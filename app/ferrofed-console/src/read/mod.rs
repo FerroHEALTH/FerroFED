@@ -333,9 +333,6 @@ pub fn answered_by(reports: &[(&str, Option<&str>)]) -> Option<String> {
 pub struct Deployment {
     /// Whether the gateway runs the development profile.
     pub development: bool,
-    /// Whether patients resolve through the static development
-    /// cross-reference.
-    pub development_crossref: bool,
     /// The gateway's product version.
     pub version: String,
     /// The replica that answered; `None` when it has no name.
@@ -346,7 +343,6 @@ impl From<&DeploymentReport> for Deployment {
     fn from(report: &DeploymentReport) -> Self {
         Self {
             development: report.mode == DeploymentMode::Development,
-            development_crossref: report.development_crossref,
             version: report.version.clone(),
             replica: (report.replica != UNNAMED).then(|| report.replica.clone()),
         }

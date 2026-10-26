@@ -21,7 +21,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_registry::ehr_index::Indexed;
 use ferrofed_registry::operator::{ClearScope, ClearedEhrId, HeldBefore, IncidentReport};
 use ferrofed_server::admin::{self, Access, FINISHED};

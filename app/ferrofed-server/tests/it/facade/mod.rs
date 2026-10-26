@@ -141,13 +141,13 @@ managing_organisation = "org-b"
     )
 }
 
-/// The `[dev]` rows mapping the patient to `rows`, each `(member, ehr_id)`.
+/// The `[testkit]` rows mapping the patient to `rows`, each `(member, ehr_id)`.
 pub(crate) fn crossref(rows: &[(&str, &str)]) -> String {
     rows.iter().fold(String::new(), |mut text, (member, ehr_id)| {
         // NOTE: writing to a String cannot fail, so the result is dropped.
         let _written: std::fmt::Result = write!(
             text,
-            "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+            "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
         );
         text
     })

@@ -490,7 +490,7 @@ async fn the_static_prefilter_applies_to_the_read_by_subject_through_configurati
     let b = ehr_node("cdr-b.example.org", EHR_B).await;
     let dir = tempfile::tempdir()?;
     let denied = format!(
-        "\n[[dev.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-b\"\n"
+        "\n[[testkit.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-b\"\n"
     );
     let app = gateway(
         dir.path(),

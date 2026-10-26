@@ -250,7 +250,7 @@ async fn a_patient_no_member_holds_is_not_found_and_nothing_is_sent() -> TestRes
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
     let elsewhere = format!(
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SYNTHETIC-OTHER-1\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SYNTHETIC-OTHER-1\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     );
     let pdq = supplier().await;
     let (app, _) = gateway_over(

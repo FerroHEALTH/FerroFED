@@ -19,7 +19,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_registry::export::{
     FORMAT_VERSION, IdentityStateExport, LearnedCreatingSystem, LearnedStatus, NotExported,
 };

@@ -111,9 +111,8 @@ flowchart TB
   `printer::to_aql` (§7.1, N2, N7). It refuses a query it cannot reduce
   safely (§5.4.3).
 - **Identity seams:** one trait per role of §5.2, §13.2.1 and §14: the
-  resolver (the PIX Manager over ITI-83, or a static cross-reference for
-  trials), the localizer (XCPD over ITI-55, the Dutch NVI, the PIX Manager,
-  or the static cross-reference), the consent pre-filter, and the optional
+  resolver (the PIX Manager over ITI-83), the localizer (XCPD over ITI-55,
+  the Dutch NVI or the PIX Manager), the consent pre-filter, and the optional
   demographics step ahead of them (a PDQm Supplier over ITI-78 or ITI-119,
   Annex A §A.2). The pre-filter has a
   development binding and a production binding, the Dutch Mitz

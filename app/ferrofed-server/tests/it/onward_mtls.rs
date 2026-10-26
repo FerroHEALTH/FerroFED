@@ -39,7 +39,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{PATIENT, body, crossref, patient_query, post, registry, settings_with_room};
-use crate::support::{CLIENT_TOKEN, call};
+use crate::support::{CLIENT_TOKEN, call, injected};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -166,7 +166,7 @@ fn text(dir: &Path, (a, b): (&str, &str), tables: &str) -> Result<String, Box<dy
 
 /// The settings `text` resolves to.
 fn settings(text: &str) -> Result<Settings, Box<dyn Error>> {
-    Ok(Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?)
+    Ok(Config::from_sources(Some(&injected(text)), &BTreeMap::new())?.resolve()?)
 }
 
 /// The gateway the settings of `text` build.
@@ -181,7 +181,7 @@ fn gateway(text: &str) -> Result<Router, Box<dyn Error>> {
 
 /// The configuration error `text` resolves to.
 fn refused(text: &str) -> Result<ConfigError, Box<dyn Error>> {
-    match Config::from_sources(Some(text), &BTreeMap::new())?.resolve() {
+    match Config::from_sources(Some(&injected(text)), &BTreeMap::new())?.resolve() {
         Ok(_) => Err(format!("accepted: {text}").into()),
         Err(error) => Ok(error),
     }

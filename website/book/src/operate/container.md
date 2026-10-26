@@ -118,9 +118,8 @@ To move to a newer release, download its `compose.yaml` over the old one and
 run `docker compose up --wait`. Read the release's Upgrade notes first, and
 follow [Upgrading](upgrading.md); [Rollback](rollback.md) says how to go back.
 
-The files carry no development cross-reference. That table is for trials only,
-and the quickstart below carries it; a deployment resolves patients through
-its PIX Manager.
+A deployment resolves patients through its PIX Manager; the quickstart below
+runs FerroPIX for that.
 
 ## The image
 

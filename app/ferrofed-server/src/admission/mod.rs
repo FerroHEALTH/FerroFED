@@ -470,7 +470,7 @@ async fn exchange(
     if verdict(&lines) == Verdict::CannotCheck {
         lines.push((
             Verdict::CannotCheck,
-            "the gateway writes to no cross-reference: the [dev] table is static configuration and a PIX Manager is fed by its own identity sources, so the round trip passes only where the node's environment registers a new EHR's subject itself".to_owned(),
+            "the gateway writes to no cross-reference: a PIX Manager is fed by its own identity sources, so the round trip passes only where the node's environment registers a new EHR's subject itself".to_owned(),
         ));
     }
     Ok(finding(Condition::EhrIdExchange, lines))

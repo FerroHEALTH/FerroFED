@@ -9,6 +9,7 @@
 
 mod config;
 mod hygiene;
+#[cfg(feature = "binding-ihe")]
 mod otlp;
 mod sampling;
 mod spans;
@@ -127,14 +128,14 @@ pub(crate) fn id(span: &SpanData) -> SpanId {
 /// the example OID arc.
 pub(crate) const NAMESPACE: &str = "urn:oid:2.999.1";
 
-/// The `[dev]` rows that resolve the synthetic identifier `value` in
+/// The `[testkit]` rows that resolve the synthetic identifier `value` in
 /// [`NAMESPACE`] at node A and node B.
 pub(crate) fn resolving(value: &str) -> Result<String, std::fmt::Error> {
     let mut text = String::new();
     for (member, ehr_id) in [("node-a", EHR_A), ("node-b", EHR_B)] {
         write!(
             text,
-            "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+            "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
         )?;
     }
     Ok(text)

@@ -138,7 +138,7 @@ pub(crate) async fn gateway() -> Result<MockServer, Box<dyn Error>> {
         &gateway,
         ("GET", "/operator/deployment"),
         200,
-        r#"{"mode":"production","development_crossref":false,"product":"FerroFED","version":"0.0.12","replica":"ferrofed-0"}"#,
+        r#"{"mode":"production","product":"FerroFED","version":"0.0.12","replica":"ferrofed-0"}"#,
     )
     .await;
     answers(

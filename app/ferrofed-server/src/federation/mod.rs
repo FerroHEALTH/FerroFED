@@ -63,7 +63,6 @@ pub struct Federation {
     snapshot: Arc<RegistrySnapshot>,
     clients: NodeClients<NodeTransport>,
     resolver: Option<Arc<dyn Resolver>>,
-    cross_reference: CrossReference,
     demographics: Option<DemographicsStep>,
     localization: LocalizationPolicy,
     consent: Option<Arc<dyn ConsentPrefilter>>,
@@ -84,28 +83,6 @@ pub struct Federation {
     client_keys: Vec<Jwk>,
     documents: Vec<PublicDocument>,
     access: Option<Arc<AccessLog>>,
-}
-
-/// Where the federation's resolver, when it has one, takes its
-/// cross-reference from.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-enum CrossReference {
-    /// A cross-reference service a binding asks, or no resolver at all.
-    #[default]
-    Service,
-    /// The static development cross-reference of `[dev]`.
-    DevelopmentStatic,
-}
-
-impl CrossReference {
-    /// The static cross-reference when `development_static`, else a service.
-    const fn of(development_static: bool) -> Self {
-        if development_static {
-            Self::DevelopmentStatic
-        } else {
-            Self::Service
-        }
-    }
 }
 
 /// The demographics step a patient identifier the cross-reference does not
@@ -534,13 +511,6 @@ impl Federation {
     #[must_use]
     pub fn resolver(&self) -> Option<&dyn Resolver> {
         self.resolver.as_deref()
-    }
-
-    /// Whether the resolver is the static development cross-reference of
-    /// `[dev]`, which only the development profile admits.
-    #[must_use]
-    pub const fn development_crossref(&self) -> bool {
-        matches!(self.cross_reference, CrossReference::DevelopmentStatic)
     }
 
     /// The Step-1 consent pre-filter, when one is configured (N27a).

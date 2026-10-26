@@ -9,7 +9,7 @@
 //! read at boot, and a bad value refuses to boot rather than falling back. No
 //! specification governs the configuration: our own design.
 
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_registry::secret::{Secret, SecretUrl};
 use openehr_federation::aggregate::AggregateFunction;
@@ -17,7 +17,6 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use crate::binding::development::DevSection;
 use crate::telemetry::{DEFAULT_FILTER, Format};
 
 pub mod auth;
@@ -70,8 +69,7 @@ pub const COMBINING_MARGIN_MS: u64 = 1_000;
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    /// The deployment profile: `production`, or `development`, the only
-    /// profile that admits the static cross-reference of `[dev]`.
+    /// The deployment profile: `production`, or `development`.
     pub profile: Profile,
     /// The HTTP surface.
     pub server: server::Server,
@@ -87,9 +85,6 @@ pub struct Config {
     /// The registry names the endpoints, and the node dispatch hands each one
     /// its credentials.
     pub credentials: BTreeMap<String, Credentials>,
-    /// The static development cross-reference (`[[dev.crossref]]`), accepted
-    /// only under `profile = "development"`.
-    pub dev: Option<DevSection>,
     /// The PIXm resolver (`[pixm]`): the PIX Managers and each member's
     /// `ehr_id` domain there (#43).
     #[cfg(feature = "binding-ihe")]
@@ -160,7 +155,6 @@ impl Default for Config {
             registry: registry::Registry::default(),
             federation: Federation::default(),
             credentials: BTreeMap::new(),
-            dev: None,
             #[cfg(feature = "binding-ihe")]
             pixm: None,
             #[cfg(feature = "binding-ihe")]

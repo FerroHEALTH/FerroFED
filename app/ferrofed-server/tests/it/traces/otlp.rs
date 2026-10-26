@@ -21,24 +21,32 @@ use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use ferrofed_testkit::otlp::Collector;
+use ferrofed_testkit::pixm_stub;
+use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain, PatientId};
 use opentelemetry_proto::tonic::common::v1::any_value::Value;
 use opentelemetry_proto::tonic::common::v1::{AnyValue, KeyValue};
 use opentelemetry_proto::tonic::trace::v1::Span;
 
-use super::{NAMESPACE, TestResult, resolving};
-use crate::facade::{body, node_answering, registry};
-use crate::support::{MINTED_REQUEST_ID, auth_toml, bearer, is_minted_form, serving, unseamed};
+use super::TestResult;
+use crate::facade::{EHR_A, EHR_B, body, node_answering, registry};
+use crate::support::{MINTED_REQUEST_ID, auth_toml, bearer, is_minted_form, serving, spawned};
 
-/// The synthetic patient identifier, under the example OID arc, with letters
-/// so no timing or count a span records can spell it (#1198).
-const PATIENT: &str = "Qz7pt";
+/// The synthetic patient, under the example OID arc, whose value carries
+/// letters so no timing or count a span records can spell it (#1198).
+const PATIENT: PatientId = PatientId::new(1, 41);
 
-/// [`PATIENT`] written as the hexadecimal of its ASCII bytes, the form a
-/// client can hide it in inside a trace id.
-const HEX_PATIENT: &str = "517a377074";
+/// The value of [`PATIENT`].
+static VALUE: LazyLock<String> = LazyLock::new(|| PATIENT.value());
+
+/// [`PATIENT`]'s value written as the hexadecimal of its ASCII bytes, the
+/// form a client can hide it in inside a trace id.
+static HEX_PATIENT: LazyLock<String> = LazyLock::new(|| hex(PATIENT.value().as_bytes()));
 
 /// The client's trace id: [`HEX_PATIENT`], zero-padded to 32 digits.
-static CLIENT_TRACE: LazyLock<String> = LazyLock::new(|| format!("{HEX_PATIENT:0>32}"));
+static CLIENT_TRACE: LazyLock<String> = LazyLock::new(|| format!("{:0>32}", *HEX_PATIENT));
+
+/// The `ehr_id` domains of node A and node B at the stub PIX Manager.
+const DOMAINS: [EhrDomain; 2] = [EhrDomain::new(1), EhrDomain::new(2)];
 
 /// The span the client sent from.
 const CLIENT_SPAN: &str = "00f067aa0ba902b7";
@@ -154,11 +162,18 @@ async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the
     let dir = tempfile::tempdir()?;
     let document = dir.path().join("registry.toml");
     std::fs::write(&document, registry(&a.uri(), &b.uri(), ""))?;
-    let config = unseamed(&format!(
-        "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\notlp_endpoint = \"{}\"\n\n[registry]\ndocument = {}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{}{}",
+    let pix = pixm_stub::manager(&[CrossReferenceSeed {
+        patient: PATIENT,
+        ehrs: vec![(DOMAINS[0], EHR_A.parse()?), (DOMAINS[1], EHR_B.parse()?)],
+    }])
+    .await;
+    let config = spawned(&format!(
+        "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\notlp_endpoint = \"{}\"\n\n[registry]\ndocument = {}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n{}",
         collector.endpoint(),
         toml::Value::String(document.display().to_string()),
-        resolving(PATIENT)?,
+        pixm_stub::base_url(&pix),
+        DOMAINS[0].system(),
+        DOMAINS[1].system(),
         auth_toml(),
     ));
     let mut file = tempfile::NamedTempFile::new()?;
@@ -190,8 +205,10 @@ async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the
     }
     let aql = format!(
         "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
-         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
-         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+         WHERE e/ehr_status/subject/external_ref/id/value = '{}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{}'",
+        *VALUE,
+        PATIENT.namespace()
     );
     let answer = client
         .post(format!("http://{listen}/v1/query/aql"))
@@ -201,7 +218,7 @@ async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the
             "traceparent",
             format!("00-{}-{CLIENT_SPAN}-01", *CLIENT_TRACE),
         )
-        .header("tracestate", format!("vendor={HEX_PATIENT}"))
+        .header("tracestate", format!("vendor={}", *HEX_PATIENT))
         .body(body(&aql)?)
         .send()
         .await?;
@@ -253,11 +270,19 @@ fn exported_clean(collector: &Collector) {
     );
     for span in &spans {
         let carried = carried(span);
-        assert!(!carried.contains(PATIENT), "{}: {carried}", span.name);
-        assert!(!carried.contains(HEX_PATIENT), "{}: {carried}", span.name);
+        assert!(
+            !carried.contains(VALUE.as_str()),
+            "{}: {carried}",
+            span.name
+        );
+        assert!(
+            !carried.contains(HEX_PATIENT.as_str()),
+            "{}: {carried}",
+            span.name
+        );
         assert!(span.links.is_empty(), "{} carries a link", span.name);
         let ids = ids(span);
-        for client in [CLIENT_TRACE.as_str(), HEX_PATIENT, CLIENT_SPAN] {
+        for client in [CLIENT_TRACE.as_str(), HEX_PATIENT.as_str(), CLIENT_SPAN] {
             assert!(
                 !ids.contains(client),
                 "{} carries the client's {client}: {ids}",

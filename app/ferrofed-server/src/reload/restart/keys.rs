@@ -290,12 +290,6 @@ password_file = "@DIR@/password"
 client_identity_file = "@DIR@/client.pem"
 trust_roots_file = "@DIR@/client-ca.pem"
 
-[[dev.crossref]]
-namespace = "urn:oid:2.999.1"
-value = "12345"
-member = "node-a"
-ehr_id = "7d44b88c-4199-4bad-97dc-d78268e01398"
-
 [[pixm.manager]]
 url = "https://pix.example.org/fhir/"
 method = "get"

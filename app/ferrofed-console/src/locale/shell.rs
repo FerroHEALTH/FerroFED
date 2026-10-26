@@ -6,8 +6,6 @@
 messages! {
     /// `this gateway runs the development profile and must not hold real …`
     DevelopmentBody = "development-body",
-    /// `this gateway runs the development profile and must not hold real …`
-    DevelopmentBodyCrossref = "development-body-crossref",
     /// `Development deployment`
     DevelopmentTitle = "development-title",
     /// `FerroFED …`

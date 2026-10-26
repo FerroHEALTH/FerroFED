@@ -330,7 +330,7 @@ async fn a_development_gateway_is_named_in_the_banner_on_every_page() -> Result<
         let banner = "//div[@role = 'note' and contains(., 'Development deployment')]";
         browser.element(By::XPath(banner)).await?;
         browser
-            .text("div", "the static development cross-reference")
+            .text("div", "must not hold real patient data")
             .await?;
         browser
             .element(By::Css(r#"header .fui-topbar-status[title*="FerroFED"]"#))

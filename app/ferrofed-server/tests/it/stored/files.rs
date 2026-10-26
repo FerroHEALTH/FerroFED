@@ -478,7 +478,7 @@ async fn the_admin_distribution_at_a_read_only_registry_is_a_405_allowing_nothin
     let settings = settings(dir.path(), (&a.uri(), &b.uri()), &definitions, "")?;
     let access = ferrofed_server::admin::Access::new(
         &crate::support::auth(),
-        ferrofed_identity::dev::Profile::Production,
+        ferrofed_identity::profile::Profile::Production,
         Vec::new(),
     );
     let operator = ferrofed_server::admin::router(Arc::new(AppState::build(&settings)?), access);

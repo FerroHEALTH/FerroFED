@@ -98,7 +98,7 @@ The `status` object:
 |---|---|
 | `profile` | The deployment profile, `production` or `development`. |
 | `members` | The member nodes of the registry the gateway federates, as a range: `0`, `1-2`, `3-5`, `6-10`, `11-50` or `51+`. Never a node name, an endpoint id or a URL. |
-| `services` | The identity, localization and consent services the configuration names, sorted: `dev` (the static development cross-reference), `mcsd`, `mitz`, `nvi`, `pdqm`, `pixm`, `pmir`, `xcpd`. Never a service URL or a credential. |
+| `services` | The identity, localization and consent services the configuration names, sorted: `mcsd`, `mitz`, `nvi`, `pdqm`, `pixm`, `pmir`, `xcpd`. Never a service URL or a credential. |
 | `stored_queries` | Whether the gateway offers the stored-query registry. |
 | `fhir` | Whether the gateway serves the FHIR R4 face of the exchange format. |
 

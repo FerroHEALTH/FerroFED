@@ -214,8 +214,6 @@ impl MembersBucket {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Service {
-    /// The static development cross-reference (`[[dev.crossref]]`).
-    Dev,
     /// The mCSD care services directory the registry is read from.
     Mcsd,
     /// The Mitz consent pre-filter (`[nl_gf.mitz]`).
@@ -441,7 +439,6 @@ mod tests {
                 .collect()
         }
         let services = names(&[
-            Service::Dev,
             Service::Mcsd,
             Service::Mitz,
             Service::Nvi,

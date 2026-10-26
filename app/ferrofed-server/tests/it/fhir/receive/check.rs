@@ -6,20 +6,25 @@
 //! received category with its member, and the categories no member
 //! receives, the set the capability statement names.
 
-use super::{receiving, rows, text};
-use crate::facade::{EHR_A, NAMESPACE, PATIENT};
+use super::{receiving, text};
+use crate::facade::{NAMESPACE, registry};
 use crate::fhir::{TestResult, UNREACHED_SUPPLIER, fhir_tables};
 use crate::run::binary;
+use crate::support::unasked_pixm;
 
 /// The standard output of `config check` over the development gateway
 /// with the face `fhir`, after asserting that it passed.
 fn checked(fhir: &str) -> Result<String, Box<dyn std::error::Error>> {
     let dir = tempfile::tempdir()?;
-    let crossref = rows(&[(NAMESPACE, PATIENT, "node-a", EHR_A)]);
+    let resolver = unasked_pixm(&registry(
+        "http://a.example.org",
+        "http://b.example.org",
+        "",
+    ));
     let text = text(
         dir.path(),
         ("http://a.example.org", "http://b.example.org", ""),
-        &crossref,
+        &resolver,
         fhir,
     )?;
     let output = binary(&["config", "check"], &text)?;

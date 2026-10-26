@@ -5,9 +5,9 @@
 //!
 //! FerroFED keeps no patient index: a deployment resolves patients through a
 //! PIX Manager. A test still needs a fixed answer, so it writes the rows it
-//! needs as `[[dev.crossref]]` (and `[[dev.consent_denied]]`) tables in the
-//! configuration text it builds, and [`take`] reads them out of the text
-//! into a [`Fixture`], which builds the [`StaticResolver`] and
+//! needs as `[[testkit.crossref]]` (and `[[testkit.consent_denied]]`)
+//! tables in the configuration text it builds, and [`take`] reads them out
+//! of the text into a [`Fixture`], which builds the [`StaticResolver`] and
 //! [`StaticConsentPrefilter`] they describe. The server's tests inject those
 //! through its `test-seam` injection point, which a production build does
 //! not compile. No specification governs the fixture: our own design.
@@ -34,6 +34,10 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
+/// The table a test writes the fixture's rows under, which the gateway's
+/// configuration does not know.
+pub const TABLE: &str = "testkit";
+
 /// The mode `OPTIONS {base}/` declares the fixture's localizer and consent
 /// pre-filter under.
 pub const MODE: &str = "development-static";
@@ -58,7 +62,7 @@ struct ConsentDoc {
     member: NodeId,
 }
 
-/// The `[dev]` rows of a test's configuration text.
+/// The `[testkit]` rows of a test's configuration text.
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Rows {
@@ -111,16 +115,15 @@ impl Fixture {
     pub fn prefilter(
         &self,
         registry: &RegistrySnapshot,
-    ) -> Result<Arc<dyn ConsentPrefilter>, String> {
-        let prefilter = StaticConsentPrefilter::new(&self.consent, registry)?;
-        Ok(Arc::new(prefilter))
+    ) -> Result<Arc<StaticConsentPrefilter>, String> {
+        StaticConsentPrefilter::new(&self.consent, registry).map(Arc::new)
     }
 }
 
-/// Takes the `[dev]` table out of the configuration `text`, with the
+/// Takes the `[testkit]` table out of the configuration `text`, with the
 /// fixture its rows describe.
 ///
-/// A text with no `[dev]` table, or one that is no TOML, comes back as it
+/// A text with no `[testkit]` table, or one that is no TOML, comes back as it
 /// is with no fixture, so a test of a refused configuration reads its own
 /// error.
 ///
@@ -136,10 +139,10 @@ pub fn take(text: &str) -> (String, Option<Fixture>) {
     let Ok(mut table) = text.parse::<toml::Table>() else {
         return (text.to_owned(), None);
     };
-    let Some(dev) = table.remove("dev") else {
+    let Some(rows) = table.remove(TABLE) else {
         return (text.to_owned(), None);
     };
-    let Ok(rows) = dev.try_into::<Rows>() else {
+    let Ok(rows) = rows.try_into::<Rows>() else {
         return (text.to_owned(), None);
     };
     let fixture = Fixture {

@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;

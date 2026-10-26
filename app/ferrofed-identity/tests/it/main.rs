@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Integration tests: the patient reference stays redacted, the static
-//! development cross-reference resolves only under the development profile,
-//! the PIXm resolver reads each member's `ehr_id` from its domain and fails
+//! Integration tests: the patient reference stays redacted, the PIXm
+//! resolver reads each member's `ehr_id` from its domain and fails
 //! closed, and the resolution bindings stay in their session (§5.2, §5.4,
 //! §12.5.1, N3, N6, N33).
 #![allow(
@@ -37,8 +36,6 @@ mod pixm_localizer;
 #[cfg(feature = "ihe")]
 mod pmir;
 mod session;
-mod static_consent;
-mod static_resolver;
 mod support;
 #[cfg(feature = "ihe")]
 mod timing;

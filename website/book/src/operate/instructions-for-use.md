@@ -372,7 +372,7 @@ deployment in the EU must plan for are:
   ([Writes through a gateway with several replicas](../integrate/client-contract.md#writes-through-a-gateway-with-several-replicas)).
 - **The console changes only what the file leaves to it.** Under
   `config.ui = "managed"`, the bootstrap core (`profile`, `[server]`,
-  `[metrics]`, `[auth]`, `[trust]`, `[config]` and `[dev]`) and client authentication
+  `[metrics]`, `[auth]`, `[trust]` and `[config]`) and client authentication
   stay in the file, and a member, credential or binding section the file
   provides is read-only in the console. The console reads one replica at a
   time, and each replica keeps its own incidents and routing table

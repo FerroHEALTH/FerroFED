@@ -56,7 +56,7 @@ const PASS_TO_NODE: &str = "\n[federation.consent]\nemergency = \"pass-to-node\"
 /// pre-filter denying asking node B about the patient.
 fn denying_node_b() -> String {
     format!(
-        "{}\n[[dev.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-b\"\n",
+        "{}\n[[testkit.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-b\"\n",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
     )
 }
@@ -250,7 +250,7 @@ impl SubjectGateway {
             .mount(&node_b)
             .await;
         let identity = format!(
-            "{}\n[[dev.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-b\"\n",
+            "{}\n[[testkit.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-b\"\n",
             crossref(&[("node-b", EHR_B)])
         );
         let repository = FeedRepository::start().await;

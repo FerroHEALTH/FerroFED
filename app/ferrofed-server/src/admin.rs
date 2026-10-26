@@ -44,7 +44,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::serve::{Listener, ListenerExt};
 use axum::{Json, Router};
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_registry::export::IdentityStateExport;
 use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, HeaderValue, StatusCode, header};

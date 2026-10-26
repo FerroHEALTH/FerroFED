@@ -19,7 +19,6 @@ use std::path::Path;
 
 use axum::Router;
 use ferrofed_identity::ihe::pixm::PixmConfigError;
-use ferrofed_server::binding::Role;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error;
 use ferrofed_server::federation::{Federation, error::FederationError};
@@ -381,33 +380,12 @@ fn load_refusal(dir: &Path, text: &str) -> Result<FederationError, Box<dyn Error
     let text = format!(
         "{text}\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     );
-    let settings = Config::from_sources(Some(&crate::support::unseamed(&text)), &BTreeMap::new())?
-        .resolve()?;
+    let settings =
+        Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     match Federation::load(&settings) {
         Ok(_) => Err("the federation was built".into()),
         Err(error) => Ok(error),
     }
-}
-
-#[test]
-fn a_pix_manager_and_the_dev_cross_reference_together_refuse_to_boot() -> TestResult {
-    let dir = tempfile::tempdir()?;
-    let dev = format!(
-        "profile = \"development\"\n\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
-    );
-    let error = load_refusal(
-        dir.path(),
-        &format!("{dev}\n{}", pixm("https://127.0.0.1:9")),
-    )?;
-    assert!(
-        matches!(
-            &error,
-            FederationError::Conflict(conflict)
-                if conflict.role == Role::Resolver && conflict.sections == ["[pixm]", "[dev]"]
-        ),
-        "exactly one resolver is active (no specification governs this: our own design): {error:?}"
-    );
-    Ok(())
 }
 
 #[test]
@@ -484,7 +462,6 @@ fn a_pix_manager_without_a_registry_refuses_to_boot() -> TestResult {
 #[test]
 fn a_refusal_asking_for_a_registry_names_both_sources() {
     for refused in [
-        FederationError::DevWithoutRegistry,
         FederationError::PixmWithoutRegistry,
         FederationError::DemographicWithoutRegistry,
         FederationError::NodeSelectionUndeclared,

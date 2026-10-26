@@ -6,7 +6,6 @@
 use std::path::PathBuf;
 
 use ferrofed_engine::dispatch::SetupError;
-use ferrofed_identity::dev::DevCrossRefError;
 #[cfg(feature = "binding-ihe")]
 use ferrofed_identity::ihe::mcsd::error::FhirFormError;
 #[cfg(feature = "binding-ihe")]
@@ -62,19 +61,6 @@ pub enum FederationError {
     #[error("the registry could not be read from the care services directory")]
     #[cfg(feature = "binding-ihe")]
     Directory(#[source] Box<DirectoryFailure>),
-    /// The `[dev]` table is set but no registry is, neither
-    /// `registry.document` nor `[registry.mcsd]`, so its rows name members
-    /// that do not exist.
-    #[error(
-        "the [dev] cross-reference needs a registry, registry.document or [registry.mcsd], whose members its rows name"
-    )]
-    DevWithoutRegistry,
-    /// The `[dev]` table does not read as the static cross-reference.
-    #[error("the [dev] cross-reference is not valid")]
-    DevTable(#[source] crate::config::error::Error),
-    /// The static cross-reference refuses its rows or the profile.
-    #[error("the [dev] cross-reference cannot be enabled")]
-    DevCrossRef(#[source] DevCrossRefError),
     /// The cross-reference a test injected refuses the registry, its reason
     /// in the test kit's words (`test-seam` builds only).
     #[cfg(feature = "test-seam")]

@@ -115,7 +115,7 @@ fn config(state_dir: &Path, endpoint: &str) -> Result<UsageReportSettings, Box<d
 fn facts() -> Facts {
     Facts {
         profile: ProfileToken::Development,
-        services: vec![Service::Dev],
+        services: vec![Service::Pixm],
         stored_queries: false,
         fhir: false,
     }
@@ -197,7 +197,7 @@ async fn the_start_report_is_exactly_the_v2_envelope() -> TestResult {
             "status": {
                 "profile": "development",
                 "members": "1-2",
-                "services": ["dev"],
+                "services": ["pixm"],
                 "stored_queries": false,
                 "fhir": false
             }

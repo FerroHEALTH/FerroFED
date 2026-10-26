@@ -39,18 +39,18 @@ fn of_patient() -> Result<Request<Body>, http::Error> {
     ))
 }
 
-/// A `[[dev.consent_denied]]` row denying the test patient at `member`.
+/// A `[[testkit.consent_denied]]` row denying the test patient at `member`.
 fn denied(member: &str) -> String {
     format!(
-        "\n[[dev.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\n"
+        "\n[[testkit.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"{member}\"\n"
     )
 }
 
-/// A `[[dev.crossref]]` row knowing another synthetic patient at node A, so
+/// A `[[testkit.crossref]]` row knowing another synthetic patient at node A, so
 /// the cross-reference is configured and holds the test patient nowhere.
 fn another_patient() -> String {
     format!(
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SYNTHETIC-OTHER-2\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SYNTHETIC-OTHER-2\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     )
 }
 

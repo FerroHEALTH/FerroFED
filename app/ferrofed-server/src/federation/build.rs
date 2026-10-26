@@ -32,11 +32,11 @@ use crate::health::dependencies::Dependencies;
 use crate::localization::{self, LocalizationPolicy};
 use crate::metrics::nodes::NodeRequests;
 use crate::onward::NodeTransport;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 
 use super::error::FederationError;
 use super::registry::read_registry;
-use super::{CrossReference, DemographicsStep, Federation, Observed, Reconciled, widened};
+use super::{DemographicsStep, Federation, Observed, Reconciled, widened};
 
 impl Federation {
     /// Builds the federation `settings` describe, or `None` when no registry
@@ -44,15 +44,14 @@ impl Federation {
     ///
     /// The registry document is read and checked, every endpoint gets a node
     /// client over one shared connection pool, an endpoint with a
-    /// `[credentials]` section sends them on every request, and the static
-    /// cross-reference is enabled when `[dev]` is set under the development
-    /// profile. Without a resolver, a query that names a patient fails closed
+    /// `[credentials]` section sends them on every request, and the binding
+    /// that offers a resolver builds it. Without a resolver, a query that names a patient fails closed
     /// (§11.3 covers only an answered lookup; no specification governs this:
     /// our own design).
     ///
     /// # Errors
     /// Returns a [`FederationError`] for a registry document that does not
-    /// load, a `[dev]` table that is refused, a credentials key or a
+    /// load, a resolver a binding refuses to build, a credentials key or a
     /// `federation.demographic_endpoint` that names no endpoint of the
     /// registry, and an HTTP client that cannot be built.
     pub fn load(settings: &Settings) -> Result<Option<Self>, FederationError> {
@@ -204,9 +203,6 @@ impl Federation {
             id,
             snapshot: Arc::new(snapshot),
             clients,
-            // NOTE: no specification governs this: our own design; one binding offers the resolver,
-            // so a resolver with `[dev]` set is the static development cross-reference.
-            cross_reference: CrossReference::of(settings.dev.is_some() && resolver.is_some()),
             resolver,
             demographics,
             localization,
@@ -271,7 +267,6 @@ impl Federation {
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
-            cross_reference: CrossReference::default(),
             demographics: None,
             localization: LocalizationPolicy::none(),
             consent: None,

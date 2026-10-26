@@ -66,25 +66,25 @@ impl Default for Options {
     }
 }
 
-/// Returns the development profile with `tables`, the `[dev]` rows of
+/// Returns the development profile with `tables`, the `[testkit]` rows of
 /// [`dev_rows`].
 pub(crate) fn development(tables: &[String]) -> String {
     format!("profile = \"development\"\n{}", tables.concat())
 }
 
-/// The `[dev]` rows mapping `patient` to each `(member, ehr_id)` of `rows`,
+/// The `[testkit]` rows mapping `patient` to each `(member, ehr_id)` of `rows`,
 /// with the Step-1 consent pre-filter denying asking each member of `denied`
 /// about `patient` (N27a).
 pub(crate) fn dev_rows(patient: PatientId, rows: &[(&str, Uuid)], denied: &[&str]) -> String {
     let (namespace, value) = (patient.namespace(), patient.value());
     let crossref = rows.iter().map(|(member, ehr_id)| {
         format!(
-            "\n[[dev.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+            "\n[[testkit.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
         )
     });
     let consent = denied.iter().map(|member| {
         format!(
-            "\n[[dev.consent_denied]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\n"
+            "\n[[testkit.consent_denied]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\n"
         )
     });
     crossref.chain(consent).collect::<Vec<_>>().concat()

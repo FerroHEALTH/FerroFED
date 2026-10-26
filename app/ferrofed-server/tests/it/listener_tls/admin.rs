@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::listener::TlsListener;
 use ferrofed_server::listener::certificates::Certificates;

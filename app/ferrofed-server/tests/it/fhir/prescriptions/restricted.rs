@@ -21,17 +21,17 @@ use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL};
 use crate::fhir::{FHIR, TestResult};
 use crate::support::{call, claims, issuer};
 
-/// A `[[dev.crossref]]` row knowing another patient at node A.
+/// A `[[testkit.crossref]]` row knowing another patient at node A.
 fn another_patient() -> String {
     format!(
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SYNTHETIC-OTHER-4q\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SYNTHETIC-OTHER-4q\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     )
 }
 
-/// A `[[dev.consent_denied]]` row denying node A for the test patient.
+/// A `[[testkit.consent_denied]]` row denying node A for the test patient.
 fn denied_at_a() -> String {
     format!(
-        "\n[[dev.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\n"
+        "\n[[testkit.consent_denied]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\n"
     )
 }
 

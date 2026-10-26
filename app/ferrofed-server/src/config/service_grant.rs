@@ -21,7 +21,7 @@
 //!
 //! No specification governs the shape of the table: our own design.
 
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 
 use crate::config::Credentials;
 use crate::config::error::Error;

@@ -50,8 +50,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_identity::dev::Profile;
 use ferrofed_identity::nl::mitz::{HolderConfig, MitzConfig, MitzPrefilter, is_purpose};
+use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::consent::ConsentPrefilter;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;

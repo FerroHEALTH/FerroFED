@@ -211,7 +211,7 @@ async fn a_short_identifier_inside_the_nodes_ehr_id_is_answered() -> TestResult 
     let b = node_answering("uid-at-b").await;
     let dir = tempfile::tempdir()?;
     let crossref = format!(
-        "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{INSIDE_EHR_A}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{INSIDE_EHR_A}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n"
     );
     let app = gateway(
         dir.path(),

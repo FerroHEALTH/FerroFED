@@ -420,9 +420,8 @@ impl Gateway {
             .await
     }
 
-    /// Reads how the gateway is deployed: its profile, whether the
-    /// development cross-reference is in service, its product version and
-    /// its replica, `GET {base}/operator/deployment`.
+    /// Reads how the gateway is deployed: its profile, its product version
+    /// and its replica, `GET {base}/operator/deployment`.
     ///
     /// # Errors
     /// As [`Gateway::incidents`].

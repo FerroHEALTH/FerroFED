@@ -55,13 +55,13 @@ const UNKNOWN_EHR: &str = "3333cccc-3333-4333-8333-333333333333";
 /// The patient-facing grant: a query and a read of the patient's EHR.
 const PATIENT_SCOPE: &str = "patient/aql-*.s patient/composition-*.r";
 
-/// The one `[[dev.crossref]]` row placing `value` in `namespace` at
+/// The one `[[testkit.crossref]]` row placing `value` in `namespace` at
 /// `member` under `ehr_id`.
 fn row(text: &mut String, (namespace, value): (&str, &str), (member, ehr_id): (&str, &str)) {
     // NOTE: writing to a String cannot fail, so the result is dropped.
     let _written: std::fmt::Result = write!(
         text,
-        "\n[[dev.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
     );
 }
 
@@ -534,8 +534,9 @@ async fn without_the_opt_in_a_patient_grant_still_admits_nothing() -> TestResult
 }
 
 /// A configuration over node A alone, its registry document written to
-/// `dir`, whose issuer's patient tokens are bound to `endpoint`, with the
-/// `[dev]` cross-reference when `resolving`.
+/// `dir`, whose issuer's patient tokens are bound to `endpoint`, with a PIX
+/// Manager that is never asked when `resolving`, which a spawned
+/// `config check` needs.
 fn configured(dir: &Path, endpoint: &str, resolving: bool) -> Result<String, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(
@@ -546,12 +547,13 @@ fn configured(dir: &Path, endpoint: &str, resolving: bool) -> Result<String, Box
          connection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n",
     )?;
     let path = toml::Value::String(document.display().to_string());
-    let (profile, crossref) = if resolving {
-        let mut text = String::new();
-        row(&mut text, (EHR_SYSTEM, EHR_A), ("node-a", EHR_A));
-        ("profile = \"development\"\n", text)
-    } else {
-        ("", String::new())
+    let (profile, crossref) = match resolving {
+        #[cfg(feature = "binding-ihe")]
+        true => (
+            "profile = \"development\"\n",
+            support::unasked_pixm(&std::fs::read_to_string(&document)?),
+        ),
+        _ => ("", String::new()),
     };
     Ok(format!(
         "{profile}[server]\nlisten = \"127.0.0.1:1\"\n\n[registry]\ndocument = {path}\n\n\
@@ -574,6 +576,7 @@ fn checked(toml: &str) -> Result<(Option<i32>, String), Box<dyn Error>> {
 
 // NOTE: no specification governs this: our own design; a patient token's member is held
 // to the registry as every configured endpoint is.
+#[cfg(feature = "binding-ihe")]
 #[test]
 fn config_check_refuses_a_binding_to_an_endpoint_the_registry_lacks() -> TestResult {
     let dir = tempfile::tempdir()?;

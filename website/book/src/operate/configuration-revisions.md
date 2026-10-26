@@ -59,7 +59,6 @@ bootstrap core comes from the file alone and is never part of a revision:
 | `[auth]` | client authentication, the operator scope among it |
 | `[trust]` | each issuer's policy, the edge mode and the purposes of use client authentication holds a token to |
 | `[config]` | the revision store itself |
-| `[dev]` | the development cross-reference pairs patient identifiers with `ehr_id`s, which no store holds |
 
 So a revision can neither lock you out of the admin listener nor lower the
 security floor the file sets. A revision that sets a key of the core is

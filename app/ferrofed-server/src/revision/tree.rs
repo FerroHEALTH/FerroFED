@@ -18,14 +18,9 @@ use ferrofed_registry::revision::{Change, Difference};
 /// They are the profile, the client listener (`[server]`: its address, TLS,
 /// base path and limits), the admin listener and its scrape authentication
 /// (`[metrics]`), client authentication with the product scope (`[auth]`)
-/// and its policy (`[trust]`), the revision store itself (`[config]`), and
-/// the development
-/// cross-reference (`[dev]`), which pairs patient identifiers with `ehr_id`s
-/// and is never written to a store (§5.4.1, N33). The profile decides the
-/// transport policy every outbound URL is held to.
-pub const CORE: [&str; 7] = [
-    "profile", "server", "metrics", "auth", "trust", "config", "dev",
-];
+/// and its policy (`[trust]`), and the revision store itself (`[config]`).
+/// The profile decides the transport policy every outbound URL is held to.
+pub const CORE: [&str; 6] = ["profile", "server", "metrics", "auth", "trust", "config"];
 
 /// The keys of the resources the operator console owns, each a table and
 /// the key inside it: only a revision holds them, and a file load carries

@@ -169,7 +169,7 @@ front of it.
 | | Threat | From | Mitigation | Provided by |
 |---|---|---|---|---|
 | I | a secret in a log, an error, the banner or a `Debug` print | P6 | secrets come from `_file` keys, are redacted in `Debug` and zeroised after reading; a refused configuration names the key, never the value | [Configuration](../operate/configuration.md); `app/ferrofed-server/tests/it/config/redaction.rs`, `config/secrets.rs`, `credentials.rs`, `banner.rs` |
-| T | a configuration that weakens transport or resolves from a static table | P9 | the development profile alone admits `[dev]` and cleartext credentials, takes a restart to change, and prints a red notice; `config check` exits `78` on a refused file | `profile`; `app/ferrofed-server/tests/it/transport/` |
+| T | a configuration that weakens transport or resolves from a static table | P9 | the gateway keeps no patient table and refuses a `[dev]` table at load; the development profile alone admits cleartext credentials to loopback services, takes a restart to change, and prints a red notice; `config check` exits `78` on a refused file | `profile`; `app/ferrofed-server/tests/it/transport/` |
 | S | the signing key leaks | P9 | the key is a file; rotation publishes the next key ahead of signing with it | `[signing] next_key_file`, `previous_key_file`; `app/ferrofed-server/tests/it/next_key.rs` |
 
 ## Risks the deployment carries

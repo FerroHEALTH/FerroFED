@@ -54,8 +54,8 @@ pub const PINS: [(&str, &str); 4] = [
 
 /// The words of the development notice, before wrapping.
 pub const DEVELOPMENT_NOTICE: &str = "DEVELOPMENT: this deployment runs the development profile, \
-     which may resolve patients from a static development table. It must not hold or reach \
-     real patient data.";
+     which relaxes checks a production deployment must pass, such as encryption to a loopback \
+     service. It must not hold or reach real patient data.";
 
 /// The column every value of the aligned list starts at, after its label.
 const LABEL_WIDTH: usize = 17;

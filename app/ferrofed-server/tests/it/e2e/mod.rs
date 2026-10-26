@@ -146,13 +146,13 @@ pub(crate) fn dev_resolver() -> String {
     format!(
         r#"profile = "development"
 
-[[dev.crossref]]
+[[testkit.crossref]]
 namespace = "{namespace}"
 value = "{value}"
 member = "node-a"
 ehr_id = "{EHR_A}"
 
-[[dev.crossref]]
+[[testkit.crossref]]
 namespace = "{namespace}"
 value = "{value}"
 member = "node-b"

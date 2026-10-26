@@ -22,8 +22,9 @@ pub enum Stage {
     Merged,
 }
 
-/// The top-level tables whose rows a fault never describes: a row of
-/// `[dev]` holds a patient identifier.
+/// The top-level tables whose rows a fault never describes: a row of the
+/// removed `[dev]` table held a patient identifier, and a configuration
+/// written for an older release may still carry one.
 const OPAQUE: &[&str] = &["dev"];
 
 /// Where a configuration parse fault sits and what kind it is.

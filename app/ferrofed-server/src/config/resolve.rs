@@ -11,7 +11,7 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::secret::SecretUrl;
 use openehr_federation::aggregate::AggregateFunction;
@@ -156,7 +156,6 @@ impl Config {
             federation,
             credentials,
             onward_tls,
-            dev: None,
             #[cfg(feature = "binding-ihe")]
             pixm: None,
             #[cfg(feature = "binding-ihe")]

@@ -260,8 +260,6 @@ mod tests {
         let table: toml::Table = toml::from_str(&text).unwrap();
         assert_eq!(vec!["federation"], table.keys().collect::<Vec<_>>());
         assert!(text.starts_with("# FerroFED configuration revision 1, saved at"));
-        assert!(
-            text.contains("bootstrap core (profile, server, metrics, auth, trust, config, dev)")
-        );
+        assert!(text.contains("bootstrap core (profile, server, metrics, auth, trust, config)"));
     }
 }

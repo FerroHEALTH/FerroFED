@@ -116,15 +116,11 @@ async fn dependencies(
     Json(state.dependencies())
 }
 
-/// `GET {base}/operator/deployment`: the deployment profile, whether the
-/// federation resolves through the static development cross-reference,
-/// the product version, and the replica that answered; always `200`.
+/// `GET {base}/operator/deployment`: the deployment profile, the product
+/// version, and the replica that answered; always `200`.
 async fn deployment(State(state): State<Arc<AppState>>) -> Json<DeploymentReport> {
     Json(DeploymentReport {
         mode: state.mode(),
-        development_crossref: state
-            .federation()
-            .is_some_and(|federation| federation.development_crossref()),
         product: crate::body::PRODUCT.to_owned(),
         version: crate::body::VERSION.to_owned(),
         replica: state.replica().to_string(),

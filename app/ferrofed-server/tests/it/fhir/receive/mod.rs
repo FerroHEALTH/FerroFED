@@ -59,14 +59,14 @@ pub(super) const EHR_SYSTEM: &str = "urn:oid:2.999.9.1";
 /// The synthetic substance the document records.
 pub(super) const SUBSTANCE: &str = "Synthetic substance one";
 
-/// The `[[dev.crossref]]` rows, each `(namespace, value, member, ehr_id)`.
+/// The `[[testkit.crossref]]` rows, each `(namespace, value, member, ehr_id)`.
 pub(super) fn rows(rows: &[(&str, &str, &str, &str)]) -> String {
     rows.iter()
         .fold(String::new(), |mut text, (namespace, value, member, ehr_id)| {
             // NOTE: writing to a String cannot fail, so the result is dropped.
             let _written: std::fmt::Result = write!(
                 text,
-                "\n[[dev.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+                "\n[[testkit.crossref]]\nnamespace = \"{namespace}\"\nvalue = \"{value}\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
             );
             text
         })

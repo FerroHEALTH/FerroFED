@@ -161,7 +161,7 @@ impl Nodes {
         for (member, ehr_id) in [("node_1", EHR_1), ("node_2", EHR_2)] {
             write!(
                 text,
-                "\n[[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"12345\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+                "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"12345\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
             )?;
         }
         let settings =

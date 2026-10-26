@@ -28,7 +28,7 @@ use crate::usage_report::payload::{
 };
 use crate::usage_report::state::{Instance, StateDir, StateError};
 use crate::usage_report::window::Counts;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 
 /// The book page that carries the full notice.
 pub const NOTICE_URL: &str = "https://ferrofed.eu/docs/operate/usage-report.html";
@@ -207,9 +207,6 @@ impl Facts {
     #[must_use]
     pub fn of(settings: &Settings) -> Self {
         let mut services = Vec::new();
-        if settings.dev.is_some() {
-            services.push(Service::Dev);
-        }
         #[cfg(feature = "binding-ihe")]
         {
             let configured = [

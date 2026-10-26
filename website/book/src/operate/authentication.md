@@ -243,7 +243,7 @@ ehr_id_system = "urn:oid:2.999.9.1"
 
 `config check` and the start refuse a binding whose endpoint the registry
 lacks, a binding without a registry, and a binding without a cross-reference
-service (`[dev]` or `[pixm]`), each naming its key. Without the section, a
+service (`[pixm]`), each naming its key. Without the section, a
 `patient/` grant of that issuer admits nothing, as above.
 
 With the opt-in, a `patient/` scope of that issuer counts on an EHR's data
@@ -362,7 +362,7 @@ surface carries:
 | `GET {base}/operator/stored-queries` | every stored-query version the gateway holds, with its AQL and whether it is read-only |
 | `GET {base}/operator/stored-queries/{name}` | every version of the one stored query whose qualified name is `{name}`, such as `org.example::patient_compositions`, lowest first; a `404` (`stored-query-unknown`) when the gateway holds none, and a `400` (`query-name-invalid`) for a name ITS-REST does not admit |
 | `GET {base}/operator/dependencies` | the state the gateway last observed of each member endpoint and service ([Health probes](health.md#the-dependency-report)) |
-| `GET {base}/operator/deployment` | how the process is deployed: its profile, whether patients resolve through the `[dev]` cross-reference, and the product version |
+| `GET {base}/operator/deployment` | how the process is deployed: its profile, the product version and the replica |
 
 The incident report is `{"counts": {...}, "recent": [...], "cleared":
 [...]}`: `counts` names every incident kind with how many the gateway
@@ -396,7 +396,6 @@ The deployment report is one object:
 ```json
 {
   "mode": "development",
-  "development_crossref": true,
   "product": "FerroFED",
   "version": "0.0.11",
   "replica": "ferrofed-7d9c4b5f6-x2k8q"
@@ -406,11 +405,8 @@ The deployment report is one object:
 `mode` is the `profile` the process started with, `production` or
 `development`, and a reload never changes it
 ([Configuration](configuration.md#the-startup-banner)). The gateway knows no
-other profile, so the report names no other. `development_crossref` is
-`true` while the federation resolves patients through the static
-[`[dev]` cross-reference](identity.md#the-development-cross-reference-dev),
-which only the development profile admits; a reload that adds or removes
-`[dev]` changes it. `product` and `version` are those of `GET {base}/`.
+other profile, so the report names no other. `product` and `version` are
+those of `GET {base}/`.
 The report carries no setting value, URL, credential or patient
 identifier.
 

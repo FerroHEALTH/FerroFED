@@ -21,8 +21,7 @@
 //! into the fields [`answers`] keeps (states, counts, kinds, times and
 //! routing ids) and written again, the metrics keep only the labels the
 //! gateway sets, a part that does not read is named without quoting it, and
-//! the configuration keeps no key of a data-keyed table and no value of
-//! `[dev]`. The archive is an uncompressed POSIX tar under one directory,
+//! the configuration keeps no key of a data-keyed table. The archive is an uncompressed POSIX tar under one directory,
 //! [`ROOT`], with `manifest.json` first. No specification governs the
 //! report's form: our own design.
 

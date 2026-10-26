@@ -327,7 +327,7 @@ async fn slow_gateway(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
             "GET",
             "/operator/deployment",
             String::from(
-                r#"{"mode":"production","development_crossref":false,"product":"FerroFED","version":"0.0.12","replica":"ferrofed-0"}"#,
+                r#"{"mode":"production","product":"FerroFED","version":"0.0.12","replica":"ferrofed-0"}"#,
             ),
         ),
     ] {
@@ -403,7 +403,7 @@ async fn every_page_names_the_replica_that_answered() -> Result<(), Box<dyn Erro
         &unnamed,
         ("GET", "/operator/deployment"),
         200,
-        r#"{"mode":"production","development_crossref":false,"product":"FerroFED","version":"0.0.12"}"#,
+        r#"{"mode":"production","product":"FerroFED","version":"0.0.12"}"#,
     )
     .await;
     let (_state, service, session) = signed_in_console(&unnamed)?;

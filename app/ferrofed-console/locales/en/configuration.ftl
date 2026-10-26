@@ -369,7 +369,7 @@ show-secret-while-held = Show the value while held
 config-how-title = How configuration works
 config-how-lead = Revisions are managed on this gateway (config.ui = "managed"): its configuration is a history of revisions, each saved with a reason, compared with the one that runs and applied when you choose.
 config-how-core-title = The bootstrap core: always in ferrofed.toml
-config-how-core = The profile, the client and admin listeners, client authentication, the revision store and the development cross-reference come from the file alone. No revision holds them, so no change here can lock you out of the admin listener or lower the security floor the file sets.
+config-how-core = The profile, the client and admin listeners, client authentication and the revision store come from the file alone. No revision holds them, so no change here can lock you out of the admin listener or lower the security floor the file sets.
 config-how-rest-title = Everything else: a revision
 config-how-rest = Members, stored queries, onward credentials and binding sections are saved here as revisions. A revision never holds a secret value, only the file it is read from. Changed credentials or a changed binding section run on trial until you confirm them.
 config-how-owners = A member the file or a care services directory provides, and a stored-query version, are not changed here: they show as read-only.

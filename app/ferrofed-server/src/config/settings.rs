@@ -14,7 +14,7 @@ use ferrofed_engine::fanout::Budget;
 use ferrofed_engine::onward::Grant;
 use ferrofed_engine::onward::grant::fapi2::Fapi2Grant;
 use ferrofed_engine::onward::keys::KeyRing;
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::replica::Replica;
@@ -25,7 +25,6 @@ use openehr_federation::id::FederationId;
 use openehr_federation::object::Uri;
 
 use crate::base_path::BasePath;
-use crate::binding::development::DevSection;
 use crate::binding::seam::OnwardGrant;
 use crate::client_address::Forwarding;
 use crate::config::auth::AuthSettings;
@@ -69,8 +68,6 @@ pub struct Settings {
     /// with, by endpoint id: the client certificate the gateway presents
     /// (RFC 8705) and the roots it trusts them by.
     pub onward_tls: BTreeMap<EndpointId, TlsSettings>,
-    /// The static development cross-reference, as written.
-    pub dev: Option<DevSection>,
     /// The PIXm resolver, with every secret read.
     #[cfg(feature = "binding-ihe")]
     pub pixm: Option<crate::binding::ihe::pixm::PixmSettings>,

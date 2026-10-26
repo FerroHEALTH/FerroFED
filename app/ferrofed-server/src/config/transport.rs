@@ -51,7 +51,7 @@
 
 use std::fmt;
 
-use ferrofed_identity::dev::Profile;
+use ferrofed_identity::profile::Profile;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use url::Url;
 
@@ -450,7 +450,7 @@ mod tests {
         CleartextError, Encryption, ProtectedSite, TrustAnchorError, encrypted_connection,
         loopback_payload, protected_payload, trust_anchor,
     };
-    use ferrofed_identity::dev::Profile;
+    use ferrofed_identity::profile::Profile;
     use url::Url;
 
     fn site() -> ProtectedSite {

@@ -252,7 +252,7 @@ fn federation(
 }
 
 /// A development federation over node A at `a` and node B at `b`, with the
-/// static cross-reference, which knows no synthetic subject.
+/// test kit's fixed cross-reference, which knows no synthetic subject.
 fn dev_federation(dir: &Path, a: &str, b: &str) -> Result<Federation, Box<dyn Error>> {
     federation(
         dir,

@@ -231,7 +231,7 @@ body names the class only; the log line `registry reload refused` carries
 the precise `class`. The directory's state never gates readiness.
 
 A `SIGHUP` reload with a directory rebuilds the federation over the registry
-the directory gave, applying `[credentials]`, `[dev]`, `[pixm]`, `[pdqm]`,
+the directory gave, applying `[credentials]`, `[pixm]`, `[pdqm]`,
 `[xcpd]` and `[nl_gf]`; it never asks the directory. A change to
 `[registry.mcsd]` takes a restart, and a change between a document and a directory is refused as
 `registry-presence`.
@@ -332,9 +332,7 @@ the Dutch Generic Functions when `[nl_gf.nvi]` is
 both refuses to boot. Otherwise it is
 the resolver: the PIXm resolver when `[pixm]` is set, which names the members
 whose domain holds the patient at the PIX Manager
-([`[pixm]` as the localizer](identity.md#pixm-as-the-localizer)), or the
-[development cross-reference](identity.md), under `profile = "development"`,
-which names the members its `[dev]` rows map the patient at. The localized
+([`[pixm]` as the localizer](identity.md#pixm-as-the-localizer)). The localized
 selection with no localizer refuses to boot, and so do
 `[federation.localization]`, `[xcpd]` and `[nl_gf.nvi]` under `ask-all`.
 
@@ -436,15 +434,14 @@ the `--config` file, or the file `FERROFED_CONFIG` names, with the process's
 gateway reloads on the signal only and never watches the file, so write the
 new document completely, then send the signal.
 
-Ten sections take effect on a reload:
+Nine sections take effect on a reload:
 
 | Reloaded | Needs a restart |
 |---|---|
 | `[registry]`: the document's contents, its path and its `format` | `[registry.mcsd]`, the directory the registry is read from |
 | `[credentials]`, each endpoint's onward TLS included | `[server]`, `public_url`, `trusted_proxies`, `forwarded_header` and `replica` included, and `[signing]`, `rotation_overlap_s` included |
-| `[dev]` | `[telemetry]` and `[metrics]` |
 | `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
-| `[pdqm]` | `[pmir]` |
+| `[pdqm]` | `[pmir]`, `[telemetry]` and `[metrics]` |
 | `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
 | `[nl_gf]` | `[audit]` and `[config]` |
 | `[access_log]` | `[fhir]` and `[eehrxf]` |
@@ -464,8 +461,8 @@ and the document must still declare it: a reload whose document drops that
 endpoint is refused (`demographic-endpoint`, below).
 
 A reload whose file changes `profile` is refused (`profile`, below), so
-everything the development profile admits, the development cross-reference
-and consent table, and a credential or patient identifier over plain `http`
+everything the development profile admits, such as a credential or patient
+identifier over plain `http`
 ([What must travel encrypted](configuration.md#what-must-travel-encrypted)),
 follows the profile the process started with.
 

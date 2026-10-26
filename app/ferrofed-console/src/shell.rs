@@ -180,19 +180,11 @@ fn chrome(path: &str, reads: &Reads, searched: Option<String>, content: AnyView)
         .as_ref()
         .is_ok_and(|deployment| deployment.development);
     let banner = development.then(|| {
-        let crossref = reads
-            .deployment
-            .as_ref()
-            .is_ok_and(|deployment| deployment.development_crossref);
         banner(
             Tone::Warn,
             Glyph::TRIANGLE_ALERT,
             tr(Msg::DevelopmentTitle),
-            &tr(if crossref {
-                Msg::DevelopmentBodyCrossref
-            } else {
-                Msg::DevelopmentBody
-            }),
+            &tr(Msg::DevelopmentBody),
             None,
         )
     });

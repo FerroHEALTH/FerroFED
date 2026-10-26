@@ -65,15 +65,13 @@ sequenceDiagram
   [Dutch localization](../operate/localization.md#dutch-localization-nl_gfnvi)).
   Without either, the PIX Manager localizes: its candidates are the members
   whose domain holds an identifier for the patient, and the resolution
-  reuses that one ITI-83 answer (§14.2). The development cross-reference
-  localizes under `profile = "development"`. The read of an EHR by subject
+  reuses that one ITI-83 answer (§14.2). The read of an EHR by subject
   is localized the same way.
 - **The consent pre-filter** is optional and never the gate: a member it
   denies is `consent-denied`, never resolved and never sent a request, and
   every other member is asked so its node can decide (§13.2.1, N27, N27a).
   When the pre-filter cannot answer, every candidate is asked. The
-  pre-filter is the development table `[[dev.consent_denied]]` or the Dutch
-  binding, Mitz
+  pre-filter is the Dutch binding, Mitz
   ([Dutch consent](../operate/consent.md#dutch-consent-nl_gfmitz)).
 - "No identifier in this domain" is an answer: that member is
   `not-resolved` and does not fail the query (N6). A PIX Manager that cannot
