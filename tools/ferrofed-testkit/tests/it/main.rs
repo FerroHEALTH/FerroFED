@@ -24,6 +24,7 @@ mod keycloak_recipe;
 mod mcsd;
 mod myhealth_eu;
 mod national_connector;
+mod pixm_stub;
 mod pmir;
 mod proxy;
 mod seed;

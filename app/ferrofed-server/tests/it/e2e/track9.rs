@@ -27,7 +27,7 @@ use tokio::net::TcpListener;
 
 use crate::e2e::scenario::{Validated, fixture};
 use crate::e2e::{
-    EHR_A, EHR_B, PATIENT, TestResult, composition_carrying, dev_resolver, gateway_mounted, plan,
+    EHR_A, EHR_B, PATIENT, TestResult, composition_carrying, fixed_resolver, gateway_mounted, plan,
 };
 
 /// The prefix the deployment mounts the gateway at.
@@ -69,7 +69,7 @@ async fn an_unmodified_client_given_only_the_base_url_reads_and_writes_at_a_pref
     }
     let nodes = Box::pin(seeded()).await?;
     let dir = tempfile::tempdir()?;
-    let app = gateway_mounted(dir.path(), (&nodes.a, &nodes.b), &dev_resolver(), BASE)?;
+    let app = gateway_mounted(dir.path(), (&nodes.a, &nodes.b), &fixed_resolver(), BASE)?;
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let base = format!("http://{}{BASE}", listener.local_addr()?);
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();

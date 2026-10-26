@@ -8,7 +8,9 @@
 //! not answer. They need fixed answers, not a cross-reference, so
 //! [`manager`] mounts one `wiremock` answer per patient on a
 //! [`Server`]: a `Parameters` of `targetId` and `targetIdentifier`, ITI TF-2
-//! §3.83.4.2.2.1 (Case 1), and `404` `not-found` for any other
+//! §3.83.4.2.2.1 (Case 1), with the identifiers of the domains the request's
+//! `targetSystem` names alone, or of every domain when it names none
+//! (§3.83.4.1.2.2), and `404` `not-found` for any other
 //! `sourceIdentifier`, §3.83.4.2.2.2 (Case 2). It decides nothing: patient
 //! identity is FerroPIX's, and the end-to-end lane resolves through the
 //! pinned FerroPIX image ([`ferropix`](crate::containers::ferropix)). No
@@ -19,7 +21,7 @@ use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue}
 use fhir_types::r4::parameters::{Parameters, ParametersParameter, ParametersParameterValue};
 use fhir_types::r4::reference::Reference;
 use wiremock::matchers::{body_string_contains, method, path, query_param};
-use wiremock::{Mock, ResponseTemplate};
+use wiremock::{Mock, Request, Respond, ResponseTemplate};
 
 use crate::mock::Server;
 use crate::seed::CrossReferenceSeed;
@@ -43,8 +45,10 @@ pub async fn manager(known: &[CrossReferenceSeed]) -> Server {
     let server = Server::start().await;
     for (index, cross_reference) in known.iter().enumerate() {
         let patient = cross_reference.patient;
-        let answer = ResponseTemplate::new(200)
-            .set_body_raw(answer(index, cross_reference).into_bytes(), FHIR_JSON);
+        let answer = Answer {
+            index,
+            cross_reference: cross_reference.clone(),
+        };
         Mock::given(method("POST"))
             .and(path(PATH))
             .and(body_string_contains(patient.value()))
@@ -98,13 +102,60 @@ pub async fn queries(server: &Server) -> usize {
         .count()
 }
 
+/// The answer for one patient the stub knows, chosen by the domains the
+/// request asks for.
+#[derive(Debug, Clone)]
+struct Answer {
+    /// Which patient of the stub it is.
+    index: usize,
+    /// The patient and the `ehr_id` it has in each domain.
+    cross_reference: CrossReferenceSeed,
+}
+
+impl Respond for Answer {
+    fn respond(&self, request: &Request) -> ResponseTemplate {
+        let asked = target_systems(request);
+        ResponseTemplate::new(200).set_body_raw(
+            answer(self.index, &self.cross_reference, &asked).into_bytes(),
+            FHIR_JSON,
+        )
+    }
+}
+
+/// The `targetSystem` values of `request`: the query parameters of a `GET`,
+/// or the `targetSystem` parameters of a `POST`ed `Parameters`
+/// (ITI TF-2 §3.83.4.1.2).
+fn target_systems(request: &Request) -> Vec<String> {
+    let mut asked: Vec<String> = request
+        .url
+        .query_pairs()
+        .filter(|(name, _)| name == "targetSystem")
+        .map(|(_, value)| value.into_owned())
+        .collect();
+    // NOTE: no specification governs this: our own design; a body that is no
+    // Parameters asks for no domain, so every domain answers, as with a GET.
+    if let Ok(body) = serde_json::from_slice::<Parameters>(&request.body) {
+        let posted = body
+            .parameter
+            .iter()
+            .filter(|parameter| parameter.name.value.as_deref() == Some("targetSystem"))
+            .filter_map(|parameter| match &parameter.value {
+                Some(ParametersParameterValue::Uri(uri)) => uri.value.clone(),
+                _ => None,
+            });
+        asked.extend(posted);
+    }
+    asked
+}
+
 /// The `Parameters` answer for the patient `cross_reference` names, the
-/// `index`-th the stub knows.
+/// `index`-th the stub knows, with the identifiers of the domains in `asked`
+/// alone, or of every domain when `asked` is empty (ITI TF-2 §3.83.4.1.2.2).
 #[expect(
     clippy::expect_used,
     reason = "a typed Parameters of strings and identifiers always serialises"
 )]
-fn answer(index: usize, cross_reference: &CrossReferenceSeed) -> String {
+fn answer(index: usize, cross_reference: &CrossReferenceSeed, asked: &[String]) -> String {
     let mut parameter = vec![ParametersParameter {
         name: "targetId".into(),
         value: Some(ParametersParameterValue::Reference(Box::new(Reference {
@@ -113,7 +164,11 @@ fn answer(index: usize, cross_reference: &CrossReferenceSeed) -> String {
         }))),
         ..ParametersParameter::default()
     }];
-    for (domain, ehr_id) in &cross_reference.ehrs {
+    for (domain, ehr_id) in cross_reference
+        .ehrs
+        .iter()
+        .filter(|(domain, _)| asked.is_empty() || asked.contains(&domain.system()))
+    {
         parameter.push(ParametersParameter {
             name: "targetIdentifier".into(),
             value: Some(ParametersParameterValue::Identifier(Box::new(Identifier {

@@ -28,7 +28,7 @@ use http::{HeaderMap, HeaderValue, Request, StatusCode, header};
 use secrecy::SecretString;
 use uuid::Uuid;
 
-use crate::e2e::{EHR_A, EHR_B, PATIENT, dev_resolver, plan, registry_document};
+use crate::e2e::{EHR_A, EHR_B, PATIENT, fixed_resolver, plan, registry_document};
 use crate::support::settings;
 
 /// How a scenario configures the gateway; [`Options::default`] is the
@@ -55,7 +55,7 @@ pub(crate) struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            resolver: dev_resolver(),
+            resolver: fixed_resolver(),
             node_selection: "ask-all",
             per_node_ms: 20_000,
             overall_ms: 25_000,

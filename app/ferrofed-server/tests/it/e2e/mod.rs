@@ -136,12 +136,12 @@ pub(crate) fn gateway(
     a: &ProxiedNode,
     b: &ProxiedNode,
 ) -> Result<axum::Router, Box<dyn Error>> {
-    gateway_resolving(dir, a, b, &dev_resolver())
+    gateway_resolving(dir, a, b, &fixed_resolver())
 }
 
 /// The development cross-reference resolving [`PATIENT`] to [`EHR_A`] at
 /// node A and [`EHR_B`] at node B.
-pub(crate) fn dev_resolver() -> String {
+pub(crate) fn fixed_resolver() -> String {
     let (namespace, value) = (PATIENT.namespace(), PATIENT.value());
     format!(
         r#"profile = "development"
