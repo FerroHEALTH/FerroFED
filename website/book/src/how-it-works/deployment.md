@@ -15,8 +15,10 @@ model or the topology: our own design.
 The repository's `compose.yaml` runs the gateway beside four member CDRs, four
 FerroEHR instances, on one PostgreSQL server that holds a database per node
 ([The quickstart](../operate/container.md#the-quickstart)). The gateway runs
-in the development profile, with a static cross-reference from four synthetic
-patients to their EHRs in place of a PIX Manager. It trusts one development
+in the development profile and resolves every patient through FerroPIX, the
+FerroHEALTH patient index, which Compose runs beside it on its own
+PostgreSQL and seeds with four synthetic patients over ITI-104 before the
+gateway starts. It trusts one development
 issuer, whose tokens `scripts/quickstart/token.sh` prints, and signs with a
 key `scripts/quickstart/signing-key.sh` writes once
 ([The quickstart issuer](../operate/authentication.md#the-quickstart-issuer)).
@@ -26,7 +28,9 @@ flowchart TB
     you["You: curl, seed.sh<br/>and token.sh"]
     keys["docker/quickstart:<br/>issuer key set,<br/>signing key"]
     subgraph compose["docker compose"]
-        gw["ferrofed, :8080<br/>static cross-reference"]
+        gw["ferrofed, :8080"]
+        pix["ferropix<br/>PIXm Manager"]
+        seed["ferropix-seed<br/>ITI-104, once"]
         subgraph nodes["Four member CDRs"]
             a["ferroehr-a<br/>:8081"]
             b["ferroehr-b<br/>:8082"]
@@ -39,6 +43,8 @@ flowchart TB
     keys -->|"mounted<br/>read-only"| gw
     you -->|"seed over ITS-REST"| nodes
     gw -->|"AQL, Basic auth,<br/>the signed caller"| nodes
+    gw -->|"ITI-83"| pix
+    seed -->|"ITI-104"| pix
     nodes -->|"a database each"| pg
 ```
 

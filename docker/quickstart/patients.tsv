@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The quickstart's synthetic patients, one line per EHR: the member, the
+# ehr_id, the patient's identifier namespace and value, and the member's
+# ehr_id domain at FerroPIX. Every identifier lies inside the example arc
+# urn:oid:2.999 that ITU-T X.660 reserves for examples, and each EHR's first
+# group names its node and its last group its patient.
+#
+# scripts/quickstart/seed.sh creates each EHR at its node from these lines,
+# and docker/quickstart/ferropix/seed.sh feeds FerroPIX the same lines over
+# ITI-104, so the nodes and the patient index agree on every ehr_id. The
+# domains are the ones docker/quickstart/ferrofed.toml maps each member to in
+# [pixm.manager.members]. ffd-test-0004 has an EHR at no node, so it has no
+# line.
+node-a	aaaaaaaa-aaaa-4aaa-8aaa-000000000001	urn:oid:2.999.1.1	ffd-test-0001	urn:oid:2.999.2.1
+node-b	bbbbbbbb-bbbb-4bbb-8bbb-000000000001	urn:oid:2.999.1.1	ffd-test-0001	urn:oid:2.999.2.2
+node-c	cccccccc-cccc-4ccc-8ccc-000000000001	urn:oid:2.999.1.1	ffd-test-0001	urn:oid:2.999.2.3
+node-d	dddddddd-dddd-4ddd-8ddd-000000000001	urn:oid:2.999.1.1	ffd-test-0001	urn:oid:2.999.2.4
+node-b	bbbbbbbb-bbbb-4bbb-8bbb-000000000002	urn:oid:2.999.1.1	ffd-test-0002	urn:oid:2.999.2.2
+node-d	dddddddd-dddd-4ddd-8ddd-000000000002	urn:oid:2.999.1.1	ffd-test-0002	urn:oid:2.999.2.4
+node-c	cccccccc-cccc-4ccc-8ccc-000000000003	urn:oid:2.999.1.1	ffd-test-0003	urn:oid:2.999.2.3

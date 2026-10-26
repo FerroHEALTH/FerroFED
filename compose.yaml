@@ -19,10 +19,18 @@
 #
 # WHAT RUNS. The gateway federates the four nodes below: docker/quickstart/
 # registry.toml names them and docker/quickstart/ferrofed.toml configures the
-# gateway, both mounted read-only. The configuration is a development profile
-# with a static cross-reference from four synthetic patients to their EHRs,
-# which scripts/quickstart/seed.sh creates over ITS-REST: a patient at all
-# four nodes, one at two, one at one and one at none.
+# gateway, both mounted read-only. The gateway resolves every patient through
+# FerroPIX, the FerroHEALTH patient index, as a PIXm Consumer: FerroFED keeps
+# no patient index of its own. docker/quickstart/patients.tsv names four
+# synthetic patients and their EHRs: a patient at all four nodes, one at two,
+# one at one and one at none. The `ferropix-seed` service feeds FerroPIX
+# those EHRs over ITI-104 before the gateway starts, and
+# scripts/quickstart/seed.sh creates them at the nodes over ITS-REST.
+#
+# THE PATIENT INDEX. FerroPIX runs under its development profile on its own
+# PostgreSQL, configured by docker/quickstart/ferropix/ferropix.toml, with
+# development credentials and a development sealing key
+# (docker/quickstart/ferropix/data-key), NOT for anything real.
 #
 # THE SIGNING KEY. The gateway signs the caller's identity onto every request
 # to a node with its own key, which scripts/quickstart/signing-key.sh writes
@@ -95,6 +103,8 @@ services:
     container_name: ferrofed
     restart: unless-stopped
     depends_on:
+      ferropix-seed:
+        condition: service_completed_successfully
       ferroehr-a:
         condition: service_healthy
       ferroehr-b:
@@ -204,6 +214,83 @@ services:
       retries: 30
       start_period: 20s
 
+  # FerroPIX's PostgreSQL, the release FerroPIX pins for its own tests and
+  # quickstart. The script mounted below creates the restricted role FerroPIX
+  # connects as.
+  ferropix-postgres:
+    image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    restart: unless-stopped
+    environment:
+      # A development superuser password, NOT for anything real.
+      POSTGRES_PASSWORD: ${FERROPIX_POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ferropix
+    volumes:
+      - ferropix-pgdata:/var/lib/postgresql
+      - ./docker/quickstart/ferropix/10-ferropix-role.sql:/docker-entrypoint-initdb.d/10-ferropix-role.sql:ro
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+      - /var/run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d ferropix"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # FerroPIX, the patient index: its PIXm Manager answers the gateway's
+  # ITI-83 and takes the seed's ITI-104 feed.
+  ferropix:
+    image: ghcr.io/ferrohealth/ferropix:0.0.5@sha256:6d42e2f9498eb0a801401149d19134cb6f54c2db3d2c499ffe8ba77ad902a8d5
+    restart: unless-stopped
+    depends_on:
+      ferropix-postgres:
+        condition: service_healthy
+    environment:
+      FERROPIX_CONFIG: /etc/ferropix/ferropix.toml
+    volumes:
+      - ./docker/quickstart/ferropix/ferropix.toml:/etc/ferropix/ferropix.toml:ro
+      - ./docker/quickstart/ferropix/data-key:/run/secrets/ferropix-data-key:ro
+      # The audit spool and the usage report's instance id.
+      - ferropix-state:/var/lib/ferropix
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ferropix", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Feeds FerroPIX the patients of docker/quickstart/patients.tsv once, as
+  # each member's Patient Identity Source, and exits.
+  ferropix-seed:
+    image: curlimages/curl:8.23.0@sha256:11e64e28c5f58c8d93ee95fcf22ac055f48b0bc440e0ce7d8013bbb5ad6aa8ac
+    restart: "no"
+    depends_on:
+      ferropix:
+        condition: service_healthy
+    environment:
+      # The Patient Identity Source of docker/quickstart/ferropix/ferropix.toml,
+      # a development credential, NOT for anything real.
+      FERROPIX_USER: quickstart-source
+      FERROPIX_PASSWORD: ferrofed-source-example
+    entrypoint: ["/bin/sh", "/seed/seed.sh", "/seed/patients.tsv", "http://ferropix:8080/fhir"]
+    volumes:
+      - ./docker/quickstart/ferropix/seed.sh:/seed/seed.sh:ro
+      - ./docker/quickstart/patients.tsv:/seed/patients.tsv:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
   ferroehr-a:
     <<: *ferroehr-node
     environment:
@@ -280,3 +367,5 @@ configs:
 volumes:
   ferrofed-state:
   ferroehr-pgdata:
+  ferropix-pgdata:
+  ferropix-state:

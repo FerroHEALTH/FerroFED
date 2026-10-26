@@ -5,9 +5,10 @@
 # over each node's ITS-REST API and nothing else (no specification governs the
 # seed: our own design).
 #
-# The patients are the [[dev.crossref]] rows of docker/quickstart/ferrofed.toml,
-# the gateway's static cross-reference, so the seed and the gateway agree on
-# every ehr_id by construction. For each row the script creates the EHR with
+# The patients are the lines of docker/quickstart/patients.tsv, which the
+# compose `ferropix-seed` service also feeds to FerroPIX, the patient index the
+# gateway resolves through, so the nodes and the index agree on every ehr_id by
+# construction. For each row the script creates the EHR with
 # PUT /v1/ehr/{ehr_id}, its EHR_STATUS.subject naming the patient, and commits
 # one vendored demo composition to it with POST /v1/ehr/{ehr_id}/composition;
 # each node first takes the vendored operational template through
@@ -27,7 +28,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-readonly CONFIG=docker/quickstart/ferrofed.toml
+readonly PATIENTS=docker/quickstart/patients.tsv
 readonly DEMO=docs/specs/federation-ref/docker/demo-data
 readonly TEMPLATE="$DEMO/International Patient Summary.opt"
 readonly HOST="${FERROFED_BIND_HOST:-127.0.0.1}"
@@ -80,23 +81,9 @@ accept() {
   esac
 }
 
-# rows: one line per [[dev.crossref]] row, "member ehr_id namespace value".
+# rows: one line per EHR of $PATIENTS, "member ehr_id namespace value".
 rows() {
-  awk '
-    function flush() {
-      if (open) print row["member"], row["ehr_id"], row["namespace"], row["value"]
-      open = 0
-      delete row
-    }
-    /^\[\[dev\.crossref\]\][[:space:]]*$/ { flush(); open = 1; next }
-    /^\[/ { flush(); next }
-    open && /^[a-z_]+[[:space:]]*=[[:space:]]*"[^"]*"[[:space:]]*$/ {
-      key = $0; sub(/[[:space:]]*=.*/, "", key)
-      value = $0; sub(/^[^"]*"/, "", value); sub(/".*/, "", value)
-      row[key] = value
-    }
-    END { flush() }
-  ' "$CONFIG"
+  awk -F '\t' '!/^#/ && NF >= 4 { print $1, $2, $3, $4 }' "$PATIENTS"
 }
 
 [[ -f "$TEMPLATE" ]] || die "the vendored template $TEMPLATE is missing"
@@ -104,7 +91,7 @@ command -v curl >/dev/null || die "curl is required"
 
 rows >"$work/rows"
 count="$(wc -l <"$work/rows" | tr -d ' ')"
-[[ "$count" -gt 0 ]] || die "$CONFIG holds no [[dev.crossref]] row"
+[[ "$count" -gt 0 ]] || die "$PATIENTS holds no patient"
 
 seen=" "
 while read -r member ehr_id namespace value <&3; do

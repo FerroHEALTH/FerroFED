@@ -375,10 +375,13 @@ front.
 `docker/quickstart/registry.toml` names the four nodes and
 `docker/quickstart/ferrofed.toml` configures the gateway with each node's
 quickstart credentials; Compose mounts both read-only. The configuration runs
-in the development profile, with a static cross-reference from four synthetic
-patients to their EHRs. It is a testing device and no identity binding; a
-deployment resolves patients through an identifier cross-reference service,
-a PIX Manager ([Identity resolution](identity.md)).
+in the development profile and resolves every patient through FerroPIX, the
+FerroHEALTH patient index, as its PIXm Consumer: FerroFED keeps no patient
+index of its own ([Identity resolution](identity.md)). Compose runs FerroPIX
+on its own PostgreSQL, configured by `docker/quickstart/ferropix/ferropix.toml`
+with development credentials and a development sealing key, and the
+one-shot `ferropix-seed` service feeds it the patients of
+`docker/quickstart/patients.tsv` over ITI-104 before the gateway starts.
 
 `docker compose down -v` stops the stack and removes its volumes. A
 quickstart volume created before v0.0.8 holds the roles with their earlier
@@ -387,8 +390,8 @@ once before you bring that stack up again, then seed it anew.
 
 ### The synthetic patients
 
-`scripts/quickstart/seed.sh` reads the cross-reference rows of
-`docker/quickstart/ferrofed.toml` and creates exactly those EHRs over each
+`scripts/quickstart/seed.sh` reads `docker/quickstart/patients.tsv`, the
+patients FerroPIX was fed, and creates exactly those EHRs over each
 node's ITS-REST API: `PUT /v1/ehr/{ehr_id}` with the patient on
 `EHR_STATUS.subject`, the vendored `International Patient Summary` template,
 and one vendored demo composition per EHR. It needs `curl`, and a second run
