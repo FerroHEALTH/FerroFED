@@ -41,6 +41,8 @@ use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_smart::client::TokenError;
+use ferrohealth_smart::client::cache::TokenSource;
 use http::header::{AUTHORIZATION, HeaderMap};
 use http::{HeaderValue, StatusCode};
 use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, Ura, is_bsn_system};
@@ -50,7 +52,6 @@ use nl_generic_functions::mitz::question::{
     MAX_CATEGORIES, ProfessionalId, Purpose, RoleCode,
 };
 use nl_generic_functions::mitz::{MitzClient, UZI_ROOT};
-use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider};
 use secrecy::SecretString;
 use thiserror::Error;
 use tokio::task::JoinSet;
@@ -203,16 +204,11 @@ pub enum MitzPrefilterError {
     Stopped,
     /// The grant gave no token the question can carry.
     #[error("the Mitz grant gave no token")]
-    Token(#[source] CredentialsError),
+    Token(#[source] Arc<TokenError>),
     /// The client that carries the grant's token cannot be built.
     #[error("the Mitz client that carries the grant's token cannot be built")]
     Client(#[source] MitzConfigError),
 }
-
-/// A credential a grant's provider gave that is no bearer token.
-#[derive(Debug, Error)]
-#[error("the grant gave a credential that is no bearer token")]
-struct NotBearer;
 
 /// The [`ConsentPrefilter`] over Mitz's closed authorization question
 /// (Annex B §B.6, N27a).
@@ -513,7 +509,7 @@ impl Asker {
     /// The asker `config` describes; a grant's client is built per token,
     /// and the endpoint is checked here.
     fn from_config(config: &MitzConfig) -> Result<Self, MitzConfigError> {
-        let Authentication::Grant(provider) = &config.auth else {
+        let Authentication::Grant(source) = &config.auth else {
             return Ok(Self::Fixed(client(config, &config.auth)?));
         };
         client(config, &Authentication::None)?;
@@ -521,7 +517,7 @@ impl Asker {
             endpoint: config.endpoint.clone(),
             development: config.development,
             tls: config.tls.clone(),
-            provider: Arc::clone(provider),
+            source: source.clone(),
             current: Mutex::new(None),
         }))
     }
@@ -546,7 +542,7 @@ impl fmt::Debug for Asker {
             Self::Token(asker) => f
                 .debug_struct("Token")
                 .field("endpoint", &asker.endpoint)
-                .field("provider", &asker.provider)
+                .field("source", &asker.source)
                 .finish_non_exhaustive(),
         }
     }
@@ -558,7 +554,7 @@ struct TokenAsker {
     endpoint: SecretUrl,
     development: bool,
     tls: Tls,
-    provider: Arc<dyn CredentialsProvider>,
+    source: TokenSource,
     current: Mutex<Option<(HeaderValue, MitzClient)>>,
 }
 
@@ -575,7 +571,10 @@ impl TokenAsker {
             // NOTE: RFC 6750 §3.1: a 401 answers an invalid or expired token, so the token is
             // dropped and the question asked once more, never again with the refused token.
             Err(error) if error.status() == Some(StatusCode::UNAUTHORIZED) => {
-                self.provider.refused();
+                let refused = self.lock().as_ref().map(|(held, _)| held.clone());
+                if let Some(refused) = refused {
+                    self.source.invalidate(&refused);
+                }
                 let left = timeout.saturating_sub(started.elapsed());
                 if left.is_zero() {
                     return Err(ConsentError::DeadlineExceeded);
@@ -590,23 +589,16 @@ impl TokenAsker {
         }
     }
 
-    /// The client that carries the provider's current token as a bearer
-    /// token (RFC 6750 §2.1).
+    /// The client that carries the source's current token as a bearer token
+    /// (RFC 6750 §2.1).
     async fn client(&self) -> Result<MitzClient, ConsentError> {
         let failed = |error| ConsentError::Backend(Box::new(error));
-        let credentials = self
-            .provider
-            .credentials()
+        let token = self
+            .source
+            .token()
             .await
             .map_err(|source| failed(MitzPrefilterError::Token(source)))?;
-        if !matches!(credentials, Credentials::Bearer(_)) {
-            return Err(failed(MitzPrefilterError::Token(CredentialsError::new(
-                NotBearer,
-            ))));
-        }
-        let mut header = credentials
-            .header_value()
-            .map_err(|source| failed(MitzPrefilterError::Token(CredentialsError::new(source))))?;
+        let mut header = token.header().clone();
         header.set_sensitive(true);
         if let Some((held, client)) = self.lock().as_ref()
             && *held == header

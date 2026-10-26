@@ -25,6 +25,7 @@ ihe = [
   "ihe-iti/pdqm",
   "ihe-iti/pixm",
   "ihe-iti/pmir",
+  "ihe-iti/smart",
   "ihe-iti/xcpd",
 ]
 # The BALP recorders: the FHIR Feed of ITI-20 to an ATNA Audit Record
@@ -39,6 +40,9 @@ nl = ["dep:nl-generic-functions"]
 [dependencies]
 async-trait.workspace = true
 ferrofed-registry.workspace = true
+# The OAuth 2.0 client-credentials token an IHE FHIR client and Mitz send,
+# fetched, cached and renewed by the family's client (IUA ITI-71).
+ferrohealth-smart.workspace = true
 http.workspace = true
 # The PIXm resolver (#43) over the ITI-83 client of the binding crate, the
 # registry document in FHIR form (#74) over its mCSD directory reader, and the

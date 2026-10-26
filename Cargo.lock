@@ -1597,6 +1597,7 @@ dependencies = [
  "async-trait",
  "ferrofed-registry",
  "ferrofed-testkit",
+ "ferrohealth-smart",
  "fhir-types",
  "http",
  "ihe-atna",
@@ -2648,11 +2649,12 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.60"
+version = "0.0.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6faafb3053c7550d8acf215f1ef0d019d4814dea4f27a7efc42d7950d220e2ba"
+checksum = "c6b955e2273c2c037a4067634a1324e20f6132a3e6535fb11deae767893ef3cd"
 dependencies = [
  "async-trait",
+ "ferrohealth-smart",
  "fhir-types",
  "http",
  "ihe-atna",

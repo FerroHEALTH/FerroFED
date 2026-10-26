@@ -22,10 +22,10 @@
 //! client refuses it.
 
 use std::fmt;
-use std::sync::Arc;
 
+use ferrohealth_smart::client::cache::TokenSource;
 use http::header::{AUTHORIZATION, HeaderMap};
-use openehr_its::rest::client::{Credentials, CredentialsProvider, InvalidCredentials};
+use openehr_its::rest::client::{Credentials, InvalidCredentials};
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 
@@ -47,11 +47,11 @@ pub enum Authentication {
         /// The password.
         password: SecretString,
     },
-    /// An OAuth 2.0 access token the provider obtains and refreshes,
-    /// incorporated in each request (IUA ITI-71, ITI-72 §3.72.4.2). Only a
-    /// client that takes an authorizer sends it; [`http_client`] refuses it
-    /// ([`ClientError::Grant`]).
-    Grant(Arc<dyn CredentialsProvider>),
+    /// An OAuth 2.0 access token the source obtains with the
+    /// client-credentials grant and renews, incorporated in each request
+    /// (IUA ITI-71, ITI-72 §3.72.4.2). Only a client that takes an authorizer
+    /// sends it; [`http_client`] refuses it ([`ClientError::Grant`]).
+    Grant(TokenSource),
 }
 
 impl Authentication {
