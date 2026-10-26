@@ -66,6 +66,10 @@ jobs:
           cache-shared-key: sonar
           cache-save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Restore the FHIR package closure
+        if: ${{ hashFiles('Cargo.toml') != '' }}
+        uses: ./.github/actions/fhir-packages
+
       - name: Install cargo-llvm-cov and cargo-nextest
         if: ${{ hashFiles('Cargo.toml') != '' }}
         uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28

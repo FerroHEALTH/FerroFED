@@ -901,6 +901,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
+      - uses: ./.github/actions/fhir-packages
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-nextest
@@ -962,6 +963,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           cache-shared-key: binding-tests-${{ matrix.build }}
+      - uses: ./.github/actions/fhir-packages
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-nextest
@@ -996,6 +998,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
+      - uses: ./.github/actions/fhir-packages
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-nextest
