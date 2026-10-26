@@ -5,3 +5,6 @@
   patients now live in `docker/quickstart/patients.tsv`, which
   `scripts/quickstart/seed.sh` reads too. Run `docker compose down -v` once
   before bringing an older quickstart up again (#1377).
+- The `binding-nl` feature carries `binding-ihe`: the Dutch binding resolves
+  patients through FerroPIX's PIXm Manager, the family's patient index for
+  Dutch BSNs too (#1377).

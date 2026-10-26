@@ -194,7 +194,9 @@ fn config_check_refuses_a_creating_system_mapping_to_an_undeclared_endpoint()
 /// check` together, so its four members, their credentials and the PIX
 /// Manager every member is resolved through agree with one another. The
 /// suite's key stands in for the one `scripts/quickstart/signing-key.sh`
-/// writes before the first `docker compose up`.
+/// writes before the first `docker compose up`. The quickstart resolves
+/// through a PIX Manager, so it needs the IHE binding the image carries.
+#[cfg(feature = "binding-ihe")]
 #[test]
 #[expect(
     clippy::panic_in_result_fn,

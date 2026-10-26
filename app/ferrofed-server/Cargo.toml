@@ -39,7 +39,14 @@ binding-ihe = [
 ]
 # The Dutch binding of Annex B: the NVI localizer, the Mitz consent
 # pre-filter, the LRZa URAs they read, and the Nuts grant (src/binding/nl).
-binding-nl = ["dep:nl-generic-functions", "ferrofed-identity/nl", "ferrofed-engine/nl"]
+# It resolves patients through FerroPIX's PIXm Manager, the family's patient
+# index for Dutch BSNs too, so it carries the IHE binding (#1377).
+binding-nl = [
+  "binding-ihe",
+  "dep:nl-generic-functions",
+  "ferrofed-identity/nl",
+  "ferrofed-engine/nl",
+]
 # The PostgreSQL backend of the stored-query registry, for several replicas
 # sharing one store (#268). Off by default, so a single gateway carries no
 # PostgreSQL client (no specification governs this: our own design).
