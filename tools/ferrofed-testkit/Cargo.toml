@@ -71,6 +71,8 @@ openehr-rm.workspace = true
 reqwest.workspace = true
 # The identifier values of the stub responding gateway's answers (#367).
 secrecy.workspace = true
+# The configuration text the fixed cross-reference's rows are read from.
+toml.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 testcontainers.workspace = true
@@ -99,7 +101,6 @@ openehr-its = { workspace = true, features = ["rest"] }
 # an operator's browser reaches both (#276).
 ferrofed-console.workspace = true
 tempfile.workspace = true
-toml.workspace = true
 # The XCPD client the stub responding gateway is held to (#85), the mCSD
 # client the harness directory is held to (#86), and the PMIR subscriber and
 # feed reader the harness Patient Identity Registry is held to (#147).

@@ -271,7 +271,7 @@ fn localized_gateway(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 500\n\n{rows}{consent}"
     );
     let settings = ferrofed_server::config::Config::from_sources(
-        Some(&crate::support::signed(&text)),
+        Some(&crate::support::unseamed(&text)),
         &std::collections::BTreeMap::new(),
     )?
     .resolve()?;
@@ -423,16 +423,26 @@ struct Declared {
 #[test]
 fn consent_rows_outside_the_development_profile_refuse_to_start() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let built = gateway(
-        dir.path(),
-        &registry("https://cdr-a.example.org", "https://cdr-b.example.org", ""),
-        "profile = \"production\"",
-        &format!(
-            "{}{}",
-            crossref(&[("node-a", EHR_A)]),
-            denied(PATIENT, "node-b")
-        ),
+    let document = dir.path().join("registry.toml");
+    std::fs::write(
+        &document,
+        registry("https://cdr-a.example.org", "https://cdr-b.example.org", ""),
+    )?;
+    let document = toml::Value::String(document.display().to_string());
+    let text = format!(
+        "profile = \"production\"\n\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}{}",
+        crossref(&[("node-a", EHR_A)]),
+        denied(PATIENT, "node-b")
     );
+    let built = ferrofed_server::config::Config::from_sources(
+        Some(&crate::support::unseamed(&text)),
+        &std::collections::BTreeMap::new(),
+    )
+    .map_err(Box::<dyn Error>::from)
+    .and_then(|config| config.resolve().map_err(Box::<dyn Error>::from))
+    .and_then(|settings| {
+        ferrofed_server::federation::Federation::load(&settings).map_err(Box::<dyn Error>::from)
+    });
     assert!(
         built.is_err(),
         "a production gateway refuses the [dev] table"

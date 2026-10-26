@@ -26,7 +26,7 @@ use http::header;
 use tokio::net::TcpListener;
 
 use crate::run::binary;
-use crate::support::{auth_toml, bearer, operator_bearer, signed};
+use crate::support::{auth_toml, bearer, operator_bearer, unseamed};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -109,7 +109,7 @@ fn configuration(gateway: &str, admin: &str, document: &Path) -> String {
          [[dev.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{}",
         auth_toml()
     );
-    signed(&text)
+    unseamed(&text)
 }
 
 /// Reads every file of the archive at `path`, by its path below the root.

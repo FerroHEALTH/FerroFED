@@ -23,7 +23,7 @@ fn rendered(code: ExitCode) -> String {
 /// with the suite's `[auth]` added when `toml` names none, and its
 /// `[signing]` when `toml` configures a registry and names none.
 pub(crate) fn binary(args: &[&str], toml: &str) -> Result<Output, Box<dyn StdError>> {
-    let toml = crate::support::signed(toml);
+    let toml = crate::support::unseamed(toml);
     let mut file = tempfile::NamedTempFile::new()?;
     file.write_all(toml.as_bytes())?;
     if !toml.contains("[auth") {

@@ -410,8 +410,8 @@ fn deployed(dir: &std::path::Path, text: &str) -> Result<Router, Box<dyn Error>>
     std::fs::write(&document, REGISTRY)?;
     let document = toml::Value::String(document.display().to_string());
     let text = text.replace("{registry}", &document.to_string());
-    let settings =
-        Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
+    let settings = Config::from_sources(Some(&crate::support::unseamed(&text)), &BTreeMap::new())?
+        .resolve()?;
     Ok(ferrofed_server::router(
         Arc::new(AppState::build(&settings)?),
         &settings_with_room(),

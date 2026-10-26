@@ -27,6 +27,8 @@
 pub mod development;
 #[cfg(feature = "binding-ihe")]
 pub mod ihe;
+#[cfg(feature = "test-seam")]
+pub mod injected;
 #[cfg(feature = "binding-nl")]
 pub mod nl;
 pub mod process;
@@ -58,6 +60,8 @@ static COMPILED: &[&dyn Binding] = &[
     &nl::Nl,
     #[cfg(feature = "binding-ihe")]
     &ihe::Ihe,
+    #[cfg(feature = "test-seam")]
+    &injected::Injected,
     &development::Development,
 ];
 

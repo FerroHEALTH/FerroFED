@@ -381,8 +381,8 @@ fn load_refusal(dir: &Path, text: &str) -> Result<FederationError, Box<dyn Error
     let text = format!(
         "{text}\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     );
-    let settings =
-        Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
+    let settings = Config::from_sources(Some(&crate::support::unseamed(&text)), &BTreeMap::new())?
+        .resolve()?;
     match Federation::load(&settings) {
         Ok(_) => Err("the federation was built".into()),
         Err(error) => Ok(error),
