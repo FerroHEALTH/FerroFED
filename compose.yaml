@@ -253,6 +253,9 @@ services:
         condition: service_healthy
     environment:
       FERROPIX_CONFIG: /etc/ferropix/ferropix.toml
+      # FerroPIX's installation report follows FerroFED's switch, so
+      # FERROFED__USAGE_REPORT__ENABLED=false stops both.
+      FERROPIX__USAGE_REPORT__ENABLED: ${FERROFED__USAGE_REPORT__ENABLED:-true}
     volumes:
       - ./docker/quickstart/ferropix/ferropix.toml:/etc/ferropix/ferropix.toml:ro
       - ./docker/quickstart/ferropix/data-key:/run/secrets/ferropix-data-key:ro
@@ -300,10 +303,11 @@ services:
       FERROEHR__SERVER__SYSTEM_ID: node-a.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
       # FerroEHR's installation report to FerroPULSE: on by default, and
-      # FERROEHR__USAGE_REPORT__ENABLED=false in your shell or .env stops it.
+      # FERROEHR__USAGE_REPORT__ENABLED=false, or FerroFED's switch when that
+      # is unset, in your shell or .env stops it.
       # What it sends and when:
       # https://ferroehr.eu/docs/latest/usage-report.html
-      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-true}
+      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_A_PORT:-8081}:8080"
 
@@ -313,7 +317,7 @@ services:
       FERROEHR__DB__URL: postgres://ferroehr_b:ferroehr_b_example@ferroehr-postgres:5432/ferroehr_b
       FERROEHR__SERVER__SYSTEM_ID: node-b.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
-      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-true}
+      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_B_PORT:-8082}:8080"
 
@@ -323,7 +327,7 @@ services:
       FERROEHR__DB__URL: postgres://ferroehr_c:ferroehr_c_example@ferroehr-postgres:5432/ferroehr_c
       FERROEHR__SERVER__SYSTEM_ID: node-c.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
-      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-true}
+      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_C_PORT:-8083}:8080"
 
@@ -333,7 +337,7 @@ services:
       FERROEHR__DB__URL: postgres://ferroehr_d:ferroehr_d_example@ferroehr-postgres:5432/ferroehr_d
       FERROEHR__SERVER__SYSTEM_ID: node-d.quickstart.local
       FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
-      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-true}
+      FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_D_PORT:-8084}:8080"
 

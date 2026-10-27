@@ -25,7 +25,7 @@ use std::fmt::Write as _;
 use std::time::Duration;
 
 use testcontainers::core::{IntoContainerPort, WaitFor};
-use testcontainers::{ContainerAsync, GenericImage, ImageExt};
+use testcontainers::{ContainerAsync, ContainerRequest, GenericImage, ImageExt};
 
 use super::images::{FERROPIX, FERROPIX_POSTGRES};
 use super::retry;
@@ -274,18 +274,9 @@ async fn start(
     })?;
     let image = FERROPIX.repository;
     let configuration = config(&host, authoritative, local, xcpd);
-    let server = retry::start(|| {
-        FERROPIX
-            .image()
-            .with_exposed_port(PORT.tcp())
-            .with_network(network.clone())
-            .with_copy_to(CONFIG_TARGET, configuration.as_bytes().to_vec())
-            .with_copy_to(DATA_KEY_TARGET, DATA_KEY.as_bytes().to_vec())
-            .with_env_var("FERROPIX_CONFIG", CONFIG_TARGET)
-            .with_startup_timeout(Duration::from_secs(120))
-    })
-    .await
-    .map_err(|source| HarnessError::Container { image, source })?;
+    let server = retry::start(|| ferropix_request(network.clone(), &configuration))
+        .await
+        .map_err(|source| HarnessError::Container { image, source })?;
     let server_host = server
         .get_host()
         .await
@@ -303,9 +294,40 @@ async fn start(
     })
 }
 
+/// The FerroPIX container on `network` with `configuration` as its file.
+///
+/// The usage report is switched off twice: `[usage_report] enabled = false`
+/// in the file, and the environment key every family launcher carries, which
+/// wins over the file and is what `scripts/checks/usage-report-off.sh` reads.
+fn ferropix_request(network: String, configuration: &str) -> ContainerRequest<GenericImage> {
+    FERROPIX
+        .image()
+        .with_exposed_port(PORT.tcp())
+        .with_network(network)
+        .with_copy_to(CONFIG_TARGET, configuration.as_bytes().to_vec())
+        .with_copy_to(DATA_KEY_TARGET, DATA_KEY.as_bytes().to_vec())
+        .with_env_var("FERROPIX_CONFIG", CONFIG_TARGET)
+        .with_env_var("FERROPIX__USAGE_REPORT__ENABLED", "false")
+        .with_startup_timeout(Duration::from_secs(120))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{CONSUMER, SOURCE, config};
+    use super::{CONSUMER, SOURCE, config, ferropix_request};
+
+    #[test]
+    fn ferropix_starts_with_its_usage_report_off() {
+        let request = ferropix_request("net".to_owned(), "");
+        let usage_report = request
+            .env_vars()
+            .find(|(name, _)| name == "FERROPIX__USAGE_REPORT__ENABLED")
+            .map(|(_, value)| value.into_owned());
+        assert_eq!(
+            Some("false".to_owned()),
+            usage_report,
+            "a test FerroPIX must not send a usage report"
+        );
+    }
 
     #[test]
     fn the_configuration_names_every_domain_fed_by_the_source() {

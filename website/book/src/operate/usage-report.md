@@ -217,9 +217,11 @@ enabled = false
 The release's compose file and the quickstart's `compose.yaml` forward this
 variable from your shell or `.env`, so
 `FERROFED__USAGE_REPORT__ENABLED=false docker compose up` switches the report
-off there too. The quickstart's FerroEHR nodes report to FerroPULSE as well,
-each as a FerroEHR installation, and `FERROEHR__USAGE_REPORT__ENABLED=false`
-stops theirs. In a CI job the report is off by itself: when
+off there too. The quickstart's FerroEHR nodes and its FerroPIX report to
+FerroPULSE as well, each as an installation of its own product, and the same
+`FERROFED__USAGE_REPORT__ENABLED=false` stops theirs.
+`FERROEHR__USAGE_REPORT__ENABLED`, when you set it, decides for the nodes
+alone. In a CI job the report is off by itself: when
 `GITHUB_ACTIONS` or `CI` is `true` or `1`, the gateway sends nothing, and
 `enabled = true` does not change that. A container does not inherit the
 runner's environment, so a test lane that starts the image passes
