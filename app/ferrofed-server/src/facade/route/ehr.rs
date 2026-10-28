@@ -20,7 +20,7 @@ use std::time::Instant;
 
 use axum::response::Response;
 use ferrofed_engine::conveyance::Conveyance;
-use ferrofed_engine::single_node::forward::{ForwardError, Forwarded};
+use ferrofed_engine::single_node::forward::{ForwardError, Forwarded, HeldRequest};
 use ferrofed_engine::single_node::probe::{self, Answer, Probe, ProbedEhrId};
 use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::EhrId;
@@ -45,7 +45,8 @@ const EHR_ID_PARAM: &str = "ehr_id";
 /// The path `ehr_id` is parsed first, and a malformed one is a `400` before
 /// any routing (§12.5); so is a query parameter the operation does not
 /// declare, or a declared header or query value that does not match its
-/// declared kind, before anything is sent (§5.4.1, N33). The owner is then found in
+/// declared kind, before anything is sent (§5.4.1, N33), and a `CONTRIBUTION` in
+/// canonical XML is a `415` ([`write::media_refused`]). The owner is then found in
 /// the order of §12.5.1 (N41): the targeting headers, a binding the client
 /// session holds, the `ehr_id` index, and for a read only, the ask-all probe.
 /// A write none of the first three routes is a `400` (`target-required`),
@@ -72,9 +73,9 @@ pub(super) async fn route(
     if let Some(refused) = write::path_refused(write, matched) {
         return error::response(refused.code(), refused.to_string(), request_id);
     }
-    let request = match held(&arrived) {
+    let request = match held_as(&arrived, write, &logged) {
         Ok(request) => request,
-        Err(failure) => return unheld(&failure, request_id, &logged),
+        Err(refused) => return *refused,
     };
     let snapshot = federation.snapshot();
     let asked = ((arrived.headers, arrived.session), &arrived.conveyance);
@@ -165,6 +166,26 @@ pub(super) async fn route(
         }
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => failed(&failure, provenance, (request_id, &logged)),
+    }
+}
+
+/// The request `arrived` held to its operation ([`held`]), or the answer
+/// refusing it before it is routed: [`unheld`]'s, or the `415` of a `write`
+/// that sends a `CONTRIBUTION` in canonical XML ([`write::media_refused`]).
+fn held_as(
+    arrived: &Arrived<'_>,
+    write: Write,
+    logged: &str,
+) -> Result<HeldRequest, Box<Response>> {
+    let request =
+        held(arrived).map_err(|failure| Box::new(unheld(&failure, arrived.request_id, logged)))?;
+    match write::media_refused(write, request.headers()) {
+        Some(refused) => Err(Box::new(error::response(
+            Code::MediaTypeUnsupported,
+            refused.to_string(),
+            arrived.request_id,
+        ))),
+        None => Ok(request),
     }
 }
 
