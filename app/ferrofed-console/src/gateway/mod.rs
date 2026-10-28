@@ -33,6 +33,7 @@ use ferrofed_registry::health::DependencyReport;
 use ferrofed_registry::operator::{
     CreatingSystemEntry, DeploymentReport, IncidentReport, Page, PageRequest, StoredVersion,
 };
+use ferrohealth_secret::secret::Secret;
 use http::{Method, StatusCode};
 use openehr_federation::error::WireError;
 use openehr_federation::meta::FederationMeta;
@@ -55,21 +56,16 @@ use url::Url;
 
 use crate::config::settings::GatewaySettings;
 
-/// The operator's access token, sent to the gateway as a bearer credential.
-#[derive(Clone)]
-pub struct AccessToken(SecretString);
+/// The operator's access token, sent to the gateway as a bearer credential,
+/// held in the family's redacting [`Secret`].
+#[derive(Debug, Clone)]
+pub struct AccessToken(Secret);
 
 impl AccessToken {
     /// Wraps the token the OpenID Provider issued.
     #[must_use]
     pub fn new(token: SecretString) -> Self {
-        Self(token)
-    }
-}
-
-impl fmt::Debug for AccessToken {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("AccessToken(..)")
+        Self(Secret::from(token))
     }
 }
 
@@ -605,7 +601,7 @@ impl Gateway {
         token: &AccessToken,
     ) -> Result<Client<ReqwestTransport>, GatewayError> {
         Client::new(self.transport.clone(), root)
-            .map(|client| client.with_credentials(Credentials::bearer(token.0.clone())))
+            .map(|client| client.with_credentials(Credentials::bearer(token.0.to_secret_string())))
             .map_err(|source| GatewayError::Call { source })
     }
 }

@@ -34,8 +34,9 @@ use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
+use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::openehr::smart_scopes::SmartScope;
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 
 /// A caller the gateway verified.
 ///
@@ -206,31 +207,18 @@ impl fmt::Debug for Professional {
 
 /// A caller's verified access token.
 ///
-/// `Debug` shows nothing of it, and it is never logged or conveyed to a
-/// node: it reaches only the authorization server of a node whose grant
-/// exchanges it (RFC 8693 §2.1).
-#[derive(Clone)]
-pub struct VerifiedToken(SecretString);
+/// It is held in the family's redacting [`Secret`], so `Debug` shows
+/// nothing of it, and it is never logged or conveyed to a node: it reaches
+/// only the authorization server of a node whose grant exchanges it
+/// (RFC 8693 §2.1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedToken(Secret);
 
 impl VerifiedToken {
-    /// Returns the token text.
+    /// Returns the token text, for the one request that exchanges it.
     #[must_use]
-    pub fn secret(&self) -> &SecretString {
-        &self.0
-    }
-}
-
-impl PartialEq for VerifiedToken {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.expose_secret() == other.0.expose_secret()
-    }
-}
-
-impl Eq for VerifiedToken {}
-
-impl fmt::Debug for VerifiedToken {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("VerifiedToken(<redacted>)")
+    pub fn secret(&self) -> SecretString {
+        self.0.to_secret_string()
     }
 }
 
@@ -551,7 +539,7 @@ impl Caller {
             self.verified_by,
             VerifiedBy::Signature | VerifiedBy::Introspection
         ) {
-            self.token = Some(VerifiedToken(token));
+            self.token = Some(VerifiedToken(Secret::from(token)));
         }
         self
     }
