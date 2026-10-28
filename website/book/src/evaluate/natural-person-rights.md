@@ -93,9 +93,9 @@ A dispensation is read only by the id its receipt named.
 **The gap.** Imaging, test results and discharge reports have no interface
 in the exchange format (Annex II, point 2.1:
 [#522](https://github.com/FerroHEALTH/FerroFED/issues/522),
-[#666](https://github.com/FerroHEALTH/FerroFED/issues/666),
-[#667](https://github.com/FerroHEALTH/FerroFED/issues/667),
-[#668](https://github.com/FerroHEALTH/FerroFED/issues/668)).
+[FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324),
+[FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
+[FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
 
 ## Art 4(2): proxies and legal representatives
 
@@ -283,9 +283,9 @@ writes it to the member that owns its prescription
 A prescription is served, never received. Imaging, test results and
 discharge reports are the gap of point 2.2
 ([#665](https://github.com/FerroHEALTH/FerroFED/issues/665),
-[#666](https://github.com/FerroHEALTH/FerroFED/issues/666),
-[#667](https://github.com/FerroHEALTH/FerroFED/issues/667),
-[#668](https://github.com/FerroHEALTH/FerroFED/issues/668)).
+[FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324),
+[FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
+[FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
 
 ## Art 8: restricting access
 

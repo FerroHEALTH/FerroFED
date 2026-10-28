@@ -29,8 +29,9 @@ publish = false
 [workspace.dependencies]
 # The openEHR surface (ITS-REST, AQL and the RM, from the published crates):
 # one lockstep family, moved together by the dependency sweep and checked
-# against docs/VERSIONS.md by scripts/checks/versions.sh. The pin is 0.0.90,
-# the line fhirconnect requires exactly (#1181); ferrohealth-smart 0.8.5
+# against docs/VERSIONS.md by scripts/checks/versions.sh. The pin is 0.0.109,
+# the line fhirconnect and eehrxf require exactly (#1181, #813); 0.0.91 to
+# 0.0.109 were taken with the published eehrxf (#813); ferrohealth-smart 0.8.5
 # carries its scope grammar itself, so the lock holds one copy (#1390);
 # 0.0.89 and 0.0.90 add only openehr-sdt's party building
 # (FerroEHR #3810, #3832). 0.0.87 bounds the bytes the
@@ -42,19 +43,19 @@ publish = false
 # #3565); 0.0.83 said so when a deadline passed (FerroEHR #3560), and 0.0.82
 # printed a scope in its canonical form (FerroEHR #3557) and sent a DPoP-bound
 # token with a proof from a prover (FerroEHR #3558).
-openehr-base = "0.0.90"
-openehr-rm = "0.0.90"
-openehr-query = { version = "0.0.90", features = ["federation"] }
-openehr-its = { version = "0.0.90", default-features = false }
+openehr-base = "0.0.109"
+openehr-rm = "0.0.109"
+openehr-query = { version = "0.0.109", features = ["federation"] }
+openehr-its = { version = "0.0.109", default-features = false }
 # The SMART on openEHR scope grammar alone, with no default feature: the
 # scope an onward token is requested with is written and checked with it
 # (#81), and every caller's scope claim is read with it (#80).
-openehr-sdt = { version = "0.0.90", default-features = false }
+openehr-sdt = { version = "0.0.109", default-features = false }
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.52" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.53" }
 # The shared audit library of the family, published from FerroHEALTH/FerroAUDIT
 # and pinned exactly: the ATNA ITI-20 sender and the BALP AuditEvent
 # (ihe-atna), and the EHDS logging component (ehds-logging); 0.2.6 closes a
@@ -63,7 +64,11 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.52" }
 # 2026-10-28.
 ihe-atna = { version = "=0.3.1", default-features = false }
 ehds-logging = { version = "=0.3.1", default-features = false }
-eehrxf = { path = "crates/eehrxf", version = "0.0.40" }
+# The European interoperability software component of Regulation (EU)
+# 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
+# owner decision of 2026-10-28 (#813) and pinned exactly, because FerroBRIDGE's
+# crate line moves by patch. Verified against crates.io on 2026-10-28.
+eehrxf = { version = "=0.1.128", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
@@ -181,7 +186,7 @@ tokio-rustls = { version = "0.26.6", default-features = false }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # The FHIR R4 model of the IHE bindings (PIXm 3.1.0 declares FHIR 4.0.1 in its
 # ImplementationGuide), compiled in ihe-iti, nl-generic-functions
-# and crates/eehrxf and, for its PIX Manager test device, in
+# and eehrxf and, for its PIX Manager test device, in
 # tools/ferrofed-testkit, never in the engine; checked against
 # docs/VERSIONS.md by scripts/checks/versions.sh. Each binding names the root
 # set it reads: `terminology` for PIXm (#42), `resources` for the PDQm Patient
@@ -193,23 +198,24 @@ fhir-types = { version = "0.1.128", default-features = false }
 # runs in process (#684), and the template index and mapping-file loader it
 # takes, both from FerroBRIDGE on the workspace openehr-* line, so the build
 # carries one copy of that family (#1028).
-# Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
-# against crates.io on 2026-10-21.
-fhirconnect = "=0.1.173"
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.204 is
+# the release eehrxf 0.1.128 requires (#813). Verified against crates.io on
+# 2026-10-28.
+fhirconnect = "=0.1.204"
 # The FHIR terminology client the European interoperability component asks
 # its terminology server through (#925), from FerroBRIDGE, with the caller's
 # HTTP client for mutual TLS and the `context` form of `$validate-code`.
-# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.140 is
-# the release on ferrohealth-smart 0.8 (#1390). Verified against crates.io on
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.141 is
+# the release eehrxf 0.1.128 builds on (#813). Verified against crates.io on
 # 2026-10-28.
-ferrobridge-term = "=0.1.140"
+ferrobridge-term = "=0.1.141"
 # The FHIR R4 profile validator a document received in the exchange format is
 # held to in full: every invariant, binding and entry profile (#808), from
 # FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch. Verified
 # against crates.io on 2026-10-28.
-ferrobridge-validator = "=0.1.140"
-openehr-mapping-core = "=0.1.124"
+ferrobridge-validator = "=0.1.141"
+openehr-mapping-core = "=0.1.135"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by
 # FerroHEALTH/FerroPIX since #367 and pinned exactly, because its crate line
@@ -223,8 +229,8 @@ ihe-iti = "=0.0.66"
 # crate line moves by patch. 0.0.33 is the release on ferrohealth-smart
 # 0.8 (#1390). Verified against crates.io on 2026-10-28.
 nl-generic-functions = "=0.0.33"
-# The FHIR package archive (an npm tarball, gzip over tar) the dataset model of
-# crates/eehrxf is read from (#684): flate2 on its pure-Rust backend, at the
+# The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
+# the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
 # Verified against crates.io on 2026-10-06.
 flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }

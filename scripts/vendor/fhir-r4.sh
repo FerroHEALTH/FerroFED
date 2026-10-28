@@ -42,7 +42,7 @@ pinned_begin
 
 r4=https://hl7.org/fhir/R4
 cc0='CC0-1.0: FHIR R4 2.20.2 (license.html) licenses the specification under Creative Commons No Rights Reserved (CC0)'
-read_by=$'#1053 (the StructureDefinition of the remaining-dispensations\n  extension, crates/eehrxf/src/medication/) and #1072 (the definitions of the\n  registry\'s FHIR form, app/ferrofed-identity/src/ihe/mcsd/definition/ and\n  app/ferrofed-registry/src/, and of the access log origin system,\n  app/ferrofed-server/src/access/, and the archetype-local code systems of\n  crates/eehrxf/src/terminology/, which publish none) and #1040 (the\n  prescription search, app/ferrofed-eehrxf/src/prescriptions/)'
+read_by=$'#1053 (the StructureDefinition of the remaining-dispensations\n  extension, which the site serves from the published eehrxf crate,\n  scripts/site/assemble.sh) and #1072 (the definitions of the registry\'s FHIR\n  form, app/ferrofed-identity/src/ihe/mcsd/definition/ and\n  app/ferrofed-registry/src/, and of the access log origin system,\n  app/ferrofed-server/src/access/) and #1040 (the prescription search,\n  app/ferrofed-eehrxf/src/prescriptions/)'
 
 pin commit extensibility.html "4.0.1, 2.5.0 Extensibility" "$r4/extensibility.html" \
   3c1df2fd19b10d5f7f132976dea0691e42addfaafd0bd10295ccf8ec51269eb3 "$cc0"

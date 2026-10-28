@@ -246,7 +246,7 @@ Against Art 28(b), a limitation left out:
 
 35. The instructions for use and the claims page did not say that a member
     holding its prescriptions only as openEHR data is not served
-    ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), that the gateway offers no log access interface of its own
+    ([FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322)), that the gateway offers no log access interface of its own
     ([#660](https://github.com/FerroHEALTH/FerroFED/issues/660)), or which settings stay in the file under `config.ui =
     "managed"` and that the console reads one replica at a time. All are
     now listed.
@@ -428,7 +428,7 @@ runs:
 64. `README.md` named v0.0.13 as current. It now names v0.0.14.
 65. The landing page named v0.0.13 as current and said v0.0.14 brings
     prescriptions from openEHR medication data
-    ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), which
+    ([FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322)), which
     this release does not ship. It now names v0.0.14, has a card for what
     it ships, and plans no prescription mapping in FerroFED.
 66. The claims page planned for v0.0.14 the other priority categories and

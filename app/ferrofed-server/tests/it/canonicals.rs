@@ -6,9 +6,10 @@
 //! systems alone excepted: FHIR R4 4.1.2 says an http: address "SHOULD
 //! resolve", and the book's page on the registry in FHIR form says why that
 //! family does not. The published set is read from the directories
-//! `scripts/site/assemble.sh` copies, so a definition the site would not
-//! serve counts as missing. No specification governs where a URL is
-//! hosted: our own design.
+//! `scripts/site/assemble.sh` copies, and from the published `eehrxf` crate
+//! for the definition the site serves out of its archive, so a definition
+//! the site would not serve counts as missing. No specification governs
+//! where a URL is hosted: our own design.
 
 #![expect(
     clippy::panic_in_result_fn,
@@ -19,6 +20,8 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use eehrxf::medication::prescription::REMAINING_DISPENSATIONS;
+use eehrxf::medication::prescription::REMAINING_DISPENSATIONS_DEFINITION;
 use eehrxf::terminology::system::ARCHETYPE_LOCAL;
 use fhir_types::codec::Value;
 
@@ -48,8 +51,14 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The definition directories of the site assembly's `DEFINITIONS` array.
-fn definition_directories() -> Result<Vec<String>, Box<dyn Error>> {
+/// The entry of the site assembly's `DEFINITIONS` array that names the
+/// published `eehrxf` crate's archive, whose definitions this test reads from
+/// the crate it links.
+const COMPONENT_DEFINITIONS: &str = "\"$component/eehrxf-$component_version/src/medication\"";
+
+/// The definition directories of this repository the site assembly's
+/// `DEFINITIONS` array names, and whether it names the published crate's.
+fn definition_directories() -> Result<(Vec<String>, bool), Box<dyn Error>> {
     let script = std::fs::read_to_string(root().join("scripts/site/assemble.sh"))?;
     let directories: Vec<String> = script
         .lines()
@@ -61,7 +70,12 @@ fn definition_directories() -> Result<Vec<String>, Box<dyn Error>> {
     if directories.is_empty() {
         return Err("the site assembly has no DEFINITIONS array".into());
     }
-    Ok(directories)
+    let component = directories.iter().any(|line| line == COMPONENT_DEFINITIONS);
+    let local = directories
+        .into_iter()
+        .filter(|line| line != COMPONENT_DEFINITIONS)
+        .collect();
+    Ok((local, component))
 }
 
 /// The URL a definition file is served at, `None` for a file that is not a
@@ -99,7 +113,19 @@ fn named(json: &str) -> Result<Option<String>, Box<dyn Error>> {
 /// URL the definition names itself by.
 fn published() -> Result<BTreeSet<String>, Box<dyn Error>> {
     let mut urls = BTreeSet::new();
-    for directory in definition_directories()? {
+    let (directories, component) = definition_directories()?;
+    assert!(
+        component,
+        "the site assembly no longer serves the published eehrxf crate's definitions"
+    );
+    let named_by_crate = named(REMAINING_DISPENSATIONS_DEFINITION)?;
+    assert_eq!(
+        named_by_crate.as_deref(),
+        Some(REMAINING_DISPENSATIONS),
+        "the published crate's extension definition names its own URL"
+    );
+    urls.insert(REMAINING_DISPENSATIONS.to_owned());
+    for directory in directories {
         for entry in std::fs::read_dir(root().join(&directory))? {
             let path = entry?.path();
             let name = path

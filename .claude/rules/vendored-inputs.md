@@ -149,13 +149,14 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
 - The exchange-format proxies of #683, each the FHIR package registry's
   tarball committed whole and pinned by URL and sha256 through
   `scripts/vendor/eehrxf.sh`:
-  - `docs/specs/eu-xtehr-models/`: `xtehr.eu.ehds.models` 1.0.0 and 0.3.0,
-    the version the MyHealth@EU guides depend on (CC0-1.0).
+  - `docs/specs/eu-xtehr-models/`: `xtehr.eu.ehds.models` 1.0.0, which
+    `hl7.fhir.eu.hdr` 1.0.0 depends on, and 0.3.0, the version the
+    MyHealth@EU guides depend on (CC0-1.0).
   - `docs/specs/eu-hl7-base/`: `hl7.fhir.eu.base` 2.0.1 (CC0-1.0).
   - `docs/specs/eu-hl7-eps/`: `hl7.fhir.eu.eps` 1.0.0-ballot (CC0-1.0).
   - `docs/specs/eu-hl7-mpd/`: `hl7.fhir.eu.mpd` 1.0.0 (CC0-1.0).
   - `docs/specs/eu-hl7-laboratory/`: `hl7.fhir.eu.laboratory` 2.1.0 and
-    2.0.0, the version the eehrxf component reads (CC0-1.0).
+    2.0.0, the version the MyHealth@EU guides depend on (CC0-1.0).
   - `docs/specs/eu-hl7-extensions/`: `hl7.fhir.eu.extensions.r4` 1.3.1 and
     1.3.0, the versions the guides depend on, and `hl7.fhir.eu.extensions`
     0.1.0, the package name before `.r4`, which MyHealth@EU Hospital

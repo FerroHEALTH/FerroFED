@@ -9,8 +9,8 @@
 # sources, so there is no separate cargo-audit job.
 
 # Every feature of every member is in the graph, so a dependency behind a
-# feature no member enables yet (fhirconnect behind eehrxf's openehr, #684,
-# #730) is checked as an upload or a later member would bring it in
+# feature no member enables yet is checked as an upload or a later member
+# would bring it in
 # (https://embarkstudios.github.io/cargo-deny/checks/cfg.html#the-graph-field-optional).
 [graph]
 all-features = true
@@ -75,6 +75,8 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "nl-generic-functions" },
   { allow = ["BUSL-1.1"], crate = "ehds-logging" },
   { allow = ["BUSL-1.1"], crate = "ihe-atna" },
+  # The interoperability component, published from FerroHEALTH/FerroBRIDGE
+  # (#813).
   { allow = ["BUSL-1.1"], crate = "eehrxf" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-registry" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-identity" },

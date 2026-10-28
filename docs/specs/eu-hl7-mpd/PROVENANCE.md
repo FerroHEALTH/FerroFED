@@ -9,15 +9,16 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `4c4ea5572812dbacfc87573af4165742284a0825b0a200fa606df07393ea9758`
-- Fetched: 2026-10-05, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-28, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 1 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 1 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `2713f1364730690524723bf7526f4887e727f3ef47e359dafe6f0fc5cd9dc1fa`
-- Read by: #683 (the exchange-format proxies the interoperability
-  component of #519, EHDS readiness, is designed against)
+- Read by: #683 (the exchange-format proxies the gateway's FHIR face and its
+  testkit are held to; the component itself moved to FerroHEALTH/FerroBRIDGE
+  with #813)
 
 The European ePrescription and eDispensation guide, canonical
 `http://hl7.eu/fhir/mpd`, committed under CC0-1.0.

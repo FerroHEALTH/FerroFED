@@ -214,7 +214,7 @@ Item names its row in the matrix exactly.
 | HL7 Europe Medication Prescription and Dispense | `hl7.fhir.eu.mpd` 1.0.0 | the `MedicationRequest` and `MedicationDispense` profiles the FHIR face serves prescriptions in and holds a received dispensation to, Art 14(1)(b) and (c) |
 | HL7 Europe Base and Core | `hl7.fhir.eu.base` 2.0.1 | the EU core profiles each mapped entry of the patient summary is written to |
 | HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, and the category codes of the access record |
-| Xt-EHR EHDS Logical Information Models | `xtehr.eu.ehds.models` 1.0.0 | the EHDS dataset model the interoperability component reads |
+| `eehrxf` | =0.1.128 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
 
 Beside them:
 

@@ -9,15 +9,16 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `7d4ef5d38be992ad0d72849688f235e7621f50eb0e9821bc39ab368538e046b4`
-- Fetched: 2026-10-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-28, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 2 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 2 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `8385f0e3cbcd9c778bbe1e4a8b9a6391be3e8a136288d774145b8f440b0d49ca`
-- Read by: #683 (the exchange-format proxies the interoperability
-  component of #519, EHDS readiness, is designed against)
+- Read by: #683 (the exchange-format proxies the gateway's FHIR face and its
+  testkit are held to; the component itself moved to FerroHEALTH/FerroBRIDGE
+  with #813)
 
 The logical models of the Xt-EHR joint action for the priority categories
 of Regulation (EU) 2025/327 Article 14(1), canonical

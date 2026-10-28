@@ -22,10 +22,10 @@ cargo-fuzz = true
 # beside the crates below, so the rest of the server stays out of the build.
 [dependencies]
 libfuzzer-sys = "0.4.13"
-openehr-base = "0.0.90"
+openehr-base = "0.0.109"
 openehr-federation = { path = "../crates/openehr-federation", default-features = false, features = ["aql"] }
-openehr-its = { version = "0.0.90", default-features = false, features = ["rest"] }
-openehr-query = "0.0.90"
+openehr-its = { version = "0.0.109", default-features = false, features = ["rest"] }
+openehr-query = "0.0.109"
 serde_json = "1"
 thiserror = "2.0.21"
 

@@ -9,15 +9,16 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `12effdefce443cb7b61ff9b7f39a4431b54d9267becdeef7d3505770ddc8398e`
-- Fetched: 2026-10-06, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-28, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 1 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 1 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `32f3192e35f86541a0adadd7524cb705ac953e16741f87e2d0097936cba5c61c`
-- Read by: #683 (the exchange-format proxies the interoperability
-  component of #519, EHDS readiness, is designed against)
+- Read by: #683 (the exchange-format proxies the gateway's FHIR face and its
+  testkit are held to; the component itself moved to FerroHEALTH/FerroBRIDGE
+  with #813)
 
 The IHE Pharmacy profile for medication prescription and dispense,
 canonical `https://profiles.ihe.net/PHARM/MPD`, in the public-comment

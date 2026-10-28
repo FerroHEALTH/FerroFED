@@ -1335,9 +1335,9 @@ jobs:
   # per regional binding (the Cargo
   # reference, Features; no specification governs the layout: our own
   # design), so every feature must build and lint on its own as well as
-  # together, such as eehrxf's fhir-r4 without its openehr mapping. Per
-  # package, never the workspace all-features union. The published crates
-  # FerroPIX owns are linted there.
+  # together. Per package, never the workspace all-features union. The
+  # published crates FerroPIX owns are linted there, and eehrxf in
+  # FerroHEALTH/FerroBRIDGE (#813).
   features:
     name: features (cargo-hack)
     needs: detect
@@ -1357,7 +1357,6 @@ jobs:
       - run: >-
           cargo hack clippy --locked --each-feature --all-targets
           --package openehr-federation
-          --package eehrxf
           --package ferrofed-identity --package ferrofed-engine
           --package ferrofed-server
           -- -D warnings

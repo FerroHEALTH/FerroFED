@@ -9,7 +9,7 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `c16ba48646a27bf3fdb93cf44393879ac77841a2e900af03a46bbc1ebbd3aa64`
-- Fetched: 2026-10-16, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-28, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 9 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 9 besides this one, each verbatim as the
@@ -17,12 +17,12 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `7409229d7dea2fb04c4f5f386c402606b4b379818cc45382229625851957e7e0`
 - Read by: #1053 (the StructureDefinition of the remaining-dispensations
-  extension, crates/eehrxf/src/medication/) and #1072 (the definitions of the
-  registry's FHIR form, app/ferrofed-identity/src/ihe/mcsd/definition/ and
+  extension, which the site serves from the published eehrxf crate,
+  scripts/site/assemble.sh) and #1072 (the definitions of the registry's FHIR
+  form, app/ferrofed-identity/src/ihe/mcsd/definition/ and
   app/ferrofed-registry/src/, and of the access log origin system,
-  app/ferrofed-server/src/access/, and the archetype-local code systems of
-  crates/eehrxf/src/terminology/, which publish none) and #1040 (the
-  prescription search, app/ferrofed-eehrxf/src/prescriptions/)
+  app/ferrofed-server/src/access/) and #1040 (the prescription search,
+  app/ferrofed-eehrxf/src/prescriptions/)
 
 The Extensibility (2.5.0), Defining Extensions (2.5.1), StructureDefinition,
 CodeSystem, NamingSystem, Using Codes in Resources (4.1), Search (3.1.1),

@@ -442,9 +442,10 @@ fn a_mapping_to_a_profile_the_section_does_not_take_is_refused() -> Result<(), B
     let example = Source {
         files: vec![
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../crates/eehrxf/tests/fixtures/mapping/ferrofed_allergy.yml"),
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../crates/eehrxf/tests/fixtures/mapping/ferrofed_allergy.context.yml"),
+                .join("../../tools/ferrofed-testkit/fixtures/eehrxf/mapping/ferrofed_allergy.yml"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+                "../../tools/ferrofed-testkit/fixtures/eehrxf/mapping/ferrofed_allergy.context.yml",
+            ),
         ],
         context: String::from("ferrofed_allergy.context"),
         ..allergies()?

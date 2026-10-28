@@ -445,7 +445,7 @@ category (Federation Tier §2.3, N23):
    the deployment supplies: every constraint of that profile, of the
    profile each entry's slice names and of each profile an entry claims,
    invariants and terminology bindings included
-   ([Receiving a document](../evaluate/receiving-documents.md#the-check-against-the-profiles)).
+   ([Receiving a document](../evaluate/receiving-documents.md#what-the-component-does)).
    A document with an error is a `422` with one issue per error, located by
    its FHIRPath. A warning, and each constraint the validator cannot
    evaluate, is listed as a `warning` in the answer, never passed silently.

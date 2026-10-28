@@ -3,43 +3,24 @@
 
 # The category crosswalks
 
-For each priority category it serves, the interoperability component keeps
-a crosswalk: the eHealth Network dataset, the Xt-EHR logical model and the
-HL7 Europe profiles element by element, held to the vendored packages by a
-test. This page lists each one, and the section queries that select the
-openEHR content the patient summary is written from. Where the component
-stands as a whole is on [Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned).
+For each priority category, the interoperability component keeps a
+crosswalk: the eHealth Network dataset, the Xt-EHR logical model and the HL7
+Europe profiles element by element, held to the vendored packages by a test.
+The component is the `eehrxf` crate, published from FerroHEALTH/FerroBRIDGE
+and pinned exactly here, so its crosswalks are described on
+[FerroBRIDGE's crosswalk page](https://ferrobridge.eu/docs/evaluate/category-crosswalks.html): the patient summary, the
+prescription and dispensation, the discharge report, the laboratory report
+and the imaging study and report. This page keeps what the gateway does with
+them: its reading of the patient summary against the Xt-EHR D6.1 draft and
+the section queries that select the openEHR content each document is written
+from. Where the component stands as a whole is on
+[Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned).
 
-## The patient summary crosswalk
-
-The eHealth Network *Guidelines on Patient Summary* (Release 3.4, §4), the
-Xt-EHR `EHDSPatientSummary` logical model and the HL7 Europe Patient Summary
-composition (`hl7.fhir.eu.eps` 1.0.0-ballot) describe one dataset three
-ways. `eehrxf` holds the crosswalk between them as data, keyed on the Xt-EHR
-element path. Each row names:
-
-- the eHealth Network element ids, such as `A.2.1.1` for allergies;
-- the obligation the Xt-EHR obligations profile puts on a producer;
-- the element or slice of the EPS composition that carries it, such as
-  `Composition.section:sectionAllergies.entry:allergyOrIntolerance`;
-- the profiles a FHIRconnect context may map to in order to feed it. The
-  header, each section's narrative, its empty reason and its note have none,
-  because the document is assembled around them.
-
-Every section of the model has a row, and so does every header element a
-producer must be able to populate. A test fails when an element a producer
-`SHALL:able-to-populate` has no row, when a row names a slice the pinned EPS
-profile lacks, or when one of the five required EPS sections (problems,
-allergies, medications, procedures, devices) is uncovered. Two EPS sections
-have no counterpart in the model and no row: vital signs and the general
-patient history. The presented form, a rendering of the whole summary, has
-no element in the EPS composition.
-
-Two elements are open in the [clinical safety risk file](clinical-safety.md)
-(hazard I-03), because no openEHR content is named to feed them yet:
-
-- the medical alert (A.2.1.2), which a producer must be able to populate;
-- the functional status (A.2.3.4).
+Two elements of the patient summary crosswalk have no openEHR content named
+to feed them, so they are open in the [clinical safety risk
+file](clinical-safety.md) (hazard I-03) and the gateway writes them as
+unavailable: the medical alert (A.2.1.2), which a producer must be able to
+populate, and the functional status (A.2.3.4).
 
 ## Against the Xt-EHR D6.1 draft
 
@@ -56,11 +37,11 @@ crosswalk above is read from, and adds these points for an EHR system:
 | §9.1.2 | results from different sources say where and when they were documented | one `Provenance` per mapped composition names the composition and the member, and each member authors the sections it feeds |
 | §9.3.2 | every section the summary supports has a narrative, and every content section keeps the guideline's contents in a flat structure, with a travel history section of its own | every section carries a generated narrative; the travel history is a crosswalk row with no section query, because the International Patient Summary template has no section for it |
 | §9.3.2, §9.3.4.1 | every section suggested to be supported carries an empty list reason, as the IPS 2.0.0 guide does, in place of the MyHealth@EU content-model null flavour | a section with no entry carries `emptyReason`, `nilknown` only when every member answered and none holds content for it, and `unavailable` otherwise |
-| §9.2.1.2 | no code system or value set is mandatory; profiles may impose some | the terminology rules prefer the eHN code systems and keep a code in no preferred system as recorded ([Terminology](../integrate/terminology.md)), and a received document is held to the bindings of its profiles ([Receiving documents](receiving-documents.md#the-check-against-the-profiles)) |
+| §9.2.1.2 | no code system or value set is mandatory; profiles may impose some | the terminology rules prefer the eHN code systems and keep a code in no preferred system as recorded ([Terminology](../integrate/terminology.md)), and a received document is held to the bindings of its profiles ([Receiving documents](receiving-documents.md#what-the-component-does)) |
 
 D6.1 asks nothing the gateway does not do, and changes no decision. The
 summary is read again against the adopted act
-([#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289)).
+([FerroHEALTH/FerroBRIDGE#1327](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1327)).
 
 ## The patient summary's section queries
 
@@ -100,39 +81,7 @@ answers ([The patient summary over FHIR](../integrate/patient-summary.md),
 list names it beside each member's own summary
 ([#810](https://github.com/FerroHEALTH/FerroFED/issues/810)).
 
-## The discharge report crosswalk
-
-The discharge report (Art 14(1)(f)) is described three ways as well: the
-eHealth Network *Guideline on Hospital Discharge Report* (Release 1.1, §4),
-the Xt-EHR `EHDSDischargeReport` logical model and the HL7 Europe Hospital
-Discharge Report composition (`hl7.fhir.eu.hdr` 1.0.0). `eehrxf` holds the
-crosswalk between them under its `discharge` feature, keyed on the Xt-EHR
-element path, as it does for the patient summary. A test fails when an
-element a producer must or should be able to populate has no row, when a row
-names an element the HDR composition lacks or a profile its section entries
-do not target, or when a row's producer obligation differs from the Xt-EHR
-obligations profile.
-
-The encounter is the composition's `encounter`, which the HDR profile
-requires, so it has no section. The model's devices and procedures of the
-patient history sit in the HDR sections for devices and past procedures,
-and its presented form in the attachments section. Building the discharge
-report from member data, its section queries and the FHIR face are planned
-([#667](https://github.com/FerroHEALTH/FerroFED/issues/667)).
-
-## The laboratory report crosswalk
-
-Test results (Art 14(1)(e)) are crosswalked the same way, under `eehrxf`'s
-`laboratory` feature: the eHealth Network *Guideline on Laboratory Results*
-(Release 1.1, §4), the Xt-EHR `EHDSLaboratoryReport` logical model and the
-HL7 Europe Laboratory Report profiles (`hl7.fhir.eu.laboratory` 2.0.0). A
-laboratory report keeps its header in the composition and its body in the
-`DiagnosticReport` the composition names, so the crosswalk names elements of
-both and is checked against both: the orders and their supporting
-information sit in the `ServiceRequest` the report is based on, the
-specimens in `specimen`, and the results in `result`, each an
-`Observation-resultslab-eu-lab`. The same test holds it to the packages as
-it does the discharge report's.
+## The laboratory report's section query
 
 One stored query selects the laboratory reports,
 `eu.ferrofed.eehrxf::laboratory-report`, held beside the patient summary's
@@ -143,28 +92,14 @@ example simple" names (CKM cid `1013.26.408`, asset version 3). That
 template is a DRAFT CKM has not reviewed or published, so a reviewed
 template that names other entries would change the query; it is vendored
 by `scripts/vendor/openehr-ckm.sh` with its status recorded. A test holds the
-query to the template's entries. Building the laboratory report from the
-members' answers and the FHIR face are planned
-([#666](https://github.com/FerroHEALTH/FerroFED/issues/666)), and the
-mapping of laboratory results waits on FerroBRIDGE's FHIRconnect contexts
-for the Laboratory Report profiles
-([FerroHEALTH/FerroBRIDGE#116](https://github.com/FerroHEALTH/FerroBRIDGE/issues/116)).
+query to the template's entries. The mapping of laboratory results is
+component work in FerroBRIDGE
+([FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324)).
 
-## The imaging crosswalks
-
-Imaging (Art 14(1)(d)) names two things, the imaging studies and the
-imaging reports, and the Xt-EHR package models each on its own, so `eehrxf`
-carries two crosswalks under its `imaging` feature. The imaging report
-crosswalk keys on `EHDSImagingReport` and names the elements of the HL7
-Europe Imaging Report composition and the `DiagnosticReport` it names
-(`hl7.fhir.eu.imaging` 1.0.0-ballot); the imaging study crosswalk keys on
-`EHDSImagingStudy` and names the elements of its `ImagingStudy` profile.
-Both name the element ids of the eHealth Network *Guideline on Medical
-imaging studies and reports* (Release 1.1): those of the report data set
-(§4.1) and those of the imaging study manifest (§4.2). The four sections the
-composition requires (the imaging study, the order, the history and the
-procedure) each have a row, as does the study's DICOM Study Instance UID,
-the identifier the `ImagingStudy` profile requires. Building the imaging
-report from member data, referencing the studies held outside the member
-CDRs, and the FHIR face are planned
-([#668](https://github.com/FerroHEALTH/FerroFED/issues/668)).
+The discharge report and the imaging report have no section query yet.
+Building each report from the members' answers, and the FHIR face, are
+planned as the gateway half of each category
+([#1404](https://github.com/FerroHEALTH/FerroFED/issues/1404),
+[#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405),
+[#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406)), after the
+component work in FerroBRIDGE.

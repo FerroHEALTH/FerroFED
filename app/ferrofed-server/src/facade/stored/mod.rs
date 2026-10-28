@@ -58,6 +58,7 @@ use openehr_its::rest::routes::RouteMatch;
 use crate::config::public_url::PublicUrl;
 use crate::error::{self, Code};
 use crate::facade::answer;
+use crate::facade::query_string::literal_plus;
 use crate::facade::request::{self, Submitted};
 use crate::facade::route::Arrived;
 use crate::facade::stored::distribution::Registry;
@@ -317,7 +318,8 @@ fn members(
         query_parameters,
         additional_properties: BTreeMap::new(),
     };
-    let (query, headers) = (arrived.uri.query(), &HeaderMap::new());
+    let (query, headers) = (literal_plus(arrived.uri.query()), &HeaderMap::new());
+    let query = query.as_deref();
     // NOTE: §5.4.3, the reader's and the decoder's messages may quote the
     // request, so a malformed one is refused with a fixed message.
     match carrier {

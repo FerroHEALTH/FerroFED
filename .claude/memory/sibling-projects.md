@@ -27,7 +27,8 @@ siblings:
 - **FerroBRIDGE** at `../FerroBRIDGE` and **FerroTERM** at `../FerroTERM`:
   the openEHR-to-FHIR-and-OMOP bridge and the FHIR terminology server. FHIR
   is FerroBRIDGE's lane, so the openEHR and FHIR exchange format (`eehrxf`)
-  belongs there and moves there in one step (#813, A76). On 2026-10-01 the
+  belongs there: it moved there in one step on 2026-10-28 (#813, A76) and
+  FerroFED pins the published crate exactly. On 2026-10-01 the
   owner pointed at both as "the perfect way" to set up Claude and GitHub;
   this repository's `.claude/`, `.github/` and `scripts/` were carried from
   FerroBRIDGE, the newer of the two, and adapted.

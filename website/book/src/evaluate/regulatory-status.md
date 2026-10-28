@@ -155,7 +155,7 @@ and Art 105 applies them from the same 2029 and 2031 dates by category.
 A weekly job, `scripts/checks/ehds-acts.sh`, reads EUR-Lex and the
 Commission's "Have your say" register and files an issue for each act
 adopted; the re-checks against the exchange format and the common
-specifications wait in [#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289) and [#799](https://github.com/FerroHEALTH/FerroFED/issues/799).
+specifications wait in [FerroHEALTH/FerroBRIDGE#1327](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1327) and [#799](https://github.com/FerroHEALTH/FerroFED/issues/799).
 
 Two implementing acts are adopted. Both bind the national contact points
 and the cross-border authentication chain, and neither sets the content of
@@ -499,7 +499,9 @@ them:
   label per category and per origin, which the repository applies as
   access rights by origin and category (point 3.4;
   [Labelling the access records](../operate/access-labels.md)).
-- The European interoperability component has a library, `crates/eehrxf`:
+- The European interoperability component is the `eehrxf` crate, published
+  from FerroHEALTH/FerroBRIDGE and pinned exactly
+  ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)):
   the EHDS dataset model, read from the Xt-EHR logical models, and the
   mapping of an openEHR composition to a FHIR R4 `Bundle` through the
   mapping files you supply. It also reads a received document, checks it
@@ -559,17 +561,17 @@ before the Regulation applies on 26 March 2027:
   ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), and is
   re-checked against the Art 36(1) common specifications once they are
   adopted. None is adopted, so the issue waits upstream with no milestone.
-- [#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289): the
+- [FerroHEALTH/FerroBRIDGE#1327](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1327): the
   European interoperability software component for the patient summary is
   built from federated openEHR data
   ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)), and is
   re-checked against the Art 15(1) implementing act once it is adopted.
   None is adopted.
-- [#523](https://github.com/FerroHEALTH/FerroFED/issues/523): the rest of
+- [FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321): the rest of
   the interoperability component for electronic prescriptions and
   dispensations, serving them from openEHR medication data through a
   FHIRconnect mapping
-  ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)). The
+  ([FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322)). The
   interoperability component moves to FerroBRIDGE
   ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)), and this
   mapping is built there.

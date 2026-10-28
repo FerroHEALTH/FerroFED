@@ -22,6 +22,11 @@
 # digest. Every package declares CC0-1.0 in its manifest, except the IHE
 # Pharmacy package, which declares CC-BY-SA-4.0, and IHE MHD, which declares
 # CC-BY-4.0.
+# The interoperability component itself, eehrxf, is published from
+# FerroHEALTH/FerroBRIDGE (#813), which vendors the versions its own tests
+# read; the gateway keeps every package its testkit, its validator lane and
+# its decisions read, the dependency closure of the MyHealth@EU guides
+# included.
 # scripts/checks/pin-freshness.sh reads each package's registry entry.
 #
 # Usage:
@@ -47,7 +52,7 @@ pinned_begin
 registry=https://packages.fhir.org
 cc0='CC0-1.0: the license of the package manifest and of the ImplementationGuide resource'
 whole='The registry tarball as served, package manifest included; the archive is committed whole so its sha256 stays the pin.'
-read_by=$'#683 (the exchange-format proxies the interoperability\n  component of #519, EHDS readiness, is designed against)'
+read_by=$'#683 (the exchange-format proxies the gateway\'s FHIR face and its\n  testkit are held to; the component itself moved to FerroHEALTH/FerroBRIDGE\n  with #813)'
 
 pin commit xtehr.eu.ehds.models-1.0.0.tgz "1.0.0 (FHIR 5.0.0, 2026-04-13)" \
   "$registry/xtehr.eu.ehds.models/1.0.0" \
@@ -96,12 +101,13 @@ pin commit hl7.fhir.eu.laboratory-2.0.0.tgz "2.0.0 (FHIR 4.0.1, 2026-05-05)" \
 pin commit hl7.fhir.eu.laboratory-2.1.0.tgz "2.1.0 (FHIR 4.0.1, 2026-10-16)" \
   "$registry/hl7.fhir.eu.laboratory/2.1.0" \
   87019c396f4cff934ec5230ce1f97d76b79b40591be08161e694ad661129379c "$cc0" \
-  "$whole The current release; the eehrxf component reads 2.0.0, the version MyHealth@EU Laboratory 9.1.1 derives from, until decision A62 re-pins it."
+  "$whole The current release; 2.0.0 is the version MyHealth@EU Laboratory 9.1.1 and Hospital Discharge Report 9.1.1 depend on, and the one the interoperability component reads."
 pinned_corpus eu-hl7-laboratory "HL7 Europe Laboratory Report" \
   "the HL7 Europe Laboratory Report guide hl7.fhir.eu.laboratory" \
   "The European laboratory report guide, canonical
 \`http://hl7.eu/fhir/laboratory\`, at its current release and at the
-version the eehrxf component reads, committed under CC0-1.0." "" "$read_by"
+version the MyHealth@EU guides and the interoperability component read,
+committed under CC0-1.0." "" "$read_by"
 
 pin commit hl7.fhir.eu.extensions.r4-1.3.0.tgz "1.3.0 (FHIR 4.0.1, 2026-03-27)" \
   "$registry/hl7.fhir.eu.extensions.r4/1.3.0" \

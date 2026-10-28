@@ -220,7 +220,7 @@ row carries the pin-set digest first and the tarball sha256 after it.
 | HL7 Europe Base and Core | package `hl7.fhir.eu.base` 2.0.1, pin-set digest `b84f7ba0799903e6bf4d2bf0ecaeeaefd0f71510238c7e30d63244ff6c603c67`, tarball sha256 `3fb23b64d70656ea809e1ad66d84d5d008400e18424266debf176cb46fba0b4a` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-base/PROVENANCE.md` |
 | HL7 Europe Patient Summary | package `hl7.fhir.eu.eps` 1.0.0-ballot, pin-set digest `ba59282865c06a3819a25d92b4110f5d6c84b2df2b0f4e0ae34092a66659f038`, tarball sha256 `e0fff1fb20d3daf75609259faa6b860131ebf4fc8890bb68f0da882307afc33c` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-eps/PROVENANCE.md` |
 | HL7 Europe Medication Prescription and Dispense | package `hl7.fhir.eu.mpd` 1.0.0, pin-set digest `4c4ea5572812dbacfc87573af4165742284a0825b0a200fa606df07393ea9758`, tarball sha256 `f1bc1084efc93e16ae4b45c1bb71340385d314a72031949c4a7e0d97aea5fd6b` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-mpd/PROVENANCE.md` |
-| HL7 Europe Laboratory Report | package `hl7.fhir.eu.laboratory` 2.1.0 and 2.0.0 (the version the eehrxf component reads), pin-set digest `ee502f9693d6df00d1b52ef7e0548eafd3512d9698d05469681d5e5635573e02`, 2.1.0 tarball sha256 `87019c396f4cff934ec5230ce1f97d76b79b40591be08161e694ad661129379c` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-laboratory/PROVENANCE.md` |
+| HL7 Europe Laboratory Report | package `hl7.fhir.eu.laboratory` 2.1.0 and 2.0.0 (the version the MyHealth@EU guides and the interoperability component read), pin-set digest `ee502f9693d6df00d1b52ef7e0548eafd3512d9698d05469681d5e5635573e02`, 2.1.0 tarball sha256 `87019c396f4cff934ec5230ce1f97d76b79b40591be08161e694ad661129379c` | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-laboratory/PROVENANCE.md` |
 | HL7 Europe Extensions | package `hl7.fhir.eu.extensions.r4` 1.3.1 and 1.3.0, and `hl7.fhir.eu.extensions` 0.1.0 (the package name before `.r4`, which MyHealth@EU Hospital Discharge Report 9.1.1 depends on), pin-set digest `19839fe8077fe6c794fb035ab52447003fcd3c6996b354fe893bf82588b3658c`, tarball sha256 `37f3ee7ae7a2312e71a4e855e6c36f45d2bc3b13f995bcf4a9fb499ca014cff6` (1.3.1, which `hl7.fhir.eu.base` 2.0.1 depends on) and `8510e930856961d550c04d43f243ef0bdcb27089431fe183ab11c7f805f0c2f1` (1.3.0, which `hl7.fhir.eu.eps` 1.0.0-ballot and `hl7.fhir.eu.laboratory` 2.0.0 depend on) | `scripts/vendor/eehrxf.sh`, `docs/specs/eu-hl7-extensions/PROVENANCE.md` |
 | HL7 International Patient Summary | package `hl7.fhir.uv.ips` 2.0.1 and 2.0.0, pin-set digest `6c8531fdbe8adbc888a8a4f33dcbe9619b8e42f47e1c7186f698cc11eb389055`, tarball sha256 `7183242b70fb2a9058aa3701fb607517a3c2fd0e3100d1d8c538d744c2adf799` (2.0.1, which `hl7.fhir.eu.laboratory` 2.1.0 and `hl7.fhir.eu.hdr` 1.0.0 depend on) and `b3964eba08ee699bc121b905c4290641e54dd34f2cf3b5cd3edeb08a40a66979` (2.0.0, which `hl7.fhir.eu.eps` 1.0.0-ballot depends on) | `scripts/vendor/eehrxf.sh`, `docs/specs/hl7-ips/PROVENANCE.md` |
 | IHE Pharmacy Medication Prescription and Dispense | package `ihe.pharm.mpd.r4` 1.0.0-comment-2, pin-set digest `12effdefce443cb7b61ff9b7f39a4431b54d9267becdeef7d3505770ddc8398e`, tarball sha256 `05eda0d1871d2980cb13023d18a5a9618c9945c3a85cf721c14c5e989e0d3776`, the version `hl7.fhir.eu.base` 2.0.1, `hl7.fhir.eu.eps` 1.0.0-ballot and `hl7.fhir.eu.mpd` 1.0.0 depend on | `scripts/vendor/eehrxf.sh`, `docs/specs/ihe-pharm-mpd/PROVENANCE.md` |
@@ -310,9 +310,9 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the five rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is 0.0.90 since 2026-10-21, the line `fhirconnect`, `openehr-mapping-core`
-and `ferrohealth-smart` build on, so the lock holds one copy of each
-member (#1181).
+pin is 0.0.109 since 2026-10-28, the line the published `eehrxf`,
+`fhirconnect` and `openehr-mapping-core` require exactly, so the lock holds
+one copy of each member (#1181, #813).
 `openehr-sdt` (the SMART on openEHR scope grammar) joined the group at the
 family pin with its default features off, so only the grammar is compiled:
 the onward grant (#81) writes and checks the scope it requests with it, and client
@@ -320,11 +320,11 @@ authentication (#80) reads every caller's scopes with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.90 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.90 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.90 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.90 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-sdt` | 0.0.90 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.109 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.109 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.109 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.109 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-sdt` | 0.0.109 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -393,8 +393,9 @@ AQL variable, which `columns[].path` now carries (#877).
 0.0.89, published on 2026-10-19, and 0.0.90, published on 2026-10-20, change
 nothing the gateway reads: they add the PARTY builder, the caller's
 `rm_version` and party validation to `openehr-sdt` (FerroEHR #3809, #3810,
-#3832). 0.0.91, published on 2026-10-20, is not taken while `fhirconnect`
-requires exactly 0.0.90, since a 0.0.x caret requirement admits one version.
+#3832). 0.0.109 is taken with the published interoperability component
+(#813): `eehrxf` 0.1.128 and `fhirconnect` 0.1.204 require it, and a 0.0.x
+caret requirement admits one version.
 `ferrohealth-smart` 0.8.5 and later carry the SMART on openEHR scope grammar
 as their own module and no longer depend on `openehr-sdt`, so the lock holds
 one `openehr-sdt` (#1390).
@@ -403,8 +404,8 @@ one `openehr-sdt` (#1390).
 
 The FHIR model comes from the published `fhir-types` crate
 (`docs/architecture.md` §6, decisions A16 and A59), compiled in the binding
-crates `ihe-iti` and `nl-generic-functions` (both from crates.io) and in the
-interoperability component `crates/eehrxf`, never in the engine, so the
+crates `ihe-iti` and `nl-generic-functions` and in the interoperability
+component `eehrxf` (all from crates.io), never in the engine, so the
 gateway core never builds it. `scripts/checks/versions.sh` fails when this row
 and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 
@@ -420,14 +421,17 @@ carries (#119); the mCSD directory (#86) reads `Organization` and `Endpoint`
 from the same set. 0.1.127 is the release the FHIRconnect engine builds on
 (#684), so the build carries one `fhir-types`.
 
-## FHIRconnect engine (crates.io)
+## The interoperability component and its engine (crates.io)
 
-The European interoperability component (`crates/eehrxf`, feature `openehr`,
-#684, #730) runs FHIRconnect 1.0.0 in process through FerroBRIDGE's published
+The European interoperability component, `eehrxf`, is published from
+FerroHEALTH/FerroBRIDGE since the owner decision of 2026-10-28 (#813, decision
+A76), and every change to it is made there. Its `openehr` feature (#684,
+#730) runs FHIRconnect 1.0.0 in process through FerroBRIDGE's published
 `fhirconnect`, with the template index and the mapping-file loader of
-`openehr-mapping-core` (decision A61). Both are pinned exactly in the root
-`Cargo.toml`, because FerroBRIDGE's crate line moves by patch, and both build
-on the `openehr-*` line above. The component's terminology server is asked
+`openehr-mapping-core` (decision A61). Each crate below is pinned exactly in
+the root `Cargo.toml`, because FerroBRIDGE's crate line moves by patch, at the
+version the pinned `eehrxf` requires, and all build on the `openehr-*` line
+above. The component's terminology server is asked
 through FerroBRIDGE's `ferrobridge-term` (#925), pinned exactly the same way,
 over the HTTP client the gateway builds with its credential and TLS material. A
 received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
@@ -436,10 +440,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhirconnect` | =0.1.173 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | =0.1.124 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | =0.1.140 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | =0.1.140 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | =0.1.128 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | =0.1.204 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | =0.1.135 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | =0.1.141 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | =0.1.141 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
