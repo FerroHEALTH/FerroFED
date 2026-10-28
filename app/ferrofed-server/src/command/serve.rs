@@ -20,7 +20,7 @@ use crate::revision::routes::Managed;
 use crate::revision::service::{Booted, Revisions};
 use crate::state::AppState;
 use crate::support::Support;
-use crate::usage_report::reporter::Usage;
+use crate::usage_report::Usage;
 use crate::{
     EXIT_CONFIG, admin, banner, binding, body, chain, config, panic, reload, revision, serve,
     state, telemetry, trusted_router,

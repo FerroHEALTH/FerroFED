@@ -44,6 +44,7 @@ use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use ferrofed_registry::incident::Kind;
+use ferrohealth_usage_report::window::Window;
 use http::{HeaderValue, StatusCode, header};
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Gauge, MeterProvider as _, ObservableCounter};
@@ -235,13 +236,15 @@ pub struct Metrics {
     bindings: crate::binding::process::Instruments,
     /// The window of the installation report, which the request log and the
     /// node requests record into beside the instruments.
-    usage: Arc<crate::usage_report::window::Window>,
+    usage: Arc<Window>,
 }
 
 impl Metrics {
     /// Returns the metrics `settings` describe: the Prometheus reader always,
     /// and the OTLP push when `settings.otlp_endpoint` is set, over TLS for an
-    /// `https://` collector ([`crate::telemetry::collector_tls`]).
+    /// `https://` collector ([`crate::telemetry::collector_tls`]), with
+    /// `usage` the window of the installation report the request log and
+    /// the node requests record into.
     ///
     /// The OTLP exporter speaks gRPC through `tonic`, so with a collector
     /// configured this runs inside a Tokio runtime context.
@@ -249,7 +252,7 @@ impl Metrics {
     /// # Errors
     /// Returns [`MetricsError::Otlp`] when the OTLP exporter cannot be built,
     /// and [`MetricsError::Prometheus`] when the pull reader cannot be.
-    pub fn new(settings: &MetricsSettings) -> Result<Self, MetricsError> {
+    pub fn new(settings: &MetricsSettings, usage: Window) -> Result<Self, MetricsError> {
         let otlp = settings
             .otlp_endpoint
             .as_ref()
@@ -268,13 +271,14 @@ impl Metrics {
                     .map_err(MetricsError::Otlp)
             })
             .transpose()?;
-        Self::with_readers(otlp)
+        Self::with_readers(otlp, usage)
     }
 
     /// Builds the provider over the Prometheus reader and `otlp`, and the
     /// instruments over the provider.
     fn with_readers(
         otlp: Option<PeriodicReader<opentelemetry_otlp::MetricExporter>>,
+        usage: Window,
     ) -> Result<Self, MetricsError> {
         let registry = prometheus::Registry::new();
         // NOTE: no specification governs this: our own design; the scope label
@@ -325,7 +329,7 @@ impl Metrics {
                 "Whether this replica runs the configuration revision the store marks running",
             )
             .build();
-        let usage = Arc::new(crate::usage_report::window::Window::default());
+        let usage = Arc::new(usage);
         let nodes = Instruments::new(&meter).with_usage(Arc::clone(&usage));
         let inbound = inbound::Instruments::new(&meter);
         let security = security::observe(&meter);
@@ -350,7 +354,7 @@ impl Metrics {
 
     /// Returns the window of the installation report.
     #[must_use]
-    pub const fn usage(&self) -> &Arc<crate::usage_report::window::Window> {
+    pub const fn usage(&self) -> &Arc<Window> {
         &self.usage
     }
 
@@ -428,8 +432,11 @@ impl Default for Metrics {
         reason = "the pull reader registers one collector in a registry built empty beside it, so the registration cannot collide"
     )]
     fn default() -> Self {
-        Self::with_readers(None)
-            .expect("the Prometheus reader should register in its own empty registry")
+        Self::with_readers(
+            None,
+            crate::usage_report::group::window(crate::base_path::BasePath::default(), None),
+        )
+        .expect("the Prometheus reader should register in its own empty registry")
     }
 }
 

@@ -103,8 +103,13 @@ async fn the_admin_listener_serves_a_parseable_text_exposition() -> TestResult {
 
 #[tokio::test]
 async fn an_otlp_push_shares_the_provider_and_leaves_the_exposition_whole() -> TestResult {
-    let pushed =
-        Metrics::new(&resolved("[metrics]\notlp_endpoint = \"http://127.0.0.1:4317\"\n")?.metrics)?;
+    let pushed = Metrics::new(
+        &resolved("[metrics]\notlp_endpoint = \"http://127.0.0.1:4317\"\n")?.metrics,
+        ferrofed_server::usage_report::group::window(
+            ferrofed_server::base_path::BasePath::default(),
+            None,
+        ),
+    )?;
     let alone = Metrics::default();
     let families = |text: &str| -> Vec<String> {
         text.lines()

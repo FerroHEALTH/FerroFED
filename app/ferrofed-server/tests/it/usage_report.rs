@@ -28,9 +28,10 @@ use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::state::AppState;
-use ferrofed_server::usage_report::config::{Deployment, UsageReportSettings};
-use ferrofed_server::usage_report::payload::{ProfileToken, Service};
-use ferrofed_server::usage_report::reporter::{self, Facts, Reporter, StartOutcome};
+use ferrofed_server::usage_report::status::{Facts, ProfileToken, Service};
+use ferrofed_server::usage_report::{Fed, identity};
+use ferrohealth_usage_report::reporter::{Reporter, StartOutcome, prepare};
+use ferrohealth_usage_report::section::{Deployment, Endpoint, UsageReportSection};
 use http::{Request, StatusCode};
 use serde_json::{Value, json};
 use wiremock::matchers::{header, method, path};
@@ -102,10 +103,10 @@ fn stable(mut report: Value) -> Result<Value, Box<dyn Error>> {
 }
 
 /// A report configuration over `state_dir` posting to `endpoint`.
-fn config(state_dir: &Path, endpoint: &str) -> Result<UsageReportSettings, Box<dyn Error>> {
-    Ok(UsageReportSettings {
+fn config(state_dir: &Path, endpoint: &str) -> Result<UsageReportSection, Box<dyn Error>> {
+    Ok(UsageReportSection {
         enabled: true,
-        endpoint: url::Url::parse(endpoint)?,
+        endpoint: Endpoint::new(endpoint)?,
         state_dir: Some(state_dir.to_path_buf()),
         deployment: Deployment::Compose,
     })
@@ -123,14 +124,17 @@ fn facts() -> Facts {
 
 /// A reporter of `state` under `config`.
 fn reporter_over(
-    config: &UsageReportSettings,
+    config: &UsageReportSection,
     state: Arc<AppState>,
-) -> Result<Reporter, Box<dyn Error>> {
-    let prepared = reporter::prepare(config, None).map_err(|off| format!("{off:?}"))?;
+) -> Result<Reporter<Fed>, Box<dyn Error>> {
+    let prepared = prepare(config, None).map_err(|off| format!("{off:?}"))?;
+    let window = Arc::clone(state.metrics().usage());
     Ok(Reporter::new(
         config,
-        (prepared, facts()),
-        state,
+        identity(),
+        prepared,
+        Arc::new(Fed::new(facts(), state)),
+        window,
         Instant::now(),
     )?)
 }
@@ -178,7 +182,7 @@ async fn the_start_report_is_exactly_the_v2_envelope() -> TestResult {
         &dir.path().join("state"),
         "https://report.ferropulse.eu/v1/report",
     )?;
-    let report = serde_json::to_value(reporter_over(&config, state)?.start_report())?;
+    let report = serde_json::to_value(reporter_over(&config, state)?.start_report().await)?;
     assert_eq!(
         stable(report)?,
         json!({
@@ -231,8 +235,7 @@ async fn the_daily_report_counts_requests_by_route_group_and_node_outcomes_and_n
         "https://report.ferropulse.eu/v1/report",
     )?;
     let reporter = reporter_over(&config, Arc::clone(&state))?;
-    let counts = state.metrics().usage().take();
-    let report = serde_json::to_value(reporter.daily_report(&counts))?;
+    let report = serde_json::to_value(reporter.daily_report().await)?;
     let rendered = report.to_string();
     for value in [PATIENT, EHR_A, "SYNTHETIC", "node-a", "127.0.0.1"] {
         assert!(
@@ -253,7 +256,10 @@ async fn the_daily_report_counts_requests_by_route_group_and_node_outcomes_and_n
         counters["node_requests"].as_u64() >= Some(2),
         "the query asks both members: {counters}"
     );
-    assert_eq!(counters["node_timeouts"], json!(0), "{counters}");
+    assert!(
+        counters.get("node_timeouts").is_none(),
+        "no node request ran past its budget, so the counter is not sent: {counters}"
+    );
     let groups = window["groups"].as_object().ok_or("an object")?;
     assert_eq!(
         groups.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -318,7 +324,12 @@ async fn a_daily_report_that_does_not_reach_the_collector_keeps_its_window() -> 
     assert!(reporter.send_daily().await.is_err(), "nothing listens");
     let kept = state.metrics().usage().take();
     assert_eq!(kept.requests(), 1, "the retry carries the window");
-    assert_eq!(kept.node_requests, 2);
+    let node_requests = kept
+        .counters
+        .iter()
+        .find(|(key, _)| key.as_str() == "node_requests")
+        .map(|(_, count)| *count);
+    assert_eq!(Some(2), node_requests);
     Ok(())
 }
 
@@ -363,7 +374,7 @@ fn a_collector_that_is_not_https_or_carries_credentials_is_refused() {
     ] {
         let table = format!("[usage_report]\nendpoint = \"{endpoint}\"\n");
         assert!(
-            matches!(resolved(&table), Err(ConfigError::ReportEndpoint { ref key }) if key == "usage_report.endpoint"),
+            matches!(resolved(&table), Err(ConfigError::Parse { ref fault }) if fault.key() == Some("usage_report.endpoint")),
             "{endpoint}"
         );
     }
