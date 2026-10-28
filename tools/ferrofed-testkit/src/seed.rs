@@ -217,8 +217,19 @@ pub struct SeedPlan {
 pub struct Committed {
     /// The EHR it was committed to.
     pub ehr_id: Uuid,
-    /// The version uid the node named in its `ETag`, without the quotes.
+    /// The version uid the node named in its `ETag`, without the weak
+    /// prefix and the quotes.
     pub version_uid: Option<String>,
+}
+
+/// The version uid an `ETag` value names: its entity tag without the weak
+/// prefix `W/` and the quotes (RFC 9110 §8.8.3), as FerroEHR answers a
+/// commit with a weak tag.
+fn version_of(etag: &str) -> String {
+    etag.trim()
+        .trim_start_matches("W/")
+        .trim_matches('"')
+        .to_owned()
 }
 
 /// What a seed wrote.
@@ -338,7 +349,7 @@ pub async fn seed(api_root: &str, plan: &SeedPlan) -> Result<SeedReport, SeedErr
             .headers()
             .get(ETAG)
             .and_then(|value| value.to_str().ok())
-            .map(|value| value.trim_matches('"').to_owned());
+            .map(version_of);
         report.compositions.push(Committed {
             ehr_id: seed.ehr_id,
             version_uid,
@@ -499,5 +510,19 @@ pub fn ehr_status(subject: Option<PatientId>) -> EhrStatus {
         is_queryable: true,
         is_modifiable: true,
         other_details: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::version_of;
+
+    #[test]
+    fn a_weak_and_a_strong_entity_tag_name_the_same_version() {
+        assert_eq!("8849182c::node-a::1", version_of("\"8849182c::node-a::1\""));
+        assert_eq!(
+            "8849182c::node-a::1",
+            version_of("W/\"8849182c::node-a::1\"")
+        );
     }
 }
