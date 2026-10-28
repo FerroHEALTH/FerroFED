@@ -41,15 +41,13 @@ const RESTRICTED_CONFIG: &str = r#"[[auth.basic.users]]
 user = "harness-admin"
 password_hash = "$argon2id$v=19$m=32768,t=2,p=1$ZmVycm9mZWQtaGFybmVzcy1h$t/ra6Wz0qdF31frrVsd1pXhVK2mQdTQLx53fDeIgDS8"
 scopes = ["user/composition-*.cruds", "user/template-*.cruds", "user/aql-*.cruds", "__ferroehr.platform"]
+roles = ["ADMIN"]
 
 [[auth.basic.users]]
 user = "harness-clinician"
 password_hash = "$argon2id$v=19$m=32768,t=2,p=1$ZmVycm9mZWQtaGFybmVzcy1j$eBo26o4ip9ZdPKtCbzkJIjvpp+SfoLqTK0a07Qw6jcU"
 scopes = ["user/composition-*.cruds", "user/template-*.cruds", "user/aql-*.cruds"]
-
-[authz.rbac.basic_roles]
-harness-admin = ["ADMIN"]
-harness-clinician = ["USER"]
+roles = ["USER"]
 "#;
 
 /// Starts FerroEHR as `system_id` on a database server of its own with its

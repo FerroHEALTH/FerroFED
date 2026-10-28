@@ -186,7 +186,8 @@ fn config(
 ) -> String {
     let mut text = format!(
         "profile = \"development\"\n\n\
-         [server]\nlisten = \"0.0.0.0:{PORT}\"\npublic_base_url = \"http://ferropix.example.org\"\n\n\
+         public_base_url = \"http://ferropix.example.org\"\n\n\
+         [server]\nlisten = \"0.0.0.0:{PORT}\"\n\n\
          [db]\nurl = \"postgresql://{DATABASE}:{DATABASE_PASSWORD}@{database_host}:{POSTGRES_PORT}/{DATABASE}\"\n\
          data_key_file = \"{DATA_KEY_TARGET}\"\n\n\
          [usage_report]\nenabled = false\n\n\

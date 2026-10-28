@@ -75,7 +75,7 @@ name: ferrofed
 # What the four nodes share; each service below merges it and adds its own
 # database, system_id and port.
 x-ferroehr-node: &ferroehr-node
-  image: ghcr.io/ferrohealth/ferroehr:5.4.1@sha256:b676e89db9cdd808817f7cfd46e13e79415e63c3baf92b5f249da38bd2a5e732
+  image: ghcr.io/ferrohealth/ferroehr:5.5.0@sha256:e1b15849a3792481a7f16680081b1ae6a2d7160d66e5cb1657fcef5cccfed0dc
   restart: unless-stopped
   depends_on:
     ferroehr-postgres:
@@ -176,7 +176,7 @@ services:
 
   # The one database server of the four nodes, FerroEHR's own PostgreSQL image.
   ferroehr-postgres:
-    image: ghcr.io/ferrohealth/ferroehr-postgres:5.4.1@sha256:eb3a720d6245f5472fe5f70ab66ed9662fe6addfa9c543f470ebc689f2eb2cfe
+    image: ghcr.io/ferrohealth/ferroehr-postgres:5.5.0@sha256:dfe1d5c1bb95d31d3f6ff00fec03cd76ae20d57d20e6225b31e5bc68adf7fa81
     restart: unless-stopped
     environment:
       # The development superuser password of FerroEHR's own quickstart.
@@ -246,7 +246,7 @@ services:
   # FerroPIX, the patient index: its PIXm Manager answers the gateway's
   # ITI-83 and takes the seed's ITI-104 feed.
   ferropix:
-    image: ghcr.io/ferrohealth/ferropix:0.0.5@sha256:6d42e2f9498eb0a801401149d19134cb6f54c2db3d2c499ffe8ba77ad902a8d5
+    image: ghcr.io/ferrohealth/ferropix:0.0.10@sha256:f44b2b12f0f12a6f0b1c7e2afc9611c649d501606b96d48e4471e0952826a504
     restart: unless-stopped
     depends_on:
       ferropix-postgres:
@@ -297,11 +297,15 @@ services:
   ferroehr-a:
     <<: *ferroehr-node
     environment:
+      # FerroEHR reads only the configuration file this names, the inline
+      # ferroehr-config below; each node sets it, since its own environment
+      # replaces the anchor's.
+      FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
       FERROEHR__DB__URL: postgres://ferroehr_a:ferroehr_a_example@ferroehr-postgres:5432/ferroehr_a
       # The system_id the node stamps into every EHR and version it creates,
       # the one docker/quickstart/registry.toml declares for node-a.
-      FERROEHR__SERVER__SYSTEM_ID: node-a.quickstart.local
-      FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+      FERROEHR__REST__SYSTEM_ID: node-a.quickstart.local
+      FERROEHR__TELEMETRY__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
       # FerroEHR's installation report to FerroPULSE: on by default, and
       # FERROEHR__USAGE_REPORT__ENABLED=false, or FerroFED's switch when that
       # is unset, in your shell or .env stops it.
@@ -314,9 +318,10 @@ services:
   ferroehr-b:
     <<: *ferroehr-node
     environment:
+      FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
       FERROEHR__DB__URL: postgres://ferroehr_b:ferroehr_b_example@ferroehr-postgres:5432/ferroehr_b
-      FERROEHR__SERVER__SYSTEM_ID: node-b.quickstart.local
-      FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+      FERROEHR__REST__SYSTEM_ID: node-b.quickstart.local
+      FERROEHR__TELEMETRY__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
       FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_B_PORT:-8082}:8080"
@@ -324,9 +329,10 @@ services:
   ferroehr-c:
     <<: *ferroehr-node
     environment:
+      FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
       FERROEHR__DB__URL: postgres://ferroehr_c:ferroehr_c_example@ferroehr-postgres:5432/ferroehr_c
-      FERROEHR__SERVER__SYSTEM_ID: node-c.quickstart.local
-      FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+      FERROEHR__REST__SYSTEM_ID: node-c.quickstart.local
+      FERROEHR__TELEMETRY__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
       FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_C_PORT:-8083}:8080"
@@ -334,9 +340,10 @@ services:
   ferroehr-d:
     <<: *ferroehr-node
     environment:
+      FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
       FERROEHR__DB__URL: postgres://ferroehr_d:ferroehr_d_example@ferroehr-postgres:5432/ferroehr_d
-      FERROEHR__SERVER__SYSTEM_ID: node-d.quickstart.local
-      FERROEHR__LOG__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
+      FERROEHR__REST__SYSTEM_ID: node-d.quickstart.local
+      FERROEHR__TELEMETRY__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
       FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_D_PORT:-8084}:8080"
@@ -349,7 +356,12 @@ configs:
   ferroehr-config:
     content: |
       [server]
-      bind = "0.0.0.0:8080"
+      listen = "0.0.0.0:8080"
+
+      # The gateway resolves patients through FerroPIX and names each node's
+      # own ehr_id, so a node keeps only its in-instance subject lookup.
+      [ehr_index]
+      provider = "local"
 
       [auth]
       enabled = true
@@ -361,12 +373,10 @@ configs:
       user = "ferroehr"
       password_hash = "$$argon2id$$v=19$$m=19456,t=2,p=1$$ZmVycm9laHJEZXZTYWx0$$be5nPwWjfUl1qvSrvkvqvdMOuCgM0VFcN/VN4MFLjT8"
       scopes = ["user/composition-*.cruds", "user/template-*.cruds", "user/aql-*.cruds", "__ferroehr.platform"]
+      roles = ["ADMIN", "USER"]
 
       [authz.rbac]
       enabled = false
-
-      [authz.rbac.basic_roles]
-      ferroehr = ["ADMIN", "USER"]
 
 volumes:
   ferrofed-state:
