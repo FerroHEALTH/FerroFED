@@ -97,6 +97,32 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
+### To v0.0.14, from v0.0.13
+
+- Remove `[dev]` from your configuration: `[[dev.crossref]]` and
+  `[[dev.consent_denied]]` are refused at load, naming the table. Resolve
+  patients through a PIX Manager with `[[pixm.manager]]`, as the quickstart
+  does with FerroPIX. With the `binding-nl` feature the gateway carries the
+  IHE binding too, because the Dutch binding resolves patients through
+  FerroPIX's PIXm Manager (#1377).
+- A dispensation sent to `POST {fhir-base}/MedicationDispense` must carry
+  its own business identifier, an `identifier` with a `system` and a
+  `value`; one without it is refused `422` `required`, naming
+  `MedicationDispense.identifier`. Have the pharmacy systems and the
+  national connector that send dispensations through the gateway set it
+  (#1346).
+- A verified HTTP Basic credential of `[[auth.basic.users]]` is now kept
+  for 300 seconds by default. Set `auth.basic.cache_ttl_seconds = 0` to
+  check every request, as before (#1390).
+- An access record writes its security labels once, on its
+  `ehds-categories` and `origin` entities, and no `meta.security`. A
+  repository rule or search that filtered on `_security` reads the
+  entities' `securityLabel` instead (#1390).
+- The quickstart runs FerroPIX beside the gateway, and its nodes run
+  FerroEHR 5.5.0. If you edited `compose.yaml` or the quickstart's FerroPIX
+  file, carry their renames over as the changelog lists them, and run
+  `docker compose down -v` once before the first start (#1377, #1386).
+
 ### To v0.0.13, from v0.0.12
 
 - The Kubernetes example moved to `deploy/kubernetes/base/`: apply it with
