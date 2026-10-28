@@ -209,7 +209,7 @@ async fn readiness_turns_503_while_the_listener_accepts_until_the_drain_delay_en
     })
     .await??;
     assert_eq!(reqwest::StatusCode::SERVICE_UNAVAILABLE, withdrawn);
-    let liveness = status_of(&client, &format!("http://{address}/health")).await?;
+    let liveness = status_of(&client, &format!("http://{address}/health/liveness")).await?;
     assert_eq!(
         reqwest::StatusCode::OK,
         liveness,
