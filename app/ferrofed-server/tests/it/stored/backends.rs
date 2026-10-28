@@ -22,6 +22,7 @@ use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::{Backend, Store};
 use ferrofed_server::telemetry::{DEFAULT_FILTER, Rendering, subscriber};
+#[cfg(feature = "postgres")]
 use ferrohealth_secret::file::SecretError;
 
 use crate::run::binary;
