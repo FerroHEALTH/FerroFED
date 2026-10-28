@@ -3,7 +3,8 @@
 
 //! The security labels of each access record (Regulation (EU) 2025/327
 //! Annex II 3.4): the record carries a label per category of the data and
-//! per origin, in `meta.security` and on the entity each belongs to, so the
+//! per origin, on the entity each belongs to and never in `meta.security`
+//! (`RESTful` ATNA Rev. 3.6 Table 3.81.4.2.2.1-1 maps no `meta`), so the
 //! Audit Record Repository can limit who reads it (IHE `RESTful` ATNA
 //! §3.81.4.1.3); `[access_log.labels]` replaces the defaults, and a label
 //! the logging component refuses, or one for an endpoint the registry does
@@ -150,15 +151,7 @@ async fn with_no_labels_table_a_record_carries_its_category_and_its_origins() ->
         &[composition(DISCHARGE, UID_B)],
     )
     .await?;
-    assert_eq!(
-        tokens(&record, "/meta/security"),
-        [
-            priority("Laboratory-Reports"),
-            priority("Discharge-Reports"),
-            origin("node-a-pub"),
-            origin("node-b-pub"),
-        ]
-    );
+    assert!(tokens(&record, "/meta/security").is_empty(), "{record}");
     assert_eq!(
         category_labels(&record),
         [
@@ -179,13 +172,15 @@ async fn the_labels_the_configuration_declares_replace_the_defaults() -> TestRes
          [access_log.labels.origins]\n\"node-a-pub\" = [{{ system = \"{CLASSES}\", code = \"hospital-a\" }}]\n"
     );
     let record = record_of(&tables, &[composition(LAB_REPORT, UID_A)], &[]).await?;
+    assert!(tokens(&record, "/meta/security").is_empty(), "{record}");
+    assert_eq!(category_labels(&record), [format!("{CLASSES}|lab")]);
     assert_eq!(
-        tokens(&record, "/meta/security"),
-        [
-            format!("{CLASSES}|lab"),
-            format!("{CLASSES}|hospital-a"),
-            "https://example.org/fhir/CodeSystem/origin|node-b-pub".to_owned(),
-        ]
+        origin_labels(&record, "node-a-pub"),
+        [format!("{CLASSES}|hospital-a")]
+    );
+    assert_eq!(
+        origin_labels(&record, "node-b-pub"),
+        ["https://example.org/fhir/CodeSystem/origin|node-b-pub".to_owned()]
     );
     Ok(())
 }

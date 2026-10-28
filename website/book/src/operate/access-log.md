@@ -29,7 +29,7 @@ the caller.
 |---|---|
 | (a) the provider or other individuals who accessed the data | an agent whose `who` is an `Organization` by its identifier: the requester's organisation where the issuer states one ([Consent](consent.md)), the IHE IUA `subject_organization_id` otherwise; and the Application agent (DICOM `110150`) with the token's `client_id` |
 | (b) the specific natural person who accessed the data | the `agent:user` (`IRCP`): the token's `iss` and `sub`, the professional the token names, the assurance level of the authentication, who acts, `altId` the professional identification the requester claims state, and every purpose of use: see [The person behind an access](#the-person-behind-an-access) |
-| (c) the categories of the data accessed | the entity named `ehds-categories`: see [Categories](#categories); each category's security label is on it and in `meta.security` ([Labelling the access records](access-labels.md)) |
+| (c) the categories of the data accessed | the entity named `ehds-categories`: see [Categories](#categories); each category's security label is on it ([Labelling the access records](access-labels.md)) |
 | (d) the time and date | `recorded` |
 | (e) the origin or origins of the data | one entity named `origin` per endpoint the access was sent to: the endpoint id, its node, its `system_id`, how it answered (the Federation Tier §11.1 status: `active`, `node-error`, `time-out`, and so on, for a query, a routed request and a received document alike), the rows it sent, and for a write the version it left: `written-version`, the `OBJECT_VERSION_ID` the member's `ETag` or `Location` named, or `written-version-unread`, `unnamed` or `malformed`, when its answer named none or no version id; and for an EHR create the EHR it left: `created-ehr`, the `ehr_id` the member's `ETag` or `Location` named, held to the `HIER_OBJECT_ID` form, or `created-ehr-unread`, `unnamed` or `malformed`, when its answer named none, no `ehr_id` or two that differ |
 
@@ -494,8 +494,8 @@ The gateway never adds the `ehr_id` to a dispatched query to learn whose
 rows it returned: that changes what each member is asked (§7.1) and which
 rows `DISTINCT` keeps and what an aggregate counts (N13, §11.6.3).
 
-Each record carries a security label per category and per origin, in
-`meta.security` and on its `ehds-categories` and `origin` entities, so your
+Each record carries a security label per category and per origin, on its
+`ehds-categories` and `origin` entities, so your
 repository can limit who reads it by category and origin: see [Labelling
 the access records](access-labels.md) and `[access_log.labels]` there.
 

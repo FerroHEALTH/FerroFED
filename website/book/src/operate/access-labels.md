@@ -20,18 +20,16 @@ when the record is written and sent with it over ITI-20.
 
 | Element | Labels |
 |---|---|
-| `meta.security` | every label of the record, each once: the categories' first, then each origin's in the order the access asked the origins |
 | `securityLabel` of the `ehds-categories` entity | the labels of the categories |
 | `securityLabel` of each `origin` entity | the labels of that origin |
 
-FHIR R4 `Meta.security` holds the "security labels applied to this
-resource", which "connect specific resources to the overall security
-policy and infrastructure": a repository that keeps the records as FHIR
-resources decides on them. A repository that keeps the DICOM form of a
-record keeps each `entity.securityLabel` as that entity's
-`ParticipantObjectSensitivity` (IHE RESTful ATNA Rev. 3.6, Table
-3.20.4.2.2.1-1), which has no place for `meta`, so the entity labels
-survive there.
+Each label is written once, on the entity it belongs to, and the record
+writes no `meta.security`. IHE RESTful ATNA Rev. 3.6 maps each
+`entity.securityLabel` to that entity's DICOM `ParticipantObjectSensitivity`
+and maps no `meta` (Table 3.81.4.2.2.1-1), so the entity labels are the ones
+that survive in both forms of a record. A repository that filters on the
+FHIR `_security` search parameter, which reads `meta.security`, finds no
+label there: read the entities' `securityLabel` instead.
 
 ## The labels a record carries
 

@@ -413,6 +413,9 @@ fn accessor(caller: &Caller) -> Accessor {
         }),
         roles: Vec::new(),
         token_id: None,
+        // NOTE: Annex II 3.2(a); a verified caller carries no data permit or other policy
+        // beside its token, so none is recorded.
+        policies: Vec::new(),
         assurance: caller.assurance().map(|level| match level {
             AssuranceLevel::Low => ehds_logging::record::AssuranceLevel::Low,
             AssuranceLevel::Substantial => ehds_logging::record::AssuranceLevel::Substantial,
