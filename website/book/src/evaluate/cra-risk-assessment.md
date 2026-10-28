@@ -36,8 +36,8 @@ advice.
 ## Date and revision
 
 This assessment was made on **2026-10-15**, against the code of FerroFED
-0.0.10 and the `main` branch after it, and last reviewed on **2026-10-25**,
-against FerroFED 0.0.13. It is updated with each release: the
+0.0.10 and the `main` branch after it, and last reviewed on **2026-10-28**,
+against FerroFED 0.0.14. It is updated with each release: the
 version-bump pull request reviews every row against what the release
 changes and adds a line to [Revisions](#revisions)
 ([`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md),
@@ -248,3 +248,4 @@ the ones a professional user needs to know.
 | 5 | 2026-10-23 | `main` before 0.0.12 | Annex I, Part II, point (2): a security fix ships alone where technically feasible, and a release that ships one beside functional changes opens its Security section with the reason; every Security entry names its GitHub security advisory or VEX statement, and the release lane refuses a section that does not |
 | 6 | 2026-10-24 | 0.0.12 | every row reviewed against the release: point (a) adds the release's full image and binary scans with the OpenVEX record, the scan before an image is tagged and the weekly scan, and the console's site build needs no CSS tool; point (d) holds with client authentication on `ferrohealth-smart`, every token that fails a check answered with one `invalid_token` challenge and every static bearer token removed, so a machine authenticates with HTTP Basic or the OAuth 2.0 client credentials grant; point (e) holds with the Argon2id hashes of the Basic users' passwords; the gateway and console images no longer trust the compromised emSign intermediates (GHSA-w3hc-w475-673c) and `ctutils` 0.4.4 fixes RUSTSEC-2026-0385 (GHSA-rv83-4vc9-vqxg). No point changes whether it applies |
 | 7 | 2026-10-25 | 0.0.13 | every row reviewed against the release: point (e) adds the OTLP export over TLS, with private trust roots and mutual TLS, so a remote collector needs no forwarder beside the gateway; point (d) holds with the running configuration the admin listener answers behind the operator scope, which names a secret by its file and never by its value; point (j) holds with the Kubernetes package's NetworkPolicy, which admits only the reverse proxy, the scraper and the console to the gateway; Annex I, Part II, points (4) to (6) hold with the response times `SECURITY.md` now states, those of every product of the family. No point changes whether it applies |
+| 8 | 2026-10-28 | 0.0.14 | every row reviewed against the release: point (d) holds with the family crates on `ferrohealth-smart` 0.8.6, which masks every secret through `ferrohealth-secret` and caches a verified Basic credential for 300 seconds under a keyed hash drawn at boot, emptied at a restart; point (e) holds with `[auth] ca_file`, which adds trust roots for the issuers alone; point (j) holds with a `CONTRIBUTION` in XML refused `415` before it is routed; point (g) holds more strictly with the static cross-reference removed, so no profile holds a table of patient identifiers. No point changes whether it applies |

@@ -551,25 +551,28 @@ Seven of the manufacturer's obligations have a first answer:
   documentation is kept for ten years (Art 30(3)).
 
 The planned work is filed under
-[#519](https://github.com/FerroHEALTH/FerroFED/issues/519); its remaining
-issues are in the v0.0.14 milestone, before the Regulation
-applies on 26 March 2027:
+[#519](https://github.com/FerroHEALTH/FerroFED/issues/519). What remains
+before the Regulation applies on 26 March 2027:
 
 - [#799](https://github.com/FerroHEALTH/FerroFED/issues/799): the European
   logging software component is built
   ([#521](https://github.com/FerroHEALTH/FerroFED/issues/521)), and is
   re-checked against the Art 36(1) common specifications once they are
-  adopted.
+  adopted. None is adopted, so the issue waits upstream with no milestone.
 - [#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289): the
   European interoperability software component for the patient summary is
   built from federated openEHR data
   ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)), and is
   re-checked against the Art 15(1) implementing act once it is adopted.
+  None is adopted.
 - [#523](https://github.com/FerroHEALTH/FerroFED/issues/523): the rest of
   the interoperability component for electronic prescriptions and
   dispensations, serving them from openEHR medication data through a
   FHIRconnect mapping
-  ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)).
+  ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)). The
+  interoperability component moves to FerroBRIDGE
+  ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)), and this
+  mapping is built there.
 - [#525](https://github.com/FerroHEALTH/FerroFED/issues/525): the rest of
   the conformity work: the points the [Annex II checklist](annex-ii.md)
   leaves open, the EU declaration of conformity, which each release writes

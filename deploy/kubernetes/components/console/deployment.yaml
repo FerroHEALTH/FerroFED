@@ -43,7 +43,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: ferrofed-console
-          image: ghcr.io/ferrohealth/ferrofed-console:0.0.13
+          image: ghcr.io/ferrohealth/ferrofed-console:0.0.14
           imagePullPolicy: IfNotPresent
           args: ["serve"]
           ports:

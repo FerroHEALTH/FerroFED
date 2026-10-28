@@ -462,27 +462,58 @@ Released on 2026-10-25.
   ([#638](https://github.com/FerroHEALTH/FerroFED/issues/638), [#644](https://github.com/FerroHEALTH/FerroFED/issues/644), [#1220](https://github.com/FerroHEALTH/FerroFED/issues/1220), [#1235](https://github.com/FerroHEALTH/FerroFED/issues/1235), [#1269](https://github.com/FerroHEALTH/FerroFED/issues/1269), [#1258](https://github.com/FerroHEALTH/FerroFED/issues/1258),
   [The Kubernetes package](../operate/kubernetes.md)).
 
+### v0.0.14: no patient index, and the safety controls of the clinical review
+
+- No patient index in any profile: the static development cross-reference
+  `[dev]` is refused at load, every patient resolves through a PIX Manager,
+  and the quickstart runs FerroPIX seeded over ITI-104
+  ([#1377](https://github.com/FerroHEALTH/FerroFED/issues/1377)).
+- The patient summary's safety controls from the clinical review: a
+  probable duplicate medicine across members marked in the narrative, the
+  medical alert and functional status sections written as unavailable, the
+  medication order selected for the medication summary, and a composition
+  that holds a mapped archetype twice left out and named rather than merged
+  ([#1343](https://github.com/FerroHEALTH/FerroFED/issues/1343), [#1344](https://github.com/FerroHEALTH/FerroFED/issues/1344), [#1350](https://github.com/FerroHEALTH/FerroFED/issues/1350)).
+- A received dispensation checked against the owner's dispensations by its
+  business identifier before it is written
+  ([#1346](https://github.com/FerroHEALTH/FerroFED/issues/1346)).
+- A `CONTRIBUTION` in XML answered `415` before it is routed, as a node
+  answers it ([#1391](https://github.com/FerroHEALTH/FerroFED/issues/1391)).
+- Consent before release (CP-19) observed at FerroEHR on a restriction of
+  processing the harness sets, and honoured by the federated query
+  ([#1389](https://github.com/FerroHEALTH/FerroFED/issues/1389)).
+- The family crates on `ferrohealth-smart` 0.8, with a Basic credential
+  cached for five minutes and each access record's labels on its entities
+  ([#1390](https://github.com/FerroHEALTH/FerroFED/issues/1390)).
+
 ## Planned
 
 Each milestone on the
 [milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
 release, and every issue in it names the sections it answers.
 
-v0.0.14: the rest of EHDS readiness ([#519](https://github.com/FerroHEALTH/FerroFED/issues/519)): the other priority
-categories of the interoperability component and prescriptions from openEHR
-medication data through a FHIRconnect mapping
-([#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and the rest of the manufacturer's
-conformity work ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [Regulatory status](regulatory-status.md)). The
+The European interoperability software component, `eehrxf` and every
+document it builds in the exchange format, moves to FerroBRIDGE
+([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)). The other
+priority categories and prescriptions from openEHR medication data through
+a FHIRconnect mapping are built there
+([#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043), [#666](https://github.com/FerroHEALTH/FerroFED/issues/666), [#667](https://github.com/FerroHEALTH/FerroFED/issues/667), [#668](https://github.com/FerroHEALTH/FerroFED/issues/668)).
+FerroFED keeps the gateway half: the federation queries, the FHIR face
+routes and the access record. v0.0.15 carries the rest of the
+manufacturer's conformity work
+([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [#940](https://github.com/FerroHEALTH/FerroFED/issues/940), [Regulatory status](regulatory-status.md)). The
 changelog fragments in
 [`changelog.d/`](https://github.com/FerroHEALTH/FerroFED/tree/main/changelog.d)
 list what is merged on `main` for the next release.
 
-Also in v0.0.14: the patient summary, built, re-checked against the Art 15(1)
-implementing act once it is adopted
+Waiting on the EU: the patient summary, built, is re-checked against the
+Art 15(1) implementing act once it is adopted
 ([#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289)); the logging
-component, built, re-checked against the Art 36(1)
+component, built, is re-checked against the Art 36(1)
 common specifications once they are adopted
-([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)).
+([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)); and the Art 40
+testing environment is run once it exists
+([#675](https://github.com/FerroHEALTH/FerroFED/issues/675)).
 
 ## Limitations
 

@@ -297,6 +297,7 @@ event, and its frequency is the event's:
 | Settle a prescription identifier collision | when the `PrescriptionIdentifierCollision` integrity incident is raised: two members hold one prescription identifier, and every dispensation for it is refused `409`, so agree with both members' operators which one owns it | [Every answer](../integrate/prescriptions.md#every-answer), [Integrity incidents](registry.md#integrity-incidents) |
 | Export the identity state | before a system that replaces FerroFED takes over, on each replica | [Exporting the identity state](identity-state-export.md), [Decommissioning](decommissioning.md) |
 | Keep each receiving category's packages complete | when you move a `[[fhir.receive]]` `package` or one of its dependencies to a new version: name every package of its dependency closure in `dependencies`, which `config check` holds to the manifests | [Receiving a document](../evaluate/receiving-documents.md) |
+| Keep the PIX Manager fed | continuously: the gateway keeps no patient index of its own, so a patient whose records a member has not fed to the PIX Manager over ITI-104, or whose binding the PIX Manager has dropped, resolves at no member and answers as not found | [Identity resolution](identity.md) |
 | Re-read this page and the information sheet | at each release | the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md) |
 
 When a release makes maintenance mandatory, the manufacturer says so in its

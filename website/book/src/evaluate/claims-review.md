@@ -66,6 +66,7 @@ as a broken command, is fixed in the same change.
 | v0.0.11 | 2026-10-16 | see below | 33 to 43, below | the v0.0.11 version bump, except finding 16, which stands |
 | v0.0.12 | 2026-10-24 | see below | 44 to 55, below | the v0.0.12 version bump |
 | v0.0.13 | 2026-10-25 | see below | 56 to 63, below | the v0.0.13 version bump |
+| v0.0.14 | 2026-10-28 | see below | 64 to 69, below | the v0.0.14 version bump |
 
 ### Findings of 2026-10-06
 
@@ -408,6 +409,50 @@ runs:
     openEHR content feeds yet.
 63. `llms.txt` did not name the national connector the FHIR face serves.
     It now does.
+
+No text suggested a use outside the intended purpose, (c).
+
+### Findings of 2026-10-28
+
+The review at the v0.0.14 cut. Read in full: `README.md`, `llms.txt`,
+`CITATION.cff`, the landing page, the Evaluate pages written by hand, the
+instructions for use, the Upgrading page and the assembled release notes.
+Every other page of the book, `SUPPORT.md`, `SECURITY.md` and the README
+of each crate was searched for "planned", "v0.0.14", "cross-reference" and
+the issues the v0.0.14 milestone closed next to a statement that the work
+is still to come.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+64. `README.md` named v0.0.13 as current. It now names v0.0.14.
+65. The landing page named v0.0.13 as current and said v0.0.14 brings
+    prescriptions from openEHR medication data
+    ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), which
+    this release does not ship. It now names v0.0.14, has a card for what
+    it ships, and plans no prescription mapping in FerroFED.
+66. The claims page planned for v0.0.14 the other priority categories and
+    the prescription mapping, which move to FerroBRIDGE with the
+    interoperability component
+    ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)). It now has
+    a v0.0.14 section, says where that work is built, and lists the
+    re-checks that wait on the EU apart.
+67. The regulatory status page put the remaining EHDS issues in the
+    v0.0.14 milestone. It now says which wait on an adopted act and that
+    the prescription mapping moves to FerroBRIDGE.
+68. `llms.txt` planned the further categories without saying where, and
+    did not say the gateway keeps no patient index
+    ([#1377](https://github.com/FerroHEALTH/FerroFED/issues/1377)). It now
+    says both.
+
+Against Art 28(b), a limitation left out:
+
+69. A draft EU declaration of conformity carried the Annex IV point 4
+    statement of conformity under a banner that said only "Not issued".
+    The draft now says it claims no conformity, that no conformity
+    assessment has been carried out and that the Article 40 testing
+    environment does not exist yet
+    ([#940](https://github.com/FerroHEALTH/FerroFED/issues/940)).
 
 No text suggested a use outside the intended purpose, (c).
 

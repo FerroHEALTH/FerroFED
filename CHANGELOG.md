@@ -24,6 +24,232 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.14] - 2026-10-28
+
+Security fixes until 2031-10-28, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- A dispensation sent to `POST {fhir-base}/MedicationDispense` must carry
+  its own business identifier, an `identifier` with a `system` and a
+  `value`; one without it is refused `422` `required`, naming
+  `MedicationDispense.identifier`. Have the pharmacy systems and the
+  national connector that send dispensations through the gateway set it
+  (#1346).
+- Remove `[dev]` from your configuration: `[[dev.crossref]]` and
+  `[[dev.consent_denied]]` are refused at load. Resolve patients through a
+  PIX Manager with `[[pixm.manager]]`, as the quickstart does with FerroPIX
+  (#1377).
+- If you edited the quickstart's `compose.yaml` or
+  `docker/quickstart/ferropix/ferropix.toml`, carry FerroEHR 5.5.0's and
+  FerroPIX 0.0.10's renames over: in `ferroehr-config`, `server.bind` is
+  `server.listen`, each Basic user's roles are its own `roles` list in place
+  of `[authz.rbac.basic_roles]`, and `[ehr_index] provider = "local"` is
+  required; each node sets `FERROEHR_CONFIG`, `FERROEHR__REST__SYSTEM_ID`
+  and `FERROEHR__TELEMETRY__FORMAT` in place of `FERROEHR__SERVER__SYSTEM_ID`
+  and `FERROEHR__LOG__FORMAT`; FerroPIX's `server.public_base_url` is the
+  top-level `public_base_url`. Run `docker compose down -v` once before the
+  first start on the new images (#1386).
+
+### Added
+
+- `eehrxf` 0.0.32 carries the discharge report crosswalk under its
+  `discharge` feature: each Xt-EHR `EHDSDischargeReport` element with the
+  eHealth Network ids of the Guideline on Hospital Discharge Report Release
+  1.1, its producer obligation, and the element of the HL7 Europe Hospital
+  Discharge Report 1.0.0 composition that carries it, checked against the
+  vendored packages. A crosswalk row now admits any context profile where
+  the profile element references any resource (#1333).
+- `eehrxf` 0.0.33 carries the laboratory report crosswalk under its
+  `laboratory` feature: each Xt-EHR `EHDSLaboratoryReport` element with the
+  eHealth Network ids of the Guideline on Laboratory Results Release 1.1,
+  its producer obligation, and the element of the HL7 Europe Laboratory
+  Report 2.0.0 composition or `DiagnosticReport` that carries it, checked
+  against the vendored packages. A crosswalk names companion profiles beside
+  its document profile, and `Crosswalk::check_with` holds its rows to all of
+  them (#1337).
+- `eehrxf` 0.0.34 carries the imaging crosswalks under its `imaging`
+  feature: the Xt-EHR `EHDSImagingReport` elements against the HL7 Europe
+  Imaging Report 1.0.0-ballot composition and its `DiagnosticReport`, and
+  the `EHDSImagingStudy` elements against its `ImagingStudy`, each with the
+  eHealth Network ids of the Guideline on Medical imaging studies and reports
+  Release 1.1, checked against the vendored packages (#1339).
+- The patient summary carries the safety controls of the review of 2026-10-25
+  (#1327): the medication summary marks two members' entries of one medicine,
+  strength and route as a probable duplicate in its narrative, naming both
+  members and merging nothing (#1343); the medical alert and the functional
+  status are always written, as `unavailable`, with a narrative saying the
+  gateway does not supply them (#1344); the medication summary also selects
+  `openEHR-EHR-INSTRUCTION.medication_order.v3`, and a mapping whose context
+  does not apply to a composition leaves it to the section's other mappings
+  (#1345); every element a mapping run dropped is named in its section's
+  narrative by path and member (#1350).
+- A dispensation received on the FHIR face is checked against the owner's
+  dispensations before it is written: the gateway reads the patient's
+  dispensations at the owner's own endpoint, by its `ehr_id` alone, matches
+  the received one's business identifier at the gateway, and refuses one the
+  owner already holds with `409` `duplicate`, naming it, with nothing
+  written. An owner that does not answer that read refuses the dispensation.
+  A dispensation a client sends again after a time-out is never written
+  twice (hazard I-12, #1346).
+- `eehrxf` writes the laboratory report and the discharge report documents.
+  The laboratory report is a `Bundle-eu-lab` of HL7 Europe Laboratory
+  Report 2.0.0, with the `DiagnosticReport-eu-lab` beside its composition;
+  the two hold one identifier, type, subject and category and each names
+  the other, and the results go in sections coded by study type (#1355).
+  The discharge report is a `bundle-eu-hdr` of HL7 Europe Hospital
+  Discharge Report 1.0.0, with the encounter it reports on and its language
+  (#1357). The patient summary and both reports share one assembly,
+  `document::Form`.
+- `eehrxf` writes the imaging report document, a `BundleReportEuImaging` of
+  HL7 Europe Imaging Report 1.0.0-ballot with the `DiagnosticReportEuImaging`
+  beside its composition. The composition's type is the report's code, both
+  carry the imaging-report and `Medical-Imaging` categories, and its
+  organization authors are the report's performing organizations, as the
+  profile's `dr-comp-author-org` requires, with the operator organization as
+  custodian (#1375).
+- The node profile observes consent before release (N27, CP-19) at
+  FerroEHR: the harness sets a restriction of processing (GDPR Art. 18) on
+  one of two compositions through FerroEHR's ADMIN API, and the new
+  restriction check reads the restricted composition withheld on the read
+  and the composition query. An end-to-end case shows the federated query
+  through the gateway leaving it out and a follow-up read of it answering
+  the node's `403` (#1389).
+- The gateway holds a stored query for the laboratory report,
+  `eu.ferrofed.eehrxf::laboratory-report`, read-only beside the patient
+  summary's section queries: every whole composition that contains an
+  `openEHR-EHR-OBSERVATION.laboratory_test_result.v1`, the entry the openEHR
+  CKM template 1013.26.408 (asset version 3, DRAFT) names. The template is
+  vendored by `scripts/vendor/openehr-ckm.sh` with its status recorded (#666).
+
+### Changed
+
+- `docs/release.md` has the step that affixes the CE marking (Regulation
+  (EU) 2025/327 Art 41) to a release's information sheet, instructions for
+  use and EU declaration of conformity, and makes or updates its EU database
+  entry (Art 49), from the first release placed on the market as an EHR
+  system; the entry waits on the Art 49(4) delegated act, which the weekly
+  `ehds-acts` job watches. The regulatory status page links it (#1144).
+- The clinical safety risk file, the Annex II checklist, the regulatory
+  status page and the instructions for use no longer cite closed issues as
+  pending work: the hazards that wait on a clinical review cite #1327, the
+  Annex II rows name the open issues that keep each point partial, point 3.4
+  records the security labels per category and origin. The production
+  guide's CDR checklist is a page of its own, Preparing each CDR, and the
+  patient summary's terminology rules are the page Terminology on the FHIR
+  face (#1319, #1320, #1321, #1322, #1325, #1328).
+- The clinical safety risk file records the safety review of the
+  interoperability component of 2026-10-25, which the owner accepted: I-01,
+  I-04 to I-06, I-11 and I-13 to I-15 closed at P1, I-09 accepted at S3, P2
+  by a benefit-risk judgement, and I-02, I-03 and I-12 kept open, each
+  naming the control that closes it. The Annex II checklist and the book's
+  receiving and prescriptions pages follow it (#1327).
+- `eehrxf`'s `Category::crosswalk`, which answered one crosswalk or none, is
+  `Category::crosswalks`, which answers the crosswalks of a category's
+  datasets in the order of `Category::roots`: two for imaging, one for every
+  other category. A caller of `crosswalk()` takes the first of
+  `crosswalks()` (#1339).
+- The operator console's find answers under the field as you type: a panel
+  anchored under the top bar's find asks the console's `/search/answer`
+  route and shows organisations, nodes, creating systems and stored queries
+  grouped by kind, five of each, with the words searched for emphasised, and
+  says when the registry or the stored queries did not answer; the arrow keys
+  walk them and Enter opens one. Enter with none chosen, or "See all
+  results", opens the find page, which lists every match in the page, one
+  card per kind. The console moves to FerroUI 0.4.0.
+- Moved to `ferrohealth-smart` 0.6.0, the family's SMART and OAuth 2.0
+  resource-server crate, from 0.4.0; client authentication and the onward
+  client credentials grant behave as before (#1342).
+- The operator console's settings tabs mark a value's source with FerroUI's
+  setting source: From the environment, Default, or From the file under
+  managed revisions; a value the running revision sets, or the file with
+  revisions off, is the page's own source and carries no mark. The words the
+  console wrote after every value ("from revision 1", "from an environment
+  override") are gone.
+- The compose quickstart resolves every patient through FerroPIX, the
+  FerroHEALTH patient index, which Compose runs beside the gateway on its own
+  PostgreSQL and seeds with the synthetic patients over ITI-104 before the
+  gateway starts. The gateway keeps no cross-reference of its own. The
+  patients now live in `docker/quickstart/patients.tsv`, which
+  `scripts/quickstart/seed.sh` reads too. Run `docker compose down -v` once
+  before bringing an older quickstart up again (#1377).
+- The `binding-nl` feature carries `binding-ihe`: the Dutch binding resolves
+  patients through FerroPIX's PIXm Manager, the family's patient index for
+  Dutch BSNs too (#1377).
+- The compose quickstart and the end-to-end harness run FerroEHR 5.5.0 and
+  FerroPIX 0.0.10, each pinned by digest, and the browser journeys run
+  Chrome for Testing 156.0.8078.73. Each node names its configuration file
+  in `FERROEHR_CONFIG`, sets its `system_id` as `FERROEHR__REST__SYSTEM_ID`
+  and keeps FerroEHR's in-instance subject lookup
+  (`[ehr_index] provider = "local"`); FerroPIX reads `public_base_url` at
+  the top level. The vendored W3C DID Resolution 1.0 moves to the Candidate
+  Recommendation Draft of 2026-10-26 (#1386).
+- Moved to `ferrohealth-smart` 0.8.6, with `ihe-iti` 0.0.66,
+  `nl-generic-functions` 0.0.33, `ihe-atna` and `ehds-logging` 0.3.1,
+  `ferrobridge-term` and `ferrobridge-validator` 0.1.140 on the same line,
+  so the build holds one `ferrohealth-smart` and one `openehr-sdt` (#1390).
+  A verified Basic credential of `[[auth.basic.users]]` is now kept for
+  300 seconds by default (`auth.basic.cache_ttl_seconds`; `0` keeps the old
+  behaviour), and `[auth] ca_file` names extra trust roots for the issuers.
+  An access record names each security label once, on its `ehds-categories`
+  and `origin` entities, and writes no `meta.security`, as IHE RESTful ATNA
+  Rev. 3.6 Table 3.81.4.2.2.1-1 maps no `meta`: a repository that filtered
+  on `_security` reads the entities' `securityLabel` instead.
+- The quickstart's FerroPIX and its four FerroEHR nodes follow
+  `FERROFED__USAGE_REPORT__ENABLED`, so one variable stops every installation
+  report the quickstart sends; `FERROEHR__USAGE_REPORT__ENABLED`, when set,
+  still decides for the nodes (#1392).
+- Moved to FerroPIX's `ihe-iti` 0.0.54 and `nl-generic-functions` 0.0.29,
+  FerroAUDIT's `ihe-atna` and `ehds-logging` 0.2.10, and
+  `ferrohealth-smart` 0.7.0, the versions those crates require of one
+  another. The access record, the audit trail, client authentication and
+  identity resolution behave as before (#367).
+- A draft EU declaration of conformity
+  (`scripts/release/declaration-of-conformity.sh --draft`) opens by saying
+  that it is not issued and claims no conformity: no conformity assessment
+  against Chapter III of Regulation (EU) 2025/327 has been carried out, and
+  the Article 40 testing environment does not exist yet (#940).
+
+### Removed
+
+- The unpublished workspace crate `oauth-server-metadata` is retired: the
+  onward grants take the RFC 8414 duplicate-name refusal and metadata
+  location from `ferrohealth-smart` 0.6.0, and the engine keeps the issuer
+  and mutual-TLS alias host rules, with no change in what is accepted or
+  refused (#1342).
+- The static development cross-reference `[dev]` (`[[dev.crossref]]` and
+  `[[dev.consent_denied]]`) is removed: FerroFED keeps no patient index in
+  any profile and resolves every patient through a PIX Manager. A
+  configuration that sets `[dev]` is refused at load naming the table. The
+  operator deployment report drops `development_crossref`, the identity-state
+  export drops its `development_cross_reference` entry, the usage report no
+  longer names the `dev` service, and the console's development banner no
+  longer mentions a static cross-reference (#1377).
+
+### Fixed
+
+- A patient summary section no longer writes one resource that mixes two
+  entries: a composition that holds a mapping context's start archetype more
+  than once is left out of that context's section and named in its narrative,
+  with the member and the number of entries (#1350).
+- A `CONTRIBUTION` sent as `application/xml` is answered `415`
+  (`media-type-unsupported`) before it is routed, naming the media types
+  `contribution_create` takes, as a FerroEHR node answers it: ITS-REST 1.1.0
+  defines that body in JSON alone. It was a `400`
+  (`preceding-version-invalid`) after the write was routed (#1391).
+
+### Security
+
+Shipped with functional changes because: the fix is a dependency release that reached main beside the unreleased work of the next version, and a patch of v0.0.13 alone would ship the same pins.
+
+- `ferrohealth-smart` 0.7.1 masks the userinfo of an OAuth section's
+  `issuer` and `token_endpoint` in every rendering, a URL that does not parse
+  included; before it a credential written into such a URL could reach a
+  log through the section's `Debug` or serialized form (CWE-532,
+  GHSA-vphj-3f8c-5hpx). FerroFED takes it with the releases built on it:
+  `ihe-atna` and `ehds-logging` 0.2.11, `ihe-iti` 0.0.60,
+  `nl-generic-functions` 0.0.30 and `ferrobridge-term` 0.1.137.
+
 ## [0.0.13] - 2026-10-25
 
 Security fixes until 2031-10-25, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -5750,7 +5976,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.13...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.14...HEAD
+[0.0.14]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.10...v0.0.11

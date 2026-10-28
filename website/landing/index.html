@@ -63,7 +63,7 @@
     <section class="hero">
       <div class="wrap">
         <img class="hero-logo" src="./assets/brand/ferrofed-icon.svg" alt="FerroFED" width="88" height="88">
-        <p class="status" role="note">v0.0.13 released. Linux binaries, the gateway and console images, signed, and a compose file to start it.</p>
+        <p class="status" role="note">v0.0.14 released. Linux binaries, the gateway and console images, signed, and a compose file to start it.</p>
         <h1>Where else the record is.</h1>
         <p class="sub">
           FerroFED is an openEHR federation gateway. A client sends it an
@@ -317,6 +317,19 @@ EOF</code></pre>
             </p>
           </article>
 
+          <article class="card">
+            <span class="tag">In v0.0.14</span>
+            <h3>No patient index, and safer summaries</h3>
+            <p>
+              The gateway keeps no table of patients in any profile: every
+              patient resolves through FerroPIX, the family's patient index,
+              which the quickstart runs. The patient summary marks a probable
+              duplicate medicine across members, a repeated entry is never
+              merged into one, and a dispensation is checked against the
+              owner's before it is written.
+            </p>
+          </article>
+
         </div>
       </div>
     </section>
@@ -410,7 +423,7 @@ EOF</code></pre>
         <div class="status-panel">
           <h2>Where the project is</h2>
           <p>
-            v0.0.13 is the current release. It answers one federated AQL query
+            v0.0.14 is the current release. It answers one federated AQL query
             over many nodes with the patient resolved outside AQL, merges the
             rows as one CDR would, and routes reads, writes and definitions to
             the node that owns them. Every caller is authenticated, each node
@@ -426,8 +439,10 @@ EOF</code></pre>
             authentication onto the family's shared crate, and judges every
             scan finding of a release. v0.0.13 serves a national contact
             point's connector, validates a received document in full and
-            ships the Kubernetes package; v0.0.14 brings prescriptions from
-            openEHR medication data. The tracker's milestones are the
+            ships the Kubernetes package. v0.0.14 resolves every patient
+            through FerroPIX and keeps no patient index of its own, and adds
+            the safety controls of the clinical review to the patient
+            summary. The tracker's milestones are the
             roadmap; every issue carries its acceptance criteria, and a
             release is cut when its milestone has no open issue left.
           </p>
