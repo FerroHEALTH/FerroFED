@@ -47,7 +47,9 @@
 //! received, byte for byte (N22). Every version that names a preceding
 //! version must be controlled by the path node, and a version that names none
 //! is a creation inside the path EHR, so a `CONTRIBUTION` of creations alone
-//! routes by its path `ehr_id` as any other request does.
+//! routes by its path `ehr_id` as any other request does. A `CONTRIBUTION` in
+//! canonical XML is a `415` before it is routed ([`media_refused`]), because
+//! `contribution_create` takes its body in JSON alone.
 
 use std::fmt;
 
@@ -170,13 +172,15 @@ pub enum PrecedingInvalid {
         "the body is not a CONTRIBUTION in the representation its Content-Type selects, canonical JSON or a canonical envelope whose data is FLAT or STRUCTURED, whose every preceding_version_uid is one OBJECT_VERSION_ID, so the versions it amends, and their controlling CDR, are unknown (ITS-REST 1.1.0 contribution_create; §12.4, N23)"
     )]
     Contribution,
-    /// The body is a `CONTRIBUTION` in canonical XML, which the gateway does
-    /// not read, so the versions it amends are unknown.
-    #[error(
-        "a CONTRIBUTION in canonical XML is not read, so the versions it amends, and their controlling CDR, are unknown; send it in canonical JSON or a Simplified Format (ITS-REST 1.1.0 contribution_create; §12.4, N23)"
-    )]
-    XmlContribution,
 }
+
+/// A `CONTRIBUTION` sent in canonical XML, which `contribution_create` takes
+/// in no representation but JSON (ITS-REST 1.1.0 EHR API).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "a CONTRIBUTION is taken as application/json, application/openehr.wt.flat+json or application/openehr.wt.structured+json, not application/xml: ITS-REST 1.1.0 contribution_create defines its body in JSON alone, so the request was not sent"
+)]
+pub struct XmlContribution;
 
 /// Where a versioned write names a version it amends, which a refusal points
 /// at in place of quoting the version (§5.4.3).
@@ -318,10 +322,6 @@ fn amended(
     content_type: Option<&HeaderValue>,
     body: &[u8],
 ) -> Result<Vec<(Named, ObjectVersionId)>, PrecedingInvalid> {
-    // TODO(#308): a CONTRIBUTION in canonical XML is refused 400 until openehr-its reads it.
-    if content_type.is_some_and(|value| value.as_bytes() == CANONICAL_XML.as_bytes()) {
-        return Err(PrecedingInvalid::XmlContribution);
-    }
     let read = contribution_create_request_body(content_type, body)
         .map_err(|_quoted| PrecedingInvalid::Contribution)?;
     let preceding = match read {
@@ -397,6 +397,24 @@ pub fn path_refused(write: Write, matched: &RouteMatch) -> Option<Refused> {
         Write::Versioned(Preceding::Path) => in_path(matched).err().map(Refused::from),
         Write::Versioned(_) | Write::NewEhr | Write::Routed => None,
     }
+}
+
+/// The refusal of a `write` whose `headers`, the ones `declared::held`
+/// composed, send a `CONTRIBUTION` in canonical XML, or `None` otherwise.
+///
+/// `contribution_create` declares its request body as `application/json`
+/// alone, with the Simplified Formats beside it, and no openEHR specification
+/// defines an XML `CONTRIBUTION`, so the refusal is the `415` the node answers
+/// (ITS-REST 1.1.0 EHR API, `contribution_create`; RFC 9110 §15.5.16). It is
+/// answered before the write is routed or its body read.
+#[must_use]
+pub fn media_refused(write: Write, headers: &HeaderMap) -> Option<XmlContribution> {
+    let xml = headers.get(header::CONTENT_TYPE).is_some_and(|value| {
+        value
+            .as_bytes()
+            .eq_ignore_ascii_case(CANONICAL_XML.as_bytes())
+    });
+    (write == Write::Versioned(Preceding::Contribution) && xml).then_some(XmlContribution)
 }
 
 /// The version the path of a composition `DELETE` names (ITS-REST 1.1.0 EHR

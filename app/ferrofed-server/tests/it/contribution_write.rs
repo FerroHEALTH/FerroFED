@@ -140,6 +140,13 @@ fn posted(at: &str, media: &str, endpoint: &str, sent: &str) -> Result<Request<B
         .body(Body::from(sent.to_owned()))
 }
 
+/// A `POST` of `sent` as `media` to `at`, naming no target.
+fn untargeted(at: &str, media: &str, sent: &str) -> Result<Request<Body>, http::Error> {
+    Request::post(at)
+        .header(header::CONTENT_TYPE, media)
+        .body(Body::from(sent.to_owned()))
+}
+
 /// A `CONTRIBUTION` committing `versions` (ITS-REST 1.1.0 `NewContribution`).
 fn contribution(versions: &[String]) -> String {
     format!(
@@ -529,35 +536,40 @@ async fn a_malformed_flat_contribution_is_a_400_before_any_node() -> TestResult 
     Ok(())
 }
 
-/// A `CONTRIBUTION` in canonical XML is one the gateway does not read, so it
-/// cannot name the versions it amends, and refuses a write it cannot
-/// unambiguously route (§12.4, N23).
-// TODO(#308): this refusal holds until openehr-its reads a CONTRIBUTION in canonical XML.
+/// A `CONTRIBUTION` in canonical XML is a `415`, as at the node:
+/// `contribution_create` takes its body in JSON alone (ITS-REST 1.1.0 EHR
+/// API), so it is refused before it is routed, with or without a target, and
+/// the refusal names the media types the operation takes.
 // conformance: CP-15
 #[tokio::test]
-async fn a_contribution_in_canonical_xml_is_never_forwarded() -> TestResult {
+async fn a_contribution_in_canonical_xml_is_refused_415_before_routing() -> TestResult {
     let xml = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<contribution xmlns=\"http://schemas.openehr.org/v1\">\n  <versions>\n    <preceding_version_uid><value>{CREATED_AT_A}</value></preceding_version_uid>\n  </versions>\n</contribution>\n"
     );
-    let a = Server::start().await;
-    let b = Server::start().await;
-    let dir = tempfile::tempdir()?;
-    let request = posted(&contribution_of(EHR_A), "application/xml", ENDPOINT_A, &xml)?;
-    let text = refused_at_neither(
-        over(dir.path(), &a, &b, "")?,
-        request,
-        (StatusCode::BAD_REQUEST, "preceding-version-invalid"),
-        (&a, &b),
-    )
-    .await?;
-    assert!(
-        text.contains("canonical XML"),
-        "the refusal says which form it does not read: {text}"
-    );
-    assert!(
-        !without_request_id(&text)?.contains("8849182c"),
-        "the body is not quoted: {text}"
-    );
+    for target in [Some(ENDPOINT_A), None] {
+        let a = Server::start().await;
+        let b = Server::start().await;
+        let dir = tempfile::tempdir()?;
+        let request = match target {
+            Some(endpoint) => posted(&contribution_of(EHR_A), "application/xml", endpoint, &xml)?,
+            None => untargeted(&contribution_of(EHR_A), "application/xml", &xml)?,
+        };
+        let text = refused_at_neither(
+            over(dir.path(), &a, &b, "")?,
+            request,
+            (StatusCode::UNSUPPORTED_MEDIA_TYPE, "media-type-unsupported"),
+            (&a, &b),
+        )
+        .await?;
+        assert!(
+            text.contains("application/json") && text.contains("not application/xml"),
+            "{target:?}: the refusal names the media types it takes: {text}"
+        );
+        assert!(
+            !without_request_id(&text)?.contains("8849182c"),
+            "{target:?}: the body is not quoted: {text}"
+        );
+    }
     Ok(())
 }
 

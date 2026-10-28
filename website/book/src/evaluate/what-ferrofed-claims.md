@@ -484,9 +484,6 @@ component, built, re-checked against the Art 36(1)
 common specifications once they are adopted
 ([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)).
 
-A `CONTRIBUTION` in canonical XML waits on the openEHR XSD and `openehr-its`
-([#308](https://github.com/FerroHEALTH/FerroFED/issues/308)).
-
 ## Limitations
 
 Regulation (EU) 2025/327 Art 28(b) forbids "failing to inform the

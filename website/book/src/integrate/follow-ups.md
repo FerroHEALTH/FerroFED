@@ -238,8 +238,10 @@ A body it cannot read as the representation you declared, or a
 `preceding_version_uid` that is no `OBJECT_VERSION_ID`, is a `400`
 (`preceding-version-invalid`), because the gateway cannot tell which
 versions it amends (§12.4), and nothing is sent. A `CONTRIBUTION` in
-canonical XML (`application/xml`) is not read yet, so it is the same `400`
-(#308).
+canonical XML (`application/xml`) is a `415` (`media-type-unsupported`),
+answered before it is routed, as a node answers it: `contribution_create`
+takes its body in JSON alone (ITS-REST 1.1.0 EHR API), and no openEHR
+specification defines an XML `CONTRIBUTION`.
 
 The same rule covers a write against a row that de-duplication kept
 (§10.3, N36). Suppose node A created a composition and node B holds an
