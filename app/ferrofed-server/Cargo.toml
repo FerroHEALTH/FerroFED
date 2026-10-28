@@ -67,6 +67,9 @@ ferrohealth-secret.workspace = true
 # readiness document, served by ferrohealth-server's health routes.
 ferrohealth-health = { workspace = true, features = ["registry"] }
 ferrohealth-server.workspace = true
+# The installation report to FerroPULSE (#1397): the section, envelope v2,
+# the reporter, the instance id and the window the request log fills.
+ferrohealth-usage-report.workspace = true
 anyhow.workspace = true
 # The constant-time comparison of the PMIR feed token (#147), the keyed
 # caller references of the security log (#500), and the SHA-256 a conformance

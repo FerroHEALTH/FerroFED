@@ -252,10 +252,7 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
         Arc::clone(&state),
     ));
     let metrics = Arc::clone(state.metrics());
-    let usage = (
-        Arc::clone(metrics.usage()),
-        state.fhir().map(|fhir| fhir.base.as_str().to_owned()),
-    );
+    let usage = Arc::clone(metrics.usage());
     let fhir_state = Arc::clone(&state);
     // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate
     // and the caller rate, so a record names the verified caller and a refusal writes none.
@@ -341,19 +338,18 @@ pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
 
 /// What the request log of the client surface records each request into:
 /// the inbound request instruments, and the window of the installation
-/// report with the FHIR face's base.
+/// report.
 type Metered = (
     metrics::inbound::Instruments,
-    (Arc<usage_report::window::Window>, Option<String>),
+    Arc<ferrohealth_usage_report::window::Window>,
 );
 
 /// Applies the middleware of [`with_middleware`] to `router`, the request log
 /// recording each request through `metered` when it is set.
 fn layered(router: Router, server: &ServerSettings, metered: Option<Metered>) -> Router {
     let log = match metered {
-        Some((inbound, (usage, fhir))) => {
-            request_log::RequestLog::new(server.base_path.clone(), Some(inbound))
-                .with_usage(usage, fhir)
+        Some((inbound, usage)) => {
+            request_log::RequestLog::new(server.base_path.clone(), Some(inbound)).with_usage(usage)
         }
         None => request_log::RequestLog::new(server.base_path.clone(), None),
     };

@@ -108,7 +108,7 @@ pub struct Settings {
     /// takes, under `config.ui = "managed"`.
     pub revision_policy: crate::revision::policy::Policy,
     /// The installation report to `FerroPULSE`.
-    pub usage_report: crate::usage_report::config::UsageReportSettings,
+    pub usage_report: ferrohealth_usage_report::section::UsageReportSection,
     /// The deprecated keys the configuration set, which `config check` and
     /// the start-up log name.
     pub deprecated: Vec<crate::config::deprecated::Deprecated>,

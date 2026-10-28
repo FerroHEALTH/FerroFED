@@ -46,7 +46,7 @@ use crate::metrics::{
     LOCALIZER_REQUEST_DURATION, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION,
     NODE_REQUESTS, OVERLOAD_REFUSALS, RESOLVER_REQUEST_DURATION, RESOLVER_REQUESTS,
 };
-use crate::usage_report::window::Window;
+use ferrohealth_usage_report::window::Window;
 
 /// The node request instruments of one meter provider, shared by every
 /// federation a reload builds.
@@ -112,7 +112,10 @@ impl Instruments {
                 "The time the cross-reference resolver took to answer a call",
             ),
             overload: overload(meter),
-            usage: Arc::default(),
+            usage: Arc::new(crate::usage_report::group::window(
+                crate::base_path::BasePath::default(),
+                None,
+            )),
         }
     }
 
@@ -433,7 +436,7 @@ impl NodeRequests {
         let Some(instruments) = &self.instruments else {
             return;
         };
-        instruments.usage.node(status);
+        crate::usage_report::group::node(&instruments.usage, status);
         let label = KeyValue::new("endpoint", endpoint.as_str().to_owned());
         instruments.requests.add(
             1,

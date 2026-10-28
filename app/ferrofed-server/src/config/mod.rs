@@ -140,7 +140,7 @@ pub struct Config {
     pub revisions: revisions::Revisions,
     /// The installation report to `FerroPULSE` (`[usage_report]`), on by
     /// default.
-    pub usage_report: crate::usage_report::config::UsageReport,
+    pub usage_report: ferrohealth_usage_report::section::UsageReportSection,
     /// The deprecated keys the configuration set, already read under their
     /// new names; never read from the file itself.
     #[serde(skip)]
@@ -176,7 +176,7 @@ impl Default for Config {
             access_log: crate::access::config::AccessLog::default(),
             audit: crate::audit::config::Audit::default(),
             revisions: revisions::Revisions::default(),
-            usage_report: crate::usage_report::config::UsageReport::default(),
+            usage_report: ferrohealth_usage_report::section::UsageReportSection::default(),
             deprecated: Vec::new(),
         }
     }

@@ -153,7 +153,14 @@ impl AppState {
         let federation = Federation::load_read(settings, document)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
         transport::warn(&cleartext);
-        let metrics = Arc::new(Metrics::new(&settings.metrics)?);
+        let usage = crate::usage_report::group::window(
+            settings.server.base_path.clone(),
+            settings
+                .fhir
+                .as_ref()
+                .map(|fhir| fhir.base.as_str().to_owned()),
+        );
+        let metrics = Arc::new(Metrics::new(&settings.metrics, usage)?);
         let federation = federation.map(|federation| federation.metered(metrics.nodes()));
         let definitions = definitions(settings, federation.as_ref())?;
         let mut built: Vec<Arc<dyn HealthIndicator>> = vec![Arc::new(Built("configuration"))];

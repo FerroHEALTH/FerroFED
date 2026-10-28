@@ -13,9 +13,10 @@ says whether it is on and how to switch it off.
 
 This page lists every field the report carries, says when it is sent, gives
 the switch, and carries the privacy notice for the data the collector stores.
-The wire format is FerroPULSE's report envelope v2; no openEHR or Federation
-Tier specification governs any of it, and the report is FerroFED's own
-design.
+The wire format is FerroPULSE's report envelope v2, sent by the family's
+`ferrohealth-usage-report` crate every FerroHEALTH product shares; no openEHR
+or Federation Tier specification governs any of it, and the report is the
+family's own design.
 
 <!-- toc -->
 
@@ -59,7 +60,7 @@ A bind mount needs a host directory that uid 65532 can write.
 The boot line, with the report on, reads:
 
 ```text
-usage report ON: instance id, version, licence type, deployment, uptime, host size, member count as a range, the configured identity services, coarse request latency per route group and node request counts, at each start and once a day; no patient data, AQL, identifiers, node names, URLs or request paths. Off: FERROFED__USAGE_REPORT__ENABLED=false. Details: https://ferrofed.eu/docs/operate/usage-report.html
+usage report ON: instance id, version, licence type, deployment, uptime, host size, member count as a range, the configured identity services, coarse request latency per route group and node request counts, at each start and once a day; no clinical content, identifiers, URLs or request paths. Off: FERROFED__USAGE_REPORT__ENABLED=false. Details: https://ferrofed.eu/docs/operate/usage-report.html
 ```
 
 It carries the configured endpoint as the structured field `endpoint`. With
@@ -178,7 +179,8 @@ daily report:
 - **`histogram`:** 11 request counts, one per latency bucket. The bucket upper
   bounds in milliseconds are 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000,
   and no bound for the last.
-- **`counters`:**
+- **`counters`:** each counter that counted at least one event in the
+  window; one that counted none is left out.
   - `node_requests`: the requests the gateway sent to a member node, a
     federated query's fan-out, a routed request and an ask-all probe alike.
     `node_requests` over the `query` group's requests is the average fan-out.
