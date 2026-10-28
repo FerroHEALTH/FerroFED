@@ -72,6 +72,7 @@ pub mod prefer;
 pub(crate) mod prescription;
 pub(crate) mod prescriptions;
 pub(crate) mod provenance;
+pub(crate) mod query_string;
 pub(crate) mod receive;
 pub(crate) mod request;
 pub mod route;

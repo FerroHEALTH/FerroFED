@@ -31,6 +31,7 @@ use openehr_its::rest::generated::query::{AdhocQueryExecute, QueryExecuteAdhocQu
 use openehr_its::rest::routes::RouteMatch;
 
 use crate::facade::answer::Failure;
+use crate::facade::query_string::literal_plus;
 use crate::facade::{intake, route, security, target};
 use crate::federation::Federation;
 
@@ -187,8 +188,10 @@ pub(super) fn read(
 fn adhoc(matched: &RouteMatch, query: Option<&str>) -> Result<AdhocQueryExecute, Failure> {
     // NOTE: no specification governs this: our own design; the façade reads its
     // headers itself, as for a POST, so the decoder reads the query string alone.
-    let params = QueryExecuteAdhocQueryParams::from_request(matched, query, &HeaderMap::new())
-        .map_err(Failure::Query)?;
+    let query = literal_plus(query);
+    let params =
+        QueryExecuteAdhocQueryParams::from_request(matched, query.as_deref(), &HeaderMap::new())
+            .map_err(Failure::Query)?;
     // NOTE: §5.4.1, N33: the node is scoped by its own ehr_id, so a client's
     // `ehr_id` is dropped, as the POST body's undeclared members are.
     Ok(AdhocQueryExecute {

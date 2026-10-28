@@ -81,6 +81,7 @@ use crate::facade::demographics::{self, Identified};
 use crate::facade::localize::{Localized, localize};
 use crate::facade::owner;
 use crate::facade::provenance::Provenance;
+use crate::facade::query_string::literal_plus;
 use crate::facade::route::{self, Arrived, Deadlines, Failure};
 use crate::facade::security;
 use crate::facade::subject::resolved::resolve;
@@ -397,8 +398,10 @@ impl Subject {
         }
         // NOTE: no specification governs this: our own design; the headers are held
         // by `declared::held`, so the generated decoder reads the query string alone.
-        let params = EhrGetBySubjectParams::from_request(matched, query, &HeaderMap::new())
-            .map_err(Unserved::Malformed)?;
+        let query = literal_plus(query);
+        let params =
+            EhrGetBySubjectParams::from_request(matched, query.as_deref(), &HeaderMap::new())
+                .map_err(Unserved::Malformed)?;
         let namespace =
             IdentifierNamespace::new(params.subject_namespace).map_err(Unserved::Patient)?;
         let value = SecretString::from(params.subject_id);
