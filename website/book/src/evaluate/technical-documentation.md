@@ -288,6 +288,12 @@ declaration with a blank.
 
 No EU declaration of conformity has been issued yet, and no release carries
 one: the manufacturer's file says `issue = false` and its values are empty.
+A draft the script writes with `--draft` opens by saying that it is not
+issued and claims no conformity: no conformity assessment against Chapter III
+has been carried out, and the Article 40 testing environment does not exist
+yet ([#675](https://github.com/FerroHEALTH/FerroFED/issues/675)). Point 4 of a
+draft is the wording Annex IV has an issued declaration use, and a draft
+makes no such statement.
 
 ### Decisions open to the manufacturer
 

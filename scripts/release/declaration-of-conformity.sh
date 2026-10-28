@@ -263,7 +263,11 @@ run() {
   tmp="$(mktemp)"
   {
     if [[ "$draft" == true ]]; then
-      printf '> **DRAFT.** Not issued. Every item marked %s waits on the manufacturer.\n\n' "$MARK"
+      printf '> **DRAFT.** Not issued, and no claim of conformity. No conformity assessment of this\n'
+      printf '> version against Chapter III of Regulation (EU) 2025/327 has been carried out, and the\n'
+      printf '> Article 40 testing environment does not exist yet. Point 4 is the statement Annex IV has\n'
+      printf '> an issued declaration make; this draft makes no such statement. Every item marked %s\n' "$MARK"
+      printf '> waits on the manufacturer.\n\n'
     fi
     cat << EOF
 # EU declaration of conformity
@@ -440,6 +444,7 @@ self_test() {
   check 'a draft is written under its own name' \
     grep -qF "$MARK"': `place_of_issue`' "$work/out/ferrofed-v1.2.3-eu-declaration-of-conformity-draft.md"
   check 'a draft is marked as one' grep -qF '**DRAFT.**' "$work/out/ferrofed-v1.2.3-eu-declaration-of-conformity-draft.md"
+  check 'a draft claims no conformity' grep -qF 'no claim of conformity' "$work/out/ferrofed-v1.2.3-eu-declaration-of-conformity-draft.md"
 
   fixture 1.2.3
   sed 's/^signatory_function = .*/signatory_function = "  "/' "$work/repo/$OWNER" > "$work/o" && mv "$work/o" "$work/repo/$OWNER"
