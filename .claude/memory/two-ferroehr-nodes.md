@@ -32,7 +32,7 @@ out PostgreSQL start-up under parallel e2e tests (#320).
 **How to apply:**
 
 - Every node runs the same pinned FerroEHR image with its own `system_id`
-  (`FERROEHR__SERVER__SYSTEM_ID`): the harness uses `cdr-a.example.org` and
+  (`FERROEHR__REST__SYSTEM_ID`): the harness uses `cdr-a.example.org` and
   `cdr-b.example.org`, the quickstart `node-a.quickstart.local` to
   `node-d.quickstart.local`, and each registry declares the value its node
   stamps.

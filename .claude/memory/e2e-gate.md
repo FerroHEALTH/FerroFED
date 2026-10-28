@@ -16,7 +16,7 @@ harness is `tools/ferrofed-testkit`:
   container holding a database per node (`ferroehr_a`, `ferroehr_b`, through
   `docker/postgres/20-ferrofed-node-databases.sh`, decision A47), then node A
   (`NODE_A_SYSTEM_ID`) and node B (`NODE_B_SYSTEM_ID`) on the pinned FerroEHR
-  image with `FERROEHR__SERVER__SYSTEM_ID` set, and puts a proxy in front of
+  image with `FERROEHR__REST__SYSTEM_ID` set, and puts a proxy in front of
   each; `ferroehr(system_id)` starts one node on a database server of its
   own, and `restricted::ferroehr_restricted(system_id)` one with its access
   controls on. `Node::stop()` makes a node offline the way an outage does.

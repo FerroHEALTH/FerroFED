@@ -51,16 +51,16 @@ impl PinnedImage {
 /// FerroEHR, an openEHR CDR speaking ITS-REST 1.1.0, which both nodes run.
 pub const FERROEHR: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferroehr",
-    tag: "5.4.1",
-    digest: "sha256:b676e89db9cdd808817f7cfd46e13e79415e63c3baf92b5f249da38bd2a5e732",
+    tag: "5.5.0",
+    digest: "sha256:e1b15849a3792481a7f16680081b1ae6a2d7160d66e5cb1657fcef5cccfed0dc",
 };
 
 /// The database image FerroEHR documents, which carries the role, the
 /// database and the extensions its migrations expect.
 pub const FERROEHR_POSTGRES: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferroehr-postgres",
-    tag: "5.4.1",
-    digest: "sha256:eb3a720d6245f5472fe5f70ab66ed9662fe6addfa9c543f470ebc689f2eb2cfe",
+    tag: "5.5.0",
+    digest: "sha256:dfe1d5c1bb95d31d3f6ff00fec03cd76ae20d57d20e6225b31e5bc68adf7fa81",
 };
 
 /// EHRbase, an openEHR CDR of another vendor speaking ITS-REST, which the
@@ -86,8 +86,8 @@ pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
 /// lane resolves and localizes patients through.
 pub const FERROPIX: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferropix",
-    tag: "0.0.5",
-    digest: "sha256:6d42e2f9498eb0a801401149d19134cb6f54c2db3d2c499ffe8ba77ad902a8d5",
+    tag: "0.0.10",
+    digest: "sha256:f44b2b12f0f12a6f0b1c7e2afc9611c649d501606b96d48e4471e0952826a504",
 };
 
 /// The PostgreSQL FerroPIX keeps its cross-reference in: the release FerroPIX

@@ -371,6 +371,8 @@ fn ferroehr_request(
 /// The usage report is switched off: a container does not inherit the CI
 /// runner's environment, so FerroEHR's own CI detection cannot see that it
 /// runs in a test, and every run would report itself as an installation.
+/// The node keeps its in-instance subject lookup (`[ehr_index] provider =
+/// "local"`), because the gateway resolves every patient itself.
 fn ferroehr_on_network(
     network: String,
     host: &str,
@@ -388,7 +390,8 @@ fn ferroehr_on_network(
                 role_password(name),
             ),
         )
-        .with_env_var("FERROEHR__SERVER__SYSTEM_ID", system_id)
+        .with_env_var("FERROEHR__REST__SYSTEM_ID", system_id)
+        .with_env_var("FERROEHR__EHR_INDEX__PROVIDER", "local")
         .with_env_var("FERROEHR__USAGE_REPORT__ENABLED", "false")
 }
 
