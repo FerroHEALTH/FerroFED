@@ -24,8 +24,9 @@
 # CC-BY-4.0.
 # The interoperability component itself, eehrxf, is published from
 # FerroHEALTH/FerroBRIDGE (#813), which vendors the versions its own tests
-# read; the gateway keeps the packages its testkit, its validator lane and its
-# decisions read.
+# read; the gateway keeps every package its testkit, its validator lane and
+# its decisions read, the dependency closure of the MyHealth@EU guides
+# included.
 # scripts/checks/pin-freshness.sh reads each package's registry entry.
 #
 # Usage:
@@ -53,6 +54,9 @@ cc0='CC0-1.0: the license of the package manifest and of the ImplementationGuide
 whole='The registry tarball as served, package manifest included; the archive is committed whole so its sha256 stays the pin.'
 read_by=$'#683 (the exchange-format proxies the gateway\'s FHIR face and its\n  testkit are held to; the component itself moved to FerroHEALTH/FerroBRIDGE\n  with #813)'
 
+pin commit xtehr.eu.ehds.models-1.0.0.tgz "1.0.0 (FHIR 5.0.0, 2026-04-13)" \
+  "$registry/xtehr.eu.ehds.models/1.0.0" \
+  a4853e58a869468464847e2eafa50fb07349e6da1e99456a0d93aae27848e1f8 "$cc0" "$whole"
 pin commit xtehr.eu.ehds.models-0.3.0.tgz "0.3.0 (FHIR 5.0.0, 2026-02-06)" \
   "$registry/xtehr.eu.ehds.models/0.3.0" \
   f2cb6b0b5b35cab33e9b618b38c54797ece61f5e2dda59982c952ecd9398865b "$cc0" \
@@ -61,9 +65,10 @@ pinned_corpus eu-xtehr-models "Xt-EHR EHDS Logical Information Models" \
   "the Xt-EHR EHDS Logical Information Models xtehr.eu.ehds.models" \
   "The logical models of the Xt-EHR joint action for the priority categories
 of Regulation (EU) 2025/327 Article 14(1), canonical
-\`http://www.xt-ehr.eu/fhir/models\`, at the version the MyHealth@EU guides
-depend on, committed under CC0-1.0. The 1.0.0 release the interoperability
-component reads is vendored with it in FerroHEALTH/FerroBRIDGE (#813)." "" "$read_by"
+\`http://www.xt-ehr.eu/fhir/models\`, at the release and at the version the
+MyHealth@EU guides depend on, committed under CC0-1.0. The continuous build
+of the source repository (https://xt-ehr.github.io/xt-ehr-common/) serves
+0.4.0 of 2026-02-26, older than the 1.0.0 release (read 2026-10-24)." "" "$read_by"
 
 pin commit hl7.fhir.eu.base-2.0.1.tgz "2.0.1 (FHIR 4.0.1, 2026-09-13)" \
   "$registry/hl7.fhir.eu.base/2.0.1" \
@@ -90,15 +95,19 @@ pinned_corpus eu-hl7-mpd "HL7 Europe Medication Prescription and Dispense" \
   "The European ePrescription and eDispensation guide, canonical
 \`http://hl7.eu/fhir/mpd\`, committed under CC0-1.0." "" "$read_by"
 
+pin commit hl7.fhir.eu.laboratory-2.0.0.tgz "2.0.0 (FHIR 4.0.1, 2026-05-05)" \
+  "$registry/hl7.fhir.eu.laboratory/2.0.0" \
+  097aa45c6efcdbc3f25ead8b7d448fee5011b5e7ecf264aa400c5e2c69c5c488 "$cc0" "$whole"
 pin commit hl7.fhir.eu.laboratory-2.1.0.tgz "2.1.0 (FHIR 4.0.1, 2026-10-16)" \
   "$registry/hl7.fhir.eu.laboratory/2.1.0" \
   87019c396f4cff934ec5230ce1f97d76b79b40591be08161e694ad661129379c "$cc0" \
-  "$whole The current release; the 2.0.0 the interoperability component reads is vendored with it in FerroHEALTH/FerroBRIDGE (#813)."
+  "$whole The current release; 2.0.0 is the version MyHealth@EU Laboratory 9.1.1 and Hospital Discharge Report 9.1.1 depend on, and the one the interoperability component reads."
 pinned_corpus eu-hl7-laboratory "HL7 Europe Laboratory Report" \
   "the HL7 Europe Laboratory Report guide hl7.fhir.eu.laboratory" \
   "The European laboratory report guide, canonical
-\`http://hl7.eu/fhir/laboratory\`, at its current release, committed under
-CC0-1.0." "" "$read_by"
+\`http://hl7.eu/fhir/laboratory\`, at its current release and at the
+version the MyHealth@EU guides and the interoperability component read,
+committed under CC0-1.0." "" "$read_by"
 
 pin commit hl7.fhir.eu.extensions.r4-1.3.0.tgz "1.3.0 (FHIR 4.0.1, 2026-03-27)" \
   "$registry/hl7.fhir.eu.extensions.r4/1.3.0" \
