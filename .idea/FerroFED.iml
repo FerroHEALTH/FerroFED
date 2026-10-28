@@ -20,8 +20,6 @@
       <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-eehrxf/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-console/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/app/ferrofed-console/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/crates/eehrxf/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/crates/eehrxf/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/ihe-iti/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/crates/nl-generic-functions/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

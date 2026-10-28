@@ -47,12 +47,13 @@ readonly CHANGELOG=CHANGELOG.md
 readonly MAKER=app/ferrofed-registry/src/manufacturer.rs
 readonly SHEET=website/book/src/evaluate/information-sheet.md
 readonly INDEX=conformance/technical-documentation.tsv
-# The logging component is the published ehds-logging crate of the family's
-# audit library (FerroHEALTH/FerroAUDIT, #1176): its version is the one the
-# lock resolves.
+# The two harmonised components are published crates, each version the one
+# the lock resolves: the logging component from the family's audit library
+# (FerroHEALTH/FerroAUDIT, #1176) and the interoperability component from
+# FerroHEALTH/FerroBRIDGE (#813).
 readonly LOCK=Cargo.lock
 readonly LOGGING=ehds-logging
-readonly EXCHANGE=crates/eehrxf/Cargo.toml
+readonly EXCHANGE=eehrxf
 readonly REPO_URL=https://github.com/FerroHEALTH/FerroFED
 readonly MARK='MANUFACTURER TO SUPPLY'
 # The keys of OWNER besides `issue`, in the order the declaration reads them.
@@ -197,11 +198,6 @@ locked_version() {
   ' "$1/$LOCK"
 }
 
-# crate_version ROOT MANIFEST: the package version a manifest declares.
-crate_version() {
-  sed -n 's/^version = "\([^"]*\)"$/\1/p' "$1/$2" | head -n 1
-}
-
 # common_specifications ROOT: the text of Annex IV point 6, from the index
 # rows of Annex III point 3.
 common_specifications() {
@@ -236,7 +232,7 @@ run() {
     blank="$(empty_fields)"
     [[ -z "$blank" ]] || die "$OWNER issues the declaration but leaves empty: $blank"
   fi
-  for f in "$CITATION" "$PINS" "$CHANGELOG" "$MAKER" "$SHEET" "$INDEX" "$LOCK" "$EXCHANGE"; do
+  for f in "$CITATION" "$PINS" "$CHANGELOG" "$MAKER" "$SHEET" "$INDEX" "$LOCK"; do
     [[ -f "$r/$f" ]] || die "$f is missing"
   done
 
@@ -254,7 +250,7 @@ run() {
   maker_website="$(record "$MAKER names no website" "$(maker_field "$r" website)")"
   representative="$(record "$SHEET has no 'Authorised representative' row" "$(sheet_row "$r" 'Authorised representative')")"
   logging="$(record "$LOCK resolves no $LOGGING" "$(locked_version "$r" "$LOGGING")")"
-  exchange="$(record "$EXCHANGE declares no version" "$(crate_version "$r" "$EXCHANGE")")"
+  exchange="$(record "$LOCK resolves no $EXCHANGE" "$(locked_version "$r" "$EXCHANGE")")"
   list="$(record "$SHEET has no standards table under (e)" "$(standards "$r")")"
   specs="$(common_specifications "$r")"
 
@@ -285,7 +281,8 @@ EHR system named in point 1.
   and the gateway binary \`ferrofed\` of that release
 - **Harmonised software components (Article 25(1)):** the European logging
   software component, crate \`ehds-logging\` $logging; the European
-  interoperability software component, crate \`eehrxf\` $exchange
+  interoperability software component, crate \`eehrxf\` $exchange, published
+  from <https://github.com/FerroHEALTH/FerroBRIDGE>
 
 ## 2. The manufacturer
 
@@ -369,7 +366,7 @@ self_test() {
     if [[ -d "$repo" ]]; then rm -r "$repo"; fi
     if [[ -d "$work/out" ]]; then rm -r "$work/out"; fi
     mkdir -p "$repo/conformance" "$repo/docs" "$repo/app/ferrofed-registry/src" \
-      "$repo/website/book/src/evaluate" "$repo/crates/eehrxf"
+      "$repo/website/book/src/evaluate"
     printf 'title: "FerroFED"\nversion: %s\n' "$1" > "$repo/$CITATION"
     printf '| Item | Pin |\n|---|---|\n| Product version | %s | x |\n' "$1" > "$repo/$PINS"
     printf '# Changelog\n\n## [%s] - 2026-01-02\n\n- a change\n' "$1" > "$repo/$CHANGELOG"
@@ -378,8 +375,7 @@ self_test() {
     printf '## (a) The manufacturer\n\n| | |\n|---|---|\n| Authorised representative | none |\n\n## (e) Standards\n\n| Item | Pin | What |\n|---|---|---|\n| Product version | 1.2.3 | this |\n| Federation Tier with AQL | 1.0.0 | the federation |\n| openEHR AQL | 1.1.0 | the queries |\n\n## Support\n\n| Release | Date |\n|---|---|\n| 1.2.3 | 2026-01-02 |\n' \
       > "$repo/$SHEET"
     printf 'item\telement\ttarget\tsection\tstatus\tissue\n3\tcommon\tx.md\t-\tplanned\t#1\n' > "$repo/$INDEX"
-    printf '[[package]]\nname = "eehrxf"\nversion = "0.5.0"\n\n[[package]]\nname = "ehds-logging"\nversion = "0.4.0"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n' > "$repo/$LOCK"
-    printf '[package]\nname = "eehrxf"\nversion = "0.5.0"\n' > "$repo/$EXCHANGE"
+    printf '[[package]]\nname = "eehrxf"\nversion = "0.5.0"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n\n[[package]]\nname = "ehds-logging"\nversion = "0.4.0"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n' > "$repo/$LOCK"
     owner_file true 'Town of signing'
   }
   # attempt WANT ARGS...: runs the script on the fixture and checks the exit.

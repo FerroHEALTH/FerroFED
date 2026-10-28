@@ -158,8 +158,8 @@ fn a_mapping_to_a_profile_its_section_does_not_take_is_refused() -> TestResult {
         ),
         "{refused:?}"
     );
-    let example =
-        Path::new(ROOT).join("crates/eehrxf/tests/fixtures/mapping/ferrofed_allergy.context.yml");
+    let example = Path::new(ROOT)
+        .join("tools/ferrofed-testkit/fixtures/eehrxf/mapping/ferrofed_allergy.context.yml");
     let [_, context] = eps::mapping_files();
     let tables = fhir_tables(UNREACHED_SUPPLIER)
         .replace(

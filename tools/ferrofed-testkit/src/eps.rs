@@ -61,15 +61,17 @@ pub const TEMPLATE: &str = "ferrofed.eehrxf.allergy.v1";
 /// Returns the path of the synthetic operational template.
 #[must_use]
 pub fn opt() -> PathBuf {
-    PathBuf::from(ROOT).join("crates/eehrxf/tests/fixtures/opt/allergy.opt")
+    PathBuf::from(ROOT).join("tools/ferrofed-testkit/fixtures/eehrxf/opt/allergy.opt")
 }
 
 /// Returns the model and context mapping files of the fixture mapping.
 #[must_use]
 pub fn mapping_files() -> [PathBuf; 2] {
     [
-        PathBuf::from(ROOT).join("crates/eehrxf/tests/fixtures/mapping/ferrofed_allergy.yml"),
-        PathBuf::from(ROOT).join("crates/eehrxf/tests/fixtures/mapping/eu_allergy.context.yml"),
+        PathBuf::from(ROOT)
+            .join("tools/ferrofed-testkit/fixtures/eehrxf/mapping/ferrofed_allergy.yml"),
+        PathBuf::from(ROOT)
+            .join("tools/ferrofed-testkit/fixtures/eehrxf/mapping/eu_allergy.context.yml"),
     ]
 }
 
@@ -146,7 +148,7 @@ pub fn allergy_composition(uid: &str, template: &str, substance: &str) -> String
 }
 
 /// The synthetic medication template's id
-/// (`crates/eehrxf/tests/fixtures/opt/medication.opt`).
+/// (`tools/ferrofed-testkit/fixtures/eehrxf/opt/medication.opt`).
 pub const MEDICATION_TEMPLATE: &str = "ferrofed.eehrxf.medication.v1";
 
 /// The context that maps the synthetic medication use to
@@ -172,7 +174,7 @@ pub const VACCINE: &str = "J07BB02";
 /// Returns the path of the synthetic medication operational template.
 #[must_use]
 pub fn medication_opt() -> PathBuf {
-    PathBuf::from(ROOT).join("crates/eehrxf/tests/fixtures/opt/medication.opt")
+    PathBuf::from(ROOT).join("tools/ferrofed-testkit/fixtures/eehrxf/opt/medication.opt")
 }
 
 /// Returns the model and context mapping files of the synthetic medication
@@ -191,7 +193,7 @@ pub fn medication_mapping_files() -> Vec<PathBuf> {
     .into_iter()
     .map(|name| {
         PathBuf::from(ROOT)
-            .join("crates/eehrxf/tests/fixtures/mapping")
+            .join("tools/ferrofed-testkit/fixtures/eehrxf/mapping")
             .join(name)
     })
     .collect()

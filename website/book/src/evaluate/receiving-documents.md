@@ -12,7 +12,8 @@ own, so a received document goes to one member: the one the deployment
 declares for the document's category, as the Federation Tier sends every new
 object to one explicitly chosen node (§2.3, N23).
 
-The interoperability component, `crates/eehrxf`, reads a received document,
+The interoperability component, the `eehrxf` crate published from
+FerroHEALTH/FerroBRIDGE and pinned exactly, reads a received document,
 checks it against its profiles and maps it into openEHR. The gateway takes
 the document at `POST {fhir-base}/Bundle` and writes the composition to the
 declared member, with an access record of each receipt
@@ -26,128 +27,34 @@ receives none
 received one with its member
 ([Running it](../operate/configuration.md#running-it)).
 
-## What the component accepts
+## What the component does
 
-A received document is a FHIR R4 `Bundle` in JSON. The component reads it in
-this order and refuses it at the first rule it breaks:
+What the component accepts, the structural check, the full validation by
+`ferrobridge-validator` and the mapping into one openEHR composition that
+keeps the document in `FEEDER_AUDIT.original_content` are described where
+the component is built, on
+[FerroBRIDGE's receiving page](https://ferrobridge.eu/docs/evaluate/receiving-documents.html). In short:
+a document is decoded strictly against FHIR R4 and held to the R4 document
+rules; its subject resolves to exactly one `Patient` entry; it is validated
+in full against the `Bundle` profile of its category over the package's
+whole dependency closure; and no refusal quotes a value of the document.
 
-1. An object that repeats a name is refused before anything reads the
-   text, because two JSON readers may keep different values for it (RFC
-   8259, §4).
-2. The text is decoded against the R4 definitions of `Bundle` and of every
-   resource it carries. An unknown property, a value of the wrong type, a
-   `null` or an empty object or array, and an invalid primitive are refused,
-   with the element path where they were found, and so is a resource of a
-   type R4 does not define, anywhere in the document. The decoded document
-   must encode back to the JSON it was read from. Every later rule, the
-   profile check and the mapping read that one decoded document.
-3. The `Bundle` is a `document`, and meets the R4 rules for one: an
-   `identifier` with a system and a value (`bdl-9`), a `timestamp`
-   (`bdl-10`), `fullUrl`s given once (`bdl-7`), none version specific
-   (`bdl-8`), each REST-style one ending with its resource's type and id,
-   and a `Composition` as its first entry (`bdl-11`).
-4. The `Composition.subject` names one `Patient` entry of the same `Bundle`,
-   by its `fullUrl`, or by a relative `Patient/<id>` resolved against the
-   server base of the composition's own `fullUrl`. Every reference in the
-   document is found by its R4 type, at any depth: in backbone elements,
-   contained resources and extensions, and resolved by one resolver,
-   `receive::reference::resolve`, which answers exactly one entry or a
-   typed refusal. It reads a reference and a `fullUrl` in one canonical
-   spelling only: a relative `Type/id`, an `http` or `https` URL with a
-   lower-case host, `urn:uuid:` with a lower-case UUID, `urn:oid:`, a
-   `_history` version matched on the entry's `meta.versionId`, and a `#id`
-   into the resource's own `contained`. Whitespace, a query string,
-   percent-encoding, a trailing or doubled slash, a dot segment and a
-   resource type in another case are refused, so no reader can take one of
-   them for an entry the resolver would not. A `type` or an `identifier`
-   beside the reference must agree with its target. A `subject`, `patient`,
-   `beneficiary` or `for` must name that same entry by reference. Any other
-   reference may name it, an entry of another type, a contained resource
-   by `#id`, or a resource outside the document whose path names a type
-   other than `Patient`; one that could name another patient (a path or a
-   `type` that says `Patient`, or a URN no entry carries) is refused, and so
-   is a `type` that disagrees with the reference's target. A second
-   `Patient` entry and a contained `Patient` are refused, and so is an
-   element the R4 element table does not describe. A document is
-   registered under the identification data of the one person it is about
-   (Art 13(3)), so a document that could be read as about two is refused
-   whole.
+The gateway adds what is its own:
 
-The document's text is kept byte for byte. No refusal quotes a value of the
-document, so a patient identifier never reaches an error message or a log
-line through one. Whether the caller may write for that patient, and whether
-the member's `ehr_id` is that patient's, the federation half decides before
-it sends anything (see below).
-
-## The check against the profiles
-
-The document is then validated against the HL7 Europe `Bundle` profile of
-its category, for a patient summary `bundle-eu-eps` of `hl7.fhir.eu.eps`
-1.0.0-ballot, by FerroBRIDGE's FHIR R4 profile validator,
-[`ferrobridge-validator`](https://docs.rs/ferrobridge-validator), pinned
-exactly in `docs/VERSIONS.md` (decision A106). It reads the package and every
-package of its dependency closure, which each `[[fhir.receive]]` names in
-`dependencies`, and holds the document, at every occurrence of every element
-in play, to what FHIR R4 has a validator check
-([validation](https://hl7.org/fhir/R4/validation.html),
-[profiling](https://hl7.org/fhir/R4/profiling.html)):
-
-- the structure: unknown elements, the JSON shapes, the cardinality per
-  parent, the types a choice may take and the lexical form of every
-  primitive;
-- the values a `fixed[x]` or `pattern[x]` requires;
-- slicing, with all five discriminator kinds, `profile` and paths through
-  `resolve()` included, ordered slicing, and each slice's own constraints;
-- every invariant of the core definitions and of each profile, evaluated as
-  FHIRPath: the R4 `ait-1` of an `AllergyIntolerance`, the `cmp-1` and
-  `cmp-2` of a section, the `eps-bundle-subject-ref` of the EPS `Bundle`;
-- the terminology bindings, a `required` one as an error and an
-  `extensible` one as a warning, read from the value sets the packages carry;
-- the profile each entry's slice names, each profile a resource claims in
-  `meta.profile`, and the target profiles of every reference;
-- the content rules R4 gives a document
-  ([documents](https://hl7.org/fhir/R4/documents.html)).
-
-An issue of severity `error` or `fatal` refuses the document with `422` and
-an `OperationOutcome` of every such issue, located by its FHIRPath, before
-any member is asked. Each warning the validator finds is returned in the
-outcome of the write. Every constraint it met and did not evaluate (an
-invariant whose expression calls a function it cannot answer, a value set no
-package carries, a reference outside the document) is listed there as a
-`warning` of type `not-supported`, never passed in silence. A `required`
-binding the packages cannot decide is asked of the terminology server's
-`ValueSet/$validate-code`; a server that refuses or does not answer refuses
-the document with `502`, and with no server configured the binding is listed
-as not evaluated
-([Terminology](../integrate/terminology.md)). No message
-quotes a value of the document.
-
-A coding that carries no display is given one by the terminology server's
-`$lookup` before the mapping runs, because `DV_CODED_TEXT.value` is
-mandatory in the RM. With no terminology server configured, the document is
-refused. The composition keeps the document as it was received.
-
-## Mapped into openEHR, with the original kept
-
-The component maps the document into one openEHR composition through the
-FHIRconnect mapping files the deployment supplies, run in process by
-FerroBRIDGE's `fhirconnect` engine. The whole document is the input of
-FHIRconnect's `$toopenehr`, so the context that maps it is the one whose
-profile the document's resources claim, and a mapping may follow the
-document's references into its other entries. A document no context maps,
-or one with two resources of the type a context maps, is refused with the
-engine's reason.
-
-The composition keeps the document itself. The openEHR RM lets
-`FEEDER_AUDIT.original_content` carry the original content inline, and puts
-one at the composition to establish the equivalence between the whole
-composition and the whole document (RM 1.1.0, Common Information Model,
-"Original Content"). The component sets it to a `DV_PARSABLE` holding the
-document's text with the formalism `application/fhir+json`, beside the
-engine's own audit of the system the content passed through. What the
-mapping does not carry into structured content is therefore still in the
-record, and what the run declared lost comes back beside the composition as
-an `OperationOutcome`.
+- each `[[fhir.receive]]` names the package and, in `dependencies`, every
+  package of its dependency closure, which the validator refuses to load
+  short of (decision A106);
+- an issue of severity `error` or `fatal` refuses the document with `422`
+  and an `OperationOutcome` of every such issue, before any member is asked,
+  and each warning, and every constraint the validator met and did not
+  evaluate as a `warning` of type `not-supported`, is returned in the
+  outcome of the write;
+- a `required` binding the packages cannot decide is asked of the
+  `[eehrxf.terminology]` server, and a server that refuses or does not
+  answer refuses the document with `502`; with no server configured the
+  binding is listed as not evaluated, and a coding that carries no display
+  refuses the document ([Terminology](../integrate/terminology.md));
+- the FHIRconnect mapping files the component runs are the deployment's.
 
 ## Written to the declared member
 
@@ -172,7 +79,7 @@ distinguishable as having been inserted by the natural person or by his or
 her representative". When the caller is a person acting under their own grant,
 a token whose `sub` names the person and whose `patient/` scopes are
 confined to them ([Patient grants](../operate/authentication.md#patient-grants)),
-the component marks the composition before it is sent: every entry, in
+the gateway has the component mark the composition before it is sent: every entry, in
 the composition and in each of its sections, names the record's subject
 as its `provider`. The openEHR RM defines `ENTRY.provider` as "the agent
 who provided the information", which "is usually the patient or the

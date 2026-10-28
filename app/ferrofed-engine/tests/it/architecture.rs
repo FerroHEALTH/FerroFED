@@ -15,12 +15,15 @@
 //! `openehr-its`'s client runtime (#34). The operator console links no part
 //! of the gateway, so it reaches it over HTTP as any client does (#275). The
 //! two harmonised software components of Regulation (EU) 2025/327, `eehrxf`
-//! and `ehds-logging`, reach neither each other nor the application, only the
-//! server links both, and the engine compiles neither, nor any FHIR model
-//! (#684, #730). `eehrxf`'s FHIR R4 serialisation compiles no openEHR crate
-//! without its `openehr` mapping feature (#730). The component's federation
-//! half, `ferrofed-eehrxf`, reaches the component, the component reaches
-//! nothing of FerroFED, and only the server links the half (#776).
+//! and `ehds-logging`, both published crates read from the resolved graph,
+//! reach neither each other nor the application, only the server links both,
+//! and the engine compiles neither, nor any FHIR model (#684, #730). The
+//! component's federation half, `ferrofed-eehrxf`, reaches the component, the
+//! component reaches nothing of FerroFED, and only the server links the half
+//! (#776). That `eehrxf`'s FHIR R4 serialisation compiles no openEHR crate
+//! without its `openehr` feature is checked where the crate is built,
+//! FerroHEALTH/FerroBRIDGE, because cargo takes no feature flag for a package
+//! outside the workspace (#813).
 //!
 //! The checks read the graph with `cargo tree`, so they hold from the
 //! placeholder modules on and turn red the day a dependency edge would break
@@ -77,13 +80,6 @@ const HTTP_ENGINES: &[&str] = &[
 /// depend on it either.
 const APPLICATION: &str = "ferrofed-server";
 
-/// The binding crates, the specification crates they share, and the EHDS
-/// interoperability component, the members that carry no FerroFED dependency
-/// at all; a binding crate may depend on another, and the two harmonised
-/// components are held apart by
-/// `the_two_harmonised_components_are_independent_of_each_other`.
-const STANDALONE: &[&str] = &["eehrxf"];
-
 /// The European logging software component, which the server's composition
 /// root alone builds records for (Regulation (EU) 2025/327 Art 2(2)(o)). It
 /// is the published crate of the family's audit library (FerroAUDIT), so it
@@ -91,7 +87,8 @@ const STANDALONE: &[&str] = &["eehrxf"];
 const LOGGING: &str = "ehds-logging";
 
 /// The European interoperability software component (Regulation (EU)
-/// 2025/327 Art 2(2)(n)).
+/// 2025/327 Art 2(2)(n)). It is published from FerroHEALTH/FerroBRIDGE (#813),
+/// so it is read from the dependency graph and is no member.
 const INTEROPERABILITY: &str = "eehrxf";
 
 /// The crates of the interoperability component's mapping engine, which the
@@ -107,13 +104,6 @@ const ENGINE: &str = "ferrofed-engine";
 
 /// The FHIR model crate, which the core never compiles.
 const FHIR_MODEL: &str = "fhir-types";
-
-/// The interoperability component's FHIR R4 serialisation, which compiles no
-/// openEHR crate without the mapping from openEHR.
-const SERIALISATION: &str = "fhir-r4";
-
-/// The prefix of every crate of the openEHR family, by crates.io name.
-const OPENEHR: &str = "openehr-";
 
 /// The operator console, a client of the gateway's public surface.
 const CONSOLE: &str = "ferrofed-console";
@@ -137,12 +127,6 @@ fn closure(package: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
 /// published logging component.
 fn resolved(package: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
     tree(package, &[])
-}
-
-/// The package names in the normal and build dependency closure of `package`
-/// with `feature` alone on.
-fn closure_of(package: &str, feature: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
-    tree(package, &["--no-default-features", "--features", feature])
 }
 
 /// The package names in the normal and build dependency closure of `package`,
@@ -307,30 +291,23 @@ fn no_crate_but_the_server_reaches_a_storage_implementation() -> Result<(), Box<
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
 )]
-fn the_binding_crates_depend_on_nothing_in_ferrofed() -> Result<(), Box<dyn Error>> {
+fn the_interoperability_component_depends_on_nothing_in_ferrofed() -> Result<(), Box<dyn Error>> {
     let mut internal = members("crates")?;
     internal.extend(members("app")?);
     internal.extend(members("tools")?);
-    let mut breaches = Vec::new();
-    for binding in STANDALONE {
-        assert!(
-            internal.contains(*binding),
-            "the crate map lost the binding crate {binding}: {internal:?}"
-        );
-        let reached = closure(binding)?;
-        assert!(
-            reached.contains(*binding),
-            "cargo tree for {binding} did not list the crate itself, so its output was not read"
-        );
-        for name in &internal {
-            if !STANDALONE.contains(&name.as_str()) && reached.contains(name.as_str()) {
-                breaches.push(format!("{binding} depends on {name}"));
-            }
-        }
-    }
+    let reached = resolved(INTEROPERABILITY)?;
+    assert!(
+        reached.contains(INTEROPERABILITY),
+        "cargo tree for {INTEROPERABILITY} did not list the crate itself, so its output was not read"
+    );
+    let breaches: Vec<String> = internal
+        .iter()
+        .filter(|name| reached.contains(name.as_str()))
+        .map(|name| format!("{INTEROPERABILITY} depends on {name}"))
+        .collect();
     assert!(
         breaches.is_empty(),
-        "a binding crate depends on FerroFED (#106): {breaches:?}"
+        "the interoperability component depends on FerroFED (#106): {breaches:?}"
     );
     Ok(())
 }
@@ -413,7 +390,7 @@ fn the_two_harmonised_components_are_independent_of_each_other() -> Result<(), B
     // "independent of" the other; reading that as no dependency edge either
     // way is our own reading, which the crate graph enforces.
     let application = members("app")?;
-    let interoperability = closure(INTEROPERABILITY)?;
+    let interoperability = resolved(INTEROPERABILITY)?;
     let logging = resolved(LOGGING)?;
     assert!(
         interoperability.contains(INTEROPERABILITY) && logging.contains(LOGGING),
@@ -454,13 +431,10 @@ fn no_crate_but_the_composition_root_links_both_components() -> Result<(), Box<d
     let mut checked = members("crates")?;
     checked.extend(members("app")?);
     checked.extend(members("tools")?);
+    let application = closure(APPLICATION)?;
     assert!(
-        checked.contains(INTEROPERABILITY),
-        "the crate map lost the interoperability component: {checked:?}"
-    );
-    assert!(
-        closure(APPLICATION)?.contains(LOGGING),
-        "the server no longer links the logging component {LOGGING}"
+        application.contains(INTEROPERABILITY) && application.contains(LOGGING),
+        "the server no longer links both harmonised components"
     );
     let mut breaches = Vec::new();
     for member in &checked {
@@ -516,28 +490,6 @@ fn the_engine_compiles_neither_component_and_no_fhir() -> Result<(), Box<dyn Err
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
 )]
-fn the_fhir_serialisation_alone_compiles_no_openehr() -> Result<(), Box<dyn Error>> {
-    let reached = closure_of(INTEROPERABILITY, SERIALISATION)?;
-    assert!(
-        reached.contains(INTEROPERABILITY) && reached.contains(FHIR_MODEL),
-        "cargo tree for {INTEROPERABILITY} with {SERIALISATION} did not list the crate or its FHIR model, so its output was not read"
-    );
-    let breaches: Vec<&String> = reached
-        .iter()
-        .filter(|name| name.starts_with(OPENEHR) || MAPPING_ENGINE.contains(&name.as_str()))
-        .collect();
-    assert!(
-        breaches.is_empty(),
-        "{INTEROPERABILITY} with {SERIALISATION} alone compiles openEHR, which only its mapping feature may: {breaches:?}"
-    );
-    Ok(())
-}
-
-#[test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "a test asserts, and returns its setup errors"
-)]
 fn the_interoperability_glue_sits_between_the_server_and_the_component()
 -> Result<(), Box<dyn Error>> {
     let mut checked = members("crates")?;
@@ -552,11 +504,10 @@ fn the_interoperability_glue_sits_between_the_server_and_the_component()
         glue.contains(INTEROPERABILITY_GLUE) && glue.contains(INTEROPERABILITY),
         "cargo tree for {INTEROPERABILITY_GLUE} did not list it or the component, so its output was not read"
     );
-    let component = closure(INTEROPERABILITY)?;
+    let component = resolved(INTEROPERABILITY)?;
     let mut breaches: Vec<String> = checked
         .iter()
-        .filter(|name| name.as_str() != INTEROPERABILITY && component.contains(name.as_str()))
-        .filter(|name| !STANDALONE.contains(&name.as_str()))
+        .filter(|name| component.contains(name.as_str()))
         .map(|name| format!("{INTEROPERABILITY} reaches {name}"))
         .collect();
     for member in &checked {

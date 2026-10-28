@@ -11,9 +11,7 @@ paths: ["crates/**", "scripts/release/**", ".github/workflows/publish-crates.yml
 switch** (owner decision, 2026-10-01; `docs/architecture.md` §11, decision
 A35). The split is fixed (#106, decision A34): the libraries a third party
 could use live under `crates/` and carry the name of the specification they
-implement, never `ferrofed-*` (`openehr-federation`, and `eehrxf`, the
-interoperability software component of Regulation (EU) 2025/327, whose
-logging twin `ehds-logging` FerroHEALTH/FerroAUDIT publishes;
+implement, never `ferrofed-*` (`openehr-federation`;
 `.claude/memory/published-crate-naming.md`), one crate per
 specification with a feature per layer or profile; FerroFED's own glue and
 the server binary live under `app/`, and the tools under `tools/`. The
@@ -56,9 +54,11 @@ an owner decision recorded per crate when the switch flips, never assumed.
   SemVer line. A name is held on crates.io by a 0.0.0 placeholder published
   before the crate has content (`openehr-federation`, published on
   2026-10-01), and the crate's line in the workspace starts at 0.0.1, above
-  the placeholder. `eehrxf` (#684) was claimed the same way on 2026-10-06.
-  `ihe-iti` and `nl-generic-functions` moved to FerroHEALTH/FerroPIX and
-  `ehds-logging` to FerroHEALTH/FerroAUDIT, which publish them (#367, #1177).
+  the placeholder. `ihe-iti` and `nl-generic-functions` moved to
+  FerroHEALTH/FerroPIX, `ehds-logging` to FerroHEALTH/FerroAUDIT and
+  `eehrxf`, the interoperability software component of Regulation (EU)
+  2025/327, to FerroHEALTH/FerroBRIDGE, which publish them (#367, #1177,
+  #813); FerroFED pins each exactly from crates.io and patches none.
 
 ## The bump rule
 
@@ -123,8 +123,8 @@ reaches the registry.
 
 ## Owner steps when the switch is flipped
 
-Both names exist on crates.io (the 0.0.0 placeholder of `openehr-federation`
-of 2026-10-01 and that of `eehrxf` of 2026-10-06), so every later version can
+The name exists on crates.io (the 0.0.0 placeholder of `openehr-federation`
+of 2026-10-01), so every later version can
 go through Trusted Publishing with no first upload by a personal token. Two steps, done once:
 
 1. The `crates-io` GitHub environment, with the owner as required reviewer and

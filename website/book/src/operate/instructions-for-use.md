@@ -321,7 +321,7 @@ deployment in the EU must plan for are:
   ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
   A member that holds its prescriptions only as openEHR data, with no FHIR
   endpoint of its own in those profiles, is not served
-  ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)).
+  ([FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322)).
   Imaging, test results and discharge reports are neither produced nor
   received
   ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
@@ -356,7 +356,7 @@ deployment in the EU must plan for are:
   write as a `warning`, not refused. A `required` binding the packages
   cannot decide is asked of your terminology server; with no server
   configured it is listed as not evaluated
-  ([The check against the profiles](../evaluate/receiving-documents.md#the-check-against-the-profiles)).
+  ([The check against the profiles](../evaluate/receiving-documents.md#what-the-component-does)).
 - **A code in no preferred code system is translated only through your
   terminology server.** With `[eehrxf.terminology]` set, the patient summary
   the gateway writes adds each `equivalent` or `equal` translation after the

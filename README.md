@@ -167,12 +167,13 @@ your own record servers.
 - [Health probes](https://ferrofed.eu/docs/operate/health.html), [metrics](https://ferrofed.eu/docs/operate/metrics.html), [tracing](https://ferrofed.eu/docs/operate/tracing.html) and [overload protection](https://ferrofed.eu/docs/operate/overload.html)
 
 <details>
-<summary><b>Published crates</b> (2)</summary>
+<summary><b>Published crates</b> (1)</summary>
 
 | Crate | What it does | Version | Docs | Downloads |
 |---|---|---|---|---|
 | [`openehr-federation`](https://crates.io/crates/openehr-federation) | The Federation Tier with AQL wire types, the AQL rewrite with identifier hygiene, and the federated result merge | [![crates.io](https://img.shields.io/crates/v/openehr-federation?logo=rust&label=crates.io)](https://crates.io/crates/openehr-federation) | [![docs.rs](https://img.shields.io/docsrs/openehr-federation?logo=docsdotrs&label=docs.rs)](https://docs.rs/openehr-federation) | [![downloads](https://img.shields.io/crates/d/openehr-federation?logo=rust&label=downloads)](https://crates.io/crates/openehr-federation) |
-| [`eehrxf`](https://crates.io/crates/eehrxf) | The European EHR exchange format in FHIR R4 and its dataset model of the EHDS priority categories | [![crates.io](https://img.shields.io/crates/v/eehrxf?logo=rust&label=crates.io)](https://crates.io/crates/eehrxf) | [![docs.rs](https://img.shields.io/docsrs/eehrxf?logo=docsdotrs&label=docs.rs)](https://docs.rs/eehrxf) | [![downloads](https://img.shields.io/crates/d/eehrxf?logo=rust&label=downloads)](https://crates.io/crates/eehrxf) |
+
+The interoperability component of Regulation (EU) 2025/327 the gateway runs, [`eehrxf`](https://crates.io/crates/eehrxf), is published from [FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE).
 
 </details>
 

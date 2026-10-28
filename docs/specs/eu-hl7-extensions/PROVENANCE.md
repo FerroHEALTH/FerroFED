@@ -9,15 +9,16 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `19839fe8077fe6c794fb035ab52447003fcd3c6996b354fe893bf82588b3658c`
-- Fetched: 2026-10-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-28, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 3 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 3 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `3cc061507c2c8b0342fa0325c339ffa91901005f95fc6fa68029ac4a112901e9`
-- Read by: #683 (the exchange-format proxies the interoperability
-  component of #519, EHDS readiness, is designed against)
+- Read by: #683 (the exchange-format proxies the gateway's FHIR face and its
+  testkit are held to; the component itself moved to FerroHEALTH/FerroBRIDGE
+  with #813)
 
 The extensions the HL7 Europe guides share, canonical
 `http://hl7.eu/fhir/extensions`, at both versions the pinned HL7 Europe

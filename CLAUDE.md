@@ -130,11 +130,13 @@ patient up by identifier (#1294), validates a received document in full
 with `ferrobridge-validator` (#808), translates a summary code through the
 terminology server on `ferrobridge-term` (#1213, #925), and ships the
 Kubernetes package and OTLP over TLS (#638, #644). v0.0.14, being built,
-carries the rest of EHDS readiness (#519): the FHIRconnect mapping of
-openEHR medication data (#1043, #523), the further categories (#666 to
-#668), the conformity work (#525, #940, #1144), the re-checks against the
-implementing acts once adopted (#1289, #1267, #799) and the European
-digital testing environment (#675). Each crate gets the rest of
+carries the rest of EHDS readiness (#519): the conformity work (#525,
+#940, #1144), the re-checks against the implementing acts once adopted
+(#1267, #799) and the European digital testing environment (#675). The
+component work (the openEHR mapping of medication data, the further
+categories and the patient summary's re-check against the Art 15(1) act)
+moved to FerroHEALTH/FerroBRIDGE with `eehrxf` (#813); the gateway half of
+each stays here (#1403 to #1406). Each crate gets the rest of
 its behaviour from its own issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
@@ -202,9 +204,10 @@ run and the version guard built from v0.0.2 (`.claude/memory/crate-split.md`,
 `.claude/rules/crates-publishing.md`). A capability whose home is another
 product belongs there (`.claude/memory/family-architecture.md`): patient
 identity and the IHE profiles are FerroPIX's, reached as a client over the
-`ihe-iti` and `nl-generic-functions` crates it publishes, and `eehrxf` is
-built here until it is complete and publishable, then moves to FerroBRIDGE in
-one step (A76, #813).
+`ihe-iti` and `nl-generic-functions` crates it publishes, and the
+interoperability component `eehrxf` is FerroBRIDGE's, published from there and
+pinned exactly here; every component change is made there (A76, #813, owner
+decision 2026-10-28: no component is built in one product to be moved later).
 
 ## Repo map
 
@@ -253,13 +256,11 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   profile, publishable only through the workspace `publish` switch (#106):
   `openehr-federation` (the Federation Tier: the wire additions always on, the
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
-  `merge`), and the interoperability component of Regulation
-  (EU) 2025/327 (decision A58), `eehrxf` (the interoperability
-  component: the format-neutral dataset model read from the Xt-EHR logical
-  models package, one feature per Art 14(1) category, `fhir-r4`, the FHIR
-  R4 serialisation with no openEHR crate, and `openehr`, which maps openEHR
-  to it through FerroBRIDGE's FHIRconnect engine in process; #684, #730).
-  The logging component, `ehds-logging` (the Annex II 3.2 access record, the
+  `merge`). The interoperability component of Regulation (EU) 2025/327
+  (decision A58) is `eehrxf`, published from FerroHEALTH/FerroBRIDGE since
+  #813 and pinned exactly (`eehrxf = "=0.1.128"`); FerroFED keeps no copy, and
+  its own half is `app/ferrofed-eehrxf` below. The logging component,
+  `ehds-logging` (the Annex II 3.2 access record, the
   Art 14(1) categories and their map, the sink, and `balp`; #623), and the
   ATNA and BALP audit, `ihe-atna`, come from the family's audit library,
   FerroHEALTH/FerroAUDIT, pinned exactly from crates.io (#1176). The two

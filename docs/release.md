@@ -308,7 +308,7 @@ slow one.
    `CHANGELOG.md`. The
    [instructions for use](https://ferrofed.eu/docs/operate/instructions-for-use.html)
    list every maintenance step and limitation the release adds. When the
-   release changes the `ehds-logging` pin, `crates/eehrxf`, the access log of
+   release changes the `ehds-logging` pin, the `eehrxf` pin, the access log of
    `app/ferrofed-server/src/access/`, a mapping pin or the query path they
    ride, the
    [clinical safety risk file](https://ferrofed.eu/docs/evaluate/clinical-safety.html)
@@ -326,7 +326,7 @@ slow one.
    bump, and the `plan` job at the tag, while the two tables differ.
 6. **A change to a harmonised component is reflected in the technical
    documentation** (Regulation (EU) 2025/327 Art 30(2)). When the pin of the
-   published `ehds-logging` crate moves, or a file under `crates/eehrxf`,
+   published `ehds-logging` or `eehrxf` crate moves, or a file under
    `app/ferrofed-eehrxf`, `app/ferrofed-server/src/access` or
    `app/ferrofed-server/src/fhir` differs from the previous release tag, the version-bump pull request
    adds a row whose release is the new version to the clinical safety

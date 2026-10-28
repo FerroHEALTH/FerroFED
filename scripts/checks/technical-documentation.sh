@@ -48,7 +48,6 @@ readonly CHANGES_HEADING='Changes to the harmonised components'
 readonly REVIEW_HEADING='Review and change'
 # The harmonised software components (Art 25(1)) and the code that serves them.
 readonly COMPONENTS=(
-  crates/eehrxf
   app/ferrofed-eehrxf
   app/ferrofed-server/src/access
   app/ferrofed-server/src/fhir
@@ -56,9 +55,11 @@ readonly COMPONENTS=(
 
 # The harmonised components taken from crates.io, each pinned by a line of
 # the root Cargo.toml: the logging component comes from the family's audit
-# library, FerroHEALTH/FerroAUDIT (#1176). A moved pin is a changed component.
+# library, FerroHEALTH/FerroAUDIT (#1176), and the interoperability component
+# from FerroHEALTH/FerroBRIDGE (#813). A moved pin is a changed component.
 readonly PUBLISHED=(
   ehds-logging
+  eehrxf
 )
 
 failures=0
@@ -266,7 +267,7 @@ self_test() {
   script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
   repo="$work/repo"
   mkdir -p "$repo/scripts/checks" "$repo/conformance" "$repo/docs/specs/eu-ehds" "$repo/docs/specs/eu-cra" \
-    "$repo/website/book/src/evaluate" "$repo/crates/eehrxf"
+    "$repo/website/book/src/evaluate" "$repo/app/ferrofed-eehrxf"
   cp "$script" "$repo/scripts/checks/technical-documentation.sh"
   stub_git() {
     git -C "$repo" -c user.name=self-test -c user.email=self-test@example.org \
@@ -335,7 +336,7 @@ self_test() {
   cra_row() { row_in "$CRA_INDEX" "$@"; }
 
   fixture
-  printf 'one\n' > "$repo/crates/eehrxf/lib.rs"
+  printf 'one\n' > "$repo/app/ferrofed-eehrxf/lib.rs"
   stub_git init -q -b main
   stub_git add -A
   stub_git commit -q -m "the first release"
@@ -370,8 +371,8 @@ self_test() {
   sed -i.orig '/^| 37(2) |/d' "$repo/$PAGE" && rm -f "$repo/$PAGE.orig"
   expect "a page that lists no row for an item" 1 "lists no row for 37(2)"
   fixture
-  sed -i.orig '/crates\/eehrxf/d' "$repo/$PAGE" && rm -f "$repo/$PAGE.orig"
-  expect "a page that drops a component path" 1 "component path crates/eehrxf"
+  sed -i.orig '/app\/ferrofed-eehrxf/d' "$repo/$PAGE" && rm -f "$repo/$PAGE.orig"
+  expect "a page that drops a component path" 1 "component path app/ferrofed-eehrxf"
   fixture
   sed -i.orig "/- \`ehds-logging\`/d" "$repo/$PAGE" && rm -f "$repo/$PAGE.orig"
   expect "a page that drops a published component" 1 "published component ehds-logging"
@@ -407,7 +408,7 @@ self_test() {
   manifest 0.0.2 0.1.1
   expect "a bump that moves a published component's pin with no row" 1 "has no row whose release is 0.0.2"
   manifest 0.0.2 0.1.0
-  printf 'two\n' > "$repo/crates/eehrxf/lib.rs"
+  printf 'two\n' > "$repo/app/ferrofed-eehrxf/lib.rs"
   stub_git commit -q -a -m "a component change"
   expect "a bump that changes a component with no row" 1 "has no row whose release is 0.0.2"
   printf '| 2026-02-01 | before 0.0.2 |\n' >> "$repo/$SAFETY"
@@ -421,7 +422,7 @@ self_test() {
   # change after its tag is the next bump's to record.
   stub_git commit -q -a -m "the second release"
   stub_git tag v0.0.2
-  printf 'three\n' > "$repo/crates/eehrxf/lib.rs"
+  printf 'three\n' > "$repo/app/ferrofed-eehrxf/lib.rs"
   stub_git commit -q -a -m "a change after the release"
   expect "a routine change between releases" 0 "between v0.0.1 and 0.0.2"
   manifest 0.0.3-rc.1 0.1.0

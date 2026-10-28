@@ -320,7 +320,7 @@ specification ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
 - The FHIR face: the patient summary in the HL7 Europe exchange format, the
   document list and the read of a listed document, and the receipt of a
   patient summary document into the member you declare for it, with
-  `crates/eehrxf` as a library ([#809](https://github.com/FerroHEALTH/FerroFED/issues/809), [#810](https://github.com/FerroHEALTH/FerroFED/issues/810), [#802](https://github.com/FerroHEALTH/FerroFED/issues/802), [#803](https://github.com/FerroHEALTH/FerroFED/issues/803),
+  the published `eehrxf` crate as a library ([#809](https://github.com/FerroHEALTH/FerroFED/issues/809), [#810](https://github.com/FerroHEALTH/FerroFED/issues/810), [#802](https://github.com/FerroHEALTH/FerroFED/issues/802), [#803](https://github.com/FerroHEALTH/FerroFED/issues/803),
   [The patient summary over FHIR](../integrate/patient-summary.md),
   [Receiving a document](receiving-documents.md)).
 - The [information sheet](information-sheet.md), the
@@ -348,7 +348,7 @@ Released on 2026-10-16.
   search and the read of a patient's prescriptions, and a received
   dispensation written to the member that owns its prescription and read
   back, with no dispensability, count or lock computed at the gateway
-  ([#523](https://github.com/FerroHEALTH/FerroFED/issues/523),
+  ([FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321),
   [Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
 - A received document written under a person's own grant, or under a
   representative's, marked as theirs in every entry and in its access
@@ -497,7 +497,7 @@ document it builds in the exchange format, moves to FerroBRIDGE
 ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)). The other
 priority categories and prescriptions from openEHR medication data through
 a FHIRconnect mapping are built there
-([#523](https://github.com/FerroHEALTH/FerroFED/issues/523), [#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043), [#666](https://github.com/FerroHEALTH/FerroFED/issues/666), [#667](https://github.com/FerroHEALTH/FerroFED/issues/667), [#668](https://github.com/FerroHEALTH/FerroFED/issues/668)).
+([FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321), [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322), [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325), [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
 FerroFED keeps the gateway half: the federation queries, the FHIR face
 routes and the access record. v0.0.15 carries the rest of the
 manufacturer's conformity work
@@ -508,7 +508,7 @@ list what is merged on `main` for the next release.
 
 Waiting on the EU: the patient summary, built, is re-checked against the
 Art 15(1) implementing act once it is adopted
-([#1289](https://github.com/FerroHEALTH/FerroFED/issues/1289)); the logging
+([FerroHEALTH/FerroBRIDGE#1327](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1327)); the logging
 component, built, is re-checked against the Art 36(1)
 common specifications once they are adopted
 ([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)); and the Art 40
@@ -547,10 +547,10 @@ These are the ones to know before you deploy FerroFED; the
   endpoint
   ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md));
   a member that holds its prescriptions only as openEHR data is not served
-  ([#1043](https://github.com/FerroHEALTH/FerroFED/issues/1043)), and imaging, test results and discharge reports are planned
-  ([#666](https://github.com/FerroHEALTH/FerroFED/issues/666),
-  [#667](https://github.com/FerroHEALTH/FerroFED/issues/667),
-  [#668](https://github.com/FerroHEALTH/FerroFED/issues/668)). No EU
+  ([FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322)), and imaging, test results and discharge reports are planned
+  ([FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324),
+  [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
+  [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)). No EU
   declaration of conformity has been drawn up, and no release carries the
   CE marking
   ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).
@@ -604,7 +604,7 @@ These are the ones to know before you deploy FerroFED; the
   listed in the outcome of the write as a `warning`, not refused, and a
   `required` binding the packages cannot decide is listed as not evaluated
   when no terminology server is configured
-  ([The check against the profiles](receiving-documents.md#the-check-against-the-profiles)).
+  ([The check against the profiles](receiving-documents.md#what-the-component-does)).
 - **Part of ITS-REST is not served.** The gateway never federates the
   DEMOGRAPHIC area: it answers `501` there unless you name one member to
   serve it, and `501` for any ITS-REST path it does not serve

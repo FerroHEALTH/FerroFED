@@ -9,15 +9,16 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `6c8531fdbe8adbc888a8a4f33dcbe9619b8e42f47e1c7186f698cc11eb389055`
-- Fetched: 2026-10-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-28, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 2 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 2 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
   `PROVENANCE.md` excluded): `545f293b8ecc1e24002ed5e0459e20ffb6bd78b463b96b35d7d207e06c7a2126`
-- Read by: #683 (the exchange-format proxies the interoperability
-  component of #519, EHDS readiness, is designed against)
+- Read by: #683 (the exchange-format proxies the gateway's FHIR face and its
+  testkit are held to; the component itself moved to FerroHEALTH/FerroBRIDGE
+  with #813)
 
 The International Patient Summary, canonical `http://hl7.org/fhir/uv/ips`,
 at the version the HL7 Europe Patient Summary depends on and at the version
