@@ -18,10 +18,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::body::Body;
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::Config;
 use ferrofed_server::metrics::{self, CONTENT_TYPE, Metrics};
+use ferrohealth_secret::secret_url::SecretUrl;
 use http::{Request, StatusCode, header};
 
 use crate::metrics::{count, parse};

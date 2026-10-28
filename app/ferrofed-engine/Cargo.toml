@@ -22,6 +22,7 @@ publish = false
 nl = ["dep:nl-generic-functions"]
 
 [dependencies]
+ferrohealth-secret.workspace = true
 # The onward credentials provider the node client asks before each attempt
 # (#81).
 async-trait.workspace = true

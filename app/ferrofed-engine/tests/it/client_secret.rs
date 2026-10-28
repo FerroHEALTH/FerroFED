@@ -19,8 +19,8 @@ use std::time::Duration;
 use ferrofed_engine::onward::grant::client_credentials::{ClientCredentials, Recipient};
 use ferrofed_engine::onward::token::{ErrorCode, REFRESH_MARGIN, TokenError};
 use ferrofed_engine::onward::{Clock, Grant, Scope, ScopeError, SecretMethod, SystemClock};
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::oauth::TokenEndpoint;
+use ferrohealth_secret::secret_url::SecretUrl;
 use openehr_its::rest::client::{Credentials, CredentialsProvider, ReqwestTransport};
 use secrecy::SecretString;
 

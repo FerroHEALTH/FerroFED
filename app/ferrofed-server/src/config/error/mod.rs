@@ -82,13 +82,11 @@ pub enum Error {
         /// The key that replaces it.
         to: String,
     },
-    /// A value and its `_file` sibling are both set.
-    #[error("{key} is set together with {key}_file; set one of them")]
-    Conflict {
-        /// The inline key.
-        key: String,
-    },
-    /// A `_file` sibling could not be read.
+    /// A secret and its `_file` sibling are both set, or the file cannot be
+    /// read or holds nothing.
+    #[error(transparent)]
+    SecretFile(#[from] ferrohealth_secret::file::SecretError),
+    /// A file a key names (a PEM bundle, a key) could not be read.
     #[error("{key} names {}, which could not be read", path.display())]
     Secret {
         /// The `_file` key.
@@ -98,14 +96,6 @@ pub enum Error {
         /// What the file system reported.
         #[source]
         source: std::io::Error,
-    },
-    /// A secret read from a `_file` sibling is empty.
-    #[error("{key} names {}, which holds no secret", path.display())]
-    EmptySecret {
-        /// The `_file` key.
-        key: String,
-        /// The path it named.
-        path: PathBuf,
     },
     /// TLS material is no PEM of the kind its key takes; the message
     /// quotes no part of it.

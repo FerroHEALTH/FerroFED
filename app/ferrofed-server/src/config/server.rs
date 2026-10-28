@@ -11,7 +11,7 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 
 use ferrofed_registry::replica::Replica;
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ipnet::IpNet;
 use serde::Deserialize;
 

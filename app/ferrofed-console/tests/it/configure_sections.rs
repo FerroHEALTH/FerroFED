@@ -275,7 +275,7 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
             .secrets
             .first()
             .and_then(|change| change.value.as_ref())
-            .map(ferrofed_registry::secret::WriteOnly::expose)
+            .map(ferrohealth_secret::secret::WriteOnly::expose)
     );
     for path in [
         "/configuration/credentials",

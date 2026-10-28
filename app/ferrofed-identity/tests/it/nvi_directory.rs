@@ -21,9 +21,9 @@ use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::localizer::{Localization, Localizer};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::nvi::{LocalizationService, PSEUDO_BSN_SYSTEM};
+use ferrohealth_secret::secret_url::SecretUrl;
 use serde_json::json;
 
 use crate::mcsd::{ORG_A, ORG_REGION, fhir, resource};

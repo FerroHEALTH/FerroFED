@@ -18,9 +18,9 @@ use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::tls::MutualTls;
 use ferrofed_testkit::xcpd::{Answer, Community, RespondingGateway};
+use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::xcpd::security::XuaAssertion;
 use secrecy::SecretString;
 

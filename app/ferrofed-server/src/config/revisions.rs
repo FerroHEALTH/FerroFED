@@ -30,13 +30,13 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
 use crate::config::Config;
 use crate::config::error::Error;
-use crate::config::secrets::secret;
 use crate::revision::policy::Policy;
+use ferrohealth_secret::file::read_secret;
 
 /// Whether the configuration is managed as revisions, `config.ui`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -351,7 +351,7 @@ fn url(section: &Revisions) -> Result<SecretUrl, Error> {
         .into());
     }
     let key = "config.url";
-    let url = secret(key, section.url.as_ref(), section.url_file.as_deref())?
+    let url = read_secret(key, section.url.clone(), section.url_file.as_deref())?
         .filter(|url: &SecretUrl| !url.expose().trim().is_empty())
         .ok_or_else(|| Error::Missing {
             key: String::from(key),

@@ -22,7 +22,8 @@ use ferrofed_engine::onward::SystemClock;
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::nl::nuts::{NutsCredentials, NutsGrant};
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::secret::{Secret, SecretUrl};
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use nl_generic_functions::nuts_auth::NutsClient;
 use nl_generic_functions::nuts_auth::did_document::{DidDocument, MEDIA_TYPE};
 use nl_generic_functions::nuts_auth::error::InvalidInput;
@@ -32,10 +33,10 @@ use serde::Deserialize;
 use crate::binding::seam::{OnwardGrant, Provided, PublicDocument};
 use crate::config::error::Error;
 use crate::config::error::credentials::CredentialsFault;
-use crate::config::secrets::{read_secret, secret};
 use crate::config::settings::{Scheme, Settings};
 use crate::config::transport::{Encryption, ProtectedSite};
 use crate::federation::error::FederationError;
+use ferrohealth_secret::file::{read_secret, read_secret_file};
 
 /// The table the grant is configured by, under `[credentials."<id>"]`.
 pub const KEY: &str = "nuts";
@@ -260,7 +261,7 @@ pub(super) fn resolve(section: &str, nuts: &Nuts) -> Result<NutsOnward, Error> {
         .key_file
         .as_deref()
         .ok_or_else(|| missing("key_file"))?;
-    let pem = secret::<Secret>(&format!("{section}.key"), None, Some(key_file))?
+    let pem = read_secret::<Secret>(&format!("{section}.key"), None, Some(key_file))?
         .ok_or_else(|| missing("key_file"))?;
     let key =
         HolderKey::from_pem(&pem.to_secret_string(), &nuts.kid, &did).map_err(holder_refused)?;
@@ -270,7 +271,7 @@ pub(super) fn resolve(section: &str, nuts: &Nuts) -> Result<NutsOnward, Error> {
         let file = held.file.as_deref().ok_or_else(|| Error::Missing {
             key: format!("{prefix}.file"),
         })?;
-        let jwt = read_secret(&format!("{prefix}.file"), file)?;
+        let jwt = read_secret_file(&prefix, file)?;
         credentials.push((held.input_descriptor.clone(), jwt));
     }
     let holder = Holder::new(did, key, credentials).map_err(holder_refused)?;
@@ -279,7 +280,7 @@ pub(super) fn resolve(section: &str, nuts: &Nuts) -> Result<NutsOnward, Error> {
         .as_deref()
         .ok_or_else(|| missing("dpop_key_file"))?;
     let dpop_key = format!("{section}.dpop_key");
-    let dpop_pem = secret::<Secret>(&dpop_key, None, Some(dpop_file))?
+    let dpop_pem = read_secret::<Secret>(&dpop_key, None, Some(dpop_file))?
         .ok_or_else(|| missing("dpop_key_file"))?;
     let prover = Prover::from_pem(&dpop_pem.to_secret_string()).map_err(|source| {
         Error::Credentials(CredentialsFault::DpopKey {

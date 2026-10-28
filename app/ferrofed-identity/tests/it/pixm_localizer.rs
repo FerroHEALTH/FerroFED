@@ -20,8 +20,8 @@ use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::role::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::pixm::Invocation;
 use secrecy::SecretString;
 use wiremock::matchers::{method, path};

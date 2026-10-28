@@ -77,7 +77,7 @@ fn an_https_collector_takes_a_client_identity_and_trust_roots_from_files() -> Te
             Some(certificates.client_identity().trim()),
             tls.client_identity
                 .as_ref()
-                .map(ferrofed_registry::secret::Secret::expose)
+                .map(ferrohealth_secret::secret::Secret::expose)
         );
     }
     let plain = resolved("[telemetry]\notlp_endpoint = \"https://collector.example.org:4317\"\n")?;

@@ -44,14 +44,15 @@ use ferrofed_engine::onward::issuer::{AliasHost, InvalidAliasHost, InvalidIssuer
 use ferrofed_engine::onward::keys::{KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SenderConstraint};
-use ferrofed_registry::secret::{Secret, SecretUrl};
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
 use crate::config::error::Error;
 use crate::config::error::credentials::CredentialsFault;
-use crate::config::secrets::secret;
 use crate::config::tls::TlsFault;
 use crate::config::{ClientAuth, OAuth2};
+use ferrohealth_secret::file::read_secret;
 
 /// What an `oauth2` grant's client assertions name as their `aud` (RFC 7523
 /// §3).
@@ -559,7 +560,7 @@ fn with_previous_client_key(
 /// Reads the P-256 key the `_file` sibling of `key` names, at `path`.
 fn p256_key(key: &str, path: &Path) -> Result<SigningKey, Error> {
     let named = format!("{key}_file");
-    let pem = secret::<Secret>(key, None, Some(path))?
+    let pem = read_secret::<Secret>(key, None, Some(path))?
         .ok_or_else(|| Error::Missing { key: named.clone() })?;
     SigningKey::from_p256_pem(&pem.to_secret_string())
         .map_err(|source| GrantFault::ClientKey { key: named, source }.into())
@@ -572,7 +573,7 @@ fn dpop_key(section: &str, fapi2: &Fapi2) -> Result<Prover, Error> {
         .dpop_key_file
         .as_deref()
         .ok_or_else(|| Error::Missing { key: key.clone() })?;
-    let pem = secret::<Secret>(&format!("{section}.dpop_key"), None, Some(path))?
+    let pem = read_secret::<Secret>(&format!("{section}.dpop_key"), None, Some(path))?
         .ok_or_else(|| Error::Missing { key: key.clone() })?;
     Prover::from_pem(&pem.to_secret_string())
         .map_err(|source| Error::Credentials(CredentialsFault::DpopKey { key, source }))

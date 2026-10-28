@@ -39,7 +39,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ferrofed_identity::profile::Profile;
-use ferrofed_registry::secret::{Secret, SecretUrl};
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 use url::Url;
 

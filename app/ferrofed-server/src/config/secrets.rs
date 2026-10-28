@@ -13,12 +13,11 @@ use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::mtls::Thumbprint;
 use ferrofed_engine::onward::token::MAX_ASSERTION_LIFETIME;
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
-use ferrofed_registry::secret::Secret;
+use ferrohealth_secret::file::read_secret;
+use ferrohealth_secret::secret::Secret;
 use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
-use secrecy::SecretString;
-use secrecy::zeroize::Zeroizing;
 
 use crate::binding::Binding;
 use crate::config::error::Error;
@@ -120,9 +119,9 @@ fn scheme(
     credentials: &Credentials,
     certificate: Option<&Thumbprint>,
 ) -> Result<Scheme, Error> {
-    let password = secret(
+    let password = read_secret(
         &format!("{section}.password"),
-        credentials.password.as_ref(),
+        credentials.password.clone(),
         credentials.password_file.as_deref(),
     )?;
     let bound: Vec<&dyn Binding> = crate::binding::compiled()
@@ -249,48 +248,6 @@ fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials)
     }
 }
 
-/// Returns the secret `key` names, inline or from its `_file` sibling, as
-/// the redacting type `T` that holds it.
-pub(crate) fn secret<T>(
-    key: &str,
-    inline: Option<&T>,
-    file: Option<&Path>,
-) -> Result<Option<T>, Error>
-where
-    T: Clone + From<SecretString>,
-{
-    match (inline, file) {
-        (Some(_), Some(_)) => Err(Error::Conflict {
-            key: key.to_owned(),
-        }),
-        (Some(value), None) => Ok(Some(value.clone())),
-        (None, Some(path)) => {
-            read_secret(&format!("{key}_file"), path).map(|value| Some(T::from(value)))
-        }
-        (None, None) => Ok(None),
-    }
-}
-
-/// Reads the secret file `path`, trimmed and refused when empty, into a
-/// [`SecretString`]; the text read is zeroed once the trimmed value is taken.
-pub(crate) fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error> {
-    let text = std::fs::read_to_string(path)
-        .map(Zeroizing::new)
-        .map_err(|source| Error::Secret {
-            key: key.to_owned(),
-            path: path.to_path_buf(),
-            source,
-        })?;
-    let value = text.trim();
-    if value.is_empty() {
-        return Err(Error::EmptySecret {
-            key: key.to_owned(),
-            path: path.to_path_buf(),
-        });
-    }
-    Ok(SecretString::from(value))
-}
-
 /// Refuses the `oauth2` grant at `section` when it asks for a plain client
 /// credentials token: `unconstrained`, no exchange, no binding to the TLS
 /// client certificate and no authentication by it, and no `DPoP` key and an
@@ -413,7 +370,7 @@ fn resolve_grant(
     }
     if let Some(path) = &oauth2.dpop_key_file {
         let key = format!("{section}.dpop_key");
-        let pem = secret::<Secret>(&key, None, Some(path))?.ok_or_else(|| Error::Missing {
+        let pem = read_secret::<Secret>(&key, None, Some(path))?.ok_or_else(|| Error::Missing {
             key: format!("{key}_file"),
         })?;
         let prover = Prover::from_pem(&pem.to_secret_string()).map_err(|source| {
@@ -556,7 +513,7 @@ fn algorithm_name(algorithm: Algorithm) -> &'static str {
 
 /// Reads the signing key the `_file` sibling of `key` names.
 fn signing_key(key: &str, path: &Path) -> Result<SigningKey, Error> {
-    let pem = secret::<Secret>(key, None, Some(path))?.ok_or_else(|| Error::Missing {
+    let pem = read_secret::<Secret>(key, None, Some(path))?.ok_or_else(|| Error::Missing {
         key: format!("{key}_file"),
     })?;
     SigningKey::from_ec_pem(&pem.to_secret_string()).map_err(|source| {

@@ -6,7 +6,6 @@
 //! it asks for.
 
 use ferrofed_registry::resource::{SECRETS, SecretChange};
-use ferrofed_registry::secret::WriteOnly;
 
 use crate::configure::model::{SecretInput, SettingInput};
 use crate::configure::plan::{Refused, at, given, invalid};
@@ -351,7 +350,7 @@ pub fn secret_changes(
                 }
                 SecretChange {
                     key,
-                    value: Some(WriteOnly::from(typed.into_secret())),
+                    value: Some(typed),
                     file: None,
                     clear: false,
                 }
@@ -413,7 +412,7 @@ pub fn secret_changes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::configure::model::Typed;
+    use ferrohealth_secret::secret::WriteOnly;
 
     /// A setting row of `key` holding `value`.
     fn row(key: &str, value: &str) -> SettingInput {
@@ -533,7 +532,7 @@ mod tests {
             row: String::from("1"),
             key: key.to_owned(),
             choice: choice.to_owned(),
-            value: Typed::default(),
+            value: WriteOnly::default(),
             file: String::new(),
         }
     }
@@ -541,7 +540,7 @@ mod tests {
     #[test]
     fn each_secret_choice_becomes_its_change_and_a_kept_one_none() {
         let mut set = secret("oauth2.client_secret", "set");
-        set.value = Typed::new(String::from("synthetic-value"));
+        set.value = WriteOnly::new(String::from("synthetic-value"));
         let mut file = secret("client_identity", "file");
         file.file = String::from("/run/secrets/id.pem");
         let mut inputs = [

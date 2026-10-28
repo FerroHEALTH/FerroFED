@@ -14,7 +14,7 @@
 use std::fmt;
 
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
-use ferrofed_registry::secret::REDACTED;
+use ferrohealth_secret::REDACTED;
 use openehr_base::v1_3::base_types::identification::archetype_id::ArchetypeId;
 use openehr_base::v1_3::base_types::identification::generic_id::GenericId;
 use openehr_base::v1_3::base_types::identification::object_id::ObjectId;

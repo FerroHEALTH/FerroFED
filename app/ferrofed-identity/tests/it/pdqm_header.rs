@@ -22,9 +22,9 @@ use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::demographics::{Ambiguity, Demographics};
 use ferrofed_identity::role::header::{HeaderAnswer, PatientHeader};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdqm_stub::{self, Entry};
+use ferrohealth_secret::secret_url::SecretUrl;
 use secrecy::SecretString;
 
 type TestResult = Result<(), Box<dyn Error>>;

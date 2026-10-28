@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::secret::Secret;
+use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 use http::HeaderName;
 use serde::Deserialize;
@@ -34,8 +34,8 @@ use crate::config::auth::{
     AuthFault, AuthMode, Introspection, IssuerSettings, PatientBinding, Verification, fault,
 };
 use crate::config::error::Error;
-use crate::config::secrets::secret;
 use crate::config::transport;
+use ferrohealth_secret::file::read_secret;
 
 /// `[trust]` as written.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -303,9 +303,9 @@ fn introspection(
     written: &TrustedIssuer,
     timing: &Timing,
 ) -> Result<Option<Introspection>, Error> {
-    let client_secret = secret(
+    let client_secret = read_secret(
         &format!("{key}.client_secret"),
-        written.client_secret.as_ref(),
+        written.client_secret.clone(),
         written.client_secret_file.as_deref(),
     )?;
     let Some(endpoint) = &written.introspection_endpoint else {

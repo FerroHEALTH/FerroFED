@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::console::{ConsoleState, Owner};
 use crate::revision::RevisionId;
-use crate::secret::WriteOnly;
+use ferrohealth_secret::secret::WriteOnly;
 
 /// A binding section the console manages whole.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -207,7 +207,7 @@ pub struct SectionRequest {
 #[cfg(test)]
 mod tests {
     use super::{BindingSection, Resource, SecretChange};
-    use crate::secret::WriteOnly;
+    use ferrohealth_secret::secret::WriteOnly;
 
     #[test]
     fn a_resource_names_its_table() {

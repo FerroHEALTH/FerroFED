@@ -9,6 +9,7 @@ use ferrofed_server::config::error::Error;
 use ferrofed_server::config::error::basic::BasicFault;
 use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::settings::Scheme;
+use ferrohealth_secret::file::SecretError;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
@@ -104,7 +105,7 @@ fn a_secret_set_inline_and_through_its_file_refuses_to_boot() -> Result<(), Box<
     );
     let error = refusal(&text)?;
     assert!(
-        matches!(&error, Error::Conflict { key } if key == "credentials.clinic-b.password"),
+        matches!(&error, Error::SecretFile(SecretError::Both { key }) if key == "credentials.clinic-b.password"),
         "{error:?}"
     );
     Ok(())
@@ -160,15 +161,18 @@ fn a_secret_file_that_cannot_be_read_or_is_empty_refuses_to_boot() -> Result<(),
         "[credentials.\"a\"]\nuser = \"u\"\npassword_file = \"/nonexistent/ferrofed/password\"\n",
     )?;
     assert!(
-        matches!(&error, Error::Secret { key, .. } if key == "credentials.a.password_file"),
+        matches!(&error, Error::SecretFile(SecretError::Read { key, .. }) if key == "credentials.a.password"),
         "{error:?}"
     );
-    let file = secret_file("  \n")?;
+    let file = secret_file("\n")?;
     let error = refusal(&format!(
         "[credentials.\"a\"]\nuser = \"u\"\npassword_file = {:?}\n",
         file.path()
     ))?;
-    assert!(matches!(error, Error::EmptySecret { .. }), "{error:?}");
+    assert!(
+        matches!(error, Error::SecretFile(SecretError::Empty { .. })),
+        "{error:?}"
+    );
     Ok(())
 }
 

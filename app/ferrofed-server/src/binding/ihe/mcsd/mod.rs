@@ -10,7 +10,8 @@ pub mod registry;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ferrofed_registry::secret::{Secret, SecretUrl};
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
 use crate::audit::config::AuditSettings;

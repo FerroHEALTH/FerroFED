@@ -158,31 +158,10 @@ pub enum Error {
         /// The key.
         key: String,
     },
-    /// A secret is set inline and through its `_file` sibling.
-    #[error("{key} and {key}_file are both set; set one")]
-    Conflict {
-        /// The key.
-        key: String,
-    },
-    /// A secret file could not be read.
-    #[error("cannot read {key} from {}", path.display())]
-    Secret {
-        /// The `_file` key.
-        key: String,
-        /// The file it names.
-        path: PathBuf,
-        /// Why it could not be read.
-        #[source]
-        source: std::io::Error,
-    },
-    /// A secret file holds nothing but white space.
-    #[error("{key} names {}, which is empty", path.display())]
-    EmptySecret {
-        /// The `_file` key.
-        key: String,
-        /// The file it names.
-        path: PathBuf,
-    },
+    /// A secret is set inline and through its `_file` sibling, or its file
+    /// cannot be read or holds nothing.
+    #[error(transparent)]
+    SecretFile(#[from] ferrohealth_secret::file::SecretError),
     /// A socket address does not parse.
     #[error("{key} is not a socket address")]
     Address {

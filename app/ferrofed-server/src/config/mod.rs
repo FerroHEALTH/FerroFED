@@ -11,7 +11,8 @@
 
 use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
-use ferrofed_registry::secret::{Secret, SecretUrl};
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;
 use std::collections::BTreeMap;

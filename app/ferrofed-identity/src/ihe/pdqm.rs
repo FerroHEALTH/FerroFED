@@ -36,7 +36,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_atna::balp::AuditRecorder;
 use ihe_iti::pdqm::PdqmClient;
 use ihe_iti::pdqm::error::{InvalidInput, PdqmError};

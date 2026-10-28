@@ -15,7 +15,7 @@
 //! which the Dutch binding wires itself. No specification governs the mapping: our own design.
 
 use ferrofed_identity::fhir::{Authentication, Tls, TlsError};
-use ferrofed_registry::secret::Secret;
+use ferrohealth_secret::secret::Secret;
 #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 use ferrohealth_smart::client::ClientCredentials;
 

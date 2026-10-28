@@ -5,13 +5,13 @@
 //! [`Config`] with every `_file` secret read.
 
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
-use ferrofed_registry::secret::Secret;
+use ferrohealth_secret::file::read_secret;
+use ferrohealth_secret::secret::Secret;
 use ferrohealth_ui::i18n::Locale;
 use secrecy::SecretString;
-use secrecy::zeroize::Zeroizing;
 use url::Url;
 
 use crate::config::error::Error;
@@ -271,11 +271,12 @@ fn resolve_oidc(oidc: &Oidc) -> Result<OidcSettings, Error> {
             key: String::from("oidc.end_session_endpoint (for post_logout_redirect_uri)"),
         });
     }
-    let client_secret = secret(
+    let client_secret = read_secret(
         "oidc.client_secret",
-        oidc.client_secret.as_ref(),
+        oidc.client_secret.clone(),
         oidc.client_secret_file.as_deref(),
-    )?;
+    )?
+    .map(|secret: Secret| secret.to_secret_string());
     Ok(OidcSettings {
         issuer,
         authorization_endpoint,
@@ -353,42 +354,6 @@ fn provider_url(key: &str, text: &str) -> Result<Url, Error> {
             reason: "must be an https URL unless its host is loopback",
         })
     }
-}
-
-/// Returns the secret set inline or in the file its `_file` sibling names.
-fn secret(
-    key: &str,
-    inline: Option<&Secret>,
-    file: Option<&Path>,
-) -> Result<Option<SecretString>, Error> {
-    match (inline, file) {
-        (Some(_), Some(_)) => Err(Error::Conflict {
-            key: key.to_owned(),
-        }),
-        (Some(value), None) => Ok(Some(value.to_secret_string())),
-        (None, Some(path)) => read_secret(&format!("{key}_file"), path).map(Some),
-        (None, None) => Ok(None),
-    }
-}
-
-/// Reads the secret file `path`, trimmed and refused when empty; the text
-/// read is zeroed once the trimmed value is taken.
-fn read_secret(key: &str, path: &Path) -> Result<SecretString, Error> {
-    let text = std::fs::read_to_string(path)
-        .map(Zeroizing::new)
-        .map_err(|source| Error::Secret {
-            key: key.to_owned(),
-            path: path.to_path_buf(),
-            source,
-        })?;
-    let value = text.trim();
-    if value.is_empty() {
-        return Err(Error::EmptySecret {
-            key: key.to_owned(),
-            path: path.to_path_buf(),
-        });
-    }
-    Ok(SecretString::from(value))
 }
 
 /// Whether `url` names a loopback host: `localhost`, `127.0.0.0/8` or `::1`.

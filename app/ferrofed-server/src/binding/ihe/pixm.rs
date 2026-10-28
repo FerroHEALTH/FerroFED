@@ -17,8 +17,9 @@ use std::sync::Arc;
 use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmResolver};
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::pixm::Invocation;
 use serde::Deserialize;
 

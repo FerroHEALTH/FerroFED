@@ -12,11 +12,11 @@
 
 use std::collections::BTreeMap;
 
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::transport::{self, CleartextError, Encryption, ProtectedSite};
 use ferrofed_server::telemetry::Traces;
+use ferrohealth_secret::secret_url::SecretUrl;
 
 use super::TestResult;
 

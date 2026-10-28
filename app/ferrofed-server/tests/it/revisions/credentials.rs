@@ -14,7 +14,7 @@ use std::error::Error;
 use ferrofed_registry::console::{ConsoleState, Owner};
 use ferrofed_registry::resource::{BindingSection, Resource, SecretChange, SectionRequest};
 use ferrofed_registry::revision::{Applied, Author, Current, Review, Revision, RevisionId};
-use ferrofed_registry::secret::WriteOnly;
+use ferrohealth_secret::secret::WriteOnly;
 use http::{Method, StatusCode};
 use jiff::{SignedDuration, Timestamp};
 

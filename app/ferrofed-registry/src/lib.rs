@@ -64,8 +64,8 @@
 //! the process that produced it, a [`replica::Replica`].
 //!
 //! Every credential FerroFED is configured with, and every URL that may carry
-//! one in its userinfo, is held in a [`Secret`](secret::Secret) or a
-//! [`SecretUrl`](secret::SecretUrl), whose renderings never show it.
+//! one in its userinfo, is held in a [`Secret`](ferrohealth_secret::secret::Secret) or a
+//! [`SecretUrl`](ferrohealth_secret::secret_url::SecretUrl), whose renderings never show it.
 //!
 //! [`console`] holds a member the operator console manages beside the
 //! document's, owned whole, and the report of who owns each configured
@@ -98,5 +98,4 @@ pub mod replica;
 pub mod resource;
 pub mod revision;
 pub mod running;
-pub mod secret;
 pub mod snapshot;

@@ -50,7 +50,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::onward::issuer::Issuer;
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 use openehr_sdt::smart_scopes::{Compartment, SmartScope};
 use secrecy::SecretString;
 use url::Url;

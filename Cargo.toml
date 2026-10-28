@@ -313,6 +313,12 @@ ferrohealth-ui = { version = "=0.4.0", features = ["split"] }
 # itself, so the lock holds one openehr-sdt, and caches a verified Basic
 # credential for 300 s (#1390). Verified against crates.io on 2026-10-28.
 ferrohealth-smart = { version = "=0.8.6", default-features = false, features = ["fetch", "axum", "openehr"] }
+# The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
+# `WriteOnly` and `SecretUrl`, which never render a credential, and the
+# key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
+# a product pins every family crate, at the version ferrohealth-smart
+# requires. Verified against crates.io on 2026-10-28.
+ferrohealth-secret = "=0.2.0"
 # The console's string catalogs (#1162): Project Fluent messages embedded at
 # build time from app/ferrofed-console/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.

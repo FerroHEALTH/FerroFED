@@ -16,7 +16,8 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use ferrofed_registry::resource::{BindingSection, Resource, SECRETS, SecretChange, SecretSlot};
-use ferrofed_registry::secret::{SecretUrl, WriteOnly};
+use ferrohealth_secret::secret::WriteOnly;
+use ferrohealth_secret::secret_url::SecretUrl;
 
 /// The suffix of a secret's reference to a file.
 const FILE: &str = "_file";
@@ -502,7 +503,7 @@ mod tests {
     use std::path::PathBuf;
 
     use ferrofed_registry::resource::{BindingSection, Resource, SecretChange};
-    use ferrofed_registry::secret::WriteOnly;
+    use ferrohealth_secret::secret::WriteOnly;
 
     use super::{
         SectionFault, compose, present, remove, set, settings_of, slots, value_at, without_secrets,

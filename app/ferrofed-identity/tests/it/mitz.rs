@@ -20,8 +20,8 @@ use ferrofed_identity::role::consent::{
 };
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mitz::Mitz;
+use ferrohealth_secret::secret_url::SecretUrl;
 
 use crate::support::{PATIENT_VALUE, registry};
 
