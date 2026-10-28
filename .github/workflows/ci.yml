@@ -952,6 +952,8 @@ jobs:
             features: ""
           - build: binding-ihe
             features: binding-ihe
+          # binding-nl carries binding-ihe: the Dutch binding resolves
+          # patients through FerroPIX's PIXm Manager (#1377).
           - build: binding-nl
             features: binding-nl
           - build: default

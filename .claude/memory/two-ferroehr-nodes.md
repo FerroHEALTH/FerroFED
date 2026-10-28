@@ -44,12 +44,13 @@ out PostgreSQL start-up under parallel e2e tests (#320).
   `a_node_role_is_refused_on_another_node_database` holds it); never copy
   FerroEHR's script, and never separate nodes by schema (FerroEHR fixes its
   schema names).
-- The quickstart's patients live in `docker/quickstart/ferrofed.toml` as
-  `[[dev.crossref]]` rows, and `scripts/quickstart/seed.sh` creates exactly
-  those EHRs over ITS-REST: one patient at all four nodes, one at two, one at
-  one, one at none. The development cross-reference behind those rows is one
-  of the in-tree identity seams that move to FerroPIX under #367, since
-  patient identity is FerroPIX's lane ([[family-architecture]]).
+- The quickstart's patients live in `docker/quickstart/patients.tsv`: a
+  one-shot job seeds them into FerroPIX over ITI-104, and
+  `scripts/quickstart/seed.sh` creates exactly those EHRs over ITS-REST: one
+  patient at all four nodes, one at two, one at one, one at none. The
+  gateway resolves them through `[[pixm.manager]]` and keeps no
+  cross-reference of its own (#1377, decision A110), since patient identity
+  is FerroPIX's lane ([[family-architecture]]).
 - Every e2e case seeds `EHR_STATUS.subject` in the example arc on both nodes;
   never seed a node without a subject to suit it.
 - The node-profile points (CP-18, CP-19, CP-27, #93) are scored against
