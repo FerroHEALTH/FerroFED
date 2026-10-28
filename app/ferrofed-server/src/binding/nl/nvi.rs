@@ -60,8 +60,9 @@ use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::nl::nvi::{NviConfig, NviLocalizer};
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use nl_generic_functions::authorizer::Authorizer;
 use nl_generic_functions::identification::is_bsn_system;
 use serde::Deserialize;
@@ -71,12 +72,13 @@ use crate::binding::seam::{LocalizerSeam, OnwardGrant};
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::error::credentials::CredentialsFault;
-use crate::config::secrets::{resolve_credentials, secret};
+use crate::config::secrets::resolve_credentials;
 use crate::config::settings::Scheme;
 use crate::config::transport::ProtectedSite;
 use crate::config::{Config, Credentials, transport};
 use crate::localization::LocalizationError;
 use crate::service;
+use ferrohealth_secret::file::read_secret;
 
 /// The `localization.mode` of the NVI localizer of the Dutch Generic
 /// Functions (Annex B §B.1).
@@ -248,9 +250,9 @@ pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> 
         nvi.url.expose(),
         transport::identity_site(NVI_KEY, credentials.is_some().then_some(CREDENTIALS_KEY)),
     )?;
-    let client_identity = secret(
+    let client_identity = read_secret(
         "nl_gf.nvi.client_identity",
-        nvi.client_identity.as_ref(),
+        nvi.client_identity.clone(),
         nvi.client_identity_file.as_deref(),
     )?;
     let trust_roots = nvi

@@ -38,8 +38,9 @@ use ferrofed_identity::ihe::xcpd::{
 use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
 use crate::audit::AuditDestination;
@@ -48,10 +49,10 @@ use crate::binding::ihe::audit::{RepositoryTrail, trail};
 use crate::binding::seam::{Indicator, LocalizerSeam};
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
-use crate::config::secrets::secret;
 use crate::config::{Config, transport};
 use crate::localization::LocalizationError;
 use crate::service;
+use ferrohealth_secret::file::read_secret;
 
 /// The XCPD localizer, as the configuration writes it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -200,14 +201,14 @@ pub(super) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
             transport::identity_site(&key, carried),
         )?;
     }
-    let assertion = secret(
+    let assertion = read_secret(
         "xcpd.assertion",
-        xcpd.assertion.as_ref(),
+        xcpd.assertion.clone(),
         xcpd.assertion_file.as_deref(),
     )?;
-    let client_identity = secret(
+    let client_identity = read_secret(
         "xcpd.client_identity",
-        xcpd.client_identity.as_ref(),
+        xcpd.client_identity.clone(),
         xcpd.client_identity_file.as_deref(),
     )?;
     let trust_roots = xcpd

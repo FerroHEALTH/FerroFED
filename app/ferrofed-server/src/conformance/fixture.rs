@@ -20,7 +20,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
-use ferrofed_registry::secret::REDACTED;
+use ferrohealth_secret::REDACTED;
 use openehr_base::v1_3::base_types::identification::generic_id::GenericId;
 use openehr_base::v1_3::base_types::identification::object_id::ObjectId;
 use openehr_base::v1_3::base_types::identification::party_ref::PartyRef;

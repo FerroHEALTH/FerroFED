@@ -43,7 +43,7 @@ pub mod settings;
 
 use std::path::PathBuf;
 
-use ferrofed_registry::secret::Secret;
+use ferrohealth_secret::secret::Secret;
 use serde::Deserialize;
 
 /// The environment variable that names the configuration file when

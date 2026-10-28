@@ -100,8 +100,8 @@ use ferrofed_registry::document::{
 };
 use ferrofed_registry::error::IdError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus, RegistrySnapshot};
+use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::mcsd::directory::{Directory, DirectoryEndpoint, Resolution};
 
 use error::{

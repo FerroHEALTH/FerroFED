@@ -77,7 +77,7 @@ pub fn trail(settings: &AuditRepositorySettings) -> Result<Arc<RepositoryAudit>,
                 identity: settings
                     .client_identity
                     .as_ref()
-                    .map(ferrofed_registry::secret::Secret::to_secret_string),
+                    .map(ferrohealth_secret::secret::Secret::to_secret_string),
             };
             Repository::tls(&settings.url, &tls, settings.timeouts)
         }

@@ -27,9 +27,9 @@ use ferrofed_identity::role::demographics::{
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::role::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdqm_stub::{self, Entry};
+use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_atna::balp::{AuditError, AuditRecorder, Exchange};
 use ihe_iti::pixm::Invocation;
 use secrecy::SecretString;

@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use ferrofed_registry::secret::REDACTED;
+use ferrohealth_secret::REDACTED;
 use serde::{Deserialize, Serialize};
 
 use crate::health::State;

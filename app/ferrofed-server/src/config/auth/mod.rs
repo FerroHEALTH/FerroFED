@@ -28,7 +28,7 @@ use std::time::Duration;
 
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::secret::Secret;
+use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::basic::PasswordStore;
 use ferrohealth_smart::config::{AuthSection, BasicSection, IssuerKey};
 use ferrohealth_smart::resource::Settings as KeySetSettings;

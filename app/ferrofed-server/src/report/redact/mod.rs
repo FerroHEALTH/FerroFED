@@ -25,7 +25,7 @@
 
 use std::net::SocketAddr;
 
-use ferrofed_registry::secret::REDACTED;
+use ferrohealth_secret::REDACTED;
 
 use crate::report::redact::keys::{DATA_KEYED, KEPT, KNOWN_KEYS, NUMBERS, URLS};
 

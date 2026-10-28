@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use secrecy::{ExposeSecret, SecretString};
+use ferrohealth_secret::secret::WriteOnly;
 use serde::{Deserialize, Serialize};
 
 /// Which part of the configuration page a path names: the tab, the item
@@ -118,7 +118,7 @@ pub struct SecretInput {
     pub choice: String,
     /// The secret's value for `set`, which the gateway writes to a file of
     /// its own; zeroed when dropped, and never rendered or logged.
-    pub value: Typed,
+    pub value: WriteOnly,
     /// The file the gateway reads the secret from, for `file`.
     pub file: String,
 }
@@ -261,7 +261,7 @@ impl ConfigForm {
                 SecretInput {
                     key: part("key"),
                     choice: part("choice"),
-                    value: Typed::new(part("value")),
+                    value: WriteOnly::new(part("value")),
                     file: part("file"),
                     row,
                 }
@@ -356,65 +356,5 @@ impl fmt::Debug for ConfigForm {
             .field("toml", &filled(&self.toml))
             .field("edit", &self.edit)
             .finish_non_exhaustive()
-    }
-}
-
-/// A secret the operator typed into a form, on its way to the gateway:
-/// zeroed when dropped, and shown by `Debug` as whether it is empty.
-///
-/// It serializes as its value, because the form carries it to the
-/// console's server in the one request that hands it on.
-#[derive(Clone)]
-pub struct Typed(SecretString);
-
-impl Typed {
-    /// The secret `value`.
-    #[must_use]
-    pub fn new(value: String) -> Self {
-        Self(SecretString::from(value))
-    }
-
-    /// Whether the field was left empty.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.0.expose_secret().is_empty()
-    }
-
-    /// The secret, still wrapped, for the request that carries it.
-    #[must_use]
-    pub fn into_secret(self) -> SecretString {
-        self.0
-    }
-}
-
-impl Default for Typed {
-    fn default() -> Self {
-        Self::new(String::new())
-    }
-}
-
-impl PartialEq for Typed {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.expose_secret() == other.0.expose_secret()
-    }
-}
-
-impl Eq for Typed {}
-
-impl fmt::Debug for Typed {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Typed").field(&!self.is_empty()).finish()
-    }
-}
-
-impl Serialize for Typed {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.0.expose_secret())
-    }
-}
-
-impl<'de> Deserialize<'de> for Typed {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        String::deserialize(deserializer).map(Self::new)
     }
 }

@@ -21,7 +21,7 @@
 //! specification governs the storage: our own design.
 
 use ferrofed_registry::definition::store;
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 use tokio_postgres::Client;
 
 use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};

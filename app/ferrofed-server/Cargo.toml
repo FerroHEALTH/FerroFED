@@ -62,6 +62,7 @@ postgres = [
 ]
 
 [dependencies]
+ferrohealth-secret.workspace = true
 anyhow.workspace = true
 # The constant-time comparison of the PMIR feed token (#147), the keyed
 # caller references of the security log (#500), and the SHA-256 a conformance

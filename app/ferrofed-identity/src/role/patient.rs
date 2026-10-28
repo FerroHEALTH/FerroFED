@@ -6,7 +6,7 @@
 
 use std::fmt;
 
-use ferrofed_registry::secret::REDACTED;
+use ferrohealth_secret::REDACTED;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use thiserror::Error;

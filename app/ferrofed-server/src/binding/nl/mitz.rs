@@ -55,8 +55,9 @@ use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::consent::ConsentPrefilter;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::{Secret, SecretUrl};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use nl_generic_functions::identification::PSEUDO_BSN_SYSTEM;
 use serde::Deserialize;
 
@@ -64,12 +65,12 @@ use crate::binding::nl::NlGfSettings;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::resolve::localization_budget_ms;
-use crate::config::secrets::secret;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::{Scheme, Settings};
 use crate::config::{Config, Credentials, transport};
 use crate::federation::error::FederationError;
 use crate::service;
+use ferrohealth_secret::file::read_secret;
 
 /// The key of the Mitz table.
 pub const MITZ_KEY: &str = "nl_gf.mitz";
@@ -230,9 +231,9 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
         mitz.url.expose(),
         transport::identity_site(MITZ_KEY, credentials.is_some().then_some(section.as_str())),
     )?;
-    let client_identity = secret(
+    let client_identity = read_secret(
         "nl_gf.mitz.client_identity",
-        mitz.client_identity.as_ref(),
+        mitz.client_identity.clone(),
         mitz.client_identity_file.as_deref(),
     )?;
     let trust_roots = mitz

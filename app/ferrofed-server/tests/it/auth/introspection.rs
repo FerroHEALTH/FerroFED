@@ -14,13 +14,13 @@ use std::error::Error;
 use std::time::Duration;
 
 use ferrofed_engine::conveyance::caller::AssuranceLevel;
-use ferrofed_registry::secret::Secret;
 use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::assurance::Assurance;
 use ferrofed_server::config::auth::{AuthSettings, Introspection, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::ACT_REASON;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
+use ferrohealth_secret::secret::Secret;
 use url::Url;
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, ResponseTemplate};

@@ -17,13 +17,13 @@
 use std::path::{Path, PathBuf};
 
 use ferrofed_engine::onward::mtls::ThumbprintError;
-use ferrofed_registry::secret::Secret;
+use ferrohealth_secret::secret::Secret;
 use rustls::pki_types::pem::PemObject as _;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use serde::Deserialize;
 
 use crate::config::error::Error;
-use crate::config::secrets::secret;
+use ferrohealth_secret::file::read_secret;
 
 /// TLS material, or a use of mutual TLS, the gateway cannot take.
 ///
@@ -86,16 +86,20 @@ pub struct TlsSettings {
 ///
 /// # Errors
 ///
-/// [`Error::Conflict`] for an identity given inline and as a file,
-/// [`Error::Secret`] and [`Error::EmptySecret`] for a file that cannot be
-/// read or is empty.
+/// [`Error::SecretFile`] for an identity given inline and as a file, or a
+/// file that cannot be read or is empty, and [`Error::Secret`] for trust
+/// roots that cannot be read.
 pub(crate) fn resolve(
     key: &str,
     identity: Option<&Secret>,
     identity_file: Option<&Path>,
     roots_file: Option<&PathBuf>,
 ) -> Result<TlsSettings, Error> {
-    let client_identity = secret(&format!("{key}.client_identity"), identity, identity_file)?;
+    let client_identity = read_secret(
+        &format!("{key}.client_identity"),
+        identity.cloned(),
+        identity_file,
+    )?;
     let trust_roots = roots_file
         .map(|path| {
             std::fs::read_to_string(path).map_err(|source| Error::Secret {

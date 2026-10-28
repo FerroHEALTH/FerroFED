@@ -15,9 +15,9 @@ use ferrofed_identity::ihe::mcsd::source::{
 };
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId};
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mcsd::{HarnessDirectory, Member};
+use ferrohealth_secret::secret_url::SecretUrl;
 
 type TestResult = Result<(), Box<dyn Error>>;
 

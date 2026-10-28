@@ -12,6 +12,7 @@ use std::time::Duration;
 use ferrofed_console::config::Config;
 use ferrofed_console::config::error;
 use ferrofed_console::config::error::Problem;
+use ferrohealth_secret::file::SecretError;
 use secrecy::ExposeSecret as _;
 
 use crate::support::{WITH_OIDC, settings};
@@ -200,7 +201,7 @@ fn a_secret_set_inline_and_in_a_file_is_refused() {
         format!("{WITH_OIDC}client_secret = \"inline\"\nclient_secret_file = \"/run/secrets/x\"\n");
     let error = refused(&text);
     assert!(
-        matches!(&error, error::Error::Conflict { key } if key == "oidc.client_secret"),
+        matches!(&error, error::Error::SecretFile(SecretError::Both { key }) if key == "oidc.client_secret"),
         "{error:?}"
     );
 }
@@ -214,13 +215,13 @@ fn an_empty_or_missing_secret_file_is_refused_by_its_key() -> Result<(), Box<dyn
     );
     let error = refused(&text);
     assert!(
-        matches!(&error, error::Error::EmptySecret { key, .. } if key == "oidc.client_secret_file"),
+        matches!(&error, error::Error::SecretFile(SecretError::Empty { key, .. }) if key == "oidc.client_secret"),
         "{error:?}"
     );
     let text = format!("{WITH_OIDC}client_secret_file = \"/nonexistent/ferrofed-console\"\n");
     let error = refused(&text);
     assert!(
-        matches!(&error, error::Error::Secret { key, .. } if key == "oidc.client_secret_file"),
+        matches!(&error, error::Error::SecretFile(SecretError::Read { key, .. }) if key == "oidc.client_secret"),
         "{error:?}"
     );
     Ok(())

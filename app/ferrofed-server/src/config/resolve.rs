@@ -13,7 +13,7 @@ use std::time::Duration;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::profile::Profile;
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
@@ -45,9 +45,8 @@ impl Config {
     /// once, at boot, and never sits in the configuration tree.
     ///
     /// # Errors
-    /// Returns [`Error::Conflict`] when a value and its `_file` sibling are
-    /// both set, [`Error::Secret`] and [`Error::EmptySecret`] when a `_file`
-    /// cannot be read or holds nothing, [`CredentialsFault::Authorization`] and
+    /// Returns [`Error::SecretFile`] when a value and its `_file` sibling are
+    /// both set or a `_file` cannot be read or holds nothing, [`CredentialsFault::Authorization`] and
     /// [`CredentialsFault::Basic`] for a credential the `Authorization` header cannot
     /// carry, and the value errors
     /// ([`Error::Listen`], [`ServerFault::BasePath`], [`Error::Zero`], [`ServerFault::Filter`],

@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ferrofed_identity::profile::Profile;
-use ferrofed_registry::secret::Secret;
+use ferrohealth_secret::secret::Secret;
 use ihe_atna::atna::message::AuditSource;
 use ihe_atna::atna::repository::Timeouts;
 use ihe_atna::atna::spool::Bounds;
@@ -39,8 +39,8 @@ use url::Url;
 
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
-use crate::config::secrets::secret;
 use crate::config::transport;
+use ferrohealth_secret::file::read_secret;
 
 /// The repository, as the configuration writes it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -206,9 +206,9 @@ pub(crate) fn resolve(
             });
         }
     }
-    let client_identity = secret(
+    let client_identity = read_secret(
         "xcpd.audit_repository.client_identity",
-        table.client_identity.as_ref(),
+        table.client_identity.clone(),
         table.client_identity_file.as_deref(),
     )?;
     let trust_roots = table

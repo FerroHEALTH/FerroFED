@@ -40,7 +40,7 @@ use ferrofed_registry::definition::store::{
     DefinitionStore, Field, FieldFault, Insertion, StoreError,
 };
 use ferrofed_registry::definition::{QueryName, StoredDefinition};
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 use jiff::Timestamp;
 use rustls::ClientConfig;
 use rustls_platform_verifier::BuilderVerifierExt;
@@ -525,7 +525,7 @@ mod tests {
     use super::{MIGRATION_1, PostgresError, PostgresStore, migration, parses};
     use crate::stored::schema::{CURRENT, SchemaError};
     use ferrofed_registry::definition::store::StoreError;
-    use ferrofed_registry::secret::SecretUrl;
+    use ferrohealth_secret::secret_url::SecretUrl;
 
     #[test]
     fn a_url_and_libpq_pairs_parse_and_garbage_does_not() {

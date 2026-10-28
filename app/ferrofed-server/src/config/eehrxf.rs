@@ -34,7 +34,8 @@ use std::time::Duration;
 
 use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::terminology::{BridgeTerminology, BridgeTerminologyError};
-use ferrofed_registry::secret::{Secret, SecretUrl};
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
 use crate::config::error::Error;

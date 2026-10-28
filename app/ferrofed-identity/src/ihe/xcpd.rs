@@ -31,8 +31,8 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::xcpd::XcpdClient;
 use ihe_iti::xcpd::audit::{self, AuditError, AuditEvent, AuditRecorder};
 use ihe_iti::xcpd::discovery::Discovery;

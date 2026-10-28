@@ -1496,6 +1496,7 @@ dependencies = [
  "cookie",
  "ferrofed-registry",
  "ferrofed-testkit",
+ "ferrohealth-secret",
  "ferrohealth-ui",
  "fluent-templates",
  "http",
@@ -1560,6 +1561,7 @@ dependencies = [
  "base64 0.23.1",
  "ferrofed-registry",
  "ferrofed-testkit",
+ "ferrohealth-secret",
  "ferrohealth-smart",
  "http",
  "jiff",
@@ -1597,6 +1599,7 @@ dependencies = [
  "async-trait",
  "ferrofed-registry",
  "ferrofed-testkit",
+ "ferrohealth-secret",
  "ferrohealth-smart",
  "fhir-types",
  "http",
@@ -1622,6 +1625,7 @@ dependencies = [
 name = "ferrofed-registry"
 version = "0.0.2"
 dependencies = [
+ "ferrohealth-secret",
  "fhir-types",
  "jiff",
  "openehr-base",
@@ -1654,6 +1658,7 @@ dependencies = [
  "ferrofed-registry",
  "ferrofed-server",
  "ferrofed-testkit",
+ "ferrohealth-secret",
  "ferrohealth-smart",
  "fhir-types",
  "governor",

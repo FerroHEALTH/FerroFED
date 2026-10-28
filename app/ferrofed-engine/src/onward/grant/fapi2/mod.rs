@@ -53,7 +53,7 @@ use std::time::Duration;
 
 use crate::onward::issuer::{AliasHost, Issuer};
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::jwk::JwkSet;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};

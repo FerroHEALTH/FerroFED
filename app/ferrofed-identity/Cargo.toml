@@ -38,6 +38,7 @@ balp = ["dep:ihe-atna"]
 nl = ["dep:nl-generic-functions"]
 
 [dependencies]
+ferrohealth-secret.workspace = true
 async-trait.workspace = true
 ferrofed-registry.workspace = true
 # The OAuth 2.0 client-credentials token an IHE FHIR client and Mitz send,

@@ -17,9 +17,11 @@ use std::fmt::Debug;
 use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::pixm::ManagerConfig;
 use ferrofed_registry::document::Document;
-use ferrofed_registry::secret::{REDACTED, Secret, SecretUrl};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Scheme;
+use ferrohealth_secret::REDACTED;
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::pixm::Invocation;
 
 use super::secret_file;

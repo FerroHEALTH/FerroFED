@@ -18,12 +18,12 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_registry::definition::store::{DefinitionStore, StoreError};
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 use ferrofed_server::stored::postgres::{LAYOUT, PostgresStore, TABLE, VERSIONS};
 use ferrofed_server::stored::schema::{self, SchemaError};
 use ferrofed_testkit::containers::{self, database};
+use ferrohealth_secret::secret_url::SecretUrl;
 use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 

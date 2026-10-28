@@ -19,8 +19,8 @@ use crate::document::{Document, EndpointDoc, NodeDoc, OrganisationDoc};
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
 use crate::resource::{BindingSection, SectionResource};
 use crate::revision::RevisionId;
-use crate::secret::SecretUrl;
 use crate::snapshot::{ConnectionType, EndpointStatus};
+use ferrohealth_secret::secret_url::SecretUrl;
 
 /// One member the operator console manages: an organisation, the node it
 /// operates and that node's endpoints, each managed by the organisation.

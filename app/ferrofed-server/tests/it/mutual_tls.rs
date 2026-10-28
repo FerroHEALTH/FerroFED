@@ -25,6 +25,7 @@ use ferrofed_testkit::mcsd::HarnessDirectory;
 use ferrofed_testkit::pdqm_stub;
 use ferrofed_testkit::pmir::PatientIdentityRegistry;
 use ferrofed_testkit::tls::MutualTls;
+use ferrohealth_secret::file::SecretError;
 use http::StatusCode;
 use url::Url;
 
@@ -254,7 +255,7 @@ fn an_identity_given_inline_and_as_a_file_is_refused() -> TestResult {
         "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\nclient_identity = \"Qz7inline\"\nclient_identity_file = \"/nonexistent/ferrofed-client.pem\"\n",
     )?;
     assert!(
-        matches!(&error, config::error::Error::Conflict { key } if key == "pixm.manager[0].client_identity"),
+        matches!(&error, config::error::Error::SecretFile(SecretError::Both { key }) if key == "pixm.manager[0].client_identity"),
         "{error:?}"
     );
     assert!(!format!("{error} {error:?}").contains("Qz7inline"));

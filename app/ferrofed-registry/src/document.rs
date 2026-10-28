@@ -13,8 +13,8 @@
 use serde::Deserialize;
 
 use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
-use crate::secret::SecretUrl;
 use crate::snapshot::{ConnectionType, EndpointStatus};
+use ferrohealth_secret::secret_url::SecretUrl;
 
 /// The federation's members as a document declares them.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

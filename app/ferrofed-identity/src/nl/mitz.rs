@@ -39,8 +39,8 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::client::TokenError;
 use ferrohealth_smart::client::cache::TokenSource;
 use http::header::{AUTHORIZATION, HeaderMap};

@@ -17,7 +17,7 @@
 use std::collections::BTreeSet;
 
 use ferrofed_registry::id::EhrId;
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::pmir::PmirSubscriber;
 use ihe_iti::pmir::error::InvalidInput;
 use ihe_iti::pmir::feed::{Event, Feed, PatientIdentity};

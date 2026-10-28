@@ -21,9 +21,9 @@ use ferrofed_identity::ihe::mcsd::{
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId};
 use ferrofed_registry::native::NativeEndpoint;
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mcsd::{HarnessDirectory, Member, Native};
+use ferrohealth_secret::secret_url::SecretUrl;
 use serde_json::{Value, json};
 
 use super::{NATIVE, NODE_A_PUB, ORG_A, bytes, fhir, resource};

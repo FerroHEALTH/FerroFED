@@ -19,7 +19,7 @@
 //! logged and never what is traced. No specification governs telemetry: our
 //! own design.
 
-use ferrofed_registry::secret::SecretUrl;
+use ferrohealth_secret::secret_url::SecretUrl;
 
 use crate::config::tls::TlsSettings;
 use opentelemetry::KeyValue;

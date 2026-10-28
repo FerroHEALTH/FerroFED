@@ -42,7 +42,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ferrofed_identity::profile::Profile;
-use ferrofed_registry::secret::Secret;
+use ferrohealth_secret::secret::Secret;
 use ihe_atna::atna::spool::Bounds;
 use ihe_atna::balp::{NetworkAddress, Observer};
 use serde::Deserialize;
@@ -52,7 +52,7 @@ use crate::audit::AuditDestination;
 use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::error::access_log::AccessLogFault;
-use crate::config::secrets::secret;
+use ferrohealth_secret::file::read_secret;
 
 /// `[audit]`, as the configuration writes it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -267,9 +267,9 @@ fn resolve_repository(
             return Err(Error::Zero { key: key(field) });
         }
     }
-    let client_identity = secret(
+    let client_identity = read_secret(
         &key("client_identity"),
-        table.client_identity.as_ref(),
+        table.client_identity.clone(),
         table.client_identity_file.as_deref(),
     )?;
     let trust_roots = table

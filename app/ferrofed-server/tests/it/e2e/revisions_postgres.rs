@@ -14,11 +14,11 @@ use std::sync::{Arc, Barrier};
 use std::time::Duration;
 
 use ferrofed_registry::revision::{Author, Current, Origin, Outcome, RevisionId};
-use ferrofed_registry::secret::SecretUrl;
 use ferrofed_server::revision::postgres::PostgresRevisions;
 use ferrofed_server::revision::watch;
 use ferrofed_server::revision::{Draft, RevisionStore, Saved, Swapped};
 use ferrofed_testkit::containers::{self, database};
+use ferrohealth_secret::secret_url::SecretUrl;
 use http::StatusCode;
 use jiff::Timestamp;
 

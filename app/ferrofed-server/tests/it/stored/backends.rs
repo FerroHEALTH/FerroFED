@@ -22,6 +22,7 @@ use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::{Backend, Store};
 use ferrofed_server::telemetry::{DEFAULT_FILTER, Rendering, subscriber};
+use ferrohealth_secret::file::SecretError;
 
 use crate::run::binary;
 use crate::support::Logs;
@@ -202,7 +203,7 @@ fn a_postgres_url_resolves_inline_or_from_its_file_and_is_never_shown() -> TestR
     let both = format!("backend = \"postgres\"\nurl = \"{url}\"\nurl_file = {secret}");
     let refused = resolved(dir.path(), &both)?.err().ok_or("refused")?;
     assert!(
-        matches!(&refused, ConfigError::Conflict { key } if key == "stored_queries.url"),
+        matches!(&refused, ConfigError::SecretFile(SecretError::Both { key }) if key == "stored_queries.url"),
         "{refused:?}"
     );
     let refused = resolved(dir.path(), "backend = \"postgres\"")?
