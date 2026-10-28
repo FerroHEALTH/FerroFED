@@ -395,9 +395,9 @@ nothing the gateway reads: they add the PARTY builder, the caller's
 `rm_version` and party validation to `openehr-sdt` (FerroEHR #3809, #3810,
 #3832). 0.0.91, published on 2026-10-20, is not taken while `fhirconnect`
 requires exactly 0.0.90, since a 0.0.x caret requirement admits one version.
-`ferrohealth-smart` 0.7.0 requires `openehr-sdt` 0.0.98 behind its `openehr`
-feature, so the lock holds `openehr-sdt` at both versions until `fhirconnect`
-moves (#1342).
+`ferrohealth-smart` 0.8.5 and later carry the SMART on openEHR scope grammar
+as their own module and no longer depend on `openehr-sdt`, so the lock holds
+one `openehr-sdt` (#1390).
 
 ## FHIR model crate (crates.io)
 
@@ -438,8 +438,8 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 |---|---|---|
 | `fhirconnect` | =0.1.173 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | =0.1.124 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | =0.1.131 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | =0.1.131 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | =0.1.140 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | =0.1.140 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -452,8 +452,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | =0.2.10 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | =0.2.10 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | =0.3.1 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | =0.3.1 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 

@@ -105,10 +105,11 @@ demographic_clients = []
 | `auth.jwks_refresh_interval_seconds` | `60` | The least time between two reads of one key set, after an unknown `kid` or a failed read. |
 | `auth.jwks_file` | none | A JWK Set file handed over out of band, read in place of the `jwks_uri` the issuer's metadata names. |
 | `auth.timeout_ms` | `10000` | How long one call to an authorization server may take: its metadata, its key set, or an introspection. |
+| `auth.ca_file` | none | A PEM file of trust roots added to the platform's for every issuer's metadata, key set and introspection, so an issuer behind a private certificate authority is reached without changing the trust of the whole process. A file that cannot be read, or holds no certificate, refuses the start. |
 | `auth.realm` | `ferrofed` | The realm every `WWW-Authenticate` challenge names. |
 | `auth.product_scope` | none | The scope that admits a caller to the read-only [operator surface](#the-operator-surface) and to the write actions of the [admin listener](metrics.md#who-the-admin-listener-serves): a string starting with `__` or a full URI you control (SMART App Launch 2.2.0, Scopes and Launch Context, Extensibility). Without it, no caller reaches either. |
 | `auth.basic.users[]` | none | The Basic users (RFC 7617): `user`, `password_hash` or `password_hash_file` holding the Argon2id PHC string of the password, and `scopes`. A scrape of the admin listener authenticates as one ([Metrics](metrics.md#who-the-admin-listener-serves)). |
-| `auth.basic.cache_ttl_seconds` | `0` | How long a verified Basic credential is kept, so a repeat request skips the key derivation; `0` keeps none. |
+| `auth.basic.cache_ttl_seconds` | `300` | How long a verified Basic credential is kept, so a repeat request skips the key derivation; `0` keeps none. |
 | `trust.mode` | `token` | `token`: the client presents a bearer token. `edge`: a proxy authenticates the client ([The edge mode](#the-edge-mode)). |
 | `trust.purpose_of_use.required` | `true` | Whether a token must declare a purpose of use ([Purpose of use](#purpose-of-use)). |
 | `trust.issuer[].issuer` | none | The issuer this entry's policy is for: an `[auth]` issuer, or with `introspection_endpoint` the introspected one. |
