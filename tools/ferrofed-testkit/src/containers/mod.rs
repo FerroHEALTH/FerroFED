@@ -49,6 +49,7 @@ pub mod ehrbase;
 pub mod ferropix;
 pub mod images;
 pub mod keycloak;
+pub mod marks;
 pub mod restricted;
 pub(crate) mod retry;
 pub mod santempi;

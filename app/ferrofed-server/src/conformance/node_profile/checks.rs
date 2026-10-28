@@ -389,6 +389,86 @@ pub async fn consent_before_release(
     refusal(Check::ConsentBeforeRelease, interface, arrangement).await
 }
 
+/// Checks that the node withholds a composition it holds a restriction of
+/// processing for, from every principal, before it releases anything (§13.2,
+/// N27; assists CP-19).
+///
+/// The EHR `ehr_id` holds two compositions, the versioned objects `served`
+/// and `restricted`, and the operator has marked `restricted` at the node as
+/// restricted with the node's own tool, outside ITS-REST, which defines no
+/// consent or restriction resource. The read of `served` answers `200`, the
+/// read of `restricted` is refused, and the query of the EHR's compositions
+/// answers `served` alone. The node's credentials are the endpoint's onward
+/// ones, so the refusal is the node's own decision for every caller.
+///
+/// # Errors
+///
+/// Returns [`CheckError`] when a query of the check cannot be built or a
+/// request reaches no answer.
+pub async fn restriction_before_release(
+    interface: &Interface,
+    ehr_id: Uuid,
+    (served, restricted): (Uuid, Uuid),
+) -> Result<Finding, CheckError> {
+    let mut seen = Vec::new();
+    let read = interface
+        .get(&format!("ehr/{ehr_id}/composition/{served}"), None)
+        .await?;
+    seen.push(if read.status == StatusCode::OK {
+        (
+            Verdict::Pass,
+            format!("GET the unrestricted composition {served} answered 200"),
+        )
+    } else {
+        (
+            Verdict::NotObservable,
+            format!(
+                "GET the unrestricted composition {served} answered {}, so a refusal of the restricted one shows nothing",
+                read.status
+            ),
+        )
+    });
+    let read = interface
+        .get(&format!("ehr/{ehr_id}/composition/{restricted}"), None)
+        .await?;
+    seen.push(withheld(
+        &read,
+        &format!("GET the restricted composition {restricted}"),
+        false,
+    ));
+    let listed = interface
+        .query(&NodeQuery::scoped(COMPOSITION_QUERY, ehr_id)?, None)
+        .await?;
+    let holds = |id: Uuid| {
+        let id = id.to_string();
+        listed
+            .body
+            .windows(id.len())
+            .any(|window| window.eq_ignore_ascii_case(id.as_bytes()))
+    };
+    let what = "the query of the EHR's compositions scoped by EHR e[ehr_id/value]";
+    seen.push(match (listed.status, holds(served), holds(restricted)) {
+        (StatusCode::OK, _, true) => (
+            Verdict::Fail,
+            format!("{what} answered 200 and released the restricted composition {restricted}"),
+        ),
+        (StatusCode::OK, true, false) => (
+            Verdict::Pass,
+            format!("{what} answered 200 with the unrestricted composition alone"),
+        ),
+        (status, _, _) => (
+            Verdict::NotObservable,
+            format!(
+                "{what} answered {status} without the unrestricted composition, so its leaving out the restricted one shows nothing"
+            ),
+        ),
+    });
+    Ok(Finding::from_observations(
+        Check::ConsentBeforeRelease,
+        seen,
+    ))
+}
+
 /// The refusal both release checks observe, recorded under `check`.
 async fn refusal(
     check: Check,

@@ -49,6 +49,10 @@
 //! trace in its answers (Regulation (EU) 2025/327 Art 23, Art 8), in
 //! [`national`].
 //!
+//! A restriction of processing set at node A leaves the restricted
+//! composition out of the federated answer, and a follow-up read of it
+//! answers the node's `403`, in [`restriction`].
+//!
 //! With the `postgres` feature, the stored-query registry's PostgreSQL store
 //! runs its store suite, and two gateway instances sharing it race one new
 //! version with exactly one stored (§12.7, N44), in `stored_postgres`.
@@ -85,6 +89,7 @@ mod differential;
 mod keycloak;
 mod national;
 mod pixm;
+mod restriction;
 #[cfg(feature = "postgres")]
 mod revisions_postgres;
 mod santempi;

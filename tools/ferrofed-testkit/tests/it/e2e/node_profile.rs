@@ -27,9 +27,10 @@ use std::sync::Arc;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::config::Config;
 use ferrofed_server::conformance::node_profile::interface::{Arrangement, Interface, Principal};
-use ferrofed_server::conformance::node_profile::{Check, Finding, Profile, Verdict, checks};
+use ferrofed_server::conformance::node_profile::{Finding, Profile, Verdict, checks};
 use ferrofed_server::federation::Federation;
 use ferrofed_testkit::containers::images::FERROEHR;
+use ferrofed_testkit::containers::marks;
 use ferrofed_testkit::containers::restricted::{self, RESTRICTED_ADMIN, RESTRICTED_CLINICIAN};
 use ferrofed_testkit::containers::{
     self, HarnessUser, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode,
@@ -37,7 +38,7 @@ use ferrofed_testkit::containers::{
 use ferrofed_testkit::node_profile;
 use ferrofed_testkit::pixm_stub;
 use ferrofed_testkit::seed::{
-    self, CompositionSeed, DemoComposition, EhrDomain, EhrSeed, PatientId, SeedPlan,
+    self, Committed, CompositionSeed, DemoComposition, EhrDomain, EhrSeed, PatientId, SeedPlan,
 };
 use ferrofed_testkit::{oauth, unreachable};
 use openehr_its::json::from_canonical_json;
@@ -257,17 +258,63 @@ async fn ferroehr_is_checked_for_holding_its_own_access_decision() -> TestResult
     record(finding, "access-decided-at-node")
 }
 
+/// The versioned object a seeded composition is a version of: the
+/// `object_id` of the version uid the node named in its `ETag`.
+fn versioned_object(committed: &Committed) -> Result<Uuid, Box<dyn Error>> {
+    let uid = committed
+        .version_uid
+        .as_deref()
+        .ok_or("the node named the committed version in its ETag")?;
+    let object = uid.split("::").next().unwrap_or_default();
+    Ok(Uuid::try_parse(object)?)
+}
+
+/// A restriction of processing set through FerroEHR's ADMIN API (GDPR Art.
+/// 18) is the consent refusal the harness arranges at the node: the node
+/// must withhold the restricted composition from every caller, the
+/// gateway's onward credentials included, before it releases anything.
 // conformance: CP-19
 #[tokio::test]
-async fn ferroehr_has_no_consent_refusal_arranged_in_the_harness() -> TestResult {
+async fn ferroehr_is_checked_for_withholding_a_restricted_composition() -> TestResult {
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let finding = Finding::not_arranged(
-        Check::ConsentBeforeRelease,
-        "the harness arranges no consent refusal at this product: ITS-REST defines no consent resource, and the harness records no consent decision at the node, so nothing at its interface shows a consent check",
+    let node = marks::ferroehr(NODE_A_SYSTEM_ID).await?;
+    let plan = SeedPlan {
+        ehrs: vec![EhrSeed {
+            ehr_id: EHR,
+            subject: Some(PATIENT),
+        }],
+        template: true,
+        compositions: vec![
+            CompositionSeed {
+                ehr_id: EHR,
+                composition: DemoComposition::FirstClinic,
+            },
+            CompositionSeed {
+                ehr_id: EHR,
+                composition: DemoComposition::SecondClinic,
+            },
+        ],
+    };
+    let report = seed::seed(&node.api_root(), &plan).await?;
+    let [served, restricted] =
+        [&report.compositions[0], &report.compositions[1]].map(versioned_object);
+    let (served, restricted) = (served?, restricted?);
+    marks::restrict(&node.api_root(), EHR, restricted).await?;
+
+    let finding = checks::restriction_before_release(
+        &interface(&node.api_root(), None)?,
+        EHR,
+        (served, restricted),
+    )
+    .await?;
+    assert_eq!(3, finding.evidence().len(), "{finding:?}");
+    assert_ne!(
+        Verdict::NotObservable,
+        finding.verdict(),
+        "the harness arranged a restriction the node shows: {finding:?}"
     );
-    assert_eq!(Verdict::NotObservable, finding.verdict());
     record(finding, "consent-before-release")
 }
 
