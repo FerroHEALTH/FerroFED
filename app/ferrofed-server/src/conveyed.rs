@@ -96,7 +96,7 @@ pub fn of(federation: &Federation, caller: Option<&Caller>) -> Result<Conveyance
     // token exchange needs; it reaches that authorization server alone.
     Ok(match caller.token() {
         Some(token) => {
-            conveyance.with_subject(SubjectToken::new(token.secret().clone(), caller.covering()))
+            conveyance.with_subject(SubjectToken::new(token.secret(), caller.covering()))
         }
         None => conveyance,
     })
