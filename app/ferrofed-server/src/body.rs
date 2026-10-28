@@ -37,10 +37,3 @@ impl Default for Root {
         }
     }
 }
-
-/// `GET /health`: the process is up.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct Liveness {
-    /// Always `up`: a process that can answer is live.
-    pub state: crate::health::State,
-}

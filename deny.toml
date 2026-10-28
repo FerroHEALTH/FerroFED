@@ -93,6 +93,11 @@ exceptions = [
   # The family's one secret type and mask, which ferrohealth-smart and
   # ihe-atna render every credential through (#1390).
   { allow = ["BUSL-1.1"], crate = "ferrohealth-secret" },
+  # The family's server plumbing, health family and telemetry of
+  # FerroHEALTH/FerroSYS (#1397), under the licence of the project's own code.
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-health" },
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-server" },
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-telemetry" },
   # The operator console's Leptos stack (#275): two permissive licences, each
   # allowed for its one crate. xxhash-rust under server_fn is under the Boost
   # Software License 1.0 (OSI-listed); base16 under wasm_split_macros is

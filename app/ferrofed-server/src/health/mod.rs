@@ -1,172 +1,29 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Liveness, readiness over a registry of the gateway's own subsystems, and
-//! the last observed state of every dependency.
+//! The gateway's own indicators of the shared health family, and the last
+//! observed state of every dependency.
 //!
-//! Liveness answers `200` while the process serves and checks nothing.
-//! Readiness answers `200` only while the process is in
-//! [`lifecycle::Phase::Serving`] and every registered indicator is up, and
-//! `503` otherwise, with a body naming the phase and each indicator. An
-//! indicator checks one of the gateway's own subsystems (the configuration
-//! and the registry loaded, the stored-query store open, the outbound
-//! clients built). A member node or the identity source never gates
-//! readiness: their last observed state is [`dependencies`]'s, reported on
-//! the operator surface. No specification governs health probes: our own design.
+//! `ferrohealth-server` serves `{base}/health`, `{base}/health/liveness` and
+//! `{base}/health/readiness` over the indicator registry and the lifecycle
+//! of `ferrohealth-health` (#1397). Readiness answers `200` only while the
+//! process serves and no indicator is down, and names each indicator and its
+//! state, never its detail. An indicator checks one of the gateway's own
+//! subsystems (the configuration and the registry loaded, the stored-query
+//! store open, the outbound clients built). A member node or the identity
+//! source never gates readiness: their last observed state is
+//! [`dependencies`]'s, reported on the operator surface. No specification
+//! governs health probes: our own design.
 
 pub mod dependencies;
-pub mod lifecycle;
 
-use serde::Serialize;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::time::Duration;
+use ferrohealth_health::registry::{Check, HealthIndicator, Outcome};
 
-/// The upper bound on one indicator check.
+/// A subsystem that is up once it is built: the configuration read, the
+/// registry loaded, the outbound clients and the stored-query store made.
 ///
-/// A wedged subsystem cannot hang a probe: a check that runs past this is
-/// reported down with that as its detail.
-pub const CHECK_TIMEOUT: Duration = Duration::from_secs(2);
-
-/// The state of one indicator, or of the aggregate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum State {
-    /// The subsystem answered.
-    Up,
-    /// The subsystem did not answer.
-    Down,
-}
-
-/// The outcome of one indicator check.
-#[derive(Debug, Clone, Serialize)]
-pub struct IndicatorState {
-    /// Whether the subsystem answered.
-    pub state: State,
-    /// Why it did not, when it did not. Never a body, never a credential and
-    /// never a patient identifier.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub detail: Option<String>,
-}
-
-impl IndicatorState {
-    /// Returns the state of a subsystem that answered.
-    #[must_use]
-    pub const fn up() -> Self {
-        Self {
-            state: State::Up,
-            detail: None,
-        }
-    }
-
-    /// Returns the state of a subsystem that did not answer, with the reason.
-    #[must_use]
-    pub fn down(detail: impl Into<String>) -> Self {
-        Self {
-            state: State::Down,
-            detail: Some(detail.into()),
-        }
-    }
-}
-
-/// The future one check returns.
-///
-/// The registry holds indicators behind `dyn`, which an `async fn` in a trait
-/// is not, so a check hands back a boxed future
-/// (<https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility>).
-pub type Check<'a> = Pin<Box<dyn Future<Output = IndicatorState> + Send + 'a>>;
-
-/// One named, bounded check of one subsystem.
-pub trait HealthIndicator: fmt::Debug + Send + Sync {
-    /// Returns the name this indicator answers under in the readiness body.
-    fn name(&self) -> &'static str;
-
-    /// Runs the check.
-    ///
-    /// The registry bounds it to [`CHECK_TIMEOUT`], so an implementation needs
-    /// no timer of its own beyond its client's.
-    fn check(&self) -> Check<'_>;
-}
-
-/// The indicators readiness evaluates.
-#[derive(Debug, Clone, Default)]
-pub struct Registry {
-    /// The indicators, in registration order.
-    indicators: Arc<[Arc<dyn HealthIndicator>]>,
-}
-
-impl Registry {
-    /// Returns a registry over `indicators`.
-    #[must_use]
-    pub fn new(indicators: Vec<Arc<dyn HealthIndicator>>) -> Self {
-        Self {
-            indicators: indicators.into(),
-        }
-    }
-
-    /// Returns the names of the registered indicators, in registration order.
-    #[must_use]
-    pub fn names(&self) -> Vec<&'static str> {
-        self.indicators
-            .iter()
-            .map(|indicator| indicator.name())
-            .collect()
-    }
-
-    /// Runs every indicator and folds the results into one report.
-    ///
-    /// The checks run on the request, one after another, each bounded to
-    /// [`CHECK_TIMEOUT`]. A background loop would answer from a cache and call
-    /// a dead subsystem healthy until the next tick, so the probe asks.
-    pub async fn evaluate(&self) -> Report {
-        let mut indicators = BTreeMap::new();
-        let mut state = State::Up;
-        for indicator in self.indicators.iter() {
-            let outcome = match tokio::time::timeout(CHECK_TIMEOUT, indicator.check()).await {
-                Ok(outcome) => outcome,
-                Err(_) => IndicatorState::down(format!(
-                    "the check did not answer inside {} ms",
-                    CHECK_TIMEOUT.as_millis()
-                )),
-            };
-            if outcome.state == State::Down {
-                state = State::Down;
-            }
-            indicators.insert(indicator.name(), outcome);
-        }
-        Report { state, indicators }
-    }
-}
-
-/// What readiness answers with.
-#[derive(Debug, Clone, Serialize)]
-pub struct Report {
-    /// The aggregate: down while any indicator is down.
-    pub state: State,
-    /// Every indicator by name, in name order.
-    pub indicators: BTreeMap<&'static str, IndicatorState>,
-}
-
-impl Report {
-    /// Returns the HTTP status this report answers with.
-    #[must_use]
-    pub const fn status(&self) -> http::StatusCode {
-        match self.state {
-            State::Up => http::StatusCode::OK,
-            State::Down => http::StatusCode::SERVICE_UNAVAILABLE,
-        }
-    }
-}
-
-/// An indicator for a subsystem boot built: the configuration, the
-/// registry, the outbound clients or the stored-query store.
-///
-/// Boot refuses to serve without the subsystem, so the indicator is
-/// registered only once the subsystem exists, and it answers up. Its place in
-/// the readiness body names what the gateway serves with.
+/// Boot refuses to start without it, so the check answers `up` and its name
+/// tells readiness which subsystems this process built.
 #[derive(Debug, Clone, Copy)]
 pub struct Built(pub &'static str);
 
@@ -176,119 +33,6 @@ impl HealthIndicator for Built {
     }
 
     fn check(&self) -> Check<'_> {
-        Box::pin(std::future::ready(IndicatorState::up()))
-    }
-}
-
-/// What `GET /health/readiness` answers with: the phase of the process and
-/// the indicators.
-#[derive(Debug, Clone, Serialize)]
-pub struct Readiness {
-    /// The aggregate: up only while the process serves and every indicator
-    /// is up.
-    pub state: State,
-    /// The phase of the process.
-    pub phase: lifecycle::Phase,
-    /// Every indicator by name, in name order.
-    pub indicators: BTreeMap<&'static str, IndicatorState>,
-}
-
-impl Readiness {
-    /// Returns the readiness of a process in `phase` whose indicators
-    /// reported `report`.
-    #[must_use]
-    pub fn new(phase: lifecycle::Phase, report: Report) -> Self {
-        let state = if phase == lifecycle::Phase::Serving {
-            report.state
-        } else {
-            State::Down
-        };
-        Self {
-            state,
-            phase,
-            indicators: report.indicators,
-        }
-    }
-
-    /// Returns the HTTP status this readiness answers with.
-    #[must_use]
-    pub const fn status(&self) -> http::StatusCode {
-        match self.state {
-            State::Up => http::StatusCode::OK,
-            State::Down => http::StatusCode::SERVICE_UNAVAILABLE,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::lifecycle::Phase;
-    use super::{Built, Check, HealthIndicator, IndicatorState, Readiness, Registry, State};
-    use http::StatusCode;
-    use std::sync::Arc;
-
-    #[derive(Debug)]
-    struct Fixed(&'static str, State);
-
-    impl HealthIndicator for Fixed {
-        fn name(&self) -> &'static str {
-            self.0
-        }
-
-        fn check(&self) -> Check<'_> {
-            let state = self.1;
-            Box::pin(async move {
-                match state {
-                    State::Up => IndicatorState::up(),
-                    State::Down => IndicatorState::down("the stub is down"),
-                }
-            })
-        }
-    }
-
-    #[tokio::test]
-    async fn an_empty_registry_is_up() {
-        let report = Registry::default().evaluate().await;
-        assert_eq!(State::Up, report.state);
-        assert_eq!(StatusCode::OK, report.status());
-        assert!(report.indicators.is_empty());
-    }
-
-    #[tokio::test]
-    async fn one_down_indicator_takes_the_aggregate_down_and_every_state_is_reported() {
-        let registry = Registry::new(vec![
-            Arc::new(Fixed("registry", State::Down)),
-            Arc::new(Fixed("identity", State::Up)),
-        ]);
-        let report = registry.evaluate().await;
-        assert_eq!(State::Down, report.state);
-        assert_eq!(StatusCode::SERVICE_UNAVAILABLE, report.status());
-        assert_eq!(2, report.indicators.len());
-        assert_eq!(
-            Some(State::Down),
-            report.indicators.get("registry").map(|state| state.state)
-        );
-        assert_eq!(
-            Some(State::Up),
-            report.indicators.get("identity").map(|state| state.state)
-        );
-        assert_eq!(vec!["registry", "identity"], registry.names());
-    }
-
-    #[tokio::test]
-    async fn only_a_serving_process_with_every_indicator_up_is_ready() {
-        let registry = Registry::new(vec![Arc::new(Built("configuration"))]);
-        for (phase, status) in [
-            (Phase::Booting, StatusCode::SERVICE_UNAVAILABLE),
-            (Phase::Serving, StatusCode::OK),
-            (Phase::Draining, StatusCode::SERVICE_UNAVAILABLE),
-        ] {
-            let readiness = Readiness::new(phase, registry.evaluate().await);
-            assert_eq!(status, readiness.status(), "{phase:?}");
-            assert_eq!(1, readiness.indicators.len(), "{phase:?}");
-        }
-        let down = Registry::new(vec![Arc::new(Fixed("registry", State::Down))]);
-        let readiness = Readiness::new(Phase::Serving, down.evaluate().await);
-        assert_eq!(StatusCode::SERVICE_UNAVAILABLE, readiness.status());
+        Box::pin(std::future::ready(Outcome::up()))
     }
 }

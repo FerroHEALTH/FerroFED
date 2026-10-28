@@ -78,7 +78,7 @@ async fn the_root_document_names_the_product_the_version_and_the_manufacturer()
     reason = "a test asserts, and returns its setup errors"
 )]
 async fn liveness_is_two_hundred_once_the_router_is_built() -> Result<(), Box<dyn StdError>> {
-    let (status, body) = call(app(), Request::get("/health").body(Body::empty())?).await?;
+    let (status, body) = call(app(), Request::get("/health/liveness").body(Body::empty())?).await?;
     assert_eq!(StatusCode::OK, status);
     let document: Aggregate = serde_json::from_str(&body)?;
     assert_eq!("up", document.state);
@@ -135,7 +135,7 @@ async fn a_legal_request_id_is_echoed_and_an_illegal_one_is_replaced()
 -> Result<(), Box<dyn StdError>> {
     let response = send(
         app(),
-        Request::get("/health")
+        Request::get("/health/liveness")
             .header(request_id::HEADER, "corr-42")
             .body(Body::empty())?,
     )
@@ -158,7 +158,7 @@ async fn a_legal_request_id_is_echoed_and_an_illegal_one_is_replaced()
     ] {
         let response = send(
             app(),
-            Request::get("/health")
+            Request::get("/health/liveness")
                 .header(request_id::HEADER, illegal.clone())
                 .body(Body::empty())?,
         )

@@ -147,7 +147,11 @@ async fn a_request_past_the_concurrency_limit_is_503_with_retry_after() -> TestR
             .and_then(|value| value.to_str().ok()),
         "Retry-After names the configured seconds (RFC 9110 §10.2.3)"
     );
-    let (health, _) = call(app.clone(), Request::get("/health").body(Body::empty())?).await?;
+    let (health, _) = call(
+        app.clone(),
+        Request::get("/health/liveness").body(Body::empty())?,
+    )
+    .await?;
     assert_eq!(StatusCode::OK, health, "the health family is never refused");
     assert_eq!(
         1,

@@ -221,7 +221,7 @@ async fn the_daily_report_counts_requests_by_route_group_and_node_outcomes_and_n
     );
     let read = Request::get(format!("/v1/ehr/{EHR_A}")).body(Body::empty())?;
     call(app.clone(), read).await?;
-    let probe = Request::get("/health").body(Body::empty())?;
+    let probe = Request::get("/health/liveness").body(Body::empty())?;
     assert_eq!(StatusCode::OK, call(app.clone(), probe).await?.0);
     let nowhere = Request::get("/SYNTHETIC-UNMATCHED").body(Body::empty())?;
     assert_eq!(StatusCode::NOT_FOUND, call(app, nowhere).await?.0);
@@ -281,7 +281,7 @@ async fn the_start_report_reaches_the_collector_once_per_ten_minutes() -> TestRe
         .await;
     let dir = tempfile::tempdir()?;
     let state = Arc::new(AppState::with_health(
-        ferrofed_server::health::Registry::default(),
+        ferrohealth_health::registry::Registry::default(),
     ));
     let config = config(dir.path(), &format!("{}/v1/report", collector.uri()))?;
     let reporter = reporter_over(&config, state)?;

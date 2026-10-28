@@ -3,7 +3,8 @@
 
 # Health probes
 
-The gateway answers two health routes under its
+The gateway answers the health routes every FerroHEALTH product serves, from
+the family's `ferrohealth-server`, under its
 [base path](configuration.md#the-base-path), and the binary carries a
 `healthcheck` command for a runtime that cannot send an HTTP request itself.
 An operator reads the state of every member and service from the
@@ -14,10 +15,24 @@ health probes: our own design.
 
 | Route | Answers | Use it as |
 |---|---|---|
-| `GET {base}/health` | `200` while the process serves; it checks nothing else | liveness |
+| `GET {base}/health/liveness` | `200` while the process serves; it checks nothing else | liveness |
 | `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives | readiness, startup, the image `HEALTHCHECK` |
+| `GET {base}/health` | the status of readiness with the state alone, `{"state":"up"}` | a monitor that needs no detail |
 
-Both answer without a token and name no member.
+All three answer without a token and name no member. Readiness names each
+indicator and its state and never its detail, since anyone who reaches the
+port reads it. The body reads:
+
+```json
+{
+  "state": "up",
+  "phase": "serving",
+  "indicators": [
+    { "name": "configuration", "state": "up" },
+    { "name": "registry", "state": "up" }
+  ]
+}
+```
 
 Readiness reports the gateway's own subsystems by name: the configuration,
 the registry and the outbound clients when a registry is configured, and the

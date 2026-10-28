@@ -17,11 +17,9 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
+use ferrohealth_health::document::Readiness;
 use ferrohealth_secret::REDACTED;
 use serde::{Deserialize, Serialize};
-
-use crate::health::State;
-use crate::health::lifecycle::Phase;
 
 /// The label names whose values the metrics keep: those the gateway's own
 /// instruments set, which carry closed sets and endpoint ids, and those the
@@ -45,22 +43,16 @@ pub const METRIC_LABELS: &[&str] = &[
     "telemetry_sdk_version",
 ];
 
-/// Readiness, as the report keeps it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Readiness {
-    /// The aggregate.
-    pub state: State,
-    /// The phase of the process.
-    pub phase: Phase,
-    /// Each indicator's state, by name.
-    pub indicators: BTreeMap<String, Indicator>,
-}
-
-/// One indicator, as the report keeps it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Indicator {
-    /// Whether the subsystem answered.
-    pub state: State,
+/// Returns the readiness document `body` as the report keeps it: the phase
+/// and each indicator's state, without its `detail`.
+///
+/// # Errors
+/// The [`serde_json::Error`] of a body that is not a readiness document.
+pub fn readiness(body: &[u8]) -> Result<Vec<u8>, serde_json::Error> {
+    let read: Readiness = serde_json::from_slice(body)?;
+    let mut written = serde_json::to_vec_pretty(&read.without_detail())?;
+    written.push(b'\n');
+    Ok(written)
 }
 
 /// The integrity incidents, as the report keeps them.
@@ -161,7 +153,7 @@ fn labelled(line: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Incidents, Readiness, metrics};
+    use super::{Incidents, metrics, readiness};
 
     #[test]
     fn a_label_the_gateway_does_not_set_is_redacted() {
@@ -183,12 +175,13 @@ mod tests {
 
     #[test]
     fn readiness_and_incidents_drop_their_free_text() {
-        let readiness: Readiness = serde_json::from_str(
-            r#"{"state":"down","phase":"serving","indicators":{"store":{"state":"down","detail":"CANARY-DETAIL"}}}"#,
+        let written = readiness(
+            br#"{"state":"down","phase":"serving","indicators":[{"name":"store","state":"down","detail":"CANARY-DETAIL"}]}"#,
         )
         .expect("a readiness body");
-        let written = serde_json::to_string(&readiness).expect("it writes");
+        let written = String::from_utf8(written).expect("it writes text");
         assert!(!written.contains("CANARY"), "{written}");
+        assert!(written.contains("\"store\""), "{written}");
         let incidents: Incidents = serde_json::from_str(
             r#"{"counts":{"EhrIdCollision":1},"recent":[{"kind":"EhrIdCollision","at":"2026-10-06T00:00:00Z","description":"ehr_id 7d44b88c-4199-4bad-97dc-d78268e01398 CANARY","creating_system_id":"CANARY-SYSTEM","ehr_id":"7d44b88c-4199-4bad-97dc-d78268e01398","detection":"ask-all","endpoints":["node-a-pub"],"nodes":[]}]}"#,
         )

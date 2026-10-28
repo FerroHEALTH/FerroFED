@@ -224,7 +224,7 @@ own for the console and the scraper; clients reach the replicas through the
 `ferrofed` Service alone. The StatefulSet:
 
 - probes startup and readiness on `GET /health/readiness` and liveness on
-  `GET /health`;
+  `GET /health/liveness`;
 - mounts the ConfigMap at `/etc/ferrofed` and the `ferrofed-secrets` Secret
   at `/run/secrets/ferrofed`, readable by the gateway's group (`fsGroup`
   `65532`, mode `0440`);

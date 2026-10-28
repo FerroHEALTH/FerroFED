@@ -10,8 +10,8 @@
 #
 #   startup    GET /health/readiness until boot completes; the gateway opens
 #              its port only once the registry and its clients are built.
-#   liveness   GET /health, 200 while the process serves; it checks nothing
-#              else, so a slow member never restarts the gateway.
+#   liveness   GET /health/liveness, 200 while the process serves; it checks
+#              nothing else, so a slow member never restarts the gateway.
 #   readiness  GET /health/readiness, 200 while the gateway serves with its
 #              own subsystems up, 503 from the moment SIGTERM arrives. No
 #              member node and no identity source gates it.
@@ -133,7 +133,7 @@ spec:
             failureThreshold: 30
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/liveness
               port: http
             periodSeconds: 10
             timeoutSeconds: 3
