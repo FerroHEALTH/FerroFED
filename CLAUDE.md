@@ -310,7 +310,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   feature (`binding-ihe`, `binding-nl`; #489), the TOML and `FERROFED__` environment
   configuration with `_file` secrets and per-endpoint outbound credentials,
   the console, the request log that carries no body, query text, header value
-  or unmatched path, the health family over an indicator registry, the
+  or unmatched path, the shared health family of `ferrohealth-server` over
+  `ferrohealth-health`'s indicator registry (#1397), the
   `tower-http` stack, the bounded drain and the startup banner. The gate
   (`auth`, #80) authenticates every caller before the façade reads the
   request, and the gateway's JWK Set is served at

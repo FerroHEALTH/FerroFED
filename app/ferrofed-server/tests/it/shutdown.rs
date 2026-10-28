@@ -8,7 +8,7 @@
 use crate::support;
 use axum::Router;
 use axum::routing::get;
-use ferrofed_server::health::lifecycle::drain_on;
+use ferrofed_server::drain_on;
 use ferrofed_server::state::AppState;
 use ferrofed_server::{serve_until, with_middleware};
 use std::error::Error as StdError;

@@ -3,15 +3,16 @@
 
 //! Readiness over the indicator registry: every indicator is reported, one
 //! down indicator takes the gateway out of rotation, and a wedged one is cut
-//! off at the check timeout.
+//! off at the check timeout. The public route names each indicator and its
+//! state and never its detail, which the registry keeps for the gateway.
 
 use crate::support::{self, call};
 use axum::body::Body;
-use ferrofed_server::health::{CHECK_TIMEOUT, Check, HealthIndicator, IndicatorState, Registry};
 use ferrofed_server::state::AppState;
+use ferrohealth_health::lifecycle::Lifecycle;
+use ferrohealth_health::registry::{CHECK_TIMEOUT, Check, HealthIndicator, Outcome, Registry};
 use http::{Request, StatusCode};
 use serde::Deserialize;
-use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::Duration;
@@ -33,9 +34,9 @@ impl HealthIndicator for Stub {
         Box::pin(async move {
             tokio::time::sleep(self.delay).await;
             if self.up {
-                IndicatorState::up()
+                Outcome::up()
             } else {
-                IndicatorState::down("the synthetic subsystem is down")
+                Outcome::down("the synthetic subsystem is down")
             }
         })
     }
@@ -47,24 +48,37 @@ impl HealthIndicator for Stub {
 struct Report {
     state: String,
     phase: String,
-    indicators: BTreeMap<String, Indicator>,
+    indicators: Vec<Indicator>,
+}
+
+impl Report {
+    /// The indicator named `name`.
+    fn indicator(&self, name: &str) -> Option<&Indicator> {
+        self.indicators
+            .iter()
+            .find(|indicator| indicator.name == name)
+    }
 }
 
 /// One indicator in the readiness document.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Indicator {
+    name: String,
     state: String,
-    detail: Option<String>,
 }
 
 /// Asks readiness of a gateway whose registry holds `stubs`.
-async fn readiness(stubs: Vec<Stub>) -> Result<(StatusCode, Report), Box<dyn StdError>> {
+fn registry(stubs: Vec<Stub>) -> Registry {
     let mut indicators: Vec<Arc<dyn HealthIndicator>> = Vec::new();
     for stub in stubs {
         indicators.push(Arc::new(stub));
     }
-    let state = Arc::new(AppState::with_health(Registry::new(indicators)));
+    Registry::new(indicators)
+}
+
+async fn readiness(stubs: Vec<Stub>) -> Result<(StatusCode, Report), Box<dyn StdError>> {
+    let state = Arc::new(AppState::with_health(registry(stubs)));
     state.lifecycle().booted();
     let app = ferrofed_server::router(state, &support::settings());
     let (status, body) = call(app, Request::get("/health/readiness").body(Body::empty())?).await?;
@@ -105,9 +119,12 @@ async fn every_indicator_up_is_two_hundred_and_each_is_named() -> Result<(), Box
     assert_eq!("up", report.state);
     assert_eq!(
         vec!["identity", "registry"],
-        report.indicators.keys().collect::<Vec<_>>()
+        report
+            .indicators
+            .iter()
+            .map(|indicator| indicator.name.as_str())
+            .collect::<Vec<_>>()
     );
-    assert!(report.indicators.values().all(|i| i.detail.is_none()));
     Ok(())
 }
 
@@ -116,23 +133,32 @@ async fn every_indicator_up_is_two_hundred_and_each_is_named() -> Result<(), Box
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
 )]
-async fn one_indicator_down_is_five_hundred_and_three_with_its_reason()
+async fn one_indicator_down_is_five_hundred_and_three_and_its_reason_stays_inside()
 -> Result<(), Box<dyn StdError>> {
     let (status, report) =
         readiness(vec![stub("registry", true), stub("node:hospital-a", false)]).await?;
     assert_eq!(StatusCode::SERVICE_UNAVAILABLE, status);
     assert_eq!("down", report.state);
     let down = report
-        .indicators
-        .get("node:hospital-a")
+        .indicator("node:hospital-a")
         .ok_or("the down indicator is reported")?;
     assert_eq!("down", down.state);
+    let up = report.indicator("registry").ok_or("reported")?;
+    assert_eq!("up", up.state);
+    let lifecycle = Lifecycle::default();
+    lifecycle.booted();
+    let inside = registry(vec![stub("registry", true), stub("node:hospital-a", false)])
+        .readiness(&lifecycle)
+        .await;
     assert_eq!(
         Some("the synthetic subsystem is down"),
-        down.detail.as_deref()
+        inside
+            .indicators
+            .iter()
+            .find(|indicator| indicator.name == "node:hospital-a")
+            .and_then(|indicator| indicator.detail.as_deref()),
+        "the registry keeps the reason the public route leaves out"
     );
-    let up = report.indicators.get("registry").ok_or("reported")?;
-    assert_eq!("up", up.state);
     Ok(())
 }
 
@@ -150,14 +176,24 @@ async fn a_wedged_indicator_is_reported_down_at_the_check_timeout() -> Result<()
     };
     let (status, report) = readiness(vec![wedged]).await?;
     assert_eq!(StatusCode::SERVICE_UNAVAILABLE, status);
-    let identity = report.indicators.get("identity").ok_or("reported")?;
+    let identity = report.indicator("identity").ok_or("reported")?;
     assert_eq!("down", identity.state);
+    let lifecycle = Lifecycle::default();
+    lifecycle.booted();
+    let inside = registry(vec![Stub {
+        name: "identity",
+        up: true,
+        delay: CHECK_TIMEOUT + Duration::from_secs(60),
+    }])
+    .readiness(&lifecycle)
+    .await;
+    let reason = inside
+        .indicators
+        .first()
+        .and_then(|indicator| indicator.detail.as_deref());
     assert!(
-        identity
-            .detail
-            .as_deref()
-            .is_some_and(|detail| detail.contains("did not answer")),
-        "{identity:?}"
+        reason.is_some_and(|detail| detail.contains("did not answer")),
+        "{reason:?}"
     );
     Ok(())
 }

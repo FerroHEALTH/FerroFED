@@ -277,9 +277,16 @@ async fn options_root_is_behind_the_gate() -> TestResult {
 #[tokio::test]
 async fn the_health_family_and_the_root_need_no_token() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
-    for path in ["/", "/health"] {
+    for path in ["/", "/health/liveness"] {
         let (status, _, text) = sent(&gateway.app, Request::get(path).body(Body::empty())?).await?;
         assert_eq!(StatusCode::OK, status, "{path}: {text}");
+    }
+    for path in ["/health", "/health/readiness"] {
+        let (status, _, text) = sent(&gateway.app, Request::get(path).body(Body::empty())?).await?;
+        assert!(
+            [StatusCode::OK, StatusCode::SERVICE_UNAVAILABLE].contains(&status),
+            "{path} answers the process's state without a token: {status} {text}"
+        );
     }
     for path in ["/v1", "//v1/query/aql", "/V1/query/aql", "/elsewhere"] {
         let (status, _, text) = sent(&gateway.app, Request::get(path).body(Body::empty())?).await?;

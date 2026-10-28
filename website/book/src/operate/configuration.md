@@ -546,10 +546,10 @@ base_path = "/fed/openehr"
 ```
 
 The gateway then serves `GET /fed/openehr/`, `OPTIONS /fed/openehr/`,
-`GET /fed/openehr/health`, `POST /fed/openehr/v1/query/aql` and the rest of
+`GET /fed/openehr/health/readiness`, `POST /fed/openehr/v1/query/aql` and the rest of
 the table, serves `{base}` without the trailing slash as `{base}/`, and
 answers `404` for every path outside the base, the root included, so point a
-health probe at `{base}/health`; `ferrofed healthcheck` asks under the base
+health probe at `{base}/health/liveness` and `{base}/health/readiness`; `ferrofed healthcheck` asks under the base
 by itself. The specification reserves no prefix, and
 the gateway reserves none either: `/rest/openehr` is a valid base when you
 choose it, and is not served unless you do. The base is checked at boot: it
@@ -570,8 +570,9 @@ Every route is under the [base path](#the-base-path); with the default `/`,
 |---|---|
 | `GET {base}/` | the product name and version, and its manufacturer with the postal address and the contact |
 | `OPTIONS {base}/` | the federation's self-description (§7a.2) |
-| `GET {base}/health` | `200` while the process is up |
-| `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems (the configuration, the registry, the outbound clients, the stored-query store) are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives, with the phase and each subsystem's state; no member node and no identity source gates it |
+| `GET {base}/health/liveness` | `200` while the process is up |
+| `GET {base}/health` | the status readiness answers, with the state alone |
+| `GET {base}/health/readiness` | `200` while the gateway serves and its own subsystems (the configuration, the registry, the outbound clients, the stored-query store) are up; `503` before boot completes and from the moment `SIGTERM` or `SIGINT` arrives, with the phase and each subsystem's state, never its detail; no member node and no identity source gates it |
 | `GET {base}/operator/dependencies` | to a caller with the operator scope, always `200`, with the state the gateway last observed of each member endpoint, of the resolver, of the consent pre-filter and of the mCSD directory: `up`, `degraded`, `failing`, `down` or `unknown`, with `directory_fault` while the directory is `degraded`; endpoint ids, states, the fault's class and the [replica name](#the-replica-name) only |
 | `GET {base}/operator/deployment` | to a caller with the operator scope, always `200`, with the profile the process started with, the product version and the [replica name](#the-replica-name); no setting value |
 | `GET` and `POST {base}/v1/query/aql` | the federated `RESULT_SET`, the `GET` form reading the request from its query string; `501` when no registry is configured |

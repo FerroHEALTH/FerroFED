@@ -49,7 +49,7 @@ pub const TRACKED_CALLERS: usize = 10_000;
 pub struct Admission {
     slots: Arc<Semaphore>,
     retry_after: Duration,
-    exempt: [String; 2],
+    exempt: [String; 3],
     metrics: Arc<Metrics>,
 }
 
@@ -66,7 +66,11 @@ impl Admission {
         Self {
             slots: Arc::new(Semaphore::new(permits)),
             retry_after: overload.retry_after,
-            exempt: [base.join("/health"), base.join("/health/readiness")],
+            exempt: [
+                base.join("/health"),
+                base.join("/health/liveness"),
+                base.join("/health/readiness"),
+            ],
             metrics,
         }
     }

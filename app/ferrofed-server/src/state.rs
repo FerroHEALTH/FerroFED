@@ -12,6 +12,8 @@ use ferrofed_registry::definition::store::{DefinitionStore, Definitions, StoreEr
 use ferrofed_registry::operator::DeploymentMode;
 use ferrofed_registry::replica::Replica;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_health::lifecycle::Lifecycle;
+use ferrohealth_health::registry::{HealthIndicator, Registry};
 
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::pmir::IdentityFeedError;
@@ -22,8 +24,7 @@ use crate::config::settings::Settings;
 use crate::config::stored_queries::{Backend, Store};
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::federation::{Federation, error::FederationError, registry::read_registry};
-use crate::health::lifecycle::Lifecycle;
-use crate::health::{Built, HealthIndicator, Registry};
+use crate::health::Built;
 use crate::metrics::{Metrics, MetricsError};
 use crate::stored;
 

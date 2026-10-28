@@ -48,7 +48,7 @@ fn a_request_line_carries_the_method_the_route_the_status_the_latency_and_the_id
         &support::app(),
         "info",
         vec![
-            Request::get("/health")
+            Request::get("/health/liveness")
                 .header(request_id::HEADER, "corr-log")
                 .body(Body::empty())?,
         ],
@@ -57,7 +57,7 @@ fn a_request_line_carries_the_method_the_route_the_status_the_latency_and_the_id
     assert_eq!(1, lines.len(), "one line per request: {text}");
     let line = lines.first().ok_or("one line")?;
     assert_eq!(Some("GET"), line.method.as_deref());
-    assert_eq!(Some("/health"), line.route.as_deref());
+    assert_eq!(Some("/health/liveness"), line.route.as_deref());
     assert_eq!(Some(StatusCode::OK.as_u16()), line.status);
     assert!(line.latency_ms.is_some_and(|ms| ms >= 0.0), "{text}");
     let logged_id = line.request_id.as_deref().ok_or("an id is logged")?;
@@ -83,7 +83,7 @@ fn a_client_request_id_is_echoed_and_never_logged() -> Result<(), Box<dyn StdErr
         .build()?;
     let response = runtime.block_on(support::send(
         support::app(),
-        Request::get("/health")
+        Request::get("/health/liveness")
             .header(request_id::HEADER, client_id)
             .body(Body::empty())?,
     ))?;
@@ -99,7 +99,7 @@ fn a_client_request_id_is_echoed_and_never_logged() -> Result<(), Box<dyn StdErr
         &support::app(),
         "trace",
         vec![
-            Request::get("/health")
+            Request::get("/health/liveness")
                 .header(request_id::HEADER, client_id)
                 .body(Body::empty())?,
             Request::get("/v1/ehr")
@@ -129,7 +129,7 @@ fn an_unnamed_request_logs_the_id_its_response_carries() -> Result<(), Box<dyn S
     let response = tracing::subscriber::with_default(capture, || {
         runtime.block_on(support::send(
             support::app(),
-            Request::get("/health").body(Body::empty())?,
+            Request::get("/health/liveness").body(Body::empty())?,
         ))
     })?;
     let answered = response
@@ -239,7 +239,7 @@ fn a_server_error_logs_at_error_and_a_client_error_at_warn() -> Result<(), Box<d
         vec![
             Request::get("/v1/query/aql").body(Body::empty())?,
             Request::get("/nowhere").body(Body::empty())?,
-            Request::get("/health").body(Body::empty())?,
+            Request::get("/health/liveness").body(Body::empty())?,
         ],
     )?;
     let lines = request_lines(&error_only)?;
@@ -253,7 +253,7 @@ fn a_server_error_logs_at_error_and_a_client_error_at_warn() -> Result<(), Box<d
         "warn",
         vec![
             Request::get("/nowhere").body(Body::empty())?,
-            Request::get("/health").body(Body::empty())?,
+            Request::get("/health/liveness").body(Body::empty())?,
         ],
     )?;
     let lines = request_lines(&warn_and_above)?;
@@ -517,7 +517,7 @@ fn an_unknown_method_is_logged_as_other_and_never_as_the_client_sent_it()
         vec![
             Request::builder()
                 .method(http::Method::from_bytes(b"SYNTHETIC-METHOD-1")?)
-                .uri("/health")
+                .uri("/health/liveness")
                 .body(Body::empty())?,
         ],
     )?;

@@ -300,7 +300,7 @@ async fn under_a_prefix_nothing_is_served_outside_it() -> TestResult {
         assert_eq!(StatusCode::NOT_FOUND, status, "{verb} {uri}");
         assert_eq!("not-found", error_body(&text)?.code, "{verb} {uri}");
     }
-    let request = Request::get("/fed/openehr/health").body(Body::empty())?;
+    let request = Request::get("/fed/openehr/health/liveness").body(Body::empty())?;
     let (status, _) = call(app, request).await?;
     assert_eq!(
         StatusCode::OK,

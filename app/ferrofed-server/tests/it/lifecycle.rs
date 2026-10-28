@@ -19,7 +19,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
-use ferrofed_server::health::lifecycle::drain_on;
+use ferrofed_server::drain_on;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode};
@@ -38,13 +38,14 @@ type TestResult = Result<(), Box<dyn Error>>;
 struct Readiness {
     state: String,
     phase: String,
-    indicators: BTreeMap<String, Indicator>,
+    indicators: Vec<Indicator>,
 }
 
 /// One indicator in the readiness document.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Indicator {
+    name: String,
     state: String,
 }
 
@@ -133,10 +134,14 @@ async fn readiness_is_503_until_boot_completes_and_names_what_boot_built() -> Te
             "registry",
             "stored_queries"
         ],
-        report.indicators.keys().collect::<Vec<_>>(),
+        report
+            .indicators
+            .iter()
+            .map(|indicator| indicator.name.as_str())
+            .collect::<Vec<_>>(),
         "every subsystem boot built, and no member and no resolver"
     );
-    assert!(report.indicators.values().all(|i| i.state == "up"));
+    assert!(report.indicators.iter().all(|i| i.state == "up"));
 
     state.lifecycle().booted();
     let (status, report) = readiness(&state).await?;
@@ -174,8 +179,18 @@ async fn readiness_is_503_from_the_moment_the_stop_signal_arrives() -> TestResul
     assert_eq!("down", report.state);
     assert_eq!("draining", report.phase);
 
-    let (status, _) = call(app(&state), Request::get("/health").body(Body::empty())?).await?;
+    let (status, _) = call(
+        app(&state),
+        Request::get("/health/liveness").body(Body::empty())?,
+    )
+    .await?;
     assert_eq!(StatusCode::OK, status, "a draining process is still live");
+    let (status, summary) = call(app(&state), Request::get("/health").body(Body::empty())?).await?;
+    assert_eq!(
+        (StatusCode::SERVICE_UNAVAILABLE, r#"{"state":"down"}"#),
+        (status, summary.as_str()),
+        "the summary follows readiness"
+    );
     Ok(())
 }
 

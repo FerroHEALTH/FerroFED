@@ -319,6 +319,16 @@ ferrohealth-smart = { version = "=0.8.6", default-features = false, features = [
 # a product pins every family crate, at the version ferrohealth-smart
 # requires. Verified against crates.io on 2026-10-28.
 ferrohealth-secret = "=0.2.0"
+# The health family of FerroHEALTH/FerroSYS (#1397): the readiness
+# document, and with `registry` the indicators and the lifecycle the gateway
+# runs. Pinned exactly, at the version ferrohealth-server requires.
+# Verified against crates.io on 2026-10-28.
+ferrohealth-health = { version = "=0.1.1", default-features = false }
+# The HTTP server plumbing of FerroHEALTH/FerroSYS (#1397): the health routes
+# every product serves. Pinned exactly, as a product pins every family crate;
+# 0.3.7 carries GHSA-2mc2-h3jq-c5wg. Verified against crates.io on
+# 2026-10-28.
+ferrohealth-server = { version = "=0.3.7", default-features = false }
 # The console's string catalogs (#1162): Project Fluent messages embedded at
 # build time from app/ferrofed-console/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.

@@ -290,8 +290,12 @@ impl Report {
                     .await
                     .and_then(|(status, body)| {
                         if status == StatusCode::OK || status == StatusCode::SERVICE_UNAVAILABLE {
-                            source::document::<answers::Readiness>(&readiness, &body)
+                            answers::readiness(&body)
                                 .map(|body| (status, body))
+                                .map_err(|source| SourceError::NotDocument {
+                                    path: readiness.clone(),
+                                    source,
+                                })
                         } else {
                             Err(refused(&readiness, status))
                         }

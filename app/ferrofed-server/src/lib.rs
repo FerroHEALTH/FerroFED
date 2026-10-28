@@ -108,8 +108,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::State;
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::get;
 use axum::serve::Listener;
 use axum::{Json, Router};
@@ -122,8 +121,9 @@ use tower_http::timeout::TimeoutLayer;
 use crate::auth::guard::Guard;
 use crate::auth::trust::Trust;
 use crate::config::settings::ServerSettings;
-use crate::health::lifecycle::{Lifecycle, drain_on};
 use crate::state::AppState;
+use ferrohealth_health::lifecycle::Lifecycle;
+use ferrohealth_server::health::Health;
 
 /// The exit code of a command line the binary refuses.
 ///
@@ -166,10 +166,10 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// ([`ServerSettings::base_path`]; §4.1, N28). `GET {base}/` answers a small
 /// JSON document naming the product and its version, `OPTIONS {base}/` the
 /// federation's self-description ([`facade::options::options_root`]),
-/// `GET {base}/health` answers `200` while the process is up,
-/// `GET {base}/health/readiness` answers `200` while the process serves
-/// and every registered indicator is up and `503` with the phase and each
-/// indicator's state otherwise. `GET {base}/.well-known/jwks.json`
+/// `GET {base}/health`, `{base}/health/liveness` and
+/// `{base}/health/readiness` are the shared health family of
+/// `ferrohealth-server` over the indicators and the lifecycle of `state`
+/// ([`health`]). `GET {base}/.well-known/jwks.json`
 /// answers the gateway's public signing keys with no client authentication
 /// ([`jwks`]), and `404` when none are configured. A binding's public
 /// document, such as a Nuts holder's DID document, is answered at the path
@@ -210,9 +210,12 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
 /// Each request takes the gate in place when it arrives, so a reload that
 /// replaces the gate ([`reload`]) reaches the requests that arrive after it.
 pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<Trust>) -> Router {
+    let health = ferrohealth_server::health::routes(Health::new(
+        state.health().clone(),
+        state.lifecycle().clone(),
+    ));
     let surface = Router::new()
-        .route("/health", get(liveness))
-        .route("/health/readiness", get(readiness))
+        .merge(health.with_state(()))
         // NOTE: RFC 7517 §5, §13.1 jwks-discovery: public keys are public material,
         // so the JWK Set stays outside every client authentication layer.
         .route(jwks::JWKS_PATH, get(jwks::jwks))
@@ -377,21 +380,6 @@ async fn root() -> Json<body::Root> {
     Json(body::Root::default())
 }
 
-/// `GET /health`: `200` while the process is up.
-async fn liveness() -> Json<body::Liveness> {
-    Json(body::Liveness {
-        state: health::State::Up,
-    })
-}
-
-/// `GET /health/readiness`: the phase of the process and the state of every
-/// registered indicator.
-async fn readiness(State(state): State<Arc<AppState>>) -> Response {
-    let report = state.health().evaluate().await;
-    let readiness = health::Readiness::new(state.lifecycle().phase(), report);
-    (readiness.status(), Json(readiness)).into_response()
-}
-
 /// Serves `app` on an already-bound listener until the process receives
 /// `SIGTERM` or `SIGINT`, then drains.
 ///
@@ -471,6 +459,30 @@ where
         "the drain did not finish in time; the remaining connections are dropped"
     );
     Ok(())
+}
+
+/// Completes `delay` after `signal` completes, moving `lifecycle` to
+/// draining the moment the signal arrives.
+///
+/// [`crate::serve`] hands this the process's stop signal and
+/// `server.drain_delay_ms`, so readiness answers `503` while the listener
+/// still accepts, and a load balancer that polls readiness, or removes a
+/// terminating endpoint, stops routing to the process before it closes. The
+/// Kubernetes documentation describes that removal as running alongside the
+/// stop signal, not ahead of it
+/// (<https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination>).
+pub async fn drain_on<F>(signal: F, lifecycle: Lifecycle, delay: Duration)
+where
+    F: Future<Output = ()>,
+{
+    signal.await;
+    lifecycle.drain();
+    tracing::info!(
+        drain_delay_ms = delay.as_millis(),
+        "readiness withdrawn; the listener accepts until the drain delay ends"
+    );
+    tokio::time::sleep(delay).await;
+    tracing::info!("the listener stops accepting; draining the requests in flight");
 }
 
 /// Completes when the process receives `SIGTERM` or `SIGINT`.
