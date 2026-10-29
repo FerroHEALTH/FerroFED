@@ -18,7 +18,7 @@
 
 use ferrofed_registry::running::{SecretSetting, Section, Setting, Source};
 
-use super::{Layers, at};
+use super::{Layers, at, indexed, provenance_key, sourced};
 
 /// The keys of `[trust.issuer.national_contact_point]`, in the order the
 /// book's table lists them.
@@ -65,7 +65,7 @@ pub(super) fn settings(layers: &Layers) -> Vec<Setting> {
         let prefix = format!("trust.issuer[{index}]");
         settings.push(listed(layers, &format!("{prefix}.issuer"), false));
         settings.push(secret(layers, &format!("{prefix}.client_secret")));
-        if value(
+        if indexed(
             &layers.file_now,
             &format!("{prefix}.national_contact_point"),
         )
@@ -83,35 +83,18 @@ pub(super) fn settings(layers: &Layers) -> Vec<Setting> {
     settings
 }
 
-/// The value at `key` of `tree`, a dotted key whose segments may name an
-/// array element as `name[index]`.
-fn value<'a>(tree: &'a toml::Table, key: &str) -> Option<&'a toml::Value> {
-    let mut value: Option<&toml::Value> = None;
-    for segment in key.split('.') {
-        let (name, index) = match segment.split_once('[') {
-            Some((name, rest)) => (name, rest.strip_suffix(']')?.parse::<usize>().ok()),
-            None => (segment, None),
-        };
-        let table = match value {
-            None => tree,
-            Some(held) => held.as_table()?,
-        };
-        let held = table.get(name)?;
-        value = Some(match index {
-            Some(index) => held.as_array()?.get(index)?,
-            None => held,
-        });
-    }
-    value
-}
-
-/// Where the value at `key` comes from: the environment when an override
-/// set it to what runs, the file otherwise, and nothing when it is unset.
-fn origin(layers: &Layers, key: &str, runs: Option<&toml::Value>) -> Source {
-    match runs {
-        None => Source::Default,
-        Some(runs) if value(&layers.environment, key) == Some(runs) => Source::Environment,
-        Some(_) => Source::File,
+/// Where the value at `key` comes from: the override that set it to what
+/// runs, the file otherwise, which alone sets `[auth]` and `[trust]`, and
+/// nothing when it is unset.
+fn origin(layers: &Layers, key: &str, runs: Option<&toml::Value>, secret: bool) -> Source {
+    let by = if secret {
+        layers.provenance.secret_source(&provenance_key(key))
+    } else {
+        layers.provenance.source(&provenance_key(key))
+    };
+    match sourced(layers, key, runs, by) {
+        Source::Revision => Source::File,
+        other => other,
     }
 }
 
@@ -122,9 +105,9 @@ fn listed(layers: &Layers, key: &str, restart: bool) -> Setting {
     } else {
         &layers.file_now
     };
-    let runs = value(tree, key);
+    let runs = indexed(tree, key);
     let next = restart
-        .then(|| value(&layers.file_now, key))
+        .then(|| indexed(&layers.file_now, key))
         .flatten()
         .filter(|now| Some(*now) != runs)
         .cloned();
@@ -132,7 +115,7 @@ fn listed(layers: &Layers, key: &str, restart: bool) -> Setting {
         key: key.to_owned(),
         section: Section::Authentication,
         value: runs.cloned(),
-        source: origin(layers, key, runs),
+        source: origin(layers, key, runs, false),
         default: None,
         restart,
         next,
@@ -145,11 +128,11 @@ fn listed(layers: &Layers, key: &str, restart: bool) -> Setting {
 /// never its value.
 fn secret(layers: &Layers, key: &str) -> Setting {
     let file = format!("{key}_file");
-    let inline = value(&layers.file_now, key);
-    let reference = value(&layers.file_now, &file);
+    let inline = indexed(&layers.file_now, key);
+    let reference = indexed(&layers.file_now, &file);
     let source = match reference {
-        Some(_) => origin(layers, &file, reference),
-        None => origin(layers, key, inline),
+        Some(_) => origin(layers, &file, reference, true),
+        None => origin(layers, key, inline, true),
     };
     Setting {
         key: key.to_owned(),

@@ -77,7 +77,7 @@ stops, or on every replica that has its own `callback_url`; otherwise delete
 the subscription at the Registry
 ([Several replicas](identity.md#several-replicas)). The drain logs a warning
 when a binding did not finish stopping in
-`server.bindings_drain_timeout_ms`, since what it holds at a remote service
+`gateway.bindings_drain_timeout_ms`, since what it holds at a remote service
 may be left there; delete it at that service.
 
 Stop the operator console as well. Its sessions live in its memory and end

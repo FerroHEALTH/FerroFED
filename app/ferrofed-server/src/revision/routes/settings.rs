@@ -20,13 +20,14 @@ use axum::response::Response;
 use ferrofed_registry::running::SettingsRequest;
 use http::HeaderMap;
 
-use super::console::{ConsoleError, base_table, created, saved_as};
+use super::console::{base_table, created, saved_as};
 use super::{Managed, answered, body_refused};
 use crate::admin::Operator;
-use crate::config::load::env_value;
+use crate::config::load::with_pairs;
 use crate::error::{self, Code};
 use crate::request_id;
-use crate::running::{catalog, set};
+use crate::revision::service::Refused;
+use crate::running::catalog;
 
 /// The save of settings.
 pub const SETTINGS: &str = "/admin/config/settings";
@@ -72,12 +73,8 @@ pub(super) async fn save_settings(
                 reason,
                 settings,
             } = request;
-            let mut table = base_table(&managed, base)?;
-            for (key, raw) in &settings {
-                if !set(&mut table, key, env_value(raw)) {
-                    return Err(ConsoleError::NotATable(key.clone()));
-                }
-            }
+            let pairs: Vec<(String, String)> = settings.into_iter().collect();
+            let table = with_pairs(&base_table(&managed, base)?, &pairs).map_err(Refused::from)?;
             saved_as(&managed, (base, &table), (&operator, reason))
         })
         .await,

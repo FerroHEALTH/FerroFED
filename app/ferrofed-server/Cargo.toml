@@ -62,6 +62,7 @@ postgres = [
 ]
 
 [dependencies]
+ferrohealth-config.workspace = true
 ferrohealth-secret.workspace = true
 # The health family (#1397): the indicator registry, the lifecycle and the
 # readiness document, served by ferrohealth-server's health routes.

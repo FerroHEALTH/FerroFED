@@ -99,7 +99,7 @@ fn the_drain_delay_is_read_from_the_file_and_the_environment() -> Result<(), Box
     .server;
     assert_eq!(Duration::from_secs(7), server.drain_delay);
     let error = refusal("[server]\ndrain_delay_ms = \"five seconds\"\n")?;
-    assert!(matches!(error, Error::Parse { .. }), "{error:?}");
+    assert!(matches!(error, Error::Load { .. }), "{error:?}");
     Ok(())
 }
 
@@ -111,7 +111,7 @@ fn the_drain_delay_is_read_from_the_file_and_the_environment() -> Result<(), Box
 fn the_bindings_drain_has_a_budget_read_from_the_file() -> Result<(), Box<dyn StdError>> {
     let server = resolved("[server]\n")?;
     assert_eq!(Duration::from_secs(5), server.bindings_drain);
-    let server = resolved("[server]\nbindings_drain_timeout_ms = 8000\n")?;
+    let server = resolved("[gateway]\nbindings_drain_timeout_ms = 8000\n")?;
     assert_eq!(Duration::from_secs(8), server.bindings_drain);
     Ok(())
 }
@@ -122,9 +122,9 @@ fn the_bindings_drain_has_a_budget_read_from_the_file() -> Result<(), Box<dyn St
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_bindings_drain_of_zero_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>> {
-    let error = refusal("[server]\nbindings_drain_timeout_ms = 0\n")?;
+    let error = refusal("[gateway]\nbindings_drain_timeout_ms = 0\n")?;
     assert!(
-        matches!(&error, Error::Zero { key } if key == "server.bindings_drain_timeout_ms"),
+        matches!(&error, Error::Zero { key } if key == "gateway.bindings_drain_timeout_ms"),
         "{error:?}"
     );
     Ok(())

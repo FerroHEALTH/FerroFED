@@ -61,10 +61,10 @@ fn gateway(
     std::fs::write(&document, registry_document(&nodes.a, &nodes.b, ""))?;
     let document = toml::Value::String(document.display().to_string());
     // NOTE: no specification governs this: our own design; the JWK Set's URL follows
-    // `server.public_url` here, as the production guide leaves it unset.
+    // `gateway.public_url` here, as the production guide leaves it unset.
     let key_file = toml::Value::String(crate::support::signing_key_file().to_owned());
     let text = format!(
-        "{}\n\n[server]\nbase_path = \"/fed\"\npublic_url = \"https://gateway.example.org/fed\"\n\n[signing]\nkey_file = {key_file}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
+        "{}\n\n[server]\nbase_path = \"/fed\"\n\n[gateway]\npublic_url = \"https://gateway.example.org/fed\"\n\n[signing]\nkey_file = {key_file}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
         fixed_resolver(),
         recipe.auth_against(idp.origin())
     );

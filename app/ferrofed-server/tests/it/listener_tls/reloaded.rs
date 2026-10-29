@@ -36,7 +36,7 @@ fn gateway(
 ) -> Result<(std::path::PathBuf, Reloader, Router), Box<dyn Error>> {
     let config = dir.join("ferrofed.toml");
     std::fs::write(&config, format!("profile = \"development\"\n{auth}"))?;
-    let resolved = Config::load(Some(&config))?.resolve()?;
+    let resolved = Config::resolve_loaded(&Config::load(&crate::support::file_sources(&config))?)?;
     let state = Arc::new(AppState::build(&resolved)?);
     let trust = Arc::new(Trust::new(&resolved.server.auth));
     let app = ferrofed_server::trusted_router(Arc::clone(&state), &settings(), Arc::clone(&trust));

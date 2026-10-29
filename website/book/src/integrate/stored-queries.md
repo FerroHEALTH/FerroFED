@@ -127,7 +127,7 @@ See how it works: [definitions and stored queries](../how-it-works/definitions.m
 `Location` names the URL of the stored query,
 `{base}/v1/definition/query/{name}/{version}` (ITS-REST `Location_Query`):
 
-- With `server.public_url` set
+- With `gateway.public_url` set
   ([the public base URL](../operate/public-address.md#the-public-base-url)),
   it is that absolute URL, such as
   `https://gateway.example.org/v1/definition/query/org.example::compositions/1.0.0`.
@@ -284,7 +284,7 @@ openEHR-federation-endpoint: node-c-pub
 - The answer has the shape and the statuses of a first distribution (`200`,
   `207` with `complete: false`, `504` or `424`), and `meta.registry:
   "held"` says the registry held the version and stored nothing.
-- With `server.public_url` set, `Location` names the stored version's URL
+- With `gateway.public_url` set, `Location` names the stored version's URL
   under it. Without it, the answer carries no `Location`: the admin listener
   is another origin, and no reference from it reaches the client listener.
 - It is refused before any node is asked: `404` (`stored-query-unknown`)

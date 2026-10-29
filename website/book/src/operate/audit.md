@@ -168,7 +168,7 @@ file that is no FHIR `AuditEvent` is quarantined the same way. A quarantined
 record stays counted under the spool's bounds until you remove it.
 
 On `SIGTERM`, once the bindings have stopped, the gateway stops every audit
-trail within `server.bindings_drain_timeout_ms`. Each forwarder finishes the
+trail within `gateway.bindings_drain_timeout_ms`. Each forwarder finishes the
 record it is writing, ends an ITI-20 syslog connection with a TLS
 `close_notify` (RFC 5425 §4.4) and returns, so the frames it wrote last
 reach the repository; a socket dropped with the repository's session

@@ -72,7 +72,7 @@ pub mod base_path;
 pub mod binding;
 pub mod body;
 pub mod cli;
-pub mod client_address;
+
 pub mod command;
 pub mod config;
 pub mod conformance;
@@ -197,7 +197,7 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// request count of `state` ([`metrics::inbound`]) and the installation
 /// report's window. Before any of them, each request served over a
 /// connection is named by the address it came from, its peer or the client
-/// a trusted proxy names ([`client_address`]).
+/// a trusted proxy names (`ferrohealth_server::client_address`).
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     trusted_router(state, server, Arc::new(Trust::new(&server.auth)))
 }
@@ -292,7 +292,7 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
         ))
         .layer(axum::middleware::from_fn_with_state(
             Arc::new(server.forwarding.clone()),
-            client_address::attach,
+            ferrohealth_server::client_address::attach,
         ))
         .layer(axum::middleware::from_fn_with_state(
             fhir_state,

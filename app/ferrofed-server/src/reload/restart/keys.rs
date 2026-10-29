@@ -71,13 +71,13 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("server.tls", |boot, fresh| {
         boot.server.tls != fresh.server.tls
     }),
-    ("server.public_url", |boot, fresh| {
+    ("gateway.public_url", |boot, fresh| {
         boot.server.public_url != fresh.server.public_url
     }),
     ("server.forwarding", |boot, fresh| {
         boot.server.forwarding != fresh.server.forwarding
     }),
-    ("server.replica", |boot, fresh| {
+    ("gateway.replica", |boot, fresh| {
         boot.server.replica != fresh.server.replica
     }),
     ("metrics.tls", |boot, fresh| {
@@ -98,11 +98,14 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("server.shutdown_timeout_ms", |boot, fresh| {
         boot.server.shutdown_timeout != fresh.server.shutdown_timeout
     }),
-    ("server.bindings_drain_timeout_ms", |boot, fresh| {
+    ("gateway.bindings_drain_timeout_ms", |boot, fresh| {
         boot.server.bindings_drain != fresh.server.bindings_drain
     }),
     ("server.body_limit_bytes", |boot, fresh| {
         boot.server.body_limit != fresh.server.body_limit
+    }),
+    ("server.compression", |boot, fresh| {
+        boot.server.compression != fresh.server.compression
     }),
     ("server.overload", |boot, fresh| {
         boot.server.overload != fresh.server.overload
@@ -209,18 +212,22 @@ profile = "development"
 [server]
 listen = "127.0.0.1:8080"
 base_path = "/fed"
-public_url = "https://gateway.example.org/fed"
 trusted_proxies = ["10.0.0.1"]
 forwarded_header = "x-forwarded-for"
 request_timeout_ms = 30000
 header_read_timeout_ms = 20000
 drain_delay_ms = 10
 shutdown_timeout_ms = 40000
-bindings_drain_timeout_ms = 5000
 body_limit_bytes = 1048576
 max_concurrent_requests = 512
-overload_retry_after_s = 2
+retry_after_s = 2
+compression = true
+compression_min_bytes = 1024
+
+[gateway]
+public_url = "https://gateway.example.org/fed"
 replica = "replica-a"
+bindings_drain_timeout_ms = 5000
 
 [server.caller_rate]
 requests_per_second = 10
@@ -758,13 +765,13 @@ secrets_dir = "@DIR@/secrets"
         }
         let (from, to) = (from.display().to_string(), to.display().to_string());
         let tree: Table = MAXIMAL.replace("@DIR@", &from).parse()?;
-        // NOTE: no specification governs this: our own design; with `server.public_url` the
+        // NOTE: no specification governs this: our own design; with `gateway.public_url` the
         // two keys under it derive from it, so each form is walked on its own.
         let derived = ["signing.jwks_uri", "pmir.callback_url"]
             .into_iter()
             .try_fold(tree.clone(), |tree, key| changed(&tree, &path(key), None))
             .ok_or("the derived keys are set")?;
-        let written = changed(&tree, &path("server.public_url"), None).ok_or("a public URL")?;
+        let written = changed(&tree, &path("gateway.public_url"), None).ok_or("a public URL")?;
         let mut silent = Vec::new();
         let mut unchangeable: Option<BTreeSet<String>> = None;
         for form in [derived, written] {

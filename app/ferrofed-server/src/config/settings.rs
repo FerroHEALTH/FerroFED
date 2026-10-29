@@ -26,7 +26,6 @@ use openehr_federation::object::Uri;
 
 use crate::base_path::BasePath;
 use crate::binding::seam::OnwardGrant;
-use crate::client_address::Forwarding;
 use crate::config::auth::AuthSettings;
 use crate::config::limits::Overload;
 use crate::config::public_url::PublicUrl;
@@ -35,6 +34,7 @@ use crate::config::server::ListenerTlsSettings;
 use crate::config::stored_queries::Store;
 use crate::config::tls::TlsSettings;
 use crate::config::{EmergencyConsent, NodeSelection};
+use ferrohealth_server::client_address::Forwarding;
 use ferrohealth_telemetry::section::TelemetrySection;
 
 /// The settings the run path holds, with every secret already read.
@@ -111,7 +111,7 @@ pub struct Settings {
     pub usage_report: ferrohealth_usage_report::section::UsageReportSection,
     /// The deprecated keys the configuration set, which `config check` and
     /// the start-up log name.
-    pub deprecated: Vec<crate::config::deprecated::Deprecated>,
+    pub deprecated: Vec<ferrohealth_config::loader::Deprecation>,
 }
 
 /// The gateway's signing keys, resolved.
@@ -268,6 +268,9 @@ pub struct ServerSettings {
     pub tls: Option<ListenerTlsSettings>,
     /// The name of this process, which every operator report names.
     pub replica: Replica,
+    /// The smallest response body the listener compresses, when
+    /// `server.compression` is on.
+    pub compression: Option<u64>,
 }
 
 impl ServerSettings {
@@ -275,9 +278,7 @@ impl ServerSettings {
     /// served and drained by, built from these settings: the listen
     /// address, the timeouts, the drain and the body limit.
     ///
-    /// The operator's `[server]` keys stay the gateway's own until the
-    /// configuration loader moves (#1408); the section's TLS is the kept one
-    /// each listener is handed, and its compression stays off.
+    /// The section's TLS is the kept one each listener is handed.
     #[must_use]
     pub fn section(&self) -> ferrohealth_server::section::ServerSection {
         let millis = |duration: Duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
@@ -289,7 +290,8 @@ impl ServerSettings {
             drain_delay_ms: millis(self.drain_delay),
             shutdown_timeout_ms: millis(self.shutdown_timeout),
             tls: None,
-            compression: false,
+            compression: self.compression.is_some(),
+            compression_min_bytes: self.compression.unwrap_or(1024),
             ..ferrohealth_server::section::ServerSection::default()
         }
     }
@@ -454,9 +456,9 @@ impl Settings {
         );
         for key in &self.deprecated {
             tracing::warn!(
-                key = key.renamed.from,
-                replacement = key.renamed.to,
-                refused_in = key.renamed.refused_in,
+                key = key.old,
+                replacement = key.new,
+                refused_in = key.refused_in,
                 "a deprecated configuration key is set"
             );
         }

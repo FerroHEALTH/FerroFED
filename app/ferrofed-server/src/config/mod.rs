@@ -21,13 +21,13 @@ use std::path::PathBuf;
 use ferrohealth_telemetry::section::TelemetrySection;
 
 pub mod auth;
-pub mod deprecated;
 pub mod eehrxf;
 pub mod error;
 pub mod fhir;
+pub mod gateway;
 pub mod grant;
 pub mod limits;
-pub(crate) mod load;
+pub mod load;
 pub mod oauth;
 pub mod public_url;
 pub mod registry;
@@ -42,14 +42,12 @@ pub mod stored_queries;
 pub mod tls;
 pub mod transport;
 
-/// The prefix of every environment override.
+/// The namespace of the configuration ([`load::loader`]).
 ///
-/// The name after it is the dotted key with `__` between segments, upper or
-/// lower case: `FERROFED__SERVER__LISTEN` sets `[server] listen`.
-pub const ENV_PREFIX: &str = "FERROFED__";
-
-/// The environment variable naming the configuration file.
-pub const CONFIG_PATH_ENV: &str = "FERROFED_CONFIG";
+/// `FERROFED__<SECTION>__<KEY>` overrides a key, upper or lower case:
+/// `FERROFED__SERVER__LISTEN` sets `[server] listen`; `FERROFED_CONFIG`
+/// names the file.
+pub const PREFIX: &str = "FERROFED";
 
 /// The milliseconds kept for combining the answers after the fan-out budget.
 ///
@@ -72,8 +70,12 @@ pub const COMBINING_MARGIN_MS: u64 = 1_000;
 pub struct Config {
     /// The deployment profile: `production`, or `development`.
     pub profile: Profile,
-    /// The HTTP surface.
-    pub server: server::Server,
+    /// The HTTP surface, the section of `ferrohealth-server` with the
+    /// gateway's [`server::defaults`].
+    pub server: ferrohealth_server::section::ServerSection,
+    /// The gateway's own keys beside `[server]`: its public URL, the name
+    /// of this process and the bindings' drain.
+    pub gateway: gateway::Gateway,
     /// The console, the trace export and the metrics push
     /// (`ferrohealth-telemetry`).
     pub telemetry: TelemetrySection,
@@ -142,17 +144,24 @@ pub struct Config {
     /// The installation report to `FerroPULSE` (`[usage_report]`), on by
     /// default.
     pub usage_report: ferrohealth_usage_report::section::UsageReportSection,
-    /// The deprecated keys the configuration set, already read under their
-    /// new names; never read from the file itself.
+    /// The removed `[dev]` table (#1377), read only so that a configuration
+    /// still setting it is refused by name
+    /// ([`Error::DevRemoved`](error::Error::DevRemoved)); its rows are never
+    /// kept, since one held a patient identifier.
+    pub dev: Option<serde::de::IgnoredAny>,
+    /// Whether a source set `server.shutdown_timeout_ms`; unset, the drain
+    /// lasts `server.request_timeout_ms` ([`Config::load`] and
+    /// [`Config::from_sources`] read it from the provenance).
     #[serde(skip)]
-    pub deprecated: Vec<deprecated::Deprecated>,
+    pub shutdown_timeout_written: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             profile: Profile::Production,
-            server: server::Server::default(),
+            server: server::defaults(),
+            gateway: gateway::Gateway::default(),
             telemetry: TelemetrySection::default(),
             registry: registry::Registry::default(),
             federation: Federation::default(),
@@ -178,7 +187,8 @@ impl Default for Config {
             audit: crate::audit::config::Audit::default(),
             revisions: revisions::Revisions::default(),
             usage_report: ferrohealth_usage_report::section::UsageReportSection::default(),
-            deprecated: Vec::new(),
+            dev: None,
+            shutdown_timeout_written: false,
         }
     }
 }

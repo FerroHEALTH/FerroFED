@@ -8,8 +8,8 @@
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ServerFault {
-    /// `server.replica` is no replica name.
-    #[error("server.replica is no replica name")]
+    /// `gateway.replica` is no replica name.
+    #[error("gateway.replica is no replica name")]
     Replica(#[source] ferrofed_registry::replica::ReplicaError),
     /// The base path is not one a request can be served under (§4.1, N28).
     #[error("{key} is not a base path")]
@@ -37,15 +37,15 @@ pub enum ServerFault {
         #[source]
         source: std::net::AddrParseError,
     },
-    /// `server.public_url` is no `http` or `https` URL, or carries a user
+    /// `gateway.public_url` is no `http` or `https` URL, or carries a user
     /// name, a password, a query or a fragment.
     #[error(
-        "server.public_url must be an http or https URL with no user name, password, query or fragment"
+        "gateway.public_url must be an http or https URL with no user name, password, query or fragment"
     )]
     PublicUrlForm,
-    /// The path of `server.public_url` is not `server.base_path`.
+    /// The path of `gateway.public_url` is not `server.base_path`.
     #[error(
-        "server.public_url names the path {path} and server.base_path is {base}; the public URL ends in the base path"
+        "gateway.public_url names the path {path} and server.base_path is {base}; the public URL ends in the base path"
     )]
     PublicUrlPath {
         /// The path the public URL names, with no trailing `/`.
@@ -56,7 +56,7 @@ pub enum ServerFault {
     /// A key that repeats the public base URL names another route than the
     /// one the gateway serves under it.
     #[error(
-        "{key} is not the route the gateway serves under server.public_url, {served}; remove {key} to take that value, or correct it"
+        "{key} is not the route the gateway serves under gateway.public_url, {served}; remove {key} to take that value, or correct it"
     )]
     PublicUrlDisagrees {
         /// The key that repeats the public URL.

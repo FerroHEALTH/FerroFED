@@ -121,7 +121,7 @@ fn text(
     std::fs::write(&document, registry(a, b, members))?;
     let document = toml::Value::String(document.display().to_string());
     Ok(format!(
-        "profile = \"development\"\n\n[server]\npublic_url = \"{PUBLIC}\"\n\n\
+        "profile = \"development\"\n\n[gateway]\npublic_url = \"{PUBLIC}\"\n\n\
          [registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\n\
          node_selection = \"ask-all\"\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\
          {crossref}{fhir}"

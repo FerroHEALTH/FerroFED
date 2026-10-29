@@ -8,7 +8,7 @@
 //! against the request URL (RFC 3986 §5.2) and compares the result with that
 //! URL. The routes are the `PUT` at a version, the `PUT` with no version, and
 //! the operator's distribution of a held version on the admin listener, each
-//! with and without `server.public_url`.
+//! with and without `gateway.public_url`.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"

@@ -520,7 +520,8 @@ impl Gateway {
         let document = document(dir.path(), HTTPS_A)?;
         let config = dir.path().join("ferrofed.toml");
         std::fs::write(&config, text(&document))?;
-        let settings = Config::load(Some(&config))?.resolve()?;
+        let settings =
+            Config::resolve_loaded(&Config::load(&crate::support::file_sources(&config))?)?;
         let state = Arc::new(AppState::build(&settings)?);
         let reloader = Reloader::new(Some(config.clone()), settings, Arc::clone(&state));
         Ok(Self {

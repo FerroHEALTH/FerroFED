@@ -230,18 +230,16 @@ outside development.
 ```toml
 [server]
 listen = "127.0.0.1:8080"     # the socket address to bind
-base_path = "/"               # the path of the base URL every route sits under; see The base path
-# public_url = "https://gateway.example.org"   # the base URL clients reach; see The public address
+base_path = ""                # the path of the base URL every route sits under, empty for the root; see The base path
 trusted_proxies = []          # the proxies whose forwarded client address is taken; see The public address
 forwarded_header = "forwarded"   # or "x-forwarded-for": the header those proxies name the client in
 request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
 drain_delay_ms = 0            # after SIGTERM, readiness is 503 and the listener accepts this long; see Health probes
 shutdown_timeout_ms = 30000   # then the drain is bounded by this; unset, the request timeout, and never shorter
-bindings_drain_timeout_ms = 5000  # then the bindings stop their processes within this; see Health probes
+header_read_timeout_ms = 30000  # a client that sends no request head within this is closed
 body_limit_bytes = 1048576    # a body past this answers 413
 max_concurrent_requests = 512 # one more at once answers 503 overloaded; see Overload protection
-overload_retry_after_s = 1    # the Retry-After of that 503, in seconds
-# replica = "gateway-eu-1"    # the name every operator report carries; unset, HOSTNAME, else "unnamed"; see The replica name
+retry_after_s = 1             # the Retry-After of that 503, in seconds
 
 # A per-caller rate, off unless set; see Overload protection.
 [server.caller_rate]
@@ -258,6 +256,12 @@ burst = 20                    # at once after a quiet spell; one more answers 42
 # min_version = "1.3"           # the default; "1.2" keeps TLS 1.2 clients
 # reload_interval_s = 3600      # optional: read the files again on this period, beside SIGHUP
 # healthcheck_identity_file = "/run/secrets/ferrofed/healthcheck.pem"   # what ferrofed healthcheck presents then
+
+# The gateway's own keys beside [server].
+[gateway]
+# public_url = "https://gateway.example.org"   # the base URL clients reach; see The public address
+bindings_drain_timeout_ms = 5000  # after the drain, the bindings stop their processes within this; see Health probes
+# replica = "gateway-eu-1"    # the name every operator report carries; unset, HOSTNAME, else "unnamed"; see The replica name
 
 [telemetry]
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal
@@ -543,7 +547,7 @@ before you apply it (#579;
 
 `server.base_path` is the path of the base URL the gateway is served at,
 `{base}` in the specification, and every route in the table below sits under
-it (§4.1, N28). It is `/` by default, so the gateway serves at the root. Set
+it (§4.1, N28). It is empty by default, so the gateway serves at the root. Set
 it to mount the gateway under a path of your choosing, for example behind a
 reverse proxy that does not strip the path:
 
@@ -560,18 +564,18 @@ health probe at `{base}/health/liveness` and `{base}/health/readiness`; `ferrofe
 by itself. The specification reserves no prefix, and
 the gateway reserves none either: `/rest/openehr` is a valid base when you
 choose it, and is not served unless you do. The base is checked at boot: it
-starts with `/`, has no trailing `/` unless it is `/`, has no query or
-fragment, and has no empty, `.` or `..` segment, or the gateway refuses to
-start and names `server.base_path`. Tell clients the full base URL, scheme,
+is empty, or starts with `/` and has no trailing `/`, no query or fragment,
+and no empty, `.` or `..` segment, or the gateway refuses to start and names
+`server.base_path`. Tell clients the full base URL, scheme,
 host and this path, through the registry or service discovery; nodes never
 see it, because the gateway asks each node at the node's own base URL.
-Write that full URL once in `server.public_url`, and the keys that repeat
+Write that full URL once in `gateway.public_url`, and the keys that repeat
 it follow from it ([The public address](public-address.md)).
 
 ## The HTTP surface
 
-Every route is under the [base path](#the-base-path); with the default `/`,
-`{base}/` is `/`.
+Every route is under the [base path](#the-base-path); with the default, the
+root, `{base}/` is `/`.
 
 | Route | Answers |
 |---|---|
@@ -604,7 +608,7 @@ table and its dependency states to itself, so every report of the
 [export of the identity state](identity-state-export.md) names the process
 that produced it. `[server] replica` sets the name: 1 to 64 ASCII letters,
 digits, `.`, `_` and `-`. Any other value is refused at load with
-`server.replica is no replica name`. Unset, the name is the `HOSTNAME` the
+`gateway.replica is no replica name`. Unset, the name is the `HOSTNAME` the
 process runs with, which Kubernetes sets to the pod's own name, and
 `unnamed` when `HOSTNAME` is unset or is no such name. A start is never
 refused for its host name.

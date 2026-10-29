@@ -8,6 +8,7 @@ use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::binding::ihe::pixm::PixmMethod;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+use ferrohealth_config::error::ConfigError;
 #[cfg(feature = "binding-ihe")]
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
@@ -27,13 +28,13 @@ fn an_unknown_key_refuses_to_boot_and_the_message_names_it() -> Result<(), Box<d
         ("[server]\nlisten_port = 8080\n", "server.listen_port"),
         (
             "[credentials.\"a\"]\ntoken = \"synthetic\"\n",
-            "credentials.\"a\".token",
+            "credentials.a.token",
         ),
         ("[unknown]\nkey = 1\n", "unknown"),
     ] {
         let error = refusal(text)?;
-        assert!(matches!(error, Error::Parse { .. }), "{error:?}");
-        let message = error.to_string();
+        assert!(matches!(error, Error::Load { .. }), "{error:?}");
+        let message = crate::support::chain(&error);
         assert!(message.contains(key), "the refusal names {key}: {message}");
     }
     Ok(())
@@ -66,7 +67,7 @@ fn a_logged_query_parameter_refuses_to_boot_and_the_message_names_it()
 #[test]
 fn an_unknown_key_set_through_the_environment_refuses_to_boot() {
     let outcome = Config::from_sources(None, &env("FERROFED__SERVER__LISTEN_PORT", "8080"));
-    assert!(matches!(outcome, Err(Error::Parse { .. })), "{outcome:?}");
+    assert!(matches!(outcome, Err(Error::Load { .. })), "{outcome:?}");
 }
 
 #[test]
@@ -76,8 +77,9 @@ fn an_unknown_key_set_through_the_environment_refuses_to_boot() {
 )]
 fn a_bad_value_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>> {
     let error = refusal("[server]\nlisten = \"not an address\"\n")?;
-    assert!(
-        matches!(&error, Error::Listen { key, .. } if key == "server.listen"),
+    assert_eq!(
+        Some("server.listen"),
+        crate::support::refused_key(&error),
         "{error:?}"
     );
     for key in [
@@ -92,11 +94,11 @@ fn a_bad_value_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>>
         );
     }
     let error = refusal("[server]\nrequest_timeout_ms = \"thirty\"\n")?;
-    assert!(matches!(error, Error::Parse { .. }), "{error:?}");
+    assert!(matches!(error, Error::Load { .. }), "{error:?}");
     let error = refusal("[telemetry]\nformat = \"xml\"\n")?;
-    assert!(matches!(error, Error::Parse { .. }), "{error:?}");
+    assert!(matches!(error, Error::Load { .. }), "{error:?}");
     let error = refusal("[telemetry]\nfilter = \"info,=,,\"\n")?;
-    assert!(matches!(error, Error::Parse { .. }), "{error:?}");
+    assert!(matches!(error, Error::Load { .. }), "{error:?}");
     Ok(())
 }
 
@@ -108,7 +110,7 @@ fn a_bad_value_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>>
 fn a_malformed_dev_row_never_echoes_its_identifier() -> Result<(), Box<dyn StdError>> {
     for text in BROKEN_DEV_ROWS {
         let error = refusal(text)?;
-        assert!(matches!(error, Error::Parse { .. }), "not a parse refusal");
+        assert!(matches!(error, Error::Load { .. }), "not a parse refusal");
         // NOTE: the messages never print the rendering, which would put the
         // identifier into the test log the test keeps it out of.
         let rendered = everything(&error);
@@ -117,8 +119,14 @@ fn a_malformed_dev_row_never_echoes_its_identifier() -> Result<(), Box<dyn StdEr
             "a parse refusal echoes the [dev] identifier"
         );
         assert!(
-            error.to_string().contains("at dev"),
-            "the refusal locates the fault in the [dev] table"
+            matches!(
+                &error,
+                Error::Load { source, .. } if matches!(
+                    source.as_ref(),
+                    ConfigError::Syntax { position: Some((line, _)), .. } if *line >= 2
+                )
+            ),
+            "the refusal locates the fault in the [dev] table, from its second line"
         );
     }
     Ok(())
@@ -151,10 +159,10 @@ fn a_dev_table_is_refused_naming_the_key() -> Result<(), Box<dyn StdError>> {
 )]
 fn a_malformed_line_outside_dev_names_its_key_and_position() -> Result<(), Box<dyn StdError>> {
     let error = refusal("[server]\nlisten = \"127.0.0.1:8080\nshutdown_timeout_ms = 10\n")?;
-    let message = error.to_string();
+    let message = crate::support::chain(&error);
     assert!(
-        message.contains("at server.listen") && message.contains("line 2"),
-        "the refusal names server.listen on line 2: {message}"
+        message.contains("line 2"),
+        "the refusal names the line of server.listen: {message}"
     );
     assert!(
         !message.contains("127.0.0.1:8080"),
@@ -173,12 +181,12 @@ fn an_environment_fault_names_its_key_and_no_line() -> Result<(), Box<dyn StdErr
     else {
         return Err("the override was accepted".into());
     };
-    let message = error.to_string();
+    let message = crate::support::chain(&error);
     assert!(
-        message.contains("after the environment overrides")
-            && message.contains("at server.listen_port")
+        message.contains("server.listen_port")
+            && message.contains("FERROFED__SERVER__LISTEN_PORT")
             && !message.contains("line "),
-        "the refusal names the key and no position: {message}"
+        "the refusal names the key, the variable that set it and no position: {message}"
     );
     Ok(())
 }
@@ -190,10 +198,10 @@ fn an_environment_fault_names_its_key_and_no_line() -> Result<(), Box<dyn StdErr
 )]
 fn a_parse_fault_names_the_file_it_is_in() -> Result<(), Box<dyn StdError>> {
     let file = secret_file("[server]\nlisten_port = 8080\n")?;
-    let Err(error) = Config::load(Some(file.path())) else {
+    let Err(error) = Config::load(&crate::support::file_sources(file.path())) else {
         return Err("the configuration was accepted".into());
     };
-    let message = error.to_string();
+    let message = crate::support::chain(&error);
     assert!(
         message.contains(&file.path().display().to_string()),
         "the refusal names the file: {message}"
@@ -218,8 +226,8 @@ fn a_pixm_method_other_than_get_or_post_refuses_to_boot_naming_its_key()
 -> Result<(), Box<dyn StdError>> {
     for method in ["\"put\"", "\"GET\"", "\"\"", "1"] {
         let error = refusal(&pix_manager(&format!("method = {method}")))?;
-        assert!(matches!(error, Error::Parse { .. }), "{method}: {error:?}");
-        let message = error.to_string();
+        assert!(matches!(error, Error::Load { .. }), "{method}: {error:?}");
+        let message = crate::support::chain(&error);
         assert!(
             message.contains("pixm.manager") && message.contains("method"),
             "the refusal names the key: {message}"

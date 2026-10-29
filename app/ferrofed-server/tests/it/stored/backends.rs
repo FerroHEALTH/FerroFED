@@ -144,7 +144,8 @@ fn each_backend_refuses_a_key_it_does_not_read_and_needs_its_own() -> TestResult
         &BTreeMap::new(),
     );
     assert!(
-        matches!(&unknown, Err(ConfigError::Parse { fault }) if fault.key() == Some("stored_queries.backend")),
+        unknown.as_ref().err().and_then(crate::support::refused_key)
+            == Some("stored_queries.backend"),
         "an unknown backend is refused at its key: {unknown:?}"
     );
     Ok(())

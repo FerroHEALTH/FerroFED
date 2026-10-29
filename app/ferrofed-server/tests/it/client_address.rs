@@ -15,13 +15,16 @@ use std::error::Error;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
+use axum::Extension;
 use axum::Router;
 use axum::body::Body;
-use axum::extract::connect_info::MockConnectInfo;
+use axum::extract::ConnectInfo;
 use axum::routing::get;
-use ferrofed_server::client_address::{self, ClientAddress, ForwardedHeader, Forwarding};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrohealth_server::client_address::{
+    self, ClientAddress, ForwardedHeader, Forwarding, TrustedProxy,
+};
 use http::{Request, StatusCode};
 
 use crate::support::call;
@@ -50,7 +53,7 @@ async fn client(
             Arc::new(forwarding),
             client_address::attach,
         ))
-        .layer(MockConnectInfo(peer));
+        .layer(Extension(ConnectInfo(peer)));
     let mut request = Request::get("/");
     for (name, value) in headers {
         request = request.header(*name, *value);
@@ -64,7 +67,7 @@ async fn client(
 fn trusting(proxies: &[&str], header: ForwardedHeader) -> Result<Forwarding, Box<dyn Error>> {
     let proxies = proxies
         .iter()
-        .map(|proxy| proxy.parse::<ipnet::IpNet>())
+        .map(|proxy| proxy.parse::<TrustedProxy>())
         .collect::<Result<Vec<_>, _>>()?;
     Ok(Forwarding::new(proxies, header))
 }
@@ -188,7 +191,6 @@ fn resolve(text: &str) -> Result<Result<Forwarding, ConfigError>, Box<dyn Error>
 #[test]
 fn the_default_trusts_no_proxy() -> TestResult {
     let forwarding = resolve("")?.map_err(|error| error.to_string())?;
-    assert!(forwarding.is_empty());
     assert_eq!(Forwarding::default(), forwarding);
     Ok(())
 }
@@ -213,12 +215,16 @@ fn a_trusted_proxy_is_an_address_or_a_cidr_block() -> TestResult {
 
 #[test]
 fn an_entry_that_is_no_address_is_refused_by_its_key() -> TestResult {
-    let refused = resolve("[server]\ntrusted_proxies = [\"127.0.0.1\", \"proxy.example.org\"]\n")?
-        .err()
-        .ok_or("a host name is refused")?;
-    assert!(
-        refused.to_string().contains("server.trusted_proxies[1]"),
-        "{refused}"
+    let refused = Config::from_sources(
+        Some("[server]\ntrusted_proxies = [\"127.0.0.1\", \"proxy.example.org\"]\n"),
+        &BTreeMap::new(),
+    )
+    .err()
+    .ok_or("a host name is refused")?;
+    assert_eq!(
+        Some("server.trusted_proxies"),
+        crate::support::refused_key(&refused),
+        "{refused:?}"
     );
     let unknown = Config::from_sources(
         Some("[server]\nforwarded_header = \"x-real-ip\"\n"),

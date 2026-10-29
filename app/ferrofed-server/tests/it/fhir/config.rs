@@ -29,9 +29,12 @@ fn resolved(dir: &Path, server: &str, fhir: &str) -> Result<(), Error> {
         &document,
         crate::facade::registry("http://a.example.org", "http://b.example.org", ""),
     )
-    .map_err(|source| Error::Read {
-        path: document.clone(),
-        source,
+    .map_err(|source| Error::Load {
+        file: None,
+        source: Box::new(ferrohealth_config::error::ConfigError::Read {
+            path: document.clone(),
+            source,
+        }),
     })?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
@@ -77,7 +80,7 @@ fn a_face_with_no_public_url_is_refused() -> TestResult {
         matches!(
             refused,
             Err(Error::Fhir(FhirError::Missing {
-                key: "server.public_url"
+                key: "gateway.public_url"
             }))
         ),
         "{refused:?}"

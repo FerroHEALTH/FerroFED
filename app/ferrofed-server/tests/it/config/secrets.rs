@@ -202,13 +202,14 @@ fn a_refusal_never_quotes_a_secret() -> Result<(), Box<dyn StdError>> {
 )]
 fn a_secret_of_the_wrong_type_is_never_echoed() -> Result<(), Box<dyn StdError>> {
     let error = refusal("[credentials.\"a\"]\nuser = \"u\"\npassword = 73194426\n")?;
-    assert!(matches!(error, Error::Parse { .. }), "not a parse refusal");
+    assert!(matches!(error, Error::Load { .. }), "not a parse refusal");
     assert!(
         !everything(&error).contains("73194426"),
         "the refusal echoes the inline secret"
     );
-    assert!(
-        error.to_string().contains("credentials.\"a\".password"),
+    assert_eq!(
+        Some("credentials.a.password"),
+        crate::support::refused_key(&error),
         "the refusal names the key"
     );
     Ok(())

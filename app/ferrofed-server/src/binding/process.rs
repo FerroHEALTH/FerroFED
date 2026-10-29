@@ -166,7 +166,7 @@ pub struct Running {
 
 impl Running {
     /// Stops every process that holds something at a remote service, within
-    /// `budget`, the `server.bindings_drain_timeout_ms` the shipped grace
+    /// `budget`, the `gateway.bindings_drain_timeout_ms` the shipped grace
     /// periods leave room for.
     pub(crate) async fn drain(self, budget: Duration) -> Drained {
         within(budget, self.stop()).await

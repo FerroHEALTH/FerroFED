@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The gateway's public base URL, `server.public_url`: the absolute URL at
+//! The gateway's public base URL, `gateway.public_url`: the absolute URL at
 //! which clients, the nodes' authorization servers and the identity services
 //! reach `{base}` (§4.1, N28).
 //!
 //! Three keys repeat it: `auth.audience`, `signing.jwks_uri` and
-//! `pmir.callback_url`. With `server.public_url` set, each that is unset
+//! `pmir.callback_url`. With `gateway.public_url` set, each that is unset
 //! takes its value from it, and `signing.jwks_uri` and `pmir.callback_url`,
 //! when set, must name the route the gateway serves under it, so a copy that
 //! misses the base path is refused at load. No specification governs the
@@ -19,7 +19,7 @@ use crate::config::error::Error;
 use crate::config::error::server::ServerFault;
 
 /// The key that holds the public base URL.
-pub const KEY: &str = "server.public_url";
+pub const KEY: &str = "gateway.public_url";
 
 /// The public base URL, resolved: an absolute `http` or `https` URL with no
 /// user name, password, query or fragment, whose path is `server.base_path`

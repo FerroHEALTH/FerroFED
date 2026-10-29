@@ -144,7 +144,7 @@ services:
         hard: 16384
     # Longer than the gateway's drain delay (server.drain_delay_ms, 0), its
     # 30-second drain (server.shutdown_timeout_ms) and the bindings' 5-second
-    # drain (server.bindings_drain_timeout_ms) of ferrofed.toml, with 5 seconds
+    # drain (gateway.bindings_drain_timeout_ms) of ferrofed.toml, with 5 seconds
     # for the export flush, so `docker compose down` never kills a drain in
     # progress. Raise it with any of the three settings.
     stop_grace_period: 40s

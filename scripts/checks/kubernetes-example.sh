@@ -16,8 +16,8 @@
 #   4. checks that the preStop sleep matches the drain delay, and that
 #      terminationGracePeriodSeconds outlasts the preStop sleep, the drain
 #      delay, the drain and the bindings' drain of the configuration's
-#      [server] table, each of which the configuration must set, and that
-#      the replicas spread over zones and nodes;
+#      [server] and [gateway] tables, each of which the configuration must
+#      set, and that the replicas spread over zones and nodes;
 #   5. checks that each replica serves /metrics on the port [metrics] listen
 #      names, annotated for the scraper, and that networkpolicy.yaml opens
 #      that port to a named source alone;
@@ -116,12 +116,12 @@ else
 fi
 
 echo "== the grace period covers the preStop sleep, the drain delay, the drain and the bindings' drain"
-# server_ms FILE KEY: KEY's value in the [server] table of FILE, empty when
-# it is unset.
+# server_ms FILE KEY: KEY's value in the [server] or [gateway] table of FILE,
+# empty when it is unset.
 server_ms() {
   local file="$1" key="$2"
   awk -v key="$key" '
-    /^\[/ { inside = ($0 == "[server]"); next }
+    /^\[/ { inside = ($0 == "[server]" || $0 == "[gateway]"); next }
     inside && $1 == key && $2 == "=" { print $3; exit }
   ' "$file"
 }
@@ -139,10 +139,10 @@ grace_covers() {
   shutdown="$(server_ms "$file" shutdown_timeout_ms)"
   bindings="$(server_ms "$file" bindings_drain_timeout_ms)"
   if [[ -n "$unset_keys" ]]; then
-    echo "the configuration leaves [server]$unset_keys unset; this guard reads each from the configuration and copies no default from the code"
+    echo "the configuration leaves$unset_keys unset in [server] and [gateway]; this guard reads each from the configuration and copies no default from the code"
     return 1
   elif ! [[ "$delay$shutdown$bindings" =~ ^[0-9]+$ ]] || ! [[ "$grace$prestop" =~ ^[0-9]+$ ]]; then
-    echo "the [server] timeouts, the preStop sleep or the grace period are not whole numbers"
+    echo "the drain timeouts, the preStop sleep or the grace period are not whole numbers"
     return 1
   elif ((grace * 1000 <= prestop * 1000 + delay + shutdown + bindings)); then
     echo "a grace period of $grace s does not outlast the preStop sleep ($prestop s) plus drain_delay_ms ($delay) plus shutdown_timeout_ms ($shutdown) plus bindings_drain_timeout_ms ($bindings)"
@@ -174,7 +174,7 @@ grep -v '^bindings_drain_timeout_ms[[:space:]]' "$work/ferrofed.toml" > "$work/u
 if grace_covers "$work/ferrofed.toml" 1 > /dev/null; then
   bad "the grace check accepts a grace period of one second"
 elif cmp -s "$work/ferrofed.toml" "$work/unbudgeted.toml"; then
-  bad "configmap.yaml sets no [server] bindings_drain_timeout_ms to remove"
+  bad "configmap.yaml sets no [gateway] bindings_drain_timeout_ms to remove"
 elif grace_covers "$work/ferrofed.toml" "$((grace - 5))" "${prestop:-0}" > /dev/null; then
   bad "the grace check leaves out the preStop sleep"
 elif grace_covers "$work/unbudgeted.toml" "$grace" > /dev/null; then

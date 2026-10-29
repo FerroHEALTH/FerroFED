@@ -117,6 +117,9 @@ pub enum Source {
     File,
     /// A `FERROFED__` environment override.
     Environment,
+    /// A `--set key=value` argument of the command line the process
+    /// started with.
+    Set,
     /// The configuration revision this replica runs, under `managed`.
     Revision,
     /// Nothing sets it: the gateway's default.

@@ -76,7 +76,7 @@ pub struct Pmir {
     pub trust_roots_file: Option<PathBuf>,
     /// The absolute URL the Registry sends the feed to: the gateway's public
     /// address followed by `{base}` and `path`, the `channel.endpoint` of the
-    /// subscription. Empty, it is `path` under `server.public_url`, which
+    /// subscription. Empty, it is `path` under `gateway.public_url`, which
     /// must then be set.
     pub callback_url: String,
     /// The path under `{base}` the gateway serves the feed at.

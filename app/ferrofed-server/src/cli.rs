@@ -18,6 +18,7 @@
 
 use clap::{Parser, Subcommand};
 use ferrofed_registry::manufacturer::MANUFACTURER;
+use ferrohealth_server::cli::ConfigArgs;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
@@ -39,9 +40,11 @@ pub static LONG_VERSION: LazyLock<String> =
     about = "The FerroFED openEHR federation gateway"
 )]
 pub struct Cli {
-    /// The configuration file to read, overriding `FERROFED_CONFIG`.
-    #[arg(long, value_name = "PATH", global = true)]
-    pub config: Option<PathBuf>,
+    /// `--config`, the file to read in place of the one `FERROFED_CONFIG`
+    /// names, and the `--set key=value` pairs applied over it and the
+    /// environment.
+    #[command(flatten)]
+    pub sources: ConfigArgs,
     /// The job to run.
     #[command(subcommand)]
     pub command: Command,
@@ -184,6 +187,7 @@ pub struct RunArgs {
 mod tests {
     use super::{AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand, ReportArgs};
     use clap::Parser;
+    use ferrohealth_server::cli::ConfigArgs;
     use std::path::PathBuf;
 
     #[test]
@@ -246,7 +250,11 @@ mod tests {
         for (argv, expected) in cases {
             let cli = Cli::try_parse_from(argv).expect("the subcommand parses");
             assert_eq!(expected, cli.command, "{argv:?}");
-            assert_eq!(None, cli.config, "no --config was given");
+            assert_eq!(
+                ConfigArgs::default(),
+                cli.sources,
+                "no --config or --set was given"
+            );
         }
     }
 
@@ -282,7 +290,41 @@ mod tests {
     fn the_config_flag_is_global_and_reads_a_path() {
         let cli = Cli::try_parse_from(["ferrofed", "serve", "--config", "/etc/ferrofed.toml"])
             .expect("--config parses after the subcommand");
-        assert_eq!(Some(PathBuf::from("/etc/ferrofed.toml")), cli.config);
+        assert_eq!(
+            Some(PathBuf::from("/etc/ferrofed.toml")),
+            cli.sources.config
+        );
+    }
+
+    #[test]
+    fn a_set_pair_is_global_and_repeatable() {
+        let cli = Cli::try_parse_from([
+            "ferrofed",
+            "config",
+            "check",
+            "--set",
+            "server.listen=0.0.0.0:8080",
+            "--set",
+            "federation.best_effort=false",
+        ])
+        .expect("--set repeats after the subcommand");
+        assert_eq!(
+            vec![
+                ("server.listen".to_owned(), "0.0.0.0:8080".to_owned()),
+                ("federation.best_effort".to_owned(), "false".to_owned()),
+            ],
+            cli.sources.sets
+        );
+        let cli = Cli::try_parse_from(["ferrofed", "--set", "server.listen=0.0.0.0:8080", "serve"])
+            .expect("--set parses before the subcommand");
+        assert_eq!(
+            vec![("server.listen".to_owned(), "0.0.0.0:8080".to_owned())],
+            cli.sources.sets
+        );
+        assert!(
+            Cli::try_parse_from(["ferrofed", "serve", "--set", "no-pair"]).is_err(),
+            "a --set without = is refused"
+        );
     }
 
     #[test]

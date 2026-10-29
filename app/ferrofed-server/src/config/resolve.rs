@@ -13,6 +13,7 @@ use std::time::Duration;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::profile::Profile;
 use ferrofed_registry::id::EndpointId;
+use ferrohealth_server::client_address::Forwarding;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
@@ -25,7 +26,7 @@ use crate::config::error::server::ServerFault;
 use crate::config::grant::GrantFault;
 use crate::config::public_url::PublicUrl;
 use crate::config::secrets::{resolve_node_credentials, resolve_signing};
-use crate::config::server::{ListenerTlsSettings, METRICS_TLS, Metrics, SERVER_TLS, resolve_tls};
+use crate::config::server::{ListenerTlsSettings, METRICS_TLS, Metrics, resolve_tls};
 use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
     ServerSettings, Settings, SigningSettings,
@@ -80,7 +81,7 @@ impl Config {
     /// ([`Error::Missing`]), a file that does not read or a key that does not
     /// match its certificate ([`Error::ListenerTls`]), and a healthcheck
     /// identity it never presents ([`ServerFault::HealthcheckIdentityUnused`]).
-    /// `server.public_url` is refused as
+    /// `gateway.public_url` is refused as
     /// [`PublicUrl::resolve`](crate::config::public_url::PublicUrl::resolve) refuses it,
     /// a `signing.jwks_uri` that names another route under it
     /// ([`ServerFault::PublicUrlDisagrees`]), and an entry of
@@ -89,16 +90,10 @@ impl Config {
     /// [`Fhir::resolve`](crate::config::fhir::Fhir::resolve) refuses it
     /// ([`Error::Fhir`]).
     pub fn resolve(&self) -> Result<Settings, Error> {
-        let listen = self
-            .server
-            .listen
-            .parse::<SocketAddr>()
-            .map_err(|source| Error::Listen {
-                key: String::from("server.listen"),
-                source,
-            })?;
-        let (base_path, public_url) = self.server.resolve_base()?;
-        let forwarding = self.server.resolve_forwarding()?;
+        let listen = self.server.listen;
+        let base_path = crate::config::server::resolve_base_path(&self.server)?;
+        let public_url = self.gateway.resolve_public_url(&base_path)?;
+        let forwarding = Forwarding::from_section(&self.server);
         let request_timeout =
             positive_ms("server.request_timeout_ms", self.server.request_timeout_ms)?;
         let (shutdown_timeout, bindings_drain) = self.resolve_drain(request_timeout)?;
@@ -133,7 +128,7 @@ impl Config {
                 listen,
                 base_path,
                 request_timeout,
-                header_read_timeout_ms: self.server.resolve_header_read_timeout()?,
+                header_read_timeout_ms: self.server.header_read_timeout_ms,
                 drain_delay: Duration::from_millis(self.server.drain_delay_ms),
                 shutdown_timeout,
                 bindings_drain,
@@ -141,9 +136,10 @@ impl Config {
                 auth,
                 public_url,
                 forwarding,
-                overload: self.server.resolve_overload()?,
-                tls: resolve_tls(self.server.tls.as_ref(), SERVER_TLS)?,
-                replica: self.server.resolve_replica()?,
+                overload: crate::config::limits::resolve_overload(&self.server)?,
+                tls: crate::config::server::resolve_server_tls(&self.server)?,
+                replica: self.gateway.resolve_replica()?,
+                compression: crate::config::server::compression(&self.server),
             },
             telemetry,
             registry_document: self.registry.document.clone(),
@@ -173,7 +169,7 @@ impl Config {
             revision_poll: crate::config::revisions::poll(&self.revisions)?,
             revision_policy: crate::config::revisions::policy(&self.revisions)?,
             usage_report: self.usage_report.clone(),
-            deprecated: self.deprecated.clone(),
+            deprecated: Vec::new(),
         };
         // NOTE: no specification governs this: our own design; a request is an emergency
         // only by a declared purpose, so passing one to the node needs a purpose declared.
@@ -224,18 +220,16 @@ impl Config {
         Ok((credentials, onward_tls))
     }
 
-    /// Resolves `server.shutdown_timeout_ms`: `request_timeout` when unset,
-    /// and refused when it is shorter, so the drain never cuts a request the
-    /// server accepted before its listener closed; and beside it
-    /// `server.bindings_drain_timeout_ms`, refused at zero.
+    /// Resolves `server.shutdown_timeout_ms`: `request_timeout` when no
+    /// source sets it, and refused when it is shorter, so the drain never
+    /// cuts a request the server accepted before its listener closed; and
+    /// beside it `gateway.bindings_drain_timeout_ms`, refused at zero.
     fn resolve_drain(&self, request_timeout: Duration) -> Result<(Duration, Duration), Error> {
-        let bindings_drain = positive_ms(
-            "server.bindings_drain_timeout_ms",
-            self.server.bindings_drain_timeout_ms,
-        )?;
-        let Some(shutdown_ms) = self.server.shutdown_timeout_ms else {
+        let bindings_drain = Duration::from_millis(self.gateway.resolve_bindings_drain()?.get());
+        if !self.shutdown_timeout_written {
             return Ok((request_timeout, bindings_drain));
-        };
+        }
+        let shutdown_ms = self.server.shutdown_timeout_ms;
         let shutdown_timeout = positive_ms("server.shutdown_timeout_ms", shutdown_ms)?;
         // NOTE: no specification governs this: our own design; a request accepted
         // just before the listener closes may run its whole request timeout.

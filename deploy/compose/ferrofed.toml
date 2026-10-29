@@ -34,6 +34,8 @@ drain_delay_ms = 0
 # Then the requests in flight get this long to finish: at least
 # request_timeout_ms, which config check enforces.
 shutdown_timeout_ms = 30000
+
+[gateway]
 # Then the bindings get this long to stop their processes, such as deleting
 # the PMIR subscription. compose.yaml's stop_grace_period outlasts the delay,
 # the drain and this budget.

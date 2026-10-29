@@ -704,7 +704,7 @@ fn a_localization_budget_past_the_overall_budget_refuses_to_boot() -> TestResult
 fn an_on_failure_policy_the_specification_does_not_name_refuses_to_boot() -> TestResult {
     let text = "[federation]\nnode_selection = \"localized\"\n\n[federation.localization]\non_failure = \"open\"\n";
     match Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new()) {
-        Err(ferrofed_server::config::error::Error::Parse { .. }) => Ok(()),
+        Err(ferrofed_server::config::error::Error::Load { .. }) => Ok(()),
         other => Err(format!("§14.1 names closed and ask-all only: {other:?}").into()),
     }
 }

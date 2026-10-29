@@ -147,7 +147,7 @@ fn an_unknown_key_in_the_table_is_refused() -> Result<(), Box<dyn Error>> {
     let Err(error) = outcome else {
         return Err("the configuration was accepted".into());
     };
-    let message = error.to_string();
+    let message = crate::support::chain(&error);
     assert!(
         message.contains("national_contact_point.disclose"),
         "the refusal names the key: {message}"

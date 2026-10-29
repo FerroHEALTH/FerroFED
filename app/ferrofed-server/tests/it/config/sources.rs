@@ -6,6 +6,7 @@
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::config::error::Error;
 use ferrofed_server::config::error::server::ServerFault;
+use ferrofed_server::config::public_url::PublicUrl;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
 use ferrohealth_telemetry::section::Format;
@@ -153,7 +154,7 @@ fn every_aggregate_is_decomposable_by_default_and_the_list_can_narrow()
     let unknown = refusal(&format!(
         "{FULL}\n[federation]\ndecomposable_aggregates = [\"MEDIAN\"]\n"
     ))?;
-    assert!(matches!(unknown, Error::Parse { .. }), "{unknown:?}");
+    assert!(matches!(unknown, Error::Load { .. }), "{unknown:?}");
     Ok(())
 }
 
@@ -171,7 +172,7 @@ fn a_zero_offset_window_or_an_unknown_strategy_refuses_to_boot() -> Result<(), B
     let unknown = refusal(&format!(
         "{FULL}\n[federation]\noffset_strategy = \"cursor\"\n"
     ))?;
-    assert!(matches!(unknown, Error::Parse { .. }), "{unknown:?}");
+    assert!(matches!(unknown, Error::Load { .. }), "{unknown:?}");
     Ok(())
 }
 
@@ -235,6 +236,61 @@ fn a_request_timeout_past_the_budget_and_the_margin_is_accepted() -> Result<(), 
         defaults.server.request_timeout
             > defaults.federation.budget.overall() + Duration::from_millis(COMBINING_MARGIN_MS),
         "the defaults keep the relation"
+    );
+    Ok(())
+}
+
+/// The keys `[server]` gave up to the shared section are read under their
+/// new names for one release, and `config check` and the start-up log name
+/// each one.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_key_from_the_old_server_table_is_read_under_its_new_name() -> Result<(), Box<dyn StdError>> {
+    let loaded = Config::loaded_from_sources(
+        Some(
+            "[server]\npublic_url = \"https://gateway.example.org\"\nreplica = \"gateway-eu-1\"\nbindings_drain_timeout_ms = 8000\noverload_retry_after_s = 3\n",
+        ),
+        &BTreeMap::new(),
+    )?;
+    let settings = Config::resolve_loaded(&loaded)?;
+    assert_eq!(
+        Some("https://gateway.example.org"),
+        settings.server.public_url.as_ref().map(PublicUrl::as_str)
+    );
+    assert_eq!("gateway-eu-1", settings.server.replica.as_str());
+    assert_eq!(Duration::from_secs(8), settings.server.bindings_drain);
+    assert_eq!(Duration::from_secs(3), settings.server.overload.retry_after);
+    let renamed: Vec<(&str, &str)> = settings
+        .deprecated
+        .iter()
+        .map(|key| (key.old.as_str(), key.new.as_str()))
+        .collect();
+    assert_eq!(
+        vec![
+            ("server.public_url", "gateway.public_url"),
+            ("server.replica", "gateway.replica"),
+            (
+                "server.bindings_drain_timeout_ms",
+                "gateway.bindings_drain_timeout_ms"
+            ),
+            ("server.overload_retry_after_s", "server.retry_after_s"),
+        ],
+        renamed
+    );
+    let both = Config::from_sources(
+        Some("[server]\nreplica = \"a\"\n\n[gateway]\nreplica = \"b\"\n"),
+        &BTreeMap::new(),
+    );
+    assert!(
+        matches!(
+            &both,
+            Err(Error::Load { source, .. })
+                if matches!(source.as_ref(), ferrohealth_config::error::ConfigError::Renamed { .. })
+        ),
+        "an old key beside its new one is refused: {both:?}"
     );
     Ok(())
 }

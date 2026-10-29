@@ -267,7 +267,7 @@ impl Harness {
         let [model, context] = eps::mapping_files();
         let namespace = PATIENT.namespace();
         let text = format!(
-            "{identity}\n\n[server]\npublic_url = \"{origin}\"\n\n\
+            "{identity}\n\n[gateway]\npublic_url = \"{origin}\"\n\n\
              [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
              node_selection = \"ask-all\"\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\n\n\
              [auth]\naudience = [\"{AUDIENCE}\"]\n\n[[auth.issuer]]\nissuer = \"{NCP_ISSUER}\"\n\

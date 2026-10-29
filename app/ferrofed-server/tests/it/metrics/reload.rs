@@ -50,7 +50,7 @@ async fn an_applied_and_a_refused_reload_each_count_under_their_result() -> Test
             crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
         )),
     )?;
-    let settings = Config::load(Some(&config))?.resolve()?;
+    let settings = Config::resolve_loaded(&Config::load(&crate::support::file_sources(&config))?)?;
     let state = Arc::new(AppState::build(&settings)?);
     let reloader = Reloader::new(Some(config), settings, Arc::clone(&state));
     let scraped =

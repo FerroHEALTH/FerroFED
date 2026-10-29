@@ -81,7 +81,7 @@ impl Trusting {
         let document = dir.path().join("registry.toml");
         std::fs::write(&document, member("a", "http://127.0.0.1:9/a"))?;
         std::fs::write(&config, configuration(&document, "", auth))?;
-        let settings = Config::load(Some(&config))?.resolve()?;
+        let settings = Config::resolve_loaded(&Config::load(&support::file_sources(&config))?)?;
         let state = Arc::new(AppState::build(&settings)?);
         let trust = Arc::new(Trust::new(&settings.server.auth));
         let app = ferrofed_server::trusted_router(

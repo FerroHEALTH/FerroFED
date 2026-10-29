@@ -101,7 +101,7 @@ on the Docker host itself as `host.docker.internal`. The stop grace period of
 drain
 ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request));
 raise it with `server.drain_delay_ms`, `server.shutdown_timeout_ms` or
-`server.bindings_drain_timeout_ms`.
+`gateway.bindings_drain_timeout_ms`.
 
 The restart policy is `unless-stopped`. Docker restarts a gateway that exits
 with an error, doubling its wait before each attempt from 100 ms
@@ -252,7 +252,7 @@ own for the console and the scraper; clients reach the replicas through the
 - sets `server.drain_delay_ms` to 5 seconds in the example configuration, so
   a pod keeps accepting while it leaves the Service's endpoints, and
   `server.shutdown_timeout_ms` to the 30-second request timeout and
-  `server.bindings_drain_timeout_ms` to 5 seconds;
+  `gateway.bindings_drain_timeout_ms` to 5 seconds;
 - holds `SIGTERM` with a `preStop` sleep of 5 seconds, matching the drain
   delay, while the proxies in front stop sending the pod new requests;
 - gives the pod a `terminationGracePeriodSeconds` of 50, which outlasts the

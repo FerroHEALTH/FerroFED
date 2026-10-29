@@ -35,6 +35,7 @@ readonly SELF='scripts/checks/shared-crates.sh'
 
 # The FerroSYS crates FerroFED runs on, by crates.io name.
 readonly ADOPTED=(
+  ferrohealth-config
   ferrohealth-secret
   ferrohealth-health
   ferrohealth-server

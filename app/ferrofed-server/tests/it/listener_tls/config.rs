@@ -83,14 +83,20 @@ fn a_missing_key_or_certificate_is_refused_by_name() -> TestResult {
         "[server.tls]\ncertificate_file = {}\n",
         quoted(&files.certificate)
     );
-    refused(
-        &check(dir.path(), &only_certificate)?,
-        "server.tls.key_file",
+    let output = check(dir.path(), &only_certificate)?;
+    refused(&output, "server.tls");
+    assert!(
+        written(&output).contains("`key_file`"),
+        "{}",
+        written(&output)
     );
     let only_key = format!("[server.tls]\nkey_file = {}\n", quoted(&files.key));
-    refused(
-        &check(dir.path(), &only_key)?,
-        "server.tls.certificate_file",
+    let output = check(dir.path(), &only_key)?;
+    refused(&output, "server.tls");
+    assert!(
+        written(&output).contains("`certificate_file`"),
+        "{}",
+        written(&output)
     );
     let absent = format!(
         "[server.tls]\ncertificate_file = {}\nkey_file = {}\n",

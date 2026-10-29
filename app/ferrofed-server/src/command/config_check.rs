@@ -31,7 +31,10 @@ pub(super) fn config_checked(
         println!("ferrofed: warning: {notice}");
     }
     for key in &settings.deprecated {
-        println!("ferrofed: warning: {key}");
+        println!(
+            "ferrofed: warning: {} is deprecated and read as {}; rename it, because FerroFED {} refuses it",
+            key.old, key.new, key.refused_in
+        );
     }
     for note in settings
         .server

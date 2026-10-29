@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `server.public_url`: the gateway's public base URL, named once. The
+//! `gateway.public_url`: the gateway's public base URL, named once. The
 //! audience, the JWK Set's URL and the PMIR callback default from it, and a
 //! JWK Set URL or callback that names another route than the gateway serves
 //! under it is refused by its key. No specification governs the key: our own
@@ -30,8 +30,10 @@ fn resolve(text: &str) -> Result<Result<Settings, ConfigError>, Box<dyn Error>> 
 /// A gateway under `base` at `public`, signing with the suite's key, with
 /// the `[signing]` keys `signing`.
 fn gateway(base: &str, public: &str, signing: &str) -> String {
+    // NOTE: `server.base_path` writes the root as the empty path.
+    let base = if base == "/" { "" } else { base };
     format!(
-        "[server]\nbase_path = \"{base}\"\npublic_url = \"{public}\"\n\n[signing]\nkey_file = {}\n{signing}",
+        "[server]\nbase_path = \"{base}\"\n\n[gateway]\npublic_url = \"{public}\"\n\n[signing]\nkey_file = {}\n{signing}",
         toml::Value::String(signing_key_file().to_owned())
     )
 }
@@ -113,7 +115,7 @@ fn a_public_url_whose_path_is_not_the_base_path_is_refused() -> TestResult {
         "{refused}"
     );
     assert!(
-        refused.to_string().contains("server.public_url"),
+        refused.to_string().contains("gateway.public_url"),
         "{refused}"
     );
     let refused = resolve(&gateway("/", "https://gateway.example.org/?a=1", ""))?
@@ -155,7 +157,7 @@ mod pmir {
     ) -> Result<String, Box<dyn std::error::Error>> {
         let text = crate::pmir::text(dir, "http://127.0.0.1:9/fhir/", callback, "")?;
         Ok(format!(
-            "{text}\n[server]\nbase_path = \"/fed\"\npublic_url = \"{public}\"\n\n[signing]\nkey_file = {}\n",
+            "{text}\n[server]\nbase_path = \"/fed\"\n\n[gateway]\npublic_url = \"{public}\"\n\n[signing]\nkey_file = {}\n",
             toml::Value::String(crate::support::signing_key_file().to_owned())
         ))
     }

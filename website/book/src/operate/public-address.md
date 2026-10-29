@@ -13,13 +13,15 @@ client address the gateway takes.
 
 Three keys name the URL clients and services reach the gateway at:
 `auth.audience`, the JWK Set's `signing.jwks_uri` and the PMIR feed's
-`pmir.callback_url`. Name it once in `server.public_url`, with the scheme,
+`pmir.callback_url`. Name it once in `gateway.public_url`, with the scheme,
 the host, any port and the [base path](configuration.md#the-base-path), and
 leave the three out:
 
 ```toml
 [server]
 base_path = "/fed"
+
+[gateway]
 public_url = "https://gateway.example.org/fed"
 ```
 
@@ -27,20 +29,20 @@ Each of the three that is not set then takes its value from it:
 
 | Key | Value |
 |---|---|
-| `auth.audience` | `server.public_url` as written |
+| `auth.audience` | `gateway.public_url` as written |
 | `signing.jwks_uri` | `{public_url}/.well-known/jwks.json` |
 | `pmir.callback_url` | `{public_url}` followed by `pmir.path`, `/pmir/feed` by default |
 
-The gateway refuses to start, naming the key, when `server.public_url` is
+The gateway refuses to start, naming the key, when `gateway.public_url` is
 no `http` or `https` URL, carries a user name, a password, a query or a
 fragment, or names a path other than `server.base_path` (a trailing `/`
 aside). A `signing.jwks_uri` or `pmir.callback_url` you still set must name
-the route the gateway serves under `server.public_url`, or `config check`
+the route the gateway serves under `gateway.public_url`, or `config check`
 refuses it and names the key and the URL it expects. A copy that misses the
 base path is then found before a node fails to fetch the JWK Set or the
 Registry sends the feed nowhere. An `auth.audience` you set is taken as
 written: it is the gateway's identifier at its issuers, which need not be
-its URL. Without `server.public_url`, each key is read as written and
+its URL. Without `gateway.public_url`, each key is read as written and
 nothing is compared.
 
 ## Behind a reverse proxy

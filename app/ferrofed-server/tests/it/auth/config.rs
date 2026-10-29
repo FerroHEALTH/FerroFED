@@ -228,7 +228,7 @@ fn a_key_of_the_former_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
             .err()
             .ok_or("refused")?;
         assert!(
-            matches!(error, ConfigError::Parse { .. }),
+            matches!(error, ConfigError::Load { .. }),
             "{written}: {error:?}"
         );
     }
@@ -240,7 +240,7 @@ fn a_key_of_the_former_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
         .err()
         .ok_or("refused")?;
     assert!(
-        matches!(error, ConfigError::Parse { .. }),
+        matches!(error, ConfigError::Load { .. }),
         "an inline key set is no key: {error:?}"
     );
     Ok(())

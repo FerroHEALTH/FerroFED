@@ -21,7 +21,7 @@ of `[server]` and `[federation]`.
 ```toml
 [server]
 max_concurrent_requests = 512   # one more at once answers 503 overloaded
-overload_retry_after_s = 1      # the Retry-After of that 503, in seconds
+retry_after_s = 1      # the Retry-After of that 503, in seconds
 
 [server.caller_rate]            # unset, no caller is rate limited
 requests_per_second = 10        # sustained, per caller
@@ -36,7 +36,7 @@ max_node_answer_bytes = 16777216  # of one answer; a longer one makes its member
 
 A request that arrives while the gateway serves `max_concurrent_requests`
 others is answered `503` with the code `overloaded` and a `Retry-After` of
-`overload_retry_after_s` seconds (RFC 9110 §15.6.4, §10.2.3). The gateway
+`retry_after_s` seconds (RFC 9110 §15.6.4, §10.2.3). The gateway
 refuses it before it reads anything else of it: the caller is not verified,
 and no resolver, localizer or member is asked. The health family,
 `{base}/health` and `{base}/health/readiness`, is never refused, so an

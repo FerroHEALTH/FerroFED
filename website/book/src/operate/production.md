@@ -34,7 +34,7 @@ in.
 Decide three values before you start, because several settings repeat them:
 
 - the public base URL, here `https://gateway.example.org/fed`: its path is
-  `server.base_path`, and `server.public_url` names it once, from which
+  `server.base_path`, and `gateway.public_url` names it once, from which
   `auth.audience`, the JWK Set's URL and the PMIR feed's URL follow
   ([The public base URL](public-address.md#the-public-base-url));
 - the federation id, `federation.id`, which `OPTIONS {base}/` reports;
@@ -87,11 +87,13 @@ profile = "production"
 [server]
 listen = "127.0.0.1:8080"
 base_path = "/fed"
-public_url = "https://gateway.example.org/fed"
 trusted_proxies = ["127.0.0.1"]
 forwarded_header = "x-forwarded-for"
 drain_delay_ms = 5000
 shutdown_timeout_ms = 30000
+
+[gateway]
+public_url = "https://gateway.example.org/fed"
 
 [telemetry]
 format = "json"
@@ -179,7 +181,7 @@ access token:
 
 - its JOSE header names the type `at+jwt`;
 - it carries `iss`, `exp`, `aud`, `sub`, `client_id`, `iat` and `jti`, and
-  `aud` names `auth.audience`, which is `server.public_url` unless you set
+  `aud` names `auth.audience`, which is `gateway.public_url` unless you set
   it;
 - its `scope` holds the SMART on openEHR scopes of each operation, such as
   `user/aql-*.s` for a federated query
@@ -419,7 +421,7 @@ holds to the FAPI 2.0 Security Profile
 ([Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set)).
 The JWK Set is served at `https://gateway.example.org/fed/.well-known/jwks.json`,
 on the public address of [step 8](#8-tls-and-the-public-address), and
-`signing.jwks_uri` takes that value from `server.public_url`; give it to
+`signing.jwks_uri` takes that value from `gateway.public_url`; give it to
 `cdr-b`'s operator with the `client_id`, and to every member that verifies
 the caller token.
 
@@ -485,7 +487,7 @@ password_hash_file = "/run/secrets/ferrofed/pmir-registry-hash"
 
 The Registry sends the feed to `pmir.callback_url`, which is
 `https://gateway.example.org/fed/pmir/feed` here, the feed route under
-`server.public_url`.
+`gateway.public_url`.
 
 ## 7. The access log
 

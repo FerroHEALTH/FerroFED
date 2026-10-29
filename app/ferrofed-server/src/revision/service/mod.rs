@@ -23,7 +23,6 @@ use jiff::Timestamp;
 
 use crate::config::Config;
 use crate::config::error::Error;
-use crate::config::error::parse::Stage;
 use crate::config::revisions::RevisionsFault;
 use crate::config::settings::Settings;
 use crate::reload::{ReloadError, Reloader};
@@ -301,8 +300,7 @@ impl Revisions {
     /// core; [`Refused::State`] for what [`AppState::check`](crate::state::AppState::check) and the caller
     /// check refuse.
     pub fn validate(&self, text: &str) -> Result<(String, Config), Refused> {
-        let table: toml::Table =
-            toml::from_str(text).map_err(|error| Error::parse(&error, text, Stage::File))?;
+        let table = crate::config::load::table(text)?;
         if let Some(key) = core_keys(&table).into_iter().next() {
             return Err(Refused::Core { key });
         }
@@ -312,7 +310,7 @@ impl Revisions {
         let config = configuration(&join(&self.core(), &table))?;
         let settings = config.resolve()?;
         checked(&settings)?;
-        let written = toml::to_string(&table).map_err(|source| Error::Assemble { source })?;
+        let written = toml::to_string(&table).map_err(Error::assemble)?;
         Ok((written, config))
     }
 
@@ -354,8 +352,7 @@ impl Revisions {
     ) -> Result<Revision, RevisionError> {
         let reason = reason_of(&reason)?;
         let (toml, _config) = self.validate(toml)?;
-        let table: toml::Table = toml::from_str(&toml)
-            .map_err(|source| Refused::from(Error::parse(&source, &toml, Stage::File)))?;
+        let table = crate::config::load::table(&toml).map_err(Refused::from)?;
         let file_owned = self.file_untouched(&table)?;
         let console = present(&table)
             .into_iter()
