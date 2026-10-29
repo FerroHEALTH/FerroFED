@@ -73,7 +73,7 @@ async fn an_unmodified_client_given_only_the_base_url_reads_and_writes_at_a_pref
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let base = format!("http://{}{BASE}", listener.local_addr()?);
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
-    let serving = tokio::spawn(ferrofed_server::serve_until(
+    let serving = tokio::spawn(crate::support::serve_until(
         listener,
         app,
         Duration::from_secs(1),

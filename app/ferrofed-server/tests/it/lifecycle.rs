@@ -19,7 +19,6 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
-use ferrofed_server::drain_on;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode};
@@ -164,16 +163,20 @@ async fn readiness_is_503_from_the_moment_the_stop_signal_arrives() -> TestResul
             tracing::debug!("the stop channel closed");
         }
     };
-    let draining = tokio::spawn(drain_on(
-        signal,
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let draining = tokio::spawn(ferrohealth_server::serve::serve(
+        listener,
+        app(&state),
         state.lifecycle().clone(),
+        signal,
         std::time::Duration::ZERO,
+        std::time::Duration::from_secs(1),
     ));
     let (status, _) = readiness(&state).await?;
     assert_eq!(StatusCode::OK, status, "no signal yet");
 
     stop.send(()).map_err(|()| "the signal task is gone")?;
-    draining.await?;
+    draining.await??;
     let (status, report) = readiness(&state).await?;
     assert_eq!(StatusCode::SERVICE_UNAVAILABLE, status);
     assert_eq!("down", report.state);

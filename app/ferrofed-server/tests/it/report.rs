@@ -223,7 +223,7 @@ async fn a_running_gateway_is_reported_without_a_patient_identifier_or_a_credent
     let state = Arc::new(AppState::build(&settings)?);
     state.lifecycle().booted();
     let app = ferrofed_server::router(Arc::clone(&state), &settings.server);
-    tokio::spawn(ferrofed_server::serve_until(
+    tokio::spawn(crate::support::serve_until(
         gateway_listener,
         app,
         Duration::ZERO,
@@ -231,7 +231,11 @@ async fn a_running_gateway_is_reported_without_a_patient_identifier_or_a_credent
     ));
     let (_, admin_app) =
         ferrofed_server::admin::listener(&settings, &state).ok_or("an admin listener")?;
-    tokio::spawn(ferrofed_server::admin::serve(admin_listener, admin_app));
+    tokio::spawn(ferrofed_server::admin::serve(
+        admin_listener,
+        admin_app,
+        None,
+    ));
 
     exercise(gateway).await?;
     emit_incidents()?;

@@ -7,11 +7,11 @@
 
 use std::sync::Arc;
 
-use ferrofed_server::listener::certificates::{CertificateError, Certificates};
 use ferrofed_testkit::listener::ListenerCertificates;
+use ferrohealth_server::tls::{TlsError, TlsKeys};
 use http::StatusCode;
 
-use super::{TestResult, client, presented, ready_over, tls_files};
+use super::{TestResult, client, kept, presented, ready_over, tls_section};
 use ferrofed_server::healthcheck::READINESS;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -19,7 +19,7 @@ async fn a_reload_presents_the_new_certificate_from_the_next_handshake() -> Test
     let dir = tempfile::tempdir()?;
     let first = ListenerCertificates::generate()?;
     let files = first.write(dir.path())?;
-    let certificates = Arc::new(Certificates::load(tls_files(&files, false))?);
+    let certificates = kept(&tls_section(&files, false, false), TlsKeys::SERVER)?;
     let address = ready_over(Arc::clone(&certificates)).await?;
 
     let (status, leaf) = presented(&client(first.ca(), None)?, address, READINESS).await?;
@@ -47,7 +47,7 @@ async fn a_key_that_does_not_match_is_refused_and_the_running_certificate_stays(
     let dir = tempfile::tempdir()?;
     let first = ListenerCertificates::generate()?;
     let files = first.write(dir.path())?;
-    let certificates = Arc::new(Certificates::load(tls_files(&files, false))?);
+    let certificates = kept(&tls_section(&files, false, false), TlsKeys::SERVER)?;
     let address = ready_over(Arc::clone(&certificates)).await?;
 
     let second = ListenerCertificates::generate()?;
@@ -55,16 +55,7 @@ async fn a_key_that_does_not_match_is_refused_and_the_running_certificate_stays(
     let refused = certificates
         .reload()
         .expect_err("a certificate beside another certificate's key is refused");
-    assert!(
-        matches!(
-            refused,
-            CertificateError::Config {
-                table: "server.tls",
-                ..
-            }
-        ),
-        "{refused:?}"
-    );
+    assert!(matches!(refused, TlsError::Config(_)), "{refused:?}");
 
     std::fs::write(&files.key, "Qz7-synthetic-not-a-key")?;
     let refused = certificates

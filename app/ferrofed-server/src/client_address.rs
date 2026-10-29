@@ -26,8 +26,6 @@ use http::header::{FORWARDED, HeaderName};
 use ipnet::IpNet;
 use serde::Deserialize;
 
-use crate::listener::Peer;
-
 /// The `X-Forwarded-For` header, which no RFC registers.
 pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 
@@ -132,13 +130,13 @@ pub struct ClientAddress(pub IpAddr);
 /// it; a request with no connection, as in a test, gets none.
 pub async fn attach(
     State(forwarding): State<Arc<Forwarding>>,
-    peer: Result<ConnectInfo<Peer>, ExtensionRejection>,
+    peer: Result<ConnectInfo<std::net::SocketAddr>, ExtensionRejection>,
     mut request: Request,
     next: Next,
 ) -> Response {
     // NOTE: no specification governs this: our own design; a request served
     // over no connection has no peer, so it is named by no address.
-    let peer = peer.ok().map(|ConnectInfo(Peer(peer))| peer.ip());
+    let peer = peer.ok().map(|ConnectInfo(peer)| peer.ip());
     if let Some(peer) = peer {
         let client = forwarding.client(peer, request.headers());
         request.extensions_mut().insert(ClientAddress(client));

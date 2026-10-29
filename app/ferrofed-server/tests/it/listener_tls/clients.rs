@@ -1,25 +1,26 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! A listener with a client CA admits a client whose certificate that CA
-//! signed and refuses one that presents none or another CA's, and `ferrofed
-//! healthcheck` presents `healthcheck_identity_file` to it.
-
-use std::sync::Arc;
+//! A listener whose client CA `client_auth = "required"` names admits a
+//! client whose certificate that CA signed and refuses one that presents
+//! none or another CA's, and `ferrofed healthcheck` presents
+//! `healthcheck_identity_file` to it.
 
 use ferrofed_server::healthcheck::READINESS;
-use ferrofed_server::listener::certificates::Certificates;
 use ferrofed_testkit::listener::ListenerCertificates;
+use ferrohealth_server::tls::TlsKeys;
 use http::StatusCode;
 
-use super::{TestResult, client, ferrofed, presented, quoted, ready_over, tls_files, written};
+use super::{
+    TestResult, client, ferrofed, kept, presented, quoted, ready_over, tls_section, written,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn only_a_client_certificate_the_client_ca_signed_is_admitted() -> TestResult {
     let dir = tempfile::tempdir()?;
     let set = ListenerCertificates::generate()?;
     let files = set.write(dir.path())?;
-    let address = ready_over(Arc::new(Certificates::load(tls_files(&files, true))?)).await?;
+    let address = ready_over(kept(&tls_section(&files, true, false), TlsKeys::SERVER)?).await?;
 
     let (status, _) = presented(
         &client(set.ca(), Some(set.client_identity()))?,
@@ -55,10 +56,10 @@ async fn the_healthcheck_presents_its_identity_to_a_listener_that_requires_one()
     let dir = tempfile::tempdir()?;
     let set = ListenerCertificates::generate()?;
     let files = set.write(dir.path())?;
-    let address = ready_over(Arc::new(Certificates::load(tls_files(&files, true))?)).await?;
+    let address = ready_over(kept(&tls_section(&files, true, false), TlsKeys::SERVER)?).await?;
     let config = dir.path().join("ferrofed.toml");
     let base = format!(
-        "[server]\nlisten = \"{address}\"\n\n[server.tls]\ncertificate_file = {}\nkey_file = {}\nclient_ca_file = {}\n",
+        "[server]\nlisten = \"{address}\"\n\n[server.tls]\ncertificate_file = {}\nkey_file = {}\nclient_auth = \"required\"\nclient_ca_file = {}\n",
         quoted(&files.certificate),
         quoted(&files.key),
         quoted(&files.client_ca),

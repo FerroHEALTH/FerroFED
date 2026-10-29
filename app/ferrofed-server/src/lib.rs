@@ -8,8 +8,9 @@
 //! reads the file and the environment into one
 //! [`config::settings::Settings`], [`telemetry`] installs the subscriber,
 //! [`router`] builds the HTTP surface over [`state::AppState`],
-//! and [`serve`] runs it on a bound listener until the process is asked to
-//! stop, while [`reload`] replaces the registry on `SIGHUP`. On a terminal,
+//! and `ferrohealth_server::serve` runs it and the admin listener until the
+//! process is asked to stop, while [`reload`] replaces the registry on
+//! `SIGHUP`. On a terminal,
 //! `serve` prints the [`banner`] before the subscriber starts. `main.rs` only
 //! hands in the arguments and returns the exit code.
 //!
@@ -83,7 +84,6 @@ pub mod fhir;
 pub mod health;
 pub mod healthcheck;
 pub mod jwks;
-pub mod listener;
 pub mod localization;
 pub mod metrics;
 mod onward;
@@ -104,13 +104,10 @@ pub mod telemetry;
 pub mod upstream;
 pub mod usage_report;
 
-use std::future::Future;
 use std::sync::Arc;
-use std::time::Duration;
 
 use axum::response::Response;
 use axum::routing::get;
-use axum::serve::Listener;
 use axum::{Json, Router};
 use http::{HeaderMap, StatusCode};
 use tower_http::catch_panic::CatchPanicLayer;
@@ -122,7 +119,6 @@ use crate::auth::guard::Guard;
 use crate::auth::trust::Trust;
 use crate::config::settings::ServerSettings;
 use crate::state::AppState;
-use ferrohealth_health::lifecycle::Lifecycle;
 use ferrohealth_server::health::Health;
 
 /// The exit code of a command line the binary refuses.
@@ -374,140 +370,4 @@ fn layered(router: Router, server: &ServerSettings, metered: Option<Metered>) ->
 /// `GET /`: the product and the version, as JSON.
 async fn root() -> Json<body::Root> {
     Json(body::Root::default())
-}
-
-/// Serves `app` on an already-bound listener until the process receives
-/// `SIGTERM` or `SIGINT`, then drains.
-///
-/// The listener is a [`tokio::net::TcpListener`] for plain HTTP or a
-/// [`listener::TlsListener`] for `[server.tls]`. The signal moves
-/// `lifecycle` to draining at once, so readiness answers `503` from the
-/// moment the signal arrives. The listener keeps accepting for
-/// `server.drain_delay`, then closes, and the requests in flight get
-/// `server.shutdown_timeout` to finish ([`drain_on`]).
-///
-/// # Errors
-/// Returns the I/O error from accepting or serving connections.
-pub async fn serve<L>(
-    listener: L,
-    app: Router,
-    server: &ServerSettings,
-    lifecycle: Lifecycle,
-) -> std::io::Result<()>
-where
-    L: Listener,
-    L::Addr: std::fmt::Debug,
-    listener::Peer:
-        for<'a> axum::extract::connect_info::Connected<axum::serve::IncomingStream<'a, L>>,
-{
-    serve_until(
-        listener,
-        app,
-        server.shutdown_timeout,
-        drain_on(shutdown_signal(), lifecycle, server.drain_delay),
-    )
-    .await
-}
-
-/// Serves `app` on an already-bound listener until `shutdown` completes, then
-/// finishes the requests in flight within `drain`.
-///
-/// A container runtime stops a container with `SIGTERM` to PID 1 and kills it
-/// after a grace period, so the drain is bounded here too: a connection still
-/// open when `drain` elapses is dropped and the function returns.
-///
-/// # Errors
-/// Returns the I/O error from accepting or serving connections.
-pub async fn serve_until<L, F>(
-    listener: L,
-    app: Router,
-    drain: Duration,
-    shutdown: F,
-) -> std::io::Result<()>
-where
-    L: Listener,
-    L::Addr: std::fmt::Debug,
-    listener::Peer:
-        for<'a> axum::extract::connect_info::Connected<axum::serve::IncomingStream<'a, L>>,
-    F: Future<Output = ()> + Send + 'static,
-{
-    let signalled = Arc::new(tokio::sync::Notify::new());
-    let inner = Arc::clone(&signalled);
-    // NOTE: Regulation (EU) 2025/327 Annex II 3.2: an access record names the address the
-    // request came from, which the connection alone knows.
-    let app = app.into_make_service_with_connect_info::<listener::Peer>();
-    let server = axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            shutdown.await;
-            inner.notify_one();
-        })
-        .into_future();
-    let mut server = std::pin::pin!(server);
-    tokio::select! {
-        result = &mut server => return result,
-        () = signalled.notified() => {}
-    }
-    if let Ok(result) = tokio::time::timeout(drain, server).await {
-        return result;
-    }
-    tracing::warn!(
-        drain_ms = drain.as_millis(),
-        "the drain did not finish in time; the remaining connections are dropped"
-    );
-    Ok(())
-}
-
-/// Completes `delay` after `signal` completes, moving `lifecycle` to
-/// draining the moment the signal arrives.
-///
-/// [`crate::serve`] hands this the process's stop signal and
-/// `server.drain_delay_ms`, so readiness answers `503` while the listener
-/// still accepts, and a load balancer that polls readiness, or removes a
-/// terminating endpoint, stops routing to the process before it closes. The
-/// Kubernetes documentation describes that removal as running alongside the
-/// stop signal, not ahead of it
-/// (<https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination>).
-pub async fn drain_on<F>(signal: F, lifecycle: Lifecycle, delay: Duration)
-where
-    F: Future<Output = ()>,
-{
-    signal.await;
-    lifecycle.drain();
-    tracing::info!(
-        drain_delay_ms = delay.as_millis(),
-        "readiness withdrawn; the listener accepts until the drain delay ends"
-    );
-    tokio::time::sleep(delay).await;
-    tracing::info!("the listener stops accepting; draining the requests in flight");
-}
-
-/// Completes when the process receives `SIGTERM` or `SIGINT`.
-///
-/// A failure to install a handler is logged and that arm never completes, so
-/// the server keeps serving and the runtime's own kill stays the backstop.
-pub async fn shutdown_signal() {
-    let interrupt = async {
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => {}
-            Err(error) => {
-                tracing::error!(%error, "cannot listen for SIGINT");
-                std::future::pending::<()>().await;
-            }
-        }
-    };
-    let terminate = async {
-        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-            Ok(mut signal) => {
-                signal.recv().await;
-            }
-            Err(error) => {
-                tracing::error!(%error, "cannot listen for SIGTERM");
-                std::future::pending::<()>().await;
-            }
-        }
-    };
-    tokio::select! {
-        () = interrupt => tracing::info!("SIGINT received, draining"),
-        () = terminate => tracing::info!("SIGTERM received, draining"),
-    }
 }

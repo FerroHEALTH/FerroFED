@@ -13,7 +13,6 @@ use std::net::SocketAddr;
 
 use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_server::client_address::{ForwardedHeader, Forwarding};
-use ferrofed_server::listener::Peer;
 use http::StatusCode;
 
 use super::{LAB_REPORT, TestResult, accesses, composition, gateway_under, node_with_rows};
@@ -49,9 +48,8 @@ async fn recorded(
         .map(|proxy| proxy.parse::<ipnet::IpNet>())
         .collect::<Result<Vec<_>, _>>()?;
     server.forwarding = Forwarding::new(proxies, ForwardedHeader::Forwarded);
-    let app = gateway_under(dir.path(), (&a.uri(), &b.uri()), &repository, "", &server)?.layer(
-        MockConnectInfo(Peer(SocketAddr::new(PROXY.parse()?, 40000))),
-    );
+    let app = gateway_under(dir.path(), (&a.uri(), &b.uri()), &repository, "", &server)?
+        .layer(MockConnectInfo(SocketAddr::new(PROXY.parse()?, 40000)));
     let aql = format!(
         "SELECT c FROM EHR e CONTAINS COMPOSITION c \
          WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \

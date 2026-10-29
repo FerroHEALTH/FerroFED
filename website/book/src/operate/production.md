@@ -524,7 +524,7 @@ The listener speaks plain HTTP by default. Choose one of two shapes:
   ships one for nginx.
 - **TLS on the listener**, with `[server.tls]`, where the hop from your
   proxy or load balancer to the gateway crosses a network others share. Add
-  `client_ca_file` to admit the proxy alone
+  `client_auth = "required"` and a `client_ca_file` to admit the proxy alone
   ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
 
 `ferrofed.conf` is the nginx configuration for the settings above, and

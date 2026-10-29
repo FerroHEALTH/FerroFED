@@ -22,7 +22,6 @@ use axum::routing::get;
 use ferrofed_server::client_address::{self, ClientAddress, ForwardedHeader, Forwarding};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
-use ferrofed_server::listener::Peer;
 use http::{Request, StatusCode};
 
 use crate::support::call;
@@ -51,7 +50,7 @@ async fn client(
             Arc::new(forwarding),
             client_address::attach,
         ))
-        .layer(MockConnectInfo(Peer(peer)));
+        .layer(MockConnectInfo(peer));
     let mut request = Request::get("/");
     for (name, value) in headers {
         request = request.header(*name, *value);

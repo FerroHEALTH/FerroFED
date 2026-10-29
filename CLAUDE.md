@@ -313,7 +313,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   the console, the request log that carries no body, query text, header value
   or unmatched path, the shared health family of `ferrohealth-server` over
   `ferrohealth-health`'s indicator registry (#1397), the
-  `tower-http` stack, the bounded drain and the startup banner. The gate
+  `tower-http` stack, the listeners with their TLS and the bounded drain of
+  `ferrohealth-server` (#1397), and the startup banner. The gate
   (`auth`, #80) authenticates every caller before the façade reads the
   request, and the gateway's JWK Set is served at
   `{base}/.well-known/jwks.json` (#81). The façade (#38) serves the federated AQL query, the stored queries the gateway holds

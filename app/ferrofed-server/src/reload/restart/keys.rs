@@ -89,6 +89,9 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("server.request_timeout_ms", |boot, fresh| {
         boot.server.request_timeout != fresh.server.request_timeout
     }),
+    ("server.header_read_timeout_ms", |boot, fresh| {
+        boot.server.header_read_timeout_ms != fresh.server.header_read_timeout_ms
+    }),
     ("server.drain_delay_ms", |boot, fresh| {
         boot.server.drain_delay != fresh.server.drain_delay
     }),
@@ -219,6 +222,7 @@ public_url = "https://gateway.example.org/fed"
 trusted_proxies = ["10.0.0.1"]
 forwarded_header = "x-forwarded-for"
 request_timeout_ms = 30000
+header_read_timeout_ms = 20000
 drain_delay_ms = 10
 shutdown_timeout_ms = 40000
 bindings_drain_timeout_ms = 5000
@@ -234,7 +238,10 @@ burst = 20
 [server.tls]
 certificate_file = "@DIR@/listener.crt"
 key_file = "@DIR@/listener.key"
+client_auth = "required"
 client_ca_file = "@DIR@/client-ca.pem"
+reload_interval_s = 3600
+min_version = "1.2"
 healthcheck_identity_file = "@DIR@/client.pem"
 
 [telemetry]
@@ -551,6 +558,8 @@ secrets_dir = "@DIR@/secrets"
         ("stored_queries.backend", "files"),
         ("config.ui", "off"),
         ("usage_report.deployment", "helm"),
+        ("server.tls.client_auth", "optional"),
+        ("server.tls.min_version", "1.3"),
     ];
 
     /// The values a change of the leaf `key`, now `value`, tries in order: a

@@ -99,14 +99,16 @@ impl Running {
         let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
         let gateway = TcpListener::bind("127.0.0.1:0").await?;
         let gateway_address = gateway.local_addr()?;
-        tokio::spawn(ferrofed_server::serve_until(
+        tokio::spawn(ferrohealth_server::serve::serve(
             gateway,
             ferrofed_server::router(
                 Arc::new(AppState::with_federation(federation)),
                 &settings.server,
             ),
-            Duration::from_secs(1),
+            ferrohealth_health::lifecycle::Lifecycle::default(),
             std::future::pending(),
+            Duration::ZERO,
+            Duration::from_secs(1),
         ));
 
         let console_settings = ferrofed_console::config::Config::from_sources(
@@ -129,11 +131,13 @@ impl Running {
         })?;
         let console = TcpListener::bind("127.0.0.1:0").await?;
         let console_address = console.local_addr()?;
-        tokio::spawn(ferrofed_server::serve_until(
+        tokio::spawn(ferrohealth_server::serve::serve(
             console,
             ferrofed_console::server::router(state),
-            Duration::from_secs(1),
+            ferrohealth_health::lifecycle::Lifecycle::default(),
             std::future::pending(),
+            Duration::ZERO,
+            Duration::from_secs(1),
         ));
         Ok(Self {
             _node: node,

@@ -6,6 +6,7 @@
 use std::process::ExitCode;
 
 use crate::config::fhir::FhirSettings;
+use crate::config::server::ListenerTlsSettings;
 use crate::config::settings::Settings;
 use crate::support::Support;
 use crate::{admin, binding, body, config, metrics};
@@ -54,9 +55,9 @@ pub(super) fn config_checked(
         } else if surface
             .tls
             .as_ref()
-            .is_some_and(|tls| tls.client_ca.is_some())
+            .is_some_and(ListenerTlsSettings::requires_client_certificate)
         {
-            "a client whose certificate metrics.tls.client_ca_file admits"
+            "a client whose certificate metrics.tls.client_ca_file admits (client_auth = \"required\")"
         } else {
             "every peer"
         };

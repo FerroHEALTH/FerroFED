@@ -17,8 +17,9 @@ page: our own design.
   and patient identifiers in the clear (B1). Keep `server.listen` on a
   loopback address, its default `127.0.0.1:8080`, when the proxy runs beside
   it; in a container, bind the address the proxy reaches and nothing wider.
-  Where the hop crosses a shared network, set `[server.tls]` with a
-  `client_ca_file` that admits the proxy alone, and `[metrics.tls]` for the
+  Where the hop crosses a shared network, set `[server.tls]` with
+  `client_auth = "required"` and a `client_ca_file` that admits the proxy
+  alone, and `[metrics.tls]` for the
   admin listener
   ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
 - [ ] **Publish container ports on one address.** A port published on
@@ -155,13 +156,14 @@ page: our own design.
   it to an internal address the console's server can reach and no public
   network can ([The operator console](operator-console.md#configuration)).
   The console presents no client certificate: guard the scrape with
-  `scrape_users` on a listener the console calls, never with a
-  `client_ca_file`.
+  `scrape_users` on a listener the console calls, never with a required
+  client certificate.
 - [ ] **Authenticate the scrape off loopback.** Name a scrape user in
   `metrics.scrape_users`, write it under `[[auth.basic.users]]` with the
   Argon2id hash of a long random password, such as `openssl rand -hex 32`,
   and give your Prometheus the password with `basic_auth.password_file`; or
-  set `[metrics.tls]` with a `client_ca_file` that admits the scraper.
+  set `[metrics.tls]` with `client_auth = "required"` and a
+  `client_ca_file` that admits the scraper.
   Outside the development profile the gateway refuses to start with a
   listener off loopback and neither.
 - [ ] **Set `auth.product_scope`** and have only your operators' issuer

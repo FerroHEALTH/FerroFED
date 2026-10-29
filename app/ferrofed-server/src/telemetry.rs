@@ -207,10 +207,7 @@ pub fn collector_tls(endpoint: &SecretUrl, tls: &TlsSettings) -> Option<ClientTl
     // NOTE: tonic's client reads rustls's process-level provider, which is ambiguous while two
     // crypto crates are linked; an earlier install wins, so the result is dropped.
     let _installed: Result<(), std::sync::Arc<rustls::crypto::CryptoProvider>> =
-        crate::listener::certificates::provider()
-            .as_ref()
-            .clone()
-            .install_default();
+        rustls::crypto::aws_lc_rs::default_provider().install_default();
     let mut config = ClientTlsConfig::new().with_native_roots();
     if let Some(roots) = &tls.trust_roots {
         config = config.ca_certificate(Certificate::from_pem(roots));
