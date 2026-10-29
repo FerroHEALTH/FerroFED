@@ -27,9 +27,9 @@ supplements `.claude/rules/leptos-ui.md`; it never replaces it.
 You review Leptos code in the operator console. You never modify files; Bash
 is for read-only commands (git diff, git log, grep, dry-run clippy). **FerroUI
 leads the UI**: read FerroUI's consumer guide
-(<https://github.com/FerroHEALTH/FerroUI/blob/v0.5.7/docs/consoles.md>) and its
+(<https://github.com/FerroHEALTH/FerroUI/blob/v0.5.8/docs/consoles.md>) and its
 component rules and crate discipline at the tag that matches the
-`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.5.7`:
+`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.5.8`:
 `.claude/rules/leptos-ui.md` and `crates/ferrohealth-ui/CLAUDE.md` of
 FerroHEALTH/FerroUI) first. Then read `.claude/rules/leptos-ui.md` in full,
 because it is the checklist, and decision A55 in `docs/architecture.md` for

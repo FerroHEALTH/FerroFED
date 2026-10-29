@@ -8,20 +8,20 @@ paths: ["app/ferrofed-console/**"]
 # Leptos console rules (`app/ferrofed-console`, and any Leptos code)
 
 **FerroUI leads the UI.** The console draws with `ferrohealth-ui`, pinned
-exactly in the root `[workspace.dependencies]` (today `=0.5.7`), and the
+exactly in the root `[workspace.dependencies]` (today `=0.5.8`), and the
 FerroUI repository (FerroHEALTH/FerroUI) is the source for its components,
 design, tokens, icons, accessibility bar, interaction contract, words and
 quality control. Read these first, at the git tag that matches the pin
-(today `v0.5.7`):
+(today `v0.5.8`):
 
-- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.7/docs/consoles.md):
+- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.8/docs/consoles.md):
   the consumer guide, how a console uses the library.
-- [`.claude/rules/leptos-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.7/.claude/rules/leptos-ui.md):
+- [`.claude/rules/leptos-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.8/.claude/rules/leptos-ui.md):
   the component rules of every FerroHEALTH console. The section numbers this
-  file cites (FerroUI §N) are those of the `v0.5.7` copy.
-- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.7/crates/ferrohealth-ui/CLAUDE.md):
+  file cites (FerroUI §N) are those of the `v0.5.8` copy.
+- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.8/crates/ferrohealth-ui/CLAUDE.md):
   the crate's own discipline.
-- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.5.7/design/consoles/ferrofed):
+- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.5.8/design/consoles/ferrofed):
   the reviewed design of this console. Every page matches its mockup at
   1440 and 390 px, light and dark. FerroUI's `design/` is the only design
   source; a design folder anywhere else is stale.
