@@ -246,7 +246,7 @@ services:
   # FerroPIX, the patient index: its PIXm Manager answers the gateway's
   # ITI-83 and takes the seed's ITI-104 feed.
   ferropix:
-    image: ghcr.io/ferrohealth/ferropix:0.0.10@sha256:f44b2b12f0f12a6f0b1c7e2afc9611c649d501606b96d48e4471e0952826a504
+    image: ghcr.io/ferrohealth/ferropix:0.0.12@sha256:01adb1e7cc91b46409cc315162200fb99a712a9232508d5c85a228554d22d6d3
     restart: unless-stopped
     depends_on:
       ferropix-postgres:
