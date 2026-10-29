@@ -177,6 +177,26 @@ async fn a_documented_400_is_a_node_error_with_the_nodes_status_and_message() ->
 }
 
 #[tokio::test]
+async fn a_problem_details_refusal_is_a_node_error_with_the_nodes_status_and_detail() -> TestResult
+{
+    let problem = r#"{"type":"https://cdr.example.org/problems/aql-invalid","title":"The AQL is not valid","status":400,"detail":"unknown archetype path in WHERE","instance":"urn:uuid:5d0c6a8e-2f4b-4e19-8c3a-71b9e0d2a4f6"}"#;
+    let server = node_answering(
+        "/openehr",
+        ResponseTemplate::new(400)
+            .set_body_raw(problem.as_bytes().to_vec(), "application/problem+json"),
+    )
+    .await;
+    let reply = dispatch_to(&server).await?;
+    assert_eq!(reply.status(), EndpointStatus::NodeError);
+    assert_eq!(
+        error_text(&reply)?,
+        "the node answered 400 Bad Request: unknown archetype path in WHERE",
+        "RFC 9457 §3.1.4: the detail, never the document quoted whole"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_documented_408_is_a_node_error_not_a_time_out() -> TestResult {
     let server = node_answering(
         "/openehr",

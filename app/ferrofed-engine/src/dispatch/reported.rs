@@ -21,6 +21,7 @@ use ferrohealth_smart::client::TokenError as SmartTokenError;
 use http::StatusCode;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::client::{CredentialsError, ErrorBody};
+use serde::Deserialize;
 
 use crate::hygiene::Withheld;
 use crate::hygiene::mask::MASK;
@@ -39,7 +40,8 @@ pub const CODE_MEMBER: &str = "code";
 /// status and an excerpt of the node's message.
 ///
 /// The message is the ITS-REST `Error.message` when the body is one, the
-/// body's text otherwise.
+/// `detail` (else the `title`) of an RFC 9457 problem details body when it is
+/// one, and the body's text otherwise.
 #[must_use]
 pub fn answered(status: StatusCode, body: &ErrorBody, withheld: &Withheld) -> ErrorDetail {
     said(format!("the node answered {status}"), body, withheld)
@@ -56,10 +58,36 @@ pub fn answered(status: StatusCode, body: &ErrorBody, withheld: &Withheld) -> Er
 // HTTP status, so the node's message follows the status, bounded and masked.
 #[must_use]
 pub fn said(lead: String, body: &ErrorBody, withheld: &Withheld) -> ErrorDetail {
-    match body.message().or_else(|| body.text()) {
+    let problem = problem_message(body);
+    match body
+        .message()
+        .or(problem.as_deref())
+        .or_else(|| body.text())
+    {
         Some(message) => followed_by(lead, message, withheld),
         None => ErrorDetail::Text(lead),
     }
+}
+
+/// The members of an RFC 9457 problem details object a node's message is
+/// read from (RFC 9457 §3.1.3, §3.1.4); every other member is ignored.
+#[derive(Debug, Deserialize)]
+struct ProblemBody {
+    /// The short summary of the problem type.
+    title: Option<String>,
+    /// The explanation of this occurrence.
+    detail: Option<String>,
+}
+
+/// The `detail` of the problem details object `body` holds, else its
+/// `title`, when the body is one and either is text that is not blank.
+// TODO(#1432): read `ErrorBody::problem` once the openehr-* crates are taken at 0.0.115.
+fn problem_message(body: &ErrorBody) -> Option<String> {
+    // NOTE: RFC 9457 §3: every member is optional, so a body that is no problem object is
+    // legitimately absent detail, and the body's text is read in its place.
+    let problem: ProblemBody = serde_json::from_slice(body.raw()).ok()?;
+    let given = |member: Option<String>| member.filter(|text| !text.trim().is_empty());
+    given(problem.detail).or_else(|| given(problem.title))
 }
 
 /// The `error` that reads `lead`, then an excerpt of `reason`, text the
@@ -366,6 +394,52 @@ mod tests {
         let body = ErrorBody::from_bytes(b"\n\t\r\n".to_vec());
         let error = answered(StatusCode::SERVICE_UNAVAILABLE, &body, &Withheld::none());
         assert_eq!("the node answered 503 Service Unavailable", text(&error));
+    }
+
+    #[test]
+    fn a_problem_details_refusal_is_reported_by_its_detail_and_masked() {
+        let body = ErrorBody::from_bytes(
+            format!(
+                r#"{{"type":"https://cdr.example.org/problems/ehr-not-found","title":"EHR not found","status":404,"detail":"no EHR for subject {SUBJECT} at this node","instance":"urn:uuid:0b7e2f3c-8d61-4c55-9a7e-3f1d2c4b5a69"}}"#
+            )
+            .into_bytes(),
+        );
+        let error = answered(StatusCode::NOT_FOUND, &body, &withheld());
+        assert_eq!(
+            format!("the node answered 404 Not Found: no EHR for subject {MASK} at this node"),
+            text(&error)
+        );
+    }
+
+    #[test]
+    fn a_problem_details_refusal_without_a_detail_is_reported_by_its_title() {
+        let body = ErrorBody::from_bytes(
+            br#"{"type":"about:blank","title":"Conflict","status":409,"detail":" "}"#.to_vec(),
+        );
+        let error = answered(StatusCode::CONFLICT, &body, &Withheld::none());
+        assert_eq!("the node answered 409 Conflict: Conflict", text(&error));
+    }
+
+    #[test]
+    fn an_its_rest_error_and_a_problem_are_each_read_by_their_own_member() {
+        let error = ErrorBody::from_bytes(br#"{"message":"the AQL is not valid"}"#.to_vec());
+        assert_eq!(
+            "the node answered 400 Bad Request: the AQL is not valid",
+            text(&answered(
+                StatusCode::BAD_REQUEST,
+                &error,
+                &Withheld::none()
+            ))
+        );
+        let neither = ErrorBody::from_bytes(br#"{"status":400}"#.to_vec());
+        assert_eq!(
+            r#"the node answered 400 Bad Request: {"status":400}"#,
+            text(&answered(
+                StatusCode::BAD_REQUEST,
+                &neither,
+                &Withheld::none()
+            ))
+        );
     }
 
     #[test]
