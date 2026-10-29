@@ -283,6 +283,9 @@ impl ServerSettings {
     ///
     /// The section's TLS is the kept one each listener is handed, and the
     /// caller rate sits inside the gateway's client authentication.
+    ///
+    /// # Panics
+    /// Never: the base path was resolved from the section's own form.
     #[must_use]
     #[expect(
         clippy::expect_used,

@@ -261,7 +261,7 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
     let stack = if server.base_path.is_root() {
         stack
     } else {
-        let outside = Arc::clone(&state);
+        let outside = state;
         stack.fallback(move |request: axum::extract::Request| {
             let state = Arc::clone(&outside);
             async move { outside_the_base(&state, &request) }

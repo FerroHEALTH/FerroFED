@@ -27,10 +27,11 @@ use ferrohealth_server::request_id::{HEADER, is_legal};
 use ferrohealth_telemetry::request_log::RequestId;
 use http::{Extensions, HeaderValue};
 
-/// Reads the stack's id of `request` as its [`OutboundId`], on the request
-/// for the handler and on the response, and names the request by that id in
-/// `x-request-id` when the client named none, so every error body names the
-/// exchange id.
+/// Reads the stack's id of `request` as its [`OutboundId`].
+///
+/// The id goes on the request for the handler and on the response, and
+/// names the request in `x-request-id` when the client named none, so every
+/// error body names the exchange id.
 pub async fn bridge(mut request: Request, next: Next) -> Response {
     let id = request
         .extensions()
