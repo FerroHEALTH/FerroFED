@@ -215,7 +215,7 @@ async fn with_revisions_off_the_settings_tabs_show_alone_and_read_only()
         &listener,
         ("GET", "/admin/config"),
         404,
-        r#"{"message":"not managed","code":"configuration-unmanaged"}"#,
+        r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#configuration-unmanaged","detail":"not managed","code":"configuration-unmanaged"}"#,
     )
     .await;
     let off = RUNNING

@@ -6,7 +6,7 @@
 //! request log.
 //!
 //! A refusal and a panic are answered in the gateway's error shape, an
-//! ITS-REST error naming the stable code and the request, and under
+//! RFC 9457 problem naming the stable code and the request, and under
 //! `{fhir-base}` as an `OperationOutcome` (FHIR R4 `http.html`). A refusal
 //! of the overload bound or the caller rate is counted by its limit
 //! ([`Limit`]). The panic message reaches neither the body nor the log
@@ -43,16 +43,16 @@ fn panic_body(state: Arc<AppState>) -> PanicBody {
             &state,
             uri,
             (StatusCode::INTERNAL_SERVER_ERROR, Some(Code::Internal)),
-            request_id,
+            (request_id, ferrohealth_server::problem::INTERNAL),
         )
     })
 }
 
 /// The body of a refusal the stack writes: `429 rate-limited` and
-/// `503 overloaded`, each counted by its limit, and a `408` or a `413` with
-/// no body, as the gateway answered them before it served through the stack.
+/// `503 overloaded`, each counted by its limit, and a `408` or a `413` as
+/// an `about:blank` problem.
 fn refusal_body(state: Arc<AppState>) -> RefusalBody {
-    Arc::new(move |uri, request_id, status, _reason| {
+    Arc::new(move |uri, request_id, status, reason| {
         let code = match status {
             StatusCode::SERVICE_UNAVAILABLE => {
                 state.metrics().shed(Limit::Concurrency);
@@ -64,18 +64,19 @@ fn refusal_body(state: Arc<AppState>) -> RefusalBody {
             }
             _ => None,
         };
-        answered(&state, uri, (status, code), request_id)
+        answered(&state, uri, (status, code), (request_id, reason))
     })
 }
 
 /// The answer of `status` and its `code` for a request to `uri`: an
-/// `OperationOutcome` under the FHIR face, the gateway's error body of
-/// `code` elsewhere, and no body without one.
+/// `OperationOutcome` under the FHIR face, the gateway's problem of `code`
+/// elsewhere, and without a code an `about:blank` problem whose detail is
+/// the stack's `reason`, a fixed sentence (RFC 9457 §4.2.1).
 fn answered(
     state: &AppState,
     uri: &Uri,
     (status, code): (StatusCode, Option<Code>),
-    request_id: &str,
+    (request_id, reason): (&str, &str),
 ) -> Response {
     match (state.fhir(), code) {
         (Some(fhir), _) if crate::fhir::classify(fhir, uri.path()).is_some() => {
@@ -85,6 +86,9 @@ fn answered(
             )
         }
         (_, Some(code)) => error::fixed(code, request_id),
-        (_, None) => status.into_response(),
+        (_, None) => ferrohealth_server::problem::Problem::new(status)
+            .with_detail(reason)
+            .with_request_id(request_id)
+            .into_response(),
     }
 }

@@ -245,7 +245,8 @@ impl Reply {
         })
     }
 
-    /// Returns the stable code of an ITS-REST `Error` answer.
+    /// Returns the stable code of a problem details answer, its `code`
+    /// extension member.
     ///
     /// # Errors
     ///

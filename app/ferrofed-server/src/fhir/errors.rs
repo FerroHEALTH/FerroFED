@@ -46,10 +46,11 @@ pub(crate) fn refused(status: StatusCode, message: &str) -> Response {
     outcome(status, issue_type(status), message)
 }
 
-/// The gateway's error body, as far as the outcome reads it.
+/// The gateway's problem details body, as far as the outcome reads it.
 #[derive(serde::Deserialize)]
 struct GatewayError {
-    /// The message.
+    /// The problem's `detail` (RFC 9457 §3.1.4).
+    #[serde(rename = "detail")]
     message: String,
     /// The stable code.
     code: Option<String>,

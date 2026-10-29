@@ -148,8 +148,8 @@ the conformance instrument. Read it before proposing anything structural.
 Each crate gets its behaviour from its own issue, and nothing is built ahead
 of one (`.claude/memory/owner-work-style.md`). The `openehr-*` family is pinned
 in `docs/VERSIONS.md`, at a release that carries the federation gaps
-FerroFED raised, the open ITS-REST `Error` the error vocabulary writes its
-`code` into, the AQL function classification the rewrite reads, the
+FerroFED raised, the open ITS-REST `Error` a node's consent refusal `code`
+is read from, the AQL function classification the rewrite reads, the
 `Authorization` value configuration load checks credentials with, and the RM
 model's primitives, `Ordered` marker and reference targets the rewrite orders
 keys by.

@@ -331,10 +331,11 @@ impl Unanswered {
     }
 }
 
-/// The `message` of the ITS-REST `Error` body and the `code` member the
-/// gateway writes into it.
+/// The `detail` of the gateway's RFC 9457 problem and its `code` extension
+/// member.
 #[derive(serde::Deserialize)]
 struct Coded {
+    #[serde(rename = "detail")]
     message: Option<String>,
     code: Option<String>,
 }

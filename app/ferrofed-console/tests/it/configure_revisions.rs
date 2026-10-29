@@ -221,7 +221,7 @@ async fn a_refused_download_shows_the_status_and_code() -> Result<(), Box<dyn Er
         &listener,
         ("GET", "/admin/config/revisions/9/export"),
         404,
-        r#"{"message":"no revision 9 is held","code":"revision-unknown"}"#,
+        r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#revision-unknown","detail":"no revision 9 is held","code":"revision-unknown"}"#,
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
@@ -313,7 +313,7 @@ async fn a_refused_import_shows_the_status_and_code() -> Result<(), Box<dyn Erro
         &listener,
         ("POST", "/admin/config/import"),
         409,
-        r#"{"message":"[credentials.\"node-a-pub\"] is provided by the configuration file","code":"resource-file-owned"}"#,
+        r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#resource-file-owned","detail":"[credentials.\"node-a-pub\"] is provided by the configuration file","code":"resource-file-owned"}"#,
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;

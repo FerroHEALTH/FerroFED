@@ -4,30 +4,35 @@
 //! The error vocabulary: every condition the gateway answers with an error
 //! body, its HTTP status (§11.2) and the stable code the body names.
 //!
-//! An error body is the ITS-REST `Error`, `message` and `validationErrors`,
-//! with two members added: `code`, one of the codes of [`Code`], and
-//! `request_id`, the exchange id of [`crate::request_id`]: the client's own
-//! when it named the request, otherwise the gateway's, which the log records
-//! too. Two
-//! failures answer with another body. A fan-out that fails under
-//! all-or-nothing (`504`, `424`) answers the `RESULT_SET` of §11.4, whose
+//! An error body is an RFC 9457 problem details document
+//! (<https://www.rfc-editor.org/rfc/rfc9457>), `application/problem+json`,
+//! written through `ferrohealth_server::problem`. Each [`Code`] is a problem
+//! type defined once in [`types`], under [`BASE`], the book page that lists
+//! every code (RFC 9457 §4): the `type` of `no-destination` is
+//! `{BASE}no-destination`, its `title` the code's fixed message. The
+//! `detail` is the sentence of this occurrence, and two extension members
+//! (§3.2) follow: `code`, the code itself, and `request_id`, the exchange id
+//! of [`crate::request_id`]: the client's own when it named the request,
+//! otherwise the gateway's, which the log records too and which is also the
+//! `instance` as a `urn:uuid:` URI when it is a UUID. Two failures answer
+//! with another body. A fan-out that fails under all-or-nothing (`504`,
+//! `424`) answers the `RESULT_SET` of §11.4, whose
 //! `meta.federation.endpoints[]` statuses say which node failed and why,
 //! and which echoes the client's own `q` (N17, N37). A node's own answer on a
 //! single-node route passes through as the node sent it (§11.2).
 //!
 //! The codes are API: a code is only ever added, never renamed, removed or
 //! moved to another status. No error body quotes a parameter value, the query
-//! text, a path or a header value (§5.4.3). No specification defines the
-//! `code` member or its values: our own design.
+//! text, a path or a header value (§5.4.3, RFC 9457 §5). No specification
+//! defines the `code` member or its values: our own design.
 
 mod code;
 
-use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
-use axum::Json;
 use axum::response::{IntoResponse, Response};
+use ferrohealth_server::problem::{Problem, ProblemType, ProblemTypes};
 use openehr_federation::aql::refusal::Refusal;
-use openehr_its::rest::generated::common::Error;
 
 /// The stable code of a failure the gateway answers with an error body.
 ///
@@ -304,40 +309,94 @@ impl From<&Refusal> for RefusalCode {
     }
 }
 
-/// The member of the ITS-REST `Error` that carries the stable [`Code`].
+/// The base URI of every FerroFED problem type: the book page that lists
+/// every code, one anchor per code (RFC 9457 §4).
+pub const BASE: &str = "https://ferrofed.eu/docs/integrate/errors.html#";
+
+/// The extension member of a problem that carries the stable [`Code`].
 pub const CODE_MEMBER: &str = "code";
 
-/// The member of the ITS-REST `Error` that carries the request id, so a client
-/// and an operator name the same request.
+/// The extension member of a problem that carries the request id, so a
+/// client and an operator name the same request.
 pub const REQUEST_ID_MEMBER: &str = "request_id";
 
-/// The ITS-REST `Error` of `code`, with `message` and `request_id`.
-///
-/// The code and the request id ride in the generated type's
-/// `additional_properties`, which the open ITS-REST `Error` schema admits.
-/// The body never carries the request's path, query, headers or body, any of
-/// which may carry a patient identifier (§5.4.3).
-#[must_use]
-pub fn body(code: Code, message: impl Into<String>, request_id: &str) -> Error {
-    let mut error = Error {
-        message: message.into(),
-        validation_errors: Vec::new(),
-        additional_properties: BTreeMap::new(),
-    };
-    error
-        .additional_properties
-        .insert(CODE_MEMBER.to_owned(), code.as_str().into());
-    error
-        .additional_properties
-        .insert(REQUEST_ID_MEMBER.to_owned(), request_id.into());
-    error
+/// The registry of every [`Code`]'s problem type.
+static TYPES: LazyLock<ProblemTypes> = LazyLock::new(registry);
+
+/// Builds the registry: one type per code, under its slug, titled with its
+/// fixed message and used with its status.
+#[expect(
+    clippy::expect_used,
+    reason = "BASE and every code are constants the unit tests define the registry from"
+)]
+fn registry() -> ProblemTypes {
+    let mut types = ProblemTypes::new(BASE).expect("the problem base should be a legal base");
+    for code in Code::every() {
+        types
+            .define(code.as_str(), code.message(), code.status())
+            .expect("every code should be one legal, distinct problem type slug");
+    }
+    types
 }
 
-/// Answers `code` with its status and the ITS-REST `Error` carrying `message`
-/// and `request_id`.
+/// FerroFED's problem types, in slug order.
+#[must_use]
+pub fn types() -> &'static ProblemTypes {
+    &TYPES
+}
+
+impl Code {
+    /// The problem type of this code, as [`types`] defines it.
+    ///
+    /// # Panics
+    /// Never: the registry defines every code, which a unit test holds.
+    #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "registry() defines every code of Code::every, which every_code_is_one_problem_type checks"
+    )]
+    pub fn problem_type(self) -> &'static ProblemType {
+        types()
+            .get(self.as_str())
+            .expect("every code should be defined in the registry")
+    }
+}
+
+/// The problem of `code`, with `message` as its `detail` and `request_id`
+/// as its `request_id` member and, when it is a UUID, its `instance`.
+///
+/// The body never carries the request's path, query, headers or body, any of
+/// which may carry a patient identifier (§5.4.3, RFC 9457 §5).
+#[must_use]
+pub fn body(code: Code, message: impl Into<String>, request_id: &str) -> Problem {
+    let problem = code
+        .problem_type()
+        .problem()
+        .with_detail(message)
+        .with_request_id(request_id);
+    extended(
+        extended(problem, CODE_MEMBER, code.as_str()),
+        REQUEST_ID_MEMBER,
+        request_id,
+    )
+}
+
+/// `problem` with the text extension member `name` set to `value`.
+#[expect(
+    clippy::expect_used,
+    reason = "name is CODE_MEMBER or REQUEST_ID_MEMBER, legal names a unit test adds, and text always serializes"
+)]
+fn extended(problem: Problem, name: &str, value: &str) -> Problem {
+    problem
+        .with_extension(name, value)
+        .expect("a legal member name with a text value should be added")
+}
+
+/// Answers `code` with its status and its problem carrying `message` and
+/// `request_id`.
 #[must_use]
 pub fn response(code: Code, message: impl Into<String>, request_id: &str) -> Response {
-    (code.status(), Json(body(code, message, request_id))).into_response()
+    body(code, message, request_id).into_response()
 }
 
 /// Answers `code` with its status and its fixed [`Code::message`].
@@ -348,37 +407,55 @@ pub fn fixed(code: Code, request_id: &str) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::{CODE_MEMBER, Code, Error, REQUEST_ID_MEMBER, body};
+    use std::collections::BTreeSet;
+
+    use http::{StatusCode, header};
+
+    use super::{BASE, Code, body, types};
 
     #[test]
-    fn the_body_is_the_its_rest_error_with_the_code_and_the_request_id() {
-        let answer = body(Code::EhrIdCollision, "two claimants", "corr-1");
+    fn every_code_is_one_problem_type_under_the_book_page() {
+        let mut slugs = BTreeSet::new();
+        for code in Code::every() {
+            let defined = code.problem_type();
+            assert_eq!(format!("{BASE}{}", code.as_str()), defined.uri());
+            assert_eq!(Some(code.message()), defined.title());
+            assert_eq!(code.status(), defined.status());
+            assert!(slugs.insert(code.as_str()), "{} twice", code.as_str());
+        }
+        assert_eq!(slugs.len(), types().iter().count());
+    }
+
+    #[test]
+    fn the_body_is_the_problem_with_the_code_and_the_request_id() {
+        let answer = body(
+            Code::EhrIdCollision,
+            "two claimants",
+            "6f1c0b9e-3d1a-4c55-9a43-0d8f1f2b7c11",
+        );
         assert_eq!(
-            r#"{"message":"two claimants","validationErrors":[],"code":"ehr-id-collision","request_id":"corr-1"}"#,
+            r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#ehr-id-collision","title":"the ehr_id is claimed by more than one node (N42)","status":409,"detail":"two claimants","instance":"urn:uuid:6f1c0b9e-3d1a-4c55-9a43-0d8f1f2b7c11","code":"ehr-id-collision","request_id":"6f1c0b9e-3d1a-4c55-9a43-0d8f1f2b7c11"}"#,
             serde_json::to_string(&answer).unwrap()
         );
     }
 
     #[test]
-    fn the_body_round_trips_through_the_generated_error_with_both_members() {
-        let sent = body(Code::NoDestination, "no member in scope", "corr-2");
-        let text = serde_json::to_string(&sent).unwrap();
-        let read: Error = serde_json::from_str(&text).unwrap();
-        assert_eq!("no member in scope", read.message);
-        assert_eq!(read.validation_errors, Vec::<String>::new());
-        let member = |name: &str| {
-            read.additional_properties
-                .get(name)
-                .and_then(|value| value.as_str())
-                .map(str::to_owned)
-        };
-        assert_eq!(Some("no-destination".to_owned()), member(CODE_MEMBER));
-        assert_eq!(Some("corr-2".to_owned()), member(REQUEST_ID_MEMBER));
-        assert_eq!(2, read.additional_properties.len(), "nothing else is added");
+    fn a_request_id_that_is_no_uuid_is_a_member_and_no_instance() {
+        let answer = serde_json::to_value(body(Code::NoDestination, "none", "corr-2")).unwrap();
+        assert_eq!(Some("corr-2"), answer["request_id"].as_str());
+        assert!(answer.get("instance").is_none(), "{answer}");
+    }
+
+    #[test]
+    fn a_problem_answers_its_status_as_problem_json() {
+        let response = super::fixed(Code::NotFound, "corr-3");
+        assert_eq!(StatusCode::NOT_FOUND, response.status());
         assert_eq!(
-            text,
-            serde_json::to_string(&read).unwrap(),
-            "byte-identical"
+            Some("application/problem+json"),
+            response
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
         );
     }
 }

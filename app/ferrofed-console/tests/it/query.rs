@@ -238,7 +238,7 @@ async fn an_all_or_nothing_failure_shows_its_status_and_every_endpoint()
 async fn a_refused_query_shows_its_status_and_stable_code() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(
         400,
-        String::from(r#"{"message":"the query cannot be federated","code":"aql-not-federable"}"#),
+        String::from(r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#aql-not-federable","detail":"the query cannot be federated","code":"aql-not-federable"}"#),
     )
     .await?;
     let (service, session) = signed_in_console(&gateway)?;
@@ -414,7 +414,7 @@ async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
 
     let refusing = self::gateway(
         400,
-        String::from(r#"{"message":"refused","code":"aql-invalid"}"#),
+        String::from(r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#aql-invalid","detail":"refused","code":"aql-invalid"}"#),
     )
     .await?;
     let (refused_service, refused_session) = signed_in_console(&refusing)?;

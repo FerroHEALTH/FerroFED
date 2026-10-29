@@ -306,7 +306,7 @@ async fn a_refusal_shows_the_replica_its_status_and_its_code() -> Result<(), Box
             &listener,
             &clear_path(),
             status,
-            format!(r#"{{"code":"{code}","message":"refused"}}"#),
+            format!(r#"{{"type":"https://ferrofed.eu/docs/integrate/errors.html#{code}","code":"{code}","detail":"refused"}}"#),
         )
         .await;
         let replicas = [("gateway-0", listener.uri())];
