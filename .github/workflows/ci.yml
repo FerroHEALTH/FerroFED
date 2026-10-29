@@ -565,6 +565,27 @@ jobs:
           bash scripts/checks/annex-ii.sh --self-test
           bash scripts/checks/annex-ii.sh
 
+  # The MyHealth@EU self-assessment guard: every requirement id of the
+  # MyHealth@EU Requirements Catalogue v10.0.0 has one row in
+  # conformance/myhealth-eu.tsv under its section number, with a status, a
+  # conclusion in FerroFED's own words and evidence that exists; the badge,
+  # the README block and the book page equal a fresh rendering; and no
+  # catalogue text or copy is held. Its self-test proves each refusal.
+  myhealth-eu:
+    name: myhealth-eu
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/myhealth-eu.sh --self-test
+          bash scripts/checks/myhealth-eu.sh
+
   # The register of economic operators guard (Regulation (EU) 2025/327 Art
   # 35, Regulation (EU) 2024/2847 Art 23): the public copy has the documented
   # column row and no entry, because the rows are kept outside the public
@@ -1626,6 +1647,7 @@ jobs:
       - technical-documentation
       - support-periods
       - annex-ii
+      - myhealth-eu
       - economic-operators
       - e2e-placement
       - usage-report-off
