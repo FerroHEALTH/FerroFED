@@ -16,7 +16,9 @@
 #     key-or-file reader (ferrohealth-secret); the indicator trait or the
 #     lifecycle (ferrohealth-health); the report section, the reporter, the
 #     state directory or the envelope types (ferrohealth-usage-report); a
-#     TLS listener, its kept certificates, a serve loop or a drain
+#     TLS listener, its kept certificates, a serve loop, a drain, or a layer
+#     of the stack (the request id, the panic catch, the timeout, the body
+#     limit, the overload bound or the caller rate) of its own
 #     (ferrohealth-server); the telemetry section, the console formats, the
 #     request log, the sampler, a trace export, an OTLP or Prometheus
 #     exporter or a panic hook of its own (ferrohealth-telemetry).
@@ -52,6 +54,8 @@ ferrohealth-health	struct[[:space:]]+Lifecycle([^A-Za-z0-9_]|\$)
 ferrohealth-usage-report	struct[[:space:]]+(UsageReport|UsageReportSection|UsageReportSettings|StateDir|Reporter|SchemaV2|Window24h)([^A-Za-z0-9_]|\$)
 ferrohealth-server	struct[[:space:]]+(TlsListener|Certificates|ReloadableTls)([^A-Za-z0-9_]|\$)
 ferrohealth-server	fn[[:space:]]+(serve_until|drain_on|server_config)[[:space:]]*[<(]
+ferrohealth-server	(CatchPanicLayer|SetRequestIdLayer|PropagateRequestIdLayer|RequestBodyLimitLayer|TimeoutLayer)([^A-Za-z0-9_]|\$)
+ferrohealth-server	struct[[:space:]]+(Admission|CallerLimit)([^A-Za-z0-9_]|\$)
 ferrohealth-telemetry	(struct|enum)[[:space:]]+(TelemetrySection|OtlpSection|SampleRatio|Traces|Format|Rendering|RequestLog)([^A-Za-z0-9_]|\$)
 ferrohealth-telemetry	fn[[:space:]]+(sampler|collector_tls|method_label)[[:space:]]*[<(]
 ferrohealth-telemetry	(opentelemetry_otlp|opentelemetry_prometheus)::
@@ -106,6 +110,9 @@ self_test() {
     'pub struct UsageReport {'
     'pub struct TlsListener {'
     'pub async fn serve_until<L, F>('
+    '        .layer(CatchPanicLayer::custom(caught))'
+    'use tower_http::timeout::TimeoutLayer;'
+    'pub struct Admission {'
     'pub struct SampleRatio(f64);'
     'pub enum Format {'
     'pub fn sampler(ratio: SampleRatio) -> Sampler {'

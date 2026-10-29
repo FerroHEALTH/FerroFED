@@ -9,7 +9,7 @@ use crate::support::console::subscriber;
 use crate::support::{self, Logs, request_lines};
 use axum::Router;
 use axum::body::Body;
-use ferrofed_server::request_id;
+use ferrohealth_server::request_id;
 use ferrohealth_telemetry::request_log::UNMATCHED;
 use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode};

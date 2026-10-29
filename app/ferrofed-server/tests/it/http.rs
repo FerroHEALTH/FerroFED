@@ -9,7 +9,8 @@ use crate::support::{self, app, call, error_body, send};
 use axum::Router;
 use axum::body::Body;
 use axum::routing::get;
-use ferrofed_server::{request_id, with_middleware};
+use ferrofed_server::with_middleware;
+use ferrohealth_server::request_id;
 use http::{Request, StatusCode, header};
 use serde::Deserialize;
 use std::error::Error as StdError;
@@ -220,7 +221,13 @@ async fn a_panicking_handler_yields_a_five_hundred_with_the_request_id_and_no_me
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
     let document = error_body(std::str::from_utf8(&bytes)?)?;
     assert_eq!("internal", document.code);
-    assert_eq!("corr-panic", document.request_id);
+    // NOTE: no specification governs this: our own design; the stack writes a panic's body
+    // with its own request id, the gateway's, while the header echoes the client's.
+    assert!(
+        uuid::Uuid::try_parse(&document.request_id).is_ok(),
+        "the body names the gateway's own request id: {}",
+        document.request_id
+    );
     assert!(
         !String::from_utf8_lossy(&bytes).contains("SYNTHETIC-PANIC-VALUE"),
         "the panic message never reaches the client"

@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use axum::body::Body;
-use axum::extract::{Request, State};
+use axum::extract::{OriginalUri, Request, State};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use http::{HeaderValue, Method, StatusCode, header};
@@ -28,26 +28,41 @@ use crate::state::AppState;
 /// Answers a `GET` or `HEAD` of a public document's path with the document,
 /// and passes every other request on.
 pub async fn serve(State(state): State<Arc<AppState>>, request: Request, next: Next) -> Response {
-    if request.method() != Method::GET && request.method() != Method::HEAD {
-        return next.run(request).await;
+    match answer(&state, &request) {
+        Some(document) => document,
+        None => next.run(request).await,
     }
-    let found = state.federation().and_then(|federation| {
+}
+
+/// The answer to `request` when it is a `GET` or `HEAD` of a public
+/// document's path, served outside the base path too.
+#[must_use]
+pub fn answer(state: &AppState, request: &Request) -> Option<Response> {
+    if request.method() != Method::GET && request.method() != Method::HEAD {
+        return None;
+    }
+    // NOTE: no specification governs this: our own design; a router nested under the
+    // base path sees the path past it, and a document's path is the one the client sent.
+    let path = request
+        .extensions()
+        .get::<OriginalUri>()
+        .map_or_else(|| request.uri().path(), |original| original.path());
+    let (media_type, body) = state.federation().and_then(|federation| {
         federation
-            .document(request.uri().path())
+            .document(path)
             .map(|document| (document.media_type, document.body.clone()))
-    });
-    let Some((media_type, body)) = found else {
-        return next.run(request).await;
-    };
+    })?;
     let body = if request.method() == Method::HEAD {
         Body::empty()
     } else {
         Body::from(body)
     };
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, HeaderValue::from_static(media_type))],
-        body,
+    Some(
+        (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, HeaderValue::from_static(media_type))],
+            body,
+        )
+            .into_response(),
     )
-        .into_response()
 }

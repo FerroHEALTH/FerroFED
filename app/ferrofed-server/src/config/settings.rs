@@ -34,7 +34,6 @@ use crate::config::server::ListenerTlsSettings;
 use crate::config::stored_queries::Store;
 use crate::config::tls::TlsSettings;
 use crate::config::{EmergencyConsent, NodeSelection};
-use ferrohealth_server::client_address::Forwarding;
 use ferrohealth_telemetry::section::TelemetrySection;
 
 /// The settings the run path holds, with every secret already read.
@@ -240,8 +239,11 @@ pub struct ServerSettings {
     pub base_path: BasePath,
     /// The absolute URL clients reach `{base}` at, when configured.
     pub public_url: Option<PublicUrl>,
-    /// The reverse proxies a forwarded client address is taken from.
-    pub forwarding: Forwarding,
+    /// The reverse proxies whose forwarded client address the gateway
+    /// takes.
+    pub trusted_proxies: Vec<ferrohealth_server::client_address::TrustedProxy>,
+    /// The header a trusted proxy names the client in.
+    pub forwarded_header: ferrohealth_server::client_address::ForwardedHeader,
     /// How long one request may take before the server answers `408`.
     pub request_timeout: Duration,
     /// How long a client may take to send a request head, in milliseconds.
@@ -274,25 +276,46 @@ pub struct ServerSettings {
 }
 
 impl ServerSettings {
-    /// The `[server]` section of `ferrohealth-server` the listeners are
-    /// served and drained by, built from these settings: the listen
-    /// address, the timeouts, the drain and the body limit.
+    /// The `[server]` section of `ferrohealth-server` the listeners and the
+    /// stack serve by, built from these settings: the listen address, the
+    /// base path, the timeouts, the drain, the body limit, the forwarding,
+    /// the overload bound and the compression.
     ///
-    /// The section's TLS is the kept one each listener is handed.
+    /// The section's TLS is the kept one each listener is handed, and the
+    /// caller rate sits inside the gateway's client authentication.
+    ///
+    /// # Panics
+    /// Never: the base path was resolved from the section's own form.
     #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "the base path was resolved from the section's own form, so it reads back"
+    )]
     pub fn section(&self) -> ferrohealth_server::section::ServerSection {
         let millis = |duration: Duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
+        let base = self.base_path.as_str();
+        let base_path = if self.base_path.is_root() {
+            ferrohealth_server::section::BasePath::default()
+        } else {
+            ferrohealth_server::section::BasePath::new(base)
+                .expect("a resolved base path should be a section's base path")
+        };
         ferrohealth_server::section::ServerSection {
             listen: self.listen,
+            base_path,
             request_timeout_ms: millis(self.request_timeout),
             header_read_timeout_ms: self.header_read_timeout_ms,
             body_limit_bytes: self.body_limit,
             drain_delay_ms: millis(self.drain_delay),
             shutdown_timeout_ms: millis(self.shutdown_timeout),
+            max_concurrent_requests: Some(self.overload.max_concurrent_requests),
+            retry_after_s: self.overload.retry_after.as_secs(),
             tls: None,
+            trusted_proxies: self.trusted_proxies.clone(),
+            forwarded_header: self.forwarded_header,
+            caller_rate: None,
             compression: self.compression.is_some(),
             compression_min_bytes: self.compression.unwrap_or(1024),
-            ..ferrohealth_server::section::ServerSection::default()
         }
     }
 }

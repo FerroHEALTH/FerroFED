@@ -13,7 +13,7 @@ use std::net::SocketAddr;
 
 use axum::Extension;
 use axum::extract::ConnectInfo;
-use ferrohealth_server::client_address::{ForwardedHeader, Forwarding, TrustedProxy};
+use ferrohealth_server::client_address::{ForwardedHeader, TrustedProxy};
 use http::StatusCode;
 
 use super::{LAB_REPORT, TestResult, accesses, composition, gateway_under, node_with_rows};
@@ -48,7 +48,8 @@ async fn recorded(
         .iter()
         .map(|proxy| proxy.parse::<TrustedProxy>())
         .collect::<Result<Vec<_>, _>>()?;
-    server.forwarding = Forwarding::new(proxies, ForwardedHeader::Forwarded);
+    server.trusted_proxies = proxies;
+    server.forwarded_header = ForwardedHeader::Forwarded;
     let app = gateway_under(dir.path(), (&a.uri(), &b.uri()), &repository, "", &server)?.layer(
         Extension(ConnectInfo(SocketAddr::new(PROXY.parse()?, 40000))),
     );
