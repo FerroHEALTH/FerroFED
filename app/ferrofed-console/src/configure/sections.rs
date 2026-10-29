@@ -12,8 +12,8 @@ use leptos::prelude::*;
 
 use crate::act::{Acted, ReplicaAnswer};
 use crate::configure::render::answers::said;
-use crate::configure::said::ActionAnswer;
 use crate::configure::said::replica_said;
+use crate::configure::said::{ActionAnswer, Answer};
 use crate::locale::{Msg, tr, tr_with};
 
 /// How a removal names `resource`: `credentials:<endpoint id>` or
@@ -32,9 +32,15 @@ pub fn choice(resource: &Resource) -> String {
 pub fn confirmed(answer: &ReplicaAnswer<Current>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        view: replica_said(answer, "confirmation", confirmed_line).into_any(),
+        answer: Answer::Confirmed(answer.clone()),
         field: None,
     }
+}
+
+/// The answer of `answer` drawn.
+#[must_use]
+pub fn confirmed_view(answer: &ReplicaAnswer<Current>) -> AnyView {
+    replica_said(answer, "confirmation", confirmed_line).into_any()
 }
 
 /// What a replica reports of a confirmation.
@@ -58,9 +64,15 @@ fn confirmed_line(replica: &str, mark: &Current) -> AnyView {
 pub fn approved(answer: &ReplicaAnswer<Review>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        view: replica_said(answer, "approval", approved_line).into_any(),
+        answer: Answer::Approved(answer.clone()),
         field: None,
     }
+}
+
+/// The answer of `answer` drawn.
+#[must_use]
+pub fn approved_view(answer: &ReplicaAnswer<Review>) -> AnyView {
+    replica_said(answer, "approval", approved_line).into_any()
 }
 
 /// What a replica reports of an approval.

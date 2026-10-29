@@ -10,16 +10,28 @@
 //! filter's do. As you type, the panel under the field asks [`ANSWER`], the
 //! server function [`find_answer`], which answers the FerroUI search
 //! answer as JSON; the find page lists every match in the page.
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
+#[cfg(not(target_arch = "wasm32"))]
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::view::action::ActionGroup;
-use ferrohealth_ui::view::search::{Hit, HitGroup, Mark, SearchAnswer, Way, find_results};
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::view::search::{Hit, HitGroup, Mark, Way};
+use ferrohealth_ui::view::search::{SearchAnswer, find_results};
 use ferrohealth_ui::view::surface::{Header, page_heading};
 use leptos::prelude::*;
 use leptos::server_fn::codec::{GetUrl, Json};
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::app::{QUERY, STORED_QUERIES};
 use crate::locale::{Msg, tr, tr_with};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::read::federation::Federation;
 
 /// The route the panel under the field asks as you type.
@@ -35,11 +47,13 @@ pub fn query_of(search: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Whether `text` holds `words`, ignoring case.
 fn holds(text: &str, words: &str) -> bool {
     text.to_lowercase().contains(&words.to_lowercase())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The organisations `federation` holds that match `words`.
 fn organisation_hits(federation: &Federation, words: &str) -> Vec<Hit> {
     federation
@@ -63,6 +77,7 @@ fn organisation_hits(federation: &Federation, words: &str) -> Vec<Hit> {
         .collect()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The nodes `federation` holds that match `words` by their id, an
 /// endpoint's id or their `system_id`; a `system_id` leads to the node's
 /// Routes tab.
@@ -116,6 +131,7 @@ fn node_hits(federation: &Federation, words: &str) -> Vec<Hit> {
 
 /// The hits of `words`, grouped by kind, and whether a read failed, so the
 /// answer is not whole.
+#[cfg(not(target_arch = "wasm32"))]
 async fn groups(words: &str) -> (Vec<HitGroup>, bool) {
     let mut groups = Vec::new();
     let mut failed = false;
@@ -164,6 +180,7 @@ async fn groups(words: &str) -> (Vec<HitGroup>, bool) {
 }
 
 /// What the find holds for `words`: every match, grouped by kind.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn answer(words: &str) -> SearchAnswer {
     let (groups, failed) = groups(words).await;
     let unfinished = failed.then(|| tr(Msg::SearchUnfinished));
@@ -220,15 +237,36 @@ pub fn page() -> AnyView {
     let words = crate::pages::query_param("q")
         .map(|words| words.trim().to_owned())
         .filter(|words| !words.is_empty());
+    let found = Resource::new(
+        move || (crate::read::changes(), words.clone()),
+        |(_, words)| async move {
+            match words {
+                Some(words) => {
+                    Some(
+                        find_answer(words.clone())
+                            .await
+                            .unwrap_or_else(|_| SearchAnswer {
+                                query: words,
+                                unfinished: Some(tr(Msg::SearchUnfinished)),
+                                ..SearchAnswer::default()
+                            }),
+                    )
+                }
+                None => None,
+            }
+        },
+    );
     let body = Suspend::new(async move {
+        let found = found.await;
         let heading = page_heading(
             Header {
                 title: tr(Msg::SearchTitle).into(),
                 subtitle: Some(
-                    match &words {
-                        Some(words) => {
-                            tr_with(Msg::SearchSubtitle, &[("words", words.clone().into())])
-                        }
+                    match &found {
+                        Some(answer) => tr_with(
+                            Msg::SearchSubtitle,
+                            &[("words", answer.query.clone().into())],
+                        ),
                         None => tr(Msg::SearchEmptySubtitle),
                     }
                     .into(),
@@ -238,8 +276,8 @@ pub fn page() -> AnyView {
             ActionGroup::none(),
         )
         .into_any();
-        let found = match &words {
-            Some(words) => find_results(answer(words).await),
+        let found = match found {
+            Some(answer) => find_results(answer),
             None => view! { <p class="fui-muted">{tr(Msg::SearchNothingLine)}</p> }.into_any(),
         };
         view! {

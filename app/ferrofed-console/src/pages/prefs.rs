@@ -42,25 +42,17 @@ pub fn page() -> AnyView {
         keyboard: format!("{PREFERENCES}/keyboard"),
     };
     let saved = crate::pages::query_param("saved");
-    let browser = use_context::<http::request::Parts>()
-        .and_then(|parts| {
-            parts
-                .headers
-                .get(http::header::ACCEPT_LANGUAGE)
-                .and_then(|value| value.to_str().ok())
-                .map(ferrohealth_ui::i18n::Locale::negotiate)
-        })
-        .unwrap_or_default();
+    let visit = crate::visit::visit_untracked();
     let page = preferences_page(PreferencesPage {
         section,
         routes,
         reading: false,
-        preferences: crate::prefs::requested(),
+        preferences: visit.chosen().preferences,
         action: String::from(PREFERENCE),
         saved,
         accent: tr(Msg::AccentAzure),
         languages: crate::locale::choices(),
-        browser,
+        browser: visit.browser(),
         week_from_language: Weekday::Monday,
         shortcuts: None,
         reset: String::from(RESET),

@@ -29,8 +29,11 @@ use ferrohealth_ui::view::state::state;
 /// The services.
 #[must_use]
 pub fn list() -> AnyView {
+    let federation_read = Resource::new(crate::read::changes, |_| {
+        crate::read::federation::federation_now()
+    });
     let body = Suspend::new(async move {
-        match crate::read::federation::read().await {
+        match federation_read.await {
             Ok(federation) => services(&federation),
             Err(stop) => view! {
                 {page_heading(header(), ActionGroup::none())}
@@ -128,8 +131,11 @@ fn services(federation: &Federation) -> AnyView {
 #[must_use]
 pub fn page() -> AnyView {
     let key = crate::pages::param("service");
+    let federation_read = Resource::new(crate::read::changes, |_| {
+        crate::read::federation::federation_now()
+    });
     let body = Suspend::new(async move {
-        match crate::read::federation::read().await {
+        match federation_read.await {
             Err(stop) => stopped(&stop),
             Ok(federation) => match federation.service(&key) {
                 Some(service) => service_page(service, federation.replica.as_deref()),

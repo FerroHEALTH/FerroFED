@@ -3,11 +3,11 @@
 
 //! The configuration's reads and the run of each of its forms.
 //!
-//! Each runs while the page is drawn, as the operator of the request: the
-//! form read into what is sent, checked before any replica is asked, and
-//! the gateway's answers read into what the page draws. The first replica
-//! configured is called with the operator's own access token, which never
-//! leaves the server.
+//! Each runs on the server, behind the configuration's server functions,
+//! as the operator of the request: the form read into what is sent,
+//! checked before any replica is asked, and the gateway's answers read into
+//! what the page draws. The first replica configured is called with the
+//! operator's own access token, which never leaves the server.
 
 use crate::locale::{Msg, tr};
 use ferrofed_registry::console::ConsoleMember;
@@ -18,9 +18,9 @@ use ferrofed_registry::running::SettingsRequest;
 
 use crate::config::settings::ReplicaSettings;
 use crate::configure::member::Shown;
-use crate::configure::model::{ConfigView, Screen};
+use crate::configure::model::Screen;
 use crate::configure::plan::{Plan, Refused, Settings, at, invalid};
-use crate::configure::render::{self, Loaded, SavedLine, StoredLine};
+use crate::configure::render::{self, ConfigData, Managed, SavedLine, StoredLine};
 use crate::configure::said::ActionAnswer;
 use crate::configure::sections;
 use crate::configure::settings;
@@ -46,9 +46,8 @@ pub fn replica(replicas: &[ReplicaSettings]) -> Result<&ReplicaSettings, Refusal
         .ok_or_else(|| invalid(&tr(Msg::ConsoleConfiguredNoAdminListenerSo2)))
 }
 
-/// The part of the configuration page `screen` names, as `replica`
-/// answers it, its form drawn as `draft` holds it when the operator posted
-/// one, or the page saying its configuration is not managed.
+/// What the part of the configuration page `screen` names reads of
+/// `replica`, or what a replica whose configuration is not managed shows.
 ///
 /// # Errors
 /// Returns the [`Stop`] of a refused or failed read, and of a path that
@@ -58,24 +57,28 @@ pub async fn page(
     replica: &ReplicaSettings,
     token: &AccessToken,
     screen: &Screen,
-    draft: Option<&crate::configure::draft::Draft>,
-) -> Result<ConfigView, Stop> {
+) -> Result<ConfigData, Stop> {
     let shown = render::Shown::of(screen)
         .ok_or_else(|| Stop::Refused(invalid(&tr(Msg::PathNamesNoPartConfigurationPage))))?;
     let standing = match gateway.config_standing(replica, token).await {
         Ok(standing) => standing,
         Err(error) if unmanaged(&error) => {
             return Ok(match gateway.config_running(replica, token).await {
-                Ok(running) => render::file_only(&running, shown.file_section()),
+                Ok(running) => ConfigData::FileOnly {
+                    running: Box::new(running),
+                    section: shown.file_section(),
+                },
                 Err(error) => {
                     unread(&error);
-                    render::unmanaged(replica)
+                    ConfigData::Unmanaged {
+                        replica: replica.name.clone(),
+                    }
                 }
             });
         }
         Err(error) => return Err(error.into()),
     };
-    let settings = if shown.reads_running() {
+    let running_config = if shown.reads_running() {
         match gateway.config_running(replica, token).await {
             Ok(running) => Some(running),
             Err(error) => {
@@ -123,19 +126,15 @@ pub async fn page(
         )),
         _ => None,
     };
-    let loaded = Loaded {
-        replica,
-        standing: &standing,
-        resources: &resources,
-        history: history.as_ref(),
-        pending: pending.as_deref(),
-        compared: compared
-            .as_ref()
-            .map(|(other, changes)| (*other, changes.as_slice())),
-        draft,
-        running: settings.as_ref(),
-    };
-    render::page(&loaded, &shown).map_err(Stop::Refused)
+    Ok(ConfigData::Managed(Box::new(Managed {
+        replica: replica.name.clone(),
+        standing,
+        resources,
+        history,
+        pending,
+        compared,
+        running: running_config,
+    })))
 }
 
 /// Logs once that the running configuration could not be read, as every

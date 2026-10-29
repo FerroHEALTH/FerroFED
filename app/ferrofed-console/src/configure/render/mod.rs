@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The server's rendering of the configuration page and of each form's
-//! answer, which the page shows as it stands.
+//! The rendering of the configuration page and of each form's answer, in
+//! both halves, from what the server read of the first replica
+//! ([`ConfigData`]).
 //!
 //! The page is a header with the revision that runs and the one saved, the
 //! card of what that saved revision changes, and five tabs, each at a path
@@ -33,15 +34,15 @@ use ferrofed_registry::revision::{
 use ferrofed_registry::running::{RunningConfig, Section};
 use ferrohealth_ui::view::time::reading;
 use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
 
-use crate::config::settings::ReplicaSettings;
 use crate::configure::model::{ConfigView, Screen};
 use crate::locale::{Msg, tr, tr_with};
 use crate::read::Refusal;
 
 /// What a replica reports of a saved revision, with the preview of what it
 /// changes against the running revision when the console could read it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedLine {
     /// The revision saved.
     pub revision: Revision,
@@ -52,7 +53,7 @@ pub struct SavedLine {
 }
 
 /// What a replica reports of a stored-query version stored.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredLine {
     /// The qualified name.
     pub name: String,
@@ -63,11 +64,91 @@ pub struct StoredLine {
 /// The id on the page of the reason field of the rollback.
 pub const ROLLBACK_REASON: &str = "cfg-rollback-reason";
 
+/// What the server read of the first replica for the configuration page.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ConfigData {
+    /// The replica keeps configuration revisions.
+    Managed(Box<Managed>),
+    /// The replica keeps no revisions: the settings of one section as its
+    /// running configuration holds them, read-only.
+    FileOnly {
+        /// The running configuration.
+        running: Box<RunningConfig>,
+        /// The section the path names.
+        section: Section,
+    },
+    /// The replica keeps no revisions and its running configuration could
+    /// not be read.
+    Unmanaged {
+        /// The replica's name.
+        replica: String,
+    },
+}
+
+/// What the server read of a replica that keeps configuration revisions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Managed {
+    /// The replica's name.
+    pub replica: String,
+    /// Which revision runs and which is newest.
+    pub standing: Standing,
+    /// Every member, stored query, credential and binding section.
+    pub resources: Resources,
+    /// The newest revisions, for the history.
+    pub history: Option<Page<Revision>>,
+    /// What the newest revision changes against the running one.
+    pub pending: Option<Vec<Difference>>,
+    /// The revision the history compares with the running one, and what
+    /// differs.
+    pub compared: Option<(RevisionId, Vec<Difference>)>,
+    /// The replica's running configuration, for a settings tab.
+    pub running: Option<RunningConfig>,
+}
+
+impl ConfigData {
+    /// The part of the page `screen` names, drawn from this data, its form
+    /// drawn as `draft` holds it when the operator posted one.
+    ///
+    /// # Errors
+    /// Returns [`Refusal::Invalid`] for a path that names no part of the
+    /// page, and for a member, a credential or a binding section the
+    /// gateway does not hold.
+    pub fn view(
+        &self,
+        screen: &Screen,
+        draft: Option<&crate::configure::draft::Draft>,
+    ) -> Result<ConfigView, Refusal> {
+        let shown = Shown::of(screen).ok_or_else(|| {
+            crate::configure::plan::invalid(&tr(Msg::PathNamesNoPartConfigurationPage))
+        })?;
+        match self {
+            Self::Managed(managed) => {
+                let loaded = Loaded {
+                    replica: &managed.replica,
+                    standing: &managed.standing,
+                    resources: &managed.resources,
+                    history: managed.history.as_ref(),
+                    pending: managed.pending.as_deref(),
+                    compared: managed
+                        .compared
+                        .as_ref()
+                        .map(|(other, changes)| (*other, changes.as_slice())),
+                    draft,
+                    running: managed.running.as_ref(),
+                };
+                page(&loaded, &shown)
+            }
+            Self::FileOnly { running, section } => Ok(file_only(running, *section)),
+            Self::Unmanaged { replica } => Ok(unmanaged(replica)),
+        }
+    }
+}
+
 /// What the page is drawn from, as the first replica answered it.
 #[derive(Debug, Clone, Copy)]
 pub struct Loaded<'a> {
-    /// The replica the page reads and changes.
-    pub replica: &'a ReplicaSettings,
+    /// The name of the replica the page reads and changes.
+    pub replica: &'a str,
     /// Which revision runs and which is newest.
     pub standing: &'a Standing,
     /// Every member, stored query, credential and binding section.
@@ -419,10 +500,10 @@ pub fn file_only(running: &RunningConfig, section: Section) -> ConfigView {
 
 /// The page of a gateway whose configuration is not managed: no form.
 #[must_use]
-pub fn unmanaged(replica: &ReplicaSettings) -> ConfigView {
+pub fn unmanaged(replica: &str) -> ConfigView {
     let said = tr_with(
         Msg::ReplicaServesNoConfigurationRevisionsConfiguration,
-        &[("name", replica.name.clone().into())],
+        &[("name", replica.to_owned().into())],
     );
     ConfigView {
         header: Some(top::title(()).into_any()),

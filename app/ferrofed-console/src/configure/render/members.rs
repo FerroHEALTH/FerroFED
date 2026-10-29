@@ -324,9 +324,9 @@ fn query_named(row: &QueryEndpointInput) -> String {
 fn query_row(row: &QueryEndpointInput) -> RepeatRow {
     let key = row.key.as_str();
     let named = query_named(row);
-    let name = |part: &str| format!("form[query][{key}][{part}]");
+    let name = |part: &str| format!("form[query.{key}.{part}]");
     let fields = view! {
-        <input type="hidden" name="form[query_rows]" value=key.to_owned() />
+        <input type="hidden" name="form[query_rows][]" value=key.to_owned() />
         <div class="fui-field-row fui-field-row-narrow-wide">
             {text(
                 (&query_field(key, "id"), &name("id")),
@@ -392,7 +392,7 @@ fn profile(key: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
             <input
                 type="url"
                 id=id.clone()
-                name=format!("form[fhir][{key}][profiles]")
+                name=format!("form[fhir.{key}.profiles][]")
                 value=value
                 class=format!("{INPUT} fui-mono")
                 autocomplete="off"
@@ -474,7 +474,7 @@ fn categories(key: &str, served: &[String]) -> AnyView {
                     <input
                         type="checkbox"
                         id=id
-                        name=format!("form[fhir][{key}][categories]")
+                        name=format!("form[fhir.{key}.categories][]")
                         value=code
                         checked=on
                     />
@@ -511,9 +511,9 @@ fn fhir_named(row: &FhirEndpointInput) -> String {
 fn fhir_row(row: &FhirEndpointInput) -> RepeatRow {
     let key = row.key.as_str();
     let named = fhir_named(row);
-    let name = |part: &str| format!("form[fhir][{key}][{part}]");
+    let name = |part: &str| format!("form[fhir.{key}.{part}]");
     let fields = view! {
-        <input type="hidden" name="form[fhir_rows]" value=key.to_owned() />
+        <input type="hidden" name="form[fhir_rows][]" value=key.to_owned() />
         <div class="fui-field-row fui-field-row-narrow-wide">
             {text(
                 (&fhir_field(key, "id"), &name("id")),

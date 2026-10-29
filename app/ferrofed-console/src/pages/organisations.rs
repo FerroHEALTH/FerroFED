@@ -80,8 +80,11 @@ pub fn all_nodes() -> AnyView {
 fn page(view_of: View) -> AnyView {
     let asked = asked();
     let managed = crate::pages::configuration::console_manages();
+    let federation_read = Resource::new(crate::read::changes, |_| {
+        crate::read::federation::federation_now()
+    });
     let body = Suspend::new(async move {
-        match crate::read::federation::read().await {
+        match federation_read.await {
             Ok(federation) => listing(&federation, view_of, &asked, managed),
             Err(stop) => view! {
                 {heading_only(managed)}

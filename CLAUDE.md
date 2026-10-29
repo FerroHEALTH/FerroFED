@@ -332,12 +332,14 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   and the running configuration with its save of settings (`running`,
   #1235).
 - `app/ferrofed-console`: the operator console, the `ferrofed-console` binary
-  and its own image (#275, decisions A55 and A104); never published. A
-  Leptos app in islands mode built on FerroUI (`ferrohealth-ui`, pinned
-  exactly): the server renders every page whole and the browser hydrates
-  only the islands, its two halves chosen by compilation target, never by
-  Cargo feature; every action is a plain form post to its own page
-  (`act`), so every page reads and every action posts with no WebAssembly.
+  and its own image (#275, decisions A55, A104 and A111); never published.
+  A Leptos app built on FerroUI (`ferrohealth-ui`, pinned exactly) that
+  hydrates the whole page (#1397): the server draws the first page and the
+  browser draws every page after it from five lazy route groups (`routes`),
+  each page reading the gateway through a server function (`read`) and
+  each action a server function behind an `<ActionForm>` (`act`), its two
+  halves chosen by compilation target, never by Cargo feature; every page
+  still reads and every action still posts with no WebAssembly.
   A pure HTTP client of the gateway (`gateway`, on `openehr-its`
   `rest-client`) that links no part of it; the operator's OpenID Connect
   session is held on its server (`session`, `oidc`), the code exchanged and

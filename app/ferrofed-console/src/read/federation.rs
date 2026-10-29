@@ -13,6 +13,13 @@
 //! organisation is named by its id. Every id here is a routing id of the
 //! registry, never a patient identifier (§5.4.1, N33), so a page path may
 //! carry it.
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
 use std::collections::BTreeMap;
 
@@ -23,12 +30,17 @@ use ferrohealth_ui::view::flow::FlowState;
 use ferrohealth_ui::view::state::Mark;
 use openehr_federation::options::{MemberEndpoint, OptionsRoot};
 
+use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
+
 use crate::locale::{Msg, tr};
-use crate::read::{Stop, signed_in};
+use crate::read::Stop;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::read::signed_in;
 
 /// The state of an endpoint, a node, an organisation or a service, as a
 /// shape, a colour and a word (FerroUI family rule 12).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Health {
     /// It answered the last request: a filled dot.
     Reachable,
@@ -125,7 +137,7 @@ impl Health {
 }
 
 /// One member endpoint.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Endpoint {
     /// The `endpoint_id`.
     pub id: String,
@@ -142,7 +154,7 @@ pub struct Endpoint {
 }
 
 /// One node and its endpoints.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Node {
     /// The `node_id`, or the `endpoint_id` of an endpoint that names no
     /// node.
@@ -195,7 +207,7 @@ impl Node {
 }
 
 /// One organisation and its nodes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Organisation {
     /// The organisation's id.
     pub id: String,
@@ -252,7 +264,7 @@ impl Organisation {
 }
 
 /// The kind of a service the gateway asks, which groups the services.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ServiceGroup {
     /// Who the patient is: the resolver, the demographics service and the
     /// identity feed.
@@ -294,7 +306,7 @@ impl ServiceGroup {
 }
 
 /// One service the gateway asks.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Service {
     /// Its key in the dependency report, such as `resolver`.
     pub key: String,
@@ -394,7 +406,7 @@ pub(crate) fn p95(endpoint: &MemberEndpoint) -> Option<u64> {
 }
 
 /// The federation the console draws.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Federation {
     /// The federation's id, as the self-description names it.
     pub id: String,
@@ -537,6 +549,16 @@ fn services(dependencies: &DependencyReport) -> Vec<Service> {
     services
 }
 
+/// The federation as the operator of the request reads it ([`read`]).
+///
+/// # Errors
+/// As [`read`], and [`crate::read::Fault::Unavailable`] when the console's
+/// server does not answer.
+#[server(endpoint = "federation")]
+pub async fn federation_now() -> Result<Federation, Stop> {
+    read().await
+}
+
 /// Reads the federation as the operator of the request.
 ///
 /// It reads the self-description, the dependency report, and the
@@ -546,6 +568,7 @@ fn services(dependencies: &DependencyReport) -> Vec<Service> {
 /// # Errors
 /// Returns the [`Stop`] of a missing session, or of the self-description
 /// or the dependency report the gateway refused or did not answer.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn read() -> Result<Federation, Stop> {
     let (state, token) = signed_in()?;
     let gateway = state.gateway();

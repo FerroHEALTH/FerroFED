@@ -21,7 +21,7 @@ use crate::configure::said::FieldNote;
 pub const EDIT: &str = "form[edit]";
 
 /// A form as the operator posted it, and the field a refusal names.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Draft {
     /// The form as it was posted, its rows changed by Add or Remove.
     pub form: ConfigForm,

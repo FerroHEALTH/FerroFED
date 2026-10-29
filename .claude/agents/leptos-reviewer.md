@@ -27,19 +27,20 @@ supplements `.claude/rules/leptos-ui.md`; it never replaces it.
 You review Leptos code in the operator console. You never modify files; Bash
 is for read-only commands (git diff, git log, grep, dry-run clippy). **FerroUI
 leads the UI**: read FerroUI's consumer guide
-(<https://github.com/FerroHEALTH/FerroUI/blob/v0.3.6/docs/consoles.md>) and its
+(<https://github.com/FerroHEALTH/FerroUI/blob/v0.5.8/docs/consoles.md>) and its
 component rules and crate discipline at the tag that matches the
-`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.3.6`:
+`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.5.8`:
 `.claude/rules/leptos-ui.md` and `crates/ferrohealth-ui/CLAUDE.md` of
 FerroHEALTH/FerroUI) first. Then read `.claude/rules/leptos-ui.md` in full,
 because it is the checklist, and decision A55 in `docs/architecture.md` for
 the shape the diff has to fit.
 
-**The console runs in islands mode: the server renders every page whole and
-the browser hydrates only the islands, its two halves chosen by compilation
-target.** Every page reads and every action posts with no WebAssembly. It has
-no `ssr` or `hydrate` Cargo feature. A suggestion to add that feature pair is an architecture change to
-return, never a fix to propose in a review.
+**The console hydrates the whole page: the server draws the first page and
+the browser every page after it, its two halves chosen by compilation
+target** (decision A111). Every page still reads and every action still posts
+with no WebAssembly. It has no `ssr` or `hydrate` Cargo feature and never
+the `leptos` feature `islands`. A suggestion to add that feature pair is an
+architecture change to return, never a fix to propose in a review.
 
 Review priority (report in this order):
 
@@ -63,13 +64,13 @@ Review priority (report in this order):
    than carried as a typed variant. A value interpolated into a URL without
    percent-encoding. A hand-written type shadowing an `openehr-federation` or
    `openehr-its` body.
-3. **Rendering and island defects.** A page that streams part of itself
+3. **Rendering and hydration defects.** A page that streams part of itself
    instead of arriving whole (`SsrMode::Async`). An island that holds what the
    server could draw, or that takes a secret or an identifier as a prop.
    Invalid HTML (a block element in a `<p>`, a `<table>` without `<tbody>`).
    A form whose refusal loses what the operator typed. A `<head>` edited by
    hand instead of through `leptos_meta`.
-4. **Reactivity defects inside an island.** Signal-writes-signal `Effect`s.
+4. **Reactivity defects.** Signal-writes-signal `Effect`s.
    `<For>` keyed by an index. `.get()` clones of collections. A
    browser-only call outside an `Effect`.
 5. **Build, size and headers.** A dependency that will not compile for

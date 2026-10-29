@@ -1,23 +1,11 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The console's own islands.
+//! The console's own components.
 //!
 //! Each is a widget of FerroUI that shares state with the console's code,
-//! as small as its behaviour, as FerroUI asks; every other
-//! island the console draws is one of FerroUI's ready islands.
-#![expect(
-    clippy::mem_forget,
-    reason = "the island macro of leptos_macro 0.8 keeps each hydrated island alive by forgetting its view state, in the browser entry it writes"
-)]
-#![expect(
-    clippy::must_use_candidate,
-    reason = "the #[island] macro drops a #[must_use] from the function it writes"
-)]
-#![expect(
-    missing_docs,
-    reason = "the #[island] macro writes an undocumented struct of each island's props as they cross to the browser"
-)]
+//! as small as its behaviour, as FerroUI asks. No specification governs
+//! this: our own design.
 
 use ferrohealth_ui::highlight::Language;
 use ferrohealth_ui::widget::editor::{Editor, code_editor};
@@ -32,8 +20,12 @@ pub const AQL: &str = "aql";
 /// The server writes the text into the text area, and the text area takes
 /// typing from the first paint, so the form posts what was typed whether or
 /// not the WebAssembly runs (FerroUI's interaction contract, layer 3); once
-/// it runs, the editor colours the AQL as it is typed.
-#[island]
+/// the page has hydrated, the editor colours the AQL as it is typed.
+#[component]
+#[expect(
+    clippy::must_use_candidate,
+    reason = "the #[component] macro drops a #[must_use] from the function it writes"
+)]
 pub fn AqlEditor(
     /// The AQL the editor opens with.
     text: String,

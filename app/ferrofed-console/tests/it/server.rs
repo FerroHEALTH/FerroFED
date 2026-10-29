@@ -354,36 +354,49 @@ async fn the_stylesheets_are_ferroui_s_own() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Every action is a plain form post to the page it sits on, so no server
-// function route answers, with a session or without.
+// Every page reads and every action runs through a server function, which
+// checks the operator's session itself: a visitor's call reads nothing and asks
+// neither the gateway nor a replica anything, whatever it posts.
 #[tokio::test]
-async fn no_server_function_route_answers() -> Result<(), Box<dyn Error>> {
-    let (state, service) = console("[session]\nsecure_cookie = false\n")?;
-    let session = state.sessions().establish(signed_in())?;
-    for route in [
-        "/api/query",
-        "/api/configure",
-        "/api/clear-ehr-id",
-        "/api/theme",
+async fn a_server_function_asks_nothing_for_a_visitor() -> Result<(), Box<dyn Error>> {
+    let gateway = ferrofed_testkit::mock::Server::start().await;
+    let (_state, service) = console(&format!(
+        "[gateway]\nbase_url = \"{uri}\"\n\n[session]\nsecure_cookie = false\n\n\
+         [[admin.replicas]]\nname = \"gateway-0\"\nadmin_url = \"{uri}\"\n",
+        uri = gateway.uri()
+    ))?;
+    for (route, body) in [
+        ("/api/query", "kind=aql&aql=SELECT+1"),
+        (
+            "/api/configure",
+            "form%5Baction%5D=apply&form%5Brevision%5D=2&form%5Bconfirm%5D=yes",
+        ),
+        (
+            "/api/clear",
+            "ehr_id=8c3e8f3a-1b2c-4d5e-8f90-123456789abc&replica=*&confirm=yes",
+        ),
+        (
+            "/api/repair",
+            "name=org.example%3A%3Aweights&version=1.0.0&endpoint=*&confirm=yes",
+        ),
+        ("/api/federation", ""),
+        ("/api/dashboard", ""),
+        ("/api/configuration", ""),
     ] {
-        let (response, _body) = send(&service, get(route)?).await?;
-        assert_eq!(StatusCode::SEE_OTHER, response.status(), "{route}");
-        let (response, _body) = send(&service, get_as(route, &session)?).await?;
-        assert_eq!(StatusCode::NOT_FOUND, response.status(), "{route}");
         let request = http::Request::post(route)
             .header("content-type", "application/x-www-form-urlencoded")
             .header("sec-fetch-site", "same-origin")
-            .header(
-                "cookie",
-                format!("{}={}", ferrofed_console::session::COOKIE, session.as_str()),
-            )
-            .body(axum::body::Body::from("form%5Baction%5D=apply"))?;
-        let (response, _body) = send(&service, request).await?;
+            .body(axum::body::Body::from(body))?;
+        let (_response, answer) = send(&service, request).await?;
         assert!(
-            response.status().is_client_error(),
-            "{route}: {}",
-            response.status()
+            answer.contains("NotAuthenticated") || answer.contains("SignedOut"),
+            "{route}: {answer}"
         );
     }
+    let asked = gateway
+        .received_requests()
+        .await
+        .ok_or("the stub records requests")?;
+    assert!(asked.is_empty(), "a visitor's call asked {}", asked.len());
     Ok(())
 }

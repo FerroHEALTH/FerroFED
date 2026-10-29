@@ -3,7 +3,7 @@
 
 //! What the configuration page renders and what its forms post.
 //!
-//! The page is drawn on the server: the header with the revisions it names,
+//! The page is drawn in both halves: the header with the revisions it names,
 //! the card of the revision saved and not applied, the tabs, and the tab's
 //! own cards with their forms. Its forms post to the server alone, as
 //! structured fields:
@@ -33,7 +33,7 @@ pub struct Screen {
     pub compare: String,
 }
 
-/// The configuration page as the server draws it, in the parts the page
+/// The configuration page as it is drawn, in the parts the page
 /// places around the answer of a form.
 #[derive(Debug, Default)]
 pub struct ConfigView {
@@ -193,6 +193,16 @@ pub struct ConfigForm {
 }
 
 impl ConfigForm {
+    /// The form with every secret's value emptied, as it comes back to the
+    /// page to be drawn again: a secret is never drawn again.
+    #[must_use]
+    pub fn without_secrets(mut self) -> Self {
+        for secret in &mut self.secrets {
+            secret.value = WriteOnly::new(String::new());
+        }
+        self
+    }
+
     /// The form the posted `fields` hold, by the field names the forms
     /// post: each row's fields named by its key.
     #[must_use]
@@ -216,7 +226,7 @@ impl ConfigForm {
         let query_endpoints = all("form[query_rows]")
             .into_iter()
             .map(|key| {
-                let part = |part: &str| one(&format!("form[query][{key}][{part}]"));
+                let part = |part: &str| one(&format!("form[query.{key}.{part}]"));
                 QueryEndpointInput {
                     id: part("id"),
                     url: part("url"),
@@ -228,8 +238,8 @@ impl ConfigForm {
         let fhir_endpoints = all("form[fhir_rows]")
             .into_iter()
             .map(|key| {
-                let part = |part: &str| one(&format!("form[fhir][{key}][{part}]"));
-                let many = |part: &str| all(&format!("form[fhir][{key}][{part}]"));
+                let part = |part: &str| one(&format!("form[fhir.{key}.{part}]"));
+                let many = |part: &str| all(&format!("form[fhir.{key}.{part}]"));
                 FhirEndpointInput {
                     id: part("id"),
                     url: part("url"),
@@ -244,7 +254,7 @@ impl ConfigForm {
         let settings = all("form[setting_rows]")
             .into_iter()
             .map(|row| {
-                let part = |part: &str| format!("form[setting][{row}][{part}]");
+                let part = |part: &str| format!("form[setting.{row}.{part}]");
                 SettingInput {
                     key: one(&part("key")),
                     value: one(&part("value")),
@@ -257,7 +267,7 @@ impl ConfigForm {
         let secrets = all("form[secret_rows]")
             .into_iter()
             .map(|row| {
-                let part = |part: &str| one(&format!("form[secret][{row}][{part}]"));
+                let part = |part: &str| one(&format!("form[secret.{row}.{part}]"));
                 SecretInput {
                     key: part("key"),
                     choice: part("choice"),

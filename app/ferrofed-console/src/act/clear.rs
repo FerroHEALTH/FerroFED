@@ -10,17 +10,22 @@
 //! The page answers with one line per replica. An `ehr_id` is a routing id,
 //! never a patient identifier (§5.4.1, N33), and the clear is recorded with
 //! the operator by the gateway.
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
-use axum::Extension;
-use axum::extract::Form;
-use axum::response::Response;
-use ferrofed_registry::operator::{ClearedEhrId, HeldBefore};
-use http::{HeaderMap, Uri};
-use leptos::context::provide_context;
+#[cfg(not(target_arch = "wasm32"))]
+use ferrofed_registry::operator::ClearedEhrId;
+use ferrofed_registry::operator::HeldBefore;
+use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
 
-use crate::act::{ReplicaAnswer, acted, field, render};
-use crate::read::Refusal;
-use crate::server::ConsoleState;
+use crate::act::ReplicaAnswer;
+use crate::read::{Fault, Refusal, Stop};
 
 /// The field the dialog's confirmation step posts, which an action needs
 /// before it asks any replica.
@@ -30,7 +35,7 @@ pub const CONFIRM: &str = "confirm";
 pub const EVERY_REPLICA: &str = "*";
 
 /// What a replica reports of a clear.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClearLine {
     /// What the replica held before.
     pub held: HeldBefore,
@@ -40,15 +45,28 @@ pub struct ClearLine {
 
 /// The outcome of a clear the page draws: the answer of each replica, or
 /// why no replica was asked.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClearOutcome {
     /// The replicas asked, each with its answer.
     Answered(Vec<ReplicaAnswer<ClearLine>>),
     /// The form cannot be sent as it stands.
     Refused(Refusal),
+    /// The console could not run the clear, such as when its own server did
+    /// not answer the page.
+    Failed(Fault),
+}
+
+impl From<Stop> for ClearOutcome {
+    fn from(stop: Stop) -> Self {
+        match stop {
+            Stop::Refused(refusal) => Self::Refused(refusal),
+            Stop::Fault(fault) => Self::Failed(fault),
+        }
+    }
 }
 
 /// The line of `cleared`.
+#[cfg(not(target_arch = "wasm32"))]
 fn line(cleared: ClearedEhrId) -> ClearLine {
     ClearLine {
         held: cleared.held,
@@ -56,64 +74,63 @@ fn line(cleared: ClearedEhrId) -> ClearLine {
     }
 }
 
-/// Serves the post of the clear form on Integrity.
-pub async fn post(
-    Extension(state): Extension<ConsoleState>,
-    headers: HeaderMap,
-    extensions: http::Extensions,
-    uri: Uri,
-    Form(fields): Form<Vec<(String, String)>>,
-) -> Response {
-    let outcome = clear(&state, &headers, &fields).await;
-    render(&state, (headers, extensions), uri, move || {
-        provide_context(outcome.clone());
-    })
-    .await
+/// Clears the `ehr_id` at the replica `replica` names, or at every replica
+/// for [`EVERY_REPLICA`], once the dialog's confirmation step posted
+/// `confirm`, as the operator of the request.
+///
+/// # Errors
+/// Returns [`crate::read::Fault::Unavailable`] when the console's server
+/// does not answer; a form that cannot be sent and a replica's refusal are
+/// answers.
+#[server(endpoint = "clear")]
+pub async fn clear_ehr_id(
+    /// The `ehr_id` to clear.
+    #[server(default)]
+    ehr_id: String,
+    /// The replica's name, or [`EVERY_REPLICA`].
+    #[server(default)]
+    replica: String,
+    /// Not empty once the operator took the confirmation step.
+    #[server(default)]
+    confirm: String,
+) -> Result<ClearOutcome, Stop> {
+    Ok(clear(&ehr_id, &replica, &confirm).await)
 }
 
-/// Clears the `ehr_id` the form `fields` names at the replicas it names.
-async fn clear(
-    state: &ConsoleState,
-    headers: &HeaderMap,
-    fields: &[(String, String)],
-) -> ClearOutcome {
-    let token = match crate::read::signed_in_with(state, headers) {
-        Ok(token) => token,
-        Err(_signed_out) => {
-            return ClearOutcome::Refused(Refusal::NotAuthenticated { code: None });
-        }
+/// Clears the `ehr_id` the form names at the replicas it names.
+#[cfg(not(target_arch = "wasm32"))]
+async fn clear(ehr_id: &str, replica: &str, confirm: &str) -> ClearOutcome {
+    use crate::locale::{Msg, tr};
+    let Ok((state, token)) = crate::read::signed_in() else {
+        return ClearOutcome::Refused(Refusal::NotAuthenticated { code: None });
     };
     let replicas = &state.settings().admin;
-    let locale = crate::locale::requested_from(state, headers);
-    let invalid = |msg| {
-        ClearOutcome::Refused(Refusal::Invalid {
-            reason: crate::locale::tr_in(&locale, msg, &[]),
-        })
-    };
+    let invalid = |msg| ClearOutcome::Refused(Refusal::Invalid { reason: tr(msg) });
     if replicas.is_empty() {
-        return invalid(crate::locale::Msg::ClearNoAdmin);
+        return invalid(Msg::ClearNoAdmin);
     }
-    if field(fields, CONFIRM).is_none() {
-        return invalid(crate::locale::Msg::ClearConfirm);
+    if confirm.trim().is_empty() {
+        return invalid(Msg::ClearConfirm);
     }
-    let Some(ehr_id) = field(fields, "ehr_id") else {
-        return invalid(crate::locale::Msg::ClearNameEhrId);
-    };
-    let chosen: Vec<_> = match field(fields, "replica") {
-        Some(EVERY_REPLICA) => replicas.iter().collect(),
-        Some(name) => replicas
+    let ehr_id = ehr_id.trim();
+    if ehr_id.is_empty() {
+        return invalid(Msg::ClearNameEhrId);
+    }
+    let chosen: Vec<_> = match replica.trim() {
+        EVERY_REPLICA => replicas.iter().collect(),
+        "" => Vec::new(),
+        name => replicas
             .iter()
             .filter(|replica| replica.name == name)
             .collect(),
-        None => Vec::new(),
     };
     if chosen.is_empty() {
-        return invalid(crate::locale::Msg::ClearChooseReplica);
+        return invalid(Msg::ClearChooseReplica);
     }
     let mut answers = Vec::new();
     for replica in chosen {
         let answered = state.gateway().clear_ehr_id(replica, &token, ehr_id).await;
-        answers.push(acted(
+        answers.push(crate::act::acted(
             crate::read::ActionKind::Admin,
             (&replica.name, "clear"),
             answered,

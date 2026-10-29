@@ -8,21 +8,20 @@ paths: ["app/ferrofed-console/**"]
 # Leptos console rules (`app/ferrofed-console`, and any Leptos code)
 
 **FerroUI leads the UI.** The console draws with `ferrohealth-ui`, pinned
-exactly in the root `[workspace.dependencies]` (today `=0.3.6`, with its
-`split` feature), and the
+exactly in the root `[workspace.dependencies]` (today `=0.5.8`), and the
 FerroUI repository (FerroHEALTH/FerroUI) is the source for its components,
 design, tokens, icons, accessibility bar, interaction contract, words and
 quality control. Read these first, at the git tag that matches the pin
-(today `v0.3.6`):
+(today `v0.5.8`):
 
-- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.3.6/docs/consoles.md):
+- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.8/docs/consoles.md):
   the consumer guide, how a console uses the library.
-- [`.claude/rules/leptos-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.3.6/.claude/rules/leptos-ui.md):
+- [`.claude/rules/leptos-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.8/.claude/rules/leptos-ui.md):
   the component rules of every FerroHEALTH console. The section numbers this
-  file cites (FerroUI §N) are those of the `v0.3.6` copy.
-- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.3.6/crates/ferrohealth-ui/CLAUDE.md):
+  file cites (FerroUI §N) are those of the `v0.5.8` copy.
+- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.8/crates/ferrohealth-ui/CLAUDE.md):
   the crate's own discipline.
-- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.3.6/design/consoles/ferrofed):
+- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.5.8/design/consoles/ferrofed):
   the reviewed design of this console. Every page matches its mockup at
   1440 and 390 px, light and dark. FerroUI's `design/` is the only design
   source; a design folder anywhere else is stale.
@@ -42,20 +41,27 @@ question is the official Leptos book (<https://github.com/leptos-rs/book>,
 
 ## 0. The mandates (absolute)
 
-- **Islands mode, the four layers.** The server renders every page whole;
-  the browser hydrates only the islands FerroUI's components and
-  `crate::islands` carry (the Leptos book, "Guide: Islands"). Every page
-  reads, and every action posts, with no WebAssembly: native HTML first
-  (links, forms, `<details>`, `<dialog>` with `command`), behaviour in Rust
-  islands on top, and no hand-written JavaScript anywhere (FerroUI §0). The
-  only JavaScript in the product is the hydration bootstrap and the
-  `wasm-bindgen` glue the toolchain writes.
+- **The whole page hydrates, and every page works with no WebAssembly.**
+  The server draws the first page and the browser hydrates it whole, then
+  draws every page after it, each group of pages a lazy route
+  (`crate::routes`), so no link or form reloads the document (FerroUI
+  `docs/consoles.md`, How a console builds). With no WebAssembly every page
+  still reads and every action still posts: native HTML first (links,
+  forms, `<details>`, `<dialog>` with `command`), behaviour in Rust on top,
+  and no hand-written JavaScript anywhere (FerroUI §0). The only JavaScript
+  in the product is the hydration bootstrap and the `wasm-bindgen` glue the
+  toolchain writes.
 - **Two halves by target, never by feature.** The host build is the server
-  half (the whole page tree, axum, the gateway client); the
-  `wasm32-unknown-unknown` build is the browser half (the islands alone).
-  Every page module is `#[cfg(not(target_arch = "wasm32"))]`; only
-  `crate::islands` and the `manufacturer` facts compile for the browser.
-  The crate has no `ssr` or `hydrate` feature.
+  half (axum, the gateway client, the session, the server functions'
+  bodies); the `wasm32-unknown-unknown` build is the browser half (the page
+  tree, drawn again in the browser). The page tree, `crate::read`'s types,
+  `crate::act`'s answers and `crate::configure`'s rendering compile for both;
+  whatever reaches the gateway is `#[cfg(not(target_arch = "wasm32"))]`. The
+  crate has no `ssr` or `hydrate` feature, and never the `leptos` feature
+  `islands`. The browser half links `ferrofed-registry` (the operator reports
+  and the configuration resources), `openehr-federation` and `openehr-its`
+  with no feature (the self-description, the federation metadata and the
+  stored query definition) of the workspace, and no other FerroFED crate.
 - **The console is a client of the gateway and nothing else.** It reaches
   the gateway over HTTP, on the public surface any client uses, through
   `crate::gateway` and the `openehr-its` client, and links no part of the
@@ -75,20 +81,31 @@ question is the official Leptos book (<https://github.com/leptos-rs/book>,
   `POST` body; a `GET` of the query page never runs one.
 - **Every state-changing request is a same-origin `POST`.** The server's
   `same_origin_only` layer refuses any other method from another origin
-  (`Sec-Fetch-Site`, else `Origin`/`Referer`), and every form handler checks
-  the session again before it asks the gateway or a replica.
+  (`Sec-Fetch-Site`, else `Origin`/`Referer`) before FerroUI's answer
+  wrapper reads the body, and every server function checks the session
+  itself before it asks the gateway or a replica.
 
 ## 1. Pages and forms
 
-- **A page is a route of `crate::app` rendered `SsrMode::Async`**, inside
-  `Suspense` with a `Suspend` that reads the gateway, so the HTML arrives
-  whole: nothing waits in a `<template>` for a script
-  (`tests/it/views.rs`).
-- **A form posts to the page it sits on.** Its handler (`crate::act`) reads
-  the fields, runs the action, and renders the same page again through
-  `act::render`, with the outcome provided as context; the page draws the
-  outcome at its top. A route's `POST` is registered at the same path
-  pattern as the Leptos route so the two merge.
+- **A page is a route of `crate::app`, drawn by its lazy route group
+  (`crate::routes`), rendered `SsrMode::Async`.** It asks what it reads of
+  the gateway through a server function under a `Resource`, inside
+  `Suspense` with a `Suspend`, so the server sends the HTML whole and the
+  browser draws the same page from the same reads (`tests/it/views.rs`).
+  What the server read of the request (the session, the operator, the
+  preferences, the locale, the replicas) reaches the browser as the
+  `crate::visit::Visit`, never as a cookie or the request a component reads.
+- **An action is a server function behind FerroUI's `<ActionForm>`** in its
+  answer mode (`widget::action`): the form draws `answer_field()`, the page
+  calls `answered(&action)`, and the router is wrapped in `draw_answers`.
+  Once the page has hydrated the form calls the function and the page draws
+  its answer in place; with no WebAssembly the post goes to the function and
+  the page it names is drawn with the answer. A function whose form has rows
+  takes the fields whole (`crate::act::fields`): a field posted more than
+  once is named with `[]`, and a row's field in one dotted step
+  (`form[query.0.url]`), since `serde_qs` reads a step of digits as a
+  sequence's place. A download (the self-description, a revision's TOML) is
+  a plain route.
 - **Rows are FerroUI's F7 rows** (`widget::repeat`): a sub-card per
   endpoint, setting or new secret (`Fields::Card`), a row of one field per
   profile or list value (`Fields::One`). Add and Remove are submit buttons
@@ -101,7 +118,9 @@ question is the official Leptos book (<https://github.com/leptos-rs/book>,
   with its line and `aria-invalid`. A secret is never drawn again.
 - **A confirmation is a native modal dialog.** `popover_form` and the
   console's `confirmed` part hold the reason and post `confirm`; an action
-  without it asks no replica. Each dialog id is unique on its page: a table
+  without it asks no replica. A configuration table's removal is FerroUI's
+  `danger_form_dialog`, which posts natively to the configuration's
+  function until FerroUI can draw it around a server action (#1414). Each dialog id is unique on its page: a table
   row's removal takes an id made from its row (`plan::removal_dialog`), and
   the item's own page keeps a removal of its own. An explanation, such as
   How configuration works, is FerroUI's `info_dialog`.
@@ -112,11 +131,19 @@ question is the official Leptos book (<https://github.com/leptos-rs/book>,
   (`prefs::return_path`).
 - Views are built in `.into_any()`-erased sections, so a deep page does not
   blow rustc's layout recursion in a plain `cargo build`.
+- **A resource carries what the page draws and nothing more.** Its value is
+  written into the page for the browser to hydrate from, so a read the page
+  draws one part of comes back reduced: the stored queries' home carries no
+  AQL, and a stored query's page the AQL of the version it shows alone.
+- **The query console's address keeps no key it does not read.** A `GET`
+  of `/query` with any key but `stored` and `version` is sent to the same
+  page without it (`server::clean_query_address`), so a parameter a link
+  put in the address is never echoed into the fields that name the page.
 
 ## 2. The server half
 
-- A handler is thin: check the session, call `crate::gateway`, map the
-  answer to the page's types. Errors are types (`read::Refusal`,
+- A server function is thin: check the session, call `crate::gateway`, map
+  the answer to the page's types. Errors are types (`read::Refusal`,
   `read::Fault`), and every failed gateway call is logged once by
   `read::stopped` with what it asked for, never a body, a token or a query.
 - A refusal shows its status and stable code (FerroUI's refusal R18); the
@@ -140,7 +167,9 @@ the console keeps no stylesheet of its own.
   `tower::ServiceExt::oneshot`, the gateway and the admin listeners as
   `wiremock` stubs answering the specification's own examples
   (`tests/it/stub.rs`). Every page has a test that it answers whole, needs a
-  session and escapes what the gateway names.
+  session and escapes what the gateway names; an action's test posts as a
+  browser with no WebAssembly does, to the server function with the page in
+  the answer field (`tests/it/support.rs`, `answer_post`).
 - Gates for every console change (`/ui-gates`): `cargo fmt`; clippy on the
   host with `--all-targets` and on `wasm32-unknown-unknown` with `--lib`,
   both at `-D warnings`; `cargo nextest run -p ferrofed-console`;
@@ -150,13 +179,14 @@ the console keeps no stylesheet of its own.
 - **Browser journeys** drive the console in headless Chrome: Rust only,
   `thirtyfour` over chromedriver, in the testkit's `tests/it/journeys/`
   behind `FERROFED_JOURNEYS=1`. A journey fails on any error the browser
-  logs and waits on elements, never on a sleep. A new screen gets its
-  journey in the same change.
+  logs and waits on elements, never on a sleep, and on the root's
+  `data-ferroui-hydrated` before it touches a hydrated page. A new screen
+  gets its journey in the same change.
 - **Never weaken a gate to make a change pass.**
 
 ## 5. The bundle budget
 
-The browser downloads the islands' WebAssembly, so its size is held to a
+The browser downloads the page's WebAssembly, so its size is held to a
 budget in CI. After `scripts/release/console-site.sh --release`, the
 `console` job runs `scripts/checks/console-bundle.sh`, which writes the
 WebAssembly and its glue, raw, `gzip -9` and `brotli -q 11`, to the job
@@ -165,25 +195,26 @@ below. The script reads the budget from this table.
 
 | Measure | Budget |
 |---|---|
-| WebAssembly, brotli-compressed | 512000 bytes |
+| WebAssembly, brotli-compressed | 696320 bytes |
 
 - The gating number is the brotli-compressed WebAssembly of the entry, the
   download every page makes (the Leptos book, `deployment/binary_size`).
-  The build splits (`cargo leptos build --split`) and the dependency turns
-  on `ferrohealth-ui`'s `split` feature with it: FerroUI's lazy islands
-  load from chunks of their own on a page that draws them, and a split
-  build without the feature keeps their code in the entry
-  (FerroHEALTH/FerroUI#331).
-- The budget was raised step by step from 220 KiB (the operator views of
-  #276) to 500 KiB (`ferrohealth-ui` 0.1.7, #1162, 479645 bytes), each step
-  recorded in the pull request that took it. The islands console on
-  `ferrohealth-ui` 0.3.2 (#1230) measured 315488 bytes split, 442611
-  unsplit (2026-10-23, cargo-leptos 0.3.11, wasm-bindgen 0.2.129, Rust
-  1.99.1): the islands FerroUI's components carry and the AQL editor. On
-  `ferrohealth-ui` 0.3.3 with its `split` feature (#1233) it measured
-  321296 bytes, on 0.3.4 (#1242) 323552 bytes, on 0.3.5 (#1245)
-  324469 bytes, and on 0.3.6 (#1249) 324245 bytes. A change that needs more raises the budget here in its own
-  pull request, with the measured size and the reason.
+  The build splits (`cargo leptos build --split`): each lazy route group
+  loads its code from chunks of its own the first time a page of the group
+  is drawn, or earlier while the browser is idle, and the site script fails
+  a build whose glue imports `__wasm_split_placeholder__`, which no browser
+  resolves.
+- The budget is 680 KiB, a quarter over the 556958 bytes the move to
+  FerroUI 0.5.7 measured (#1397, 2026-10-28, cargo-leptos 0.3.11,
+  wasm-bindgen 0.2.129, wasm-opt version_123, Rust 1.99.1): whole-page
+  hydration puts the renderer, the reactive graph, the router, the shell,
+  the visit and the reads' serde in the entry, and every data segment
+  stays there, since `--split` moves code alone. The five route groups
+  measured 1025542 (Configuration, raw), 157776 (Console), 276147
+  (Federation), 477569 (Overview) and 551468 (Queries, with the code
+  editor), raw. Before it, the islands console on `ferrohealth-ui` 0.3.6
+  measured 324245 bytes against a 500 KiB budget. A change that needs more
+  raises the budget here, with the measured size and the reason.
 - The `wasm-release` profile (`opt-level = "z"`, `lto = true`,
   `codegen-units = 1`, `debug = false`) keeps the overflow checks
   (`.claude/rules/reliability.md`); a panic in the browser prints its
@@ -211,7 +242,10 @@ No string the console draws lives outside a catalog (FerroUI §13).
   (`crate::locale::requested`): the operator's language preference, else
   the best language of `Accept-Language` the catalog holds, else
   `[server] locale`, provided with `ferrohealth_ui::i18n::provide_locale`
-  and written as `<html lang>`. An island takes its words as props.
+  and written as `<html lang>`. The catalog is embedded in both halves, and
+  the browser provides the locale the server chose (`crate::visit`), so a
+  page drawn in the browser speaks as the server's does; a server function
+  answers in the request's locale too.
 - A handler's plain-text answer is a catalog message too, in the
   request's language (`server::plain`).
 - `scripts/checks/stray-literals.sh` runs in CI with an empty baseline:

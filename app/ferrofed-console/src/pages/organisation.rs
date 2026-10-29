@@ -33,8 +33,11 @@ use ferrohealth_ui::view::state::state;
 pub fn page() -> AnyView {
     let id = crate::pages::param("org");
     let tab = crate::pages::param("tab");
+    let federation_read = Resource::new(crate::read::changes, |_| {
+        crate::read::federation::federation_now()
+    });
     let body = Suspend::new(async move {
-        match crate::read::federation::read().await {
+        match federation_read.await {
             Err(stop) => view! {
                 {page_heading(
                     Header {

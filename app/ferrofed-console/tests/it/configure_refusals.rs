@@ -11,10 +11,8 @@
 
 use std::error::Error;
 
-use axum::body::Body;
-use ferrofed_console::session::COOKIE;
 use ferrofed_testkit::mock::Server;
-use http::{Request, StatusCode};
+use http::StatusCode;
 
 use crate::configure::{
     answers, changes, configured, form, form_with, listener, posted, query_row, refusal_of, save_c,
@@ -233,13 +231,17 @@ async fn a_post_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Erro
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener)?;
     for site in [Some("cross-site"), Some("same-site"), None] {
-        let mut request = Request::post("/configuration")
-            .header("content-type", "application/x-www-form-urlencoded")
-            .header("cookie", format!("{COOKIE}={}", session.as_str()));
-        if let Some(site) = site {
-            request = request.header("sec-fetch-site", site);
-        }
-        let (response, body) = send(&service, request.body(Body::from(save_c()))?).await?;
+        let from: Vec<(&str, &str)> = site
+            .map(|site| ("sec-fetch-site", site))
+            .into_iter()
+            .collect();
+        let request = crate::support::answer_post(
+            (ferrofed_console::act::configure::IMPORT, "/configuration"),
+            &save_c(),
+            Some(&session),
+            &from,
+        )?;
+        let (response, body) = send(&service, request).await?;
         assert_eq!(StatusCode::FORBIDDEN, response.status(), "{site:?}: {body}");
     }
     let asked = listener
@@ -261,11 +263,12 @@ async fn a_save_whose_held_member_cannot_be_read_sends_nothing() -> Result<(), B
     let listener = Server::start().await;
     answers(&listener, ("GET", "/admin/config/resources"), 500, "").await;
     let (service, session) = signed_in_console(&listener)?;
-    let request = Request::post("/configuration")
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("sec-fetch-site", "same-origin")
-        .header("cookie", format!("{COOKIE}={}", session.as_str()))
-        .body(Body::from(save_c()))?;
+    let request = crate::support::answer_post(
+        (ferrofed_console::act::configure::IMPORT, "/configuration"),
+        &save_c(),
+        Some(&session),
+        &[("sec-fetch-site", "same-origin")],
+    )?;
     let (_response, html) = send(&service, request).await?;
     assert!(
         html.contains("Replica gateway-0 refused the save: 500"),

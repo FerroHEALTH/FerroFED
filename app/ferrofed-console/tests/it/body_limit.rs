@@ -22,8 +22,9 @@ use hyper::body::Frame;
 
 use crate::configure::{answers, form, signed_in_console};
 
-/// The page an import of TOML posts to, which takes the larger limit.
-const IMPORT: &str = "/configuration/import-export";
+/// The route an import of TOML posts to, the configuration's server
+/// function, which takes the larger limit.
+const IMPORT: &str = ferrofed_console::act::configure::IMPORT;
 use crate::support::send;
 
 /// What revision 2 changes against the running revision 1.
@@ -79,8 +80,9 @@ async fn an_oversized_body_to_any_other_route_is_refused() -> Result<(), Box<dyn
     let (service, session) = signed_in_console(&listener)?;
     for path in [
         "/configuration",
-        "/query",
-        "/integrity",
+        "/api/query",
+        "/api/clear",
+        "/api/repair",
         "/preference",
         "/logout",
     ] {
@@ -275,7 +277,13 @@ async fn an_import_at_its_own_limit_still_runs() -> Result<(), Box<dyn Error>> {
         body.len() > BODY_LIMIT,
         "the import is over the default limit"
     );
-    let (response, text) = send(&service, post(IMPORT, body, Some(session.as_str()))?).await?;
+    let request = crate::support::answer_post(
+        (IMPORT, "/configuration/import-export"),
+        &body,
+        Some(&session),
+        &[("sec-fetch-site", "same-origin")],
+    )?;
+    let (response, text) = send(&service, request).await?;
     assert_eq!(StatusCode::OK, response.status(), "{text}");
     assert!(
         text.contains("Replica gateway-0 imported revision 2 as a dry run."),

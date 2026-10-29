@@ -7,10 +7,11 @@
 //! the week and the shortcut hints are FerroUI's (family rule 9); the folded
 //! navigation is the console's.
 //!
-//! The server reads the cookies as it renders, so the first paint is in the
-//! chosen theme and density with no flash, and writes them on `<html>` as
-//! `data-theme`, `data-density`, `data-motion` and `data-hints`. Every
-//! preference is a plain form post to [`PREFERENCE`], which keeps the one
+//! The server reads the cookies as it renders (`crate::visit`), so the first
+//! paint is in the chosen theme and density with no flash, and writes them
+//! on `<html>` as `data-theme`, `data-density`, `data-motion` and
+//! `data-hints`. Every preference is a form post to [`PREFERENCE`], which
+//! FerroUI's form navigator posts in the page, which keeps the one
 //! value it names in its cookie and sends the browser back to the page it
 //! came from; the user menu's theme choice posts there too. Reset to
 //! defaults posts to [`RESET`], which clears every preference cookie. The
@@ -19,18 +20,25 @@
 //! no user store and nothing in browser storage. No specification governs
 //! this: our own design.
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::locale::Msg;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::server::plain;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::Extension;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::extract::Form;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::response::{IntoResponse, Redirect, Response};
-use ferrohealth_ui::theme::{
-    Density, Hints, Language, Motion, Preference, Preferences, Theme, WeekStart,
-};
+#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::theme::Preferences;
+use ferrohealth_ui::theme::{Density, Hints, Language, Motion, Preference, Theme, WeekStart};
+#[cfg(not(target_arch = "wasm32"))]
 use http::header::SET_COOKIE;
+#[cfg(not(target_arch = "wasm32"))]
 use http::{HeaderValue, StatusCode};
-use leptos::context::use_context;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::server::ConsoleState;
 
 /// The route every preference posts to, its value under its cookie's name
@@ -45,41 +53,6 @@ pub const SIDEBAR: &str = "/sidebar";
 
 /// The path of Your preferences, its Appearance tab.
 pub const PREFERENCES: &str = "/preferences";
-
-/// The request's `Cookie` header, empty for none.
-#[must_use]
-pub fn request_cookies() -> String {
-    use_context::<http::request::Parts>()
-        .and_then(|parts| {
-            parts
-                .headers
-                .get(http::header::COOKIE)
-                .and_then(|value| value.to_str().ok())
-                .map(str::to_owned)
-        })
-        .unwrap_or_default()
-}
-
-/// The preferences the request's cookies keep, each the family default
-/// where its cookie is missing or names no value the console offers.
-#[must_use]
-pub fn requested() -> Preferences {
-    let prefix = use_context::<ConsoleState>().map_or_else(
-        || String::from(crate::session::PREFERENCE_PREFIX),
-        |state| state.sessions().preference_prefix(),
-    );
-    Preferences::read(&request_cookies(), &prefix)
-}
-
-/// Whether the request's cookie asks for the navigation folded to its rail.
-#[must_use]
-pub fn rail_requested() -> bool {
-    let name = use_context::<ConsoleState>().map_or_else(
-        || String::from(crate::session::SIDEBAR_COOKIE),
-        |state| state.sessions().cookie_name(crate::session::SIDEBAR_COOKIE),
-    );
-    ferrohealth_ui::theme::cookie(&request_cookies(), &name) == Some("rail")
-}
 
 /// The page `back` names when it is a plain path of the console.
 ///
@@ -138,6 +111,7 @@ pub fn preference_return(back: &str, name: &str) -> String {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Keeps the one preference a plain form post chose in its cookie, and
 /// sends the browser back to the page it came from.
 ///
@@ -185,6 +159,7 @@ pub async fn choose(
     redirect_with(&preference_return(back, name), &[cookie])
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// What Reset to defaults posts.
 #[derive(Debug, serde::Deserialize)]
 pub struct Reset {
@@ -192,6 +167,7 @@ pub struct Reset {
     back: String,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Clears every preference cookie and sends the browser back to the page
 /// it came from.
 pub async fn reset(
@@ -205,6 +181,7 @@ pub async fn reset(
     redirect_with(return_path(&reset.back), &cleared)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// What the navigation's Collapse or Expand posts.
 #[derive(Debug, serde::Deserialize)]
 pub struct SidebarChoice {
@@ -214,6 +191,7 @@ pub struct SidebarChoice {
     back: String,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Keeps whether the navigation is folded in its cookie and sends the
 /// browser back to the page it came from.
 pub async fn sidebar(
@@ -233,6 +211,7 @@ pub async fn sidebar(
     redirect_with(return_path(&choice.back), &[cookie])
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The `303` redirect to `location` that sets each of `cookies`.
 #[must_use]
 pub fn redirect_with(location: &str, cookies: &[String]) -> Response {

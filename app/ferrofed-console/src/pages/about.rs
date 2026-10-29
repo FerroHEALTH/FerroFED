@@ -9,6 +9,13 @@
 //! {base}/` document, its one home, with Copy and Download (FerroUI's About
 //! template). A visitor reads the cards in the centred layout, with no
 //! document.
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
 use ferrohealth_ui::highlight::Language;
 use ferrohealth_ui::view::replica::Replica;
@@ -21,7 +28,8 @@ use leptos::prelude::*;
 
 use crate::app::{PRODUCT, VERSION};
 use crate::locale::{Msg, tr, tr_with};
-use crate::manufacturer::MANUFACTURER;
+use ferrofed_registry::manufacturer::MANUFACTURER;
+use serde::{Deserialize, Serialize};
 
 /// The route Download fetches the `OPTIONS {base}/` document from.
 pub const OPTIONS_DOCUMENT: &str = "/about/options.json";
@@ -30,21 +38,37 @@ pub const OPTIONS_DOCUMENT: &str = "/about/options.json";
 const COPY_ID: &str = "options-copy";
 
 /// The FerroUI version the console is built on, as its manifest pins it.
-const FERROUI: &str = "0.3.6";
+const FERROUI: &str = "0.5.8";
 
 /// What the gateway told the console of itself, for the Versions card and
 /// the document.
-struct Gateway {
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Gateway {
     /// The gateway's address, for a signed-in operator.
     address: Option<String>,
+    /// The gateway's product version.
     version: Option<String>,
+    /// The specification version it declares.
     spec: Option<String>,
+    /// The replica that answered.
     replica: Option<String>,
+    /// Its `OPTIONS {base}/` document, pretty-printed.
     document: Option<String>,
 }
 
-/// Reads what the About page shows of the gateway; nothing for a visitor
-/// or a gateway that does not answer.
+/// What the About page shows of the gateway; nothing for a visitor or a
+/// gateway that does not answer.
+///
+/// # Errors
+/// Returns [`crate::read::Fault::Unavailable`] when the console's server
+/// does not answer.
+#[server(endpoint = "about")]
+pub async fn gateway_now() -> Result<Gateway, crate::read::Stop> {
+    Ok(gateway().await)
+}
+
+/// Reads what the About page shows of the gateway.
+#[cfg(not(target_arch = "wasm32"))]
 async fn gateway() -> Gateway {
     let deployment = crate::read::deployment().await.ok();
     let (address, description) = match crate::read::signed_in() {
@@ -156,10 +180,21 @@ fn about(gateway: Gateway) -> AnyView {
     })
 }
 
+/// About as the route draws it: in the shell for a signed-in operator, in
+/// the centred layout for a visitor.
+#[must_use]
+pub fn routed() -> AnyView {
+    match crate::visit::visit_untracked().session {
+        crate::visit::SessionState::SignedIn => page(),
+        _ => centred(),
+    }
+}
+
 /// About, in the shell of a signed-in operator.
 #[must_use]
 pub fn page() -> AnyView {
-    let body = Suspend::new(async move { about(gateway().await) });
+    let gateway = Resource::new(crate::read::changes, |_| gateway_now());
+    let body = Suspend::new(async move { about(gateway.await.unwrap_or_default()) });
     view! {
         {crate::app::title(tr(Msg::AboutTitle))}
         <Suspense fallback=|| ()>{body}</Suspense>
@@ -170,13 +205,7 @@ pub fn page() -> AnyView {
 /// About, in the centred layout a visitor reads.
 #[must_use]
 pub fn centred() -> AnyView {
-    let body = about(Gateway {
-        address: None,
-        version: None,
-        spec: None,
-        replica: None,
-        document: None,
-    });
+    let body = about(Gateway::default());
     view! {
         {crate::app::title(tr(Msg::AboutTitle))}
         {centred_layout(

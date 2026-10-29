@@ -11,7 +11,7 @@ use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_console::server::ConsoleState;
-use ferrofed_console::session::{COOKIE, SessionId};
+use ferrofed_console::session::SessionId;
 use http::Request;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -205,8 +205,10 @@ pub(crate) fn signed_in_console(
     Ok((state, service, session))
 }
 
-/// A form post of `fields` to `path` carrying the session cookie of
-/// `session`, as the console's own page sends it.
+/// A form post of `fields` from the query console at `path`, carrying the
+/// session cookie of `session`, as the console's own page sends it with no
+/// WebAssembly: to the query's server function, with the page in the
+/// answer field.
 pub(crate) fn post_as(
     path: &str,
     session: &SessionId,
@@ -216,9 +218,10 @@ pub(crate) fn post_as(
     for (name, value) in fields {
         form.append_pair(name, value);
     }
-    Ok(Request::post(path)
-        .header("cookie", format!("{COOKIE}={}", session.as_str()))
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("sec-fetch-site", "same-origin")
-        .body(Body::from(form.finish()))?)
+    crate::support::answer_post(
+        ("/api/query", path),
+        &form.finish(),
+        Some(session),
+        &[("sec-fetch-site", "same-origin")],
+    )
 }

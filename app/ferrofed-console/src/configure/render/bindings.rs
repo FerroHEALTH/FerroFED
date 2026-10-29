@@ -42,7 +42,7 @@ struct SettingRow {
 /// one the section holds and then its heading, and its value.
 fn binding_row(setting: &SettingRow) -> RepeatRow {
     let row = setting.row.as_str();
-    let name = |part: &str| format!("form[setting][{row}][{part}]");
+    let name = |part: &str| format!("form[setting.{row}.{part}]");
     let value_id = setting_field(row, "value");
     let key = if setting.held {
         view! { <input type="hidden" name=name("key") value=setting.key.clone() /> }.into_any()
@@ -69,7 +69,7 @@ fn binding_row(setting: &SettingRow) -> RepeatRow {
         (tr(Msg::NewSetting), tr(Msg::Value), tr(Msg::ThisNewSetting))
     };
     let fields = view! {
-        <input type="hidden" name="form[setting_rows]" value=row.to_owned() />
+        <input type="hidden" name="form[setting_rows][]" value=row.to_owned() />
         {key}
         {text(
             (&value_id, &name("value")),
@@ -97,9 +97,9 @@ fn binding_row(setting: &SettingRow) -> RepeatRow {
 /// A new secret row of a binding section (F7 sub-card), its key typed,
 /// `key` filled in, and its value masked and never filled.
 fn new_secret(row: &str, key: String) -> RepeatRow {
-    let name = |part: &str| format!("form[secret][{row}][{part}]");
+    let name = |part: &str| format!("form[secret.{row}.{part}]");
     let fields = view! {
-        <input type="hidden" name="form[secret_rows]" value=row.to_owned() />
+        <input type="hidden" name="form[secret_rows][]" value=row.to_owned() />
         {text(
             (&secret_field(row, "key"), &name("key")),
             tr(Msg::SecretKey),

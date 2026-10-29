@@ -103,21 +103,26 @@ fn signed_in_console(gateway: &MockServer) -> Result<(axum::Router, SessionId), 
 fn form(fields: &[(&str, &str)]) -> String {
     let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (name, value) in fields {
-        form.append_pair(name, value);
+        // NOTE: the page names each box of a list with `[]`, as a field posted more than once
+        // (`ferrofed_console::act::fields`).
+        let name = match *name {
+            "endpoint" | "organisation" => format!("{name}[]"),
+            other => other.to_owned(),
+        };
+        form.append_pair(&name, value);
     }
     form.finish()
 }
 
-/// A `POST` of `body` to the query page, as the console's own page sends
-/// it, carrying `session`'s cookie when given.
-fn run(body: String, session: Option<&SessionId>) -> Result<Request<Body>, Box<dyn Error>> {
-    let mut request = Request::post("/query")
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("sec-fetch-site", "same-origin");
-    if let Some(session) = session {
-        request = request.header("cookie", format!("{COOKIE}={}", session.as_str()));
-    }
-    Ok(request.body(Body::from(body))?)
+/// A `POST` of `body` from the query page, as the console's own page sends
+/// it with no WebAssembly, carrying `session`'s cookie when given.
+fn run(body: &str, session: Option<&SessionId>) -> Result<Request<Body>, Box<dyn Error>> {
+    crate::support::answer_post(
+        ("/api/query", "/query"),
+        body,
+        session,
+        &[("sec-fetch-site", "same-origin")],
+    )
 }
 
 /// An AQL query naming the patient through the parameter `patient`.
@@ -140,7 +145,7 @@ async fn answered(
     session: &SessionId,
     body: String,
 ) -> Result<String, Box<dyn Error>> {
-    let (response, text) = send(service, run(body, Some(session))?).await?;
+    let (response, text) = send(service, run(&body, Some(session))?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{text}");
     assert!(!text.contains(OPERATOR_TOKEN), "{text}");
     Ok(text)
@@ -182,7 +187,8 @@ async fn a_query_over_two_nodes_shows_the_rows_every_endpoint_and_complete()
     assert!(html.contains("118") && html.contains("306"), "{html}");
     let answer = html
         .split_once("query-answer-title")
-        .map(|(_, rest)| rest)
+        .and_then(|(_, rest)| rest.split_once("</main>"))
+        .map(|(answer, _)| answer)
         .unwrap_or_default();
     assert!(!answer.contains(PATIENT), "{answer}");
     Ok(())
@@ -266,7 +272,7 @@ async fn a_query_without_a_live_session_asks_the_gateway_nothing() -> Result<(),
     let gateway = gateway(200, result_set_example()?).await?;
     let (service, _session) = signed_in_console(&gateway)?;
     for forged in [None, Some(SessionId::from_cookie("forged"))] {
-        let (response, _text) = send(&service, run(patient_query(), forged.as_ref())?).await?;
+        let (response, _text) = send(&service, run(&patient_query(), forged.as_ref())?).await?;
         assert_eq!(StatusCode::SEE_OTHER, response.status());
     }
     let asked = gateway
@@ -376,7 +382,8 @@ async fn a_form_that_cannot_be_sent_is_refused_without_quoting_it() -> Result<()
         assert!(html.contains(r#"role="alert""#), "{body}: {html}");
         let answer = html
             .split_once("query-answer-title")
-            .map(|(_, rest)| rest)
+            .and_then(|(_, rest)| rest.split_once("</main>"))
+            .map(|(answer, _)| answer)
             .unwrap_or_default();
         assert!(!answer.contains(PATIENT), "{body}: {answer}");
     }
@@ -423,7 +430,7 @@ async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
     // The page posts its form, so the browser keeps no field in its history.
     let (_response, page) = send(&service, get_as("/query", &session)?).await?;
     assert!(page.contains(r#"method="post""#), "{page}");
-    assert!(page.contains(r#"action="/query""#), "{page}");
+    assert!(page.contains(r#"action="/api/query""#), "{page}");
 
     let mut asked = gateway
         .received_requests()
@@ -471,7 +478,7 @@ async fn the_query_page_offers_what_the_gateway_declares() -> Result<(), Box<dyn
     );
     for endpoint in crate::stub::example_endpoints()? {
         assert!(
-            page.contains(&format!(r#"name="endpoint" value="{endpoint}""#)),
+            page.contains(&format!(r#"name="endpoint[]" value="{endpoint}""#)),
             "each declared endpoint is a checkbox: {endpoint}: {page}"
         );
     }
@@ -508,13 +515,12 @@ fn console_with_origin(gateway: &MockServer) -> Result<(axum::Router, SessionId)
 /// A `POST` of the query carrying `session`'s cookie and only the headers
 /// `from` names, as a page of some origin would send it.
 fn run_from(session: &SessionId, from: &[(&str, &str)]) -> Result<Request<Body>, Box<dyn Error>> {
-    let mut request = Request::post("/query")
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("cookie", format!("{COOKIE}={}", session.as_str()));
-    for (name, value) in from {
-        request = request.header(*name, *value);
-    }
-    Ok(request.body(Body::from(patient_query()))?)
+    crate::support::answer_post(
+        ("/api/query", "/query"),
+        &patient_query(),
+        Some(session),
+        from,
+    )
 }
 
 // A cross-site page could otherwise spend the operator's gateway credential
@@ -567,6 +573,13 @@ async fn a_get_never_runs_a_query() -> Result<(), Box<dyn Error>> {
         .header("sec-fetch-site", "same-origin")
         .body(Body::empty())?;
     let (response, _text) = send(&service, request).await?;
+    assert_eq!(StatusCode::SEE_OTHER, response.status());
+    assert_eq!(
+        "/query",
+        crate::support::header(&response, "location"),
+        "the address keeps no key the console does not read"
+    );
+    let (response, _text) = send(&service, get_as("/query", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status());
     let asked = gateway
         .received_requests()
@@ -597,7 +610,7 @@ async fn the_query_page_needs_a_signed_in_session() -> Result<(), Box<dyn Error>
 async fn an_answer_is_neither_compressed_nor_cached() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
-    let mut request = run(patient_query(), Some(&session))?;
+    let mut request = run(&patient_query(), Some(&session))?;
     request.headers_mut().insert(
         "accept-encoding",
         http::HeaderValue::from_static("br, gzip"),
@@ -670,7 +683,8 @@ async fn every_value_a_node_wrote_reaches_the_answer_escaped() -> Result<(), Box
     let html = answered(&service, &session, patient_query()).await?;
     let answer = html
         .split_once("query-answer-title")
-        .map(|(_, rest)| rest)
+        .and_then(|(_, rest)| rest.split_once("</main>"))
+        .map(|(answer, _)| answer)
         .unwrap_or_default();
     for escaped in [
         "&lt;script&gt;alert(1)&lt;/script&gt;",
@@ -701,11 +715,21 @@ async fn the_run_works_before_the_page_hydrates() -> Result<(), Box<dyn Error>> 
     let (service, session) = signed_in_console(&gateway)?;
     let (_response, page) = send(&service, get_as("/query", &session)?).await?;
     let form = page
-        .split_once(r#"<form id="query-form""#)
+        .split_once(r#"id="query-form""#)
         .and_then(|(_, rest)| rest.split_once("</form>"))
         .map(|(form, _)| form)
         .ok_or("the query form")?;
-    assert!(form.contains(r#"type="submit""#), "{form}");
-    assert!(!form.contains("disabled"), "{form}");
+    let submits: Vec<&str> = form
+        .split(r#"<button type="submit""#)
+        .skip(1)
+        .filter_map(|rest| rest.split_once('>').map(|(tag, _)| tag))
+        .collect();
+    assert!(!submits.is_empty(), "{form}");
+    // NOTE: FerroUI F7, the repeat's blank row is a hidden, disabled fieldset that never
+    // posts, so the check is of the buttons that submit the form.
+    assert!(
+        submits.iter().all(|tag| !tag.contains("disabled")),
+        "{form}"
+    );
     Ok(())
 }

@@ -175,11 +175,11 @@ async fn the_edit_form_shows_each_fhir_endpoint_with_every_key() -> Result<(), B
     let (service, session) = signed_in_console(&listener)?;
     let page_text = page(&service, &session, "/configuration/members/node-c").await?;
     for shown in [
-        r#"name="form[fhir][0][id]" value="node-c-fhir""#,
-        r#"name="form[fhir][0][url]" value="https://cdr-c.example.org/fhir""#,
-        r#"name="form[fhir][0][system]" value="urn:oid:2.999.1""#,
-        r#"name="form[fhir][0][categories]" value="Patient-Summaries" checked"#,
-        r#"name="form[fhir][0][profiles]" value="http://example.org/ps""#,
+        r#"name="form[fhir.0.id]" value="node-c-fhir""#,
+        r#"name="form[fhir.0.url]" value="https://cdr-c.example.org/fhir""#,
+        r#"name="form[fhir.0.system]" value="urn:oid:2.999.1""#,
+        r#"name="form[fhir.0.categories][]" value="Patient-Summaries" checked"#,
+        r#"name="form[fhir.0.profiles][]" value="http://example.org/ps""#,
         r#"<label for="cfg-f-0-system" class="fui-label">Identifier system of the ehr_id</label>"#,
         r#"aria-describedby="cfg-f-0-system-help cfg-f-0-system-error""#,
         r#"name="form[fhir_shown]" value="yes""#,
@@ -189,7 +189,7 @@ async fn the_edit_form_shows_each_fhir_endpoint_with_every_key() -> Result<(), B
         assert!(page_text.contains(shown), "{shown}: {page_text}");
     }
     assert!(
-        !page_text.contains(r#"name="form[fhir][0][in_service]" value="on" checked"#),
+        !page_text.contains(r#"name="form[fhir.0.in_service]" value="on" checked"#),
         "a suspended endpoint is shown out of service: {page_text}"
     );
     let added = page(&service, &session, "/configuration/members/new").await?;

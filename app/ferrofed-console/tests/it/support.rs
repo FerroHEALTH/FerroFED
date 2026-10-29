@@ -65,6 +65,40 @@ pub(crate) fn get(path: &str) -> Result<Request<Body>, Box<dyn Error>> {
     Ok(Request::get(path).body(Body::empty())?)
 }
 
+/// The body `body` of a form whose `<ActionForm>` calls a server function,
+/// as a browser with no WebAssembly posts it from the page at `page`: its
+/// fields and the page in the answer field (FerroUI `widget::action`).
+pub(crate) fn answering(page: &str, body: &str) -> String {
+    let mut form = url::form_urlencoded::Serializer::new(body.to_owned());
+    form.append_pair(ferrohealth_ui::widget::action::ANSWER, page);
+    form.finish()
+}
+
+/// A plain post of `body` to the server function at `function`, from the
+/// page at `page`, as the console's own page sends it with no WebAssembly,
+/// carrying the session cookie of `session` when given and the headers
+/// `from` names.
+pub(crate) fn answer_post(
+    (function, page): (&str, &str),
+    body: &str,
+    session: Option<&SessionId>,
+    from: &[(&str, &str)],
+) -> Result<Request<Body>, Box<dyn Error>> {
+    let mut request = Request::post(function)
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("accept", "text/html,application/xhtml+xml");
+    if let Some(session) = session {
+        request = request.header(
+            "cookie",
+            format!("{}={}", ferrofed_console::session::COOKIE, session.as_str()),
+        );
+    }
+    for (name, value) in from {
+        request = request.header(*name, *value);
+    }
+    Ok(request.body(Body::from(answering(page, body)))?)
+}
+
 /// The value of the header `name` on `response`, or an empty string.
 pub(crate) fn header<'a>(response: &'a Response<()>, name: &str) -> &'a str {
     response

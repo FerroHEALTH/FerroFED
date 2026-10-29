@@ -26,9 +26,11 @@ use ferrohealth_ui::view::surface::{
     Header, SectionHead, page_heading, panel_section, panel_sections, stack,
 };
 use ferrohealth_ui::view::tabs::{Tab, binder};
+use ferrohealth_ui::widget::action::{answer_field, answered};
+use leptos::form::ActionForm;
 use leptos::prelude::*;
 
-use crate::act::clear::{ClearLine, ClearOutcome, EVERY_REPLICA};
+use crate::act::clear::{ClearEhrId, ClearLine, ClearOutcome, EVERY_REPLICA};
 use crate::act::{Acted, ReplicaAnswer};
 use crate::app::INTEGRITY;
 use crate::locale::{Msg, tr, tr_with};
@@ -39,6 +41,7 @@ use crate::read::incidents::{Incident, Incidents};
 const CLEAR_DIALOG: &str = "clear-dialog";
 
 /// How many incidents are open, `None` when the gateway did not answer.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn open_count() -> Option<u32> {
     let (state, token) = crate::read::signed_in().ok()?;
     // NOTE: no specification governs this: our own design; the count is the shell's,
@@ -74,37 +77,40 @@ pub fn what(kind: &str) -> String {
 #[must_use]
 pub fn page() -> AnyView {
     let resolved = crate::pages::query_param("show").as_deref() == Some("resolved");
-    let outcome = use_context::<ClearOutcome>();
-    let body = Suspend::new(async move {
-        let read = crate::read::incidents::read().await;
-        integrity(read, resolved, outcome)
+    let clear = ServerAction::<ClearEhrId>::new();
+    // NOTE: no specification governs this: our own design; the clear's answer is drawn
+    // at the top and its dialog opens empty again, so no posted field is drawn back.
+    let _posted = answered(&clear);
+    crate::read::follow(clear);
+    let read = Resource::new(crate::read::changes, |_| {
+        crate::read::incidents::incidents_now()
     });
     view! {
         {crate::app::title(tr(Msg::IntegrityTitle))}
-        <Suspense fallback=|| ()>{body}</Suspense>
+        <Suspense fallback=|| ()>
+            {move || {
+                let outcome = clear
+                    .value()
+                    .get()
+                    .map(|answer| answer.unwrap_or_else(ClearOutcome::from));
+                Suspend::new(async move { integrity(read.await, resolved, outcome, clear) })
+            }}
+        </Suspense>
     }
     .into_any()
 }
 
 /// The page of `read`, on the Resolved tab when `resolved`, with the
-/// clear's `outcome` at the top after a post.
+/// clear's `outcome` at the top after a post, its form calling `clear`.
 fn integrity(
     read: Result<Incidents, crate::read::Stop>,
     resolved: bool,
     outcome: Option<ClearOutcome>,
+    clear: ServerAction<ClearEhrId>,
 ) -> AnyView {
-    let replicas: Vec<String> = use_context::<crate::server::ConsoleState>()
-        .map(|state| {
-            state
-                .settings()
-                .admin
-                .iter()
-                .map(|replica| replica.name.clone())
-                .collect()
-        })
-        .unwrap_or_default();
+    let replicas = crate::visit::visit_untracked().replicas();
     let held = read.as_ref().map(Incidents::held).unwrap_or_default();
-    let clear = (!replicas.is_empty()).then(|| clear_form(&replicas, &held));
+    let clear = (!replicas.is_empty()).then(|| clear_form(&replicas, &held, clear));
     let heading = page_heading(
         Header {
             title: tr(Msg::IntegrityTitle).into(),
@@ -134,7 +140,7 @@ fn integrity(
 
 /// The clear's form in its dialog: the `ehr_id`, offered from the open
 /// incidents' `held`, and the replica among `replicas` or every one.
-fn clear_form(replicas: &[String], held: &[String]) -> AnyView {
+fn clear_form(replicas: &[String], held: &[String], clear: ServerAction<ClearEhrId>) -> AnyView {
     let known = held
         .iter()
         .map(|ehr_id| view! { <option value=ehr_id.clone()></option> })
@@ -167,7 +173,8 @@ fn clear_form(replicas: &[String], held: &[String]) -> AnyView {
         </select>
     });
     let body = view! {
-        <form method="post" action=INTEGRITY class="fui-form">
+        <ActionForm action=clear attr:class="fui-form">
+            {answer_field()}
             {ehr_id}
             {replica}
             <p class="fui-small fui-muted">{tr(Msg::ClearRecorded)}</p>
@@ -185,7 +192,7 @@ fn clear_form(replicas: &[String], held: &[String]) -> AnyView {
                     {tr(Msg::ClearSubmit)}
                 </button>
             </div>
-        </form>
+        </ActionForm>
     }
     .into_any();
     popover_form(PopoverForm {
@@ -203,6 +210,7 @@ fn clear_form(replicas: &[String], held: &[String]) -> AnyView {
 fn answer(outcome: ClearOutcome) -> AnyView {
     let answers = match outcome {
         ClearOutcome::Refused(refused) => return refused_view(&refused),
+        ClearOutcome::Failed(fault) => return crate::pages::fault_view(&fault),
         ClearOutcome::Answered(answers) => answers,
     };
     let failed = answers

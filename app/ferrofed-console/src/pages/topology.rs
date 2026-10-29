@@ -142,6 +142,9 @@ fn asked() -> Asked {
 #[must_use]
 pub fn page() -> AnyView {
     let asked = asked();
+    let federation_read = Resource::new(crate::read::changes, |_| {
+        crate::read::federation::federation_now()
+    });
     let body = Suspend::new(async move {
         let heading = page_heading(
             Header {
@@ -152,7 +155,7 @@ pub fn page() -> AnyView {
             ActionGroup::none(),
         )
         .into_any();
-        match crate::read::federation::read().await {
+        match federation_read.await {
             Err(stop) => view! {
                 {heading}
                 {stopped(&stop)}
