@@ -547,7 +547,7 @@ gives the rules, the terminology server and the required bindings.
 ## Configuring the face
 
 ```toml
-[server]
+[gateway]
 public_url = "https://gateway.example.org"   # the face names its entries under it
 
 [fhir]
@@ -640,7 +640,7 @@ load refuses either without it.
   load refuses the face without one. The Supplier is asked by the identifier
   in the system `[pdqm.namespaces]` maps its namespace to, in the master
   domain, or in the system you sent when that is an absolute URI.
-- `[fhir]` needs a registry and `server.public_url`, and refuses a base on a
+- `[fhir]` needs a registry and `gateway.public_url`, and refuses a base on a
   path the gateway serves under `{base}`, or one that overlaps the PMIR feed
   route (`pmir.path`).
 - Each `[[fhir.mapping]]` is one FHIRconnect 1.0.0 context mapping, compiled

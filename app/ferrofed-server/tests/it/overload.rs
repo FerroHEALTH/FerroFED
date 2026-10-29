@@ -18,7 +18,7 @@
 
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -126,7 +126,7 @@ async fn a_request_past_the_concurrency_limit_is_503_with_retry_after() -> TestR
     let quick = node_answering("uid-b::cdr-b.example.org::1").await;
     let dir = tempfile::tempdir()?;
     let mut server = roomy();
-    server.overload.max_concurrent_requests = NonZeroU32::new(1).ok_or("one is positive")?;
+    server.overload.max_concurrent_requests = NonZeroUsize::new(1).ok_or("one is positive")?;
     server.overload.retry_after = Duration::from_secs(7);
     let (app, state) = gateway(dir.path(), (&slow.uri(), &quick.uri()), "", &server)?;
     let held = tokio::spawn({
@@ -305,16 +305,13 @@ async fn a_zero_limit_is_refused_by_its_key() -> TestResult {
             "[server]\nmax_concurrent_requests = 0\n",
             "server.max_concurrent_requests",
         ),
+        ("[server]\nretry_after_s = 0\n", "server.retry_after_s"),
         (
-            "[server]\noverload_retry_after_s = 0\n",
-            "server.overload_retry_after_s",
-        ),
-        (
-            "[server.caller_rate]\nrequests_per_second = 0\n",
+            "[server.caller_rate]\nrequests_per_second = 0\nburst = 1\n",
             "server.caller_rate.requests_per_second",
         ),
         (
-            "[server.caller_rate]\nburst = 0\n",
+            "[server.caller_rate]\nrequests_per_second = 1\nburst = 0\n",
             "server.caller_rate.burst",
         ),
         (
@@ -326,11 +323,13 @@ async fn a_zero_limit_is_refused_by_its_key() -> TestResult {
             "federation.max_node_answer_bytes",
         ),
     ] {
-        let refused = Config::from_sources(Some(text), &BTreeMap::new())?
-            .resolve()
-            .err()
-            .ok_or_else(|| format!("{key} = 0 is refused"))?;
-        assert!(refused.to_string().contains(key), "{key}: {refused}");
+        let refused = match Config::from_sources(Some(text), &BTreeMap::new()) {
+            Ok(config) => config.resolve().err(),
+            Err(refused) => Some(refused),
+        }
+        .ok_or_else(|| format!("{key} = 0 is refused"))?;
+        let message = crate::support::chain(&refused);
+        assert!(message.contains(key), "{key}: {message}");
     }
     Ok(())
 }

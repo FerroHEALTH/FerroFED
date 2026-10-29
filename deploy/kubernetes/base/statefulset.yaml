@@ -66,7 +66,7 @@ spec:
       # The gateway calls no Kubernetes API.
       automountServiceAccountToken: false
       # Covers the preStop sleep (5 s) below, server.drain_delay_ms (5 s),
-      # server.shutdown_timeout_ms (30 s) and server.bindings_drain_timeout_ms
+      # server.shutdown_timeout_ms (30 s) and gateway.bindings_drain_timeout_ms
       # (5 s) of configmap.yaml, with 5 s for the export flush, so the kubelet
       # never kills a drain in progress. The grace period counts from the
       # moment the pod is deleted.

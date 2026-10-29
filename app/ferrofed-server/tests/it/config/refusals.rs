@@ -77,8 +77,9 @@ fn an_unknown_key_set_through_the_environment_refuses_to_boot() {
 )]
 fn a_bad_value_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>> {
     let error = refusal("[server]\nlisten = \"not an address\"\n")?;
-    assert!(
-        matches!(&error, Error::Listen { key, .. } if key == "server.listen"),
+    assert_eq!(
+        Some("server.listen"),
+        crate::support::refused_key(&error),
         "{error:?}"
     );
     for key in [

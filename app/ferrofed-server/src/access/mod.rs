@@ -72,11 +72,11 @@ use secrecy::SecretString;
 
 use crate::auth::caller::Caller;
 use crate::base_path::BasePath;
-use crate::client_address::ClientAddress;
 use crate::error::{self, Code};
 use crate::metrics::security::Event;
 use crate::request_id;
 use crate::state::AppState;
+use ferrohealth_server::client_address::ClientAddress;
 
 /// The access log of one federation: the category map, the retention, the
 /// emergency purposes and the sink.

@@ -80,7 +80,7 @@ fn a_face_with_no_public_url_is_refused() -> TestResult {
         matches!(
             refused,
             Err(Error::Fhir(FhirError::Missing {
-                key: "server.public_url"
+                key: "gateway.public_url"
             }))
         ),
         "{refused:?}"

@@ -6,7 +6,7 @@
 //! (ITS-REST 1.1.0 Definition API, `200_StoredQuery_stored`,
 //! `Location_Query`), whichever route answered.
 //!
-//! With `server.public_url` set it is that absolute URL. Unset, the gateway
+//! With `gateway.public_url` set it is that absolute URL. Unset, the gateway
 //! does not know the scheme and host its clients use (§4.1, N28), so it is a
 //! reference relative to the request URL, which resolves to the stored
 //! query's URL on the client listener only (RFC 3986 §5.2); the admin
@@ -61,7 +61,7 @@ pub(super) fn location(
                 .map_err(|failure| {
                     tracing::error!(
                         error = %crate::chain(&failure),
-                        "a stored query's URL under server.public_url does not parse"
+                        "a stored query's URL under gateway.public_url does not parse"
                     );
                     Refused::fixed(Code::Internal)
                 })?

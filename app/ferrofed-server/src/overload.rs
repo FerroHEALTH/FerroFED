@@ -60,8 +60,9 @@ impl Admission {
     pub fn new(overload: &Overload, base: &BasePath, metrics: Arc<Metrics>) -> Self {
         // NOTE: no specification governs this: our own design; a bound past
         // what a semaphore holds is held to that maximum.
-        let permits = usize::try_from(overload.max_concurrent_requests.get())
-            .unwrap_or(Semaphore::MAX_PERMITS)
+        let permits = overload
+            .max_concurrent_requests
+            .get()
             .min(Semaphore::MAX_PERMITS);
         Self {
             slots: Arc::new(Semaphore::new(permits)),

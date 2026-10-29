@@ -238,3 +238,60 @@ fn a_request_timeout_past_the_budget_and_the_margin_is_accepted() -> Result<(), 
     );
     Ok(())
 }
+
+/// The keys `[server]` gave up to the shared section are read under their
+/// new names for one release, and `config check` and the start-up log name
+/// each one.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_key_from_the_old_server_table_is_read_under_its_new_name() -> Result<(), Box<dyn StdError>> {
+    let loaded = Config::loaded_from_sources(
+        Some(
+            "[server]\npublic_url = \"https://gateway.example.org\"\nreplica = \"gateway-eu-1\"\nbindings_drain_timeout_ms = 8000\noverload_retry_after_s = 3\n",
+        ),
+        &BTreeMap::new(),
+    )?;
+    let settings = Config::resolve_loaded(&loaded)?;
+    assert_eq!(
+        Some("https://gateway.example.org"),
+        settings.server.public_url.as_ref().map(|url| url.as_str())
+    );
+    assert_eq!("gateway-eu-1", settings.server.replica.as_str());
+    assert_eq!(Duration::from_secs(8), settings.server.bindings_drain);
+    assert_eq!(Duration::from_secs(3), settings.server.overload.retry_after);
+    let renamed: Vec<(&str, &str)> = settings
+        .deprecated
+        .iter()
+        .map(|key| (key.old.as_str(), key.new.as_str()))
+        .collect();
+    assert_eq!(
+        vec![
+            ("server.public_url", "gateway.public_url"),
+            ("server.replica", "gateway.replica"),
+            (
+                "server.bindings_drain_timeout_ms",
+                "gateway.bindings_drain_timeout_ms"
+            ),
+            ("server.overload_retry_after_s", "server.retry_after_s"),
+        ],
+        renamed
+    );
+    let both = Config::from_sources(
+        Some("[server]\nreplica = \"a\"\n\n[gateway]\nreplica = \"b\"\n"),
+        &BTreeMap::new(),
+    );
+    assert!(
+        matches!(
+            both,
+            Err(Error::Load {
+                source: ferrohealth_config::error::ConfigError::Renamed { .. },
+                ..
+            })
+        ),
+        "an old key beside its new one is refused: {both:?}"
+    );
+    Ok(())
+}

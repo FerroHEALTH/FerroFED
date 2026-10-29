@@ -10,8 +10,8 @@
 #   1. every ```toml block of the page opens with `# ferrofed.toml` or
 #      `# registry.toml`, and the blocks of each file assemble into it;
 #   2. the proxy's upstream is the assembled server.listen, its locations sit
-#      under server.base_path, server.public_url ends in that path, [signing]
-#      jwks_uri and [pmir] callback_url, as set or as server.public_url gives
+#      under server.base_path, gateway.public_url ends in that path, [signing]
+#      jwks_uri and [pmir] callback_url, as set or as gateway.public_url gives
 #      them, name the routes the proxy passes, and the proxy sets the
 #      X-Forwarded-For the gateway reads from the proxy's address alone;
 #   3. given a static Linux ferrofed binary, `ferrofed config check` accepts
@@ -119,15 +119,15 @@ value() {
 }
 listen="$(value server listen)"
 base="$(value server base_path)"
-public="$(value server public_url)"
+public="$(value gateway public_url)"
 jwks="$(value signing jwks_uri)"
 feed="$(value pmir callback_url)"
-# An unset jwks_uri or callback_url is its route under server.public_url.
+# An unset jwks_uri or callback_url is its route under gateway.public_url.
 if [[ -n "$public" ]]; then
   if [[ "$public" != https://*"$base" ]]; then
-    bad "the page's server.public_url, $public, does not end in server.base_path $base"
+    bad "the page's gateway.public_url, $public, does not end in server.base_path $base"
   else
-    echo "OK: server.public_url ends in server.base_path"
+    echo "OK: gateway.public_url ends in server.base_path"
   fi
   jwks="${jwks:-$public/.well-known/jwks.json}"
   feed="${feed:-$public/pmir/feed}"
@@ -138,8 +138,8 @@ if [[ -z "$listen" ]] || [[ "$upstream" != "$listen" ]]; then
 else
   echo "OK: the proxy passes to server.listen, $listen"
 fi
-if [[ -z "$base" ]] || [[ "$base" == "/" ]]; then
-  bad "the page sets no server.base_path other than /"
+if [[ -z "$base" ]]; then
+  bad "the page sets no server.base_path other than the root"
 else
   outside=0
   while IFS= read -r path; do

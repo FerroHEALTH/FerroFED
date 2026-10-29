@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 use ferrohealth_config::error::ConfigError;
 use ferrohealth_config::loader::{Loaded, Loader};
+use ferrohealth_config::provenance::Source;
 use ferrohealth_server::cli::ConfigArgs;
 
 use crate::config::error::Error;
@@ -26,8 +27,36 @@ use crate::config::{Config, PREFIX};
 /// Returns [`Error::Load`] when the namespace is refused, which it never is
 /// for [`PREFIX`].
 pub fn loader() -> Result<Loader, Error> {
-    Loader::new(PREFIX).map_err(|source| Error::Load { file: None, source })
+    let fault = |source| Error::Load { file: None, source };
+    let loader = Loader::new(PREFIX)
+        .map_err(fault)?
+        .defaults("server", &crate::config::server::defaults())
+        .map_err(fault)?;
+    Ok(RENAMED.iter().fold(loader, |loader, (old, new)| {
+        loader.rename(*old, *new, REFUSED_IN)
+    }))
 }
+
+/// The keys this release reads under their old names, each as the old and
+/// the new dotted key: `[server]` became the section of
+/// `ferrohealth-server`, and the gateway's own keys moved to `[gateway]`
+/// (#1408).
+pub const RENAMED: &[(&str, &str)] = &[
+    ("server.public_url", "gateway.public_url"),
+    ("server.replica", "gateway.replica"),
+    (
+        "server.bindings_drain_timeout_ms",
+        "gateway.bindings_drain_timeout_ms",
+    ),
+    ("server.overload_retry_after_s", "server.retry_after_s"),
+];
+
+/// The release that refuses the old keys of [`RENAMED`].
+pub const REFUSED_IN: &str = "0.0.16";
+
+/// The dotted key whose source decides whether the drain follows the
+/// request timeout ([`Config::shutdown_timeout_written`]).
+const SHUTDOWN_TIMEOUT: &str = "server.shutdown_timeout_ms";
 
 impl Config {
     /// Reads the configuration of the running process: the file `sources`
@@ -71,7 +100,12 @@ impl Config {
         text: Option<&str>,
         environment: &BTreeMap<String, String>,
     ) -> Result<Self, Error> {
-        Self::loaded_from_sources(text, environment).map(|loaded| loaded.into_parts().0)
+        Self::loaded_from_sources(text, environment).map(|loaded| {
+            let written = shutdown_written(&loaded);
+            let mut config = loaded.into_parts().0;
+            config.shutdown_timeout_written = written;
+            config
+        })
     }
 
     /// Reads `text` and `environment` as [`from_sources`](Self::from_sources)
@@ -96,10 +130,17 @@ impl Config {
     /// # Errors
     /// Every error [`Config::resolve`] returns.
     pub fn resolve_loaded(loaded: &Loaded<Self>) -> Result<Settings, Error> {
-        let mut settings = loaded.settings().resolve()?;
+        let mut config = loaded.settings().clone();
+        config.shutdown_timeout_written = shutdown_written(loaded);
+        let mut settings = config.resolve()?;
         settings.deprecated = loaded.deprecations().to_vec();
         Ok(settings)
     }
+}
+
+/// Whether a source of `loaded` set `server.shutdown_timeout_ms`.
+fn shutdown_written(loaded: &Loaded<Config>) -> bool {
+    loaded.provenance().source(SHUTDOWN_TIMEOUT) != Source::Default
 }
 
 /// Reads `text`, a table the gateway stores such as a revision's, as TOML,
@@ -109,7 +150,10 @@ impl Config {
 /// # Errors
 /// Returns [`Error::Load`] for text that is not TOML.
 pub(crate) fn table(text: &str) -> Result<toml::Table, Error> {
-    loader()?
+    // NOTE: no specification governs this: our own design; the table is read as
+    // written, so the loader that reads it layers no default and renames no key.
+    Loader::new(PREFIX)
+        .map_err(|source| Error::Load { file: None, source })?
         .load_sources::<toml::Table>(Some(text), None, &BTreeMap::new())
         .map(|loaded| loaded.into_parts().0)
         .map_err(|source| refused(None, source))
@@ -176,10 +220,18 @@ mod tests {
     fn an_absent_file_and_an_empty_environment_leave_the_defaults() {
         let config = Config::from_sources(None, &BTreeMap::new()).expect("the defaults parse");
         assert_eq!(Config::default(), config);
-        assert_eq!("127.0.0.1:8080", config.server.listen);
+        assert_eq!("127.0.0.1:8080", config.server.listen.to_string());
         assert_eq!(1024 * 1024, config.server.body_limit_bytes);
         assert_eq!(0, config.server.drain_delay_ms);
-        assert_eq!(None, config.server.shutdown_timeout_ms);
+        assert!(!config.shutdown_timeout_written);
+        assert_eq!(
+            Some(512),
+            config
+                .server
+                .max_concurrent_requests
+                .map(std::num::NonZeroUsize::get),
+            "the gateway's own default"
+        );
         assert!(config.credentials.is_empty());
         let settings = config.resolve().expect("the defaults resolve");
         assert_eq!(

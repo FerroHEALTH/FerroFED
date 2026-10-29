@@ -627,7 +627,7 @@ const EXPORT_TAKES_NO_BODY: &str = "the export of the identity state takes no bo
 /// The action takes no `body`. It is refused with `400` (`body-invalid`)
 /// for a body, and `501` when the gateway runs without a registry. Each
 /// replica learns its own maps, so the export names the replica
-/// (`server.replica`).
+/// (`gateway.replica`).
 // NOTE: Regulation (EU) 2025/327 Annex II 2.6; a POST, so the export is admitted and
 // recorded with its operator as every admin action is: our own design.
 async fn export_identity_state(

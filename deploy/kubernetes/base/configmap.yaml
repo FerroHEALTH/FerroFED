@@ -45,13 +45,15 @@ data:
     # Then the listener closes, and the requests in flight get this long to
     # finish: at least request_timeout_ms, which config check enforces.
     shutdown_timeout_ms = 30000
+    # Past this many requests at once the gateway answers 503 overloaded
+    # with Retry-After, before anything reaches a member.
+    max_concurrent_requests = 512
+
+    [gateway]
     # Then the bindings get this long to stop their processes, such as
     # deleting the PMIR subscription. The pod's terminationGracePeriodSeconds
     # covers the delay, the drain and this budget.
     bindings_drain_timeout_ms = 5000
-    # Past this many requests at once the gateway answers 503 overloaded
-    # with Retry-After, before anything reaches a member.
-    max_concurrent_requests = 512
 
     # Each verified caller may send this many requests a second, after a
     # burst; one more is 429 rate-limited with Retry-After.

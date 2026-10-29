@@ -381,7 +381,7 @@ pub(crate) fn settings() -> ServerSettings {
         listen: std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
         base_path: ferrofed_server::base_path::BasePath::default(),
         public_url: None,
-        forwarding: ferrofed_server::client_address::Forwarding::default(),
+        forwarding: ferrohealth_server::client_address::Forwarding::default(),
         request_timeout: Duration::from_secs(5),
         header_read_timeout_ms: std::num::NonZeroU64::MIN.saturating_add(29_999),
         drain_delay: Duration::ZERO,
@@ -389,11 +389,13 @@ pub(crate) fn settings() -> ServerSettings {
         bindings_drain: Duration::from_secs(5),
         body_limit: 1024,
         auth: auth(),
-        overload: ferrofed_server::config::server::Server::default()
-            .resolve_overload()
-            .expect("the default limits should resolve"),
+        overload: ferrofed_server::config::limits::resolve_overload(
+            &ferrofed_server::config::server::defaults(),
+        )
+        .expect("the default limits should resolve"),
         tls: None,
         replica: ferrofed_registry::replica::Replica::default(),
+        compression: None,
     }
 }
 

@@ -155,7 +155,7 @@ governs this: our own design.
    and is closed, and no new connection is accepted.
 3. The requests in flight get `server.shutdown_timeout_ms` to finish. A
    connection still open after that is dropped.
-4. The bindings get `server.bindings_drain_timeout_ms` (5 seconds by
+4. The bindings get `gateway.bindings_drain_timeout_ms` (5 seconds by
    default) to stop their processes, such as deleting the PMIR
    subscription ([The identity feed](identity.md#the-identity-feed-pmir)).
    A process still stopping after that is abandoned, and the gateway logs

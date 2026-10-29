@@ -158,7 +158,7 @@ services:
         hard: 16384
     # Longer than the gateway's drain delay (server.drain_delay_ms, 0), its
     # 30-second drain (server.shutdown_timeout_ms) and the bindings' 5-second
-    # drain (server.bindings_drain_timeout_ms) of docker/quickstart/ferrofed.toml,
+    # drain (gateway.bindings_drain_timeout_ms) of docker/quickstart/ferrofed.toml,
     # with 5 seconds for the export flush, so `docker compose down` never
     # kills a drain in progress; Docker's default stop timeout is 10 s.
     stop_grace_period: 40s

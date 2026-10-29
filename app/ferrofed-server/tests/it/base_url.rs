@@ -66,8 +66,10 @@ pub(crate) fn gateway_at(
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
     let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
+    // NOTE: `server.base_path` writes the root as the empty path.
+    let written = if base == "/" { "" } else { base };
     let text = format!(
-        "profile = \"development\"\n\n[server]\nbase_path = \"{base}\"\nrequest_timeout_ms = 10000\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{rows}"
+        "profile = \"development\"\n\n[server]\nbase_path = \"{written}\"\nrequest_timeout_ms = 10000\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{rows}"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
@@ -362,7 +364,7 @@ fn the_base_path_is_the_root_by_default_and_the_deployment_chooses_any_other() -
 #[test]
 fn a_malformed_base_path_refuses_to_boot_naming_its_key() {
     for base in [
-        "",
+        "/",
         "fed",
         "/fed/",
         "/fed?x=1",
@@ -371,12 +373,13 @@ fn a_malformed_base_path_refuses_to_boot_naming_its_key() {
         "/fed/../x",
     ] {
         let refused = resolved(&format!("[server]\nbase_path = \"{base}\"\n"), &[]);
-        assert!(
-            matches!(
-                &refused,
-                Err(error::Error::Server(error::server::ServerFault::BasePath { key, .. })) if key == "server.base_path"
-            ),
-            "{base:?}: {refused:?}"
-        );
+        let named = match &refused {
+            Err(error::Error::Server(error::server::ServerFault::BasePath { key, .. })) => {
+                Some(key.as_str())
+            }
+            Err(refusal) => crate::support::refused_key(refusal),
+            Ok(_) => None,
+        };
+        assert_eq!(Some("server.base_path"), named, "{base:?}: {refused:?}");
     }
 }

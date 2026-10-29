@@ -7,7 +7,7 @@
 //! The face sits on a base of its own, `{fhir-base}`, beside `{base}`, so
 //! no ITS-REST path changes (Federation Tier §4.1, N28). It names its
 //! document's entries under the absolute URL of that base, which it takes
-//! from `server.public_url`, and writes the document as the operator the
+//! from `gateway.public_url`, and writes the document as the operator the
 //! table names. Each `[[fhir.mapping]]` is one FHIRconnect context mapping
 //! that feeds one patient summary section, compiled when the configuration
 //! is read, so a mapping that does not compile, or maps to a profile the
@@ -274,8 +274,8 @@ pub enum FhirError {
         /// The base as written.
         base: String,
     },
-    /// `server.public_url` does not take `fhir.base` as a path.
-    #[error("server.public_url does not take fhir.base as a path")]
+    /// `gateway.public_url` does not take `fhir.base` as a path.
+    #[error("gateway.public_url does not take fhir.base as a path")]
     Absolute(#[source] url::ParseError),
     /// The gateway federates nothing, so the face would serve nothing.
     #[error("[fhir] serves the patient summary from the members, and no [registry] is set")]
@@ -402,7 +402,7 @@ impl Fhir {
             });
         }
         let public = public.ok_or(FhirError::Missing {
-            key: "server.public_url",
+            key: "gateway.public_url",
         })?;
         let absolute = url::Url::parse(public.as_str())
             .and_then(|url| url.join(base.as_str()))

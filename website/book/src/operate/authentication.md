@@ -97,7 +97,7 @@ demographic_clients = []
 | Key | Default | Meaning |
 |---|---|---|
 | `auth.issuer` | none | The issuer identifier its tokens carry in `iss`: `https`, or `http` to a loopback host (RFC 8414 §2). Several issuers are an `[[auth.issuer]]` list, each entry an `issuer` with any of the keys below that differ for it. |
-| `auth.audience` | the public URL | The audiences, of which every token names one in `aud` (RFC 9068 §4). Unset, the `server.public_url` as written; an issuer without an audience refuses the start. |
+| `auth.audience` | the public URL | The audiences, of which every token names one in `aud` (RFC 9068 §4). Unset, the `gateway.public_url` as written; an issuer without an audience refuses the start. |
 | `auth.algorithms` | six | The signature algorithms admitted: RS256, RS384, PS256, PS384, ES256 and ES384. An HMAC algorithm refuses the start. |
 | `auth.token_profile` | `rfc9068` | `rfc9068`: the `at+jwt` type and the claims RFC 9068 §2.2 requires. `jwt`: a JWT bearer token outside that profile, `typ` absent or `JWT`, for an issuer that issues no RFC 9068 tokens; the gateway still requires `client_id`. |
 | `auth.clock_skew_seconds` | `60` | The leeway on `exp`, `nbf` and `iat`, at most `300` (RFC 7519 §4.1.4). |

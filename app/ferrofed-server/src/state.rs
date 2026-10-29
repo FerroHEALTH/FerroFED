@@ -51,7 +51,7 @@ pub struct AppState {
     /// The FHIR R4 face of the exchange format, when it is served (Regulation
     /// (EU) 2025/327 Annex II 2.1). It is fixed for the life of the process.
     fhir: Option<Arc<FhirSettings>>,
-    /// The absolute URL clients reach `{base}` at, `server.public_url`, when
+    /// The absolute URL clients reach `{base}` at, `gateway.public_url`, when
     /// it is set; the stored-query answers name their `Location` under it.
     public_url: Option<PublicUrl>,
     /// The metrics surface every recording site and the admin listener
@@ -379,7 +379,7 @@ impl AppState {
     }
 
     /// Returns the absolute URL clients reach `{base}` at, when
-    /// `server.public_url` is set.
+    /// `gateway.public_url` is set.
     #[must_use]
     pub fn public_url(&self) -> Option<&PublicUrl> {
         self.public_url.as_ref()
