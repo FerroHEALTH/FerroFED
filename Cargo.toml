@@ -156,6 +156,9 @@ tempfile = "3.27.0"
 async-trait = "0.1.92"
 # Endpoint base URLs in the registry (#36).
 url = "2.5.8"
+# The console's decoding of a route parameter from the address path (#1397),
+# the release url itself reads with. Verified against crates.io on 2026-10-29.
+percent-encoding = "2.3.2"
 # The trusted reverse proxies of the listener (#722): the addresses and CIDR
 # blocks a forwarded client address is taken from. Verified against crates.io
 # on 2026-10-06.

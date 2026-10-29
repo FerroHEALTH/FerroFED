@@ -1510,6 +1510,7 @@ dependencies = [
  "leptos_router",
  "openehr-federation",
  "openehr-its",
+ "percent-encoding",
  "reqwest",
  "secrecy",
  "serde",

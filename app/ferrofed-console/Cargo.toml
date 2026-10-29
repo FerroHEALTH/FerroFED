@@ -65,6 +65,8 @@ http.workspace = true
 thiserror.workspace = true
 # The words of a find, read from the query string.
 url.workspace = true
+# A route parameter decoded from the address path.
+percent-encoding.workspace = true
 # The settings a credential or a binding section holds, read and written as
 # TOML on the configuration page.
 toml.workspace = true

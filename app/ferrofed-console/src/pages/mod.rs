@@ -177,10 +177,9 @@ pub fn param_of(path: &str, name: &str) -> String {
     parts
         .get(at)
         .map(|segment| {
-            url::form_urlencoded::parse(format!("v={}", segment.replace('+', "%2B")).as_bytes())
-                .map(|(_, value)| value.into_owned())
-                .next()
-                .unwrap_or_default()
+            percent_encoding::percent_decode_str(segment)
+                .decode_utf8_lossy()
+                .into_owned()
         })
         .unwrap_or_default()
 }
