@@ -298,7 +298,7 @@ impl Harness {
         let state = Arc::new(AppState::build(&settings)?);
         state.lifecycle().booted();
         let app = ferrofed_server::router(Arc::clone(&state), &settings.server);
-        let task = tokio::spawn(ferrofed_server::serve_until(
+        let task = tokio::spawn(crate::support::serve_until(
             listener,
             app,
             Duration::ZERO,

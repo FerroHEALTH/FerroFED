@@ -58,11 +58,11 @@ use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::config::{CONFIG_PATH_ENV, Config};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
-use crate::listener::certificates::{CertificateError, Certificates, Staged};
 use crate::metrics::ReloadResult;
 use crate::revision::service::{FileRevision, RevisionError, Revisions};
 use crate::state::{AppState, StateError};
 use ferrofed_registry::revision::RevisionId;
+use ferrohealth_server::tls::{ReloadableTls, TlsError};
 
 pub mod action;
 mod restart;
@@ -97,7 +97,7 @@ pub struct Reloader {
     boot: Settings,
     state: Arc<AppState>,
     serial: Mutex<Option<Settings>>,
-    certificates: Vec<Arc<Certificates>>,
+    certificates: Vec<Arc<ReloadableTls>>,
     revisions: Option<Arc<Revisions>>,
     trust: Option<Arc<Trust>>,
     tree: toml::Table,
@@ -183,7 +183,7 @@ pub enum ReloadError {
         table: &'static str,
         /// What reading them reported.
         #[source]
-        source: Box<CertificateError>,
+        source: Box<TlsError>,
     },
 }
 
@@ -319,7 +319,7 @@ impl Reloader {
     /// Returns this reloader with `certificates`, the TLS of the listeners,
     /// which [`Reloader::reload`] reads again from their files.
     #[must_use]
-    pub fn with_certificates(mut self, certificates: Vec<Arc<Certificates>>) -> Self {
+    pub fn with_certificates(mut self, certificates: Vec<Arc<ReloadableTls>>) -> Self {
         self.certificates = certificates;
         self
     }
@@ -363,9 +363,16 @@ impl Reloader {
                     self.put_auth(applied.as_ref().unwrap_or(&self.boot), &effective);
                 outcome.certificates = staged
                     .into_iter()
-                    .map(|(certificates, config)| {
-                        certificates.install(config);
-                        certificates.files().table
+                    .filter_map(|tls| match tls.reload() {
+                        Ok(()) => Some(table(tls)),
+                        Err(error) => {
+                            tracing::error!(
+                                table = table(tls),
+                                error = crate::chain(&error),
+                                "the listener's certificate files changed as they were read; the running ones stay"
+                            );
+                            None
+                        }
                     })
                     .collect();
                 *applied = Some(effective);
@@ -396,17 +403,17 @@ impl Reloader {
         outcome
     }
 
-    /// Reads every listener's certificate files into a configuration not yet
-    /// in place.
-    fn staged(&self) -> Result<Vec<(&Arc<Certificates>, Staged)>, ReloadError> {
+    /// Reads every listener's certificate files once, so a reload whose
+    /// renewed pair does not read is refused before anything is put in
+    /// place.
+    fn staged(&self) -> Result<Vec<&Arc<ReloadableTls>>, ReloadError> {
         self.certificates
             .iter()
-            .map(|certificates| {
-                certificates
-                    .read()
-                    .map(|staged| (certificates, staged))
+            .map(|tls| {
+                ferrohealth_server::tls::server_config_of(tls.section(), tls.keys())
+                    .map(|_read| tls)
                     .map_err(|source| ReloadError::Certificate {
-                        table: certificates.files().table,
+                        table: table(tls),
                         source: Box::new(source),
                     })
             })
@@ -718,4 +725,10 @@ fn federation_class(error: &FederationError) -> &'static str {
 /// The ids in `ids`, comma-separated.
 fn joined<T>(ids: &[T], name: impl Fn(&T) -> &str) -> String {
     ids.iter().map(name).collect::<Vec<_>>().join(",")
+}
+/// The table a listener's TLS is configured in, `server.tls` or
+/// `metrics.tls`, read from the keys its faults are named by.
+fn table(tls: &ReloadableTls) -> &'static str {
+    let key = tls.keys().certificate_file();
+    key.strip_suffix(".certificate_file").unwrap_or(key)
 }

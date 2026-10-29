@@ -15,7 +15,9 @@
 #     such a crate provides: a secret type over a SecretString or a
 #     key-or-file reader (ferrohealth-secret); the indicator trait or the
 #     lifecycle (ferrohealth-health); the report section, the reporter, the
-#     state directory or the envelope types (ferrohealth-usage-report).
+#     state directory or the envelope types (ferrohealth-usage-report); a
+#     TLS listener, its kept certificates, a serve loop or a drain
+#     (ferrohealth-server).
 #
 # A crate joins ADOPTED, with the definitions it retires in RETIRED, in the
 # pull request that moves FerroFED onto it.
@@ -43,7 +45,9 @@ readonly RETIRED="ferrohealth-secret	(struct|enum)[[:space:]]+[A-Za-z_]+[[:space
 ferrohealth-secret	fn[[:space:]]+(read_secret|require_secret|read_secret_file)[[:space:]]*[<(]
 ferrohealth-health	trait[[:space:]]+HealthIndicator([^A-Za-z0-9_]|\$)
 ferrohealth-health	struct[[:space:]]+Lifecycle([^A-Za-z0-9_]|\$)
-ferrohealth-usage-report	struct[[:space:]]+(UsageReport|UsageReportSection|UsageReportSettings|StateDir|Reporter|SchemaV2|Window24h)([^A-Za-z0-9_]|\$)"
+ferrohealth-usage-report	struct[[:space:]]+(UsageReport|UsageReportSection|UsageReportSettings|StateDir|Reporter|SchemaV2|Window24h)([^A-Za-z0-9_]|\$)
+ferrohealth-server	struct[[:space:]]+(TlsListener|Certificates|ReloadableTls)([^A-Za-z0-9_]|\$)
+ferrohealth-server	fn[[:space:]]+(serve_until|drain_on|server_config)[[:space:]]*[<(]"
 
 # check ROOT: prints every finding under ROOT and returns 1 when there is one.
 check() {
@@ -92,6 +96,8 @@ self_test() {
     'pub struct Lifecycle(Arc<AtomicU8>);'
     'pub struct Reporter {'
     'pub struct UsageReport {'
+    'pub struct TlsListener {'
+    'pub async fn serve_until<L, F>('
   )
   local case
   for case in "${cases[@]}"; do

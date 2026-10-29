@@ -103,9 +103,9 @@ scrape_configs:
       - targets: ["gateway.example.org:9464"]
 ```
 
-Mutual TLS authenticates the scrape as well: with `[metrics.tls]` and its
-`client_ca_file`, every client of the listener must present a certificate
-that CA signed ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
+Mutual TLS authenticates the scrape as well: with `[metrics.tls]`,
+`client_auth = "required"` and its `client_ca_file`, every client of the
+listener must present a certificate that CA signed ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
 Give the scraper such a certificate with `tls_config` in its job.
 
 `config check` says who a listener that is not on a loopback address
@@ -119,7 +119,7 @@ answers. `serve` and `config check` refuse:
   enforces it;
 - outside `profile = "development"`, a `listen` address that is not a
   loopback address with nothing to authenticate the scrape: neither
-  `scrape_users` nor `[metrics.tls] client_ca_file`;
+  `scrape_users` nor a `[metrics.tls]` with `client_auth = "required"`;
 - a `scrape_users` entry that no `[[auth.basic.users]]` entry writes;
 - a `listen` address equal to `server.listen`;
 - an `otlp_endpoint` that is neither an `http://` nor an `https://` URL.

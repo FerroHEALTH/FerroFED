@@ -6,11 +6,11 @@
 //! bounded. No specification governs the process model: our own design.
 
 use crate::support;
+use crate::support::serve_until;
 use axum::Router;
 use axum::routing::get;
-use ferrofed_server::drain_on;
 use ferrofed_server::state::AppState;
-use ferrofed_server::{serve_until, with_middleware};
+use ferrofed_server::with_middleware;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -170,11 +170,13 @@ async fn readiness_turns_503_while_the_listener_accepts_until_the_drain_delay_en
             tracing::debug!("the stop channel closed");
         }
     };
-    let server = tokio::spawn(serve_until(
+    let server = tokio::spawn(ferrohealth_server::serve::serve(
         listener,
         router,
+        state.lifecycle().clone(),
+        signal,
+        DELAY,
         Duration::from_secs(10),
-        drain_on(signal, state.lifecycle().clone(), DELAY),
     ));
     // A fresh connection for every request, so each one tests the listener.
     let client = reqwest::Client::builder()

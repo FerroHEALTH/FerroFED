@@ -325,6 +325,7 @@ async fn the_served_listener_records_a_loopback_peer() -> TestResult {
     let server = tokio::spawn(admin::serve(
         listener_socket,
         listener(Profile::Development, false, None)?,
+        None,
     ));
     let response = reqwest::Client::new()
         .post(format!("http://{address}{WRITE}"))

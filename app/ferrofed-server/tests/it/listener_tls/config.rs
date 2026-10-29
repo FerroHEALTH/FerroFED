@@ -51,7 +51,7 @@ fn a_usable_certificate_and_key_pass_on_both_listeners() -> TestResult {
     let dir = tempfile::tempdir()?;
     let files = ListenerCertificates::generate()?.write(dir.path())?;
     let metrics = format!(
-        "[metrics]\nlisten = \"127.0.0.1:9464\"\n\n[metrics.tls]\ncertificate_file = {}\nkey_file = {}\nclient_ca_file = {}\n",
+        "[metrics]\nlisten = \"127.0.0.1:9464\"\n\n[metrics.tls]\ncertificate_file = {}\nkey_file = {}\nclient_auth = \"required\"\nclient_ca_file = {}\n",
         quoted(&files.certificate),
         quoted(&files.key),
         quoted(&files.client_ca),
@@ -63,7 +63,7 @@ fn a_usable_certificate_and_key_pass_on_both_listeners() -> TestResult {
             server_tls(
                 &files,
                 &format!(
-                    "client_ca_file = {}\nhealthcheck_identity_file = {}\n",
+                    "client_auth = \"required\"\nclient_ca_file = {}\nhealthcheck_identity_file = {}\n",
                     quoted(&files.client_ca),
                     quoted(&files.client_identity)
                 )
@@ -116,7 +116,13 @@ fn files_that_hold_no_pem_or_do_not_match_are_refused_without_quoting_them() -> 
         quoted(&garbage)
     );
     refused(&check(dir.path(), &no_key)?, "server.tls.key_file");
-    let no_ca = server_tls(&files, &format!("client_ca_file = {}\n", quoted(&garbage)));
+    let no_ca = server_tls(
+        &files,
+        &format!(
+            "client_auth = \"required\"\nclient_ca_file = {}\n",
+            quoted(&garbage)
+        ),
+    );
     refused(&check(dir.path(), &no_ca)?, "server.tls.client_ca_file");
 
     let mismatched = format!(
@@ -141,7 +147,7 @@ fn a_healthcheck_identity_the_healthcheck_never_presents_is_refused() -> TestRes
         "server.tls.healthcheck_identity_file",
     );
     let metrics = format!(
-        "[metrics]\nlisten = \"127.0.0.1:9464\"\n\n[metrics.tls]\ncertificate_file = {}\nkey_file = {}\nclient_ca_file = {}\n{identity}",
+        "[metrics]\nlisten = \"127.0.0.1:9464\"\n\n[metrics.tls]\ncertificate_file = {}\nkey_file = {}\nclient_auth = \"required\"\nclient_ca_file = {}\n{identity}",
         quoted(&files.certificate),
         quoted(&files.key),
         quoted(&files.client_ca),
@@ -149,6 +155,36 @@ fn a_healthcheck_identity_the_healthcheck_never_presents_is_refused() -> TestRes
     refused(
         &check(dir.path(), &metrics)?,
         "metrics.tls.healthcheck_identity_file",
+    );
+    Ok(())
+}
+
+// A client CA under `client_auth = "none"`, the default, would ask no client
+// certificate (RFC 8446 §4.3.2), so the listener it meant for mutual TLS would
+// admit every client: it is refused on both listeners, naming the key to set.
+#[test]
+fn a_client_ca_without_client_auth_is_refused_on_both_listeners() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let files = ListenerCertificates::generate()?.write(dir.path())?;
+    let ca = format!("client_ca_file = {}\n", quoted(&files.client_ca));
+    let server = check(dir.path(), &server_tls(&files, &ca))?;
+    refused(&server, "server.tls");
+    assert!(
+        written(&server).contains("client_auth"),
+        "{}",
+        written(&server)
+    );
+    let metrics = format!(
+        "[metrics]\nlisten = \"127.0.0.1:9464\"\n\n[metrics.tls]\ncertificate_file = {}\nkey_file = {}\n{ca}",
+        quoted(&files.certificate),
+        quoted(&files.key),
+    );
+    let output = check(dir.path(), &metrics)?;
+    refused(&output, "metrics.tls");
+    assert!(
+        written(&output).contains("client_auth"),
+        "{}",
+        written(&output)
     );
     Ok(())
 }

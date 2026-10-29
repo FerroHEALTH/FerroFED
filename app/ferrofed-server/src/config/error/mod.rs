@@ -192,8 +192,14 @@ pub enum Error {
     TlsFault(#[from] crate::config::tls::TlsFault),
     /// The certificate, the key or the client CA of a listener's TLS cannot
     /// be served with.
-    #[error(transparent)]
-    ListenerTls(#[from] crate::listener::certificates::CertificateError),
+    #[error("{table} cannot be served with")]
+    ListenerTls {
+        /// The listener's table, `server.tls` or `metrics.tls`.
+        table: &'static str,
+        /// What the server reported, naming the key at fault.
+        #[source]
+        source: ferrohealth_server::tls::TlsError,
+    },
     /// A URL the gateway verifies its callers against is plain `http` to a
     /// host that is not loopback.
     #[error(transparent)]

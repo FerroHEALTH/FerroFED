@@ -25,12 +25,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use http::StatusCode;
+use std::path::{Path, PathBuf};
+
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::{WebPkiSupportedAlgorithms, verify_tls12_signature, verify_tls13_signature};
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::pki_types::pem::PemObject as _;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
 use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
 
-use crate::listener::certificates::{self, CertificateError, TlsFiles};
+use crate::config::server::ListenerTlsSettings;
 
 /// The path the job asks, under the configured base path.
 pub const READINESS: &str = "/health/readiness";
@@ -96,6 +99,34 @@ impl fmt::Display for Outcome {
     }
 }
 
+/// A file of a listener's TLS the job could not read into its own TLS.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum TlsError {
+    /// The file could not be read.
+    #[error("{key} names {}, which could not be read", path.display())]
+    Read {
+        /// The key that names the file.
+        key: &'static str,
+        /// The file.
+        path: PathBuf,
+        /// What the read reported.
+        #[source]
+        source: std::io::Error,
+    },
+    /// The file holds no PEM of the kind the key names.
+    #[error("{key} holds no {kind} in PEM")]
+    Pem {
+        /// The key that names the file.
+        key: &'static str,
+        /// What it should hold.
+        kind: &'static str,
+    },
+    /// rustls refused the client configuration.
+    #[error("the healthcheck's TLS configuration was refused")]
+    Config(#[source] rustls::Error),
+}
+
 /// The TLS the job speaks to a listener that serves it.
 #[derive(Debug, Clone)]
 pub struct Tls {
@@ -105,48 +136,81 @@ pub struct Tls {
 
 impl Tls {
     /// Reads the certificate the listener serves and the identity the job
-    /// presents from `files`.
+    /// presents from `tls`.
     ///
     /// # Errors
     ///
-    /// A [`CertificateError`] naming the key of a file that does not read,
-    /// and [`CertificateError::Config`] for an identity whose key does not
-    /// match its certificate.
-    pub fn read(files: &TlsFiles) -> Result<Self, CertificateError> {
-        let certificate = format!("{}.certificate_file", files.table);
-        let leaf = certificates::certificates(&certificate, &files.certificate)?
+    /// A [`TlsError`] naming the key of a file that does not read, and
+    /// [`TlsError::Config`] for an identity whose key does not match its
+    /// certificate.
+    pub fn read(tls: &ListenerTlsSettings) -> Result<Self, TlsError> {
+        let (section, keys) = (&tls.section, tls.keys);
+        let leaf = chain(keys.certificate_file(), &section.certificate_file)?
             .into_iter()
             .next()
-            .ok_or(CertificateError::NoCertificate { key: certificate })?;
-        let provider = certificates::provider();
+            .ok_or(TlsError::Pem {
+                key: keys.certificate_file(),
+                kind: "certificate",
+            })?;
+        let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
         let other = Arc::new(AtomicBool::new(false));
         let pinned = Pinned {
             leaf,
             algorithms: provider.signature_verification_algorithms,
             other: Arc::clone(&other),
         };
-        let config = |source| CertificateError::Config {
-            table: files.table,
-            source,
-        };
         let builder = ClientConfig::builder_with_provider(provider)
             .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])
-            .map_err(config)?
+            .map_err(TlsError::Config)?
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(pinned));
-        let config = match &files.healthcheck_identity {
+        let config = match &section.healthcheck_identity_file {
             None => builder.with_no_client_auth(),
             Some(path) => {
-                let key = format!("{}.healthcheck_identity_file", files.table);
-                let chain = certificates::certificates(&key, path)?;
-                let private = certificates::private_key(&key, path)?;
+                let key = keys.healthcheck_identity_file();
                 builder
-                    .with_client_auth_cert(chain, private)
-                    .map_err(config)?
+                    .with_client_auth_cert(chain(key, path)?, private_key(key, path)?)
+                    .map_err(TlsError::Config)?
             }
         };
         Ok(Self { config, other })
     }
+}
+
+/// The certificates the PEM file `path`, named by `key`, holds.
+fn chain(key: &'static str, path: &Path) -> Result<Vec<CertificateDer<'static>>, TlsError> {
+    let text = read(key, path)?;
+    let chain = CertificateDer::pem_slice_iter(&text)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_unreadable| TlsError::Pem {
+            key,
+            kind: "certificate",
+        })?;
+    if chain.is_empty() {
+        return Err(TlsError::Pem {
+            key,
+            kind: "certificate",
+        });
+    }
+    Ok(chain)
+}
+
+/// The private key the PEM file `path`, named by `key`, holds.
+fn private_key(key: &'static str, path: &Path) -> Result<PrivateKeyDer<'static>, TlsError> {
+    let text = read(key, path)?;
+    PrivateKeyDer::from_pem_slice(&text).map_err(|_unreadable| TlsError::Pem {
+        key,
+        kind: "private key",
+    })
+}
+
+/// The bytes of the file `path`, named by `key`.
+fn read(key: &'static str, path: &Path) -> Result<Vec<u8>, TlsError> {
+    std::fs::read(path).map_err(|source| TlsError::Read {
+        key,
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 /// The verifier that accepts one certificate: the one the listener's own

@@ -14,14 +14,14 @@ use axum::body::Body;
 use ferrofed_server::auth::trust::Trust;
 use ferrofed_server::config::Config;
 use ferrofed_server::healthcheck::READINESS;
-use ferrofed_server::listener::certificates::Certificates;
 use ferrofed_server::reload::Reloader;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::listener::ListenerCertificates;
+use ferrohealth_server::tls::{ReloadableTls, TlsKeys};
 use http::{Request, StatusCode, header};
 
-use super::{TestResult, client, presented, ready_over, tls_files};
+use super::{TestResult, client, kept, presented, ready_over, tls_section};
 use crate::support::{AUDIENCE, auth_toml, call, settings};
 
 /// An issuer the reload would add.
@@ -31,7 +31,7 @@ const ADDED: &str = "https://issuer-added.example.test";
 /// a reloader of both, and its client face.
 fn gateway(
     dir: &std::path::Path,
-    certificates: &Arc<Certificates>,
+    certificates: &Arc<ReloadableTls>,
     auth: &str,
 ) -> Result<(std::path::PathBuf, Reloader, Router), Box<dyn Error>> {
     let config = dir.join("ferrofed.toml");
@@ -70,7 +70,7 @@ async fn a_renewed_certificate_is_presented_after_the_reload() -> TestResult {
     let dir = tempfile::tempdir()?;
     let first = ListenerCertificates::generate()?;
     let files = first.write(dir.path())?;
-    let certificates = Arc::new(Certificates::load(tls_files(&files, false))?);
+    let certificates = kept(&tls_section(&files, false, false), TlsKeys::SERVER)?;
     let address = ready_over(Arc::clone(&certificates)).await?;
     let (_, reloader, _) = gateway(dir.path(), &certificates, &auth_toml())?;
 
@@ -90,7 +90,7 @@ async fn files_that_do_not_form_a_pair_refuse_the_whole_reload() -> TestResult {
     let dir = tempfile::tempdir()?;
     let first = ListenerCertificates::generate()?;
     let files = first.write(dir.path())?;
-    let certificates = Arc::new(Certificates::load(tls_files(&files, false))?);
+    let certificates = kept(&tls_section(&files, false, false), TlsKeys::SERVER)?;
     let address = ready_over(Arc::clone(&certificates)).await?;
     let (config, reloader, app) = gateway(dir.path(), &certificates, &auth_toml())?;
     let added = Issuer::new(ADDED)?;

@@ -100,6 +100,10 @@ openehr-its = { workspace = true, features = ["rest"] }
 # The operator console, driven against a running gateway over stub nodes, as
 # an operator's browser reaches both (#276).
 ferrofed-console.workspace = true
+# The gateway and the console served as `ferrofed serve` serves its
+# listeners (#1397).
+ferrohealth-health.workspace = true
+ferrohealth-server.workspace = true
 tempfile.workspace = true
 # The XCPD client the stub responding gateway is held to (#85), the mCSD
 # client the harness directory is held to (#86), and the PMIR subscriber and

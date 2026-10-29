@@ -13,18 +13,19 @@ use tokio::net::TcpListener;
 
 use crate::auth::trust::Trust;
 use crate::binding::process::Drained;
+use crate::config::server::ListenerTlsSettings;
 use crate::config::settings::Settings;
-use crate::listener::TlsListener;
-use crate::listener::certificates::{Certificates, TlsFiles};
 use crate::revision::routes::Managed;
 use crate::revision::service::{Booted, Revisions};
 use crate::state::AppState;
 use crate::support::Support;
 use crate::usage_report::Usage;
 use crate::{
-    EXIT_CONFIG, admin, banner, binding, body, chain, config, panic, reload, revision, serve,
-    state, telemetry, trusted_router,
+    EXIT_CONFIG, admin, banner, binding, body, chain, config, panic, reload, revision, state,
+    telemetry, trusted_router,
 };
+use ferrohealth_server::serve::Listener;
+use ferrohealth_server::tls::ReloadableTls;
 
 /// Runs `serve`: the banner on a terminal, the runtime, the subscriber with
 /// the trace export when `telemetry.otlp_endpoint` is set, the state, and
@@ -201,7 +202,7 @@ fn serve_command(
         if let Some(notice) = Support::current().notice(body::VERSION) {
             tracing::warn!("{notice}");
         }
-        let client_tls = certificates(server.tls.as_ref())?;
+        let client_tls = kept(server.tls.as_ref())?;
         let listener = TcpListener::bind(server.listen)
             .await
             .with_context(|| format!("binding {}", server.listen))?;
@@ -211,21 +212,22 @@ fn serve_command(
             .local_addr()
             .with_context(|| format!("reading the address {} bound", server.listen))?;
         tracing::info!(listen = %bound, tls = client_tls.is_some(), "listening");
-        let mut listener_certificates: Vec<Arc<Certificates>> =
-            client_tls.iter().cloned().collect();
+        let mut listener_tls: Vec<Arc<ReloadableTls>> = client_tls.iter().cloned().collect();
         let admin_tls = match admin {
-            Some(_) => certificates(admin_tls_files.as_ref())?,
+            Some(_) => kept(admin_tls_files.as_ref())?,
             None => None,
         };
-        listener_certificates.extend(admin_tls.iter().cloned());
+        listener_tls.extend(admin_tls.iter().cloned());
         let reloader = Arc::new(
             reload::Reloader::new(config, settings, Arc::clone(state))
                 .with_tree(tree.clone())
-                .with_certificates(listener_certificates)
+                .with_certificates(listener_tls)
                 .with_revisions(revisions.clone())
                 .with_trust(Arc::clone(&trust)),
         );
         let watch = revision::watch::start(revisions.as_ref(), &reloader, state, revision_poll);
+        let app = trusted_router(Arc::clone(state), &server, trust);
+        let mut listeners = vec![with_tls(Listener::new(listener, app), client_tls)];
         if let Some((address, access)) = admin {
             let managed =
                 revisions.map(|revisions| Arc::new(Managed::new(revisions, Arc::clone(&reloader))));
@@ -235,28 +237,23 @@ fn serve_command(
                 managed,
                 Some(Arc::clone(&reloader)),
             );
-            admin::start(address, app, admin_tls)
+            let bound = admin::bind(address, admin_tls.is_some())
                 .await
                 .with_context(|| format!("binding metrics.listen {address}"))?;
+            listeners.push(with_tls(Listener::new(bound, app), admin_tls));
         }
         let running = state.processes().start(&reloader);
         tokio::spawn(reload::on_hangup(reloader));
-        let app = trusted_router(Arc::clone(state), &server, trust);
         state.lifecycle().booted();
         let report = usage.1.start(Arc::clone(state), usage.0).await;
         let lifecycle = state.lifecycle().clone();
-        let stopped = match client_tls {
-            None => serve(listener, app, &server, lifecycle).await,
-            Some(certificates) => {
-                serve(
-                    TlsListener::new(listener, certificates)?,
-                    app,
-                    &server,
-                    lifecycle,
-                )
-                .await
-            }
-        };
+        let stopped = ferrohealth_server::serve::run_all(
+            listeners,
+            &server.section(),
+            lifecycle,
+            ferrohealth_server::serve::shutdown_signal(),
+        )
+        .await;
         if let Some(report) = report {
             report.abort();
         }
@@ -295,18 +292,27 @@ async fn drain_bindings(running: binding::process::Running, budget: std::time::D
     }
 }
 
-/// Reads the TLS `files` of a listener, when it serves TLS.
+/// Reads the TLS `tls` of a listener, when it serves TLS, into the
+/// configuration the server serves and the gateway keeps, which a reload
+/// and an applied revision read again.
 ///
 /// `config check` read the same files, so a failure here means they changed
 /// between the check and the start.
-fn certificates(files: Option<&TlsFiles>) -> anyhow::Result<Option<Arc<Certificates>>> {
-    files
-        .map(|files| {
-            Certificates::load(files.clone())
-                .map(Arc::new)
-                .map_err(anyhow::Error::new)
-        })
-        .transpose()
+fn kept(tls: Option<&ListenerTlsSettings>) -> anyhow::Result<Option<Arc<ReloadableTls>>> {
+    tls.map(|tls| {
+        ReloadableTls::of(&tls.section, tls.keys)
+            .map(Arc::new)
+            .map_err(anyhow::Error::new)
+    })
+    .transpose()
+}
+
+/// `listener` over `tls`, when it serves TLS.
+fn with_tls(listener: Listener, tls: Option<Arc<ReloadableTls>>) -> Listener {
+    match tls {
+        Some(tls) => listener.with_reloadable_tls(tls),
+        None => listener,
+    }
 }
 
 /// The trace export `settings` configure, built inside `runtime`, or `None`

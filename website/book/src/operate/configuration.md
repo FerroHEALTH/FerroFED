@@ -253,7 +253,10 @@ burst = 20                    # at once after a quiet spell; one more answers 42
 # [server.tls]
 # certificate_file = "/run/secrets/ferrofed/listener.crt"   # the chain, its own certificate first
 # key_file = "/run/secrets/ferrofed/listener.key"
-# client_ca_file = "/run/secrets/ferrofed/proxy-ca.pem"     # optional: require a client certificate it signed
+# client_auth = "required"      # none (the default), optional or required: ask a client certificate
+# client_ca_file = "/run/secrets/ferrofed/proxy-ca.pem"     # the CA it must chain to: set with client_auth, refused without it
+# min_version = "1.3"           # the default; "1.2" keeps TLS 1.2 clients
+# reload_interval_s = 3600      # optional: read the files again on this period, beside SIGHUP
 # healthcheck_identity_file = "/run/secrets/ferrofed/healthcheck.pem"   # what ferrofed healthcheck presents then
 
 [telemetry]
@@ -266,10 +269,10 @@ trace_sample_ratio = 1.0   # the share of requests whose spans are exported, 0.0
 # The metrics surface, off by default; see Metrics.
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-query distribution; loopback unless allow_remote
-# scrape_users = ["prometheus"]   # the [[auth.basic.users]] GET /metrics admits; needed off loopback outside development, unless client_ca_file is set
+# scrape_users = ["prometheus"]   # the [[auth.basic.users]] GET /metrics admits; needed off loopback outside development, unless [metrics.tls] requires a client certificate
 otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to, http:// or https://
 # [metrics.otlp_tls] takes the keys [telemetry.otlp_tls] takes.
-# [metrics.tls] takes certificate_file, key_file and client_ca_file, as [server.tls] does.
+# [metrics.tls] takes certificate_file, key_file, client_auth, client_ca_file, min_version and reload_interval_s, as [server.tls] does.
 
 # Outbound credentials, one section per endpoint id. Each section names one
 # scheme: a user and a password, or a grant; see Onward credentials.
@@ -619,31 +622,45 @@ The client listener and the admin listener each run in one of two modes.
 - **TLS**, with `[server.tls]` or `[metrics.tls]`. Use it when the hop from
   the proxy to the gateway crosses a network others share, or when your
   policy forbids a cleartext hop inside the network (NEN 7510 is one such
-  policy). Set `client_ca_file` as well to admit only the proxy: a client
-  that presents no certificate that CA signed fails its handshake and reaches
-  nothing.
+  policy). Set `client_auth = "required"` with a `client_ca_file` to admit
+  only the proxy: a client that presents no certificate that CA signed fails
+  its handshake and reaches nothing.
 
 ```toml
 [server.tls]
 certificate_file = "/run/secrets/ferrofed/listener.crt"
 key_file = "/run/secrets/ferrofed/listener.key"
+client_auth = "required"
 client_ca_file = "/run/secrets/ferrofed/proxy-ca.pem"
 healthcheck_identity_file = "/run/secrets/ferrofed/healthcheck.pem"
 ```
 
 - `certificate_file` holds the chain the listener presents, its own
   certificate first, and `key_file` its private key, both PEM.
-- `client_ca_file`, optional, holds the CA certificates a client
-  certificate must chain to. Set, every client must present one.
+- `client_auth` says whether the listener asks a client certificate:
+  `none`, the default, asks none; `optional` verifies one a client presents;
+  `required` refuses a client that presents none.
+- `client_ca_file` holds the CA certificates a client certificate must chain
+  to. It is required with `optional` or `required`, and refused with `none`,
+  where it would do nothing (a client sends a certificate only when the
+  listener asks for one, RFC 8446 §4.3.2).
+- `min_version` is the oldest TLS version the listener speaks: `"1.3"`, the
+  default, or `"1.2"` to keep a TLS 1.2 client. `"1.1"` and `"1.0"` are
+  refused (RFC 8996).
+- `reload_interval_s`, optional, reads the files again on that period, beside
+  `SIGHUP` and an applied configuration revision.
 - `healthcheck_identity_file`, `[server.tls]` only, holds a client
   certificate chain and its key, PEM, which `ferrofed healthcheck` presents
   to a listener that requires one. It is refused anywhere else.
 
-The listener negotiates TLS 1.3 (RFC 8446) or TLS 1.2 and nothing older,
-and picks TLS 1.3 whenever the client offers it, as BCP 195 asks (RFC 9325
-§3.1.1). Its TLS 1.2 cipher suites are the four ECDHE AES-GCM suites RFC 9325
-§4.2 recommends, each with forward secrecy. It offers HTTP/1.1 in ALPN. A
-client that does not finish its handshake within 10 seconds is dropped.
+The listener speaks TLS 1.3 (RFC 8446) alone by default. With `min_version
+= "1.2"` it speaks TLS 1.2 too, and picks TLS 1.3 whenever the client offers
+it, as BCP 195 asks (RFC 9325 §3.1.1); its TLS 1.2 cipher suites are then the
+four ECDHE AES-GCM suites RFC 9325 §4.2 recommends, each with forward
+secrecy. It offers HTTP/2 and HTTP/1.1 in ALPN. A client that does not
+finish its handshake within 10 seconds is dropped, and one that does not
+send a request head within `server.header_read_timeout_ms` (30 seconds by
+default) is disconnected.
 
 `config check` reads every file, and refuses, with exit code 78 and the key
 named, a missing certificate or key, a file that holds no PEM, a key that

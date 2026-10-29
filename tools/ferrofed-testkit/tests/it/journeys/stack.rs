@@ -178,11 +178,13 @@ impl Stack {
         let cookie = state
             .sessions()
             .cookie_name(ferrofed_console::session::COOKIE);
-        tokio::spawn(ferrofed_server::serve_until(
+        tokio::spawn(ferrohealth_server::serve::serve(
             listener,
             ferrofed_console::server::router(state),
-            Duration::from_secs(1),
+            ferrohealth_health::lifecycle::Lifecycle::default(),
             std::future::pending(),
+            Duration::ZERO,
+            Duration::from_secs(1),
         ));
         Ok(Self {
             _answering: answering,
@@ -344,11 +346,13 @@ async fn gateway(
     let state = AppState::build(&settings)?;
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
-    tokio::spawn(ferrofed_server::serve_until(
+    tokio::spawn(ferrohealth_server::serve::serve(
         listener,
         ferrofed_server::router(Arc::new(state), &settings.server),
-        Duration::from_secs(1),
+        ferrohealth_health::lifecycle::Lifecycle::default(),
         std::future::pending(),
+        Duration::ZERO,
+        Duration::from_secs(1),
     ));
     Ok(format!("http://{address}"))
 }

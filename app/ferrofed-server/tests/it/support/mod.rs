@@ -352,6 +352,7 @@ pub(crate) fn settings() -> ServerSettings {
         public_url: None,
         forwarding: ferrofed_server::client_address::Forwarding::default(),
         request_timeout: Duration::from_secs(5),
+        header_read_timeout_ms: std::num::NonZeroU64::MIN.saturating_add(29_999),
         drain_delay: Duration::ZERO,
         shutdown_timeout: Duration::from_secs(5),
         bindings_drain: Duration::from_secs(5),
@@ -817,4 +818,32 @@ pub(crate) fn conveyance() -> Result<ferrofed_engine::conveyance::Conveyance, Bo
         signer("example-federation")?,
         Principal::Caller(caller),
     ))
+}
+
+/// Serves `app` on `listener` as `ferrofed serve` serves its listeners
+/// (`ferrohealth_server::serve`), until `signal` completes, then gives the
+/// requests in flight `drain` to finish.
+///
+/// # Errors
+///
+/// Never fails today, as the server's own `serve`.
+pub(crate) async fn serve_until<F>(
+    listener: tokio::net::TcpListener,
+    app: Router,
+    drain: Duration,
+    signal: F,
+) -> io::Result<()>
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    ferrohealth_server::serve::serve(
+        listener,
+        app,
+        ferrohealth_health::lifecycle::Lifecycle::default(),
+        signal,
+        Duration::ZERO,
+        drain,
+    )
+    .await
+    .map(|_drained| ())
 }

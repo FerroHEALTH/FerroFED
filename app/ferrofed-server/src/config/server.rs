@@ -8,10 +8,13 @@
 //! specification governs the configuration: our own design.
 
 use std::net::IpAddr;
+use std::num::NonZeroU64;
 use std::path::PathBuf;
 
 use ferrofed_registry::replica::Replica;
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_server::section::{ClientAuth, TlsSection, TlsVersion};
+use ferrohealth_server::tls::{HealthcheckTls, TlsKeys, server_config_of};
 use ipnet::IpNet;
 use serde::Deserialize;
 
@@ -22,7 +25,6 @@ use crate::config::error::server::ServerFault;
 use crate::config::limits;
 use crate::config::public_url::PublicUrl;
 use crate::config::tls::CollectorTls;
-use crate::listener::certificates::{Certificates, TlsFiles};
 
 /// The HTTP surface.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -54,6 +56,10 @@ pub struct Server {
     /// registry configured, it must exceed `federation.overall_timeout_ms`
     /// by more than [`COMBINING_MARGIN_MS`](crate::config::COMBINING_MARGIN_MS).
     pub request_timeout_ms: u64,
+    /// How long a client may take to send a request head once it connected
+    /// or once its last response was written; a connection still sending one
+    /// then is closed. Zero is refused.
+    pub header_read_timeout_ms: u64,
     /// How long the server keeps accepting connections after the stop signal,
     /// with readiness already `503`, so a load balancer stops routing to the
     /// process before its listener closes. `0`, the default, closes it at once.
@@ -98,6 +104,7 @@ impl Default for Server {
             trusted_proxies: Vec::new(),
             forwarded_header: ForwardedHeader::default(),
             request_timeout_ms: 30_000,
+            header_read_timeout_ms: 30_000,
             drain_delay_ms: 0,
             shutdown_timeout_ms: None,
             bindings_drain_timeout_ms: 5_000,
@@ -168,6 +175,17 @@ impl Server {
         }
     }
 
+    /// Resolves `server.header_read_timeout_ms`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Zero`] for a bound of zero.
+    pub fn resolve_header_read_timeout(&self) -> Result<NonZeroU64, Error> {
+        NonZeroU64::new(self.header_read_timeout_ms).ok_or_else(|| Error::Zero {
+            key: String::from("server.header_read_timeout_ms"),
+        })
+    }
+
     /// Resolves `server.trusted_proxies` and `server.forwarded_header`: each
     /// proxy an IP address, read as a block of one, or a CIDR block.
     ///
@@ -225,17 +243,15 @@ pub struct Metrics {
     pub tls: Option<ListenerTls>,
 }
 
-/// The TLS a listener serves: its certificate and key, and the CA a client
-/// certificate must chain to when one is required.
+/// The TLS a listener serves: its certificate and key, and the client
+/// certificates it asks for.
 ///
-/// Every file is read at start and again on `SIGHUP`, so a renewed
-/// certificate takes effect without a restart; a changed path takes a
-/// restart. The listener negotiates TLS 1.3 or TLS 1.2 and nothing older
+/// Every file is read at start and again on `SIGHUP`, every
+/// `reload_interval_s` and when a configuration revision is applied, so a
+/// renewed certificate takes effect without a restart; a changed path takes
+/// a restart. The listener speaks TLS 1.3 alone unless `min_version`
+/// lowers it to TLS 1.2, with the suites of RFC 9325 §4.2, and nothing older
 /// (RFC 8446; BCP 195, RFC 9325 §3.1.1).
-#[expect(
-    clippy::struct_field_names,
-    reason = "each key names a file, as every `_file` key of the configuration does"
-)]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ListenerTls {
@@ -244,14 +260,40 @@ pub struct ListenerTls {
     pub certificate_file: Option<PathBuf>,
     /// The PEM file holding the private key of that certificate.
     pub key_file: Option<PathBuf>,
+    /// Whether the listener asks a client certificate: `none`, the default,
+    /// `optional` or `required`.
+    pub client_auth: ClientAuth,
     /// The PEM file of the CA certificates a client certificate must chain
-    /// to. Set, the listener refuses a client that presents none; unset, it
-    /// asks for none.
+    /// to: required unless `client_auth` is `none`, and refused when it is.
     pub client_ca_file: Option<PathBuf>,
+    /// How often, in seconds, the files are read again; unset, only
+    /// `SIGHUP` and an applied revision read them again.
+    pub reload_interval_s: Option<NonZeroU64>,
+    /// The oldest TLS version the listener speaks: `"1.3"`, the default, or
+    /// `"1.2"` to keep a TLS 1.2 client.
+    pub min_version: TlsVersion,
     /// The PEM file holding the client certificate chain and key `ferrofed
     /// healthcheck` presents to a listener that requires one; `[server.tls]`
     /// only.
     pub healthcheck_identity_file: Option<PathBuf>,
+}
+
+/// The TLS of one listener, resolved: the table `ferrohealth-server` serves
+/// and the keys its faults are named by.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListenerTlsSettings {
+    /// The table.
+    pub section: TlsSection,
+    /// The keys of the table it came from, `server.tls` or `metrics.tls`.
+    pub keys: TlsKeys,
+}
+
+impl ListenerTlsSettings {
+    /// Whether the listener asks every client for a certificate.
+    #[must_use]
+    pub fn requires_client_certificate(&self) -> bool {
+        self.section.client_auth == ClientAuth::Required
+    }
 }
 
 impl ListenerTls {
@@ -262,34 +304,43 @@ impl ListenerTls {
     ///
     /// [`Error::Missing`] for an unset `certificate_file` or `key_file`,
     /// [`ServerFault::HealthcheckIdentityUnused`] for a healthcheck identity outside
-    /// `[server.tls]` or beside no `client_ca_file`, and
-    /// [`Error::ListenerTls`] for a file that does not read or a key that
-    /// does not match its certificate.
-    pub(crate) fn resolve(&self, table: &'static str) -> Result<TlsFiles, Error> {
+    /// `[server.tls]` or beside no client certificate asked for, and
+    /// [`Error::ListenerTls`] for a file that does not read, a key that does
+    /// not match its certificate, or a `client_auth` its `client_ca_file`
+    /// disagrees with.
+    pub(crate) fn resolve(&self, table: &'static str) -> Result<ListenerTlsSettings, Error> {
         let required = |field: &str, value: &Option<PathBuf>| {
             value.clone().ok_or_else(|| Error::Missing {
                 key: format!("{table}.{field}"),
             })
         };
-        let files = TlsFiles {
-            table,
-            certificate: required("certificate_file", &self.certificate_file)?,
-            key: required("key_file", &self.key_file)?,
-            client_ca: self.client_ca_file.clone(),
-            healthcheck_identity: self.healthcheck_identity_file.clone(),
+        let section = TlsSection {
+            certificate_file: required("certificate_file", &self.certificate_file)?,
+            key_file: required("key_file", &self.key_file)?,
+            client_auth: self.client_auth,
+            client_ca_file: self.client_ca_file.clone(),
+            reload_interval_s: self.reload_interval_s,
+            healthcheck_identity_file: self.healthcheck_identity_file.clone(),
+            min_version: self.min_version,
         };
         // NOTE: no specification governs this: our own design; the healthcheck asks
         // the client listener alone, and presents a certificate only where one is asked.
-        if files.healthcheck_identity.is_some()
-            && (table != SERVER_TLS || files.client_ca.is_none())
+        if section.healthcheck_identity_file.is_some()
+            && (table != SERVER_TLS || section.client_auth == ClientAuth::None)
         {
             return Err(Error::Server(ServerFault::HealthcheckIdentityUnused {
                 key: format!("{table}.healthcheck_identity_file"),
             }));
         }
-        Certificates::load(files.clone())?;
-        crate::healthcheck::Tls::read(&files)?;
-        Ok(files)
+        let keys = if table == SERVER_TLS {
+            TlsKeys::SERVER
+        } else {
+            ferrohealth_server::tls_keys!("metrics.tls")
+        };
+        let served = |source| Error::ListenerTls { table, source };
+        server_config_of(&section, keys).map_err(served)?;
+        HealthcheckTls::read_of(&section, keys).map_err(served)?;
+        Ok(ListenerTlsSettings { section, keys })
     }
 }
 
@@ -302,7 +353,7 @@ impl ListenerTls {
 pub(crate) fn resolve_tls(
     tls: Option<&ListenerTls>,
     table: &'static str,
-) -> Result<Option<TlsFiles>, Error> {
+) -> Result<Option<ListenerTlsSettings>, Error> {
     tls.map(|tls| tls.resolve(table)).transpose()
 }
 

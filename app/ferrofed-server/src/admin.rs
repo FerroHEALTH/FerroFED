@@ -42,7 +42,6 @@ use axum::extract::{MatchedPath, Path, Request, State};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::serve::{Listener, ListenerExt};
 use axum::{Json, Router};
 use ferrofed_identity::profile::Profile;
 use ferrofed_registry::export::IdentityStateExport;
@@ -57,8 +56,6 @@ use crate::config::auth::AuthSettings;
 use crate::config::settings::Settings;
 use crate::error::{self, Code};
 use crate::facade::stored;
-use crate::listener::TlsListener;
-use crate::listener::certificates::Certificates;
 use crate::metrics;
 use crate::metrics::security::Event;
 use crate::reload::{self, Reloader};
@@ -365,24 +362,23 @@ pub fn managed_listener(
     })
 }
 
-/// Binds the admin listener at `address` and serves `app` on it, plain or
-/// over `tls`, in a task of its own, logging the address it bound.
+/// Binds the admin listener at `address`, logging the address it bound and
+/// whether it serves TLS (`tls`).
+///
+/// The server serves it beside the client listener and drains both
+/// together (`ferrohealth_server::serve::run_all`).
 ///
 /// # Errors
 /// Returns the I/O error of binding `address` or of reading the address
 /// bound.
-pub async fn start(
-    address: SocketAddr,
-    app: Router,
-    tls: Option<Arc<Certificates>>,
-) -> std::io::Result<()> {
+pub async fn bind(address: SocketAddr, tls: bool) -> std::io::Result<tokio::net::TcpListener> {
     let bound = tokio::net::TcpListener::bind(address).await?;
     // NOTE: no specification governs this: our own design; the bound address, so a
     // listener configured on port 0 names the port the system gave it.
     let local = bound.local_addr()?;
     tracing::info!(
         listen = %local,
-        tls = tls.is_some(),
+        tls,
         path = metrics::PATH,
         distribute = DISTRIBUTE,
         clear_ehr_id = CLEAR_EHR_ID,
@@ -390,36 +386,27 @@ pub async fn start(
         reload = RELOAD,
         "serving the admin listener"
     );
-    tokio::spawn(async move {
-        let stopped = match tls {
-            None => serve(bound, app).await,
-            Some(certificates) => match TlsListener::new(bound, certificates) {
-                Ok(tls) => serve(tls, app).await,
-                Err(error) => Err(error),
-            },
-        };
-        if let Err(error) = stopped {
-            tracing::error!(%error, "the metrics listener stopped");
-        }
-    });
-    Ok(())
+    Ok(bound)
 }
 
-/// Serves the admin listener's `app` on `listener`, plain or TLS, recording
-/// each connection's peer for [`operator_only`].
+/// Serves the admin listener's `app` on `listener`, plain or over `tls`,
+/// until the process ends, each request carrying its connection's peer for
+/// [`operator_only`] (`ferrohealth_server::serve`).
 ///
 /// # Errors
-/// Returns the I/O error from accepting or serving connections.
-pub async fn serve<L>(listener: L, app: Router) -> std::io::Result<()>
-where
-    L: Listener<Addr = SocketAddr>,
-{
-    // NOTE: no specification governs this: our own design; axum records the
-    // peer of any listener whose connections it taps, so a TLS one is tapped.
-    let tapped = listener.tap_io(|_connection: &mut L::Io| {});
-    axum::serve(
-        tapped,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
+/// Returns the error of a listener that fails.
+pub async fn serve(
+    listener: tokio::net::TcpListener,
+    app: Router,
+    tls: Option<Arc<ferrohealth_server::tls::ReloadableTls>>,
+) -> Result<ferrohealth_server::serve::Drained, ferrohealth_server::serve::ServeError> {
+    ferrohealth_server::serve::run_with_tls(
+        listener,
+        app,
+        &ferrohealth_server::section::ServerSection::default(),
+        tls,
+        ferrohealth_health::lifecycle::Lifecycle::default(),
+        std::future::pending(),
     )
     .await
 }

@@ -175,7 +175,10 @@ fn a_client_ca_admits_a_remote_listener() -> TestResult {
         ),
         "TLS without a client CA authenticates no one: {without_ca}"
     );
-    let mutual = format!("{tls}client_ca_file = {}\n", quoted(&files.client_ca));
+    let mutual = format!(
+        "{tls}client_auth = \"required\"\nclient_ca_file = {}\n",
+        quoted(&files.client_ca)
+    );
     let settings = resolved(&remote("0.0.0.0:9464", &mutual))?;
     assert_eq!(Some("0.0.0.0:9464".parse()?), settings.metrics.listen);
     Ok(())

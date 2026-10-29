@@ -83,7 +83,7 @@ pub enum ServerFault {
     /// the development profile, and neither a Basic user nor a client CA
     /// authenticates the scrape there.
     #[error(
-        "metrics.listen is {address}, which is not a loopback address, and nothing authenticates GET /metrics there: name an [[auth.basic.users]] user in metrics.scrape_users, or set metrics.tls.client_ca_file for mutual TLS, or keep the listener on loopback"
+        "metrics.listen is {address}, which is not a loopback address, and nothing authenticates GET /metrics there: name an [[auth.basic.users]] user in metrics.scrape_users, or set metrics.tls.client_auth = \"required\" with a metrics.tls.client_ca_file for mutual TLS, or keep the listener on loopback"
     )]
     MetricsUnauthenticated {
         /// The address `metrics.listen` names.
@@ -150,7 +150,7 @@ pub enum ServerFault {
     /// A healthcheck identity is named where `ferrofed healthcheck` never
     /// presents it.
     #[error(
-        "{key} is read only by ferrofed healthcheck, which presents it to a [server.tls] listener that sets client_ca_file; remove it here"
+        "{key} is read only by ferrofed healthcheck, which presents it to a [server.tls] listener that asks a client certificate (client_auth); remove it here"
     )]
     HealthcheckIdentityUnused {
         /// The key that names it.

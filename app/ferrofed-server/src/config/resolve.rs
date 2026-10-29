@@ -26,7 +26,7 @@ use crate::config::error::server::ServerFault;
 use crate::config::grant::GrantFault;
 use crate::config::public_url::PublicUrl;
 use crate::config::secrets::{resolve_node_credentials, resolve_signing};
-use crate::config::server::{METRICS_TLS, Metrics, SERVER_TLS, resolve_tls};
+use crate::config::server::{ListenerTlsSettings, METRICS_TLS, Metrics, SERVER_TLS, resolve_tls};
 use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
     ServerSettings, Settings, SigningSettings, TelemetrySettings,
@@ -135,6 +135,7 @@ impl Config {
                 listen,
                 base_path,
                 request_timeout,
+                header_read_timeout_ms: self.server.resolve_header_read_timeout()?,
                 drain_delay: Duration::from_millis(self.server.drain_delay_ms),
                 shutdown_timeout,
                 bindings_drain,
@@ -450,7 +451,9 @@ fn resolve_metrics(
         if address == server && address.port() != 0 {
             return Err(Error::Server(ServerFault::MetricsShared { address }));
         }
-        let mutual = tls.as_ref().is_some_and(|tls| tls.client_ca.is_some());
+        let mutual = tls
+            .as_ref()
+            .is_some_and(ListenerTlsSettings::requires_client_certificate);
         if !address.ip().is_loopback()
             && profile == Profile::Production
             && metrics.scrape_users.is_empty()

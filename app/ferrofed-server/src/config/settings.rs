@@ -32,10 +32,10 @@ use crate::config::auth::AuthSettings;
 use crate::config::limits::Overload;
 use crate::config::public_url::PublicUrl;
 use crate::config::registry::RegistryFormat;
+use crate::config::server::ListenerTlsSettings;
 use crate::config::stored_queries::Store;
 use crate::config::tls::TlsSettings;
 use crate::config::{EmergencyConsent, NodeSelection};
-use crate::listener::certificates::TlsFiles;
 use crate::telemetry::{Format, SampleRatio};
 
 /// The settings the run path holds, with every secret already read.
@@ -244,6 +244,8 @@ pub struct ServerSettings {
     pub forwarding: Forwarding,
     /// How long one request may take before the server answers `408`.
     pub request_timeout: Duration,
+    /// How long a client may take to send a request head, in milliseconds.
+    pub header_read_timeout_ms: std::num::NonZeroU64,
     /// How long the listener keeps accepting after the stop signal, with
     /// readiness already `503`.
     pub drain_delay: Duration,
@@ -263,9 +265,34 @@ pub struct ServerSettings {
     pub overload: Overload,
     /// The TLS the listener serves, from `[server.tls]`; `None` serves plain
     /// HTTP.
-    pub tls: Option<TlsFiles>,
+    pub tls: Option<ListenerTlsSettings>,
     /// The name of this process, which every operator report names.
     pub replica: Replica,
+}
+
+impl ServerSettings {
+    /// The `[server]` section of `ferrohealth-server` the listeners are
+    /// served and drained by, built from these settings: the listen
+    /// address, the timeouts, the drain and the body limit.
+    ///
+    /// The operator's `[server]` keys stay the gateway's own until the
+    /// configuration loader moves (#1408); the section's TLS is the kept one
+    /// each listener is handed, and its compression stays off.
+    #[must_use]
+    pub fn section(&self) -> ferrohealth_server::section::ServerSection {
+        let millis = |duration: Duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
+        ferrohealth_server::section::ServerSection {
+            listen: self.listen,
+            request_timeout_ms: millis(self.request_timeout),
+            header_read_timeout_ms: self.header_read_timeout_ms,
+            body_limit_bytes: self.body_limit,
+            drain_delay_ms: millis(self.drain_delay),
+            shutdown_timeout_ms: millis(self.shutdown_timeout),
+            tls: None,
+            compression: false,
+            ..ferrohealth_server::section::ServerSection::default()
+        }
+    }
 }
 
 /// The console and the trace export, resolved.
@@ -296,7 +323,7 @@ pub struct MetricsSettings {
     pub otlp_tls: TlsSettings,
     /// The TLS the admin listener serves, from `[metrics.tls]`; `None` serves
     /// plain HTTP.
-    pub tls: Option<TlsFiles>,
+    pub tls: Option<ListenerTlsSettings>,
     /// The Basic users a scrape of `GET /metrics` may authenticate as;
     /// empty leaves the scrape open.
     pub scrape_users: Vec<String>,

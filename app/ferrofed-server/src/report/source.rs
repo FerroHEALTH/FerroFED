@@ -30,7 +30,7 @@ pub enum SourceError {
     NotServed(&'static str),
     /// The listener's TLS material could not be read.
     #[error("the TLS material of the listener could not be read")]
-    Tls(#[source] crate::listener::certificates::CertificateError),
+    Tls(#[source] healthcheck::TlsError),
     /// The HTTP client could not be built.
     #[error("the HTTP client could not be built")]
     Client(#[source] reqwest::Error),
@@ -115,7 +115,7 @@ impl Listener {
     /// [`SourceError::Client`] when the client cannot be built.
     pub fn new(
         listen: std::net::SocketAddr,
-        tls: Option<&crate::listener::certificates::TlsFiles>,
+        tls: Option<&crate::config::server::ListenerTlsSettings>,
         timeout: Duration,
     ) -> Result<Self, SourceError> {
         let tls = tls.map(Tls::read).transpose().map_err(SourceError::Tls)?;

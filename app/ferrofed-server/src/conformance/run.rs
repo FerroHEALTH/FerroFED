@@ -183,7 +183,7 @@ pub async fn run(settings: &Settings, options: RunOptions) -> Result<Summary, Ru
     if let Some((stop, serving)) = served {
         drop(stop);
         match serving.await {
-            Ok(Ok(())) => {}
+            Ok(Ok(_drained)) => {}
             Ok(Err(error)) => return Err(RunError::Serve(error)),
             Err(joined) => return Err(RunError::Serve(std::io::Error::other(joined))),
         }
@@ -240,7 +240,7 @@ fn members_held(
 /// The handle that stops the in-process gateway, and its serving task.
 type Served = (
     tokio::sync::oneshot::Sender<()>,
-    tokio::task::JoinHandle<std::io::Result<()>>,
+    tokio::task::JoinHandle<std::io::Result<ferrohealth_server::serve::Drained>>,
 );
 
 /// Starts the gateway `settings` configure on a loopback port of its own,
@@ -261,15 +261,17 @@ async fn in_process(settings: &Settings) -> Result<(Arc<Federation>, Url, Served
     let base = Url::parse(&format!("http://{address}{base_path}/")).map_err(RunError::Base)?;
     let app = crate::router(state, &settings.server);
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
-    let serving = tokio::spawn(crate::serve_until(
+    let serving = tokio::spawn(ferrohealth_server::serve::serve(
         listener,
         app,
-        settings.server.shutdown_timeout,
+        ferrohealth_health::lifecycle::Lifecycle::default(),
         async {
             // NOTE: no specification governs this: our own design; a dropped
             // sender ends the wait as a sent signal does.
             let _signalled = stopped.await;
         },
+        std::time::Duration::ZERO,
+        settings.server.shutdown_timeout,
     ));
     Ok((federation, base, (stop, serving)))
 }
