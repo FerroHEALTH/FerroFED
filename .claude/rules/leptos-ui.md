@@ -119,8 +119,9 @@ question is the official Leptos book (<https://github.com/leptos-rs/book>,
 - **A confirmation is a native modal dialog.** `popover_form` and the
   console's `confirmed` part hold the reason and post `confirm`; an action
   without it asks no replica. A configuration table's removal is FerroUI's
-  `danger_form_dialog`, which posts natively to the configuration's
-  function until FerroUI can draw it around a server action (#1414). Each dialog id is unique on its page: a table
+  `danger_action_dialog` around the configuration's `<ActionForm>`, so it
+  runs in the page once hydrated and posts with no WebAssembly, closing
+  once the saved removal changed the page (#1414). Each dialog id is unique on its page: a table
   row's removal takes an id made from its row (`plan::removal_dialog`), and
   the item's own page keeps a removal of its own. An explanation, such as
   How configuration works, is FerroUI's `info_dialog`.
