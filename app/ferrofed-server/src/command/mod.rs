@@ -10,6 +10,7 @@
 use std::process::ExitCode;
 
 use clap::Parser;
+use ferrohealth_server::healthcheck::Outcome;
 
 use crate::cli::{AdmissionCommand, Cli, Command, ConfigCommand, ConformanceCommand};
 use crate::config::Config;
@@ -61,7 +62,7 @@ where
         Err(error) if cli.command == Command::Healthcheck => {
             // NOTE: no specification governs this: our own design; a runtime
             // reads any exit but 0 and 1 as reserved, so a refusal is unhealthy.
-            eprintln!("ferrofed: not ready: {}", chain(&error));
+            eprintln!("ferrofed: {}", Outcome::Failed(chain(&error)));
             return ExitCode::FAILURE;
         }
         Err(error) => {

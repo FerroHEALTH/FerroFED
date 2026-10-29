@@ -302,8 +302,8 @@ balancer or the container runtime takes the gateway out.
 no identity service gates readiness.
 
 **Confirm.** Read the body's phase. `ferrofed healthcheck` prints
-`ferrofed: <address>: <outcome>` and exits `1`; a configuration that does
-not load prints `ferrofed: not ready: …`.
+`ferrofed: <address>: unhealthy: readiness answered 503` and exits `1`; a
+configuration that does not load prints `ferrofed: unhealthy: …`.
 
 **Fix.** `booting` lasts until the gateway has bound its listener and
 started its bindings. A gateway that cannot start exits instead, with a

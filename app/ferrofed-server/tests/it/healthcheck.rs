@@ -3,7 +3,8 @@
 
 //! The `healthcheck` job on the real binary: `0` only when readiness answers
 //! `200`, `1` for a `503`, a refused connection and a gateway that never
-//! answers, and one line every time, never the body. No specification
+//! answers, and one line every time in the family's words (`healthy`,
+//! `unhealthy: ...`), never the body. No specification
 //! governs health probes: our own design.
 #![allow(
     clippy::panic_in_result_fn,
@@ -77,7 +78,11 @@ async fn ready_is_exit_zero() -> TestResult {
     let output = healthcheck(&address.to_string()).await?;
     assert_eq!(Some(0), output.status.code(), "{}", written(&output));
     one_line(&output);
-    assert!(written(&output).contains("ready"));
+    assert!(
+        written(&output).trim_end().ends_with(": healthy"),
+        "{}",
+        written(&output)
+    );
     Ok(())
 }
 
@@ -108,7 +113,11 @@ async fn not_ready_is_exit_one() -> TestResult {
     let output = healthcheck(&address.to_string()).await?;
     assert_eq!(Some(1), output.status.code(), "{}", written(&output));
     one_line(&output);
-    assert!(written(&output).contains("503"), "{}", written(&output));
+    assert!(
+        written(&output).contains("unhealthy: readiness answered 503"),
+        "{}",
+        written(&output)
+    );
     Ok(())
 }
 
@@ -127,7 +136,7 @@ async fn a_refused_connection_is_exit_one() -> TestResult {
     assert_eq!(Some(1), output.status.code(), "{}", written(&output));
     one_line(&output);
     assert!(
-        written(&output).contains("no connection"),
+        written(&output).contains("unhealthy: cannot connect to"),
         "{}",
         written(&output)
     );
@@ -146,7 +155,7 @@ async fn a_gateway_that_never_answers_is_exit_one_within_the_timeout() -> TestRe
     assert_eq!(Some(1), output.status.code(), "{}", written(&output));
     one_line(&output);
     assert!(
-        written(&output).contains("no answer within"),
+        written(&output).contains("unhealthy: readiness did not answer in time"),
         "{}",
         written(&output)
     );
@@ -167,5 +176,10 @@ fn a_configuration_that_does_not_load_is_exit_one() -> TestResult {
         "a runtime health check reads only 0 and 1"
     );
     one_line(&output);
+    assert!(
+        written(&output).starts_with("ferrofed: unhealthy: "),
+        "{}",
+        written(&output)
+    );
     Ok(())
 }

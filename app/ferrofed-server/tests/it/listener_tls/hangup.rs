@@ -102,7 +102,8 @@ async fn sighup_presents_the_replaced_certificate_without_a_restart() -> TestRes
     let output = healthcheck().await??;
     assert_eq!(Some(1), output.status.code(), "{}", written(&output));
     assert!(
-        written(&output).contains("SIGHUP"),
+        written(&output).contains("unhealthy: the listener presents a certificate other than")
+            && written(&output).contains("SIGHUP"),
         "the replaced file is named as the cause: {}",
         written(&output)
     );
