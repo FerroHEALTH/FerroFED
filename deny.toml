@@ -95,8 +95,10 @@ exceptions = [
   # The family's one secret type and mask, which ferrohealth-smart and
   # ihe-atna render every credential through (#1390).
   { allow = ["BUSL-1.1"], crate = "ferrohealth-secret" },
-  # The family's server plumbing, health family and telemetry of
-  # FerroHEALTH/FerroSYS (#1397), under the licence of the project's own code.
+  # The family's configuration loader (#1408), server plumbing, health family
+  # and telemetry of FerroHEALTH/FerroSYS (#1397), under the licence of the
+  # project's own code.
+  { allow = ["BUSL-1.1"], crate = "ferrohealth-config" },
   { allow = ["BUSL-1.1"], crate = "ferrohealth-health" },
   { allow = ["BUSL-1.1"], crate = "ferrohealth-server" },
   { allow = ["BUSL-1.1"], crate = "ferrohealth-telemetry" },

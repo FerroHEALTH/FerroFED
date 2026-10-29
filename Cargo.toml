@@ -328,8 +328,10 @@ ferrohealth-secret = "=0.2.0"
 # into one typed tree, with where each key came from and the merged table the
 # configuration revisions record. Pinned exactly, as a product pins every
 # family crate; 0.2.7 carries `Loaded::table_with_secrets` and
-# `Provenance::secret_source`. Verified against crates.io on 2026-10-29.
-ferrohealth-config = "=0.2.7"
+# `Provenance::secret_source`, and 0.2.8 masks a refused value of any type
+# and names the key of a refusal inside an array of tables. Verified against
+# crates.io on 2026-10-29.
+ferrohealth-config = "=0.2.8"
 # The health family of FerroHEALTH/FerroSYS (#1397): the readiness
 # document, and with `registry` the indicators and the lifecycle the gateway
 # runs. Pinned exactly, at the version ferrohealth-server requires.

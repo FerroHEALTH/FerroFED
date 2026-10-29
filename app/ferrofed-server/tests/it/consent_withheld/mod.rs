@@ -599,7 +599,7 @@ fn an_unknown_key_in_the_consent_table_refuses_to_start_and_is_named() -> TestRe
     let Err(error) = outcome else {
         return Err("the configuration was accepted".into());
     };
-    let message = error.to_string();
+    let message = crate::support::chain(&error);
     assert!(
         message.contains("federation.consent.hide"),
         "the refusal names the key: {message}"
