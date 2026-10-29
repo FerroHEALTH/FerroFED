@@ -546,7 +546,7 @@ WebDriver, through chromedriver, with the `thirtyfour` client, a test-only
 dependency of the testkit. Chrome and chromedriver come as one Chrome for
 Testing release, which `browser-actions/setup-chrome` installs in the
 `journeys (browser)` job of `ci.yml`, so the browser and its driver always
-match. `thirtyfour` was the latest on crates.io on 2026-10-05, and the Chrome
+match. `thirtyfour` was the latest on crates.io on 2026-10-29, and the Chrome
 for Testing release was the newest stable one on 2026-10-14. `scripts/checks/versions.sh`
 holds both rows, and the weekly `scripts/checks/pin-freshness.sh` reports a
 newer stable Chrome for Testing release.
@@ -561,7 +561,7 @@ so each digest was taken on 2026-10-16 of a download whose MD5 equals the
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `thirtyfour` | 0.37.5 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `thirtyfour` | 0.38.1 | the root `Cargo.toml` `[workspace.dependencies]` |
 | Chrome for Testing (Chrome and chromedriver) | 156.0.8078.73 | the `chrome-version` of `.github/workflows/ci.yml`, and `scripts/release/journey-tools.sh` |
 | Chrome for Testing, `chrome-linux64.zip` SHA-256 | `c51c24f0126534aaf6d21d1f85b8e243934b3951989dbb59a1f8aab8e32b20c1` | `scripts/release/journey-tools.sh` |
 | Chrome for Testing, `chrome-mac-arm64.zip` SHA-256 | `a46be48ee2e33b3edc1a98a39668b9f0abb8f23f031bc4df195e2388e6de28d1` | `scripts/release/journey-tools.sh` |
