@@ -60,6 +60,46 @@ impl std::fmt::Debug for CreateAsked<'_> {
     }
 }
 
+/// A member's answer that was no success: its status and its body, which
+/// the gateway relays when it is a FHIR `OperationOutcome`.
+///
+/// `Debug` shows the status and the body's size, never the body.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Answered {
+    status: StatusCode,
+    body: Vec<u8>,
+}
+
+impl Answered {
+    /// The member's status `status`, with its body `body`, empty when it
+    /// was not read.
+    #[must_use]
+    pub fn new(status: StatusCode, body: Vec<u8>) -> Self {
+        Self { status, body }
+    }
+
+    /// The member's status.
+    #[must_use]
+    pub fn status(&self) -> StatusCode {
+        self.status
+    }
+
+    /// The member's body bytes, empty when it was not read.
+    #[must_use]
+    pub fn body(&self) -> &[u8] {
+        &self.body
+    }
+}
+
+impl std::fmt::Debug for Answered {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Answered")
+            .field("status", &self.status)
+            .field("body_bytes", &self.body.len())
+            .finish()
+    }
+}
+
 /// What a member answered a create with.
 #[derive(Debug)]
 pub enum Created {
@@ -69,9 +109,9 @@ pub enum Created {
     /// A client-error status other than `401`: the member refused the
     /// resource (FHIR R4 `http.html` §3.1.0.8: `400`, `422`), or its own
     /// state no longer admits it.
-    Refused(StatusCode),
+    Refused(Answered),
     /// Any other status the member answered with.
-    Erred(StatusCode),
+    Erred(Answered),
     /// No answer of the member's: the request was refused at the gateway,
     /// timed out, could not reach the member, or was never sent.
     Failed(ForwardError),
@@ -105,7 +145,7 @@ impl Created {
     pub fn contact(&self) -> Contact {
         match self {
             Self::Made(made) => Contact::Answered(made.status()),
-            Self::Refused(status) | Self::Erred(status) => Contact::Answered(*status),
+            Self::Refused(answered) | Self::Erred(answered) => Contact::Answered(answered.status()),
             Self::Failed(error) => Contact::of_forward_error(error),
             Self::Abandoned => Contact::Silent,
         }
@@ -153,9 +193,11 @@ impl<T: Transport + Clone> NodeClient<T> {
             Some(Err(ForwardError::Oversized { status, .. }))
                 if status.is_client_error() && status != StatusCode::UNAUTHORIZED =>
             {
-                Created::Refused(status)
+                Created::Refused(Answered::new(status, Vec::new()))
             }
-            Some(Err(ForwardError::Oversized { status, .. })) => Created::Erred(status),
+            Some(Err(ForwardError::Oversized { status, .. })) => {
+                Created::Erred(Answered::new(status, Vec::new()))
+            }
             Some(Err(failure)) => Created::Failed(failure),
             Some(Ok(answer)) if answer.status() == StatusCode::UNAUTHORIZED => {
                 Created::Failed(ForwardError::Refused {
@@ -168,9 +210,9 @@ impl<T: Transport + Clone> NodeClient<T> {
                 Created::Made(Forwarded::of_answer(answer))
             }
             Some(Ok(answer)) if answer.status().is_client_error() => {
-                Created::Refused(answer.status())
+                Created::Refused(Answered::new(answer.status(), answer.into_body()))
             }
-            Some(Ok(answer)) => Created::Erred(answer.status()),
+            Some(Ok(answer)) => Created::Erred(Answered::new(answer.status(), answer.into_body())),
         }
     }
 }
