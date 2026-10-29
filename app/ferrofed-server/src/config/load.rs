@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Reading the configuration tree with `ferrohealth-config`: the defaults,
-//! the TOML file, every `FERROFED__` override and the `--set` pairs, each
-//! over the one before. No specification governs the configuration: our own
-//! design, in the family's shape.
+//! Reading the configuration tree with `ferrohealth-config`.
+//!
+//! The defaults, the TOML file, every `FERROFED__` override and the `--set`
+//! pairs, each over the one before. No specification governs the
+//! configuration: our own design, in the family's shape.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -27,7 +28,10 @@ use crate::config::{Config, PREFIX};
 /// Returns [`Error::Load`] when the namespace is refused, which it never is
 /// for [`PREFIX`].
 pub fn loader() -> Result<Loader, Error> {
-    let fault = |source| Error::Load { file: None, source };
+    let fault = |source| Error::Load {
+        file: None,
+        source: Box::new(source),
+    };
     let loader = Loader::new(PREFIX)
         .map_err(fault)?
         .defaults("server", &crate::config::server::defaults())
@@ -153,7 +157,10 @@ pub(crate) fn table(text: &str) -> Result<toml::Table, Error> {
     // NOTE: no specification governs this: our own design; the table is read as
     // written, so the loader that reads it layers no default and renames no key.
     Loader::new(PREFIX)
-        .map_err(|source| Error::Load { file: None, source })?
+        .map_err(|source| Error::Load {
+            file: None,
+            source: Box::new(source),
+        })?
         .load_sources::<toml::Table>(Some(text), None, &BTreeMap::new())
         .map(|loaded| loaded.into_parts().0)
         .map_err(|source| refused(None, source))
@@ -185,7 +192,10 @@ fn refused(file: Option<&Path>, source: ConfigError) -> Error {
         ConfigError::Read { .. } => None,
         _ => file.map(Path::to_path_buf),
     };
-    Error::Load { file, source }
+    Error::Load {
+        file,
+        source: Box::new(source),
+    }
 }
 
 /// Refuses the removed `[dev]` table, which the shared loader reads as any

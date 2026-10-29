@@ -19,10 +19,11 @@ use crate::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::error::server::ServerFault;
 
-/// The gateway's defaults of the shared `[server]` table, which
-/// [`load::loader`](crate::config::load::loader) layers under every source
-/// and [`Config::default`](crate::config::Config) holds: at most 512
-/// requests served at once, and the rest as `ferrohealth-server` sets it.
+/// The gateway's defaults of the shared `[server]` table.
+///
+/// [`load::loader`](crate::config::load::loader) layers them under every
+/// source and [`Config::default`](crate::config::Config) holds them: at most
+/// 512 requests served at once, and the rest as `ferrohealth-server` sets it.
 #[must_use]
 pub fn defaults() -> ServerSection {
     ServerSection {
@@ -187,6 +188,28 @@ pub(crate) fn resolve_section(
     server_config_of(&section, keys).map_err(served)?;
     HealthcheckTls::read_of(&section, keys).map_err(served)?;
     Ok(ListenerTlsSettings { section, keys })
+}
+
+/// Resolves `[server.tls]`, when it is set.
+///
+/// # Errors
+///
+/// The errors of [`resolve_section`].
+pub(crate) fn resolve_server_tls(
+    section: &ServerSection,
+) -> Result<Option<ListenerTlsSettings>, Error> {
+    section
+        .tls
+        .clone()
+        .map(|tls| resolve_section(tls, SERVER_TLS))
+        .transpose()
+}
+
+/// The smallest response body the client listener compresses, when
+/// `server.compression` is on.
+#[must_use]
+pub fn compression(section: &ServerSection) -> Option<u64> {
+    section.compression.then_some(section.compression_min_bytes)
 }
 
 /// Resolves `tls`, the TLS of the listener whose table is `table`, when it

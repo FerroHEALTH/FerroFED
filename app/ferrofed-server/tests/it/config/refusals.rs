@@ -120,14 +120,11 @@ fn a_malformed_dev_row_never_echoes_its_identifier() -> Result<(), Box<dyn StdEr
         );
         assert!(
             matches!(
-                error,
-                Error::Load {
-                    source: ConfigError::Syntax {
-                        position: Some((line, _)),
-                        ..
-                    },
-                    ..
-                } if line >= 2
+                &error,
+                Error::Load { source, .. } if matches!(
+                    source.as_ref(),
+                    ConfigError::Syntax { position: Some((line, _)), .. } if *line >= 2
+                )
             ),
             "the refusal locates the fault in the [dev] table, from its second line"
         );

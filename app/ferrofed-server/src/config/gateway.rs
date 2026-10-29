@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `[gateway]`: the gateway's own keys beside the shared `[server]` of
-//! `ferrohealth-server`: the URL clients reach it at, the name of this
-//! process, and how long the bindings may take to stop. No specification
-//! governs the configuration: our own design.
+//! `[gateway]`: the gateway's own keys beside the shared `[server]`.
+//!
+//! The URL clients reach it at, the name of this process, and how long the
+//! bindings may take to stop. No specification governs the configuration:
+//! our own design.
 
 use std::num::NonZeroU64;
 

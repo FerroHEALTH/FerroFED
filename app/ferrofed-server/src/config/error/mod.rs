@@ -38,7 +38,7 @@ pub enum Error {
         file: Option<PathBuf>,
         /// What the loader refused.
         #[source]
-        source: ferrohealth_config::error::ConfigError,
+        source: Box<ferrohealth_config::error::ConfigError>,
     },
     /// The configuration sets `[dev]`, the static cross-reference FerroFED
     /// no longer has: it keeps no patient index (#1377).
@@ -188,10 +188,10 @@ pub enum Error {
 impl Error {
     /// The refusal of a configuration table that cannot be written as TOML,
     /// such as a revision's.
-    pub(crate) const fn assemble(source: toml::ser::Error) -> Self {
+    pub(crate) fn assemble(source: toml::ser::Error) -> Self {
         Self::Load {
             file: None,
-            source: ferrohealth_config::error::ConfigError::Assemble { source },
+            source: Box::new(ferrohealth_config::error::ConfigError::Assemble { source }),
         }
     }
 }

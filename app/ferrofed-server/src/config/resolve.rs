@@ -26,7 +26,7 @@ use crate::config::error::server::ServerFault;
 use crate::config::grant::GrantFault;
 use crate::config::public_url::PublicUrl;
 use crate::config::secrets::{resolve_node_credentials, resolve_signing};
-use crate::config::server::{ListenerTlsSettings, METRICS_TLS, Metrics, SERVER_TLS, resolve_tls};
+use crate::config::server::{ListenerTlsSettings, METRICS_TLS, Metrics, resolve_tls};
 use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
     ServerSettings, Settings, SigningSettings,
@@ -137,17 +137,9 @@ impl Config {
                 public_url,
                 forwarding,
                 overload: crate::config::limits::resolve_overload(&self.server)?,
-                tls: self
-                    .server
-                    .tls
-                    .clone()
-                    .map(|tls| crate::config::server::resolve_section(tls, SERVER_TLS))
-                    .transpose()?,
+                tls: crate::config::server::resolve_server_tls(&self.server)?,
                 replica: self.gateway.resolve_replica()?,
-                compression: self
-                    .server
-                    .compression
-                    .then_some(self.server.compression_min_bytes),
+                compression: crate::config::server::compression(&self.server),
             },
             telemetry,
             registry_document: self.registry.document.clone(),

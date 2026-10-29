@@ -31,10 +31,10 @@ fn resolved(dir: &Path, server: &str, fhir: &str) -> Result<(), Error> {
     )
     .map_err(|source| Error::Load {
         file: None,
-        source: ferrohealth_config::error::ConfigError::Read {
+        source: Box::new(ferrohealth_config::error::ConfigError::Read {
             path: document.clone(),
             source,
-        },
+        }),
     })?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(

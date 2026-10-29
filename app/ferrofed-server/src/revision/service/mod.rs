@@ -310,7 +310,7 @@ impl Revisions {
         let config = configuration(&join(&self.core(), &table))?;
         let settings = config.resolve()?;
         checked(&settings)?;
-        let written = toml::to_string(&table).map_err(|source| Error::assemble(source))?;
+        let written = toml::to_string(&table).map_err(Error::assemble)?;
         Ok((written, config))
     }
 

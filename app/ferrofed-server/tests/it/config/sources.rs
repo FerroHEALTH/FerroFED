@@ -6,6 +6,7 @@
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::config::error::Error;
 use ferrofed_server::config::error::server::ServerFault;
+use ferrofed_server::config::public_url::PublicUrl;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
 use ferrohealth_telemetry::section::Format;
@@ -257,7 +258,7 @@ fn a_key_from_the_old_server_table_is_read_under_its_new_name() -> Result<(), Bo
     let settings = Config::resolve_loaded(&loaded)?;
     assert_eq!(
         Some("https://gateway.example.org"),
-        settings.server.public_url.as_ref().map(|url| url.as_str())
+        settings.server.public_url.as_ref().map(PublicUrl::as_str)
     );
     assert_eq!("gateway-eu-1", settings.server.replica.as_str());
     assert_eq!(Duration::from_secs(8), settings.server.bindings_drain);
@@ -285,11 +286,9 @@ fn a_key_from_the_old_server_table_is_read_under_its_new_name() -> Result<(), Bo
     );
     assert!(
         matches!(
-            both,
-            Err(Error::Load {
-                source: ferrohealth_config::error::ConfigError::Renamed { .. },
-                ..
-            })
+            &both,
+            Err(Error::Load { source, .. })
+                if matches!(source.as_ref(), ferrohealth_config::error::ConfigError::Renamed { .. })
         ),
         "an old key beside its new one is refused: {both:?}"
     );

@@ -53,10 +53,10 @@ pub(crate) fn millis(duration: Duration) -> Result<u64, TryFromIntError> {
 /// names one: an unknown key or a value the tree refuses.
 pub(crate) fn refused_key(error: &ferrofed_server::config::error::Error) -> Option<&str> {
     match error {
-        ferrofed_server::config::error::Error::Load {
-            source: ferrohealth_config::error::ConfigError::Invalid { key, .. },
-            ..
-        } => key.as_deref(),
+        ferrofed_server::config::error::Error::Load { source, .. } => match source.as_ref() {
+            ferrohealth_config::error::ConfigError::Invalid { key, .. } => key.as_deref(),
+            _ => None,
+        },
         _ => None,
     }
 }
