@@ -22,7 +22,6 @@ use ferrofed_testkit::mock::Server;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 use http::{HeaderMap, Request, Response, StatusCode, header};
 use openehr_federation::headers::{ENDPOINT, SYSTEM_ID};
-use openehr_its::rest::generated::common::Error;
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as StdError;
@@ -460,36 +459,68 @@ pub(crate) async fn call(
 /// What the tests read of an error body.
 #[derive(Debug)]
 pub(crate) struct ErrorBody {
-    /// The ITS-REST message.
+    /// The problem's `detail`, the sentence of this occurrence.
     pub(crate) message: String,
-    /// The ITS-REST validation errors.
-    pub(crate) validation_errors: Vec<String>,
+    /// The problem's `status` member.
+    pub(crate) status: u16,
     /// The stable error code.
     pub(crate) code: String,
     /// The request id.
     pub(crate) request_id: String,
 }
 
-/// Reads `text` as the generated ITS-REST `Error`, which must carry the
-/// stable code and the request id as its only extra members.
+/// The members a gateway problem may carry: those of RFC 9457 §3.1 and the
+/// two extension members.
+const PROBLEM_MEMBERS: [&str; 7] = [
+    "type",
+    "title",
+    "status",
+    "detail",
+    "instance",
+    CODE_MEMBER,
+    REQUEST_ID_MEMBER,
+];
+
+/// Reads `text` as the gateway's RFC 9457 problem: a `type` under the book
+/// page naming its `code`, the code's fixed message as `title`, a `status`,
+/// a `detail`, the request id, and no other member.
+#[expect(
+    clippy::disallowed_types,
+    reason = "a test reads the problem's members by name, to refuse one the gateway must not send"
+)]
 pub(crate) fn error_body(text: &str) -> Result<ErrorBody, Box<dyn StdError>> {
-    let error: Error = serde_json::from_str(text)?;
+    let problem: serde_json::Map<String, serde_json::Value> = serde_json::from_str(text)?;
     let member = |name: &str| -> Result<String, Box<dyn StdError>> {
-        Ok(error
-            .additional_properties
+        Ok(problem
             .get(name)
             .and_then(|value| value.as_str())
-            .ok_or_else(|| format!("the error body carries a string {name}: {text}"))?
+            .ok_or_else(|| format!("the problem carries a string {name}: {text}"))?
             .to_owned())
     };
     let code = member(CODE_MEMBER)?;
     let request_id = member(REQUEST_ID_MEMBER)?;
-    if error.additional_properties.len() != 2 {
-        return Err(format!("the error body carries only code and request_id: {text}").into());
+    if let Some(extra) = problem
+        .keys()
+        .find(|name| !PROBLEM_MEMBERS.contains(&name.as_str()))
+    {
+        return Err(format!("the problem carries {extra}: {text}").into());
     }
+    let defined = ferrofed_server::error::Code::every()
+        .find(|known| known.as_str() == code)
+        .ok_or_else(|| format!("{code} is a code of the gateway: {text}"))?;
+    if member("type")? != format!("{}{code}", ferrofed_server::error::BASE)
+        || member("title")? != defined.message()
+    {
+        return Err(format!("the problem's type and title are its code's: {text}").into());
+    }
+    let status = problem
+        .get("status")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|status| u16::try_from(status).ok())
+        .ok_or_else(|| format!("the problem carries its status: {text}"))?;
     Ok(ErrorBody {
-        message: error.message,
-        validation_errors: error.validation_errors,
+        message: member("detail")?,
+        status,
         code,
         request_id,
     })

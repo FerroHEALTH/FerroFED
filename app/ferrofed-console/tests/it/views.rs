@@ -141,7 +141,7 @@ async fn a_page_the_gateway_refuses_shows_the_status_and_the_code() -> Result<()
             ResponseTemplate::new(403)
                 .insert_header("content-type", "application/json")
                 .set_body_string(
-                    r#"{"message":"no scope of the access token grants this operation","code":"scope-insufficient"}"#,
+                    r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#scope-insufficient","detail":"no scope of the access token grants this operation","code":"scope-insufficient"}"#,
                 ),
         )
         .mount(&gateway)
@@ -275,7 +275,7 @@ async fn a_page_the_gateway_does_not_authenticate_links_back_to_sign_in()
             ResponseTemplate::new(401)
                 .insert_header("content-type", "application/json")
                 .set_body_string(
-                    r#"{"message":"the access token has expired","code":"token-invalid"}"#,
+                    r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#token-invalid","detail":"the access token has expired","code":"token-invalid"}"#,
                 ),
         )
         .mount(&gateway)

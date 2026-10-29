@@ -119,7 +119,7 @@ async fn gateway(items: &[Held], split: usize) -> Result<MockServer, Box<dyn Err
             ResponseTemplate::new(404)
                 .insert_header("content-type", "application/json")
                 .set_body_string(
-                    r#"{"message":"no stored query is held under that name","code":"stored-query-unknown"}"#,
+                    r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#stored-query-unknown","detail":"no stored query is held under that name","code":"stored-query-unknown"}"#,
                 ),
         )
         .with_priority(10)
@@ -432,7 +432,7 @@ async fn a_refused_by_name_read_shows_the_refusal() -> Result<(), Box<dyn Error>
             ResponseTemplate::new(403)
                 .insert_header("content-type", "application/json")
                 .set_body_string(
-                    r#"{"message":"no operator scope","code":"operator-scope-missing"}"#,
+                    r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#operator-scope-missing","detail":"no operator scope","code":"operator-scope-missing"}"#,
                 ),
         )
         .with_priority(1)

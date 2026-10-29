@@ -449,7 +449,7 @@ async fn a_gateway_whose_configuration_is_not_managed_shows_so_and_no_form()
         &listener,
         ("GET", "/admin/config"),
         404,
-        r#"{"message":"not managed","code":"configuration-unmanaged"}"#,
+        r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#configuration-unmanaged","detail":"not managed","code":"configuration-unmanaged"}"#,
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;

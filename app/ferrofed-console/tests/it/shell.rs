@@ -236,7 +236,7 @@ async fn the_top_bar_names_the_operator_and_the_gateway_that_answered() -> Resul
 
     let refusing = gateway(
         403,
-        String::from(r#"{"message":"no operator scope","code":"insufficient-scope"}"#),
+        String::from(r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#insufficient-scope","detail":"no operator scope","code":"insufficient-scope"}"#),
     )
     .await;
     let (state, service) = console(&configured(&refusing.uri()))?;
@@ -392,7 +392,7 @@ async fn a_production_gateway_or_a_refused_deployment_shows_no_banner() -> Resul
 
     let refused = deployed(
         403,
-        r#"{"message":"no operator scope","code":"scope-insufficient"}"#,
+        r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#scope-insufficient","detail":"no operator scope","code":"scope-insufficient"}"#,
     )
     .await?;
     let top = top_of(&refused).await?;

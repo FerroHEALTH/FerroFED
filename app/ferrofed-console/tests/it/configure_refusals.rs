@@ -27,7 +27,7 @@ async fn a_change_the_gateway_refuses_shows_its_status_and_code() -> Result<(), 
         &listener,
         ("PUT", "/admin/config/members/node-c"),
         409,
-        r#"{"message":"member node-c is provided by the file","code":"resource-file-owned"}"#,
+        r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#resource-file-owned","detail":"member node-c is provided by the file","code":"resource-file-owned"}"#,
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
@@ -59,7 +59,7 @@ async fn a_configuration_invalid_refusal_shows_the_key_the_gateway_names()
         &listener,
         ("PUT", "/admin/config/members/node-c"),
         422,
-        r#"{"message":"the revision's configuration is refused: registry.timeout_ms <b>is</b> zero; it must be positive","code":"configuration-invalid"}"#,
+        r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#configuration-invalid","detail":"the revision's configuration is refused: registry.timeout_ms <b>is</b> zero; it must be positive","code":"configuration-invalid"}"#,
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;
@@ -92,7 +92,9 @@ async fn another_refusal_shows_its_code_and_not_the_gateway_message() -> Result<
         ),
     ] {
         let listener = listener().await;
-        let body = format!(r#"{{"message":"the hidden text","code":"{code}"}}"#);
+        let body = format!(
+            r#"{{"type":"https://ferrofed.eu/docs/integrate/errors.html#{code}","detail":"the hidden text","code":"{code}"}}"#
+        );
         answers(
             &listener,
             ("PUT", "/admin/config/members/node-c"),
@@ -285,7 +287,7 @@ async fn a_refused_configuration_action_is_logged_as_what_it_is() -> Result<(), 
     let captured = Captured::default();
     let _logging = captured.logging();
     let listener = listener().await;
-    let refused = r#"{"message":"refused","code":"revision-conflict"}"#;
+    let refused = r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#revision-conflict","detail":"refused","code":"revision-conflict"}"#;
     for route in [
         ("PUT", "/admin/config/members/node-c"),
         ("POST", "/admin/config/revisions/2/apply"),

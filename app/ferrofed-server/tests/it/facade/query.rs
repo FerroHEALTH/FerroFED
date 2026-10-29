@@ -409,7 +409,7 @@ async fn a_refused_query_is_a_400_that_quotes_nothing_and_asks_nobody() -> TestR
             "the refusal quotes nothing (§5.4.3): {}",
             error.message
         );
-        assert!(error.validation_errors.is_empty(), "no other detail");
+        assert_eq!(400, error.status, "RFC 9457 §3.1.2");
     }
     for server in [&a, &b] {
         assert!(

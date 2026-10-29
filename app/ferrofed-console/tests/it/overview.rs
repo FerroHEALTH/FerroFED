@@ -153,7 +153,7 @@ async fn a_dashboard_part_the_gateway_refuses_is_named_and_the_rest_shows()
         .respond_with(
             ResponseTemplate::new(403)
                 .insert_header("content-type", "application/json")
-                .set_body_string(r#"{"message":"no operator scope","code":"scope-insufficient"}"#),
+                .set_body_string(r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#scope-insufficient","detail":"no operator scope","code":"scope-insufficient"}"#),
         )
         .mount(&gateway)
         .await;

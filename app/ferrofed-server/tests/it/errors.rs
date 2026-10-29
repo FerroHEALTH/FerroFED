@@ -144,7 +144,7 @@ fn checked(status: StatusCode, text: &str) -> Result<ErrorBody, Box<dyn Error>> 
         .find(|code| code.as_str() == error.code)
         .ok_or_else(|| format!("{} is in the vocabulary", error.code))?;
     assert_eq!(code.status(), status, "the code names the status: {text}");
-    assert!(error.validation_errors.is_empty(), "{text}");
+    assert_eq!(status.as_u16(), error.status, "RFC 9457 §3.1.2: {text}");
     assert!(
         !error.request_id.is_empty(),
         "a request id is named: {text}"
@@ -490,12 +490,18 @@ fn documented() -> Result<BTreeMap<String, String>, Box<dyn Error>> {
         let (Some(first), Some(second)) = (cells.next(), cells.next()) else {
             continue;
         };
-        let Some(code) = first
-            .strip_prefix('`')
-            .and_then(|rest| rest.strip_suffix('`'))
+        let Some((anchor, code)) = first
+            .strip_prefix("<a id=\"")
+            .and_then(|rest| rest.split_once("\"></a>`"))
+            .and_then(|(anchor, rest)| Some((anchor, rest.strip_suffix('`')?)))
         else {
+            assert!(
+                !first.starts_with('`'),
+                "a code row carries the anchor its problem type names (RFC 9457 §4): {line}"
+            );
             continue;
         };
+        assert_eq!(anchor, code, "the anchor is the code: {line}");
         if code.chars().all(|c| c.is_ascii_lowercase() || c == '-') {
             let previous = rows.insert(code.to_owned(), second.to_owned());
             assert_eq!(None, previous, "{code} is documented once");

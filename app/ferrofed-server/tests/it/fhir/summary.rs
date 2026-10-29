@@ -402,8 +402,8 @@ async fn an_its_rest_path_under_the_base_still_answers_as_it_did() -> TestResult
     assert_eq!(StatusCode::NOT_IMPLEMENTED, status, "N32: {text}");
     assert_eq!(
         field(&headers, header::CONTENT_TYPE.as_str()),
-        Some("application/json"),
-        "the ITS-REST error, never an OperationOutcome"
+        Some("application/problem+json"),
+        "the gateway's problem details, never an OperationOutcome"
     );
     assert!(text.contains("not-implemented"), "{text}");
     assert!(received(&a).await?.is_empty() && received(&b).await?.is_empty());

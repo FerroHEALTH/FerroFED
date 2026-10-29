@@ -475,7 +475,7 @@ async fn an_approval_the_gateway_refuses_shows_its_status_and_code() -> Result<(
         &listener,
         ("POST", "/admin/config/revisions/3/approve"),
         403,
-        r#"{"message":"revision 3 is approved by an operator other than its author","code":"approval-own-revision"}"#,
+        r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#approval-own-revision","detail":"revision 3 is approved by an operator other than its author","code":"approval-own-revision"}"#,
     )
     .await;
     let (service, session) = signed_in_console(&listener)?;

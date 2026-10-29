@@ -212,7 +212,7 @@ async fn a_panicking_handler_yields_a_five_hundred_with_the_request_id_and_no_me
             .and_then(|value| value.to_str().ok())
     );
     assert_eq!(
-        Some("application/json"),
+        Some("application/problem+json"),
         response
             .headers()
             .get(header::CONTENT_TYPE)
@@ -254,8 +254,9 @@ async fn a_request_past_the_timeout_yields_four_hundred_and_eight() -> Result<()
         ),
         &settings,
     );
-    let (status, _) = call(router, Request::get("/slow").body(Body::empty())?).await?;
+    let (status, body) = call(router, Request::get("/slow").body(Body::empty())?).await?;
     assert_eq!(StatusCode::REQUEST_TIMEOUT, status);
+    about_blank(&body, 408)?;
     Ok(())
 }
 
@@ -271,7 +272,29 @@ async fn a_body_over_the_ceiling_yields_four_hundred_and_thirteen() -> Result<()
     let request = Request::post("/v1/query/aql")
         .header(header::CONTENT_LENGTH, oversized.len())
         .body(Body::from(oversized))?;
-    let (status, _) = call(app(), request).await?;
+    let (status, body) = call(app(), request).await?;
     assert_eq!(StatusCode::PAYLOAD_TOO_LARGE, status);
+    about_blank(&body, 413)?;
+    Ok(())
+}
+
+/// Checks that `body` is an `about:blank` problem of `status` (RFC 9457
+/// §4.2.1) carrying no code.
+#[expect(
+    clippy::disallowed_types,
+    reason = "a test reads the problem's members by name"
+)]
+fn about_blank(body: &str, status: u64) -> Result<(), Box<dyn StdError>> {
+    let problem: serde_json::Value = serde_json::from_str(body)?;
+    let member = |name: &str| problem.get(name).cloned();
+    if member("type").as_ref().and_then(serde_json::Value::as_str) != Some("about:blank")
+        || member("status")
+            .as_ref()
+            .and_then(serde_json::Value::as_u64)
+            != Some(status)
+        || member("code").is_some()
+    {
+        return Err(format!("an about:blank problem of {status} with no code: {body}").into());
+    }
     Ok(())
 }
