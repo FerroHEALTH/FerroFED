@@ -18,8 +18,8 @@
 #     state directory or the envelope types (ferrohealth-usage-report); a
 #     TLS listener, its kept certificates, a serve loop or a drain
 #     (ferrohealth-server); the telemetry section, the console formats, the
-#     request log, the sampler, a trace export or an OTLP or Prometheus
-#     exporter of its own (ferrohealth-telemetry).
+#     request log, the sampler, a trace export, an OTLP or Prometheus
+#     exporter or a panic hook of its own (ferrohealth-telemetry).
 #
 # A crate joins ADOPTED, with the definitions it retires in RETIRED, in the
 # pull request that moves FerroFED onto it.
@@ -53,7 +53,8 @@ ferrohealth-server	struct[[:space:]]+(TlsListener|Certificates|ReloadableTls)([^
 ferrohealth-server	fn[[:space:]]+(serve_until|drain_on|server_config)[[:space:]]*[<(]
 ferrohealth-telemetry	(struct|enum)[[:space:]]+(TelemetrySection|OtlpSection|SampleRatio|Traces|Format|Rendering|RequestLog)([^A-Za-z0-9_]|\$)
 ferrohealth-telemetry	fn[[:space:]]+(sampler|collector_tls|method_label)[[:space:]]*[<(]
-ferrohealth-telemetry	(opentelemetry_otlp|opentelemetry_prometheus)::"
+ferrohealth-telemetry	(opentelemetry_otlp|opentelemetry_prometheus)::
+ferrohealth-telemetry	(std::panic::set_hook|fn[[:space:]]+install_hook[[:space:]]*[<(])"
 
 # check ROOT: prints every finding under ROOT and returns 1 when there is one.
 check() {
@@ -108,6 +109,8 @@ self_test() {
     'pub enum Format {'
     'pub fn sampler(ratio: SampleRatio) -> Sampler {'
     'use opentelemetry_otlp::WithExportConfig as _;'
+    '    std::panic::set_hook(Box::new(hook));'
+    'pub fn install_hook() {'
   )
   local case
   for case in "${cases[@]}"; do

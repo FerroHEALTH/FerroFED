@@ -119,8 +119,8 @@ pub(crate) struct LogLine {
     pub(crate) request_id: Option<String>,
     /// Whether the client named its request, on a request line.
     pub(crate) client_named: Option<bool>,
-    /// Where a thread panicked, on the panic hook's line.
-    pub(crate) location: Option<String>,
+    /// The source file a thread panicked in, on the panic hook's line.
+    pub(crate) file: Option<String>,
     /// The address a listener bound, on its start line.
     pub(crate) listen: Option<String>,
 }

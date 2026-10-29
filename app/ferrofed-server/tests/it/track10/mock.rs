@@ -232,16 +232,16 @@ async fn a_panicking_handler_holding_the_identifier_leaves_it_on_neither_stderr_
     };
     let hooked: Vec<LogLine> = lines(&text)?
         .into_iter()
-        .filter(|line| line.message == "a thread panicked")
+        .filter(|line| line.message == "a thread panicked; the message is withheld")
         .collect();
     let [hooked] = hooked.as_slice() else {
         return Err(format!("the hook wrote one line: {text}").into());
     };
     assert!(
         hooked
-            .location
+            .file
             .as_deref()
-            .is_some_and(|at| at.contains("track10/mock.rs:")),
+            .is_some_and(|at| at.ends_with("track10/mock.rs")),
         "the hook's line names where the handler panicked: {text}"
     );
     assert!(
@@ -256,7 +256,7 @@ async fn a_panicking_handler_holding_the_identifier_leaves_it_on_neither_stderr_
 /// writes the log to `log`.
 #[expect(clippy::panic, reason = "the route panics by design")]
 async fn panicking_child(log: &Path) -> TestResult {
-    ferrofed_server::panic::install_hook();
+    ferrohealth_telemetry::panic::install_hook();
     let value = PATIENT.value();
     let held = value.clone();
     let router = ferrofed_server::with_middleware(
