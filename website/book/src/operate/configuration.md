@@ -236,7 +236,8 @@ forwarded_header = "forwarded"   # or "x-forwarded-for": the header those proxie
 request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
 drain_delay_ms = 0            # after SIGTERM, readiness is 503 and the listener accepts this long; see Health probes
 shutdown_timeout_ms = 30000   # then the drain is bounded by this; unset, the request timeout, and never shorter
-header_read_timeout_ms = 30000  # a client that sends no request head within this is closed
+header_read_timeout_ms = 30000  # a client that sends no request head within this, counted from its first byte, is closed
+idle_timeout_ms = 120000      # a kept-alive connection with no next request within this is closed
 body_limit_bytes = 1048576    # a body past this answers 413
 max_concurrent_requests = 512 # one more at once answers 503 overloaded; see Overload protection
 retry_after_s = 1             # the Retry-After of that 503, in seconds
@@ -670,7 +671,11 @@ four ECDHE AES-GCM suites RFC 9325 §4.2 recommends, each with forward
 secrecy. It offers HTTP/2 and HTTP/1.1 in ALPN. A client that does not
 finish its handshake within 10 seconds is dropped, and one that does not
 send a request head within `server.header_read_timeout_ms` (30 seconds by
-default) is disconnected.
+default, counted from the head's first byte) is disconnected. A kept-alive
+HTTP/1.1 connection that sends no next request within
+`server.idle_timeout_ms` (120 seconds by default) is closed with a clean end
+of stream; keep it longer than the idle timeout of the clients and proxies in
+front, so they close an idle connection first.
 
 `config check` reads every file, and refuses, with exit code 78 and the key
 named, a missing certificate or key, a file that holds no PEM, a key that

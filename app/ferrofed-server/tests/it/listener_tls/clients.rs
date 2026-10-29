@@ -6,8 +6,8 @@
 //! none or another CA's, and `ferrofed healthcheck` presents
 //! `healthcheck_identity_file` to it.
 
-use ferrofed_server::healthcheck::READINESS;
 use ferrofed_testkit::listener::ListenerCertificates;
+use ferrohealth_server::health::READINESS;
 use ferrohealth_server::tls::TlsKeys;
 use http::StatusCode;
 

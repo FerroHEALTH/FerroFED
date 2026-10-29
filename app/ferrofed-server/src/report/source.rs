@@ -5,18 +5,19 @@
 //! readiness, the dependency states, the integrity incidents and the
 //! metrics.
 //!
-//! Each is asked on loopback, the way `ferrofed healthcheck` asks, with the
-//! same timeout and the same TLS. An answer is read up to a bound and kept
+//! Each is asked on loopback, the way `ferrofed healthcheck` asks, through
+//! `ferrohealth_server::healthcheck::Get`, with the same timeout and the
+//! same TLS: the listener's own certificate and nothing else. An answer is read up to a bound and kept
 //! only when it is the document the route serves; any other outcome is a
 //! [`SourceError`] the manifest names, never an empty file. No
 //! specification governs the report: our own design.
 
 use std::time::Duration;
 
-use http::{StatusCode, header};
+use ferrohealth_server::healthcheck::{self, Get, GetError};
+use ferrohealth_server::tls::{HealthcheckTls, TlsError};
+use http::{HeaderValue, StatusCode, header};
 use secrecy::{ExposeSecret, SecretString};
-
-use crate::healthcheck::{self, Tls};
 
 /// The most bytes read of any one answer.
 pub const ANSWER_LIMIT: usize = 4 * 1024 * 1024;
@@ -30,10 +31,10 @@ pub enum SourceError {
     NotServed(&'static str),
     /// The listener's TLS material could not be read.
     #[error("the TLS material of the listener could not be read")]
-    Tls(#[source] healthcheck::TlsError),
-    /// The HTTP client could not be built.
-    #[error("the HTTP client could not be built")]
-    Client(#[source] reqwest::Error),
+    Tls(#[source] TlsError),
+    /// The bearer token makes no `Authorization` header value.
+    #[error("the operator token makes no Authorization header")]
+    Bearer(#[source] header::InvalidHeaderValue),
     /// The request could not be made or was not answered.
     #[error("GET {path} was not answered")]
     Request {
@@ -41,7 +42,7 @@ pub enum SourceError {
         path: String,
         /// Why.
         #[source]
-        source: reqwest::Error,
+        source: GetError,
     },
     /// The gateway answered with a status the part is not served with.
     #[error("GET {path} answered {status}{hint}")]
@@ -92,7 +93,7 @@ impl SourceError {
             }
             Self::NotServed(_)
             | Self::Tls(_)
-            | Self::Client(_)
+            | Self::Bearer(_)
             | Self::Request { .. }
             | Self::TooLong { .. } => crate::chain(self),
         }
@@ -102,8 +103,9 @@ impl SourceError {
 /// One listener on this host and how to ask it.
 #[derive(Debug)]
 pub struct Listener {
-    client: reqwest::Client,
-    origin: String,
+    address: std::net::SocketAddr,
+    tls: Option<HealthcheckTls>,
+    timeout: Duration,
 }
 
 impl Listener {
@@ -111,20 +113,20 @@ impl Listener {
     /// serves it.
     ///
     /// # Errors
-    /// [`SourceError::Tls`] for TLS material that does not read, and
-    /// [`SourceError::Client`] when the client cannot be built.
+    /// [`SourceError::Tls`] for TLS material that does not read.
     pub fn new(
         listen: std::net::SocketAddr,
         tls: Option<&crate::config::server::ListenerTlsSettings>,
         timeout: Duration,
     ) -> Result<Self, SourceError> {
-        let tls = tls.map(Tls::read).transpose().map_err(SourceError::Tls)?;
-        let (client, scheme) =
-            healthcheck::client(timeout, tls.as_ref()).map_err(SourceError::Client)?;
-        let address = healthcheck::target(listen);
+        let tls = tls
+            .map(|tls| HealthcheckTls::read_of(&tls.section, tls.keys))
+            .transpose()
+            .map_err(SourceError::Tls)?;
         Ok(Self {
-            client,
-            origin: format!("{scheme}://{address}"),
+            address: healthcheck::target(listen),
+            tls,
+            timeout,
         })
     }
 
@@ -132,6 +134,7 @@ impl Listener {
     /// and the body.
     ///
     /// # Errors
+    /// [`SourceError::Bearer`] for a token that makes no header value,
     /// [`SourceError::Request`] when no answer arrives, and
     /// [`SourceError::TooLong`] for a body past [`ANSWER_LIMIT`].
     pub async fn get(
@@ -139,29 +142,26 @@ impl Listener {
         path: &str,
         bearer: Option<&SecretString>,
     ) -> Result<(StatusCode, Vec<u8>), SourceError> {
-        let failed = |source| SourceError::Request {
-            path: path.to_owned(),
-            source,
-        };
-        let mut request = self.client.get(format!("{}{path}", self.origin));
+        let mut get = Get::new(self.address, path, self.timeout, ANSWER_LIMIT);
+        if let Some(tls) = &self.tls {
+            get = get.with_tls(tls.clone());
+        }
         if let Some(token) = bearer {
-            request = request.header(
-                header::AUTHORIZATION,
-                format!("Bearer {}", token.expose_secret()),
-            );
+            let mut value = HeaderValue::from_str(&format!("Bearer {}", token.expose_secret()))
+                .map_err(SourceError::Bearer)?;
+            value.set_sensitive(true);
+            get = get.with_header(header::AUTHORIZATION, value);
         }
-        let mut response = request.send().await.map_err(failed)?;
-        let status = response.status();
-        let mut body = Vec::new();
-        while let Some(chunk) = response.chunk().await.map_err(failed)? {
-            if body.len().saturating_add(chunk.len()) > ANSWER_LIMIT {
-                return Err(SourceError::TooLong {
-                    path: path.to_owned(),
-                });
-            }
-            body.extend_from_slice(&chunk);
+        match get.send().await {
+            Ok(answer) => Ok((answer.status(), answer.into_body())),
+            Err(GetError::TooLong { .. }) => Err(SourceError::TooLong {
+                path: path.to_owned(),
+            }),
+            Err(source) => Err(SourceError::Request {
+                path: path.to_owned(),
+                source,
+            }),
         }
-        Ok((status, body))
     }
 }
 

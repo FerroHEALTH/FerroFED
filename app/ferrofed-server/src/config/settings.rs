@@ -248,6 +248,9 @@ pub struct ServerSettings {
     pub request_timeout: Duration,
     /// How long a client may take to send a request head, in milliseconds.
     pub header_read_timeout_ms: std::num::NonZeroU64,
+    /// How long a kept-alive HTTP/1.1 connection may wait for its next
+    /// request, in milliseconds.
+    pub idle_timeout_ms: std::num::NonZeroU64,
     /// How long the listener keeps accepting after the stop signal, with
     /// readiness already `503`.
     pub drain_delay: Duration,
@@ -305,6 +308,7 @@ impl ServerSettings {
             base_path,
             request_timeout_ms: millis(self.request_timeout),
             header_read_timeout_ms: self.header_read_timeout_ms,
+            idle_timeout_ms: self.idle_timeout_ms,
             body_limit_bytes: self.body_limit,
             drain_delay_ms: millis(self.drain_delay),
             shutdown_timeout_ms: millis(self.shutdown_timeout),

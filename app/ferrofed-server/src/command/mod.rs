@@ -19,7 +19,7 @@ use crate::{EXIT_CONFIG, EXIT_USAGE, chain, config, state};
 mod admission;
 mod config_check;
 mod conformance;
-mod healthcheck;
+pub mod healthcheck;
 mod report;
 mod serve;
 

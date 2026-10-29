@@ -384,6 +384,7 @@ pub(crate) fn settings() -> ServerSettings {
         forwarded_header: ferrohealth_server::client_address::ForwardedHeader::default(),
         request_timeout: Duration::from_secs(5),
         header_read_timeout_ms: std::num::NonZeroU64::MIN.saturating_add(29_999),
+        idle_timeout_ms: std::num::NonZeroU64::MIN.saturating_add(119_999),
         drain_delay: Duration::ZERO,
         shutdown_timeout: Duration::from_secs(5),
         bindings_drain: Duration::from_secs(5),

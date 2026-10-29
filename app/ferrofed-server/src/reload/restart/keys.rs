@@ -95,6 +95,9 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("server.header_read_timeout_ms", |boot, fresh| {
         boot.server.header_read_timeout_ms != fresh.server.header_read_timeout_ms
     }),
+    ("server.idle_timeout_ms", |boot, fresh| {
+        boot.server.idle_timeout_ms != fresh.server.idle_timeout_ms
+    }),
     ("server.drain_delay_ms", |boot, fresh| {
         boot.server.drain_delay != fresh.server.drain_delay
     }),
@@ -219,6 +222,7 @@ trusted_proxies = ["10.0.0.1"]
 forwarded_header = "x-forwarded-for"
 request_timeout_ms = 30000
 header_read_timeout_ms = 20000
+idle_timeout_ms = 95000
 drain_delay_ms = 10
 shutdown_timeout_ms = 40000
 body_limit_bytes = 1048576

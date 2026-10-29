@@ -32,8 +32,8 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::routing::get;
-use ferrofed_server::healthcheck::READINESS;
 use ferrofed_testkit::listener::ListenerFiles;
+use ferrohealth_server::health::READINESS;
 use ferrohealth_server::section::{ClientAuth, ServerSection, TlsSection, TlsVersion};
 use ferrohealth_server::tls::{ReloadableTls, TlsKeys};
 use http::StatusCode;

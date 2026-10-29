@@ -9,8 +9,8 @@
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
-use ferrofed_server::healthcheck::READINESS;
 use ferrofed_testkit::listener::ListenerCertificates;
+use ferrohealth_server::health::READINESS;
 use http::StatusCode;
 
 use super::{TestResult, client, presented, quoted, written};

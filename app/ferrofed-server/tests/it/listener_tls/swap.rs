@@ -12,7 +12,7 @@ use ferrohealth_server::tls::{TlsError, TlsKeys};
 use http::StatusCode;
 
 use super::{TestResult, client, kept, presented, ready_over, tls_section};
-use ferrofed_server::healthcheck::READINESS;
+use ferrohealth_server::health::READINESS;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_reload_presents_the_new_certificate_from_the_next_handshake() -> TestResult {

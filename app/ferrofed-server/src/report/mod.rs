@@ -41,10 +41,11 @@ use jiff::Timestamp;
 use secrecy::SecretString;
 use serde::Serialize;
 
+use crate::command::healthcheck::TIMEOUT;
 use crate::config::settings::Settings;
-use crate::healthcheck::{READINESS, TIMEOUT};
 use crate::report::provenance::{Build, Release};
 use crate::report::source::{Listener, SourceError};
+use ferrohealth_server::health::READINESS;
 
 /// The directory every file of the archive sits under.
 pub const ROOT: &str = "ferrofed-report";
