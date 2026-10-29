@@ -36,6 +36,22 @@ async fn a_query_without_a_token_is_401_and_reaches_no_node() -> TestResult {
     assert_refused(&gateway, query()?, Refusal::Missing).await
 }
 
+/// A path no route matches under the ITS-REST prefix or the operator API is
+/// refused at the gate as a routed one is, through the stack of
+/// `ferrohealth-server` (FerroHEALTH/FerroSYS#199), and health stays open.
+#[tokio::test]
+async fn an_unknown_path_under_the_gate_without_a_token_is_401_and_health_is_not() -> TestResult {
+    let gateway = Gateway::trusting_the_test_issuer().await?;
+    for path in ["/v1/synthetic-unrouted", "/operator/synthetic-unrouted"] {
+        let request = Request::get(path).body(Body::empty())?;
+        assert_refused(&gateway, request, Refusal::Missing).await?;
+    }
+    let request = Request::get("/health/liveness").body(Body::empty())?;
+    let (status, _, text) = sent(&gateway.app, request).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    Ok(())
+}
+
 /// CP-17, inbound half: a credential in a scheme the gate does not admit is
 /// no credential, a `401` whose challenge names no error (RFC 6750 §3.1).
 // conformance: CP-17

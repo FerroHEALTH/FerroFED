@@ -340,9 +340,10 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # healthcheck. Pinned exactly, as a product pins every family crate; 0.3.7
 # carries GHSA-2mc2-h3jq-c5wg, 0.3.8 refuses a client CA under
 # `client_auth = "none"` and keeps a listener's TLS reloadable from the
-# product's own reload path, and 0.3.9 names that refusal's values readably.
-# Verified against crates.io on 2026-10-29.
-ferrohealth-server = { version = "=0.4.0", default-features = false }
+# product's own reload path, 0.3.9 names that refusal's values readably, and
+# 0.4.1 keeps a product's own fallback and its layers through the stack.
+# Verified against crates.io on 2026-10-30.
+ferrohealth-server = { version = "=0.4.1", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.
