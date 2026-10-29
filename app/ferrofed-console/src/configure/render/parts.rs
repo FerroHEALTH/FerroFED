@@ -20,7 +20,7 @@ use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::Column;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
-use ferrohealth_ui::view::dialog::{ConfirmForm, Confirmation, danger_form_dialog};
+use ferrohealth_ui::view::dialog::{Confirmation, DIALOG_FORM, danger_action_dialog};
 use ferrohealth_ui::view::form::{ERROR, Field, INPUT, described_by, error_id};
 use ferrohealth_ui::view::status::badge;
 use ferrohealth_ui::widget::action::answer_field;
@@ -29,7 +29,7 @@ use ferrohealth_ui::widget::repeat::{RepeatAdd, RowEnd};
 use leptos::form::ActionForm;
 use leptos::prelude::*;
 
-use crate::act::configure::{Configure, IMPORT};
+use crate::act::configure::{ConfigAnswer, Configure, IMPORT};
 
 use crate::configure::draft::{Draft, EDIT, Edit};
 use crate::configure::plan::removal_reason;
@@ -235,7 +235,7 @@ pub(crate) struct Removal {
 /// The actions of a configuration table's row named `named`, whose
 /// removal confirms in the dialog `dialog`: its row menu (F13) with Edit to
 /// `edit` and, when the row can be removed, Remove… after a separator,
-/// opening that dialog (FerroUI `danger_form_dialog`) with its Reason,
+/// opening that dialog (FerroUI `danger_action_dialog`) with its Reason,
 /// drawn beside the menu in the row's actions cell.
 pub(crate) fn row_actions(
     dialog: &str,
@@ -265,23 +265,49 @@ pub(crate) fn row_actions(
             {ferrohealth_ui::view::button::label(Some(Glyph::TRASH), tr(Msg::SaveTheRemoval))}
         </button>
     };
-    let asks = danger_form_dialog(
+    let fields = view! {
+        {answer_field()}
+        {removal.fields}
+        {hidden("confirm", String::from("yes"))}
+    }
+    .into_any();
+    let configure = use_context::<ServerAction<Configure>>();
+    // NOTE: no specification governs this: our own design; the dialog closes once a
+    // saved removal changed what the page shows, and stays open on a refusal.
+    let done = configure.map_or_else(
+        || Signal::stored(false),
+        |configure| {
+            Signal::derive(move || {
+                configure.value().with(|answer| {
+                    matches!(answer, Some(Ok(ConfigAnswer { answer: Some(said), .. })) if said.changed)
+                })
+            })
+        },
+    );
+    let asks = danger_action_dialog(
         Confirmation {
             id: dialog.to_owned().into(),
             title: removal.title.into(),
             message: removal.message.into(),
         },
-        ConfirmForm {
-            // TODO(#1414): the dialog posts its own form natively until FerroUI's ConfirmForm
-            // takes a server action, so with WebAssembly this one post loads a new document.
-            action: String::from(IMPORT),
-            fields: view! {
-                {answer_field()}
-                {removal.fields}
-                {hidden("confirm", String::from("yes"))}
+        fields,
+        move |parts| match configure {
+            Some(configure) => view! {
+                <ActionForm action=configure attr:class=DIALOG_FORM>
+                    {parts}
+                </ActionForm>
+            }
+            .into_any(),
+            // NOTE: no specification governs this: our own design; outside the page the
+            // form posts to the same function, its answer drawn on the page it names.
+            None => view! {
+                <form method="post" action=IMPORT class=DIALOG_FORM>
+                    {parts}
+                </form>
             }
             .into_any(),
         },
+        done,
         confirm,
     );
     view! {

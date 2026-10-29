@@ -44,10 +44,11 @@ fn removal_is_in_the_row_menu(body: &str) -> Result<(), Box<dyn Error>> {
         .ok_or("the row's removal dialog")?;
     assert!(
         dialog.contains(&format!(
-            r#"class="fui-dialog fui-dialog-danger"><form method="post" action="{path}""#,
+            r#"class="fui-dialog fui-dialog-danger"><form action="{path}" method="post" class="{form}""#,
             path = ferrofed_console::act::configure::IMPORT,
+            form = ferrohealth_ui::view::dialog::DIALOG_FORM,
         )),
-        "the danger dialog holds the form it posts: {dialog}"
+        "the danger dialog holds the configuration's ActionForm, which posts with no WebAssembly: {dialog}"
     );
     for field in [
         r#"name="form[action]" value="remove-member""#,
