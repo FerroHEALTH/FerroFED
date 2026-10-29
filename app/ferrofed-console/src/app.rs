@@ -88,16 +88,18 @@ pub const CONFIGURATION: &str = "/configuration";
 pub const SEARCH: &str = "/search";
 
 /// The pages a visitor may read with no session: the sign-in at `/` and
-/// About, and the routes of the sign-in, the stylesheets, the brand marks,
-/// the preference posts and the site bundle.
+/// About, and the routes of the sign-in, the health routes, the stylesheets,
+/// the brand marks, the preference posts and the site bundle.
 #[cfg(not(target_arch = "wasm32"))]
-pub const PUBLIC: [&str; 12] = [
+pub const PUBLIC: [&str; 14] = [
     "/",
     ABOUT,
     SIGN_IN,
     crate::oidc::CALLBACK,
     SIGN_OUT,
     crate::server::HEALTH,
+    ferrohealth_server::health::LIVENESS,
+    ferrohealth_server::health::READINESS,
     STYLESHEET,
     THEME,
     MARK_LIGHT,

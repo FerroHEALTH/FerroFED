@@ -1496,7 +1496,11 @@ dependencies = [
  "cookie",
  "ferrofed-registry",
  "ferrofed-testkit",
+ "ferrohealth-config",
+ "ferrohealth-health",
  "ferrohealth-secret",
+ "ferrohealth-server",
+ "ferrohealth-telemetry",
  "ferrohealth-ui",
  "fluent-templates",
  "http",
@@ -1820,6 +1824,7 @@ dependencies = [
  "tower",
  "tower-http 0.7.1",
  "tracing",
+ "url",
  "uuid",
 ]
 

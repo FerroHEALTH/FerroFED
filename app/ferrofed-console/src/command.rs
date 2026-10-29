@@ -9,11 +9,17 @@ use std::fmt::Write as _;
 use std::process::ExitCode;
 
 use clap::Parser;
+use ferrohealth_server::cli::{Common, ConfigCommand};
+use ferrohealth_telemetry::telemetry::{Console, Service, Telemetry};
 
-use crate::cli::{Cli, Command, ConfigCommand};
+use crate::cli::Cli;
 use crate::config::Config;
 use crate::config::settings::Settings;
 use crate::server::ConsoleState;
+
+/// How long `healthcheck` waits for the console's answer, shorter than the
+/// five seconds the image's `HEALTHCHECK` allows.
+pub const HEALTHCHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// The exit code of a configuration the console will not start on, from the
 /// BSD `sysexits.h` set (`EX_CONFIG`).
@@ -44,9 +50,25 @@ where
             return u8::try_from(code).map_or(ExitCode::FAILURE, ExitCode::from);
         }
     };
-    let settings = match Config::load(cli.config.as_deref()).and_then(|config| config.resolve()) {
+    let loaded = match Config::load(cli.config.config.as_deref(), &cli.config.sets) {
+        Ok(loaded) => loaded,
+        Err(error) if cli.command == Common::Healthcheck => {
+            eprintln!("ferrofed-console: not up: {}", chain(&error));
+            return ExitCode::FAILURE;
+        }
+        Err(error) => {
+            eprintln!("ferrofed-console: cannot start: {}", chain(&error));
+            return ExitCode::from(EXIT_CONFIG);
+        }
+    };
+    let report = (cli.command
+        == Common::Config {
+            command: ConfigCommand::Check,
+        })
+    .then(|| ferrohealth_config::report::check_report(&loaded));
+    let settings = match loaded.into_parts().0.resolve() {
         Ok(settings) => settings,
-        Err(error) if cli.command == Command::Healthcheck => {
+        Err(error) if cli.command == Common::Healthcheck => {
             eprintln!("ferrofed-console: not up: {}", chain(&error));
             return ExitCode::FAILURE;
         }
@@ -56,11 +78,11 @@ where
         }
     };
     match cli.command {
-        Command::Healthcheck => runtime_then(|| healthcheck(&settings)),
-        Command::Config {
+        Common::Healthcheck => runtime_then(|| healthcheck(&settings)),
+        Common::Config {
             command: ConfigCommand::Check,
-        } => config_check(settings),
-        Command::Serve => runtime_then(|| serve(settings)),
+        } => config_check(settings, report),
+        Common::Serve => runtime_then(|| serve(settings)),
     }
 }
 
@@ -86,8 +108,8 @@ where
     }
 }
 
-/// Runs `config check`: the state the server would start with is built, and
-/// nothing is bound.
+/// Runs `config check`: the running tree with every secret redacted, then the
+/// state the server would start with is built, and nothing is bound.
 #[expect(
     clippy::print_stdout,
     reason = "the job's one answer goes to standard output"
@@ -96,7 +118,18 @@ where
     clippy::print_stderr,
     reason = "the job's refusal goes to standard error"
 )]
-fn config_check(settings: Settings) -> ExitCode {
+fn config_check(
+    settings: Settings,
+    report: Option<Result<String, ferrohealth_config::error::ConfigError>>,
+) -> ExitCode {
+    match report {
+        Some(Ok(report)) => println!("{report}"),
+        Some(Err(error)) => {
+            eprintln!("ferrofed-console: cannot start: {}", chain(&error));
+            return ExitCode::from(EXIT_CONFIG);
+        }
+        None => {}
+    }
     match ConsoleState::new(settings) {
         Ok(_state) => {
             println!("ferrofed-console: the configuration is valid");
@@ -119,9 +152,9 @@ fn config_check(settings: Settings) -> ExitCode {
     reason = "the job's one-line refusal goes to standard error"
 )]
 async fn healthcheck(settings: &Settings) -> ExitCode {
-    let target = crate::healthcheck::target(settings.listen);
-    let outcome = crate::healthcheck::check(target, crate::healthcheck::TIMEOUT).await;
-    if outcome.is_up() {
+    let target = ferrohealth_server::healthcheck::target(settings.listen);
+    let outcome = ferrohealth_server::healthcheck::check(target, "", HEALTHCHECK_TIMEOUT).await;
+    if outcome.exit_code() == 0 {
         println!("ferrofed-console: {outcome}");
         ExitCode::SUCCESS
     } else {
@@ -137,16 +170,20 @@ async fn healthcheck(settings: &Settings) -> ExitCode {
     reason = "a refusal before the subscriber starts has no other place to go"
 )]
 async fn serve(settings: Settings) -> ExitCode {
-    let subscriber = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_unset| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .try_init();
-    if let Err(error) = subscriber {
-        eprintln!("ferrofed-console: cannot start the log: {error}");
-        return ExitCode::FAILURE;
-    }
+    let service = Service::new("ferrofed-console", env!("CARGO_PKG_VERSION"));
+    let installed = Telemetry::new(&settings.telemetry, service).and_then(|telemetry| {
+        telemetry
+            .install(&settings.telemetry, &Console::detect())
+            .map(|_filter| telemetry)
+    });
+    let telemetry = match installed {
+        Ok(telemetry) => telemetry,
+        Err(error) => {
+            eprintln!("ferrofed-console: cannot start the log: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    ferrohealth_telemetry::panic::install_hook();
     let listen = settings.listen;
     let state = match ConsoleState::new(settings) {
         Ok(state) => state,
@@ -163,44 +200,24 @@ async fn serve(settings: Settings) -> ExitCode {
         }
     };
     tracing::info!(%listen, "the operator console is listening");
-    match crate::server::serve(listener, crate::server::router(state), shutdown_signal()).await {
-        Ok(()) => ExitCode::SUCCESS,
+    let lifecycle = state.lifecycle().clone();
+    let served = crate::server::serve(
+        listener,
+        crate::server::router(state),
+        lifecycle,
+        ferrohealth_server::serve::shutdown_signal(),
+    );
+    let code = match served.await {
+        Ok(_drained) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!(%error, "the listener failed");
             ExitCode::FAILURE
         }
-    }
-}
-
-/// Completes when the process receives `SIGTERM` or `SIGINT`.
-///
-/// A failure to install a handler is logged and that arm never completes, so
-/// the console keeps serving and the runtime's own kill stays the backstop.
-async fn shutdown_signal() {
-    let interrupt = async {
-        if let Err(error) = tokio::signal::ctrl_c().await {
-            tracing::error!(%error, "cannot listen for SIGINT");
-            std::future::pending::<()>().await;
-        }
     };
-    #[cfg(unix)]
-    let terminate = async {
-        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-            Ok(mut signal) => {
-                signal.recv().await;
-            }
-            Err(error) => {
-                tracing::error!(%error, "cannot listen for SIGTERM");
-                std::future::pending::<()>().await;
-            }
-        }
-    };
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-    tokio::select! {
-        () = interrupt => tracing::info!("SIGINT received, stopping"),
-        () = terminate => tracing::info!("SIGTERM received, stopping"),
+    if let Err(error) = telemetry.shutdown() {
+        tracing::warn!(%error, "the telemetry did not flush");
     }
+    code
 }
 
 /// Renders `error` with every cause in its chain, colon-separated.

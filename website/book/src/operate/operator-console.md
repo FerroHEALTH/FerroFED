@@ -239,8 +239,11 @@ service worker or a URL.
   typed is never drawn again. A replica whose configuration is not managed answers
   `404`, and the page says so and offers no form
   ([Console-managed resources](configuration-revisions.md#console-managed-resources)).
-- **`GET /health`**, which answers `200` while the process serves, and the
-  `healthcheck` command the image runs against it.
+- **The health routes of the FerroHEALTH family:** `GET /health/liveness`
+  answers `200` while the process serves, `GET /health/readiness` answers
+  `200` while it takes requests and `503` once it drains on `SIGTERM`, and
+  `GET /health` follows readiness with `{"state":"up"}`. The `healthcheck`
+  command the image runs asks `GET /health`.
 
 Every answer carries a Content-Security-Policy whose script source is a nonce
 minted for that answer, `X-Content-Type-Options: nosniff`,
@@ -478,11 +481,19 @@ and its request log carries no body and no header value.
 
 ## Configuration
 
-The console reads a TOML file named by `--config` or `FERROFED_CONSOLE_CONFIG`.
-Every key can be set from the environment as
-`FERROFED_CONSOLE__<SECTION>__<KEY>`, and the client secret can be read from a
-file through `client_secret_file`. A refused configuration names the key and
-the line, never a value, so no secret reaches a message or a log.
+The console reads a TOML file named by `--config` or `FERROFED_CONSOLE_CONFIG`,
+with the family's loader (`ferrohealth-config`). Every key can be set from the
+environment as `FERROFED_CONSOLE__<SECTION>__<KEY>`, or on the command line as
+`--set section.key=value`, repeatable, which wins over both; and the client
+secret can be read from a file through `client_secret_file`. A refused
+configuration names the key, and the variable or `--set` pair that set it,
+never a value, so no secret reaches a message or a log; text that is not TOML
+is named by its line and column. `config check` prints the running
+configuration with every secret redacted and where each key came from.
+
+The console log is the family's `[telemetry]` section: `RUST_LOG` or
+`telemetry.filter` chooses what it logs, as on the gateway
+([What the log records](configuration.md#what-the-log-records)).
 
 ```toml
 [server]

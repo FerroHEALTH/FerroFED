@@ -16,7 +16,17 @@ async fn the_health_route_answers_up() -> Result<(), Box<dyn Error>> {
     let (_state, service) = console("")?;
     let (response, body) = send(&service, get("/health")?).await?;
     assert_eq!(StatusCode::OK, response.status());
-    assert_eq!(r#"{"status":"up"}"#, body);
+    assert_eq!(r#"{"state":"up"}"#, body);
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_liveness_and_readiness_routes_answer_with_no_session() -> Result<(), Box<dyn Error>> {
+    let (_state, service) = console(WITH_OIDC)?;
+    for path in ["/health/liveness", "/health/readiness"] {
+        let (response, _body) = send(&service, get(path)?).await?;
+        assert_eq!(StatusCode::OK, response.status(), "{path}");
+    }
     Ok(())
 }
 
