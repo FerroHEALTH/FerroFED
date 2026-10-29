@@ -28,8 +28,9 @@ use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence, Queried, ResourceKind, RootObject};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_eehrxf::patient_summary::Section;
+use ferrofed_eehrxf::summary::once::ListedOnce;
 use ferrofed_eehrxf::summary::{
-    Answer, Covered, Elsewhere, Held, ListedOnce, Organisation, Origin, SectionAnswers,
+    Answer, Covered, Elsewhere, Held, Organisation, Origin, SectionAnswers,
 };
 use ferrofed_engine::fanout::reader::RowReader;
 use ferrofed_engine::fanout::{FanOutError, FederatedAnswer, Plan};
