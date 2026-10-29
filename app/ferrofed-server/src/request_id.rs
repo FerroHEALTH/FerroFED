@@ -58,20 +58,14 @@ impl MakeRequestId for Mint {
     }
 }
 
-tokio::task_local! {
-    /// The [`OutboundId`] of the request whose task is running, for the
-    /// panic hook, which sees neither the request nor its response.
-    static SERVING: OutboundId;
-}
-
 /// Mints the gateway's [`OutboundId`] for `request` and records it on the
 /// request and on its response.
 ///
 /// The request carries it to the handler and, as the request log's
 /// [`ferrohealth_telemetry::request_log::RequestId`], to the request log,
 /// with whether the client named a request of its own; the response carries
-/// it out to the panic renderer, which sees no request; and while the
-/// request is served, [`serving`] reads it for the panic hook.
+/// it out to the panic renderer, which sees no request; and the request
+/// log names the request to the panic hook of `ferrohealth-telemetry` by it.
 pub async fn mint_outbound(mut request: Request, next: Next) -> Response {
     let id = OutboundId::mint();
     // NOTE: no specification governs this: our own design; an illegal client id is
@@ -84,7 +78,7 @@ pub async fn mint_outbound(mut request: Request, next: Next) -> Response {
             id.to_string(),
             client_named,
         ));
-    let mut response = SERVING.scope(id, next.run(request)).await;
+    let mut response = next.run(request).await;
     response.extensions_mut().insert(id);
     response
 }
@@ -93,15 +87,6 @@ pub async fn mint_outbound(mut request: Request, next: Next) -> Response {
 #[must_use]
 pub fn outbound(extensions: &Extensions) -> Option<OutboundId> {
     extensions.get::<OutboundId>().copied()
-}
-
-/// Returns the [`OutboundId`] of the request the current task serves, or
-/// `None` outside one.
-#[must_use]
-pub fn serving() -> Option<OutboundId> {
-    // NOTE: no specification governs this: our own design; outside a served
-    // request there is no id to read, so the absence is the answer.
-    SERVING.try_with(|id| *id).ok()
 }
 
 /// Removes an `x-request-id` this server will not echo.

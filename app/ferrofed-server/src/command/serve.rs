@@ -21,8 +21,8 @@ use crate::state::AppState;
 use crate::support::Support;
 use crate::usage_report::Usage;
 use crate::{
-    EXIT_CONFIG, admin, banner, binding, body, chain, config, metrics, panic, reload, revision,
-    state, trusted_router,
+    EXIT_CONFIG, admin, banner, binding, body, chain, config, metrics, reload, revision, state,
+    trusted_router,
 };
 use ferrohealth_server::serve::Listener;
 use ferrohealth_server::tls::ReloadableTls;
@@ -110,7 +110,7 @@ pub(super) fn serve_job(
         eprintln!("ferrofed: cannot start: {}", chain(&error));
         return ExitCode::from(EXIT_CONFIG);
     }
-    panic::install_hook();
+    ferrohealth_telemetry::panic::install_hook();
     if let Err(error) = state::admits_callers(&settings, settings.federates()) {
         tracing::error!(error = chain(&error), "cannot start");
         booted.inspect(|booted| booted.refused("callers", "the configuration admits no caller"));
