@@ -21,14 +21,15 @@
 
 use std::error::Error;
 
+use crate::support::console::subscriber;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::conformance::scenarios::track11;
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::containers::{self, API_PATH, ProxiedNode, TwoNodes};
 use ferrofed_testkit::seed::{
     self, CompositionSeed, DemoComposition, EhrSeed, PatientId, SeedPlan, SeedReport,
 };
+use ferrohealth_telemetry::section::Rendering;
 use http::{Method, Request, StatusCode, header};
 use uuid::Uuid;
 

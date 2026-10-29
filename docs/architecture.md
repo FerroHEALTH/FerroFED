@@ -1501,7 +1501,7 @@ own design.
 **A secret is a type** (#364, the design FerroEHR's configuration uses). Every
 credential the configuration holds is a `Secret` (a basic password, a
 client secret) or a `SecretUrl` (a URL or connection string that may carry one:
-the stored-query store's PostgreSQL `url`, `metrics.otlp_endpoint`, a PIX
+the stored-query store's PostgreSQL `url`, `telemetry.otlp.endpoint`, a PIX
 Manager URL, a registry endpoint URL), both from `ferrohealth-secret`, the
 family crate of FerroHEALTH/FerroSYS the registry document, the identity
 bindings, the server and the console configuration share (#1397). Both
@@ -1716,10 +1716,10 @@ replicas. It reads the gateway through one `base_url`, behind the Service,
 so it cannot show every replica at once; the book states that limit.
 
 **Metrics** (#281, decision A50; no specification governs metrics: our own
-design). One OpenTelemetry `MeterProvider` feeds two readers, the
-Prometheus pull reader and, when `[metrics] otlp_endpoint` names a
-collector, a periodic OTLP push over gRPC, so an instrument cannot exist on
-one surface and not the other. The pull reader is served as the Prometheus
+design). One OpenTelemetry `MeterProvider`, built by `ferrohealth-telemetry`
+(#1397), feeds two readers, the Prometheus pull reader and, when
+`[telemetry.otlp]` names a collector, a periodic OTLP push over gRPC, so an
+instrument cannot exist on one surface and not the other. The pull reader is served as the Prometheus
 text exposition at `GET /metrics` on an admin listener of its own,
 `[metrics] listen`, off when unset and never the gateway's client listener,
 so no client of the federation reaches it; the

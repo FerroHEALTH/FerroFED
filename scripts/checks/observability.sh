@@ -14,7 +14,9 @@
 #      over that variable;
 #   3. every metric either file names is one the gateway exports: its name,
 #      without the Prometheus suffixes, is an instrument name of
-#      app/ferrofed-server/src with each `.` written `_`.
+#      app/ferrofed-server/src, or one of the HTTP server metrics the request
+#      log of ferrohealth-telemetry records (HTTP_SERVER), with each `.`
+#      written `_`.
 #
 # Usage:
 #   scripts/checks/observability.sh              check the shipped assets
@@ -171,7 +173,11 @@ if [[ "$fail" -eq 0 ]]; then
 fi
 
 echo "== every metric named is one the gateway exports"
-exported="$(grep -rhoE '"(ferrofed|http\.server)\.[a-z_.]+"' app/ferrofed-server/src |
+# The instruments the request log of ferrohealth-telemetry records on the
+# gateway's meter provider (OpenTelemetry HTTP semantic conventions).
+readonly HTTP_SERVER='"http.server.request.duration"
+"http.server.active_requests"'
+exported="$( { grep -rhoE '"(ferrofed|http\.server)\.[a-z_.]+"' app/ferrofed-server/src; echo "$HTTP_SERVER"; } |
   tr -d '"' | tr '.' '_' | sort -u)"
 named="$( { jq -r '.panels[].targets[].expr' "$DASHBOARD"; jq -r '.groups[].rules[].expr' <<< "$rules"; } |
   grep -oE '\b(ferrofed|http_server)_[a-z_]+' | sort -u)"

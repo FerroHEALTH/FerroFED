@@ -4,8 +4,10 @@
 //! The console: the rendering `auto` resolves to, both renderings, and the
 //! filter, which is honoured or refused but never silently replaced.
 
+use crate::support::console::subscriber;
 use crate::support::{Logs, lines};
-use ferrofed_server::telemetry::{DEFAULT_FILTER, Error, Format, Rendering, subscriber};
+use ferrohealth_telemetry::section::{DEFAULT_FILTER, Format, Rendering};
+use ferrohealth_telemetry::telemetry::InitError as Error;
 use std::error::Error as StdError;
 
 /// Writes one `info` line through a subscriber built for `rendering` and
@@ -71,10 +73,7 @@ fn a_filter_that_parses_is_honoured() -> Result<(), Box<dyn StdError>> {
 #[test]
 fn a_filter_that_does_not_parse_is_refused() {
     assert!(
-        matches!(
-            emitted(Rendering::Json, "info,=,,"),
-            Err(Error::Filter { .. })
-        ),
+        matches!(emitted(Rendering::Json, "info,=,,"), Err(Error::Filter(_))),
         "a broken filter is refused, never replaced"
     );
 }

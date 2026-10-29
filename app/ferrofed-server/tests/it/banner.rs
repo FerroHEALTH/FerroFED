@@ -22,7 +22,8 @@ use ferrofed_server::config::stored_queries::{Backend, Store};
 use ferrofed_server::federation::{error::FederationError, registry::read_registry};
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_server::support::Support;
-use ferrofed_server::telemetry::Format;
+use ferrohealth_telemetry::section::Format;
+use ferrohealth_telemetry::telemetry::Console;
 
 use crate::facade::{NAMESPACE, PATIENT, registry};
 use crate::run::binary;
@@ -290,11 +291,11 @@ fn the_banner_prints_only_before_the_terminal_rendering() {
 #[test]
 fn colour_follows_the_terminal_unless_pretty_is_asked_for() {
     for unset in [None, Some(OsStr::new(""))] {
-        assert!(Format::Auto.colour(true, unset));
-        assert!(!Format::Auto.colour(false, unset));
-        assert!(Format::Pretty.colour(false, unset));
-        assert!(Format::Json.colour(true, unset));
-        assert!(!Format::Json.colour(false, unset));
+        assert!(Console::new(true, unset).colour(Format::Auto));
+        assert!(!Console::new(false, unset).colour(Format::Auto));
+        assert!(Console::new(false, unset).colour(Format::Pretty));
+        assert!(Console::new(true, unset).colour(Format::Json));
+        assert!(!Console::new(false, unset).colour(Format::Json));
     }
 }
 
@@ -306,7 +307,7 @@ fn no_color_switches_colour_off_whatever_the_format_and_the_terminal() {
         for format in [Format::Auto, Format::Json, Format::Pretty] {
             for stdout_is_terminal in [false, true] {
                 assert!(
-                    !format.colour(stdout_is_terminal, Some(OsStr::new(value))),
+                    !Console::new(stdout_is_terminal, Some(OsStr::new(value))).colour(format),
                     "NO_COLOR={value} {format:?} terminal={stdout_is_terminal}"
                 );
             }

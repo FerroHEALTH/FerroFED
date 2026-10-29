@@ -30,8 +30,7 @@
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
 //! 2.0 grant, the issuer of its FAPI 2.0 grant (sent the client assertion and
 //! the callers' tokens), the site of a grant a binding adds, and
-//! `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries
-//! a user name or a password. Each binding holds its own sites
+//! `telemetry.otlp.endpoint` when it carries a user name or a password. Each binding holds its own sites
 //! ([`Binding::sites`](crate::binding::Binding::sites)): the IHE binding every
 //! PIX Manager, the PDQm Supplier of `[pdqm]`, every XCPD responding gateway,
 //! the Patient Identity Registry of `[pmir]` and its callback URL, the care
@@ -343,14 +342,8 @@ pub fn check(
     for binding in crate::binding::compiled() {
         cleartext.extend(binding.sites(settings)?);
     }
-    let collectors = [
-        ("metrics.otlp_endpoint", &settings.metrics.otlp_endpoint),
-        ("telemetry.otlp_endpoint", &settings.telemetry.otlp_endpoint),
-    ];
-    for (key, endpoint) in collectors {
-        let Some(endpoint) = endpoint else {
-            continue;
-        };
+    if let Some(otlp) = &settings.telemetry.otlp {
+        let (key, endpoint) = ("telemetry.otlp.endpoint", &otlp.endpoint);
         let carries = Url::parse(endpoint.expose())
             .is_ok_and(|parsed| !parsed.username().is_empty() || parsed.password().is_some());
         if carries {

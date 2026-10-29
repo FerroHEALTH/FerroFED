@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `[telemetry] trace_sample_ratio`: the share of the gateway's own traces
+//! `[telemetry.otlp] sample_ratio`: the share of the gateway's own traces
 //! that are exported, decided once at the root, the request span, and
 //! followed by every span under it; validated at load to `0.0` to `1.0`,
 //! with `1.0` as the default.
@@ -13,7 +13,7 @@
 use std::collections::BTreeMap;
 
 use ferrofed_server::config::Config;
-use ferrofed_server::telemetry::SampleRatio;
+use ferrohealth_telemetry::section::SampleRatio;
 use http::StatusCode;
 
 use super::{Exported, TestResult, named};
@@ -79,27 +79,41 @@ async fn a_ratio_of_zero_exports_no_root_and_no_span_under_it() -> TestResult {
     Ok(())
 }
 
+/// The sample ratio the configuration `text` resolves to.
+fn resolved_ratio(text: &str) -> Result<Option<SampleRatio>, Box<dyn std::error::Error>> {
+    let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
+    Ok(settings.telemetry.otlp.map(|otlp| otlp.sample_ratio))
+}
+
 #[test]
 fn every_trace_is_sampled_unless_a_ratio_is_set() -> TestResult {
-    let settings = Config::from_sources(Some(""), &BTreeMap::new())?.resolve()?;
-    assert_eq!(SampleRatio::ALL, settings.telemetry.trace_sample_ratio);
-    let text = "[telemetry]\ntrace_sample_ratio = 0.25\n";
-    let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
-    assert_eq!(ratio(0.25)?, settings.telemetry.trace_sample_ratio);
+    let collector = "[telemetry.otlp]\nendpoint = \"http://127.0.0.1:4317\"\n";
+    assert_eq!(Some(SampleRatio::ALL), resolved_ratio(collector)?);
+    let text = format!("{collector}sample_ratio = 0.25\n");
+    assert_eq!(Some(ratio(0.25)?), resolved_ratio(&text)?);
     Ok(())
 }
 
 #[test]
 fn a_ratio_outside_zero_to_one_is_refused_at_load() -> TestResult {
     for refused in ["1.5", "-0.1", "nan", "inf"] {
-        let text = format!("[telemetry]\ntrace_sample_ratio = {refused}\n");
-        let error = Config::from_sources(Some(&text), &BTreeMap::new())?
-            .resolve()
+        let text = format!(
+            "[telemetry.otlp]\nendpoint = \"http://127.0.0.1:4317\"\nsample_ratio = {refused}\n"
+        );
+        let error = Config::from_sources(Some(&text), &BTreeMap::new())
+            .and_then(|config| config.resolve())
             .err()
             .ok_or_else(|| format!("{refused} is refused"))?;
+        let mut text = error.to_string();
+        let mut source = std::error::Error::source(&error);
+        while let Some(cause) = source {
+            text.push_str(": ");
+            text.push_str(&cause.to_string());
+            source = cause.source();
+        }
         assert!(
-            error.to_string().contains("telemetry.trace_sample_ratio"),
-            "{refused}: {error}"
+            text.contains("telemetry.otlp.sample_ratio"),
+            "{refused}: {text}"
         );
     }
     Ok(())

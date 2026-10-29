@@ -98,8 +98,10 @@ async fn no_label_carries_what_a_request_sent() -> TestResult {
         .collect();
     let limits: BTreeSet<&str> = Limit::ALL.iter().map(|limit| limit.as_str()).collect();
     let methods = BTreeSet::from([
-        "CONNECT", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE", "_OTHER",
+        "CONNECT", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "QUERY", "TRACE",
+        "_OTHER",
     ]);
+    let versions = BTreeSet::from(["0.9", "1.0", "1.1", "2", "3"]);
     let classes = BTreeSet::from(["1xx", "2xx", "3xx", "4xx", "5xx"]);
     // NOTE: §5.4.1, N33: the two routes are the templates of the two requests,
     // the read's path identifier written as its parameter name.
@@ -119,6 +121,7 @@ async fn no_label_carries_what_a_request_sent() -> TestResult {
                 (_, "limit") => limits.contains(value.as_str()),
                 (_, "http_request_method") => methods.contains(value.as_str()),
                 (_, "url_scheme") => value == "http",
+                (_, "network_protocol_version") => versions.contains(value.as_str()),
                 (_, "http_route") => routes.contains(value.as_str()),
                 (_, "http_response_status_code") => value.parse::<u16>().is_ok(),
                 (_, "error_type") => value.parse::<u16>().is_ok_and(|status| status >= 500),

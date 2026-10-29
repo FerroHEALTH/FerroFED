@@ -365,8 +365,8 @@ async fn an_approval_of_a_revision_that_needs_none_is_refused() -> TestResult {
 async fn a_secret_value_is_written_to_an_owner_only_file_and_never_shown() -> TestResult {
     let secrets = tempfile::tempdir()?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "trace",
         false,
         logs.clone(),

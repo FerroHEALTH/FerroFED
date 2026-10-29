@@ -504,8 +504,8 @@ async fn each_discovery_writes_an_audit_event_without_the_identifier() -> TestRe
         "",
     )?)?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),
@@ -602,8 +602,8 @@ async fn a_confined_caller_naming_another_patient_makes_no_exchange_and_no_audit
     )?;
     let (app, token) = confined_gateway(&text)?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),

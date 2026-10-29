@@ -365,8 +365,8 @@ async fn no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node() -> T
         &settings_with_room(),
     )?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "trace",
         false,
         logs.clone(),

@@ -271,8 +271,8 @@ async fn panicking_child(log: &Path) -> TestResult {
         &crate::support::settings(),
     );
     let logs = Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "trace",
         false,
         logs.clone(),

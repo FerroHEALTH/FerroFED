@@ -19,7 +19,6 @@ use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::replica::Replica;
 use ferrohealth_secret::secret::Secret;
-use ferrohealth_secret::secret_url::SecretUrl;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
@@ -36,7 +35,7 @@ use crate::config::server::ListenerTlsSettings;
 use crate::config::stored_queries::Store;
 use crate::config::tls::TlsSettings;
 use crate::config::{EmergencyConsent, NodeSelection};
-use crate::telemetry::{Format, SampleRatio};
+use ferrohealth_telemetry::section::TelemetrySection;
 
 /// The settings the run path holds, with every secret already read.
 ///
@@ -49,8 +48,9 @@ pub struct Settings {
     pub profile: Profile,
     /// The HTTP surface.
     pub server: ServerSettings,
-    /// The console.
-    pub telemetry: TelemetrySettings,
+    /// The console, the trace export and the metrics push, the log filter
+    /// already known to parse.
+    pub telemetry: TelemetrySection,
     /// The registry document, when the gateway federates.
     pub registry_document: Option<PathBuf>,
     /// The form the registry document is written in.
@@ -295,32 +295,12 @@ impl ServerSettings {
     }
 }
 
-/// The console and the trace export, resolved.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TelemetrySettings {
-    /// The rendering.
-    pub format: Format,
-    /// The `tracing` filter directive, already known to parse.
-    pub filter: String,
-    /// The OTLP collector the spans are exported to, already known to be an
-    /// `http://` or `https://` URL; `None` exports nothing.
-    pub otlp_endpoint: Option<SecretUrl>,
-    /// The TLS an `https://` collector is reached with, every file read.
-    pub otlp_tls: TlsSettings,
-    /// The share of the gateway's traces that are sampled.
-    pub trace_sample_ratio: SampleRatio,
-}
-
 /// The metrics surface, resolved.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MetricsSettings {
     /// The admin listener's address, already held to loopback unless remote
     /// serving was allowed; `None` runs no listener.
     pub listen: Option<SocketAddr>,
-    /// The OTLP collector the metrics are pushed to; `None` pushes nothing.
-    pub otlp_endpoint: Option<SecretUrl>,
-    /// The TLS an `https://` collector is reached with, every file read.
-    pub otlp_tls: TlsSettings,
     /// The TLS the admin listener serves, from `[metrics.tls]`; `None` serves
     /// plain HTTP.
     pub tls: Option<ListenerTlsSettings>,
@@ -449,9 +429,13 @@ impl Settings {
                 .as_ref()
                 .map(|store| store.backend().name()),
             metrics_listen = self.metrics.listen.map(|address| address.to_string()),
-            metrics_otlp_push = self.metrics.otlp_endpoint.is_some(),
-            traces_otlp_export = self.telemetry.otlp_endpoint.is_some(),
-            trace_sample_ratio = self.telemetry.trace_sample_ratio.get(),
+            metrics_otlp_push = self.telemetry.otlp.as_ref().is_some_and(|otlp| otlp.metrics),
+            traces_otlp_export = self.telemetry.otlp.as_ref().is_some_and(|otlp| otlp.traces),
+            trace_sample_ratio = self
+                .telemetry
+                .otlp
+                .as_ref()
+                .map(|otlp| otlp.sample_ratio.get()),
             credentials = endpoints.join(","),
             client_certificates = mutual.join(","),
             max_concurrent_requests = self.server.overload.max_concurrent_requests.get(),

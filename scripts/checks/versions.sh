@@ -69,8 +69,8 @@
 #                          X.Y.Z, released on YYYY-MM-DD" names the product
 #                          version and its CHANGELOG.md release date.
 #  13. metrics crates      the opentelemetry group moves as one, and each of
-#                          its rows, the prometheus row, the
-#                          tracing-opentelemetry row and the tonic row
+#                          its rows, the tracing-opentelemetry row and the
+#                          tonic row
 #                          matches the root
 #                          Cargo.toml [workspace.dependencies] requirement.
 #  14. console toolchain    the Leptos rows against the root Cargo.toml
@@ -1275,16 +1275,16 @@ fi
 
 echo "== metrics crates ($matrix <-> Cargo.toml)"
 # The opentelemetry crates are released in lockstep, so their rows are one
-# group, as the openehr-* family's are; prometheus, tracing-opentelemetry and
-# tonic are on release lines of their own, each held to its own row.
+# group, as the openehr-* family's are; tracing-opentelemetry and tonic are on
+# release lines of their own, each held to its own row.
 otel_pin=""
-for crate in opentelemetry opentelemetry_sdk opentelemetry-prometheus opentelemetry-otlp opentelemetry-proto prometheus tracing-opentelemetry tonic; do
+for crate in opentelemetry opentelemetry_sdk opentelemetry-proto tracing-opentelemetry tonic; do
   want="$(pin_of "$crate" "$matrix")"
   if [[ -z "$want" ]]; then
     bad "$matrix has no $crate row"
     continue
   fi
-  if [[ "$crate" != "prometheus" ]] && [[ "$crate" != "tracing-opentelemetry" ]] && [[ "$crate" != "tonic" ]]; then
+  if [[ "$crate" != "tracing-opentelemetry" ]] && [[ "$crate" != "tonic" ]]; then
     if [[ -z "$otel_pin" ]]; then
       otel_pin="$want"
     elif [[ "$want" != "$otel_pin" ]]; then

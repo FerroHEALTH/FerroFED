@@ -130,8 +130,8 @@ async fn each_resolution_reaches_the_repository_and_no_log_metric_or_node_names_
         "",
     )?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),
@@ -319,8 +319,8 @@ async fn the_log_destination_records_each_resolution_without_the_patient() -> Te
         ),
     )?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),
@@ -425,8 +425,8 @@ async fn the_caller_reaches_the_repository_and_no_log_line_or_metric() -> TestRe
         "",
     )?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "trace",
         false,
         logs.clone(),

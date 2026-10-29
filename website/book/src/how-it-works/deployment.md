@@ -151,9 +151,9 @@ flowchart TB
 - **The admin listener** is a second listener for your operators, off unless
   `[metrics] listen` is set and on loopback unless you allow otherwise
   ([Metrics](../operate/metrics.md)).
-- **The OpenTelemetry collector**, when `[telemetry] otlp_endpoint` names
-  one, receives the gateway's spans over OTLP
-  ([Tracing](../operate/tracing.md)).
+- **The OpenTelemetry collector**, when `[telemetry.otlp]` names one,
+  receives the gateway's spans and metrics over OTLP
+  ([Tracing](../operate/tracing.md), [Metrics](../operate/metrics.md)).
 
 ## Several replicas
 

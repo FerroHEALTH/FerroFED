@@ -15,6 +15,7 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::support::console::subscriber;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_identity::profile::Profile;
@@ -23,7 +24,7 @@ use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;
 use ferrofed_server::reload::Reloader;
 use ferrofed_server::state::AppState;
-use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
 
 use crate::support::{self, Logs, OPERATOR_SCOPE, send_as_is};

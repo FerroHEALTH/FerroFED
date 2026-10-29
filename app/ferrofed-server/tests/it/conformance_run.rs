@@ -23,13 +23,14 @@ use std::error::Error;
 use std::path::Path;
 use std::process::{ExitCode, Output};
 
+use crate::support::console::subscriber;
 use ferrofed_server::config::Config;
 use ferrofed_server::conformance::client::{Gateway, HttpGateway, post_aql};
 use ferrofed_server::conformance::fixture::SyntheticPatient;
 use ferrofed_server::conformance::run::RunOptions;
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_server::{EXIT_CONFIG, EXIT_USAGE};
 use ferrofed_testkit::mock::Server;
+use ferrohealth_telemetry::section::Rendering;
 use http::StatusCode;
 use secrecy::SecretString;
 use wiremock::matchers::any;

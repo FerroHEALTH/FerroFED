@@ -13,7 +13,6 @@ use std::time::Duration;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::profile::Profile;
 use ferrofed_registry::id::EndpointId;
-use ferrohealth_secret::secret_url::SecretUrl;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
@@ -29,14 +28,14 @@ use crate::config::secrets::{resolve_node_credentials, resolve_signing};
 use crate::config::server::{ListenerTlsSettings, METRICS_TLS, Metrics, SERVER_TLS, resolve_tls};
 use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
-    ServerSettings, Settings, SigningSettings, TelemetrySettings,
+    ServerSettings, Settings, SigningSettings,
 };
-use crate::config::tls::{CollectorTls, TlsSettings, resolve_collector};
+use crate::config::tls::TlsSettings;
 use crate::config::{
     COMBINING_MARGIN_MS, Config, EmergencyConsent, Federation, Localization, NodeSelection,
-    OffsetPaging, Telemetry, stored_queries,
+    OffsetPaging, stored_queries,
 };
-use crate::telemetry::SampleRatio;
+use ferrohealth_telemetry::section::TelemetrySection;
 
 impl Config {
     /// Resolves this tree into the settings the run path holds.
@@ -49,7 +48,7 @@ impl Config {
     /// both set or a `_file` cannot be read or holds nothing, [`CredentialsFault::Authorization`] and
     /// [`CredentialsFault::Basic`] for a credential the `Authorization` header cannot
     /// carry, and the value errors
-    /// ([`Error::Listen`], [`ServerFault::BasePath`], [`Error::Zero`], [`ServerFault::Filter`],
+    /// ([`Error::Listen`], [`ServerFault::BasePath`], [`Error::Zero`],
     /// [`CredentialsFault::EndpointId`], [`FederationFault::DemographicEndpoint`], [`Error::Missing`],
     /// [`CredentialsFault::Scheme`], [`CredentialsFault::NoScheme`], [`ServerFault::Budget`],
     /// [`FederationFault::LocalizationBudget`], [`Error::Url`]),
@@ -63,10 +62,9 @@ impl Config {
     /// binds at a port other than 0 ([`ServerFault::MetricsShared`]), a remote
     /// listener outside the development
     /// profile whose scrape neither a scrape user nor a client CA
-    /// authenticates ([`ServerFault::MetricsUnauthenticated`]), and the metrics push and the trace export
-    /// each refuse a collector that is no `http://` or `https://` URL
-    /// ([`ServerFault::OtlpScheme`]) and TLS material without an `https://`
-    /// collector ([`ServerFault::OtlpTlsCleartext`]). An OAuth 2.0 grant refuses a missing key, a
+    /// authenticates ([`ServerFault::MetricsUnauthenticated`]), and `[telemetry]` refuses a
+    /// collector that is no `http://` or `https://` URL ([`ServerFault::OtlpScheme`]) and a
+    /// logged query parameter ([`ServerFault::LoggedQueryParameters`]). An OAuth 2.0 grant refuses a missing key, a
     /// scope outside the SMART on openEHR `system` grammar ([`CredentialsFault::Scope`]),
     /// an unusable endpoint or resource ([`CredentialsFault::Grant`]), a PIX Manager
     /// section ([`CredentialsFault::GrantNotHere`]) and a missing `[signing]`
@@ -420,8 +418,7 @@ fn scrape_users(metrics: &MetricsSettings, auth: AuthSettings) -> Result<AuthSet
 
 /// Resolves `[metrics]`: the listener on a loopback address unless
 /// `allow_remote` is set and never on `server`, the gateway's own address,
-/// its scrape authenticated off loopback outside the development profile,
-/// and the OTLP collector an `http://` URL.
+/// and its scrape authenticated off loopback outside the development profile.
 fn resolve_metrics(
     metrics: &Metrics,
     server: SocketAddr,
@@ -464,86 +461,37 @@ fn resolve_metrics(
             }));
         }
     }
-    let (otlp_endpoint, otlp_tls) = otlp_collector(
-        ("metrics.otlp_endpoint", "metrics.otlp_tls"),
-        metrics.otlp_endpoint.as_ref(),
-        &metrics.otlp_tls,
-    )?;
     Ok(MetricsSettings {
         listen,
-        otlp_endpoint,
-        otlp_tls,
         tls,
         scrape_users: metrics.scrape_users.clone(),
     })
 }
 
-/// Resolves `[telemetry]`: a filter that parses, a trace collector that is
-/// an `http://` or `https://` URL with the TLS it is reached with, and a
-/// sample ratio from `0.0` to `1.0`.
-fn resolve_telemetry(telemetry: &Telemetry) -> Result<TelemetrySettings, Error> {
-    tracing_subscriber::EnvFilter::try_new(&telemetry.filter)
-        .map_err(|source| Error::Server(ServerFault::Filter { source }))?;
-    let trace_sample_ratio = SampleRatio::new(telemetry.trace_sample_ratio).ok_or(
-        Error::Server(ServerFault::SampleRatio {
-            value: telemetry.trace_sample_ratio,
-        }),
-    )?;
-    let (otlp_endpoint, otlp_tls) = otlp_collector(
-        ("telemetry.otlp_endpoint", "telemetry.otlp_tls"),
-        telemetry.otlp_endpoint.as_ref(),
-        &telemetry.otlp_tls,
-    )?;
-    Ok(TelemetrySettings {
-        format: telemetry.format,
-        filter: telemetry.filter.clone(),
-        otlp_endpoint,
-        otlp_tls,
-        trace_sample_ratio,
-    })
-}
-
-/// Resolves the OTLP collector `endpoint` under `key`, with the TLS of
-/// `table`: an `http://` URL, to a collector beside the gateway, or an
-/// `https://` URL, reached over TLS with the platform's trust roots and
-/// whatever the table adds. TLS material is refused beside an `http://`
-/// collector or none, since it would be silently unused.
-fn otlp_collector(
-    (key, table_key): (&str, &str),
-    endpoint: Option<&SecretUrl>,
-    table: &CollectorTls,
-) -> Result<(Option<SecretUrl>, TlsSettings), Error> {
-    let cleartext = || {
-        Error::Server(ServerFault::OtlpTlsCleartext {
-            table: format!("[{table_key}]"),
-            key: key.to_owned(),
-        })
-    };
-    let Some(endpoint) = endpoint else {
-        return if table.names_tls() {
-            Err(cleartext())
-        } else {
-            Ok((None, TlsSettings::default()))
-        };
-    };
-    let parsed = url::Url::parse(endpoint.expose()).map_err(|source| Error::Url {
-        key: key.to_owned(),
-        source,
-    })?;
-    match parsed.scheme() {
-        "http" if table.names_tls() => Err(cleartext()),
-        "http" => Ok((
-            Some(SecretUrl::new(String::from(parsed))),
-            TlsSettings::default(),
-        )),
-        "https" => Ok((
-            Some(SecretUrl::new(String::from(parsed))),
-            resolve_collector(table_key, table)?,
-        )),
-        _ => Err(Error::Server(ServerFault::OtlpScheme {
-            key: key.to_owned(),
-        })),
+/// Resolves `[telemetry]`: no logged query parameter beside the paging values
+/// the request log carries, and a collector that is an `http://` or
+/// `https://` URL.
+///
+/// The filter parses and the sample ratio is in range once the section is
+/// read; the collector's TLS files are read when the export is built.
+fn resolve_telemetry(telemetry: &TelemetrySection) -> Result<TelemetrySection, Error> {
+    // NOTE: §5.4.3, a query value may carry the patient identifier, so the logged
+    // parameters are fixed in code and a deployment cannot widen them.
+    if !telemetry.logged_query_parameters.is_empty() {
+        return Err(Error::Server(ServerFault::LoggedQueryParameters));
     }
+    if let Some(otlp) = &telemetry.otlp
+        && !otlp.endpoint.is_empty()
+    {
+        let parsed = url::Url::parse(otlp.endpoint.expose()).map_err(|source| Error::Url {
+            key: String::from("telemetry.otlp.endpoint"),
+            source,
+        })?;
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return Err(Error::Server(ServerFault::OtlpScheme));
+        }
+    }
+    Ok(telemetry.clone())
 }
 
 /// Returns `count`, refusing zero under `key`.

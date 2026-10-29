@@ -24,13 +24,14 @@ use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::support::console::subscriber;
 use axum::Router;
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::containers::keycloak::recipe::{self, Recipe};
 use ferrofed_testkit::containers::keycloak::{self, CLINICAL_APP, Keycloak, REPORTING_SERVICE};
 use ferrofed_testkit::containers::{self, TwoNodes};
+use ferrohealth_telemetry::section::Rendering;
 use http::header::{AUTHORIZATION, WWW_AUTHENTICATE};
 use http::{HeaderMap, StatusCode};
 

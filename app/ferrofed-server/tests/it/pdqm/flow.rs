@@ -356,8 +356,8 @@ async fn neither_identifier_reaches_a_log_line_a_metric_or_a_node() -> TestResul
         &tables(&pix.uri(), &pdqm_stub::base_url(&pdq), "iti-119"),
     )?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "debug",
         false,
         logs.clone(),

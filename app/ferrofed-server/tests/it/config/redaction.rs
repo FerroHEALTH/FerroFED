@@ -114,7 +114,7 @@ fn configuration(
         "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{CLIENT_SECRET}\"\n\n\
          [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
          [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n\n\
-         [metrics]\notlp_endpoint = \"{otlp}\"\n{audit}\n\
+         [telemetry.otlp]\nendpoint = \"{otlp}\"\n{audit}\n\
          [[pixm.manager]]\nurl = \"{pix_url}\"\n\
          members = {{ \"node-a\" = \"urn:oid:2.999.1\" }}\n\n\
          [pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n{extra}"
@@ -161,7 +161,7 @@ fn no_configuration_type_renders_a_credential_as_written() -> TestResult {
         redacted("PixManager", manager);
         shows_placeholder("PixManager.url", &manager.url);
     }
-    shows_placeholder("Metrics", &config.metrics);
+    shows_placeholder("TelemetrySection", &config.telemetry);
     shows_placeholder("StoredQueries", &config.stored_queries);
     let composed = ManagerConfig {
         tls: ferrofed_identity::fhir::Tls::default(),
@@ -201,7 +201,7 @@ fn no_resolved_settings_type_renders_a_credential() -> TestResult {
     let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
     let config = configuration(&file.path().display().to_string(), PIX_URL, "")?;
     let settings = config.resolve()?;
-    shows_placeholder("MetricsSettings", &settings.metrics);
+    shows_placeholder("TelemetrySection", &settings.telemetry);
     shows_placeholder("Settings", &settings);
     for (endpoint, scheme) in &settings.credentials {
         // NOTE: ferrohealth-smart renders its own secret with its own placeholder,
@@ -263,14 +263,10 @@ fn every_secret_still_resolves_to_its_value() -> TestResult {
     let pixm = settings.pixm.as_ref().ok_or("the PIXm settings resolve")?;
     let url = pixm.managers.first().ok_or("one Manager")?.url.expose();
     assert_eq!(PIX_URL, url, "the Manager URL is kept as written");
-    let otlp = settings
-        .metrics
-        .otlp_endpoint
-        .as_ref()
-        .ok_or("an OTLP push")?;
+    let otlp = settings.telemetry.otlp.as_ref().ok_or("an OTLP push")?;
     assert_eq!(
-        format!("{}/", otlp_url()),
-        otlp.expose(),
+        otlp_url(),
+        otlp.endpoint.expose(),
         "the collector URL is kept for connecting"
     );
     Ok(())

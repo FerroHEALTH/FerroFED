@@ -42,15 +42,16 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::support::console::subscriber;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::leak::{Carrier, Needles, Sighting};
 use ferrofed_testkit::proxy::{Capture, CapturingProxy};
 use ferrofed_testkit::seed::PatientId;
+use ferrohealth_telemetry::section::Rendering;
 use http::{Method, Request, StatusCode};
 use uuid::Uuid;
 

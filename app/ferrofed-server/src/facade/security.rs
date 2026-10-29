@@ -26,6 +26,10 @@ use crate::metrics::security::Event;
 /// apart from the request log.
 pub const TARGET: &str = "ferrofed::security";
 
+/// The directive the console writes the security events through whatever
+/// `telemetry.filter` says: [`TARGET`] at `info` and above.
+pub const DIRECTIVE: &str = "ferrofed::security=info";
+
 /// A query was refused before anything was dispatched (§5.4.3).
 pub(crate) fn refused(refusal: &Refusal, request_id: &str) {
     Event::AqlRefused.record();

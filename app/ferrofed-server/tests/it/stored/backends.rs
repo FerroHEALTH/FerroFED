@@ -16,14 +16,15 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 
+use crate::support::console::subscriber;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::stored_queries::{Backend, Store};
-use ferrofed_server::telemetry::{DEFAULT_FILTER, Rendering, subscriber};
 #[cfg(feature = "postgres")]
 use ferrohealth_secret::file::SecretError;
+use ferrohealth_telemetry::section::{DEFAULT_FILTER, Rendering};
 
 use crate::run::binary;
 use crate::support::Logs;

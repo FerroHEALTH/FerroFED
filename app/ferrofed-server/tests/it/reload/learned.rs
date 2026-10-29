@@ -6,6 +6,7 @@
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
+use crate::support::console::subscriber;
 use ferrofed_identity::session::{Bound, ResolutionBindings, SessionKey};
 use ferrofed_registry::creating_system::{CreatingSystemRoute, Sighting};
 use ferrofed_registry::ehr_index::{EhrIndex, Indexed};
@@ -13,7 +14,7 @@ use ferrofed_registry::error::CreatingSystemMiss;
 use ferrofed_registry::id::{EhrId, NodeId, SystemId};
 use ferrofed_registry::incident::Incident;
 use ferrofed_server::facade::owner::{self, Held, Located};
-use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrohealth_telemetry::section::Rendering;
 use http::{HeaderMap, StatusCode};
 use openehr_base::prelude::ObjectVersionId;
 

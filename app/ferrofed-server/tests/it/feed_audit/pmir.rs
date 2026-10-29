@@ -101,8 +101,8 @@ async fn a_received_message_is_recorded_naming_its_patient_toward_the_repository
     )?)?;
     gateway.bind("caller-1", &[EHR_A, EHR_A2])?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),

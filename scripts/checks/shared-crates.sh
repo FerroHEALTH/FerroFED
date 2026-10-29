@@ -17,7 +17,9 @@
 #     lifecycle (ferrohealth-health); the report section, the reporter, the
 #     state directory or the envelope types (ferrohealth-usage-report); a
 #     TLS listener, its kept certificates, a serve loop or a drain
-#     (ferrohealth-server).
+#     (ferrohealth-server); the telemetry section, the console formats, the
+#     request log, the sampler, a trace export or an OTLP or Prometheus
+#     exporter of its own (ferrohealth-telemetry).
 #
 # A crate joins ADOPTED, with the definitions it retires in RETIRED, in the
 # pull request that moves FerroFED onto it.
@@ -36,6 +38,7 @@ readonly ADOPTED=(
   ferrohealth-secret
   ferrohealth-health
   ferrohealth-server
+  ferrohealth-telemetry
   ferrohealth-usage-report
 )
 
@@ -47,7 +50,10 @@ ferrohealth-health	trait[[:space:]]+HealthIndicator([^A-Za-z0-9_]|\$)
 ferrohealth-health	struct[[:space:]]+Lifecycle([^A-Za-z0-9_]|\$)
 ferrohealth-usage-report	struct[[:space:]]+(UsageReport|UsageReportSection|UsageReportSettings|StateDir|Reporter|SchemaV2|Window24h)([^A-Za-z0-9_]|\$)
 ferrohealth-server	struct[[:space:]]+(TlsListener|Certificates|ReloadableTls)([^A-Za-z0-9_]|\$)
-ferrohealth-server	fn[[:space:]]+(serve_until|drain_on|server_config)[[:space:]]*[<(]"
+ferrohealth-server	fn[[:space:]]+(serve_until|drain_on|server_config)[[:space:]]*[<(]
+ferrohealth-telemetry	(struct|enum)[[:space:]]+(TelemetrySection|OtlpSection|SampleRatio|Traces|Format|Rendering|RequestLog)([^A-Za-z0-9_]|\$)
+ferrohealth-telemetry	fn[[:space:]]+(sampler|collector_tls|method_label)[[:space:]]*[<(]
+ferrohealth-telemetry	(opentelemetry_otlp|opentelemetry_prometheus)::"
 
 # check ROOT: prints every finding under ROOT and returns 1 when there is one.
 check() {
@@ -98,6 +104,10 @@ self_test() {
     'pub struct UsageReport {'
     'pub struct TlsListener {'
     'pub async fn serve_until<L, F>('
+    'pub struct SampleRatio(f64);'
+    'pub enum Format {'
+    'pub fn sampler(ratio: SampleRatio) -> Sampler {'
+    'use opentelemetry_otlp::WithExportConfig as _;'
   )
   local case
   for case in "${cases[@]}"; do

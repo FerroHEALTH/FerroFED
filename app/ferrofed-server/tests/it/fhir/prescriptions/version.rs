@@ -11,8 +11,9 @@
 
 use std::error::Error;
 
+use crate::support::console::subscriber;
 use axum::body::Body;
-use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrohealth_telemetry::section::Rendering;
 use http::{HeaderName, Request, Response, StatusCode, header};
 
 use super::{AT_A, Members, RX_A, RX_B, face_id, page, searchset};

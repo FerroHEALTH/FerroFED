@@ -13,7 +13,7 @@ use ferrohealth_usage_report::window::Window;
 use openehr_federation::status::EndpointStatus;
 
 use crate::base_path::BasePath;
-use crate::request_log::UNMATCHED;
+use ferrohealth_telemetry::request_log::UNMATCHED;
 
 /// The counter of the requests the gateway sent to a member node.
 pub const NODE_REQUESTS: &str = "node_requests";
@@ -130,7 +130,7 @@ mod tests {
 
     use super::{Group, node, window};
     use crate::base_path::BasePath;
-    use crate::request_log::UNMATCHED;
+    use ferrohealth_telemetry::request_log::UNMATCHED;
 
     fn group(base: &str, template: &str) -> Option<Group> {
         let base: BasePath = base.parse().expect("a base path");

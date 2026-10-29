@@ -20,7 +20,10 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt::Write as _;
 
-use ferrofed_server::telemetry::{Rendering, SampleRatio, sampler, traced};
+use ferrohealth_telemetry::section::{Rendering, SampleRatio};
+use ferrohealth_telemetry::telemetry::sampler;
+
+use crate::support::console::traced;
 use opentelemetry::trace::{SpanId, TracerProvider as _};
 use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
 use tracing::subscriber::DefaultGuard;

@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The OTLP export over TLS (#644): `[telemetry.otlp_tls]` and
-//! `[metrics.otlp_tls]` take effect beside an `https://` collector alone,
-//! every file is read and checked at load, a credential in the collector URL
-//! passes the transport rule once it is `https://`, and a span reaches a
-//! collector that requires a client certificate only when the gateway
-//! presents one and trusts the collector's CA. No specification governs the
-//! export: our own design.
+//! The OTLP export over TLS (#644): the TLS files of `[telemetry.otlp]` take
+//! effect beside an `https://` collector alone, every file is read and
+//! checked when the export is built, a credential in the collector URL passes
+//! the transport rule once it is `https://`, and a span reaches a collector
+//! that requires a client certificate only when the gateway presents one and
+//! trusts the collector's CA. No specification governs the export: our own
+//! design.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -20,9 +20,10 @@ use std::time::{Duration, Instant};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::transport;
-use ferrofed_server::telemetry::Traces;
+use ferrofed_server::metrics::service;
 use ferrofed_testkit::listener::ListenerCertificates;
 use ferrofed_testkit::otlp::Collector;
+use ferrohealth_telemetry::telemetry::{InitError, Telemetry};
 use opentelemetry::trace::Tracer as _;
 
 use super::TestResult;
@@ -35,17 +36,14 @@ fn resolved(text: &str) -> Result<Settings, Box<dyn std::error::Error>> {
     Ok(Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?)
 }
 
-/// The refusal `text` resolves to.
-fn refused(text: &str) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(Config::from_sources(Some(text), &BTreeMap::new())?
-        .resolve()
-        .err()
-        .ok_or("the configuration is refused")?
-        .to_string())
+/// The export the configuration `text` builds, or the refusal it is built
+/// with.
+fn built(text: &str) -> Result<Result<Telemetry, InitError>, Box<dyn std::error::Error>> {
+    Ok(Telemetry::new(&resolved(text)?.telemetry, service()))
 }
 
 /// Writes the client identity and the trust roots of `certificates` into
-/// `dir`, and returns the `otlp_tls` table naming them.
+/// `dir`, and returns the `[telemetry.otlp]` keys naming them.
 fn tls_table(dir: &Path, certificates: &ListenerCertificates) -> Result<String, std::io::Error> {
     let identity = dir.join("collector-client.pem");
     let roots = dir.join("collector-ca.pem");
@@ -58,57 +56,42 @@ fn tls_table(dir: &Path, certificates: &ListenerCertificates) -> Result<String, 
     ))
 }
 
-#[test]
-fn an_https_collector_takes_a_client_identity_and_trust_roots_from_files() -> TestResult {
+#[tokio::test]
+async fn an_https_collector_takes_a_client_identity_and_trust_roots_from_files() -> TestResult {
     let dir = tempfile::tempdir()?;
     let certificates = ListenerCertificates::generate()?;
     let table = tls_table(dir.path(), &certificates)?;
-    for section in ["telemetry", "metrics"] {
-        let settings = resolved(&format!(
-            "[{section}]\notlp_endpoint = \"https://collector.example.org:4317\"\n\n[{section}.otlp_tls]\n{table}"
-        ))?;
-        let tls = if section == "telemetry" {
-            settings.telemetry.otlp_tls
-        } else {
-            settings.metrics.otlp_tls
-        };
-        assert_eq!(Some(certificates.ca()), tls.trust_roots.as_deref());
-        assert_eq!(
-            Some(certificates.client_identity().trim()),
-            tls.client_identity
-                .as_ref()
-                .map(ferrohealth_secret::secret::Secret::expose)
-        );
-    }
-    let plain = resolved("[telemetry]\notlp_endpoint = \"https://collector.example.org:4317\"\n")?;
-    assert_eq!(
-        None, plain.telemetry.otlp_tls.trust_roots,
-        "the platform's roots alone"
-    );
+    let telemetry = built(&format!(
+        "[telemetry.otlp]\nendpoint = \"https://collector.example.org:4317\"\n{table}"
+    ))??;
+    assert!(telemetry.tracer().is_some(), "the export is built");
+    let plain = built("[telemetry.otlp]\nendpoint = \"https://collector.example.org:4317\"\n")??;
+    assert!(plain.tracer().is_some(), "the platform's roots alone");
     Ok(())
 }
 
-#[test]
-fn tls_material_beside_an_http_collector_or_none_is_refused() -> TestResult {
+#[tokio::test]
+async fn tls_material_beside_an_http_collector_or_none_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
     let table = tls_table(dir.path(), &ListenerCertificates::generate()?)?;
-    for section in ["telemetry", "metrics"] {
-        for endpoint in ["otlp_endpoint = \"http://127.0.0.1:4317\"\n", ""] {
-            let error = refused(&format!(
-                "[{section}]\n{endpoint}\n[{section}.otlp_tls]\n{table}"
-            ))?;
-            assert!(
-                error.contains(&format!("[{section}.otlp_tls]"))
-                    && error.contains(&format!("https:// {section}.otlp_endpoint")),
-                "{error}"
-            );
-        }
-    }
+    let error = built(&format!(
+        "[telemetry.otlp]\nendpoint = \"http://127.0.0.1:4317\"\n{table}"
+    ))?
+    .err()
+    .ok_or("TLS material beside an http:// collector is refused")?;
+    assert!(
+        matches!(error, InitError::TlsWithoutHttps { .. }),
+        "{error}"
+    );
+    let error = built(&format!("[telemetry.otlp]\n{table}"))?
+        .err()
+        .ok_or("TLS material beside no collector is refused")?;
+    assert!(matches!(error, InitError::MissingEndpoint), "{error}");
     Ok(())
 }
 
-#[test]
-fn tls_material_that_is_no_pem_of_its_kind_is_refused_without_quoting_it() -> TestResult {
+#[tokio::test]
+async fn tls_material_that_is_no_pem_of_its_kind_is_refused_without_quoting_it() -> TestResult {
     let dir = tempfile::tempdir()?;
     let certificates = ListenerCertificates::generate()?;
     let no_key = dir.path().join("no-key.pem");
@@ -119,24 +102,27 @@ fn tls_material_that_is_no_pem_of_its_kind_is_refused_without_quoting_it() -> Te
         (
             "client_identity_file",
             &no_key,
-            "telemetry.otlp_tls.client_identity",
+            "telemetry.otlp.client_identity_file",
         ),
         (
             "client_identity_file",
             &garbage,
-            "telemetry.otlp_tls.client_identity",
+            "telemetry.otlp.client_identity_file",
         ),
         (
             "trust_roots_file",
             &garbage,
-            "telemetry.otlp_tls.trust_roots_file",
+            "telemetry.otlp.trust_roots_file",
         ),
     ];
     for (key, path, named) in cases {
-        let error = refused(&format!(
-            "[telemetry]\notlp_endpoint = \"https://collector.example.org:4317\"\n\n[telemetry.otlp_tls]\n{key} = {}\n",
+        let error = built(&format!(
+            "[telemetry.otlp]\nendpoint = \"https://collector.example.org:4317\"\n{key} = {}\n",
             toml::Value::String(path.display().to_string())
-        ))?;
+        ))?
+        .err()
+        .ok_or("the material is refused")?
+        .to_string();
         assert!(error.contains(named), "{error}");
         assert!(!error.contains(SECRET), "{error}");
     }
@@ -146,7 +132,7 @@ fn tls_material_that_is_no_pem_of_its_kind_is_refused_without_quoting_it() -> Te
 #[test]
 fn a_collector_credential_passes_the_transport_rule_over_https() -> TestResult {
     let production = resolved(&format!(
-        "[telemetry]\notlp_endpoint = \"https://gateway:{SECRET}@collector.example.org:4317\"\n"
+        "[telemetry.otlp]\nendpoint = \"https://gateway:{SECRET}@collector.example.org:4317\"\n"
     ))?;
     assert_eq!(
         Vec::<transport::ProtectedSite>::new(),
@@ -158,24 +144,15 @@ fn a_collector_credential_passes_the_transport_rule_over_https() -> TestResult {
 /// Exports one span to `collector` with the TLS `table` names, and returns
 /// how many spans the collector holds once the export has flushed.
 async fn exported(collector: &Collector, table: &str) -> Result<usize, Box<dyn std::error::Error>> {
-    let settings = resolved(&format!(
-        "[telemetry]\notlp_endpoint = \"{}\"\n\n[telemetry.otlp_tls]\n{table}",
+    let telemetry = built(&format!(
+        "[telemetry.otlp]\nendpoint = \"{}\"\n{table}",
         collector.endpoint()
-    ))?;
-    let endpoint = settings
-        .telemetry
-        .otlp_endpoint
-        .as_ref()
-        .ok_or("a collector is configured")?;
-    let traces = Traces::new(
-        endpoint,
-        &settings.telemetry.otlp_tls,
-        settings.telemetry.trace_sample_ratio,
-    )?;
-    traces.tracer().in_span("synthetic-probe", |_context| ());
+    ))??;
+    let tracer = telemetry.tracer().ok_or("the spans are exported")?;
+    tracer.in_span("synthetic-probe", |_context| ());
     // NOTE: a refused handshake fails the flush, which is the outcome this
     // helper measures by the spans the collector holds.
-    let _flushed = tokio::task::spawn_blocking(move || traces.shutdown()).await?;
+    let _flushed = tokio::task::spawn_blocking(move || telemetry.shutdown()).await?;
     Ok(collector.spans().len())
 }
 

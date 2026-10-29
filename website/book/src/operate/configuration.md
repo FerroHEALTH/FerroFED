@@ -192,8 +192,8 @@ The sections, and the page that covers each:
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
 | `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_bytes` | the overload limits and the answer bound | [Overload protection](overload.md) |
 | `federation.offset_strategy`, `federation.max_offset_window`, `federation.max_node_rows` | paging across nodes, and the most rows read of one node for a query with no `LIMIT`, 9999 by default (a node is asked for one row more, so set it one under the largest page your nodes serve) | [Queries and API areas](queries-and-areas.md#paging-with-offset) |
-| `[telemetry] otlp_endpoint` | the trace export | [Tracing](tracing.md) |
-| `[metrics]`, `[config]` | the admin listener and the OTLP push; `config.ui`, `off` by default, and the store of the configuration revisions the admin listener serves under `managed` | [Metrics](metrics.md), [Configuration revisions](configuration-revisions.md) |
+| `[telemetry.otlp]` | the trace export and the metrics push to one OTLP collector | [Tracing](tracing.md), [Metrics](metrics.md) |
+| `[metrics]`, `[config]` | the admin listener; `config.ui`, `off` by default, and the store of the configuration revisions the admin listener serves under `managed` | [Metrics](metrics.md), [Configuration revisions](configuration-revisions.md) |
 | `[registry]` | the registry document and its form, or the mCSD directory of `[registry.mcsd]` the registry is read from; a member's own exchange-format endpoint is an `hl7-fhir-rest` endpoint of the document | [The registry](registry.md), [A member's own exchange-format endpoint](registry.md#a-members-own-exchange-format-endpoint) |
 | `[pixm]` | the cross-reference; a `[dev]` table is refused | [Identity resolution](identity.md) |
 | `[pdqm]` | the PDQm Supplier asked for the master identity of an identifier the cross-reference does not map | [Demographics first](identity.md#demographics-first-pdqm) |
@@ -262,16 +262,20 @@ burst = 20                    # at once after a quiet spell; one more answers 42
 [telemetry]
 format = "auto"   # auto, json or pretty; auto is json unless stdout is a terminal
 filter = "info,hyper=warn,tower=warn,h2=warn"   # what the console logs; never what is traced
-otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the spans are exported to, http:// beside the gateway or https:// over TLS; see Tracing
-# [telemetry.otlp_tls] takes trust_roots_file and client_identity or client_identity_file for an https:// collector.
-trace_sample_ratio = 1.0   # the share of requests whose spans are exported, 0.0 to 1.0
+# environment = "production"   # optional: deployment.environment.name on every exported span and metric
+
+# The trace export and the metrics push, off without this table; see Tracing and Metrics.
+[telemetry.otlp]
+endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector, http:// beside the gateway or https:// over TLS
+traces = true          # export the spans
+metrics = true         # push the metrics
+sample_ratio = 1.0     # the share of requests whose spans are exported, 0.0 to 1.0
+# trust_roots_file and client_identity_file add the TLS of an https:// collector.
 
 # The metrics surface, off by default; see Metrics.
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-query distribution; loopback unless allow_remote
 # scrape_users = ["prometheus"]   # the [[auth.basic.users]] GET /metrics admits; needed off loopback outside development, unless [metrics.tls] requires a client certificate
-otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector the same metrics are pushed to, http:// or https://
-# [metrics.otlp_tls] takes the keys [telemetry.otlp_tls] takes.
 # [metrics.tls] takes certificate_file, key_file, client_auth, client_ca_file, min_version and reload_interval_s, as [server.tls] does.
 
 # Outbound credentials, one section per endpoint id. Each section names one
@@ -347,7 +351,7 @@ The gateway never prints a secret. A password or a client secret, inline, from
 the environment or from a `_file` sibling, shows as `***` wherever the
 configuration is rendered: a debug log line, a panic message, a test failure.
 A URL that may carry a credential, such as the stored-query store's
-`url` or `metrics.otlp_endpoint`, shows with its userinfo and its query
+`url` or `telemetry.otlp.endpoint`, shows with its userinfo and its query
 replaced: `postgres://***@db.example.org:5432/ferrofed?***`. A libpq
 key/value connection string shows as `***` whole. The value itself is sent
 unchanged.
@@ -456,8 +460,8 @@ never a value. The rule covers:
   identifier and, when one is configured, the XUA assertion;
 - the `url` of `[nl_gf.nvi]`, which is sent the pseudonymised BSN and, when
   one is configured, its credentials;
-- `metrics.otlp_endpoint` and `telemetry.otlp_endpoint` when either carries a
-  user name or a password; an `https://` collector meets the rule.
+- `telemetry.otlp.endpoint` when it carries a user name or a password; an
+  `https://` collector meets the rule.
 
 ```text
 ferrofed: cannot start: the url of endpoint hospital-a in registry.document is not an https URL, and credentials.hospital-a would travel over it in cleartext: outside profile = "development" a credential or a patient identifier is sent only encrypted
@@ -689,7 +693,10 @@ the gateway's request id (`request_id`) and whether the client sent its own
 (`client_named`). A façade query carries the patient identifier, so the line
 never carries a request body, the AQL text, a header value, the request path,
 or a query value other than the ITS-REST paging parameters `offset` and
-`fetch`, and those only when they are digits. The route is a path template,
+`fetch`, and those only when they are one to ten digits. That list is fixed
+in code: `serve` and `config check` refuse `[telemetry]
+logged_query_parameters`, so a deployment cannot widen it. The line is
+written under the target `ferrohealth_telemetry::request`. The route is a path template,
 never the path the client sent: a request the gateway routes or answers
 under `{base}/v1/` is logged under the template of the ITS-REST operation it
 addresses, so a routed composition read is logged as

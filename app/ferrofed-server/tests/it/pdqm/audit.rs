@@ -128,8 +128,8 @@ async fn the_log_destination_records_the_exchange_without_the_patient() -> TestR
         &super::tables(&pix.uri(), &pdqm_stub::base_url(&pdq), "iti-78"),
     )?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),
