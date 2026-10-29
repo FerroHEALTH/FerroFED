@@ -536,3 +536,37 @@ async fn a_read_is_recorded_once_under_electronic_prescriptions_naming_its_membe
     }
     Ok(())
 }
+
+#[cfg(feature = "binding-ihe")]
+#[tokio::test]
+async fn a_read_names_the_prescription_it_read_as_a_literal_reference() -> TestResult {
+    use crate::access::{accesses, data};
+    use crate::feed_audit::{SETTLE, audit_tables};
+    use ferrofed_testkit::atna_feed::FeedRepository;
+
+    let members = answering().await?;
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let tables = audit_tables(&repository, "");
+    let app = members.gateway(
+        dir.path(),
+        &[("node-a", EHR_A), ("node-b", EHR_B)],
+        ("", &tables),
+    )?;
+    let id = face_id(AT_A.0, AT_A.1, "rx-a1")?;
+    let (status, text) = call(app, read(&id)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let records = accesses(&repository.wait_for(1, SETTLE).await)?;
+    let [record] = records.as_slice() else {
+        return Err(format!("one access record per request: {records:#?}").into());
+    };
+    let Some(entity) = data(record) else {
+        return Err(format!("one data entity in {record}").into());
+    };
+    assert_eq!(
+        entity["what"],
+        serde_json::json!({"reference": "MedicationRequest/rx-a1"}),
+        "FHIR R4 references.html §2.3.0.2: a [type]/[id] read is what.reference"
+    );
+    Ok(())
+}

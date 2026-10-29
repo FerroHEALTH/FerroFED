@@ -60,10 +60,11 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.53" }
 # and pinned exactly: the ATNA ITI-20 sender and the BALP AuditEvent
 # (ihe-atna), and the EHDS logging component (ehds-logging); 0.2.6 closes a
 # forwarder's syslog connection with close_notify (#1278); 0.3.1 is the
-# release on ferrohealth-smart 0.8 (#1390). Verified against crates.io on
-# 2026-10-28.
-ihe-atna = { version = "=0.3.1", default-features = false }
-ehds-logging = { version = "=0.3.1", default-features = false }
+# release on ferrohealth-smart 0.8 (#1390); 0.3.2 writes a data entity that
+# is no FHIR literal reference as what.identifier (#1416). Verified against
+# crates.io on 2026-10-29.
+ihe-atna = { version = "=0.3.2", default-features = false }
+ehds-logging = { version = "=0.3.2", default-features = false }
 # The European interoperability software component of Regulation (EU)
 # 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
 # owner decision of 2026-10-28 (#813) and pinned exactly, because FerroBRIDGE's
