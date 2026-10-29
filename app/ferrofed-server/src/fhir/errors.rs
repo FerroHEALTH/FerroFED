@@ -40,6 +40,12 @@ fn issue_type(status: StatusCode) -> &'static str {
     }
 }
 
+/// The `OperationOutcome` of a refusal of `status` the stack writes under
+/// `{fhir-base}`, with `message` as its diagnostics.
+pub(crate) fn refused(status: StatusCode, message: &str) -> Response {
+    outcome(status, issue_type(status), message)
+}
+
 /// The gateway's error body, as far as the outcome reads it.
 #[derive(serde::Deserialize)]
 struct GatewayError {

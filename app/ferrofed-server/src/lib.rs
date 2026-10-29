@@ -78,6 +78,7 @@ pub mod config;
 pub mod conformance;
 pub mod conveyed;
 pub mod documents;
+pub mod edge;
 pub mod error;
 pub mod facade;
 pub mod federation;
@@ -90,7 +91,6 @@ pub mod metrics;
 mod onward;
 pub mod operator;
 pub mod overload;
-pub mod panic;
 pub mod reload;
 pub mod report;
 pub mod request_id;
@@ -109,18 +109,13 @@ use std::sync::Arc;
 use axum::response::Response;
 use axum::routing::get;
 use axum::{Json, Router};
-use http::{HeaderMap, StatusCode};
-use tower_http::catch_panic::CatchPanicLayer;
-use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::request_id::{PropagateRequestIdLayer, SetRequestIdLayer};
-use tower_http::timeout::TimeoutLayer;
 
 use crate::auth::guard::Guard;
 use crate::auth::trust::Trust;
 use crate::config::settings::ServerSettings;
 use crate::state::AppState;
 use ferrohealth_server::health::Health;
-use ferrohealth_telemetry::request_log::RequestLog;
+use ferrohealth_server::stack::Stack;
 
 /// The exit code of a command line the binary refuses.
 ///
@@ -197,7 +192,10 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// request count of `state` ([`metrics::inbound`]) and the installation
 /// report's window. Before any of them, each request served over a
 /// connection is named by the address it came from, its peer or the client
-/// a trusted proxy names (`ferrohealth_server::client_address`).
+/// a trusted proxy names (`ferrohealth_server::client_address`). All of it
+/// runs in the stack of `ferrohealth-server` ([`edge`]), which also
+/// compresses an answer of a client that accepts it under
+/// `server.compression`.
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
     trusted_router(state, server, Arc::new(Trust::new(&server.auth)))
 }
@@ -208,12 +206,7 @@ pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
 /// Each request takes the gate in place when it arrives, so a reload that
 /// replaces the gate ([`reload`]) reaches the requests that arrive after it.
 pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<Trust>) -> Router {
-    let health = ferrohealth_server::health::routes(Health::new(
-        state.health().clone(),
-        state.lifecycle().clone(),
-    ));
     let surface = Router::new()
-        .merge(health.with_state(()))
         // NOTE: RFC 7517 §5, §13.1 jwks-discovery: public keys are public material,
         // so the JWK Set stays outside every client authentication layer.
         .route(jwks::JWKS_PATH, get(jwks::jwks))
@@ -223,87 +216,110 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
                 .post(facade::query_aql)
                 .fallback(facade::route::unrouted),
         )
+        .route("/", base_root())
         .fallback(facade::route::unrouted);
     let surface = operator::routes(surface, state.replica());
     let surface = state.processes().routes(surface, &trust);
-    let routes = if server.base_path.is_root() {
-        surface.route("/", base_root())
-    } else {
-        // NOTE: no specification governs this: our own design; `{base}/` is the
-        // root N28 names, and `{base}` without the slash is served the same.
-        let base = server.base_path.as_str();
-        Router::new()
-            .route(base, base_root())
-            .route(&server.base_path.join("/"), base_root())
-            .nest(base, surface)
-            .fallback(outside_the_base)
-    };
-    // NOTE: Regulation (EU) 2025/327 Annex II 2.1, Federation Tier N28: the FHIR face sits on a
-    // base of its own beside `{base}`, so no ITS-REST path changes.
-    let routes = match state.fhir() {
-        Some(fhir) => routes.nest(fhir.base.as_str(), fhir::routes()),
-        None => routes,
-    };
     let guard = Arc::new(Guard::new(
         trust,
         server.base_path.clone(),
         Arc::clone(&state),
     ));
+    let gated = |routes: Router<Arc<AppState>>| gated(routes, server, (&state, &guard));
+    let mut beside = Router::new();
+    // NOTE: no specification governs this: our own design; `{base}/` is the
+    // root N28 names, and `{base}` without the slash is served the same.
+    if !server.base_path.is_root() {
+        beside = beside.merge(gated(
+            Router::new().route(&server.base_path.join("/"), base_root()),
+        ));
+    }
+    // NOTE: Regulation (EU) 2025/327 Annex II 2.1, Federation Tier N28: the FHIR face sits on a
+    // base of its own beside `{base}`, so no ITS-REST path changes.
+    if let Some(fhir) = state.fhir() {
+        beside = beside.merge(gated(
+            Router::new().nest(fhir.base.as_str(), fhir::routes()),
+        ));
+    }
     let metrics = Arc::clone(state.metrics());
     let usage = Arc::clone(metrics.usage());
-    let fhir_state = Arc::clone(&state);
-    // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate
-    // and the caller rate, so a record names the verified caller and a refusal writes none.
-    let routes = routes
-        .with_state(Arc::clone(&state))
-        .layer(axum::middleware::from_fn_with_state(
-            Arc::new(access::Gate::new(
-                Arc::clone(&state),
-                server.base_path.clone(),
-            )),
-            access::record,
-        ));
-    let rated = match server.overload.caller_rate {
-        Some(rate) => routes.layer(axum::middleware::from_fn_with_state(
-            Arc::new(overload::CallerLimit::new(rate, Arc::clone(&metrics))),
-            overload::per_caller,
-        )),
-        None => routes,
-    };
-    let admission = Arc::new(overload::Admission::new(
-        &server.overload,
-        &server.base_path,
-        Arc::clone(&metrics),
-    ));
-    let guarded = rated
-        .layer(axum::middleware::from_fn_with_state(
-            guard,
-            auth::guard::guard,
-        ))
-        // NOTE: RFC 7517 §5, DID 1.0 §7.1: published key material is public, so a
-        // binding's documents are answered outside the client authentication gate.
-        .layer(axum::middleware::from_fn_with_state(
-            state,
-            documents::serve,
-        ))
-        .layer(axum::middleware::from_fn_with_state(
-            admission,
-            overload::admit,
-        ))
-        .layer(axum::middleware::from_fn_with_state(
-            Arc::new(server.forwarding.clone()),
-            ferrohealth_server::client_address::attach,
-        ))
-        .layer(axum::middleware::from_fn_with_state(
-            fhir_state,
-            fhir::errors::outcomes,
-        ));
     let log = request_log::of(server.base_path.clone())
         .with_metrics(&metrics.telemetry().meter(metrics::SCOPE))
         .serving_tls(server.tls.is_some())
         .with_recorder(Arc::new(metrics.requests()))
         .with_recorder(usage);
-    layered(guarded, server, log)
+    let health = Health::new(state.health().clone(), state.lifecycle().clone());
+    let stack = Stack::new(
+        gated(surface),
+        health,
+        &server.section(),
+        edge::policy(&state, log),
+    )
+    .beside(beside);
+    // NOTE: axum `Router::merge` refuses a second fallback, and under the root the
+    // surface's own fallback answers every path the routes leave.
+    let stack = if server.base_path.is_root() {
+        stack
+    } else {
+        let outside = Arc::clone(&state);
+        stack.fallback(move |request: axum::extract::Request| {
+            let state = Arc::clone(&outside);
+            async move { outside_the_base(&state, &request) }
+        })
+    };
+    stack.into_router()
+}
+
+/// `routes` behind the gateway's own layers, outermost first: the outbound
+/// id ([`request_id::bridge`]), the `OperationOutcome` of every error under
+/// the FHIR face, a binding's public documents, the client authentication
+/// gate, the caller rate, and the access log.
+fn gated(
+    routes: Router<Arc<AppState>>,
+    server: &ServerSettings,
+    (state, guard): (&Arc<AppState>, &Arc<Guard>),
+) -> Router {
+    // NOTE: Regulation (EU) 2025/327 Annex II 3.2: the access log sits inside the gate
+    // and the caller rate, so a record names the verified caller and a refusal writes none.
+    let routes = routes
+        .with_state(Arc::clone(state))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::new(access::Gate::new(
+                Arc::clone(state),
+                server.base_path.clone(),
+            )),
+            access::record,
+        ));
+    let rated = match server.overload.caller_rate {
+        Some(rate) => routes
+            .layer(axum::middleware::from_fn_with_state(
+                ferrohealth_server::caller_rate::CallerLimit::new(
+                    ferrohealth_server::section::CallerRate {
+                        requests_per_second: rate.requests_per_second,
+                        burst: rate.burst,
+                    },
+                ),
+                ferrohealth_server::caller_rate::limit,
+            ))
+            .layer(axum::middleware::from_fn(overload::caller_key)),
+        None => routes,
+    };
+    rated
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(guard),
+            auth::guard::guard,
+        ))
+        // NOTE: RFC 7517 §5, DID 1.0 §7.1: published key material is public, so a
+        // binding's documents are answered outside the client authentication gate.
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(state),
+            documents::serve,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(state),
+            fhir::errors::outcomes,
+        ))
+        .layer(axum::middleware::from_fn(request_id::bridge))
 }
 
 /// `GET` and `OPTIONS` of `{base}/` (§7a.2).
@@ -311,46 +327,49 @@ fn base_root() -> axum::routing::MethodRouter<Arc<AppState>> {
     get(root).options(facade::options::options_root)
 }
 
-/// Every path outside the configured base: `404`, naming no path.
-async fn outside_the_base(headers: HeaderMap) -> Response {
+/// Every path outside the configured base: a binding's public document at
+/// its own path ([`documents`]), and `404`, naming no path, elsewhere.
+fn outside_the_base(state: &AppState, request: &axum::extract::Request) -> Response {
+    if let Some(document) = documents::answer(state, request) {
+        return document;
+    }
+    let exchange = request_id::of(request.headers())
+        .map(str::to_owned)
+        .or_else(|| {
+            request
+                .extensions()
+                .get::<ferrohealth_telemetry::request_log::RequestId>()
+                .map(|id| id.id().to_owned())
+        });
     error::fixed(
         error::Code::NotFound,
-        request_id::of(&headers).unwrap_or_default(),
+        exchange.as_deref().unwrap_or_default(),
     )
 }
 
-/// Applies the middleware stack every FerroFED surface carries to `router`.
+/// Serves `router` in the stack every FerroFED surface carries, the
+/// `ferrohealth-server` stack under `server`, with the gateway's error
+/// bodies and its request log ([`edge`]).
 ///
-/// Outermost first: the request-id normalizer, the panic renderer, the layer
-/// that mints the gateway's outbound id, the layer that sets the exchange id,
-/// the layer that propagates the exchange id onto the response, the request
-/// log, the panic catcher, the request timeout, and the body-size ceiling.
-/// The renderer sits outside the outbound and propagate layers because it
-/// reads both ids from the response they have just stamped, and the exchange
-/// id is set inside the outbound layer so an unnamed request takes the
-/// outbound id as its exchange id ([`request_id`]). The log sits outside the
-/// catcher, the timeout and the ceiling, so a request one of them answers,
-/// a panicking one included, still gets its line with the status it answered.
+/// From the outside in: the request id, the request log, the client
+/// address, the refusal and panic bodies, the panic catch, the request
+/// timeout, the body limit and the compression, then the gateway's outbound
+/// id ([`request_id::bridge`]) and `router`. A request one of the stack's
+/// layers answers, a panicking one included, still gets its request line
+/// with the status it answered.
 pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
-    layered(router, server, request_log::of(server.base_path.clone()))
-}
-
-/// Applies the middleware of [`with_middleware`] to `router`, each request
-/// logged by `log`.
-fn layered(router: Router, server: &ServerSettings, log: RequestLog) -> Router {
-    router
-        .layer(RequestBodyLimitLayer::new(server.body_limit))
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
-            server.request_timeout,
-        ))
-        .layer(CatchPanicLayer::custom(panic::caught))
-        .layer(log)
-        .layer(PropagateRequestIdLayer::new(request_id::HEADER))
-        .layer(SetRequestIdLayer::new(request_id::HEADER, request_id::Mint))
-        .layer(axum::middleware::from_fn(request_id::mint_outbound))
-        .layer(axum::middleware::map_response(panic::render))
-        .layer(axum::middleware::map_request(request_id::strip_illegal))
+    let state = Arc::new(AppState::default());
+    let section = ferrohealth_server::section::ServerSection {
+        base_path: ferrohealth_server::section::BasePath::default(),
+        ..server.section()
+    };
+    Stack::new(
+        router.layer(axum::middleware::from_fn(request_id::bridge)),
+        Health::new(state.health().clone(), state.lifecycle().clone()),
+        &section,
+        edge::policy(&state, request_log::of(server.base_path.clone())),
+    )
+    .into_router()
 }
 
 /// `GET /`: the product and the version, as JSON.

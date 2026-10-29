@@ -112,13 +112,11 @@ http = "1.5.0"
 # The media types and ranges of Accept and Content-Type on a routed request
 # (#261; RFC 9110 §8.3, §12.5.1).
 mime = "0.3.17"
-# The server's HTTP stack and the middleware the binary shape needs.
+# The server's HTTP stack; the middleware around it is ferrohealth-server's
+# stack (#1418), and the console takes the tower-http features it serves with.
 axum = "0.8.9"
 tower = "0.5.3"
-tower-http = { version = "0.7.1", default-features = false, features = ["catch-panic", "request-id", "timeout", "limit"] }
-# The per-caller rate limit of the listener (#631): a GCRA bucket keyed on
-# the verified caller, without the dashmap, quanta and jitter extras.
-governor = { version = "0.10.4", default-features = false, features = ["std"] }
+tower-http = { version = "0.7.1", default-features = false }
 tokio = { version = "1.53.1", default-features = false }
 tracing = "0.1.44"
 # The console: the env filter, the JSON line format and the pretty one.
@@ -344,7 +342,7 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # `client_auth = "none"` and keeps a listener's TLS reloadable from the
 # product's own reload path, and 0.3.9 names that refusal's values readably.
 # Verified against crates.io on 2026-10-29.
-ferrohealth-server = { version = "=0.3.9", default-features = false }
+ferrohealth-server = { version = "=0.3.10", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.

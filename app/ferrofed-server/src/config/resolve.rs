@@ -13,7 +13,6 @@ use std::time::Duration;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::profile::Profile;
 use ferrofed_registry::id::EndpointId;
-use ferrohealth_server::client_address::Forwarding;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
@@ -93,7 +92,6 @@ impl Config {
         let listen = self.server.listen;
         let base_path = crate::config::server::resolve_base_path(&self.server)?;
         let public_url = self.gateway.resolve_public_url(&base_path)?;
-        let forwarding = Forwarding::from_section(&self.server);
         let request_timeout =
             positive_ms("server.request_timeout_ms", self.server.request_timeout_ms)?;
         let (shutdown_timeout, bindings_drain) = self.resolve_drain(request_timeout)?;
@@ -135,7 +133,8 @@ impl Config {
                 body_limit: self.server.body_limit_bytes,
                 auth,
                 public_url,
-                forwarding,
+                trusted_proxies: self.server.trusted_proxies.clone(),
+                forwarded_header: self.server.forwarded_header,
                 overload: crate::config::limits::resolve_overload(&self.server)?,
                 tls: crate::config::server::resolve_server_tls(&self.server)?,
                 replica: self.gateway.resolve_replica()?,

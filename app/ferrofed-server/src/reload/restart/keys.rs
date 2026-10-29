@@ -74,8 +74,11 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("gateway.public_url", |boot, fresh| {
         boot.server.public_url != fresh.server.public_url
     }),
-    ("server.forwarding", |boot, fresh| {
-        boot.server.forwarding != fresh.server.forwarding
+    ("server.trusted_proxies", |boot, fresh| {
+        boot.server.trusted_proxies != fresh.server.trusted_proxies
+    }),
+    ("server.forwarded_header", |boot, fresh| {
+        boot.server.forwarded_header != fresh.server.forwarded_header
     }),
     ("gateway.replica", |boot, fresh| {
         boot.server.replica != fresh.server.replica

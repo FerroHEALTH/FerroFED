@@ -185,7 +185,12 @@ async fn a_request_with_no_connection_is_named_by_nothing() -> TestResult {
 fn resolve(text: &str) -> Result<Result<Forwarding, ConfigError>, Box<dyn Error>> {
     Ok(Config::from_sources(Some(text), &BTreeMap::new())?
         .resolve()
-        .map(|settings| settings.server.forwarding))
+        .map(|settings| {
+            Forwarding::new(
+                settings.server.trusted_proxies,
+                settings.server.forwarded_header,
+            )
+        }))
 }
 
 #[test]

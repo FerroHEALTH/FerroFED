@@ -8,9 +8,10 @@
 //! identifier travels in a header the gateway composes (§5.4.1, N33). The
 //! gateway cannot tell whether a client's free text names a patient, so no
 //! header value toward a node comes from client input. The correlation id is
-//! an [`OutboundId`], which only [`OutboundId::mint`] can make: a version 4
-//! UUID with no client input, one per client request and the same for every
-//! node that request reaches (CP-26).
+//! an [`OutboundId`], a version 4 UUID with no client input that the gateway
+//! mints ([`OutboundId::mint`]) or that its server stack minted as the
+//! request's own id ([`OutboundId::of_server_id`]), one per client request
+//! and the same for every node that request reaches (CP-26).
 //!
 //! Every header of `POST {base}/v1/query/aql` to a node, and where its value
 //! comes from:
@@ -70,7 +71,8 @@ use uuid::Uuid;
 
 /// The correlation id one client request carries to every node it reaches.
 ///
-/// It is minted by the gateway and never parsed or built from text, so no
+/// It is minted by the gateway, or read from the id the gateway's server
+/// stack minted for the request, and never built from a client's text, so no
 /// client value can become one. `Display` writes the hyphenated UUID, which
 /// is always a legal header value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -81,6 +83,22 @@ impl OutboundId {
     #[must_use]
     pub fn mint() -> Self {
         Self(Uuid::new_v4())
+    }
+
+    /// The id the gateway's server stack minted for a request, read from its
+    /// text: a version 4 UUID `ferrohealth-server` mints with no client input.
+    ///
+    /// The server reads it from that request id alone, never from a header,
+    /// so a client value cannot become one; text that is no version 4 UUID
+    /// gives `None`.
+    #[must_use]
+    pub fn of_server_id(text: &str) -> Option<Self> {
+        // NOTE: no specification governs this: our own design; text that is no
+        // version 4 UUID was not minted by the stack, so it names no id.
+        Uuid::try_parse(text)
+            .ok()
+            .filter(|uuid| uuid.get_version_num() == 4)
+            .map(Self)
     }
 
     /// The id `uuid`, so a unit test can pin a value; production code only
@@ -115,6 +133,21 @@ mod tests {
     use wiremock::{Mock, ResponseTemplate};
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn a_server_id_is_read_as_a_version_4_uuid_and_nothing_else_is() {
+        let minted = OutboundId::mint().to_string();
+        assert_eq!(
+            Some(minted.clone()),
+            OutboundId::of_server_id(&minted).map(|id| id.to_string())
+        );
+        assert_eq!(None, OutboundId::of_server_id("corr-42"));
+        assert_eq!(
+            None,
+            OutboundId::of_server_id("00000000-0000-1000-8000-000000000000"),
+            "a version 1 UUID was not minted by the stack"
+        );
+    }
 
     /// A fixed version 4 UUID, and a short all-hex value that occurs in it.
     ///

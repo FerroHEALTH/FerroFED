@@ -135,8 +135,6 @@ openehr-query.workspace = true
 ferrohealth-smart.workspace = true
 # The RFC 7519 verification of every caller's access token (#80).
 jsonwebtoken.workspace = true
-# The per-caller rate limit of the listener (#631).
-governor.workspace = true
 # The trusted reverse proxies a forwarded client address is taken from (#722).
 ipnet.workspace = true
 # The metered cross-reference resolver implements the identity crate's
@@ -183,7 +181,6 @@ rustls.workspace = true
 tokio-rustls.workspace = true
 rustls-platform-verifier = { workspace = true, optional = true }
 toml.workspace = true
-tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
