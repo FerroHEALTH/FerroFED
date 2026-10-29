@@ -219,6 +219,17 @@ where the listener requires a client certificate
 ([TLS on the listeners](configuration.md#tls-on-the-listeners)). The [image](container.md#the-image) runs it as its
 `HEALTHCHECK`, and so does the `compose.yaml` gateway service.
 
+The line uses the words every FerroHEALTH product's `healthcheck` prints:
+
+| Outcome | Line | Exit |
+|---|---|---|
+| Readiness answers `200` | `ferrofed: <address>: healthy` | `0` |
+| Readiness answers another status | `ferrofed: <address>: unhealthy: readiness answered <status>` | `1` |
+| No answer within three seconds | `ferrofed: <address>: unhealthy: readiness did not answer in time` | `1` |
+| The listener presents a certificate other than `certificate_file` holds | `ferrofed: <address>: unhealthy: the listener presents a certificate other than server.tls.certificate_file holds; send SIGHUP so the gateway reads it` | `1` |
+| A refused connection, a failed handshake or another failure | `ferrofed: <address>: unhealthy: <reason>` | `1` |
+| The configuration does not load | `ferrofed: unhealthy: <reason>` | `1` |
+
 A Kubernetes pod probes the routes directly
 ([Kubernetes](container.md#kubernetes)): startup and readiness on
 `{base}/health/readiness`, liveness on `{base}/health`. Point every probe at

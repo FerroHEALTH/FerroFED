@@ -78,7 +78,11 @@ async fn the_healthcheck_presents_its_identity_to_a_listener_that_requires_one()
     })
     .await??;
     assert_eq!(Some(0), output.status.code(), "{}", written(&output));
-    assert!(written(&output).contains("ready"), "{}", written(&output));
+    assert!(
+        written(&output).trim_end().ends_with(": healthy"),
+        "{}",
+        written(&output)
+    );
 
     std::fs::write(&config, &base)?;
     let output = tokio::task::spawn_blocking(move || ferrofed(&["healthcheck"], &config)).await??;
