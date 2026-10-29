@@ -98,6 +98,29 @@ pub const DATA_ABSENT_REASON: &str = "http://hl7.org/fhir/StructureDefinition/da
 /// The statement every section's narrative carries.
 pub const NOT_EXHAUSTIVE: &str = "This section is not exhaustive: it holds what the members that answered record, mapped to the European exchange format.";
 
+/// One narrative line for each composition `listed` names as listed once,
+/// naming the organisations of the kept and the dropped copies.
+fn listed_once(listed: &[ListedOnce], origins: &[Origin]) -> Vec<String> {
+    let shown = |index: usize| {
+        origins.get(index).map_or_else(
+            || index.to_string(),
+            |origin| origin.organisation.shown().to_owned(),
+        )
+    };
+    listed
+        .iter()
+        .map(|once| {
+            let dropped: Vec<String> = once.dropped.iter().map(|index| shown(*index)).collect();
+            format!(
+                "A record {} also holds as a copy of the one from {} is listed once, from {}.",
+                dropped.join(", "),
+                shown(once.kept),
+                shown(once.kept)
+            )
+        })
+        .collect()
+}
+
 /// The statement the narrative of a section the gateway does not supply
 /// carries.
 pub const NOT_SUPPLIED: &str = "The gateway does not supply this section: no openEHR content is named to feed it, so the section says nothing about whether the patient has any. Ask the care providers who treat the patient.";
@@ -187,6 +210,19 @@ pub struct SectionAnswers {
     /// The answer of each origin that was asked, by its index in the
     /// origins.
     pub answers: Vec<(usize, Answer)>,
+    /// The compositions two or more origins answered with under one full
+    /// version id, each listed once, from the origin kept.
+    pub listed_once: Vec<ListedOnce>,
+}
+
+/// A composition two or more origins answered with under one full
+/// `OBJECT_VERSION_ID` (Federation Tier §10.3, an imported copy), listed once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedOnce {
+    /// The origin whose copy the section lists, by its index in the origins.
+    pub kept: usize,
+    /// The origins whose copy the section leaves out, by index.
+    pub dropped: Vec<usize>,
 }
 
 /// Who writes the summary: the gateway and its operator.
@@ -548,6 +584,7 @@ impl Assembly {
         let mut paragraphs = narrative(entries.len(), (&silent, &uncovered), origins, &shown);
         paragraphs.extend(withheld);
         paragraphs.extend(duplicates::lines(&keys));
+        paragraphs.extend(listed_once(&answers.listed_once, origins));
         paragraphs.extend(covered_elsewhere(elsewhere));
         let mut section = eehrxf::document::Section::new(slot, paragraphs);
         for author in authors {

@@ -195,7 +195,13 @@ every entry is named under the absolute URL of `{fhir-base}`.
   every member answered and none holds content for it, and `unavailable`
   otherwise.
 - Each member's data are listed as mapped, beside every other member's,
-  never merged with them.
+  never merged with them. A composition two members hold under one full
+  version id, an imported copy (Federation Tier §10.3), is listed once: the
+  copy at the member whose `system_id` is the version's `creating_system_id`,
+  else the copy at the lowest endpoint id, and the section's narrative names
+  the members whose copy it left out. The MyHealth@EU requirements forbid
+  information present identically more than once in an exchanged document
+  (Requirements Catalogue v10.0.0, 10.03).
 - The `Patient` carries the identifier you asked by, and the header the
   demographics binding holds (eHN PS A.1.1, A.1.2): the names, the birth
   date, the administrative gender, the addresses and the phone numbers and
