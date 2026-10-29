@@ -624,7 +624,12 @@ professional's name. A request that reaches patient data needs every
 attribute, not empty, and a purpose of use, whatever
 `trust.purpose_of_use.required` says. A token that lacks an attribute is
 refused `403 contact-point-attributes-required`, one with no purpose of use
-`403 purpose-of-use-required`, and no node is asked anything. The contact
+`403 purpose-of-use-required`, and no node is asked anything. The message of
+the first names each attribute that is missing, empty or not admitted, by its
+Annex table and name (`missing or not admitted: Table 1 family_name, Table 2
+healthcare_provider_name`), and never a value, so the connector can tell the
+professional what to complete (MyHealth@EU Requirements Catalogue v10.0.0,
+§1.25). The contact
 point's connector is a client acting for the professional the token names,
 so `client_tokens_act_for_professional` need not be set. The IUA
 `person_id`, a patient identifier, is never read (§5.4.1, N33): the patient

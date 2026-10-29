@@ -151,7 +151,7 @@ pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: 
                 "a request was refused at client authentication"
             );
             let request_id = request_id::of(request.headers()).unwrap_or_default();
-            refusal.response(gate.realm(), request_id)
+            refused.response(gate.realm(), request_id)
         }
     }
 }

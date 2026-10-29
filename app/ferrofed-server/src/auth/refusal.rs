@@ -17,6 +17,7 @@ use axum::response::{IntoResponse, Response};
 use ferrohealth_smart::refusal::{Denied, Reason, Refusal as SmartRefusal, Schemes, StepUp};
 use http::{HeaderValue, StatusCode, header};
 
+use crate::auth::contact_point::MissingAnnex;
 use crate::error::{self, Code};
 
 /// Why a request was refused at the gate.
@@ -213,6 +214,50 @@ pub struct Refused {
     pub refusal: Refusal,
     /// The check that refused the credential, when one did.
     pub check: Option<Reason>,
+    /// The Annex attributes a contact point's token lacks, which the answer
+    /// names, empty for every other refusal.
+    pub missing: MissingAnnex,
+}
+
+impl Refused {
+    /// The refusal of a contact point's token that lacks the Annex
+    /// attributes `missing`.
+    #[must_use]
+    pub fn missing(missing: MissingAnnex) -> Self {
+        Self {
+            refusal: Refusal::ContactPoint,
+            check: None,
+            missing,
+        }
+    }
+
+    /// The answer to the refused request: the error body, naming the
+    /// missing Annex attributes of a contact point's token, with the
+    /// challenge naming `realm`.
+    #[must_use]
+    pub fn response(self, realm: &str, request_id: &str) -> Response {
+        if self.refusal != Refusal::ContactPoint || self.missing.is_empty() {
+            return self.refusal.response(realm, request_id);
+        }
+        let names: Vec<&str> = self.missing.names().collect();
+        let message = format!(
+            "{}; missing or not admitted: {}",
+            self.refusal.description(),
+            names.join(", ")
+        );
+        let mut response =
+            error::response(self.refusal.code(), message, request_id).into_response();
+        let challenge = self
+            .refusal
+            .smart()
+            .and_then(|refusal| refusal.challenge(Some(realm)));
+        if let Some(value) = challenge.and_then(|text| HeaderValue::from_str(&text).ok()) {
+            response
+                .headers_mut()
+                .insert(header::WWW_AUTHENTICATE, value);
+        }
+        response
+    }
 }
 
 impl From<Refusal> for Refused {
@@ -220,6 +265,7 @@ impl From<Refusal> for Refused {
         Self {
             refusal,
             check: None,
+            missing: MissingAnnex::default(),
         }
     }
 }
@@ -237,6 +283,7 @@ impl From<&Denied> for Refused {
         Self {
             refusal,
             check: denied.reason(),
+            missing: MissingAnnex::default(),
         }
     }
 }

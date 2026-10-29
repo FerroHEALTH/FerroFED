@@ -29,6 +29,8 @@ use std::fmt;
 
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_engine::conveyance::relayed::{Relayed, Role};
+
+use crate::auth::contact_point::MissingAnnex;
 use ferrofed_identity::role::behalf::{self, OnBehalfOf};
 use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::role::patient::IdentifierNamespace;
@@ -99,6 +101,9 @@ pub struct Caller {
     /// token carries every Implementing Regulation (EU) 2026/2099 Annex
     /// attribute.
     relayed: Option<Box<Relayed>>,
+    /// The Annex attributes a contact point's token lacks, empty when it
+    /// carries every one or the issuer is no contact point.
+    annex_missing: MissingAnnex,
     /// The correlation identifier the contact point's connector sent, when
     /// its issuer declares the header and the request carries it.
     correlation: Option<String>,
@@ -290,18 +295,35 @@ impl Caller {
             representative: None,
             contact_point: false,
             relayed: None,
+            annex_missing: MissingAnnex::default(),
             correlation: None,
         }
     }
 
     /// Returns this caller, vouched for by an issuer declared a national
     /// contact point, its token relaying `relayed` when it carries every
-    /// Annex attribute.
+    /// Annex attribute, or lacking the attributes the error names.
     #[must_use]
-    pub fn relayed_by_contact_point(mut self, relayed: Option<Box<Relayed>>) -> Self {
+    pub fn relayed_by_contact_point(mut self, relayed: Result<Box<Relayed>, MissingAnnex>) -> Self {
         self.contact_point = true;
-        self.relayed = relayed;
+        match relayed {
+            Ok(relayed) => {
+                self.relayed = Some(relayed);
+                self.annex_missing = MissingAnnex::default();
+            }
+            Err(missing) => {
+                self.relayed = None;
+                self.annex_missing = missing;
+            }
+        }
         self
+    }
+
+    /// Returns the Annex attributes the contact point's token lacks, empty
+    /// when it carries every one.
+    #[must_use]
+    pub fn annex_missing(&self) -> MissingAnnex {
+        self.annex_missing
     }
 
     /// Returns whether the issuer that vouched for the caller is declared a

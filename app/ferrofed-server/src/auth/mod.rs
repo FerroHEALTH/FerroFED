@@ -71,6 +71,7 @@ use secrecy::SecretString;
 
 use crate::auth::caller::{Caller, PatientContext, Stated, VerifiedBy};
 use crate::auth::claims::Claims;
+use crate::auth::contact_point::MissingAnnex;
 use crate::auth::introspection::Introspector;
 use crate::auth::permission::{Requirement, Resource};
 use crate::auth::refusal::{BasicRefusal, Refusal, Refused};
@@ -218,6 +219,7 @@ impl Gate {
             .ok_or(Refused {
                 refusal: Refusal::Invalid,
                 check: Some(Reason::UntrustedIssuer),
+                missing: MissingAnnex::default(),
             })?;
         let trusted: &IssuerSettings = &entry;
         let caller = self.caller(&smart, trusted)?;
@@ -318,6 +320,7 @@ impl Gate {
         let invalid = |check: &'static str| Refused {
             refusal: Refusal::Invalid,
             check: Some(Reason::Other(check)),
+            missing: MissingAnnex::default(),
         };
         // NOTE: RFC 9068 §2.2 requires `client_id`, and IHE IUA ITI TF-2 3.71.4.2.2.1
         // tells a client from a person by it, so a token without one does not hold.

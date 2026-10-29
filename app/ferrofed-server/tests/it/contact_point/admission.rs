@@ -104,6 +104,51 @@ async fn a_request_missing_any_annex_attribute_is_403_with_nothing_sent() -> Tes
     gateway.nobody_asked().await
 }
 
+/// Requirements Catalogue v10.0.0 §1.25 (01): the refusal names each
+/// missing Annex attribute by its Annex name, in the tables' order, and
+/// quotes no claim value.
+#[tokio::test]
+async fn the_refusal_names_each_missing_attribute_and_no_value() -> TestResult {
+    let gateway = Gateway::with(declared()?).await?;
+    let names = claim_names();
+    let mut claims = relaying();
+    let family = claims.other.remove(&names.family_name);
+    if let Some(extensions) = claims.extensions.as_mut() {
+        extensions.ihe_iua.subject_organization = None;
+    }
+    let request = bearing(query()?, &minted(&claims)?)?;
+    let (status, _, text) = sent(&gateway.app, request).await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
+    assert!(
+        text.contains(
+            "missing or not admitted: Table 1 family_name, Table 2 healthcare_provider_name"
+        ),
+        "{text}"
+    );
+    let given = relaying().other.get(&names.given_name).cloned();
+    for value in [family, given].into_iter().flatten() {
+        assert!(!text.contains(&value), "a claim value is quoted: {text}");
+    }
+    gateway.nobody_asked().await
+}
+
+/// A country code that is not admitted is named as `country_code`.
+#[tokio::test]
+async fn a_country_not_admitted_is_named() -> TestResult {
+    let gateway = Gateway::with(declared()?).await?;
+    let mut claims = relaying();
+    claims
+        .other
+        .insert(claim_names().country_code, String::from("XA"));
+    let (_, _, text) = sent(&gateway.app, bearing(query()?, &minted(&claims)?)?).await?;
+    assert!(
+        text.contains("missing or not admitted: Table 1 country_code"),
+        "{text}"
+    );
+    assert!(!text.contains("XA"), "{text}");
+    gateway.nobody_asked().await
+}
+
 /// The refusal of a short token carries its challenge, as every `403` of the
 /// gate does (RFC 6750 §3).
 #[tokio::test]
