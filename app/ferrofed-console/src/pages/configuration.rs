@@ -77,51 +77,57 @@ pub fn page() -> AnyView {
     view! {
         {crate::app::title(tr(Msg::Configuration))}
         <Suspense fallback=|| ()>
-            {move || {
-                let screen = screen.clone();
-                let ConfigAnswer { answer, draft } = match configure.value().get() {
-                    Some(Ok(answered)) => answered,
-                    Some(Err(stop)) => {
-                        ConfigAnswer {
-                            answer: Some(ActionAnswer {
-                                answer: match stop {
-                                    crate::read::Stop::Refused(refusal) => Answer::Refused(refusal),
-                                    crate::read::Stop::Fault(fault) => Answer::Failed(fault),
-                                },
-                                changed: false,
-                                field: None,
-                            }),
-                            draft: None,
-                        }
-                    }
-                    None => ConfigAnswer::default(),
-                };
-                Suspend::new(async move {
-                    if let Some(draft) = &draft {
-                        provide_context(draft.clone());
-                        if let Some(note) = draft.field.clone() {
-                            provide_context(note);
-                        }
-                    }
-                    let answer = answer.map(|answer| answer.view());
-                    match read
-                        .await
-                        .and_then(|data| {
-                            data.view(&screen, draft.as_ref()).map_err(crate::read::Stop::Refused)
-                        })
-                    {
-                        Ok(view) => drawn(view, answer),
-                        Err(stop) => {
-                            view! {
-                                {heading()}
-                                {answer}
-                                {stopped(&stop)}
+            {crate::pages::afresh(
+                move || configure.version().get(),
+                move || {
+                    let screen = screen.clone();
+                    let ConfigAnswer { answer, draft } = match configure.value().get() {
+                        Some(Ok(answered)) => answered,
+                        Some(Err(stop)) => {
+                            ConfigAnswer {
+                                answer: Some(ActionAnswer {
+                                    answer: match stop {
+                                        crate::read::Stop::Refused(refusal) => {
+                                            Answer::Refused(refusal)
+                                        }
+                                        crate::read::Stop::Fault(fault) => Answer::Failed(fault),
+                                    },
+                                    changed: false,
+                                    field: None,
+                                }),
+                                draft: None,
                             }
-                                .into_any()
                         }
-                    }
-                })
-            }}
+                        None => ConfigAnswer::default(),
+                    };
+                    Suspend::new(async move {
+                        if let Some(draft) = &draft {
+                            provide_context(draft.clone());
+                            if let Some(note) = draft.field.clone() {
+                                provide_context(note);
+                            }
+                        }
+                        let answer = answer.map(|answer| answer.view());
+                        match read
+                            .await
+                            .and_then(|data| {
+                                data.view(&screen, draft.as_ref())
+                                    .map_err(crate::read::Stop::Refused)
+                            })
+                        {
+                            Ok(view) => drawn(view, answer),
+                            Err(stop) => {
+                                view! {
+                                    {heading()}
+                                    {answer}
+                                    {stopped(&stop)}
+                                }
+                                    .into_any()
+                            }
+                        }
+                    })
+                },
+            )}
         </Suspense>
     }
     .into_any()

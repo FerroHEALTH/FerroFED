@@ -38,7 +38,7 @@ pub const OPTIONS_DOCUMENT: &str = "/about/options.json";
 const COPY_ID: &str = "options-copy";
 
 /// The FerroUI version the console is built on, as its manifest pins it.
-const FERROUI: &str = "0.5.6";
+const FERROUI: &str = "0.5.7";
 
 /// What the gateway told the console of itself, for the Versions card and
 /// the document.

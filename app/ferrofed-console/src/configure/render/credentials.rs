@@ -358,7 +358,10 @@ pub(super) fn masked(id: &str, name: &str) -> AnyView {
         .trailing(Inner::HoldToShow(
             HoldWords::of_page().named(tr(Msg::ShowSecretWhileHeld)),
         ))
-        .after(error_line(id))
+        .after(view! {
+            {error_line(id)}
+            {ferrohealth_ui::widget::action::secret_mark(name)}
+        })
         .view(masked_input(id, name, Some(error_id(id))))
 }
 

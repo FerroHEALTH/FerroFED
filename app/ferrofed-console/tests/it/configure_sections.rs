@@ -160,6 +160,10 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
         "a secret's value field carries the hold-to-show eye: {edit}"
     );
     assert!(
+        edit.contains(r#"name="ferroui_secret" value="form[secret."#),
+        "a secret's value field is marked, so a plain post never draws it back: {edit}"
+    );
+    assert!(
         edit.contains(r#"name="form[resource]" value="credentials:node-c-pub""#),
         "the removal sits on the credential's own page: {edit}"
     );

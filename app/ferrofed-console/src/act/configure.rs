@@ -125,3 +125,32 @@ async fn answered(
         draft,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Configure;
+
+    // NOTE: leptos 0.8 `ActionForm`, the browser reads the form into the function's arguments
+    // with `serde_qs` and writes them again for its post, which the server reads back.
+    #[test]
+    fn a_form_crosses_from_the_browser_to_the_server_whole() {
+        let body = "ferroui_answer=%2Fconfiguration%2Fmembers%2Fnew&form%5Baction%5D=add-member\
+            &form%5Bbase%5D=2&form%5Borganisation%5D=org-c&form%5Bnode%5D=node-c\
+            &form%5Bquery_rows%5D%5B%5D=0&form%5Bquery_rows%5D%5B%5D=new-1\
+            &form%5Bquery.0.id%5D=node-c-pub&form%5Bquery.0.url%5D=https%3A%2F%2Fcdr.example.org\
+            &form%5Bquery.new-1.id%5D=node-c-old&form%5Bquery.0.in_service%5D=on&form%5Breason%5D=add";
+        let read: Configure = serde_qs::Config::new(5, false)
+            .deserialize_str(body)
+            .expect("the browser reads the form");
+        let wire = serde_qs::to_string(&read).expect("the browser writes its post");
+        let back: Configure = serde_qs::Config::new(5, false)
+            .deserialize_str(&wire)
+            .expect("the server reads the post");
+        let mut sent = read.fields.pairs().to_vec();
+        let mut got = back.fields.pairs().to_vec();
+        sent.sort();
+        got.sort();
+        assert_eq!(sent, got);
+        assert_eq!(12, got.len());
+    }
+}

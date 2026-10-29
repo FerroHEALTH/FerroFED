@@ -88,17 +88,20 @@ pub fn page() -> AnyView {
     view! {
         {crate::app::title(tr(Msg::QueryTitle))}
         <Suspense fallback=|| ()>
-            {move || {
-                let (form, ran) = match run.value().get() {
-                    Some(Ok(QueryPost { form, ran })) => (form, ran),
-                    Some(Err(stop)) => (fresh.clone(), Some(Ran::from(stop))),
-                    None => (fresh.clone(), None),
-                };
-                Suspend::new(async move {
-                    let options = options.await.unwrap_or_default();
-                    console(&form, stored, &options, ran, run)
-                })
-            }}
+            {crate::pages::afresh(
+                move || run.version().get(),
+                move || {
+                    let (form, ran) = match run.value().get() {
+                        Some(Ok(QueryPost { form, ran })) => (form, ran),
+                        Some(Err(stop)) => (fresh.clone(), Some(Ran::from(stop))),
+                        None => (fresh.clone(), None),
+                    };
+                    Suspend::new(async move {
+                        let options = options.await.unwrap_or_default();
+                        console(&form, stored, &options, ran, run)
+                    })
+                },
+            )}
         </Suspense>
     }
     .into_any()

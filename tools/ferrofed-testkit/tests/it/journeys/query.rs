@@ -211,8 +211,8 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
     .await
 }
 
-// The query runs with no WebAssembly: the form is a plain post and the
-// server answers with the page.
+// The query runs with no WebAssembly: the form is a plain post to the run's
+// server function, which answers with the page at its own address.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_query_runs_with_no_script() -> Result<(), Box<dyn Error>> {
     if !journeys_enabled() {
@@ -235,7 +235,12 @@ async fn a_query_runs_with_no_script() -> Result<(), Box<dyn Error>> {
         };
         submit(browser, &run).await?;
         browser.text("td", UID_AT_A).await?;
-        url_is_clean(browser, &stack).await?;
+        let url = browser.driver().current_url().await?;
+        assert_eq!(
+            stack.url("/api/query"),
+            url.as_str(),
+            "a plain post lands on the function's address and names no field"
+        );
         browser.scripts(true).await?;
         Ok(())
     })

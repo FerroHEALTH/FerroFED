@@ -516,7 +516,7 @@ breaking of a method chain depends on where leptosfmt left it (#1155).
 | `leptos_axum` | 0.8.10 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `leptos_meta` | 0.8.7 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `leptos_router` | 0.8.17 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrohealth-ui` (FerroUI) | 0.5.6 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `app/ferrofed-console/src/pages/about.rs`, `.claude/rules/leptos-ui.md` |
+| `ferrohealth-ui` (FerroUI) | 0.5.7 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `app/ferrofed-console/src/pages/about.rs`, `.claude/rules/leptos-ui.md` |
 | `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-console.yml` |
 | `leptosfmt` | 0.1.33 | the formatting job of `.github/workflows/ci.yml`, `.claude/skills/ui-gates/SKILL.md` |
 | `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-console.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |

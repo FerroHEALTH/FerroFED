@@ -130,7 +130,13 @@ pub(crate) fn signed_in_console(
 pub(crate) fn form(fields: &[(&str, &str)]) -> String {
     let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (name, value) in fields {
-        form.append_pair(&page_name(name), value);
+        let name = page_name(name);
+        form.append_pair(&name, value);
+        // NOTE: FerroUI `widget::action::secret_mark`, the page marks each secret's value
+        // field beside it, so a plain post carries the mark the browser sends.
+        if name.starts_with("form[secret.") && name.ends_with(".value]") {
+            form.append_pair(ferrohealth_ui::widget::action::SECRET, &name);
+        }
     }
     form.finish()
 }

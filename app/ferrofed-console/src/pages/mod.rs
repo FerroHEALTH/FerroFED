@@ -33,7 +33,7 @@ use ferrohealth_ui::view::button::{Variant, link_button};
 use ferrohealth_ui::view::refusal::{Issue, Refusal as Refused, Severity, fault, refusal};
 use ferrohealth_ui::view::surface::disclosure;
 use leptos::prelude::*;
-use leptos_router::hooks::{use_location, use_params_map};
+use leptos_router::hooks::use_location;
 
 use crate::locale::{Msg, tr, tr_with};
 use crate::read::{Fault, Refusal, Stop};
@@ -132,23 +132,75 @@ pub fn fault_view(failed: &Fault) -> AnyView {
     .into_any()
 }
 
+/// `draw`, mounted afresh each time `version` changes, such as an action's
+/// version once it answered.
+///
+/// A form's repeatable rows that FerroUI's widget added in the page are
+/// nodes the renderer does not know, so a form drawn again in place would
+/// keep them beside the rows its answer names; a fresh mount drops them.
+pub fn afresh<F, V>(version: impl Fn() -> usize + Send + Sync + 'static, draw: F) -> AnyView
+where
+    F: Fn() -> V + Clone + Send + Sync + 'static,
+    V: IntoView + 'static,
+{
+    view! { <For each=move || [version()] key=|drawn| *drawn children=move |_| draw.clone() /> }
+        .into_any()
+}
+
 /// The route's parameter `name`, empty when it has none.
 #[must_use]
 pub fn param(name: &str) -> String {
-    use_params_map().with_untracked(|params| params.get(name).unwrap_or_default())
+    // NOTE: no specification governs this: our own design; a lazy route group draws its
+    // page as the address changes, before the router's parameters follow, so they are read
+    // from the address itself.
+    let path = use_location().pathname.get_untracked();
+    param_of(&path, name)
 }
 
-/// The value of the query parameter `name` of the request, if it has one.
+/// The route parameter `name` the address path `path` names, decoded, empty
+/// when the route has none.
+#[must_use]
+pub fn param_of(path: &str, name: &str) -> String {
+    let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
+    let at = match (parts.first().copied(), name) {
+        (Some("organisations"), "org")
+        | (Some("services"), "service")
+        | (Some("query" | "self-description" | "configuration"), "tab")
+        | (Some("preferences"), "section")
+        | (Some("stored-queries"), "name") => 1,
+        (Some("organisations"), "node")
+        | (Some("stored-queries"), "tab")
+        | (Some("configuration"), "item") => 2,
+        (Some("organisations"), "tab") => 3,
+        _ => return String::new(),
+    };
+    parts
+        .get(at)
+        .map(|segment| {
+            url::form_urlencoded::parse(format!("v={}", segment.replace('+', "%2B")).as_bytes())
+                .map(|(_, value)| value.into_owned())
+                .next()
+                .unwrap_or_default()
+        })
+        .unwrap_or_default()
+}
+
+/// The value of the query parameter `name` of the address, if it has one.
 #[must_use]
 pub fn query_param(name: &str) -> Option<String> {
-    leptos_router::hooks::use_query_map().with_untracked(|query| query.get(name))
+    query_values(name).into_iter().next_back()
 }
 
-/// Every value of the query parameter `name` of the request, in order.
+/// Every value of the query parameter `name` of the address, in order.
 #[must_use]
 pub fn query_values(name: &str) -> Vec<String> {
-    leptos_router::hooks::use_query_map()
-        .with_untracked(|query| query.get_all(name).unwrap_or_default())
+    // NOTE: no specification governs this: our own design; read from the address
+    // itself, as `param` is, so a page drawn as the address changes reads the new one.
+    let search = use_location().search.get_untracked();
+    url::form_urlencoded::parse(search.trim_start_matches('?').as_bytes())
+        .filter(|(key, _)| key == name)
+        .map(|(_, value)| value.into_owned())
+        .collect()
 }
 
 /// The path of the page being drawn.
@@ -314,4 +366,43 @@ pub fn table(
         body: ferrohealth_ui::table::view::Body::Rows(rows),
     })
     .into_any()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::param_of;
+
+    #[test]
+    fn a_route_parameter_is_read_from_the_address_and_decoded() {
+        assert_eq!(
+            "org-a",
+            param_of("/organisations/org-a/node-a/routes", "org")
+        );
+        assert_eq!(
+            "node-a",
+            param_of("/organisations/org-a/node-a/routes", "node")
+        );
+        assert_eq!(
+            "routes",
+            param_of("/organisations/org-a/node-a/routes", "tab")
+        );
+        assert_eq!("", param_of("/organisations/org-a", "tab"));
+        assert_eq!(
+            "access-log",
+            param_of("/configuration/access-log/edit", "tab")
+        );
+        assert_eq!("edit", param_of("/configuration/access-log/edit", "item"));
+        assert_eq!(
+            "org.example::weights+v",
+            param_of(
+                "/stored-queries/org.example%3A%3Aweights%2Bv/versions",
+                "name"
+            )
+        );
+        assert_eq!("versions", param_of("/stored-queries/x/versions", "tab"));
+        assert_eq!("stored", param_of("/query/stored", "tab"));
+        assert_eq!("language", param_of("/preferences/language", "section"));
+        assert_eq!("resolver", param_of("/services/resolver", "service"));
+        assert_eq!("", param_of("/query", "org"));
+    }
 }

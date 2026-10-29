@@ -8,20 +8,20 @@ paths: ["app/ferrofed-console/**"]
 # Leptos console rules (`app/ferrofed-console`, and any Leptos code)
 
 **FerroUI leads the UI.** The console draws with `ferrohealth-ui`, pinned
-exactly in the root `[workspace.dependencies]` (today `=0.5.6`), and the
+exactly in the root `[workspace.dependencies]` (today `=0.5.7`), and the
 FerroUI repository (FerroHEALTH/FerroUI) is the source for its components,
 design, tokens, icons, accessibility bar, interaction contract, words and
 quality control. Read these first, at the git tag that matches the pin
-(today `v0.5.6`):
+(today `v0.5.7`):
 
-- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.6/docs/consoles.md):
+- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.7/docs/consoles.md):
   the consumer guide, how a console uses the library.
-- [`.claude/rules/leptos-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.6/.claude/rules/leptos-ui.md):
+- [`.claude/rules/leptos-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.7/.claude/rules/leptos-ui.md):
   the component rules of every FerroHEALTH console. The section numbers this
-  file cites (FerroUI §N) are those of the `v0.5.6` copy.
-- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.6/crates/ferrohealth-ui/CLAUDE.md):
+  file cites (FerroUI §N) are those of the `v0.5.7` copy.
+- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.5.7/crates/ferrohealth-ui/CLAUDE.md):
   the crate's own discipline.
-- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.5.6/design/consoles/ferrofed):
+- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.5.7/design/consoles/ferrofed):
   the reviewed design of this console. Every page matches its mockup at
   1440 and 390 px, light and dark. FerroUI's `design/` is the only design
   source; a design folder anywhere else is stale.
@@ -204,8 +204,8 @@ below. The script reads the budget from this table.
   is drawn, or earlier while the browser is idle, and the site script fails
   a build whose glue imports `__wasm_split_placeholder__`, which no browser
   resolves.
-- The budget is 680 KiB, a quarter over the 556513 bytes the move to
-  FerroUI 0.5.6 measured (#1397, 2026-10-28, cargo-leptos 0.3.11,
+- The budget is 680 KiB, a quarter over the 556958 bytes the move to
+  FerroUI 0.5.7 measured (#1397, 2026-10-28, cargo-leptos 0.3.11,
   wasm-bindgen 0.2.129, wasm-opt version_123, Rust 1.99.1): whole-page
   hydration puts the renderer, the reactive graph, the router, the shell,
   the visit and the reads' serde in the entry, and every data segment
