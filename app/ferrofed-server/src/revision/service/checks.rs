@@ -40,7 +40,7 @@ pub(super) fn stored(saved: Saved, base: Option<RevisionId>) -> Result<Revision,
 /// The configuration `tree` writes, read as the file is read with no
 /// environment beside it.
 pub(super) fn configuration(tree: &toml::Table) -> Result<Config, Error> {
-    let text = toml::to_string(tree).map_err(|source| Error::Assemble { source })?;
+    let text = toml::to_string(tree).map_err(|source| Error::assemble(source))?;
     Config::from_sources(Some(&text), &BTreeMap::new())
 }
 

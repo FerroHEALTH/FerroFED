@@ -6,8 +6,8 @@
 //!
 //! The document ([`RunningConfig`]) lists the deployment-wide settings of
 //! [`catalog`], each with the value this replica runs, where it comes from
-//! (the file, a `FERROFED__` override, the revision it runs, or the
-//! default), its default, and whether a change of it waits for the next
+//! (the file, a `FERROFED__` override, a `--set` pair, the revision it
+//! runs, or the default, as the loader's provenance names it), its default, and whether a change of it waits for the next
 //! start; for such a setting it also names the value the next start takes
 //! when that differs. Under `config.ui = "off"` the values are the file's
 //! and the environment's as the process started and as the last reload
@@ -24,10 +24,10 @@ use axum::routing::get;
 use axum::{Json, Router};
 use ferrofed_registry::revision::RevisionId;
 use ferrofed_registry::running::{RunningConfig, SecretSetting, Setting, Source};
+use ferrohealth_config::provenance::{Provenance, Source as Origin};
 use http::HeaderMap;
 
 use crate::config::revisions::Ui;
-use crate::config::{ENV_PREFIX, load};
 use crate::error::{self, Code};
 use crate::reload::Reloader;
 use crate::request_id;
@@ -78,10 +78,12 @@ pub struct Layers {
     pub boot: toml::Table,
     /// The tree the replica runs now, for the settings a reload applies.
     pub now: toml::Table,
-    /// The `FERROFED__` overrides of the process, as a tree.
-    pub environment: toml::Table,
-    /// The file's tree the process started with, which alone sets the
-    /// bootstrap core (`[auth]`, `[trust]`) a revision never holds.
+    /// Where each key of [`Layers::file_boot`] came from: the file, a
+    /// `FERROFED__` override or a `--set` pair.
+    pub provenance: Provenance,
+    /// The file's tree the process started with, its overrides applied,
+    /// which alone sets the bootstrap core (`[auth]`, `[trust]`) a revision
+    /// never holds.
     pub file_boot: toml::Table,
     /// The file's tree the replica runs now, as the last reload applied it.
     pub file_now: toml::Table,
@@ -97,7 +99,7 @@ pub struct Layers {
 /// Returns the [`RevisionError`] of a revision store that cannot be read,
 /// under `config.ui = "managed"`.
 pub fn document(reloader: &Reloader) -> Result<RunningConfig, RevisionError> {
-    let environment = environment(std::env::vars());
+    let provenance = reloader.provenance().clone();
     let file_boot = reloader.boot_tree().clone();
     let file_now = reloader
         .loaded_tree()
@@ -106,7 +108,7 @@ pub fn document(reloader: &Reloader) -> Result<RunningConfig, RevisionError> {
         None => Layers {
             boot: file_boot.clone(),
             now: file_now.clone(),
-            environment,
+            provenance,
             file_boot,
             file_now,
             revision: None,
@@ -117,7 +119,7 @@ pub fn document(reloader: &Reloader) -> Result<RunningConfig, RevisionError> {
             Layers {
                 boot: table_of(revisions, reloader.boot_revision())?,
                 now: table_of(revisions, running)?,
-                environment,
+                provenance,
                 file_boot,
                 file_now,
                 revision: running,
@@ -138,19 +140,6 @@ fn table_of(revisions: &Revisions, id: Option<RevisionId>) -> Result<toml::Table
         .revision(id)?
         .ok_or(RevisionError::Unknown(id))?;
     held_table(&revision)
-}
-
-/// The `FERROFED__` overrides among `variables`, as a tree.
-pub fn environment(variables: impl IntoIterator<Item = (String, String)>) -> toml::Table {
-    let mut tree = toml::Table::new();
-    for (name, raw) in variables {
-        // NOTE: no specification governs this: our own design; a name that names no
-        // key refused the start, so one that does not apply now sets nothing.
-        if name.starts_with(ENV_PREFIX) && load::apply_override(&mut tree, &name, &raw).is_err() {
-            tracing::debug!(variable = %name, "an environment override names no key");
-        }
-    }
-    tree
 }
 
 /// The running configuration `layers` describe.
@@ -176,13 +165,13 @@ fn setting(entry: &Entry, layers: &Layers) -> Setting {
     } else {
         &layers.now
     };
-    let default = entry.default.map(load::env_value);
+    let default = entry.default.map(catalog::default_value);
     if let Kind::Secret { file } = entry.kind {
         let inline = at(runs, entry.key);
         let reference = at(runs, file);
         let source = match reference {
-            Some(_) => source(layers, file, reference),
-            None => source(layers, entry.key, inline),
+            Some(_) => secret_source(layers, file, reference),
+            None => secret_source(layers, entry.key, inline),
         };
         return Setting {
             key: entry.key.to_owned(),
@@ -220,12 +209,79 @@ fn setting(entry: &Entry, layers: &Layers) -> Setting {
 
 /// Where `value`, the value of `key`, comes from.
 fn source(layers: &Layers, key: &str, value: Option<&toml::Value>) -> Source {
-    match value {
-        None => Source::Default,
-        Some(value) if at(&layers.environment, key) == Some(value) => Source::Environment,
-        Some(_) if layers.managed => Source::Revision,
-        Some(_) => Source::File,
+    sourced(
+        layers,
+        key,
+        value,
+        layers.provenance.source(&provenance_key(key)),
+    )
+}
+
+/// Where `value`, the value of the secret `key` or of its `_file` sibling,
+/// comes from, counting the two keys as one setting.
+fn secret_source(layers: &Layers, key: &str, value: Option<&toml::Value>) -> Source {
+    sourced(
+        layers,
+        key,
+        value,
+        layers.provenance.secret_source(&provenance_key(key)),
+    )
+}
+
+/// Where `value`, the value of `key`, comes from, when the process's own
+/// sources set `key` from `origin`.
+///
+/// An override names the source only while what runs is what it set: under
+/// `managed`, a revision saved since may hold another value.
+pub(crate) fn sourced(
+    layers: &Layers,
+    key: &str,
+    value: Option<&toml::Value>,
+    origin: Origin,
+) -> Source {
+    let overridden = match origin {
+        Origin::Environment => Some(Source::Environment),
+        Origin::Set => Some(Source::Set),
+        Origin::Default | Origin::File => None,
+    };
+    match (value, overridden) {
+        (None, _) => Source::Default,
+        (Some(value), Some(overridden)) if indexed(&layers.file_boot, key) == Some(value) => {
+            overridden
+        }
+        (Some(_), _) if layers.managed => Source::Revision,
+        (Some(_), _) => Source::File,
     }
+}
+
+/// The dotted key the loader's provenance knows `key` by: an element of an
+/// array, `trust.issuer[0].issuer`, is set by the array, `trust.issuer`.
+pub(crate) fn provenance_key(key: &str) -> String {
+    key.split_once('[')
+        .map_or(key, |(array, _)| array)
+        .to_owned()
+}
+
+/// The value at `key` of `tree`, a dotted key whose segments may name an
+/// array element as `name[index]`.
+pub(crate) fn indexed<'a>(tree: &'a toml::Table, key: &str) -> Option<&'a toml::Value> {
+    let mut value: Option<&toml::Value> = None;
+    for segment in key.split('.') {
+        let (name, index) = match segment.split_once('[') {
+            Some((name, rest)) => (name, rest.strip_suffix(']')?.parse::<usize>().ok()),
+            None => (segment, None),
+        };
+        let table = match value {
+            None => tree,
+            Some(held) => held.as_table()?,
+        };
+        let held = table.get(name)?;
+        value = Some(match index {
+            Some(index) => held.as_array()?.get(index)?,
+            None => held,
+        });
+    }
+    value
 }
 
 /// The value at the dotted `key` of `tree`.
@@ -235,27 +291,6 @@ pub(crate) fn at<'a>(tree: &'a toml::Table, key: &str) -> Option<&'a toml::Value
     segments.try_fold(tree.get(first)?, |value, segment| {
         value.as_table().and_then(|table| table.get(segment))
     })
-}
-
-/// Sets the dotted `key` of `tree` to `value`, creating each parent table;
-/// `false` when a parent is set to something other than a table.
-pub(crate) fn set(tree: &mut toml::Table, key: &str, value: toml::Value) -> bool {
-    let segments: Vec<&str> = key.split('.').collect();
-    let Some((last, parents)) = segments.split_last() else {
-        return false;
-    };
-    let mut cursor = tree;
-    for parent in parents {
-        let entry = cursor
-            .entry((*parent).to_owned())
-            .or_insert_with(|| toml::Value::Table(toml::Table::new()));
-        let Some(next) = entry.as_table_mut() else {
-            return false;
-        };
-        cursor = next;
-    }
-    cursor.insert((*last).to_owned(), value);
-    true
 }
 
 #[cfg(test)]

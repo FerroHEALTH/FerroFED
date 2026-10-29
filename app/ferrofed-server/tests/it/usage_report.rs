@@ -374,7 +374,11 @@ fn a_collector_that_is_not_https_or_carries_credentials_is_refused() {
     ] {
         let table = format!("[usage_report]\nendpoint = \"{endpoint}\"\n");
         assert!(
-            matches!(resolved(&table), Err(ConfigError::Parse { ref fault }) if fault.key() == Some("usage_report.endpoint")),
+            resolved(&table)
+                .err()
+                .as_ref()
+                .and_then(crate::support::refused_key)
+                == Some("usage_report.endpoint"),
             "{endpoint}"
         );
     }

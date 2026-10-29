@@ -82,10 +82,6 @@ pub enum ConsoleError {
     /// refused.
     #[error(transparent)]
     Section(#[from] SectionFault),
-    /// The revision sets a parent of a changed setting to a value that is
-    /// no table.
-    #[error("the revision sets a parent of {0} to a value that is no table")]
-    NotATable(String),
 }
 
 impl From<Refused> for ConsoleError {
@@ -106,9 +102,6 @@ impl<T: serde::Serialize> Answer for Result<T, ConsoleError> {
                 error::response(Code::ResourceUnknown, refusal.to_string(), request_id)
             }
             Err(ConsoleError::Section(fault)) => sections::refused(&fault, request_id),
-            Err(refusal @ ConsoleError::NotATable(_)) => {
-                error::response(Code::ConfigurationInvalid, refusal.to_string(), request_id)
-            }
         }
     }
 }
@@ -374,7 +367,7 @@ fn with_members(mut table: toml::Table, members: &[ConsoleMember]) -> Result<tom
             registry.remove("members");
         } else {
             let value = toml::Value::try_from(members)
-                .map_err(|source| Refused::from(Error::Assemble { source }))?;
+                .map_err(|source| Refused::from(Error::assemble(source)))?;
             registry.insert(String::from("members"), value);
         }
     }
@@ -388,8 +381,7 @@ pub(super) fn saved_as(
     (base, table): (Option<RevisionId>, &toml::Table),
     (operator, reason): (&Operator, String),
 ) -> Result<Revision, ConsoleError> {
-    let text =
-        toml::to_string(table).map_err(|source| Refused::from(Error::Assemble { source }))?;
+    let text = toml::to_string(table).map_err(|source| Refused::from(Error::assemble(source)))?;
     let saved = guarded(
         managed,
         (Origin::Operator, base),

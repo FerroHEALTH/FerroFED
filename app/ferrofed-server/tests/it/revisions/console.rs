@@ -17,7 +17,6 @@ use ferrofed_registry::console::{ConsoleMember, ConsoleState, Owner, QueryRegist
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::operator::{Page, StoredVersion};
 use ferrofed_registry::revision::{Origin, Revision, RevisionId};
-use ferrofed_server::config::Config;
 use http::{Method, Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 
@@ -444,7 +443,7 @@ async fn the_configuration_file_never_sets_a_console_member() -> TestResult {
             "organisation = { id = \"org-c\" }\nnode = { id = \"node-c\", system_id = \"cdr-c.example.org\" }\nendpoints = []\n"
         ),
     )?;
-    let refused = Config::load_with_tree(Some(&file))
+    let refused = crate::support::config_and_tree(&file)
         .err()
         .ok_or("the file is refused")?;
     assert!(

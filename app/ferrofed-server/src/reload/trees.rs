@@ -9,6 +9,7 @@
 use std::sync::{Arc, PoisonError};
 
 use ferrofed_registry::revision::RevisionId;
+use ferrohealth_config::provenance::Provenance;
 
 use super::Reloader;
 use crate::revision::service::Revisions;
@@ -21,6 +22,29 @@ impl Reloader {
     pub fn with_tree(mut self, tree: toml::Table) -> Self {
         self.tree = tree;
         self
+    }
+
+    /// Returns this reloader with `sets`, the `--set` pairs the process
+    /// started with, which every reload of the file applies again.
+    #[must_use]
+    pub fn with_sets(mut self, sets: Vec<(String, String)>) -> Self {
+        self.sets = sets;
+        self
+    }
+
+    /// Returns this reloader with `provenance`, where each key of the tree
+    /// the process started with came from, which the running configuration
+    /// reads.
+    #[must_use]
+    pub fn with_provenance(mut self, provenance: Provenance) -> Self {
+        self.provenance = provenance;
+        self
+    }
+
+    /// Where each key of the tree the process started with came from.
+    #[must_use]
+    pub fn provenance(&self) -> &Provenance {
+        &self.provenance
     }
 
     /// The configuration tree the process started with.

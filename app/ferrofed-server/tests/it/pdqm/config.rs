@@ -172,7 +172,7 @@ fn an_unknown_transaction_is_refused() -> TestResult {
         "profile = \"development\"\n{}",
         with("transaction", "\"iti-21\"")
     ))?;
-    assert!(matches!(error, error::Error::Parse { .. }), "{error:?}");
+    assert!(matches!(error, error::Error::Load { .. }), "{error:?}");
     Ok(())
 }
 

@@ -1660,6 +1660,7 @@ dependencies = [
  "ferrofed-registry",
  "ferrofed-server",
  "ferrofed-testkit",
+ "ferrohealth-config",
  "ferrohealth-health",
  "ferrohealth-secret",
  "ferrohealth-server",
@@ -1757,6 +1758,20 @@ dependencies = [
  "url",
  "uuid",
  "wiremock",
+]
+
+[[package]]
+name = "ferrohealth-config"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bd06be76f568419eae594d08b41a18f4262061a43587d073a0e88a135b7bacb"
+dependencies = [
+ "ferrohealth-secret",
+ "percent-encoding",
+ "serde",
+ "thiserror 2.0.21",
+ "toml",
+ "tracing",
 ]
 
 [[package]]

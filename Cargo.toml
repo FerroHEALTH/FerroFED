@@ -323,6 +323,13 @@ ferrohealth-smart = { version = "=0.8.6", default-features = false, features = [
 # a product pins every family crate, at the version ferrohealth-smart
 # requires. Verified against crates.io on 2026-10-28.
 ferrohealth-secret = "=0.2.0"
+# The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
+# defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
+# into one typed tree, with where each key came from and the merged table the
+# configuration revisions record. Pinned exactly, as a product pins every
+# family crate; 0.2.7 carries `Loaded::table_with_secrets` and
+# `Provenance::secret_source`. Verified against crates.io on 2026-10-29.
+ferrohealth-config = "=0.2.7"
 # The health family of FerroHEALTH/FerroSYS (#1397): the readiness
 # document, and with `registry` the indicators and the lifecycle the gateway
 # runs. Pinned exactly, at the version ferrohealth-server requires.

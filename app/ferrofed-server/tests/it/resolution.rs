@@ -433,7 +433,7 @@ fn a_registry_without_a_declared_node_selection_refuses_to_boot() -> TestResult 
 fn a_node_selection_the_gateway_does_not_know_refuses_to_boot() -> TestResult {
     let text = "[federation]\nnode_selection = \"nearest\"\n";
     match Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new()) {
-        Err(error::Error::Parse { .. }) => Ok(()),
+        Err(error::Error::Load { .. }) => Ok(()),
         other => Err(format!(
             "only ask-all and localized are node selections the gateway offers, refused at parse: {other:?}"
         )

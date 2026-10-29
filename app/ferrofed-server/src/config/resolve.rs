@@ -173,7 +173,7 @@ impl Config {
             revision_poll: crate::config::revisions::poll(&self.revisions)?,
             revision_policy: crate::config::revisions::policy(&self.revisions)?,
             usage_report: self.usage_report.clone(),
-            deprecated: self.deprecated.clone(),
+            deprecated: Vec::new(),
         };
         // NOTE: no specification governs this: our own design; a request is an emergency
         // only by a declared purpose, so passing one to the node needs a purpose declared.

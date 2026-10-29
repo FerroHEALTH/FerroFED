@@ -153,7 +153,7 @@ fn every_aggregate_is_decomposable_by_default_and_the_list_can_narrow()
     let unknown = refusal(&format!(
         "{FULL}\n[federation]\ndecomposable_aggregates = [\"MEDIAN\"]\n"
     ))?;
-    assert!(matches!(unknown, Error::Parse { .. }), "{unknown:?}");
+    assert!(matches!(unknown, Error::Load { .. }), "{unknown:?}");
     Ok(())
 }
 
@@ -171,7 +171,7 @@ fn a_zero_offset_window_or_an_unknown_strategy_refuses_to_boot() -> Result<(), B
     let unknown = refusal(&format!(
         "{FULL}\n[federation]\noffset_strategy = \"cursor\"\n"
     ))?;
-    assert!(matches!(unknown, Error::Parse { .. }), "{unknown:?}");
+    assert!(matches!(unknown, Error::Load { .. }), "{unknown:?}");
     Ok(())
 }
 

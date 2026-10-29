@@ -141,7 +141,7 @@ fn a_reload_of_the_file_changes_a_live_setting_and_names_the_next_start_of_a_res
     let boot =
         "[federation]\nper_node_timeout_ms = 2500\n\n[federation.consent]\ndisclose = true\n";
     std::fs::write(&path, boot)?;
-    let (config, tree) = Config::load_with_tree(Some(&path))?;
+    let (config, tree) = support::config_and_tree(&path)?;
     let reloader = Reloader::new(
         Some(path.clone()),
         config.resolve()?,

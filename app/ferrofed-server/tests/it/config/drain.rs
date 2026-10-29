@@ -99,7 +99,7 @@ fn the_drain_delay_is_read_from_the_file_and_the_environment() -> Result<(), Box
     .server;
     assert_eq!(Duration::from_secs(7), server.drain_delay);
     let error = refusal("[server]\ndrain_delay_ms = \"five seconds\"\n")?;
-    assert!(matches!(error, Error::Parse { .. }), "{error:?}");
+    assert!(matches!(error, Error::Load { .. }), "{error:?}");
     Ok(())
 }
 

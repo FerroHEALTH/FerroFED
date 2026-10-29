@@ -38,7 +38,6 @@ use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_identity::profile::Profile;
 use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
 use ferrofed_server::admin::{self, Access};
-use ferrofed_server::config::Config;
 use ferrofed_server::reload::Reloader;
 use ferrofed_server::revision::embedded::RedbRevisions;
 use ferrofed_server::revision::routes::Managed;
@@ -190,7 +189,7 @@ impl Gateway {
         (config, store): (PathBuf, PathBuf),
         shared: Option<Box<dyn RevisionStore>>,
     ) -> Result<Self, Box<dyn Error>> {
-        let (loaded, tree) = Config::load_with_tree(Some(&config))?;
+        let (loaded, tree) = support::config_and_tree(&config)?;
         let settings = loaded.resolve()?;
         ferrofed_server::config::revisions::check_tree(settings.revisions.as_ref(), &tree)?;
         let (settings, booted) = match shared {

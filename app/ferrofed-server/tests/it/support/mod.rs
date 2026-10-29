@@ -49,6 +49,36 @@ pub(crate) fn millis(duration: Duration) -> Result<u64, TryFromIntError> {
     u64::try_from(duration.as_millis())
 }
 
+/// The dotted key a refusal of the configuration loader names, when it
+/// names one: an unknown key or a value the tree refuses.
+pub(crate) fn refused_key(error: &ferrofed_server::config::error::Error) -> Option<&str> {
+    match error {
+        ferrofed_server::config::error::Error::Load {
+            source: ferrohealth_config::error::ConfigError::Invalid { key, .. },
+            ..
+        } => key.as_deref(),
+        _ => None,
+    }
+}
+
+/// The configuration the file `path` holds, with the merged table it was
+/// read from, as `serve` reads them.
+pub(crate) fn config_and_tree(
+    path: &Path,
+) -> Result<(ferrofed_server::config::Config, toml::Table), ferrofed_server::config::error::Error> {
+    let loaded = ferrofed_server::config::Config::load(&file_sources(path))?;
+    let tree = loaded.table_with_secrets().clone();
+    Ok((loaded.into_parts().0, tree))
+}
+
+/// The `--config` of `path`, with no `--set` pair.
+pub(crate) fn file_sources(path: &Path) -> ferrohealth_server::cli::ConfigArgs {
+    ferrohealth_server::cli::ConfigArgs {
+        config: Some(path.to_path_buf()),
+        sets: Vec::new(),
+    }
+}
+
 /// Returns `error` and every cause behind it, as one line.
 pub(crate) fn chain(error: &(dyn StdError + 'static)) -> String {
     let mut line = error.to_string();

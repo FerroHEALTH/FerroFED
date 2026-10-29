@@ -56,12 +56,14 @@ use crate::auth::trust::Trust;
 use crate::binding::{self, Role, RoleConflict};
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
-use crate::config::{CONFIG_PATH_ENV, Config};
+use crate::config::{Config, PREFIX};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
 use crate::metrics::ReloadResult;
 use crate::revision::service::{FileRevision, RevisionError, Revisions};
 use crate::state::{AppState, StateError};
 use ferrofed_registry::revision::RevisionId;
+use ferrohealth_config::provenance::Provenance;
+use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::tls::{ReloadableTls, TlsError};
 
 pub mod action;
@@ -100,7 +102,9 @@ pub struct Reloader {
     certificates: Vec<Arc<ReloadableTls>>,
     revisions: Option<Arc<Revisions>>,
     trust: Option<Arc<Trust>>,
+    sets: Vec<(String, String)>,
     tree: toml::Table,
+    provenance: Provenance,
     boot_revision: Option<RevisionId>,
     loaded: Mutex<Option<toml::Table>>,
 }
@@ -243,7 +247,9 @@ impl Reloader {
             certificates: Vec::new(),
             revisions: None,
             trust: None,
+            sets: Vec::new(),
             tree: toml::Table::new(),
+            provenance: Provenance::default(),
             boot_revision: None,
             loaded: Mutex::new(None),
         }
@@ -472,19 +478,20 @@ impl Reloader {
     /// the file's has been recorded, with the revision that is and whether
     /// the file's load recorded it.
     fn fresh(&self) -> Result<Fresh, ReloadError> {
-        let Some(revisions) = &self.revisions else {
-            return Config::load_with_tree(self.config.as_deref())
-                .and_then(|(config, tree)| config.resolve().map(|settings| (settings, tree)))
-                .map(|(settings, tree)| (settings, None, Some(tree)))
-                .map_err(ReloadError::Config);
+        let sources = ConfigArgs {
+            config: self.config.clone(),
+            sets: self.sets.clone(),
         };
-        let (config, tree) =
-            Config::load_with_tree(self.config.as_deref()).map_err(ReloadError::Config)?;
-        let settings = config.resolve().map_err(ReloadError::Config)?;
-        crate::config::revisions::check_tree(settings.revisions.as_ref(), &tree)
+        let loaded = Config::load(&sources).map_err(ReloadError::Config)?;
+        let settings = Config::resolve_loaded(&loaded).map_err(ReloadError::Config)?;
+        let tree = loaded.table_with_secrets();
+        let Some(revisions) = &self.revisions else {
+            return Ok((settings, None, Some(tree.clone())));
+        };
+        crate::config::revisions::check_tree(settings.revisions.as_ref(), tree)
             .map_err(ReloadError::Config)?;
         let loaded = revisions
-            .file_loaded(&tree)
+            .file_loaded(tree)
             .map_err(|error| ReloadError::Revisions(Box::new(error)))?;
         let file = loaded.file;
         let settings = loaded.config.resolve().map_err(|error| {
@@ -634,7 +641,7 @@ impl Reloader {
     fn source(&self) -> Option<PathBuf> {
         self.config
             .clone()
-            .or_else(|| std::env::var_os(CONFIG_PATH_ENV).map(PathBuf::from))
+            .or_else(|| std::env::var_os(format!("{PREFIX}_CONFIG")).map(PathBuf::from))
     }
 }
 

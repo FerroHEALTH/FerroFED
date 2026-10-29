@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_registry::incident::{Detection, Incident};
-use ferrofed_server::config::Config;
 use ferrofed_server::report::{ROOT, Report};
 use ferrofed_server::state::AppState;
 use http::header;
@@ -218,7 +217,7 @@ async fn a_running_gateway_is_reported_without_a_patient_identifier_or_a_credent
         &file,
         configuration(&gateway.to_string(), &admin.to_string(), &document),
     )?;
-    let (config, tree) = Config::load_with_tree(Some(&file))?;
+    let (config, tree) = crate::support::config_and_tree(&file)?;
     let settings = config.resolve()?;
     let state = Arc::new(AppState::build(&settings)?);
     state.lifecycle().booted();

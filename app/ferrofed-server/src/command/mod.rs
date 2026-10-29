@@ -51,12 +51,12 @@ where
         );
         return ExitCode::from(EXIT_USAGE);
     }
-    let loaded = Config::load_with_tree(cli.config.as_deref()).and_then(|(config, tree)| {
-        let settings = config.resolve()?;
-        config::revisions::check_tree(settings.revisions.as_ref(), &tree)?;
-        Ok((settings, tree))
+    let loaded = Config::load(&cli.sources).and_then(|loaded| {
+        let settings = Config::resolve_loaded(&loaded)?;
+        config::revisions::check_tree(settings.revisions.as_ref(), loaded.table_with_secrets())?;
+        Ok((settings, loaded))
     });
-    let (settings, tree) = match loaded {
+    let (settings, loaded) = match loaded {
         Ok(loaded) => loaded,
         Err(error) if cli.command == Command::Healthcheck => {
             // NOTE: no specification governs this: our own design; a runtime
@@ -93,8 +93,10 @@ where
         Command::Conformance {
             command: ConformanceCommand::Run(args),
         } => conformance::conformance_command(&settings, args),
-        Command::Report(args) => report::report_command(&settings, &tree, &args),
-        Command::Serve => serve::serve_job(settings, &tree, cli.config),
+        Command::Report(args) => {
+            report::report_command(&settings, loaded.table_with_secrets(), &args)
+        }
+        Command::Serve => serve::serve_job(settings, &loaded, cli.sources),
     }
 }
 

@@ -52,7 +52,7 @@ impl Revisions {
         let (core, rest) = split(tree);
         *self.core.lock().unwrap_or_else(PoisonError::into_inner) = core;
         let text =
-            toml::to_string(&rest).map_err(|source| Refused::from(Error::Assemble { source }))?;
+            toml::to_string(&rest).map_err(|source| Refused::from(Error::assemble(source)))?;
         let _serial = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
         for _ in 0..FILE_ATTEMPTS {
             let history = self.store.history()?;
@@ -210,8 +210,8 @@ impl Revisions {
             let (written, config) = self.validate(text)?;
             return Ok((written, config, Vec::new()));
         }
-        let written = toml::to_string(&carried)
-            .map_err(|source| Refused::from(Error::Assemble { source }))?;
+        let written =
+            toml::to_string(&carried).map_err(|source| Refused::from(Error::assemble(source)))?;
         match self.validate(&written) {
             Ok((written, config)) => Ok((written, config, console)),
             Err(refused) => {

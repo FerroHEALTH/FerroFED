@@ -111,7 +111,7 @@ pub struct Settings {
     pub usage_report: ferrohealth_usage_report::section::UsageReportSection,
     /// The deprecated keys the configuration set, which `config check` and
     /// the start-up log name.
-    pub deprecated: Vec<crate::config::deprecated::Deprecated>,
+    pub deprecated: Vec<ferrohealth_config::loader::Deprecation>,
 }
 
 /// The gateway's signing keys, resolved.
@@ -454,9 +454,9 @@ impl Settings {
         );
         for key in &self.deprecated {
             tracing::warn!(
-                key = key.renamed.from,
-                replacement = key.renamed.to,
-                refused_in = key.renamed.refused_in,
+                key = key.old,
+                replacement = key.new,
+                refused_in = key.refused_in,
                 "a deprecated configuration key is set"
             );
         }

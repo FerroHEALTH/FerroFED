@@ -29,9 +29,12 @@ fn resolved(dir: &Path, server: &str, fhir: &str) -> Result<(), Error> {
         &document,
         crate::facade::registry("http://a.example.org", "http://b.example.org", ""),
     )
-    .map_err(|source| Error::Read {
-        path: document.clone(),
-        source,
+    .map_err(|source| Error::Load {
+        file: None,
+        source: ferrohealth_config::error::ConfigError::Read {
+            path: document.clone(),
+            source,
+        },
     })?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(

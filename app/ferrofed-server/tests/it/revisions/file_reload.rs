@@ -12,7 +12,6 @@ use std::path::Path;
 
 use crate::support::console::subscriber;
 use ferrofed_registry::revision::{Author, Origin, RevisionId};
-use ferrofed_server::config::Config;
 use ferrofed_server::reload::ReloadError;
 use ferrofed_server::revision::service::{self, Booted, Followed, REFUSED};
 use ferrohealth_telemetry::section::Rendering;
@@ -149,7 +148,7 @@ fn third_start(replicas: &Replicas, document: &Path) -> Result<Booted, Box<dyn s
         &config,
         text.replace(&registry, &format!("[registry]\ndocument = {document}\n")),
     )?;
-    let (_, tree) = Config::load_with_tree(Some(&config))?;
+    let (_, tree) = crate::support::config_and_tree(&config)?;
     let (_, booted) = service::boot_over(Box::new(replicas.shared.clone()), &tree)?;
     Ok(booted)
 }

@@ -1,196 +1,175 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! Reading the configuration tree: the TOML file, then every `FERROFED__`
-//! environment override applied over it. No specification governs the
-//! configuration: our own design.
+//! Reading the configuration tree with `ferrohealth-config`: the defaults,
+//! the TOML file, every `FERROFED__` override and the `--set` pairs, each
+//! over the one before. No specification governs the configuration: our own
+//! design, in the family's shape.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use ferrohealth_config::error::ConfigError;
+use ferrohealth_config::loader::{Loaded, Loader};
+use ferrohealth_server::cli::ConfigArgs;
+
 use crate::config::error::Error;
-use crate::config::error::parse::Stage;
 use crate::config::revisions::RevisionsFault;
-use crate::config::{CONFIG_PATH_ENV, Config, ENV_PREFIX, deprecated};
+use crate::config::settings::Settings;
+use crate::config::{Config, PREFIX};
+
+/// Returns the loader of the gateway's configuration: the `FERROFED`
+/// namespace, whose `FERROFED__<SECTION>__<KEY>` overrides set a key and
+/// whose `FERROFED_CONFIG` names the file.
+///
+/// # Errors
+/// Returns [`Error::Load`] when the namespace is refused, which it never is
+/// for [`PREFIX`].
+pub fn loader() -> Result<Loader, Error> {
+    Loader::new(PREFIX).map_err(|source| Error::Load { file: None, source })
+}
 
 impl Config {
-    /// Reads the configuration file `path` names, then the environment.
+    /// Reads the configuration of the running process: the file `sources`
+    /// names (or `FERROFED_CONFIG` does), the environment, and the `--set`
+    /// pairs of `sources`, last.
     ///
-    /// `path` is what `--config` named; without it the file is the one
-    /// `FERROFED_CONFIG` names, and without that the defaults stand.
+    /// The [`Loaded`] keeps the merged table the configuration revisions
+    /// record and `ferrofed report` writes, redacted, and where each key
+    /// came from.
     ///
     /// # Errors
-    /// Returns [`Error::Read`] when a named file cannot be read,
-    /// [`RevisionsFault::ConsoleKeyInFile`] when the file or the environment
-    /// sets a resource the operator console owns, and every other [`Error`]
-    /// the merge and the parse produce.
-    pub fn load(path: Option<&Path>) -> Result<Self, Error> {
-        Self::load_with_tree(path).map(|(config, _tree)| config)
+    /// Returns [`Error::Load`] with every refusal of the loader, naming the
+    /// file a refusal of its content sits in, [`Error::DevRemoved`] for the
+    /// removed `[dev]` table, and [`RevisionsFault::ConsoleKeyInFile`] when
+    /// a source sets a resource the operator console owns.
+    pub fn load(sources: &ConfigArgs) -> Result<Loaded<Self>, Error> {
+        let loader = loader()?;
+        let file = sources
+            .config
+            .clone()
+            .or_else(|| std::env::var_os(loader.config_variable()).map(PathBuf::from));
+        loader
+            .load_with::<Self>(sources.config.as_deref(), &sources.sets)
+            .map_err(|source| refused(file.as_deref(), source))
+            .and_then(checked)
+            .and_then(console_free)
     }
 
-    /// Reads the configuration as [`load`](Self::load) does, and returns it
-    /// with the merged tree it was read from: the file, every environment
-    /// override and every deprecated key renamed.
+    /// Reads `text` as the configuration file and applies `environment`
+    /// over it, as [`load`](Self::load) does with no `--set` pair.
     ///
-    /// `ferrofed report` writes the tree, redacted, as the effective
-    /// configuration.
-    ///
-    /// # Errors
-    /// Every error [`load`](Self::load) returns.
-    pub fn load_with_tree(path: Option<&Path>) -> Result<(Self, toml::Table), Error> {
-        let named = path
-            .map(Path::to_path_buf)
-            .or_else(|| std::env::var_os(CONFIG_PATH_ENV).map(PathBuf::from));
-        let text = match &named {
-            None => None,
-            Some(path) => {
-                let text = std::fs::read_to_string(path).map_err(|source| Error::Read {
-                    path: path.clone(),
-                    source,
-                })?;
-                Some(text)
-            }
-        };
-        let environment: BTreeMap<String, String> = std::env::vars()
-            .filter(|(name, _)| name.starts_with(ENV_PREFIX))
-            .collect();
-        let loaded = Self::merged(text.as_deref(), &environment).and_then(|(config, tree)| {
-            // NOTE: no specification governs this: our own design; what the console owns
-            // lives only in a revision, so the file never sets it and nothing is written back.
-            match crate::revision::tree::console_keys(&tree)
-                .into_iter()
-                .next()
-            {
-                Some(key) => Err(RevisionsFault::ConsoleKeyInFile { key }.into()),
-                None => Ok((config, tree)),
-            }
-        });
-        match &named {
-            Some(path) => loaded.map_err(|error| error.in_file(path)),
-            None => loaded,
-        }
-    }
-
-    /// Reads `text` as TOML and applies `environment` over it.
-    ///
-    /// Reading the sources and reading the process environment are separate so
-    /// a test can state both: setting an environment variable is `unsafe` in
-    /// edition 2024 and this workspace forbids `unsafe`.
+    /// Reading the sources and reading the process environment are separate
+    /// so a test can state both: setting an environment variable is `unsafe`
+    /// in edition 2024 and this workspace forbids `unsafe`.
     ///
     /// # Errors
-    /// Returns [`Error::Parse`] for TOML that does not read as this tree,
-    /// [`Error::EnvName`] and [`Error::EnvShape`] for an override that names
-    /// no key, [`Error::Renamed`] for a deprecated key set beside the key
-    /// that replaces it ([`deprecated`]), and [`Error::Assemble`] when the
-    /// merged tree cannot be written.
+    /// Every error [`load`](Self::load) returns but a file that cannot be
+    /// read and a resource of the operator console, which a revision's
+    /// table, read through here, holds.
     pub fn from_sources(
         text: Option<&str>,
         environment: &BTreeMap<String, String>,
     ) -> Result<Self, Error> {
-        Self::merged(text, environment).map(|(config, _tree)| config)
+        Self::loaded_from_sources(text, environment).map(|loaded| loaded.into_parts().0)
     }
 
     /// Reads `text` and `environment` as [`from_sources`](Self::from_sources)
-    /// does, and returns the configuration with the merged tree it parsed.
-    fn merged(
+    /// does, and keeps the merged table and the provenance.
+    ///
+    /// # Errors
+    /// Every error [`from_sources`](Self::from_sources) returns.
+    pub fn loaded_from_sources(
         text: Option<&str>,
         environment: &BTreeMap<String, String>,
-    ) -> Result<(Self, toml::Table), Error> {
-        let mut table = match text {
-            None => toml::Table::new(),
-            Some(text) => {
-                toml::from_str(text).map_err(|error| Error::parse(&error, text, Stage::File))?
-            }
-        };
-        for (name, raw) in environment {
-            apply_override(&mut table, name, raw)?;
-        }
-        if table.contains_key("dev") {
-            return Err(Error::DevRemoved);
-        }
-        let deprecated = deprecated::apply(&mut table, deprecated::RENAMED)?;
-        // The merged tree is written back and re-read so every refusal carries
-        // the key and its position, which a `Table` alone cannot report.
-        let merged = toml::to_string(&table).map_err(|source| Error::Assemble { source })?;
-        let mut config: Self = toml::from_str(&merged).map_err(|error| {
-            let fault = Error::parse(&error, &merged, Stage::Merged);
-            text.and_then(|text| Self::in_the_file(text, &fault))
-                .unwrap_or(fault)
-        })?;
-        config.deprecated = deprecated;
-        Ok((config, table))
+    ) -> Result<Loaded<Self>, Error> {
+        loader()?
+            .load_sources::<Self>(text, None, environment)
+            .map_err(|source| refused(None, source))
+            .and_then(checked)
     }
 
-    /// Reads the file alone again when the merged tree is refused, so a fault
-    /// the file itself carries is reported at its line and column.
+    /// Resolves the configuration `loaded` holds, with every renamed key it
+    /// still set under its old name, which `config check` and the start-up
+    /// log name.
     ///
-    /// The file's own refusal is taken only when it names the same key: a
-    /// fault an override introduced has no line in the file.
-    fn in_the_file(text: &str, merged: &Error) -> Option<Error> {
-        let file = toml::from_str::<Self>(text)
-            .err()
-            .map(|error| Error::parse(&error, text, Stage::File))?;
-        let same_key = match (merged, &file) {
-            (Error::Parse { fault: merged }, Error::Parse { fault: file }) => {
-                let unquoted = |key: Option<&str>| key.map(|key| key.replace('"', ""));
-                unquoted(merged.key()) == unquoted(file.key())
-            }
-            _ => false,
-        };
-        same_key.then_some(file)
+    /// # Errors
+    /// Every error [`Config::resolve`] returns.
+    pub fn resolve_loaded(loaded: &Loaded<Self>) -> Result<Settings, Error> {
+        let mut settings = loaded.settings().resolve()?;
+        settings.deprecated = loaded.deprecations().to_vec();
+        Ok(settings)
     }
 }
 
-/// Applies one environment override onto `table`.
-pub(crate) fn apply_override(table: &mut toml::Table, name: &str, raw: &str) -> Result<(), Error> {
-    let Some(path) = name.strip_prefix(ENV_PREFIX) else {
-        return Ok(());
-    };
-    let segments: Vec<String> = path.split("__").map(str::to_ascii_lowercase).collect();
-    let Some((key, parents)) = segments.split_last() else {
-        return Err(Error::EnvName {
-            name: name.to_owned(),
-        });
-    };
-    if key.is_empty() || parents.is_empty() || parents.iter().any(String::is_empty) {
-        return Err(Error::EnvName {
-            name: name.to_owned(),
-        });
-    }
-    let mut cursor = table;
-    for parent in parents {
-        let entry = cursor
-            .entry(parent.clone())
-            .or_insert_with(|| toml::Value::Table(toml::Table::new()));
-        let toml::Value::Table(next) = entry else {
-            return Err(Error::EnvShape {
-                name: name.to_owned(),
-            });
-        };
-        cursor = next;
-    }
-    cursor.insert(key.clone(), env_value(raw));
-    Ok(())
-}
-
-/// Reads `raw` as a TOML value, or as the string it is.
+/// Reads `text`, a table the gateway stores such as a revision's, as TOML,
+/// refused as the loader refuses a file that is not TOML: by its position,
+/// quoting no value.
 ///
-/// An environment variable carries text, so a number, a boolean and an array
-/// are spelled in TOML syntax and everything else is the string itself.
-pub(crate) fn env_value(raw: &str) -> toml::Value {
-    // NOTE: no specification governs this: our own design. A parse failure IS
-    // the answer here, because text that is not TOML syntax is a plain string.
-    let parsed = toml::from_str::<toml::Table>(&format!("value = {raw}"))
-        .ok()
-        .and_then(|table| table.get("value").cloned());
-    parsed.unwrap_or_else(|| toml::Value::String(raw.to_owned()))
+/// # Errors
+/// Returns [`Error::Load`] for text that is not TOML.
+pub(crate) fn table(text: &str) -> Result<toml::Table, Error> {
+    loader()?
+        .load_sources::<toml::Table>(Some(text), None, &BTreeMap::new())
+        .map(|loaded| loaded.into_parts().0)
+        .map_err(|source| refused(None, source))
+}
+
+/// Sets each dotted key of `pairs` in `table`, typed as the configuration
+/// tree takes it: a number, a boolean or an array where the tree wants one,
+/// and text elsewhere, as a `--set` pair is.
+///
+/// # Errors
+/// Returns [`Error::Load`] for a pair that names no key of the tree, or
+/// whose value the tree refuses.
+pub(crate) fn with_pairs(
+    table: &toml::Table,
+    pairs: &[(String, String)],
+) -> Result<toml::Table, Error> {
+    let text = toml::to_string(table).map_err(Error::assemble)?;
+    loader()?
+        .load_sources_with::<Config>(Some(&text), None, &BTreeMap::new(), pairs)
+        .map(|loaded| loaded.table_with_secrets().clone())
+        .map_err(|source| refused(None, source))
+}
+
+/// The refusal of a load whose sources `ferrohealth-config` refused, naming
+/// `file` unless the refusal is that the file could not be read, which
+/// names it itself.
+fn refused(file: Option<&Path>, source: ConfigError) -> Error {
+    let file = match source {
+        ConfigError::Read { .. } => None,
+        _ => file.map(Path::to_path_buf),
+    };
+    Error::Load { file, source }
+}
+
+/// Refuses the removed `[dev]` table, which the shared loader reads as any
+/// other table.
+fn checked(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
+    if loaded.settings().dev.is_some() {
+        return Err(Error::DevRemoved);
+    }
+    Ok(loaded)
+}
+
+/// Refuses a file or an override that sets a resource the operator console
+/// owns, which only a revision holds.
+fn console_free(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
+    // NOTE: no specification governs this: our own design; what the console owns
+    // lives only in a revision, so the file never sets it and nothing is written back.
+    match crate::revision::tree::console_keys(loaded.table_with_secrets())
+        .into_iter()
+        .next()
+    {
+        Some(key) => Err(RevisionsFault::ConsoleKeyInFile { key }.into()),
+        None => Ok(loaded),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_override, env_value};
     use crate::config::Config;
-    use crate::config::error::Error;
     use std::collections::BTreeMap;
 
     #[test]
@@ -210,20 +189,30 @@ mod tests {
     }
 
     #[test]
-    fn an_environment_value_reads_as_toml_syntax_or_as_the_string_it_is() {
-        assert_eq!(toml::Value::Integer(5), env_value("5"));
-        assert_eq!(toml::Value::Boolean(true), env_value("true"));
+    fn a_pair_is_set_through_its_parents_typed_as_the_tree_takes_it() {
+        let table = super::with_pairs(
+            &toml::Table::new(),
+            &[("federation.consent.disclose".to_owned(), "false".to_owned())],
+        )
+        .expect("the pair names a key of the tree");
         assert_eq!(
-            toml::Value::String(String::from("0.0.0.0:8080")),
-            env_value("0.0.0.0:8080")
+            Some(&toml::Value::Boolean(false)),
+            crate::running::at(&table, "federation.consent.disclose")
         );
     }
 
     #[test]
-    fn an_override_name_without_a_section_and_a_key_is_refused() {
-        let mut table = toml::Table::new();
-        let error = apply_override(&mut table, "FERROFED__LISTEN", "x")
-            .expect_err("a section and a key are both required");
-        assert!(matches!(error, Error::EnvName { .. }), "{error:?}");
+    fn a_pair_under_a_value_is_refused() {
+        let flat: toml::Table = toml::from_str(
+            "[federation]
+best_effort = true
+",
+        )
+        .expect("the table reads");
+        let refused = super::with_pairs(
+            &flat,
+            &[("federation.best_effort.x".to_owned(), "1".to_owned())],
+        );
+        assert!(refused.is_err(), "{refused:?}");
     }
 }

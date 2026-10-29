@@ -50,6 +50,18 @@ impl Entry {
     }
 }
 
+/// The value `default`, a catalog default written as TOML syntax.
+#[expect(
+    clippy::expect_used,
+    reason = "every catalog default is a constant the tests read as TOML syntax"
+)]
+pub(crate) fn default_value(default: &'static str) -> toml::Value {
+    toml::from_str::<toml::Table>(&format!("value = {default}"))
+        .ok()
+        .and_then(|mut table| table.remove("value"))
+        .expect("a catalog default should be TOML syntax")
+}
+
 /// A setting of `section` that holds one value.
 const fn scalar(
     key: &'static str,
@@ -262,7 +274,7 @@ mod tests {
             let Some(default) = entry.default else {
                 continue;
             };
-            let value = crate::config::load::env_value(default);
+            let value = super::default_value(default);
             let unset = config(&with(toml::Table::new(), entry.key, None));
             let set = config(&with(toml::Table::new(), entry.key, Some(value)));
             assert_eq!(unset, set, "{}", entry.key);

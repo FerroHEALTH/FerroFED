@@ -98,7 +98,8 @@ impl Gateway {
         let document = dir.path().join("registry.toml");
         std::fs::write(&document, registry)?;
         std::fs::write(&config, configuration(&document, top, tables))?;
-        let settings = Config::load(Some(&config))?.resolve()?;
+        let settings =
+            Config::resolve_loaded(&Config::load(&crate::support::file_sources(&config))?)?;
         let state = Arc::new(AppState::build(&settings)?);
         let app = ferrofed_server::router(Arc::clone(&state), &settings_with_room());
         let reloader = Reloader::new(Some(config.clone()), settings, Arc::clone(&state));

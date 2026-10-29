@@ -4,7 +4,6 @@
 //! `serve`: the gateway, from its runtime to the drain.
 
 use std::io::IsTerminal;
-use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -13,6 +12,7 @@ use tokio::net::TcpListener;
 
 use crate::auth::trust::Trust;
 use crate::binding::process::Drained;
+use crate::config::Config;
 use crate::config::server::ListenerTlsSettings;
 use crate::config::settings::Settings;
 use crate::revision::routes::Managed;
@@ -24,6 +24,8 @@ use crate::{
     EXIT_CONFIG, admin, banner, binding, body, chain, config, metrics, reload, revision, state,
     trusted_router,
 };
+use ferrohealth_config::loader::Loaded;
+use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::serve::Listener;
 use ferrohealth_server::tls::ReloadableTls;
 use ferrohealth_telemetry::section::Filter;
@@ -43,9 +45,10 @@ use ferrohealth_telemetry::telemetry::{Console, InitError, Telemetry};
 )]
 pub(super) fn serve_job(
     settings: Settings,
-    tree: &toml::Table,
-    config: Option<PathBuf>,
+    loaded: &Loaded<Config>,
+    config: ConfigArgs,
 ) -> ExitCode {
+    let tree = loaded.table_with_secrets();
     let (settings, booted) = match revision::service::boot(settings, tree) {
         Ok(booted) => booted,
         Err(error) => {
@@ -132,7 +135,7 @@ pub(super) fn serve_job(
     };
     drop(entered);
     let revisions = booted.map(started);
-    let code = match serve_command(&runtime, settings, &state, (config, revisions, tree)) {
+    let code = match serve_command(&runtime, settings, &state, (config, revisions, loaded)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!(error = format!("{error:#}"), "cannot serve");
@@ -161,8 +164,8 @@ fn started(booted: Booted) -> Arc<Revisions> {
 }
 
 /// Serves `state` on `runtime` until the process is asked to stop,
-/// reloading the registry on `SIGHUP` from `config`, the file `settings`
-/// were read from ([`reload`]), and serving `GET /metrics` and the operator's
+/// reloading the registry on `SIGHUP` from `sources`, the file and the
+/// `--set` pairs `settings` were read from ([`reload`]), and serving `GET /metrics` and the operator's
 /// stored-query distribution on the admin listener when `metrics.listen` is
 /// set ([`admin`]). Each binding's processes start beside the server, such as
 /// a care services directory kept in step and the PMIR identity feed, which
@@ -171,7 +174,7 @@ fn serve_command(
     runtime: &tokio::runtime::Runtime,
     settings: Settings,
     state: &Arc<AppState>,
-    (config, revisions, tree): (Option<PathBuf>, Option<Arc<Revisions>>, &toml::Table),
+    (sources, revisions, loaded): (ConfigArgs, Option<Arc<Revisions>>, &Loaded<Config>),
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
     let revision_poll = settings.revision_poll;
@@ -216,8 +219,10 @@ fn serve_command(
         };
         listener_tls.extend(admin_tls.iter().cloned());
         let reloader = Arc::new(
-            reload::Reloader::new(config, settings, Arc::clone(state))
-                .with_tree(tree.clone())
+            reload::Reloader::new(sources.config, settings, Arc::clone(state))
+                .with_sets(sources.sets)
+                .with_tree(loaded.table_with_secrets().clone())
+                .with_provenance(loaded.provenance().clone())
                 .with_certificates(listener_tls)
                 .with_revisions(revisions.clone())
                 .with_trust(Arc::clone(&trust)),

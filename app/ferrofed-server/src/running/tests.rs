@@ -4,7 +4,10 @@
 use ferrofed_registry::revision::RevisionId;
 use ferrofed_registry::running::{Section, Source};
 
-use super::{Layers, environment, of, set};
+use std::collections::BTreeMap;
+
+use super::{Layers, of};
+use crate::config::Config;
 
 /// The tree `text` writes.
 fn tree(text: &str) -> toml::Table {
@@ -32,17 +35,24 @@ fn a_setting_nothing_sets_runs_its_default() {
 
 #[test]
 fn a_value_names_the_file_or_the_override_it_comes_from() {
-    let boot = tree("[federation]\nper_node_timeout_ms = 2500\noverall_timeout_ms = 4000\n");
-    let layers = Layers {
-        now: boot.clone(),
-        boot,
-        environment: environment([
+    let loaded = Config::loaded_from_sources(
+        Some("[federation]\nper_node_timeout_ms = 2500\noverall_timeout_ms = 3000\n"),
+        &BTreeMap::from([
             (
                 String::from("FERROFED__FEDERATION__OVERALL_TIMEOUT_MS"),
                 String::from("4000"),
             ),
             (String::from("PATH"), String::from("/usr/bin")),
         ]),
+    )
+    .expect("the configuration reads");
+    let boot = loaded.table_with_secrets().clone();
+    let layers = Layers {
+        now: boot.clone(),
+        boot: boot.clone(),
+        provenance: loaded.provenance().clone(),
+        file_boot: boot.clone(),
+        file_now: boot,
         ..Layers::default()
     };
     let document = of(&layers);
@@ -54,6 +64,7 @@ fn a_value_names_the_file_or_the_override_it_comes_from() {
     let overall = document
         .setting("federation.overall_timeout_ms")
         .expect("listed");
+    assert_eq!(Some(toml::Value::Integer(4000)), overall.value);
     assert_eq!(Source::Environment, overall.source);
 }
 
@@ -158,24 +169,4 @@ fn a_secret_is_named_by_its_file_and_its_value_never_reaches_the_document() {
         "an unset secret says so"
     );
     assert_eq!(Source::Default, url.source);
-}
-
-#[test]
-fn a_dotted_key_is_set_through_its_parents_and_never_through_a_value() {
-    let mut tree = toml::Table::new();
-    assert!(set(
-        &mut tree,
-        "federation.consent.disclose",
-        toml::Value::Boolean(false)
-    ));
-    assert_eq!(
-        Some(&toml::Value::Boolean(false)),
-        super::at(&tree, "federation.consent.disclose")
-    );
-    let mut flat = self::tree("federation = 3\n");
-    assert!(!set(
-        &mut flat,
-        "federation.best_effort",
-        toml::Value::Boolean(true)
-    ));
 }

@@ -130,7 +130,7 @@ fn a_configured_data_user_is_refused() -> TestResult {
         )
     })?;
     match resolved(&text) {
-        Err(error::Error::Parse { .. }) => Ok(()),
+        Err(error::Error::Load { .. }) => Ok(()),
         other => Err(format!("no fixed professional stands in for a caller: {other:?}").into()),
     }
 }
