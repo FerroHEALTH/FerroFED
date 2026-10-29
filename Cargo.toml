@@ -55,7 +55,7 @@ openehr-sdt = { version = "0.0.109", default-features = false }
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.54" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.55" }
 # The shared audit library of the family, published from FerroHEALTH/FerroAUDIT
 # and pinned exactly: the ATNA ITI-20 sender and the BALP AuditEvent
 # (ihe-atna), and the EHDS logging component (ehds-logging); 0.2.6 closes a
@@ -258,7 +258,7 @@ thirtyfour = { version = "0.38.1", default-features = false, features = ["reqwes
 rustix = { version = "1.1.5", default-features = false, features = ["std", "process"] }
 # Test-only for the wire types (#33): schema validation of every emitted body
 # (draft 2020-12, the remote resolvers off) and property tests.
-jsonschema = { version = "0.58.3", default-features = false }
+jsonschema = { version = "0.59.0", default-features = false }
 proptest = "1.11.0"
 # Test-only for the wire types (#310): reads the vendored ITS-REST OpenAPI
 # YAML the result-set schema's ITS-REST subset is held to; a pure-Rust,
