@@ -525,7 +525,7 @@ fn collected(
 /// Leaves in `answers` one copy of each composition two or more origins of
 /// `reached` answered with under one full version id, counts what each
 /// origin keeps, and returns what it left out.
-// NOTE: Federation Tier §10.3 and A32: the kept copy is the one at the member whose `system_id`
+// NOTE: Federation Tier §10.3, BASE §"Composite Identifiers and Case": the kept copy is the one at the member whose `system_id`
 // equals the uid's `creating_system_id` apart from case, else the lowest `endpoint_id`.
 fn once(answers: &mut [(usize, Answer)], reached: &mut [Reached]) -> Vec<ListedOnce> {
     let mut holders: BTreeMap<String, (String, BTreeSet<usize>)> = BTreeMap::new();

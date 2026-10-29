@@ -111,7 +111,7 @@ async fn the_summary_is_an_eps_document_from_both_members_and_no_identifier_reac
     Ok(())
 }
 
-/// Requirements Catalogue v10.0.0 §1.18.3 (10.03), amending A65: a
+/// Requirements Catalogue v10.0.0 §1.18.3 (10.03) and Federation Tier §10.3: a
 /// composition two members hold under one full version id (an imported
 /// copy, §10.3) is listed once, from the member that created it, and the
 /// section's narrative says so.
