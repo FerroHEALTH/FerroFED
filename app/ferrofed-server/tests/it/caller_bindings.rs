@@ -14,10 +14,11 @@
 
 use std::error::Error;
 
+use crate::support::console::subscriber;
 use axum::Router;
 use axum::body::Body;
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::mock::Server;
+use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
 use serde::Deserialize;
 use wiremock::ResponseTemplate;

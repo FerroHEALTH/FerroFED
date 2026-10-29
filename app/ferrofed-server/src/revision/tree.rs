@@ -275,13 +275,13 @@ mod tests {
             "[credentials.\"node-a\"]\npassword = \"synthetic-secret-1\"\n\
              [credentials.\"node-b\"]\npassword_file = \"/run/secrets/b\"\n\
              [stored_queries]\nbackend = \"postgres\"\nurl = \"host=db\"\n\
-             [telemetry]\notlp_endpoint = \"http://u:synthetic-pw@collector:4317\"\n",
+             [telemetry.otlp]\nendpoint = \"http://u:synthetic-pw@collector:4317\"\n",
         );
         assert_eq!(
             vec![
                 "credentials.node-a.password",
                 "stored_queries.url",
-                "telemetry.otlp_endpoint"
+                "telemetry.otlp.endpoint"
             ],
             inline_secrets(&tree)
         );

@@ -18,7 +18,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use crate::telemetry::{DEFAULT_FILTER, Format};
+use ferrohealth_telemetry::section::TelemetrySection;
 
 pub mod auth;
 pub mod deprecated;
@@ -74,8 +74,9 @@ pub struct Config {
     pub profile: Profile,
     /// The HTTP surface.
     pub server: server::Server,
-    /// The console.
-    pub telemetry: Telemetry,
+    /// The console, the trace export and the metrics push
+    /// (`ferrohealth-telemetry`).
+    pub telemetry: TelemetrySection,
     /// The federation's membership.
     pub registry: registry::Registry,
     /// The federated query: the budgets and the default issuing namespace.
@@ -152,7 +153,7 @@ impl Default for Config {
         Self {
             profile: Profile::Production,
             server: server::Server::default(),
-            telemetry: Telemetry::default(),
+            telemetry: TelemetrySection::default(),
             registry: registry::Registry::default(),
             federation: Federation::default(),
             credentials: BTreeMap::new(),
@@ -445,42 +446,6 @@ impl Default for Federation {
             consent: ConsentReporting::default(),
             max_in_flight_per_node: 64,
             max_node_answer_bytes: 16 * 1024 * 1024,
-        }
-    }
-}
-
-/// The console and the trace export.
-///
-/// The export is off by default. No specification governs telemetry: our own
-/// design.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Telemetry {
-    /// The rendering: `auto`, `json` or `pretty`.
-    pub format: Format,
-    /// The `tracing` filter directive of the console.
-    pub filter: String,
-    /// The URL of an OTLP collector the gateway's spans are exported to over
-    /// gRPC: `http://` to a collector beside the gateway, or `https://` over
-    /// TLS. Unset, no span is exported and no node request carries a
-    /// `traceparent`.
-    pub otlp_endpoint: Option<SecretUrl>,
-    /// The TLS an `https://` collector is reached with
-    /// (`[telemetry.otlp_tls]`).
-    pub otlp_tls: tls::CollectorTls,
-    /// The share of the gateway's traces that are sampled, from `0.0`, none,
-    /// to `1.0`, every one; `1.0` unless set.
-    pub trace_sample_ratio: f64,
-}
-
-impl Default for Telemetry {
-    fn default() -> Self {
-        Self {
-            format: Format::Auto,
-            filter: String::from(DEFAULT_FILTER),
-            otlp_endpoint: None,
-            otlp_tls: tls::CollectorTls::default(),
-            trace_sample_ratio: 1.0,
         }
     }
 }

@@ -20,19 +20,13 @@ pub enum ServerFault {
         #[source]
         source: crate::base_path::BasePathError,
     },
-    /// `telemetry.trace_sample_ratio` is not a number from `0.0` to `1.0`.
-    #[error("telemetry.trace_sample_ratio is {value}; it must be a number from 0.0 to 1.0")]
-    SampleRatio {
-        /// The value the key holds.
-        value: f64,
-    },
-    /// The log filter does not parse.
-    #[error("telemetry.filter is not a valid tracing filter")]
-    Filter {
-        /// What the filter parser reported.
-        #[source]
-        source: tracing_subscriber::filter::ParseError,
-    },
+    /// `telemetry.logged_query_parameters` names a parameter: the request log
+    /// carries the ITS-REST paging values alone, a list fixed in code, since
+    /// any other parameter may carry a patient identifier (§5.4.3).
+    #[error(
+        "telemetry.logged_query_parameters is set; FerroFED logs only the offset and fetch paging values, and never another query value"
+    )]
+    LoggedQueryParameters,
     /// An entry of `server.trusted_proxies` is neither an IP address nor a
     /// CIDR block.
     #[error("{key} is neither an IP address nor a CIDR block such as 10.0.0.0/8")]
@@ -103,24 +97,12 @@ pub enum ServerFault {
         /// The address both keys name.
         address: std::net::SocketAddr,
     },
-    /// `metrics.otlp_endpoint` or `telemetry.otlp_endpoint` is neither an
-    /// `http://` nor an `https://` URL.
+    /// `telemetry.otlp.endpoint` is neither an `http://` nor an `https://`
+    /// URL.
     #[error(
-        "{key} must be an http:// URL, to a collector beside the gateway, or an https:// URL, over TLS"
+        "telemetry.otlp.endpoint must be an http:// URL, to a collector beside the gateway, or an https:// URL, over TLS"
     )]
-    OtlpScheme {
-        /// The key of the collector URL.
-        key: String,
-    },
-    /// An `otlp_tls` table names TLS material for a collector that is not
-    /// reached over `https://`, or for no collector at all.
-    #[error("{table} names TLS material, which takes an https:// {key}")]
-    OtlpTlsCleartext {
-        /// The TLS table.
-        table: String,
-        /// The key of the collector URL.
-        key: String,
-    },
+    OtlpScheme,
     /// The request timeout does not exceed the overall fan-out budget plus
     /// the combining margin, so it could cut the answer and the `504`
     /// envelope the budget produces when it expires (§11.4, §11.5).

@@ -25,6 +25,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::support::console::traced;
 use axum::Router;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
@@ -33,11 +34,11 @@ use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::transport;
 use ferrofed_server::state::AppState;
-use ferrofed_server::telemetry::{Rendering, traced};
 use ferrofed_testkit::dpop;
 use ferrofed_testkit::nuts::{self, NutsNode};
 use ferrofed_testkit::nvi::LocalizationService;
 use ferrofed_testkit::oauth;
+use ferrohealth_telemetry::section::Rendering;
 use http::StatusCode;
 use jsonwebtoken::Algorithm;
 

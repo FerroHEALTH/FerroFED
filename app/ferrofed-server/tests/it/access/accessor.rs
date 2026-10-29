@@ -114,8 +114,8 @@ async fn recorded(auth: AuthSettings, claims: &Claims) -> Result<Recorded, Box<d
         &server,
     )?;
     let logs = Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "trace",
         false,
         logs.clone(),

@@ -101,7 +101,7 @@ fn configuration(gateway: &str, admin: &str, document: &Path) -> String {
     let text = format!(
         "profile = \"development\"\n\n\
          [server]\nlisten = \"{gateway}\"\n\n\
-         [telemetry]\notlp_endpoint = \"http://{user}:{password}@127.0.0.1:4317/{path}?key={query}#{fragment}\"\n\n\
+         [telemetry.otlp]\nendpoint = \"http://{user}:{password}@127.0.0.1:4317/{path}?key={query}#{fragment}\"\n\n\
          [metrics]\nlisten = \"{admin}\"\n\n\
          [registry]\ndocument = {document}\n\n\
          [federation]\nid = \"{federation}\"\nnode_selection = \"ask-all\"\ndefault_namespace = \"urn:oid:{namespace}\"\n\n\

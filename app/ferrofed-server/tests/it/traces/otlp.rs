@@ -168,7 +168,7 @@ async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the
     }])
     .await;
     let config = spawned(&format!(
-        "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\notlp_endpoint = \"{}\"\n\n[registry]\ndocument = {}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n{}",
+        "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:0\"\n\n[telemetry]\nformat = \"json\"\n\n[telemetry.otlp]\nendpoint = \"{}\"\nmetrics = false\n\n[registry]\ndocument = {}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n{}",
         collector.endpoint(),
         toml::Value::String(document.display().to_string()),
         pixm_stub::base_url(&pix),

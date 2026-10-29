@@ -13,9 +13,10 @@
 
 use std::error::Error;
 
+use crate::support::console::subscriber;
 use axum::body::Body;
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::pmir::merge_message;
+use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
 use serde::Deserialize;
 

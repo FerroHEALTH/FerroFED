@@ -207,8 +207,8 @@ async fn each_discovery_reaches_the_audit_repository_without_the_identifier_in_a
         &keys,
     )?)?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),
@@ -292,8 +292,8 @@ async fn each_discovery_names_the_verified_caller_as_its_human_requestor_toward_
         &keys,
     )?)?;
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "trace",
         false,
         logs.clone(),

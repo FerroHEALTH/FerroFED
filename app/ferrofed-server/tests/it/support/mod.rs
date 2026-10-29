@@ -7,6 +7,7 @@
 //! report. A conveyed token as a node reads it is in [`conveyed`], and the
 //! addresses a `serve` process bound in [`serving`].
 
+pub(crate) mod console;
 pub(crate) mod conveyed;
 pub(crate) mod serving;
 

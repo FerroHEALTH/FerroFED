@@ -21,6 +21,7 @@ use std::error::Error;
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
+use crate::support::console::subscriber;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_identity::session::{ResolutionBindings, SessionKey};
@@ -29,8 +30,8 @@ use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::incident::{Detection, TARGET};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_server::facade::owner::{self, Held, HeldElsewhere};
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::mock::Server;
+use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode};
 use serde::Deserialize;
 use wiremock::ResponseTemplate;

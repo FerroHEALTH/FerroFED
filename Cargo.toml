@@ -122,20 +122,14 @@ tokio = { version = "1.53.1", default-features = false }
 tracing = "0.1.44"
 # The console: the env filter, the JSON line format and the pretty one.
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "fmt", "env-filter", "json", "ansi"] }
-# The metrics surface (#281) and the trace export (#353); no specification
-# governs either: our own design. One OpenTelemetry MeterProvider feeds the
-# Prometheus pull reader and the optional OTLP push, so an instrument cannot
-# exist on one surface and not the other, and one TracerProvider exports the
-# gateway's own spans over OTLP when a collector is configured.
-# The opentelemetry crates are released in lockstep and move together;
-# scripts/checks/versions.sh holds them equal against docs/VERSIONS.md.
-# Verified against crates.io on 2026-10-03, the trace features on 2026-10-04.
+# The instruments the gateway records through and the trace context its node
+# requests carry (#281, #353), on the provider ferrohealth-telemetry builds;
+# no specification governs either: our own design. The opentelemetry crates
+# are released in lockstep and move together; scripts/checks/versions.sh
+# holds them equal against docs/VERSIONS.md. Verified against crates.io on
+# 2026-10-03, the trace features on 2026-10-04.
 opentelemetry = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs"] }
 opentelemetry_sdk = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs", "rt-tokio", "experimental_metrics_custom_reader"] }
-opentelemetry-prometheus = "0.33.0"
-# `tls-aws-lc` and `tls-roots` carry an `https://` collector over rustls with
-# the platform's roots (#644).
-opentelemetry-otlp = { version = "0.33.0", default-features = false, features = ["metrics", "trace", "internal-logs", "grpc-tonic", "tls-aws-lc", "tls-roots"] }
 # Test-only: the OTLP trace service the testkit's in-process collector answers
 # (#437), from the opentelemetry group, and the gRPC server it runs on.
 # Verified against crates.io on 2026-10-04.
@@ -145,8 +139,6 @@ tonic = { version = "0.14.6", default-features = false }
 # the release paired with the opentelemetry 0.33 line. Verified against
 # crates.io on 2026-10-04.
 tracing-opentelemetry = { version = "0.34.0", default-features = false }
-# The registry and text encoder the Prometheus reader renders through.
-prometheus = { version = "0.14.0", default-features = false }
 # The minted request id when a client sends none or sends an illegal one.
 uuid = { version = "1.26.1", default-features = false, features = ["v4", "std"] }
 # Test-only: a real HTTP client for the cases that drive a real socket.
@@ -338,6 +330,14 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # product's own reload path, and 0.3.9 names that refusal's values readably.
 # Verified against crates.io on 2026-10-29.
 ferrohealth-server = { version = "=0.3.9", default-features = false }
+# The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
+# the console, the panic line, the request log with the HTTP server metrics,
+# and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.
+# Pinned exactly, as a product pins every family crate; 0.2.3 carries the
+# HTTP span conventions, the digit shape of a logged query value, the OTLP
+# TLS checks and `http.server.active_requests`. Verified against crates.io on
+# 2026-10-29.
+ferrohealth-telemetry = { version = "=0.2.3", default-features = false }
 # The installation report of FerroHEALTH/FerroSYS to FerroPULSE (#1397): the
 # `[usage_report]` section, envelope v2, the instance id, the window and the
 # reporter. Pinned exactly, as a product pins every family crate. Verified

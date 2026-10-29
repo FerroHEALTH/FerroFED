@@ -5,12 +5,13 @@
 //! the status, the latency and the gateway's own request id, and nothing a
 //! client sent beyond that: not even the client's `x-request-id` (§5.4.3).
 
+use crate::support::console::subscriber;
 use crate::support::{self, Logs, request_lines};
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::request_id;
-use ferrofed_server::request_log::UNMATCHED;
-use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrohealth_telemetry::request_log::UNMATCHED;
+use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode};
 use std::error::Error as StdError;
 

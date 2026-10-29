@@ -13,8 +13,7 @@
 #   - each identity service a binding names: [[pixm.manager]], [pdqm],
 #     [xcpd], [pmir], [registry.mcsd], [nl_gf.nvi], [nl_gf.mitz];
 #   - the token endpoint of each [credentials."<endpoint id>"] grant;
-#   - the OTLP collector of telemetry.otlp_endpoint and
-#     metrics.otlp_endpoint;
+#   - the OTLP collector of telemetry.otlp.endpoint;
 #   - the stored-query or revision PostgreSQL, when one is configured;
 #   - the usage report's collector, report.ferropulse.eu on port 443,
 #     unless usage_report is off

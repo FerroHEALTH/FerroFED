@@ -310,8 +310,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   behind one `Binding` trait, each a module under `binding/` and a default
   feature (`binding-ihe`, `binding-nl`; #489), the TOML and `FERROFED__` environment
   configuration with `_file` secrets and per-endpoint outbound credentials,
-  the console, the request log that carries no body, query text, header value
-  or unmatched path, the shared health family of `ferrohealth-server` over
+  the console, the panic line, the request log that carries no body, query
+  text, header value or unmatched path, and the one OpenTelemetry provider of
+  `ferrohealth-telemetry` (#1397), the shared health family of `ferrohealth-server` over
   `ferrohealth-health`'s indicator registry (#1397), the
   `tower-http` stack, the listeners with their TLS and the bounded drain of
   `ferrohealth-server` (#1397), and the startup banner. The gate
@@ -323,7 +324,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   node, and `OPTIONS {base}/`, with its two `serde_json::Value` seams
   (`facade::intake`, `facade::cells`); an ITS-REST path it does not serve
   answers `501`. The admin listener (`[metrics] listen`) carries the
-  OpenTelemetry metrics, exported as Prometheus and over OTLP, behind an
+  OpenTelemetry metrics, exported as Prometheus and, under
+  `[telemetry.otlp]`, over OTLP with the spans, behind an
   optional scrape token or mutual TLS, and the stored-query drift repair,
   admitted through the client authentication gate for the issuer's
   operator scope and recorded with the operator who ran it (#635, #767),

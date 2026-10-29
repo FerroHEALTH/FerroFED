@@ -6,7 +6,8 @@
 //!
 //! [`command`] runs the binary: [`cli`] parses the command line, [`config`]
 //! reads the file and the environment into one
-//! [`config::settings::Settings`], [`telemetry`] installs the subscriber,
+//! [`config::settings::Settings`], `ferrohealth-telemetry` installs the
+//! subscriber and builds the one OpenTelemetry provider,
 //! [`router`] builds the HTTP surface over [`state::AppState`],
 //! and `ferrohealth_server::serve` runs it and the admin listener until the
 //! process is asked to stop, while [`reload`] replaces the registry on
@@ -100,7 +101,6 @@ pub mod service;
 pub mod state;
 pub mod stored;
 pub mod support;
-pub mod telemetry;
 pub mod upstream;
 pub mod usage_report;
 
@@ -120,6 +120,7 @@ use crate::auth::trust::Trust;
 use crate::config::settings::ServerSettings;
 use crate::state::AppState;
 use ferrohealth_server::health::Health;
+use ferrohealth_telemetry::request_log::RequestLog;
 
 /// The exit code of a command line the binary refuses.
 ///
@@ -192,8 +193,9 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// access to patient data is stored in the access log, naming the verified
 /// caller, before its answer leaves ([`access`]); a request refused by
 /// either limit writes no record. The request log
-/// records each request in the inbound request metrics of `state`
-/// ([`metrics::inbound`]). Before any of them, each request served over a
+/// ([`request_log`]) records each request in the HTTP server metrics, the
+/// request count of `state` ([`metrics::inbound`]) and the installation
+/// report's window. Before any of them, each request served over a
 /// connection is named by the address it came from, its peer or the client
 /// a trusted proxy names ([`client_address`]).
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
@@ -296,11 +298,12 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
             fhir_state,
             fhir::errors::outcomes,
         ));
-    layered(
-        guarded,
-        server,
-        Some((metrics.inbound().serving_tls(server.tls.is_some()), usage)),
-    )
+    let log = request_log::of(server.base_path.clone())
+        .with_metrics(&metrics.telemetry().meter(metrics::SCOPE))
+        .serving_tls(server.tls.is_some())
+        .with_recorder(Arc::new(metrics.requests()))
+        .with_recorder(usage);
+    layered(guarded, server, log)
 }
 
 /// `GET` and `OPTIONS` of `{base}/` (§7a.2).
@@ -329,26 +332,12 @@ async fn outside_the_base(headers: HeaderMap) -> Response {
 /// catcher, the timeout and the ceiling, so a request one of them answers,
 /// a panicking one included, still gets its line with the status it answered.
 pub fn with_middleware(router: Router, server: &ServerSettings) -> Router {
-    layered(router, server, None)
+    layered(router, server, request_log::of(server.base_path.clone()))
 }
 
-/// What the request log of the client surface records each request into:
-/// the inbound request instruments, and the window of the installation
-/// report.
-type Metered = (
-    metrics::inbound::Instruments,
-    Arc<ferrohealth_usage_report::window::Window>,
-);
-
-/// Applies the middleware of [`with_middleware`] to `router`, the request log
-/// recording each request through `metered` when it is set.
-fn layered(router: Router, server: &ServerSettings, metered: Option<Metered>) -> Router {
-    let log = match metered {
-        Some((inbound, usage)) => {
-            request_log::RequestLog::new(server.base_path.clone(), Some(inbound)).with_usage(usage)
-        }
-        None => request_log::RequestLog::new(server.base_path.clone(), None),
-    };
+/// Applies the middleware of [`with_middleware`] to `router`, each request
+/// logged by `log`.
+fn layered(router: Router, server: &ServerSettings, log: RequestLog) -> Router {
     router
         .layer(RequestBodyLimitLayer::new(server.body_limit))
         .layer(TimeoutLayer::with_status_code(
@@ -356,10 +345,7 @@ fn layered(router: Router, server: &ServerSettings, metered: Option<Metered>) ->
             server.request_timeout,
         ))
         .layer(CatchPanicLayer::custom(panic::caught))
-        .layer(axum::middleware::from_fn_with_state(
-            Arc::new(log),
-            request_log::log,
-        ))
+        .layer(log)
         .layer(PropagateRequestIdLayer::new(request_id::HEADER))
         .layer(SetRequestIdLayer::new(request_id::HEADER, request_id::Mint))
         .layer(axum::middleware::from_fn(request_id::mint_outbound))

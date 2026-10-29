@@ -13,8 +13,8 @@
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_server::request_log::UNMATCHED;
 use ferrofed_testkit::mock::Server;
+use ferrohealth_telemetry::request_log::UNMATCHED;
 use http::{Method, Request, StatusCode};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};

@@ -67,12 +67,23 @@ tokio::task_local! {
 /// Mints the gateway's [`OutboundId`] for `request` and records it on the
 /// request and on its response.
 ///
-/// The request carries it to the handler and the request log; the response
-/// carries it out to the panic renderer, which sees no request; and while the
+/// The request carries it to the handler and, as the request log's
+/// [`ferrohealth_telemetry::request_log::RequestId`], to the request log,
+/// with whether the client named a request of its own; the response carries
+/// it out to the panic renderer, which sees no request; and while the
 /// request is served, [`serving`] reads it for the panic hook.
 pub async fn mint_outbound(mut request: Request, next: Next) -> Response {
     let id = OutboundId::mint();
+    // NOTE: no specification governs this: our own design; an illegal client id is
+    // stripped before this runs, so a header left here is one the client named.
+    let client_named = request.headers().contains_key(HEADER);
     request.extensions_mut().insert(id);
+    request
+        .extensions_mut()
+        .insert(ferrohealth_telemetry::request_log::RequestId::new(
+            id.to_string(),
+            client_named,
+        ));
     let mut response = SERVING.scope(id, next.run(request)).await;
     response.extensions_mut().insert(id);
     response

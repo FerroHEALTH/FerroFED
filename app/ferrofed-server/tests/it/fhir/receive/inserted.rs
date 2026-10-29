@@ -107,8 +107,8 @@ async fn a_persons_own_document_is_marked_as_inserted_by_them_with_no_identifier
     let app = person_gateway(dir.path(), (&a, &b), "")?;
     let token = minted(&own_grant())?;
     let logs = Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "debug",
         false,
         logs.clone(),

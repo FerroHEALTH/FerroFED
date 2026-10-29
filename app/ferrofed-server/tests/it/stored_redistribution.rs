@@ -21,14 +21,15 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::support::console::subscriber;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_identity::profile::Profile;
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::mock::Server;
+use ferrohealth_telemetry::section::Rendering;
 use http::{Method, Request, StatusCode, header};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::generated::definition::StoredQuery;

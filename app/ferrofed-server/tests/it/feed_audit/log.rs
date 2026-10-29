@@ -34,8 +34,8 @@ const SENTINEL: &str = "Qz7-SENTINEL-4714";
 /// which nextest runs alone: a directory read runs on a thread of its own.
 fn captured() -> Result<Logs, Box<dyn Error>> {
     let logs = Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),

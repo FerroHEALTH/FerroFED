@@ -17,9 +17,10 @@
 
 use std::error::Error;
 
+use crate::support::console::subscriber;
 use axum::body::Body;
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::mock::Server;
+use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
 use opentelemetry::trace::{SpanId, TraceId};
 use opentelemetry_sdk::trace::SpanData;

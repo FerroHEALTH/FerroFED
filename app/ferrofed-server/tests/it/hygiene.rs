@@ -7,10 +7,11 @@
 //! with the whole HTTP stack logging at `trace`.
 
 use crate::request_log::logged;
+use crate::support::console::subscriber;
 use crate::support::serve_until;
 use crate::support::{self, Logs, request_lines};
 use axum::body::Body;
-use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrohealth_telemetry::section::Rendering;
 use http::{Request, header};
 use std::error::Error as StdError;
 use std::time::Duration;

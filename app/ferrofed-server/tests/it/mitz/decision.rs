@@ -159,8 +159,8 @@ async fn the_bsn_reaches_mitz_only_and_no_node_log_or_error() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway_over(dir.path(), (&a.uri(), &b.uri()), &mitz.endpoint())?;
     let logs = Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "trace",
         false,
         logs.clone(),

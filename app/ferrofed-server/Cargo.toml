@@ -69,7 +69,7 @@ ferrohealth-health = { workspace = true, features = ["registry"] }
 ferrohealth-server.workspace = true
 # The installation report to FerroPULSE (#1397): the section, envelope v2,
 # the reporter, the instance id and the window the request log fills.
-ferrohealth-usage-report.workspace = true
+ferrohealth-usage-report = { workspace = true, features = ["telemetry"] }
 anyhow.workspace = true
 # The constant-time comparison of the PMIR feed token (#147), the keyed
 # caller references of the security log (#500), and the SHA-256 a conformance
@@ -141,15 +141,15 @@ ipnet.workspace = true
 # The metered cross-reference resolver implements the identity crate's
 # async resolver seam (#629).
 async-trait.workspace = true
-# The metrics surface (#281): one MeterProvider, the Prometheus pull reader on
-# the admin listener and the optional OTLP push.
+# The telemetry (#1397): the `[telemetry]` section, the console, the panic
+# line, the request log with the HTTP server metrics, and the one provider
+# read by Prometheus on the admin listener and pushed over OTLP with the
+# spans.
+ferrohealth-telemetry = { workspace = true, features = ["axum", "otlp", "prometheus"] }
+# The metrics surface (#281): the gateway's instruments on that provider.
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
-opentelemetry-prometheus.workspace = true
-opentelemetry-otlp.workspace = true
-prometheus.workspace = true
-# The trace export (#353): the gateway's own spans as OpenTelemetry spans,
-# over the same OTLP exporter crate as the metrics push.
+# The trace export (#353): the gateway's own spans as OpenTelemetry spans.
 tracing-opentelemetry.workspace = true
 # The EHR_STATUS of the test EHRs an admission check creates (§12b.1, #79).
 openehr-rm.workspace = true

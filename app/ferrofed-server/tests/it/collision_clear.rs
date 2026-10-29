@@ -18,6 +18,7 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::support::console::subscriber;
 use axum::Router;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
@@ -26,8 +27,8 @@ use ferrofed_registry::ehr_index::Indexed;
 use ferrofed_registry::operator::{ClearScope, ClearedEhrId, HeldBefore, IncidentReport};
 use ferrofed_server::admin::{self, Access, FINISHED};
 use ferrofed_server::state::AppState;
-use ferrofed_server::telemetry::{DEFAULT_FILTER, Rendering, subscriber};
 use ferrofed_testkit::mock::Server;
+use ferrohealth_telemetry::section::{DEFAULT_FILTER, Rendering};
 use http::{Method, Request, StatusCode, header};
 use serde::Deserialize;
 use wiremock::ResponseTemplate;

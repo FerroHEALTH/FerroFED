@@ -1662,6 +1662,7 @@ dependencies = [
  "ferrohealth-secret",
  "ferrohealth-server",
  "ferrohealth-smart",
+ "ferrohealth-telemetry",
  "ferrohealth-usage-report",
  "fhir-types",
  "governor",
@@ -1679,11 +1680,8 @@ dependencies = [
  "openehr-query",
  "openehr-rm",
  "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry-prometheus",
  "opentelemetry-proto",
  "opentelemetry_sdk",
- "prometheus",
  "redb",
  "reqwest",
  "rustls",
@@ -1837,16 +1835,20 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-telemetry"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2520fcd3daaf7053226ae5fc5107471d277f4dac94907eea9536c7583805a2c"
+checksum = "41895ebbfe4956540e96aeba84e1d569dbef01373ff71a12b287c8d743e12990"
 dependencies = [
  "axum",
  "ferrohealth-secret",
  "http",
  "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry-prometheus",
  "opentelemetry_sdk",
  "pin-project-lite",
+ "prometheus",
+ "rustls",
  "secrecy",
  "serde",
  "thiserror 2.0.21",
@@ -1877,6 +1879,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "244de83090953a4d780a29304837cc250980e834bf98fcfa98598ce8f7cd2859"
 dependencies = [
+ "ferrohealth-telemetry",
  "http",
  "jiff",
  "reqwest",
@@ -3950,9 +3953,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-otlp"
-version = "0.33.0"
+version = "0.33.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "699a67345e21962a231955b9059a157e428b219fa5df8efe11f08346fb23a344"
+checksum = "0756af24841e367128ef31c831999937b8b5c5197d47914590d8f4e2e88c2e1a"
 dependencies = [
  "http",
  "opentelemetry",

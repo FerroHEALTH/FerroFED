@@ -28,7 +28,7 @@ use crate::config::stored_queries::Backend;
 use crate::config::transport::{CleartextError, ProtectedSite};
 use crate::federation::error::FederationError;
 use crate::support::Support;
-use crate::telemetry::{Format, Rendering};
+use ferrohealth_telemetry::section::{Format, Rendering};
 
 /// The `FerroFED` wordmark in the `FIGlet` "standard" font.
 ///

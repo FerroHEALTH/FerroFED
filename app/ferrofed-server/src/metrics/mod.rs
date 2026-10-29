@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The metrics surface: one `OpenTelemetry` meter provider, read by the
-//! Prometheus text exposition of `GET /metrics` on the admin listener and,
-//! when a collector is configured, pushed over OTLP.
+//! The metrics surface: the gateway's instruments on the one meter provider.
 //!
-//! One provider feeds both readers, so an instrument cannot exist on one
-//! surface and not the other. Every label value is drawn from a closed set
+//! The provider is `ferrohealth-telemetry`'s, read by the Prometheus text
+//! exposition of `GET /metrics` on the admin listener and, under
+//! `[telemetry.otlp]`, pushed over OTLP. One provider feeds both readers, so
+//! an instrument cannot exist on one surface and not the other. Every label value is drawn from a closed set
 //! or from the registry: `kind` from the integrity incident kinds, `outcome`
 //! from the §11.1 statuses or, for the consent pre-filter's calls, from its
 //! three decisions, `result` from the reload outcomes and from what a
@@ -40,18 +40,14 @@ pub mod security;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::extract::State;
-use axum::response::{IntoResponse, Response};
-use axum::routing::get;
 use ferrofed_registry::incident::Kind;
+use ferrohealth_telemetry::section::TelemetrySection;
+use ferrohealth_telemetry::telemetry::{InitError, Service, Telemetry, prometheus_route};
 use ferrohealth_usage_report::window::Window;
-use http::{HeaderValue, StatusCode, header};
+use http::StatusCode;
 use opentelemetry::KeyValue;
-use opentelemetry::metrics::{Counter, Gauge, MeterProvider as _, ObservableCounter};
-use opentelemetry_otlp::{WithExportConfig as _, WithTonicConfig as _};
-use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider, Temporality};
+use opentelemetry::metrics::{Counter, Gauge, ObservableCounter};
 
-use crate::config::settings::MetricsSettings;
 use crate::metrics::nodes::Instruments;
 
 /// The instrumentation scope every instrument is created under.
@@ -132,10 +128,6 @@ pub const NODE_DURATION_BUCKETS: [f64; 12] = [
     0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0,
 ];
 
-/// The media type of the Prometheus text exposition format, version 0.0.4
-/// (<https://prometheus.io/docs/instrumenting/exposition_formats/>).
-pub const CONTENT_TYPE: &str = "text/plain; version=0.0.4; charset=utf-8";
-
 /// How a registry reload ended, the `result` label of
 /// [`REGISTRY_RELOADS`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -181,34 +173,19 @@ impl FollowResult {
     }
 }
 
-/// The metrics surface could not be built, rendered or flushed.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum MetricsError {
-    /// The OTLP exporter could not be built for `metrics.otlp_endpoint`.
-    #[error("the OTLP metrics exporter could not be built")]
-    Otlp(#[source] opentelemetry_otlp::ExporterBuildError),
-    /// The Prometheus reader could not be registered.
-    #[error("the Prometheus metrics reader could not be built")]
-    Prometheus(#[source] opentelemetry_sdk::error::OTelSdkError),
-    /// The gathered metrics could not be encoded as text.
-    #[error("the metrics could not be encoded")]
-    Encode(#[source] prometheus::Error),
-    /// The encoded metrics are not UTF-8.
-    #[error("the encoded metrics are not UTF-8")]
-    Utf8(#[source] std::string::FromUtf8Error),
-    /// The meter provider could not flush or stop its readers.
-    #[error("the meter provider could not shut down")]
-    Shutdown(#[source] opentelemetry_sdk::error::OTelSdkError),
+/// Returns the service the gateway's telemetry describes: `ferrofed` at
+/// this build's version, exporting the spans of every `ferrofed` crate.
+#[must_use]
+pub fn service() -> Service {
+    Service::new(SCOPE, crate::body::VERSION)
 }
 
-/// The meter provider, the Prometheus registry its pull reader writes into,
-/// and the instruments the gateway records through.
+/// The telemetry whose provider the gateway's instruments sit on, and the
+/// instruments the gateway records through.
 pub struct Metrics {
-    provider: SdkMeterProvider,
-    registry: prometheus::Registry,
+    telemetry: Arc<Telemetry>,
     nodes: Instruments,
-    inbound: inbound::Instruments,
+    requests: inbound::Requests,
     reloads: Counter<u64>,
     follows: Counter<u64>,
     in_step: Gauge<u64>,
@@ -240,64 +217,12 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    /// Returns the metrics `settings` describe: the Prometheus reader always,
-    /// and the OTLP push when `settings.otlp_endpoint` is set, over TLS for an
-    /// `https://` collector ([`crate::telemetry::collector_tls`]), with
-    /// `usage` the window of the installation report the request log and
-    /// the node requests record into.
-    ///
-    /// The OTLP exporter speaks gRPC through `tonic`, so with a collector
-    /// configured this runs inside a Tokio runtime context.
-    ///
-    /// # Errors
-    /// Returns [`MetricsError::Otlp`] when the OTLP exporter cannot be built,
-    /// and [`MetricsError::Prometheus`] when the pull reader cannot be.
-    pub fn new(settings: &MetricsSettings, usage: Window) -> Result<Self, MetricsError> {
-        let otlp = settings
-            .otlp_endpoint
-            .as_ref()
-            .map(|endpoint| {
-                let mut builder = opentelemetry_otlp::MetricExporter::builder()
-                    .with_tonic()
-                    .with_endpoint(endpoint.expose());
-                if let Some(config) = crate::telemetry::collector_tls(endpoint, &settings.otlp_tls)
-                {
-                    builder = builder.with_tls_config(config);
-                }
-                builder
-                    .with_temporality(Temporality::Cumulative)
-                    .build()
-                    .map(|exporter| PeriodicReader::builder(exporter).build())
-                    .map_err(MetricsError::Otlp)
-            })
-            .transpose()?;
-        Self::with_readers(otlp, usage)
-    }
-
-    /// Builds the provider over the Prometheus reader and `otlp`, and the
-    /// instruments over the provider.
-    fn with_readers(
-        otlp: Option<PeriodicReader<opentelemetry_otlp::MetricExporter>>,
-        usage: Window,
-    ) -> Result<Self, MetricsError> {
-        let registry = prometheus::Registry::new();
-        // NOTE: no specification governs this: our own design; the scope label
-        // is left off, so every series carries only the labels listed above.
-        let pull = opentelemetry_prometheus::exporter()
-            .with_registry(registry.clone())
-            .scope_info_enabled(false)
-            .build()
-            .map_err(MetricsError::Prometheus)?;
-        // NOTE: no specification governs this: our own design; one provider
-        // feeds both readers, so the pull and the push expose the same metrics.
-        let mut builder = SdkMeterProvider::builder()
-            .with_resource(crate::telemetry::resource())
-            .with_reader(pull);
-        if let Some(reader) = otlp {
-            builder = builder.with_reader(reader);
-        }
-        let provider = builder.build();
-        let meter = provider.meter(SCOPE);
+    /// Returns the gateway's instruments on the meter provider of
+    /// `telemetry`, with `usage` the window of the installation report the
+    /// request log and the node requests record into.
+    #[must_use]
+    pub fn new(telemetry: Arc<Telemetry>, usage: Window) -> Self {
+        let meter = telemetry.meter(SCOPE);
         let incidents = meter
             .u64_observable_counter(INTEGRITY_INCIDENTS)
             .with_description("Integrity incidents the gateway emitted, by kind")
@@ -331,15 +256,14 @@ impl Metrics {
             .build();
         let usage = Arc::new(usage);
         let nodes = Instruments::new(&meter).with_usage(Arc::clone(&usage));
-        let inbound = inbound::Instruments::new(&meter);
+        let requests = inbound::Requests::new(&meter);
         let security = security::observe(&meter);
         let dispensations = dispensations::observe(&meter);
         let bindings = crate::binding::process::Instruments::new(&meter);
-        Ok(Self {
-            provider,
-            registry,
+        Self {
+            telemetry,
             nodes,
-            inbound,
+            requests,
             reloads,
             follows,
             in_step,
@@ -349,7 +273,13 @@ impl Metrics {
             _audit: crate::audit::metrics::Instruments::new(&meter),
             bindings,
             usage,
-        })
+        }
+    }
+
+    /// Returns the telemetry whose provider the instruments sit on.
+    #[must_use]
+    pub const fn telemetry(&self) -> &Arc<Telemetry> {
+        &self.telemetry
     }
 
     /// Returns the window of the installation report.
@@ -364,11 +294,11 @@ impl Metrics {
         self.nodes.clone()
     }
 
-    /// Returns the inbound request instruments the request log records
-    /// through.
+    /// Returns the counter of the requests the gateway served, which the
+    /// request log feeds.
     #[must_use]
-    pub fn inbound(&self) -> inbound::Instruments {
-        self.inbound.clone()
+    pub fn requests(&self) -> inbound::Requests {
+        self.requests.clone()
     }
 
     /// Counts one request `limit` refused.
@@ -404,39 +334,26 @@ impl Metrics {
     /// Returns the Prometheus text exposition of every instrument.
     ///
     /// # Errors
-    /// Returns [`MetricsError::Encode`] when the gathered families cannot be
-    /// encoded, and [`MetricsError::Utf8`] when the encoding is not UTF-8.
-    pub fn render(&self) -> Result<String, MetricsError> {
-        use prometheus::Encoder as _;
-
-        let mut text = Vec::new();
-        prometheus::TextEncoder::new()
-            .encode(&self.registry.gather(), &mut text)
-            .map_err(MetricsError::Encode)?;
-        String::from_utf8(text).map_err(MetricsError::Utf8)
-    }
-
-    /// Flushes the OTLP push, when configured, and stops every reader.
-    ///
-    /// # Errors
-    /// Returns [`MetricsError::Shutdown`] when a reader cannot flush or stop.
-    pub fn shutdown(&self) -> Result<(), MetricsError> {
-        self.provider.shutdown().map_err(MetricsError::Shutdown)
+    /// Returns the [`InitError`] the metrics could not be encoded with.
+    pub fn render(&self) -> Result<String, InitError> {
+        self.telemetry.render_prometheus()
     }
 }
 
 impl Default for Metrics {
-    /// Returns the Prometheus reader alone, with no OTLP push.
+    /// Returns the instruments on a provider with the Prometheus reader alone,
+    /// with no OTLP push.
     #[expect(
         clippy::expect_used,
-        reason = "the pull reader registers one collector in a registry built empty beside it, so the registration cannot collide"
+        reason = "with no [telemetry.otlp] the provider builds the pull reader alone, in a registry built empty beside it, so the registration cannot collide"
     )]
     fn default() -> Self {
-        Self::with_readers(
-            None,
+        let telemetry = Telemetry::new(&TelemetrySection::default(), service())
+            .expect("the Prometheus reader should register in its own empty registry");
+        Self::new(
+            Arc::new(telemetry),
             crate::usage_report::group::window(crate::base_path::BasePath::default(), None),
         )
-        .expect("the Prometheus reader should register in its own empty registry")
     }
 }
 
@@ -451,29 +368,12 @@ impl std::fmt::Debug for Metrics {
 ///
 /// The listener carries no other route and no authentication, so it binds a
 /// loopback address unless the operator allows a remote one.
-pub fn router(metrics: Arc<Metrics>) -> Router {
+pub fn router(metrics: &Metrics) -> Router {
     routes(metrics).fallback(|| async { StatusCode::NOT_FOUND })
 }
 
 /// Returns the `GET /metrics` route over `metrics` alone, with no fallback,
 /// for the admin listener to merge beside its other routes.
-pub fn routes(metrics: Arc<Metrics>) -> Router {
-    Router::new()
-        .route(PATH, get(exposition))
-        .with_state(metrics)
-}
-
-/// `GET /metrics`: the text exposition, or `500` when it cannot be encoded.
-async fn exposition(State(metrics): State<Arc<Metrics>>) -> Response {
-    match metrics.render() {
-        Ok(text) => (
-            [(header::CONTENT_TYPE, HeaderValue::from_static(CONTENT_TYPE))],
-            text,
-        )
-            .into_response(),
-        Err(error) => {
-            tracing::error!(error = %crate::chain(&error), "the metrics could not be rendered");
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
-        }
-    }
+pub fn routes(metrics: &Metrics) -> Router {
+    Router::new().route(PATH, prometheus_route(Arc::clone(metrics.telemetry())))
 }

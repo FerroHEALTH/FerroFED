@@ -24,8 +24,15 @@ over time.
 listen = "127.0.0.1:9464"     # the admin listener; unset, nothing listens
 allow_remote = false          # true lets listen name a non-loopback address
 scrape_users = ["prometheus"]  # the [[auth.basic.users]] a scrape may authenticate as; empty, the scrape is open
-otlp_endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector; unset, nothing is pushed
+
+[telemetry.otlp]
+endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector; without the table, nothing is pushed
+metrics = true                       # push the metrics; true unless set
 ```
+
+The push shares its collector, its TLS and its resource with the
+[trace export](tracing.md): one `[telemetry.otlp]` table names both, and
+`traces = false` keeps the spans in the process.
 
 The admin listener serves `GET /metrics` and the operator's
 [stored-query distribution](../integrate/stored-queries.md#repairing-drift)
@@ -121,14 +128,12 @@ answers. `serve` and `config check` refuse:
   loopback address with nothing to authenticate the scrape: neither
   `scrape_users` nor a `[metrics.tls]` with `client_auth = "required"`;
 - a `scrape_users` entry that no `[[auth.basic.users]]` entry writes;
-- a `listen` address equal to `server.listen`;
-- an `otlp_endpoint` that is neither an `http://` nor an `https://` URL.
-  Over `http://` the push speaks gRPC without TLS, so run that collector
-  beside the gateway, on the same host or in the same pod; over `https://`
-  it speaks gRPC over TLS ([A remote collector over TLS](#a-remote-collector-over-tls));
-- an `http://` `otlp_endpoint` with a user name or a password in it, outside
-  `profile = "development"`, since that credential would travel in cleartext
-  ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
+- a `listen` address equal to `server.listen`.
+
+`serve` and `config check` refuse the collector as [Tracing](tracing.md#turning-it-on)
+describes: an `endpoint` that is neither an `http://` nor an `https://` URL,
+and an `http://` one with a user name or a password in it outside
+`profile = "development"`.
 
 The push sends every 60 seconds; the standard `OTEL_METRIC_EXPORT_INTERVAL`
 environment variable, in milliseconds, changes the interval. A push that
@@ -136,32 +141,16 @@ fails is logged at `WARN` under the target `opentelemetry-otlp`, and the
 counts stay readable on `/metrics`. On `SIGTERM` the gateway pushes once
 more after the drain.
 
-`[metrics]` takes effect on a restart only: a [reload](registry.md#reloading-the-registry)
-that changes it logs the key as needing a restart, like `[server]`.
+`[metrics]` and `[telemetry.otlp]` take effect on a restart only: a
+[reload](registry.md#reloading-the-registry) that changes one logs the key
+as needing a restart, like `[server]`.
 
 ### A remote collector over TLS
 
-An `https://` `otlp_endpoint` pushes the metrics over TLS to a collector anywhere,
-with no forwarder beside the gateway. The gateway trusts the platform's
-roots, and `[metrics.otlp_tls]` adds what a private collector needs:
-
-```toml
-[metrics]
-otlp_endpoint = "https://otel.example.org:4317"
-
-[metrics.otlp_tls]
-trust_roots_file = "/run/secrets/ferrofed/otel-ca.pem"              # PEM roots beside the platform's
-client_identity_file = "/run/secrets/ferrofed/otel-client.pem"      # chain and key, PEM, for mutual TLS
-```
-
-`client_identity` takes the same PEM inline. Every file is read once, at
-start, and checked: a client identity must hold a certificate and its
-private key, and the trust roots at least one certificate. `serve` and
-`config check` refuse a `[metrics.otlp_tls]` table beside an `http://`
-collector or none, since it would go unused. A user name or a password in an
-`https://` collector URL passes the transport rule. A changed file takes
-effect on a restart, and a [reload](registry.md#reloading-the-registry) logs
-`metrics.otlp_tls` as needing one.
+An `https://` `endpoint` pushes the metrics over TLS to a collector
+anywhere, with the `trust_roots_file` and `client_identity_file` of
+`[telemetry.otlp]` that [Tracing](tracing.md#a-remote-collector-over-tls)
+describes.
 
 ### Reloading over the admin listener
 
@@ -223,7 +212,7 @@ the unit after a histogram.
 | `ferrofed_localizer_requests_total` | `ferrofed.localizer.requests` | counter | `outcome` | the calls to the [localizer](registry.md#node-selection), by `candidates`, `no-records`, `not-configured`, `unavailable`, or `audit-failed` for an XCPD exchange whose audit message could not be recorded |
 | `ferrofed_demographics_requests_total` | `ferrofed.demographics.requests` | counter | `outcome` | the calls to the [demographics step](identity.md#demographics-first-pdqm), by `identified`, `no-match`, `ambiguous`, `unavailable`, or `audit-failed` for an exchange whose audit record could not be stored |
 | `ferrofed_http_requests_total` | `ferrofed.http.requests` | counter | `http_request_method`, `http_route`, `status_class` | the requests the gateway answered, by the route template and the status class `1xx` to `5xx`, a refused one included |
-| `http_server_request_duration_seconds` | `http.server.request.duration` (unit `s`) | histogram | `http_request_method`, `http_route`, `http_response_status_code`, `url_scheme`, and `error_type` on a `5xx` | the time from receiving a request to answering it, the OpenTelemetry HTTP server metric (<https://opentelemetry.io/docs/specs/semconv/http/http-metrics/>) |
+| `http_server_request_duration_seconds` | `http.server.request.duration` (unit `s`) | histogram | `http_request_method`, `http_route`, `http_response_status_code`, `url_scheme`, `network_protocol_version`, and `error_type` on a `5xx` | the time from receiving a request to answering it, the OpenTelemetry HTTP server metric (<https://opentelemetry.io/docs/specs/semconv/http/http-metrics/>) |
 | `http_server_active_requests` | `http.server.active_requests` | gauge | `http_request_method`, `url_scheme` | the requests being served now |
 | `ferrofed_resolver_requests_total` | `ferrofed.resolver.requests` | counter | `outcome` | the calls to the [cross-reference resolver](identity.md), a PIX Manager, one per patient lookup across the members asked, by `resolved`, `not-resolved`, `unavailable` (the service failed for a member) or `time-out` (its budget ran out) |
 | `ferrofed_resolver_request_duration_seconds` | `ferrofed.resolver.request.duration` (unit `s`) | histogram | none | the time each resolver call took |
@@ -256,14 +245,15 @@ path reaches the surface:
 | `class` | `member` (the member's own answer or failure), `client-error` (a `4xx`, other than a consent refusal, the member answered a request routed to it with) |
 | `result` | `applied`, `refused` |
 | `http_route` | a route template of the gateway, such as `/v1/query/aql` or `/v1/ehr/{ehr_id}/composition`, under the base path, or `<unmatched>` for a path no route names; a path identifier is written as its parameter name, never its value |
-| `http_request_method` | `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`, `HEAD`, `PATCH`, `CONNECT`, `TRACE`, or `_OTHER` for any other method |
+| `http_request_method` | `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`, `HEAD`, `PATCH`, `CONNECT`, `TRACE`, `QUERY`, or `_OTHER` for any other method |
 | `http_response_status_code`, `error_type` | the HTTP status the gateway answered |
 | `status_class` | `1xx`, `2xx`, `3xx`, `4xx`, `5xx` |
 | `url_scheme` | `http` where the listener speaks plain HTTP and TLS ends in front of it, `https` where it serves `[server.tls]` itself |
+| `network_protocol_version` | `1.0`, `1.1` or `2`, the HTTP version of the request |
 | `event` | `caller-refused`, `key-set-unavailable`, `introspection-unavailable`, `aql-refused`, `patient-predicate-stripped`, `subject-parameters-consumed`, `outbound-gate-stopped`, `query-parameter-refused`, `parameter-value-refused`, `ehr-id-probe-refused`, `definition-subject-literal`, `held-definition-refused`, `patient-confinement`, `patient-context-unavailable`, `admin-write-refused`, `scrape-refused`, `admin-write-admitted`, `write-unrecorded`: the `event` field of the log line |
 | `reason` | on `ferrofed_security_events_total`, why the gate refused the caller: `missing`, `malformed`, `invalid`, `unavailable`, `operation`, `scope`, `demographic-client`, `purpose-of-use`, `patient-context`, `patient-demographic`, `natural-person`, `assurance`, `contact-point-attributes`, `correlation` |
 | `limit` | `concurrency`, `caller-rate`, `node-in-flight` |
-| `le` | a bucket bound in seconds: on the member, resolver, localizer and demographics histograms `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf`; on `http_server_request_duration_seconds` the bounds the OpenTelemetry HTTP conventions advise, `0.005`, `0.01`, `0.025`, `0.05`, `0.075`, `0.1`, `0.25`, `0.5`, `0.75`, `1`, `2.5`, `5`, `7.5`, `10`, with `30` added for the request timeout, and `+Inf` |
+| `le` | a bucket bound in seconds: on the member, resolver, localizer and demographics histograms `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`, `10`, `30`, `+Inf`; on `http_server_request_duration_seconds` the bounds the OpenTelemetry HTTP conventions advise, `0.005`, `0.01`, `0.025`, `0.05`, `0.075`, `0.1`, `0.25`, `0.5`, `0.75`, `1`, `2.5`, `5`, `7.5`, `10`, and `+Inf` |
 
 The incident, reload, security event and dispensation counters, and the `concurrency` and
 `caller-rate` refusals, show every label value at `0` from the start, so an

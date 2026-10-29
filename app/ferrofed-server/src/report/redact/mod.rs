@@ -233,8 +233,8 @@ filter = "info,CANARY-FILTER=debug"
 id = "CANARY-FEDERATION"
 default_namespace = "urn:oid:2.999.4242"
 
-[metrics]
-otlp_endpoint = "https://collector-user:collector-pass@otel.example.org:4317/CANARY-PATH?api_key=QUERY-SECRET#CANARY-FRAGMENT"
+[telemetry.otlp]
+endpoint = "https://collector-user:collector-pass@otel.example.org:4317/CANARY-PATH?api_key=QUERY-SECRET#CANARY-FRAGMENT"
 
 [stored_queries]
 backend = "postgres"
@@ -359,7 +359,7 @@ count = 7
         );
         assert_eq!(
             "https://***@otel.example.org:4317/***?***#***",
-            redacted["metrics"]["otlp_endpoint"]
+            redacted["telemetry"]["otlp"]["endpoint"]
                 .as_str()
                 .expect("stripped")
         );

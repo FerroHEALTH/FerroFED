@@ -295,7 +295,7 @@ pub fn serving_router(
     reloader: Option<Arc<Reloader>>,
 ) -> Router {
     let access = Arc::new(access);
-    let metrics = metrics::routes(Arc::clone(state.metrics()))
+    let metrics = metrics::routes(state.metrics())
         .route_layer(middleware::from_fn_with_state(Arc::clone(&access), scrape));
     let mut app = Router::new()
         .route(DISTRIBUTE, post(distribute))

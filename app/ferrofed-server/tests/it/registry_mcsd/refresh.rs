@@ -317,8 +317,8 @@ async fn a_listing_outside_the_selection_is_applied_and_logged_once() -> TestRes
     harness.put_organization(a.organisation_also_listing(&["Endpoint/ex-endpointXCAquery"])?);
 
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),

@@ -367,8 +367,8 @@ async fn the_localizer_error_names_the_manager_status_once_and_the_log_keeps_the
     )?;
     proxy.set_fault(Fault::Status(StatusCode::SERVICE_UNAVAILABLE));
     let logs = crate::support::Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "info",
         false,
         logs.clone(),

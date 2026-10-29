@@ -10,11 +10,12 @@
 
 use std::path::Path;
 
+use crate::support::console::subscriber;
 use ferrofed_registry::revision::{Author, Origin, RevisionId};
 use ferrofed_server::config::Config;
 use ferrofed_server::reload::ReloadError;
 use ferrofed_server::revision::service::{self, Booted, Followed, REFUSED};
-use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrohealth_telemetry::section::Rendering;
 
 use super::{Replicas, TestResult};
 use crate::support::Logs;

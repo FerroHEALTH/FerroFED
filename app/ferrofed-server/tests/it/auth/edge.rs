@@ -11,11 +11,12 @@
 
 use std::error::Error;
 
+use crate::support::console::subscriber;
 use axum::body::Body;
 use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::{AuthMode, AuthSettings, IssuerSettings};
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::issuer::{Claims, Issuer};
+use ferrohealth_telemetry::section::Rendering;
 use http::{HeaderName, Request};
 
 use super::{Gateway, TestResult, assert_admitted, assert_refused, bearing, query};

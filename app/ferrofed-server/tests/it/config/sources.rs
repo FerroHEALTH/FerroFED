@@ -8,7 +8,7 @@ use ferrofed_server::config::error::Error;
 use ferrofed_server::config::error::server::ServerFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
-use ferrofed_server::telemetry::Format;
+use ferrohealth_telemetry::section::Format;
 use openehr_federation::aql::OffsetStrategy;
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
@@ -32,7 +32,7 @@ fn a_file_states_every_section_and_the_resolver_reads_it() -> Result<(), Box<dyn
     );
     assert_eq!(4096, settings.server.body_limit);
     assert_eq!(Format::Json, settings.telemetry.format);
-    assert_eq!("debug", settings.telemetry.filter);
+    assert_eq!("debug", settings.telemetry.filter.as_str());
     match settings.credentials.get(&EndpointId::new("hospital-a")?) {
         Some(Scheme::Oauth { grant, .. }) => assert_eq!("ferrofed", grant.client_id),
         other => return Err(format!("hospital-a is an oauth scheme: {other:?}").into()),

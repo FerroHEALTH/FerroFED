@@ -125,8 +125,8 @@ async fn a_persons_own_grant_gets_their_summary_and_no_identifier_reaches_a_node
     let app = gateway(dir.path(), (&a, &b, &pdq), "")?;
     let token = minted(&own_grant())?;
     let logs = Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "debug",
         false,
         logs.clone(),
@@ -181,8 +181,8 @@ async fn a_persons_own_grant_asking_for_another_patient_is_refused_before_anyone
     let app = gateway(dir.path(), (&a, &b, &pdq), "")?;
     let token = minted(&own_grant())?;
     let logs = Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "debug",
         false,
         logs.clone(),

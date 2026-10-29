@@ -22,6 +22,7 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::support::console::subscriber;
 use ferrofed_identity::profile::Profile;
 use ferrofed_server::banner::{Deployment, render};
 use ferrofed_server::config::Config;
@@ -33,8 +34,8 @@ use ferrofed_server::config::transport::{self, CleartextError, Encryption, Prote
 use ferrofed_server::federation::registry::read_registry;
 use ferrofed_server::reload::{ReloadError, Reloader};
 use ferrofed_server::state::{AppState, StateError};
-use ferrofed_server::telemetry::{Rendering, subscriber};
 use ferrofed_testkit::oauth;
+use ferrohealth_telemetry::section::Rendering;
 
 use crate::facade::registry;
 use crate::run::binary;
@@ -265,11 +266,11 @@ fn a_pix_manager_without_credentials_still_carries_identifiers_and_needs_https()
 
 #[test]
 fn an_otlp_endpoint_carrying_userinfo_is_refused_outside_development() -> TestResult {
-    let text = format!("[metrics]\notlp_endpoint = \"http://gateway:{SECRET}@127.0.0.1:4317\"\n");
+    let text = format!("[telemetry.otlp]\nendpoint = \"http://gateway:{SECRET}@127.0.0.1:4317\"\n");
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let expected = site(
-        "metrics.otlp_endpoint",
-        "the userinfo of metrics.otlp_endpoint",
+        "telemetry.otlp.endpoint",
+        "the userinfo of telemetry.otlp.endpoint",
     );
     match AppState::check(&settings) {
         Err(StateError::Cleartext(refused)) => {
@@ -351,14 +352,14 @@ fn every_site_starts_under_development_and_is_reported() -> TestResult {
     let settings = resolved(dir.path(), "development", HTTP_A, &tables)?;
     reported(&settings, &sites)?;
     let otlp = format!(
-        "profile = \"development\"\n\n[metrics]\notlp_endpoint = \"http://gateway:{SECRET}@127.0.0.1:4317\"\n"
+        "profile = \"development\"\n\n[telemetry.otlp]\nendpoint = \"http://gateway:{SECRET}@127.0.0.1:4317\"\n"
     );
     let otlp = Config::from_sources(Some(&otlp), &BTreeMap::new())?.resolve()?;
     reported(
         &otlp,
         &[site(
-            "metrics.otlp_endpoint",
-            "the userinfo of metrics.otlp_endpoint",
+            "telemetry.otlp.endpoint",
+            "the userinfo of telemetry.otlp.endpoint",
         )],
     )
 }
@@ -454,7 +455,7 @@ fn a_plain_http_url_no_credential_is_sent_to_starts_outside_development() -> Tes
     let settings = resolved(dir.path(), "production", HTTP_A, "")?;
     reported(&settings, &[])?;
     AppState::build(&settings)?;
-    let otlp = "[metrics]\notlp_endpoint = \"http://127.0.0.1:4317\"\n";
+    let otlp = "[telemetry.otlp]\nendpoint = \"http://127.0.0.1:4317\"\n";
     let settings = Config::from_sources(Some(otlp), &BTreeMap::new())?.resolve()?;
     reported(&settings, &[])
 }

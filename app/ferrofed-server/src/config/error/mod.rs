@@ -97,15 +97,6 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
-    /// TLS material is no PEM of the kind its key takes; the message
-    /// quotes no part of it.
-    #[error("{key} must hold {holds} in PEM")]
-    Pem {
-        /// The key the material was read from.
-        key: String,
-        /// What the key takes.
-        holds: &'static str,
-    },
     /// A key a section needs is not set.
     #[error("{key} is not set, and its section needs it")]
     Missing {

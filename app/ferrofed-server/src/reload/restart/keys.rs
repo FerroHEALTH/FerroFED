@@ -113,14 +113,11 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("telemetry.filter", |boot, fresh| {
         boot.telemetry.filter != fresh.telemetry.filter
     }),
-    ("telemetry.otlp_endpoint", |boot, fresh| {
-        boot.telemetry.otlp_endpoint != fresh.telemetry.otlp_endpoint
+    ("telemetry.environment", |boot, fresh| {
+        boot.telemetry.environment != fresh.telemetry.environment
     }),
-    ("telemetry.otlp_tls", |boot, fresh| {
-        boot.telemetry.otlp_tls != fresh.telemetry.otlp_tls
-    }),
-    ("telemetry.trace_sample_ratio", |boot, fresh| {
-        boot.telemetry.trace_sample_ratio != fresh.telemetry.trace_sample_ratio
+    ("telemetry.otlp", |boot, fresh| {
+        boot.telemetry.otlp != fresh.telemetry.otlp
     }),
     ("federation.id", |boot, fresh| {
         boot.federation.id != fresh.federation.id
@@ -182,12 +179,6 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("metrics.listen", |boot, fresh| {
         boot.metrics.listen != fresh.metrics.listen
     }),
-    ("metrics.otlp_endpoint", |boot, fresh| {
-        boot.metrics.otlp_endpoint != fresh.metrics.otlp_endpoint
-    }),
-    ("metrics.otlp_tls", |boot, fresh| {
-        boot.metrics.otlp_tls != fresh.metrics.otlp_tls
-    }),
     ("metrics.scrape_users", |boot, fresh| {
         boot.metrics.scrape_users != fresh.metrics.scrape_users
     }),
@@ -247,10 +238,13 @@ healthcheck_identity_file = "@DIR@/client.pem"
 [telemetry]
 format = "json"
 filter = "info"
-otlp_endpoint = "https://otel.example.org:4317"
-trace_sample_ratio = 0.5
+environment = "production"
 
-[telemetry.otlp_tls]
+[telemetry.otlp]
+endpoint = "https://otel.example.org:4317"
+traces = true
+metrics = true
+sample_ratio = 0.5
 client_identity_file = "@DIR@/collector-client.pem"
 trust_roots_file = "@DIR@/collector-ca.pem"
 
@@ -365,11 +359,6 @@ path = "@DIR@/stored.redb"
 [metrics]
 listen = "127.0.0.1:9090"
 scrape_users = ["synthetic-scraper"]
-otlp_endpoint = "https://otel.example.org:4317"
-
-[metrics.otlp_tls]
-client_identity_file = "@DIR@/collector-client.pem"
-trust_roots_file = "@DIR@/collector-ca.pem"
 
 [metrics.tls]
 certificate_file = "@DIR@/listener.crt"

@@ -8,10 +8,11 @@ use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::binding::ihe::pixm::PixmMethod;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
-use ferrofed_server::config::error::server::ServerFault;
 #[cfg(feature = "binding-ihe")]
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
+
+use ferrofed_server::config::error::server::ServerFault;
 
 use super::{BROKEN_DEV_ROWS, env, everything, refusal, secret_file};
 use crate::run::binary;
@@ -25,10 +26,6 @@ fn an_unknown_key_refuses_to_boot_and_the_message_names_it() -> Result<(), Box<d
     for (text, key) in [
         ("[server]\nlisten_port = 8080\n", "server.listen_port"),
         (
-            "[telemetry]\nlogged_query_parameters = [\"q\"]\n",
-            "telemetry.logged_query_parameters",
-        ),
-        (
             "[credentials.\"a\"]\ntoken = \"synthetic\"\n",
             "credentials.\"a\".token",
         ),
@@ -38,6 +35,30 @@ fn an_unknown_key_refuses_to_boot_and_the_message_names_it() -> Result<(), Box<d
         assert!(matches!(error, Error::Parse { .. }), "{error:?}");
         let message = error.to_string();
         assert!(message.contains(key), "the refusal names {key}: {message}");
+    }
+    Ok(())
+}
+
+// NOTE: §5.4.3, a query value may carry the patient identifier, so a deployment cannot
+// widen the logged parameters past the paging values.
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn a_logged_query_parameter_refuses_to_boot_and_the_message_names_it()
+-> Result<(), Box<dyn StdError>> {
+    for list in ["[\"q\"]", "[\"offset\"]"] {
+        let error = refusal(&format!("[telemetry]\nlogged_query_parameters = {list}\n"))?;
+        assert!(
+            matches!(error, Error::Server(ServerFault::LoggedQueryParameters)),
+            "{error:?}"
+        );
+        let message = error.to_string();
+        assert!(
+            message.contains("telemetry.logged_query_parameters"),
+            "the refusal names the key: {message}"
+        );
     }
     Ok(())
 }
@@ -75,10 +96,7 @@ fn a_bad_value_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>>
     let error = refusal("[telemetry]\nformat = \"xml\"\n")?;
     assert!(matches!(error, Error::Parse { .. }), "{error:?}");
     let error = refusal("[telemetry]\nfilter = \"info,=,,\"\n")?;
-    assert!(
-        matches!(error, Error::Server(ServerFault::Filter { .. })),
-        "{error:?}"
-    );
+    assert!(matches!(error, Error::Parse { .. }), "{error:?}");
     Ok(())
 }
 

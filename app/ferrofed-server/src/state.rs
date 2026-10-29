@@ -25,8 +25,10 @@ use crate::config::stored_queries::{Backend, Store};
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::federation::{Federation, error::FederationError, registry::read_registry};
 use crate::health::Built;
-use crate::metrics::{Metrics, MetricsError};
+use crate::metrics::Metrics;
 use crate::stored;
+use ferrohealth_telemetry::section::TelemetrySection;
+use ferrohealth_telemetry::telemetry::{InitError, Telemetry};
 
 /// The state the router is built over.
 ///
@@ -89,9 +91,9 @@ pub enum StateError {
         #[source]
         source: StoreError,
     },
-    /// The metrics surface cannot be built.
-    #[error(transparent)]
-    Metrics(#[from] MetricsError),
+    /// The meter provider of the metrics surface cannot be built.
+    #[error("the metrics surface cannot be built")]
+    Metrics(#[source] InitError),
     /// The gateway federates, and `[auth]` trusts no issuer, so no caller
     /// could ever be admitted (§13.1, N25).
     #[error(
@@ -120,9 +122,8 @@ impl AppState {
     /// the gateway serves. Each subsystem built gets a [`Built`] indicator,
     /// and no member node or identity source gets one. The state is booting
     /// until the run path marks boot complete. The metrics surface is built
-    /// with an OTLP push when `metrics.otlp_endpoint` is set, which needs a
-    /// Tokio runtime context, and the federation records its node requests
-    /// through it. Every credential is held to the transport rule of
+    /// on a meter provider read by Prometheus alone, and the federation
+    /// records its node requests through it. Every credential is held to the transport rule of
     /// [`transport::check`] before anything that could send one is built, and
     /// under the development profile each one that travels unencrypted
     /// is logged as a warning.
@@ -149,6 +150,25 @@ impl AppState {
         settings: &Settings,
         document: Option<Result<RegistrySnapshot, FederationError>>,
     ) -> Result<Self, StateError> {
+        // NOTE: no specification governs this: our own design; a state built apart from
+        // `serve` exports nothing, so its metrics are read by Prometheus alone.
+        let telemetry = Telemetry::new(&TelemetrySection::default(), crate::metrics::service())
+            .map_err(StateError::Metrics)?;
+        Self::build_telemetered(settings, document, Arc::new(telemetry))
+    }
+
+    /// Returns the state `settings` describe over `document`, as
+    /// [`AppState::build_read`] does, its instruments on the meter provider of
+    /// `telemetry`, the one `serve` installed.
+    ///
+    /// # Errors
+    /// Returns the [`StateError`] [`AppState::build`] returns, the read's own
+    /// error included.
+    pub fn build_telemetered(
+        settings: &Settings,
+        document: Option<Result<RegistrySnapshot, FederationError>>,
+        telemetry: Arc<Telemetry>,
+    ) -> Result<Self, StateError> {
         settings.log_summary();
         let federation = Federation::load_read(settings, document)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
@@ -160,7 +180,7 @@ impl AppState {
                 .as_ref()
                 .map(|fhir| fhir.base.as_str().to_owned()),
         );
-        let metrics = Arc::new(Metrics::new(&settings.metrics, usage)?);
+        let metrics = Arc::new(Metrics::new(telemetry, usage));
         let federation = federation.map(|federation| federation.metered(metrics.nodes()));
         let definitions = definitions(settings, federation.as_ref())?;
         let mut built: Vec<Arc<dyn HealthIndicator>> = vec![Arc::new(Built("configuration"))];

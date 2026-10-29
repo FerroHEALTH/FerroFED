@@ -128,8 +128,8 @@ async fn a_requester_the_question_does_not_take_is_not_asked_and_is_no_outage() 
     let dir = tempfile::tempdir()?;
     let (app, state) = metered_over(dir.path(), (&a.uri(), &b.uri()), &mitz.endpoint())?;
     let logs = Logs::default();
-    let capture = ferrofed_server::telemetry::subscriber(
-        ferrofed_server::telemetry::Rendering::Json,
+    let capture = crate::support::console::subscriber(
+        ferrohealth_telemetry::section::Rendering::Json,
         "trace",
         false,
         logs.clone(),

@@ -12,7 +12,6 @@ use std::num::NonZeroU64;
 use std::path::PathBuf;
 
 use ferrofed_registry::replica::Replica;
-use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_server::section::{ClientAuth, TlsSection, TlsVersion};
 use ferrohealth_server::tls::{HealthcheckTls, TlsKeys, server_config_of};
 use ipnet::IpNet;
@@ -24,7 +23,6 @@ use crate::config::error::Error;
 use crate::config::error::server::ServerFault;
 use crate::config::limits;
 use crate::config::public_url::PublicUrl;
-use crate::config::tls::CollectorTls;
 
 /// The HTTP surface.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -213,10 +211,10 @@ impl Server {
     }
 }
 
-/// The metrics surface: one meter provider read by the Prometheus text
-/// exposition on its own listener and, when set, pushed over OTLP.
+/// The admin listener that serves the Prometheus text exposition of the
+/// metrics; `[telemetry.otlp]` pushes the same metrics to a collector.
 ///
-/// Both are off by default. No specification governs metrics: our own design.
+/// It is off by default. No specification governs metrics: our own design.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Metrics {
@@ -231,13 +229,6 @@ pub struct Metrics {
     /// open. Outside the development profile a `listen` address that is not
     /// a loopback one needs a user here, or `[metrics.tls] client_ca_file`.
     pub scrape_users: Vec<String>,
-    /// The URL of an OTLP collector the metrics are pushed to over gRPC:
-    /// `http://` to a collector beside the gateway, or `https://` over TLS.
-    /// Unset, nothing is pushed.
-    pub otlp_endpoint: Option<SecretUrl>,
-    /// The TLS an `https://` collector is reached with
-    /// (`[metrics.otlp_tls]`).
-    pub otlp_tls: CollectorTls,
     /// The TLS the admin listener serves (`[metrics.tls]`); unset, it serves
     /// plain HTTP.
     pub tls: Option<ListenerTls>,

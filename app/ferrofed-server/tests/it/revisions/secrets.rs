@@ -32,7 +32,7 @@ async fn a_secret_written_inline_is_refused_and_never_echoed() -> TestResult {
     for table in [
         format!("\n[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"{INLINE}\"\n"),
         format!("\n[credentials.\"node-a-pub\"]\nuser = \"u\"\npassword = \"{INLINE}\"\n"),
-        format!("\n[telemetry]\notlp_endpoint = \"http://u:{INLINE}@127.0.0.1:4317\"\n"),
+        format!("\n[telemetry.otlp]\nendpoint = \"http://u:{INLINE}@127.0.0.1:4317\"\n"),
     ] {
         let toml = rest(&gateway.one(), &table);
         let (status, text) = gateway.save(Some(1), "an inline secret", &toml).await?;

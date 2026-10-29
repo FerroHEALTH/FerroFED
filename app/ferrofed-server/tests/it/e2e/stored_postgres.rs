@@ -33,8 +33,9 @@ use crate::facade::{
     registry, settings_with_room, statuses,
 };
 use crate::stored::suite::SCENARIOS;
+use crate::support::console::subscriber;
 use crate::support::{Logs, call, chain, error_body};
-use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrohealth_telemetry::section::Rendering;
 
 /// The qualified name the race stores under.
 const NAME: &str = "org.example::raced";

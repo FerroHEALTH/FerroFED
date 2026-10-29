@@ -20,8 +20,8 @@ use std::time::{Duration, Instant};
 use axum::body::Body;
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::Config;
-use ferrofed_server::metrics::{self, CONTENT_TYPE, Metrics};
-use ferrohealth_secret::secret_url::SecretUrl;
+use ferrofed_server::metrics::{self, Metrics, service};
+use ferrohealth_telemetry::telemetry::Telemetry;
 use http::{Request, StatusCode, header};
 
 use crate::metrics::{count, parse};
@@ -29,6 +29,10 @@ use crate::run::binary;
 use crate::support::{app, call, send, serving};
 
 type TestResult = Result<(), Box<dyn Error>>;
+
+/// The media type of the Prometheus text exposition format, version 0.0.4
+/// (<https://prometheus.io/docs/instrumenting/exposition_formats/>).
+const CONTENT_TYPE: &str = "text/plain; version=0.0.4";
 
 /// The settings `text` resolves to.
 fn resolved(text: &str) -> Result<ferrofed_server::config::settings::Settings, Box<dyn Error>> {
@@ -39,7 +43,7 @@ fn resolved(text: &str) -> Result<ferrofed_server::config::settings::Settings, B
 fn the_listener_and_the_push_are_off_by_default() -> TestResult {
     let settings = resolved("")?;
     assert_eq!(None, settings.metrics.listen, "no admin listener");
-    assert_eq!(None, settings.metrics.otlp_endpoint, "no OTLP push");
+    assert_eq!(None, settings.telemetry.otlp, "no OTLP push");
     Ok(())
 }
 
@@ -56,7 +60,7 @@ async fn the_gateway_listener_never_serves_metrics() -> TestResult {
 
 #[tokio::test]
 async fn the_admin_listener_serves_a_parseable_text_exposition() -> TestResult {
-    let surface = metrics::router(Arc::new(Metrics::default()));
+    let surface = metrics::router(&Metrics::default());
     let response = send(
         surface.clone(),
         Request::get(metrics::PATH).body(Body::empty())?,
@@ -103,13 +107,14 @@ async fn the_admin_listener_serves_a_parseable_text_exposition() -> TestResult {
 
 #[tokio::test]
 async fn an_otlp_push_shares_the_provider_and_leaves_the_exposition_whole() -> TestResult {
+    let settings = resolved("[telemetry.otlp]\nendpoint = \"http://127.0.0.1:4317\"\n")?;
     let pushed = Metrics::new(
-        &resolved("[metrics]\notlp_endpoint = \"http://127.0.0.1:4317\"\n")?.metrics,
+        Arc::new(Telemetry::new(&settings.telemetry, service())?),
         ferrofed_server::usage_report::group::window(
             ferrofed_server::base_path::BasePath::default(),
             None,
         ),
-    )?;
+    );
     let alone = Metrics::default();
     let families = |text: &str| -> Vec<String> {
         text.lines()
@@ -185,27 +190,22 @@ fn two_listeners_on_port_zero_each_get_a_port_of_their_own() -> TestResult {
 }
 
 #[test]
-fn the_otlp_push_takes_an_http_collector_and_refuses_another_scheme() -> TestResult {
-    let settings = resolved("[metrics]\notlp_endpoint = \"http://127.0.0.1:4317\"\n")?;
-    assert_eq!(
-        Some("http://127.0.0.1:4317/"),
-        settings
-            .metrics
-            .otlp_endpoint
-            .as_ref()
-            .map(SecretUrl::expose)
+fn the_push_is_configured_under_telemetry_and_the_metrics_key_is_refused() -> TestResult {
+    let text = "[metrics]\notlp_endpoint = \"http://127.0.0.1:4317\"\n";
+    let refused = Config::from_sources(Some(text), &BTreeMap::new())
+        .and_then(|config| config.resolve())
+        .err()
+        .ok_or("metrics.otlp_endpoint is refused")?;
+    assert!(
+        format!("{refused:?}").contains("otlp_endpoint"),
+        "{refused:?}"
     );
-    for refused in ["ftp://collector.example.org:4317", "not a url"] {
-        let text = format!("[metrics]\notlp_endpoint = \"{refused}\"\n");
-        let error = Config::from_sources(Some(&text), &BTreeMap::new())?
-            .resolve()
-            .err()
-            .ok_or("the collector is refused")?;
-        assert!(
-            error.to_string().contains("metrics.otlp_endpoint"),
-            "{error}"
-        );
-    }
+    let settings = resolved("[telemetry.otlp]\nendpoint = \"http://127.0.0.1:4317\"\n")?;
+    let otlp = settings.telemetry.otlp.ok_or("an OTLP collector")?;
+    assert!(
+        otlp.metrics,
+        "the metrics are pushed unless metrics = false"
+    );
     Ok(())
 }
 

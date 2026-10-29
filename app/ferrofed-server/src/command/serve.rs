@@ -21,15 +21,17 @@ use crate::state::AppState;
 use crate::support::Support;
 use crate::usage_report::Usage;
 use crate::{
-    EXIT_CONFIG, admin, banner, binding, body, chain, config, panic, reload, revision, state,
-    telemetry, trusted_router,
+    EXIT_CONFIG, admin, banner, binding, body, chain, config, metrics, panic, reload, revision,
+    state, trusted_router,
 };
 use ferrohealth_server::serve::Listener;
 use ferrohealth_server::tls::ReloadableTls;
+use ferrohealth_telemetry::section::Filter;
+use ferrohealth_telemetry::telemetry::{Console, InitError, Telemetry};
 
-/// Runs `serve`: the banner on a terminal, the runtime, the subscriber with
-/// the trace export when `telemetry.otlp_endpoint` is set, the state, and
-/// the server, until the process is asked to stop.
+/// Runs `serve`: the banner on a terminal, the runtime, the telemetry with
+/// the trace export and the metrics push `[telemetry.otlp]` asks for, the
+/// state, and the server, until the process is asked to stop.
 ///
 /// The registry document is read once, before the banner, and the state is
 /// built over that read after the subscriber starts, so the banner describes
@@ -52,7 +54,13 @@ pub(super) fn serve_job(
         }
     };
     let stdout_is_terminal = std::io::stdout().is_terminal();
-    let no_color = std::env::var_os("NO_COLOR");
+    let console = match console(stdout_is_terminal) {
+        Ok(console) => console,
+        Err(error) => {
+            eprintln!("ferrofed: cannot start: {}", chain(&error));
+            return ExitCode::from(EXIT_CONFIG);
+        }
+    };
     let format = settings.telemetry.format;
     let (document, sources) = binding::process::read_source(&settings);
     if banner::prints(format, stdout_is_terminal) {
@@ -78,7 +86,7 @@ pub(super) fn serve_job(
                         .iter()
                         .any(|binding| binding.spools_in_memory(&settings)),
             ),
-            format.colour(stdout_is_terminal, no_color.as_deref()),
+            console.colour(format),
         );
     }
     let runtime = match tokio::runtime::Builder::new_multi_thread()
@@ -91,33 +99,25 @@ pub(super) fn serve_job(
             return ExitCode::FAILURE;
         }
     };
-    let traces = match traces(&settings, &runtime) {
-        Ok(traces) => traces,
+    let telemetry = match telemetry(&settings, &runtime) {
+        Ok(telemetry) => Arc::new(telemetry),
         Err(error) => {
             eprintln!("ferrofed: cannot start: {}", chain(&error));
             return ExitCode::from(EXIT_CONFIG);
         }
     };
-    if let Err(error) = telemetry::init(
-        format,
-        &settings.telemetry.filter,
-        stdout_is_terminal,
-        no_color.as_deref(),
-        traces.as_ref().map(telemetry::Traces::tracer),
-    ) {
+    if let Err(error) = telemetry.install(&settings.telemetry, &console) {
         eprintln!("ferrofed: cannot start: {}", chain(&error));
         return ExitCode::from(EXIT_CONFIG);
     }
     panic::install_hook();
-    // NOTE: no specification governs this: our own design; the OTLP push is a
-    // tonic client, which is built inside the runtime it will run on.
     if let Err(error) = state::admits_callers(&settings, settings.federates()) {
         tracing::error!(error = chain(&error), "cannot start");
         booted.inspect(|booted| booted.refused("callers", "the configuration admits no caller"));
         return ExitCode::from(EXIT_CONFIG);
     }
     let entered = runtime.enter();
-    let state = match AppState::build_read(&settings, document) {
+    let state = match AppState::build_telemetered(&settings, document, Arc::clone(&telemetry)) {
         Ok(state) => Arc::new(state.with_sources(sources)),
         Err(error) => {
             tracing::error!(error = chain(&error), "cannot start");
@@ -139,10 +139,10 @@ pub(super) fn serve_job(
             ExitCode::FAILURE
         }
     };
-    // NOTE: no specification governs this: our own design; the spans still held
-    // are flushed while the runtime the export runs on is still up.
-    if let Some(Err(error)) = traces.as_ref().map(telemetry::Traces::shutdown) {
-        tracing::warn!(error = chain(&error), "the traces could not be flushed");
+    // NOTE: no specification governs this: our own design; the spans and the metrics
+    // still held are flushed while the runtime the export runs on is still up.
+    if let Err(error) = telemetry.shutdown() {
+        tracing::warn!(error = chain(&error), "the telemetry could not be flushed");
     }
     code
 }
@@ -167,9 +167,6 @@ fn started(booted: Booted) -> Arc<Revisions> {
 /// set ([`admin`]). Each binding's processes start beside the server, such as
 /// a care services directory kept in step and the PMIR identity feed, which
 /// deletes its subscription once the drain ends ([`crate::binding`]).
-///
-/// The metrics are flushed once the gateway has stopped, while the runtime
-/// an OTLP push runs on is still up.
 fn serve_command(
     runtime: &tokio::runtime::Runtime,
     settings: Settings,
@@ -191,7 +188,7 @@ fn serve_command(
         (address, access)
     });
     let admin_tls_files = settings.metrics.tls.clone();
-    let outcome = runtime.block_on(async {
+    runtime.block_on(async {
         use anyhow::Context;
 
         tracing::info!(
@@ -264,11 +261,7 @@ fn serve_command(
         stopped.context("serving HTTP")?;
         tracing::info!("ferrofed stopped");
         anyhow::Ok(())
-    });
-    if let Err(error) = state.metrics().shutdown() {
-        tracing::warn!(error = chain(&error), "the metrics could not be flushed");
-    }
-    outcome
+    })
 }
 
 /// Stops the bindings `running` started, then every audit trail, each within
@@ -315,29 +308,32 @@ fn with_tls(listener: Listener, tls: Option<Arc<ReloadableTls>>) -> Listener {
     }
 }
 
-/// The trace export `settings` configure, built inside `runtime`, or `None`
-/// with no collector.
+/// The console of this process, whose security events the console writes
+/// whatever `telemetry.filter` says.
 ///
 /// # Errors
 ///
-/// Returns the [`telemetry::Error`] the exporter could not be built with.
-fn traces(
+/// Returns the [`InitError`] of a security directive that does not parse,
+/// which a build never holds.
+fn console(stdout_is_terminal: bool) -> Result<Console, InitError> {
+    let security = Filter::new(crate::facade::security::DIRECTIVE)?;
+    Ok(Console::new(stdout_is_terminal, std::env::var_os("NO_COLOR").as_deref()).force(security))
+}
+
+/// The telemetry `settings` configure, built inside `runtime`: the
+/// Prometheus reader always, and the trace export and the metrics push
+/// `[telemetry.otlp]` asks for.
+///
+/// # Errors
+///
+/// Returns the [`InitError`] an exporter or a collector TLS file could not
+/// be built or read with.
+fn telemetry(
     settings: &Settings,
     runtime: &tokio::runtime::Runtime,
-) -> Result<Option<telemetry::Traces>, telemetry::Error> {
-    // NOTE: no specification governs this: our own design; the OTLP trace export
-    // is a tonic client, which is built inside the runtime it will run on.
-    settings
-        .telemetry
-        .otlp_endpoint
-        .as_ref()
-        .map(|endpoint| {
-            let _entered = runtime.enter();
-            telemetry::Traces::new(
-                endpoint,
-                &settings.telemetry.otlp_tls,
-                settings.telemetry.trace_sample_ratio,
-            )
-        })
-        .transpose()
+) -> Result<Telemetry, InitError> {
+    // NOTE: no specification governs this: our own design; the OTLP export is a tonic
+    // client, which is built inside the runtime it will run on.
+    let _entered = runtime.enter();
+    Telemetry::new(&settings.telemetry, metrics::service())
 }

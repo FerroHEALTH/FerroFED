@@ -6,9 +6,10 @@
 //! is, never a line of the configuration. No specification governs this:
 //! our own design.
 
+use crate::support::console::subscriber;
 use ferrofed_registry::revision::{Author, Origin};
 use ferrofed_server::revision::{Draft, Saved};
-use ferrofed_server::telemetry::{Rendering, subscriber};
+use ferrohealth_telemetry::section::Rendering;
 use http::StatusCode;
 use jiff::Timestamp;
 
