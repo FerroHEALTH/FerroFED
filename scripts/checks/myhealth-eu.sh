@@ -15,8 +15,8 @@
 #                 issue, a waits-art-15-1 row names #1425, and every row
 #                 states FerroFED's conclusion;
 #   the tree      each evidence item is a file of the tree, and its anchor,
-#                 when it has one, is a heading of a Markdown file, a test
-#                 function of a Rust file or a decision of the architecture;
+#                 when it has one, is a heading of a Markdown file or a test
+#                 function of a Rust file;
 #   the renders   the badge file, the README block and the book page block
 #                 equal what scripts/conformance/myhealth-eu.sh renders, and
 #                 the book summary lists the page;
@@ -39,7 +39,6 @@ readonly BADGE=conformance/myhealth-eu-badge.json
 readonly README=README.md
 readonly PAGE=website/book/src/evaluate/myhealth-eu.md
 readonly SUMMARY=website/book/src/SUMMARY.md
-readonly ARCHITECTURE=docs/architecture.md
 readonly RENDER=scripts/conformance/myhealth-eu.sh
 readonly HEADER=$'id\tsection\tstatus\tevidence\tissue\tnote'
 readonly NOTE_MAX=300
@@ -105,10 +104,6 @@ has_test() {
   ' "$1"
 }
 
-has_decision() {
-  grep -Eq "^\| $2 \|" "$1"
-}
-
 check_evidence() {
   local line="$1" rest="$2" item path anchor
   [[ "$rest" != - && -n "$rest" ]] || {
@@ -132,16 +127,12 @@ check_evidence() {
       continue
     fi
     [[ -n "$anchor" ]] || continue
-    if [[ "$path" == "$ARCHITECTURE" && "$anchor" =~ ^A[0-9]+$ ]]; then
-      has_decision "$path" "$anchor" || fail "$MAPPING line $line: $path has no decision $anchor."
-      continue
-    fi
     case "$path" in
     *.md) has_heading "$path" "$anchor" ||
       fail "$MAPPING line $line: $path has no heading \"$anchor\"." ;;
     *.rs) has_test "$path" "$anchor" ||
       fail "$MAPPING line $line: $path has no test \"$anchor\"." ;;
-    *) fail "$MAPPING line $line: $path takes no anchor; only a Markdown heading, a Rust test or a decision does." ;;
+    *) fail "$MAPPING line $line: $path takes no anchor; only a Markdown heading or a Rust test does." ;;
     esac
   done
 }
@@ -212,7 +203,7 @@ check_renders() {
 
 run() {
   local row line=0 seen=" " id section status evidence issue note pair want
-  for f in "$MAPPING" "$BADGE" "$README" "$PAGE" "$SUMMARY" "$ARCHITECTURE" "$RENDER"; do
+  for f in "$MAPPING" "$BADGE" "$README" "$PAGE" "$SUMMARY" "$RENDER"; do
     [[ -f "$f" ]] || {
       fail "$f is missing."
       finish
@@ -299,7 +290,7 @@ self_test() {
     [[ "$status" -eq "$want" ]] || flunk "$name exited $status, wanted $want."
     [[ -z "$pattern" ]] || grep -Fq -- "$pattern" "$work/out" || flunk "$name did not say \"$pattern\"."
   }
-  # The fixture: every id met on one decision, the renders written, a page,
+  # The fixture: every id met on one page, the renders written, a page,
   # a summary, a heading and a test, in a git repository of its own.
   fixture() {
     rm -rf -- "$repo"
@@ -307,13 +298,13 @@ self_test() {
       "$repo/docs" "$repo/website/book/src/evaluate" "$repo/tests"
     cp "$script" "$repo/scripts/checks/myhealth-eu.sh"
     cp "$render" "$repo/scripts/conformance/myhealth-eu.sh"
-    printf '# Architecture\n\n## The evidence\n\n| A1 | a decision |\n' > "$repo/$ARCHITECTURE"
+    printf '# Evidence\n\n## The evidence\n' > "$repo/docs/evidence.md"
     printf '#[test]\nfn a_test() {}\n\nfn not_a_test() {}\n' > "$repo/tests/it.rs"
     {
       printf '# a comment\n%s\n' "$HEADER"
       for pair in $IDS; do
-        printf '%s\t%s\tmet\t%s::A1; %s::The evidence; tests/it.rs::a_test\t-\tThe gateway does its share.\n' \
-          "${pair%%=*}" "${pair#*=}" "$ARCHITECTURE" "$ARCHITECTURE"
+        printf '%s\t%s\tmet\tdocs/evidence.md; docs/evidence.md::The evidence; tests/it.rs::a_test\t-\tThe gateway does its share.\n' \
+          "${pair%%=*}" "${pair#*=}"
       done
     } > "$repo/$MAPPING"
     printf '# MyHealth@EU\n\n<!-- myhealth-eu:begin -->\n<!-- myhealth-eu:end -->\n' > "$repo/$PAGE"
@@ -403,15 +394,11 @@ self_test() {
   rerender
   expect "evidence that does not exist" 1 "missing.md does not exist"
   fixture
-  row 06 4 "$ARCHITECTURE::A9"
-  rerender
-  expect "a decision that does not exist" 1 "has no decision A9"
-  fixture
   row 06 4 'tests/it.rs::not_a_test'
   rerender
   expect "a function that is no test" 1 "has no test \"not_a_test\""
   fixture
-  row 06 4 "$ARCHITECTURE::No such heading"
+  row 06 4 "docs/evidence.md::No such heading"
   rerender
   expect "a heading that does not exist" 1 "has no heading \"No such heading\""
   fixture
