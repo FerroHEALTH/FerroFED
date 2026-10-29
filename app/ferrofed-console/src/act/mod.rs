@@ -14,7 +14,7 @@
 //! the gateway as the operator, and the answer never reaches a URL, the
 //! history or a log; a refusal stays with the fields it is about, as
 //! FerroUI asks. Every unsafe request passes the console's same-origin
-//! check before it reaches a function (`crate::server::same_origin`). No
+//! check before it reaches a function (`ferrohealth_server::same_origin`). No
 //! specification governs the console's actions: our own design.
 #![cfg_attr(
     target_arch = "wasm32",

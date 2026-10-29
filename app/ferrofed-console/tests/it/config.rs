@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use ferrofed_console::config::Config;
 use ferrofed_console::config::error;
-use ferrofed_console::config::error::Problem;
+use ferrohealth_config::error::ConfigError;
 use ferrohealth_secret::file::SecretError;
 use secrecy::ExposeSecret as _;
 
@@ -162,22 +162,67 @@ fn a_replica_url_that_is_not_http_or_carries_userinfo_is_refused() {
 }
 
 #[test]
-fn a_parse_refusal_names_the_key_and_the_line_only() {
+fn a_value_refusal_names_the_key_and_never_the_value() {
     let error =
         refused("[server]\nlisten = \"127.0.0.1:3000\"\n\n[gateway]\ntimeout_ms = \"soon\"\n");
-    let error::Error::Parse { fault } = &error else {
-        panic!("a parse refusal: {error:?}");
+    let error::Error::Load { source } = &error else {
+        panic!("a refused load: {error:?}");
     };
-    assert_eq!(Some("gateway.timeout_ms"), fault.key.as_deref());
-    assert_eq!(Problem::InvalidValue, fault.problem);
-    assert_eq!(Some(5), fault.position.map(|(line, _column)| line));
-    assert!(!error.to_string().contains("soon"), "{error}");
+    assert!(
+        matches!(source, ConfigError::Invalid { key: Some(key), .. } if key == "gateway.timeout_ms"),
+        "{source:?}"
+    );
+    let shown = format!("{error} {source} {error:?}");
+    assert!(!shown.contains("soon"), "{shown}");
+}
+
+#[test]
+fn text_that_is_not_toml_is_refused_at_its_line() {
+    let error = refused("[server]\nlisten = \"127.0.0.1:3000\"\n\n[gateway\n");
+    let error::Error::Load { source } = &error else {
+        panic!("a refused load: {error:?}");
+    };
+    assert!(
+        matches!(
+            source,
+            ConfigError::Syntax {
+                position: Some((4, _)),
+                ..
+            }
+        ),
+        "{source:?}"
+    );
 }
 
 #[test]
 fn an_unknown_key_is_refused() {
     let error = refused("[server]\nlisten = \"127.0.0.1:3000\"\nport = 3000\n");
-    assert!(matches!(error, error::Error::Parse { .. }), "{error:?}");
+    let error::Error::Load { source } = &error else {
+        panic!("a refused load: {error:?}");
+    };
+    assert!(source.to_string().contains("server.port"), "{source}");
+}
+
+#[test]
+fn an_unknown_variable_is_refused_by_its_name() {
+    let error = Config::from_sources(
+        None,
+        &BTreeMap::from([(
+            String::from("FERROFED_CONSOLE__GATEWAY__TOKEN"),
+            String::from("s3cret"),
+        )]),
+    )
+    .expect_err("an unknown key");
+    let error::Error::Load { source } = &error else {
+        panic!("a refused load: {error:?}");
+    };
+    assert!(
+        source
+            .to_string()
+            .contains("FERROFED_CONSOLE__GATEWAY__TOKEN"),
+        "{source}"
+    );
+    assert!(!format!("{error} {source} {error:?}").contains("s3cret"));
 }
 
 #[test]

@@ -1,16 +1,19 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The console's configuration: a TOML file, `FERROFED_CONSOLE__` environment
-//! overrides over it, and every secret reachable through a `<key>_file`
-//! sibling read at start.
+//! The console's configuration, read by `ferrohealth-config`.
+//!
+//! The tree's defaults, a TOML file, `FERROFED_CONSOLE__` environment
+//! overrides and the `--set` pairs over it, and every secret reachable
+//! through a `<key>_file` sibling read at start through `ferrohealth-secret`.
 //!
 //! [`Config`] is the tree as written, every default in its struct's
 //! `Default` impl; [`Config::load`](crate::config::Config::load) reads it and
 //! [`Config::resolve`](crate::config::Config::resolve) turns it into the
 //! checked [`settings::Settings`] the server runs on. An override names its
 //! key by path, `FERROFED_CONSOLE__GATEWAY__BASE_URL` for `[gateway]
-//! base_url`. No specification governs the configuration: our own design.
+//! base_url`; `RUST_LOG` is the alias of `telemetry.filter`. No
+//! specification governs the configuration: our own design.
 //!
 //! ```toml
 //! [server]
@@ -43,18 +46,30 @@ pub mod settings;
 
 use std::path::PathBuf;
 
+use ferrohealth_config::loader::Loader;
 use ferrohealth_secret::secret::Secret;
-use serde::Deserialize;
+use ferrohealth_telemetry::section::TelemetrySection;
+use serde::{Deserialize, Serialize};
 
-/// The environment variable that names the configuration file when
-/// `--config` does not.
-pub const CONFIG_PATH_ENV: &str = "FERROFED_CONSOLE_CONFIG";
+/// The environment namespace: `FERROFED_CONSOLE__SERVER__LISTEN` sets
+/// `[server] listen`, and `FERROFED_CONSOLE_CONFIG` names the file.
+pub const PREFIX: &str = "FERROFED_CONSOLE";
 
-/// The prefix of every environment override.
-pub const ENV_PREFIX: &str = "FERROFED_CONSOLE__";
+/// The variable that names the `tracing` filter, the alias of
+/// `telemetry.filter`.
+pub const FILTER_ENV: &str = "RUST_LOG";
+
+/// The loader of the console's tree.
+///
+/// # Errors
+/// Returns the loader's error when the prefix is refused, which it never is
+/// for [`PREFIX`].
+pub fn loader() -> Result<Loader, ferrohealth_config::error::ConfigError> {
+    Ok(Loader::new(PREFIX)?.alias(FILTER_ENV, "telemetry.filter"))
+}
 
 /// The configuration tree as written.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     /// `[server]`: where the console listens and where its site bundle is.
@@ -70,10 +85,13 @@ pub struct Config {
     /// reaches for the operator's admin actions; without one the console
     /// offers none.
     pub admin: Admin,
+    /// `[telemetry]`: the console log, the family's section; `RUST_LOG` sets
+    /// its filter too.
+    pub telemetry: TelemetrySection,
 }
 
 /// `[server]`.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Server {
     /// The socket address the console listens on.
@@ -97,7 +115,7 @@ impl Default for Server {
 }
 
 /// `[gateway]`.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Gateway {
     /// The gateway's `{base}`: its self-description is `OPTIONS {base}/` and
@@ -118,7 +136,7 @@ impl Default for Gateway {
 
 /// `[session]`: the pending sign-ins and the signed-in sessions, each a pool
 /// of its own.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Session {
     /// Whether the cookies carry `Secure`, so a browser sends them over HTTPS
@@ -153,7 +171,7 @@ impl Default for Session {
 
 /// `[oidc]`: an OAuth 2.0 authorization code client with PKCE at an OpenID
 /// Provider.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Oidc {
     /// The provider's issuer identifier.
@@ -217,7 +235,7 @@ impl Default for Oidc {
 /// Each admin listener must be reachable from the console's server on an
 /// internal network, never a public one, so the gateway's `[metrics] listen`
 /// binds a non-loopback internal address.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Admin {
     /// Every replica, in the order the console names them; the drift
@@ -227,7 +245,7 @@ pub struct Admin {
 }
 
 /// One gateway replica's admin listener.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Replica {
     /// The name the console shows for the replica and the operator picks it

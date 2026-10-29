@@ -36,6 +36,8 @@ pub struct Settings {
     /// The admin listener of every gateway replica the console acts on, in
     /// the order configured; empty when the console offers no admin action.
     pub admin: Vec<ReplicaSettings>,
+    /// The console log, the family's `[telemetry]` section.
+    pub telemetry: ferrohealth_telemetry::section::TelemetrySection,
 }
 
 /// One resolved `[[admin.replicas]]` entry.
@@ -171,6 +173,7 @@ impl Config {
             session,
             oidc,
             admin,
+            telemetry: self.telemetry.clone(),
         })
     }
 }

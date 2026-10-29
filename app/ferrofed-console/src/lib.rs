@@ -17,9 +17,9 @@
 //! [`act`] the actions the operator posts, [`configure`] the configuration
 //! revisions, [`prefs`] the operator's preferences kept in cookies, and
 //! [`locale`] the console's words. [`server`] serves it with the health and
-//! sign-in routes, [`config`] reads the TOML configuration, [`cli`] and
-//! [`command`] run the binary, and [`healthcheck`] is the job a container
-//! runtime runs beside it.
+//! sign-in routes, [`config`] reads the TOML configuration, and [`cli`] and
+//! [`command`] run the binary, its `healthcheck` the family's from
+//! `ferrohealth-server`.
 //!
 //! Every page works with no WebAssembly: a link is a plain `<a>`, a
 //! preference a plain form the server answers, and every action a server
@@ -51,8 +51,6 @@ pub mod command;
 pub mod config;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod gateway;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod healthcheck;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod oidc;
 #[cfg(not(target_arch = "wasm32"))]

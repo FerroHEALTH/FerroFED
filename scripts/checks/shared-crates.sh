@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: BUSL-1.1
 # The shared-crates guard (no specification governs this: our own design).
 #
-# Every FerroHEALTH product takes its server plumbing, configuration,
-# health family, secret handling, telemetry and usage report from the
-# FerroSYS crates, and keeps no copy of its own beside them (#1397). This
-# guard holds FerroFED to the crates it has moved onto:
+# Every FerroHEALTH product, its operator console included, takes its
+# server plumbing, configuration, health family, secret handling, telemetry
+# and usage report from the FerroSYS crates, and keeps no copy of its own
+# beside them (#1397). This guard holds FerroFED to the crates it has moved
+# onto:
 #
 #   - the root Cargo.toml pins each of them exactly (`= "=x.y.z"`), as a
 #     product pins every family crate;
@@ -59,7 +60,10 @@ ferrohealth-server	struct[[:space:]]+(Admission|CallerLimit)([^A-Za-z0-9_]|\$)
 ferrohealth-telemetry	(struct|enum)[[:space:]]+(TelemetrySection|OtlpSection|SampleRatio|Traces|Format|Rendering|RequestLog)([^A-Za-z0-9_]|\$)
 ferrohealth-telemetry	fn[[:space:]]+(sampler|collector_tls|method_label)[[:space:]]*[<(]
 ferrohealth-telemetry	(opentelemetry_otlp|opentelemetry_prometheus)::
-ferrohealth-telemetry	(std::panic::set_hook|fn[[:space:]]+install_hook[[:space:]]*[<(])"
+ferrohealth-telemetry	(std::panic::set_hook|fn[[:space:]]+install_hook[[:space:]]*[<(])
+ferrohealth-telemetry	tracing_subscriber::fmt\(\)
+ferrohealth-server	fn[[:space:]]+(same_origin|content_security_policy|shutdown_signal)[[:space:]]*[<(]
+ferrohealth-config	fn[[:space:]]+(apply_override|env_value)[[:space:]]*[<(]"
 
 # check ROOT: prints every finding under ROOT and returns 1 when there is one.
 check() {
@@ -119,6 +123,10 @@ self_test() {
     'use opentelemetry_otlp::WithExportConfig as _;'
     '    std::panic::set_hook(Box::new(hook));'
     'pub fn install_hook() {'
+    '    let subscriber = tracing_subscriber::fmt()'
+    'pub fn same_origin(headers: &http::HeaderMap, origin: Option<&str>) -> bool {'
+    'async fn shutdown_signal() {'
+    'fn apply_override(table: &mut toml::Table, name: &str, raw: &str) {}'
   )
   local case
   for case in "${cases[@]}"; do

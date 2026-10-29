@@ -9,7 +9,7 @@
 //!
 //! A sign-out is a `POST`, which the server takes only from the console's own
 //! pages, as it takes every request that is not a safe method
-//! ([`crate::server::same_origin`]). No specification of the federation
+//! (`ferrohealth_server::same_origin`). No specification of the federation
 //! governs sign-out: our own design on RP-Initiated Logout 1.0.
 
 use crate::locale::Msg;
