@@ -160,7 +160,7 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
         "a secret's value field carries the hold-to-show eye: {edit}"
     );
     assert!(
-        edit.contains(r#"name="ferroui_secret" value="form[secret."#),
+        marks_a_secret(&edit, "form[secret."),
         "a secret's value field is marked, so a plain post never draws it back: {edit}"
     );
     assert!(
@@ -487,4 +487,29 @@ async fn an_approval_the_gateway_refuses_shows_its_status_and_code() -> Result<(
     .await?;
     assert!(html.contains("403 (approval-own-revision)"), "{html}");
     Ok(())
+}
+
+/// Whether `page` holds the mark of a field whose name starts with `prefix`:
+/// a hidden input named `ferroui_secret_` and the field name's bytes in
+/// lower-case hexadecimal, its value the field name (FerroUI 0.5.8).
+fn marks_a_secret(page: &str, prefix: &str) -> bool {
+    page.split('<').any(|tag| {
+        let Some((_, after)) = tag.split_once(&format!(r#"value="{prefix}"#)) else {
+            return false;
+        };
+        let Some((rest, _)) = after.split_once('"') else {
+            return false;
+        };
+        let field = format!("{prefix}{rest}");
+        let hex = field.bytes().fold(String::new(), |mut hex, byte| {
+            use std::fmt::Write as _;
+            let _written = write!(hex, "{byte:02x}");
+            hex
+        });
+        tag.contains(r#"type="hidden""#)
+            && tag.contains(&format!(
+                r#"name="{}_{hex}""#,
+                ferrohealth_ui::widget::action::SECRET
+            ))
+    })
 }
