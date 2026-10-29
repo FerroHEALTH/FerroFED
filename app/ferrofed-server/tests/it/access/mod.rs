@@ -250,6 +250,18 @@ pub(crate) fn named<'a>(record: &'a Value, name: &str) -> Vec<&'a Value> {
         .unwrap_or_default()
 }
 
+/// The data entity of `record`: the one entity in the role of a domain
+/// resource (`object-role` `4`), the object a read or write acted on (BALP
+/// 1.1.4 `entity:data`).
+pub(crate) fn data(record: &Value) -> Option<&Value> {
+    let mut data = record["entity"]
+        .as_array()?
+        .iter()
+        .filter(|entity| entity.pointer("/role/code").and_then(Value::as_str) == Some("4"));
+    let first = data.next();
+    data.next().is_none().then_some(first).flatten()
+}
+
 /// The `detail` values of `kind` in the entity named `name` of `record`.
 pub(crate) fn details(record: &Value, name: &str, kind: &str) -> Vec<String> {
     named(record, name)

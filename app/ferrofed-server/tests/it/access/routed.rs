@@ -20,8 +20,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::{
-    LAB_CATEGORY, LAB_REPORT, TestResult, accesses, composition, details, gateway, gateway_with,
-    named, profile,
+    LAB_CATEGORY, LAB_REPORT, TestResult, accesses, composition, data, details, gateway,
+    gateway_with, named, profile,
 };
 use crate::facade::{EHR_A, NAMESPACE, PATIENT, body, post, settings_with_room};
 use crate::feed_audit::{SETTLE, names_the_default_caller};
@@ -134,6 +134,29 @@ async fn a_routed_read_names_the_endpoint_and_the_category_of_what_it_read() -> 
     assert_eq!(
         ehrs.first().map(|ehr| &ehr["what"]["identifier"]["value"]),
         Some(&serde_json::json!(EHR_A))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_routed_read_names_the_openehr_path_it_read_as_an_identifier() -> TestResult {
+    let node = node().await;
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let (status, text) = call(over(dir.path(), &node, &repository, "")?, read()?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let records = accesses(&repository.wait_for(1, SETTLE).await)?;
+    let [record] = records.as_slice() else {
+        return Err(format!("one record of the read, got {records:?}").into());
+    };
+    let Some(entity) = data(record) else {
+        return Err(format!("one data entity in {record}").into());
+    };
+    assert_eq!(
+        entity["what"],
+        serde_json::json!({"identifier": {"value": format!("/ehr/{EHR_A}/composition/{UID}")}}),
+        "FHIR R4 references.html §2.3.0.3: an openEHR path is no literal reference, so it is \
+         what.identifier with no system"
     );
     Ok(())
 }
