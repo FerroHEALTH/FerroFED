@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The console's pages, each drawn on the server from what it reads of the
-//! gateway, with FerroUI's templates and components.
+//! The console's pages, each drawn from what it reads of the gateway, with
+//! FerroUI's templates and components, by the server for the first page and
+//! by the browser for every page after it.
 //!
-//! A page reads inside a `Suspense`, and its route renders
-//! `SsrMode::Async`, so the server sends it whole. A read the gateway
+//! A page asks its reads under a `Resource` inside a `Suspense`, and its
+//! route renders `SsrMode::Async`, so the server sends it whole. A read the gateway
 //! refused draws its status and stable code in words, and a fault of the
 //! console says what failed with the way to try again; neither draws an
 //! empty view, as FerroUI asks.
@@ -159,9 +160,12 @@ pub fn here() -> String {
 /// Sets the answer's status to `status`, for a page that is a refusal or
 /// a fault of its own.
 pub fn set_status(status: http::StatusCode) {
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
         response.set_status(status);
     }
+    #[cfg(target_arch = "wasm32")]
+    let _: http::StatusCode = status;
 }
 
 /// A time as the gateway writes it (RFC 3339), relative to now in a list

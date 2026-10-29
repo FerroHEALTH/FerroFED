@@ -12,19 +12,29 @@
 //! organisation and its nodes nested under Organisations (F10); it folds to
 //! a rail from 48 rem up and is a drawer below. The development banner
 //! sits under the top bar while the gateway runs the development profile.
-//! Every part is server HTML: the drawer, the menu and the find work with
-//! no WebAssembly, and FerroUI's islands add their keys.
+//! The shell is drawn once and survives a navigation in the page; the
+//! drawer, the menu and the find work with no WebAssembly too.
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::search::{SearchBox, search_box};
-use ferrohealth_ui::view::shell::{Footer, Shell, TopBar, brand_mark, lockup, shell, topbar};
+use ferrohealth_ui::view::shell::{
+    Footer, Shell, TopBar, brand_mark, lockup, shell as shell_view, topbar,
+};
 use ferrohealth_ui::view::status::{Reach, StatusPill, banner, status_pill};
 use ferrohealth_ui::widget::menu::{ThemeChoice, UserMenu, user_menu};
 use ferrohealth_ui::widget::nav::{Count, Entry, Group, Nest, NestItem, Rail, Sidebar, sidebar};
 use leptos::prelude::*;
 use leptos_router::hooks::use_location;
+use serde::{Deserialize, Serialize};
 
 use crate::app::{
     ABOUT, ALL_NODES, CONFIGURATION, INTEGRITY, MARK_DARK, MARK_LIGHT, ORGANISATIONS, PRODUCT,
@@ -69,8 +79,8 @@ pub fn brand_lockup() -> AnyView {
 /// What the shell reads of the gateway for one page: how it is deployed,
 /// the open incidents, and the federation where the page sits inside an
 /// organisation.
-#[derive(Debug, Clone)]
-struct Reads {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reads {
     deployment: Result<Deployment, Stop>,
     /// The gateway's status from its self-description, read when its
     /// deployment cannot be: the federation and the specification version.
@@ -79,8 +89,23 @@ struct Reads {
     federation: Option<Federation>,
 }
 
-/// Reads what the shell of the page at `path` draws.
-async fn reads(path: String) -> Reads {
+/// What the shell of a page reads, with the federation when `nested`, the
+/// page sitting inside an organisation, as the operator of the request.
+///
+/// # Errors
+/// Returns [`crate::read::Fault::Unavailable`] when the console's server
+/// does not answer.
+#[server(endpoint = "shell")]
+pub async fn reads_now(
+    /// Whether the page sits inside an organisation.
+    nested: bool,
+) -> Result<Reads, Stop> {
+    Ok(reads(nested).await)
+}
+
+/// Reads what the shell of a page draws.
+#[cfg(not(target_arch = "wasm32"))]
+async fn reads(nested: bool) -> Reads {
     let deployment = crate::read::deployment().await;
     // NOTE: no specification governs this: our own design; an operator whose token
     // reads no deployment still reads the gateway as up when it describes itself.
@@ -94,7 +119,7 @@ async fn reads(path: String) -> Reads {
     } else {
         None
     };
-    let federation = if nested_org(&path).is_some() && reachable {
+    let federation = if nested && reachable {
         crate::read::federation::read().await.ok()
     } else {
         None
@@ -115,44 +140,77 @@ fn nested_org(path: &str) -> Option<&str> {
     (!org.is_empty() && org != "nodes" && org != "new").then_some(org)
 }
 
-/// The page `content` in the shell of a signed-in operator.
+/// The page `content` in the shell of a signed-in operator: the top bar,
+/// the banner and the navigation each read the gateway as they are drawn,
+/// and the page itself is drawn once inside them.
 #[must_use]
-pub fn signed_in(content: AnyView) -> AnyView {
-    let path = use_location().pathname.get_untracked();
-    let query = use_location().search.get_untracked();
-    let searched = (path == SEARCH)
-        .then(|| crate::pages::search::query_of(&query))
-        .flatten();
-    let chrome = {
-        let path = path.clone();
-        Suspend::new(async move {
-            let reads = reads(path.clone()).await;
-            chrome(&path, &reads, searched, content)
+pub fn shell(content: AnyView) -> AnyView {
+    // NOTE: FerroUI `docs/consoles.md`, "How a console builds", step 10: the shell
+    // is drawn once, and the navigation and the `back` of its forms follow the router.
+    ferrohealth_ui::widget::nav::follow_path();
+    let location = use_location();
+    let nested = Memo::new(move |_| nested_org(&location.pathname.get()).is_some());
+    let reads = Resource::new(
+        move || (crate::read::changes(), nested.get()),
+        |(_, nested)| reads_now(nested),
+    );
+    let read = move || async move {
+        reads.await.unwrap_or_else(|stop| Reads {
+            deployment: Err(stop),
+            described: None,
+            open_incidents: None,
+            federation: None,
         })
     };
-    view! { <Suspense fallback=|| ()>{chrome}</Suspense> }.into_any()
+    let bar = view! {
+        <Suspense>
+            {move || {
+                let path = location.pathname.get_untracked();
+                let query = location.search.get_untracked();
+                let searched = (path == SEARCH)
+                    .then(|| crate::pages::search::query_of(&query))
+                    .flatten();
+                let visit = crate::visit::visit();
+                Suspend::new(async move { top_bar(&path, &read().await, searched, &visit) })
+            }}
+        </Suspense>
+    }
+    .into_any();
+    let banner = view! { <Suspense>{move || Suspend::new(async move { development(&read().await) })}</Suspense> }
+    .into_any();
+    let nav = view! {
+        <Suspense>
+            {move || {
+                let path = location.pathname.get();
+                let rail = crate::visit::visit().chosen().rail;
+                let replicas = crate::visit::visit().replicas();
+                Suspend::new(async move { navigation_of(&path, rail, &replicas, &read().await) })
+            }}
+        </Suspense>
+    }
+    .into_any();
+    shell_view(Shell {
+        topbar: bar,
+        banner: Some(banner),
+        sidebar: nav,
+        content,
+        dock: None,
+        footer: footer(),
+    })
 }
 
-/// The shell itself, around `content`.
-fn chrome(path: &str, reads: &Reads, searched: Option<String>, content: AnyView) -> AnyView {
+/// The top bar of the shell drawn at `path` from `reads`, with the find's
+/// `searched` words, in the visit `visit`.
+fn top_bar(
+    path: &str,
+    reads: &Reads,
+    searched: Option<String>,
+    visit: &crate::visit::Visit,
+) -> AnyView {
     let reachable = reads.deployment.is_ok() || matches!(reads.described, Some(Ok(_)));
-    let search = search_box(SearchBox {
-        id: String::from(SEARCH_ID),
-        name: String::from("q"),
-        label: tr(Msg::SearchLabel),
-        placeholder: tr(Msg::SearchPlaceholder),
-        action: String::from(SEARCH),
-        value: searched.unwrap_or_default(),
-        submit: tr(Msg::SearchSubmit).into(),
-        shortcut: Some('/'),
-        busy: false,
-        disabled: (!reachable).then(|| tr(Msg::SearchDisabled)),
-        post: false,
-        suggest: Some(String::from(crate::pages::search::ANSWER)),
-        suggest_from: 2,
-    });
+    let search = search_box(find(searched, reachable));
     let pill = status_pill(top_pill(reads)).into_any();
-    let operator = crate::read::operator().unwrap_or_else(|| tr(Msg::Operator));
+    let operator = visit.operator.clone().unwrap_or_else(|| tr(Msg::Operator));
     let menu = user_menu(UserMenu {
         id: USER_MENU_ID,
         label: operator.clone(),
@@ -161,7 +219,7 @@ fn chrome(path: &str, reads: &Reads, searched: Option<String>, content: AnyView)
         line: tr(Msg::OperatorLine),
         preferences: String::from(crate::prefs::PREFERENCES),
         theme: ThemeChoice {
-            current: crate::prefs::requested().theme,
+            current: visit.chosen().preferences.theme,
             action: String::from(crate::prefs::PREFERENCE),
             back: path.to_owned(),
         },
@@ -175,26 +233,68 @@ fn chrome(path: &str, reads: &Reads, searched: Option<String>, content: AnyView)
         {menu}
     }
     .into_any();
+    topbar(TopBar {
+        sidebar: SIDEBAR_ID,
+        lockup: brand_lockup(),
+        search: Some(search),
+        end,
+    })
+}
+
+/// The top bar's find, holding the `searched` words, disabled with its
+/// reason when the gateway is not `reachable`; once the page has hydrated
+/// its panel asks [`crate::pages::search::ANSWER`] as the words are typed.
+fn find(searched: Option<String>, reachable: bool) -> SearchBox {
+    SearchBox {
+        id: String::from(SEARCH_ID),
+        name: String::from("q"),
+        label: tr(Msg::SearchLabel),
+        placeholder: tr(Msg::SearchPlaceholder),
+        action: String::from(SEARCH),
+        value: searched.unwrap_or_default(),
+        submit: tr(Msg::SearchSubmit).into(),
+        shortcut: Some('/'),
+        busy: false,
+        disabled: (!reachable).then(|| tr(Msg::SearchDisabled)),
+        post: false,
+        suggest: Some(String::from(crate::pages::search::ANSWER)),
+        suggest_from: 2,
+        all: None,
+        signed_out: Some(String::from(crate::app::SIGN_IN)),
+    }
+}
+
+/// The development banner, while the gateway runs the development profile.
+fn development(reads: &Reads) -> AnyView {
     let development = reads
         .deployment
         .as_ref()
         .is_ok_and(|deployment| deployment.development);
-    let banner = development.then(|| {
-        banner(
-            Tone::Warn,
-            Glyph::TRIANGLE_ALERT,
-            tr(Msg::DevelopmentTitle),
-            &tr(Msg::DevelopmentBody),
-            None,
-        )
-    });
-    let nav = sidebar(Sidebar {
+    development
+        .then(|| {
+            banner(
+                Tone::Warn,
+                Glyph::TRIANGLE_ALERT,
+                tr(Msg::DevelopmentTitle),
+                &tr(Msg::DevelopmentBody),
+                None,
+            )
+        })
+        .into_any()
+}
+
+/// The navigation of the shell drawn at `path`, folded to its rail when
+/// `rail`, with the configuration where the console reaches `replicas`,
+/// from `reads`.
+fn navigation_of(path: &str, rail: bool, replicas: &[String], reads: &Reads) -> AnyView {
+    let reachable = reads.deployment.is_ok() || matches!(reads.described, Some(Ok(_)));
+    sidebar(Sidebar {
         id: SIDEBAR_ID,
         label: tr(Msg::NavLabel),
-        groups: navigation(reads.open_incidents, reachable),
+        groups: navigation(reads.open_incidents, reachable, !replicas.is_empty()),
         current: path.to_owned(),
         rail: Some(Rail {
-            collapsed: crate::prefs::rail_requested(),
+            collapsed: rail,
             action: String::from(crate::prefs::SIDEBAR),
             back: path.to_owned(),
         }),
@@ -202,19 +302,6 @@ fn chrome(path: &str, reads: &Reads, searched: Option<String>, content: AnyView)
             .federation
             .as_ref()
             .and_then(|federation| nest(federation, path)),
-    });
-    shell(Shell {
-        topbar: topbar(TopBar {
-            sidebar: SIDEBAR_ID,
-            lockup: brand_lockup(),
-            search: Some(search),
-            end,
-        }),
-        banner,
-        sidebar: nav,
-        content,
-        dock: None,
-        footer: footer(),
     })
 }
 
@@ -300,7 +387,7 @@ fn entry(href: &'static str, label: Msg, glyph: Glyph, exact: bool) -> Entry {
 
 /// The navigation's groups, Integrity counting the `open` incidents, or a
 /// dash with the reason when the gateway did not answer.
-fn navigation(open: Option<u32>, reachable: bool) -> Vec<Group> {
+fn navigation(open: Option<u32>, reachable: bool, manages: bool) -> Vec<Group> {
     let mut integrity = entry(INTEGRITY, Msg::NavIntegrity, Glyph::SHIELD_CHECK, false);
     integrity.count = Some(match open {
         Some(count) => Count::Known {
@@ -361,7 +448,7 @@ fn navigation(open: Option<u32>, reachable: bool) -> Vec<Group> {
             title: tr(Msg::NavGroupConsole).into(),
             // NOTE: no specification governs this: our own design; a console with no
             // admin listener changes no configuration, so it offers no entry for it.
-            entries: crate::pages::configuration::console_manages()
+            entries: manages
                 .then(|| {
                     entry(
                         CONFIGURATION,
@@ -433,4 +520,18 @@ pub fn attention(health: Health) -> bool {
 #[must_use]
 pub const fn all_nodes() -> &'static str {
     ALL_NODES
+}
+
+#[cfg(test)]
+mod tests {
+    use super::find;
+
+    #[test]
+    fn the_find_names_its_answer_route_and_submits_to_the_find_page() {
+        let find = find(Some(String::from("node-b")), true);
+        assert_eq!(Some(crate::pages::search::ANSWER), find.suggest.as_deref());
+        assert_eq!(crate::app::SEARCH, find.action);
+        assert_eq!("node-b", find.value);
+        assert!(find.disabled.is_none());
+    }
 }

@@ -303,9 +303,10 @@ console_error_panic_hook = "0.1.7"
 # The FerroHEALTH component library: the console's views and widgets, the
 # table model, the highlighter, the Lucide icons, the stylesheet and the role
 # tokens, shared by every FerroHEALTH console. Pinned exactly, so the console
-# moves to a new version deliberately. Verified against crates.io on
-# 2026-10-19.
-ferrohealth-ui = { version = "=0.4.0", features = ["split"] }
+# moves to a new version deliberately. From 0.5 the console hydrates the
+# whole page and draws every page after the first in the browser (#1397).
+# Verified against crates.io on 2026-10-28.
+ferrohealth-ui = "=0.5.6"
 # The FerroHEALTH SMART and OAuth 2.0 resource-server crate (#1174):
 # every caller's token checked against its issuer's metadata and key set,
 # the SMART on openEHR grant rules over the grammar it re-exports, the Basic
@@ -347,6 +348,11 @@ ferrohealth-usage-report = { version = "=0.2.0", default-features = false }
 # build time from app/ferrofed-console/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.
 # Verified against crates.io on 2026-10-19.
+# The query-string reader leptos's server functions read a form's fields
+# with, at the version the lock holds through server_fn, for the console's
+# test that its posted fields read back whole. Verified against crates.io on
+# 2026-10-28.
+serde_qs = { version = "0.15.0", default-features = false }
 fluent-templates = { version = "0.15.1", default-features = false, features = ["macros", "walkdir"] }
 cookie = { version = "0.18.2", default-features = false }
 

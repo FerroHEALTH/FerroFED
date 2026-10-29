@@ -13,6 +13,13 @@
 //! The self-description and the health are the dashboard's ground, so a
 //! refusal of either is the page's. Every other part the gateway refuses
 //! or cannot answer says so in its own card, and the rest still shows.
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
 use ferrofed_registry::revision::Standing;
 use ferrohealth_ui::i18n::Arg;
@@ -29,6 +36,7 @@ use ferrohealth_ui::view::surface::{
 };
 use ferrohealth_ui::view::tag::Tag;
 use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::app::{ALL_NODES, CONFIGURATION, INTEGRITY, ORGANISATIONS, TOPOLOGY};
 use crate::locale::{Msg, tr, tr_with};
@@ -39,14 +47,26 @@ use crate::read::incidents::Incidents;
 use ferrohealth_ui::view::state::state;
 
 /// What the dashboard reads of the gateway.
-struct Reads {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reads {
     federation: Result<Federation, Stop>,
     incidents: Result<Incidents, Stop>,
     standings: Option<Vec<(String, Result<Standing, Stop>)>>,
     stored: Option<u64>,
 }
 
+/// What the dashboard draws, as the operator of the request reads it.
+///
+/// # Errors
+/// Returns [`crate::read::Fault::Unavailable`] when the console's server
+/// does not answer.
+#[server(endpoint = "dashboard")]
+pub async fn reads_now() -> Result<Reads, Stop> {
+    Ok(reads().await)
+}
+
 /// Reads what the dashboard draws.
+#[cfg(not(target_arch = "wasm32"))]
 async fn reads() -> Reads {
     let federation = crate::read::federation::read().await;
     let incidents = crate::read::incidents::read().await;
@@ -84,7 +104,13 @@ async fn reads() -> Reads {
 /// The dashboard.
 #[must_use]
 pub fn page() -> AnyView {
-    let body = Suspend::new(async move { dashboard(reads().await) });
+    let reads = Resource::new(crate::read::changes, |_| reads_now());
+    let body = Suspend::new(async move {
+        match reads.await {
+            Ok(reads) => dashboard(reads),
+            Err(stop) => stopped(&stop),
+        }
+    });
     view! {
         {crate::app::title(tr(Msg::DashboardTitle))}
         <Suspense fallback=|| ()>{body}</Suspense>

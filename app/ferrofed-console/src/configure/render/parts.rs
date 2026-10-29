@@ -9,9 +9,9 @@
 //! The repeatable rows are FerroUI's F7 rows: an Add or a Remove submits
 //! its form with `form[edit]` naming the row, and the page answers with the
 //! form drawn again from what was posted (`crate::configure::draft`), so
-//! the rows change with no WebAssembly; with it, FerroUI's island changes
-//! them in place and the form posts the rows it holds. A refused field's line shows the refusal the page was
-//! drawn with.
+//! the rows change with no WebAssembly; with it, FerroUI's widget changes
+//! them in place and the form posts the rows it holds. A refused field's
+//! line shows the refusal the page was drawn with.
 
 use std::borrow::Cow;
 
@@ -23,9 +23,13 @@ use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::dialog::{ConfirmForm, Confirmation, danger_form_dialog};
 use ferrohealth_ui::view::form::{ERROR, Field, INPUT, described_by, error_id};
 use ferrohealth_ui::view::status::badge;
+use ferrohealth_ui::widget::action::answer_field;
 use ferrohealth_ui::widget::action_menu::{Act, Action, Item, Menu, row_menu};
 use ferrohealth_ui::widget::repeat::{RepeatAdd, RowEnd};
+use leptos::form::ActionForm;
 use leptos::prelude::*;
+
+use crate::act::configure::{Configure, IMPORT};
 
 use crate::configure::draft::{Draft, EDIT, Edit};
 use crate::configure::plan::removal_reason;
@@ -186,17 +190,34 @@ pub(crate) fn reason() -> AnyView {
     .into_any()
 }
 
-/// A form posting to the page it sits on, holding `body`, with `class`.
+/// A form calling the configuration's server function, holding `body`,
+/// with `class`; with no WebAssembly its post is drawn on the page it sits
+/// on.
 ///
 /// Its first submit button posts the form as it stands and is hidden from
 /// sight and from a reader, so Enter in a field saves rather than pressing
 /// the first Add or Remove (HTML, "implicit submission").
-pub(crate) fn form(class: &'static str, body: impl IntoView) -> impl IntoView {
-    view! {
-        <form method="post" action=crate::pages::here() class=class>
-            <button type="submit" class="fui-sr-only" tabindex="-1" aria-hidden="true"></button>
-            {body}
-        </form>
+pub(crate) fn form(class: &'static str, body: impl IntoView + 'static) -> AnyView {
+    let body = view! {
+        {answer_field()}
+        <button type="submit" class="fui-sr-only" tabindex="-1" aria-hidden="true"></button>
+        {body}
+    };
+    match use_context::<ServerAction<Configure>>() {
+        Some(configure) => view! {
+            <ActionForm action=configure attr:class=class>
+                {body}
+            </ActionForm>
+        }
+        .into_any(),
+        // NOTE: no specification governs this: our own design; outside the page the form
+        // posts to the same function, its answer drawn on the page it names.
+        None => view! {
+            <form method="post" action=IMPORT class=class>
+                {body}
+            </form>
+        }
+        .into_any(),
     }
 }
 
@@ -251,8 +272,11 @@ pub(crate) fn row_actions(
             message: removal.message.into(),
         },
         ConfirmForm {
-            action: crate::pages::here(),
+            // TODO(#1414): the dialog posts its own form natively until FerroUI's ConfirmForm
+            // takes a server action, so with WebAssembly this one post loads a new document.
+            action: String::from(IMPORT),
             fields: view! {
+                {answer_field()}
                 {removal.fields}
                 {hidden("confirm", String::from("yes"))}
             }

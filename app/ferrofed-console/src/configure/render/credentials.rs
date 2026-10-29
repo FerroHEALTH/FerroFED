@@ -270,7 +270,7 @@ pub(super) fn secret_row(
 ) -> AnyView {
     let (key, label) = secret;
     let chosen = chosen.filter(|choice| !choice.is_empty()).unwrap_or("keep");
-    let name = |part: &str| format!("form[secret][{row}][{part}]");
+    let name = |part: &str| format!("form[secret.{row}.{part}]");
     let status = slot.map_or_else(
         || tr(Msg::NotSet),
         |slot| {
@@ -331,7 +331,7 @@ pub(super) fn secret_row(
         <div class="fui-reveal">
             <fieldset class="fui-fieldset fui-choice" id=group.clone()>
                 <legend class="fui-label">{label}</legend>
-                <input type="hidden" name="form[secret_rows]" value=row.to_owned() />
+                <input type="hidden" name="form[secret_rows][]" value=row.to_owned() />
                 <input type="hidden" name=name("key") value=key.to_owned() />
                 <p class="fui-help">
                     <code>{key.to_owned()}</code>
@@ -372,7 +372,7 @@ fn list_value(row: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
             <input
                 type="text"
                 id=id.clone()
-                name=format!("form[setting][{row}][values]")
+                name=format!("form[setting.{row}.values][]")
                 value=value
                 class=format!("{INPUT} fui-mono")
                 autocomplete="off"
@@ -496,7 +496,7 @@ impl Shown<'_> {
 /// The field of the credential setting `field`, in row `row`, holding what
 /// `held` sets.
 fn setting(row: &str, field: &Field, shown: Shown<'_>) -> AnyView {
-    let name = |part: &str| format!("form[setting][{row}][{part}]");
+    let name = |part: &str| format!("form[setting.{row}.{part}]");
     let id = setting_field(row, "value");
     let value = shown.value(field.key);
     let control = match field.kind {
@@ -564,7 +564,7 @@ fn setting(row: &str, field: &Field, shown: Shown<'_>) -> AnyView {
         .into_any(),
     };
     view! {
-        <input type="hidden" name="form[setting_rows]" value=row.to_owned() />
+        <input type="hidden" name="form[setting_rows][]" value=row.to_owned() />
         <input type="hidden" name=name("key") value=field.key />
         {control}
     }

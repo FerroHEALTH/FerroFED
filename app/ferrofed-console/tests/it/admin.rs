@@ -11,7 +11,7 @@
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_console::session::{COOKIE, SessionId};
+use ferrofed_console::session::SessionId;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use wiremock::matchers::{header, method, path};
@@ -111,14 +111,35 @@ fn form(fields: &[(&str, &str)]) -> String {
     form.finish()
 }
 
-/// A `POST` of `body` to the page `route`, as the console's own page sends
-/// it, carrying `session`'s cookie.
+/// The server function the action form on the page `route` calls, and the
+/// body it posts: the clear on Integrity, and the drift repair on a stored
+/// query's page, whose form names the query in a hidden field.
+fn function_of(route: &str, body: String) -> (&'static str, String) {
+    let path = route.split('?').next().unwrap_or(route);
+    match path.strip_prefix("/stored-queries/") {
+        Some(name) => {
+            let name = url::form_urlencoded::parse(format!("name={name}").as_bytes())
+                .map(|(_, value)| value.into_owned())
+                .next()
+                .unwrap_or_default();
+            let mut form = url::form_urlencoded::Serializer::new(body);
+            form.append_pair("name", &name);
+            ("/api/repair", form.finish())
+        }
+        None => ("/api/clear", body),
+    }
+}
+
+/// A `POST` of `body` from the page `route`, as the console's own page
+/// sends it with no WebAssembly, carrying `session`'s cookie.
 fn act(route: &str, body: String, session: &SessionId) -> Result<Request<Body>, Box<dyn Error>> {
-    Ok(Request::post(route)
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("sec-fetch-site", "same-origin")
-        .header("cookie", format!("{COOKIE}={}", session.as_str()))
-        .body(Body::from(body))?)
+    let (function, body) = function_of(route, body);
+    crate::support::answer_post(
+        (function, route),
+        &body,
+        Some(session),
+        &[("sec-fetch-site", "same-origin")],
+    )
 }
 
 /// Posts the action `body` to the page `route` and reads the page it
@@ -489,11 +510,12 @@ async fn a_clear_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Err
     .await;
     let replicas = [("gateway-0", listener.uri())];
     let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
-    let request = Request::post("/integrity")
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("sec-fetch-site", "cross-site")
-        .header("cookie", format!("{COOKIE}={}", session.as_str()))
-        .body(Body::from(clear_at("*")))?;
+    let request = crate::support::answer_post(
+        ("/api/clear", "/integrity"),
+        &clear_at("*"),
+        Some(&session),
+        &[("sec-fetch-site", "cross-site")],
+    )?;
     let (response, _body) = send(&service, request).await?;
     assert_eq!(StatusCode::FORBIDDEN, response.status());
     assert_eq!(0, asked(&listener).await?);
@@ -597,7 +619,7 @@ async fn the_actions_are_offered_only_with_an_admin_listener() -> Result<(), Box
     let (service, session) = signed_in_console(&gateway.uri(), &replicas)?;
     let (_, integrity) = send(&service, get_as("/integrity", &session)?).await?;
     assert!(integrity.contains("Clear a held EHR id"), "{integrity}");
-    assert!(integrity.contains(r#"action="/integrity""#), "{integrity}");
+    assert!(integrity.contains(r#"action="/api/clear""#), "{integrity}");
     assert!(
         integrity.contains(&format!(r#"<option value="{EHR_ID}">"#)),
         "{integrity}"

@@ -16,13 +16,14 @@
 //! each confirmed in a step of their own.
 //!
 //! The page is read from the first replica's admin listener with the
-//! operator's own access token ([`act`]) and drawn on the server, its forms
-//! whole. Every form is a plain `POST` to the page it sits on, read on the
-//! server into a [`model::ConfigForm`] and run while the page is drawn
-//! again, so its answer shows at the top of the page with no WebAssembly;
-//! a refusal of one field names that field. No specification governs the
-//! console: our own design.
+//! operator's own access token (`act`, behind `crate::act::configure`) and
+//! drawn in both halves, its forms whole. Every form calls the
+//! configuration's server function behind an `<ActionForm>`, read on the
+//! server into a [`model::ConfigForm`] and run, so its answer shows at the
+//! top of the page, with no WebAssembly too; a refusal of one field names
+//! that field. No specification governs the console: our own design.
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod act;
 pub mod draft;
 pub mod export;

@@ -8,6 +8,13 @@
 //! Endpoints, each its own route; each row is read-only, with the term
 //! clients read in the document as its key hint. The document itself has
 //! its one home on About. The replica that answered is a row of its own.
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::table::view::{
@@ -58,6 +65,7 @@ pub fn page() -> AnyView {
     let Some((key, _, intro)) = TABS.iter().find(|(key, _, _)| *key == tab).copied() else {
         return crate::pages::errors::not_found();
     };
+    let read = Resource::new(crate::read::changes, |_| description_now());
     let body = Suspend::new(async move {
         let heading = page_heading(
             Header {
@@ -75,19 +83,7 @@ pub fn page() -> AnyView {
             ActionGroup::none(),
         )
         .into_any();
-        let read = match crate::read::signed_in() {
-            Ok((state, token)) => {
-                let description = state.gateway().self_description(&token).await;
-                let replica = crate::read::deployment()
-                    .await
-                    .ok()
-                    .and_then(|deployment| deployment.replica);
-                description
-                    .map(|description| (description, replica))
-                    .map_err(crate::read::Stop::from)
-            }
-            Err(fault) => Err(crate::read::Stop::Fault(fault)),
-        };
+        let read = read.await;
         let panel = match read {
             Err(stop) => {
                 return view! {
@@ -115,6 +111,23 @@ pub fn page() -> AnyView {
         <Suspense fallback=|| ()>{body}</Suspense>
     }
     .into_any()
+}
+
+/// The gateway's self-description and the replica that answered, as the
+/// operator of the request reads them.
+///
+/// # Errors
+/// Returns the [`crate::read::Stop`] of a missing session, or of a
+/// self-description the gateway refused or did not answer.
+#[server(endpoint = "self-description")]
+pub async fn description_now() -> Result<(OptionsRoot, Option<String>), crate::read::Stop> {
+    let (state, token) = crate::read::signed_in()?;
+    let description = state.gateway().self_description(&token).await?;
+    let replica = crate::read::deployment()
+        .await
+        .ok()
+        .and_then(|deployment| deployment.replica);
+    Ok((description, replica))
 }
 
 /// One read-only row: its label, its line, its value and the term the

@@ -3,7 +3,10 @@
 
 //! What each page reads of the gateway, as the signed-in operator.
 //!
-//! Every read runs on the server while the page renders, with the
+//! Every read runs on the server, behind a server function a page asks
+//! under a `Resource`: in the server's own render the function is a plain
+//! call, and in the browser a call to the console's server, so a page drawn
+//! in the browser reads what the server's render read. Each read uses the
 //! operator's own access token, which never leaves the server. A read that
 //! fails stops short of its view in one of two ways ([`Stop`]): the
 //! gateway's refusal, an expected outcome a page shows in words with its
@@ -21,19 +24,26 @@ use std::collections::BTreeSet;
 
 use ferrofed_registry::operator::{DeploymentMode, DeploymentReport};
 use ferrofed_registry::replica::UNNAMED;
-use leptos::context::use_context;
+use leptos::prelude::*;
+use leptos::server_fn::ServerFn;
+use leptos::server_fn::codec::JsonEncoding;
+use leptos::server_fn::error::{FromServerFnError, ServerFnErrorErr};
+use serde::{Deserialize, Serialize};
 
-use crate::app::SessionState;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::gateway::{AccessToken, GatewayError};
 use crate::locale::{Msg, tr, tr_with};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::server::ConsoleState;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::visit::SessionState;
 
 /// The most rows a paged read asks the gateway for at once.
 pub const PAGE_SIZE: u64 = 100;
 
 /// An expected refusal: the gateway's, with its status and stable code, or
 /// the console's of input it cannot send.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Refusal {
     /// The gateway refused the request, with its status and its stable
     /// error code.
@@ -59,7 +69,7 @@ pub enum Refusal {
 
 /// Why the console could not serve a page: a fault of its own, of its
 /// session, or of its reach to the gateway, never an expected refusal.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
 pub enum Fault {
     /// The request carries no live signed-in session.
     #[error("sign in to see this page")]
@@ -80,12 +90,60 @@ pub enum Fault {
 }
 
 /// Why a read stops short of its view.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Stop {
     /// The gateway refused, or the input cannot be sent.
     Refused(Refusal),
     /// The console, its session or its reach to the gateway failed.
     Fault(Fault),
+}
+
+impl FromServerFnError for Stop {
+    type Encoder = JsonEncoding;
+
+    fn from_server_fn_error(value: ServerFnErrorErr) -> Self {
+        // NOTE: no specification governs this: our own design; a page that cannot
+        // reach the console's own server function is a page the console cannot serve.
+        leptos::logging::warn!("a server function did not answer: {value}");
+        Self::Fault(Fault::Unavailable)
+    }
+}
+
+/// The count of the changes the operator made in the page, which every
+/// read keys on, so a read drawn after an action asks again.
+#[derive(Debug, Clone, Copy)]
+pub struct Changes(pub RwSignal<u32>);
+
+/// The count of the operator's changes, tracked; zero outside the page tree.
+#[must_use]
+pub fn changes() -> u32 {
+    use_context::<Changes>().map_or(0, |changes| changes.0.get())
+}
+
+/// Counts one more change, so every read drawn in the page asks again.
+pub fn changed() {
+    if let Some(Changes(changes)) = use_context::<Changes>() {
+        changes.update(|count| *count = count.wrapping_add(1));
+    }
+}
+
+/// Counts a change each time `action` resolves, so the reads drawn after it
+/// ask the gateway again, and counts its answer as drawn in the page
+/// (`ferrohealth_ui::widget::submit::drawn`).
+pub fn follow<A>(action: ServerAction<A>)
+where
+    A: ServerFn + Clone + Send + Sync + 'static,
+    A::Output: Send + Sync + 'static,
+    A::Error: Send + Sync + 'static,
+{
+    Effect::watch(
+        move || action.version().get(),
+        move |_, _, _| {
+            changed();
+            ferrohealth_ui::widget::submit::drawn();
+        },
+        false,
+    );
 }
 
 impl From<Refusal> for Stop {
@@ -100,12 +158,14 @@ impl From<Fault> for Stop {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl From<GatewayError> for Stop {
     fn from(error: GatewayError) -> Self {
         stopped(&error, Asked::View)
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The state of the request's session, which decides the shell the page is
 /// drawn in.
 #[must_use]
@@ -117,6 +177,7 @@ pub fn session_state() -> SessionState {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The console's state and the operator's access token, for a request that
 /// carries a live signed-in session.
 ///
@@ -130,6 +191,7 @@ pub fn signed_in() -> Result<(ConsoleState, AccessToken), Fault> {
     signed_in_with(&state, &parts.headers).map(|token| (state, token))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The operator's access token for a request whose headers are `headers`,
 /// on the console `state`.
 ///
@@ -152,6 +214,7 @@ pub fn signed_in_with(
     Ok(AccessToken::new(token))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The name of the operator of the request's live signed-in session, as
 /// the provider gave it.
 #[must_use]
@@ -167,6 +230,7 @@ pub fn operator() -> Option<String> {
     state.sessions().operator(&id).ok().flatten()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// What a failed gateway call asked for, as its log line names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Asked<'a> {
@@ -187,6 +251,7 @@ pub enum Asked<'a> {
     },
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Which page an operator's action at a replica's admin listener comes
 /// from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,6 +262,7 @@ pub enum ActionKind {
     Configuration,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl ActionKind {
     /// The action's kind, as a log line names it.
     #[must_use]
@@ -208,6 +274,7 @@ impl ActionKind {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// What stopped the gateway call `asked` that failed.
 ///
 /// It is the gateway's refusal, or the console's fault of a body it cannot
@@ -329,7 +396,7 @@ pub fn answered_by(reports: &[(&str, Option<&str>)]) -> Option<String> {
 }
 
 /// How the gateway that answered the console is deployed.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Deployment {
     /// Whether the gateway runs the development profile.
     pub development: bool,
@@ -349,6 +416,7 @@ impl From<&DeploymentReport> for Deployment {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Reads how the gateway is deployed, as the operator of the request.
 ///
 /// # Errors
@@ -364,6 +432,7 @@ pub async fn deployment() -> Result<Deployment, Stop> {
     Ok(Deployment::from(&report))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The federation and the specification version the gateway's
 /// self-description declares, read as the status of the gateway when its
 /// deployment cannot be read.
@@ -384,6 +453,7 @@ pub async fn described() -> Result<(String, String), Stop> {
     ))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The page of at most `limit` items that starts at `offset`, held to the
 /// most the gateway answers at once.
 #[must_use]

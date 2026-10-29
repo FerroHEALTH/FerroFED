@@ -18,6 +18,9 @@ use crate::locale::{Msg, tr, tr_with};
 /// Sets the answer's status to `status` unless an earlier part of the
 /// render set a server error, which outranks it (RFC 9110 §15.6).
 fn answer(status: http::StatusCode) {
+    #[cfg(target_arch = "wasm32")]
+    let _: http::StatusCode = status;
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
         let failed = response
             .0

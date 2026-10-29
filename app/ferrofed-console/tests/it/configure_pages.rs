@@ -12,9 +12,9 @@ use crate::configure::{changes, listener, page, signed_in_console};
 
 /// Console member C's row offers Remove… as its row menu's last item, after
 /// a separator, opening a danger dialog whose form posts the removal of C
-/// with a required reason to the page at `path`, drawn in the row's
-/// actions cell, and no Remove button stands beside the menu.
-fn removal_is_in_the_row_menu(body: &str, path: &str) -> Result<(), Box<dyn Error>> {
+/// with a required reason to the configuration's server function, drawn in
+/// the row's actions cell, and no Remove button stands beside the menu.
+fn removal_is_in_the_row_menu(body: &str) -> Result<(), Box<dyn Error>> {
     assert!(
         body.contains(
             r#"<div role="separator" class="fui-menu-sep"></div><button type="button" role="menuitem" command="show-modal" commandfor="cfg-remove-node-c-dialog""#
@@ -44,7 +44,8 @@ fn removal_is_in_the_row_menu(body: &str, path: &str) -> Result<(), Box<dyn Erro
         .ok_or("the row's removal dialog")?;
     assert!(
         dialog.contains(&format!(
-            r#"class="fui-dialog fui-dialog-danger"><form method="post" action="{path}""#
+            r#"class="fui-dialog fui-dialog-danger"><form method="post" action="{path}""#,
+            path = ferrofed_console::act::configure::IMPORT,
         )),
         "the danger dialog holds the form it posts: {dialog}"
     );
@@ -92,7 +93,7 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
             body.contains(r#"commandfor="cfg-remove-node-c-dialog""#),
             "a console member's row offers its own confirmed removal: {body}"
         );
-        removal_is_in_the_row_menu(&body, path)?;
+        removal_is_in_the_row_menu(&body)?;
         assert!(
             !body.contains("cfg-remove-node-a-dialog"),
             "a member the file provides offers none: {body}"
@@ -114,18 +115,18 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
     }
     let edit = page(&service, &session, "/configuration/members/node-c").await?;
     assert!(edit.contains("Edit member node-c"), "{edit}");
-    assert!(edit.contains(r#"name="form[query][0][url]""#), "{edit}");
+    assert!(edit.contains(r#"name="form[query.0.url]""#), "{edit}");
     assert!(edit.contains(r#"commandfor="remove-member""#), "{edit}");
     assert!(
         edit.contains(r#"class="fui-repeater-card""#),
         "each endpoint is an F7 sub-card: {edit}"
     );
     assert!(
-        edit.contains(r#"<template data-repeat="blank" data-token="__row__">"#),
+        edit.contains(r#"<fieldset data-repeat="blank" data-token="__row__" hidden disabled class="fui-repeat-blank">"#),
         "Add copies a blank endpoint in place with WebAssembly: {edit}"
     );
     assert!(
-        edit.contains(r#"<template data-repeat="blank" data-token="__profile__">"#),
+        edit.contains(r#"<fieldset data-repeat="blank" data-token="__profile__" hidden disabled class="fui-repeat-blank">"#),
         "a blank FHIR endpoint's own profiles add rows in place under a token of their own: {edit}"
     );
     assert!(

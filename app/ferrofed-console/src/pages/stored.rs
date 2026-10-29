@@ -12,6 +12,13 @@
 //! (§12.7). A qualified name is the definition's name (ITS-REST Query API,
 //! "Qualified query name"), never a patient identifier, so it sits in the
 //! path (§5.4.1, N33).
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
 use std::collections::BTreeMap;
 
@@ -37,17 +44,20 @@ use ferrohealth_ui::view::tabs::{Tab, TabRow};
 use ferrohealth_ui::view::tag::Tag;
 use ferrohealth_ui::view::template::detail::{DetailPage, detail_page};
 use ferrohealth_ui::view::template::list::HeadingCount;
+use ferrohealth_ui::widget::action::{answer_field, answered};
 use ferrohealth_ui::widget::action_menu::{Act, Action};
+use leptos::form::ActionForm;
 use leptos::prelude::*;
 use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::act::Acted;
-use crate::act::repair::RepairOutcome;
+use crate::act::repair::{RepairDrift, RepairOutcome};
 use crate::app::STORED_QUERIES;
 use crate::locale::{Msg, tr, tr_with};
 use crate::pages::{refused_view, stopped};
 use crate::read::Stop;
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The most pages of stored versions a page reads.
 const PAGES: u64 = 20;
 
@@ -103,7 +113,58 @@ pub fn console_href(name: &str, version: &str) -> String {
     )
 }
 
+/// Every stored version the gateway holds, as the operator of the request
+/// reads them.
+///
+/// # Errors
+/// Returns the [`Stop`] of a missing session or a read the gateway refused
+/// or did not answer, and [`crate::read::Fault::Unavailable`] when the
+/// console's server does not answer.
+#[server(endpoint = "stored")]
+pub async fn held_now() -> Result<Vec<Held>, Stop> {
+    // NOTE: no specification governs this: our own design; the home draws no AQL, so none
+    // crosses to the page.
+    let mut held = held().await?;
+    for version in &mut held {
+        version.definition.q.clear();
+    }
+    Ok(held)
+}
+
+/// Every version of the stored query `name`, newest first, as the operator
+/// of the request reads them, with the AQL of the version `version` names
+/// or of the newest alone.
+///
+/// # Errors
+/// As [`held_now`].
+#[server(endpoint = "stored-versions")]
+pub async fn versions_now(
+    /// The stored query's qualified name.
+    name: String,
+    /// The version the page shows, when the address names one.
+    version: Option<String>,
+) -> Result<Vec<Held>, Stop> {
+    let mut versions = versions_of(&name).await?;
+    versions.sort_by_key(|held| std::cmp::Reverse(version_key(&held.definition.version)));
+    let shown = version
+        .filter(|asked| {
+            versions
+                .iter()
+                .any(|held| held.definition.version == *asked)
+        })
+        .or_else(|| versions.first().map(|held| held.definition.version.clone()));
+    // NOTE: no specification governs this: our own design; the page draws one version's
+    // AQL, so no other crosses to the page.
+    for held in &mut versions {
+        if Some(&held.definition.version) != shown.as_ref() {
+            held.definition.q.clear();
+        }
+    }
+    Ok(versions)
+}
+
 /// Every stored version the gateway holds, read page by page.
+#[cfg(not(target_arch = "wasm32"))]
 async fn held() -> Result<Vec<Held>, Stop> {
     let (state, token) = crate::read::signed_in()?;
     let mut found = Vec::new();
@@ -127,6 +188,7 @@ async fn held() -> Result<Vec<Held>, Stop> {
 }
 
 /// Every version of the stored query `name`, read page by page.
+#[cfg(not(target_arch = "wasm32"))]
 async fn versions_of(name: &str) -> Result<Vec<Held>, Stop> {
     let (state, token) = crate::read::signed_in()?;
     let mut found = Vec::new();
@@ -156,6 +218,7 @@ async fn versions_of(name: &str) -> Result<Vec<Held>, Stop> {
 ///
 /// # Errors
 /// Returns the [`Stop`] of a read that failed.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn names() -> Result<Vec<(String, u32)>, Stop> {
     let mut counted: BTreeMap<String, u32> = BTreeMap::new();
     for version in held().await? {
@@ -210,6 +273,7 @@ fn grouped(held: &[Held]) -> BTreeMap<String, BTreeMap<String, Vec<&Held>>> {
 /// The stored queries.
 #[must_use]
 pub fn list() -> AnyView {
+    let held_read = Resource::new(crate::read::changes, |_| held_now());
     let body = Suspend::new(async move {
         let heading = page_heading(
             Header {
@@ -220,7 +284,7 @@ pub fn list() -> AnyView {
             new_version(),
         )
         .into_any();
-        match held().await {
+        match held_read.await {
             Err(stop) => view! {
                 {heading}
                 {stopped(&stop)}
@@ -335,36 +399,62 @@ pub fn page() -> AnyView {
         return crate::pages::errors::not_found();
     }
     let asked = crate::pages::query_param("version");
-    let repaired = use_context::<RepairOutcome>();
-    let body = Suspend::new(async move {
-        let read = versions_of(&name).await;
-        match read {
-            Err(Stop::Refused(crate::read::Refusal::Gateway { status: 404, .. })) => view! {
-                {repaired.map(repair_answer)}
-                {crate::pages::errors::not_found()}
-            }
-            .into_any(),
-            Err(stop) => view! {
-                {repaired.map(repair_answer)}
-                {stopped(&stop)}
-            }
-            .into_any(),
-            Ok(versions) => {
-                let mut versions = versions;
-                versions.sort_by_key(|version| {
-                    std::cmp::Reverse(version_key(&version.definition.version))
-                });
-                detail(
-                    &name,
-                    &versions,
-                    tab == "versions",
-                    asked.as_deref(),
-                    repaired,
-                )
-            }
-        }
+    let repair = ServerAction::<RepairDrift>::new();
+    // NOTE: no specification governs this: our own design; the repair's answer is drawn
+    // at the top and its dialog opens with the version shown again.
+    let _posted = answered(&repair);
+    crate::read::follow(repair);
+    let asked_name = name.clone();
+    let asked_version = asked.clone();
+    let read = Resource::new(crate::read::changes, move |_| {
+        versions_now(asked_name.clone(), asked_version.clone())
     });
-    view! { <Suspense fallback=|| ()>{body}</Suspense> }.into_any()
+    view! {
+        <Suspense fallback=|| ()>
+            {move || {
+                let name = name.clone();
+                let tab = tab.clone();
+                let asked = asked.clone();
+                let repaired = repair
+                    .value()
+                    .get()
+                    .map(|answer| answer.unwrap_or_else(RepairOutcome::from));
+                Suspend::new(async move {
+                    match read.await {
+                        Err(Stop::Refused(crate::read::Refusal::Gateway { status: 404, .. })) => {
+                            view! {
+                                {repaired.map(repair_answer)}
+                                {crate::pages::errors::not_found()}
+                            }
+                                .into_any()
+                        }
+                        Err(stop) => {
+                            view! {
+                                {repaired.map(repair_answer)}
+                                {stopped(&stop)}
+                            }
+                                .into_any()
+                        }
+                        Ok(versions) => {
+                            let mut versions = versions;
+                            versions
+                                .sort_by_key(|version| {
+                                    std::cmp::Reverse(version_key(&version.definition.version))
+                                });
+                            detail(
+                                &name,
+                                &versions,
+                                tab == "versions",
+                                asked.as_deref(),
+                                (repaired, repair),
+                            )
+                        }
+                    }
+                })
+            }}
+        </Suspense>
+    }
+    .into_any()
 }
 
 /// The page of the stored query `name` and its `versions`, newest first,
@@ -375,7 +465,7 @@ fn detail(
     versions: &[Held],
     on_versions: bool,
     asked: Option<&str>,
-    repaired: Option<RepairOutcome>,
+    (repaired, repair): (Option<RepairOutcome>, ServerAction<RepairDrift>),
 ) -> AnyView {
     let shown = asked
         .and_then(|asked| {
@@ -423,7 +513,7 @@ fn detail(
         aql(shown)
     };
     let repair =
-        crate::pages::configuration::console_manages().then(|| repair_form(name, &version));
+        crate::pages::configuration::console_manages().then(|| repair_form(name, &version, repair));
     let answer = repaired.map(repair_answer);
     let read_only = shown.read_only.then(|| {
         Tag::new(tr(Msg::StoredReadOnly))
@@ -534,9 +624,9 @@ fn versions_table(name: &str, versions: &[Held]) -> AnyView {
     .into_any()
 }
 
-/// The drift repair's form in its dialog: the version and the members.
-fn repair_form(name: &str, version: &str) -> AnyView {
-    let action = format!("{}?version={}", href(name), encoded(version));
+/// The drift repair's form in its dialog: the version and the members,
+/// calling `repair`.
+fn repair_form(name: &str, version: &str, repair: ServerAction<RepairDrift>) -> AnyView {
     let version_field = Field::new("repair-version", tr(Msg::ColumnVersion)).view(view! {
         <input
             type="text"
@@ -550,17 +640,16 @@ fn repair_form(name: &str, version: &str) -> AnyView {
     let endpoints = Field::new("repair-endpoints", tr(Msg::RepairEndpoints))
         .help(tr(Msg::RepairEndpointsHelp))
         .view(view! { <input type="text" id="repair-endpoints" name="endpoint" class=INPUT value="*" required /> });
-    let replica = use_context::<crate::server::ConsoleState>()
-        .and_then(|state| {
-            state
-                .settings()
-                .admin
-                .first()
-                .map(|replica| replica.name.clone())
-        })
+    let replica = crate::visit::visit_untracked()
+        .replicas()
+        .into_iter()
+        .next()
         .unwrap_or_default();
+    let name = name.to_owned();
     let body = view! {
-        <form method="post" action=action class="fui-form">
+        <ActionForm action=repair attr:class="fui-form">
+            {answer_field()}
+            <input type="hidden" name="name" value=name />
             {version_field}
             {endpoints}
             <p class="fui-small fui-muted">
@@ -580,7 +669,7 @@ fn repair_form(name: &str, version: &str) -> AnyView {
                     {tr(Msg::RepairSubmit)}
                 </button>
             </div>
-        </form>
+        </ActionForm>
     }
     .into_any();
     popover_form(PopoverForm {
@@ -597,6 +686,7 @@ fn repair_form(name: &str, version: &str) -> AnyView {
 fn repair_answer(outcome: RepairOutcome) -> AnyView {
     let answer = match outcome {
         RepairOutcome::Refused(refused) => return refused_view(&refused),
+        RepairOutcome::Failed(fault) => return crate::pages::fault_view(&fault),
         RepairOutcome::Answered(answer) => answer,
     };
     match &answer.acted {

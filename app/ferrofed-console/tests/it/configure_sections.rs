@@ -156,7 +156,7 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
     );
     assert!(edit.contains(r#"type="password""#), "{edit}");
     assert!(
-        edit.contains("Show the value while held"),
+        edit.contains("fui-input-hold"),
         "a secret's value field carries the hold-to-show eye: {edit}"
     );
     assert!(

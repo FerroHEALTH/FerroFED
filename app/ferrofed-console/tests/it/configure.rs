@@ -11,10 +11,9 @@
 
 use std::error::Error;
 
-use axum::body::Body;
-use ferrofed_console::session::{COOKIE, SessionId};
+use ferrofed_console::session::SessionId;
 use ferrofed_testkit::mock::Server;
-use http::{Request, StatusCode};
+use http::StatusCode;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -131,9 +130,26 @@ pub(crate) fn signed_in_console(
 pub(crate) fn form(fields: &[(&str, &str)]) -> String {
     let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (name, value) in fields {
-        form.append_pair(&format!("form[{name}]"), value);
+        form.append_pair(&page_name(name), value);
     }
     form.finish()
+}
+
+/// The whole name the page gives the field `name` of its form, as a test
+/// writes it (`query][0][url`, `query_rows`): a row's field in one step with
+/// dots (`form[query.0.url]`), and a field the form posts more than once,
+/// a row list or a list's values, with `[]` (`ferrofed_console::act::fields`).
+pub(crate) fn page_name(name: &str) -> String {
+    let flat = name.replace("][", ".");
+    let repeated = flat.ends_with("_rows")
+        || [".profiles", ".categories", ".values"]
+            .iter()
+            .any(|list| flat.ends_with(list));
+    if repeated {
+        format!("form[{flat}][]")
+    } else {
+        format!("form[{flat}]")
+    }
 }
 
 /// Posts the configuration form `body` to the page at `path` as the
@@ -144,11 +160,12 @@ pub(crate) async fn posted(
     path: &str,
     body: String,
 ) -> Result<String, Box<dyn Error>> {
-    let request = Request::post(path)
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("sec-fetch-site", "same-origin")
-        .header("cookie", format!("{COOKIE}={}", session.as_str()))
-        .body(Body::from(body))?;
+    let request = crate::support::answer_post(
+        (ferrofed_console::act::configure::IMPORT, path),
+        &body,
+        Some(session),
+        &[("sec-fetch-site", "same-origin")],
+    )?;
     let (response, text) = send(service, request).await?;
     assert_eq!(StatusCode::OK, response.status(), "{text}");
     assert!(!text.contains(OPERATOR_TOKEN), "{text}");

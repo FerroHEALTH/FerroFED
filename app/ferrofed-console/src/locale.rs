@@ -19,8 +19,10 @@
 //! configured `[server] locale`. [`crate::app::App`] provides it with
 //! `ferrohealth_ui::i18n::provide_locale`, so the console's words and the
 //! components' words follow the same choice, and the document writes it as
-//! `<html lang>` (WCAG 2.2 SC 3.1.1). Every island takes its words as props,
-//! resolved here on the server, so the browser carries no catalog. A number
+//! `<html lang>` (WCAG 2.2 SC 3.1.1). The catalog is embedded in both
+//! halves and the browser provides the locale the server chose
+//! (`crate::visit::Visit`), so a page drawn in the browser speaks as the
+//! server's does. A number
 //! a message takes is grouped in the page's language by FerroUI's
 //! formatter, with the catalog's `number-group` and `number-decimal`. No
 //! specification governs the catalog layout or the choice: our own design.
@@ -280,6 +282,7 @@ pub fn chosen(chosen: Option<&str>, header: &str, configured: Locale) -> Locale 
 }
 
 /// The locale of the request being served.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn requested() -> Locale {
     use leptos::context::use_context;
@@ -291,12 +294,31 @@ pub fn requested() -> Locale {
         .and_then(|parts| parts.headers.get(http::header::ACCEPT_LANGUAGE))
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default();
-    let preferences = crate::prefs::requested();
+    let (cookies, prefix) = crate::visit::requested_preferences();
+    let preferences = ferrohealth_ui::theme::Preferences::read(&cookies, &prefix);
     chosen(preferences.language.tag(), header, configured)
+}
+
+/// The locale the request's `Accept-Language` asks for among the shipped
+/// catalogs, which Your preferences names as the browser's own.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn browser() -> Locale {
+    use leptos::context::use_context;
+    use_context::<http::request::Parts>()
+        .and_then(|parts| {
+            parts
+                .headers
+                .get(http::header::ACCEPT_LANGUAGE)
+                .and_then(|value| value.to_str().ok())
+                .map(Locale::negotiate)
+        })
+        .unwrap_or_default()
 }
 
 /// The locale of a request whose headers are `headers`, on the console
 /// `state`: for a handler, where no page tree is in reach.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn requested_from(state: &crate::server::ConsoleState, headers: &http::HeaderMap) -> Locale {
     let header = headers

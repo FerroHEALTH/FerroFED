@@ -342,7 +342,7 @@ pub fn tab(loaded: &Loaded<'_>, section: Section) -> AnyView {
 fn unreadable(loaded: &Loaded<'_>) -> AnyView {
     view! {
         <p role="status" class="fui-muted">
-            {tr_with(Msg::SettingsUnreadable, &[("replica", loaded.replica.name.clone().into())])}
+            {tr_with(Msg::SettingsUnreadable, &[("replica", loaded.replica.to_owned().into())])}
         </p>
     }
     .into_any()
@@ -373,7 +373,7 @@ fn choices(key: &str) -> Option<&'static [&'static str]> {
 /// The control of one editable setting, posted as row `row`.
 fn control(row: usize, setting: &Setting, posted: Option<&str>) -> AnyView {
     let id = format!("cfg-setting-{row}");
-    let name = format!("form[setting][{row}][value]");
+    let name = format!("form[setting.{row}.value]");
     let held = typed(setting.value.as_ref());
     let current = posted.map_or_else(|| held.clone(), str::to_owned);
     let described = described_by(&id, false, true);
@@ -451,9 +451,9 @@ fn control(row: usize, setting: &Setting, posted: Option<&str>) -> AnyView {
         .into_any(),
     };
     view! {
-        <input type="hidden" name="form[setting_rows]" value=row.to_string() />
-        <input type="hidden" name=format!("form[setting][{row}][key]") value=setting.key.clone() />
-        <input type="hidden" name=format!("form[setting][{row}][was]") value=held />
+        <input type="hidden" name="form[setting_rows][]" value=row.to_string() />
+        <input type="hidden" name=format!("form[setting.{row}.key]") value=setting.key.clone() />
+        <input type="hidden" name=format!("form[setting.{row}.was]") value=held />
         {input}
         {error_line(&id)}
     }

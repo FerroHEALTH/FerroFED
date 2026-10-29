@@ -11,6 +11,13 @@
 //! every endpoint's part said in words, an incomplete answer said before
 //! its rows (§11.4), the rows, and the raw result set. Before a run the
 //! answer is one quiet line.
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
@@ -25,18 +32,21 @@ use ferrohealth_ui::view::surface::{
 };
 use ferrohealth_ui::view::tabs::{Tab, binder};
 use ferrohealth_ui::view::template::list::HeadingCount;
+use ferrohealth_ui::widget::action::answer_field;
 use ferrohealth_ui::widget::repeat::{Fields, ROW, Repeat, RepeatAdd, RepeatRow, RowEnd, repeat};
+use leptos::form::ActionForm;
 use leptos::prelude::*;
 use openehr_federation::status::EndpointStatus;
 
 use crate::act::query::{
     ADD, PARAMETER_NAME, PARAMETER_VALUE, ParameterRow, QueryAnswer, QueryForm, QueryOptions,
-    QueryPost, REMOVE, Ran, succeeded,
+    QueryPost, REMOVE, Ran, RunQuery, succeeded,
 };
 use crate::app::QUERY;
-use crate::islands::{AQL, AqlEditor};
+use crate::editors::{AQL, AqlEditor};
 use crate::locale::{Msg, tr, tr_with};
 use crate::pages::{fault_view, refused_view};
+use crate::read::Stop;
 
 /// The id of the query form.
 const FORM: &str = "query-form";
@@ -57,43 +67,70 @@ pub fn page() -> AnyView {
     if !stored && !crate::pages::param("tab").is_empty() {
         return crate::pages::errors::not_found();
     }
-    let posted = use_context::<QueryPost>();
-    let mut form = posted
-        .as_ref()
-        .map(|post| post.form.clone())
-        .unwrap_or_default();
-    if posted.is_none() {
-        form.kind = String::from(if stored { "stored" } else { "aql" });
-        form.name = crate::pages::query_param("stored").unwrap_or_default();
-        form.version = crate::pages::query_param("version").unwrap_or_default();
+    let run = ServerAction::<RunQuery>::new();
+    // NOTE: no specification governs this: our own design; the answer carries the form as
+    // the server read it, so the page draws the form from the answer, not the posted fields.
+    let _posted = ferrohealth_ui::widget::action::answered(&run);
+    let fresh = {
+        let mut form = QueryForm {
+            kind: String::from(if stored { "stored" } else { "aql" }),
+            name: crate::pages::query_param("stored").unwrap_or_default(),
+            version: crate::pages::query_param("version").unwrap_or_default(),
+            ..QueryForm::default()
+        };
         form.parameters.push(ParameterRow {
             key: String::from("1"),
             ..ParameterRow::default()
         });
-    }
-    let ran = posted.and_then(|post| post.ran);
-    let body = Suspend::new(async move {
-        let options = match crate::read::signed_in() {
-            Ok((state, token)) => state
-                .gateway()
-                .self_description(&token)
-                .await
-                .ok()
-                .map(|description| QueryOptions::of(&description)),
-            Err(_) => None,
-        };
-        console(&form, stored, &options.unwrap_or_default(), ran)
-    });
+        form
+    };
+    let options = Resource::new(crate::read::changes, |_| options_now());
     view! {
         {crate::app::title(tr(Msg::QueryTitle))}
-        <Suspense fallback=|| ()>{body}</Suspense>
+        <Suspense fallback=|| ()>
+            {move || {
+                let (form, ran) = match run.value().get() {
+                    Some(Ok(QueryPost { form, ran })) => (form, ran),
+                    Some(Err(stop)) => (fresh.clone(), Some(Ran::from(stop))),
+                    None => (fresh.clone(), None),
+                };
+                Suspend::new(async move {
+                    let options = options.await.unwrap_or_default();
+                    console(&form, stored, &options, ran, run)
+                })
+            }}
+        </Suspense>
     }
     .into_any()
 }
 
+/// What the gateway's self-description offers a query, as the operator of
+/// the request reads it; nothing when it cannot be read.
+///
+/// # Errors
+/// Returns [`crate::read::Fault::Unavailable`] when the console's server
+/// does not answer.
+#[server(endpoint = "query-options")]
+pub async fn options_now() -> Result<QueryOptions, Stop> {
+    let (state, token) = crate::read::signed_in()?;
+    Ok(state
+        .gateway()
+        .self_description(&token)
+        .await
+        .ok()
+        .map(|description| QueryOptions::of(&description))
+        .unwrap_or_default())
+}
+
 /// The console with `form` filled in, on the Stored query tab when
 /// `stored`, offering `options`, with what the run `ran` gave.
-fn console(form: &QueryForm, stored: bool, options: &QueryOptions, ran: Option<Ran>) -> AnyView {
+fn console(
+    form: &QueryForm,
+    stored: bool,
+    options: &QueryOptions,
+    ran: Option<Ran>,
+    run: ServerAction<RunQuery>,
+) -> AnyView {
     let heading = page_heading(
         Header {
             title: tr(Msg::QueryTitle).into(),
@@ -103,25 +140,28 @@ fn console(form: &QueryForm, stored: bool, options: &QueryOptions, ran: Option<R
         ActionGroup::none(),
     )
     .into_any();
-    let action = if stored { STORED_TAB } else { QUERY };
     let query = if stored {
         stored_fields(form)
     } else {
         aql_field(form)
     };
+    let rows = parameters(form);
+    let window = window(form);
+    let federation = federation_options(form, options);
     let editor = view! {
-        <form id=FORM method="post" action=action class="fui-form fui-stack">
+        <ActionForm action=run attr:id=FORM attr:class="fui-form fui-stack">
+            {answer_field()}
             <input type="hidden" name="kind" value=if stored { "stored" } else { "aql" } />
             {query}
-            {parameters(form)}
-            {window(form)}
-            {federation_options(form, options)}
+            {rows}
+            {window}
+            {federation}
             <div class="fui-actions">
                 <button type="submit" class=Variant::Primary.class()>
                     {label(Some(Glyph::PLAY), tr(Msg::QueryRun))}
                 </button>
             </div>
-        </form>
+        </ActionForm>
     }
     .into_any();
     let tabs = binder(
@@ -312,10 +352,14 @@ fn window(form: &QueryForm) -> AnyView {
 /// A group of check boxes named `name`, one per value of `values`, those in
 /// `chosen` checked.
 fn checks(name: &'static str, values: &[String], chosen: &[String]) -> AnyView {
+    // NOTE: no specification governs this: our own design; a box is one of many under one
+    // name, so the field is named with `[]` (`crate::act::fields`).
+    let field = format!("{name}[]");
     values
         .iter()
         .map(|value| {
             let id = format!("query-{name}-{value}");
+            let name = field.clone();
             let checked = chosen.contains(value);
             keyed_check(
                 id.clone(),

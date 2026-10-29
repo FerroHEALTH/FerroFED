@@ -14,7 +14,7 @@ use crate::configure::plan::Refused;
 use crate::configure::render::parts::diff_table;
 use crate::configure::render::{SavedLine, StoredLine, mark_said};
 use crate::configure::said::replica_said;
-use crate::configure::said::{ActionAnswer, FieldNote};
+use crate::configure::said::{ActionAnswer, Answer, FieldNote};
 use crate::locale::{Msg, tr, tr_with};
 use crate::read::Refusal;
 
@@ -34,7 +34,7 @@ pub fn refused(refused: &Refused) -> ActionAnswer {
         });
     ActionAnswer {
         changed: false,
-        view: crate::pages::refused_view(&refused.refusal),
+        answer: Answer::Refused(refused.refusal.clone()),
         field,
     }
 }
@@ -44,9 +44,15 @@ pub fn refused(refused: &Refused) -> ActionAnswer {
 pub fn saved(answer: &ReplicaAnswer<SavedLine>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        view: replica_said(answer, "save", saved_line).into_any(),
+        answer: Answer::Saved(answer.clone()),
         field: None,
     }
+}
+
+/// The answer of `answer` drawn.
+#[must_use]
+pub fn saved_view(answer: &ReplicaAnswer<SavedLine>) -> AnyView {
+    replica_said(answer, "save", saved_line).into_any()
 }
 
 /// What a replica reports of a saved revision.
@@ -96,9 +102,15 @@ fn saved_line(replica: &str, line: &SavedLine) -> AnyView {
 pub fn applied(answer: &ReplicaAnswer<Applied>, what: &str) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        view: replica_said(answer, what, applied_line).into_any(),
+        answer: Answer::Applied(answer.clone(), what.to_owned()),
         field: None,
     }
+}
+
+/// The answer of `answer` drawn.
+#[must_use]
+pub fn applied_view(answer: &ReplicaAnswer<Applied>, what: &str) -> AnyView {
+    replica_said(answer, what, applied_line).into_any()
 }
 
 /// What a replica reports of an apply or a rollback.
@@ -140,9 +152,15 @@ fn applied_line(replica: &str, line: &Applied) -> AnyView {
 pub fn stored(answer: &ReplicaAnswer<StoredLine>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        view: replica_said(answer, "store", stored_line).into_any(),
+        answer: Answer::Stored(answer.clone()),
         field: None,
     }
+}
+
+/// The answer of `answer` drawn.
+#[must_use]
+pub fn stored_view(answer: &ReplicaAnswer<StoredLine>) -> AnyView {
+    replica_said(answer, "store", stored_line).into_any()
 }
 
 /// What a replica reports of a stored-query version stored.
@@ -166,9 +184,15 @@ fn stored_line(replica: &str, line: &StoredLine) -> AnyView {
 pub fn imported(answer: &ReplicaAnswer<Imported>) -> ActionAnswer {
     ActionAnswer {
         changed: matches!(answer.acted, Acted::Done(_)),
-        view: replica_said(answer, "import", imported_line).into_any(),
+        answer: Answer::Imported(answer.clone()),
         field: None,
     }
+}
+
+/// The answer of `answer` drawn.
+#[must_use]
+pub fn imported_view(answer: &ReplicaAnswer<Imported>) -> AnyView {
+    replica_said(answer, "import", imported_line).into_any()
 }
 
 /// What a replica reports of an import.

@@ -396,14 +396,13 @@ impl Browser {
     }
 }
 
-/// Waits until the page's islands have hydrated: the operator's menu button,
-/// an island of every signed-in page, says whether its menu is open only
-/// once its island runs (FerroUI F13).
+/// Waits until the page has hydrated: FerroUI's browser entry writes
+/// `data-ferroui-hydrated` on the root element once the page and its lazy
+/// route have hydrated (FerroUI `docs/consoles.md`, How a console builds,
+/// step 9).
 pub(crate) async fn hydrated(browser: &Browser) -> Result<(), Box<dyn Error>> {
     browser
-        .element(By::Css(
-            r#"button[popovertarget="user-menu"][aria-expanded]"#,
-        ))
+        .element(By::Css("html[data-ferroui-hydrated]"))
         .await
         .map_err(|error| format!("the page never hydrated: {error}"))?;
     Ok(())

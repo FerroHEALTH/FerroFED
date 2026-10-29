@@ -27,9 +27,10 @@ service worker or a URL.
 
 - **A sign-in page and a shell, built on FerroUI.** The console draws every
   page with `ferrohealth-ui`, the FerroHEALTH component library, and its
-  FerroFED theme. The server renders each page whole, and the browser
-  hydrates only the few interactive parts (islands), so every page reads and
-  every action posts with no WebAssembly. A visitor reads a sign-in card. A
+  FerroFED theme. The server draws the first page whole and the browser
+  takes it over, so following a link or posting a form draws the next page
+  in place and never loads a new document; with WebAssembly turned off every
+  page still reads and every action still posts. A visitor reads a sign-in card. A
   signed-in operator lands on a dashboard and reads every page in a shell: a
   top bar with the find field, the gateway's status (which names the
   gateway's version and the replica that answered), and the operator's

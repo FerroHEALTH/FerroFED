@@ -10,6 +10,13 @@
 //! routing table (N21, §12.2), each with its ground: the node's own
 //! `system_id`, a registered route or a learned one. A tab the console has
 //! no data for is left out (T2).
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
 use ferrofed_registry::operator::{CreatingSystemEntry, RouteSource};
 use ferrohealth_ui::i18n::Arg;
@@ -33,6 +40,7 @@ use crate::read::Stop;
 use crate::read::federation::{Health, Node, Organisation};
 use ferrohealth_ui::view::state::state;
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The most pages of the routing table the Routes tab reads.
 const ROUTE_PAGES: u64 = 10;
 
@@ -76,8 +84,23 @@ pub fn page() -> AnyView {
     let Some(tab) = NodeTab::of(&crate::pages::param("tab")) else {
         return crate::pages::errors::not_found();
     };
+    let federation_read = Resource::new(crate::read::changes, |_| {
+        crate::read::federation::federation_now()
+    });
+    let node_id = id.clone();
+    let routes_read = Resource::new(crate::read::changes, move |_| {
+        let node = node_id.clone();
+        async move {
+            if tab == NodeTab::Routes {
+                Some(routes_now(node).await)
+            } else {
+                None
+            }
+        }
+    });
     let body = Suspend::new(async move {
-        let federation = match crate::read::federation::read().await {
+        let routes = routes_read.await;
+        let federation = match federation_read.await {
             Ok(federation) => federation,
             Err(stop) => return stopped(&stop),
         };
@@ -87,17 +110,28 @@ pub fn page() -> AnyView {
         else {
             return crate::pages::errors::not_found();
         };
-        let routes = if tab == NodeTab::Routes {
-            Some(routes_of(&node.id).await)
-        } else {
-            None
-        };
         node_page(organisation, node, tab, routes)
     });
     view! { <Suspense fallback=|| ()>{body}</Suspense> }.into_any()
 }
 
+/// The creating systems the routing table routes to `node`, as the
+/// operator of the request reads them.
+///
+/// # Errors
+/// Returns the [`Stop`] of a missing session or a read the gateway refused
+/// or did not answer, and [`crate::read::Fault::Unavailable`] when the
+/// console's server does not answer.
+#[server(endpoint = "node-routes")]
+pub async fn routes_now(
+    /// The node's id.
+    node: String,
+) -> Result<Vec<CreatingSystemEntry>, Stop> {
+    routes_of(&node).await
+}
+
 /// The creating systems the routing table routes to `node`.
+#[cfg(not(target_arch = "wasm32"))]
 async fn routes_of(node: &str) -> Result<Vec<CreatingSystemEntry>, Stop> {
     let (state, token) = crate::read::signed_in()?;
     let mut found = Vec::new();

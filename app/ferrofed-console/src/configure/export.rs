@@ -10,15 +10,23 @@
 //! is answered with its status and stable code, never an empty file. No
 //! specification governs this: our own design.
 
+#[cfg(not(target_arch = "wasm32"))]
 use axum::Extension;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::extract::Path;
+#[cfg(not(target_arch = "wasm32"))]
 use axum::response::{IntoResponse, Response};
 use ferrofed_registry::revision::RevisionId;
+#[cfg(not(target_arch = "wasm32"))]
 use http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE, LOCATION};
+#[cfg(not(target_arch = "wasm32"))]
 use http::{HeaderMap, HeaderValue, StatusCode};
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::gateway::AccessToken;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::locale::{Msg, tr, tr_with};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::server::ConsoleState;
 
 /// The path of a revision's download.
@@ -31,6 +39,7 @@ pub fn href(id: RevisionId) -> String {
 }
 
 /// A plain-text answer of `status` saying `said`, never cached.
+#[cfg(not(target_arch = "wasm32"))]
 fn plain(status: StatusCode, said: String) -> Response {
     (
         status,
@@ -45,6 +54,7 @@ fn plain(status: StatusCode, said: String) -> Response {
 
 /// Serves `GET` [`EXPORT`]: revision `id` as a TOML attachment, read from
 /// the first replica as the signed-in operator.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn export(
     Extension(state): Extension<ConsoleState>,
     Path(id): Path<String>,
@@ -113,6 +123,7 @@ pub async fn export(
 }
 
 /// The `200` of revision `id`'s TOML, an attachment never cached.
+#[cfg(not(target_arch = "wasm32"))]
 fn attachment(id: RevisionId, toml: Vec<u8>) -> Response {
     let mut response = (StatusCode::OK, toml).into_response();
     let headers = response.headers_mut();

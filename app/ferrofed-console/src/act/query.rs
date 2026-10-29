@@ -7,38 +7,48 @@
 //! sent as the gateway's own ITS-REST query, and its federated answer read
 //! for the page (§9, §11.1, §11.4, N37).
 //!
-//! The form posts to the console's own page, so nothing the operator
-//! entered, a patient named in a parameter among it, reaches a URL, the
-//! history or a log (N33); the answer is drawn into the page that answers
-//! the post and kept nowhere. A press of a parameter row's Remove or of Add
-//! posts the form too, and the page answers with the rows changed and no
-//! query run (FerroUI F7).
+//! The form posts to a server function, so nothing the operator entered, a
+//! patient named in a parameter among it, reaches a URL, the history or a
+//! log (N33); the answer is drawn into the page and kept nowhere. A press
+//! of a parameter row's Remove or of Add posts the form too, and the page
+//! answers with the rows changed and no query run (FerroUI F7).
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt;
 
-use axum::Extension;
-use axum::extract::Form;
-use axum::response::Response;
+#[cfg(not(target_arch = "wasm32"))]
+use std::collections::BTreeMap;
+
 use ferrohealth_ui::i18n::Locale;
-use http::{HeaderMap, HeaderValue, Uri};
-use leptos::context::provide_context;
+use leptos::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use openehr_federation::headers::{
     COMPLETENESS, COMPLETENESS_PARTIAL, DEDUP, ENDPOINT, ORGANISATION,
 };
 use openehr_federation::options::OptionsRoot;
 use openehr_federation::outcome::ErrorDetail;
+#[cfg(not(target_arch = "wasm32"))]
 use openehr_its::rest::generated::query::QueryParameters;
+use serde::{Deserialize, Serialize};
 
-use crate::act::{field, render};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::act::field;
+use crate::act::fields::Fields;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::gateway::{FederatedAnswer, QueryCall, QueryTarget};
 use crate::locale::{Msg, tr_in};
-use crate::read::{Asked, Fault, Refusal, Stop, stopped};
-use crate::server::ConsoleState;
+use crate::read::{Fault, Refusal, Stop};
 
 /// One parameter row of the form: its key on the page, its name and its
 /// value.
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParameterRow {
     /// The row's key, which names its fields.
     pub key: String,
@@ -52,7 +62,7 @@ pub struct ParameterRow {
 ///
 /// Its `Debug` output names which fields are filled, never what they hold,
 /// because the AQL text and the parameter values can name a patient (N33).
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryForm {
     /// `aql` or `stored`.
     pub kind: String,
@@ -158,7 +168,7 @@ impl QueryForm {
 }
 
 /// What a post of the query console asked for.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Asking {
     /// Run the query.
     Run,
@@ -169,7 +179,7 @@ pub enum Asking {
 }
 
 /// One endpoint's part of a federated answer (§9.5).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndpointLine {
     /// The `endpoint_id`.
     pub id: String,
@@ -184,7 +194,7 @@ pub struct EndpointLine {
 }
 
 /// A federated answer as the page draws it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryAnswer {
     /// The status the gateway answered with.
     pub status: u16,
@@ -203,7 +213,7 @@ pub struct QueryAnswer {
 }
 
 /// What a run gave.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Ran {
     /// The gateway answered.
     Answered(QueryAnswer),
@@ -213,8 +223,17 @@ pub enum Ran {
     Fault(Fault),
 }
 
+impl From<Stop> for Ran {
+    fn from(stop: Stop) -> Self {
+        match stop {
+            Stop::Refused(refusal) => Self::Refused(refusal),
+            Stop::Fault(fault) => Self::Fault(fault),
+        }
+    }
+}
+
 /// The query console's post and what it gave, which the page draws.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryPost {
     /// The form as posted, its rows changed by Add or Remove.
     pub form: QueryForm,
@@ -222,18 +241,30 @@ pub struct QueryPost {
     pub ran: Option<Ran>,
 }
 
-/// Serves the post of the query console.
-pub async fn post(
-    Extension(state): Extension<ConsoleState>,
-    headers: HeaderMap,
-    extensions: http::Extensions,
-    uri: Uri,
-    Form(fields): Form<Vec<(String, String)>>,
-) -> Response {
-    let mut form = QueryForm::of(&fields);
-    let asking = if field(&fields, ADD).is_some() {
+/// Runs the query the console's form `fields` hold through the gateway as
+/// the operator of the request, or changes its parameter rows for an Add
+/// or a Remove and runs nothing.
+///
+/// # Errors
+/// Returns [`crate::read::Fault::Unavailable`] when the console's server
+/// does not answer; a form that cannot be sent and the gateway's refusal
+/// are answers.
+#[server(endpoint = "query")]
+pub async fn run_query(
+    /// The query console's form, every field as posted.
+    #[server(flatten)]
+    fields: Fields,
+) -> Result<QueryPost, Stop> {
+    Ok(posted(fields.pairs()).await)
+}
+
+/// The query console's post of `fields` and what it gave.
+#[cfg(not(target_arch = "wasm32"))]
+async fn posted(fields: &[(String, String)]) -> QueryPost {
+    let mut form = QueryForm::of(fields);
+    let asking = if field(fields, ADD).is_some() {
         Asking::Add
-    } else if let Some(key) = field(&fields, REMOVE) {
+    } else if let Some(key) = field(fields, REMOVE) {
         Asking::Remove(key.to_owned())
     } else {
         Asking::Run
@@ -251,21 +282,18 @@ pub async fn post(
             form.parameters.retain(|row| row.key != key);
             None
         }
-        Asking::Run => Some(run(&state, &headers, &form).await),
+        Asking::Run => Some(run(&form).await),
     };
-    let posted = QueryPost { form, ran };
-    render(&state, (headers, extensions), uri, move || {
-        provide_context(posted.clone());
-    })
-    .await
+    QueryPost { form, ran }
 }
 
-/// Runs `form` through the gateway as the operator of `headers`.
-async fn run(state: &ConsoleState, headers: &HeaderMap, form: &QueryForm) -> Ran {
-    let Ok(token) = crate::read::signed_in_with(state, headers) else {
+/// Runs `form` through the gateway as the operator of the request.
+#[cfg(not(target_arch = "wasm32"))]
+async fn run(form: &QueryForm) -> Ran {
+    let Ok((state, token)) = crate::read::signed_in() else {
         return Ran::Refused(Refusal::NotAuthenticated { code: None });
     };
-    let locale = crate::locale::requested_from(state, headers);
+    let locale = ferrohealth_ui::i18n::locale();
     let call = match call(&locale, form) {
         Ok(call) => call,
         Err(refused) => return Ran::Refused(refused),
@@ -277,7 +305,7 @@ async fn run(state: &ConsoleState, headers: &HeaderMap, form: &QueryForm) -> Ran
             read.elapsed_ms = u64::try_from(started.elapsed().as_millis()).ok();
             Ran::Answered(read)
         }
-        Err(error) => match stopped(&error, Asked::Query) {
+        Err(error) => match crate::read::stopped(&error, crate::read::Asked::Query) {
             Stop::Refused(refused) => Ran::Refused(refused),
             Stop::Fault(fault) => Ran::Fault(fault),
         },
@@ -286,7 +314,7 @@ async fn run(state: &ConsoleState, headers: &HeaderMap, form: &QueryForm) -> Ran
 
 /// What `description` offers a query: its dedup modes, whether it takes a
 /// partial answer, its endpoints and its organisations.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryOptions {
     /// The dedup modes the gateway declares.
     pub dedup_modes: Vec<String>,
@@ -321,17 +349,20 @@ impl QueryOptions {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// A refusal of the form, naming the field and never its value.
 fn invalid(reason: String) -> Refusal {
     Refusal::Invalid { reason }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The text of `field`, trimmed, or `None` when it is empty.
 fn given(field: &str) -> Option<&str> {
     let text = field.trim();
     (!text.is_empty()).then_some(text)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The gateway call `form` describes, its refusals in `locale`.
 ///
 /// # Errors
@@ -379,13 +410,15 @@ pub fn call(locale: &Locale, form: &QueryForm) -> Result<QueryCall, Refusal> {
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// `value` as a header value, refused when it is not legal on the wire.
 fn header_value(locale: &Locale, value: &str) -> Result<String, Refusal> {
-    HeaderValue::from_str(value)
+    http::HeaderValue::from_str(value)
         .map(|_legal| value.to_owned())
         .map_err(|_illegal| invalid(tr_in(locale, Msg::QueryHeaderIllegal, &[])))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The whole number `text` holds, or `None` when it is empty.
 fn whole(locale: &Locale, field: Msg, text: &str) -> Result<Option<i64>, Refusal> {
     let Some(text) = given(text) else {
@@ -401,6 +434,7 @@ fn whole(locale: &Locale, field: Msg, text: &str) -> Result<Option<i64>, Refusal
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The query parameters `rows` hold, each value sent as a string.
 fn parameters(locale: &Locale, rows: &[ParameterRow]) -> Result<QueryParameters, Refusal> {
     let mut parameters = BTreeMap::new();
@@ -430,6 +464,7 @@ fn parameters(locale: &Locale, rows: &[ParameterRow]) -> Result<QueryParameters,
     Ok(parameters)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// What the page draws of `federated`.
 #[must_use]
 pub fn answer(locale: &Locale, federated: &FederatedAnswer) -> QueryAnswer {

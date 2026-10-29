@@ -121,6 +121,9 @@ pub fn router(state: ConsoleState) -> axum::Router {
         move || {
             leptos::context::provide_context(state.clone());
             provide_request_nonce();
+            // NOTE: no specification governs this: our own design; a server function
+            // answers in the request's language, as the page that called it speaks.
+            ferrohealth_ui::i18n::provide_locale(crate::locale::requested());
         }
     };
     let pages = axum::Router::new()
@@ -136,16 +139,6 @@ pub fn router(state: ConsoleState) -> axum::Router {
         .route(crate::prefs::PREFERENCE, post(crate::prefs::choose))
         .route(crate::prefs::RESET, post(crate::prefs::reset))
         .route(crate::prefs::SIDEBAR, post(crate::prefs::sidebar))
-        .route(crate::app::INTEGRITY, post(crate::act::clear::post))
-        .route(crate::app::QUERY, post(crate::act::query::post))
-        .route("/query/{tab}", post(crate::act::query::post))
-        .route("/stored-queries/{name}", post(crate::act::repair::post))
-        .route(crate::app::CONFIGURATION, post(crate::act::configure::post))
-        .route("/configuration/{tab}", post(crate::act::configure::post))
-        .route(
-            "/configuration/{tab}/{item}",
-            post(crate::act::configure::post),
-        )
         .route(
             crate::configure::export::EXPORT,
             get(crate::configure::export::export),
@@ -164,15 +157,21 @@ pub fn router(state: ConsoleState) -> axum::Router {
             context,
             crate::app::document,
         ))
+        .layer(axum::middleware::from_fn(clean_query_address))
         .layer(axum::middleware::from_fn(require_session))
         .layer(axum::middleware::from_fn(
             crate::oidc::refresh::refresh_session,
         ))
-        .layer(axum::middleware::from_fn(same_origin_only))
-        .layer(Extension(state))
-        .layer(axum::extract::DefaultBodyLimit::max(CONFIGURE_BODY_LIMIT))
-        .layer(axum::middleware::from_fn(limit_body));
-    with_security_headers(pages.layer(bundle_compression()), form_action).with_state(options)
+        .layer(Extension(state.clone()))
+        .layer(axum::extract::DefaultBodyLimit::max(CONFIGURE_BODY_LIMIT));
+    // NOTE: no specification governs this: our own design; the origin check and the body
+    // limit hold before the answer wrapper reads a plain post, so a refused one reads nothing.
+    ferrohealth_ui::widget::action::draw_answers(
+        with_security_headers(pages.layer(bundle_compression()), form_action).with_state(options),
+    )
+    .layer(axum::middleware::from_fn(same_origin_only))
+    .layer(Extension(state))
+    .layer(axum::middleware::from_fn(limit_body))
 }
 
 /// The largest body a request to the console carries, but the
@@ -270,6 +269,56 @@ async fn require_session(
             );
             response
         }
+    }
+}
+
+/// The query keys the query console reads from its address: the stored
+/// query and the version a stored query's Run link names.
+const QUERY_KEYS: [&str; 2] = ["stored", "version"];
+
+/// Sends a `GET` of the query console whose address carries any other key
+/// to the same page without it, before anything draws it.
+///
+/// A query and its parameters travel in a `POST` body (N33), so a key the
+/// console never reads, such as a parameter a link put in the address, is
+/// dropped rather than echoed into the page's fields that name the address.
+async fn clean_query_address(request: Request, next: Next) -> Response {
+    let path = request.uri().path();
+    let on_console = path == crate::app::QUERY || path.starts_with("/query/");
+    let Some(query) = request.uri().query().filter(|_| on_console) else {
+        return next.run(request).await;
+    };
+    let pairs: Vec<(String, String)> = url::form_urlencoded::parse(query.as_bytes())
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    if pairs
+        .iter()
+        .all(|(key, _)| QUERY_KEYS.contains(&key.as_str()))
+    {
+        return next.run(request).await;
+    }
+    let kept: Vec<&(String, String)> = pairs
+        .iter()
+        .filter(|(key, _)| QUERY_KEYS.contains(&key.as_str()))
+        .collect();
+    let mut location = path.to_owned();
+    if !kept.is_empty() {
+        let mut form = url::form_urlencoded::Serializer::new(String::new());
+        for (key, value) in kept {
+            form.append_pair(key, value);
+        }
+        location.push('?');
+        location.push_str(&form.finish());
+    }
+    match HeaderValue::from_str(&location) {
+        Ok(location) => {
+            let mut response = StatusCode::SEE_OTHER.into_response();
+            response
+                .headers_mut()
+                .insert(http::header::LOCATION, location);
+            response
+        }
+        Err(_illegal) => StatusCode::BAD_REQUEST.into_response(),
     }
 }
 

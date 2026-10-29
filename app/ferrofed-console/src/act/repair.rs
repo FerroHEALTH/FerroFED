@@ -9,22 +9,25 @@
 //! replica configured sends it, since the stored-query store is the
 //! replicas' shared one. The page answers with each member's outcome as a
 //! fan-out (§9.5).
+#![cfg_attr(
+    target_arch = "wasm32",
+    allow(
+        clippy::unused_async_trait_impl,
+        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
+    )
+)]
 
-use axum::Extension;
-use axum::extract::{Form, Path};
-use axum::response::Response;
-use http::{HeaderMap, HeaderValue, Uri};
-use leptos::context::provide_context;
+use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
 
+use crate::act::ReplicaAnswer;
 use crate::act::query::EndpointLine;
-use crate::act::{ReplicaAnswer, acted, field, render};
-use crate::gateway::admin::{Distribution, Redistribution};
-use crate::locale::{Msg, tr_in};
-use crate::read::Refusal;
-use crate::server::ConsoleState;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::gateway::admin::Distribution;
+use crate::read::{Fault, Refusal, Stop};
 
 /// What a replica reports of a drift repair.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RepairLine {
     /// The status the replica answered with.
     pub status: u16,
@@ -39,15 +42,28 @@ pub struct RepairLine {
 }
 
 /// The outcome of a repair the page draws.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RepairOutcome {
     /// The replica asked, with its answer.
     Answered(ReplicaAnswer<RepairLine>),
     /// The form cannot be sent as it stands.
     Refused(Refusal),
+    /// The console could not run the repair, such as when its own server
+    /// did not answer the page.
+    Failed(Fault),
+}
+
+impl From<Stop> for RepairOutcome {
+    fn from(stop: Stop) -> Self {
+        match stop {
+            Stop::Refused(refusal) => Self::Refused(refusal),
+            Stop::Fault(fault) => Self::Failed(fault),
+        }
+    }
 }
 
 /// The line of `distribution`.
+#[cfg(not(target_arch = "wasm32"))]
 fn line(distribution: Distribution) -> RepairLine {
     let federation = &distribution.federation;
     RepairLine {
@@ -71,49 +87,54 @@ fn line(distribution: Distribution) -> RepairLine {
     }
 }
 
-/// Serves the post of the repair form on a stored query's page.
-pub async fn post(
-    Extension(state): Extension<ConsoleState>,
-    Path(name): Path<String>,
-    headers: HeaderMap,
-    extensions: http::Extensions,
-    uri: Uri,
-    Form(fields): Form<Vec<(String, String)>>,
-) -> Response {
-    let outcome = repair(&state, &headers, &name, &fields).await;
-    render(&state, (headers, extensions), uri, move || {
-        provide_context(outcome.clone());
-    })
-    .await
+/// Sends the version `version` of the stored query `name` again to the
+/// members `endpoint` names, `*` for every active member, once the dialog's
+/// confirmation step posted `confirm`, through the first replica, as the
+/// operator of the request.
+///
+/// # Errors
+/// Returns [`crate::read::Fault::Unavailable`] when the console's server
+/// does not answer; a form that cannot be sent and a replica's refusal are
+/// answers.
+#[server(endpoint = "repair")]
+pub async fn repair_drift(
+    /// The stored query's qualified name.
+    #[server(default)]
+    name: String,
+    /// The version to send.
+    #[server(default)]
+    version: String,
+    /// The members, `*` or their endpoint ids.
+    #[server(default)]
+    endpoint: String,
+    /// Not empty once the operator took the confirmation step.
+    #[server(default)]
+    confirm: String,
+) -> Result<RepairOutcome, Stop> {
+    Ok(repair(&name, &version, &endpoint, &confirm).await)
 }
 
-/// Sends the version `fields` names of the stored query `name` again.
-async fn repair(
-    state: &ConsoleState,
-    headers: &HeaderMap,
-    name: &str,
-    fields: &[(String, String)],
-) -> RepairOutcome {
-    let Ok(token) = crate::read::signed_in_with(state, headers) else {
+/// Sends the version the form names of the stored query `name` again.
+#[cfg(not(target_arch = "wasm32"))]
+async fn repair(name: &str, version: &str, endpoint: &str, confirm: &str) -> RepairOutcome {
+    use crate::gateway::admin::Redistribution;
+    use crate::locale::{Msg, tr};
+    let Ok((state, token)) = crate::read::signed_in() else {
         return RepairOutcome::Refused(Refusal::NotAuthenticated { code: None });
     };
-    let locale = crate::locale::requested_from(state, headers);
-    let invalid = |msg| {
-        RepairOutcome::Refused(Refusal::Invalid {
-            reason: tr_in(&locale, msg, &[]),
-        })
-    };
+    let invalid = |msg| RepairOutcome::Refused(Refusal::Invalid { reason: tr(msg) });
     let Some(replica) = state.settings().admin.first() else {
         return invalid(Msg::RepairNoAdmin);
     };
-    if field(fields, crate::act::clear::CONFIRM).is_none() {
+    if confirm.trim().is_empty() {
         return invalid(Msg::RepairConfirm);
     }
-    let Some(version) = field(fields, "version") else {
+    let version = version.trim();
+    if version.is_empty() {
         return invalid(Msg::RepairNameVersion);
-    };
-    let chosen: Vec<&str> = crate::act::fields_named(fields, "endpoint")
-        .into_iter()
+    }
+    let chosen: Vec<&str> = endpoint
+        .split(',')
         .map(str::trim)
         .filter(|id| !id.is_empty())
         .collect();
@@ -122,7 +143,7 @@ async fn repair(
     } else {
         chosen.join(", ")
     };
-    if HeaderValue::from_str(&endpoints).is_err() {
+    if http::HeaderValue::from_str(&endpoints).is_err() {
         return invalid(Msg::RepairEndpointsIllegal);
     }
     let sent = Redistribution {
@@ -131,7 +152,7 @@ async fn repair(
         endpoints,
     };
     let answered = state.gateway().repair_drift(replica, &token, &sent).await;
-    RepairOutcome::Answered(acted(
+    RepairOutcome::Answered(crate::act::acted(
         crate::read::ActionKind::Admin,
         (&replica.name, "drift repair"),
         answered,

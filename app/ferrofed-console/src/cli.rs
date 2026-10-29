@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 
 use clap::{Parser, Subcommand};
 
-use crate::manufacturer::MANUFACTURER;
+use ferrofed_registry::manufacturer::MANUFACTURER;
 
 /// What `ferrofed-console --version` prints after the binary's name.
 ///

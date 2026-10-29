@@ -1,28 +1,33 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The page tree the server renders.
+//! The page tree the server draws and the browser hydrates whole.
 //!
-//! The document carries the operator's theme, density, reduced motion and
-//! shortcut hints from their cookies as `data-theme`, `data-density`,
-//! `data-motion` and `data-hints`, and the request's locale as `lang`, so a
-//! page arrives as the operator chose it before any script runs. A
-//! signed-in operator reads every page in the shell; a visitor reads the
-//! sign-in and About in the centred layout. Every route renders
-//! `SsrMode::Async`: the server waits for every gateway answer and sends
-//! the page whole, so it reads with no script (the Leptos book,
-//! `ssr/23_ssr_modes`). The browser hydrates only the islands.
+//! The server draws the first page and the browser takes the whole tree
+//! over, then draws every page after it, each group of pages a lazy route
+//! ([`crate::routes`]), so no link or form reloads the document (FerroUI
+//! `docs/consoles.md`, "How a console builds"). The document carries the
+//! operator's theme, density, reduced motion and shortcut hints from their
+//! cookies as `data-theme`, `data-density`, `data-motion` and `data-hints`,
+//! and the request's locale as `lang`, so a page arrives as the operator
+//! chose it before any script runs. A signed-in operator reads every page
+//! in the shell; a visitor reads the sign-in and About in the centred
+//! layout. Every route renders `SsrMode::Async`: the server waits for every
+//! gateway answer and sends the page whole, so it reads with no script (the
+//! Leptos book, `ssr/23_ssr_modes`).
 
 use ferrohealth_ui::i18n::provide_locale;
-use ferrohealth_ui::island::ToastRegion;
+use ferrohealth_ui::island::{FormNavigator, PageAnnouncer, ToastRegion};
 use ferrohealth_ui::widget::toast::RegionWords;
 use leptos::prelude::*;
 use leptos_meta::{Title, provide_meta_context};
 use leptos_router::components::{Route, Router, Routes};
-use leptos_router::{SsrMode, path};
+use leptos_router::{Lazy, SsrMode, path};
 
 use crate::locale::{Msg, tr};
 use crate::pages;
+use crate::routes::{LConfiguration, LConsole, LFederation, LOverview, LQueries};
+use crate::visit::{FollowVisit, SessionState, Visits};
 
 /// The product name as an operator reads it.
 pub const PRODUCT: &str = "FerroFED Console";
@@ -85,6 +90,7 @@ pub const SEARCH: &str = "/search";
 /// The pages a visitor may read with no session: the sign-in at `/` and
 /// About, and the routes of the sign-in, the stylesheets, the brand marks,
 /// the preference posts and the site bundle.
+#[cfg(not(target_arch = "wasm32"))]
 pub const PUBLIC: [&str; 12] = [
     "/",
     ABOUT,
@@ -102,19 +108,24 @@ pub const PUBLIC: [&str; 12] = [
 
 /// Whether a request for `path` needs a live signed-in session: every path
 /// but the public ones and the site bundle.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn needs_session(path: &str) -> bool {
     let path = path.trim_end_matches('/');
     let path = if path.is_empty() { "/" } else { path };
-    !(PUBLIC.contains(&path) || path.starts_with("/pkg/"))
+    // NOTE: no specification governs this: our own design; a server function checks the
+    // session itself and answers a visitor's page, such as the visit, so it is not gated here.
+    !(PUBLIC.contains(&path) || path.starts_with("/pkg/") || path.starts_with("/api/"))
 }
 
 /// The whole HTML document the server renders around [`App`], as the
 /// request's preference cookies and locale ask.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn document(options: LeptosOptions) -> impl IntoView {
-    let preferences = crate::prefs::requested();
-    let lang = crate::locale::requested().tag();
+    let visit = crate::visit::Visit::requested();
+    let preferences = visit.chosen().preferences;
+    let lang = visit.locale().tag();
     view! {
         <!DOCTYPE html>
         <html
@@ -130,7 +141,7 @@ pub fn document(options: LeptosOptions) -> impl IntoView {
                 <link rel="icon" href="/favicon.ico" />
                 <link rel="stylesheet" href=STYLESHEET />
                 <link rel="stylesheet" href=THEME />
-                <HydrationScripts options islands=true />
+                <HydrationScripts options />
                 <leptos_meta::MetaTags />
             </head>
             <body>
@@ -140,189 +151,110 @@ pub fn document(options: LeptosOptions) -> impl IntoView {
     }
 }
 
-/// What the server knows of the request's session, which decides the shell
-/// the page is drawn in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SessionState {
-    /// A live signed-in session: the shell.
-    SignedIn,
-    /// No live session: the sign-in.
-    SignedOut,
-    /// The session store cannot be read, so the console cannot tell: the
-    /// page says so, and offers neither the sign-in nor the pages.
-    Unreadable,
-}
-
-/// The root component: the title format, the locale, the routes and the
-/// toast region.
+/// The root component: the title format, the routes in the layout the
+/// visit's session calls for, the toast region and the page announcer.
+///
+/// The server draws it and the browser hydrates it whole, both from the
+/// same [`crate::visit::Visit`], which the browser asks for again after
+/// each navigation.
 #[component]
-#[expect(
-    clippy::must_use_candidate,
-    reason = "the #[component] macro drops a #[must_use] from the function it writes"
-)]
 pub fn App() -> impl IntoView {
     provide_meta_context();
-    provide_locale(crate::locale::requested());
-    let session = crate::read::session_state();
-    let flash = crate::act::flash::taken();
+    // NOTE: the Leptos book, `ssr/22_life_cycle`: what the server read reaches the
+    // hydrating page serialized, so both halves draw the same page.
+    let visits = RwSignal::new((*SharedValue::new(crate::visit::server_visit)).clone());
+    provide_context(Visits(visits));
+    provide_context(crate::read::Changes(RwSignal::new(0)));
+    provide_locale(visits.with_untracked(crate::visit::Visit::locale));
+    ferrohealth_ui::widget::prefetch::routes(crate::routes::ROUTES);
+    let session = Memo::new(move |_| visits.with(|visit| visit.session));
+    let region = move || {
+        (session.get() == SessionState::SignedIn).then(|| {
+            view! { <ToastRegion words=RegionWords::of_page() flash=Vec::new() /> }
+        })
+    };
     view! {
         <Title formatter=|text: String| {
             if text.is_empty() { String::from(PRODUCT) } else { format!("{text} · {PRODUCT}") }
         } />
-        <Router>{routes(session)}</Router>
-        <ToastRegion words=RegionWords::of_page() flash=flash />
+        <Router>
+            <FollowVisit />
+            <FormNavigator />
+            {move || layout(session.get())}
+        </Router>
+        {region}
+        <PageAnnouncer />
     }
 }
 
-/// The page `page` of a signed-in operator in the shell, the sign-in for a
-/// visitor, and the unreadable store's page when the session cannot be
-/// read.
-fn guarded(
-    session: SessionState,
-    page: fn() -> AnyView,
-) -> impl Fn() -> AnyView + Clone + Send + Sync {
-    move || match session {
-        SessionState::SignedIn => crate::shell::signed_in(page()),
+/// The page for a request whose session is `session`.
+fn layout(session: SessionState) -> AnyView {
+    // NOTE: leptos_axum, `generate_route_list`: the server lists its routes by
+    // rendering the app with no request, so every layout draws the same routes.
+    let routes = routes(session);
+    match session {
+        SessionState::SignedIn => crate::shell::shell(routes),
+        SessionState::SignedOut | SessionState::Unreadable => routes,
+    }
+}
+
+/// The page `page` for the visit's session: the page for a signed-in
+/// operator, the sign-in for a visitor, and the unreadable store's page
+/// when the session cannot be read.
+pub fn guarded(page: fn() -> AnyView) -> AnyView {
+    match crate::visit::visit_untracked().session {
+        SessionState::SignedIn => page(),
         SessionState::SignedOut => pages::sign_in::page(),
         SessionState::Unreadable => pages::errors::unreadable(),
     }
 }
 
 /// The routes, for a request whose session is `session`.
-#[expect(
-    clippy::too_many_lines,
-    reason = "the route table is one list, read as one"
-)]
 fn routes(session: SessionState) -> AnyView {
+    let fallback = move || match session {
+        SessionState::SignedIn => pages::errors::not_found(),
+        SessionState::SignedOut => pages::sign_in::page(),
+        SessionState::Unreadable => pages::errors::unreadable(),
+    };
+    let overview = Lazy::<LOverview>::new;
+    let federation = Lazy::<LFederation>::new;
+    let queries = Lazy::<LQueries>::new;
+    let configuration = Lazy::<LConfiguration>::new;
+    let console = Lazy::<LConsole>::new;
     view! {
-        <Routes fallback=move || match session {
-            SessionState::SignedIn => crate::shell::signed_in(pages::errors::not_found()),
-            SessionState::SignedOut => pages::sign_in::page(),
-            SessionState::Unreadable => pages::errors::unreadable(),
-        }>
-            <Route
-                path=path!("/")
-                view=guarded(session, pages::dashboard::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/about")
-                view=move || match session {
-                    SessionState::SignedIn => crate::shell::signed_in(pages::about::page()),
-                    _ => pages::about::centred(),
-                }
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/topology")
-                view=guarded(session, pages::topology::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/organisations")
-                view=guarded(session, pages::organisations::list)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/organisations/nodes")
-                view=guarded(session, pages::organisations::all_nodes)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/organisations/:org")
-                view=guarded(session, pages::organisation::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/organisations/:org/:node")
-                view=guarded(session, pages::node::page)
-                ssr=SsrMode::Async
-            />
+        <Routes fallback>
+            <Route path=path!("/") view=overview() ssr=SsrMode::Async />
+            <Route path=path!("/topology") view=overview() ssr=SsrMode::Async />
+            <Route path=path!("/search") view=overview() ssr=SsrMode::Async />
+            <Route path=path!("/organisations") view=federation() ssr=SsrMode::Async />
+            <Route path=path!("/organisations/nodes") view=federation() ssr=SsrMode::Async />
+            <Route path=path!("/organisations/:org") view=federation() ssr=SsrMode::Async />
+            <Route path=path!("/organisations/:org/:node") view=federation() ssr=SsrMode::Async />
             <Route
                 path=path!("/organisations/:org/:node/:tab")
-                view=guarded(session, pages::node::page)
+                view=federation()
                 ssr=SsrMode::Async
             />
-            <Route
-                path=path!("/services")
-                view=guarded(session, pages::services::list)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/services/:service")
-                view=guarded(session, pages::services::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/integrity")
-                view=guarded(session, pages::integrity::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/query")
-                view=guarded(session, pages::query::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/query/:tab")
-                view=guarded(session, pages::query::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/stored-queries")
-                view=guarded(session, pages::stored::list)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/stored-queries/:name")
-                view=guarded(session, pages::stored::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/stored-queries/:name/:tab")
-                view=guarded(session, pages::stored::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/self-description")
-                view=guarded(session, pages::describe::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/self-description/:tab")
-                view=guarded(session, pages::describe::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/configuration")
-                view=guarded(session, pages::configuration::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/configuration/:tab")
-                view=guarded(session, pages::configuration::page)
-                ssr=SsrMode::Async
-            />
+            <Route path=path!("/services") view=federation() ssr=SsrMode::Async />
+            <Route path=path!("/services/:service") view=federation() ssr=SsrMode::Async />
+            <Route path=path!("/integrity") view=federation() ssr=SsrMode::Async />
+            <Route path=path!("/query") view=queries() ssr=SsrMode::Async />
+            <Route path=path!("/query/:tab") view=queries() ssr=SsrMode::Async />
+            <Route path=path!("/stored-queries") view=queries() ssr=SsrMode::Async />
+            <Route path=path!("/stored-queries/:name") view=queries() ssr=SsrMode::Async />
+            <Route path=path!("/stored-queries/:name/:tab") view=queries() ssr=SsrMode::Async />
+            <Route path=path!("/self-description") view=queries() ssr=SsrMode::Async />
+            <Route path=path!("/self-description/:tab") view=queries() ssr=SsrMode::Async />
+            <Route path=path!("/configuration") view=configuration() ssr=SsrMode::Async />
+            <Route path=path!("/configuration/:tab") view=configuration() ssr=SsrMode::Async />
             <Route
                 path=path!("/configuration/:tab/:item")
-                view=guarded(session, pages::configuration::page)
+                view=configuration()
                 ssr=SsrMode::Async
             />
-            <Route
-                path=path!("/preferences")
-                view=guarded(session, pages::prefs::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/preferences/:section")
-                view=guarded(session, pages::prefs::page)
-                ssr=SsrMode::Async
-            />
-            <Route
-                path=path!("/search")
-                view=guarded(session, pages::search::page)
-                ssr=SsrMode::Async
-            />
+            <Route path=path!("/preferences") view=console() ssr=SsrMode::Async />
+            <Route path=path!("/preferences/:section") view=console() ssr=SsrMode::Async />
+            <Route path=path!("/about") view=console() ssr=SsrMode::Async />
         </Routes>
     }
     .into_any()

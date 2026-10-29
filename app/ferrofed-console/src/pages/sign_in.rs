@@ -18,8 +18,7 @@ use crate::locale::{Msg, tr};
 
 /// Whether the console is configured with an OpenID Provider.
 fn configured() -> bool {
-    use_context::<crate::server::ConsoleState>()
-        .is_some_and(|state| state.settings().oidc.is_some())
+    crate::visit::visit_untracked().sign_in
 }
 
 /// The sign-in page.

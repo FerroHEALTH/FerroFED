@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 [package]
 name = "ferrofed-console"
-description = "The FerroFED Console, the operator console: a Leptos app rendered on the server in islands mode, and a backend-for-frontend over the gateway's public surface"
+description = "The FerroFED Console, the operator console: a Leptos app the server draws and the browser hydrates whole, and a backend-for-frontend over the gateway's public surface"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,9 +13,9 @@ authors.workspace = true
 # The application is never published, whatever the workspace switch says.
 publish = false
 
-# One crate, two halves (the Leptos book, "Guide: Islands"): the rlib feeds
-# the server binary and the cdylib is the WebAssembly bundle whose islands
-# the browser hydrates. cargo-leptos builds the cdylib for wasm32 and the
+# One crate, two halves (the Leptos book, server-side rendering): the rlib
+# feeds the server binary and the cdylib is the WebAssembly bundle that
+# hydrates the whole page. cargo-leptos builds the cdylib for wasm32 and the
 # binary for the host.
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -31,31 +31,55 @@ path = "src/main.rs"
 # apply only to a build for that target (the Cargo reference, resolver
 # version 2 and later). No specification governs this: our own design.
 [dependencies]
-# Islands mode, the one rendering mode FerroUI 0.3 supports: the server
-# draws every page and the browser hydrates the islands alone (the Leptos
-# book, "Guide: Islands"). No specification governs this: our own design.
-leptos = { workspace = true, features = ["islands"] }
+# The whole page hydrates in the browser (FerroUI `docs/consoles.md`, "How a
+# console builds"): the server draws it, the browser takes it over, and every
+# page after the first is drawn in the browser, its code loaded per lazy
+# route. Neither half turns on the `leptos` feature `islands`.
+leptos.workspace = true
 leptos_meta.workspace = true
 leptos_router.workspace = true
-# An island's props cross to the browser as JSON.
+# The state the server read and every page's reads cross to the browser as
+# JSON, through serde.
 serde.workspace = true
-# The FerroHEALTH components every page is drawn with, their islands, their
-# icons and their stylesheet.
+serde_json.workspace = true
+# The FerroHEALTH components every page is drawn with, their stylesheet and
+# their icons, in both halves.
 ferrohealth-ui.workspace = true
+# The console's own string catalogs under locales/, embedded in both halves,
+# so a page drawn in the browser speaks as the server's does.
+fluent-templates.workspace = true
+# The gateway's operator reports and configuration resources a page draws,
+# and the `Secret` and `WriteOnly` its forms hold, in both halves.
+ferrofed-registry.workspace = true
+ferrohealth-secret.workspace = true
+# The gateway's self-description and federation metadata (§7a.2, §11) a page
+# draws, and the ITS-REST stored query definition and query parameters.
+openehr-federation.workspace = true
+openehr-its.workspace = true
+# The times of an incident and of a clear, compared to mark the incident
+# resolved, and the wall clock the countdown of a revision awaiting its
+# confirmation starts from.
+jiff.workspace = true
+# A page's answer status, set on the server and named in both halves.
+http.workspace = true
+thiserror.workspace = true
+# The words of a find, read from the query string.
+url.workspace = true
+# The settings a credential or a binding section holds, read and written as
+# TOML on the configuration page.
+toml.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 leptos = { workspace = true, features = ["hydrate"] }
+# The browser's clock, which a relative time and a countdown read
+# (jiff's `js` feature; wasm32-unknown-unknown has no system clock).
+jiff = { workspace = true, features = ["js"] }
 wasm-bindgen.workspace = true
 console_error_panic_hook.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ferrohealth-secret.workspace = true
-thiserror.workspace = true
 # A secret the operator types into a form, zeroed when dropped.
 secrecy.workspace = true
-# The console's own string catalogs under locales/, on the server alone:
-# every island takes its words as props.
-fluent-templates.workspace = true
 # The per-request script nonce of the Content-Security-Policy rides `nonce`.
 leptos = { workspace = true, features = ["ssr", "nonce"] }
 leptos_axum.workspace = true
@@ -69,36 +93,23 @@ axum.workspace = true
 base64.workspace = true
 clap.workspace = true
 cookie.workspace = true
-# The type every credential the console is configured with is held in, which
-# never renders its value, and the reports of the gateway's operator surface.
-ferrofed-registry.workspace = true
-http.workspace = true
-# The times of an incident and of a clear, compared to mark the incident
-# resolved; the registry builds on it already, and the wall clock
-# the countdown of a revision awaiting its confirmation starts from.
-jiff.workspace = true
 # Each request's body is read up to its limit before anything else reads it.
 http-body-util.workspace = true
 # The ID Token of a sign-in, verified against the provider's JWK Set
 # (OpenID Connect Core 1.0 §3.1.3.7).
 jsonwebtoken.workspace = true
-# The gateway's self-description, `OPTIONS {base}/` (§7a.2).
-openehr-federation.workspace = true
 # The ITS-REST client the gateway is called through.
 openehr-its = { workspace = true, features = ["rest-client"] }
 # The healthcheck job asks the console beside it, over the client openehr-its
 # already brings in.
 reqwest.workspace = true
-serde_json.workspace = true
 # `sync` holds one refresh of a session's access token at a time.
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
-toml.workspace = true
 # The site bundle is served brotli- or gzip-compressed, as the request's
 # Accept-Encoding chooses.
 tower-http = { workspace = true, features = ["set-header", "compression-br", "compression-gzip"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
-url.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 # The test OpenID Provider: an issuer whose key pair is generated at run
@@ -107,6 +118,8 @@ ferrofed-testkit.workspace = true
 jiff.workspace = true
 jsonwebtoken.workspace = true
 serde_json.workspace = true
+# The reader a server function reads a form's fields with.
+serde_qs.workspace = true
 tempfile.workspace = true
 # A request body that stalls is timed out on a paused clock.
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "test-util"] }
@@ -131,3 +144,6 @@ assets-dir = "public"
 site-addr = "127.0.0.1:3000"
 reload-port = 3001
 lib-profile-release = "wasm-release"
+# A dev build keeps its component types, as the server half does, so the
+# bundle hydrates the pages the server rendered.
+disable-erase-components = true
