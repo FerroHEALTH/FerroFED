@@ -111,6 +111,70 @@ async fn the_summary_is_an_eps_document_from_both_members_and_no_identifier_reac
     Ok(())
 }
 
+/// Requirements Catalogue v10.0.0 §1.18.3 (10.03) and Federation Tier §10.3: a
+/// composition two members hold under one full version id (an imported
+/// copy, §10.3) is listed once, from the member that created it, and the
+/// section's narrative says so.
+#[tokio::test]
+async fn an_imported_copy_is_listed_once_from_the_member_that_created_it() -> TestResult {
+    let (a, b) = (node_holding(UID_B).await, node_holding(UID_B).await);
+    let dir = tempfile::tempdir()?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
+    let (status, _, body) = exchange(app, summary("")?).await?;
+    let text = String::from_utf8(body)?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let findings = eps::check(&text)?;
+    assert!(findings.is_empty(), "the EPS profiles: {findings:#?}");
+    let document: Value = serde_json::from_str(&text)?;
+    let allergies = section(&document, ALLERGIES_SECTION).ok_or("the allergies section")?;
+    assert_eq!(
+        allergies["entry"].as_array().map(Vec::len),
+        Some(1),
+        "one copy listed: {allergies}"
+    );
+    assert_eq!(
+        allergies["author"].as_array().map(Vec::len),
+        Some(1),
+        "only the kept copy's member authored the section: {allergies}"
+    );
+    let narrative = allergies
+        .pointer("/text/div")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    assert!(narrative.contains("is listed once, from"), "{narrative}");
+    assert_eq!(
+        resources(&document, "Provenance").len(),
+        1,
+        "one Provenance"
+    );
+    assert!(
+        narrative.contains(
+            "org-a also holds as a copy of the one from org-b is listed once, from org-b"
+        ),
+        "the copy of the member that created it is kept: {narrative}"
+    );
+    Ok(())
+}
+
+/// Two different compositions stay listed, one from each member.
+#[tokio::test]
+async fn two_different_compositions_are_both_listed() -> TestResult {
+    let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
+    let dir = tempfile::tempdir()?;
+    let pdq = supplier().await;
+    let (_, _, body) = exchange(gateway(dir.path(), (&a, &b), &pdq)?, summary("")?).await?;
+    let document: Value = serde_json::from_slice(&body)?;
+    let allergies = section(&document, ALLERGIES_SECTION).ok_or("the allergies section")?;
+    assert_eq!(allergies["entry"].as_array().map(Vec::len), Some(2));
+    let narrative = allergies
+        .pointer("/text/div")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    assert!(!narrative.contains("is listed once"), "{narrative}");
+    Ok(())
+}
+
 #[tokio::test]
 async fn the_face_needs_no_stored_query_registry() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);

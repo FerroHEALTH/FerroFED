@@ -60,6 +60,7 @@ fn medication_answers(a: &[Held], b: &[Held]) -> Vec<SectionAnswers> {
             SectionAnswers {
                 section,
                 answers: vec![(0, held(a)), (1, held(b))],
+                listed_once: Vec::new(),
             }
         })
         .collect()

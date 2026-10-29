@@ -82,6 +82,7 @@ fn answers(allergies: &[Held], b: &Answer) -> Vec<SectionAnswers> {
             SectionAnswers {
                 section,
                 answers: vec![(0, a), (1, b.clone())],
+                listed_once: Vec::new(),
             }
         })
         .collect()

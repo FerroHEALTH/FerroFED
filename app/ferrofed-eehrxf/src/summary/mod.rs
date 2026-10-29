@@ -56,8 +56,10 @@
 
 pub mod duplicates;
 pub mod mappings;
+pub mod once;
 pub mod repeated;
 
+use once::ListedOnce;
 use std::collections::{BTreeMap, BTreeSet};
 
 use eehrxf::category::Category;
@@ -187,6 +189,9 @@ pub struct SectionAnswers {
     /// The answer of each origin that was asked, by its index in the
     /// origins.
     pub answers: Vec<(usize, Answer)>,
+    /// The compositions two or more origins answered with under one full
+    /// version id, each listed once, from the origin kept.
+    pub listed_once: Vec<ListedOnce>,
 }
 
 /// Who writes the summary: the gateway and its operator.
@@ -548,6 +553,7 @@ impl Assembly {
         let mut paragraphs = narrative(entries.len(), (&silent, &uncovered), origins, &shown);
         paragraphs.extend(withheld);
         paragraphs.extend(duplicates::lines(&keys));
+        paragraphs.extend(once::lines(&answers.listed_once, origins));
         paragraphs.extend(covered_elsewhere(elsewhere));
         let mut section = eehrxf::document::Section::new(slot, paragraphs);
         for author in authors {

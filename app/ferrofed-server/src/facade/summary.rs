@@ -28,6 +28,7 @@ use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence, Queried, ResourceKind, RootObject};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_eehrxf::patient_summary::Section;
+use ferrofed_eehrxf::summary::once::ListedOnce;
 use ferrofed_eehrxf::summary::{
     Answer, Covered, Elsewhere, Held, Organisation, Origin, SectionAnswers,
 };
@@ -36,6 +37,10 @@ use ferrofed_engine::fanout::{FanOutError, FederatedAnswer, Plan};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
+use openehr_base::prelude::ObjectVersionId;
+use openehr_base::v1_3::base_types::identification::lexical::{
+    composite_id_key, composite_ids_equal,
+};
 use openehr_federation::aql::{Analysis, ColumnSource, PatientQuery};
 use openehr_federation::dedup::DedupMode;
 use openehr_federation::outcome::EndpointOutcome;
@@ -503,19 +508,89 @@ fn collected(
                 continue;
             }
             let rows = held.get(&reached.endpoint).map_or(&[][..], Vec::as_slice);
-            let compositions = compositions(rows, sources);
-            reached.compositions = reached.compositions.saturating_add(compositions.len());
             reached
                 .objects
                 .extend(cells::node_root_objects(rows, sources).0);
-            section_answers.push((index, Answer::Answered(compositions)));
+            section_answers.push((index, Answer::Answered(compositions(rows, sources))));
         }
+        let listed_once = once(&mut section_answers, &mut gathered.reached);
         gathered.sections.push(SectionAnswers {
             section: *section,
             answers: section_answers,
+            listed_once,
         });
     }
     Ok(gathered)
+}
+
+/// Leaves in `answers` one copy of each composition two or more origins of
+/// `reached` answered with under one full version id, counts what each
+/// origin keeps, and returns what it left out.
+// NOTE: Federation Tier §10.3, BASE §"Composite Identifiers and Case": the kept copy is the one at the member whose `system_id`
+// equals the uid's `creating_system_id` apart from case, else the lowest `endpoint_id`.
+fn once(answers: &mut [(usize, Answer)], reached: &mut [Reached]) -> Vec<ListedOnce> {
+    let mut holders: BTreeMap<String, (String, BTreeSet<usize>)> = BTreeMap::new();
+    for (index, answer) in answers.iter() {
+        let Answer::Answered(held) = answer else {
+            continue;
+        };
+        for composition in held {
+            let Some((key, creating)) = version_key(&composition.uid) else {
+                continue;
+            };
+            holders
+                .entry(key)
+                .or_insert_with(|| (creating, BTreeSet::new()))
+                .1
+                .insert(*index);
+        }
+    }
+    let mut keepers: BTreeMap<String, usize> = BTreeMap::new();
+    let mut listed = Vec::new();
+    for (key, (creating, holding)) in holders {
+        if holding.len() < 2 {
+            continue;
+        }
+        let originating = holding.iter().copied().find(|index| {
+            reached
+                .get(*index)
+                .and_then(|reached| reached.system_id.as_deref())
+                .is_some_and(|system| composite_ids_equal(system, &creating))
+        });
+        let Some(kept) = originating.or_else(|| holding.first().copied()) else {
+            continue;
+        };
+        listed.push(ListedOnce {
+            kept,
+            dropped: holding.into_iter().filter(|index| *index != kept).collect(),
+        });
+        keepers.insert(key, kept);
+    }
+    for (index, answer) in answers.iter_mut() {
+        if let Answer::Answered(held) = answer {
+            held.retain(|composition| {
+                version_key(&composition.uid)
+                    .and_then(|(key, _)| keepers.get(&key))
+                    .is_none_or(|kept| kept == index)
+            });
+            if let Some(reached) = reached.get_mut(*index) {
+                reached.compositions = reached.compositions.saturating_add(held.len());
+            }
+        }
+    }
+    listed
+}
+
+/// The case-folded key of the version `uid` names and its
+/// `creating_system_id`, when `uid` is an `OBJECT_VERSION_ID`.
+fn version_key(uid: &str) -> Option<(String, String)> {
+    // NOTE: a uid that is no OBJECT_VERSION_ID names no version to compare, so the composition
+    // is legitimately no copy of another and stays listed.
+    let version = ObjectVersionId::new(uid).ok()?;
+    Some((
+        composite_id_key(version.value()),
+        version.creating_system_id_str().to_owned(),
+    ))
 }
 
 /// The compositions of `rows`, each read from the composition, uid and
