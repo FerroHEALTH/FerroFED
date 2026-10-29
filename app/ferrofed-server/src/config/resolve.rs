@@ -127,6 +127,7 @@ impl Config {
                 base_path,
                 request_timeout,
                 header_read_timeout_ms: self.server.header_read_timeout_ms,
+                idle_timeout_ms: self.server.idle_timeout_ms,
                 drain_delay: Duration::from_millis(self.server.drain_delay_ms),
                 shutdown_timeout,
                 bindings_drain,

@@ -38,12 +38,12 @@ pub fn policy(state: &Arc<AppState>, request_log: RequestLog) -> StackPolicy {
 
 /// The body of a panicked request: `500 internal`.
 fn panic_body(state: Arc<AppState>) -> PanicBody {
-    Arc::new(move |uri, request_id| {
+    Arc::new(move |uri, ids| {
         answered(
             &state,
             uri,
             (StatusCode::INTERNAL_SERVER_ERROR, Some(Code::Internal)),
-            (request_id, ferrohealth_server::problem::INTERNAL),
+            (ids.server, ferrohealth_server::problem::INTERNAL),
         )
     })
 }
@@ -52,7 +52,7 @@ fn panic_body(state: Arc<AppState>) -> PanicBody {
 /// `503 overloaded`, each counted by its limit, and a `408` or a `413` as
 /// an `about:blank` problem.
 fn refusal_body(state: Arc<AppState>) -> RefusalBody {
-    Arc::new(move |uri, request_id, status, reason| {
+    Arc::new(move |uri, ids, status, reason| {
         let code = match status {
             StatusCode::SERVICE_UNAVAILABLE => {
                 state.metrics().shed(Limit::Concurrency);
@@ -64,7 +64,7 @@ fn refusal_body(state: Arc<AppState>) -> RefusalBody {
             }
             _ => None,
         };
-        answered(&state, uri, (status, code), (request_id, reason))
+        answered(&state, uri, (status, code), (ids.server, reason))
     })
 }
 

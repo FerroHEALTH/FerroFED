@@ -13,11 +13,11 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_server::auth::trust::Trust;
 use ferrofed_server::config::Config;
-use ferrofed_server::healthcheck::READINESS;
 use ferrofed_server::reload::Reloader;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::listener::ListenerCertificates;
+use ferrohealth_server::health::READINESS;
 use ferrohealth_server::tls::{ReloadableTls, TlsKeys};
 use http::{Request, StatusCode, header};
 

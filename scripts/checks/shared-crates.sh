@@ -19,8 +19,11 @@
 #     state directory or the envelope types (ferrohealth-usage-report); a
 #     TLS listener, its kept certificates, a serve loop, a drain, or a layer
 #     of the stack (the request id, the panic catch, the timeout, the body
-#     limit, the overload bound or the caller rate) of its own
-#     (ferrohealth-server); the telemetry section, the console formats, the
+#     limit, the overload bound or the caller rate) of its own, or a
+#     healthcheck of its own: a certificate verifier that pins the
+#     listener's certificate, a readiness check or the readiness path
+#     (ferrohealth-server, whose `healthcheck::Get` reads a body over the
+#     pinned TLS too, #1448); the telemetry section, the console formats, the
 #     request log, the sampler, a trace export, an OTLP or Prometheus
 #     exporter or a panic hook of its own (ferrohealth-telemetry).
 #
@@ -63,7 +66,11 @@ ferrohealth-telemetry	(opentelemetry_otlp|opentelemetry_prometheus)::
 ferrohealth-telemetry	(std::panic::set_hook|fn[[:space:]]+install_hook[[:space:]]*[<(])
 ferrohealth-telemetry	tracing_subscriber::fmt\(\)
 ferrohealth-server	fn[[:space:]]+(same_origin|content_security_policy|shutdown_signal)[[:space:]]*[<(]
-ferrohealth-config	fn[[:space:]]+(apply_override|env_value)[[:space:]]*[<(]"
+ferrohealth-config	fn[[:space:]]+(apply_override|env_value)[[:space:]]*[<(]
+ferrohealth-server	impl[[:space:]]+([A-Za-z_]+::)*ServerCertVerifier[[:space:]]+for[[:space:]]
+ferrohealth-server	with_custom_certificate_verifier
+ferrohealth-server	fn[[:space:]]+(check_tls|check_url|healthcheck_client)[[:space:]]*[<(]
+ferrohealth-server	const[[:space:]]+READINESS[[:space:]]*:"
 
 # check ROOT: prints every finding under ROOT and returns 1 when there is one.
 check() {
@@ -127,6 +134,11 @@ self_test() {
     'pub fn same_origin(headers: &http::HeaderMap, origin: Option<&str>) -> bool {'
     'async fn shutdown_signal() {'
     'fn apply_override(table: &mut toml::Table, name: &str, raw: &str) {}'
+    'impl ServerCertVerifier for Pinned {'
+    'impl rustls::client::danger::ServerCertVerifier for Pinned {'
+    '    .with_custom_certificate_verifier(Arc::new(pinned));'
+    'pub async fn check_tls(address: SocketAddr, tls: &Tls) -> Outcome {'
+    'pub const READINESS: &str = "/health/readiness";'
   )
   local case
   for case in "${cases[@]}"; do

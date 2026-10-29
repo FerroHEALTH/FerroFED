@@ -43,8 +43,8 @@
 //! the identifier-integrity conditions of §12b.2 (§12b.1, N42a, CP-33a).
 //! [`conformance`] is the `conformance run` job: the Connectathon tracks of
 //! §16.3 driven against a configured deployment, and its report (§16.4).
-//! [`healthcheck`] is the `healthcheck` job a container runtime runs beside
-//! the server, and [`health`] answers liveness, readiness and the last
+//! [`command::healthcheck`] is the `healthcheck` job a container runtime runs
+//! beside the server, and [`health`] answers liveness, readiness and the last
 //! observed state of every dependency. [`report`] is the `report` job: the
 //! archive a complaint or a serious-incident report attaches. [`jwks`] serves the gateway's public
 //! signing keys, which its OAuth 2.0 client assertions to the nodes are
@@ -84,7 +84,6 @@ pub mod facade;
 pub mod federation;
 pub mod fhir;
 pub mod health;
-pub mod healthcheck;
 pub mod jwks;
 pub mod localization;
 pub mod metrics;
