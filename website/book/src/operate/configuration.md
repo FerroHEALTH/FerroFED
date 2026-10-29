@@ -240,6 +240,8 @@ header_read_timeout_ms = 30000  # a client that sends no request head within thi
 body_limit_bytes = 1048576    # a body past this answers 413
 max_concurrent_requests = 512 # one more at once answers 503 overloaded; see Overload protection
 retry_after_s = 1             # the Retry-After of that 503, in seconds
+compression = true            # gzip or brotli for a client that accepts it; false leaves every answer as written
+compression_min_bytes = 1024  # an answer shorter than this is never compressed
 
 # A per-caller rate, off unless set; see Overload protection.
 [server.caller_rate]

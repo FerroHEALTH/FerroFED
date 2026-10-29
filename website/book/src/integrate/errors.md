@@ -26,7 +26,10 @@ ITS-REST `Error` body and two more members:
   gateway's own id, the one its log and every node record. Your own id never
   leaves the gateway: no node receives it and the log does not record it,
   because the gateway cannot tell whether free text names a patient (§5.4.1,
-  N33). To name a request the operator can find by its id, send none.
+  N33). To name a request the operator can find by its id, send none. A
+  `500 internal` for a request whose handler failed, a `503 overloaded`
+  and a `429 rate-limited` always name the gateway's own id here, while the
+  header still echoes yours.
 
 ```json
 {
