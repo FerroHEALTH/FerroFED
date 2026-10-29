@@ -219,5 +219,6 @@ privileged-access and FerroFED has no grant to reuse it (Commission
 Decision 2011/833/EU Art 2(2)(c)), so this page and `docs/architecture.md`
 cite it by version, section and requirement id only and carry none of its
 text. This is FerroFED's own reading, not a MyHealth@EU compliance check.
-When the Art 15(1) act is adopted, the decisions behind this page are
-checked again.
+The result for every requirement id, with its status and evidence, is on
+[MyHealth@EU self-assessment](../evaluate/myhealth-eu.md). When the Art 15(1)
+act is adopted, the decisions behind this page are checked again.

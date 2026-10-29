@@ -28,6 +28,7 @@
 - [Licensing](evaluate/licensing.md)
 - [Regulatory status](evaluate/regulatory-status.md)
   - [Category crosswalks](evaluate/category-crosswalks.md)
+  - [MyHealth@EU self-assessment](evaluate/myhealth-eu.md)
   - [Information sheet](evaluate/information-sheet.md)
   - [CRA information to the user](evaluate/cra-user-information.md)
   - [Technical documentation](evaluate/technical-documentation.md)
