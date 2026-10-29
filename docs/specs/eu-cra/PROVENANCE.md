@@ -9,7 +9,7 @@ the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
   the pins): `c5641e7937d0a0a9638af933a62143b1a9807fa002a1b3b337632e527e4f655f`
-- Fetched: 2026-10-15, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Fetched: 2026-10-29, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 9 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 9 besides this one, each verbatim as the

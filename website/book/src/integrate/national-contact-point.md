@@ -108,6 +108,35 @@ For every request of the contact point, the gateway:
   conveyance, and sends no patient identifier to any member (Federation
   Tier §5.4.1, N33).
 
+The gateway never refuses a contact-point request because of the
+professional's role or the point of care: it conveys both for the record and
+for the member's information. The country of affiliation must not deny
+access on them (MyHealth@EU Requirements Catalogue v10.0.0, 01 and 01.02),
+so a member that applies its own release rule to a contact-point request
+must not use them either.
+
+## Failures the connector relays
+
+The contact points exchange a common set of exceptions, and the national
+answer travels with the one the contact point sends on (Requirements
+Catalogue v10.0.0, §1.25). Every failure of the face is an
+`OperationOutcome` whose status and issue type tell the connector which kind
+it is:
+
+| What happened | Status and issue type | Temporary? |
+|---|---|---|
+| A member, the identity binding or the access record could not answer in time or at all | `503` `transient`, `504` `timeout` | yes, the connector may ask again |
+| A member answered with an error, named in the outcome | `424` `incomplete` | the member's, which the outcome names |
+| The owner of a prescription failed on a dispensation or could not be reached | `502` `exception`, the member's own issues after the gateway's when it sent some | unknown: read the prescription before sending again |
+| The request is malformed or misses a parameter | `400` `invalid` | no |
+| The token misses an Annex attribute; the message names each missing one | `403` `forbidden` | no, until the contact point sends it |
+| No member holds the patient, or the prescription | an empty `searchset`, or `404` `not-found` | no |
+| The member that owns the prescription refused the dispensation | `409` `conflict`, the member's own issues after the gateway's | no |
+| The gateway failed on its own | `500` `exception` | no |
+
+A patient no member holds and a patient every member restricts answer
+alike, so the connector reports both as a patient with no data.
+
 The end-to-end test `e2e::national` drives these routes from the harness
 national connector of `tools/ferrofed-testkit` over two FerroEHR nodes.
 
@@ -124,8 +153,12 @@ stay with the contact point:
   `GET {fhir-base}/Patient?identifier=`, the patient lookup Xt-EHR D5.1
   §3.4.6 asks of every producer EHR system and has a consumer use
   ([Looking a patient up](patient-summary.md#looking-a-patient-up)).
-- **The eHDSI CDA.** FerroFED emits no eHDSI CDA pivot document and no
-  national CDA. Regulation (EU) 2025/327 recital 26 allows different
+- **The eHDSI CDA and the PDF of the original.** FerroFED emits no eHDSI
+  CDA pivot document, no national CDA and no PDF. The contact point of the
+  country of affiliation passes on a PDF of the original summary in its
+  language (Requirements Catalogue v10.0.0, 05.02); every section of the
+  gateway's document carries that original information as its generated
+  narrative, from which the contact point renders it. Regulation (EU) 2025/327 recital 26 allows different
   profiles at the level of EHR systems and of contact points, and the
   transformation to the contact point's profile is the contact point's.
   MyHealth@EU runs its Patient Summary and ePrescription services on CDA,
@@ -172,9 +205,19 @@ eDispensation, laboratory, discharge and imaging reports, vaccination and
 the NCPeH API), the eHDSI CDA reference test documents, and the OpenNCP
 Transformation Manager's Schematrons and coded element list.
 
-The MyHealth@EU Requirements Catalogue, release 9.0.0 of 2025-03-24, is
-available only with authorisation from DG SANTE behind EU Login (D6.1 §5),
-and Commission Decision 2011/833/EU does not let a privileged-access document
-be copied here without a written grant. FerroFED records it for manual
-retrieval and has not read it. When the act is adopted, or the catalogue
-can be read, the decisions behind this page are checked again.
+The decisions were checked again on 2026-10-29 against the MyHealth@EU
+Requirements Catalogue v10.0.0 (W10-Operation Ready, 2026-03-06), which the
+owner read under an EU Login reading grant: its requirements on health
+professional identification (01), patient identification (02), the contact
+point's operation and data protection (03, 04), the patient summary (05),
+information quality (10), security, traceability and auditability (11),
+non-repudiation (12), the summary use case and the exception handling. They
+hold, with two amendments of FerroFED's own: the gateway never refuses on
+the professional's role or point of care, and the PDF of the original is
+the contact point's, rendered from the narrative. The catalogue is
+privileged-access and FerroFED has no grant to reuse it (Commission
+Decision 2011/833/EU Art 2(2)(c)), so this page and `docs/architecture.md`
+cite it by version, section and requirement id only and carry none of its
+text. This is FerroFED's own reading, not a MyHealth@EU compliance check.
+When the Art 15(1) act is adopted, the decisions behind this page are
+checked again.
