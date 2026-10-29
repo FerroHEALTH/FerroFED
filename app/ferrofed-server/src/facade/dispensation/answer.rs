@@ -27,10 +27,11 @@ use ehds_logging::record::{
 use ferrofed_eehrxf::dispensations::{self, RESOURCE, Received};
 use ferrofed_eehrxf::face;
 use ferrofed_engine::single_node::forward::{ForwardError, Forwarded};
-use ferrofed_engine::single_node::native_create::Created;
+use ferrofed_engine::single_node::native_create::{Answered, Created};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::incident::Incident;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use fhir_types::r4::operation_outcome::OperationOutcomeIssue;
 use http::{HeaderValue, StatusCode, header};
 use secrecy::SecretString;
 
@@ -204,22 +205,24 @@ pub(super) fn written(
                 fhir,
             );
         }
-        Written::Sent(Created::Refused(answered)) => (
-            StatusCode::CONFLICT,
-            "conflict",
-            format!(
-                "member {member} refused the dispensation at endpoint {endpoint} with {}",
-                answered.as_u16()
-            ),
-        ),
-        Written::Sent(Created::Erred(answered)) => (
-            StatusCode::BAD_GATEWAY,
-            "exception",
-            format!(
-                "member {member} answered the dispensation at endpoint {endpoint} with {}",
-                answered.as_u16()
-            ),
-        ),
+        Written::Sent(Created::Refused(answered)) => {
+            return relayed(
+                federation,
+                lookup,
+                (writing, created),
+                (StatusCode::CONFLICT, "conflict"),
+                (answered, "refused"),
+            );
+        }
+        Written::Sent(Created::Erred(answered)) => {
+            return relayed(
+                federation,
+                lookup,
+                (writing, created),
+                (StatusCode::BAD_GATEWAY, "exception"),
+                (answered, "answered"),
+            );
+        }
         Written::Sent(Created::Abandoned | Created::Failed(ForwardError::TimeOut { .. })) => (
             StatusCode::GATEWAY_TIMEOUT,
             "timeout",
@@ -269,6 +272,63 @@ pub(super) fn written(
         accessed(federation, lookup, Some((writing, created, None))),
     );
     response
+}
+
+/// The answer to a member's refusal or error `answered` of the write to
+/// `writing`: the gateway's issue of `code` with `status`, naming the member
+/// and its status, and after it the member's own issues when its body is a
+/// FHIR `OperationOutcome`.
+// NOTE: MyHealth@EU Requirements Catalogue v10.0.0 §1.25: the national answer travels with the
+// business exception, so the member's issues follow the gateway's, unaltered.
+fn relayed(
+    federation: &Federation,
+    lookup: &Lookup<'_>,
+    (writing, created): (&Chosen, &Written),
+    (status, code): (StatusCode, &str),
+    (answered, verb): (&Answered, &str),
+) -> Response {
+    let (member, endpoint) = (&writing.node, &writing.native);
+    let own = member_issues(answered.body());
+    let follows = if own.is_empty() {
+        ""
+    } else {
+        "; the member's own issues follow"
+    };
+    let diagnostics = format!(
+        "member {member} {verb} the dispensation at endpoint {endpoint} with {}{follows}",
+        answered.status().as_u16()
+    );
+    let mut outcome = face::outcome(code, &diagnostics);
+    outcome.issue.extend(own);
+    let mut response = crate::fhir::fhir_json(status, &outcome);
+    attach(
+        &mut response,
+        accessed(federation, lookup, Some((writing, created, None))),
+    );
+    response
+}
+
+/// What a member's answer body is read for: whether it is an
+/// `OperationOutcome`, and its issues.
+#[derive(serde::Deserialize)]
+struct MemberOutcome {
+    /// The resource type the body names.
+    #[serde(rename = "resourceType")]
+    resource_type: String,
+    /// The issues, when it is an `OperationOutcome`.
+    #[serde(default)]
+    issue: Vec<OperationOutcomeIssue>,
+}
+
+/// The issues of `body` when it is a FHIR R4 `OperationOutcome`, and none
+/// otherwise.
+fn member_issues(body: &[u8]) -> Vec<OperationOutcomeIssue> {
+    // NOTE: a body that is no OperationOutcome is legitimately absent here: the member's status
+    // alone already carries the verdict, so an unreadable body is left out, never an error.
+    match serde_json::from_slice::<MemberOutcome>(body) {
+        Ok(read) if read.resource_type == "OperationOutcome" => read.issue,
+        Ok(_) | Err(_) => Vec::new(),
+    }
 }
 
 /// The `201 Created` of the dispensation `made` at `writing`.

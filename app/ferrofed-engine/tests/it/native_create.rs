@@ -138,7 +138,7 @@ async fn a_refusal_is_read_by_its_status() -> TestResult {
     let transport = ReqwestTransport::with_timeout(Duration::from_secs(10))?;
     let created = created(&transport, &member.uri()).await?;
     assert!(
-        matches!(created, Created::Refused(StatusCode::CONFLICT)),
+        matches!(&created, Created::Refused(answered) if answered.status() == StatusCode::CONFLICT),
         "{created:?}"
     );
     assert_eq!(EndpointStatus::Active, created.status());
@@ -172,12 +172,12 @@ async fn an_answer_past_the_body_bound_is_read_by_its_status() -> TestResult {
     );
     let refused = created(&Bounded(StatusCode::UNPROCESSABLE_ENTITY), native).await?;
     assert!(
-        matches!(refused, Created::Refused(StatusCode::UNPROCESSABLE_ENTITY)),
+        matches!(&refused, Created::Refused(answered) if answered.status() == StatusCode::UNPROCESSABLE_ENTITY),
         "{refused:?}"
     );
     let erred = created(&Bounded(StatusCode::BAD_GATEWAY), native).await?;
     assert!(
-        matches!(erred, Created::Erred(StatusCode::BAD_GATEWAY)),
+        matches!(&erred, Created::Erred(answered) if answered.status() == StatusCode::BAD_GATEWAY),
         "{erred:?}"
     );
     Ok(())

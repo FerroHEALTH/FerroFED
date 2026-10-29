@@ -438,6 +438,82 @@ async fn the_owners_refusal_is_a_conflict_naming_it() -> TestResult {
     Ok(())
 }
 
+/// The member's issues of `text`, after the gateway's first one.
+fn relayed_issues(text: &str) -> Result<Vec<serde_json::Value>, serde_json::Error> {
+    let outcome: serde_json::Value = serde_json::from_str(text)?;
+    let issues = outcome
+        .get("issue")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(issues.into_iter().skip(1).collect())
+}
+
+/// MyHealth@EU Requirements Catalogue v10.0.0 §1.25: the owner's own
+/// reason travels after the gateway's issue, unaltered, so the contact point
+/// can relay why the prescription was not dispensable.
+#[tokio::test]
+async fn the_owners_own_issues_follow_the_gateways_on_a_refusal_and_an_error() -> TestResult {
+    let reason = br#"{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"business-rule","diagnostics":"the prescription is already fully dispensed"}]}"#;
+    for (answered, expected) in [
+        (StatusCode::CONFLICT, StatusCode::CONFLICT),
+        (StatusCode::INTERNAL_SERVER_ERROR, StatusCode::BAD_GATEWAY),
+    ] {
+        let members = members(
+            (&[RX_A], &[RX_B]),
+            ResponseTemplate::new(answered.as_u16())
+                .set_body_raw(reason.to_vec(), "application/fhir+json"),
+        )
+        .await?;
+        let dir = tempfile::tempdir()?;
+        let (status, text) = call(
+            gateway(&members, dir.path())?,
+            post(&dispensation(BY_IDENTIFIER))?,
+        )
+        .await?;
+        assert_eq!(expected, status, "{answered}: {text}");
+        let (_, diagnostics) = issue(&text)?;
+        assert!(
+            diagnostics.contains("node-a") && diagnostics.contains("own issues follow"),
+            "{diagnostics}"
+        );
+        let relayed = relayed_issues(&text)?;
+        assert_eq!(1, relayed.len(), "{text}");
+        assert_eq!(
+            Some("the prescription is already fully dispensed"),
+            relayed[0]["diagnostics"].as_str(),
+            "{text}"
+        );
+        assert_eq!(Some("business-rule"), relayed[0]["code"].as_str(), "{text}");
+    }
+    Ok(())
+}
+
+/// A member body that is no `OperationOutcome` is left out.
+#[tokio::test]
+async fn a_member_body_that_is_no_outcome_is_not_relayed() -> TestResult {
+    for body in [
+        &br#"{"resourceType":"Patient","id":"x"}"#[..],
+        &b"not json"[..],
+    ] {
+        let members = members(
+            (&[RX_A], &[RX_B]),
+            ResponseTemplate::new(409).set_body_raw(body.to_vec(), "application/fhir+json"),
+        )
+        .await?;
+        let dir = tempfile::tempdir()?;
+        let (status, text) = call(
+            gateway(&members, dir.path())?,
+            post(&dispensation(BY_IDENTIFIER))?,
+        )
+        .await?;
+        assert_eq!(StatusCode::CONFLICT, status, "{text}");
+        assert!(relayed_issues(&text)?.is_empty(), "{text}");
+        assert!(!issue(&text)?.1.contains("own issues follow"), "{text}");
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn an_owner_that_does_not_answer_is_asked_once_and_the_outcome_is_unknown() -> TestResult {
     let members = members(
