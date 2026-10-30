@@ -460,7 +460,7 @@ async fn mark_dark() -> Response {
 }
 
 /// The brand favicon.
-const FAVICON_ICO: &[u8] = include_bytes!("../public/favicon.ico");
+const FAVICON_ICO: &[u8] = include_bytes!("../../../assets/brand/favicon.ico");
 
 /// Serves the brand favicon, which a browser asks for on every first page.
 async fn favicon() -> Response {

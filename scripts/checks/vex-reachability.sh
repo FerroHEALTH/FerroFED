@@ -96,7 +96,14 @@ note() { echo "vex-reachability: $*" >&2; fail=1; }
 # silence as agreement: a document with no `statements` array, or a jq failure
 # inside the process substitution feeding the loop, would run zero iterations
 # and report every statement verified.
+# A document with no statement is right only while the source accepts no
+# advisory, which vex-advisories.sh holds the document to.
 expected="$(jq -r '.statements | length' "$DOC")"
+source_toml="${VEX_DIR:-security/vex}/rust-advisories.toml"
+if [[ "$expected" == "0" ]] && ! grep -q '^\[\[accepted\]\]' "$source_toml"; then
+  echo "ok: $source_toml accepts no advisory, so $DOC declares no statement to verify"
+  exit 0
+fi
 [[ "$expected" -gt 0 ]] 2>/dev/null || {
   echo "error: $DOC declares no statements, so nothing would be verified" >&2
   exit 1
