@@ -8,13 +8,6 @@
 //! Endpoints, each its own route; each row is read-only, with the term
 //! clients read in the document as its key hint. The document itself has
 //! its one home on About. The replica that answered is a row of its own.
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
 
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::table::view::{
@@ -25,12 +18,12 @@ use ferrohealth_ui::view::surface::{Header, page_heading};
 use ferrohealth_ui::view::tabs::{Tab, binder};
 use ferrohealth_ui::view::tag::Tag;
 use ferrohealth_ui::view::template::settings::{Setting, setting_row, settings_panel};
-use leptos::prelude::*;
+use ferrohealth_ui::html::Html;
 use openehr_federation::options::{GatewayDescription, OptionsRoot};
 
 use crate::app::{ABOUT, SELF_DESCRIPTION};
-use crate::locale::{Msg, tr, tr_with};
-use crate::pages::stopped;
+use crate::locale::{Msg, current, tr, tr_with};
+use crate::pages::{h, stopped, t};
 
 /// The tabs, each its key, its words and its intro.
 const TABS: [(&str, Msg, Msg); 5] = [
@@ -54,8 +47,7 @@ const TABS: [(&str, Msg, Msg); 5] = [
 ];
 
 /// The self-description, on the tab the path names.
-#[must_use]
-pub fn page() -> AnyView {
+pub async fn page() -> Html {
     let tab = crate::pages::param("tab");
     let tab = if tab.is_empty() {
         String::from("federation")
@@ -65,9 +57,10 @@ pub fn page() -> AnyView {
     let Some((key, _, intro)) = TABS.iter().find(|(key, _, _)| *key == tab).copied() else {
         return crate::pages::errors::not_found();
     };
-    let read = Resource::new(crate::read::changes, |_| description_now());
-    let body = Suspend::new(async move {
+    let read = description_now().await;
+    let body = {
         let heading = page_heading(
+            &current(),
             Header {
                 title: tr(Msg::DescribeTitle).into(),
                 subtitle_view: Some(crate::pages::marked(
@@ -75,22 +68,21 @@ pub fn page() -> AnyView {
                     &[],
                     vec![(
                         "about",
-                        view! { <a href=ABOUT>{tr(Msg::DescribeSubtitleAbout)}</a> }.into_any(),
+                        h(format!(
+                            "<a href=\"{ABOUT}\">{}</a>",
+                            t(tr(Msg::DescribeSubtitleAbout))
+                        )),
                     )],
                 )),
                 ..Header::default()
             },
             ActionGroup::none(),
-        )
-        .into_any();
-        let read = read.await;
+        );
         let panel = match read {
             Err(stop) => {
-                return view! {
-                    {heading}
-                    {stopped(&stop)}
-                }
-                .into_any();
+                return crate::app::title(tr(Msg::DescribeTitle))
+                    .then(heading)
+                    .then(stopped(&stop));
             }
             Ok((description, replica)) => tab_panel(key, intro, &description, replica),
         };
@@ -100,17 +92,9 @@ pub fn page() -> AnyView {
                 Tab::new(*each, format!("{SELF_DESCRIPTION}/{each}"), tr(*words))
             })
             .collect();
-        view! {
-            {heading}
-            {binder(tr(Msg::DescribeTitle), tabs, key, panel)}
-        }
-        .into_any()
-    });
-    view! {
-        {crate::app::title(tr(Msg::DescribeTitle))}
-        <Suspense fallback=|| ()>{body}</Suspense>
-    }
-    .into_any()
+        heading.then(binder(&current(), tr(Msg::DescribeTitle), tabs, key, panel))
+    };
+    crate::app::title(tr(Msg::DescribeTitle)).then(body)
 }
 
 /// The gateway's self-description and the replica that answered, as the
@@ -119,7 +103,6 @@ pub fn page() -> AnyView {
 /// # Errors
 /// Returns the [`crate::read::Stop`] of a missing session, or of a
 /// self-description the gateway refused or did not answer.
-#[server(endpoint = "self-description")]
 pub async fn description_now() -> Result<(OptionsRoot, Option<String>), crate::read::Stop> {
     let (state, token) = crate::read::signed_in()?;
     let description = state.gateway().self_description(&token).await?;
@@ -132,8 +115,9 @@ pub async fn description_now() -> Result<(OptionsRoot, Option<String>), crate::r
 
 /// One read-only row: its label, its line, its value and the term the
 /// document names it by.
-fn row(label: Msg, line: Msg, value: AnyView, term: &str) -> AnyView {
+fn row(label: Msg, line: Msg, value: Html, term: &str) -> Html {
     setting_row(
+        &current(),
         Setting {
             label: tr(label),
             description: tr(line),
@@ -147,13 +131,12 @@ fn row(label: Msg, line: Msg, value: AnyView, term: &str) -> AnyView {
 }
 
 /// A value in the code face.
-fn code(text: impl Into<String>) -> AnyView {
-    let text = text.into();
-    view! { <code>{text}</code> }.into_any()
+fn code(text: impl Into<String>) -> Html {
+    h(format!("<code>{}</code>", t(text.into())))
 }
 
 /// `offered` as a tag in words.
-fn offered(offered: bool) -> AnyView {
+fn offered(offered: bool) -> Html {
     Tag::new(tr(if offered {
         Msg::Offered
     } else {
@@ -163,7 +146,7 @@ fn offered(offered: bool) -> AnyView {
 }
 
 /// The panel of the tab `key` of `description`.
-fn tab_panel(key: &str, intro: Msg, description: &OptionsRoot, replica: Option<String>) -> AnyView {
+fn tab_panel(key: &str, intro: Msg, description: &OptionsRoot, replica: Option<String>) -> Html {
     let gateway = &description.federation;
     let rows = match key {
         "capabilities" => capabilities(gateway),
@@ -172,12 +155,12 @@ fn tab_panel(key: &str, intro: Msg, description: &OptionsRoot, replica: Option<S
         "endpoints" => return endpoints_panel(intro, description),
         _ => federation(description, replica),
     };
-    settings_panel(tr(intro).into_any(), None, rows)
+    settings_panel(t(tr(intro)), None, rows)
 }
 
 /// The Federation tab: the federation, the specification, the key set and
 /// the replica that answered.
-fn federation(description: &OptionsRoot, replica: Option<String>) -> Vec<AnyView> {
+fn federation(description: &OptionsRoot, replica: Option<String>) -> Vec<Html> {
     let gateway = &description.federation;
     let mut rows = vec![
         row(
@@ -189,11 +172,10 @@ fn federation(description: &OptionsRoot, replica: Option<String>) -> Vec<AnyView
         row(
             Msg::DescribeSpecification,
             Msg::DescribeSpecificationLine,
-            tr_with(
+            t(tr_with(
                 Msg::AboutSpecificationValue,
                 &[("version", gateway.spec_version.as_str().to_owned().into())],
-            )
-            .into_any(),
+            )),
             "federation.spec_version",
         ),
     ];
@@ -211,10 +193,11 @@ fn federation(description: &OptionsRoot, replica: Option<String>) -> Vec<AnyView
     }
     rows.extend(manufacturer(description));
     rows.push(setting_row(
+        &current(),
         Setting {
             label: tr(Msg::DescribeAnsweredBy),
             description: tr(Msg::DescribeAnsweredByLine),
-            value: replica.map_or_else(|| tr(Msg::ReplicaUnnamed).into_any(), code),
+            value: replica.map_or_else(|| t(tr(Msg::ReplicaUnnamed)), code),
             keys: Vec::new(),
             next_start: false,
             source: None,
@@ -249,25 +232,22 @@ struct Manufacturer {
 
 /// The rows of the manufacturer and the support period `description`
 /// declares, each said as not declared where it names none.
-fn manufacturer(description: &OptionsRoot) -> Vec<AnyView> {
+fn manufacturer(description: &OptionsRoot) -> Vec<Html> {
     let said = |value: Option<String>| {
-        value.map_or_else(
-            || tr(Msg::DescribeNotDeclared).into_any(),
-            IntoAny::into_any,
-        )
+        t(value.unwrap_or_else(|| tr(Msg::DescribeNotDeclared)))
     };
     let supported = match description.extra.get(SUPPORTED_UNTIL) {
-        None => tr(Msg::DescribeNotDeclared).into_any(),
+        None => tr(Msg::DescribeNotDeclared),
         Some(raw) => match serde_json::from_str::<Option<String>>(raw.get()) {
-            Ok(Some(day)) => day.into_any(),
-            Ok(None) => tr(Msg::DescribeNoEndDate).into_any(),
-            Err(_unreadable) => tr(Msg::DescribeUnreadable).into_any(),
+            Ok(Some(day)) => day,
+            Ok(None) => tr(Msg::DescribeNoEndDate),
+            Err(_unreadable) => tr(Msg::DescribeUnreadable),
         },
     };
     let fixes = row(
         Msg::DescribeFixesUntil,
         Msg::DescribeFixesUntilLine,
-        supported,
+        t(supported),
         SUPPORTED_UNTIL,
     );
     let declared = match description.extra.get(MANUFACTURER) {
@@ -281,7 +261,7 @@ fn manufacturer(description: &OptionsRoot) -> Vec<AnyView> {
             row(
                 Msg::DescribeManufacturer,
                 Msg::DescribeManufacturerLine,
-                tr(Msg::DescribeUnreadable).into_any(),
+                t(tr(Msg::DescribeUnreadable)),
                 MANUFACTURER,
             ),
             fixes,
@@ -318,7 +298,7 @@ fn manufacturer(description: &OptionsRoot) -> Vec<AnyView> {
 
 /// The Capabilities tab: what the gateway offers a query (§8, §10,
 /// §11.4, §12.7).
-fn capabilities(gateway: &GatewayDescription) -> Vec<AnyView> {
+fn capabilities(gateway: &GatewayDescription) -> Vec<Html> {
     let completeness = &gateway.completeness;
     let definition = &gateway.definition;
     vec![
@@ -369,7 +349,7 @@ fn capabilities(gateway: &GatewayDescription) -> Vec<AnyView> {
 
 /// The ITS-REST areas tab: how each area of the openEHR REST API is served
 /// (§7a.2).
-fn areas(gateway: &GatewayDescription) -> Vec<AnyView> {
+fn areas(gateway: &GatewayDescription) -> Vec<Html> {
     let areas = &gateway.its_rest;
     vec![
         row(
@@ -401,27 +381,25 @@ fn areas(gateway: &GatewayDescription) -> Vec<AnyView> {
 
 /// The Limits tab: the budgets, the paging and the aggregates (§11.5,
 /// §11.6).
-fn limits(gateway: &GatewayDescription) -> Vec<AnyView> {
+fn limits(gateway: &GatewayDescription) -> Vec<Html> {
     let aggregates = &gateway.aggregates.decomposable;
     vec![
         row(
             Msg::DescribePerNode,
             Msg::DescribePerNodeLine,
-            tr_with(
+            t(tr_with(
                 Msg::Milliseconds,
                 &[("count", Arg::from(gateway.timeout.per_node_ms))],
-            )
-            .into_any(),
+            )),
             "federation.timeout.per_node_ms",
         ),
         row(
             Msg::DescribeOverall,
             Msg::DescribeOverallLine,
-            tr_with(
+            t(tr_with(
                 Msg::Milliseconds,
                 &[("count", Arg::from(gateway.timeout.overall_ms))],
-            )
-            .into_any(),
+            )),
             "federation.timeout.overall_ms",
         ),
         row(
@@ -440,7 +418,7 @@ fn limits(gateway: &GatewayDescription) -> Vec<AnyView> {
             Msg::DescribeAggregates,
             Msg::DescribeAggregatesLine,
             if aggregates.is_empty() {
-                tr(Msg::None).into_any()
+                t(tr(Msg::None))
             } else {
                 code(aggregates.join(", "))
             },
@@ -451,7 +429,7 @@ fn limits(gateway: &GatewayDescription) -> Vec<AnyView> {
 
 /// The Endpoints tab: every member endpoint the document lists, with its
 /// status.
-fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> AnyView {
+fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> Html {
     let columns = [
         Column {
             role: Role::Title,
@@ -476,30 +454,30 @@ fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> AnyView {
         .iter()
         .map(|endpoint| {
             let active = endpoint.status.as_str() == "active";
-            view! {
-                <tr class:is-excluded=!active>
-                    {title_cell(None, code(endpoint.id.to_string()), None)}
-                    {cell(&columns[1], code(endpoint.organisation.clone()))}
-                    {cell(&columns[2], code(endpoint.node_id.clone().unwrap_or_default()))}
-                    {cell(&columns[3], Tag::new(endpoint.status.as_str().to_owned()).view())}
-                    {cell(&columns[4], crate::pages::latency(endpoint.latency_ms_p50))}
-                    {cell(
-                        &columns[5],
-                        crate::pages::latency(crate::read::federation::p95(endpoint)),
-                    )}
-                </tr>
-            }
-        })
-        .collect_view()
-        .into_any();
-    view! {
-        {settings_panel(tr(intro).into_any(), None, Vec::new())}
-        {data_table(DataTable {
-            caption: &tr(Msg::DescribeEndpoints),
-            columns: &columns,
-            sorting: Sorting::default(),
-            body: Body::Rows(rows),
-        })}
-    }
-    .into_any()
+            h(format!(
+                "<tr{}>{}{}{}{}{}{}</tr>",
+                if active { "" } else { " class=\"is-excluded\"" },
+                title_cell(None, code(endpoint.id.to_string()), None),
+                cell(&columns[1], code(endpoint.organisation.clone())),
+                cell(
+                    &columns[2],
+                    code(endpoint.node_id.clone().unwrap_or_default())
+                ),
+                cell(
+                    &columns[3],
+                    Tag::new(endpoint.status.as_str().to_owned()).view()
+                ),
+                cell(&columns[4], crate::pages::latency(endpoint.latency_ms_p50)),
+                cell(
+                    &columns[5],
+                    crate::pages::latency(crate::read::federation::p95(endpoint)),
+                ),
+            ))
+        });
+    settings_panel(t(tr(intro)), None, Vec::new()).then(data_table(DataTable {
+        caption: &tr(Msg::DescribeEndpoints),
+        columns: &columns,
+        sorting: Sorting::default(),
+        body: Body::Rows(Html::join(rows)),
+    }))
 }

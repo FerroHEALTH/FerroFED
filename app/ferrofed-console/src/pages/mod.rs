@@ -1,15 +1,15 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The console's pages, each drawn from what it reads of the gateway, with
-//! FerroUI's templates and components, by the server for the first page and
-//! by the browser for every page after it.
+//! The console's pages, each drawn whole by the server from what it reads
+//! of the gateway, with FerroUI's templates and components.
 //!
-//! A page asks its reads under a `Resource` inside a `Suspense`, and its
-//! route renders `SsrMode::Async`, so the server sends it whole. A read the gateway
-//! refused draws its status and stable code in words, and a fault of the
-//! console says what failed with the way to try again; neither draws an
-//! empty view, as FerroUI asks.
+//! A page's handler reads the gateway first and then draws, so the
+//! document arrives whole and reads with the scripts refused. A read the
+//! gateway refused draws its status and stable code in words, and a fault
+//! of the console says what failed with the way to try again; neither
+//! draws an empty view, as FerroUI asks. Each page writes its own markup
+//! from escaped parts ([`h`], [`t`]) beside the library's components.
 
 pub mod about;
 pub mod configuration;
@@ -28,21 +28,38 @@ pub mod sign_in;
 pub mod stored;
 pub mod topology;
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::view::button::{Variant, link_button};
 use ferrohealth_ui::view::refusal::{Issue, Refusal as Refused, Severity, fault, refusal};
 use ferrohealth_ui::view::surface::disclosure;
-use leptos::prelude::*;
-use leptos_router::hooks::use_location;
 
-use crate::locale::{Msg, tr, tr_with};
+use crate::locale::{Msg, current, tr, tr_with};
 use crate::read::{Fault, Refusal, Stop};
+
+/// The markup `markup`, made by the page from escaped parts.
+#[must_use]
+pub const fn h(markup: String) -> Html {
+    Html::raw(markup)
+}
+
+/// `text` escaped as a text node or an attribute value.
+#[must_use]
+pub fn t(text: impl AsRef<str>) -> Html {
+    Html::text(text)
+}
+
+/// `part`, or no markup at all.
+#[must_use]
+pub fn opt(part: Option<Html>) -> Html {
+    part.unwrap_or_default()
+}
 
 /// The words of a read that stopped short of its view: the gateway's
 /// refusal with its status and stable code, or the console's fault with
 /// the way to try again.
 #[must_use]
-pub fn stopped(stop: &Stop) -> AnyView {
+pub fn stopped(stop: &Stop) -> Html {
     match stop {
         Stop::Refused(refused) => refused_view(refused),
         Stop::Fault(failed) => fault_view(failed),
@@ -52,15 +69,13 @@ pub fn stopped(stop: &Stop) -> AnyView {
 /// The gateway's refusal `refused`, or the console's of input it cannot
 /// send.
 #[must_use]
-pub fn refused_view(refused: &Refusal) -> AnyView {
+pub fn refused_view(refused: &Refusal) -> Html {
     if let Refusal::Invalid { reason } = refused {
-        return ferrohealth_ui::view::notice::notice(
+        return ferrohealth_ui::view::notice::notice_text(
             ferrohealth_ui::tone::Tone::Bad,
             ferrohealth_ui::view::notice::Announce::Alert,
-            None,
-            reason.clone(),
-        )
-        .into_any();
+            reason,
+        );
     }
     let (status, summary, code) = match refused {
         Refusal::Gateway { status, code } => {
@@ -72,43 +87,31 @@ pub fn refused_view(refused: &Refusal) -> AnyView {
         Refusal::Invalid { reason } => (None, reason.clone(), None),
     };
     let issues = code
-        .map(|code| {
-            vec![Issue {
-                severity: Severity::Error,
-                code,
-                text: None,
-                place: String::new(),
-                details: Vec::new(),
-            }]
-        })
+        .map(|code| vec![Issue::new(Severity::Error, code)])
         .unwrap_or_default();
     let sign_in = matches!(refused, Refusal::NotAuthenticated { .. }).then(|| {
-        view! {
-            <p>
-                <a href=crate::app::SIGN_IN rel="external">
-                    {tr(Msg::SignInAgain)}
-                </a>
-            </p>
-        }
+        h(format!(
+            "<p><a href=\"{}\" rel=\"external\">{}</a></p>",
+            crate::app::SIGN_IN,
+            t(tr(Msg::SignInAgain))
+        ))
     });
-    view! {
-        {refusal(
-            &Refused {
-                status,
-                summary,
-                issues,
-                request: None,
-                evidence: None,
-            },
-        )}
-        {sign_in}
-    }
-    .into_any()
+    refusal(
+        &current(),
+        &Refused {
+            status,
+            summary,
+            issues,
+            request: None,
+            evidence: None,
+        },
+    )
+    .then(opt(sign_in))
 }
 
 /// The console's own fault `failed`, with the way to read the page again.
 #[must_use]
-pub fn fault_view(failed: &Fault) -> AnyView {
+pub fn fault_view(failed: &Fault) -> Html {
     let (words, detail) = match failed {
         Fault::Unreachable => (tr(Msg::FaultUnreachable), tr(Msg::FaultUnreachableDetail)),
         Fault::Unreadable { status } => (
@@ -121,40 +124,28 @@ pub fn fault_view(failed: &Fault) -> AnyView {
         Fault::SignedOut => (tr(Msg::FaultSignedOut), tr(Msg::FaultSignedOutDetail)),
         Fault::Unavailable => (tr(Msg::FaultUnavailable), tr(Msg::FaultUnavailableDetail)),
     };
-    let here = use_location().pathname.get_untracked();
-    view! {
-        {fault(words)}
-        <p class="fui-actions">
-            {link_button(here, Variant::Secondary, Some(Glyph::REFRESH_CW), tr(Msg::TryAgain))}
-        </p>
-        {disclosure(tr(Msg::TechnicalDetail), view! { <p class="fui-small">{detail}</p> })}
-    }
-    .into_any()
-}
-
-/// `draw`, mounted afresh each time `version` changes, such as an action's
-/// version once it answered.
-///
-/// A form's repeatable rows that FerroUI's widget added in the page are
-/// nodes the renderer does not know, so a form drawn again in place would
-/// keep them beside the rows its answer names; a fresh mount drops them.
-pub fn afresh<F, V>(version: impl Fn() -> usize + Send + Sync + 'static, draw: F) -> AnyView
-where
-    F: Fn() -> V + Clone + Send + Sync + 'static,
-    V: IntoView + 'static,
-{
-    view! { <For each=move || [version()] key=|drawn| *drawn children=move |_| draw.clone() /> }
-        .into_any()
+    Html::join([
+        fault(words),
+        h(format!(
+            "<p class=\"fui-actions\">{}</p>",
+            link_button(
+                here(),
+                Variant::Secondary,
+                Some(Glyph::REFRESH_CW),
+                tr(Msg::TryAgain)
+            )
+        )),
+        disclosure(
+            tr(Msg::TechnicalDetail),
+            h(format!("<p class=\"fui-small\">{}</p>", t(detail))),
+        ),
+    ])
 }
 
 /// The route's parameter `name`, empty when it has none.
 #[must_use]
 pub fn param(name: &str) -> String {
-    // NOTE: no specification governs this: our own design; a lazy route group draws its
-    // page as the address changes, before the router's parameters follow, so they are read
-    // from the address itself.
-    let path = use_location().pathname.get_untracked();
-    param_of(&path, name)
+    crate::visit::with(|visit| param_of(&visit.path, name))
 }
 
 /// The route parameter `name` the address path `path` names, decoded, empty
@@ -193,38 +184,32 @@ pub fn query_param(name: &str) -> Option<String> {
 /// Every value of the query parameter `name` of the address, in order.
 #[must_use]
 pub fn query_values(name: &str) -> Vec<String> {
-    // NOTE: no specification governs this: our own design; read from the address
-    // itself, as `param` is, so a page drawn as the address changes reads the new one.
-    let search = use_location().search.get_untracked();
-    url::form_urlencoded::parse(search.trim_start_matches('?').as_bytes())
-        .filter(|(key, _)| key == name)
-        .map(|(_, value)| value.into_owned())
-        .collect()
+    crate::visit::with(|visit| {
+        url::form_urlencoded::parse(visit.query.as_bytes())
+            .filter(|(key, _)| key == name)
+            .map(|(_, value)| value.into_owned())
+            .collect()
+    })
 }
 
 /// The path of the page being drawn.
 #[must_use]
 pub fn here() -> String {
-    use_location().pathname.get_untracked()
+    crate::visit::with(|visit| visit.path.clone())
 }
 
 /// Sets the answer's status to `status`, for a page that is a refusal or
-/// a fault of its own.
+/// a fault of its own, unless an earlier part set a server error.
 pub fn set_status(status: http::StatusCode) {
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
-        response.set_status(status);
-    }
-    #[cfg(target_arch = "wasm32")]
-    let _: http::StatusCode = status;
+    crate::visit::with(|visit| visit.status(status));
 }
 
 /// A time as the gateway writes it (RFC 3339), relative to now in a list
 /// ("13 s ago"), with the full timestamp as its tooltip (family rule 11).
 #[must_use]
-pub fn relative(at: &str) -> AnyView {
+pub fn relative(at: &str) -> Html {
     let Ok(then) = at.parse::<jiff::Timestamp>() else {
-        return view! { <span>{at.to_owned()}</span> }.into_any();
+        return h(format!("<span>{}</span>", t(at)));
     };
     let seconds = u64::try_from(jiff::Timestamp::now().duration_since(then).as_secs()).unwrap_or(0);
     let words = if seconds < 60 {
@@ -239,12 +224,11 @@ pub fn relative(at: &str) -> AnyView {
             &[("count", seconds.div_euclid(86_400).into())],
         )
     };
-    view! {
-        <time datetime=at.to_owned() title=at.to_owned()>
-            {words}
-        </time>
-    }
-    .into_any()
+    h(format!(
+        "<time datetime=\"{at}\" title=\"{at}\">{}</time>",
+        t(words),
+        at = t(at)
+    ))
 }
 
 /// The first character of a slot's marker in a message's text: a private
@@ -254,7 +238,7 @@ const SLOT_OPEN: char = '\u{E000}';
 /// The last character of a slot's marker.
 const SLOT_CLOSE: char = '\u{E001}';
 
-/// The message `msg` with each placeable of `slots` drawn as its view.
+/// The message `msg` with each placeable of `slots` drawn as its markup.
 ///
 /// The placeables `args` are filled in as text, and each of `slots`, such
 /// as a link or a code span, is drawn where the message puts it, for
@@ -263,19 +247,19 @@ const SLOT_CLOSE: char = '\u{E001}';
 pub fn marked(
     msg: Msg,
     args: &[(&'static str, ferrohealth_ui::i18n::Arg)],
-    slots: Vec<(&'static str, AnyView)>,
-) -> AnyView {
+    slots: Vec<(&'static str, Html)>,
+) -> Html {
     let mut all = args.to_vec();
-    let mut views: Vec<Option<AnyView>> = Vec::with_capacity(slots.len());
+    let mut parts_of: Vec<Option<Html>> = Vec::with_capacity(slots.len());
     for (index, (name, slot)) in slots.into_iter().enumerate() {
         all.push((name, format!("{SLOT_OPEN}{index}{SLOT_CLOSE}").into()));
-        views.push(Some(slot));
+        parts_of.push(Some(slot));
     }
     let text = tr_with(msg, &all);
-    let mut parts: Vec<AnyView> = Vec::new();
+    let mut parts: Vec<Html> = Vec::new();
     let mut pieces = text.split(SLOT_OPEN);
     if let Some(lead) = pieces.next() {
-        parts.push(lead.to_owned().into_any());
+        parts.push(t(lead));
     }
     for piece in pieces {
         let (index, rest) = piece.split_once(SLOT_CLOSE).unwrap_or(("", piece));
@@ -283,15 +267,15 @@ pub fn marked(
         match index
             .parse::<usize>()
             .ok()
-            .and_then(|index| views.get_mut(index))
+            .and_then(|index| parts_of.get_mut(index))
             .and_then(Option::take)
         {
             Some(slot) => parts.push(slot),
-            None => parts.push(index.to_owned().into_any()),
+            None => parts.push(t(index)),
         }
-        parts.push(rest.to_owned().into_any());
+        parts.push(t(rest));
     }
-    parts.into_iter().collect_view().into_any()
+    Html::join(parts)
 }
 
 /// Who made or applied a revision, in words.
@@ -309,29 +293,31 @@ pub fn author(author: &ferrofed_registry::revision::Author) -> String {
 
 /// A latency in milliseconds, or a muted dash when none is measured.
 #[must_use]
-pub fn latency(ms: Option<u64>) -> AnyView {
+pub fn latency(ms: Option<u64>) -> Html {
     match ms {
-        Some(ms) => tr_with(Msg::Milliseconds, &[("count", ms.into())]).into_any(),
-        None => view! {
-            <span class="fui-muted" title=tr(Msg::NoMeasure)>
-                "\u{2013}"
-            </span>
-        }
-        .into_any(),
+        Some(ms) => t(tr_with(Msg::Milliseconds, &[("count", ms.into())])),
+        None => h(format!(
+            "<span class=\"fui-muted\" title=\"{}\">\u{2013}</span>",
+            t(tr(Msg::NoMeasure))
+        )),
     }
 }
 
 /// A latency fact: [`latency`] with `title` naming the statistic and its
 /// window, shown on hover and read by assistive technology.
 #[must_use]
-pub fn latency_fact(ms: Option<u64>, title: String) -> AnyView {
-    view! { <span title=title>{latency(ms)}</span> }.into_any()
+pub fn latency_fact(ms: Option<u64>, title: String) -> Html {
+    h(format!(
+        "<span title=\"{}\">{}</span>",
+        t(title),
+        latency(ms)
+    ))
 }
 
 /// What owns a member entry, as a provenance tag (F4) where the console
 /// cannot change it.
 #[must_use]
-pub fn owner_tag(owner: ferrofed_registry::console::Owner) -> AnyView {
+pub fn owner_tag(owner: ferrofed_registry::console::Owner) -> Html {
     use ferrofed_registry::console::Owner;
     use ferrohealth_ui::view::tag::Tag;
     match owner {
@@ -353,18 +339,13 @@ pub fn owner_tag(owner: ferrofed_registry::console::Owner) -> AnyView {
 /// A data table captioned `caption` over `columns` holding `rows`, with no
 /// sortable column.
 #[must_use]
-pub fn table(
-    caption: &str,
-    columns: &[ferrohealth_ui::table::view::Column],
-    rows: AnyView,
-) -> AnyView {
+pub fn table(caption: &str, columns: &[ferrohealth_ui::table::view::Column], rows: Html) -> Html {
     ferrohealth_ui::table::view::data_table(ferrohealth_ui::table::view::DataTable {
         caption,
         columns,
         sorting: ferrohealth_ui::table::view::Sorting::default(),
         body: ferrohealth_ui::table::view::Body::Rows(rows),
     })
-    .into_any()
 }
 
 #[cfg(test)]

@@ -1,5 +1,4 @@
 # The plain-text answers of the console's handlers, and the countdown.
-answer-countdown-left = { $minutes }:{ $seconds } left
 answer-exchange-failed = the sign-in could not be completed at the OpenID Provider
 answer-id-token-unverified = the OpenID Provider's ID Token did not verify
 answer-no-code = the redirect carries no code

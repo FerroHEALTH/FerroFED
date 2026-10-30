@@ -13,16 +13,13 @@
 //! beside its catalog file, so two changes to different areas touch
 //! different files.
 //!
-//! The server chooses the locale once per request ([`requested`]): the
-//! language the operator chose in Your preferences, else the best language
-//! of the request's `Accept-Language` the catalog holds, else the
-//! configured `[server] locale`. [`crate::app::App`] provides it with
-//! `ferrohealth_ui::i18n::provide_locale`, so the console's words and the
-//! components' words follow the same choice, and the document writes it as
-//! `<html lang>` (WCAG 2.2 SC 3.1.1). The catalog is embedded in both
-//! halves and the browser provides the locale the server chose
-//! (`crate::visit::Visit`), so a page drawn in the browser speaks as the
-//! server's does. A number
+//! The server chooses the locale once per request ([`requested_from`]):
+//! the language the operator chose in Your preferences, else the best
+//! language of the request's `Accept-Language` the catalog holds, else the
+//! configured `[server] locale`. The request's visit carries it
+//! (`crate::visit::Visit`): [`tr`] looks the console's words up in it, every
+//! FerroUI component is handed it, so both follow the same choice, and the
+//! document writes it as `<html lang>` (WCAG 2.2 SC 3.1.1). A number
 //! a message takes is grouped in the page's language by FerroUI's
 //! formatter, with the catalog's `number-group` and `number-decimal`. No
 //! specification governs the catalog layout or the choice: our own design.
@@ -31,7 +28,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use ferrohealth_ui::i18n::{Arg, Locale, Message, UnknownLanguage, library_catalog, locale};
+use ferrohealth_ui::i18n::{Arg, Locale, Message, UnknownLanguage, library_catalog};
 use fluent_templates::fluent_bundle::FluentValue;
 use fluent_templates::{LanguageIdentifier, Loader};
 
@@ -227,21 +224,28 @@ const AREAS: &[&[Msg]] = &[
     topology::ALL,
 ];
 
-/// The console's message `msg` in the page's locale.
+/// The console's message `msg` in the locale of the request's visit.
 #[must_use]
 pub fn tr(msg: Msg) -> String {
-    locale().lookup(catalog(), msg.id())
+    crate::visit::with(|visit| visit.locale.lookup(catalog(), msg.id()))
 }
 
-/// The console's message `msg` in the page's locale, with the placeables
-/// `args` filled in.
+/// The console's message `msg` in the locale of the request's visit, with
+/// the placeables `args` filled in.
 #[must_use]
 pub fn tr_with(msg: Msg, args: &[(&'static str, Arg)]) -> String {
-    locale().lookup_with(catalog(), msg.id(), args)
+    crate::visit::with(|visit| visit.locale.lookup_with(catalog(), msg.id(), args))
+}
+
+/// The locale of the request's visit, which every FerroUI component the
+/// page draws is handed.
+#[must_use]
+pub fn current() -> Locale {
+    crate::visit::with(|visit| visit.locale.clone())
 }
 
 /// The console's message `msg` in `locale`, with the placeables `args`
-/// filled in: for a handler, where no page tree is in reach.
+/// filled in.
 #[must_use]
 pub fn tr_in(locale: &Locale, msg: Msg, args: &[(&'static str, Arg)]) -> String {
     locale.lookup_with(catalog(), msg.id(), args)
@@ -281,44 +285,19 @@ pub fn chosen(chosen: Option<&str>, header: &str, configured: Locale) -> Locale 
     Locale::negotiate_with(header, catalog(), configured)
 }
 
-/// The locale of the request being served.
-#[cfg(not(target_arch = "wasm32"))]
+/// The locale the `Accept-Language` of `headers` asks for among the
+/// shipped catalogs, which Your preferences names as the browser's own.
 #[must_use]
-pub fn requested() -> Locale {
-    use leptos::context::use_context;
-    let configured = use_context::<crate::server::ConsoleState>()
-        .map_or_else(Locale::english, |state| state.settings().locale.clone());
-    let parts = use_context::<http::request::Parts>();
-    let header = parts
-        .as_ref()
-        .and_then(|parts| parts.headers.get(http::header::ACCEPT_LANGUAGE))
+pub fn browser_of(headers: &http::HeaderMap) -> Locale {
+    headers
+        .get(http::header::ACCEPT_LANGUAGE)
         .and_then(|value| value.to_str().ok())
-        .unwrap_or_default();
-    let (cookies, prefix) = crate::visit::requested_preferences();
-    let preferences = ferrohealth_ui::theme::Preferences::read(&cookies, &prefix);
-    chosen(preferences.language.tag(), header, configured)
-}
-
-/// The locale the request's `Accept-Language` asks for among the shipped
-/// catalogs, which Your preferences names as the browser's own.
-#[cfg(not(target_arch = "wasm32"))]
-#[must_use]
-pub fn browser() -> Locale {
-    use leptos::context::use_context;
-    use_context::<http::request::Parts>()
-        .and_then(|parts| {
-            parts
-                .headers
-                .get(http::header::ACCEPT_LANGUAGE)
-                .and_then(|value| value.to_str().ok())
-                .map(Locale::negotiate)
-        })
+        .map(Locale::negotiate)
         .unwrap_or_default()
 }
 
 /// The locale of a request whose headers are `headers`, on the console
-/// `state`: for a handler, where no page tree is in reach.
-#[cfg(not(target_arch = "wasm32"))]
+/// `state`.
 #[must_use]
 pub fn requested_from(state: &crate::server::ConsoleState, headers: &http::HeaderMap) -> Locale {
     let header = headers

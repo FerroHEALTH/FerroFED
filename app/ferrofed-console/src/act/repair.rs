@@ -9,25 +9,16 @@
 //! replica configured sends it, since the stored-query store is the
 //! replicas' shared one. The page answers with each member's outcome as a
 //! fan-out (§9.5).
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
 
-use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use crate::act::ReplicaAnswer;
+use crate::act::fields::Fields;
 use crate::act::query::EndpointLine;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::gateway::admin::Distribution;
 use crate::read::{Fault, Refusal, Stop};
 
 /// What a replica reports of a drift repair.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepairLine {
     /// The status the replica answered with.
     pub status: u16,
@@ -42,7 +33,7 @@ pub struct RepairLine {
 }
 
 /// The outcome of a repair the page draws.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RepairOutcome {
     /// The replica asked, with its answer.
     Answered(ReplicaAnswer<RepairLine>),
@@ -63,7 +54,6 @@ impl From<Stop> for RepairOutcome {
 }
 
 /// The line of `distribution`.
-#[cfg(not(target_arch = "wasm32"))]
 fn line(distribution: Distribution) -> RepairLine {
     let federation = &distribution.federation;
     RepairLine {
@@ -87,35 +77,24 @@ fn line(distribution: Distribution) -> RepairLine {
     }
 }
 
-/// Sends the version `version` of the stored query `name` again to the
-/// members `endpoint` names, `*` for every active member, once the dialog's
-/// confirmation step posted `confirm`, through the first replica, as the
-/// operator of the request.
+/// Sends the version the posted `fields` name of the stored query `name`
+/// again.
 ///
-/// # Errors
-/// Returns [`crate::read::Fault::Unavailable`] when the console's server
-/// does not answer; a form that cannot be sent and a replica's refusal are
-/// answers.
-#[server(endpoint = "repair")]
-pub async fn repair_drift(
-    /// The stored query's qualified name.
-    #[server(default)]
-    name: String,
-    /// The version to send.
-    #[server(default)]
-    version: String,
-    /// The members, `*` or their endpoint ids.
-    #[server(default)]
-    endpoint: String,
-    /// Not empty once the operator took the confirmation step.
-    #[server(default)]
-    confirm: String,
-) -> Result<RepairOutcome, Stop> {
-    Ok(repair(&name, &version, &endpoint, &confirm).await)
+/// It goes to the members `endpoint` names, `*` for every active member,
+/// once the dialog's confirmation step posted `confirm`, through the first
+/// replica, as the operator of the request; a form that cannot be sent and
+/// a replica's refusal are answers.
+pub async fn repair_drift(name: &str, fields: &Fields) -> RepairOutcome {
+    repair(
+        name,
+        fields.get("version").unwrap_or_default(),
+        fields.get("endpoint").unwrap_or_default(),
+        fields.get("confirm").unwrap_or_default(),
+    )
+    .await
 }
 
 /// Sends the version the form names of the stored query `name` again.
-#[cfg(not(target_arch = "wasm32"))]
 async fn repair(name: &str, version: &str, endpoint: &str, confirm: &str) -> RepairOutcome {
     use crate::gateway::admin::Redistribution;
     use crate::locale::{Msg, tr};

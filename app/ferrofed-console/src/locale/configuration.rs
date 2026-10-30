@@ -714,8 +714,6 @@ messages! {
     TextPlainCharsetUtf8 = "text-plain-charset-utf-8",
     /// `the configuration file`
     TheConfigurationFile = "the-configuration-file",
-    /// `The deadline has passed`
-    TheDeadlineHasPassed = "the-deadline-has-passed",
     /// `…The gateway says: ….`
     TheGatewaySays = "the-gateway-says",
     /// `The issuer`

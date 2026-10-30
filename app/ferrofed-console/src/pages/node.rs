@@ -10,37 +10,29 @@
 //! routing table (N21, §12.2), each with its ground: the node's own
 //! `system_id`, a registered route or a learned one. A tab the console has
 //! no data for is left out (T2).
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
 
 use ferrofed_registry::operator::{CreatingSystemEntry, RouteSource};
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::table::view::{
     Body, Column, DataTable, Role, Sorting, cell, data_table, title_cell,
 };
 use ferrohealth_ui::view::action::ActionGroup;
+use ferrohealth_ui::view::action_menu::{Act, Action};
+use ferrohealth_ui::view::state::state;
 use ferrohealth_ui::view::surface::{Crumb, Header, card, facts_row};
 use ferrohealth_ui::view::tabs::{Tab, TabRow};
 use ferrohealth_ui::view::tag::Tag;
 use ferrohealth_ui::view::template::detail::{DetailPage, detail_page};
 use ferrohealth_ui::view::template::list::list_empty;
-use ferrohealth_ui::widget::action_menu::{Act, Action};
-use leptos::prelude::*;
 
 use crate::app::ORGANISATIONS;
-use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{latency, latency_fact, owner_tag, stopped};
+use crate::locale::{Msg, current, tr, tr_with};
+use crate::pages::{h, latency, latency_fact, owner_tag, stopped, t};
 use crate::read::Stop;
 use crate::read::federation::{Health, Node, Organisation};
-use ferrohealth_ui::view::state::state;
 
-#[cfg(not(target_arch = "wasm32"))]
 /// The most pages of the routing table the Routes tab reads.
 const ROUTE_PAGES: u64 = 10;
 
@@ -77,61 +69,31 @@ impl NodeTab {
 }
 
 /// One node, on the tab the path names.
-#[must_use]
-pub fn page() -> AnyView {
+pub async fn page() -> Html {
     let org = crate::pages::param("org");
     let id = crate::pages::param("node");
     let Some(tab) = NodeTab::of(&crate::pages::param("tab")) else {
         return crate::pages::errors::not_found();
     };
-    let federation_read = Resource::new(crate::read::changes, |_| {
-        crate::read::federation::federation_now()
-    });
-    let node_id = id.clone();
-    let routes_read = Resource::new(crate::read::changes, move |_| {
-        let node = node_id.clone();
-        async move {
-            if tab == NodeTab::Routes {
-                Some(routes_now(node).await)
-            } else {
-                None
-            }
-        }
-    });
-    let body = Suspend::new(async move {
-        let routes = routes_read.await;
-        let federation = match federation_read.await {
-            Ok(federation) => federation,
-            Err(stop) => return stopped(&stop),
-        };
-        let Some((organisation, node)) = federation
-            .node(&id)
-            .filter(|(organisation, _)| organisation.id == org)
-        else {
-            return crate::pages::errors::not_found();
-        };
-        node_page(organisation, node, tab, routes)
-    });
-    view! { <Suspense fallback=|| ()>{body}</Suspense> }.into_any()
-}
-
-/// The creating systems the routing table routes to `node`, as the
-/// operator of the request reads them.
-///
-/// # Errors
-/// Returns the [`Stop`] of a missing session or a read the gateway refused
-/// or did not answer, and [`crate::read::Fault::Unavailable`] when the
-/// console's server does not answer.
-#[server(endpoint = "node-routes")]
-pub async fn routes_now(
-    /// The node's id.
-    node: String,
-) -> Result<Vec<CreatingSystemEntry>, Stop> {
-    routes_of(&node).await
+    let routes = if tab == NodeTab::Routes {
+        Some(routes_of(&id).await)
+    } else {
+        None
+    };
+    let federation = match crate::read::federation::read().await {
+        Ok(federation) => federation,
+        Err(stop) => return stopped(&stop),
+    };
+    let Some((organisation, node)) = federation
+        .node(&id)
+        .filter(|(organisation, _)| organisation.id == org)
+    else {
+        return crate::pages::errors::not_found();
+    };
+    node_page(organisation, node, tab, routes)
 }
 
 /// The creating systems the routing table routes to `node`.
-#[cfg(not(target_arch = "wasm32"))]
 async fn routes_of(node: &str) -> Result<Vec<CreatingSystemEntry>, Stop> {
     let (state, token) = crate::read::signed_in()?;
     let mut found = Vec::new();
@@ -158,13 +120,18 @@ async fn routes_of(node: &str) -> Result<Vec<CreatingSystemEntry>, Stop> {
     Ok(found)
 }
 
+/// The class attribute of a row that is `muted`.
+const fn muted(muted: bool) -> &'static str {
+    if muted { " class=\"is-excluded\"" } else { "" }
+}
+
 /// The page of `node` of `organisation` on `tab`.
 fn node_page(
     organisation: &Organisation,
     node: &Node,
     tab: NodeTab,
     routes: Option<Result<Vec<CreatingSystemEntry>, Stop>>,
-) -> AnyView {
+) -> Html {
     let href = organisation.node_href(node);
     let tabs = TabRow {
         label: node.id.clone(),
@@ -200,28 +167,24 @@ fn node_page(
         NodeTab::Endpoints => endpoints(node),
         NodeTab::Routes => routes_tab(node, routes),
     };
-    view! {
-        {crate::app::title(node.id.clone())}
-        {detail_page(DetailPage {
+    crate::app::title(node.id.clone()).then(detail_page(
+        &current(),
+        DetailPage {
             header: Header {
                 title: node.id.clone().into(),
                 subtitle: None,
-                subtitle_view: Some(
-                    crate::pages::marked(
-                        Msg::NodeSubtitle,
-                        &[],
-                        vec![
-                            (
-                                "organisation",
-                                view! {
-                                    <a href=organisation
-                                        .href()>{organisation.shown().to_owned()}</a>
-                                }
-                                    .into_any(),
-                            ),
-                        ],
-                    ),
-                ),
+                subtitle_view: Some(crate::pages::marked(
+                    Msg::NodeSubtitle,
+                    &[],
+                    vec![(
+                        "organisation",
+                        h(format!(
+                            "<a href=\"{}\">{}</a>",
+                            t(organisation.href()),
+                            t(organisation.shown())
+                        )),
+                    )],
+                )),
                 crumbs: vec![
                     Crumb::new(tr(Msg::OrganisationsTitle), ORGANISATIONS),
                     Crumb::new(organisation.shown().to_owned(), organisation.href()),
@@ -233,28 +196,31 @@ fn node_page(
             stepper: None,
             tabs: Some(tabs),
             body,
-        })}
-    }
-    .into_any()
+        },
+    ))
 }
 
 /// The Overview tab: the node's facts and the state of each endpoint.
-fn overview(organisation: &Organisation, node: &Node) -> AnyView {
+fn overview(organisation: &Organisation, node: &Node) -> Html {
     let facts = facts_row(vec![
         (
             tr(Msg::ColumnSystemId),
-            view! { <code>{node.system_id.clone().unwrap_or_default()}</code> }.into_any(),
+            h(format!(
+                "<code>{}</code>",
+                t(node.system_id.clone().unwrap_or_default())
+            )),
         ),
         (
             tr(Msg::ColumnCdr),
-            node.product
-                .clone()
-                .unwrap_or_else(|| tr(Msg::None))
-                .into_any(),
+            t(node.product.clone().unwrap_or_else(|| tr(Msg::None))),
         ),
         (
             tr(Msg::ColumnOrganisation),
-            view! { <a href=organisation.href()>{organisation.shown().to_owned()}</a> }.into_any(),
+            h(format!(
+                "<a href=\"{}\">{}</a>",
+                t(organisation.href()),
+                t(organisation.shown())
+            )),
         ),
         (
             tr(Msg::ColumnMedian),
@@ -266,38 +232,27 @@ fn overview(organisation: &Organisation, node: &Node) -> AnyView {
         ),
         (
             tr(Msg::ColumnOwner),
-            node.owner
-                .map_or_else(|| tr(Msg::None).into_any(), owner_tag),
+            node.owner.map_or_else(|| t(tr(Msg::None)), owner_tag),
         ),
     ]);
-    let health = node
-        .endpoints
-        .iter()
-        .map(|endpoint| {
-            view! {
-                <li>
-                    <code>{endpoint.id.clone()}</code>
-                    " "
-                    {state(endpoint.health.mark(), endpoint.health.word(), None)}
-                </li>
-            }
-        })
-        .collect_view();
-    view! {
-        {card(tr(Msg::NodeFacts), facts)}
-        {card(
-            tr(Msg::NodeHealth),
-            view! {
-                <p class="fui-small fui-muted">{tr(Msg::NodeHealthLine)}</p>
-                <ul class="fui-stack">{health}</ul>
-            },
-        )}
-    }
-    .into_any()
+    let health = Html::join(node.endpoints.iter().map(|endpoint| {
+        h(format!(
+            "<li><code>{}</code> {}</li>",
+            t(&endpoint.id),
+            state(endpoint.health.mark(), endpoint.health.word(), None)
+        ))
+    }));
+    card(tr(Msg::NodeFacts), facts).then(card(
+        tr(Msg::NodeHealth),
+        h(format!(
+            "<p class=\"fui-small fui-muted\">{}</p><ul class=\"fui-stack\">{health}</ul>",
+            t(tr(Msg::NodeHealthLine))
+        )),
+    ))
 }
 
 /// The Endpoints tab.
-fn endpoints(node: &Node) -> AnyView {
+fn endpoints(node: &Node) -> Html {
     let columns = [
         Column {
             role: Role::Title,
@@ -320,33 +275,37 @@ fn endpoints(node: &Node) -> AnyView {
             ..Column::text("p95", tr(Msg::ColumnP95)).titled(tr(Msg::ColumnP95Title))
         },
     ];
-    let rows = node
-        .endpoints
-        .iter()
-        .map(|endpoint| {
-            view! {
-                <tr class:is-excluded=endpoint.health
-                    == Health::Excluded>
-                    {title_cell(None, view! { <code>{endpoint.id.clone()}</code> }, None)}
-                    {cell(
-                        &columns[1],
-                        view! { <code>{endpoint.url.clone().unwrap_or_default()}</code> },
-                    )} {cell(&columns[2], Tag::new(endpoint.status.clone()).view())}
-                    {cell(&columns[3], state(endpoint.health.mark(), endpoint.health.word(), None))}
-                    {cell(&columns[4], latency(endpoint.latency_ms_p50))}
-                    {cell(&columns[5], latency(endpoint.latency_ms_p95))}
-                </tr>
-            }
-        })
-        .collect_view()
-        .into_any();
+    let rows = node.endpoints.iter().map(|endpoint| {
+        h(format!(
+            "<tr{}>{}{} {}{}{}{}</tr>",
+            muted(endpoint.health == Health::Excluded),
+            title_cell(
+                None,
+                h(format!("<code>{}</code>", t(&endpoint.id))),
+                None
+            ),
+            cell(
+                &columns[1],
+                h(format!(
+                    "<code>{}</code>",
+                    t(endpoint.url.clone().unwrap_or_default())
+                )),
+            ),
+            cell(&columns[2], Tag::new(endpoint.status.clone()).view()),
+            cell(
+                &columns[3],
+                state(endpoint.health.mark(), endpoint.health.word(), None)
+            ),
+            cell(&columns[4], latency(endpoint.latency_ms_p50)),
+            cell(&columns[5], latency(endpoint.latency_ms_p95)),
+        ))
+    });
     data_table(DataTable {
         caption: &tr(Msg::TabEndpoints),
         columns: &columns,
         sorting: Sorting::default(),
-        body: Body::Rows(rows),
+        body: Body::Rows(Html::join(rows)),
     })
-    .into_any()
 }
 
 /// The words of a route's ground.
@@ -360,7 +319,7 @@ fn ground(source: RouteSource) -> String {
 }
 
 /// The Routes tab: the creating systems the routing table routes to `node`.
-fn routes_tab(node: &Node, routes: Option<Result<Vec<CreatingSystemEntry>, Stop>>) -> AnyView {
+fn routes_tab(node: &Node, routes: Option<Result<Vec<CreatingSystemEntry>, Stop>>) -> Html {
     let routes = match routes {
         Some(Ok(routes)) => routes,
         Some(Err(stop)) => return stopped(&stop),
@@ -380,34 +339,33 @@ fn routes_tab(node: &Node, routes: Option<Result<Vec<CreatingSystemEntry>, Stop>
         Column::text("ground", tr(Msg::ColumnGround)),
         Column::text("endpoint", tr(Msg::ColumnEndpoint)),
     ];
-    let rows = routes
-        .into_iter()
-        .map(|route| {
-            view! {
-                <tr class:is-excluded=route.source
-                    == RouteSource::Withdrawn>
-                    {title_cell(
-                        None,
-                        view! { <code>{route.creating_system_id.clone()}</code> },
-                        None,
-                    )} {cell(&columns[1], Tag::new(ground(route.source)).view())}
-                    {cell(
-                        &columns[2],
-                        view! { <code>{route.endpoint.clone().unwrap_or_default()}</code> },
-                    )}
-                </tr>
-            }
-        })
-        .collect_view()
-        .into_any();
-    view! {
-        <p class="fui-small fui-muted">{tr(Msg::RoutesLine)}</p>
-        {data_table(DataTable {
-            caption: &tr(Msg::TabRoutes),
-            columns: &columns,
-            sorting: Sorting::default(),
-            body: Body::Rows(rows),
-        })}
-    }
-    .into_any()
+    let rows = routes.into_iter().map(|route| {
+        h(format!(
+            "<tr{}>{} {}{}</tr>",
+            muted(route.source == RouteSource::Withdrawn),
+            title_cell(
+                None,
+                h(format!("<code>{}</code>", t(&route.creating_system_id))),
+                None,
+            ),
+            cell(&columns[1], Tag::new(ground(route.source)).view()),
+            cell(
+                &columns[2],
+                h(format!(
+                    "<code>{}</code>",
+                    t(route.endpoint.clone().unwrap_or_default())
+                )),
+            ),
+        ))
+    });
+    h(format!(
+        "<p class=\"fui-small fui-muted\">{}</p>",
+        t(tr(Msg::RoutesLine))
+    ))
+    .then(data_table(DataTable {
+        caption: &tr(Msg::TabRoutes),
+        columns: &columns,
+        sorting: Sorting::default(),
+        body: Body::Rows(Html::join(rows)),
+    }))
 }

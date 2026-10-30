@@ -9,6 +9,7 @@
 //! nests the organisation and its nodes under Organisations (F10). A tab
 //! the console has no data for is left out (T2).
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::table::model::Noun;
@@ -16,48 +17,38 @@ use ferrohealth_ui::table::view::{
     Body, Column, DataTable, Role, Sorting, cell, count_cell, data_table, title_cell,
 };
 use ferrohealth_ui::view::action::ActionGroup;
+use ferrohealth_ui::view::action_menu::{Act, Action};
+use ferrohealth_ui::view::state::state;
 use ferrohealth_ui::view::surface::{Crumb, Header, card, facts_row, page_heading};
 use ferrohealth_ui::view::tabs::{Tab, TabRow};
 use ferrohealth_ui::view::template::detail::{DetailPage, detail_page};
-use ferrohealth_ui::widget::action_menu::{Act, Action};
-use leptos::prelude::*;
 
 use crate::app::ORGANISATIONS;
-use crate::locale::{Msg, message, tr, tr_with};
-use crate::pages::{owner_tag, stopped};
+use crate::locale::{Msg, current, message, tr, tr_with};
+use crate::pages::{h, owner_tag, stopped, t};
 use crate::read::federation::{Health, Organisation};
-use ferrohealth_ui::view::state::state;
 
 /// One organisation, on the tab the path names.
-#[must_use]
-pub fn page() -> AnyView {
+pub async fn page() -> Html {
     let id = crate::pages::param("org");
     let tab = crate::pages::param("tab");
-    let federation_read = Resource::new(crate::read::changes, |_| {
-        crate::read::federation::federation_now()
-    });
-    let body = Suspend::new(async move {
-        match federation_read.await {
-            Err(stop) => view! {
-                {page_heading(
-                    Header {
-                        title: id.clone().into(),
-                        mono: true,
-                        crumbs: crumbs(),
-                        ..Header::default()
-                    },
-                    ActionGroup::none(),
-                )}
-                {stopped(&stop)}
-            }
-            .into_any(),
-            Ok(federation) => match federation.organisation(&id) {
-                Some(organisation) => organisation_page(organisation, &tab),
-                None => crate::pages::errors::not_found(),
+    match crate::read::federation::read().await {
+        Err(stop) => page_heading(
+            &current(),
+            Header {
+                title: id.clone().into(),
+                mono: true,
+                crumbs: crumbs(),
+                ..Header::default()
             },
-        }
-    });
-    view! { <Suspense fallback=|| ()>{body}</Suspense> }.into_any()
+            ActionGroup::none(),
+        )
+        .then(stopped(&stop)),
+        Ok(federation) => match federation.organisation(&id) {
+            Some(organisation) => organisation_page(organisation, &tab),
+            None => crate::pages::errors::not_found(),
+        },
+    }
 }
 
 /// The trail of an organisation's page.
@@ -66,7 +57,7 @@ fn crumbs() -> Vec<Crumb> {
 }
 
 /// The page of `organisation` on the tab `tab` names.
-fn organisation_page(organisation: &Organisation, tab: &str) -> AnyView {
+fn organisation_page(organisation: &Organisation, tab: &str) -> Html {
     let href = organisation.href();
     let nodes_tab = tab == "nodes";
     let count = u64::try_from(organisation.nodes.len()).unwrap_or(u64::MAX);
@@ -96,19 +87,17 @@ fn organisation_page(organisation: &Organisation, tab: &str) -> AnyView {
     } else {
         overview(organisation)
     };
-    view! {
-        {crate::app::title(organisation.shown().to_owned())}
-        {detail_page(DetailPage {
+    crate::app::title(organisation.shown().to_owned()).then(detail_page(
+        &current(),
+        DetailPage {
             header: Header {
                 title: organisation.shown().to_owned().into(),
                 subtitle: None,
-                subtitle_view: Some(
-                    crate::pages::marked(
-                        Msg::OrganisationSubtitle,
-                        &[("count", Arg::from(count))],
-                        vec![("id", view! { <code>{organisation.id.clone()}</code> }.into_any())],
-                    ),
-                ),
+                subtitle_view: Some(crate::pages::marked(
+                    Msg::OrganisationSubtitle,
+                    &[("count", Arg::from(count))],
+                    vec![("id", h(format!("<code>{}</code>", t(&organisation.id))))],
+                )),
                 crumbs: crumbs(),
                 mono: false,
                 badge: Some(state(health.mark(), health.word(), None)),
@@ -117,22 +106,21 @@ fn organisation_page(organisation: &Organisation, tab: &str) -> AnyView {
             stepper: None,
             tabs: Some(tabs),
             body,
-        })}
-    }
-    .into_any()
+        },
+    ))
 }
 
 /// The Overview tab: the organisation's facts and its nodes in brief.
-fn overview(organisation: &Organisation) -> AnyView {
+fn overview(organisation: &Organisation) -> Html {
     let owner = organisation
         .nodes
         .iter()
         .find_map(|node| node.owner)
-        .map_or_else(|| tr(Msg::None).into_any(), owner_tag);
+        .map_or_else(|| t(tr(Msg::None)), owner_tag);
     let facts = facts_row(vec![
         (
             tr(Msg::ColumnId),
-            view! { <code>{organisation.id.clone()}</code> }.into_any(),
+            h(format!("<code>{}</code>", t(&organisation.id))),
         ),
         (
             tr(Msg::ColumnState),
@@ -144,26 +132,21 @@ fn overview(organisation: &Organisation) -> AnyView {
         ),
         (
             tr(Msg::ColumnNodes),
-            u64::try_from(organisation.nodes.len())
+            t(u64::try_from(organisation.nodes.len())
                 .unwrap_or(u64::MAX)
-                .to_string()
-                .into_any(),
+                .to_string()),
         ),
         (
             tr(Msg::ColumnEndpoints),
-            organisation.endpoint_count().to_string().into_any(),
+            t(organisation.endpoint_count().to_string()),
         ),
         (tr(Msg::ColumnOwner), owner),
     ]);
-    view! {
-        {card(tr(Msg::OrganisationFacts), facts)}
-        {nodes(organisation)}
-    }
-    .into_any()
+    card(tr(Msg::OrganisationFacts), facts).then(nodes(organisation))
 }
 
 /// The organisation's nodes.
-fn nodes(organisation: &Organisation) -> AnyView {
+fn nodes(organisation: &Organisation) -> Html {
     let columns = [
         Column {
             role: Role::Title,
@@ -181,35 +164,46 @@ fn nodes(organisation: &Organisation) -> AnyView {
         },
         Column::text("state", tr(Msg::ColumnState)),
     ];
-    let rows = organisation
-        .nodes
-        .iter()
-        .map(|node| {
-            let href =
-                (node.routable() && organisation.routable()).then(|| organisation.node_href(node));
-            view! {
-                <tr class:is-excluded=node.health()
-                    == Health::Excluded>
-                    {title_cell(href.as_deref(), view! { <code>{node.id.clone()}</code> }, None)}
-                    {cell(
-                        &columns[1],
-                        view! { <code>{node.system_id.clone().unwrap_or_default()}</code> },
-                    )} {cell(&columns[2], node.product.clone().unwrap_or_default())}
-                    {count_cell(
-                        &columns[3],
-                        u32::try_from(node.endpoints.len()).unwrap_or(u32::MAX),
-                        Noun::new(message(Msg::NounEndpoints)),
-                    )} {cell(&columns[4], state(node.health().mark(), node.health().word(), None))}
-                </tr>
-            }
-        })
-        .collect_view()
-        .into_any();
+    let locale = current();
+    let rows = organisation.nodes.iter().map(|node| {
+        let href =
+            (node.routable() && organisation.routable()).then(|| organisation.node_href(node));
+        let class = if node.health() == Health::Excluded {
+            " class=\"is-excluded\""
+        } else {
+            ""
+        };
+        h(format!(
+            "<tr{class}>{}{} {}{} {}</tr>",
+            title_cell(
+                href.as_deref(),
+                h(format!("<code>{}</code>", t(&node.id))),
+                None
+            ),
+            cell(
+                &columns[1],
+                h(format!(
+                    "<code>{}</code>",
+                    t(node.system_id.clone().unwrap_or_default())
+                )),
+            ),
+            cell(&columns[2], t(node.product.clone().unwrap_or_default())),
+            count_cell(
+                &locale,
+                &columns[3],
+                u32::try_from(node.endpoints.len()).unwrap_or(u32::MAX),
+                Noun::new(message(Msg::NounEndpoints)),
+            ),
+            cell(
+                &columns[4],
+                state(node.health().mark(), node.health().word(), None)
+            ),
+        ))
+    });
     data_table(DataTable {
         caption: &tr(Msg::TabNodes),
         columns: &columns,
         sorting: Sorting::default(),
-        body: Body::Rows(rows),
+        body: Body::Rows(Html::join(rows)),
     })
-    .into_any()
 }

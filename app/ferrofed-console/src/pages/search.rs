@@ -7,31 +7,19 @@
 //! A `system_id` is the creating system a record names, so it leads to its
 //! node's Routes tab. The find takes routing ids and names alone and never a
 //! patient identifier, so its words sit in the query (`GET /search?q=`) as any
-//! filter's do. As you type, the panel under the field asks [`ANSWER`], the
-//! server function [`find_answer`], which answers the FerroUI search
-//! answer as JSON; the find page lists every match in the page.
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
-
-#[cfg(not(target_arch = "wasm32"))]
+//! filter's do. As you type, FerroUI's `search` module asks [`ANSWER`],
+//! the route [`find_answer`], which answers the FerroUI search answer as
+//! JSON; the find page lists every match in the page.
+use axum::response::{IntoResponse, Response};
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::view::action::ActionGroup;
-#[cfg(not(target_arch = "wasm32"))]
 use ferrohealth_ui::view::search::{Hit, HitGroup, Mark, Way};
 use ferrohealth_ui::view::search::{SearchAnswer, find_results};
 use ferrohealth_ui::view::surface::{Header, page_heading};
-use leptos::prelude::*;
-use leptos::server_fn::codec::{GetUrl, Json};
-
-#[cfg(not(target_arch = "wasm32"))]
+use ferrohealth_ui::html::Html;
 use crate::app::{QUERY, STORED_QUERIES};
-use crate::locale::{Msg, tr, tr_with};
-#[cfg(not(target_arch = "wasm32"))]
+use crate::locale::{Msg, current, tr, tr_with};
+use crate::pages::{h, t};
 use crate::read::federation::Federation;
 
 /// The route the panel under the field asks as you type.
@@ -46,14 +34,10 @@ pub fn query_of(search: &str) -> Option<String> {
         .map(|(_, value)| value.trim().to_owned())
         .filter(|value| !value.is_empty())
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// Whether `text` holds `words`, ignoring case.
 fn holds(text: &str, words: &str) -> bool {
     text.to_lowercase().contains(&words.to_lowercase())
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// The organisations `federation` holds that match `words`.
 fn organisation_hits(federation: &Federation, words: &str) -> Vec<Hit> {
     federation
@@ -76,8 +60,6 @@ fn organisation_hits(federation: &Federation, words: &str) -> Vec<Hit> {
         })
         .collect()
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// The nodes `federation` holds that match `words` by their id, an
 /// endpoint's id or their `system_id`; a `system_id` leads to the node's
 /// Routes tab.
@@ -131,7 +113,6 @@ fn node_hits(federation: &Federation, words: &str) -> Vec<Hit> {
 
 /// The hits of `words`, grouped by kind, and whether a read failed, so the
 /// answer is not whole.
-#[cfg(not(target_arch = "wasm32"))]
 async fn groups(words: &str) -> (Vec<HitGroup>, bool) {
     let mut groups = Vec::new();
     let mut failed = false;
@@ -180,7 +161,6 @@ async fn groups(words: &str) -> (Vec<HitGroup>, bool) {
 }
 
 /// What the find holds for `words`: every match, grouped by kind.
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn answer(words: &str) -> SearchAnswer {
     let (groups, failed) = groups(words).await;
     let unfinished = failed.then(|| tr(Msg::SearchUnfinished));
@@ -213,52 +193,28 @@ pub async fn answer(words: &str) -> SearchAnswer {
 }
 
 /// Answers the panel under the field: what the find holds for the words
-/// `q`, as JSON.
-///
-/// # Errors
-/// Returns the error of a request with no live session.
-#[server(prefix = "/search", endpoint = "answer", input = GetUrl, output = Json)]
-pub async fn find_answer(
-    /// The words typed.
-    q: String,
-) -> Result<SearchAnswer, ServerFnError> {
+/// the query's `q` carries, as JSON; `401` for a request with no live
+/// session (FerroUI `docs/consoles.md`, "The top bar's search").
+pub async fn find_answer() -> Response {
     if crate::read::signed_in().is_err() {
-        if let Some(response) = use_context::<leptos_axum::ResponseOptions>() {
-            response.set_status(http::StatusCode::UNAUTHORIZED);
-        }
-        return Err(ServerFnError::new("no live session"));
+        return http::StatusCode::UNAUTHORIZED.into_response();
     }
-    Ok(answer(q.trim()).await)
+    let words = crate::pages::query_param("q").unwrap_or_default();
+    axum::Json(answer(words.trim()).await).into_response()
 }
 
 /// The find's page: the matches of the words the query carries.
-#[must_use]
-pub fn page() -> AnyView {
+pub async fn page() -> Html {
     let words = crate::pages::query_param("q")
         .map(|words| words.trim().to_owned())
         .filter(|words| !words.is_empty());
-    let found = Resource::new(
-        move || (crate::read::changes(), words.clone()),
-        |(_, words)| async move {
-            match words {
-                Some(words) => {
-                    Some(
-                        find_answer(words.clone())
-                            .await
-                            .unwrap_or_else(|_| SearchAnswer {
-                                query: words,
-                                unfinished: Some(tr(Msg::SearchUnfinished)),
-                                ..SearchAnswer::default()
-                            }),
-                    )
-                }
-                None => None,
-            }
-        },
-    );
-    let body = Suspend::new(async move {
-        let found = found.await;
+    let found = match words {
+        Some(words) => Some(answer(&words).await),
+        None => None,
+    };
+    let body = {
         let heading = page_heading(
+            &current(),
             Header {
                 title: tr(Msg::SearchTitle).into(),
                 subtitle: Some(
@@ -274,20 +230,15 @@ pub fn page() -> AnyView {
                 ..Header::default()
             },
             ActionGroup::none(),
-        )
-        .into_any();
+        );
         let found = match found {
-            Some(answer) => find_results(answer),
-            None => view! { <p class="fui-muted">{tr(Msg::SearchNothingLine)}</p> }.into_any(),
+            Some(answer) => find_results(&current(), &answer),
+            None => h(format!(
+                "<p class=\"fui-muted\">{}</p>",
+                t(tr(Msg::SearchNothingLine))
+            )),
         };
-        view! {
-            {heading}
-            {found}
-        }
-    });
-    view! {
-        {crate::app::title(tr(Msg::SearchTitle))}
-        <Suspense fallback=|| ()>{body}</Suspense>
-    }
-    .into_any()
+        heading.then(found)
+    };
+    crate::app::title(tr(Msg::SearchTitle)).then(body)
 }

@@ -12,7 +12,8 @@
 //! credential's, a binding section's and a stored query's form is a page
 //! of its own under its tab.
 //!
-//! Leptos escapes every text and attribute value it renders, so a member's
+//! Every text and attribute value is escaped where the page writes it
+//! (`crate::pages::t`) or where FerroUI's template does, so a member's
 //! name, a revision's reason, a diff's value or a stored query's name
 //! arrives as text, never as markup, a `textarea`'s text among them.
 
@@ -21,7 +22,7 @@ mod bindings;
 mod credentials;
 mod exchange;
 mod members;
-mod parts;
+pub(crate) mod parts;
 mod queries;
 pub mod running;
 mod top;
@@ -33,8 +34,7 @@ use ferrofed_registry::revision::{
 };
 use ferrofed_registry::running::{RunningConfig, Section};
 use ferrohealth_ui::view::time::reading;
-use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
+use ferrohealth_ui::html::Html;
 
 use crate::configure::model::{ConfigView, Screen};
 use crate::locale::{Msg, tr, tr_with};
@@ -42,7 +42,7 @@ use crate::read::Refusal;
 
 /// What a replica reports of a saved revision, with the preview of what it
 /// changes against the running revision when the console could read it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedLine {
     /// The revision saved.
     pub revision: Revision,
@@ -53,7 +53,7 @@ pub struct SavedLine {
 }
 
 /// What a replica reports of a stored-query version stored.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredLine {
     /// The qualified name.
     pub name: String,
@@ -65,7 +65,7 @@ pub struct StoredLine {
 pub const ROLLBACK_REASON: &str = "cfg-rollback-reason";
 
 /// What the server read of the first replica for the configuration page.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ConfigData {
     /// The replica keeps configuration revisions.
     Managed(Box<Managed>),
@@ -86,7 +86,7 @@ pub enum ConfigData {
 }
 
 /// What the server read of a replica that keeps configuration revisions.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Managed {
     /// The replica's name.
     pub replica: String,
@@ -474,13 +474,13 @@ impl Shown {
 /// of `section` as `running` holds them, read-only.
 #[must_use]
 pub fn file_only(running: &RunningConfig, section: Section) -> ConfigView {
-    let line = view! {
-        <p class="fui-small fui-muted">
-            {ferrohealth_ui::icon::icon(ferrohealth_ui::icon::Glyph::LOCK, "12")} " "
-            {tr(Msg::SettingsFileLine)}
-        </p>
-    };
+    let line = crate::pages::h(format!(
+        "<p class=\"fui-small fui-muted\">{} {}</p>",
+        ferrohealth_ui::icon::icon(ferrohealth_ui::icon::Glyph::LOCK, "12"),
+        crate::pages::t(tr(Msg::SettingsFileLine))
+    ));
     let header = ferrohealth_ui::view::surface::page_heading(
+        &crate::locale::current(),
         ferrohealth_ui::view::surface::Header {
             title: tr(Msg::Configuration).into(),
             subtitle: Some(tr(Msg::SettingsFileSubtitle).into()),
@@ -489,8 +489,8 @@ pub fn file_only(running: &RunningConfig, section: Section) -> ConfigView {
         ferrohealth_ui::view::action::ActionGroup::none(),
     );
     ConfigView {
-        header: Some(header.into_any()),
-        pending: Some(line.into_any()),
+        header: Some(header),
+        pending: Some(line),
         tab: Some(Tab::of(section)),
         lead: None,
         main: Some(running::panel(running, section)),
@@ -506,8 +506,11 @@ pub fn unmanaged(replica: &str) -> ConfigView {
         &[("name", replica.to_owned().into())],
     );
     ConfigView {
-        header: Some(top::title(()).into_any()),
-        main: Some(view! { <p role="status">{said}</p> }.into_any()),
+        header: Some(top::title(Html::empty())),
+        main: Some(crate::pages::h(format!(
+            "<p role=\"status\">{}</p>",
+            crate::pages::t(said)
+        ))),
         ..ConfigView::default()
     }
 }
@@ -518,40 +521,40 @@ pub fn unmanaged(replica: &str) -> ConfigView {
 /// Returns [`Refusal::Invalid`] for a member, a credential or a binding
 /// section the gateway does not hold.
 pub fn page(loaded: &Loaded<'_>, shown: &Shown) -> Result<ConfigView, Refusal> {
-    let (lead, main): (Option<AnyView>, AnyView) = match shown {
+    let (lead, main): (Option<Html>, Html) = match shown {
         Shown::Settings(section) => (None, running::tab(loaded, *section)),
         Shown::SettingsEdit(section) => (None, running::edit(loaded, *section)),
-        Shown::Members => (None, members::tab(loaded).into_any()),
-        Shown::MemberNew => (None, members::member_form(loaded, None).into_any()),
-        Shown::Member(node) => (None, members::member(loaded, node)?.into_any()),
-        Shown::Credentials => (None, credentials::tab(loaded).into_any()),
-        Shown::CredentialNew => (None, credentials::credential_form(loaded, None)?.into_any()),
+        Shown::Members => (None, members::tab(loaded)),
+        Shown::MemberNew => (None, members::member_form(loaded, None)),
+        Shown::Member(node) => (None, members::member(loaded, node)?),
+        Shown::Credentials => (None, credentials::tab(loaded)),
+        Shown::CredentialNew => (None, credentials::credential_form(loaded, None)?),
         Shown::Credential(endpoint) => (
             None,
-            credentials::credential_form(loaded, Some(endpoint))?.into_any(),
+            credentials::credential_form(loaded, Some(endpoint))?,
         ),
-        Shown::BindingNew => (None, bindings::binding_form(loaded, None)?.into_any()),
+        Shown::BindingNew => (None, bindings::binding_form(loaded, None)?),
         Shown::Binding(section) => (
             None,
-            bindings::binding_form(loaded, Some(section))?.into_any(),
+            bindings::binding_form(loaded, Some(section))?,
         ),
         Shown::Queries => (
             Some(running::tab(loaded, Section::StoredQueries)),
-            queries::tab(loaded).into_any(),
+            queries::tab(loaded),
         ),
-        Shown::QueryNew => (None, queries::form_page(loaded).into_any()),
+        Shown::QueryNew => (None, queries::form_page(loaded)),
         Shown::History(_) => (
-            Some(exchange::compared(loaded).into_any()),
-            exchange::history(loaded).into_any(),
+            Some(exchange::compared(loaded)),
+            exchange::history(loaded),
         ),
         Shown::Exchange => (
-            Some(exchange::export(loaded).into_any()),
-            exchange::import(loaded).into_any(),
+            Some(exchange::export(loaded)),
+            exchange::import(loaded),
         ),
     };
     Ok(ConfigView {
-        header: Some(top::header(loaded).into_any()),
-        pending: Some(top::pending(loaded).into_any()),
+        header: Some(top::header(loaded)),
+        pending: Some(top::pending(loaded)),
         tab: Some(shown.tab()),
         lead,
         main: Some(main),
@@ -589,7 +592,7 @@ pub(super) fn mark_said(mark: &Current) -> String {
             ("value1", (author(&mark.applied_by)).clone().into()),
             (
                 "value2",
-                (reading(&mark.applied_at.to_string())).clone().into(),
+                (reading(&crate::locale::current(), &mark.applied_at.to_string())).clone().into(),
             ),
             ("outcome", (outcome).clone().into()),
         ],

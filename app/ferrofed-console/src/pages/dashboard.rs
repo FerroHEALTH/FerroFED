@@ -13,13 +13,6 @@
 //! The self-description and the health are the dashboard's ground, so a
 //! refusal of either is the page's. Every other part the gateway refuses
 //! or cannot answer says so in its own card, and the rest still shows.
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
 
 use ferrofed_registry::revision::Standing;
 use ferrohealth_ui::i18n::Arg;
@@ -35,19 +28,18 @@ use ferrohealth_ui::view::surface::{
     stat_grid, titled_panel,
 };
 use ferrohealth_ui::view::tag::Tag;
-use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
+use ferrohealth_ui::html::Html;
 
 use crate::app::{ALL_NODES, CONFIGURATION, INTEGRITY, ORGANISATIONS, TOPOLOGY};
-use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{relative, stopped};
+use crate::locale::{Msg, current, tr, tr_with};
+use crate::pages::{h, opt, relative, stopped, t};
 use crate::read::Stop;
 use crate::read::federation::{Federation, Health};
 use crate::read::incidents::Incidents;
 use ferrohealth_ui::view::state::state;
 
 /// What the dashboard reads of the gateway.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reads {
     federation: Result<Federation, Stop>,
     incidents: Result<Incidents, Stop>,
@@ -55,18 +47,7 @@ pub struct Reads {
     stored: Option<u64>,
 }
 
-/// What the dashboard draws, as the operator of the request reads it.
-///
-/// # Errors
-/// Returns [`crate::read::Fault::Unavailable`] when the console's server
-/// does not answer.
-#[server(endpoint = "dashboard")]
-pub async fn reads_now() -> Result<Reads, Stop> {
-    Ok(reads().await)
-}
-
 /// Reads what the dashboard draws.
-#[cfg(not(target_arch = "wasm32"))]
 async fn reads() -> Reads {
     let federation = crate::read::federation::read().await;
     let incidents = crate::read::incidents::read().await;
@@ -102,24 +83,13 @@ async fn reads() -> Reads {
 }
 
 /// The dashboard.
-#[must_use]
-pub fn page() -> AnyView {
-    let reads = Resource::new(crate::read::changes, |_| reads_now());
-    let body = Suspend::new(async move {
-        match reads.await {
-            Ok(reads) => dashboard(reads),
-            Err(stop) => stopped(&stop),
-        }
-    });
-    view! {
-        {crate::app::title(tr(Msg::DashboardTitle))}
-        <Suspense fallback=|| ()>{body}</Suspense>
-    }
-    .into_any()
+pub async fn page() -> Html {
+    let reads = reads().await;
+    crate::app::title(tr(Msg::DashboardTitle)).then(dashboard(reads))
 }
 
 /// The dashboard of `reads`.
-fn dashboard(reads: Reads) -> AnyView {
+fn dashboard(reads: Reads) -> Html {
     let replica = reads.federation.as_ref().ok().and_then(|federation| {
         crate::read::answered_by(&[("health", federation.replica.as_deref())])
     });
@@ -131,30 +101,20 @@ fn dashboard(reads: Reads) -> AnyView {
         None => tr(Msg::DashboardSubtitle),
     };
     let heading = page_heading(
+        &current(),
         Header {
             title: tr(Msg::DashboardTitle).into(),
             subtitle: Some(subtitle.into()),
             ..Header::default()
         },
         ActionGroup::none(),
-    )
-    .into_any();
+    );
     let federation = match reads.federation {
         Ok(federation) => federation,
-        Err(stop) => {
-            return view! {
-                {heading}
-                {stopped(&stop)}
-            }
-            .into_any();
-        }
+        Err(stop) => return heading.then(stopped(&stop)),
     };
     if federation.organisations.is_empty() {
-        return view! {
-            {heading}
-            {empty_federation()}
-        }
-        .into_any();
+        return heading.then(empty_federation());
     }
     let stats = stats(
         &federation,
@@ -165,46 +125,25 @@ fn dashboard(reads: Reads) -> AnyView {
     let topology = topology_card(&federation);
     let incidents = incidents_card(&reads.incidents);
     let configuration = configuration_card(reads.standings.as_deref(), reads.stored);
-    view! {
-        {heading}
-        {stack(
-            view! {
-                {stats}
-                {grid_start(
-                    view! {
-                        {attention}
-                        {topology}
-                    },
-                )}
-                {grid_start(
-                    view! {
-                        {incidents}
-                        {configuration}
-                    },
-                )}
-            },
-        )}
-    }
-    .into_any()
+    heading.then(stack(Html::join([
+        stats,
+        grid_start(attention.then(topology)),
+        grid_start(incidents.then(configuration)),
+    ])))
 }
 
 /// A federation with no organisation: one quiet line with the way to
 /// Organisations, and the order in which a federation is set up.
-fn empty_federation() -> AnyView {
-    view! {
-        <section class="fui-card">
-            <p>
-                {tr(Msg::DashboardEmpty)} " "
-                <a href=ORGANISATIONS>{tr(Msg::DashboardEmptyLink)}</a>
-            </p>
-            <ol class="fui-small">
-                <li>{tr(Msg::DashboardSetupOrganisation)}</li>
-                <li>{tr(Msg::DashboardSetupCredentials)}</li>
-                <li>{tr(Msg::DashboardSetupQuery)}</li>
-            </ol>
-        </section>
-    }
-    .into_any()
+fn empty_federation() -> Html {
+    h(format!(
+        "<section class=\"fui-card\"><p>{} <a href=\"{ORGANISATIONS}\">{}</a></p>\
+         <ol class=\"fui-small\"><li>{}</li><li>{}</li><li>{}</li></ol></section>",
+        t(tr(Msg::DashboardEmpty)),
+        t(tr(Msg::DashboardEmptyLink)),
+        t(tr(Msg::DashboardSetupOrganisation)),
+        t(tr(Msg::DashboardSetupCredentials)),
+        t(tr(Msg::DashboardSetupQuery)),
+    ))
 }
 
 /// The four stat cards.
@@ -212,7 +151,7 @@ fn stats(
     federation: &Federation,
     incidents: Option<&Incidents>,
     standings: Option<&[(String, Result<Standing, Stop>)]>,
-) -> AnyView {
+) -> Html {
     let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     let nodes: Vec<_> = federation.nodes().collect();
     let endpoints: usize = federation
@@ -235,7 +174,7 @@ fn stats(
     let organisations = stat_card_marked(
         Stat {
             glyph: Glyph::BUILDING_COMPLEX,
-            value: ferrohealth_ui::i18n::number::grouped(u64::from(count(
+            value: ferrohealth_ui::i18n::number::grouped(&current(), u64::from(count(
                 federation.organisations.len(),
             ))),
             label: tr_with(
@@ -255,18 +194,11 @@ fn stats(
                 ],
             ),
         ),
-    )
-    .into_any();
+    );
     let reach = reach_card(worst.map(|(_, node)| *node), reachable, taking_part.len());
     let incident_card = incident_card(incidents);
     let revision = revision_card(standings);
-    stat_grid(view! {
-        {organisations}
-        {reach}
-        {incident_card}
-        {revision}
-    })
-    .into_any()
+    stat_grid(Html::join([organisations, reach, incident_card, revision]))
 }
 
 /// The card of the nodes reachable, of the `total` that take part, marked
@@ -275,7 +207,7 @@ fn reach_card(
     worst: Option<&crate::read::federation::Node>,
     reachable: usize,
     total: usize,
-) -> AnyView {
+) -> Html {
     let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     let mark = worst.map(|node| {
         badge(
@@ -302,13 +234,12 @@ fn reach_card(
             label: tr(Msg::StatNodesReachable).into(),
             href: Some(String::from(ALL_NODES)),
         },
-        mark,
+        opt(mark),
     )
-    .into_any()
 }
 
 /// The card of the open incidents, marked with the `ehr_id`s they hold.
-fn incident_card(incidents: Option<&Incidents>) -> AnyView {
+fn incident_card(incidents: Option<&Incidents>) -> Html {
     let open = incidents.map(|incidents| incidents.open.len());
     let held = incidents.map_or(0, |incidents| incidents.held().len());
     stat_card_marked(
@@ -318,7 +249,7 @@ fn incident_card(incidents: Option<&Incidents>) -> AnyView {
             label: tr(Msg::StatOpenIncidents).into(),
             href: Some(String::from(INTEGRITY)),
         },
-        (held > 0).then(|| {
+        opt((held > 0).then(|| {
             badge(
                 Tone::Warn,
                 tr_with(
@@ -326,13 +257,12 @@ fn incident_card(incidents: Option<&Incidents>) -> AnyView {
                     &[("count", Arg::from(u32::try_from(held).unwrap_or(u32::MAX)))],
                 ),
             )
-        }),
+        })),
     )
-    .into_any()
 }
 
 /// The card of the running revision, marked with the replicas in step.
-fn revision_card(standings: Option<&[(String, Result<Standing, Stop>)]>) -> AnyView {
+fn revision_card(standings: Option<&[(String, Result<Standing, Stop>)]>) -> Html {
     let running = standings
         .and_then(|standings| {
             standings
@@ -361,7 +291,7 @@ fn revision_card(standings: Option<&[(String, Result<Standing, Stop>)]>) -> AnyV
             label: tr(Msg::StatRunningConfiguration).into(),
             href: Some(String::from(CONFIGURATION)),
         },
-        in_step.filter(|_| running.is_some()).map(|in_step| {
+        opt(in_step.filter(|_| running.is_some()).map(|in_step| {
             pill(
                 Tone::Ok,
                 &tr_with(
@@ -372,14 +302,13 @@ fn revision_card(standings: Option<&[(String, Result<Standing, Stop>)]>) -> AnyV
                     )],
                 ),
             )
-        }),
+        })),
     )
-    .into_any()
 }
 
 /// The nodes that need attention: each degraded, unreachable or excluded
 /// node with why, leading to every node.
-fn attention(federation: &Federation) -> AnyView {
+fn attention(federation: &Federation) -> Html {
     let columns = [
         Column {
             role: Role::Title,
@@ -389,7 +318,7 @@ fn attention(federation: &Federation) -> AnyView {
         Column::text("state", tr(Msg::ColumnState)),
         Column::text("why", tr(Msg::ColumnWhy)),
     ];
-    let rows: Vec<AnyView> = federation
+    let rows: Vec<Html> = federation
         .nodes()
         .filter(|(_, node)| {
             node.health() != Health::Reachable && node.health() != Health::NotProbed
@@ -401,40 +330,50 @@ fn attention(federation: &Federation) -> AnyView {
                 _ => Msg::WhyDegraded,
             });
             let href = node.routable().then(|| organisation.node_href(node));
-            view! {
-                <tr class:is-excluded=node.health()
-                    == Health::Excluded>
-                    {title_cell(href.as_deref(), view! { <code>{node.id.clone()}</code> }, None)}
-                    {cell(&columns[1], organisation.shown().to_owned())}
-                    {cell(&columns[2], state(node.health().mark(), node.health().word(), None))}
-                    {cell(&columns[3], why)}
-                </tr>
-            }
-            .into_any()
+            let class = if node.health() == Health::Excluded {
+                " class=\"is-excluded\""
+            } else {
+                ""
+            };
+            h(format!(
+                "<tr{class}>{}{}{}{}</tr>",
+                title_cell(
+                    href.as_deref(),
+                    h(format!("<code>{}</code>", t(&node.id))),
+                    None
+                ),
+                cell(&columns[1], t(organisation.shown())),
+                cell(
+                    &columns[2],
+                    state(node.health().mark(), node.health().word(), None)
+                ),
+                cell(&columns[3], t(why)),
+            ))
         })
         .collect();
     let body = if rows.is_empty() {
-        view! { <p class="fui-panel-body fui-muted">{tr(Msg::AttentionNone)}</p> }.into_any()
+        h(format!(
+            "<p class=\"fui-panel-body fui-muted\">{}</p>",
+            t(tr(Msg::AttentionNone))
+        ))
     } else {
         data_table(DataTable {
             caption: &tr(Msg::AttentionTitle),
             columns: &columns,
             sorting: Sorting::default(),
-            body: Body::Rows(rows.collect_view().into_any()),
+            body: Body::Rows(Html::join(rows)),
         })
-        .into_any()
     };
     titled_panel(
         tr(Msg::AttentionTitle),
         card_action(ALL_NODES, tr(Msg::AttentionAll)),
         body,
     )
-    .into_any()
 }
 
 /// The topology in brief: each organisation with the states of its nodes,
 /// the services, and one line of counts, leading to the topology.
-fn topology_card(federation: &Federation) -> AnyView {
+fn topology_card(federation: &Federation) -> Html {
     let rows = federation
         .organisations
         .iter()
@@ -442,18 +381,15 @@ fn topology_card(federation: &Federation) -> AnyView {
             let dots = organisation
                 .nodes
                 .iter()
-                .map(|node| state(node.health().mark(), node.health().word(), None))
-                .collect_view();
-            let name = organisation.shown().to_owned();
+                .map(|node| state(node.health().mark(), node.health().word(), None));
+            let dots = Html::join(dots);
+            let name = organisation.shown();
             let link = if organisation.routable() {
-                view! { <a href=organisation.href()>{name}</a> }.into_any()
+                h(format!("<a href=\"{}\">{}</a>", t(organisation.href()), t(name)))
             } else {
-                name.into_any()
+                t(name)
             };
-            (
-                link,
-                view! { <span class="fui-cluster">{dots}</span> }.into_any(),
-            )
+            (link, h(format!("<span class=\"fui-cluster\">{dots}</span>")))
         })
         .collect::<Vec<_>>();
     let nodes: Vec<_> = federation.nodes().map(|(_, node)| node.health()).collect();
@@ -481,40 +417,30 @@ fn topology_card(federation: &Federation) -> AnyView {
             ),
         ],
     );
-    let body = view! {
-        <div class="fui-panel-body fui-stack">
-            {definitions(
-                rows
-                    .into_iter()
-                    .map(|(name, dots)| (
-                        String::new(),
-                        view! {
-                            {name}
-                            " "
-                            {dots}
-                        }
-                            .into_any(),
-                    ))
-                    .collect::<Vec<_>>(),
-            )} <p class="fui-small fui-muted">{line}</p>
-        </div>
-    };
+    let body = h(format!(
+        "<div class=\"fui-panel-body fui-stack\">{} <p class=\"fui-small fui-muted\">{}</p></div>",
+        definitions(
+            rows.into_iter()
+                .map(|(name, dots)| (String::new(), h(format!("{name} {dots}"))))
+                .collect::<Vec<_>>(),
+        ),
+        t(line)
+    ));
     titled_panel(
         tr(Msg::TopologyTitle),
         card_action(TOPOLOGY, tr(Msg::TopologyTitle)),
         body,
     )
-    .into_any()
 }
 
 /// The open incidents, leading to Integrity.
-fn incidents_card(incidents: &Result<Incidents, Stop>) -> AnyView {
+fn incidents_card(incidents: &Result<Incidents, Stop>) -> Html {
     let body = match incidents {
-        Err(stop) => view! { <div class="fui-panel-body">{stopped(stop)}</div> }.into_any(),
-        Ok(incidents) if incidents.open.is_empty() => {
-            view! { <p class="fui-panel-body fui-muted">{tr(Msg::IncidentsNoneOpen)}</p> }
-                .into_any()
-        }
+        Err(stop) => h(format!("<div class=\"fui-panel-body\">{}</div>", stopped(stop))),
+        Ok(incidents) if incidents.open.is_empty() => h(format!(
+            "<p class=\"fui-panel-body fui-muted\">{}</p>",
+            t(tr(Msg::IncidentsNoneOpen))
+        )),
         Ok(incidents) => {
             let columns = [
                 Column {
@@ -529,27 +455,24 @@ fn incidents_card(incidents: &Result<Incidents, Stop>) -> AnyView {
                 .iter()
                 .take(5)
                 .map(|incident| {
-                    let sub = view! { <code>{incident.kind.clone()}</code> }.into_any();
-                    view! {
-                        <tr>
-                            {title_cell(
-                                None,
-                                crate::pages::integrity::what(&incident.kind),
-                                Some(sub),
-                            )} {cell(&columns[1], incident.nodes.join(", "))}
-                            {cell(&columns[2], relative(&incident.at))}
-                        </tr>
-                    }
-                })
-                .collect_view()
-                .into_any();
+                    let sub = h(format!("<code>{}</code>", t(&incident.kind)));
+                    h(format!(
+                        "<tr>{} {}{}</tr>",
+                        title_cell(
+                            None,
+                            t(crate::pages::integrity::what(&incident.kind)),
+                            Some(sub),
+                        ),
+                        cell(&columns[1], t(incident.nodes.join(", "))),
+                        cell(&columns[2], relative(&incident.at)),
+                    ))
+                });
             data_table(DataTable {
                 caption: &tr(Msg::IncidentsOpenTitle),
                 columns: &columns,
                 sorting: Sorting::default(),
-                body: Body::Rows(rows),
+                body: Body::Rows(Html::join(rows)),
             })
-            .into_any()
         }
     };
     titled_panel(
@@ -557,7 +480,6 @@ fn incidents_card(incidents: &Result<Incidents, Stop>) -> AnyView {
         card_action(INTEGRITY, tr(Msg::NavIntegrity)),
         body,
     )
-    .into_any()
 }
 
 /// The configuration at a glance: the mode, the running revision, each
@@ -565,12 +487,15 @@ fn incidents_card(incidents: &Result<Incidents, Stop>) -> AnyView {
 fn configuration_card(
     standings: Option<&[(String, Result<Standing, Stop>)]>,
     stored: Option<u64>,
-) -> AnyView {
-    let mut rows: Vec<(String, AnyView)> = Vec::new();
+) -> Html {
+    let mut rows: Vec<(String, Html)> = Vec::new();
     match standings {
         None => rows.push((
             tr(Msg::ConfigRevisions),
-            view! { <span class="fui-muted">{tr(Msg::ConfigNoAdmin)}</span> }.into_any(),
+            h(format!(
+                "<span class=\"fui-muted\">{}</span>",
+                t(tr(Msg::ConfigNoAdmin))
+            )),
         )),
         Some(standings) => {
             let running = standings
@@ -583,7 +508,7 @@ fn configuration_card(
             if let Some(current) = running.and_then(|standing| standing.current.as_ref()) {
                 rows.push((
                     tr(Msg::ConfigRunning),
-                    tr_with(
+                    t(tr_with(
                         Msg::ConfigRunningValue,
                         &[
                             ("revision", current.revision.to_string().into()),
@@ -597,45 +522,35 @@ fn configuration_card(
                             ),
                             ("by", crate::pages::author(&current.applied_by).into()),
                         ],
-                    )
-                    .into_any(),
+                    )),
                 ));
             }
             let replicas = standings
                 .iter()
                 .map(|(name, standing)| {
                     let mark = match standing {
-                        Ok(standing) if standing.in_step => {
-                            pill(Tone::Ok, &tr(Msg::InStep)).into_any()
-                        }
-                        Ok(_) => pill(Tone::Warn, &tr(Msg::NotInStep)).into_any(),
-                        Err(_) => pill(Tone::Bad, &tr(Msg::NoAnswer)).into_any(),
+                        Ok(standing) if standing.in_step => pill(Tone::Ok, &tr(Msg::InStep)),
+                        Ok(_) => pill(Tone::Warn, &tr(Msg::NotInStep)),
+                        Err(_) => pill(Tone::Bad, &tr(Msg::NoAnswer)),
                     };
-                    view! {
-                        <code>{name.clone()}</code>
-                        " "
-                        {mark}
-                        " "
-                    }
-                })
-                .collect_view()
-                .into_any();
+                    h(format!("<code>{}</code> {mark} ", t(name)))
+                });
+            let replicas = Html::join(replicas);
             rows.push((
                 tr(Msg::ConfigReplicas),
-                view! { <span class="fui-cluster">{replicas}</span> }.into_any(),
+                h(format!("<span class=\"fui-cluster\">{replicas}</span>")),
             ));
         }
     }
     if let Some(stored) = stored {
         rows.push((
             tr(Msg::ConfigStored),
-            tr_with(Msg::ConfigStoredValue, &[("count", Arg::from(stored))]).into_any(),
+            t(tr_with(Msg::ConfigStoredValue, &[("count", Arg::from(stored))])),
         ));
     }
     titled_panel(
         tr(Msg::ConfigurationTitle),
         card_action(CONFIGURATION, tr(Msg::ConfigurationTitle)),
-        view! { <div class="fui-panel-body">{definitions(rows)}</div> },
+        h(format!("<div class=\"fui-panel-body\">{}</div>", definitions(rows))),
     )
-    .into_any()
 }

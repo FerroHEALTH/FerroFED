@@ -16,13 +16,6 @@
 //! FerroUI asks. Every unsafe request passes the console's same-origin
 //! check before it reaches a function (`ferrohealth_server::same_origin`). No
 //! specification governs the console's actions: our own design.
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
 
 pub mod clear;
 pub mod configure;
@@ -31,18 +24,11 @@ pub mod query;
 pub mod repair;
 
 use serde::{Deserialize, Serialize};
-
-#[cfg(not(target_arch = "wasm32"))]
 use axum::response::{IntoResponse, Response};
-#[cfg(not(target_arch = "wasm32"))]
 use http::{HeaderMap, StatusCode};
-
-#[cfg(not(target_arch = "wasm32"))]
 use crate::gateway::GatewayError;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::read::{ActionKind, Asked, Stop, stopped};
 use crate::read::{Fault, Refusal};
-#[cfg(not(target_arch = "wasm32"))]
 use crate::server::ConsoleState;
 
 /// What one replica did with an action: its report, or why it gave none.
@@ -74,7 +60,6 @@ pub const CONFIGURATION_INVALID: &str = "configuration-invalid";
 
 /// What `replica` did with the action `what`, `answered` read by `read`,
 /// logged by replica, status and code, never by what the action named.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn acted<A, T>(
     kind: ActionKind,
     (replica, what): (&str, &str),
@@ -140,7 +125,6 @@ pub fn fields_named<'a>(fields: &'a [(String, String)], name: &str) -> Vec<&'a s
 /// Serves the gateway's `OPTIONS {base}/` document as a download, read as
 /// the operator of the request: About's Download. A refusal answers with
 /// the gateway's status, never an empty file.
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn options_document(
     axum::Extension(state): axum::Extension<ConsoleState>,
     headers: HeaderMap,

@@ -111,31 +111,11 @@ fn form(fields: &[(&str, &str)]) -> String {
     form.finish()
 }
 
-/// The server function the action form on the page `route` calls, and the
-/// body it posts: the clear on Integrity, and the drift repair on a stored
-/// query's page, whose form names the query in a hidden field.
-fn function_of(route: &str, body: String) -> (&'static str, String) {
-    let path = route.split('?').next().unwrap_or(route);
-    match path.strip_prefix("/stored-queries/") {
-        Some(name) => {
-            let name = url::form_urlencoded::parse(format!("name={name}").as_bytes())
-                .map(|(_, value)| value.into_owned())
-                .next()
-                .unwrap_or_default();
-            let mut form = url::form_urlencoded::Serializer::new(body);
-            form.append_pair("name", &name);
-            ("/api/repair", form.finish())
-        }
-        None => ("/api/clear", body),
-    }
-}
-
-/// A `POST` of `body` from the page `route`, as the console's own page
-/// sends it with no WebAssembly, carrying `session`'s cookie.
+/// A `POST` of `body` to the page `route`, as the console's own form on it
+/// sends it, carrying `session`'s cookie.
 fn act(route: &str, body: String, session: &SessionId) -> Result<Request<Body>, Box<dyn Error>> {
-    let (function, body) = function_of(route, body);
     crate::support::answer_post(
-        (function, route),
+        route,
         &body,
         Some(session),
         &[("sec-fetch-site", "same-origin")],
@@ -511,7 +491,7 @@ async fn a_clear_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Err
     let replicas = [("gateway-0", listener.uri())];
     let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
     let request = crate::support::answer_post(
-        ("/api/clear", "/integrity"),
+        "/integrity",
         &clear_at("*"),
         Some(&session),
         &[("sec-fetch-site", "cross-site")],

@@ -238,7 +238,7 @@ async fn a_post_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Erro
             .into_iter()
             .collect();
         let request = crate::support::answer_post(
-            (ferrofed_console::act::configure::IMPORT, "/configuration"),
+            "/configuration",
             &save_c(),
             Some(&session),
             &from,
@@ -266,7 +266,7 @@ async fn a_save_whose_held_member_cannot_be_read_sends_nothing() -> Result<(), B
     answers(&listener, ("GET", "/admin/config/resources"), 500, "").await;
     let (service, session) = signed_in_console(&listener)?;
     let request = crate::support::answer_post(
-        (ferrofed_console::act::configure::IMPORT, "/configuration"),
+        "/configuration",
         &save_c(),
         Some(&session),
         &[("sec-fetch-site", "same-origin")],

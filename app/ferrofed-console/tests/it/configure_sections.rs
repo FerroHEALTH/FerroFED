@@ -509,7 +509,7 @@ fn marks_a_secret(page: &str, prefix: &str) -> bool {
         tag.contains(r#"type="hidden""#)
             && tag.contains(&format!(
                 r#"name="{}_{hex}""#,
-                ferrohealth_ui::widget::action::SECRET
+                ferrohealth_ui::view::form::SECRET
             ))
     })
 }

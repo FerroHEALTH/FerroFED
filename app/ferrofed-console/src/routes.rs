@@ -1,21 +1,24 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The console's pages as lazy routes, one for each group of the
-//! navigation an operator reads together.
+//! The console's pages by their address, and the handlers that draw them.
 //!
-//! Under `cargo leptos build --split` each group loads its code from chunks
-//! of its own (the Leptos book, "Code Splitting"), so the first page costs
-//! the entry and its group, and every route of a group draws the page its
-//! path names. [`ROUTES`] tells the library which link loads which group
-//! ahead of a visit (`ferrohealth_ui::widget::prefetch`). No specification
-//! governs the grouping: our own design.
+//! [`get`] draws the page a `GET` names, and [`post`] the page a form posts
+//! to: a form that answers on its page posts to the page's own address,
+//! and the handler draws that page with the answer and the fields as they
+//! were posted (FerroUI `docs/consoles.md`, "An action that answers on its
+//! page"). A signed-in operator reads each page in the shell; a visitor
+//! reads the sign-in, or About. No specification governs the console's
+//! routes: our own design.
 
-use ferrohealth_ui::widget::prefetch::Route;
-use leptos::prelude::*;
-use leptos_router::{LazyRoute, lazy_route};
+use axum::body::Bytes;
+use axum::response::{IntoResponse, Response};
+use ferrohealth_ui::html::Html;
+use http::StatusCode;
 
-use crate::app::guarded;
+use crate::act::fields::Fields;
+use crate::pages;
+use crate::visit::SessionState;
 
 /// A console page, as its path names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,148 +89,119 @@ impl Page {
     }
 }
 
-/// Declares the lazy route `$name` of a group of pages, drawing each page
-/// `$page` with `$draw`.
-///
-/// Each group matches its own pages alone, so its chunks hold their code
-/// and no other group's, and draws its page again when the address changes.
-macro_rules! group {
-    ($(#[$doc:meta])* $name:ident { $($page:ident => $draw:expr),+ $(,)? }) => {
-        $(#[$doc])*
-        #[derive(Debug, Clone, Copy)]
-        pub struct $name;
-
-        #[lazy_route]
-        impl LazyRoute for $name {
-            fn data() -> Self {
-                Self
-            }
-
-            fn view(_this: Self) -> AnyView {
-                let location = leptos_router::hooks::use_location();
-                // NOTE: leptos_router, `Route`: a navigation that stays on a route keeps
-                // its view, so the group draws the page its address names as it changes.
-                (move || {
-                    location.search.track();
-                    match Page::of(&location.pathname.get()) {
-                        $(Some(Page::$page) => $draw,)+
-                        _ => ().into_any(),
-                    }
-                })
-                .into_any()
-            }
-        }
-    };
+/// The page of a signed-in operator that `page` names, as a `GET` asks.
+async fn signed_in_page(page: Option<Page>) -> Html {
+    match page {
+        Some(Page::Dashboard) => pages::dashboard::page().await,
+        Some(Page::Topology) => pages::topology::page().await,
+        Some(Page::Search) => pages::search::page().await,
+        Some(Page::Organisations) => pages::organisations::list().await,
+        Some(Page::AllNodes) => pages::organisations::all_nodes().await,
+        Some(Page::Organisation) => pages::organisation::page().await,
+        Some(Page::Node) => pages::node::page().await,
+        Some(Page::Services) => pages::services::list().await,
+        Some(Page::Service) => pages::services::page().await,
+        Some(Page::Integrity) => pages::integrity::page(None).await,
+        Some(Page::Query) => pages::query::page(None).await,
+        Some(Page::StoredQueries) => pages::stored::list().await,
+        Some(Page::StoredQuery) => pages::stored::page(None).await,
+        Some(Page::SelfDescription) => pages::describe::page().await,
+        Some(Page::Configuration) => pages::configuration::page(None).await,
+        Some(Page::Preferences) => pages::prefs::page(),
+        Some(Page::About) => pages::about::page().await,
+        None => pages::errors::not_found(),
+    }
 }
 
-group!(
-    /// The dashboard, the topology and the find.
-    LOverview {
-        Dashboard => guarded(crate::pages::dashboard::page),
-        Topology => guarded(crate::pages::topology::page),
-        Search => guarded(crate::pages::search::page),
+/// The page a visitor reads at `page`: About, or the sign-in.
+fn visitor_page(page: Option<Page>) -> Html {
+    match page {
+        Some(Page::About) => pages::about::centred(),
+        _ => pages::sign_in::page(),
     }
-);
-
-group!(
-    /// The organisations and their nodes, the services and integrity.
-    LFederation {
-        Organisations => guarded(crate::pages::organisations::list),
-        AllNodes => guarded(crate::pages::organisations::all_nodes),
-        Organisation => guarded(crate::pages::organisation::page),
-        Node => guarded(crate::pages::node::page),
-        Services => guarded(crate::pages::services::list),
-        Service => guarded(crate::pages::services::page),
-        Integrity => guarded(crate::pages::integrity::page),
-    }
-);
-
-group!(
-    /// The query console, the stored queries and the self-description,
-    /// which draw the code editor.
-    LQueries {
-        Query => guarded(crate::pages::query::page),
-        StoredQueries => guarded(crate::pages::stored::list),
-        StoredQuery => guarded(crate::pages::stored::page),
-        SelfDescription => guarded(crate::pages::describe::page),
-    }
-);
-
-group!(
-    /// The configuration revisions and their forms.
-    LConfiguration {
-        Configuration => guarded(crate::pages::configuration::page),
-    }
-);
-
-group!(
-    /// Your preferences and About, which a visitor reads too.
-    LConsole {
-        Preferences => guarded(crate::pages::prefs::page),
-        About => crate::pages::about::routed(),
-    }
-);
-
-/// The route at `path`, loaded by the group `$group`.
-macro_rules! route {
-    ($path:literal, $group:ident, $idle:literal) => {
-        Route {
-            path: $path,
-            preload: || Box::pin($group::preload()),
-            idle: $idle,
-        }
-    };
 }
 
-/// Every route by its path and the group that draws it.
+/// The page `draw` drew, in the shell for a signed-in operator, as the
+/// document the visit asks for.
+async fn drawn(page: Option<Page>, draw: impl Future<Output = Html>) -> Response {
+    let visit = crate::visit::visit();
+    let body = match visit.session {
+        SessionState::SignedIn => {
+            let content = draw.await;
+            crate::shell::shell(content).await
+        }
+        SessionState::SignedOut => visitor_page(page),
+        SessionState::Unreadable => pages::errors::unreadable(),
+    };
+    crate::app::answer(&visit, body)
+}
+
+/// Draws the page a `GET` of the request's address names.
+pub async fn get() -> Response {
+    let page = crate::visit::with(|visit| Page::of(&visit.path));
+    drawn(page, signed_in_page(page)).await
+}
+
+/// Draws the page a form posted to, with its answer.
 ///
-/// The groups of the main navigation load once the first page is idle,
-/// each once, through the first of its routes; every other route loads on
-/// a hover or a focus.
-pub static ROUTES: &[Route] = &[
-    route!("/", LOverview, true),
-    route!("/topology", LOverview, false),
-    route!("/search", LOverview, false),
-    route!("/organisations", LFederation, true),
-    route!("/organisations/nodes", LFederation, false),
-    route!("/organisations/:org", LFederation, false),
-    route!("/organisations/:org/:node", LFederation, false),
-    route!("/organisations/:org/:node/:tab", LFederation, false),
-    route!("/services", LFederation, false),
-    route!("/services/:service", LFederation, false),
-    route!("/integrity", LFederation, false),
-    route!("/query", LQueries, true),
-    route!("/query/:tab", LQueries, false),
-    route!("/stored-queries", LQueries, false),
-    route!("/stored-queries/:name", LQueries, false),
-    route!("/stored-queries/:name/:tab", LQueries, false),
-    route!("/self-description", LQueries, false),
-    route!("/self-description/:tab", LQueries, false),
-    route!("/configuration", LConfiguration, true),
-    route!("/configuration/:tab", LConfiguration, false),
-    route!("/configuration/:tab/:item", LConfiguration, false),
-    route!("/preferences", LConsole, false),
-    route!("/preferences/:section", LConsole, false),
-    route!("/about", LConsole, true),
-];
+/// The forms are the clear of a held `ehr_id` on Integrity, a stored
+/// query's drift repair on its page, a query on the query console, and a
+/// change of the configuration on the configuration page the form was on.
+pub async fn post(body: Bytes) -> Response {
+    let page = crate::visit::with(|visit| Page::of(&visit.path));
+    let fields = Fields::read(&body);
+    let draw = async move {
+        match page {
+            Some(Page::Integrity) => pages::integrity::page(Some(fields)).await,
+            Some(Page::Query) => pages::query::page(Some(fields)).await,
+            Some(Page::StoredQuery) => pages::stored::page(Some(fields)).await,
+            Some(Page::Configuration) => pages::configuration::page(Some(fields)).await,
+            _ => Html::empty(),
+        }
+    };
+    let answers = matches!(
+        page,
+        Some(Page::Integrity | Page::Query | Page::StoredQuery | Page::Configuration)
+    );
+    if !answers {
+        return StatusCode::METHOD_NOT_ALLOWED.into_response();
+    }
+    drawn(page, draw).await
+}
 
 #[cfg(test)]
 mod tests {
-    use super::{Page, ROUTES};
+    use super::Page;
 
     #[test]
-    fn every_route_names_a_page() {
-        for route in ROUTES {
-            let path = route
-                .path
-                .replace(":org", "org-a")
-                .replace(":node", "node-a")
-                .replace(":tab", "a")
-                .replace(":item", "b")
-                .replace(":service", "c")
-                .replace(":name", "d")
-                .replace(":section", "e");
-            assert!(Page::of(&path).is_some(), "{}", route.path);
+    fn every_page_is_named_by_its_address() {
+        for path in [
+            "/",
+            "/topology",
+            "/search",
+            "/organisations",
+            "/organisations/nodes",
+            "/organisations/org-a",
+            "/organisations/org-a/node-a",
+            "/organisations/org-a/node-a/routes",
+            "/services",
+            "/services/c",
+            "/integrity",
+            "/query",
+            "/query/a",
+            "/stored-queries",
+            "/stored-queries/d",
+            "/stored-queries/d/a",
+            "/self-description",
+            "/self-description/a",
+            "/configuration",
+            "/configuration/a",
+            "/configuration/a/b",
+            "/preferences",
+            "/preferences/e",
+            "/about",
+        ] {
+            assert!(Page::of(path).is_some(), "{path}");
         }
         assert_eq!(Some(Page::AllNodes), Page::of("/organisations/nodes"));
         assert_eq!(Some(Page::Organisation), Page::of("/organisations/org-a"));

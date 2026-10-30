@@ -132,10 +132,10 @@ pub(crate) fn form(fields: &[(&str, &str)]) -> String {
     for (name, value) in fields {
         let name = page_name(name);
         form.append_pair(&name, value);
-        // NOTE: FerroUI `widget::action::secret_mark`, the page marks each secret's value
+        // NOTE: FerroUI `view::form::secret_mark`, the page marks each secret's value
         // field beside it, so a plain post carries the mark the browser sends.
         if name.starts_with("form[secret.") && name.ends_with(".value]") {
-            form.append_pair(ferrohealth_ui::widget::action::SECRET, &name);
+            form.append_pair(ferrohealth_ui::view::form::SECRET, &name);
         }
     }
     form.finish()
@@ -167,7 +167,7 @@ pub(crate) async fn posted(
     body: String,
 ) -> Result<String, Box<dyn Error>> {
     let request = crate::support::answer_post(
-        (ferrofed_console::act::configure::IMPORT, path),
+        path,
         &body,
         Some(session),
         &[("sec-fetch-site", "same-origin")],

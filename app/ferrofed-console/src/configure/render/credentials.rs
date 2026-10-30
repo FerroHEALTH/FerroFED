@@ -18,9 +18,9 @@ use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{
     Field as FormField, INPUT, Inner, SELECT, SWITCH, described_by, error_id, masked_input,
 };
-use ferrohealth_ui::widget::masked::HoldWords;
-use ferrohealth_ui::widget::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
-use leptos::prelude::*;
+use ferrohealth_ui::view::masked::HoldWords;
+use ferrohealth_ui::view::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
+use ferrohealth_ui::html::Html;
 
 use crate::configure::draft::Edit;
 use crate::configure::model::{ConfigForm, SettingInput};
@@ -35,7 +35,8 @@ use crate::configure::sections::choice;
 use crate::configure::settings::build::{secret_field, setting_field};
 use crate::configure::settings::fields::TLS;
 use crate::configure::settings::{self, Field, Grant, Kind, Secret, TLS_SECRET};
-use crate::locale::{Msg, tr, tr_with};
+use crate::locale::{Msg, current, tr, tr_with};
+use crate::pages::{h, opt, t};
 use crate::read::Refusal;
 
 /// The path of `resource`'s form.
@@ -48,23 +49,22 @@ fn href(resource: &Resource) -> String {
 }
 
 /// The secrets `slots` name, each set and read from its file, or none.
-fn secrets_said(slots: &[SecretSlot]) -> AnyView {
+fn secrets_said(slots: &[SecretSlot]) -> Html {
     if slots.is_empty() {
-        return view! { <span class="fui-muted">{tr(Msg::NotSet2)}</span> }.into_any();
+        return h(format!(
+            "<span class=\"fui-muted\">{}</span>",
+            t(tr(Msg::NotSet2))
+        ));
     }
-    let items = slots
-        .iter()
-        .map(|slot| {
-            view! {
-                <li>
-                    <code>{slot.key.clone()}</code>
-                    {tr(Msg::SetReadFrom)}
-                    <code>{slot.reference.clone()}</code>
-                </li>
-            }
-        })
-        .collect_view();
-    view! { <ul class="fui-divided">{items}</ul> }.into_any()
+    let items = Html::join(slots.iter().map(|slot| {
+        h(format!(
+            "<li><code>{}</code>{}<code>{}</code></li>",
+            t(&slot.key),
+            t(tr(Msg::SetReadFrom)),
+            t(&slot.reference)
+        ))
+    }));
+    h(format!("<ul class=\"fui-divided\">{items}</ul>"))
 }
 
 /// The settings of `section` in a few words: its grant and how many keys
@@ -91,7 +91,7 @@ fn settings_said(section: &SectionResource) -> String {
 
 /// The removal of `resource` from its own page, a confirmation step
 /// asking for the reason.
-pub(super) fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
+pub(super) fn remove(loaded: &Loaded<'_>, resource: &Resource) -> Html {
     removal(
         loaded,
         resource,
@@ -101,20 +101,19 @@ pub(super) fn remove(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
 
 /// The fields the removal of `resource` posts: what it removes and the
 /// reason it asks for.
-fn removal_fields(loaded: &Loaded<'_>, resource: &Resource) -> AnyView {
+fn removal_fields(loaded: &Loaded<'_>, resource: &Resource) -> Html {
     let named = choice(resource);
-    view! {
-        {hidden("action", String::from("remove-section"))}
-        {hidden("base", loaded.base())}
-        {hidden("resource", named.clone())}
-        {removal_reason_field(&named)}
-    }
-    .into_any()
+    Html::join([
+        hidden("action", String::from("remove-section")),
+        hidden("base", loaded.base()),
+        hidden("resource", named.clone()),
+        removal_reason_field(&named),
+    ])
 }
 
 /// The removal of `resource`, a confirmation step in the dialog `dialog`
 /// asking for the reason, opened by a button named `label`.
-fn removal(loaded: &Loaded<'_>, resource: &Resource, (dialog, label): (String, String)) -> AnyView {
+fn removal(loaded: &Loaded<'_>, resource: &Resource, (dialog, label): (String, String)) -> Html {
     let shown = resource.to_string();
     form(
         "",
@@ -134,12 +133,11 @@ fn removal(loaded: &Loaded<'_>, resource: &Resource, (dialog, label): (String, S
             removal_fields(loaded, resource),
         ),
     )
-    .into_any()
 }
 
 /// One credential's or binding section's row; one the console holds ends
 /// in its row menu, with Edit, and Remove… with its dialog.
-fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
+fn row(loaded: &Loaded<'_>, section: &SectionResource) -> Html {
     let shown = section.resource.to_string();
     let console = section.owner == Owner::Console;
     let editable = console
@@ -163,21 +161,23 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> AnyView {
             Some(removes),
         )
     });
-    let row = view! {
-        <tr>
-            <th scope="row">
-                <code>{shown.clone()}</code>
-            </th>
-            <td data-label=tr(Msg::Owner)>{owner(section.owner)}</td>
-            <td data-label=tr(Msg::State)>{state(if console { section.state } else { None })}</td>
-            <td data-label=tr(Msg::Secrets)>{secrets_said(&section.secrets)}</td>
-            <td data-label=tr(Msg::Settings)>{settings_said(section)}</td>
-            <td data-label=tr(Msg::Actions) class=ACTIONS>
-                {actions}
-            </td>
-        </tr>
-    };
-    row.into_any()
+    h(format!(
+        "<tr><th scope=\"row\"><code>{}</code></th>\
+         <td data-label=\"{}\">{}</td><td data-label=\"{}\">{}</td>\
+         <td data-label=\"{}\">{}</td><td data-label=\"{}\">{}</td>\
+         <td data-label=\"{}\" class=\"{ACTIONS}\">{}</td></tr>",
+        t(&shown),
+        t(tr(Msg::Owner)),
+        owner(section.owner),
+        t(tr(Msg::State)),
+        state(if console { section.state } else { None }),
+        t(tr(Msg::Secrets)),
+        secrets_said(&section.secrets),
+        t(tr(Msg::Settings)),
+        t(settings_said(section)),
+        t(tr(Msg::Actions)),
+        opt(actions),
+    ))
 }
 
 /// The binding sections none of the sections sets yet.
@@ -210,50 +210,41 @@ fn section_columns() -> [Column; 6] {
 }
 
 /// The Credentials and bindings tab.
-pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
+pub(super) fn tab(loaded: &Loaded<'_>) -> Html {
     let sections = &loaded.resources.sections;
     let rows = if sections.is_empty() {
-        view! {
-            <tr>
-                <td colspan="6" class="fui-muted">
-                    {tr(Msg::NoOnwardCredentialBindingSectionSet)}
-                </td>
-            </tr>
-        }
-        .into_any()
+        h(format!(
+            "<tr><td colspan=\"6\" class=\"fui-muted\">{}</td></tr>",
+            t(tr(Msg::NoOnwardCredentialBindingSectionSet))
+        ))
     } else {
-        sections
-            .iter()
-            .map(|section| row(loaded, section))
-            .collect_view()
-            .into_any()
+        Html::join(sections.iter().map(|section| row(loaded, section)))
     };
     let binding = (!addable(loaded).is_empty()).then(|| {
-        view! {
-            <a href="/configuration/bindings/new" class=Variant::Secondary.class()>
-                {tr(Msg::AddBindingSection)}
-            </a>
-        }
+        h(format!(
+            "<a href=\"/configuration/bindings/new\" class=\"{}\">{}</a>",
+            Variant::Secondary.class(),
+            t(tr(Msg::AddBindingSection))
+        ))
     });
-    view! {
-        {head(
-            ("credentials-title", tr(Msg::CredentialsAndBindings)),
-            (tr(Msg::CredentialBindingSectionFileProvidesRead), "credentials-and-binding-sections"),
-            view! {
-                {binding}
-                <a href="/configuration/credentials/new" class=Variant::Primary.class()>
-                    {icon(Glyph::PLUS, "16")}
-                    {tr(Msg::AddCredentials)}
-                </a>
-            },
-        )}
-        {crate::pages::table(
-            &tr(Msg::CredentialsBindingSectionsTheirOwners),
-            &section_columns(),
-            rows,
-        )}
-    }
-    .into_any()
+    head(
+        ("credentials-title", tr(Msg::CredentialsAndBindings)),
+        (
+            tr(Msg::CredentialBindingSectionFileProvidesRead),
+            "credentials-and-binding-sections",
+        ),
+        opt(binding).then(h(format!(
+            "<a href=\"/configuration/credentials/new\" class=\"{}\">{}{}</a>",
+            Variant::Primary.class(),
+            icon(Glyph::PLUS, "16"),
+            t(tr(Msg::AddCredentials))
+        ))),
+    )
+    .then(crate::pages::table(
+        &tr(Msg::CredentialsBindingSectionsTheirOwners),
+        &section_columns(),
+        rows,
+    ))
 }
 
 /// The choice of the secret `secret` in row `row`, its slot `slot` when it
@@ -261,13 +252,13 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> AnyView {
 ///
 /// The value field shows while Set a value is chosen and the file field
 /// while Read from a file is, which the stylesheet decides by the place of
-/// the radio chosen, so it works before the page hydrates.
+/// the radio chosen, so it works with the scripts refused.
 pub(super) fn secret_row(
     row: &str,
     secret: (&str, String),
     slot: Option<&SecretSlot>,
     chosen: Option<&str>,
-) -> AnyView {
+) -> Html {
     let (key, label) = secret;
     let chosen = chosen.filter(|choice| !choice.is_empty()).unwrap_or("keep");
     let name = |part: &str| format!("form[secret.{row}.{part}]");
@@ -295,26 +286,17 @@ pub(super) fn secret_row(
     if slot.is_some() {
         choices.push(("clear", tr(Msg::Clear)));
     }
-    let segments = choices
-        .into_iter()
-        .map(|(value, word)| {
-            let id = secret_field(row, value);
-            let label_for = id.clone();
-            view! {
-                <label for=label_for class="fui-segment">
-                    <input
-                        type="radio"
-                        id=id
-                        class="fui-sr-only"
-                        name=name("choice")
-                        value=value
-                        checked=value == chosen
-                    />
-                    {word}
-                </label>
-            }
-        })
-        .collect_view();
+    let segments = Html::join(choices.into_iter().map(|(value, word)| {
+        let id = secret_field(row, value);
+        h(format!(
+            "<label for=\"{id}\" class=\"fui-segment\"><input type=\"radio\" id=\"{id}\" \
+             class=\"fui-sr-only\" name=\"{}\" value=\"{value}\"{}>{}</label>",
+            t(name("choice")),
+            if value == chosen { " checked" } else { "" },
+            t(word),
+            id = t(&id),
+        ))
+    }));
     let group = secret_field(row, "choice");
     let value_id = secret_field(row, "value");
     let set = masked(&value_id, &name("value"));
@@ -327,41 +309,34 @@ pub(super) fn secret_row(
             ..Text::default()
         },
     );
-    view! {
-        <div class="fui-reveal">
-            <fieldset class="fui-fieldset fui-choice" id=group.clone()>
-                <legend class="fui-label">{label}</legend>
-                <input type="hidden" name="form[secret_rows][]" value=row.to_owned() />
-                <input type="hidden" name=name("key") value=key.to_owned() />
-                <p class="fui-help">
-                    <code>{key.to_owned()}</code>
-                    " · "
-                    {status}
-                </p>
-                <div class="fui-segmented">{segments}</div>
-                {error_line(&group)}
-            </fieldset>
-            <div class="fui-reveal-parts">
-                <div class="fui-revealed"></div>
-                <div class="fui-revealed">{set}</div>
-                <div class="fui-revealed">{file}</div>
-            </div>
-        </div>
-    }
-    .into_any()
+    h(format!(
+        "<div class=\"fui-reveal\"><fieldset class=\"fui-fieldset fui-choice\" id=\"{}\">\
+         <legend class=\"fui-label\">{}</legend>\
+         <input type=\"hidden\" name=\"form[secret_rows][]\" value=\"{}\">\
+         <input type=\"hidden\" name=\"{}\" value=\"{}\">\
+         <p class=\"fui-help\"><code>{}</code> · {}</p>\
+         <div class=\"fui-segmented\">{segments}</div>{}</fieldset>\
+         <div class=\"fui-reveal-parts\"><div class=\"fui-revealed\"></div>\
+         <div class=\"fui-revealed\">{set}</div><div class=\"fui-revealed\">{file}</div></div></div>",
+        t(&group),
+        t(label),
+        t(row),
+        t(name("key")),
+        t(key),
+        t(key),
+        t(status),
+        error_line(&group),
+    ))
 }
 
 /// The secret value field `id` named `name` (R10): masked, never filled,
 /// with the eye that shows what was typed while it is held.
-pub(super) fn masked(id: &str, name: &str) -> AnyView {
+pub(super) fn masked(id: &str, name: &str) -> Html {
     FormField::new(id.to_owned(), tr(Msg::ValueNeverShownAgain))
         .trailing(Inner::HoldToShow(
-            HoldWords::of_page().named(tr(Msg::ShowSecretWhileHeld)),
+            HoldWords::of(&current()).named(tr(Msg::ShowSecretWhileHeld)),
         ))
-        .after(view! {
-            {error_line(id)}
-            {ferrohealth_ui::widget::action::secret_mark(name)}
-        })
+        .after(error_line(id).then(ferrohealth_ui::view::form::secret_mark(name)))
         .view(masked_input(id, name, Some(error_id(id))))
 }
 
@@ -371,16 +346,13 @@ fn list_value(row: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
     let id = format!("{}-{at}", setting_field(row, "list"));
     let fields = FormField::new(id.clone(), tr(Msg::Value))
         .label_hidden()
-        .view(view! {
-            <input
-                type="text"
-                id=id.clone()
-                name=format!("form[setting.{row}.values][]")
-                value=value
-                class=format!("{INPUT} fui-mono")
-                autocomplete="off"
-            />
-        });
+        .view(h(format!(
+            "<input type=\"text\" id=\"{}\" name=\"form[setting.{}.values][]\" value=\"{}\" \
+             class=\"{INPUT} fui-mono\" autocomplete=\"off\">",
+            t(&id),
+            t(row),
+            t(value)
+        )));
     RepeatRow {
         key: at.to_owned(),
         heading: None,
@@ -392,7 +364,7 @@ fn list_value(row: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
 
 /// The values of the list setting in row `row`, `values` filled in, a row
 /// of one field each (F7).
-fn list(row: &str, values: Vec<String>) -> AnyView {
+fn list(row: &str, values: Vec<String>) -> Html {
     let count = values.len();
     let rows = values
         .into_iter()
@@ -412,21 +384,18 @@ fn list(row: &str, values: Vec<String>) -> AnyView {
         String::new(),
         &Edit::RemoveValue(row.to_owned(), count),
     );
-    view! {
-        {repeat(Repeat {
-            id: setting_field(row, "list"),
-            label: tr(Msg::Value),
-            fields: Fields::One,
-            head: vec![tr(Msg::Value)],
-            rows,
-            token: ROW,
-            blank: Some(blank),
-            add: Some(row_add(&Edit::AddValue(row.to_owned()), tr(Msg::AddValue))),
-            empty: tr(Msg::NoValueYet),
-            form: None,
-        })}
-    }
-    .into_any()
+    repeat(Repeat {
+        id: setting_field(row, "list"),
+        label: tr(Msg::Value),
+        fields: Fields::One,
+        head: vec![tr(Msg::Value)],
+        rows,
+        token: ROW,
+        blank: Some(blank),
+        add: Some(row_add(&Edit::AddValue(row.to_owned()), tr(Msg::AddValue))),
+        empty: tr(Msg::NoValueYet),
+        form: None,
+    })
 }
 
 /// What a credential form shows: what the gateway holds, or the form the
@@ -498,57 +467,46 @@ impl Shown<'_> {
 
 /// The field of the credential setting `field`, in row `row`, holding what
 /// `held` sets.
-fn setting(row: &str, field: &Field, shown: Shown<'_>) -> AnyView {
+fn setting(row: &str, field: &Field, shown: Shown<'_>) -> Html {
     let name = |part: &str| format!("form[setting.{row}.{part}]");
     let id = setting_field(row, "value");
     let value = shown.value(field.key);
     let control = match field.kind {
         Kind::Choice(options) => {
-            let options = options
-                .iter()
-                .map(|(choice, label)| {
-                    view! {
-                        <option value=*choice selected=*choice == value.as_str()>
-                            {tr(*label)}
-                        </option>
-                    }
-                })
-                .collect_view();
+            let options = Html::join(options.iter().map(|(choice, label)| {
+                h(format!(
+                    "<option value=\"{}\"{}>{}</option>",
+                    t(choice),
+                    if *choice == value.as_str() {
+                        " selected"
+                    } else {
+                        ""
+                    },
+                    t(tr(*label))
+                ))
+            }));
             FormField::new(id.clone(), tr(field.label))
                 .after(error_line(&id))
-                .view(view! {
-                    <select
-                        id=id.clone()
-                        name=name("value")
-                        class=SELECT
-                        aria-describedby=error_id(&id)
-                    >
-                        {options}
-                    </select>
-                })
+                .view(h(format!(
+                    "<select id=\"{}\" name=\"{}\" class=\"{SELECT}\" aria-describedby=\"{}\">{options}</select>",
+                    t(&id),
+                    t(name("value")),
+                    t(error_id(&id))
+                )))
         }
-        Kind::Switch => view! {
-            <div class="fui-check">
-                <input
-                    type="checkbox"
-                    role="switch"
-                    class=SWITCH
-                    id=id.clone()
-                    name=name("value")
-                    value="true"
-                    checked=value == "true"
-                />
-                <label for=id.clone()>{tr(field.label)}</label>
-            </div>
-        }
-        .into_any(),
-        Kind::List => view! {
-            <fieldset class="fui-fieldset fui-choice">
-                <legend class="fui-label">{tr(field.label)}</legend>
-                {list(row, shown.values(field.key))}
-            </fieldset>
-        }
-        .into_any(),
+        Kind::Switch => h(format!(
+            "<div class=\"fui-check\"><input type=\"checkbox\" role=\"switch\" class=\"{SWITCH}\" \
+             id=\"{id}\" name=\"{}\" value=\"true\"{}><label for=\"{id}\">{}</label></div>",
+            t(name("value")),
+            if value == "true" { " checked" } else { "" },
+            t(tr(field.label)),
+            id = t(&id),
+        )),
+        Kind::List => h(format!(
+            "<fieldset class=\"fui-fieldset fui-choice\"><legend class=\"fui-label\">{}</legend>{}</fieldset>",
+            t(tr(field.label)),
+            list(row, shown.values(field.key))
+        )),
         Kind::Text | Kind::Url | Kind::Path => text(
             (&id, &name("value")),
             tr(field.label),
@@ -563,15 +521,15 @@ fn setting(row: &str, field: &Field, shown: Shown<'_>) -> AnyView {
                 hint: (field.kind == Kind::Path).then_some(tr(Msg::AbsolutePathGatewaySHost)),
                 ..Text::default()
             },
-        )
-        .into_any(),
+        ),
     };
-    view! {
-        <input type="hidden" name="form[setting_rows][]" value=row.to_owned() />
-        <input type="hidden" name=name("key") value=field.key />
-        {control}
-    }
-    .into_any()
+    h(format!(
+        "<input type=\"hidden\" name=\"form[setting_rows][]\" value=\"{}\">\
+         <input type=\"hidden\" name=\"{}\" value=\"{}\">{control}",
+        t(row),
+        t(name("key")),
+        t(field.key)
+    ))
 }
 
 /// The fields and secrets of one part of the credential form, rows
@@ -581,7 +539,7 @@ fn part(
     secrets: &[Secret],
     (shown, slots): (Shown<'_>, &[SecretSlot]),
     rows: &mut u32,
-) -> AnyView {
+) -> Html {
     let mut next = || {
         let row = rows.to_string();
         *rows = rows.saturating_add(1);
@@ -597,7 +555,8 @@ fn part(
                 shown,
             )
         })
-        .collect_view();
+        .collect::<Vec<_>>();
+    let fields = Html::join(fields);
     let secrets = secrets
         .iter()
         .map(|secret| {
@@ -610,12 +569,8 @@ fn part(
                 shown.choice(secret.key),
             )
         })
-        .collect_view();
-    view! {
-        <div class="fui-columns">{fields}</div>
-        {secrets}
-    }
-    .into_any()
+        .collect::<Vec<_>>();
+    h(format!("<div class=\"fui-columns\">{fields}</div>")).then(Html::join(secrets))
 }
 
 /// The endpoints the members declare that hold no credentials yet.
@@ -640,37 +595,27 @@ fn uncredentialed(loaded: &Loaded<'_>) -> Vec<String> {
 
 /// The endpoint of the credentials: `endpoint` as it stands, or a choice
 /// of those that hold none.
-fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>, chosen: Option<&str>) -> AnyView {
+fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>, chosen: Option<&str>) -> Html {
     if let Some(endpoint) = endpoint {
-        return view! {
-            {hidden("endpoint", endpoint.to_owned())}
-            <p>{tr(Msg::Endpoint2)} <code>{endpoint.to_owned()}</code></p>
-        }
-        .into_any();
+        return hidden("endpoint", endpoint.to_owned()).then(h(format!(
+            "<p>{} <code>{}</code></p>",
+            t(tr(Msg::Endpoint2)),
+            t(endpoint)
+        )));
     }
-    let options = uncredentialed(loaded)
-        .into_iter()
-        .map(|endpoint| {
-            let shown = endpoint.clone();
-            let selected = chosen == Some(endpoint.as_str());
-            view! {
-                <option value=endpoint selected=selected>
-                    {shown}
-                </option>
-            }
-        })
-        .collect_view();
-    let select = view! {
-        <select
-            id="cfg-endpoint"
-            class=SELECT
-            name="form[endpoint]"
-            required
-            aria-describedby=described_by("cfg-endpoint", true, true)
-        >
-            {options}
-        </select>
-    };
+    let options = Html::join(uncredentialed(loaded).into_iter().map(|endpoint| {
+        let selected = chosen == Some(endpoint.as_str());
+        h(format!(
+            "<option value=\"{endpoint}\"{}>{endpoint}</option>",
+            if selected { " selected" } else { "" },
+            endpoint = t(&endpoint),
+        ))
+    }));
+    let select = h(format!(
+        "<select id=\"cfg-endpoint\" class=\"{SELECT}\" name=\"form[endpoint]\" required \
+         aria-describedby=\"{}\">{options}</select>",
+        t(described_by("cfg-endpoint", true, true).unwrap_or_default())
+    ));
     FormField::new("cfg-endpoint", tr(Msg::Endpoint))
         .help(tr(Msg::EndpointsMembersDeclareHoldNoCredentials))
         .after(error_line("cfg-endpoint"))
@@ -679,28 +624,20 @@ fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>, chosen: Option<&
 
 /// The select of the grant, `grant` chosen; the form shows the chosen
 /// grant's fields alone.
-fn grant_choice(grant: Grant) -> AnyView {
-    let grants = Grant::ALL
-        .into_iter()
-        .map(|option| {
-            view! {
-                <option value=option.as_str() selected=option == grant>
-                    {tr(option.label())}
-                </option>
-            }
-        })
-        .collect_view();
-    let select = view! {
-        <select
-            id="cfg-grant"
-            class=SELECT
-            name="form[grant]"
-            data-grant=""
-            aria-describedby=described_by("cfg-grant", true, true)
-        >
-            {grants}
-        </select>
-    };
+fn grant_choice(grant: Grant) -> Html {
+    let grants = Html::join(Grant::ALL.into_iter().map(|option| {
+        h(format!(
+            "<option value=\"{}\"{}>{}</option>",
+            t(option.as_str()),
+            if option == grant { " selected" } else { "" },
+            t(tr(option.label()))
+        ))
+    }));
+    let select = h(format!(
+        "<select id=\"cfg-grant\" class=\"{SELECT}\" name=\"form[grant]\" data-grant=\"\" \
+         aria-describedby=\"{}\">{grants}</select>",
+        t(described_by("cfg-grant", true, true).unwrap_or_default())
+    ));
     FormField::new("cfg-grant", tr(Msg::GrantType))
         .help(tr(Msg::HowGatewayReachesEndpointFormShows))
         .after(error_line("cfg-grant"))
@@ -715,7 +652,7 @@ fn grant_choice(grant: Grant) -> AnyView {
 pub(super) fn credential_form(
     loaded: &Loaded<'_>,
     endpoint: Option<&str>,
-) -> Result<AnyView, Refusal> {
+) -> Result<Html, Refusal> {
     let held = match endpoint {
         Some(endpoint) => Some(
             loaded
@@ -756,14 +693,14 @@ pub(super) fn credential_form(
             let inner = part(option.fields(), option.secrets(), (shown, slots), &mut rows);
             // NOTE: no specification governs this: our own design; each grant's settings
             // fold in one exclusive disclosure, the grant held open, with no script.
-            view! {
-                <details name="cfg-grant-parts" open=option == grant>
-                    <summary>{tr(option.label())}</summary>
-                    {inner}
-                </details>
-            }
+            h(format!(
+                "<details name=\"cfg-grant-parts\"{}><summary>{}</summary>{inner}</details>",
+                if option == grant { " open" } else { "" },
+                t(tr(option.label()))
+            ))
         })
-        .collect_view();
+        .collect::<Vec<_>>();
+    let parts = Html::join(parts);
     let tls = part(TLS, &[TLS_SECRET], (shown, slots), &mut rows);
     let title = endpoint.map_or_else(
         || tr(Msg::AddOnwardCredentials),
@@ -774,47 +711,44 @@ pub(super) fn credential_form(
             )
         },
     );
-    let body = view! {
-        {hidden("action", String::from("save-credentials"))}
-        {hidden("base", loaded.base())}
-        <fieldset class=GROUP>
-            <legend>{tr(Msg::EndpointAndGrant)}</legend>
-            {endpoint_choice(loaded, endpoint, posted.map(|form| form.endpoint.as_str()))}
-            {grant_choice(grant)}
-        </fieldset>
-        <fieldset class=GROUP>
-            <legend>{tr(Msg::GrantSettings)}</legend>
-            <div class="fui-stack">{parts}</div>
-        </fieldset>
-        <fieldset class=GROUP>
-            <legend>{tr(Msg::Tls)}</legend>
-            {tls}
-        </fieldset>
-        {reason()}
-        {save_bar(loaded, "/configuration/credentials")}
-    };
-    Ok(view! {
-        {back(title.clone())}
-        {head(
+    let body = Html::join([
+        hidden("action", String::from("save-credentials")),
+        hidden("base", loaded.base()),
+        h(format!(
+            "<fieldset class=\"{GROUP}\"><legend>{}</legend>{}{}</fieldset>\
+             <fieldset class=\"{GROUP}\"><legend>{}</legend><div class=\"fui-stack\">{parts}</div></fieldset>\
+             <fieldset class=\"{GROUP}\"><legend>{}</legend>{tls}</fieldset>",
+            t(tr(Msg::EndpointAndGrant)),
+            endpoint_choice(loaded, endpoint, posted.map(|form| form.endpoint.as_str())),
+            grant_choice(grant),
+            t(tr(Msg::GrantSettings)),
+            t(tr(Msg::Tls)),
+        )),
+        reason(),
+        save_bar(loaded, "/configuration/credentials"),
+    ]);
+    Ok(Html::join([
+        back(title.clone()),
+        head(
             ("credential-title", title),
-            (tr(Msg::SavedRevisionOnceAppliedAwaitsConfirmation), "commit-confirm"),
-            (),
-        )}
-        {form("fui-stack", body)}
-        {endpoint
-            .map(|endpoint| {
-                view! {
-                    <div class="fui-actions">
-                        {remove(loaded, &Resource::Credentials(endpoint.to_owned()))}
-                    </div>
-                }
-            })}
-    }
-    .into_any())
+            (
+                tr(Msg::SavedRevisionOnceAppliedAwaitsConfirmation),
+                "commit-confirm",
+            ),
+            Html::empty(),
+        ),
+        form("fui-stack", body),
+        opt(endpoint.map(|endpoint| {
+            h(format!(
+                "<div class=\"fui-actions\">{}</div>",
+                remove(loaded, &Resource::Credentials(endpoint.to_owned()))
+            ))
+        })),
+    ]))
 }
 
 /// The trail from the tab to the form titled `current`.
-pub(super) fn back(current: String) -> AnyView {
+pub(super) fn back(current: String) -> Html {
     trail(
         (
             tr(Msg::CredentialsAndBindings),

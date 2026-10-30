@@ -38,16 +38,16 @@ pub struct Screen {
 #[derive(Debug, Default)]
 pub struct ConfigView {
     /// The page header: its title, its subtitle and the revision pills.
-    pub header: Option<leptos::prelude::AnyView>,
+    pub header: Option<ferrohealth_ui::html::Html>,
     /// The card of the revision saved and not applied, and of what the
     /// running revision awaits.
-    pub pending: Option<leptos::prelude::AnyView>,
+    pub pending: Option<ferrohealth_ui::html::Html>,
     /// The tab shown, which the binder tabs mark.
     pub tab: Option<crate::configure::render::Tab>,
     /// The cards above the tab's main card.
-    pub lead: Option<leptos::prelude::AnyView>,
+    pub lead: Option<ferrohealth_ui::html::Html>,
     /// The tab's main card.
-    pub main: Option<leptos::prelude::AnyView>,
+    pub main: Option<ferrohealth_ui::html::Html>,
     /// Whether configuration revisions are off, so only the settings tabs
     /// show, read-only.
     pub file_only: bool,

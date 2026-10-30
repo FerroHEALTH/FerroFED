@@ -278,7 +278,7 @@ async fn an_import_at_its_own_limit_still_runs() -> Result<(), Box<dyn Error>> {
         "the import is over the default limit"
     );
     let request = crate::support::answer_post(
-        (IMPORT, "/configuration/import-export"),
+        "/configuration/import-export",
         &body,
         Some(&session),
         &[("sec-fetch-site", "same-origin")],

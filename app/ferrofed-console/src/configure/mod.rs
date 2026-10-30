@@ -17,13 +17,9 @@
 //!
 //! The page is read from the first replica's admin listener with the
 //! operator's own access token (`act`, behind `crate::act::configure`) and
-//! drawn in both halves, its forms whole. Every form calls the
-//! configuration's server function behind an `<ActionForm>`, read on the
-//! server into a [`model::ConfigForm`] and run, so its answer shows at the
-//! top of the page, with no WebAssembly too; a refusal of one field names
-//! that field. No specification governs the console: our own design.
-
-#[cfg(not(target_arch = "wasm32"))]
+//! drawn whole, its forms whole. Every form posts to the page it sits on,
+//! read on the server into a [`model::ConfigForm`] and run, so its answer
+//! shows at the top of the page; a refusal of one field names that field. No specification governs the console: our own design.
 pub mod act;
 pub mod draft;
 pub mod export;
@@ -36,37 +32,5 @@ pub mod said;
 pub mod sections;
 pub mod settings;
 
-use crate::locale::{Msg, tr, tr_with};
-
 /// The path of the configuration page.
 pub const CONFIGURATION: &str = "/configuration";
-
-/// `remaining` milliseconds in words, as the countdown of a revision that
-/// awaits its confirmation shows them.
-#[must_use]
-pub fn countdown(remaining: i64) -> String {
-    if remaining <= 0 {
-        return tr(Msg::TheDeadlineHasPassed);
-    }
-    let seconds = remaining.div_euclid(1000);
-    tr_with(
-        Msg::CountdownLeft,
-        &[
-            ("minutes", seconds.div_euclid(60).to_string().into()),
-            ("seconds", format!("{:02}", seconds.rem_euclid(60)).into()),
-        ],
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::countdown;
-
-    #[test]
-    fn the_countdown_reads_as_minutes_and_seconds_and_says_when_it_has_passed() {
-        assert_eq!("1:43 left", countdown(103_400));
-        assert_eq!("0:05 left", countdown(5_999));
-        assert_eq!("The deadline has passed", countdown(0));
-        assert_eq!("The deadline has passed", countdown(-3));
-    }
-}

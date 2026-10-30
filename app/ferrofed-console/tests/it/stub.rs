@@ -219,7 +219,7 @@ pub(crate) fn post_as(
         form.append_pair(name, value);
     }
     crate::support::answer_post(
-        ("/api/query", path),
+        path,
         &form.finish(),
         Some(session),
         &[("sec-fetch-site", "same-origin")],

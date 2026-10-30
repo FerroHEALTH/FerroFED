@@ -12,35 +12,28 @@
 //! organisation and its nodes nested under Organisations (F10); it folds to
 //! a rail from 48 rem up and is a drawer below. The development banner
 //! sits under the top bar while the gateway runs the development profile.
-//! The shell is drawn once and survives a navigation in the page; the
-//! drawer, the menu and the find work with no WebAssembly too.
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
+//! Every handler draws the shell around its page, with the entry of the
+//! page's path marked; the drawer, the menu and the find work with the
+//! scripts refused too.
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::menu::{ThemeChoice, UserMenu, user_menu};
+use ferrohealth_ui::view::nav::{Count, Entry, Group, Nest, NestItem, Rail, Sidebar, sidebar};
 use ferrohealth_ui::view::search::{SearchBox, search_box};
 use ferrohealth_ui::view::shell::{
     Footer, Shell, TopBar, brand_mark, lockup, shell as shell_view, topbar,
 };
 use ferrohealth_ui::view::status::{Reach, StatusPill, banner, status_pill};
-use ferrohealth_ui::widget::menu::{ThemeChoice, UserMenu, user_menu};
-use ferrohealth_ui::widget::nav::{Count, Entry, Group, Nest, NestItem, Rail, Sidebar, sidebar};
-use leptos::prelude::*;
-use leptos_router::hooks::use_location;
-use serde::{Deserialize, Serialize};
+use ferrohealth_ui::view::toast::toast_region;
 
 use crate::app::{
     ABOUT, ALL_NODES, CONFIGURATION, INTEGRITY, MARK_DARK, MARK_LIGHT, ORGANISATIONS, PRODUCT,
     QUERY, SEARCH, SELF_DESCRIPTION, SERVICES, SIGN_OUT, STORED_QUERIES, TOPOLOGY, VERSION,
 };
-use crate::locale::{Msg, tr, tr_with};
+use crate::locale::{Msg, current, tr, tr_with};
 use crate::read::federation::{Federation, Health};
 use crate::read::{Deployment, Fault, Refusal, Stop};
 
@@ -66,20 +59,19 @@ pub fn footer() -> Footer {
 /// The lockup: the brand mark, FerroFED and the word Console, leading to
 /// the dashboard.
 #[must_use]
-pub fn brand_lockup() -> AnyView {
+pub fn brand_lockup() -> Html {
     lockup(
         "/",
         brand_mark(MARK_LIGHT, MARK_DARK),
         "FerroFED",
         tr(Msg::LockupWord),
     )
-    .into_any()
 }
 
 /// What the shell reads of the gateway for one page: how it is deployed,
 /// the open incidents, and the federation where the page sits inside an
 /// organisation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reads {
     deployment: Result<Deployment, Stop>,
     /// The gateway's status from its self-description, read when its
@@ -89,22 +81,8 @@ pub struct Reads {
     federation: Option<Federation>,
 }
 
-/// What the shell of a page reads, with the federation when `nested`, the
-/// page sitting inside an organisation, as the operator of the request.
-///
-/// # Errors
-/// Returns [`crate::read::Fault::Unavailable`] when the console's server
-/// does not answer.
-#[server(endpoint = "shell")]
-pub async fn reads_now(
-    /// Whether the page sits inside an organisation.
-    nested: bool,
-) -> Result<Reads, Stop> {
-    Ok(reads(nested).await)
-}
-
-/// Reads what the shell of a page draws.
-#[cfg(not(target_arch = "wasm32"))]
+/// Reads what the shell of a page draws, with the federation when
+/// `nested`, the page sitting inside an organisation.
 async fn reads(nested: bool) -> Reads {
     let deployment = crate::read::deployment().await;
     // NOTE: no specification governs this: our own design; an operator whose token
@@ -141,62 +119,28 @@ fn nested_org(path: &str) -> Option<&str> {
 }
 
 /// The page `content` in the shell of a signed-in operator: the top bar,
-/// the banner and the navigation each read the gateway as they are drawn,
-/// and the page itself is drawn once inside them.
-#[must_use]
-pub fn shell(content: AnyView) -> AnyView {
-    // NOTE: FerroUI `docs/consoles.md`, "How a console builds", step 10: the shell
-    // is drawn once, and the navigation and the `back` of its forms follow the router.
-    ferrohealth_ui::widget::nav::follow_path();
-    let location = use_location();
-    let nested = Memo::new(move |_| nested_org(&location.pathname.get()).is_some());
-    let reads = Resource::new(
-        move || (crate::read::changes(), nested.get()),
-        |(_, nested)| reads_now(nested),
-    );
-    let read = move || async move {
-        reads.await.unwrap_or_else(|stop| Reads {
-            deployment: Err(stop),
-            described: None,
-            open_incidents: None,
-            federation: None,
-        })
-    };
-    let bar = view! {
-        <Suspense>
-            {move || {
-                let path = location.pathname.get_untracked();
-                let query = location.search.get_untracked();
-                let searched = (path == SEARCH)
-                    .then(|| crate::pages::search::query_of(&query))
-                    .flatten();
-                let visit = crate::visit::visit();
-                Suspend::new(async move { top_bar(&path, &read().await, searched, &visit) })
-            }}
-        </Suspense>
-    }
-    .into_any();
-    let banner = view! { <Suspense>{move || Suspend::new(async move { development(&read().await) })}</Suspense> }
-    .into_any();
-    let nav = view! {
-        <Suspense>
-            {move || {
-                let path = location.pathname.get();
-                let rail = crate::visit::visit().chosen().rail;
-                let replicas = crate::visit::visit().replicas();
-                Suspend::new(async move { navigation_of(&path, rail, &replicas, &read().await) })
-            }}
-        </Suspense>
-    }
-    .into_any();
-    shell_view(Shell {
-        topbar: bar,
-        banner: Some(banner),
-        sidebar: nav,
-        content,
-        dock: None,
-        footer: footer(),
-    })
+/// the banner and the navigation drawn from what the shell reads of the
+/// gateway, and the page itself inside them.
+pub async fn shell(content: Html) -> Html {
+    let visit = crate::visit::visit();
+    let path = visit.path.clone();
+    let reads = reads(nested_org(&path).is_some()).await;
+    let searched = (path == SEARCH)
+        .then(|| crate::pages::search::query_of(&visit.query))
+        .flatten();
+    let locale = current();
+    shell_view(
+        &locale,
+        Shell {
+            topbar: top_bar(&path, &reads, searched, &visit),
+            banner: development(&reads),
+            sidebar: navigation_of(&path, visit.chosen().rail, &visit.replicas(), &reads),
+            content,
+            dock: None,
+            toasts: toast_region(&locale, Vec::new()),
+            footer: footer(),
+        },
+    )
 }
 
 /// The top bar of the shell drawn at `path` from `reads`, with the find's
@@ -206,12 +150,15 @@ fn top_bar(
     reads: &Reads,
     searched: Option<String>,
     visit: &crate::visit::Visit,
-) -> AnyView {
+) -> Html {
     let reachable = reads.deployment.is_ok() || matches!(reads.described, Some(Ok(_)));
-    let search = search_box(find(searched, reachable));
-    let pill = status_pill(top_pill(reads)).into_any();
+    let locale = current();
+    let search = search_box(&locale, &find(searched, reachable));
+    let pill = status_pill(top_pill(reads));
     let operator = visit.operator.clone().unwrap_or_else(|| tr(Msg::Operator));
-    let menu = user_menu(UserMenu {
+    let menu = user_menu(
+        &locale,
+        UserMenu {
         id: USER_MENU_ID,
         label: operator.clone(),
         name: Some(operator.clone()),
@@ -227,18 +174,17 @@ fn top_bar(
         shortcuts: None,
         sign_out: Some(String::from(SIGN_OUT)),
         links: Vec::new(),
-    });
-    let end = view! {
-        {pill}
-        {menu}
-    }
-    .into_any();
-    topbar(TopBar {
-        sidebar: SIDEBAR_ID,
-        lockup: brand_lockup(),
-        search: Some(search),
-        end,
-    })
+        },
+    );
+    topbar(
+        &locale,
+        TopBar {
+            sidebar: SIDEBAR_ID,
+            lockup: brand_lockup(),
+            search: Some(search),
+            end: pill.then(menu),
+        },
+    )
 }
 
 /// The top bar's find, holding the `searched` words, disabled with its
@@ -252,7 +198,7 @@ fn find(searched: Option<String>, reachable: bool) -> SearchBox {
         placeholder: tr(Msg::SearchPlaceholder),
         action: String::from(SEARCH),
         value: searched.unwrap_or_default(),
-        submit: tr(Msg::SearchSubmit).into(),
+        submit: Some(tr(Msg::SearchSubmit).into()),
         shortcut: Some('/'),
         busy: false,
         disabled: (!reachable).then(|| tr(Msg::SearchDisabled)),
@@ -261,11 +207,12 @@ fn find(searched: Option<String>, reachable: bool) -> SearchBox {
         suggest_from: 2,
         all: None,
         signed_out: Some(String::from(crate::app::SIGN_IN)),
+        glyphs: Vec::new(),
     }
 }
 
 /// The development banner, while the gateway runs the development profile.
-fn development(reads: &Reads) -> AnyView {
+fn development(reads: &Reads) -> Option<Html> {
     let development = reads
         .deployment
         .as_ref()
@@ -280,15 +227,16 @@ fn development(reads: &Reads) -> AnyView {
                 None,
             )
         })
-        .into_any()
 }
 
 /// The navigation of the shell drawn at `path`, folded to its rail when
 /// `rail`, with the configuration where the console reaches `replicas`,
 /// from `reads`.
-fn navigation_of(path: &str, rail: bool, replicas: &[String], reads: &Reads) -> AnyView {
+fn navigation_of(path: &str, rail: bool, replicas: &[String], reads: &Reads) -> Html {
     let reachable = reads.deployment.is_ok() || matches!(reads.described, Some(Ok(_)));
-    sidebar(Sidebar {
+    sidebar(
+        &current(),
+        Sidebar {
         id: SIDEBAR_ID,
         label: tr(Msg::NavLabel),
         groups: navigation(reads.open_incidents, reachable, !replicas.is_empty()),
@@ -302,7 +250,8 @@ fn navigation_of(path: &str, rail: bool, replicas: &[String], reads: &Reads) -> 
             .federation
             .as_ref()
             .and_then(|federation| nest(federation, path)),
-    })
+        },
+    )
 }
 
 /// The status pill of the gateway: its deployment's, or, when the

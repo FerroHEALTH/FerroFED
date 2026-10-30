@@ -118,7 +118,7 @@ fn form(fields: &[(&str, &str)]) -> String {
 /// it with no WebAssembly, carrying `session`'s cookie when given.
 fn run(body: &str, session: Option<&SessionId>) -> Result<Request<Body>, Box<dyn Error>> {
     crate::support::answer_post(
-        ("/api/query", "/query"),
+        "/query",
         body,
         session,
         &[("sec-fetch-site", "same-origin")],
@@ -516,7 +516,7 @@ fn console_with_origin(gateway: &MockServer) -> Result<(axum::Router, SessionId)
 /// `from` names, as a page of some origin would send it.
 fn run_from(session: &SessionId, from: &[(&str, &str)]) -> Result<Request<Body>, Box<dyn Error>> {
     crate::support::answer_post(
-        ("/api/query", "/query"),
+        "/query",
         &patient_query(),
         Some(session),
         from,
