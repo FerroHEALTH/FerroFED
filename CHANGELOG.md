@@ -24,6 +24,198 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.15] - 2026-10-30
+
+Security fixes until 2031-10-30, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- A `[server.tls]` or `[metrics.tls]` table that sets `client_ca_file` must set `client_auth = "required"` beside it to keep requiring a client certificate (or `"optional"` to verify one only when a client presents it); without it `config check` and `serve` refuse the table. A listener whose clients speak TLS 1.2 alone needs `min_version = "1.2"` in its table, since the default is TLS 1.3.
+- Move a liveness probe of the gateway from `GET {base}/health` to
+  `GET {base}/health/liveness`. `{base}/health` now follows readiness and
+  answers `503` while the gateway boots or drains, so a liveness probe left
+  on it restarts a gateway that is draining (#1397).
+- Move the OTLP keys under `[telemetry.otlp]` before upgrading; the old keys are refused as unknown. `[telemetry] otlp_endpoint` becomes `[telemetry.otlp] endpoint`, `[telemetry] trace_sample_ratio` becomes `sample_ratio`, and the `trust_roots_file` and `client_identity_file` of `[telemetry.otlp_tls]` move into `[telemetry.otlp]`. `[metrics] otlp_endpoint` becomes `telemetry.otlp.metrics = true` (the default) beside the same `endpoint`, and `[metrics.otlp_tls]` goes with it: the spans and the metrics now share one collector. A deployment that pushed only metrics sets `traces = false`; one that exported only spans sets `metrics = false`, or its collector receives the metrics too. An inline `client_identity` is no longer read: write the PEM to a file and name it in `client_identity_file`.
+- `[server]` is the section of `ferrohealth-server`, and the gateway's own
+  keys moved to a new `[gateway]` table: move `server.public_url`,
+  `server.replica` and `server.bindings_drain_timeout_ms` there, and rename
+  `server.overload_retry_after_s` to `server.retry_after_s`. This release
+  still reads each old key under its new name and names it in `config check`
+  and the start-up log; FerroFED 0.0.16 refuses it, and setting an old key
+  beside its new one is refused now. The `FERROFED__` overrides follow:
+  `FERROFED__GATEWAY__PUBLIC_URL`, `FERROFED__GATEWAY__REPLICA`.
+- `server.base_path` writes the root as the empty path, its default: remove
+  `base_path = "/"`, or write `base_path = ""`. A `/` is refused.
+- `[server.caller_rate]` needs both `requests_per_second` and `burst`, where
+  each defaulted (10 and 20) before.
+
+### Added
+
+- The book's page "MyHealth@EU self-assessment" records FerroFED's own
+  reading of every requirement id of the MyHealth@EU Requirements Catalogue
+  v10.0.0: whether it binds the gateway, its status and the decision, page
+  or test that shows it. The README carries a MyHealth@EU badge counting the
+  rows met among those that bind the gateway; it is a self-assessment, not a
+  MyHealth@EU compliance check or Operation Ready status, and carries none
+  of the catalogue's text, which is privileged-access (#1423).
+- `[server] idle_timeout_ms` (default 120000) closes a kept-alive HTTP/1.1 connection that sends no next request within that time, with a clean end of stream. `server.header_read_timeout_ms` now counts from the first byte of each request head: it used to count from the end of the previous answer, so it also closed an idle connection after 30 seconds, sometimes while a client was already sending its next request on it. Keep `idle_timeout_ms` longer than the idle timeout of the clients and proxies in front of the gateway, so they close an idle connection first. A change of the key waits for a restart. Both come with `ferrohealth-server` 0.4.0.
+
+### Changed
+
+- The operator console runs on FerroUI 0.5 and hydrates the whole page: the server draws the first page and the browser draws every page after it, so following a link or posting a form no longer loads a new document. Every page reads and every action is a server function behind a form; with WebAssembly turned off every page still reads and every action still posts, its answer drawn on the page it came from. The removal of a member, a credential or a binding section from a configuration table still loads a new document once the page has hydrated, until FerroUI's confirmation dialog takes a server action (#1414). The query console's address keeps only the stored query and the version: any other key in it is dropped with a redirect, so nothing a link puts there is echoed into the page. The console's WebAssembly grows to about 557 KB compressed, its budget raised to 680 KiB.
+- The client listener and the admin listener are served, drained and given their TLS by `ferrohealth-server`. The admin listener now drains with the client listener on `SIGTERM`, within the same `server.drain_delay_ms` and `server.shutdown_timeout_ms`. A listener with TLS speaks TLS 1.3 alone unless its table sets `min_version = "1.2"`, which keeps TLS 1.2 clients with the four ECDHE AES-GCM suites of RFC 9325 §4.2, and it offers HTTP/2 beside HTTP/1.1. `[server.tls]` and `[metrics.tls]` take `client_auth` (`none`, `optional` or `required`): a client certificate is asked only when it says so, and a `client_ca_file` under `client_auth = "none"`, the default, is refused, where it used to mean a required certificate. The tables also take `reload_interval_s`, which reads the files again on that period beside `SIGHUP` and an applied configuration revision. `[server] header_read_timeout_ms` (default 30000) closes a connection that does not send a request head in time. A refusal of a listener's TLS names its table and the key at fault.
+- The health routes are the FerroHEALTH family's, served by
+  `ferrohealth-server` 0.3.7 over the indicator registry and lifecycle of
+  `ferrohealth-health` 0.1.1; FerroFED's own registry, lifecycle and
+  readiness document are deleted (#1397). `GET {base}/health/liveness` is
+  the liveness route, `200` while the process serves. `GET {base}/health`
+  now answers the status of readiness with `{"state":"up"}` or
+  `{"state":"down"}`, so it is `503` while the gateway boots or drains.
+  `GET {base}/health/readiness` lists `indicators` as an array of
+  `{"name", "state"}` sorted by name, where it was an object keyed by name,
+  and carries no `detail`. Point a liveness probe at
+  `{base}/health/liveness`: the example Kubernetes StatefulSet does, and a
+  deployment that copied it before moves its `livenessProbe` path from
+  `/health`, or the kubelet restarts a gateway that is draining. A monitor
+  that parsed the readiness body reads the array.
+- The gateway and the operator console hold every credential in the
+  secret types of `ferrohealth-secret` 0.2.0, the FerroHEALTH family crate,
+  and read every `<key>_file` sibling by its key-or-file rule; FerroFED's
+  own copy in `ferrofed-registry` is deleted (#1397). A secret file now
+  loses only its trailing line ending, where FerroFED trimmed white space
+  at both ends: a file whose secret starts or ends with a space or a tab
+  now passes it on as written, so a deployer whose secret files carry such
+  white space by accident removes it before upgrading. The refusals read
+  as the family words them: `<key> and <key>_file are both set; set exactly
+  one`, `<key>_file names <path>, which could not be read` and
+  `<key>_file names <path>, which is empty`.
+- The installation report is sent by `ferrohealth-usage-report` 0.2.0, the
+  FerroHEALTH family crate, on FerroPULSE's envelope v2; FerroFED's own
+  section, envelope, reporter, state directory and window are deleted and
+  the gateway supplies only its `status`, its route groups and its node
+  counters (#1397). The `[usage_report]` keys and their defaults are
+  unchanged, so no configuration changes. A daily report now leaves out a
+  counter that counted nothing in its window where it sent `0`, the boot
+  line with the report on ends with the family's wording ("no clinical
+  content, identifiers, URLs or request paths"), and an `endpoint` the
+  collector rule refuses is refused as an invalid value of
+  `usage_report.endpoint` while the configuration is read.
+- The console, the request log, the HTTP server metrics, the Prometheus exposition and the OTLP export are `ferrohealth-telemetry` 0.2.3, the FerroHEALTH family crate; FerroFED's own telemetry module and request log are deleted (#1397). The request line is written under the target `ferrohealth_telemetry::request`, with the fields it had. `http.server.request.duration` follows the OpenTelemetry HTTP conventions to the letter: its buckets end at 10 seconds, where FerroFED added a 30-second bucket, it carries `network.protocol.version`, and the method `QUERY` is named rather than `_OTHER`. `GET /metrics` answers with the content type `text/plain; version=0.0.4`, without the `charset` parameter. One `[telemetry.otlp]` table now names the collector both the spans and the metrics go to, with `traces` and `metrics` (both `true` unless set), `sample_ratio`, `trust_roots_file` and `client_identity_file`; `[telemetry] environment` names `deployment.environment.name` on both. `[telemetry] logged_query_parameters` is refused, since the request log carries the `offset` and `fetch` paging values alone. A collector's TLS files are read and checked when `serve` starts, where `config check` used to read them too.
+- A `[server]` value of the wrong type or form (`listen`, `base_path`,
+  `trusted_proxies`, a zero `header_read_timeout_ms` or
+  `max_concurrent_requests`, a `[server.tls]` without its `certificate_file`
+  or `key_file`) is refused as the configuration loads, naming the key,
+  where it was refused as the configuration resolved. The address a request
+  came from is read by `ferrohealth-server`, behind the same
+  `server.trusted_proxies` and `server.forwarded_header`.
+- The gateway reads its configuration with the family's loader
+  (`ferrohealth-config` 0.2.8). Every subcommand takes `--set key=value`,
+  repeatable, applied over the file and the `FERROFED__` overrides, and a
+  reload of the file applies the same pairs again. A refusal names the
+  dotted key and the variable or `--set` pair that set it, with the closest
+  known key for a misspelt one, and quotes no value; a file that is not TOML
+  is named by its line and column. The running configuration names a value
+  a `--set` pair set as `set`. An override such as `FERROFED__LISTEN` with
+  no section now names a top-level key, and is refused as unknown where it
+  was refused for its shape.
+- Every error the gateway composes outside the FHIR face is an RFC 9457
+  problem details document, `application/problem+json`, with the status
+  unchanged. Its `type` is the code's anchor on the book's Errors and status
+  codes page, its `detail` the sentence the ITS-REST `Error` carried as
+  `message`, its `instance` the request id as a `urn:uuid:` URI, and `code`
+  and `request_id` stay as extension members, so a client that branches on
+  `code` keeps working. A client that read `message` reads `detail`. A
+  failed fan-out still answers its `RESULT_SET`, a node's own answer on a
+  single-node route still passes through as the node sent it, and the FHIR
+  face still answers an `OperationOutcome`. The operator console reads the
+  new body.
+- A `408` past the request timeout and a `413` over the body limit answer an
+  `about:blank` problem with the gateway's request id as `instance`, where
+  they answered an empty and a plain-text body.
+- A member that refuses with RFC 9457 problem details, as FerroEHR 5.6.0
+  does, is reported in `meta.federation.endpoints[].error` by the problem's
+  `detail`, or its `title` when it has no detail, bounded and masked as
+  every node message is. The whole JSON document was quoted before.
+- The operator console removes a member, a credential or a binding section
+  from a configuration table in the page, as every other configuration form
+  does, once the page has hydrated: the confirmation dialog runs the
+  removal through the configuration's server function and closes when the
+  removal is saved, and stays open with the refusal otherwise. With no
+  WebAssembly it still posts the form.
+- The access record of a routed openEHR read or write names the object it
+  reached as `AuditEvent.entity[data].what.identifier` (the openEHR path,
+  such as `/ehr/<ehr_id>/composition/<uid>`, with no `system`), where it
+  wrote that path as `what.reference`, which is no FHIR literal reference
+  (FHIR R4 references.html §2.3.0.2, §2.3.0.3); an Audit Record Repository
+  that checks references, HAPI FHIR among them, refused those records. A read
+  on the FHIR face keeps `what.reference` (`MedicationRequest/<id>`). This
+  comes with FerroAUDIT `ihe-atna` and `ehds-logging` 0.3.2.
+- The client listener serves through the stack of `ferrohealth-server`
+  0.3.10: the request id, the request log, the client address, the panic
+  catch, the request timeout, the body limit, the overload bound and the
+  caller rate are the crate's, with the gateway's error bodies, and the
+  FHIR face keeps its own base beside `server.base_path`. An answer is now
+  compressed with gzip or brotli for a client that accepts it, once it is
+  1024 bytes or longer: `server.compression = false` turns it off and
+  `server.compression_min_bytes` sets the size.
+- A `500 internal` for a request whose handler panicked, a `503 overloaded`
+  and a `429 rate-limited` name the gateway's own request id in the body's
+  `request_id`, where they named the client's `X-Request-Id`; the response
+  header still echoes the client's id.
+- The panic line comes from the family's panic hook (`ferrohealth-telemetry`
+  0.2.4): it is logged under the target `ferrohealth_telemetry::panic` with
+  the message `a thread panicked; the message is withheld`, and names the
+  source as `file` and `line` with the `thread`, where FerroFED's own hook
+  wrote `a thread panicked` with one `location` field. It still names the
+  request by the gateway's `request_id` and never the panic message. A log
+  alert that matched the old target, message or `location` needs the new
+  ones.
+- Decisions A62 and A67 to A72 and the book's page "A national contact point" are re-checked against the MyHealth@EU Requirements Catalogue v10.0.0 (2026-03-06), read under a reading grant and cited by section and requirement id only: they hold, A70 now says the gateway never refuses a contact-point request on the professional's role or point of care, A72 leaves the PDF of the original summary to the contact point, rendered from the narrative, and the page says how the face's failures map to temporary and permanent ones (#1424).
+- When the member that owns a prescription refuses a dispensation (`409`) or answers it with a `5xx` (`502`), the face's `OperationOutcome` now carries the member's own issues after the gateway's, unaltered, when the member's body is an `OperationOutcome`, so a national contact point can relay why the prescription was not dispensable (MyHealth@EU Requirements Catalogue v10.0.0, §1.25) (#1426).
+- A national contact point's token that lacks an Implementing Regulation (EU) 2026/2099 Annex attribute is still refused `403 contact-point-attributes-required`, and the message now names each attribute that is missing, empty or not admitted by its Annex table and name, never its value, so the connector can tell the professional what to complete (MyHealth@EU Requirements Catalogue v10.0.0, §1.25) (#1427).
+- The patient summary lists a composition two members hold under one full version id (an imported copy, Federation Tier §10.3) once, from the member whose `system_id` is the version's `creating_system_id`, else from the lowest endpoint id, and the section's narrative names the members whose copy it left out; two different compositions stay listed (MyHealth@EU Requirements Catalogue v10.0.0, 10.03; A65 amended) (#1428).
+- The compose quickstart and the end-to-end harness run FerroPIX 0.0.12,
+  pinned by digest. Its operator API now answers errors as RFC 9457 problem
+  details, and it refuses a `[server.tls]` table that sets `client_ca_file`
+  while `client_auth` is `"none"`; the quickstart's FerroPIX configuration
+  sets neither, so it needs no change (#1437).
+- The operator console runs on the FerroHEALTH shared crates: its
+  configuration is read with `ferrohealth-config`, so every job takes
+  `--set key=value`, a refusal names the key and the variable or pair that
+  set it, and `config check` prints the running configuration with every
+  secret redacted; it serves and drains through `ferrohealth-server`, with
+  its browser security headers and same-origin check; and it logs through
+  `ferrohealth-telemetry`, whose `[telemetry]` section and `RUST_LOG` choose
+  what it logs. It serves the family's health routes:
+  `GET /health/liveness`, `GET /health/readiness`, which answers `503` once
+  the console drains, and `GET /health`, which follows readiness and now
+  answers `{"state":"up"}` where it answered `{"status":"up"}`. The example
+  Kubernetes Deployment probes liveness and readiness on their own routes.
+- `ferrofed healthcheck` and the live parts of `ferrofed report` ask the gateway through the healthcheck client of `ferrohealth-server`, which trusts only the certificate `server.tls.certificate_file` (or `metrics.tls.certificate_file`) holds and presents `server.tls.healthcheck_identity_file`, as before. The healthcheck prints the same lines with the same exit codes. A report part the gateway did not answer names the cause in the crate's words, such as `cannot connect to 127.0.0.1:8080`.
+- `ferrofed healthcheck` prints the line every FerroHEALTH product's `healthcheck` prints, from `ferrohealth_server::healthcheck::Outcome`. The old `ready` is now `healthy`; `not ready: readiness answered <status>` is now `unhealthy: readiness answered <status>`; `not ready: no answer within 3000 ms` is now `unhealthy: readiness did not answer in time`; `not ready: no connection could be made`, `not ready: the TLS handshake failed: …`, `not ready: the request failed: …` and the `not ready: …` of a configuration that does not load are now `unhealthy: <reason>`, with the cause chain as the reason; and the replaced listener certificate reads `unhealthy: the listener presents a certificate other than server.tls.certificate_file holds; send SIGHUP so the gateway reads it`. The exit codes are unchanged (`0` only on `200`, `1` otherwise). A probe, log rule or alert that matched `ready` or `not ready` must match `healthy` and `unhealthy` instead (note that `healthy` is a substring of `unhealthy`).
+- FerroFED runs on `ferrohealth-server` 0.4.1, which keeps a product's own
+  fallback and the layers around it when the stack merges its routes
+  (FerroHEALTH/FerroSYS#199). FerroFED was not exposed to the regression
+  0.4.1 fixes: the client surface and the FHIR face declare their own
+  fallback inside the client authentication gate, so an anonymous request
+  to a path no route matches under `/v1/` or `/operator/` is refused with
+  `401` before and after.
+- **The interoperability component is the published `eehrxf` 0.1.128 from
+  FerroHEALTH/FerroBRIDGE**, pinned exactly, in place of the crate this
+  repository built (owner decision of 2026-10-28, decision A76). Every change
+  to the component is made in FerroBRIDGE, and its pages are FerroBRIDGE's
+  book (https://ferrobridge.eu/docs/evaluate/interoperability-component.html);
+  this book keeps the gateway's routes, its section queries and the access
+  record. `fhirconnect` moves to 0.1.204, `openehr-mapping-core` to 0.1.135,
+  `ferrobridge-term` and `ferrobridge-validator` to 0.1.141 and the
+  `openehr-*` family to 0.0.109, the versions the component requires. A
+  resource the patient summary maps from a composition now takes the
+  FHIRconnect deterministic id of the composition uid and its entry path
+  (FHIRconnect v1.0.0, engine/id-management.adoc, Deterministic IDs). The
+  extension definition the site serves at
+  `https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations` is
+  read from the published crate.
+
 ## [0.0.14] - 2026-10-28
 
 Security fixes until 2031-10-28, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -5976,7 +6168,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.14...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.15...HEAD
+[0.0.15]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.11...v0.0.12

@@ -97,6 +97,40 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
+### To v0.0.15, from v0.0.14
+
+- Move `server.public_url`, `server.replica` and
+  `server.bindings_drain_timeout_ms` to a new `[gateway]` table, and rename
+  `server.overload_retry_after_s` to `server.retry_after_s`. This release
+  still reads each old key and names it in `config check` and the start-up
+  log; FerroFED 0.0.16 refuses it. The `FERROFED__` overrides follow, as
+  `FERROFED__GATEWAY__PUBLIC_URL` (#1408).
+- Remove `base_path = "/"`, or write `base_path = ""`: the root is the
+  empty path, and a `/` is refused. Give `[server.caller_rate]` both
+  `requests_per_second` and `burst`, which no longer default (#1408).
+- Move the OTLP keys into one `[telemetry.otlp]` table: `endpoint`,
+  `sample_ratio`, `trust_roots_file`, `client_identity_file`, and `traces`
+  and `metrics`, both on unless set. The old `[telemetry]` and `[metrics]`
+  OTLP keys and `[telemetry] logged_query_parameters` are refused as
+  unknown, and an inline `client_identity` is no longer read (#1397).
+- A `[server.tls]` or `[metrics.tls]` table with `client_ca_file` needs
+  `client_auth = "required"` beside it to keep requiring a client
+  certificate. A listener whose clients speak only TLS 1.2 needs
+  `min_version = "1.2"` (#1397).
+- Point a liveness probe at `{base}/health/liveness`. `{base}/health`
+  follows readiness now and answers `503` while the gateway boots or
+  drains, and `{base}/health/readiness` lists `indicators` as an array. The
+  example Kubernetes manifests probe the new routes (#1397, #1445).
+- A probe, log rule or alert that matched the `ready` or `not ready` line of
+  `ferrofed healthcheck` matches `healthy` and `unhealthy` instead (#1453).
+- A client that read `message` from an error body outside the FHIR face
+  reads `detail` of the RFC 9457 problem details document; `code` and
+  `request_id` stay (#1412).
+- A secret file loses only its trailing line ending: remove any space or
+  tab that sits at either end of a secret by accident (#1397).
+- A log alert on the panic line matches the target
+  `ferrohealth_telemetry::panic` and its `file` and `line` fields (#1421).
+
 ### To v0.0.14, from v0.0.13
 
 - Remove `[dev]` from your configuration: `[[dev.crossref]]` and

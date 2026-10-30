@@ -107,7 +107,7 @@ libraries: FerroAUTH, FerroAUDIT and FerroUI.
 
 ## Quick start
 
-FerroFED is at v0.0.14. The quickstart runs the published gateway image
+FerroFED is at v0.0.15. The quickstart runs the published gateway image
 beside four FerroEHR record servers with synthetic patients. You need Docker
 Compose, `openssl` and `git`:
 
