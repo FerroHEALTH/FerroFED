@@ -23,5 +23,5 @@ keywords:
   - ITS-REST
   - IHE
   - Rust
-version: 0.0.14
-date-released: 2026-10-28
+version: 0.0.15
+date-released: 2026-10-30

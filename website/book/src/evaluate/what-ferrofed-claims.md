@@ -464,6 +464,8 @@ Released on 2026-10-25.
 
 ### v0.0.14: no patient index, and the safety controls of the clinical review
 
+Released on 2026-10-28.
+
 - No patient index in any profile: the static development cross-reference
   `[dev]` is refused at load, every patient resolves through a PIX Manager,
   and the quickstart runs FerroPIX seeded over ITI-104
@@ -486,6 +488,35 @@ Released on 2026-10-25.
   cached for five minutes and each access record's labels on its entities
   ([#1390](https://github.com/FerroHEALTH/FerroFED/issues/1390)).
 
+### v0.0.15: the family's server crates, and the MyHealth@EU catalogue
+
+Released on 2026-10-30.
+
+- The listeners, their TLS and drain, the configuration loader, the health
+  routes, the secrets, the request log, the telemetry export, the panic line
+  and the installation report taken from the FerroHEALTH family's shared
+  crates, with FerroFED's own copies deleted: TLS 1.3 by default, a client
+  certificate asked under an explicit `client_auth`, `--set` on every
+  subcommand, a liveness route of its own, one OTLP collector for spans and
+  metrics, and responses compressed for a client that accepts it
+  ([#1397](https://github.com/FerroHEALTH/FerroFED/issues/1397), [#1408](https://github.com/FerroHEALTH/FerroFED/issues/1408), [#1418](https://github.com/FerroHEALTH/FerroFED/issues/1418), [#1421](https://github.com/FerroHEALTH/FerroFED/issues/1421), [#1448](https://github.com/FerroHEALTH/FerroFED/issues/1448), [#1453](https://github.com/FerroHEALTH/FerroFED/issues/1453)).
+- Every error outside the FHIR face an RFC 9457 problem details document,
+  and a member's problem details refusal reported by its `detail`
+  ([#1412](https://github.com/FerroHEALTH/FerroFED/issues/1412), [#1413](https://github.com/FerroHEALTH/FerroFED/issues/1413)).
+- The operator console hydrates the whole page on FerroUI 0.5 and runs on
+  the same shared crates; every page still reads and every action still
+  posts with no WebAssembly ([#1397](https://github.com/FerroHEALTH/FerroFED/issues/1397), [#1414](https://github.com/FerroHEALTH/FerroFED/issues/1414), [#1445](https://github.com/FerroHEALTH/FerroFED/issues/1445)).
+- FerroFED's reading of the MyHealth@EU Requirements Catalogue v10.0.0, a
+  self-assessment and no MyHealth@EU compliance check, with the gateway's
+  changes it found: the missing Annex attributes of a contact point's token
+  named, a member's own refusal of a dispensation relayed, and an imported
+  copy of a composition listed once in the patient summary
+  ([#1423](https://github.com/FerroHEALTH/FerroFED/issues/1423), [#1424](https://github.com/FerroHEALTH/FerroFED/issues/1424), [#1426](https://github.com/FerroHEALTH/FerroFED/issues/1426), [#1427](https://github.com/FerroHEALTH/FerroFED/issues/1427), [#1428](https://github.com/FerroHEALTH/FerroFED/issues/1428),
+  [MyHealth@EU self-assessment](myhealth-eu.md)).
+- The interoperability component taken as the published `eehrxf` from
+  FerroBRIDGE, and the access record of a routed openEHR read or write
+  naming its object as `what.identifier` ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813), [#1416](https://github.com/FerroHEALTH/FerroFED/issues/1416)).
+
 ## Planned
 
 Each milestone on the
@@ -499,7 +530,9 @@ priority categories and prescriptions from openEHR medication data through
 a FHIRconnect mapping are built there
 ([FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321), [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322), [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325), [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
 FerroFED keeps the gateway half: the federation queries, the FHIR face
-routes and the access record. v0.0.15 carries the rest of the
+routes and the access record, which v0.0.16 carries for prescriptions from
+openEHR medication data, test results, discharge reports and imaging
+([#1403](https://github.com/FerroHEALTH/FerroFED/issues/1403), [#1404](https://github.com/FerroHEALTH/FerroFED/issues/1404), [#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405), [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406)), with the rest of the
 manufacturer's conformity work
 ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [#940](https://github.com/FerroHEALTH/FerroFED/issues/940), [Regulatory status](regulatory-status.md)). The
 changelog fragments in
