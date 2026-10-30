@@ -188,8 +188,9 @@ fn top_bar(
 }
 
 /// The top bar's find, holding the `searched` words, disabled with its
-/// reason when the gateway is not `reachable`; once the page has hydrated
-/// its panel asks [`crate::pages::search::ANSWER`] as the words are typed.
+/// reason when the gateway is not `reachable`; FerroUI's `search` module
+/// has its panel ask [`crate::pages::search::ANSWER`] as the words are
+/// typed.
 fn find(searched: Option<String>, reachable: bool) -> SearchBox {
     SearchBox {
         id: String::from(SEARCH_ID),

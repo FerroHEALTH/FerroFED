@@ -114,8 +114,8 @@ fn form(fields: &[(&str, &str)]) -> String {
     form.finish()
 }
 
-/// A `POST` of `body` from the query page, as the console's own page sends
-/// it with no WebAssembly, carrying `session`'s cookie when given.
+/// A `POST` of `body` to the query page, as the console's own form sends
+/// it, carrying `session`'s cookie when given.
 fn run(body: &str, session: Option<&SessionId>) -> Result<Request<Body>, Box<dyn Error>> {
     crate::support::answer_post(
         "/query",
@@ -430,7 +430,7 @@ async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
     // The page posts its form, so the browser keeps no field in its history.
     let (_response, page) = send(&service, get_as("/query", &session)?).await?;
     assert!(page.contains(r#"method="post""#), "{page}");
-    assert!(page.contains(r#"action="/api/query""#), "{page}");
+    assert!(page.contains(r#"action="/query""#), "{page}");
 
     let mut asked = gateway
         .received_requests()
@@ -645,11 +645,11 @@ async fn a_nodes_hostile_values_reach_the_page_escaped() -> Result<(), Box<dyn E
         assert!(!html.contains(raw), "{raw}: {html}");
     }
     assert!(
-        html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"),
+        html.contains("&#60;script&#62;alert(1)&#60;/script&#62;"),
         "{html}"
     );
     assert!(
-        html.contains("&lt;img src=x onerror=alert(2)&gt;"),
+        html.contains("&#60;img src=x onerror=alert(2)&#62;"),
         "{html}"
     );
     Ok(())
@@ -687,10 +687,10 @@ async fn every_value_a_node_wrote_reaches_the_answer_escaped() -> Result<(), Box
         .map(|(answer, _)| answer)
         .unwrap_or_default();
     for escaped in [
-        "&lt;script&gt;alert(1)&lt;/script&gt;",
-        "&lt;img src=x onerror=alert(1)&gt;",
-        "&lt;/th&gt;&lt;script&gt;x&lt;/script&gt;",
-        "&lt;b&gt;late&lt;/b&gt; &amp; gone",
+        "&#60;script&#62;alert(1)&#60;/script&#62;",
+        "&#60;img src=x onerror=alert(1)&#62;",
+        "&#60;/th&#62;&#60;script&#62;x&#60;/script&#62;",
+        "&#60;b&#62;late&#60;/b&#62; &#38; gone",
     ] {
         assert!(answer.contains(escaped), "{escaped}: {answer}");
     }
@@ -707,10 +707,10 @@ async fn every_value_a_node_wrote_reaches_the_answer_escaped() -> Result<(), Box
     Ok(())
 }
 
-// The form posts with no WebAssembly: its Run is a plain submit button,
-// never one that waits for the page to hydrate.
+// The form posts with the scripts refused: its Run is a plain submit button,
+// never one that waits for a script.
 #[tokio::test]
-async fn the_run_works_before_the_page_hydrates() -> Result<(), Box<dyn Error>> {
+async fn the_run_works_with_the_scripts_refused() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
     let (service, session) = signed_in_console(&gateway)?;
     let (_response, page) = send(&service, get_as("/query", &session)?).await?;

@@ -69,7 +69,7 @@ async fn a_configuration_invalid_refusal_shows_the_key_the_gateway_names()
         "{html}"
     );
     assert!(html.contains("registry.timeout_ms"), "{html}");
-    assert!(html.contains("&lt;b&gt;is&lt;/b&gt;"), "{html}");
+    assert!(html.contains("&#60;b&#62;is&#60;/b&#62;"), "{html}");
     assert!(!html.contains("<b>is</b>"), "{html}");
     Ok(())
 }

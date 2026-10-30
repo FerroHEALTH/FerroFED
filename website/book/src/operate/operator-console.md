@@ -498,7 +498,6 @@ The console log is the family's `[telemetry]` section: `RUST_LOG` or
 ```toml
 [server]
 listen = "0.0.0.0:3000"
-site_root = "/site"
 
 [gateway]
 base_url = "https://gateway.example.org/"

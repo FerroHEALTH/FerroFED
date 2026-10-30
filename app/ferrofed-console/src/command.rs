@@ -130,6 +130,12 @@ fn config_check(
         }
         None => {}
     }
+    for key in &settings.deprecated {
+        eprintln!(
+            "ferrofed-console: warning: `{key}` is deprecated and does nothing; release {} refuses it",
+            crate::config::SITE_ROOT_REFUSED_IN
+        );
+    }
     match ConsoleState::new(settings) {
         Ok(_state) => {
             println!("ferrofed-console: the configuration is valid");
@@ -184,6 +190,13 @@ async fn serve(settings: Settings) -> ExitCode {
         }
     };
     ferrohealth_telemetry::panic::install_hook();
+    for key in &settings.deprecated {
+        tracing::warn!(
+            key,
+            refused_in = crate::config::SITE_ROOT_REFUSED_IN,
+            "a deprecated configuration key is set"
+        );
+    }
     let listen = settings.listen;
     let state = match ConsoleState::new(settings) {
         Ok(state) => state,

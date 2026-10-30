@@ -80,9 +80,9 @@ async fn an_oversized_body_to_any_other_route_is_refused() -> Result<(), Box<dyn
     let (service, session) = signed_in_console(&listener)?;
     for path in [
         "/configuration",
-        "/api/query",
-        "/api/clear",
-        "/api/repair",
+        "/query",
+        "/integrity",
+        "/stored-queries/org.example::weights",
         "/preference",
         "/logout",
     ] {

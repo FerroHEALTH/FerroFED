@@ -211,41 +211,34 @@ async fn every_answer_carries_the_browser_security_headers() -> Result<(), Box<d
     Ok(())
 }
 
+// Every page is drawn by the server and every script is a module the console
+// serves itself, so the policy admits scripts and stylesheets of the console's
+// own origin alone, with no nonce, no inline script and no WebAssembly.
 #[tokio::test]
-async fn the_page_scripts_carry_the_nonce_the_policy_authorizes() -> Result<(), Box<dyn Error>> {
+async fn the_policy_admits_the_consoles_own_scripts_and_styles_alone() -> Result<(), Box<dyn Error>>
+{
     let (_state, service) = console("")?;
     let (response, body) = send(&service, get("/")?).await?;
     let policy = header(&response, "content-security-policy");
-    let nonce = policy
-        .split_once("'nonce-")
-        .and_then(|(_, rest)| rest.split_once('\''))
-        .map(|(nonce, _)| nonce)
-        .ok_or("the policy names a nonce")?;
-    let stamped = format!(r#"<script type="module" nonce="{nonce}">"#);
-    assert!(body.contains(&stamped), "{nonce}: {body}");
+    assert!(policy.contains("script-src 'self';"), "{policy}");
+    assert!(policy.contains("style-src 'self';"), "{policy}");
+    for refused in ["'nonce-", "'wasm-unsafe-eval'", "'unsafe-inline'", "'unsafe-eval'"] {
+        assert!(!policy.contains(refused), "{refused}: {policy}");
+    }
+    let loader = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed).loader();
+    assert!(
+        body.contains(&format!(r#"<script type="module" src="{loader}"></script>"#)),
+        "{loader}: {body}"
+    );
+    assert_eq!(
+        1,
+        body.matches("<script").count(),
+        "the loader is the one script: {body}"
+    );
+    assert!(!body.contains(" style="), "no inline style: {body}");
     let (second, _body) = send(&service, get("/")?).await?;
-    assert_ne!(policy, header(&second, "content-security-policy"));
+    assert_eq!(policy, header(&second, "content-security-policy"));
     Ok(())
-}
-
-/// A site root holding a synthetic bundle, and the console that serves it.
-fn bundled() -> Result<(tempfile::TempDir, axum::Router, Vec<u8>), Box<dyn Error>> {
-    let site = tempfile::tempdir()?;
-    let pkg = site.path().join("pkg");
-    std::fs::create_dir_all(&pkg)?;
-    let wasm: Vec<u8> = b"\0asm\x01\0\0\0"
-        .iter()
-        .copied()
-        .chain((0..65_536_u32).map(|n| u8::try_from(n % 61).unwrap_or(0)))
-        .collect();
-    std::fs::write(pkg.join("ferrofed-console.wasm"), &wasm)?;
-    std::fs::write(
-        pkg.join("ferrofed-console.js"),
-        "export function hydrate() {}\n".repeat(64),
-    )?;
-    let root = site.path().to_string_lossy().replace('\\', "/");
-    let (_state, service) = console(&format!("[server]\nsite_root = \"{root}\"\n"))?;
-    Ok((site, service, wasm))
 }
 
 /// A `GET` of `path` accepting `encoding`, answered whole as bytes.
@@ -263,57 +256,39 @@ async fn fetch(
     Ok((http::Response::from_parts(parts, ()), bytes.to_vec()))
 }
 
+// FerroUI's script modules are served as the crate ships them, under the
+// path of its version with a year's immutable cache, to a visitor too, so
+// the sign-in works before a session exists.
 #[tokio::test]
-async fn a_brotli_request_gets_the_bundle_brotli_compressed() -> Result<(), Box<dyn Error>> {
-    let (_site, service, wasm) = bundled()?;
-    let (response, body) = fetch(&service, "/pkg/ferrofed-console.wasm", "gzip, br").await?;
-    assert_eq!(StatusCode::OK, response.status());
-    assert_eq!("br", header(&response, "content-encoding"));
-    assert!(
-        header(&response, "vary")
-            .to_ascii_lowercase()
-            .contains("accept-encoding"),
-        "{response:?}"
-    );
-    assert_eq!("application/wasm", header(&response, "content-type"));
-    assert!(
-        body.len().saturating_mul(4) < wasm.len(),
-        "{} bytes",
-        body.len()
-    );
-    assert_ne!(Some(&b"\0asm"[..]), body.get(..4));
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_gzip_request_gets_the_bundle_gzip_compressed() -> Result<(), Box<dyn Error>> {
-    let (_site, service, wasm) = bundled()?;
-    for path in ["/pkg/ferrofed-console.wasm", "/pkg/ferrofed-console.js"] {
-        let (response, body) = fetch(&service, path, "gzip").await?;
-        assert_eq!("gzip", header(&response, "content-encoding"), "{path}");
-        // RFC 1952 §2.3.1: every gzip member opens with ID1 ID2.
-        assert_eq!(Some(&[0x1f_u8, 0x8b][..]), body.get(..2), "{path}");
-        assert!(body.len() < wasm.len(), "{path}");
+async fn ferroui_s_modules_are_served_as_the_crate_ships_them() -> Result<(), Box<dyn Error>> {
+    let (_state, service) = console("")?;
+    let base = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed).base;
+    for module in ferrohealth_ui::script::MODULES {
+        let path = format!("{base}/scripts/{}", module.file);
+        let (response, body) = fetch(&service, &path, "gzip, br").await?;
+        assert_eq!(StatusCode::OK, response.status(), "{path}");
+        assert!(
+            header(&response, "content-type").starts_with("text/javascript"),
+            "{path}"
+        );
+        assert!(
+            header(&response, "cache-control").contains("immutable"),
+            "{path}"
+        );
+        assert_eq!(module.text.as_bytes(), body.as_slice(), "{path}");
     }
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_request_that_accepts_no_encoding_gets_the_bundle_as_it_is() -> Result<(), Box<dyn Error>>
-{
-    let (_site, service, wasm) = bundled()?;
-    let (response, body) = fetch(&service, "/pkg/ferrofed-console.wasm", "identity").await?;
-    assert_eq!("", header(&response, "content-encoding"));
-    assert_eq!(wasm, body);
+    let (response, _body) = fetch(&service, "/ferrohealth-ui/0.0.0/scripts/fui.js", "").await?;
+    assert_eq!(StatusCode::NOT_FOUND, response.status());
     Ok(())
 }
 
 // A document carries what the operator entered beside what an attacker would
-// want, so it is never compressed (BREACH).
+// want, so it is never compressed (BREACH); nothing the console serves is.
 #[tokio::test]
 async fn a_document_is_never_compressed() -> Result<(), Box<dyn Error>> {
-    let (_site, service, _wasm) = bundled()?;
-    for path in ["/", "/health", "/no/such/page"] {
+    let (_state, service) = console("")?;
+    let loader = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed).loader();
+    for path in ["/", "/health", "/no/such/page", loader.as_str()] {
         let (response, _body) = fetch(&service, path, "gzip, br").await?;
         assert_eq!("", header(&response, "content-encoding"), "{path}");
     }
@@ -321,20 +296,17 @@ async fn a_document_is_never_compressed() -> Result<(), Box<dyn Error>> {
 }
 
 #[tokio::test]
-async fn the_page_loads_the_bundle_cargo_leptos_writes() -> Result<(), Box<dyn Error>> {
+async fn the_page_loads_ferroui_s_assets_from_their_versioned_path() -> Result<(), Box<dyn Error>> {
     let (_state, service) = console("")?;
     let (_response, body) = send(&service, get("/")?).await?;
-    for asset in [
-        "/pkg/ferrofed-console.wasm",
-        "/pkg/ferrofed-console.js",
-        "/ferrohealth-ui.css",
-        "/ferrofed.css",
-    ] {
+    let assets = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed);
+    for asset in [assets.stylesheet(), assets.theme(), String::from("/favicon.ico")] {
         assert!(
             body.contains(&format!(r#"href="{asset}""#)),
             "{asset}: {body}"
         );
     }
+    assert!(!body.contains("/pkg/"), "no site bundle: {body}");
     Ok(())
 }
 
@@ -345,11 +317,12 @@ async fn the_page_loads_the_bundle_cargo_leptos_writes() -> Result<(), Box<dyn E
 #[tokio::test]
 async fn the_stylesheets_are_ferroui_s_own() -> Result<(), Box<dyn Error>> {
     let (_state, service) = console("")?;
+    let assets = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed);
     for (path, shipped) in [
-        ("/ferrohealth-ui.css", ferrohealth_ui::style::STYLESHEET),
-        ("/ferrofed.css", ferrohealth_ui::style::Brand::Fed.theme()),
+        (assets.stylesheet(), ferrohealth_ui::style::STYLESHEET),
+        (assets.theme(), ferrohealth_ui::style::Brand::Fed.theme()),
     ] {
-        let (response, body) = send(&service, get(path)?).await?;
+        let (response, body) = send(&service, get(&path)?).await?;
         assert_eq!(StatusCode::OK, response.status(), "{path}");
         assert!(
             header(&response, "content-type").starts_with("text/css"),
@@ -364,11 +337,11 @@ async fn the_stylesheets_are_ferroui_s_own() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Every page reads and every action runs through a server function, which
-// checks the operator's session itself: a visitor's call reads nothing and asks
-// neither the gateway nor a replica anything, whatever it posts.
+// Every page reads and every action runs as the operator of the request, so
+// a visitor's post or read is sent to sign-in and asks neither the gateway nor
+// a replica anything, whatever it posts.
 #[tokio::test]
-async fn a_server_function_asks_nothing_for_a_visitor() -> Result<(), Box<dyn Error>> {
+async fn a_post_or_a_read_asks_nothing_for_a_visitor() -> Result<(), Box<dyn Error>> {
     let gateway = ferrofed_testkit::mock::Server::start().await;
     let (_state, service) = console(&format!(
         "[gateway]\nbase_url = \"{uri}\"\n\n[session]\nsecure_cookie = false\n\n\
@@ -376,33 +349,34 @@ async fn a_server_function_asks_nothing_for_a_visitor() -> Result<(), Box<dyn Er
         uri = gateway.uri()
     ))?;
     for (route, body) in [
-        ("/api/query", "kind=aql&aql=SELECT+1"),
+        ("/query", "kind=aql&aql=SELECT+1"),
         (
-            "/api/configure",
+            "/configuration",
             "form%5Baction%5D=apply&form%5Brevision%5D=2&form%5Bconfirm%5D=yes",
         ),
         (
-            "/api/clear",
+            "/integrity",
             "ehr_id=8c3e8f3a-1b2c-4d5e-8f90-123456789abc&replica=*&confirm=yes",
         ),
         (
-            "/api/repair",
-            "name=org.example%3A%3Aweights&version=1.0.0&endpoint=*&confirm=yes",
+            "/stored-queries/org.example::weights",
+            "version=1.0.0&endpoint=*&confirm=yes",
         ),
-        ("/api/federation", ""),
-        ("/api/dashboard", ""),
-        ("/api/configuration", ""),
     ] {
         let request = http::Request::post(route)
             .header("content-type", "application/x-www-form-urlencoded")
             .header("sec-fetch-site", "same-origin")
             .body(axum::body::Body::from(body))?;
-        let (_response, answer) = send(&service, request).await?;
-        assert!(
-            answer.contains("NotAuthenticated") || answer.contains("SignedOut"),
-            "{route}: {answer}"
-        );
+        let (response, _answer) = send(&service, request).await?;
+        assert_eq!(StatusCode::SEE_OTHER, response.status(), "{route}");
+        assert_eq!("/login", header(&response, "location"), "{route}");
     }
+    for route in ["/organisations", "/configuration", "/search/answer?q=node"] {
+        let (response, _answer) = send(&service, get(route)?).await?;
+        assert_eq!(StatusCode::SEE_OTHER, response.status(), "{route}");
+    }
+    let (_response, landing) = send(&service, get("/")?).await?;
+    assert!(landing.contains("Sign-in is not set up"), "{landing}");
     let asked = gateway
         .received_requests()
         .await

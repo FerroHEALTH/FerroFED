@@ -5,7 +5,6 @@
 //! [`Config`] with every `_file` secret read.
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::time::Duration;
 
 use ferrohealth_secret::file::read_secret;
@@ -22,8 +21,6 @@ use crate::config::{Config, Oidc, Replica};
 pub struct Settings {
     /// The socket address the console listens on.
     pub listen: SocketAddr,
-    /// The directory holding the site bundle.
-    pub site_root: PathBuf,
     /// The locale a page renders in when the request names none the
     /// console's catalog holds.
     pub locale: Locale,
@@ -38,6 +35,9 @@ pub struct Settings {
     pub admin: Vec<ReplicaSettings>,
     /// The console log, the family's `[telemetry]` section.
     pub telemetry: ferrohealth_telemetry::section::TelemetrySection,
+    /// The deprecated keys the configuration set that the console reads no
+    /// more, which `config check` and the start-up log name.
+    pub deprecated: Vec<&'static str>,
 }
 
 /// One resolved `[[admin.replicas]]` entry.
@@ -167,13 +167,19 @@ impl Config {
         }
         Ok(Settings {
             listen,
-            site_root: self.server.site_root.clone(),
             locale,
             gateway: GatewaySettings { base, timeout },
             session,
             oidc,
             admin,
             telemetry: self.telemetry.clone(),
+            deprecated: self
+                .server
+                .site_root
+                .as_ref()
+                .map(|_| "server.site_root")
+                .into_iter()
+                .collect(),
         })
     }
 }

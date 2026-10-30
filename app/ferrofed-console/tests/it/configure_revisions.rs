@@ -85,7 +85,7 @@ async fn exports(listener: &Server) {
 }
 
 // NOTE: no specification governs this: our own design; the history filters its
-// newest revisions by origin in a GET form, with no WebAssembly (FerroUI T1).
+// newest revisions by origin in a GET form, with the scripts refused (FerroUI T1).
 #[tokio::test(flavor = "multi_thread")]
 async fn the_history_keeps_the_origins_its_address_names() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
@@ -263,7 +263,7 @@ async fn an_import_sends_the_toml_to_the_replica_and_shows_its_changes_escaped()
     for raw in ["<i>id</i>", "<script>x</script>"] {
         assert!(!html.contains(raw), "{raw} reached the answer raw: {html}");
     }
-    assert!(html.contains("&lt;script&gt;x&lt;/script&gt;"), "{html}");
+    assert!(html.contains("&#60;script&#62;x&#60;/script&#62;"), "{html}");
     let received = listener
         .received_requests()
         .await

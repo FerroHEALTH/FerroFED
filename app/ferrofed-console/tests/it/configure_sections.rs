@@ -176,7 +176,7 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
 }
 
 // NOTE: no specification governs this: our own design; every value the gateway
-// answers reaches the page as text, the obligation of an `inner_html` sink.
+// answers reaches the page as text, escaped where the page writes it.
 #[tokio::test(flavor = "multi_thread")]
 async fn every_value_of_a_section_is_escaped() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
@@ -186,7 +186,7 @@ async fn every_value_of_a_section_is_escaped() -> Result<(), Box<dyn Error>> {
     for raw in ["<script>u</script>", "<img src=x onerror=1>", "<b>1</b>"] {
         assert!(!body.contains(raw), "{raw} reached the page raw: {body}");
     }
-    assert!(body.contains("&lt;script&gt;u&lt;/script&gt;"), "{body}");
+    assert!(body.contains("&#60;script&#62;u&#60;/script&#62;"), "{body}");
     Ok(())
 }
 

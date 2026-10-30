@@ -12,12 +12,12 @@ use crate::configure::{changes, listener, page, signed_in_console};
 
 /// Console member C's row offers Remove… as its row menu's last item, after
 /// a separator, opening a danger dialog whose form posts the removal of C
-/// with a required reason to the configuration's server function, drawn in
+/// with a required reason to the page it sits on, drawn in
 /// the row's actions cell, and no Remove button stands beside the menu.
 fn removal_is_in_the_row_menu(body: &str) -> Result<(), Box<dyn Error>> {
     assert!(
         body.contains(
-            r#"<div role="separator" class="fui-menu-sep"></div><button type="button" role="menuitem" command="show-modal" commandfor="cfg-remove-node-c-dialog""#
+            r#"<div class="fui-menu-sep" role="separator"></div><button type="button" role="menuitem" class="fui-menu-item fui-menu-danger" command="show-modal" commandfor="cfg-remove-node-c-dialog""#
         ),
         "Remove… is the row menu's item after its separator, opening the row's dialog: {body}"
     );
@@ -44,11 +44,11 @@ fn removal_is_in_the_row_menu(body: &str) -> Result<(), Box<dyn Error>> {
         .ok_or("the row's removal dialog")?;
     assert!(
         dialog.contains(&format!(
-            r#"class="fui-dialog fui-dialog-danger"><form action="{path}" method="post" class="{form}""#,
-            path = ferrofed_console::act::configure::IMPORT,
+            r#"class="fui-dialog fui-dialog-danger"><form method="post" action="{path}" class="{form}""#,
+            path = "/configuration/members",
             form = ferrohealth_ui::view::dialog::DIALOG_FORM,
         )),
-        "the danger dialog holds the configuration's ActionForm, which posts with no WebAssembly: {dialog}"
+        "the danger dialog holds a form that posts to the page it sits on: {dialog}"
     );
     for field in [
         r#"name="form[action]" value="remove-member""#,
@@ -124,7 +124,7 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
     );
     assert!(
         edit.contains(r#"<fieldset data-repeat="blank" data-token="__row__" hidden disabled class="fui-repeat-blank">"#),
-        "Add copies a blank endpoint in place with WebAssembly: {edit}"
+        "Add copies a blank endpoint in place with the `repeat` module: {edit}"
     );
     assert!(
         edit.contains(r#"<fieldset data-repeat="blank" data-token="__profile__" hidden disabled class="fui-repeat-blank">"#),
@@ -178,7 +178,7 @@ async fn a_path_that_names_no_part_of_the_page_is_refused() -> Result<(), Box<dy
 }
 
 // NOTE: no specification governs this: our own design; every value the gateway
-// answers reaches the page as text, the obligation of an `inner_html` sink.
+// answers reaches the page as text, escaped where the page writes it.
 #[tokio::test(flavor = "multi_thread")]
 async fn every_value_the_gateway_answers_is_escaped_on_the_page() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
@@ -205,12 +205,12 @@ async fn every_value_the_gateway_answers_is_escaped_on_the_page() -> Result<(), 
         assert!(!body.contains(raw), "{raw} reached the page raw: {body}");
     }
     assert!(
-        body.contains("&lt;script&gt;alert(1)&lt;/script&gt;"),
+        body.contains("&#60;script&#62;alert(1)&#60;/script&#62;"),
         "{body}"
     );
-    assert!(body.contains("&lt;i&gt;q&lt;/i&gt;"), "{body}");
+    assert!(body.contains("&#60;i&#62;q&#60;/i&#62;"), "{body}");
     assert!(
-        body.contains("add C &lt;script&gt;x&lt;/script&gt;"),
+        body.contains("add C &#60;script&#62;x&#60;/script&#62;"),
         "{body}"
     );
     Ok(())

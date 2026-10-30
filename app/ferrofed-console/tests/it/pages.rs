@@ -57,10 +57,8 @@ async fn every_page_answers_whole_with_its_words_and_the_security_headers()
         assert!(body.contains(words), "{path} shows {words}: {body}");
         assert!(body.contains("</html>"), "{path} is whole");
         assert_eq!("no-store", header(&response, "cache-control"), "{path}");
-        assert!(
-            header(&response, "content-security-policy").contains("'nonce-"),
-            "{path}"
-        );
+        crate::support::strict(header(&response, "content-security-policy"), &body)
+            .map_err(|refused| format!("{path}: {refused}"))?;
         assert!(
             !body.contains(crate::support::OPERATOR_TOKEN),
             "{path} never shows the token"
@@ -175,10 +173,10 @@ async fn a_parameter_row_is_added_and_removed_by_a_plain_post() -> Result<(), Bo
     Ok(())
 }
 
-// A page a post answers carries the script nonce its policy names, as every
-// page does, so its hydration runs under the Content-Security-Policy.
+// A page a post answers carries the strict policy and loads FerroUI's one
+// loader module from the console's own origin, as every page does.
 #[tokio::test]
-async fn a_page_a_post_answers_carries_the_nonce_its_policy_names() -> Result<(), Box<dyn Error>> {
+async fn a_page_a_post_answers_carries_the_strict_policy() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
     let (_state, service, session) = signed_in_console(&gateway)?;
     let (response, body) = send(
@@ -191,23 +189,7 @@ async fn a_page_a_post_answers_carries_the_nonce_its_policy_names() -> Result<()
     )
     .await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
-    let policy = header(&response, "content-security-policy");
-    let nonce = policy
-        .split_once("'nonce-")
-        .and_then(|(_, rest)| rest.split_once('\''))
-        .map(|(nonce, _)| nonce)
-        .ok_or("the policy names a nonce")?;
-    assert!(
-        body.contains(&format!(r#"<script type="module" nonce="{nonce}">"#)),
-        "{body}"
-    );
-    for script in body.split("<script").skip(1) {
-        let tag = script.split('>').next().unwrap_or_default();
-        assert!(
-            tag.contains(&format!(r#"nonce="{nonce}""#)),
-            "every script carries the nonce: {tag}"
-        );
-    }
+    crate::support::strict(header(&response, "content-security-policy"), &body)?;
     Ok(())
 }
 

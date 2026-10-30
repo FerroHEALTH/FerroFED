@@ -88,6 +88,26 @@ fn the_example_configuration_in_the_book_resolves() -> Result<(), Box<dyn Error>
         .map(|replica| replica.name.as_str())
         .collect();
     assert_eq!(vec!["gateway-0", "gateway-1"], replicas);
+    assert!(settings.deprecated.is_empty(), "{:?}", settings.deprecated);
+    Ok(())
+}
+
+// The console serves no site bundle since it draws every page on the server,
+// so `[server] site_root` is still read for one release, does nothing, and is
+// named as deprecated; the release after refuses it.
+#[test]
+fn a_site_root_is_read_does_nothing_and_is_named_deprecated() -> Result<(), Box<dyn Error>> {
+    let settings = settings("[server]\nsite_root = \"/site\"\n")?;
+    assert_eq!(vec!["server.site_root"], settings.deprecated);
+    let environment = BTreeMap::from([(
+        String::from("FERROFED_CONSOLE__SERVER__SITE_ROOT"),
+        String::from("/site"),
+    )]);
+    let overridden = Config::from_sources(None, &environment)?.resolve()?;
+    assert_eq!(vec!["server.site_root"], overridden.deprecated);
+    let plain = Config::from_sources(None, &BTreeMap::new())?.resolve()?;
+    assert!(plain.deprecated.is_empty());
+    assert_eq!("0.0.17", ferrofed_console::config::SITE_ROOT_REFUSED_IN);
     Ok(())
 }
 

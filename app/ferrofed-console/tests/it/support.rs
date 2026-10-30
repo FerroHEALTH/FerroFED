@@ -166,3 +166,31 @@ impl Write for Captured {
         Ok(())
     }
 }
+
+/// Whether the policy `policy` admits the scripts and stylesheets of the
+/// console's own origin alone, and the page `body` loads FerroUI's one
+/// loader module from there: the strict policy every page carries (FerroUI
+/// `docs/consoles.md`, "How a console builds", step 6).
+pub(crate) fn strict(policy: &str, body: &str) -> Result<(), String> {
+    let loader = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed).loader();
+    let tag = format!(r#"<script type="module" src="{loader}"></script>"#);
+    if !policy.contains("script-src 'self';") || !policy.contains("style-src 'self';") {
+        return Err(format!("the policy admits more than the console: {policy}"));
+    }
+    if ["'nonce-", "'unsafe-inline'", "'unsafe-eval'", "'wasm-unsafe-eval'"]
+        .iter()
+        .any(|source| policy.contains(source))
+    {
+        return Err(format!("the policy admits an inline or evaluated script: {policy}"));
+    }
+    if !body.contains(&tag) {
+        return Err(format!("the page does not load {loader}: {body}"));
+    }
+    if body.split("<script").skip(1).any(|script| {
+        let opening = script.split('>').next().unwrap_or_default();
+        !opening.contains(&format!(r#"src="{loader}""#))
+    }) {
+        return Err(format!("every script is the loader: {body}"));
+    }
+    Ok(())
+}

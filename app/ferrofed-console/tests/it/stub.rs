@@ -206,9 +206,8 @@ pub(crate) fn signed_in_console(
 }
 
 /// A form post of `fields` from the query console at `path`, carrying the
-/// session cookie of `session`, as the console's own page sends it with no
-/// WebAssembly: to the query's server function, with the page in the
-/// answer field.
+/// session cookie of `session`, as the console's own form sends it: to the
+/// page itself, which answers with the page drawn again.
 pub(crate) fn post_as(
     path: &str,
     session: &SessionId,

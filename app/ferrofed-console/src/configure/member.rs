@@ -58,7 +58,7 @@ pub const ADD_QUERY: &str = "cfg-add-query";
 pub const ADD_FHIR: &str = "cfg-add-fhir";
 
 /// The form of a row key: 1 to 16 lowercase letters, digits and hyphens,
-/// as the page and FerroUI's F7 island (`new-1`) write them, so a key names
+/// as the page and FerroUI's `repeat` module (`new-1`) write them, so a key names
 /// a field id and nothing else.
 fn row_key(key: &str) -> Result<&str, Refused> {
     let fits = !key.is_empty()
@@ -432,6 +432,6 @@ mod tests {
             assert!(row_key(key).is_err(), "{key}");
         }
         assert!(row_key("n12").is_ok());
-        assert!(row_key("new-1").is_ok(), "a row FerroUI's island adds");
+        assert!(row_key("new-1").is_ok(), "a row FerroUI's repeat module adds");
     }
 }

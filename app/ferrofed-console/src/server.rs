@@ -211,7 +211,8 @@ pub fn policy(form_action: &str) -> String {
 }
 
 /// Sets the console's own policy `policy` on every answer, in place of the
-/// one `ferrohealth_server::console` writes for a console that hydrates.
+/// one `ferrohealth_server::console` writes, which admits a nonce and
+/// WebAssembly this console has no use for.
 async fn strict_policy(policy: String, request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
     let value = HeaderValue::from_str(&policy)

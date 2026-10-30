@@ -5,7 +5,7 @@
 //! with no AQL in it, the detail of one query with its versions and its
 //! highlighted AQL, the link to the query console that names the query and
 //! never its text, and the escaping of every value the server renders into
-//! the page (the Leptos book, `view/01_basic_component`).
+//! the page.
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -202,7 +202,7 @@ async fn the_detail_shows_the_newest_version_and_reads_every_page() -> Result<()
         "{body}"
     );
     assert!(
-        body.contains(r#"href="/query/stored?stored=org.example::weights&amp;version=1.0.10""#),
+        body.contains(r#"href="/query/stored?stored=org.example::weights&#38;version=1.0.10""#),
         "{body}"
     );
     assert!(!body.contains("SELECT 1"), "another query's text: {body}");
@@ -249,7 +249,7 @@ async fn the_version_switch_shows_the_version_the_url_names() -> Result<(), Box<
     assert!(body.contains("COMPOSITION"), "{body}");
     assert!(!body.contains("magnitude"), "{body}");
     assert!(
-        body.contains(r#"href="/query/stored?stored=org.example::weights&amp;version=1.0.2""#),
+        body.contains(r#"href="/query/stored?stored=org.example::weights&#38;version=1.0.2""#),
         "{body}"
     );
     Ok(())
@@ -450,9 +450,8 @@ async fn a_refused_by_name_read_shows_the_refusal() -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-// The list and the detail reach the page through `inner_html`, so every
-// value the gateway names in them is escaped by `view!`, and none breaks out
-// of a text or an attribute.
+// Every value the gateway names in the list and the detail is escaped where
+// the page writes it, so none breaks out of a text or an attribute.
 #[tokio::test]
 async fn hostile_values_in_a_stored_query_render_escaped() -> Result<(), Box<dyn Error>> {
     let aql = "SELECT '<script>alert(1)</script>' AS \"x\\\" onmouseover=\\\"y\" \
@@ -493,7 +492,7 @@ async fn hostile_values_in_a_stored_query_render_escaped() -> Result<(), Box<dyn
     )
     .await?;
     assert!(!versions.contains("<b>saved</b>"), "{versions}");
-    assert!(versions.contains("&lt;b&gt;saved&lt;/b&gt;"), "{versions}");
+    assert!(versions.contains("&#60;b&#62;saved&#60;/b&#62;"), "{versions}");
 
     let items = vec![held(
         "org.example\"><i>ns</i>::q\" onclick=\"x<b>",
@@ -513,15 +512,15 @@ async fn hostile_values_in_a_stored_query_render_escaped() -> Result<(), Box<dyn
     ] {
         assert!(!list.contains(raw), "{raw}: {list}");
     }
-    // A quote in a text node is text: it ends no attribute.
+    // A quote in a text node is escaped too, so it ends no attribute.
     assert!(
         list.contains(
-            r#"<code>org.example"&gt;&lt;i&gt;ns&lt;/i&gt;::q" onclick="x&lt;b&gt;</code>"#
+            "<code>org.example&#34;&#62;&#60;i&#62;ns&#60;/i&#62;::q&#34; onclick=&#34;x&#60;b&#62;</code>"
         ),
         "{list}"
     );
     assert!(
-        list.contains(r#">1.0.0"&gt;&lt;u&gt;v&lt;/u&gt;</span>"#),
+        list.contains(">1.0.0&#34;&#62;&#60;u&#62;v&#60;/u&#62;</span>"),
         "{list}"
     );
     assert!(

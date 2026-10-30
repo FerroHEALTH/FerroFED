@@ -113,10 +113,10 @@ fn form(fields: &[(&str, &str)]) -> String {
 
 /// A `POST` of `body` to the page `route`, as the console's own form on it
 /// sends it, carrying `session`'s cookie.
-fn act(route: &str, body: String, session: &SessionId) -> Result<Request<Body>, Box<dyn Error>> {
+fn act(route: &str, body: &str, session: &SessionId) -> Result<Request<Body>, Box<dyn Error>> {
     crate::support::answer_post(
         route,
-        &body,
+        body,
         Some(session),
         &[("sec-fetch-site", "same-origin")],
     )
@@ -130,7 +130,7 @@ async fn acted(
     route: &str,
     body: String,
 ) -> Result<String, Box<dyn Error>> {
-    let (response, text) = send(service, act(route, body, session)?).await?;
+    let (response, text) = send(service, act(route, &body, session)?).await?;
     assert!(!text.contains(OPERATOR_TOKEN), "{text}");
     assert!(text.contains("</html>"), "{}: {text}", response.status());
     Ok(text)
@@ -368,8 +368,8 @@ async fn hostile_values_in_a_replicas_answer_render_escaped() -> Result<(), Box<
     let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
     let html = acted(&service, &session, "/integrity", clear_at("*")).await?;
     for escaped in [
-        "&lt;script&gt;alert(1)&lt;/script&gt;",
-        "&lt;img src=x onerror=alert(1)&gt;",
+        "&#60;script&#62;alert(1)&#60;/script&#62;",
+        "&#60;img src=x onerror=alert(1)&#62;",
     ] {
         assert!(html.contains(escaped), "{escaped}: {html}");
     }
@@ -444,8 +444,8 @@ async fn a_hostile_refusal_code_of_an_action_renders_escaped() -> Result<(), Box
         let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
         let html = acted(&service, &session, REPAIR_PAGE, repair_every_member()).await?;
         for escaped in [
-            "&lt;script&gt;alert(1)&lt;/script&gt;",
-            "&lt;img src=x onerror=alert(2)&gt;",
+            "&#60;script&#62;alert(1)&#60;/script&#62;",
+            "&#60;img src=x onerror=alert(2)&#62;",
         ] {
             assert!(html.contains(escaped), "{status}: {escaped}: {html}");
         }
@@ -571,7 +571,7 @@ async fn hostile_values_in_the_form_fields_render_escaped() -> Result<(), Box<dy
         .map(|(inside, _)| inside);
     let ehr_ids = ehr_ids.ok_or("the datalist ends")?;
     assert!(
-        ehr_ids.contains("&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"),
+        ehr_ids.contains("&#34;&#62;&#60;script&#62;alert(1)&#60;/script&#62;"),
         "{ehr_ids}"
     );
     assert!(!ehr_ids.contains("<script"), "{ehr_ids}");
@@ -599,7 +599,7 @@ async fn the_actions_are_offered_only_with_an_admin_listener() -> Result<(), Box
     let (service, session) = signed_in_console(&gateway.uri(), &replicas)?;
     let (_, integrity) = send(&service, get_as("/integrity", &session)?).await?;
     assert!(integrity.contains("Clear a held EHR id"), "{integrity}");
-    assert!(integrity.contains(r#"action="/api/clear""#), "{integrity}");
+    assert!(integrity.contains(r#"action="/integrity""#), "{integrity}");
     assert!(
         integrity.contains(&format!(r#"<option value="{EHR_ID}">"#)),
         "{integrity}"

@@ -5,17 +5,15 @@
 //! stored-query drift repair, a query, and the changes of the
 //! configuration.
 //!
-//! Each action is a server function behind FerroUI's `<ActionForm>` in its
-//! answer mode. Once the page has hydrated, the form calls the function and
-//! the page draws its answer in place. With no WebAssembly the form posts
-//! to the function, and `ferrohealth_ui::widget::action::draw_answers`
-//! draws the page the form was on with the answer. Either way the function
-//! checks the operator's session itself, reads the form on the server, asks
-//! the gateway as the operator, and the answer never reaches a URL, the
-//! history or a log; a refusal stays with the fields it is about, as
-//! FerroUI asks. Every unsafe request passes the console's same-origin
-//! check before it reaches a function (`ferrohealth_server::same_origin`). No
-//! specification governs the console's actions: our own design.
+//! Each action is a plain form that posts to the page it sits on, and the
+//! server draws that page again with the answer (FerroUI `docs/consoles.md`,
+//! "An action that answers on its page"). The action checks the operator's
+//! session itself, reads the form on the server, asks the gateway as the
+//! operator, and the answer never reaches a URL, the history or a log; a
+//! refusal stays with the fields it is about, as FerroUI asks. Every unsafe
+//! request passes the console's same-origin check before it reaches an
+//! action (`ferrohealth_server::same_origin`). No specification governs the
+//! console's actions: our own design.
 
 pub mod clear;
 pub mod configure;

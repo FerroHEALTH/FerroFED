@@ -79,8 +79,8 @@ async fn a_self_description_without_a_manufacturer_says_so() -> Result<(), Box<d
     Ok(())
 }
 
-// The page reaches the browser through `inner_html`, so a value the gateway
-// declares is escaped in the cards and in the document.
+// A value the gateway declares is escaped in the cards and in the document,
+// where the page writes it.
 #[tokio::test]
 async fn hostile_values_in_the_self_description_render_escaped() -> Result<(), Box<dyn Error>> {
     let page = described(with_members(
@@ -91,10 +91,10 @@ async fn hostile_values_in_the_self_description_render_escaped() -> Result<(), B
         assert!(!page.contains(raw), "{raw}: {page}");
     }
     assert!(
-        page.contains("&lt;script&gt;alert(1)&lt;/script&gt;"),
+        page.contains("&#60;script&#62;alert(1)&#60;/script&#62;"),
         "{page}"
     );
-    assert!(page.contains("&lt;img src=x&gt;"), "{page}");
+    assert!(page.contains("&#60;img src=x&#62;"), "{page}");
     Ok(())
 }
 
