@@ -12,10 +12,9 @@
 //!
 //! This file is the one place those details are written. The gateway's
 //! `GET {base}/` and `OPTIONS {base}/`, its startup banner and `--version`
-//! read [`MANUFACTURER`] from this module, and the operator console compiles
-//! this same file for its footer and its About page, on the server and in
-//! the browser, since the browser half links no FerroFED crate. The container image labels
-//! repeat the values, and a test holds them to this file.
+//! read [`MANUFACTURER`] from this module, and so do the operator console's
+//! footer and About page. The container image labels repeat the values, and
+//! a test holds them to this file.
 
 /// The manufacturer of an EHR system, as Art 30(1)(g) asks it to be named.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]

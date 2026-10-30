@@ -335,6 +335,45 @@ fn the_operator_console_reaches_the_gateway_over_http_alone() -> Result<(), Box<
     Ok(())
 }
 
+/// The crates of a page drawn in the browser, which the operator console
+/// links no more: every page is one document its server draws with FerroUI
+/// 0.6, and FerroUI's script modules are files the console serves (#1457).
+const BROWSER_RENDERING: &[&str] = &[
+    "leptos",
+    "leptos_axum",
+    "leptos_meta",
+    "leptos_router",
+    "server_fn",
+    "tachys",
+    "wasm-bindgen",
+    "web-sys",
+    "js-sys",
+    "console_error_panic_hook",
+];
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn the_operator_console_draws_every_page_on_its_server() -> Result<(), Box<dyn Error>> {
+    let reached = closure(CONSOLE)?;
+    assert!(
+        reached.contains("ferrohealth-ui"),
+        "cargo tree for {CONSOLE} did not list FerroUI, so its output was not read"
+    );
+    let breaches: Vec<&str> = BROWSER_RENDERING
+        .iter()
+        .copied()
+        .filter(|name| reached.contains(*name))
+        .collect();
+    assert!(
+        breaches.is_empty(),
+        "the operator console links a crate that draws a page in the browser, which FerroUI 0.6 has no place for (#1457): {breaches:?}"
+    );
+    Ok(())
+}
+
 #[test]
 #[expect(
     clippy::panic_in_result_fn,

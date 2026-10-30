@@ -2,10 +2,11 @@
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
-# The FerroFED Console image: one static binary and its site bundle
-# on distroless static, per platform. Nothing is compiled here. The release
-# lane builds the musl binaries and the site bundle and stages them under
-# dist/console/ before this file is built for linux/amd64 and linux/arm64
+# The FerroFED Console image: one static binary on distroless static, per
+# platform. The binary draws every page and serves FerroUI's stylesheet,
+# themes and script modules itself. Nothing is compiled here. The release
+# lane builds the musl binaries and stages them under dist/console/ before
+# this file is built for linux/amd64 and linux/arm64
 # (.github/workflows/release-console.yml). The root .dockerignore holds the
 # build context to dist/.
 #
@@ -24,17 +25,13 @@ FROM gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e77
 ARG TARGETOS
 ARG TARGETARCH
 
-# Root-owned, executable, and not writable by the runtime user. The site
-# bundle is architecture-independent and root-owned too, so the runtime user
-# reads it and cannot change it.
+# Root-owned, executable, and not writable by the runtime user.
 COPY --chmod=0555 dist/console/${TARGETOS}_${TARGETARCH}/ferrofed-console /usr/local/bin/ferrofed-console
-COPY dist/console/site/ /site/
 
-# The binary's own defaults are loopback and a checkout's target/site, so the
-# image listens on every interface on the documented port and serves the
-# bundle it carries. Every override is FERROFED_CONSOLE__<SECTION>__<KEY>.
-ENV FERROFED_CONSOLE__SERVER__LISTEN=0.0.0.0:3000 \
-    FERROFED_CONSOLE__SERVER__SITE_ROOT=/site
+# The binary's own default is loopback, so the image listens on every
+# interface on the documented port. Every override is
+# FERROFED_CONSOLE__<SECTION>__<KEY>.
+ENV FERROFED_CONSOLE__SERVER__LISTEN=0.0.0.0:3000
 EXPOSE 3000/tcp
 
 # Numeric on purpose: the kubelet cannot resolve a user name against an image

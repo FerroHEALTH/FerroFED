@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 
-# The operator console image, as a REUSABLE workflow: the static binaries and
-# the site bundle built here, attested, and packed into
+# The operator console image, as a REUSABLE workflow: the static binaries
+# built here, attested, and packed into
 # ghcr.io/ferrohealth/ferrofed-console with the same provenance and SBOM
 # attestations as the gateway image.
 #
@@ -12,11 +12,12 @@
 # a caller cannot add steps to
 # (https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-and-reusable-workflows-to-achieve-slsa-v1-build-level-3).
 #
-# Three jobs. `binary` builds the musl server binary with cargo auditable on a
-# runner of each architecture, and `site` builds the architecture-independent
-# site bundle with cargo-leptos; each attests what it built. `image` verifies
-# both against this workflow's signer identity before it stages them, so the
-# image provenance chains to attested inputs, then pushes the index, attests
+# Two jobs. `binary` builds the musl server binary with cargo auditable on a
+# runner of each architecture and attests what it built; the binary draws
+# every page and serves FerroUI's stylesheet, themes and script modules from
+# the crate, so the image carries nothing else. `image` verifies both
+# binaries against this workflow's signer identity before it stages them, so
+# the image provenance chains to attested inputs, then pushes the index, attests
 # the index and both platform manifests as OCI referrers, and verifies its own
 # output as a consumer would. The console ships as an image alone, so the
 # release carries no console asset.
@@ -110,8 +111,6 @@ jobs:
         with:
           tool: cargo-auditable@0.7.5
 
-      # LEPTOS_OUTPUT_NAME, the bundle name the page loads, comes from the
-      # repository's .cargo/config.toml.
       - name: Build the console server
         env:
           TARGET: ${{ matrix.target }}
@@ -140,60 +139,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  site:
-    name: console site bundle
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
-      id-token: write # Sigstore, for the bundle's provenance
-      attestations: write # store it against this repository
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.sha }}
-      - uses: ./.github/actions/setup-rust
-        with:
-          target: wasm32-unknown-unknown
-          cache: "false"
-      # Prebuilt and checksum-verified by the installer; cargo-leptos finds
-      # the wasm-bindgen CLI on PATH, which must equal the wasm-bindgen crate
-      # Cargo.lock holds.
-      - name: Install cargo-leptos
-        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
-        with:
-          tool: cargo-leptos@0.3.11
-      - name: Install the wasm-bindgen CLI
-        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
-        with:
-          tool: wasm-bindgen@0.2.129
-      # Pinned and checked against its SHA-256 before use, so cargo-leptos
-      # finds it on PATH and never downloads it itself in this attested job.
-      - name: Install wasm-opt
-        run: |
-          bash scripts/release/console-tools.sh "$RUNNER_TEMP/console-tools"
-          echo "$RUNNER_TEMP/console-tools/bin" >> "$GITHUB_PATH"
-      - name: Build the site bundle
-        run: bash scripts/release/console-site.sh --release
-      # One tarball, so the bundle is one attested subject.
-      - name: Pack the site bundle
-        run: tar -C target -czf ferrofed-console-site.tar.gz site
-      - name: Attest the bundle's provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: ferrofed-console-site.tar.gz
-      - name: Hand the bundle to the image job
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ferrofed-console-${{ inputs.tag }}-site
-          path: ferrofed-console-site.tar.gz
-          if-no-files-found: error
-          retention-days: 1
-
   image:
     name: console image (linux/amd64, linux/arm64)
-    needs: [binary, site]
+    needs: [binary]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -220,11 +168,6 @@ jobs:
         with:
           name: ferrofed-console-${{ inputs.tag }}-arm64
           path: inputs/
-      - name: Download the site bundle
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ferrofed-console-${{ inputs.tag }}-site
-          path: inputs/
 
       # Refuse any input this workflow did not attest. The staged layout is
       # the one docker/console/Dockerfile copies from, dist/console/.
@@ -241,11 +184,6 @@ jobs:
             mkdir -p "dist/console/linux_${arch}"
             cp "$binary" "dist/console/linux_${arch}/ferrofed-console"
             chmod 0555 "dist/console/linux_${arch}/ferrofed-console"
-          done
-          gh attestation verify inputs/ferrofed-console-site.tar.gz --repo "$GITHUB_REPOSITORY" --signer-workflow "$signer"
-          tar -C dist/console -xzf inputs/ferrofed-console-site.tar.gz site
-          for file in ferrofed-console.wasm ferrofed-console.js; do
-            test -s "dist/console/site/pkg/${file}"
           done
 
       # No QEMU: docker/console/Dockerfile runs no command, it only copies what
