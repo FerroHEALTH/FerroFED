@@ -12,6 +12,7 @@
 //! organisation leads to the console's form where the configuration is
 //! managed.
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::table::filter::{Find, find_form};
@@ -21,13 +22,12 @@ use ferrohealth_ui::table::view::{
     Body, Column, DataTable, Role, Sorting, cell, count_cell, data_table, title_cell,
 };
 use ferrohealth_ui::view::action::ActionGroup;
+use ferrohealth_ui::view::action_menu::{Act, Action};
 use ferrohealth_ui::view::surface::Header;
 use ferrohealth_ui::view::tabs::{Tab, TabRow};
 use ferrohealth_ui::view::template::list::{
     ActiveFilters, FilterChip, HeadingCount, ListCard, ListPage, list_empty, list_page,
 };
-use ferrohealth_ui::view::action_menu::{Act, Action};
-use ferrohealth_ui::html::Html;
 
 use crate::app::{ALL_NODES, ORGANISATIONS};
 use crate::locale::{Msg, current, message, tr, tr_with};
@@ -206,21 +206,21 @@ fn listing(federation: &Federation, view_of: View, asked: &Asked, managed: bool)
     list_page(
         &current(),
         ListPage {
-        header: header(),
-        actions: actions(managed),
-        total: Some(total),
-        summary: None,
-        toolbar: Some(toolbar),
-        filters,
-        card: ListCard {
-            title: tr(Msg::OrganisationsTitle),
-            count: Some(heading_count(shown, total)),
-            order: None,
-            tabs: Some(tabs),
-            actions: None,
-            body,
-            pager,
-        },
+            header: header(),
+            actions: actions(managed),
+            total: Some(total),
+            summary: None,
+            toolbar: Some(toolbar),
+            filters,
+            card: ListCard {
+                title: tr(Msg::OrganisationsTitle),
+                count: Some(heading_count(shown, total)),
+                order: None,
+                tabs: Some(tabs),
+                actions: None,
+                body,
+                pager,
+            },
         },
     )
 }
@@ -317,32 +317,33 @@ fn organisation_table(organisations: &[&Organisation]) -> Html {
         },
         Column::text("worst", tr(Msg::ColumnWorstNode)),
     ];
-    let rows = organisations
-        .iter()
-        .map(|organisation| {
-            let href = organisation.routable().then(|| organisation.href());
-            let health = organisation.health();
-            let locale = current();
-            h(format!(
-                "<tr{}>{}{}{}{} {}</tr>",
-                excluded(health),
-                title_cell(href.as_deref(), t(organisation.shown()), None),
-                cell(&columns[1], h(format!("<code>{}</code>", t(&organisation.id)))),
-                count_cell(
-                    &locale,
-                    &columns[2],
-                    u32::try_from(organisation.nodes.len()).unwrap_or(u32::MAX),
-                    Noun::new(message(Msg::NounNodes)),
-                ),
-                count_cell(
-                    &locale,
-                    &columns[3],
-                    u32::try_from(organisation.endpoint_count()).unwrap_or(u32::MAX),
-                    Noun::new(message(Msg::NounEndpoints)),
-                ),
-                cell(&columns[4], state(health.mark(), health.word(), None)),
-            ))
-        });
+    let rows = organisations.iter().map(|organisation| {
+        let href = organisation.routable().then(|| organisation.href());
+        let health = organisation.health();
+        let locale = current();
+        h(format!(
+            "<tr{}>{}{}{}{} {}</tr>",
+            excluded(health),
+            title_cell(href.as_deref(), t(organisation.shown()), None),
+            cell(
+                &columns[1],
+                h(format!("<code>{}</code>", t(&organisation.id)))
+            ),
+            count_cell(
+                &locale,
+                &columns[2],
+                u32::try_from(organisation.nodes.len()).unwrap_or(u32::MAX),
+                Noun::new(message(Msg::NounNodes)),
+            ),
+            count_cell(
+                &locale,
+                &columns[3],
+                u32::try_from(organisation.endpoint_count()).unwrap_or(u32::MAX),
+                Noun::new(message(Msg::NounEndpoints)),
+            ),
+            cell(&columns[4], state(health.mark(), health.word(), None)),
+        ))
+    });
     data_table(DataTable {
         caption: &tr(Msg::OrganisationsTitle),
         columns: &columns,
@@ -384,33 +385,31 @@ fn node_table(nodes: &[(&Organisation, &Node)]) -> Html {
             ..Column::text("p95", tr(Msg::ColumnP95)).titled(tr(Msg::ColumnP95Title))
         },
     ];
-    let rows = nodes
-        .iter()
-        .map(|(organisation, node)| {
-            let href =
-                (node.routable() && organisation.routable()).then(|| organisation.node_href(node));
-            let health = node.health();
-            h(format!(
-                "<tr{}>{}{}{} {}{}{}</tr>",
-                excluded(health),
-                title_cell(
-                    href.as_deref(),
-                    h(format!("<code>{}</code>", t(&node.id))),
-                    None
-                ),
-                cell(&columns[1], t(organisation.shown())),
-                cell(
-                    &columns[2],
-                    h(format!(
-                        "<code>{}</code>",
-                        t(node.system_id.clone().unwrap_or_default())
-                    )),
-                ),
-                cell(&columns[3], state(health.mark(), health.word(), None)),
-                cell(&columns[4], crate::pages::latency(node.latency_ms_p50())),
-                cell(&columns[5], crate::pages::latency(node.latency_ms_p95())),
-            ))
-        });
+    let rows = nodes.iter().map(|(organisation, node)| {
+        let href =
+            (node.routable() && organisation.routable()).then(|| organisation.node_href(node));
+        let health = node.health();
+        h(format!(
+            "<tr{}>{}{}{} {}{}{}</tr>",
+            excluded(health),
+            title_cell(
+                href.as_deref(),
+                h(format!("<code>{}</code>", t(&node.id))),
+                None
+            ),
+            cell(&columns[1], t(organisation.shown())),
+            cell(
+                &columns[2],
+                h(format!(
+                    "<code>{}</code>",
+                    t(node.system_id.clone().unwrap_or_default())
+                )),
+            ),
+            cell(&columns[3], state(health.mark(), health.word(), None)),
+            cell(&columns[4], crate::pages::latency(node.latency_ms_p50())),
+            cell(&columns[5], crate::pages::latency(node.latency_ms_p95())),
+        ))
+    });
     data_table(DataTable {
         caption: &tr(Msg::AllNodes),
         columns: &columns,

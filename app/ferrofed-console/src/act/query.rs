@@ -14,10 +14,15 @@
 //! of a parameter row's Remove or of Add posts the form too, and the page
 //! answers with the rows changed and no query run (FerroUI F7).
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
-use std::collections::BTreeMap;
 
+use crate::act::field;
+use crate::act::fields::Fields;
+use crate::gateway::{FederatedAnswer, QueryCall, QueryTarget};
+use crate::locale::{Msg, tr_in};
+use crate::read::{Fault, Refusal, Stop};
 use ferrohealth_ui::i18n::Locale;
 use openehr_federation::headers::{
     COMPLETENESS, COMPLETENESS_PARTIAL, DEDUP, ENDPOINT, ORGANISATION,
@@ -26,11 +31,6 @@ use openehr_federation::options::OptionsRoot;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::generated::query::QueryParameters;
 use serde::{Deserialize, Serialize};
-use crate::act::field;
-use crate::act::fields::Fields;
-use crate::gateway::{FederatedAnswer, QueryCall, QueryTarget};
-use crate::locale::{Msg, tr_in};
-use crate::read::{Fault, Refusal, Stop};
 
 /// One parameter row of the form: its key on the page, its name and its
 /// value.

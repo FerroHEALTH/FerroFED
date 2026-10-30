@@ -12,10 +12,10 @@
 //! [`crate::prefs::PREFERENCE`], which returns here saying what it kept.
 
 use ferrohealth_ui::calendar::Weekday;
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::view::preferences::{
     PreferencesPage, Section, SectionRoutes, preferences_page,
 };
-use ferrohealth_ui::html::Html;
 
 use crate::locale::{Msg, tr};
 use crate::prefs::{PREFERENCE, PREFERENCES, RESET};
@@ -46,19 +46,19 @@ pub fn page() -> Html {
     let page = preferences_page(
         &visit.locale,
         PreferencesPage {
-        section,
-        routes,
-        reading: false,
-        preferences: visit.chosen().preferences,
-        action: String::from(PREFERENCE),
-        saved,
-        accent: tr(Msg::AccentAzure),
-        languages: crate::locale::choices(),
-        browser: visit.browser.clone(),
-        week_from_language: Weekday::Monday,
-        shortcuts: None,
-        reset: String::from(RESET),
-        own: Vec::new(),
+            section,
+            routes,
+            reading: false,
+            preferences: visit.chosen().preferences,
+            action: String::from(PREFERENCE),
+            saved,
+            accent: tr(Msg::AccentAzure),
+            languages: crate::locale::choices(),
+            browser: visit.browser.clone(),
+            week_from_language: Weekday::Monday,
+            shortcuts: None,
+            reset: String::from(RESET),
+            own: Vec::new(),
         },
     );
     crate::app::title(tr(Msg::PreferencesTitle)).then(page)

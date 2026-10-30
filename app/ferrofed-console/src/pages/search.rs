@@ -10,17 +10,17 @@
 //! filter's do. As you type, FerroUI's `search` module asks [`ANSWER`],
 //! the route [`find_answer`], which answers the FerroUI search answer as
 //! JSON; the find page lists every match in the page.
+use crate::app::{QUERY, STORED_QUERIES};
+use crate::locale::{Msg, current, tr, tr_with};
+use crate::pages::{h, t};
+use crate::read::federation::Federation;
 use axum::response::{IntoResponse, Response};
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::search::{Hit, HitGroup, Mark, Way};
 use ferrohealth_ui::view::search::{SearchAnswer, find_results};
 use ferrohealth_ui::view::surface::{Header, page_heading};
-use ferrohealth_ui::html::Html;
-use crate::app::{QUERY, STORED_QUERIES};
-use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, t};
-use crate::read::federation::Federation;
 
 /// The route the panel under the field asks as you type.
 pub const ANSWER: &str = "/search/answer";

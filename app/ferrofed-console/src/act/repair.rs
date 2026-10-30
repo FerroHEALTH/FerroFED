@@ -10,7 +10,6 @@
 //! replicas' shared one. The page answers with each member's outcome as a
 //! fan-out (§9.5).
 
-
 use crate::act::ReplicaAnswer;
 use crate::act::fields::Fields;
 use crate::act::query::EndpointLine;

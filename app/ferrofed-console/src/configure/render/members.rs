@@ -6,15 +6,15 @@
 //! each endpoint a row of its own fields.
 
 use ferrofed_registry::console::{ConsoleMember, ConsoleState, MemberResource, Owner};
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::{ACTIONS, Column, NUM};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{Field, INPUT, SWITCH};
+use ferrohealth_ui::view::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
 use ferrohealth_ui::view::status::{badge, pill};
 use ferrohealth_ui::view::surface::definitions;
-use ferrohealth_ui::view::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
-use ferrohealth_ui::html::Html;
 
 use crate::configure::draft::{self, Edit};
 use crate::configure::member::{ADD_FHIR, ADD_QUERY, fhir_field, field, query_field};
@@ -228,7 +228,11 @@ pub(super) fn member(loaded: &Loaded<'_>, node: &str) -> Result<Html, Refusal> {
     match (&found.member, editable) {
         (Some(held), true) => Ok(member_form(loaded, Some(held)).then(h(format!(
             "<div class=\"fui-actions\">{}</div>",
-            removal(loaded, node, (String::from("remove-member"), tr(Msg::Remove)))
+            removal(
+                loaded,
+                node,
+                (String::from("remove-member"), tr(Msg::Remove))
+            )
         )))),
         _ => Ok(detail(found)),
     }
@@ -338,7 +342,11 @@ fn query_row(row: &QueryEndpointInput) -> RepeatRow {
                 },
             ),
         )),
-        in_service(query_field(key, "service"), name("in_service"), row.in_service),
+        in_service(
+            query_field(key, "service"),
+            name("in_service"),
+            row.in_service,
+        ),
     ]);
     RepeatRow {
         key: key.to_owned(),
@@ -423,7 +431,10 @@ fn profiles(key: &str, held: &[String]) -> Html {
         rows,
         token: PROFILE,
         blank: Some(blank),
-        add: Some(row_add(&Edit::AddProfile(key.to_owned()), tr(Msg::AddProfile))),
+        add: Some(row_add(
+            &Edit::AddProfile(key.to_owned()),
+            tr(Msg::AddProfile),
+        )),
         empty: tr(Msg::NoProfileYet),
         form: None,
     })
@@ -522,7 +533,11 @@ fn fhir_row(row: &FhirEndpointInput) -> RepeatRow {
         ),
         categories(key, &row.categories),
         profiles(key, &row.profiles),
-        in_service(fhir_field(key, "service"), name("in_service"), row.in_service),
+        in_service(
+            fhir_field(key, "service"),
+            name("in_service"),
+            row.in_service,
+        ),
     ]);
     RepeatRow {
         key: key.to_owned(),

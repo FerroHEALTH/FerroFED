@@ -159,21 +159,21 @@ fn top_bar(
     let menu = user_menu(
         &locale,
         UserMenu {
-        id: USER_MENU_ID,
-        label: operator.clone(),
-        name: Some(operator.clone()),
-        who: operator,
-        line: tr(Msg::OperatorLine),
-        preferences: String::from(crate::prefs::PREFERENCES),
-        theme: ThemeChoice {
-            current: visit.chosen().preferences.theme,
-            action: String::from(crate::prefs::PREFERENCE),
-            back: path.to_owned(),
-        },
-        choices: Vec::new(),
-        shortcuts: None,
-        sign_out: Some(String::from(SIGN_OUT)),
-        links: Vec::new(),
+            id: USER_MENU_ID,
+            label: operator.clone(),
+            name: Some(operator.clone()),
+            who: operator,
+            line: tr(Msg::OperatorLine),
+            preferences: String::from(crate::prefs::PREFERENCES),
+            theme: ThemeChoice {
+                current: visit.chosen().preferences.theme,
+                action: String::from(crate::prefs::PREFERENCE),
+                back: path.to_owned(),
+            },
+            choices: Vec::new(),
+            shortcuts: None,
+            sign_out: Some(String::from(SIGN_OUT)),
+            links: Vec::new(),
         },
     );
     topbar(
@@ -218,16 +218,15 @@ fn development(reads: &Reads) -> Option<Html> {
         .deployment
         .as_ref()
         .is_ok_and(|deployment| deployment.development);
-    development
-        .then(|| {
-            banner(
-                Tone::Warn,
-                Glyph::TRIANGLE_ALERT,
-                tr(Msg::DevelopmentTitle),
-                &tr(Msg::DevelopmentBody),
-                None,
-            )
-        })
+    development.then(|| {
+        banner(
+            Tone::Warn,
+            Glyph::TRIANGLE_ALERT,
+            tr(Msg::DevelopmentTitle),
+            &tr(Msg::DevelopmentBody),
+            None,
+        )
+    })
 }
 
 /// The navigation of the shell drawn at `path`, folded to its rail when
@@ -238,19 +237,19 @@ fn navigation_of(path: &str, rail: bool, replicas: &[String], reads: &Reads) -> 
     sidebar(
         &current(),
         Sidebar {
-        id: SIDEBAR_ID,
-        label: tr(Msg::NavLabel),
-        groups: navigation(reads.open_incidents, reachable, !replicas.is_empty()),
-        current: path.to_owned(),
-        rail: Some(Rail {
-            collapsed: rail,
-            action: String::from(crate::prefs::SIDEBAR),
-            back: path.to_owned(),
-        }),
-        nest: reads
-            .federation
-            .as_ref()
-            .and_then(|federation| nest(federation, path)),
+            id: SIDEBAR_ID,
+            label: tr(Msg::NavLabel),
+            groups: navigation(reads.open_incidents, reachable, !replicas.is_empty()),
+            current: path.to_owned(),
+            rail: Some(Rail {
+                collapsed: rail,
+                action: String::from(crate::prefs::SIDEBAR),
+                back: path.to_owned(),
+            }),
+            nest: reads
+                .federation
+                .as_ref()
+                .and_then(|federation| nest(federation, path)),
         },
     )
 }

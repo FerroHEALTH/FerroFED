@@ -9,8 +9,8 @@
 //! again shows it.
 
 use ferrofed_registry::revision::{Applied, Current, Imported, Review};
-use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::html::Html;
+use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::notice::{Announce, notice};
 
 use crate::act::{Acted, ReplicaAnswer};
@@ -90,11 +90,7 @@ pub fn refused(refused: &Refusal) -> ActionAnswer {
 
 /// What `answer`'s replica did with the action `what`, its report drawn by
 /// `done`.
-pub fn replica_said<T>(
-    answer: &ReplicaAnswer<T>,
-    what: &str,
-    done: fn(&str, &T) -> Html,
-) -> Html {
+pub fn replica_said<T>(answer: &ReplicaAnswer<T>, what: &str, done: fn(&str, &T) -> Html) -> Html {
     let replica = answer.replica.as_str();
     match &answer.acted {
         Acted::Done(report) => done(replica, report),

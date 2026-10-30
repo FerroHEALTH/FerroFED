@@ -7,14 +7,14 @@
 //! confirm and its roll back (§13.1 onward credentials, commit-confirm).
 
 use ferrofed_registry::revision::{Current, Review, RevisionId, Signed};
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
+use ferrohealth_ui::view::countdown::{Countdown, countdown};
 use ferrohealth_ui::view::dialog::{Explanation, info_dialog};
 use ferrohealth_ui::view::notice::{Announce, notice};
 use ferrohealth_ui::view::status::pill;
-use ferrohealth_ui::html::Html;
-use ferrohealth_ui::view::countdown::{Countdown, countdown};
 use ferrohealth_ui::view::time::{reading, timestamp};
 
 use crate::configure::render::parts::{Text, confirmed, diff_table, form, hidden, lede, text};
@@ -353,7 +353,10 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> Html {
         "<div class=\"fui-split\"><div><h2 id=\"pending-title\" class=\"fui-card-title\">{}</h2>{}</div>\
          <div class=\"fui-cluster\">{apply}</div></div>{}{}",
         t(heading),
-        lede(tr(Msg::SavedNotAppliedReadWhatChanges), "what-a-revision-holds"),
+        lede(
+            tr(Msg::SavedNotAppliedReadWhatChanges),
+            "what-a-revision-holds"
+        ),
         opt(table),
         opt(review),
     ))

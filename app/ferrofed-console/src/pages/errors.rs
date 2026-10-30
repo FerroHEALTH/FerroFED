@@ -25,26 +25,26 @@ pub fn not_found() -> Html {
     let page = error_page(
         &current(),
         ErrorPage {
-        status: Status::NotFound,
-        title: tr(Msg::NotFoundTitle),
-        body: h(format!(
-            "<p>{}</p>",
-            t(tr_with(Msg::NotFoundBody, &[("path", here.into())]))
-        )),
-        hint: None,
-        ways: vec![
-            Way {
-                label: tr(Msg::NotFoundDashboard),
-                href: String::from("/"),
-                glyph: Some(Glyph::ARROW_LEFT),
-            },
-            Way {
-                label: tr(Msg::NotFoundOrganisations),
-                href: String::from(crate::app::ORGANISATIONS),
-                glyph: None,
-            },
-        ],
-        detail: None,
+            status: Status::NotFound,
+            title: tr(Msg::NotFoundTitle),
+            body: h(format!(
+                "<p>{}</p>",
+                t(tr_with(Msg::NotFoundBody, &[("path", here.into())]))
+            )),
+            hint: None,
+            ways: vec![
+                Way {
+                    label: tr(Msg::NotFoundDashboard),
+                    href: String::from("/"),
+                    glyph: Some(Glyph::ARROW_LEFT),
+                },
+                Way {
+                    label: tr(Msg::NotFoundOrganisations),
+                    href: String::from(crate::app::ORGANISATIONS),
+                    glyph: None,
+                },
+            ],
+            detail: None,
         },
     );
     crate::app::title(tr(Msg::NotFoundTitle)).then(page)
@@ -58,19 +58,19 @@ pub fn forbidden() -> Html {
     let page = error_page(
         &current(),
         ErrorPage {
-        status: Status::Forbidden,
-        title: tr(Msg::ForbiddenTitle),
-        body: h(format!("<p>{}</p>", t(tr(Msg::ForbiddenBody)))),
-        hint: Some(h(format!(
-            "<p class=\"fui-small fui-muted\">{}</p>",
-            t(tr(Msg::ForbiddenHint))
-        ))),
-        ways: vec![Way {
-            label: tr(Msg::SignInAgain),
-            href: String::from(crate::app::SIGN_IN),
-            glyph: Some(Glyph::LOG_IN),
-        }],
-        detail: None,
+            status: Status::Forbidden,
+            title: tr(Msg::ForbiddenTitle),
+            body: h(format!("<p>{}</p>", t(tr(Msg::ForbiddenBody)))),
+            hint: Some(h(format!(
+                "<p class=\"fui-small fui-muted\">{}</p>",
+                t(tr(Msg::ForbiddenHint))
+            ))),
+            ways: vec![Way {
+                label: tr(Msg::SignInAgain),
+                href: String::from(crate::app::SIGN_IN),
+                glyph: Some(Glyph::LOG_IN),
+            }],
+            detail: None,
         },
     );
     crate::app::title(tr(Msg::ForbiddenTitle)).then(page)
@@ -86,16 +86,16 @@ pub fn unreadable() -> Html {
     let page = error_page(
         &locale,
         ErrorPage {
-        status: Status::Fault,
-        title: tr(Msg::UnreadableTitle),
-        body: h(format!("<p>{}</p>", t(tr(Msg::UnreadableBody)))),
-        hint: None,
-        ways: vec![Way {
-            label: tr(Msg::TryAgain),
-            href: String::from("/"),
-            glyph: Some(Glyph::REFRESH_CW),
-        }],
-        detail: None,
+            status: Status::Fault,
+            title: tr(Msg::UnreadableTitle),
+            body: h(format!("<p>{}</p>", t(tr(Msg::UnreadableBody)))),
+            hint: None,
+            ways: vec![Way {
+                label: tr(Msg::TryAgain),
+                href: String::from("/"),
+                glyph: Some(Glyph::REFRESH_CW),
+            }],
+            detail: None,
         },
     );
     crate::app::title(tr(Msg::UnreadableTitle)).then(centred(

@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use ferrofed_registry::operator::StoredVersion;
 use ferrohealth_ui::highlight::Language;
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::table::view::{
@@ -24,6 +25,7 @@ use ferrohealth_ui::table::view::{
 };
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::action::ActionGroup;
+use ferrohealth_ui::view::action_menu::{Act, Action};
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::code::{Code, CodeHead, code_section};
 use ferrohealth_ui::view::form::{Field, INPUT};
@@ -37,8 +39,6 @@ use ferrohealth_ui::view::tabs::{Tab, TabRow};
 use ferrohealth_ui::view::tag::Tag;
 use ferrohealth_ui::view::template::detail::{DetailPage, detail_page};
 use ferrohealth_ui::view::template::list::HeadingCount;
-use ferrohealth_ui::view::action_menu::{Act, Action};
-use ferrohealth_ui::html::Html;
 use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::act::Acted;
@@ -379,9 +379,8 @@ pub async fn page(posted: Option<Fields>) -> Html {
         }
         Err(stop) => opt(repaired.map(repair_answer)).then(stopped(&stop)),
         Ok(mut versions) => {
-            versions.sort_by_key(|version| {
-                std::cmp::Reverse(version_key(&version.definition.version))
-            });
+            versions
+                .sort_by_key(|version| std::cmp::Reverse(version_key(&version.definition.version)));
             detail(
                 &name,
                 &versions,
@@ -470,13 +469,11 @@ fn detail(
                 mono: true,
                 badge: read_only,
             },
-            actions: ActionGroup::primary(
-                Action::new(
-                    Some(Glyph::PLAY),
-                    tr(Msg::StoredRun),
-                    Act::Link(console_href(name, &version)),
-                ),
-            ),
+            actions: ActionGroup::primary(Action::new(
+                Some(Glyph::PLAY),
+                tr(Msg::StoredRun),
+                Act::Link(console_href(name, &version)),
+            )),
             stepper: None,
             tabs: Some(tabs),
             body: Html::join([opt(missing), opt(answer), opt(repair), body]),
@@ -521,28 +518,24 @@ fn versions_table(name: &str, versions: &[Held]) -> Html {
         Column::text("owner", tr(Msg::ColumnOwner)),
     ];
     let rows = Html::join(versions.iter().map(|version| {
-            let number = version.definition.version.clone();
-            let link = format!("{}?version={}", href(name), encoded(&number));
-            let owner = if version.read_only {
-                Tag::new(tr(Msg::StoredReadOnly))
-                    .locked(tr(Msg::StoredReadOnlyTitle))
-                    .view()
-            } else {
-                Tag::new(tr(Msg::OwnerStore)).view()
-            };
-            h(format!(
-                "<tr>{}{}{}</tr>",
-                title_cell(
-                    Some(&link),
-                    h(format!("<code>{}</code>", t(&number))),
-                    None
-                ),
-                cell(
-                    &columns[1],
-                    crate::pages::relative(&version.definition.saved)
-                ),
-                cell(&columns[2], owner),
-            ))
+        let number = version.definition.version.clone();
+        let link = format!("{}?version={}", href(name), encoded(&number));
+        let owner = if version.read_only {
+            Tag::new(tr(Msg::StoredReadOnly))
+                .locked(tr(Msg::StoredReadOnlyTitle))
+                .view()
+        } else {
+            Tag::new(tr(Msg::OwnerStore)).view()
+        };
+        h(format!(
+            "<tr>{}{}{}</tr>",
+            title_cell(Some(&link), h(format!("<code>{}</code>", t(&number))), None),
+            cell(
+                &columns[1],
+                crate::pages::relative(&version.definition.saved)
+            ),
+            cell(&columns[2], owner),
+        ))
     }));
     data_table(DataTable {
         caption: &tr(Msg::StoredTabVersions),

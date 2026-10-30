@@ -304,11 +304,7 @@ fn checks(name: &'static str, values: &[String], chosen: &[String]) -> Html {
     Html::join(values.iter().map(|value| {
         let id = format!("query-{name}-{value}");
         let checked = chosen.contains(value);
-        keyed_check(
-            &id,
-            value.clone(),
-            checkbox(&id, &field, value, checked),
-        )
+        keyed_check(&id, value.clone(), checkbox(&id, &field, value, checked))
     }))
 }
 
@@ -426,20 +422,20 @@ pub fn outcome(endpoints: &[crate::act::query::EndpointLine], status: u16) -> Ht
     fanout(
         &current(),
         &Fanout {
-        label: tr(Msg::FanoutLabel),
-        line: tr_with(
-            Msg::FanoutLine,
-            &[
-                ("answered", Arg::from(answered)),
-                ("asked", Arg::from(asked)),
-                ("status", Arg::from(u32::from(status))),
-            ],
-        ),
-        missing: tr_with(
-            Msg::FanoutMissing,
-            &[("endpoints", missing.join(", ").into())],
-        ),
-        nodes,
+            label: tr(Msg::FanoutLabel),
+            line: tr_with(
+                Msg::FanoutLine,
+                &[
+                    ("answered", Arg::from(answered)),
+                    ("asked", Arg::from(asked)),
+                    ("status", Arg::from(u32::from(status))),
+                ],
+            ),
+            missing: tr_with(
+                Msg::FanoutMissing,
+                &[("endpoints", missing.join(", ").into())],
+            ),
+            nodes,
         },
     )
 }
@@ -521,6 +517,10 @@ fn answered(answer: &QueryAnswer) -> Html {
             }))
             .then(table),
         )
-        .then(panel_section(&locale, None, disclosure(tr(Msg::QueryRaw), raw))),
+        .then(panel_section(
+            &locale,
+            None,
+            disclosure(tr(Msg::QueryRaw), raw),
+        )),
     ))
 }

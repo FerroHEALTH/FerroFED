@@ -15,6 +15,7 @@
 //! or cannot answer says so in its own card, and the rest still shows.
 
 use ferrofed_registry::revision::Standing;
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::table::view::{
@@ -28,7 +29,6 @@ use ferrohealth_ui::view::surface::{
     stat_grid, titled_panel,
 };
 use ferrohealth_ui::view::tag::Tag;
-use ferrohealth_ui::html::Html;
 
 use crate::app::{ALL_NODES, CONFIGURATION, INTEGRITY, ORGANISATIONS, TOPOLOGY};
 use crate::locale::{Msg, current, tr, tr_with};
@@ -174,9 +174,10 @@ fn stats(
     let organisations = stat_card_marked(
         Stat {
             glyph: Glyph::BUILDING_COMPLEX,
-            value: ferrohealth_ui::i18n::number::grouped(&current(), u64::from(count(
-                federation.organisations.len(),
-            ))),
+            value: ferrohealth_ui::i18n::number::grouped(
+                &current(),
+                u64::from(count(federation.organisations.len())),
+            ),
             label: tr_with(
                 Msg::StatOrganisations,
                 &[("count", Arg::from(count(federation.organisations.len())))],
@@ -385,11 +386,18 @@ fn topology_card(federation: &Federation) -> Html {
             let dots = Html::join(dots);
             let name = organisation.shown();
             let link = if organisation.routable() {
-                h(format!("<a href=\"{}\">{}</a>", t(organisation.href()), t(name)))
+                h(format!(
+                    "<a href=\"{}\">{}</a>",
+                    t(organisation.href()),
+                    t(name)
+                ))
             } else {
                 t(name)
             };
-            (link, h(format!("<span class=\"fui-cluster\">{dots}</span>")))
+            (
+                link,
+                h(format!("<span class=\"fui-cluster\">{dots}</span>")),
+            )
         })
         .collect::<Vec<_>>();
     let nodes: Vec<_> = federation.nodes().map(|(_, node)| node.health()).collect();
@@ -436,7 +444,10 @@ fn topology_card(federation: &Federation) -> Html {
 /// The open incidents, leading to Integrity.
 fn incidents_card(incidents: &Result<Incidents, Stop>) -> Html {
     let body = match incidents {
-        Err(stop) => h(format!("<div class=\"fui-panel-body\">{}</div>", stopped(stop))),
+        Err(stop) => h(format!(
+            "<div class=\"fui-panel-body\">{}</div>",
+            stopped(stop)
+        )),
         Ok(incidents) if incidents.open.is_empty() => h(format!(
             "<p class=\"fui-panel-body fui-muted\">{}</p>",
             t(tr(Msg::IncidentsNoneOpen))
@@ -450,23 +461,19 @@ fn incidents_card(incidents: &Result<Incidents, Stop>) -> Html {
                 Column::text("nodes", tr(Msg::ColumnNodes)),
                 Column::text("detected", tr(Msg::ColumnDetected)),
             ];
-            let rows = incidents
-                .open
-                .iter()
-                .take(5)
-                .map(|incident| {
-                    let sub = h(format!("<code>{}</code>", t(&incident.kind)));
-                    h(format!(
-                        "<tr>{} {}{}</tr>",
-                        title_cell(
-                            None,
-                            t(crate::pages::integrity::what(&incident.kind)),
-                            Some(sub),
-                        ),
-                        cell(&columns[1], t(incident.nodes.join(", "))),
-                        cell(&columns[2], relative(&incident.at)),
-                    ))
-                });
+            let rows = incidents.open.iter().take(5).map(|incident| {
+                let sub = h(format!("<code>{}</code>", t(&incident.kind)));
+                h(format!(
+                    "<tr>{} {}{}</tr>",
+                    title_cell(
+                        None,
+                        t(crate::pages::integrity::what(&incident.kind)),
+                        Some(sub),
+                    ),
+                    cell(&columns[1], t(incident.nodes.join(", "))),
+                    cell(&columns[2], relative(&incident.at)),
+                ))
+            });
             data_table(DataTable {
                 caption: &tr(Msg::IncidentsOpenTitle),
                 columns: &columns,
@@ -525,16 +532,14 @@ fn configuration_card(
                     )),
                 ));
             }
-            let replicas = standings
-                .iter()
-                .map(|(name, standing)| {
-                    let mark = match standing {
-                        Ok(standing) if standing.in_step => pill(Tone::Ok, &tr(Msg::InStep)),
-                        Ok(_) => pill(Tone::Warn, &tr(Msg::NotInStep)),
-                        Err(_) => pill(Tone::Bad, &tr(Msg::NoAnswer)),
-                    };
-                    h(format!("<code>{}</code> {mark} ", t(name)))
-                });
+            let replicas = standings.iter().map(|(name, standing)| {
+                let mark = match standing {
+                    Ok(standing) if standing.in_step => pill(Tone::Ok, &tr(Msg::InStep)),
+                    Ok(_) => pill(Tone::Warn, &tr(Msg::NotInStep)),
+                    Err(_) => pill(Tone::Bad, &tr(Msg::NoAnswer)),
+                };
+                h(format!("<code>{}</code> {mark} ", t(name)))
+            });
             let replicas = Html::join(replicas);
             rows.push((
                 tr(Msg::ConfigReplicas),
@@ -545,12 +550,18 @@ fn configuration_card(
     if let Some(stored) = stored {
         rows.push((
             tr(Msg::ConfigStored),
-            t(tr_with(Msg::ConfigStoredValue, &[("count", Arg::from(stored))])),
+            t(tr_with(
+                Msg::ConfigStoredValue,
+                &[("count", Arg::from(stored))],
+            )),
         ));
     }
     titled_panel(
         tr(Msg::ConfigurationTitle),
         card_action(CONFIGURATION, tr(Msg::ConfigurationTitle)),
-        h(format!("<div class=\"fui-panel-body\">{}</div>", definitions(rows))),
+        h(format!(
+            "<div class=\"fui-panel-body\">{}</div>",
+            definitions(rows)
+        )),
     )
 }

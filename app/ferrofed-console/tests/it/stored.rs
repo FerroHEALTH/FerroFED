@@ -492,7 +492,10 @@ async fn hostile_values_in_a_stored_query_render_escaped() -> Result<(), Box<dyn
     )
     .await?;
     assert!(!versions.contains("<b>saved</b>"), "{versions}");
-    assert!(versions.contains("&#60;b&#62;saved&#60;/b&#62;"), "{versions}");
+    assert!(
+        versions.contains("&#60;b&#62;saved&#60;/b&#62;"),
+        "{versions}"
+    );
 
     let items = vec![held(
         "org.example\"><i>ns</i>::q\" onclick=\"x<b>",

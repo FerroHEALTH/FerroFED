@@ -127,9 +127,7 @@ async fn the_top_bar_carries_no_theme_toggle_and_the_user_menu_offers_the_theme(
         .ok_or("the top bar")?;
     assert!(!top.contains("theme"), "{top}");
     assert!(
-        body.contains(
-            r#"<form method="post" action="/preference" class="fui-menu-theme">"#
-        ),
+        body.contains(r#"<form method="post" action="/preference" class="fui-menu-theme">"#),
         "{body}"
     );
     assert!(body.contains(r#"name="theme" value="dark""#), "{body}");

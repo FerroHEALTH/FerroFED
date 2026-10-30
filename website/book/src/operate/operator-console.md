@@ -27,10 +27,10 @@ service worker or a URL.
 
 - **A sign-in page and a shell, built on FerroUI.** The console draws every
   page with `ferrohealth-ui`, the FerroHEALTH component library, and its
-  FerroFED theme. The server draws the first page whole and the browser
-  takes it over, so following a link or posting a form draws the next page
-  in place and never loads a new document; with WebAssembly turned off every
-  page still reads and every action still posts. A visitor reads a sign-in card. A
+  FerroFED theme. The server draws every page whole, and FerroUI's small
+  script modules add the menus, the dialogs, the row editing and the find's
+  suggestions on top; with scripts turned off every page still reads and
+  every action still posts. A visitor reads a sign-in card. A
   signed-in operator lands on a dashboard and reads every page in a shell: a
   top bar with the find field, the gateway's status (which names the
   gateway's version and the replica that answered), and the operator's
@@ -231,8 +231,8 @@ service worker or a URL.
   the reason the revision keeps; its own page offers the removal too.
   How configuration works opens an explanation of what stays in the file
   and what a revision holds. Every form is a plain post to its page: with
-  no WebAssembly, Add and Remove of a row post the form and answer with it
-  one row longer or shorter, and with it they add or remove the row in
+  scripts turned off, Add and Remove of a row post the form and answer with
+  it one row longer or shorter, and with them they add or remove the row in
   place; a form's answer shows at the top of the page, and a
   form the console or a replica refuses is drawn again as you typed it, the
   field the console refuses marked with what is wrong under it. A secret you
@@ -245,13 +245,14 @@ service worker or a URL.
   `GET /health` follows readiness with `{"state":"up"}`. The `healthcheck`
   command the image runs asks `GET /health`.
 
-Every answer carries a Content-Security-Policy whose script source is a nonce
-minted for that answer, `X-Content-Type-Options: nosniff`,
+Every answer carries a Content-Security-Policy that admits scripts and
+stylesheets from the console's own origin alone (`script-src 'self';
+style-src 'self'`), `X-Content-Type-Options: nosniff`,
 `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`, and no page is
-stored by a cache. The site bundle under `/pkg/` is served brotli- or
-gzip-compressed, as the browser's `Accept-Encoding` chooses; pages are
-never compressed, so no compression side channel reads what an operator
-entered.
+stored by a cache. FerroUI's stylesheet, theme and script modules are
+served under `/ferrohealth-ui/<version>/`, cached for a year since a new
+version is a new path. Nothing is compressed, so no compression side channel
+reads what an operator entered.
 
 The console serves plain HTTP and sends no `Strict-Transport-Security`
 header. Terminate TLS at a reverse proxy in front of it and set
@@ -261,20 +262,19 @@ then reaches the console over HTTPS alone, so no one on the network path can
 turn the operator's sign-in into a plain HTTP request.
 
 The query console's answer is rendered on the console's server, with every
-value a node sent escaped, and it works the same with no WebAssembly: Run is
-a plain form post.
+value a node sent escaped, and it works the same with scripts turned off:
+Run is a plain form post.
 
 ## The screens
 
 Each screen is shown in the light theme, with a link to the same screen in
 the dark theme. The testkit takes them against a development gateway over
 two stub nodes, node A that answers and node B that fails, so every page
-carries the amber development banner. To take them again, build the site
-bundle, install the pinned browser with `scripts/release/journey-tools.sh
-target/journey-tools`, and run the capture behind its gate:
+carries the amber development banner. To take them again, install the pinned
+browser with `scripts/release/journey-tools.sh target/journey-tools`, and run
+the capture behind its gate:
 
 ```sh
-scripts/release/console-site.sh --release
 FERROFED_JOURNEYS=1 FERROFED_SCREENSHOTS=1 \
   cargo nextest run -p ferrofed-testkit -E 'test(/screenshots::/)'
 ```
@@ -581,9 +581,10 @@ it calls the gateway with: it trusts the system's root certificates and
 presents no client certificate, so an admin listener that asks for mutual
 TLS cannot be reached from the console.
 
-The image sets `server.listen` to `0.0.0.0:3000` and `server.site_root` to
-the site bundle it carries, runs as the numeric user `65532`, and runs
-`healthcheck` as its `HEALTHCHECK`.
+The image sets `server.listen` to `0.0.0.0:3000`, runs as the numeric user
+`65532`, and runs `healthcheck` as its `HEALTHCHECK`. `server.site_root` is
+deprecated: the console serves no site bundle, so the key does nothing,
+`config check` warns that it is set, and release 0.0.17 refuses it.
 
 ## From the release compose file
 

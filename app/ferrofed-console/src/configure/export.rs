@@ -9,15 +9,15 @@
 //! and answers it as an attachment that no cache keeps. A replica's refusal
 //! is answered with its status and stable code, never an empty file. No
 //! specification governs this: our own design.
+use crate::gateway::AccessToken;
+use crate::locale::{Msg, tr, tr_with};
+use crate::server::ConsoleState;
 use axum::Extension;
 use axum::extract::Path;
 use axum::response::{IntoResponse, Response};
 use ferrofed_registry::revision::RevisionId;
 use http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE, LOCATION};
 use http::{HeaderMap, HeaderValue, StatusCode};
-use crate::gateway::AccessToken;
-use crate::locale::{Msg, tr, tr_with};
-use crate::server::ConsoleState;
 
 /// The path of a revision's download.
 pub const EXPORT: &str = "/configuration/revisions/{id}/export";

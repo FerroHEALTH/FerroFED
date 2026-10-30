@@ -515,12 +515,7 @@ fn console_with_origin(gateway: &MockServer) -> Result<(axum::Router, SessionId)
 /// A `POST` of the query carrying `session`'s cookie and only the headers
 /// `from` names, as a page of some origin would send it.
 fn run_from(session: &SessionId, from: &[(&str, &str)]) -> Result<Request<Body>, Box<dyn Error>> {
-    crate::support::answer_post(
-        "/query",
-        &patient_query(),
-        Some(session),
-        from,
-    )
+    crate::support::answer_post("/query", &patient_query(), Some(session), from)
 }
 
 // A cross-site page could otherwise spend the operator's gateway credential

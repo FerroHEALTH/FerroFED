@@ -17,7 +17,11 @@
 #      reads them, since a lone `"url"` or `"no-store"` in an `if` is a
 #      token;
 #   3. any other literal holding words: an upper-case letter, or a space
-#      next to a letter, outside its `{}` placeables, and not a class list.
+#      next to a letter, outside its `{}` placeables, and not a class list;
+#   4. a literal of markup the console writes (`<p class=\"…\">{}</p>`,
+#      an attribute list, a boolean attribute): a letter in a text node or
+#      in the value of an attribute of rule 1, outside its `{}` placeables,
+#      since the words of a page come in through its placeables.
 #
 # A single lower-case word in code (`=> "fatal"`) reads as a key and is
 # passed over, so a word drawn that way is review's to catch. Lines that
@@ -94,6 +98,33 @@ found="$(
       if (bare ~ /[A-Za-z][ \t]/ || bare ~ /[ \t][A-Za-z]/) return 1
       return 0
     }
+    # -1 for a literal that is no markup; else whether markup holds words.
+    function markup(t,    s, v) {
+      if (t ~ /^( (checked|selected|open|hidden|required|readonly|disabled))+$/) return 0
+      if (t !~ /<[A-Za-z\/!]/ && t !~ /\\">/ && t !~ /=\\"/) return -1
+      s = t
+      while (match(s, /(aria-label|title|placeholder|alt|data-label|aria-description|aria-roledescription|aria-valuetext|label)=\\"[^\\]*\\"/)) {
+        v = substr(s, RSTART, RLENGTH)
+        s = substr(s, RSTART + RLENGTH)
+        sub(/^[^=]*=\\"/, "", v)
+        sub(/\\"$/, "", v)
+        gsub(/\{[^{}]*\}/, "", v)
+        if (v ~ /[A-Za-z]/) return 1
+      }
+      s = t
+      gsub(/\\u\{[0-9A-Fa-f]+\}/, "", s)
+      if (index(s, "\\\"") > 0 && (index(s, "=") == 0 || index(s, "\\\"") < index(s, "="))) sub(/^[^\\]*\\"/, "", s)
+      gsub(/<[^<>]*>/, "", s)
+      if (index(s, ">") > 0 && (index(s, "<") == 0 || index(s, ">") < index(s, "<"))) sub(/^[^>]*>/, "", s)
+      sub(/<[^>]*$/, "", s)
+      gsub(/[A-Za-z-]+=\\"[^\\]*\\"/, "", s)
+      sub(/[A-Za-z-]+=\\"$/, "", s)
+      gsub(/(^|[ \t])(checked|selected|open|hidden|required|readonly|disabled)([ \t]|$)/, " ", s)
+      gsub(/\{[^{}]*\}/, "", s)
+      gsub(/\\"/, "", s)
+      gsub(/\\$/, "", s)
+      return s ~ /[A-Za-z]/
+    }
     function classes(t,    n, i, toks) {
       n = split(t, toks, /[ \t]+/)
       for (i = 1; i <= n; i++) if (toks[i] != "" && toks[i] !~ /^fui-[a-z0-9-]+$/) return 0
@@ -151,13 +182,24 @@ found="$(
       }
       n = length(code)
       i = 1
+      # A literal a `\` carried over from the line before goes on here.
+      carried = cont
+      cont = 0
       while (i <= n) {
         c = substr(code, i, 1)
-        if (c == "'"'"'" && substr(code, i + 2, 1) == "'"'"'") { i += 3; continue }
-        if (c != "\"") { i++; continue }
+        if (!carried && c == "'"'"'" && substr(code, i + 2, 1) == "'"'"'") { i += 3; continue }
+        if (!carried && c != "\"") { i++; continue }
         start = i
         lit = ""
-        i++
+        if (carried) {
+          start = 0
+          sub(/^[ \t]+/, "", code)
+          n = length(code)
+          i = 1
+          carried = 0
+        } else {
+          i++
+        }
         while (i <= n) {
           c = substr(code, i, 1)
           if (c == "\\") { lit = lit substr(code, i, 2); i += 2; continue }
@@ -165,11 +207,15 @@ found="$(
           lit = lit c
           i++
         }
-        pre = substr(code, 1, start - 1)
+        if (i > n && lit ~ /\\$/) cont = 1
+        pre = start > 0 ? substr(code, 1, start - 1) : ""
         after = substr(code, i + 1)
         i++
         hit = 0
-        if (pre ~ visible) {
+        shape = markup(lit)
+        if (shape >= 0) {
+          hit = shape
+        } else if (pre ~ visible) {
           hit = lit ~ /[A-Za-z]/
         } else if (pre ~ /[A-Za-z:-]=$/) {
           hit = 0

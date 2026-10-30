@@ -3,8 +3,8 @@
 
 # ferrofed-console
 
-The FerroFED Console, the operator console: the `ferrofed-console` binary, a Leptos app
-rendered on the server and hydrated in the browser, with a
+The FerroFED Console, the operator console: the `ferrofed-console` binary,
+whose server draws every page whole with FerroUI's components, with a
 backend-for-frontend in front of the gateway.
 
 Part of [FerroFED](https://ferrofed.eu), a pure-Rust openEHR federation
@@ -25,19 +25,9 @@ incidents and the `creating_system_id` routing table, the stored queries, and
 the self-description. The query console runs an AQL or a stored query through
 the gateway and shows every node's status beside the rows.
 
-Build it with cargo-leptos, from the repository root:
-
-```sh
-scripts/release/console-tools.sh "$HOME/.cache/ferrofed-console-tools"
-export PATH="$HOME/.cache/ferrofed-console-tools/bin:$PATH"
-scripts/release/console-site.sh --release
-cargo build --release -p ferrofed-console
-```
-
-The first line installs wasm-opt at its pinned release, checked against its
-SHA-256, and the site script refuses to run cargo-leptos unless the one on
-`PATH` matches those digests, so it never downloads it itself. That writes the site bundle under `target/site`
-and the server binary under `target/release`.
+Build it from the repository root with `cargo build --release -p
+ferrofed-console`: the binary serves FerroUI's stylesheet, themes and script
+modules itself, so there is no WebAssembly and no site bundle to build.
 `ferrofed-console --config console.toml serve` runs it,
 `config check` checks a configuration without binding a socket, and
 `healthcheck` is the container probe.

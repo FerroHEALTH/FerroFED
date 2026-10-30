@@ -85,17 +85,17 @@ fn origin_menu(revisions: &[Revision], asked: &[String]) -> Html {
     filter_menu(
         &current(),
         FilterMenu {
-        id: "history-origin",
-        name: "origin",
-        glyph: Glyph::LIST_FILTER,
-        label: tr(Msg::HistoryOrigin).into(),
-        title: tr(Msg::HistoryOriginTitle),
-        choices,
-        note: None,
-        form: MenuForm::Own {
-            action: Some("/configuration/history"),
-            fields: &[],
-        },
+            id: "history-origin",
+            name: "origin",
+            glyph: Glyph::LIST_FILTER,
+            label: tr(Msg::HistoryOrigin).into(),
+            title: tr(Msg::HistoryOriginTitle),
+            choices,
+            note: None,
+            form: MenuForm::Own {
+                action: Some("/configuration/history"),
+                fields: &[],
+            },
         },
     )
 }
@@ -153,7 +153,10 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> Html {
         t(crate::configure::export::href(id)),
         Variant::Ghost.class(),
         icon(Glyph::DOWNLOAD, "16"),
-        t(tr_with(Msg::ExportRevisionAsToml, &[("id", (id).to_string().into())])),
+        t(tr_with(
+            Msg::ExportRevisionAsToml,
+            &[("id", (id).to_string().into())]
+        )),
         opt(compare),
         opt(rollback),
     ))
@@ -258,7 +261,10 @@ pub(super) fn export(loaded: &Loaded<'_>) -> Html {
         "<section class=\"fui-card\" aria-labelledby=\"export-title\">{}{download}</section>",
         head(
             ("export-title", tr(Msg::Export)),
-            (tr(Msg::ConfigurationLessBootstrapCoreEachSecret), "export-and-import"),
+            (
+                tr(Msg::ConfigurationLessBootstrapCoreEachSecret),
+                "export-and-import"
+            ),
             Html::empty(),
         )
     ))

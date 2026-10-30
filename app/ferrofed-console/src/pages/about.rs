@@ -11,14 +11,14 @@
 //! document.
 
 use ferrohealth_ui::highlight::Language;
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::view::replica::Replica;
 use ferrohealth_ui::view::shell::centred as centred_layout;
-use ferrohealth_ui::view::toast::toast_region;
 use ferrohealth_ui::view::surface::{Header, card, definitions};
 use ferrohealth_ui::view::template::about::{
     AboutPage, Link, Manufacturer, SelfDescription, about_page,
 };
-use ferrohealth_ui::html::Html;
+use ferrohealth_ui::view::toast::toast_region;
 
 use crate::app::{PRODUCT, VERSION};
 use crate::locale::{Msg, current, tr, tr_with};
@@ -133,34 +133,34 @@ fn about(gateway: Gateway) -> Html {
     about_page(
         &current(),
         AboutPage {
-        header: Header {
-            title: tr(Msg::AboutTitle).into(),
-            subtitle: Some(tr(Msg::AboutSubtitle).into()),
-            ..Header::default()
-        },
-        release: format!("{PRODUCT} {VERSION}"),
-        versions,
-        manufacturer: Manufacturer {
-            licence: tr(Msg::AboutLicence),
-            support: Link {
-                label: MANUFACTURER.email.to_owned(),
-                href: format!("mailto:{}", MANUFACTURER.email),
+            header: Header {
+                title: tr(Msg::AboutTitle).into(),
+                subtitle: Some(tr(Msg::AboutSubtitle).into()),
+                ..Header::default()
             },
-            documentation: Some(Link {
-                label: tr(Msg::AboutBook),
-                href: String::from("https://ferrofed.eu/docs/operate/operator-console.html"),
+            release: format!("{PRODUCT} {VERSION}"),
+            versions,
+            manufacturer: Manufacturer {
+                licence: tr(Msg::AboutLicence),
+                support: Link {
+                    label: MANUFACTURER.email.to_owned(),
+                    href: format!("mailto:{}", MANUFACTURER.email),
+                },
+                documentation: Some(Link {
+                    label: tr(Msg::AboutBook),
+                    href: String::from("https://ferrofed.eu/docs/operate/operator-console.html"),
+                }),
+            },
+            cards: vec![address],
+            self_description: gateway.document.map(|text| SelfDescription {
+                title: tr(Msg::AboutDocumentTitle),
+                line: tr(Msg::AboutDocumentLine),
+                language: Language::Json,
+                text,
+                copy_id: String::from(COPY_ID),
+                download: String::from(OPTIONS_DOCUMENT),
             }),
-        },
-        cards: vec![address],
-        self_description: gateway.document.map(|text| SelfDescription {
-            title: tr(Msg::AboutDocumentTitle),
-            line: tr(Msg::AboutDocumentLine),
-            language: Language::Json,
-            text,
-            copy_id: String::from(COPY_ID),
-            download: String::from(OPTIONS_DOCUMENT),
-        }),
-        replica: gateway.replica.map(|name| Replica { name, at: None }),
+            replica: gateway.replica.map(|name| Replica { name, at: None }),
         },
     )
 }

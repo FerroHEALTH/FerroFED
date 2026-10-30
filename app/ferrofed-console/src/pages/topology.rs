@@ -14,6 +14,7 @@
 
 use std::collections::BTreeSet;
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::flow::{EdgeRule, FlowRule, FlowState, rule_button, rule_dialog};
@@ -22,7 +23,6 @@ use ferrohealth_ui::view::topology::{
     ClusterLink, QuickLook, StatusCount, StatusMenu, Topology, TopologyCard, TopologyGroup,
     TopologySide, TopologyView, topology,
 };
-use ferrohealth_ui::html::Html;
 
 use crate::app::{SELF_DESCRIPTION, TOPOLOGY};
 use crate::locale::{Msg, current, tr, tr_with};
@@ -171,15 +171,15 @@ fn edge_rule() -> Html {
     rule_dialog(
         &current(),
         FlowRule {
-        id: RULE_DIALOG.into(),
-        rules: vec![
-            rule(FlowState::Up, Msg::TopologyRuleUp),
-            rule(FlowState::Degraded, Msg::TopologyRuleDegraded),
-            rule(FlowState::Unreachable, Msg::TopologyRuleUnreachable),
-            rule(FlowState::NotChecked, Msg::TopologyRuleNotChecked),
-            rule(FlowState::Off, Msg::TopologyRuleOff),
-        ],
-        note: tr(Msg::TopologyRuleNote),
+            id: RULE_DIALOG.into(),
+            rules: vec![
+                rule(FlowState::Up, Msg::TopologyRuleUp),
+                rule(FlowState::Degraded, Msg::TopologyRuleDegraded),
+                rule(FlowState::Unreachable, Msg::TopologyRuleUnreachable),
+                rule(FlowState::NotChecked, Msg::TopologyRuleNotChecked),
+                rule(FlowState::Off, Msg::TopologyRuleOff),
+            ],
+            note: tr(Msg::TopologyRuleNote),
         },
     )
 }
@@ -369,16 +369,13 @@ fn services(federation: &Federation, asked: &Asked) -> Option<TopologySide> {
 fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickLook> {
     let close = asked.href(|next| next.look = None);
     if let Some((organisation, node)) = federation.node(id) {
-        let endpoints = node
-            .endpoints
-            .iter()
-            .map(|endpoint| {
-                h(format!(
-                    "<li><code>{}</code> {}</li>",
-                    t(&endpoint.id),
-                    state(endpoint.health.mark(), endpoint.health.word(), None)
-                ))
-            });
+        let endpoints = node.endpoints.iter().map(|endpoint| {
+            h(format!(
+                "<li><code>{}</code> {}</li>",
+                t(&endpoint.id),
+                state(endpoint.health.mark(), endpoint.health.word(), None)
+            ))
+        });
         let endpoints = Html::join(endpoints);
         return Some(QuickLook {
             card: id.to_owned(),
@@ -420,7 +417,11 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
             "{}<p><a href=\"{}\">{}</a></p>",
             facts_row(vec![(
                 tr(Msg::ColumnState),
-                state(organisation.health().mark(), organisation.health().word(), None),
+                state(
+                    organisation.health().mark(),
+                    organisation.health().word(),
+                    None
+                ),
             )]),
             t(organisation.href()),
             t(tr(Msg::TopologyOpenPage)),
@@ -465,52 +466,52 @@ fn map(federation: &Federation, asked: &Asked) -> Html {
     topology(
         &locale,
         Topology {
-        id: String::from("federation-map"),
-        label: tr(Msg::TopologyMapLabel),
-        list_label: tr(Msg::TopologyListLabel),
-        hub,
-        callers: None,
-        start: services(federation, asked),
-        end: Some(TopologySide {
-            title: tr(Msg::TopologyOrganisations),
-            line: tr(Msg::TopologyOrganisationsLine),
-            groups,
-        }),
-        view: asked.view,
-        views: (
-            asked.href(|next| next.view = TopologyView::Map),
-            asked.href(|next| next.view = TopologyView::List),
-        ),
-        status: StatusMenu {
-            action: String::from(TOPOLOGY),
-            name: String::from("show"),
-            states: STATES
-                .into_iter()
-                .map(|state| StatusCount {
-                    state,
-                    count: counted(state),
-                    shown: asked.shows(state),
-                })
-                .collect(),
-        },
-        tools: Some(rule_button(&locale, RULE_DIALOG)),
-        updated: None,
-        collapse_all: Some(ClusterLink {
-            href: asked.href(|next| {
-                next.all_folded = !next.all_folded;
-                next.collapse.clear();
-                next.expanded.clear();
+            id: String::from("federation-map"),
+            label: tr(Msg::TopologyMapLabel),
+            list_label: tr(Msg::TopologyListLabel),
+            hub,
+            callers: None,
+            start: services(federation, asked),
+            end: Some(TopologySide {
+                title: tr(Msg::TopologyOrganisations),
+                line: tr(Msg::TopologyOrganisationsLine),
+                groups,
             }),
-            on: asked.all_folded,
-        }),
-        minimap: Some(ClusterLink {
-            href: asked.href(|next| next.minimap = !next.minimap),
-            on: asked.minimap,
-        }),
-        look: asked
-            .look
-            .as_deref()
-            .and_then(|id| quick_look(federation, id, asked)),
+            view: asked.view,
+            views: (
+                asked.href(|next| next.view = TopologyView::Map),
+                asked.href(|next| next.view = TopologyView::List),
+            ),
+            status: StatusMenu {
+                action: String::from(TOPOLOGY),
+                name: String::from("show"),
+                states: STATES
+                    .into_iter()
+                    .map(|state| StatusCount {
+                        state,
+                        count: counted(state),
+                        shown: asked.shows(state),
+                    })
+                    .collect(),
+            },
+            tools: Some(rule_button(&locale, RULE_DIALOG)),
+            updated: None,
+            collapse_all: Some(ClusterLink {
+                href: asked.href(|next| {
+                    next.all_folded = !next.all_folded;
+                    next.collapse.clear();
+                    next.expanded.clear();
+                }),
+                on: asked.all_folded,
+            }),
+            minimap: Some(ClusterLink {
+                href: asked.href(|next| next.minimap = !next.minimap),
+                on: asked.minimap,
+            }),
+            look: asked
+                .look
+                .as_deref()
+                .and_then(|id| quick_look(federation, id, asked)),
         },
     )
 }

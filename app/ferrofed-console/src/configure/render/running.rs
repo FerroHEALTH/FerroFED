@@ -13,13 +13,13 @@
 //! secret is named by the file it is read from and never by a value.
 
 use ferrofed_registry::running::{RunningConfig, Section, Setting, Source};
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{INPUT, SELECT, described_by};
 use ferrohealth_ui::view::template::settings::{
     Setting as Row, ValueSource, setting_row, settings_panel,
 };
-use ferrohealth_ui::html::Html;
 
 use crate::configure::render::Loaded;
 use crate::configure::render::parts::{error_line, form, hidden, reason, save_bar};
@@ -398,11 +398,13 @@ fn control(row: usize, setting: &Setting, posted: Option<&str>) -> Html {
             let unset = held
                 .is_empty()
                 .then(|| option("", &tr(Msg::SettingsNotSet), current.is_empty()));
-            select(opt(unset).then(Html::join(
-                words
-                    .iter()
-                    .map(|word| option(word, word, current == *word)),
-            )))
+            select(
+                opt(unset).then(Html::join(
+                    words
+                        .iter()
+                        .map(|word| option(word, word, current == *word)),
+                )),
+            )
         }
         _ => h(format!(
             "<input type=\"text\" id=\"{}\" name=\"{}\" value=\"{}\" class=\"{INPUT}\" \

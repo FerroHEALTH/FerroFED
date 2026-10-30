@@ -274,9 +274,7 @@ pub(crate) fn row_actions(
         Variant::Destructive.class(),
         ferrohealth_ui::view::button::label(Some(Glyph::TRASH), tr(Msg::SaveTheRemoval))
     ));
-    let fields = removal
-        .fields
-        .then(hidden("confirm", String::from("yes")));
+    let fields = removal.fields.then(hidden("confirm", String::from("yes")));
     let asks = danger_form_dialog(
         &locale,
         Confirmation {

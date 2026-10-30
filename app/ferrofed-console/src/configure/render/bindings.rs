@@ -7,9 +7,9 @@
 
 use ferrofed_registry::console::Owner;
 use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot};
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::view::form::{Field, SELECT, error_id};
 use ferrohealth_ui::view::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
-use ferrohealth_ui::html::Html;
 
 use crate::configure::draft::Edit;
 use crate::configure::model::ConfigForm;
@@ -139,11 +139,7 @@ fn new_secret(row: &str, key: String) -> RepeatRow {
 
 /// The binding section of the form: `held` as it stands, or a choice of
 /// those not set yet.
-fn section_choice(
-    loaded: &Loaded<'_>,
-    held: Option<BindingSection>,
-    chosen: Option<&str>,
-) -> Html {
+fn section_choice(loaded: &Loaded<'_>, held: Option<BindingSection>, chosen: Option<&str>) -> Html {
     if let Some(binding) = held {
         return hidden("section", binding.as_str().to_owned());
     }
@@ -228,17 +224,17 @@ fn settings_group(table: &toml::Table, posted: Option<&ConfigForm>) -> Html {
         t(tr(Msg::Settings)),
         opt(kept),
         repeat(Repeat {
-                id: String::from("cfg-setting-rows"),
-                label: tr(Msg::Settings),
-                fields: Fields::Card,
-                head: Vec::new(),
-                rows,
-                token: ROW,
-                blank: Some(blank),
-                add: Some(row_add(&Edit::AddSetting, tr(Msg::AddSetting))),
-                empty: tr(Msg::NoSettingYet),
-                form: None,
-            }),
+            id: String::from("cfg-setting-rows"),
+            label: tr(Msg::Settings),
+            fields: Fields::Card,
+            head: Vec::new(),
+            rows,
+            token: ROW,
+            blank: Some(blank),
+            add: Some(row_add(&Edit::AddSetting, tr(Msg::AddSetting))),
+            empty: tr(Msg::NoSettingYet),
+            form: None,
+        }),
     ))
 }
 
@@ -253,17 +249,14 @@ fn secrets_group(slots: &[SecretSlot], posted: Option<&ConfigForm>) -> Html {
                 .map(|secret| secret.choice.clone())
         })
     };
-    let secrets = slots
-        .iter()
-        .zip(0_u32..)
-        .map(|(slot, row)| {
-            secret_row(
-                &format!("x{row}"),
-                (&slot.key, slot.key.clone()),
-                Some(slot),
-                chosen(&slot.key).as_deref(),
-            )
-        });
+    let secrets = slots.iter().zip(0_u32..).map(|(slot, row)| {
+        secret_row(
+            &format!("x{row}"),
+            (&slot.key, slot.key.clone()),
+            Some(slot),
+            chosen(&slot.key).as_deref(),
+        )
+    });
     let secrets = Html::join(secrets);
     let fresh = posted
         .map(|form| {
@@ -278,17 +271,17 @@ fn secrets_group(slots: &[SecretSlot], posted: Option<&ConfigForm>) -> Html {
         "<fieldset class=\"{GROUP}\"><legend>{}</legend>{secrets}{}</fieldset>",
         t(tr(Msg::Secrets)),
         repeat(Repeat {
-                id: String::from("cfg-secret-rows"),
-                label: tr(Msg::Secrets),
-                fields: Fields::Card,
-                head: Vec::new(),
-                rows: fresh,
-                token: ROW,
-                blank: Some(new_secret(ROW, String::new())),
-                add: Some(row_add(&Edit::AddSecret, tr(Msg::AddSecret))),
-                empty: tr(Msg::NoNewSecretYet),
-                form: None,
-            }),
+            id: String::from("cfg-secret-rows"),
+            label: tr(Msg::Secrets),
+            fields: Fields::Card,
+            head: Vec::new(),
+            rows: fresh,
+            token: ROW,
+            blank: Some(new_secret(ROW, String::new())),
+            add: Some(row_add(&Edit::AddSecret, tr(Msg::AddSecret))),
+            empty: tr(Msg::NoNewSecretYet),
+            form: None,
+        }),
     ))
 }
 

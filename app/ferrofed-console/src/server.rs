@@ -142,7 +142,10 @@ pub fn router(state: ConsoleState) -> axum::Router {
             crate::configure::export::EXPORT,
             get(crate::configure::export::export),
         )
-        .route(crate::pages::search::ANSWER, get(crate::pages::search::find_answer))
+        .route(
+            crate::pages::search::ANSWER,
+            get(crate::pages::search::find_answer),
+        )
         .route(crate::oidc::LOGIN, get(crate::oidc::login))
         .route(crate::oidc::CALLBACK, get(crate::oidc::callback))
         .route(
@@ -170,9 +173,7 @@ pub fn router(state: ConsoleState) -> axum::Router {
             move |request: Request, next: Next| console::headers(headers.clone(), request, next),
         ))
         .layer(axum::middleware::from_fn(
-            move |request: Request, next: Next| {
-                strict_policy(policy.clone(), request, next)
-            },
+            move |request: Request, next: Next| strict_policy(policy.clone(), request, next),
         ))
         .layer(axum::middleware::from_fn(same_origin_only))
         .layer(Extension(state))
@@ -217,7 +218,9 @@ async fn strict_policy(policy: String, request: Request, next: Next) -> Response
     let mut response = next.run(request).await;
     let value = HeaderValue::from_str(&policy)
         .unwrap_or_else(|_invalid| HeaderValue::from_static("default-src 'none'"));
-    response.headers_mut().insert(CONTENT_SECURITY_POLICY, value);
+    response
+        .headers_mut()
+        .insert(CONTENT_SECURITY_POLICY, value);
     response
 }
 

@@ -186,7 +186,10 @@ async fn every_value_of_a_section_is_escaped() -> Result<(), Box<dyn Error>> {
     for raw in ["<script>u</script>", "<img src=x onerror=1>", "<b>1</b>"] {
         assert!(!body.contains(raw), "{raw} reached the page raw: {body}");
     }
-    assert!(body.contains("&#60;script&#62;u&#60;/script&#62;"), "{body}");
+    assert!(
+        body.contains("&#60;script&#62;u&#60;/script&#62;"),
+        "{body}"
+    );
     Ok(())
 }
 

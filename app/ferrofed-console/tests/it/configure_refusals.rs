@@ -237,12 +237,8 @@ async fn a_post_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Erro
             .map(|site| ("sec-fetch-site", site))
             .into_iter()
             .collect();
-        let request = crate::support::answer_post(
-            "/configuration",
-            &save_c(),
-            Some(&session),
-            &from,
-        )?;
+        let request =
+            crate::support::answer_post("/configuration", &save_c(), Some(&session), &from)?;
         let (response, body) = send(&service, request).await?;
         assert_eq!(StatusCode::FORBIDDEN, response.status(), "{site:?}: {body}");
     }

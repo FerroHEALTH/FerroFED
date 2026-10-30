@@ -263,7 +263,10 @@ async fn an_import_sends_the_toml_to_the_replica_and_shows_its_changes_escaped()
     for raw in ["<i>id</i>", "<script>x</script>"] {
         assert!(!html.contains(raw), "{raw} reached the answer raw: {html}");
     }
-    assert!(html.contains("&#60;script&#62;x&#60;/script&#62;"), "{html}");
+    assert!(
+        html.contains("&#60;script&#62;x&#60;/script&#62;"),
+        "{html}"
+    );
     let received = listener
         .received_requests()
         .await

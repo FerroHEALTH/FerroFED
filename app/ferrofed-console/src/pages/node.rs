@@ -279,11 +279,7 @@ fn endpoints(node: &Node) -> Html {
         h(format!(
             "<tr{}>{}{} {}{}{}{}</tr>",
             muted(endpoint.health == Health::Excluded),
-            title_cell(
-                None,
-                h(format!("<code>{}</code>", t(&endpoint.id))),
-                None
-            ),
+            title_cell(None, h(format!("<code>{}</code>", t(&endpoint.id))), None),
             cell(
                 &columns[1],
                 h(format!(

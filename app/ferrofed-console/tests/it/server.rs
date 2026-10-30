@@ -222,12 +222,19 @@ async fn the_policy_admits_the_consoles_own_scripts_and_styles_alone() -> Result
     let policy = header(&response, "content-security-policy");
     assert!(policy.contains("script-src 'self';"), "{policy}");
     assert!(policy.contains("style-src 'self';"), "{policy}");
-    for refused in ["'nonce-", "'wasm-unsafe-eval'", "'unsafe-inline'", "'unsafe-eval'"] {
+    for refused in [
+        "'nonce-",
+        "'wasm-unsafe-eval'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+    ] {
         assert!(!policy.contains(refused), "{refused}: {policy}");
     }
     let loader = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed).loader();
     assert!(
-        body.contains(&format!(r#"<script type="module" src="{loader}"></script>"#)),
+        body.contains(&format!(
+            r#"<script type="module" src="{loader}"></script>"#
+        )),
         "{loader}: {body}"
     );
     assert_eq!(
@@ -300,7 +307,11 @@ async fn the_page_loads_ferroui_s_assets_from_their_versioned_path() -> Result<(
     let (_state, service) = console("")?;
     let (_response, body) = send(&service, get("/")?).await?;
     let assets = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed);
-    for asset in [assets.stylesheet(), assets.theme(), String::from("/favicon.ico")] {
+    for asset in [
+        assets.stylesheet(),
+        assets.theme(),
+        String::from("/favicon.ico"),
+    ] {
         assert!(
             body.contains(&format!(r#"href="{asset}""#)),
             "{asset}: {body}"

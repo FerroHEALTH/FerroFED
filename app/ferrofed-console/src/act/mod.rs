@@ -21,13 +21,13 @@ pub mod fields;
 pub mod query;
 pub mod repair;
 
-use serde::{Deserialize, Serialize};
-use axum::response::{IntoResponse, Response};
-use http::{HeaderMap, StatusCode};
 use crate::gateway::GatewayError;
 use crate::read::{ActionKind, Asked, Stop, stopped};
 use crate::read::{Fault, Refusal};
 use crate::server::ConsoleState;
+use axum::response::{IntoResponse, Response};
+use http::{HeaderMap, StatusCode};
+use serde::{Deserialize, Serialize};
 
 /// What one replica did with an action: its report, or why it gave none.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

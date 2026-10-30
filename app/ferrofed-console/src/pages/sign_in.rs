@@ -38,24 +38,24 @@ pub fn page() -> Html {
     let card = sign_in(
         &locale,
         SignIn {
-        lockup: lockup_plain(
-            brand_mark(MARK_LIGHT, MARK_DARK),
-            "FerroFED",
-            tr(Msg::LockupWord),
-        ),
-        title: Some(tr(Msg::SignInTitle)),
-        state,
-        provider: Some(Provider {
-            href: String::from(SIGN_IN),
-            label: tr(Msg::SignInWith),
-            busy: tr(Msg::SignInRedirecting),
-            glyph: Glyph::LOG_IN,
-        }),
-        basic: None,
-        line: None,
-        note: Some(tr(Msg::SignInNote)),
-        links: vec![(tr(Msg::SignInAbout), String::from(crate::app::ABOUT))],
-        caption: Some(tr(Msg::SignInCaption)),
+            lockup: lockup_plain(
+                brand_mark(MARK_LIGHT, MARK_DARK),
+                "FerroFED",
+                tr(Msg::LockupWord),
+            ),
+            title: Some(tr(Msg::SignInTitle)),
+            state,
+            provider: Some(Provider {
+                href: String::from(SIGN_IN),
+                label: tr(Msg::SignInWith),
+                busy: tr(Msg::SignInRedirecting),
+                glyph: Glyph::LOG_IN,
+            }),
+            basic: None,
+            line: None,
+            note: Some(tr(Msg::SignInNote)),
+            links: vec![(tr(Msg::SignInAbout), String::from(crate::app::ABOUT))],
+            caption: Some(tr(Msg::SignInCaption)),
         },
     );
     crate::app::title(tr(Msg::SignInTitle)).then(centred(

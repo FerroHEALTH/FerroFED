@@ -177,11 +177,18 @@ pub(crate) fn strict(policy: &str, body: &str) -> Result<(), String> {
     if !policy.contains("script-src 'self';") || !policy.contains("style-src 'self';") {
         return Err(format!("the policy admits more than the console: {policy}"));
     }
-    if ["'nonce-", "'unsafe-inline'", "'unsafe-eval'", "'wasm-unsafe-eval'"]
-        .iter()
-        .any(|source| policy.contains(source))
+    if [
+        "'nonce-",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "'wasm-unsafe-eval'",
+    ]
+    .iter()
+    .any(|source| policy.contains(source))
     {
-        return Err(format!("the policy admits an inline or evaluated script: {policy}"));
+        return Err(format!(
+            "the policy admits an inline or evaluated script: {policy}"
+        ));
     }
     if !body.contains(&tag) {
         return Err(format!("the page does not load {loader}: {body}"));

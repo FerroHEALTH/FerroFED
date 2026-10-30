@@ -18,7 +18,7 @@ use thirtyfour::By;
 use ferrofed_console::app::PRODUCT;
 
 use crate::journeys::browser::{Browser, with_browser};
-use crate::journeys::configure::{bodies, scripted, listener, submit};
+use crate::journeys::configure::{bodies, listener, scripted, submit};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;

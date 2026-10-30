@@ -145,7 +145,10 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> Html {
     let store = confirmed(
         "store-confirm",
         (Glyph::SAVE, tr(Msg::StoreTheVersion), Variant::Primary),
-        (tr(Msg::StoreVersionStoredVersionCannotChanged), tr(Msg::Store)),
+        (
+            tr(Msg::StoreVersionStoredVersionCannotChanged),
+            tr(Msg::Store),
+        ),
         Html::empty(),
     );
     let body = Html::join([
@@ -178,7 +181,10 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> Html {
         ),
         head(
             ("query-title", tr(Msg::StoreANewVersion)),
-            (tr(Msg::GatewayStoresOnceEveryReplicaServes), "console-managed-resources"),
+            (
+                tr(Msg::GatewayStoresOnceEveryReplicaServes),
+                "console-managed-resources",
+            ),
             Html::empty(),
         ),
         form("fui-stack", body),

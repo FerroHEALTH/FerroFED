@@ -33,8 +33,8 @@ use ferrofed_registry::revision::{
     Author, Current, Difference, Outcome, Revision, RevisionId, Standing,
 };
 use ferrofed_registry::running::{RunningConfig, Section};
-use ferrohealth_ui::view::time::reading;
 use ferrohealth_ui::html::Html;
+use ferrohealth_ui::view::time::reading;
 
 use crate::configure::model::{ConfigView, Screen};
 use crate::locale::{Msg, tr, tr_with};
@@ -529,28 +529,18 @@ pub fn page(loaded: &Loaded<'_>, shown: &Shown) -> Result<ConfigView, Refusal> {
         Shown::Member(node) => (None, members::member(loaded, node)?),
         Shown::Credentials => (None, credentials::tab(loaded)),
         Shown::CredentialNew => (None, credentials::credential_form(loaded, None)?),
-        Shown::Credential(endpoint) => (
-            None,
-            credentials::credential_form(loaded, Some(endpoint))?,
-        ),
+        Shown::Credential(endpoint) => {
+            (None, credentials::credential_form(loaded, Some(endpoint))?)
+        }
         Shown::BindingNew => (None, bindings::binding_form(loaded, None)?),
-        Shown::Binding(section) => (
-            None,
-            bindings::binding_form(loaded, Some(section))?,
-        ),
+        Shown::Binding(section) => (None, bindings::binding_form(loaded, Some(section))?),
         Shown::Queries => (
             Some(running::tab(loaded, Section::StoredQueries)),
             queries::tab(loaded),
         ),
         Shown::QueryNew => (None, queries::form_page(loaded)),
-        Shown::History(_) => (
-            Some(exchange::compared(loaded)),
-            exchange::history(loaded),
-        ),
-        Shown::Exchange => (
-            Some(exchange::export(loaded)),
-            exchange::import(loaded),
-        ),
+        Shown::History(_) => (Some(exchange::compared(loaded)), exchange::history(loaded)),
+        Shown::Exchange => (Some(exchange::export(loaded)), exchange::import(loaded)),
     };
     Ok(ConfigView {
         header: Some(top::header(loaded)),
@@ -592,7 +582,9 @@ pub(super) fn mark_said(mark: &Current) -> String {
             ("value1", (author(&mark.applied_by)).clone().into()),
             (
                 "value2",
-                (reading(&crate::locale::current(), &mark.applied_at.to_string())).clone().into(),
+                (reading(&crate::locale::current(), &mark.applied_at.to_string()))
+                    .clone()
+                    .into(),
             ),
             ("outcome", (outcome).clone().into()),
         ],

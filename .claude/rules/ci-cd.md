@@ -96,9 +96,9 @@ Fourteen workflows:
   attests the index and both platform manifests as OCI referrers, and verifies
   its own output as a consumer would.
 - `.github/workflows/release-console.yml`: the reusable operator console
-  lane. It builds the musl `ferrofed-console` binaries with `cargo auditable`
-  and the site bundle with cargo-leptos, attests each, verifies them against
-  its own signer, and pushes, attests and verifies
+  lane. It builds the musl `ferrofed-console` binaries with `cargo auditable`,
+  attests each, verifies them against its own signer, and pushes, attests
+  and verifies
   `ghcr.io/ferrohealth/ferrofed-console` as the image lane does the gateway.
   The three are reusable workflows because SLSA Build Level 3 needs the
   signing identity out of reach of caller-defined steps.
@@ -192,7 +192,7 @@ matches the workspace); the `release compose` job (`ferrofed config check`,
 built as a static musl binary, over the release compose assets and the
 example Kubernetes ConfigMap, and over the example the last release attached,
 which, when refused, needs a pending upgrade note:
-`scripts/checks/upgrade-notes.sh`); the `console` job (`cargo clippy --locked -p ferrofed-console --lib --target wasm32-unknown-unknown -- -D warnings`, then `scripts/release/console-site.sh --release`, the bundle budget, `scripts/checks/console-bundle.sh`, and the build-host path check, `scripts/checks/console-paths.sh`; `leptos-ui.md` §12); the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
+`scripts/checks/upgrade-notes.sh`); the `console` job (the release build of the `ferrofed-console` binary, every page under the strict policy, and the architecture tests that it links no part of the gateway, no Leptos crate and no WebAssembly glue; `console-ui.md` §4); the codegen drift gate once a generator exists (`codegen.md`); the `publish-dry-run` job (`scripts/release/publish-crates.sh package`: `cargo package` over every `crates/*` member, then `cargo publish --dry-run` over the publishable set once the switch is on); the
 crate-version guard on pull requests (`scripts/checks/crate-version-guard.sh`);
 the changelog guard on pull requests (`scripts/checks/changelog-guard.sh`: a
 new fragment under `changelog.d/`, or an edit of `CHANGELOG.md` from a pull
@@ -201,9 +201,10 @@ request opened before the fragments, unless the `no-changelog` label is set);
 which sets `FERROFED_E2E=1` and runs the container-backed tests against the
 digest-pinned node images (`.claude/memory/e2e-gate.md`), and uploads the
 gated JUnit report, the node profile findings and the differential report;
-the `journeys (browser)` job, which sets `FERROFED_JOURNEYS=1`, builds the
-console's site bundle and runs the testkit's browser journeys in headless
-Chrome at the pinned Chrome for Testing release (`leptos-ui.md` §11);
+the `journeys (browser)` job, which sets `FERROFED_JOURNEYS=1` and runs the
+testkit's browser journeys in headless Chrome at the pinned Chrome for
+Testing release, with FerroUI's modules loaded and refused (`console-ui.md`
+§4);
 the `fhir-validator (EEHRxF documents)` job, which runs HL7's FHIR Validator,
 pinned by version and SHA-256, offline over every patient summary document
 the `test` job's suites write under `FERROFED_EMIT_DIR`, against the vendored

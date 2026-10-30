@@ -12,6 +12,7 @@
 
 use ferrofed_registry::console::{ConsoleState, Owner};
 use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot, SectionResource};
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::{ACTIONS, Column};
 use ferrohealth_ui::view::button::Variant;
@@ -20,7 +21,6 @@ use ferrohealth_ui::view::form::{
 };
 use ferrohealth_ui::view::masked::HoldWords;
 use ferrohealth_ui::view::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
-use ferrohealth_ui::html::Html;
 
 use crate::configure::draft::Edit;
 use crate::configure::model::{ConfigForm, SettingInput};

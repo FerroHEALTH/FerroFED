@@ -432,6 +432,9 @@ mod tests {
             assert!(row_key(key).is_err(), "{key}");
         }
         assert!(row_key("n12").is_ok());
-        assert!(row_key("new-1").is_ok(), "a row FerroUI's repeat module adds");
+        assert!(
+            row_key("new-1").is_ok(),
+            "a row FerroUI's repeat module adds"
+        );
     }
 }

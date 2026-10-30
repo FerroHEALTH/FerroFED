@@ -28,4 +28,5 @@ allow ^%Y-%m-%d %H:%M$                      # a strftime pattern
 allow ^(admin|configuration) action$        # the noun a log line names an operator's action by
 allow ^(member (add|save|removal)|section (save|removal)|drift repair)$   # the action a log line names
 allow ^result set$                          # the ITS-REST object a wire error names to a developer
-allow ^no live session$                    # the error body of a typeahead request refused with 401, read by no person
+allow ^%H:%M:%S$                             # a strftime pattern: the clock time a countdown ends at
+allow ^(default|script|style|img|connect|object|base|form|frame)-(src|uri|action|ancestors) # a Content-Security-Policy directive

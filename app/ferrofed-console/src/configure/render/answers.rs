@@ -5,9 +5,9 @@
 //! kept it from any replica, with the field it names.
 
 use ferrofed_registry::revision::{Applied, Imported};
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::notice::{Announce, notice};
-use ferrohealth_ui::html::Html;
 
 use crate::act::{Acted, ReplicaAnswer};
 use crate::configure::plan::Refused;

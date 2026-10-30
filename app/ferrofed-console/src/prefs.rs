@@ -20,6 +20,7 @@
 //! no user store and nothing in browser storage. No specification governs
 //! this: our own design.
 use crate::locale::Msg;
+use crate::server::ConsoleState;
 use crate::server::plain;
 use axum::Extension;
 use axum::extract::Form;
@@ -28,7 +29,6 @@ use ferrohealth_ui::theme::Preferences;
 use ferrohealth_ui::theme::{Density, Hints, Language, Motion, Preference, Theme, WeekStart};
 use http::header::SET_COOKIE;
 use http::{HeaderValue, StatusCode};
-use crate::server::ConsoleState;
 
 /// The route every preference posts to, its value under its cookie's name
 /// beside `back`.

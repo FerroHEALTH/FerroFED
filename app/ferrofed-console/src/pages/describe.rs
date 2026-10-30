@@ -9,6 +9,7 @@
 //! clients read in the document as its key hint. The document itself has
 //! its one home on About. The replica that answered is a row of its own.
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::table::view::{
     Body, Column, DataTable, Role, Sorting, cell, data_table, title_cell,
@@ -18,7 +19,6 @@ use ferrohealth_ui::view::surface::{Header, page_heading};
 use ferrohealth_ui::view::tabs::{Tab, binder};
 use ferrohealth_ui::view::tag::Tag;
 use ferrohealth_ui::view::template::settings::{Setting, setting_row, settings_panel};
-use ferrohealth_ui::html::Html;
 use openehr_federation::options::{GatewayDescription, OptionsRoot};
 
 use crate::app::{ABOUT, SELF_DESCRIPTION};
@@ -233,9 +233,7 @@ struct Manufacturer {
 /// The rows of the manufacturer and the support period `description`
 /// declares, each said as not declared where it names none.
 fn manufacturer(description: &OptionsRoot) -> Vec<Html> {
-    let said = |value: Option<String>| {
-        t(value.unwrap_or_else(|| tr(Msg::DescribeNotDeclared)))
-    };
+    let said = |value: Option<String>| t(value.unwrap_or_else(|| tr(Msg::DescribeNotDeclared)));
     let supported = match description.extra.get(SUPPORTED_UNTIL) {
         None => tr(Msg::DescribeNotDeclared),
         Some(raw) => match serde_json::from_str::<Option<String>>(raw.get()) {
@@ -449,31 +447,28 @@ fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> Html {
             ..Column::text("p95", tr(Msg::ColumnP95)).titled(tr(Msg::ColumnP95Title))
         },
     ];
-    let rows = description
-        .endpoints
-        .iter()
-        .map(|endpoint| {
-            let active = endpoint.status.as_str() == "active";
-            h(format!(
-                "<tr{}>{}{}{}{}{}{}</tr>",
-                if active { "" } else { " class=\"is-excluded\"" },
-                title_cell(None, code(endpoint.id.to_string()), None),
-                cell(&columns[1], code(endpoint.organisation.clone())),
-                cell(
-                    &columns[2],
-                    code(endpoint.node_id.clone().unwrap_or_default())
-                ),
-                cell(
-                    &columns[3],
-                    Tag::new(endpoint.status.as_str().to_owned()).view()
-                ),
-                cell(&columns[4], crate::pages::latency(endpoint.latency_ms_p50)),
-                cell(
-                    &columns[5],
-                    crate::pages::latency(crate::read::federation::p95(endpoint)),
-                ),
-            ))
-        });
+    let rows = description.endpoints.iter().map(|endpoint| {
+        let active = endpoint.status.as_str() == "active";
+        h(format!(
+            "<tr{}>{}{}{}{}{}{}</tr>",
+            if active { "" } else { " class=\"is-excluded\"" },
+            title_cell(None, code(endpoint.id.to_string()), None),
+            cell(&columns[1], code(endpoint.organisation.clone())),
+            cell(
+                &columns[2],
+                code(endpoint.node_id.clone().unwrap_or_default())
+            ),
+            cell(
+                &columns[3],
+                Tag::new(endpoint.status.as_str().to_owned()).view()
+            ),
+            cell(&columns[4], crate::pages::latency(endpoint.latency_ms_p50)),
+            cell(
+                &columns[5],
+                crate::pages::latency(crate::read::federation::p95(endpoint)),
+            ),
+        ))
+    });
     settings_panel(t(tr(intro)), None, Vec::new()).then(data_table(DataTable {
         caption: &tr(Msg::DescribeEndpoints),
         columns: &columns,
