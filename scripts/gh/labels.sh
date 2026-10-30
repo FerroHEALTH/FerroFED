@@ -252,7 +252,7 @@ label spec:IHE        1d76db "The IHE identity and directory binding: PIXm, PDQm
 label spec:NL-GF      0e8a16 "The Dutch Generic Functions regional binding (Annex B)."
 
 echo "== area labels (a product part with its own crate) =="
-label console          e6c3a5 "The Leptos web UI (app/ferrofed-console)."
+label console          e6c3a5 "The operator console (app/ferrofed-console)."
 
 echo "== workflow and meta labels =="
 label research         c5def5 "An investigation whose deliverable is cited evidence and a recommendation."

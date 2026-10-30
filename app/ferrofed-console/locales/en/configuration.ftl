@@ -322,7 +322,6 @@ system-id = System id
 system-id-not-openehr-uid = The system_id is not an openEHR UID.
 text-plain-charset-utf-8 = text/plain; charset=utf-8
 the-configuration-file = the configuration file
-the-deadline-has-passed = The deadline has passed
 the-issuer = The issuer
 the-token-endpoint = The token endpoint
 this-new-setting = this new setting

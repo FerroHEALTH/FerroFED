@@ -9,27 +9,21 @@
 //! {base}/` document, its one home, with Copy and Download (FerroUI's About
 //! template). A visitor reads the cards in the centred layout, with no
 //! document.
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
 
 use ferrohealth_ui::highlight::Language;
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::view::replica::Replica;
 use ferrohealth_ui::view::shell::centred as centred_layout;
 use ferrohealth_ui::view::surface::{Header, card, definitions};
 use ferrohealth_ui::view::template::about::{
     AboutPage, Link, Manufacturer, SelfDescription, about_page,
 };
-use leptos::prelude::*;
+use ferrohealth_ui::view::toast::toast_region;
 
 use crate::app::{PRODUCT, VERSION};
-use crate::locale::{Msg, tr, tr_with};
+use crate::locale::{Msg, current, tr, tr_with};
+use crate::pages::{h, t};
 use ferrofed_registry::manufacturer::MANUFACTURER;
-use serde::{Deserialize, Serialize};
 
 /// The route Download fetches the `OPTIONS {base}/` document from.
 pub const OPTIONS_DOCUMENT: &str = "/about/options.json";
@@ -38,11 +32,11 @@ pub const OPTIONS_DOCUMENT: &str = "/about/options.json";
 const COPY_ID: &str = "options-copy";
 
 /// The FerroUI version the console is built on, as its manifest pins it.
-const FERROUI: &str = "0.5.8";
+const FERROUI: &str = "0.6.0";
 
 /// What the gateway told the console of itself, for the Versions card and
 /// the document.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Gateway {
     /// The gateway's address, for a signed-in operator.
     address: Option<String>,
@@ -56,19 +50,8 @@ pub struct Gateway {
     document: Option<String>,
 }
 
-/// What the About page shows of the gateway; nothing for a visitor or a
-/// gateway that does not answer.
-///
-/// # Errors
-/// Returns [`crate::read::Fault::Unavailable`] when the console's server
-/// does not answer.
-#[server(endpoint = "about")]
-pub async fn gateway_now() -> Result<Gateway, crate::read::Stop> {
-    Ok(gateway().await)
-}
-
-/// Reads what the About page shows of the gateway.
-#[cfg(not(target_arch = "wasm32"))]
+/// Reads what the About page shows of the gateway; nothing for a visitor
+/// or a gateway that does not answer.
 async fn gateway() -> Gateway {
     let deployment = crate::read::deployment().await.ok();
     let (address, description) = match crate::read::signed_in() {
@@ -94,8 +77,8 @@ async fn gateway() -> Gateway {
 }
 
 /// The page's cards for `gateway`.
-fn about(gateway: Gateway) -> AnyView {
-    let text = |words: String| words.into_any();
+fn about(gateway: Gateway) -> Html {
+    let text = |words: String| t(words);
     let signed_in = gateway.address.is_some();
     let mut versions = vec![(
         tr(Msg::AboutGateway),
@@ -113,7 +96,7 @@ fn about(gateway: Gateway) -> AnyView {
     if let Some(address) = gateway.address {
         versions.push((
             tr(Msg::AboutGatewayAddress),
-            view! { <code>{address}</code> }.into_any(),
+            h(format!("<code>{}</code>", t(address))),
         ));
     }
     if let Some(spec) = gateway.spec {
@@ -136,82 +119,67 @@ fn about(gateway: Gateway) -> AnyView {
     let address = card(
         tr(Msg::AboutContactTitle),
         definitions(vec![
-            (tr(Msg::AboutName), MANUFACTURER.name.into_any()),
-            (
-                tr(Msg::AboutAddress),
-                MANUFACTURER.postal_address.into_any(),
-            ),
+            (tr(Msg::AboutName), t(MANUFACTURER.name)),
+            (tr(Msg::AboutAddress), t(MANUFACTURER.postal_address)),
             (
                 tr(Msg::AboutWebsite),
-                view! { <a href=MANUFACTURER.website>{MANUFACTURER.website}</a> }.into_any(),
+                h(format!(
+                    "<a href=\"{website}\">{website}</a>",
+                    website = t(MANUFACTURER.website)
+                )),
             ),
         ]),
-    )
-    .into_any();
-    about_page(AboutPage {
-        header: Header {
-            title: tr(Msg::AboutTitle).into(),
-            subtitle: Some(tr(Msg::AboutSubtitle).into()),
-            ..Header::default()
-        },
-        release: format!("{PRODUCT} {VERSION}"),
-        versions,
-        manufacturer: Manufacturer {
-            licence: tr(Msg::AboutLicence),
-            support: Link {
-                label: MANUFACTURER.email.to_owned(),
-                href: format!("mailto:{}", MANUFACTURER.email),
+    );
+    about_page(
+        &current(),
+        AboutPage {
+            header: Header {
+                title: tr(Msg::AboutTitle).into(),
+                subtitle: Some(tr(Msg::AboutSubtitle).into()),
+                ..Header::default()
             },
-            documentation: Some(Link {
-                label: tr(Msg::AboutBook),
-                href: String::from("https://ferrofed.eu/docs/operate/operator-console.html"),
+            release: format!("{PRODUCT} {VERSION}"),
+            versions,
+            manufacturer: Manufacturer {
+                licence: tr(Msg::AboutLicence),
+                support: Link {
+                    label: MANUFACTURER.email.to_owned(),
+                    href: format!("mailto:{}", MANUFACTURER.email),
+                },
+                documentation: Some(Link {
+                    label: tr(Msg::AboutBook),
+                    href: String::from("https://ferrofed.eu/docs/operate/operator-console.html"),
+                }),
+            },
+            cards: vec![address],
+            self_description: gateway.document.map(|text| SelfDescription {
+                title: tr(Msg::AboutDocumentTitle),
+                line: tr(Msg::AboutDocumentLine),
+                language: Language::Json,
+                text,
+                copy_id: String::from(COPY_ID),
+                download: String::from(OPTIONS_DOCUMENT),
             }),
+            replica: gateway.replica.map(|name| Replica { name, at: None }),
         },
-        cards: vec![address],
-        self_description: gateway.document.map(|text| SelfDescription {
-            title: tr(Msg::AboutDocumentTitle),
-            line: tr(Msg::AboutDocumentLine),
-            language: Language::Json,
-            text,
-            copy_id: String::from(COPY_ID),
-            download: String::from(OPTIONS_DOCUMENT),
-        }),
-        replica: gateway.replica.map(|name| Replica { name, at: None }),
-    })
-}
-
-/// About as the route draws it: in the shell for a signed-in operator, in
-/// the centred layout for a visitor.
-#[must_use]
-pub fn routed() -> AnyView {
-    match crate::visit::visit_untracked().session {
-        crate::visit::SessionState::SignedIn => page(),
-        _ => centred(),
-    }
+    )
 }
 
 /// About, in the shell of a signed-in operator.
-#[must_use]
-pub fn page() -> AnyView {
-    let gateway = Resource::new(crate::read::changes, |_| gateway_now());
-    let body = Suspend::new(async move { about(gateway.await.unwrap_or_default()) });
-    view! {
-        {crate::app::title(tr(Msg::AboutTitle))}
-        <Suspense fallback=|| ()>{body}</Suspense>
-    }
-    .into_any()
+pub async fn page() -> Html {
+    let gateway = gateway().await;
+    crate::app::title(tr(Msg::AboutTitle)).then(about(gateway))
 }
 
 /// About, in the centred layout a visitor reads.
 #[must_use]
-pub fn centred() -> AnyView {
+pub fn centred() -> Html {
     let body = about(Gateway::default());
-    view! {
-        {crate::app::title(tr(Msg::AboutTitle))}
-        {centred_layout(
-            view! { <div class="fui-column">{body}</div> }.into_any(),
-            crate::shell::footer(),
-        )}
-    }
-    .into_any()
+    let locale = current();
+    crate::app::title(tr(Msg::AboutTitle)).then(centred_layout(
+        &locale,
+        h(format!("<div class=\"fui-column\">{body}</div>")),
+        toast_region(&locale, Vec::new()),
+        crate::shell::footer(),
+    ))
 }

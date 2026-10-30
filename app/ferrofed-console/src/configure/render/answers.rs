@@ -5,9 +5,9 @@
 //! kept it from any replica, with the field it names.
 
 use ferrofed_registry::revision::{Applied, Imported};
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::notice::{Announce, notice};
-use leptos::prelude::*;
 
 use crate::act::{Acted, ReplicaAnswer};
 use crate::configure::plan::Refused;
@@ -16,6 +16,7 @@ use crate::configure::render::{SavedLine, StoredLine, mark_said};
 use crate::configure::said::replica_said;
 use crate::configure::said::{ActionAnswer, Answer, FieldNote};
 use crate::locale::{Msg, tr, tr_with};
+use crate::pages::{h, opt, t};
 use crate::read::Refusal;
 
 /// The answer of a form `refused` kept from reaching any replica, marking
@@ -51,50 +52,41 @@ pub fn saved(answer: &ReplicaAnswer<SavedLine>) -> ActionAnswer {
 
 /// The answer of `answer` drawn.
 #[must_use]
-pub fn saved_view(answer: &ReplicaAnswer<SavedLine>) -> AnyView {
-    replica_said(answer, "save", saved_line).into_any()
+pub fn saved_view(answer: &ReplicaAnswer<SavedLine>) -> Html {
+    replica_said(answer, "save", saved_line)
 }
 
 /// What a replica reports of a saved revision.
-fn saved_line(replica: &str, line: &SavedLine) -> AnyView {
+fn saved_line(replica: &str, line: &SavedLine) -> Html {
     let id = line.revision.id;
     let preview = match (&line.changes, line.running) {
-        (Some(changes), Some(running)) => view! {
-            <p>
-                {tr_with(
-                    Msg::WhatChangesAgainstRunningRevision,
-                    &[("running", (running).to_string().into())],
-                )}
-            </p>
-            {diff_table(changes, (Some(running), id))}
-        }
-        .into_any(),
+        (Some(changes), Some(running)) => h(format!(
+            "<p>{}</p>{}",
+            t(tr_with(
+                Msg::WhatChangesAgainstRunningRevision,
+                &[("running", (running).to_string().into())],
+            )),
+            diff_table(changes, (Some(running), id))
+        )),
         _ => notice(
             Tone::Warn,
             Announce::Alert,
             None,
-            tr(Msg::PreviewChangesCouldNotReadReload),
-        )
-        .into_any(),
+            t(tr(Msg::PreviewChangesCouldNotReadReload)),
+        ),
     };
-    view! {
-        {said(
-            view! {
-                <strong>
-                    {tr_with(
-                        Msg::ReplicaSavedRevision,
-                        &[
-                            ("replica", (replica).to_string().into()),
-                            ("id", (id).to_string().into()),
-                        ],
-                    )}
-                </strong>
-                {tr(Msg::NotAppliedApplyFromCardTop)}
-            },
-        )}
-        {preview}
-    }
-    .into_any()
+    said(h(format!(
+        "<strong>{}</strong>{}",
+        t(tr_with(
+            Msg::ReplicaSavedRevision,
+            &[
+                ("replica", (replica).to_string().into()),
+                ("id", (id).to_string().into()),
+            ],
+        )),
+        t(tr(Msg::NotAppliedApplyFromCardTop)),
+    )))
+    .then(preview)
 }
 
 /// The answer of an apply or a rollback at `answer`'s replica.
@@ -109,12 +101,12 @@ pub fn applied(answer: &ReplicaAnswer<Applied>, what: &str) -> ActionAnswer {
 
 /// The answer of `answer` drawn.
 #[must_use]
-pub fn applied_view(answer: &ReplicaAnswer<Applied>, what: &str) -> AnyView {
-    replica_said(answer, what, applied_line).into_any()
+pub fn applied_view(answer: &ReplicaAnswer<Applied>, what: &str) -> Html {
+    replica_said(answer, what, applied_line)
 }
 
 /// What a replica reports of an apply or a rollback.
-fn applied_line(replica: &str, line: &Applied) -> AnyView {
+fn applied_line(replica: &str, line: &Applied) -> Html {
     let restored = line
         .revision
         .restores
@@ -130,21 +122,19 @@ fn applied_line(replica: &str, line: &Applied) -> AnyView {
         .awaiting
         .as_ref()
         .map(|_| tr(Msg::AwaitsYourConfirmationConfirmCardTop));
-    said(view! {
-        <strong>
-            {tr_with(
-                Msg::ReplicaAppliedRevision,
-                &[
-                    ("replica", (replica).to_string().into()),
-                    ("id", (line.revision.id).to_string().into()),
-                    ("restored", (restored).clone().into()),
-                ],
-            )}
-        </strong>
-        " "
-        {mark_said(&line.current)}
-        {awaits}
-    })
+    said(h(format!(
+        "<strong>{}</strong> {}{}",
+        t(tr_with(
+            Msg::ReplicaAppliedRevision,
+            &[
+                ("replica", (replica).to_string().into()),
+                ("id", (line.revision.id).to_string().into()),
+                ("restored", (restored).clone().into()),
+            ],
+        )),
+        t(mark_said(&line.current)),
+        opt(awaits.map(t)),
+    )))
 }
 
 /// The answer of a stored-query version stored at `answer`'s replica.
@@ -159,24 +149,23 @@ pub fn stored(answer: &ReplicaAnswer<StoredLine>) -> ActionAnswer {
 
 /// The answer of `answer` drawn.
 #[must_use]
-pub fn stored_view(answer: &ReplicaAnswer<StoredLine>) -> AnyView {
-    replica_said(answer, "store", stored_line).into_any()
+pub fn stored_view(answer: &ReplicaAnswer<StoredLine>) -> Html {
+    replica_said(answer, "store", stored_line)
 }
 
 /// What a replica reports of a stored-query version stored.
-fn stored_line(replica: &str, line: &StoredLine) -> AnyView {
-    said(view! {
-        <strong>
-            {tr_with(
-                Msg::ReplicaStoredVersion,
-                &[
-                    ("replica", (replica).to_string().into()),
-                    ("name", (line.name).clone().into()),
-                    ("version", (line.version).clone().into()),
-                ],
-            )}
-        </strong>
-    })
+fn stored_line(replica: &str, line: &StoredLine) -> Html {
+    said(h(format!(
+        "<strong>{}</strong>",
+        t(tr_with(
+            Msg::ReplicaStoredVersion,
+            &[
+                ("replica", (replica).to_string().into()),
+                ("name", (line.name).clone().into()),
+                ("version", (line.version).clone().into()),
+            ],
+        ))
+    )))
 }
 
 /// The answer of an import at `answer`'s replica, with its changes.
@@ -191,40 +180,37 @@ pub fn imported(answer: &ReplicaAnswer<Imported>) -> ActionAnswer {
 
 /// The answer of `answer` drawn.
 #[must_use]
-pub fn imported_view(answer: &ReplicaAnswer<Imported>) -> AnyView {
-    replica_said(answer, "import", imported_line).into_any()
+pub fn imported_view(answer: &ReplicaAnswer<Imported>) -> Html {
+    replica_said(answer, "import", imported_line)
 }
 
 /// What a replica reports of an import.
-fn imported_line(replica: &str, line: &Imported) -> AnyView {
+fn imported_line(replica: &str, line: &Imported) -> Html {
     let id = line.revision.id;
-    view! {
-        {said(
-            view! {
-                <strong>
-                    {tr_with(
-                        Msg::ReplicaImportedRevisionDryRun,
-                        &[
-                            ("replica", (replica).to_string().into()),
-                            ("id", (id).to_string().into()),
-                        ],
-                    )}
-                </strong>
-                {tr(Msg::NotAppliedApplyFromCardTop)}
-            },
-        )}
-        <p>
-            {tr_with(
+    Html::join([
+        said(h(format!(
+            "<strong>{}</strong>{}",
+            t(tr_with(
+                Msg::ReplicaImportedRevisionDryRun,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("id", (id).to_string().into()),
+                ],
+            )),
+            t(tr(Msg::NotAppliedApplyFromCardTop)),
+        ))),
+        h(format!(
+            "<p>{}</p>",
+            t(tr_with(
                 Msg::WhatChangesAgainstRunningRevision2,
                 &[("from", (line.diff.from).to_string().into())],
-            )}
-        </p>
-        {diff_table(&line.diff.changes, (Some(line.diff.from), id))}
-    }
-    .into_any()
+            ))
+        )),
+        diff_table(&line.diff.changes, (Some(line.diff.from), id)),
+    ])
 }
 
 /// The notice of what a replica did, `body` in words.
-pub(crate) fn said(body: impl IntoView + 'static) -> AnyView {
-    notice(Tone::Ok, Announce::Status, None, body).into_any()
+pub(crate) fn said(body: Html) -> Html {
+    notice(Tone::Ok, Announce::Status, None, body)
 }

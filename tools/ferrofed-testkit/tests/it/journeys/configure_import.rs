@@ -19,7 +19,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::journeys::browser::with_browser;
-use crate::journeys::configure::{fill, hydrated, submit};
+use crate::journeys::configure::{fill, scripted, submit};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -76,7 +76,7 @@ async fn toml_is_imported_as_a_dry_run_revision_and_its_changes_shown() -> Resul
     let stack = Stack::start_with_admin(&admin.uri()).await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        hydrated(browser, &stack, "/configuration/history").await?;
+        scripted(browser, &stack, "/configuration/history").await?;
         let link = browser
             .element(By::PartialLinkText("Export revision 2 as TOML"))
             .await?;
@@ -84,7 +84,7 @@ async fn toml_is_imported_as_a_dry_run_revision_and_its_changes_shown() -> Resul
             Some(String::from("/configuration/revisions/2/export")),
             link.attr("href").await?
         );
-        hydrated(browser, &stack, "/configuration/import-export").await?;
+        scripted(browser, &stack, "/configuration/import-export").await?;
         let download = browser
             .element(By::PartialLinkText("Download as TOML"))
             .await?;
@@ -93,7 +93,7 @@ async fn toml_is_imported_as_a_dry_run_revision_and_its_changes_shown() -> Resul
             download.attr("href").await?
         );
         browser
-            .console_clean("the hydration of the import form")
+            .console_clean("the modules of the import form")
             .await?;
 
         fill(browser, "cfg-toml", "[federation]\nbest_effort = true\n").await?;

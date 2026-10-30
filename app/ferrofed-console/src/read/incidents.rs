@@ -9,23 +9,14 @@
 //! emitted, and open otherwise. The report names an `ehr_id` only when it
 //! is a bare UUID, a routing id and never a patient identifier (§5.4.1,
 //! N33).
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
 
 use std::collections::BTreeMap;
 
 use ferrofed_registry::operator::{IncidentReport, RecordedClear, RecordedIncident};
 
-use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::read::Stop;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::read::signed_in;
 
 /// One incident.
@@ -122,22 +113,11 @@ fn clear_of(incident: &RecordedIncident, cleared: &[RecordedClear]) -> Option<Re
         .cloned()
 }
 
-/// The incidents as the operator of the request reads them ([`read`]).
-///
-/// # Errors
-/// As [`read`], and [`crate::read::Fault::Unavailable`] when the console's
-/// server does not answer.
-#[server(endpoint = "incidents")]
-pub async fn incidents_now() -> Result<Incidents, Stop> {
-    read().await
-}
-
 /// Reads the incidents as the operator of the request.
 ///
 /// # Errors
 /// Returns the [`Stop`] of a missing session, or of a read the gateway
 /// refused or did not answer.
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn read() -> Result<Incidents, Stop> {
     let (state, token) = signed_in()?;
     let report = state.gateway().incidents(&token).await?;

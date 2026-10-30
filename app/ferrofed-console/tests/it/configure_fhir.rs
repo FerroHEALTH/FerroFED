@@ -366,7 +366,7 @@ async fn a_fhir_endpoint_that_does_not_read_asks_no_replica_and_is_refused_at_it
 }
 
 // NOTE: no specification governs this: our own design; a FHIR endpoint's
-// values reach the edit form's attributes as text, the `inner_html` obligation.
+// values reach the edit form's attributes as text, escaped where they are written.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_hostile_fhir_endpoint_is_escaped_in_the_edit_form() -> Result<(), Box<dyn Error>> {
     let hostile = r#",{"id":"node-c-fhir","url":"https://x.example.org/\"><script>alert(1)</script>",
@@ -387,11 +387,11 @@ async fn a_hostile_fhir_endpoint_is_escaped_in_the_edit_form() -> Result<(), Box
         );
     }
     assert!(
-        page_text.contains("&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"),
+        page_text.contains("&#34;&#62;&#60;script&#62;alert(1)&#60;/script&#62;"),
         "{page_text}"
     );
     assert!(
-        page_text.contains("&quot; onfocus=&quot;alert(2)"),
+        page_text.contains("&#34; onfocus=&#34;alert(2)"),
         "{page_text}"
     );
     Ok(())

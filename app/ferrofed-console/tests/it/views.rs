@@ -183,16 +183,7 @@ async fn no_page_renders_the_operators_token_and_each_carries_the_security_heade
         assert_eq!("no-store", header(&response, "cache-control"), "{page}");
         assert_eq!("DENY", header(&response, "x-frame-options"), "{page}");
         let policy = header(&response, "content-security-policy");
-        let nonce = policy
-            .split_once("'nonce-")
-            .and_then(|(_, rest)| rest.split_once('\''))
-            .map(|(nonce, _)| nonce)
-            .ok_or("the policy names a nonce")?;
-        assert!(
-            body.contains(&format!(r#"<script type="module" nonce="{nonce}">"#)),
-            "{page}: {body}"
-        );
-        assert!(!policy.contains("'unsafe-inline'"), "{page}: {policy}");
+        crate::support::strict(policy, &body).map_err(|refused| format!("{page}: {refused}"))?;
     }
     Ok(())
 }

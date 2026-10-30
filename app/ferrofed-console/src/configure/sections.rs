@@ -8,7 +8,7 @@
 
 use ferrofed_registry::resource::Resource;
 use ferrofed_registry::revision::{Current, Review};
-use leptos::prelude::*;
+use ferrohealth_ui::html::Html;
 
 use crate::act::{Acted, ReplicaAnswer};
 use crate::configure::render::answers::said;
@@ -39,24 +39,23 @@ pub fn confirmed(answer: &ReplicaAnswer<Current>) -> ActionAnswer {
 
 /// The answer of `answer` drawn.
 #[must_use]
-pub fn confirmed_view(answer: &ReplicaAnswer<Current>) -> AnyView {
-    replica_said(answer, "confirmation", confirmed_line).into_any()
+pub fn confirmed_view(answer: &ReplicaAnswer<Current>) -> Html {
+    replica_said(answer, "confirmation", confirmed_line)
 }
 
 /// What a replica reports of a confirmation.
-fn confirmed_line(replica: &str, mark: &Current) -> AnyView {
-    said(view! {
-        <strong>
-            {tr_with(
-                Msg::ReplicaRecordedConfirmationRevision,
-                &[
-                    ("replica", (replica).to_string().into()),
-                    ("revision", (mark.revision).to_string().into()),
-                ],
-            )}
-        </strong>
-        {tr(Msg::StaysRunningGatewayNoLongerRolls)}
-    })
+fn confirmed_line(replica: &str, mark: &Current) -> Html {
+    said(crate::pages::h(format!(
+        "<strong>{}</strong>{}",
+        crate::pages::t(tr_with(
+            Msg::ReplicaRecordedConfirmationRevision,
+            &[
+                ("replica", (replica).to_string().into()),
+                ("revision", (mark.revision).to_string().into()),
+            ],
+        )),
+        crate::pages::t(tr(Msg::StaysRunningGatewayNoLongerRolls)),
+    )))
 }
 
 /// The answer of an approval at `answer`'s replica.
@@ -71,27 +70,26 @@ pub fn approved(answer: &ReplicaAnswer<Review>) -> ActionAnswer {
 
 /// The answer of `answer` drawn.
 #[must_use]
-pub fn approved_view(answer: &ReplicaAnswer<Review>) -> AnyView {
-    replica_said(answer, "approval", approved_line).into_any()
+pub fn approved_view(answer: &ReplicaAnswer<Review>) -> Html {
+    replica_said(answer, "approval", approved_line)
 }
 
 /// What a replica reports of an approval.
-fn approved_line(replica: &str, review: &Review) -> AnyView {
+fn approved_line(replica: &str, review: &Review) -> Html {
     let next = if review.approved {
         tr(Msg::MayNowApplied)
     } else {
         tr(Msg::StillTakesApprovalBeforeApplies)
     };
-    said(view! {
-        <strong>
-            {tr_with(
-                Msg::ReplicaRecordedApprovalRevision,
-                &[
-                    ("replica", (replica).to_string().into()),
-                    ("revision", (review.revision).to_string().into()),
-                ],
-            )}
-        </strong>
-        {next}
-    })
+    said(crate::pages::h(format!(
+        "<strong>{}</strong>{}",
+        crate::pages::t(tr_with(
+            Msg::ReplicaRecordedApprovalRevision,
+            &[
+                ("replica", (replica).to_string().into()),
+                ("revision", (review.revision).to_string().into()),
+            ],
+        )),
+        crate::pages::t(next),
+    )))
 }

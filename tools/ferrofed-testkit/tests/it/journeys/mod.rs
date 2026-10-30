@@ -6,15 +6,15 @@
 //!
 //! Each journey drives headless Chrome over `WebDriver`, through a chromedriver
 //! of its own, against a running gateway over two stub nodes and a
-//! running console that serves its release site bundle, so the browser
-//! hydrates the pages the server rendered. The operator signs in at a test
+//! running console that draws every page whole, with FerroUI's script
+//! modules loaded or refused. The operator signs in at a test
 //! OpenID Provider. Each journey fails on any error the browser logs to its
 //! console, and waits on elements explicitly, never on a timer.
 //!
 //! The gate is `FERROFED_JOURNEYS=1`; without it each journey returns at
 //! once, so the ordinary suite needs no browser. The `journeys (browser)` job
-//! of `.github/workflows/ci.yml` sets it, names the pinned chromedriver and
-//! builds the bundle, and `scripts/checks/e2e-placement.sh` keeps every gated
+//! of `.github/workflows/ci.yml` sets it and names the pinned chromedriver,
+//! and `scripts/checks/e2e-placement.sh` keeps every gated
 //! journey in this module. The book's screenshots of the console are taken
 //! on the same stack behind a gate of their own, `FERROFED_SCREENSHOTS`
 //! (`screenshots`). No specification governs the journeys: our own design.

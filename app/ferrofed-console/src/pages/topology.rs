@@ -8,12 +8,13 @@
 //! The query names the drawing's state: `view` (`map` or `list`), `look`
 //! (the card whose quick look is open), `collapse` (`all` or the groups
 //! folded), `show` (the states shown) and `minimap`. Each is a link or a
-//! `GET` form, so the topology works with no WebAssembly; FerroUI's island
-//! adds zoom, panning and the keys. Past eight organisations the healthy
+//! `GET` form, so the topology works with the scripts refused; FerroUI's
+//! `topology` module adds zoom, panning and the keys. Past eight organisations the healthy
 //! ones start folded.
 
 use std::collections::BTreeSet;
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::flow::{EdgeRule, FlowRule, FlowState, rule_button, rule_dialog};
@@ -22,11 +23,10 @@ use ferrohealth_ui::view::topology::{
     ClusterLink, QuickLook, StatusCount, StatusMenu, Topology, TopologyCard, TopologyGroup,
     TopologySide, TopologyView, topology,
 };
-use leptos::prelude::*;
 
 use crate::app::{SELF_DESCRIPTION, TOPOLOGY};
-use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{latency_fact, stopped};
+use crate::locale::{Msg, current, tr, tr_with};
+use crate::pages::{h, latency_fact, stopped, t};
 use crate::read::federation::{Federation, Health, Node, Organisation, ServiceGroup};
 use ferrohealth_ui::view::state::state;
 
@@ -109,92 +109,79 @@ impl Asked {
 
 /// The state the request's query names.
 fn asked() -> Asked {
-    let query = leptos_router::hooks::use_query_map();
-    query.with_untracked(|query| {
-        let list = |key: &str| -> BTreeSet<String> {
-            query
-                .get_str(key)
-                .unwrap_or_default()
-                .split(',')
-                .filter(|id| !id.is_empty() && *id != "all")
-                .map(str::to_owned)
-                .collect()
-        };
-        Asked {
-            view: match query.get_str("view") {
-                Some("map") => TopologyView::Map,
-                Some("list") => TopologyView::List,
-                _ => TopologyView::Auto,
-            },
-            look: query.get("look"),
-            all_folded: query.get_str("collapse") == Some("all"),
-            collapse: list("collapse"),
-            expanded: list("expand"),
-            show: query
-                .get_all("show")
-                .map(|states| states.into_iter().collect()),
-            minimap: query.get_str("minimap") == Some("on"),
-        }
-    })
+    use crate::pages::{query_param, query_values};
+    let list = |key: &str| -> BTreeSet<String> {
+        query_param(key)
+            .unwrap_or_default()
+            .split(',')
+            .filter(|id| !id.is_empty() && *id != "all")
+            .map(str::to_owned)
+            .collect()
+    };
+    let shown = query_values("show");
+    Asked {
+        view: match query_param("view").as_deref() {
+            Some("map") => TopologyView::Map,
+            Some("list") => TopologyView::List,
+            _ => TopologyView::Auto,
+        },
+        look: query_param("look"),
+        all_folded: query_param("collapse").as_deref() == Some("all"),
+        collapse: list("collapse"),
+        expanded: list("expand"),
+        show: (!shown.is_empty()).then(|| shown.into_iter().collect()),
+        minimap: query_param("minimap").as_deref() == Some("on"),
+    }
 }
 
 /// The topology.
-#[must_use]
-pub fn page() -> AnyView {
+pub async fn page() -> Html {
     let asked = asked();
-    let federation_read = Resource::new(crate::read::changes, |_| {
-        crate::read::federation::federation_now()
-    });
-    let body = Suspend::new(async move {
-        let heading = page_heading(
-            Header {
-                title: tr(Msg::TopologyTitle).into(),
-                subtitle: Some(tr(Msg::TopologySubtitle).into()),
-                ..Header::default()
-            },
-            ActionGroup::none(),
-        )
-        .into_any();
-        match federation_read.await {
-            Err(stop) => view! {
-                {heading}
-                {stopped(&stop)}
-                <p class="fui-small fui-muted">{tr(Msg::TopologyNoStale)}</p>
-            }
-            .into_any(),
-            Ok(federation) => view! {
-                {heading}
-                {map(&federation, &asked)}
-                {edge_rule()}
-            }
-            .into_any(),
-        }
-    });
-    view! {
-        {crate::app::title(tr(Msg::TopologyTitle))}
-        <Suspense fallback=|| ()>{body}</Suspense>
-    }
-    .into_any()
+    let federation = crate::read::federation::read().await;
+    let heading = page_heading(
+        &current(),
+        Header {
+            title: tr(Msg::TopologyTitle).into(),
+            subtitle: Some(tr(Msg::TopologySubtitle).into()),
+            ..Header::default()
+        },
+        ActionGroup::none(),
+    );
+    let body = match federation {
+        Err(stop) => Html::join([
+            heading,
+            stopped(&stop),
+            h(format!(
+                "<p class=\"fui-small fui-muted\">{}</p>",
+                t(tr(Msg::TopologyNoStale))
+            )),
+        ]),
+        Ok(federation) => Html::join([heading, map(&federation, &asked), edge_rule()]),
+    };
+    crate::app::title(tr(Msg::TopologyTitle)).then(body)
 }
 
 /// "How the flow is drawn": each state's line and what it means on the
 /// map, in FerroUI's short dialog that the toolbar's button opens.
-fn edge_rule() -> AnyView {
+fn edge_rule() -> Html {
     let rule = |state, meaning| EdgeRule {
         state,
         meaning: tr(meaning),
     };
-    rule_dialog(FlowRule {
-        id: RULE_DIALOG.into(),
-        rules: vec![
-            rule(FlowState::Up, Msg::TopologyRuleUp),
-            rule(FlowState::Degraded, Msg::TopologyRuleDegraded),
-            rule(FlowState::Unreachable, Msg::TopologyRuleUnreachable),
-            rule(FlowState::NotChecked, Msg::TopologyRuleNotChecked),
-            rule(FlowState::Off, Msg::TopologyRuleOff),
-        ],
-        note: tr(Msg::TopologyRuleNote),
-    })
+    rule_dialog(
+        &current(),
+        FlowRule {
+            id: RULE_DIALOG.into(),
+            rules: vec![
+                rule(FlowState::Up, Msg::TopologyRuleUp),
+                rule(FlowState::Degraded, Msg::TopologyRuleDegraded),
+                rule(FlowState::Unreachable, Msg::TopologyRuleUnreachable),
+                rule(FlowState::NotChecked, Msg::TopologyRuleNotChecked),
+                rule(FlowState::Off, Msg::TopologyRuleOff),
+            ],
+            note: tr(Msg::TopologyRuleNote),
+        },
+    )
 }
 
 /// A card of the map.
@@ -382,19 +369,14 @@ fn services(federation: &Federation, asked: &Asked) -> Option<TopologySide> {
 fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickLook> {
     let close = asked.href(|next| next.look = None);
     if let Some((organisation, node)) = federation.node(id) {
-        let endpoints = node
-            .endpoints
-            .iter()
-            .map(|endpoint| {
-                view! {
-                    <li>
-                        <code>{endpoint.id.clone()}</code>
-                        " "
-                        {state(endpoint.health.mark(), endpoint.health.word(), None)}
-                    </li>
-                }
-            })
-            .collect_view();
+        let endpoints = node.endpoints.iter().map(|endpoint| {
+            h(format!(
+                "<li><code>{}</code> {}</li>",
+                t(&endpoint.id),
+                state(endpoint.health.mark(), endpoint.health.word(), None)
+            ))
+        });
+        let endpoints = Html::join(endpoints);
         return Some(QuickLook {
             card: id.to_owned(),
             title: node.id.clone(),
@@ -404,29 +386,25 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
                 &[("organisation", organisation.shown().to_owned().into())],
             )),
             close,
-            body: view! {
-                {facts_row(
-                    vec![
-                        (
-                            tr(Msg::ColumnState),
-                            state(node.health().mark(), node.health().word(), None),
-                        ),
-                        (
-                            tr(Msg::ColumnMedian),
-                            latency_fact(node.latency_ms_p50(), tr(Msg::ColumnMedianTitle)),
-                        ),
-                        (
-                            tr(Msg::ColumnP95),
-                            latency_fact(node.latency_ms_p95(), tr(Msg::ColumnP95Title)),
-                        ),
-                    ],
-                )}
-                <ul class="fui-stack">{endpoints}</ul>
-                <p>
-                    <a href=organisation.node_href(node)>{tr(Msg::TopologyOpenPage)}</a>
-                </p>
-            }
-            .into_any(),
+            body: h(format!(
+                "{}<ul class=\"fui-stack\">{endpoints}</ul><p><a href=\"{}\">{}</a></p>",
+                facts_row(vec![
+                    (
+                        tr(Msg::ColumnState),
+                        state(node.health().mark(), node.health().word(), None),
+                    ),
+                    (
+                        tr(Msg::ColumnMedian),
+                        latency_fact(node.latency_ms_p50(), tr(Msg::ColumnMedianTitle)),
+                    ),
+                    (
+                        tr(Msg::ColumnP95),
+                        latency_fact(node.latency_ms_p95(), tr(Msg::ColumnP95Title)),
+                    ),
+                ]),
+                t(organisation.node_href(node)),
+                t(tr(Msg::TopologyOpenPage)),
+            )),
         });
     }
     federation.organisation(id).map(|organisation| QuickLook {
@@ -435,25 +413,24 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
         mono: false,
         line: Some(organisation.id.clone()),
         close,
-        body: view! {
-            {facts_row(
-                vec![
-                    (
-                        tr(Msg::ColumnState),
-                        state(organisation.health().mark(), organisation.health().word(), None),
-                    ),
-                ],
-            )}
-            <p>
-                <a href=organisation.href()>{tr(Msg::TopologyOpenPage)}</a>
-            </p>
-        }
-        .into_any(),
+        body: h(format!(
+            "{}<p><a href=\"{}\">{}</a></p>",
+            facts_row(vec![(
+                tr(Msg::ColumnState),
+                state(
+                    organisation.health().mark(),
+                    organisation.health().word(),
+                    None
+                ),
+            )]),
+            t(organisation.href()),
+            t(tr(Msg::TopologyOpenPage)),
+        )),
     })
 }
 
 /// The map of `federation` in the state `asked`.
-fn map(federation: &Federation, asked: &Asked) -> AnyView {
+fn map(federation: &Federation, asked: &Asked) -> Html {
     let many = federation.organisations.len() > UNFOLDED;
     let groups: Vec<TopologyGroup> = federation
         .organisations
@@ -485,52 +462,56 @@ fn map(federation: &Federation, asked: &Asked) -> AnyView {
             asked,
         )
     };
-    topology(Topology {
-        id: String::from("federation-map"),
-        label: tr(Msg::TopologyMapLabel),
-        list_label: tr(Msg::TopologyListLabel),
-        hub,
-        callers: None,
-        start: services(federation, asked),
-        end: Some(TopologySide {
-            title: tr(Msg::TopologyOrganisations),
-            line: tr(Msg::TopologyOrganisationsLine),
-            groups,
-        }),
-        view: asked.view,
-        views: (
-            asked.href(|next| next.view = TopologyView::Map),
-            asked.href(|next| next.view = TopologyView::List),
-        ),
-        status: StatusMenu {
-            action: String::from(TOPOLOGY),
-            name: String::from("show"),
-            states: STATES
-                .into_iter()
-                .map(|state| StatusCount {
-                    state,
-                    count: counted(state),
-                    shown: asked.shows(state),
-                })
-                .collect(),
-        },
-        tools: Some(rule_button(RULE_DIALOG.into())),
-        updated: None,
-        collapse_all: Some(ClusterLink {
-            href: asked.href(|next| {
-                next.all_folded = !next.all_folded;
-                next.collapse.clear();
-                next.expanded.clear();
+    let locale = current();
+    topology(
+        &locale,
+        Topology {
+            id: String::from("federation-map"),
+            label: tr(Msg::TopologyMapLabel),
+            list_label: tr(Msg::TopologyListLabel),
+            hub,
+            callers: None,
+            start: services(federation, asked),
+            end: Some(TopologySide {
+                title: tr(Msg::TopologyOrganisations),
+                line: tr(Msg::TopologyOrganisationsLine),
+                groups,
             }),
-            on: asked.all_folded,
-        }),
-        minimap: Some(ClusterLink {
-            href: asked.href(|next| next.minimap = !next.minimap),
-            on: asked.minimap,
-        }),
-        look: asked
-            .look
-            .as_deref()
-            .and_then(|id| quick_look(federation, id, asked)),
-    })
+            view: asked.view,
+            views: (
+                asked.href(|next| next.view = TopologyView::Map),
+                asked.href(|next| next.view = TopologyView::List),
+            ),
+            status: StatusMenu {
+                action: String::from(TOPOLOGY),
+                name: String::from("show"),
+                states: STATES
+                    .into_iter()
+                    .map(|state| StatusCount {
+                        state,
+                        count: counted(state),
+                        shown: asked.shows(state),
+                    })
+                    .collect(),
+            },
+            tools: Some(rule_button(&locale, RULE_DIALOG)),
+            updated: None,
+            collapse_all: Some(ClusterLink {
+                href: asked.href(|next| {
+                    next.all_folded = !next.all_folded;
+                    next.collapse.clear();
+                    next.expanded.clear();
+                }),
+                on: asked.all_folded,
+            }),
+            minimap: Some(ClusterLink {
+                href: asked.href(|next| next.minimap = !next.minimap),
+                on: asked.minimap,
+            }),
+            look: asked
+                .look
+                .as_deref()
+                .and_then(|id| quick_look(federation, id, asked)),
+        },
+    )
 }

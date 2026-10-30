@@ -73,14 +73,11 @@
 #                          tonic row
 #                          matches the root
 #                          Cargo.toml [workspace.dependencies] requirement.
-#  14. console toolchain    the Leptos rows against the root Cargo.toml
-#                          requirements, and the cargo-leptos and wasm-bindgen
-#                          versions ci.yml and release-console.yml install,
-#                          the wasm-bindgen CLI equal to the wasm-bindgen
-#                          crate the root Cargo.toml requires and Cargo.lock
-#                          locks, and the thirtyfour row against the root
-#                          Cargo.toml and the Chrome for Testing row against
-#                          the chrome-version ci.yml installs.
+#  14. console toolchain    the FerroUI row against the root Cargo.toml
+#                          requirement and the version About names, the
+#                          thirtyfour row against the root Cargo.toml and the
+#                          Chrome for Testing row against the chrome-version
+#                          ci.yml installs.
 #  15. support periods     every `## [x.y.z]` release of CHANGELOG.md, a
 #                          pre-release aside, has one row in the SECURITY.md
 #                          support table, with its release date and the end
@@ -1303,107 +1300,31 @@ for crate in opentelemetry opentelemetry_sdk opentelemetry-proto tracing-opentel
   fi
 done
 
-echo "== console toolchain ($matrix <-> Cargo.toml, Cargo.lock, ci.yml, release-console.yml)"
-# The Leptos crates are released on lines of their own, each held to its row.
-if [[ -f Cargo.toml ]]; then
-  for crate in leptos leptos_axum leptos_meta leptos_router; do
-    want="$(pin_of "$crate" "$matrix")"
-    req="$(manifest_req "$crate")"
-    if [[ -z "$want" ]]; then
-      bad "$matrix has no $crate row"
-    elif [[ -z "$req" ]]; then
-      bad "$crate: root Cargo.toml has no requirement, $matrix pins $want"
-    elif [[ "$req" != "$want" ]]; then
-      bad "$crate: root Cargo.toml requires $req, $matrix pins $want"
-    else
-      note "OK: $crate $want (root Cargo.toml agrees)"
-    fi
-  done
-fi
-console_workflows=(.github/workflows/ci.yml .github/workflows/release-console.yml)
-# Every version of TOOL the console workflows install, deduplicated.
-console_tool_pins() {
-  local tool="$1" wf
-  for wf in "${console_workflows[@]}"; do
-    [[ -f "$wf" ]] || continue
-    sed -nE "s|^[[:space:]]*tool:[[:space:]]*$tool@([^[:space:]]+).*|\1|p" "$wf"
-  done | sort -u
-}
-for tool in cargo-leptos wasm-bindgen; do
-  want="$(pin_of "$tool" "$matrix")"
-  found="$(console_tool_pins "$tool")"
-  if [[ -z "$want" ]]; then
-    bad "$matrix has no '$tool' row"
-  elif [[ -z "$found" ]]; then
-    bad "the console workflows pin no $tool version"
-  elif [[ "$(line_count "$found")" != "1" ]]; then
-    bad "$tool: the console workflows disagree ($(printf '%s' "$found" | tr '\n' ' '))"
-  elif [[ "$found" != "$want" ]]; then
-    bad "$tool: the console workflows pin $found, $matrix pins $want"
-  else
-    note "OK: $tool $found"
-  fi
-done
-# The wasm-bindgen CLI reads the bundle the wasm-bindgen crate wrote, and
-# refuses one from any other version, so the crate is held to the same row.
-want="$(pin_of "wasm-bindgen" "$matrix")"
-if [[ -f Cargo.toml ]] && [[ -n "$want" ]]; then
-  req="$(manifest_req "wasm-bindgen")"
-  if [[ "$req" != "$want" ]]; then
-    bad "wasm-bindgen: root Cargo.toml requires ${req:-nothing}, $matrix pins $want"
-  fi
-fi
-if [[ -f Cargo.lock ]] && [[ -n "$want" ]]; then
-  locked="$(awk '
-    $0 == "name = \"wasm-bindgen\"" { getline; if (match($0, /"[^"]+"/)) print substr($0, RSTART + 1, RLENGTH - 2) }
-  ' Cargo.lock | sort -u)"
-  if [[ "$locked" != "$want" ]]; then
-    bad "wasm-bindgen: Cargo.lock locks ${locked:-nothing}, $matrix pins $want"
-  else
-    note "OK: Cargo.lock locks wasm-bindgen $want"
-  fi
-fi
-# leptosfmt, which formats the console's view! bodies: the version the CI
-# formatting job installs and the version the ui-gates skill names (#1155).
-want="$(pin_of "leptosfmt" "$matrix")"
+echo "== console toolchain ($matrix <-> Cargo.toml, the About page, ci.yml)"
+# FerroUI is pinned exactly, and About names the version the console draws
+# with, so both are held to its row.
+want="$(pin_of "ferrohealth-ui (FerroUI)" "$matrix")"
 if [[ -z "$want" ]]; then
-  bad "$matrix has no 'leptosfmt' row"
+  bad "$matrix has no ferrohealth-ui (FerroUI) row"
 else
-  for file in .github/workflows/ci.yml .claude/skills/ui-gates/SKILL.md; do
-    [[ -f "$file" ]] || continue
-    found="$(sed -nE 's|.*cargo install leptosfmt --locked --version ([0-9][0-9.]*).*|\1|p' "$file" | sort -u)"
-    if [[ "$found" != "$want" ]]; then
-      bad "leptosfmt: $file installs ${found:-nothing}, $matrix pins $want"
+  if [[ -f Cargo.toml ]]; then
+    req="$(manifest_req "ferrohealth-ui")"
+    if [[ "$req" != "=$want" ]]; then
+      bad "ferrohealth-ui: root Cargo.toml requires ${req:-nothing}, $matrix pins =$want"
     else
-      note "OK: $file installs leptosfmt $want"
+      note "OK: ferrohealth-ui =$want (root Cargo.toml agrees)"
     fi
-  done
-fi
-# The wasm-opt cargo-leptos builds the site bundle with: each version and
-# SHA-256 the install script checks against its row.
-tools=scripts/release/console-tools.sh
-# The value VAR is set to in the install script.
-tool_pin() {
-  sed -nE "s|^$1=\"([^\"]+)\"\$|\1|p" "$tools" 2>/dev/null
-}
-for pair in \
-  "Binaryen (wasm-opt)|binaryen_version" \
-  "Binaryen, binaryen-version_123-x86_64-linux.tar.gz SHA-256|binaryen_x86_64_linux_sha256" \
-  "Binaryen, binaryen-version_123-arm64-macos.tar.gz SHA-256|binaryen_arm64_macos_sha256" \
-  "Binaryen, bin/wasm-opt of the x86_64 Linux archive, SHA-256|wasm_opt_x86_64_linux_sha256" \
-  "Binaryen, bin/wasm-opt of the arm64 macOS archive, SHA-256|wasm_opt_arm64_macos_sha256" \
-  "Binaryen, lib/libbinaryen.dylib of the arm64 macOS archive, SHA-256|libbinaryen_arm64_macos_sha256"; do
-  item="${pair%|*}"
-  want="$(pin_of "$item" "$matrix")"
-  found="$(tool_pin "${pair#*|}")"
-  if [[ -z "$want" ]]; then
-    bad "$matrix has no '$item' row"
-  elif [[ "$found" != "$want" ]]; then
-    bad "$item: $tools holds ${found:-nothing}, $matrix pins $want"
-  else
-    note "OK: $item $want"
   fi
-done
+  about=app/ferrofed-console/src/pages/about.rs
+  if [[ -f "$about" ]]; then
+    named="$(sed -nE 's|^const FERROUI: &str = "([^"]+)";|\1|p' "$about")"
+    if [[ "$named" != "$want" ]]; then
+      bad "ferrohealth-ui: $about names ${named:-nothing}, $matrix pins $want"
+    else
+      note "OK: $about names FerroUI $want"
+    fi
+  fi
+fi
 # The browser journeys: the WebDriver client against the root Cargo.toml, and
 # the Chrome for Testing release the journeys job installs.
 want="$(pin_of "thirtyfour" "$matrix")"

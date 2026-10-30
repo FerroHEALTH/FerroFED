@@ -236,7 +236,7 @@ Today:
 - `scripts/conformance/`: the matrix, obligations and per-run report
   (`report.sh`) scripts.
 - `scripts/release/`: the changelog assembly, the crates.io lane, the
-  release staging, the seed data and the console site bundle.
+  release staging and the seed data.
 - `scripts/gh/`: the tracker helpers (`rel.sh`, `project.sh`, `fields.sh`,
   `labels.sh`, `migrate-fields.sh`).
 - `scripts/vendor/`: the fetch scripts for every vendored corpus.
@@ -338,25 +338,27 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   #1235).
 - `app/ferrofed-console`: the operator console, the `ferrofed-console` binary
   and its own image (#275, decisions A55, A104 and A111); never published.
-  A Leptos app built on FerroUI (`ferrohealth-ui`, pinned exactly) that
-  hydrates the whole page (#1397): the server draws the first page and the
-  browser draws every page after it from five lazy route groups (`routes`),
-  each page reading the gateway through a server function (`read`) and
-  each action a server function behind an `<ActionForm>` (`act`), its two
-  halves chosen by compilation target, never by Cargo feature; every page
-  still reads and every action still posts with no WebAssembly.
-  A pure HTTP client of the gateway (`gateway`, on `openehr-its`
-  `rest-client`) that links no part of it; the operator's OpenID Connect
-  session is held on its server (`session`, `oidc`), the code exchanged and
-  the ID Token checked before a session begins. The pages (`pages`, read
-  through `read`) show the dashboard, the topology, the organisations and
-  their nodes, the services, the integrity incidents, the stored queries
-  and the self-description, through the gateway's read-only operator
-  surface (`{base}/operator/`, behind the `[auth] product_scope`, #1174),
-  the query console runs AQL and the stored queries with every node's
-  status and completeness shown (#277), and the configuration page changes
-  the gateway's configuration revisions (`configure`). Its discipline is
-  `.claude/rules/leptos-ui.md`. FerroUI leads its UI: its components,
+  Every page is one document its server draws whole with FerroUI
+  (`ferrohealth-ui`, pinned exactly), with no Leptos and no WebAssembly
+  (#1457): `routes` draws the page an address names, in the `shell` for a
+  signed-in operator, each page reading the gateway through `read` before it
+  draws, and each action a plain form that posts to the page it sits on,
+  which the server draws again with the answer (`act`); FerroUI's script
+  modules, served by the library's own asset router, add the in-page
+  behaviour, and every page reads and every action posts with them
+  refused. `visit` holds what the server read of the request for the
+  request's task. A pure HTTP client of the gateway (`gateway`, on
+  `openehr-its` `rest-client`) that links no part of it; the operator's
+  OpenID Connect session is held on its server (`session`, `oidc`), the code
+  exchanged and the ID Token checked before a session begins. The pages
+  (`pages`) show the dashboard, the topology, the organisations and their
+  nodes, the services, the integrity incidents, the stored queries and the
+  self-description, through the gateway's read-only operator surface
+  (`{base}/operator/`, behind the `[auth] product_scope`, #1174), the query
+  console runs AQL and the stored queries with every node's status and
+  completeness shown (#277), and the configuration page changes the
+  gateway's configuration revisions (`configure`). Its discipline is
+  `.claude/rules/console-ui.md`. FerroUI leads its UI: its components,
   design and component rules come from the FerroUI repository at the tag of
   the pin, and a missing part is a FerroUI issue, never a local copy.
 - `tools/ferrofed-testkit`: test support; never published. The pin-matrix
@@ -451,7 +453,7 @@ project; never pass them to `Agent` or `Workflow`, even for a mechanical pass.
   spec and wire conformance. Spec questions go to `spec-researcher`; bounded
   implementation to `implementer`. Both are handed the governing spec
   sections in the prompt. Operator console work goes to `ui-implementer`, and
-  `leptos-reviewer` reads a console subsystem before it is committed.
+  `ui-reviewer` reads a console subsystem before it is committed.
 
 Discipline is unchanged for subagents: they obey the hard rules below.
 
@@ -553,17 +555,17 @@ apply always. Read the relevant one before working in that area.
 - `.claude/rules/ci-cd.md`, `ai-code-review.md`, `crates-publishing.md`: the
   workflow-security discipline, the advisory-analyzer policy (SonarQube Cloud,
   CodeQL), and the crates.io rules behind the `publish` switch.
-- `.claude/rules/leptos-ui.md`: the operator console's Leptos discipline.
-  FerroUI leads the UI: the rule, the `ui-implementer` and `leptos-reviewer`
-  agents and the `/leptos-lookup` and `/ui-gates` skills read FerroUI's
+- `.claude/rules/console-ui.md`: the operator console's discipline.
+  FerroUI leads the UI: the rule, the `ui-implementer` and `ui-reviewer`
+  agents and the `/ferroui-lookup` and `/ui-gates` skills read FerroUI's
   consumer guide and component rules first and keep only what is particular
   to this console.
 - `.claude/rules/issue-workflow.md`, `issue-relationships.md`,
   `project-board.md`: the tracker work style.
-- Skills: `/spec-lookup`, `/leptos-lookup`, `/ui-gates`, `/next-task`,
+- Skills: `/spec-lookup`, `/ferroui-lookup`, `/ui-gates`, `/next-task`,
   `/phase-done`, `/phase-status`.
 - Agents: `spec-researcher`, `implementer`, and for the console
-  `ui-implementer` and `leptos-reviewer` (all on Opus).
+  `ui-implementer` and `ui-reviewer` (all on Opus).
 - Memory: `.claude/memory/`, indexed by `MEMORY.md`, tracked and shared
   (`.claude/memory/memory-lives-in-repo.md`).
 

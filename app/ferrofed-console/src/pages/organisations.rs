@@ -12,6 +12,7 @@
 //! organisation leads to the console's form where the configuration is
 //! managed.
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::table::filter::{Find, find_form};
@@ -21,17 +22,16 @@ use ferrohealth_ui::table::view::{
     Body, Column, DataTable, Role, Sorting, cell, count_cell, data_table, title_cell,
 };
 use ferrohealth_ui::view::action::ActionGroup;
+use ferrohealth_ui::view::action_menu::{Act, Action};
 use ferrohealth_ui::view::surface::Header;
 use ferrohealth_ui::view::tabs::{Tab, TabRow};
 use ferrohealth_ui::view::template::list::{
     ActiveFilters, FilterChip, HeadingCount, ListCard, ListPage, list_empty, list_page,
 };
-use ferrohealth_ui::widget::action_menu::{Act, Action};
-use leptos::prelude::*;
 
 use crate::app::{ALL_NODES, ORGANISATIONS};
-use crate::locale::{Msg, message, tr, tr_with};
-use crate::pages::stopped;
+use crate::locale::{Msg, current, message, tr, tr_with};
+use crate::pages::{h, stopped, t};
 use crate::read::federation::{Federation, Health, Node, Organisation};
 use ferrohealth_ui::view::state::state;
 
@@ -65,43 +65,28 @@ fn asked() -> Asked {
 }
 
 /// The organisations.
-#[must_use]
-pub fn list() -> AnyView {
-    page(View::Organisations)
+pub async fn list() -> Html {
+    page(View::Organisations).await
 }
 
 /// Every node across the organisations.
-#[must_use]
-pub fn all_nodes() -> AnyView {
-    page(View::Nodes)
+pub async fn all_nodes() -> Html {
+    page(View::Nodes).await
 }
 
 /// The page of `view_of`.
-fn page(view_of: View) -> AnyView {
+async fn page(view_of: View) -> Html {
     let asked = asked();
     let managed = crate::pages::configuration::console_manages();
-    let federation_read = Resource::new(crate::read::changes, |_| {
-        crate::read::federation::federation_now()
-    });
-    let body = Suspend::new(async move {
-        match federation_read.await {
-            Ok(federation) => listing(&federation, view_of, &asked, managed),
-            Err(stop) => view! {
-                {heading_only(managed)}
-                {stopped(&stop)}
-            }
-            .into_any(),
-        }
-    });
+    let body = match crate::read::federation::read().await {
+        Ok(federation) => listing(&federation, view_of, &asked, managed),
+        Err(stop) => heading_only(managed).then(stopped(&stop)),
+    };
     let title = match view_of {
         View::Organisations => Msg::OrganisationsTitle,
         View::Nodes => Msg::AllNodes,
     };
-    view! {
-        {crate::app::title(tr(title))}
-        <Suspense fallback=|| ()>{body}</Suspense>
-    }
-    .into_any()
+    crate::app::title(tr(title)).then(body)
 }
 
 /// The page's header.
@@ -128,8 +113,8 @@ fn actions(managed: bool) -> ActionGroup {
 }
 
 /// The header and actions alone, over a refusal.
-fn heading_only(managed: bool) -> AnyView {
-    ferrohealth_ui::view::surface::page_heading(header(), actions(managed)).into_any()
+fn heading_only(managed: bool) -> Html {
+    ferrohealth_ui::view::surface::page_heading(&current(), header(), actions(managed))
 }
 
 /// The path of the page `paging` names, with the find's `words`.
@@ -146,7 +131,7 @@ fn page_href(path: &str, words: &str, paging: Paging) -> String {
 }
 
 /// The listing of `federation` in the view `view_of`, as `asked`.
-fn listing(federation: &Federation, view_of: View, asked: &Asked, managed: bool) -> AnyView {
+fn listing(federation: &Federation, view_of: View, asked: &Asked, managed: bool) -> Html {
     let found = |text: &str| {
         asked
             .words
@@ -203,12 +188,13 @@ fn listing(federation: &Federation, view_of: View, asked: &Asked, managed: bool)
             action: Some(path),
             fields: &[],
         },
-        (),
+        Html::empty(),
     );
     let filters = filters(asked, path, shown);
     let tabs = tab_row(view_of, total_organisations, total_nodes);
     let pager = (window.pages > 1).then(|| {
         link_pager(
+            &current(),
             Listing::new(tr(Msg::OrganisationsTitle)).noun(Noun::new(message(match view_of {
                 View::Organisations => Msg::NounOrganisations,
                 View::Nodes => Msg::NounNodes,
@@ -217,23 +203,26 @@ fn listing(federation: &Federation, view_of: View, asked: &Asked, managed: bool)
             &|paging| page_href(path, &words, paging),
         )
     });
-    list_page(ListPage {
-        header: header(),
-        actions: actions(managed),
-        total: Some(total),
-        summary: None,
-        toolbar: Some(toolbar),
-        filters,
-        card: ListCard {
-            title: tr(Msg::OrganisationsTitle),
-            count: Some(heading_count(shown, total)),
-            order: None,
-            tabs: Some(tabs),
-            actions: None,
-            body,
-            pager,
+    list_page(
+        &current(),
+        ListPage {
+            header: header(),
+            actions: actions(managed),
+            total: Some(total),
+            summary: None,
+            toolbar: Some(toolbar),
+            filters,
+            card: ListCard {
+                title: tr(Msg::OrganisationsTitle),
+                count: Some(heading_count(shown, total)),
+                order: None,
+                tabs: Some(tabs),
+                actions: None,
+                body,
+                pager,
+            },
         },
-    })
+    )
 }
 
 /// The count the card's heading draws: every row, or the `shown` rows the
@@ -307,7 +296,7 @@ const fn rank(health: Health) -> u8 {
 }
 
 /// The table of `organisations`.
-fn organisation_table(organisations: &[&Organisation]) -> AnyView {
+fn organisation_table(organisations: &[&Organisation]) -> Html {
     let columns = [
         Column {
             role: Role::Title,
@@ -328,42 +317,52 @@ fn organisation_table(organisations: &[&Organisation]) -> AnyView {
         },
         Column::text("worst", tr(Msg::ColumnWorstNode)),
     ];
-    let rows = organisations
-        .iter()
-        .map(|organisation| {
-            let href = organisation.routable().then(|| organisation.href());
-            let health = organisation.health();
-            view! {
-                <tr class:is-excluded=health
-                    == Health::Excluded>
-                    {title_cell(href.as_deref(), organisation.shown().to_owned(), None)}
-                    {cell(&columns[1], view! { <code>{organisation.id.clone()}</code> })}
-                    {count_cell(
-                        &columns[2],
-                        u32::try_from(organisation.nodes.len()).unwrap_or(u32::MAX),
-                        Noun::new(message(Msg::NounNodes)),
-                    )}
-                    {count_cell(
-                        &columns[3],
-                        u32::try_from(organisation.endpoint_count()).unwrap_or(u32::MAX),
-                        Noun::new(message(Msg::NounEndpoints)),
-                    )} {cell(&columns[4], state(health.mark(), health.word(), None))}
-                </tr>
-            }
-        })
-        .collect_view()
-        .into_any();
+    let rows = organisations.iter().map(|organisation| {
+        let href = organisation.routable().then(|| organisation.href());
+        let health = organisation.health();
+        let locale = current();
+        h(format!(
+            "<tr{}>{}{}{}{} {}</tr>",
+            excluded(health),
+            title_cell(href.as_deref(), t(organisation.shown()), None),
+            cell(
+                &columns[1],
+                h(format!("<code>{}</code>", t(&organisation.id)))
+            ),
+            count_cell(
+                &locale,
+                &columns[2],
+                u32::try_from(organisation.nodes.len()).unwrap_or(u32::MAX),
+                Noun::new(message(Msg::NounNodes)),
+            ),
+            count_cell(
+                &locale,
+                &columns[3],
+                u32::try_from(organisation.endpoint_count()).unwrap_or(u32::MAX),
+                Noun::new(message(Msg::NounEndpoints)),
+            ),
+            cell(&columns[4], state(health.mark(), health.word(), None)),
+        ))
+    });
     data_table(DataTable {
         caption: &tr(Msg::OrganisationsTitle),
         columns: &columns,
         sorting: Sorting::default(),
-        body: Body::Rows(rows),
+        body: Body::Rows(Html::join(rows)),
     })
-    .into_any()
+}
+
+/// The class attribute of a row in `health`: muted when it is excluded.
+fn excluded(health: Health) -> &'static str {
+    if health == Health::Excluded {
+        " class=\"is-excluded\""
+    } else {
+        ""
+    }
 }
 
 /// The table of every node with its organisation, worst first.
-fn node_table(nodes: &[(&Organisation, &Node)]) -> AnyView {
+fn node_table(nodes: &[(&Organisation, &Node)]) -> Html {
     let columns = [
         Column {
             role: Role::Title,
@@ -386,33 +385,35 @@ fn node_table(nodes: &[(&Organisation, &Node)]) -> AnyView {
             ..Column::text("p95", tr(Msg::ColumnP95)).titled(tr(Msg::ColumnP95Title))
         },
     ];
-    let rows = nodes
-        .iter()
-        .map(|(organisation, node)| {
-            let href =
-                (node.routable() && organisation.routable()).then(|| organisation.node_href(node));
-            let health = node.health();
-            view! {
-                <tr class:is-excluded=health
-                    == Health::Excluded>
-                    {title_cell(href.as_deref(), view! { <code>{node.id.clone()}</code> }, None)}
-                    {cell(&columns[1], organisation.shown().to_owned())}
-                    {cell(
-                        &columns[2],
-                        view! { <code>{node.system_id.clone().unwrap_or_default()}</code> },
-                    )} {cell(&columns[3], state(health.mark(), health.word(), None))}
-                    {cell(&columns[4], crate::pages::latency(node.latency_ms_p50()))}
-                    {cell(&columns[5], crate::pages::latency(node.latency_ms_p95()))}
-                </tr>
-            }
-        })
-        .collect_view()
-        .into_any();
+    let rows = nodes.iter().map(|(organisation, node)| {
+        let href =
+            (node.routable() && organisation.routable()).then(|| organisation.node_href(node));
+        let health = node.health();
+        h(format!(
+            "<tr{}>{}{}{} {}{}{}</tr>",
+            excluded(health),
+            title_cell(
+                href.as_deref(),
+                h(format!("<code>{}</code>", t(&node.id))),
+                None
+            ),
+            cell(&columns[1], t(organisation.shown())),
+            cell(
+                &columns[2],
+                h(format!(
+                    "<code>{}</code>",
+                    t(node.system_id.clone().unwrap_or_default())
+                )),
+            ),
+            cell(&columns[3], state(health.mark(), health.word(), None)),
+            cell(&columns[4], crate::pages::latency(node.latency_ms_p50())),
+            cell(&columns[5], crate::pages::latency(node.latency_ms_p95())),
+        ))
+    });
     data_table(DataTable {
         caption: &tr(Msg::AllNodes),
         columns: &columns,
         sorting: Sorting::default(),
-        body: Body::Rows(rows),
+        body: Body::Rows(Html::join(rows)),
     })
-    .into_any()
 }

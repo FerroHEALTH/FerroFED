@@ -9,23 +9,22 @@
 //! Access log and FHIR face), then Members, Credentials and bindings,
 //! History, and Import and export, each its own route; a form's page sits
 //! under its tab. With configuration revisions off, the settings tabs show
-//! alone, read-only. A post of one of its forms runs through the
-//! configuration's server function, and its answer shows at the top. A
-//! console configured with no
-//! admin listener reads the gateway but offers no configuration, and says
-//! how to add one.
+//! alone, read-only. Each form posts to the page it sits on, which the
+//! server draws again with its answer at the top. A console configured with
+//! no admin listener reads the gateway but offers no configuration, and
+//! says how to add one.
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::view::surface::{Header, page_heading, stack};
 use ferrohealth_ui::view::tabs::{Tab as BinderTab, binder};
-use ferrohealth_ui::widget::action::answered;
-use leptos::prelude::*;
 
-use crate::act::configure::{ConfigAnswer, Configure};
+use crate::act::configure::ConfigAnswer;
+use crate::act::fields::Fields;
 use crate::configure::model::{ConfigView, Screen};
 use crate::configure::render::Tab;
 use crate::configure::said::{ActionAnswer, Answer};
-use crate::locale::{Msg, tr};
-use crate::pages::stopped;
+use crate::locale::{Msg, current, tr};
+use crate::pages::{h, opt, stopped, t};
 
 /// The path of the form that adds a member: an organisation with its first
 /// node and that node's first endpoint.
@@ -38,7 +37,7 @@ pub const NEW_QUERY: &str = "/configuration/stored-queries/new";
 /// with a replica's admin listener.
 #[must_use]
 pub fn console_manages() -> bool {
-    !crate::visit::visit_untracked().replicas().is_empty()
+    crate::visit::with(|visit| !visit.replicas().is_empty())
 }
 
 /// The path of the form that adds a node to the organisation `org`.
@@ -53,9 +52,9 @@ pub fn edit_member(node: &str) -> String {
     format!("/configuration/members/{node}")
 }
 
-/// The configuration, on the part the path names.
-#[must_use]
-pub fn page() -> AnyView {
+/// The configuration, on the part the path names, with the answer of the
+/// form `posted` to it at the top.
+pub async fn page(posted: Option<Fields>) -> Html {
     if !console_manages() {
         return no_admin();
     }
@@ -64,89 +63,53 @@ pub fn page() -> AnyView {
         item: crate::pages::param("item"),
         compare: crate::pages::query_param("compare").unwrap_or_default(),
     };
-    let configure = ServerAction::<Configure>::new();
-    // NOTE: no specification governs this: our own design; the answer carries the form as
-    // the server read it, so the page draws a form again from the answer.
-    let _posted = answered(&configure);
-    crate::read::follow(configure);
-    provide_context(configure);
-    let asked = screen.clone();
-    let read = Resource::new(crate::read::changes, move |_| {
-        crate::act::configure::config_now(asked.clone())
+    // NOTE: no specification governs this: our own design; the form runs before the page
+    // reads the replica, so the page shows what the run changed.
+    let ConfigAnswer { answer, draft } = match posted {
+        Some(fields) => match crate::act::configure::configure(&fields).await {
+            Ok(answered) => answered,
+            Err(stop) => ConfigAnswer {
+                answer: Some(ActionAnswer {
+                    answer: match stop {
+                        crate::read::Stop::Refused(refusal) => Answer::Refused(refusal),
+                        crate::read::Stop::Fault(fault) => Answer::Failed(fault),
+                    },
+                    changed: false,
+                    field: None,
+                }),
+                draft: None,
+            },
+        },
+        None => ConfigAnswer::default(),
+    };
+    let read = crate::act::configure::config_now(screen.clone()).await;
+    let body = crate::configure::render::parts::drawing(draft.clone(), || {
+        let answer = answer.map(|answer| answer.view());
+        match read.and_then(|data| {
+            data.view(&screen, draft.as_ref())
+                .map_err(crate::read::Stop::Refused)
+        }) {
+            Ok(view) => drawn(view, answer),
+            Err(stop) => Html::join([heading(), opt(answer), stopped(&stop)]),
+        }
     });
-    view! {
-        {crate::app::title(tr(Msg::Configuration))}
-        <Suspense fallback=|| ()>
-            {crate::pages::afresh(
-                move || configure.version().get(),
-                move || {
-                    let screen = screen.clone();
-                    let ConfigAnswer { answer, draft } = match configure.value().get() {
-                        Some(Ok(answered)) => answered,
-                        Some(Err(stop)) => {
-                            ConfigAnswer {
-                                answer: Some(ActionAnswer {
-                                    answer: match stop {
-                                        crate::read::Stop::Refused(refusal) => {
-                                            Answer::Refused(refusal)
-                                        }
-                                        crate::read::Stop::Fault(fault) => Answer::Failed(fault),
-                                    },
-                                    changed: false,
-                                    field: None,
-                                }),
-                                draft: None,
-                            }
-                        }
-                        None => ConfigAnswer::default(),
-                    };
-                    Suspend::new(async move {
-                        if let Some(draft) = &draft {
-                            provide_context(draft.clone());
-                            if let Some(note) = draft.field.clone() {
-                                provide_context(note);
-                            }
-                        }
-                        let answer = answer.map(|answer| answer.view());
-                        match read
-                            .await
-                            .and_then(|data| {
-                                data.view(&screen, draft.as_ref())
-                                    .map_err(crate::read::Stop::Refused)
-                            })
-                        {
-                            Ok(view) => drawn(view, answer),
-                            Err(stop) => {
-                                view! {
-                                    {heading()}
-                                    {answer}
-                                    {stopped(&stop)}
-                                }
-                                    .into_any()
-                            }
-                        }
-                    })
-                },
-            )}
-        </Suspense>
-    }
-    .into_any()
+    crate::app::title(tr(Msg::Configuration)).then(body)
 }
 
 /// The page's plain heading.
-fn heading() -> AnyView {
+fn heading() -> Html {
     page_heading(
+        &current(),
         Header {
             title: tr(Msg::Configuration).into(),
             ..Header::default()
         },
         ferrohealth_ui::view::action::ActionGroup::none(),
     )
-    .into_any()
 }
 
 /// The page of `view`, with a form's `answer` at the top.
-fn drawn(view: ConfigView, answer: Option<AnyView>) -> AnyView {
+fn drawn(view: ConfigView, answer: Option<Html>) -> Html {
     let ConfigView {
         header,
         pending,
@@ -163,37 +126,33 @@ fn drawn(view: ConfigView, answer: Option<AnyView>) -> AnyView {
                 .map(|each| BinderTab::new(each.id(), each.href(), tr(each.label())))
                 .collect();
             binder(
+                &current(),
                 tr(Msg::Configuration),
                 tabs,
                 tab.id(),
-                view! { <div class="fui-stack fui-panel-body">{lead} {main}</div> }.into_any(),
+                h(format!(
+                    "<div class=\"fui-stack fui-panel-body\">{} {}</div>",
+                    opt(lead),
+                    opt(main)
+                )),
             )
         }
-        None => main.unwrap_or_else(|| ().into_any()),
+        None => opt(main),
     };
-    view! {
-        {header}
-        {stack(
-            view! {
-                {answer.map(|answer| view! { <div id="config-outcome">{answer}</div> })}
-                {pending}
-                {section}
-            },
-        )}
-    }
-    .into_any()
+    let answer = answer.map(|answer| h(format!("<div id=\"config-outcome\">{answer}</div>")));
+    opt(header).then(stack(Html::join([opt(answer), opt(pending), section])))
 }
 
 /// The page of a console configured with no admin listener: it reads the
 /// gateway but offers no configuration, and says how to add one.
-fn no_admin() -> AnyView {
-    view! {
-        {crate::app::title(tr(Msg::Configuration))}
-        {heading()}
-        <section class="fui-card">
-            <p>{tr(Msg::ConfigNoAdminBody)}</p>
-            <p class="fui-small fui-muted">{tr(Msg::ConfigNoAdminHow)}</p>
-        </section>
-    }
-    .into_any()
+fn no_admin() -> Html {
+    Html::join([
+        crate::app::title(tr(Msg::Configuration)),
+        heading(),
+        h(format!(
+            "<section class=\"fui-card\"><p>{}</p><p class=\"fui-small fui-muted\">{}</p></section>",
+            t(tr(Msg::ConfigNoAdminBody)),
+            t(tr(Msg::ConfigNoAdminHow))
+        )),
+    ])
 }

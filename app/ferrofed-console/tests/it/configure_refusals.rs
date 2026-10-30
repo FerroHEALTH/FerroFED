@@ -69,7 +69,7 @@ async fn a_configuration_invalid_refusal_shows_the_key_the_gateway_names()
         "{html}"
     );
     assert!(html.contains("registry.timeout_ms"), "{html}");
-    assert!(html.contains("&lt;b&gt;is&lt;/b&gt;"), "{html}");
+    assert!(html.contains("&#60;b&#62;is&#60;/b&#62;"), "{html}");
     assert!(!html.contains("<b>is</b>"), "{html}");
     Ok(())
 }
@@ -237,12 +237,8 @@ async fn a_post_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Erro
             .map(|site| ("sec-fetch-site", site))
             .into_iter()
             .collect();
-        let request = crate::support::answer_post(
-            (ferrofed_console::act::configure::IMPORT, "/configuration"),
-            &save_c(),
-            Some(&session),
-            &from,
-        )?;
+        let request =
+            crate::support::answer_post("/configuration", &save_c(), Some(&session), &from)?;
         let (response, body) = send(&service, request).await?;
         assert_eq!(StatusCode::FORBIDDEN, response.status(), "{site:?}: {body}");
     }
@@ -266,7 +262,7 @@ async fn a_save_whose_held_member_cannot_be_read_sends_nothing() -> Result<(), B
     answers(&listener, ("GET", "/admin/config/resources"), 500, "").await;
     let (service, session) = signed_in_console(&listener)?;
     let request = crate::support::answer_post(
-        (ferrofed_console::act::configure::IMPORT, "/configuration"),
+        "/configuration",
         &save_c(),
         Some(&session),
         &[("sec-fetch-site", "same-origin")],

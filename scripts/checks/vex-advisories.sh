@@ -64,11 +64,16 @@ fi
 # inherited container layers, where nothing in this repository resolves the
 # finding). They still have to be well-formed OpenVEX, so a typo does not ship
 # as a document a consumer's parser rejects.
+# The generated document holds one statement per advisory deny.toml accepts,
+# so it holds none while deny.toml accepts none; a hand-authored one exists to
+# make a statement, so it holds at least one.
 docs=("$VEX_DIR"/*.openvex.json)
 for doc in "${docs[@]}"; do
-  jq -e '
+  least=1
+  [[ "$doc" == "$OUT" ]] && least=0
+  jq -e --argjson least "$least" '
     (has("@context") and has("@id") and has("author") and has("timestamp")
-     and has("version") and (.statements | type == "array" and length > 0))
+     and has("version") and (.statements | type == "array" and length >= $least))
     and (.statements | all(
       has("vulnerability") and has("products") and has("status")
       and (.status | IN("not_affected", "affected", "fixed", "under_investigation"))

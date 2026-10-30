@@ -280,28 +280,15 @@ pem = { version = "3.0.6", default-features = false, features = ["std"] }
 # crypto library rustls already builds on, so no private key is ever
 # committed. Verified against crates.io on 2026-10-04.
 rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "pem"] }
-# The operator console (#275; no specification governs it: our own design):
-# Leptos server-side rendering with hydration, the family's console stack. The
-# server half and the browser half take their features per target in
-# app/ferrofed-console, so a workspace --all-features build never enables both.
-# The wasm-bindgen CLI of the console build must equal the wasm-bindgen crate
-# version, and scripts/checks/versions.sh holds the two to the pin matrix. The
-# session cookie is written and read with the cookie crate. Verified against
-# crates.io on 2026-10-05.
-leptos = "0.8.22"
-leptos_axum = "0.8.10"
-leptos_meta = "0.8.7"
-leptos_router = "0.8.17"
-wasm-bindgen = "0.2.129"
-console_error_panic_hook = "0.1.7"
-# The FerroHEALTH component library: the console's views and widgets, the
-# table model, the highlighter, the Lucide icons, the stylesheet and the role
-# tokens, shared by every FerroHEALTH console. Pinned exactly, so the console
-# moves to a new version deliberately. From 0.5 the console hydrates the
-# whole page and draws every page after the first in the browser (#1397);
-# 0.5.8 names each secret_mark field apart (FerroUI#503).
-# Verified against crates.io on 2026-10-29.
-ferrohealth-ui = "=0.5.8"
+# The FerroHEALTH component library of the operator console (#275; no
+# specification governs it: our own design): the components, rendered on the
+# server from Askama templates, the plain script modules and the asset router
+# that serves them, the table model, the highlighter, the Lucide icons, the
+# stylesheet and the role tokens, shared by every FerroHEALTH console. Pinned
+# exactly, so the console moves to a new version deliberately. From 0.6 every
+# page is one document the server draws, with no Leptos and no WebAssembly
+# (#1457, FerroUI#510). Verified against crates.io on 2026-10-30.
+ferrohealth-ui = "=0.6.0"
 # The FerroHEALTH SMART and OAuth 2.0 resource-server crate (#1174):
 # every caller's token checked against its issuer's metadata and key set,
 # the SMART on openEHR grant rules over the grammar it re-exports, the Basic
@@ -362,11 +349,6 @@ ferrohealth-usage-report = { version = "=0.2.0", default-features = false }
 # build time from app/ferrofed-console/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.
 # Verified against crates.io on 2026-10-19.
-# The query-string reader leptos's server functions read a form's fields
-# with, at the version the lock holds through server_fn, for the console's
-# test that its posted fields read back whole. Verified against crates.io on
-# 2026-10-28.
-serde_qs = { version = "0.15.0", default-features = false }
 fluent-templates = { version = "0.15.1", default-features = false, features = ["macros", "walkdir"] }
 cookie = { version = "0.18.2", default-features = false }
 
@@ -489,15 +471,3 @@ deref_by_slicing = "warn"
 panic = "unwind"
 overflow-checks = true
 debug = "line-tables-only"
-
-# The operator console's WebAssembly bundle (app/ferrofed-console), built by
-# cargo-leptos: optimized for size, since the browser downloads it (the Cargo
-# reference, profiles; no specification governs this: our own design). It
-# keeps the inherited overflow checks and drops the line tables, which
-# wasm-bindgen strips from the bundle anyway, so they cost build time alone.
-[profile.wasm-release]
-inherits = "release"
-opt-level = "z"
-lto = true
-codegen-units = 1
-debug = false

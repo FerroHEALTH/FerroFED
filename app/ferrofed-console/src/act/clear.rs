@@ -10,21 +10,11 @@
 //! The page answers with one line per replica. An `ehr_id` is a routing id,
 //! never a patient identifier (§5.4.1, N33), and the clear is recorded with
 //! the operator by the gateway.
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
-
-#[cfg(not(target_arch = "wasm32"))]
 use ferrofed_registry::operator::ClearedEhrId;
 use ferrofed_registry::operator::HeldBefore;
-use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use crate::act::ReplicaAnswer;
+use crate::act::fields::Fields;
 use crate::read::{Fault, Refusal, Stop};
 
 /// The field the dialog's confirmation step posts, which an action needs
@@ -35,7 +25,7 @@ pub const CONFIRM: &str = "confirm";
 pub const EVERY_REPLICA: &str = "*";
 
 /// What a replica reports of a clear.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClearLine {
     /// What the replica held before.
     pub held: HeldBefore,
@@ -45,7 +35,7 @@ pub struct ClearLine {
 
 /// The outcome of a clear the page draws: the answer of each replica, or
 /// why no replica was asked.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClearOutcome {
     /// The replicas asked, each with its answer.
     Answered(Vec<ReplicaAnswer<ClearLine>>),
@@ -66,7 +56,6 @@ impl From<Stop> for ClearOutcome {
 }
 
 /// The line of `cleared`.
-#[cfg(not(target_arch = "wasm32"))]
 fn line(cleared: ClearedEhrId) -> ClearLine {
     ClearLine {
         held: cleared.held,
@@ -74,31 +63,22 @@ fn line(cleared: ClearedEhrId) -> ClearLine {
     }
 }
 
-/// Clears the `ehr_id` at the replica `replica` names, or at every replica
-/// for [`EVERY_REPLICA`], once the dialog's confirmation step posted
-/// `confirm`, as the operator of the request.
+/// Clears the `ehr_id` the posted `fields` name.
 ///
-/// # Errors
-/// Returns [`crate::read::Fault::Unavailable`] when the console's server
-/// does not answer; a form that cannot be sent and a replica's refusal are
-/// answers.
-#[server(endpoint = "clear")]
-pub async fn clear_ehr_id(
-    /// The `ehr_id` to clear.
-    #[server(default)]
-    ehr_id: String,
-    /// The replica's name, or [`EVERY_REPLICA`].
-    #[server(default)]
-    replica: String,
-    /// Not empty once the operator took the confirmation step.
-    #[server(default)]
-    confirm: String,
-) -> Result<ClearOutcome, Stop> {
-    Ok(clear(&ehr_id, &replica, &confirm).await)
+/// The clear goes to the replica `replica` names, or to every replica for
+/// [`EVERY_REPLICA`], once the dialog's confirmation step posted
+/// `confirm`, as the operator of the request; a form that cannot be sent
+/// and a replica's refusal are answers.
+pub async fn clear_ehr_id(fields: &Fields) -> ClearOutcome {
+    clear(
+        fields.get("ehr_id").unwrap_or_default(),
+        fields.get("replica").unwrap_or_default(),
+        fields.get(CONFIRM).unwrap_or_default(),
+    )
+    .await
 }
 
 /// Clears the `ehr_id` the form names at the replicas it names.
-#[cfg(not(target_arch = "wasm32"))]
 async fn clear(ehr_id: &str, replica: &str, confirm: &str) -> ClearOutcome {
     use crate::locale::{Msg, tr};
     let Ok((state, token)) = crate::read::signed_in() else {

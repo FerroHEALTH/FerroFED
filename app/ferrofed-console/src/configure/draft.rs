@@ -4,8 +4,8 @@
 //! A form drawn again as the operator posted it.
 //!
 //! A form's Add and Remove buttons submit the form with `form[edit]`
-//! naming the row they add or remove, so the rows grow and shrink with no
-//! WebAssembly (FerroUI F7, layer 1): the page answers with the form as it
+//! naming the row they add or remove, so the rows grow and shrink with the
+//! scripts refused (FerroUI F7): the page answers with the form as it
 //! was posted, the one row changed, and runs nothing. A change no replica
 //! was asked for, or one a replica refused, is drawn again the same way,
 //! with the field a refusal names marked. A secret's value is never drawn
@@ -21,7 +21,7 @@ use crate::configure::said::FieldNote;
 pub const EDIT: &str = "form[edit]";
 
 /// A form as the operator posted it, and the field a refusal names.
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Draft {
     /// The form as it was posted, its rows changed by Add or Remove.
     pub form: ConfigForm,

@@ -5,24 +5,15 @@
 //! stored-query drift repair, a query, and the changes of the
 //! configuration.
 //!
-//! Each action is a server function behind FerroUI's `<ActionForm>` in its
-//! answer mode. Once the page has hydrated, the form calls the function and
-//! the page draws its answer in place. With no WebAssembly the form posts
-//! to the function, and `ferrohealth_ui::widget::action::draw_answers`
-//! draws the page the form was on with the answer. Either way the function
-//! checks the operator's session itself, reads the form on the server, asks
-//! the gateway as the operator, and the answer never reaches a URL, the
-//! history or a log; a refusal stays with the fields it is about, as
-//! FerroUI asks. Every unsafe request passes the console's same-origin
-//! check before it reaches a function (`ferrohealth_server::same_origin`). No
-//! specification governs the console's actions: our own design.
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
+//! Each action is a plain form that posts to the page it sits on, and the
+//! server draws that page again with the answer (FerroUI `docs/consoles.md`,
+//! "An action that answers on its page"). The action checks the operator's
+//! session itself, reads the form on the server, asks the gateway as the
+//! operator, and the answer never reaches a URL, the history or a log; a
+//! refusal stays with the fields it is about, as FerroUI asks. Every unsafe
+//! request passes the console's same-origin check before it reaches an
+//! action (`ferrohealth_server::same_origin`). No specification governs the
+//! console's actions: our own design.
 
 pub mod clear;
 pub mod configure;
@@ -30,20 +21,13 @@ pub mod fields;
 pub mod query;
 pub mod repair;
 
-use serde::{Deserialize, Serialize};
-
-#[cfg(not(target_arch = "wasm32"))]
-use axum::response::{IntoResponse, Response};
-#[cfg(not(target_arch = "wasm32"))]
-use http::{HeaderMap, StatusCode};
-
-#[cfg(not(target_arch = "wasm32"))]
 use crate::gateway::GatewayError;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::read::{ActionKind, Asked, Stop, stopped};
 use crate::read::{Fault, Refusal};
-#[cfg(not(target_arch = "wasm32"))]
 use crate::server::ConsoleState;
+use axum::response::{IntoResponse, Response};
+use http::{HeaderMap, StatusCode};
+use serde::{Deserialize, Serialize};
 
 /// What one replica did with an action: its report, or why it gave none.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,7 +58,6 @@ pub const CONFIGURATION_INVALID: &str = "configuration-invalid";
 
 /// What `replica` did with the action `what`, `answered` read by `read`,
 /// logged by replica, status and code, never by what the action named.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn acted<A, T>(
     kind: ActionKind,
     (replica, what): (&str, &str),
@@ -140,7 +123,6 @@ pub fn fields_named<'a>(fields: &'a [(String, String)], name: &str) -> Vec<&'a s
 /// Serves the gateway's `OPTIONS {base}/` document as a download, read as
 /// the operator of the request: About's Download. A refusal answers with
 /// the gateway's status, never an empty file.
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn options_document(
     axum::Extension(state): axum::Extension<ConsoleState>,
     headers: HeaderMap,

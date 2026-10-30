@@ -17,7 +17,7 @@ use std::error::Error;
 use serde_json::json;
 use thirtyfour::{By, Key};
 
-use crate::journeys::browser::{Browser, hydrated, until, with_browser};
+use crate::journeys::browser::{Browser, scripted, until, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::provider::OPERATOR;
 use crate::journeys::sign_in::sign_in;
@@ -78,7 +78,7 @@ async fn the_theme_is_chosen_in_the_operators_menu_and_the_server_keeps_it()
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
         browser.goto(&stack.url("/query")).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         drawn_in(browser, "system").await?;
         // The top bar carries no theme toggle of its own (FerroUI, family rule 5).
         let outside = browser
@@ -106,7 +106,7 @@ async fn the_theme_is_chosen_in_the_operators_menu_and_the_server_keeps_it()
         assert!(!kept.is_empty(), "the console keeps the theme");
 
         browser.goto(&stack.url("/query")).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         choose_theme(browser, "light").await?;
         drawn_in(browser, "light").await?;
         browser
@@ -127,7 +127,7 @@ async fn the_keyboard_opens_the_drawer_moves_into_it_and_escape_returns()
         sign_in(browser, &stack).await?;
         wide(browser, 390).await?;
         browser.goto(&stack.url("/query")).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         let menu = r#"button[commandfor="sidebar"][aria-label="Menu"]"#;
         browser
             .element(By::Css(menu))
@@ -198,7 +198,7 @@ async fn the_operators_menu_opens_from_the_keyboard_and_escape_closes_it()
     let stack = Stack::start().await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         browser
             .element(By::Css(USER_MENU))
             .await?
@@ -279,7 +279,7 @@ async fn shift_tab_never_leaves_the_focus_under_the_top_bar() -> Result<(), Box<
             )
             .await?;
         browser.goto(&stack.url("/query")).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         let bar = browser
             .element(By::Tag("header"))
             .await?

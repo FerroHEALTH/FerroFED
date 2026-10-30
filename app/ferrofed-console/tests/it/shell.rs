@@ -127,9 +127,7 @@ async fn the_top_bar_carries_no_theme_toggle_and_the_user_menu_offers_the_theme(
         .ok_or("the top bar")?;
     assert!(!top.contains("theme"), "{top}");
     assert!(
-        body.contains(
-            r#"<form method="post" action="/preference" data-ferroui-navigates="" class="fui-menu-theme">"#
-        ),
+        body.contains(r#"<form method="post" action="/preference" class="fui-menu-theme">"#),
         "{body}"
     );
     assert!(body.contains(r#"name="theme" value="dark""#), "{body}");
@@ -433,8 +431,8 @@ async fn the_top_bar_find_asks_the_answer_route_and_submits_to_the_find_page()
     let session = state.sessions().establish(signed_in())?;
     let (_response, body) = send(&service, get_as("/search?q=node-b", &session)?).await?;
     assert!(body.contains(r#"action="/search""#), "{body}");
-    // NOTE: FerroUI `docs/consoles.md`, The top bar's search: the panel is the hydrated
-    // search box's own, so the route it asks is read through the route itself.
+    // NOTE: FerroUI `docs/consoles.md`, The top bar's search: the panel is the `search`
+    // module's own, so the route it asks is read through the route itself.
     let (response, answer) = send(&service, get_as(ANSWER_ROUTE, &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{answer}");
     let main = body.split("<main").nth(1).unwrap_or_default();

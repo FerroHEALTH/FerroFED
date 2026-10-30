@@ -65,26 +65,16 @@ pub(crate) fn get(path: &str) -> Result<Request<Body>, Box<dyn Error>> {
     Ok(Request::get(path).body(Body::empty())?)
 }
 
-/// The body `body` of a form whose `<ActionForm>` calls a server function,
-/// as a browser with no WebAssembly posts it from the page at `page`: its
-/// fields and the page in the answer field (FerroUI `widget::action`).
-pub(crate) fn answering(page: &str, body: &str) -> String {
-    let mut form = url::form_urlencoded::Serializer::new(body.to_owned());
-    form.append_pair(ferrohealth_ui::widget::action::ANSWER, page);
-    form.finish()
-}
-
-/// A plain post of `body` to the server function at `function`, from the
-/// page at `page`, as the console's own page sends it with no WebAssembly,
-/// carrying the session cookie of `session` when given and the headers
-/// `from` names.
+/// A plain post of the form body `body` to the page at `page`, as the
+/// console's own form posts it, carrying the session cookie of `session`
+/// when given and the headers `from` names.
 pub(crate) fn answer_post(
-    (function, page): (&str, &str),
+    page: &str,
     body: &str,
     session: Option<&SessionId>,
     from: &[(&str, &str)],
 ) -> Result<Request<Body>, Box<dyn Error>> {
-    let mut request = Request::post(function)
+    let mut request = Request::post(page)
         .header("content-type", "application/x-www-form-urlencoded")
         .header("accept", "text/html,application/xhtml+xml");
     if let Some(session) = session {
@@ -96,7 +86,7 @@ pub(crate) fn answer_post(
     for (name, value) in from {
         request = request.header(*name, *value);
     }
-    Ok(request.body(Body::from(answering(page, body)))?)
+    Ok(request.body(Body::from(body.to_owned()))?)
 }
 
 /// The value of the header `name` on `response`, or an empty string.
@@ -175,4 +165,39 @@ impl Write for Captured {
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
+}
+
+/// Whether the policy `policy` admits the scripts and stylesheets of the
+/// console's own origin alone, and the page `body` loads FerroUI's one
+/// loader module from there: the strict policy every page carries (FerroUI
+/// `docs/consoles.md`, "How a console builds", step 6).
+pub(crate) fn strict(policy: &str, body: &str) -> Result<(), String> {
+    let loader = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed).loader();
+    let tag = format!(r#"<script type="module" src="{loader}"></script>"#);
+    if !policy.contains("script-src 'self';") || !policy.contains("style-src 'self';") {
+        return Err(format!("the policy admits more than the console: {policy}"));
+    }
+    if [
+        "'nonce-",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "'wasm-unsafe-eval'",
+    ]
+    .iter()
+    .any(|source| policy.contains(source))
+    {
+        return Err(format!(
+            "the policy admits an inline or evaluated script: {policy}"
+        ));
+    }
+    if !body.contains(&tag) {
+        return Err(format!("the page does not load {loader}: {body}"));
+    }
+    if body.split("<script").skip(1).any(|script| {
+        let opening = script.split('>').next().unwrap_or_default();
+        !opening.contains(&format!(r#"src="{loader}""#))
+    }) {
+        return Err(format!("every script is the loader: {body}"));
+    }
+    Ok(())
 }

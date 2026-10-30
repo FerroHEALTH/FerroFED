@@ -489,57 +489,17 @@ and `tonic` on 2026-10-04.
 
 ## Operator console crates and build tools
 
-The operator console, `app/ferrofed-console` (#275), is a Leptos app rendered
-on the server and hydrated in the browser, the shape of FerroEHR's viewer.
-Each Leptos crate is on a release line of its own and is held to the root
-`Cargo.toml` alone. cargo-leptos builds the site bundle, and it runs the
-wasm-bindgen CLI it finds on `PATH`, which refuses a bundle the
-`wasm-bindgen` crate of another version wrote, so the CLI row is also held to
-the `wasm-bindgen` requirement of the root `Cargo.toml` and the version
-`Cargo.lock` locks. Both tools are fetched by `taiki-e/install-action`, which
-verifies the upstream release checksum, at the release whose manifest names
-these versions. Every version was the latest on crates.io on 2026-10-05.
-leptosfmt formats the console's `view!` bodies, which rustfmt leaves alone.
-install-action's manifest has no leptosfmt, so CI builds it with a
-version-pinned `cargo install --locked`, and runs it before rustfmt, whose
-breaking of a method chain depends on where leptosfmt left it (#1155).
-`scripts/checks/versions.sh` holds every row.
+The operator console, `app/ferrofed-console` (#275), draws every page on its
+server with FerroUI, the `ferrohealth-ui` crate, and serves the crate's
+stylesheet, its FerroFED theme and its script modules from the crate itself
+(#1457). It builds with `cargo build` alone: no WebAssembly target, no site
+bundle and no build tool of its own. FerroUI is pinned exactly, so the
+console moves to a new release deliberately, and the About page names the
+version it draws with. `scripts/checks/versions.sh` holds every row.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `leptos` | 0.8.22 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `leptos_axum` | 0.8.10 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `leptos_meta` | 0.8.7 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `leptos_router` | 0.8.17 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrohealth-ui` (FerroUI) | 0.5.8 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `app/ferrofed-console/src/pages/about.rs`, `.claude/rules/leptos-ui.md` |
-| `cargo-leptos` | 0.3.11 | `.github/workflows/ci.yml`, `.github/workflows/release-console.yml` |
-| `leptosfmt` | 0.1.33 | the formatting job of `.github/workflows/ci.yml`, `.claude/skills/ui-gates/SKILL.md` |
-| `wasm-bindgen` | 0.2.129 | the CLI in `.github/workflows/ci.yml` and `.github/workflows/release-console.yml`, the crate in the root `Cargo.toml` `[workspace.dependencies]` and `Cargo.lock` |
-| Binaryen (wasm-opt) | version_123 | `scripts/release/console-tools.sh` |
-| Binaryen, `binaryen-version_123-x86_64-linux.tar.gz` SHA-256 | `e959f2170af4c20c552e9de3a0253704d6a9d2766e8fdb88e4d6ac4bae9388fe` | `scripts/release/console-tools.sh` |
-| Binaryen, `binaryen-version_123-arm64-macos.tar.gz` SHA-256 | `74428be348c1a09863e7b642a1fa948cabf8ec9561052233d8288e941951725b` | `scripts/release/console-tools.sh` |
-| Binaryen, `bin/wasm-opt` of the x86_64 Linux archive, SHA-256 | `d66c6724c07334155720eb2def29c434dcaaf741ce859b4f7f389e22674f9c4a` | `scripts/release/console-tools.sh` |
-| Binaryen, `bin/wasm-opt` of the arm64 macOS archive, SHA-256 | `4c674f02a820509828b9271665b50cd6d06b1e6696002818cdcc23314ab949e8` | `scripts/release/console-tools.sh` |
-| Binaryen, `lib/libbinaryen.dylib` of the arm64 macOS archive, SHA-256 | `672e18b2ba553c7960d71ef3db7c732772be1661d31119401af0b4f48e5d5e14` | `scripts/release/console-tools.sh` |
-
-The console's stylesheet and its FerroFED theme are the `ferrohealth-ui`
-crate's, which the server serves as the crate ships them, so the site build
-compiles no CSS
-and needs no Node or Tailwind CSS CLI: the crate's manifest names no
-Tailwind input, so cargo-leptos runs none (#1150). cargo-leptos runs the
-Binaryen wasm-opt it finds on `PATH`, and downloads one unchecked when it
-finds none, so `scripts/release/console-tools.sh` installs it at this release
-and checks it against its digest first, and `scripts/release/console-site.sh`
-refuses to build without it. The build splits the WebAssembly
-(`cargo leptos build --split`), so the console's lazy route groups load from
-chunks of their own (FerroUI `docs/consoles.md`, How a console builds).
-Binaryen version_123 is the release cargo-leptos
-0.3.11 fetches by default. Each archive digest equals the `.sha256` file the
-upstream release publishes beside it, read on 2026-10-15.
-`scripts/release/console-tools.sh --check`, which the site script runs before
-every build, digests the `wasm-opt` on `PATH` and, on macOS, the
-`libbinaryen.dylib` it loads, both taken from the archives above on
-2026-10-15.
+| `ferrohealth-ui` (FerroUI) | 0.6.0 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `app/ferrofed-console/src/pages/about.rs`, `.claude/rules/console-ui.md` |
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only

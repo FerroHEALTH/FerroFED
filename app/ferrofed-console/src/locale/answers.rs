@@ -4,8 +4,6 @@
 //! The messages of `locales/en/answers.ftl`.
 
 messages! {
-    /// `{ $minutes }:{ $seconds } left`
-    CountdownLeft = "answer-countdown-left",
     /// `the sign-in could not be completed at the OpenID Provider`
     AnswerExchangeFailed = "answer-exchange-failed",
     /// `the OpenID Provider's ID Token did not verify`

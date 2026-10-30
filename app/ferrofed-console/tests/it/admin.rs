@@ -111,32 +111,12 @@ fn form(fields: &[(&str, &str)]) -> String {
     form.finish()
 }
 
-/// The server function the action form on the page `route` calls, and the
-/// body it posts: the clear on Integrity, and the drift repair on a stored
-/// query's page, whose form names the query in a hidden field.
-fn function_of(route: &str, body: String) -> (&'static str, String) {
-    let path = route.split('?').next().unwrap_or(route);
-    match path.strip_prefix("/stored-queries/") {
-        Some(name) => {
-            let name = url::form_urlencoded::parse(format!("name={name}").as_bytes())
-                .map(|(_, value)| value.into_owned())
-                .next()
-                .unwrap_or_default();
-            let mut form = url::form_urlencoded::Serializer::new(body);
-            form.append_pair("name", &name);
-            ("/api/repair", form.finish())
-        }
-        None => ("/api/clear", body),
-    }
-}
-
-/// A `POST` of `body` from the page `route`, as the console's own page
-/// sends it with no WebAssembly, carrying `session`'s cookie.
-fn act(route: &str, body: String, session: &SessionId) -> Result<Request<Body>, Box<dyn Error>> {
-    let (function, body) = function_of(route, body);
+/// A `POST` of `body` to the page `route`, as the console's own form on it
+/// sends it, carrying `session`'s cookie.
+fn act(route: &str, body: &str, session: &SessionId) -> Result<Request<Body>, Box<dyn Error>> {
     crate::support::answer_post(
-        (function, route),
-        &body,
+        route,
+        body,
         Some(session),
         &[("sec-fetch-site", "same-origin")],
     )
@@ -150,7 +130,7 @@ async fn acted(
     route: &str,
     body: String,
 ) -> Result<String, Box<dyn Error>> {
-    let (response, text) = send(service, act(route, body, session)?).await?;
+    let (response, text) = send(service, act(route, &body, session)?).await?;
     assert!(!text.contains(OPERATOR_TOKEN), "{text}");
     assert!(text.contains("</html>"), "{}: {text}", response.status());
     Ok(text)
@@ -388,8 +368,8 @@ async fn hostile_values_in_a_replicas_answer_render_escaped() -> Result<(), Box<
     let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
     let html = acted(&service, &session, "/integrity", clear_at("*")).await?;
     for escaped in [
-        "&lt;script&gt;alert(1)&lt;/script&gt;",
-        "&lt;img src=x onerror=alert(1)&gt;",
+        "&#60;script&#62;alert(1)&#60;/script&#62;",
+        "&#60;img src=x onerror=alert(1)&#62;",
     ] {
         assert!(html.contains(escaped), "{escaped}: {html}");
     }
@@ -464,8 +444,8 @@ async fn a_hostile_refusal_code_of_an_action_renders_escaped() -> Result<(), Box
         let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
         let html = acted(&service, &session, REPAIR_PAGE, repair_every_member()).await?;
         for escaped in [
-            "&lt;script&gt;alert(1)&lt;/script&gt;",
-            "&lt;img src=x onerror=alert(2)&gt;",
+            "&#60;script&#62;alert(1)&#60;/script&#62;",
+            "&#60;img src=x onerror=alert(2)&#62;",
         ] {
             assert!(html.contains(escaped), "{status}: {escaped}: {html}");
         }
@@ -511,7 +491,7 @@ async fn a_clear_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Err
     let replicas = [("gateway-0", listener.uri())];
     let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
     let request = crate::support::answer_post(
-        ("/api/clear", "/integrity"),
+        "/integrity",
         &clear_at("*"),
         Some(&session),
         &[("sec-fetch-site", "cross-site")],
@@ -591,7 +571,7 @@ async fn hostile_values_in_the_form_fields_render_escaped() -> Result<(), Box<dy
         .map(|(inside, _)| inside);
     let ehr_ids = ehr_ids.ok_or("the datalist ends")?;
     assert!(
-        ehr_ids.contains("&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"),
+        ehr_ids.contains("&#34;&#62;&#60;script&#62;alert(1)&#60;/script&#62;"),
         "{ehr_ids}"
     );
     assert!(!ehr_ids.contains("<script"), "{ehr_ids}");
@@ -619,7 +599,7 @@ async fn the_actions_are_offered_only_with_an_admin_listener() -> Result<(), Box
     let (service, session) = signed_in_console(&gateway.uri(), &replicas)?;
     let (_, integrity) = send(&service, get_as("/integrity", &session)?).await?;
     assert!(integrity.contains("Clear a held EHR id"), "{integrity}");
-    assert!(integrity.contains(r#"action="/api/clear""#), "{integrity}");
+    assert!(integrity.contains(r#"action="/integrity""#), "{integrity}");
     assert!(
         integrity.contains(&format!(r#"<option value="{EHR_ID}">"#)),
         "{integrity}"

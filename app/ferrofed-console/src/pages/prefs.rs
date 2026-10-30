@@ -12,10 +12,10 @@
 //! [`crate::prefs::PREFERENCE`], which returns here saying what it kept.
 
 use ferrohealth_ui::calendar::Weekday;
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::view::preferences::{
     PreferencesPage, Section, SectionRoutes, preferences_page,
 };
-use leptos::prelude::*;
 
 use crate::locale::{Msg, tr};
 use crate::prefs::{PREFERENCE, PREFERENCES, RESET};
@@ -32,7 +32,7 @@ fn section(name: &str) -> Option<Section> {
 
 /// Your preferences, on the tab the route names.
 #[must_use]
-pub fn page() -> AnyView {
+pub fn page() -> Html {
     let Some(section) = section(&crate::pages::param("section")) else {
         return crate::pages::errors::not_found();
     };
@@ -42,25 +42,24 @@ pub fn page() -> AnyView {
         keyboard: format!("{PREFERENCES}/keyboard"),
     };
     let saved = crate::pages::query_param("saved");
-    let visit = crate::visit::visit_untracked();
-    let page = preferences_page(PreferencesPage {
-        section,
-        routes,
-        reading: false,
-        preferences: visit.chosen().preferences,
-        action: String::from(PREFERENCE),
-        saved,
-        accent: tr(Msg::AccentAzure),
-        languages: crate::locale::choices(),
-        browser: visit.browser(),
-        week_from_language: Weekday::Monday,
-        shortcuts: None,
-        reset: String::from(RESET),
-        own: Vec::new(),
-    });
-    view! {
-        {crate::app::title(tr(Msg::PreferencesTitle))}
-        {page}
-    }
-    .into_any()
+    let visit = crate::visit::visit();
+    let page = preferences_page(
+        &visit.locale,
+        PreferencesPage {
+            section,
+            routes,
+            reading: false,
+            preferences: visit.chosen().preferences,
+            action: String::from(PREFERENCE),
+            saved,
+            accent: tr(Msg::AccentAzure),
+            languages: crate::locale::choices(),
+            browser: visit.browser.clone(),
+            week_from_language: Weekday::Monday,
+            shortcuts: None,
+            reset: String::from(RESET),
+            own: Vec::new(),
+        },
+    );
+    crate::app::title(tr(Msg::PreferencesTitle)).then(page)
 }

@@ -22,7 +22,7 @@ use thirtyfour::{By, Key};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::journeys::browser::{Browser, hydrated as islands, until, with_browser};
+use crate::journeys::browser::{Browser, scripted as islands, until, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -127,8 +127,8 @@ pub(crate) async fn fill(browser: &Browser, id: &str, text: &str) -> Result<(), 
 }
 
 /// Loads the configuration page at `path` and waits until it is drawn and,
-/// with scripts on, hydrated.
-pub(crate) async fn hydrated(
+/// with scripts on, its modules loaded.
+pub(crate) async fn scripted(
     browser: &Browser,
     stack: &Stack,
     path: &str,
@@ -275,7 +275,7 @@ async fn edit_fhir_endpoint(
     stack: &Stack,
     admin: &Server,
 ) -> Result<(), Box<dyn Error>> {
-    hydrated(browser, stack, "/configuration/members/node-b").await?;
+    scripted(browser, stack, "/configuration/members/node-b").await?;
     let shown = browser
         .element(By::Id("cfg-f-0-url"))
         .await?
@@ -315,7 +315,7 @@ async fn a_console_member_is_added_edited_and_applied() -> Result<(), Box<dyn Er
         sign_in(browser, &stack).await?;
 
         // The tabs are links, the one shown marked.
-        hydrated(browser, &stack, "/configuration/members").await?;
+        scripted(browser, &stack, "/configuration/members").await?;
         browser.text("span", "File, read-only").await?;
         browser
             .text("caption", "What revision 2 changes, by key")
@@ -333,13 +333,13 @@ async fn a_console_member_is_added_edited_and_applied() -> Result<(), Box<dyn Er
             .console_clean("the tabs of the configuration page")
             .await?;
 
-        hydrated(browser, &stack, "/configuration/members/new").await?;
+        scripted(browser, &stack, "/configuration/members/new").await?;
         add_member(browser, &admin, true).await?;
         browser.console_clean("an added member").await?;
         edit_fhir_endpoint(browser, &stack, &admin).await?;
 
         // The apply of the newest revision, through its confirmation dialog.
-        hydrated(browser, &stack, "/configuration/members").await?;
+        scripted(browser, &stack, "/configuration/members").await?;
         confirmed(browser, "apply-confirm").await?;
         browser
             .text("strong", "Replica gateway-0 applied revision 2.")
@@ -551,7 +551,7 @@ async fn removed(
     admin: &Server,
     dialog: &str,
 ) -> Result<(), Box<dyn Error>> {
-    hydrated(browser, stack, "/configuration/members").await?;
+    scripted(browser, stack, "/configuration/members").await?;
     menu_opens_removal(browser, dialog).await?;
     let openers = browser
         .driver()
@@ -592,7 +592,7 @@ async fn a_member_row_confirms_its_removal_and_the_page_explains_itself()
     let stack = Stack::start_with_admin(&admin.uri()).await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        hydrated(browser, &stack, "/configuration/members").await?;
+        scripted(browser, &stack, "/configuration/members").await?;
         browser
             .element(By::Css(r#"button[commandfor="config-how"]"#))
             .await?

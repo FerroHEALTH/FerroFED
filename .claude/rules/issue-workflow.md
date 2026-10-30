@@ -125,7 +125,7 @@ Labels carry what the platform has no field for. Bootstrap them once with
   XCPD, PMIR, mCSD), `spec:NL-GF` (the Dutch Generic Functions binding of
   Annex B), `research` (an investigation whose deliverable is cited evidence
   and a recommendation, as the program that wrote the architecture of record
-  was), `console` (the Leptos web UI, `app/ferrofed-console`, named as the
+  was), `console` (the operator console, `app/ferrofed-console`, named as the
   console in every family product). Add more as the
   project grows; keep the set small and meaningful.
 - **Workflow:** `conformance` (the conformance-point matrix, the Connectathon

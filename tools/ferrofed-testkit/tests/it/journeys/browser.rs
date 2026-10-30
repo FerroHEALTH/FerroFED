@@ -396,15 +396,14 @@ impl Browser {
     }
 }
 
-/// Waits until the page has hydrated: FerroUI's browser entry writes
-/// `data-ferroui-hydrated` on the root element once the page and its lazy
-/// route have hydrated (FerroUI `docs/consoles.md`, How a console builds,
-/// step 9).
-pub(crate) async fn hydrated(browser: &Browser) -> Result<(), Box<dyn Error>> {
+/// Waits until FerroUI's loader has run its modules over the page: it marks
+/// the root element with `ferrohealth_ui::script::MARK` once every module
+/// the page names has loaded (FerroUI `docs/migration-0.6.md`, Tests).
+pub(crate) async fn scripted(browser: &Browser) -> Result<(), Box<dyn Error>> {
     browser
-        .element(By::Css("html[data-ferroui-hydrated]"))
+        .element(By::Css(format!("html[{}]", ferrohealth_ui::script::MARK)))
         .await
-        .map_err(|error| format!("the page never hydrated: {error}"))?;
+        .map_err(|error| format!("the page's modules never loaded: {error}"))?;
     Ok(())
 }
 

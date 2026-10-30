@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The stack a journey runs against: two stub nodes, a running gateway over
-//! them, the test OpenID Provider, and a running console that serves its
-//! release site bundle, each on loopback.
+//! them, the test OpenID Provider, and a running console that draws every
+//! page and serves FerroUI's assets itself, each on loopback.
 //!
 //! Node A answers every query and node B fails it, so one run shows both an
 //! answering and a failing node; the gateway offers best effort, so the same
@@ -14,7 +14,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -31,10 +31,6 @@ use wiremock::{Mock, ResponseTemplate};
 
 use crate::console::{AUDIENCE, ISSUER, OPERATOR_SCOPE};
 use crate::journeys::provider::Provider;
-
-/// The environment variable naming the site bundle's directory, when it is
-/// not the workspace's `target/site`.
-const SITE_ENV: &str = "FERROFED_JOURNEYS_SITE";
 
 /// How many `creating_system_id` routes the registry registers.
 const REGISTERED: u64 = 99;
@@ -135,7 +131,6 @@ impl Stack {
     /// Starts the stack, the console naming the admin listener `admin` and
     /// rendering in `locale` when each is given.
     async fn start_with(admin: Option<&str>, locale: Option<&str>) -> Result<Self, Box<dyn Error>> {
-        let site = site_root()?;
         let answering = node(200, &format!(
             r##"{{"q":"node","columns":[{{"name":"#0","path":"c/uid/value"}}],"rows":[["{UID_AT_A}"]]}}"##
         ))
@@ -158,10 +153,9 @@ impl Stack {
 
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let console = format!("http://{}", listener.local_addr()?);
-        let site = toml::Value::String(site.display().to_string());
         let locale = toml::Value::String(locale.unwrap_or("en").to_owned());
         let text = format!(
-            "[server]\nsite_root = {site}\nlocale = {locale}\n\n[gateway]\nbase_url = \"{gateway}/\"\n\n\
+            "[server]\nlocale = {locale}\n\n[gateway]\nbase_url = \"{gateway}/\"\n\n\
              [session]\nsecure_cookie = false\n\n{}",
             provider.console_configuration(&console)
         );
@@ -211,24 +205,6 @@ impl Stack {
     pub(crate) fn cookie(&self) -> &str {
         &self.cookie
     }
-}
-
-/// The site bundle's directory: [`SITE_ENV`], or the workspace's
-/// `target/site`, which must hold the WebAssembly cargo-leptos wrote.
-fn site_root() -> Result<PathBuf, Box<dyn Error>> {
-    let site = std::env::var_os(SITE_ENV).map_or_else(
-        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/site"),
-        PathBuf::from,
-    );
-    let bundle = site.join("pkg/ferrofed-console.wasm");
-    if !bundle.is_file() {
-        return Err(format!(
-            "{} holds no site bundle: build it with scripts/release/console-site.sh --release, or name its directory in {SITE_ENV}",
-            site.display()
-        )
-        .into());
-    }
-    Ok(site)
 }
 
 /// A stub node answering every `POST /openehr/v1/query/aql` with `status`

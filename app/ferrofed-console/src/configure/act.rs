@@ -3,8 +3,8 @@
 
 //! The configuration's reads and the run of each of its forms.
 //!
-//! Each runs on the server, behind the configuration's server functions,
-//! as the operator of the request: the form read into what is sent,
+//! Each runs on the server as the configuration page draws or a form posts
+//! to it, as the operator of the request: the form read into what is sent,
 //! checked before any replica is asked, and the gateway's answers read into
 //! what the page draws. The first replica configured is called with the
 //! operator's own access token, which never leaves the server.

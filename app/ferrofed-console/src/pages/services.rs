@@ -10,43 +10,29 @@
 //! operator surface; a service the deployment configures none of is not
 //! listed.
 
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::table::view::{
     Body, Column, DataTable, Role, Sorting, cell, data_table, group_row, title_cell,
 };
 use ferrohealth_ui::view::action::ActionGroup;
+use ferrohealth_ui::view::state::state;
 use ferrohealth_ui::view::surface::{Crumb, Header, card, facts_row, page_heading};
 use ferrohealth_ui::view::template::list::{
     ActiveFilters, HeadingCount, ListCard, ListPage, list_empty, list_page,
 };
-use leptos::prelude::*;
 
 use crate::app::SERVICES;
-use crate::locale::{Msg, tr};
-use crate::pages::stopped;
+use crate::locale::{Msg, current, tr};
+use crate::pages::{h, stopped, t};
 use crate::read::federation::{Federation, Service};
-use ferrohealth_ui::view::state::state;
 
 /// The services.
-#[must_use]
-pub fn list() -> AnyView {
-    let federation_read = Resource::new(crate::read::changes, |_| {
-        crate::read::federation::federation_now()
-    });
-    let body = Suspend::new(async move {
-        match federation_read.await {
-            Ok(federation) => services(&federation),
-            Err(stop) => view! {
-                {page_heading(header(), ActionGroup::none())}
-                {stopped(&stop)}
-            }
-            .into_any(),
-        }
-    });
-    view! {
-        {crate::app::title(tr(Msg::ServicesTitle))}
-        <Suspense fallback=|| ()>{body}</Suspense>
-    }
-    .into_any()
+pub async fn list() -> Html {
+    let body = match crate::read::federation::read().await {
+        Ok(federation) => services(&federation),
+        Err(stop) => page_heading(&current(), header(), ActionGroup::none()).then(stopped(&stop)),
+    };
+    crate::app::title(tr(Msg::ServicesTitle)).then(body)
 }
 
 /// The page's header.
@@ -59,7 +45,7 @@ fn header() -> Header {
 }
 
 /// The services of `federation`, in their group rows.
-fn services(federation: &Federation) -> AnyView {
+fn services(federation: &Federation) -> Html {
     let columns = [
         Column {
             role: Role::Title,
@@ -76,25 +62,27 @@ fn services(federation: &Federation) -> AnyView {
     for service in &federation.services {
         if group != Some(service.group) {
             group = Some(service.group);
-            rows.push(group_row(&columns, service.group.title()));
+            rows.push(group_row(&columns, t(service.group.title())));
         }
-        rows.push(
-            view! {
-                <tr>
-                    {title_cell(
-                        Some(&service.href()),
-                        service.name(),
-                        Some(service.role().into_any()),
-                    )}
-                    {cell(&columns[1], state(service.health.mark(), service.health.word(), None))}
-                    {cell(
-                        &columns[2],
-                        view! { <code>{service.fault.clone().unwrap_or_default()}</code> },
-                    )}
-                </tr>
-            }
-            .into_any(),
-        );
+        rows.push(h(format!(
+            "<tr>{}{}{}</tr>",
+            title_cell(
+                Some(&service.href()),
+                t(service.name()),
+                Some(t(service.role())),
+            ),
+            cell(
+                &columns[1],
+                state(service.health.mark(), service.health.word(), None)
+            ),
+            cell(
+                &columns[2],
+                h(format!(
+                    "<code>{}</code>",
+                    t(service.fault.clone().unwrap_or_default())
+                )),
+            ),
+        )));
     }
     let count = u64::try_from(federation.services.len()).unwrap_or(u64::MAX);
     let body = if rows.is_empty() {
@@ -104,51 +92,47 @@ fn services(federation: &Federation) -> AnyView {
             caption: &tr(Msg::ServicesTitle),
             columns: &columns,
             sorting: Sorting::default(),
-            body: Body::Rows(rows.collect_view().into_any()),
+            body: Body::Rows(Html::join(rows)),
         })
-        .into_any()
     };
-    list_page(ListPage {
-        header: header(),
-        actions: ActionGroup::none(),
-        total: Some(count),
-        summary: None,
-        toolbar: None,
-        filters: ActiveFilters::default(),
-        card: ListCard {
-            title: tr(Msg::ServicesTitle),
-            count: Some(HeadingCount::All(count)),
-            order: None,
-            tabs: None,
-            actions: None,
-            body,
-            pager: None,
+    list_page(
+        &current(),
+        ListPage {
+            header: header(),
+            actions: ActionGroup::none(),
+            total: Some(count),
+            summary: None,
+            toolbar: None,
+            filters: ActiveFilters::default(),
+            card: ListCard {
+                title: tr(Msg::ServicesTitle),
+                count: Some(HeadingCount::All(count)),
+                order: None,
+                tabs: None,
+                actions: None,
+                body,
+                pager: None,
+            },
         },
-    })
+    )
 }
 
 /// One service.
-#[must_use]
-pub fn page() -> AnyView {
+pub async fn page() -> Html {
     let key = crate::pages::param("service");
-    let federation_read = Resource::new(crate::read::changes, |_| {
-        crate::read::federation::federation_now()
-    });
-    let body = Suspend::new(async move {
-        match federation_read.await {
-            Err(stop) => stopped(&stop),
-            Ok(federation) => match federation.service(&key) {
-                Some(service) => service_page(service, federation.replica.as_deref()),
-                None => crate::pages::errors::not_found(),
-            },
-        }
-    });
-    view! { <Suspense fallback=|| ()>{body}</Suspense> }.into_any()
+    match crate::read::federation::read().await {
+        Err(stop) => stopped(&stop),
+        Ok(federation) => match federation.service(&key) {
+            Some(service) => service_page(service, federation.replica.as_deref()),
+            None => crate::pages::errors::not_found(),
+        },
+    }
 }
 
 /// The page of `service`, as `replica` observed it.
-fn service_page(service: &Service, replica: Option<&str>) -> AnyView {
+fn service_page(service: &Service, replica: Option<&str>) -> Html {
     let heading = page_heading(
+        &current(),
         Header {
             title: service.name().into(),
             subtitle: Some(service.role().into()),
@@ -158,43 +142,36 @@ fn service_page(service: &Service, replica: Option<&str>) -> AnyView {
             badge: Some(state(service.health.mark(), service.health.word(), None)),
         },
         ActionGroup::none(),
-    )
-    .into_any();
+    );
+    let code = |text: &str| h(format!("<code>{}</code>", t(text)));
     let facts = facts_row(vec![
-        (tr(Msg::ColumnGroup), service.group.title().into_any()),
+        (tr(Msg::ColumnGroup), t(service.group.title())),
         (
             tr(Msg::ColumnState),
             state(service.health.mark(), service.health.word(), None),
         ),
-        (
-            tr(Msg::ColumnKey),
-            view! { <code>{service.key.clone()}</code> }.into_any(),
-        ),
+        (tr(Msg::ColumnKey), code(&service.key)),
         (
             tr(Msg::ColumnFault),
-            service.fault.clone().map_or_else(
-                || tr(Msg::None).into_any(),
-                |fault| view! { <code>{fault}</code> }.into_any(),
-            ),
+            service
+                .fault
+                .as_deref()
+                .map_or_else(|| t(tr(Msg::None)), code),
         ),
         (
             tr(Msg::ColumnObservedBy),
-            replica.map_or_else(
-                || tr(Msg::ReplicaUnnamed).into_any(),
-                |name| view! { <code>{name.to_owned()}</code> }.into_any(),
-            ),
+            replica.map_or_else(|| t(tr(Msg::ReplicaUnnamed)), code),
         ),
     ]);
-    view! {
-        {crate::app::title(service.name())}
-        {heading}
-        {card(
+    Html::join([
+        crate::app::title(service.name()),
+        heading,
+        card(
             tr(Msg::ServiceHealth),
-            view! {
-                {facts}
-                <p class="fui-small fui-muted">{tr(Msg::ServiceHealthLine)}</p>
-            },
-        )}
-    }
-    .into_any()
+            facts.then(h(format!(
+                "<p class=\"fui-small fui-muted\">{}</p>",
+                t(tr(Msg::ServiceHealthLine))
+            ))),
+        ),
+    ])
 }

@@ -12,6 +12,7 @@
 //! fields, so no `ehr_id` reaches a URL.
 
 use ferrofed_registry::operator::HeldBefore;
+use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::table::view::{
@@ -26,22 +27,19 @@ use ferrohealth_ui::view::surface::{
     Header, SectionHead, page_heading, panel_section, panel_sections, stack,
 };
 use ferrohealth_ui::view::tabs::{Tab, binder};
-use ferrohealth_ui::widget::action::{answer_field, answered};
-use leptos::form::ActionForm;
-use leptos::prelude::*;
 
-use crate::act::clear::{ClearEhrId, ClearLine, ClearOutcome, EVERY_REPLICA};
+use crate::act::clear::{ClearLine, ClearOutcome, EVERY_REPLICA};
+use crate::act::fields::Fields;
 use crate::act::{Acted, ReplicaAnswer};
 use crate::app::INTEGRITY;
-use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{refused_view, relative, stopped};
+use crate::locale::{Msg, current, tr, tr_with};
+use crate::pages::{h, opt, refused_view, relative, stopped, t};
 use crate::read::incidents::{Incident, Incidents};
 
 /// The id of the clear's dialog.
 const CLEAR_DIALOG: &str = "clear-dialog";
 
 /// How many incidents are open, `None` when the gateway did not answer.
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn open_count() -> Option<u32> {
     let (state, token) = crate::read::signed_in().ok()?;
     // NOTE: no specification governs this: our own design; the count is the shell's,
@@ -73,128 +71,91 @@ pub fn what(kind: &str) -> String {
     tr(msg)
 }
 
-/// Integrity.
-#[must_use]
-pub fn page() -> AnyView {
+/// Integrity, with the clear's answer at the top when the clear's form
+/// `posted` to it.
+pub async fn page(posted: Option<Fields>) -> Html {
     let resolved = crate::pages::query_param("show").as_deref() == Some("resolved");
-    let clear = ServerAction::<ClearEhrId>::new();
     // NOTE: no specification governs this: our own design; the clear's answer is drawn
     // at the top and its dialog opens empty again, so no posted field is drawn back.
-    let _posted = answered(&clear);
-    crate::read::follow(clear);
-    let read = Resource::new(crate::read::changes, |_| {
-        crate::read::incidents::incidents_now()
-    });
-    view! {
-        {crate::app::title(tr(Msg::IntegrityTitle))}
-        <Suspense fallback=|| ()>
-            {move || {
-                let outcome = clear
-                    .value()
-                    .get()
-                    .map(|answer| answer.unwrap_or_else(ClearOutcome::from));
-                Suspend::new(async move { integrity(read.await, resolved, outcome, clear) })
-            }}
-        </Suspense>
-    }
-    .into_any()
+    let outcome = match posted {
+        Some(fields) => Some(crate::act::clear::clear_ehr_id(&fields).await),
+        None => None,
+    };
+    let read = crate::read::incidents::read().await;
+    crate::app::title(tr(Msg::IntegrityTitle)).then(integrity(read, resolved, outcome))
 }
 
 /// The page of `read`, on the Resolved tab when `resolved`, with the
-/// clear's `outcome` at the top after a post, its form calling `clear`.
+/// clear's `outcome` at the top after a post.
 fn integrity(
     read: Result<Incidents, crate::read::Stop>,
     resolved: bool,
     outcome: Option<ClearOutcome>,
-    clear: ServerAction<ClearEhrId>,
-) -> AnyView {
-    let replicas = crate::visit::visit_untracked().replicas();
+) -> Html {
+    let replicas = crate::visit::with(crate::visit::Visit::replicas);
     let held = read.as_ref().map(Incidents::held).unwrap_or_default();
-    let clear = (!replicas.is_empty()).then(|| clear_form(&replicas, &held, clear));
+    let clear = (!replicas.is_empty()).then(|| clear_form(&replicas, &held));
     let heading = page_heading(
+        &current(),
         Header {
             title: tr(Msg::IntegrityTitle).into(),
             subtitle: Some(tr(Msg::IntegritySubtitle).into()),
             ..Header::default()
         },
         ActionGroup::none(),
-    )
-    .into_any();
+    );
     let answer = outcome.map(answer);
     let body = match read {
         Err(stop) => stopped(&stop),
         Ok(incidents) => tabs(&incidents, resolved),
     };
-    view! {
-        {heading}
-        {clear}
-        {stack(
-            view! {
-                {answer}
-                {body}
-            },
-        )}
-    }
-    .into_any()
+    Html::join([heading, opt(clear), stack(opt(answer).then(body))])
 }
 
 /// The clear's form in its dialog: the `ehr_id`, offered from the open
-/// incidents' `held`, and the replica among `replicas` or every one.
-fn clear_form(replicas: &[String], held: &[String], clear: ServerAction<ClearEhrId>) -> AnyView {
-    let known = held
-        .iter()
-        .map(|ehr_id| view! { <option value=ehr_id.clone()></option> })
-        .collect_view();
-    let choices = replicas
-        .iter()
-        .map(|name| view! { <option value=name.clone()>{name.clone()}</option> })
-        .collect_view();
+/// incidents' `held`, and the replica among `replicas` or every one. It
+/// posts to Integrity, on the tab it sits on.
+fn clear_form(replicas: &[String], held: &[String]) -> Html {
+    let known = Html::join(
+        held.iter()
+            .map(|ehr_id| h(format!("<option value=\"{}\"></option>", t(ehr_id)))),
+    );
+    let choices = Html::join(replicas.iter().map(|name| {
+        h(format!(
+            "<option value=\"{name}\">{name}</option>",
+            name = t(name)
+        ))
+    }));
     let ehr_id = Field::new("clear-ehr-id", tr(Msg::ClearEhrIdLabel))
         .help(tr(Msg::ClearEhrIdHelp))
         .holds_id()
-        .view(view! {
-            <input
-                type="text"
-                id="clear-ehr-id"
-                name="ehr_id"
-                class=INPUT
-                list="clear-ehr-ids"
-                autocomplete="off"
-                spellcheck="false"
-                required
-                value=held.first().cloned().unwrap_or_default()
-            />
-            <datalist id="clear-ehr-ids">{known}</datalist>
-        });
-    let replica = Field::new("clear-replica", tr(Msg::ClearReplicaLabel)).view(view! {
-        <select id="clear-replica" name="replica" class=SELECT>
-            <option value=EVERY_REPLICA>{tr(Msg::ClearEveryReplica)}</option>
-            {choices}
-        </select>
-    });
-    let body = view! {
-        <ActionForm action=clear attr:class="fui-form">
-            {answer_field()}
-            {ehr_id}
-            {replica}
-            <p class="fui-small fui-muted">{tr(Msg::ClearRecorded)}</p>
-            <input type="hidden" name=crate::act::clear::CONFIRM value="yes" />
-            <div class="fui-dialog-actions">
-                <button
-                    type="button"
-                    class=Variant::Secondary.class()
-                    command="close"
-                    commandfor=CLEAR_DIALOG
-                >
-                    {tr(Msg::Cancel)}
-                </button>
-                <button type="submit" class=Variant::Primary.class()>
-                    {tr(Msg::ClearSubmit)}
-                </button>
-            </div>
-        </ActionForm>
-    }
-    .into_any();
+        .view(h(format!(
+            "<input type=\"text\" id=\"clear-ehr-id\" name=\"ehr_id\" class=\"{INPUT}\" \
+             list=\"clear-ehr-ids\" autocomplete=\"off\" spellcheck=\"false\" required \
+             value=\"{}\"><datalist id=\"clear-ehr-ids\">{known}</datalist>",
+            t(held.first().cloned().unwrap_or_default())
+        )));
+    let replica = Field::new("clear-replica", tr(Msg::ClearReplicaLabel)).view(h(format!(
+        "<select id=\"clear-replica\" name=\"replica\" class=\"{SELECT}\">\
+         <option value=\"{EVERY_REPLICA}\">{}</option>{choices}</select>",
+        t(tr(Msg::ClearEveryReplica))
+    )));
+    let action = crate::pages::here_with_query();
+    let body = h(format!(
+        "<form method=\"post\" action=\"{}\" class=\"fui-form\">{ehr_id}{replica}\
+         <p class=\"fui-small fui-muted\">{}</p>\
+         <input type=\"hidden\" name=\"{}\" value=\"yes\">\
+         <div class=\"fui-dialog-actions\">\
+         <button type=\"button\" class=\"{}\" command=\"close\" commandfor=\"{CLEAR_DIALOG}\">{}</button>\
+         <button type=\"submit\" class=\"{}\">{}</button></div></form>",
+        t(action),
+        t(tr(Msg::ClearRecorded)),
+        crate::act::clear::CONFIRM,
+        Variant::Secondary.class(),
+        t(tr(Msg::Cancel)),
+        Variant::Primary.class(),
+        t(tr(Msg::ClearSubmit)),
+    ));
     popover_form(PopoverForm {
         id: CLEAR_DIALOG.into(),
         variant: Variant::Primary,
@@ -207,7 +168,7 @@ fn clear_form(replicas: &[String], held: &[String], clear: ServerAction<ClearEhr
 
 /// The answer of a clear: one line per replica, or why no replica was
 /// asked.
-fn answer(outcome: ClearOutcome) -> AnyView {
+fn answer(outcome: ClearOutcome) -> Html {
     let answers = match outcome {
         ClearOutcome::Refused(refused) => return refused_view(&refused),
         ClearOutcome::Failed(fault) => return crate::pages::fault_view(&fault),
@@ -224,36 +185,30 @@ fn answer(outcome: ClearOutcome) -> AnyView {
     } else {
         Outcome::Warn
     };
-    let lines = answers.iter().map(replica_line).collect_view();
-    view! {
-        {load_report(LoadReport {
-            outcome: report,
-            arrival: Arrival::AfterAction,
-            title: tr(
-                    match report {
-                        Outcome::Ok => Msg::ClearDone,
-                        Outcome::Warn => Msg::ClearPartly,
-                        Outcome::Bad => Msg::ClearNotDone,
-                    },
-                )
-                .into_any(),
-            counts: Vec::new(),
-            action: None,
-        })}
-        <ul class="fui-stack fui-small">{lines}</ul>
-    }
-    .into_any()
+    let lines = Html::join(answers.iter().map(replica_line));
+    load_report(LoadReport {
+        outcome: report,
+        arrival: Arrival::AfterAction,
+        title: t(tr(match report {
+            Outcome::Ok => Msg::ClearDone,
+            Outcome::Warn => Msg::ClearPartly,
+            Outcome::Bad => Msg::ClearNotDone,
+        })),
+        counts: Vec::new(),
+        action: None,
+    })
+    .then(h(format!("<ul class=\"fui-stack fui-small\">{lines}</ul>")))
 }
 
 /// What one replica did with the clear: what it held, or its refusal
 /// with its status and code, or that it gave no answer.
-fn replica_line(answer: &ReplicaAnswer<ClearLine>) -> AnyView {
+fn replica_line(answer: &ReplicaAnswer<ClearLine>) -> Html {
     let said = crate::configure::said::replica_said(answer, "clear", cleared_line);
-    view! { <li>{said}</li> }.into_any()
+    h(format!("<li>{said}</li>"))
 }
 
 /// What `replica` held before it cleared the `ehr_id`, as `line` reports.
-fn cleared_line(replica: &str, line: &ClearLine) -> AnyView {
+fn cleared_line(replica: &str, line: &ClearLine) -> Html {
     let held = match line.held {
         HeldBefore::Nothing => tr(Msg::ClearHeldNothing),
         _ => tr_with(
@@ -261,19 +216,18 @@ fn cleared_line(replica: &str, line: &ClearLine) -> AnyView {
             &[("claimants", line.claimants.join(", ").into())],
         ),
     };
-    tr_with(
+    t(tr_with(
         Msg::ClearReplicaDone,
         &[
             ("replica", replica.to_owned().into()),
             ("held", held.into()),
         ],
-    )
-    .into_any()
+    ))
 }
 
 /// The binder tabs Open and Resolved over their incidents, and the counts
 /// of each kind.
-fn tabs(incidents: &Incidents, resolved: bool) -> AnyView {
+fn tabs(incidents: &Incidents, resolved: bool) -> Html {
     let count = |n: usize| u64::try_from(n).unwrap_or(u64::MAX);
     let open_tab = Tab::new("open", INTEGRITY, tr(Msg::IntegrityOpen)).count(
         count(incidents.open.len()),
@@ -300,29 +254,30 @@ fn tabs(incidents: &Incidents, resolved: bool) -> AnyView {
         &incidents.open
     };
     let list = if shown.is_empty() {
-        view! {
-            <p class="fui-panel-body fui-muted">
-                {tr(if resolved { Msg::IntegrityNoneResolved } else { Msg::IntegrityNoneOpen })}
-            </p>
-        }
-        .into_any()
+        h(format!(
+            "<p class=\"fui-panel-body fui-muted\">{}</p>",
+            t(tr(if resolved {
+                Msg::IntegrityNoneResolved
+            } else {
+                Msg::IntegrityNoneOpen
+            }))
+        ))
     } else {
         incident_table(shown, resolved)
     };
-    let counts: Vec<AnyView> = incidents
+    let counts: Vec<Html> = incidents
         .counts
         .iter()
         .map(|(kind, count)| {
-            view! {
-                <tr>
-                    {title_cell(
-                        None,
-                        what(kind),
-                        Some(view! { <code>{kind.clone()}</code> }.into_any()),
-                    )} <td class="fui-num">{ferrohealth_ui::i18n::number::grouped(*count)}</td>
-                </tr>
-            }
-            .into_any()
+            h(format!(
+                "<tr>{} <td class=\"fui-num\">{}</td></tr>",
+                title_cell(
+                    None,
+                    t(what(kind)),
+                    Some(h(format!("<code>{}</code>", t(kind)))),
+                ),
+                t(ferrohealth_ui::i18n::number::grouped(&current(), *count)),
+            ))
         })
         .collect();
     let counts_columns = [
@@ -335,27 +290,30 @@ fn tabs(incidents: &Incidents, resolved: bool) -> AnyView {
             ..Column::text("count", tr(Msg::ColumnSinceStart))
         },
     ];
+    let locale = current();
     let counts_table = (!counts.is_empty()).then(|| {
         data_table(DataTable {
             caption: &tr(Msg::IntegrityCountsTitle),
             columns: &counts_columns,
             sorting: Sorting::default(),
-            body: Body::Rows(counts.collect_view().into_any()),
+            body: Body::Rows(Html::join(counts)),
         })
     });
-    let panel = panel_sections(view! {
-        {panel_section(None, list)}
-        {counts_table
-            .map(|table| panel_section(
+    let panel = panel_sections(
+        panel_section(&locale, None, list).then(opt(counts_table.map(|table| {
+            panel_section(
+                &locale,
                 Some(SectionHead {
                     title: tr(Msg::IntegrityCountsTitle),
                     count: None,
                     actions: None,
                 }),
                 table,
-            ))}
-    });
+            )
+        }))),
+    );
     binder(
+        &locale,
         tr(Msg::IntegrityTitle),
         vec![open_tab, resolved_tab],
         if resolved { "resolved" } else { "open" },
@@ -364,7 +322,7 @@ fn tabs(incidents: &Incidents, resolved: bool) -> AnyView {
 }
 
 /// The table of `incidents`, with who cleared each when `resolved`.
-fn incident_table(incidents: &[Incident], resolved: bool) -> AnyView {
+fn incident_table(incidents: &[Incident], resolved: bool) -> Html {
     let columns = [
         Column {
             role: Role::Title,
@@ -384,31 +342,28 @@ fn incident_table(incidents: &[Incident], resolved: bool) -> AnyView {
             }),
         ),
     ];
-    let rows = incidents
-        .iter()
-        .map(|incident| {
-            let sub = view! { <code>{incident.kind.clone()}</code> }.into_any();
-            let ehr_id = incident
-                .ehr_id
-                .clone()
-                .or_else(|| incident.creating_system_id.clone())
-                .map_or_else(
-                    || tr(Msg::None).into_any(),
-                    |id| view! { <code>{id}</code> }.into_any(),
-                );
-            let when = match (&incident.cleared, resolved) {
-                (Some(clear), true) => relative(&clear.at),
-                _ => relative(&incident.at),
-            };
-            view! {
-                <tr>
-                    {title_cell(None, what(&incident.kind), Some(sub))} {cell(&columns[1], ehr_id)}
-                    {cell(&columns[2], incident.nodes.join(", "))} {cell(&columns[3], when)}
-                </tr>
-            }
-        })
-        .collect_view()
-        .into_any();
+    let rows = incidents.iter().map(|incident| {
+        let sub = h(format!("<code>{}</code>", t(&incident.kind)));
+        let ehr_id = incident
+            .ehr_id
+            .clone()
+            .or_else(|| incident.creating_system_id.clone())
+            .map_or_else(
+                || t(tr(Msg::None)),
+                |id| h(format!("<code>{}</code>", t(id))),
+            );
+        let when = match (&incident.cleared, resolved) {
+            (Some(clear), true) => relative(&clear.at),
+            _ => relative(&incident.at),
+        };
+        h(format!(
+            "<tr>{} {}{} {}</tr>",
+            title_cell(None, t(what(&incident.kind)), Some(sub)),
+            cell(&columns[1], ehr_id),
+            cell(&columns[2], t(incident.nodes.join(", "))),
+            cell(&columns[3], when),
+        ))
+    });
     data_table(DataTable {
         caption: &tr(if resolved {
             Msg::IntegrityResolved
@@ -417,7 +372,6 @@ fn incident_table(incidents: &[Incident], resolved: bool) -> AnyView {
         }),
         columns: &columns,
         sorting: Sorting::default(),
-        body: Body::Rows(rows),
+        body: Body::Rows(Html::join(rows)),
     })
-    .into_any()
 }

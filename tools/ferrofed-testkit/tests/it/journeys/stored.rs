@@ -16,7 +16,7 @@ use std::error::Error;
 use ferrofed_console::app::PRODUCT;
 use thirtyfour::By;
 
-use crate::journeys::browser::{Browser, hydrated, with_browser};
+use crate::journeys::browser::{Browser, scripted, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::{SECOND_TEXT, SECOND_VERSION, STORED, Stack, VERSIONED, held};
@@ -186,7 +186,7 @@ async fn run_in_the_query_console_carries_the_name_and_never_the_text() -> Resul
                 "/query/stored?stored={VERSIONED}&version={SECOND_VERSION}"
             )))
             .await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         browser
             .element(By::Css(r#"a[data-tab="stored"][aria-current="page"]"#))
             .await?;

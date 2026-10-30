@@ -36,7 +36,7 @@ has run on every change since the workspace landed.
 | `release.yml` | a pushed `v*` tag, dispatch at a tag | the release lane: tag checked against the declared version, changelog section as the notes, draft then publish, with a tag whose tree has no root `Cargo.toml` refused at `plan` (`docs/release.md`) |
 | `release-build.yml` | called by `release.yml`, once per target | the SLSA Build Level 3 binary lane: `cargo auditable` build, CycloneDX and syft SBOMs, provenance and SBOM attestations, every asset attached to the draft (`docs/release.md` § The build legs) |
 | `release-image.yml` | called by `release.yml` | the container from the attested musl binaries, pushed to `ghcr.io/ferrohealth/ferrofed` by digest with provenance and SBOM attestations as OCI referrers, verified as a consumer would |
-| `release-console.yml` | called by `release.yml` | the operator console image: the musl `ferrofed-console` binaries built with `cargo auditable` and the site bundle built with cargo-leptos, each attested, verified, and packed into `ghcr.io/ferrohealth/ferrofed-console` with the same provenance and SBOM attestations as the gateway image (`docs/release.md` § The build legs) |
+| `release-console.yml` | called by `release.yml` | the operator console image: the musl `ferrofed-console` binaries built with `cargo auditable`, each attested, verified, and packed into `ghcr.io/ferrohealth/ferrofed-console` with the same provenance and SBOM attestations as the gateway image (`docs/release.md` § The build legs) |
 | `scan-and-tag.yml` | called by `release.yml` | the image gate: both pushed digests scanned on both platforms for HIGH and CRITICAL findings that have a fix (`trivy.yaml`), then the `<version>`, `<major>.<minor>` and `latest` tags applied to the digests that passed |
 | `image-scan.yml` | Mondays, dispatch | the published `latest` images, both platforms, scanned with `trivy.yaml` and every OpenVEX document under `security/vex/`, one issue when one carries a finding |
 | `publish-crates.yml` | a pushed `v*` tag, dispatch | the crates.io lane behind the workspace `publish` switch: the publishable set from `cargo metadata`, packaged, then uploaded in dependency order through Trusted Publishing; a successful no-op while the switch is `false` (`docs/release.md` § The crates.io lane) |
@@ -104,7 +104,7 @@ in `ci.yml` and `release-console.yml`, so every comparison runs.
 
 **Tier 2 is gated on the workspace.** A `detect` job checks out and looks
 for a root `Cargo.toml`, publishing a boolean output. Every Rust job carries
-`needs: detect` and `if: needs.detect.outputs.cargo == 'true'`: rustfmt (after leptosfmt over the console's `view!` bodies, #1155),
+`needs: detect` and `if: needs.detect.outputs.cargo == 'true'`: rustfmt,
 clippy at `-D warnings`, nextest plus doctests, rustdoc, `cargo deny check`
 (followed by `scripts/checks/advisory-exceptions.sh`, which fails an
 advisory exception that outlived its finding, and
@@ -268,35 +268,27 @@ default features, each as
 fixture names no section of a binding it does not test, so it fails here
 when it is neither (#881).
 
-`console (wasm32 and site bundle)` covers the half of the operator console,
-`app/ferrofed-console`, that the workspace lanes never compile. The workspace
-lanes build, lint and test its server half on the host; this job runs
-`cargo clippy -p ferrofed-console --lib --target wasm32-unknown-unknown` at
-`-D warnings`, so a dependency that cannot compile for the browser fails here,
-and then builds the release site bundle with `scripts/release/console-site.sh
---release`, after `scripts/release/console-tools.sh` has put wasm-opt on
-`PATH`, checked against the SHA-256 `docs/VERSIONS.md` pins, so cargo-leptos
-never downloads it (the journeys job and the release lane's site job do the
-same). The site script refuses to start without it, freezes `Cargo.lock` around cargo-leptos and checks the
-WebAssembly, its JavaScript glue, the stylesheet and the favicon are all written.
-`scripts/checks/console-bundle.sh` then writes the WebAssembly and JavaScript
-sizes, raw and compressed with gzip and brotli, to the job summary, and fails
-when the brotli-compressed WebAssembly is over the byte budget the console's
-rule file sets, and `scripts/checks/console-paths.sh` fails when the bundle
-names a home, runner, registry or toolchain directory of the build host,
-which `console-site.sh` remaps away. The console chooses its two halves by compilation target,
-never by Cargo feature, so the workspace `--all-features` lanes build it like
-any other member and `features (cargo-hack)` has nothing to add for it.
+`console (server-drawn)` holds the operator console, `app/ferrofed-console`,
+to the shape FerroUI 0.6 sets (#1457): every page is one document its server
+draws, with no Leptos and no WebAssembly. The workspace lanes build, lint and
+test it; this job builds the release binary the image carries, runs the
+tests that every page answers whole under the strict
+Content-Security-Policy (`script-src 'self'; style-src 'self'`, no nonce),
+and runs the architecture tests that the console links no part of the
+gateway, no Leptos crate and no WebAssembly glue. The console has no Cargo
+feature, so the workspace `--all-features` lanes build it like any other
+member and `features (cargo-hack)` has nothing to add for it.
 
-`journeys (browser)` drives the console in a browser (#608). It builds the
-same release site bundle, installs Chrome and chromedriver at the Chrome for
-Testing release `docs/VERSIONS.md` pins through `browser-actions/setup-chrome`,
+`journeys (browser)` drives the console in a browser (#608). It installs
+Chrome and chromedriver at the Chrome for Testing release `docs/VERSIONS.md`
+pins through `browser-actions/setup-chrome`,
 names the chromedriver each journey starts on a port of its own, and runs
 the testkit's `journeys` module at the profile's full parallelism with
 `FERROFED_JOURNEYS=1`: sign-in at a test OpenID Provider, each operator view
 with its pagers, a query run that shows every node's status and completeness,
-a refused query, and sign-out, each against a running gateway over stub nodes
-and failing on any error the browser logs. Without the gate a journey returns
+a refused query, every page with FerroUI's modules refused, every page at
+320 CSS px, and sign-out, each against a running gateway over stub nodes and
+failing on any error the browser logs. Without the gate a journey returns
 at once, so the `test` and `e2e (containers)` jobs need no browser, and the
 `e2e-placement` guard keeps every gated journey where this job's filter
 selects it.
@@ -335,9 +327,7 @@ own, `crate-version-guard.sh` compares `origin/main` with the working tree,
 and `stray-literals.sh` reads `app/ferrofed-console/src`, as CI does. Some
 guards need an input first, and each one says which when it is missing:
 `kubernetes-example.sh` and `upgrade-notes.sh` need a built `ferrofed`
-binary, `console-bundle.sh` and `console-paths.sh` need the release site
-bundle from `scripts/release/console-site.sh --release`, and
-`release-compose.sh` needs Docker, and `fhir-validator.sh` needs the
+binary, `release-compose.sh` needs Docker, and `fhir-validator.sh` needs the
 emitted documents and Java. `pin-freshness.sh` and `ehds-acts.sh` read
 upstream sites over the network.
 

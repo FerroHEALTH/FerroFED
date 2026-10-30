@@ -7,44 +7,30 @@
 //! sent as the gateway's own ITS-REST query, and its federated answer read
 //! for the page (§9, §11.1, §11.4, N37).
 //!
-//! The form posts to a server function, so nothing the operator entered, a
-//! patient named in a parameter among it, reaches a URL, the history or a
-//! log (N33); the answer is drawn into the page and kept nowhere. A press
+//! The form posts to the query console's own page, so nothing the operator
+//! entered, a patient named in a parameter among it, reaches a URL, the
+//! history or a log (N33); the answer is drawn into the page and kept
+//! nowhere. A press
 //! of a parameter row's Remove or of Add posts the form too, and the page
 //! answers with the rows changed and no query run (FerroUI F7).
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
 
-#[cfg(not(target_arch = "wasm32"))]
-use std::collections::BTreeMap;
-
+use crate::act::field;
+use crate::act::fields::Fields;
+use crate::gateway::{FederatedAnswer, QueryCall, QueryTarget};
+use crate::locale::{Msg, tr_in};
+use crate::read::{Fault, Refusal, Stop};
 use ferrohealth_ui::i18n::Locale;
-use leptos::prelude::*;
-#[cfg(not(target_arch = "wasm32"))]
 use openehr_federation::headers::{
     COMPLETENESS, COMPLETENESS_PARTIAL, DEDUP, ENDPOINT, ORGANISATION,
 };
 use openehr_federation::options::OptionsRoot;
 use openehr_federation::outcome::ErrorDetail;
-#[cfg(not(target_arch = "wasm32"))]
 use openehr_its::rest::generated::query::QueryParameters;
 use serde::{Deserialize, Serialize};
-
-#[cfg(not(target_arch = "wasm32"))]
-use crate::act::field;
-use crate::act::fields::Fields;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::gateway::{FederatedAnswer, QueryCall, QueryTarget};
-use crate::locale::{Msg, tr_in};
-use crate::read::{Fault, Refusal, Stop};
 
 /// One parameter row of the form: its key on the page, its name and its
 /// value.
@@ -249,17 +235,11 @@ pub struct QueryPost {
 /// Returns [`crate::read::Fault::Unavailable`] when the console's server
 /// does not answer; a form that cannot be sent and the gateway's refusal
 /// are answers.
-#[server(endpoint = "query")]
-pub async fn run_query(
-    /// The query console's form, every field as posted.
-    #[server(flatten)]
-    fields: Fields,
-) -> Result<QueryPost, Stop> {
+pub async fn run_query(fields: &Fields) -> Result<QueryPost, Stop> {
     Ok(posted(fields.pairs()).await)
 }
 
 /// The query console's post of `fields` and what it gave.
-#[cfg(not(target_arch = "wasm32"))]
 async fn posted(fields: &[(String, String)]) -> QueryPost {
     let mut form = QueryForm::of(fields);
     let asking = if field(fields, ADD).is_some() {
@@ -288,12 +268,11 @@ async fn posted(fields: &[(String, String)]) -> QueryPost {
 }
 
 /// Runs `form` through the gateway as the operator of the request.
-#[cfg(not(target_arch = "wasm32"))]
 async fn run(form: &QueryForm) -> Ran {
     let Ok((state, token)) = crate::read::signed_in() else {
         return Ran::Refused(Refusal::NotAuthenticated { code: None });
     };
-    let locale = ferrohealth_ui::i18n::locale();
+    let locale = crate::locale::current();
     let call = match call(&locale, form) {
         Ok(call) => call,
         Err(refused) => return Ran::Refused(refused),
@@ -348,21 +327,15 @@ impl QueryOptions {
         }
     }
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// A refusal of the form, naming the field and never its value.
 fn invalid(reason: String) -> Refusal {
     Refusal::Invalid { reason }
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// The text of `field`, trimmed, or `None` when it is empty.
 fn given(field: &str) -> Option<&str> {
     let text = field.trim();
     (!text.is_empty()).then_some(text)
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// The gateway call `form` describes, its refusals in `locale`.
 ///
 /// # Errors
@@ -409,16 +382,12 @@ pub fn call(locale: &Locale, form: &QueryForm) -> Result<QueryCall, Refusal> {
         headers,
     })
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// `value` as a header value, refused when it is not legal on the wire.
 fn header_value(locale: &Locale, value: &str) -> Result<String, Refusal> {
     http::HeaderValue::from_str(value)
         .map(|_legal| value.to_owned())
         .map_err(|_illegal| invalid(tr_in(locale, Msg::QueryHeaderIllegal, &[])))
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// The whole number `text` holds, or `None` when it is empty.
 fn whole(locale: &Locale, field: Msg, text: &str) -> Result<Option<i64>, Refusal> {
     let Some(text) = given(text) else {
@@ -433,8 +402,6 @@ fn whole(locale: &Locale, field: Msg, text: &str) -> Result<Option<i64>, Refusal
         ))),
     }
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// The query parameters `rows` hold, each value sent as a string.
 fn parameters(locale: &Locale, rows: &[ParameterRow]) -> Result<QueryParameters, Refusal> {
     let mut parameters = BTreeMap::new();
@@ -463,8 +430,6 @@ fn parameters(locale: &Locale, rows: &[ParameterRow]) -> Result<QueryParameters,
     }
     Ok(parameters)
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// What the page draws of `federated`.
 #[must_use]
 pub fn answer(locale: &Locale, federated: &FederatedAnswer) -> QueryAnswer {

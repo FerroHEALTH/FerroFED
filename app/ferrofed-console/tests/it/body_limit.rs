@@ -80,9 +80,9 @@ async fn an_oversized_body_to_any_other_route_is_refused() -> Result<(), Box<dyn
     let (service, session) = signed_in_console(&listener)?;
     for path in [
         "/configuration",
-        "/api/query",
-        "/api/clear",
-        "/api/repair",
+        "/query",
+        "/integrity",
+        "/stored-queries/org.example::weights",
         "/preference",
         "/logout",
     ] {
@@ -278,7 +278,7 @@ async fn an_import_at_its_own_limit_still_runs() -> Result<(), Box<dyn Error>> {
         "the import is over the default limit"
     );
     let request = crate::support::answer_post(
-        (IMPORT, "/configuration/import-export"),
+        "/configuration/import-export",
         &body,
         Some(&session),
         &[("sec-fetch-site", "same-origin")],

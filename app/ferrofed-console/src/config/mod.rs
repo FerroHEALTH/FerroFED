@@ -18,7 +18,6 @@
 //! ```toml
 //! [server]
 //! listen = "0.0.0.0:3000"
-//! site_root = "/site"
 //!
 //! [gateway]
 //! base_url = "https://gateway.example.org/"
@@ -72,7 +71,7 @@ pub fn loader() -> Result<Loader, ferrohealth_config::error::ConfigError> {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    /// `[server]`: where the console listens and where its site bundle is.
+    /// `[server]`: where the console listens and the locale it falls back to.
     pub server: Server,
     /// `[gateway]`: the FerroFED gateway the console is a client of.
     pub gateway: Gateway,
@@ -96,20 +95,25 @@ pub struct Config {
 pub struct Server {
     /// The socket address the console listens on.
     pub listen: String,
-    /// The directory holding the site bundle cargo-leptos builds: the
-    /// WebAssembly, its JavaScript glue and the stylesheet under `pkg/`.
-    pub site_root: PathBuf,
     /// The BCP 47 tag of the locale a page renders in when the request's
     /// `Accept-Language` names no language the console's catalog holds.
     pub locale: String,
+    /// Deprecated and read no more: the directory of the site bundle the
+    /// console served before it drew every page on the server. Release
+    /// [`SITE_ROOT_REFUSED_IN`] refuses it.
+    pub site_root: Option<PathBuf>,
 }
+
+/// The release that refuses `[server] site_root`, which the console reads
+/// no more since it serves no site bundle.
+pub const SITE_ROOT_REFUSED_IN: &str = "0.0.17";
 
 impl Default for Server {
     fn default() -> Self {
         Self {
             listen: String::from("127.0.0.1:3000"),
-            site_root: PathBuf::from("target/site"),
             locale: String::from("en"),
+            site_root: None,
         }
     }
 }

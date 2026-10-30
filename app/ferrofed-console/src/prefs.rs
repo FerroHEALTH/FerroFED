@@ -19,27 +19,16 @@
 //! cookies are, live one year and hold no patient data; the console keeps
 //! no user store and nothing in browser storage. No specification governs
 //! this: our own design.
-
-#[cfg(not(target_arch = "wasm32"))]
 use crate::locale::Msg;
-#[cfg(not(target_arch = "wasm32"))]
+use crate::server::ConsoleState;
 use crate::server::plain;
-#[cfg(not(target_arch = "wasm32"))]
 use axum::Extension;
-#[cfg(not(target_arch = "wasm32"))]
 use axum::extract::Form;
-#[cfg(not(target_arch = "wasm32"))]
 use axum::response::{IntoResponse, Redirect, Response};
-#[cfg(not(target_arch = "wasm32"))]
 use ferrohealth_ui::theme::Preferences;
 use ferrohealth_ui::theme::{Density, Hints, Language, Motion, Preference, Theme, WeekStart};
-#[cfg(not(target_arch = "wasm32"))]
 use http::header::SET_COOKIE;
-#[cfg(not(target_arch = "wasm32"))]
 use http::{HeaderValue, StatusCode};
-
-#[cfg(not(target_arch = "wasm32"))]
-use crate::server::ConsoleState;
 
 /// The route every preference posts to, its value under its cookie's name
 /// beside `back`.
@@ -110,8 +99,6 @@ pub fn preference_return(back: &str, name: &str) -> String {
         page.to_owned()
     }
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// Keeps the one preference a plain form post chose in its cookie, and
 /// sends the browser back to the page it came from.
 ///
@@ -158,16 +145,12 @@ pub async fn choose(
     let cookie = state.sessions().preference_cookie(name, &value).to_string();
     redirect_with(&preference_return(back, name), &[cookie])
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// What Reset to defaults posts.
 #[derive(Debug, serde::Deserialize)]
 pub struct Reset {
     /// The page to return to.
     back: String,
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// Clears every preference cookie and sends the browser back to the page
 /// it came from.
 pub async fn reset(
@@ -180,8 +163,6 @@ pub async fn reset(
         .collect::<Vec<_>>();
     redirect_with(return_path(&reset.back), &cleared)
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// What the navigation's Collapse or Expand posts.
 #[derive(Debug, serde::Deserialize)]
 pub struct SidebarChoice {
@@ -190,8 +171,6 @@ pub struct SidebarChoice {
     /// The page to return to.
     back: String,
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// Keeps whether the navigation is folded in its cookie and sends the
 /// browser back to the page it came from.
 pub async fn sidebar(
@@ -210,8 +189,6 @@ pub async fn sidebar(
     let cookie = state.sessions().sidebar_cookie(&choice.sidebar).to_string();
     redirect_with(return_path(&choice.back), &[cookie])
 }
-
-#[cfg(not(target_arch = "wasm32"))]
 /// The `303` redirect to `location` that sets each of `cookies`.
 #[must_use]
 pub fn redirect_with(location: &str, cookies: &[String]) -> Response {

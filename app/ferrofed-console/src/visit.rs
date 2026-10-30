@@ -1,43 +1,43 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! What the server read of the request for the page: the session, the
-//! operator, the preferences, the locale and the console's own settings.
+//! What the server read of the request it draws a page for: the session,
+//! the operator, the preferences, the locale, the address and the
+//! console's own settings.
 //!
-//! The server reads it from the request as it draws the first page and the
-//! browser takes it serialized with the page, then asks the server again
-//! ([`visit_now`]) after each navigation and each post drawn in the page,
-//! so both halves draw the same page and no component reads a cookie, the
-//! session or the request on the server alone (FerroUI `docs/consoles.md`,
-//! "How a console builds", step 4). It carries the preference cookies and
-//! never the session cookie, so no session id reaches a script. No
+//! The [`scoped`] middleware reads it once per request and keeps it for
+//! the request's task, so the handler, the reads it makes of the gateway
+//! and every part of the page it draws read the same visit (FerroUI
+//! `docs/consoles.md`, "How a console builds", step 3). The page is drawn
+//! whole from it: the theme and the navigation's rail from the preference
+//! cookies, the words in its locale, the marked entry from its path. The
+//! page names its title and, where it is a refusal or a fault of its own,
+//! its status as it draws ([`Visit::title`], [`Visit::status`]). No
 //! specification governs the console: our own design.
-#![cfg_attr(
-    target_arch = "wasm32",
-    allow(
-        clippy::unused_async_trait_impl,
-        reason = "the server function macro writes the browser half's call as an async trait method; only that target has it"
-    )
-)]
-#![cfg_attr(
-    not(target_arch = "wasm32"),
-    expect(
-        clippy::unused_async,
-        reason = "the visit's server function reads the request alone, with nothing to await"
-    )
-)]
 
+use std::fmt;
+use std::sync::{Arc, Mutex, PoisonError};
+
+use axum::extract::Request;
+use axum::middleware::Next;
+use axum::response::Response;
 use ferrohealth_ui::i18n::Locale;
 use ferrohealth_ui::theme::{Preferences, cookie};
-use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
+use http::StatusCode;
+
+use crate::server::ConsoleState;
 
 /// The name of the navigation's cookie after the preference prefix.
 pub const RAIL: &str = "sidebar";
 
+tokio::task_local! {
+    /// The visit of the request the task serves.
+    static VISIT: Visit;
+}
+
 /// What the server knows of the request's session, which decides the shell
 /// the page is drawn in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionState {
     /// A live signed-in session: the shell.
     SignedIn,
@@ -68,7 +68,7 @@ pub fn chosen_in(cookies: &str, prefix: &str) -> Chosen {
 }
 
 /// The console's own settings a signed-in operator's pages read.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Settings {
     /// The gateway's base address.
     pub gateway: String,
@@ -78,9 +78,25 @@ pub struct Settings {
     pub replicas: Vec<String>,
 }
 
+/// What the page names of itself as it is drawn: its title and the status
+/// its answer carries.
+#[derive(Debug, Default)]
+struct Drawn {
+    title: Option<String>,
+    status: Option<StatusCode>,
+}
+
 /// What the server read of the request for the page.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct Visit {
+    /// The console's state, absent outside a request the console serves.
+    state: Option<ConsoleState>,
+    /// The request's headers, which the session is read from.
+    headers: http::HeaderMap,
+    /// The address path.
+    pub path: String,
+    /// The address query, after the `?`, empty for none.
+    pub query: String,
     /// The request's session.
     pub session: SessionState,
     /// The signed-in operator's name, as the provider gave it.
@@ -89,51 +105,110 @@ pub struct Visit {
     pub preferences: String,
     /// The prefix each preference cookie's name takes.
     pub prefix: String,
-    /// The tag of the page's locale.
-    pub locale: String,
-    /// The tag of the locale the browser asks for, which Your preferences
-    /// names as the browser's own.
-    pub browser: String,
+    /// The page's locale.
+    pub locale: Locale,
+    /// The locale the browser asks for, which Your preferences names as the
+    /// browser's own.
+    pub browser: Locale,
     /// The console's settings, for a signed-in operator alone.
     pub settings: Option<Settings>,
     /// Whether the console has an OpenID Provider to sign operators in at.
     pub sign_in: bool,
+    /// What the page names of itself as it is drawn.
+    drawn: Arc<Mutex<Drawn>>,
+}
+
+impl fmt::Debug for Visit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // NOTE: no specification governs this: our own design; the headers carry the
+        // session cookie and the query what a link put there, so neither is shown.
+        f.debug_struct("Visit")
+            .field("path", &self.path)
+            .field("session", &self.session)
+            .field("locale", &self.locale.tag())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for Visit {
     fn default() -> Self {
         Self {
+            state: None,
+            headers: http::HeaderMap::new(),
+            path: String::from("/"),
+            query: String::new(),
             session: SessionState::SignedOut,
             operator: None,
             preferences: String::new(),
             prefix: String::new(),
-            locale: Locale::english().tag(),
-            browser: Locale::english().tag(),
+            locale: Locale::english(),
+            browser: Locale::english(),
             settings: None,
             sign_in: false,
+            drawn: Arc::default(),
         }
     }
 }
 
 impl Visit {
+    /// The visit of the request `parts` on the console `state`.
+    #[must_use]
+    pub fn of(state: &ConsoleState, parts: &http::request::Parts) -> Self {
+        let prefix = state.sessions().preference_prefix();
+        let preferences = preference_cookies(&parts.headers, &prefix);
+        let session = match crate::read::signed_in_with(state, &parts.headers) {
+            Ok(_) => SessionState::SignedIn,
+            Err(crate::read::Fault::SignedOut) => SessionState::SignedOut,
+            Err(_) => SessionState::Unreadable,
+        };
+        let settings = (session == SessionState::SignedIn).then(|| Settings {
+            gateway: state.settings().gateway.base.to_string(),
+            replicas: state
+                .settings()
+                .admin
+                .iter()
+                .map(|replica| replica.name.clone())
+                .collect(),
+        });
+        Self {
+            path: parts.uri.path().to_owned(),
+            query: parts.uri.query().unwrap_or_default().to_owned(),
+            session,
+            operator: crate::read::operator_of(state, &parts.headers),
+            locale: crate::locale::requested_from(state, &parts.headers),
+            browser: crate::locale::browser_of(&parts.headers),
+            preferences,
+            prefix,
+            settings,
+            sign_in: state.settings().oidc.is_some(),
+            headers: parts.headers.clone(),
+            state: Some(state.clone()),
+            drawn: Arc::default(),
+        }
+    }
+
+    /// The visit of a page at `path` with the address query `query`, in
+    /// `locale`, for a test that draws a part with no request.
+    #[must_use]
+    pub fn at(path: &str, query: &str, locale: Locale) -> Self {
+        Self {
+            path: path.to_owned(),
+            query: query.to_owned(),
+            locale,
+            ..Self::default()
+        }
+    }
+
     /// The preferences the visit carries.
     #[must_use]
     pub fn chosen(&self) -> Chosen {
         chosen_in(&self.preferences, &self.prefix)
     }
 
-    /// The page's locale, English for a tag no catalog names.
+    /// The page's locale.
     #[must_use]
     pub fn locale(&self) -> Locale {
-        // NOTE: no specification governs this: our own design; the server writes a
-        // tag it parsed, so a tag that does not parse is English, the fallback.
-        crate::locale::configured(&self.locale).unwrap_or_else(|_| Locale::english())
-    }
-
-    /// The locale the browser asks for, English for a tag no catalog names.
-    #[must_use]
-    pub fn browser(&self) -> Locale {
-        Locale::parse(&self.browser).unwrap_or_else(|_| Locale::english())
+        self.locale.clone()
     }
 
     /// The names of the replicas whose admin listeners the console reaches;
@@ -146,60 +221,59 @@ impl Visit {
             .unwrap_or_default()
     }
 
-    /// What the server reads of the request being served.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// The console's state, when the visit is a request the console serves.
     #[must_use]
-    pub fn requested() -> Self {
-        let state = use_context::<crate::server::ConsoleState>();
-        let (preferences, prefix) = requested_preferences();
-        let session = crate::read::session_state();
-        let settings = (session == SessionState::SignedIn)
-            .then(|| {
-                state.as_ref().map(|state| Settings {
-                    gateway: state.settings().gateway.base.to_string(),
-                    replicas: state
-                        .settings()
-                        .admin
-                        .iter()
-                        .map(|replica| replica.name.clone())
-                        .collect(),
-                })
-            })
-            .flatten();
-        Self {
-            session,
-            operator: crate::read::operator(),
-            preferences,
-            prefix,
-            locale: crate::locale::requested().tag(),
-            browser: crate::locale::browser().tag(),
-            settings,
-            sign_in: state
-                .as_ref()
-                .is_some_and(|state| state.settings().oidc.is_some()),
+    pub const fn state(&self) -> Option<&ConsoleState> {
+        self.state.as_ref()
+    }
+
+    /// The request's headers.
+    #[must_use]
+    pub const fn headers(&self) -> &http::HeaderMap {
+        &self.headers
+    }
+
+    /// Names the page's title, which the document writes before the
+    /// product's name.
+    pub fn title(&self, title: String) {
+        self.drawn
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .title = Some(title);
+    }
+
+    /// Sets the answer's status to `status` unless an earlier part of the
+    /// page set a server error, which outranks it (RFC 9110 §15.6).
+    pub fn status(&self, status: StatusCode) {
+        let mut drawn = self.drawn.lock().unwrap_or_else(PoisonError::into_inner);
+        if !drawn.status.is_some_and(|set| set.is_server_error()) {
+            drawn.status = Some(status);
         }
     }
-}
 
-/// The request's preference cookies as one `Cookie` header value, with the
-/// prefix each one's name takes.
-#[cfg(not(target_arch = "wasm32"))]
-#[must_use]
-pub fn requested_preferences() -> (String, String) {
-    let prefix = use_context::<crate::server::ConsoleState>().map_or_else(
-        || String::from(crate::session::PREFERENCE_PREFIX),
-        |state| state.sessions().preference_prefix(),
-    );
-    let preferences = use_context::<http::request::Parts>()
-        .map(|parts| preference_cookies(&parts.headers, &prefix))
-        .unwrap_or_default();
-    (preferences, prefix)
+    /// The title the page named, if it named one.
+    #[must_use]
+    pub fn drawn_title(&self) -> Option<String> {
+        self.drawn
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .title
+            .clone()
+    }
+
+    /// The status the page set, if it set one.
+    #[must_use]
+    pub fn drawn_status(&self) -> Option<StatusCode> {
+        self.drawn
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .status
+    }
 }
 
 /// The preference cookies of `headers`, each named `prefix` then the name
 /// of a preference or the navigation's, joined as one `Cookie` header
 /// value; the session's cookie shares the prefix and is never among them.
-#[cfg(not(target_arch = "wasm32"))]
 fn preference_cookies(headers: &http::HeaderMap, prefix: &str) -> String {
     // NOTE: RFC 9113 §8.2.3: a request may split its cookies over several
     // headers, which read as one list joined by `; `.
@@ -220,124 +294,39 @@ fn preference_cookies(headers: &http::HeaderMap, prefix: &str) -> String {
         .join("; ")
 }
 
-/// The visit the page knows, which the browser asks for again after each
-/// navigation.
-#[derive(Debug, Clone, Copy)]
-pub struct Visits(pub RwSignal<Visit>);
+/// Reads the visit of `request` and keeps it for the request's task while
+/// the rest of the stack and the handler serve it.
+pub async fn scoped(
+    axum::Extension(state): axum::Extension<ConsoleState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let (parts, body) = request.into_parts();
+    let visit = Visit::of(&state, &parts);
+    VISIT
+        .scope(visit, next.run(Request::from_parts(parts, body)))
+        .await
+}
 
-/// The visit the page knows ([`Visits`]), or the request's own outside the
-/// page tree.
+/// Runs `draw` with `visit` as the visit of the task, for a test that draws
+/// a part of a page with no request.
+pub fn drawing<R>(visit: Visit, draw: impl FnOnce() -> R) -> R {
+    VISIT.sync_scope(visit, draw)
+}
+
+/// The visit of the request the task serves, or a visitor's with no
+/// request outside one.
 #[must_use]
 pub fn visit() -> Visit {
-    use_context::<Visits>().map_or_else(server_visit, |visits| visits.0.get())
+    VISIT.try_with(Clone::clone).unwrap_or_default()
 }
 
-/// The visit the page knows, read without tracking it.
-#[must_use]
-pub fn visit_untracked() -> Visit {
-    use_context::<Visits>().map_or_else(server_visit, |visits| visits.0.get_untracked())
-}
-
-/// The visit the server reads of the request; in the browser, which reads
-/// the value the server serialized, the default.
-#[must_use]
-pub fn server_visit() -> Visit {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        Visit::requested()
+/// What `read` reads of the visit of the request the task serves, or of a
+/// visitor's with no request outside one.
+pub fn with<R>(read: impl FnOnce(&Visit) -> R) -> R {
+    if VISIT.try_with(|_| ()).is_ok() {
+        VISIT.with(read)
+    } else {
+        read(&Visit::default())
     }
-    #[cfg(target_arch = "wasm32")]
-    {
-        Visit::default()
-    }
-}
-
-/// The visit of the request that asks, for the page after a navigation.
-///
-/// # Errors
-///
-/// When the server function cannot be reached or answered.
-#[server(endpoint = "visit")]
-pub async fn visit_now() -> Result<Visit, ServerFnError> {
-    Ok(Visit::requested())
-}
-
-/// Asks the server for the visit again after each navigation and each post
-/// drawn in the page, so a preference a post just kept, or a session that
-/// ended, reaches the page drawn in the browser.
-#[component]
-#[expect(
-    clippy::must_use_candidate,
-    reason = "the #[component] macro drops a #[must_use] from the function it writes"
-)]
-pub fn FollowVisit() -> impl IntoView {
-    let location = leptos_router::hooks::use_location();
-    let visits = use_context::<Visits>();
-    Effect::watch(
-        move || {
-            (
-                location.pathname.get(),
-                location.search.get(),
-                ferrohealth_ui::widget::submit::posts().get(),
-            )
-        },
-        move |_, _, _| {
-            if let Some(Visits(visits)) = visits {
-                leptos::task::spawn_local(async move {
-                    match visit_now().await {
-                        Ok(now) => {
-                            follow_root(&now);
-                            // NOTE: no specification governs this: our own design; the same
-                            // visit redraws nothing, so a page keeps the focus it took.
-                            if visits.get_untracked() != now {
-                                visits.set(now);
-                            }
-                        }
-                        Err(error) => leptos::logging::warn!("the visit did not come: {error}"),
-                    }
-                });
-            }
-        },
-        false,
-    );
-}
-
-/// Sets the root element's theme, density, motion, hints and language from
-/// the visit `now`, as the server writes them on a document it draws, so a
-/// preference a post just kept takes effect in the page.
-fn follow_root(now: &Visit) {
-    #[cfg(target_arch = "wasm32")]
-    {
-        let Some(root) = document().document_element() else {
-            return;
-        };
-        let language = now.locale().tag();
-        // NOTE: no specification governs this: our own design; the words of a page are
-        // drawn in its locale, so a new language loads the page as a document.
-        if root
-            .get_attribute("lang")
-            .is_some_and(|lang| lang != language)
-        {
-            if window().location().reload().is_err() {
-                leptos::logging::warn!("the browser refused to load the page in its language");
-            }
-            return;
-        }
-        let chosen = now.chosen().preferences;
-        let attributes = [
-            ("data-theme", chosen.theme.key()),
-            ("data-density", chosen.density.key()),
-            ("data-motion", chosen.motion.key()),
-            ("data-hints", chosen.hints.key()),
-        ];
-        for (name, value) in attributes {
-            if root.get_attribute(name).as_deref() != Some(value)
-                && root.set_attribute(name, value).is_err()
-            {
-                leptos::logging::warn!("the browser refused the root's {name}");
-            }
-        }
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    let _: &Visit = now;
 }

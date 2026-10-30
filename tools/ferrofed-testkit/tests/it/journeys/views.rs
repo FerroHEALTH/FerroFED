@@ -13,9 +13,10 @@
 use std::error::Error;
 
 use ferrofed_console::app::PRODUCT;
+use serde_json::json;
 use thirtyfour::By;
 
-use crate::journeys::browser::{Browser, hydrated, with_browser};
+use crate::journeys::browser::{Browser, scripted, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::{Stack, VERSIONED};
@@ -56,7 +57,7 @@ async fn each_page_is_reached_by_the_navigation_and_drawn_whole() -> Result<(), 
     let stack = Stack::start().await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
 
         navigate(browser, "Organisations").await?;
         browser.titled(&titled("Organisations")).await?;
@@ -104,7 +105,7 @@ async fn each_page_is_reached_by_the_navigation_and_drawn_whole() -> Result<(), 
         navigate(browser, "Topology").await?;
         browser.titled(&titled("Topology")).await?;
         browser.text("span", "org-a").await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         browser
             .element(By::Css(r#"button[commandfor="topology-rule"]"#))
             .await?
@@ -156,6 +157,82 @@ async fn each_page_reads_with_no_script() -> Result<(), Box<dyn Error>> {
         browser.titled(&titled("Organisations")).await?;
         browser.scripts(true).await?;
         browser.console_clean("the pages with no script").await
+    })
+    .await
+}
+
+/// The address pattern of FerroUI's script modules, the loader among them.
+const MODULES: &str = "*/ferrohealth-ui/*/scripts/*";
+
+/// Refuses the browser every script module of FerroUI from now on (the
+/// Chrome `DevTools` Protocol, `Network.setBlockedURLs`).
+async fn withhold_the_modules(browser: &Browser) -> Result<(), Box<dyn Error>> {
+    let cdp = browser.driver().cdp();
+    cdp.send_raw("Network.enable", json!({})).await?;
+    cdp.send_raw("Network.setBlockedURLs", json!({ "urls": [MODULES] }))
+        .await?;
+    Ok(())
+}
+
+/// Fails on any browser error other than a refused module, naming `step`.
+async fn only_the_modules_refused(browser: &Browser, step: &str) -> Result<(), Box<dyn Error>> {
+    let others: Vec<String> = browser
+        .console_errors()
+        .await?
+        .into_iter()
+        .filter(|entry| !entry.contains("/scripts/"))
+        .collect();
+    if others.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "the browser logged {} error(s) other than the withheld modules during {step}:\n{}",
+        others.len(),
+        others.join("\n")
+    )
+    .into())
+}
+
+// Every page the book shows reads whole with FerroUI's modules refused, as
+// on a page whose modules have not loaded or will not: the server drew its
+// content, its links lead where they lead and its forms post (FerroUI
+// `docs/migration-0.6.md`, Tests). A refused module is the one error a page
+// may log here.
+#[tokio::test(flavor = "multi_thread")]
+async fn every_page_reads_whole_with_the_modules_refused() -> Result<(), Box<dyn Error>> {
+    if !journeys_enabled() {
+        return Ok(());
+    }
+    let admin = crate::journeys::screenshots::listener().await;
+    let stack = Stack::start_with_admin(&admin.uri()).await?;
+    with_browser(async |browser| {
+        sign_in(browser, &stack).await?;
+        withhold_the_modules(browser).await?;
+        for shot in &crate::journeys::screenshots::PAGES {
+            browser.goto(&stack.url(shot.url)).await?;
+            browser
+                .element(By::XPath(shot.ready.to_owned()))
+                .await
+                .map_err(|error| format!("{} reads with the modules refused: {error}", shot.url))?;
+            let marked = browser
+                .driver()
+                .find_all(By::Css(format!("html[{}]", ferrohealth_ui::script::MARK)))
+                .await?;
+            assert!(marked.is_empty(), "{}: a module ran", shot.url);
+            browser.element(By::Css("main h1")).await?;
+            only_the_modules_refused(browser, shot.url).await?;
+        }
+        browser.goto(&stack.url("/")).await?;
+        navigate(browser, "Organisations").await?;
+        browser.titled(&titled("Organisations")).await?;
+        browser
+            .element(By::XPath("//main//a[@href = '/organisations/org-a']"))
+            .await?
+            .click()
+            .await?;
+        browser.at(&stack.url("/organisations/org-a")).await?;
+        browser.goto("about:blank").await?;
+        only_the_modules_refused(browser, "the links with the modules refused").await
     })
     .await
 }
