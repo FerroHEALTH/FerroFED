@@ -18,7 +18,7 @@ use std::error::Error;
 use ferrofed_console::app::PRODUCT;
 use thirtyfour::{By, WebElement};
 
-use crate::journeys::browser::{Browser, hydrated, with_browser};
+use crate::journeys::browser::{Browser, scripted, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::{PATIENT, Stack, UID_AT_A, patient_query};
@@ -157,9 +157,9 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
         browser
             .titled(&format!("Query console · {PRODUCT}"))
             .await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         browser
-            .console_clean("the hydration of the query console")
+            .console_clean("the modules of the query console")
             .await?;
 
         // Node A alone: a complete answer.
@@ -211,8 +211,8 @@ async fn a_query_run_shows_every_node_and_whether_the_answer_is_complete()
     .await
 }
 
-// The query runs with no WebAssembly: the form is a plain post to the run's
-// server function, which answers with the page at its own address.
+// The query runs with the scripts refused: the form is a plain post to the
+// query console's own address, which answers with the page and its answer.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_query_runs_with_no_script() -> Result<(), Box<dyn Error>> {
     if !journeys_enabled() {
@@ -237,9 +237,9 @@ async fn a_query_runs_with_no_script() -> Result<(), Box<dyn Error>> {
         browser.text("td", UID_AT_A).await?;
         let url = browser.driver().current_url().await?;
         assert_eq!(
-            stack.url("/api/query"),
+            stack.url("/query"),
             url.as_str(),
-            "a plain post lands on the function's address and names no field"
+            "a plain post lands on the page's own address and names no field"
         );
         browser.scripts(true).await?;
         Ok(())
@@ -256,7 +256,7 @@ async fn a_refused_query_shows_the_gateways_status_and_code() -> Result<(), Box<
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
         browser.goto(&stack.url("/query")).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         let run = Run {
             aql: "SELECT FROM",
             parameter: ("", ""),
@@ -285,7 +285,7 @@ async fn a_parameter_row_is_added_and_removed_and_the_tabs_switch_the_kind()
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
         browser.goto(&stack.url("/query")).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         let rows = async || -> Result<usize, Box<dyn Error>> {
             Ok(browser
                 .driver()

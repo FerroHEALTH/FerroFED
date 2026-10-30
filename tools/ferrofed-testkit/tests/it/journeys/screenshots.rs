@@ -12,7 +12,7 @@
 //! again at 390 CSS pixels, a phone, under the ignored [`NARROW_IMAGES`], for
 //! the visual review the book does not show. The browser runs
 //! through the chromedriver at `FERROFED_WEBDRIVER`, as the journeys do, and
-//! the console serves its release site bundle. Without the gate the capture
+//! the console draws every page itself. Without the gate the capture
 //! returns at once, so no CI job takes a screenshot.
 //!
 //! The guard runs in the ordinary suite: every route the console's router
@@ -38,7 +38,7 @@ use thirtyfour::{By, Cookie};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::journeys::browser::hydrated;
+use crate::journeys::browser::scripted;
 use crate::journeys::browser::{Browser, with_browser};
 use crate::journeys::query::{Run, submit};
 use crate::journeys::sign_in::sign_in;
@@ -86,16 +86,16 @@ const THEME_COOKIE: &str = "ferrofed_console_theme";
 
 /// One screenshot of a console page.
 #[derive(Debug)]
-struct Shot {
+pub(crate) struct Shot {
     /// The image's name, without the theme suffix and the extension.
     image: &'static str,
-    /// The route of the console's router the page answers, as `path!` names
+    /// The route the page answers, as `ferrofed_console::routes::ROUTES` names
     /// it, or `*` for the fallback.
     route: &'static str,
     /// The path the browser loads.
-    url: &'static str,
+    pub(crate) url: &'static str,
     /// The `XPath` of an element the page shows once it has loaded.
-    ready: &'static str,
+    pub(crate) ready: &'static str,
 }
 
 /// The sign-in card a visitor reads.
@@ -107,7 +107,7 @@ const SIGN_IN: Shot = Shot {
 };
 
 /// The pages a signed-in operator loads and reads as they are.
-const PAGES: [Shot; 29] = [
+pub(crate) const PAGES: [Shot; 29] = [
     Shot {
         image: "dashboard",
         route: "/",
@@ -428,7 +428,7 @@ fn integrity_history() -> Result<(), Box<dyn Error>> {
 }
 
 /// A stub admin listener answering every route the pages read.
-async fn listener() -> Server {
+pub(crate) async fn listener() -> Server {
     let listener = Server::start().await;
     for (route, body) in [
         ("/admin/config", STANDING),
@@ -507,8 +507,8 @@ async fn scheme(browser: &Browser, theme: Theme) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Waits until a signed-in page has hydrated, so each island is drawn as
-/// it runs; the sign-in has none to wait for.
+/// Waits until a signed-in page's modules have loaded, so each part is
+/// drawn as it runs; the sign-in has none to wait for.
 async fn settled(browser: &Browser) -> Result<(), Box<dyn Error>> {
     let signed_in = !browser
         .driver()
@@ -516,7 +516,7 @@ async fn settled(browser: &Browser) -> Result<(), Box<dyn Error>> {
         .await?
         .is_empty();
     if signed_in {
-        hydrated(browser).await?;
+        scripted(browser).await?;
     }
     Ok(())
 }
@@ -633,14 +633,14 @@ async fn answers(
         (&QUERY_PARTIAL, &[][..], true),
     ] {
         browser.goto(&stack.url(shot.url)).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         run.endpoints = endpoints;
         run.partial = partial;
         submit(browser, &run).await?;
         capture(browser, shot, at).await?;
     }
     browser.goto(&stack.url(QUERY_REFUSED.url)).await?;
-    hydrated(browser).await?;
+    scripted(browser).await?;
     let refused = Run {
         aql: "SELECT FROM",
         parameter: ("", ""),
@@ -700,16 +700,14 @@ async fn the_book_shows_every_console_page_in_light_and_dark() -> Result<(), Box
     .await
 }
 
-/// The routes the console's router declares, read from its source.
+/// The routes the console draws a page for (`ferrofed_console::routes::ROUTES`).
 fn routes() -> Result<BTreeSet<String>, Box<dyn Error>> {
-    let source = std::fs::read_to_string(root().join("app/ferrofed-console/src/app.rs"))?;
-    let routes: BTreeSet<String> = source
-        .split("path!(\"")
-        .skip(1)
-        .filter_map(|rest| rest.split_once('"').map(|(route, _)| route.to_owned()))
+    let routes: BTreeSet<String> = ferrofed_console::routes::ROUTES
+        .iter()
+        .map(|route| (*route).to_owned())
         .collect();
     if routes.is_empty() {
-        return Err("the console's router declares no path!(…) route".into());
+        return Err("the console declares no route".into());
     }
     Ok(routes)
 }

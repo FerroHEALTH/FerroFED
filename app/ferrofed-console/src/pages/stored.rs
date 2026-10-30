@@ -448,8 +448,7 @@ fn detail(
     } else {
         aql(shown)
     };
-    let repair = crate::pages::configuration::console_manages()
-        .then(|| repair_form(name, &version, on_versions));
+    let repair = crate::pages::configuration::console_manages().then(|| repair_form(&version));
     let answer = repaired.map(repair_answer);
     let read_only = shown.read_only.then(|| {
         Tag::new(tr(Msg::StoredReadOnly))
@@ -554,9 +553,8 @@ fn versions_table(name: &str, versions: &[Held]) -> Html {
 }
 
 /// The drift repair's form in its dialog: the version and the members,
-/// posting to the stored query's page, on the Versions tab when
-/// `on_versions`.
-fn repair_form(name: &str, version: &str, on_versions: bool) -> Html {
+/// posting to the stored query's page it sits on.
+fn repair_form(version: &str) -> Html {
     let version_field = Field::new("repair-version", tr(Msg::ColumnVersion)).view(h(format!(
         "<input type=\"text\" id=\"repair-version\" name=\"version\" class=\"{INPUT}\" value=\"{}\" required>",
         t(version)
@@ -570,11 +568,7 @@ fn repair_form(name: &str, version: &str, on_versions: bool) -> Html {
         .into_iter()
         .next()
         .unwrap_or_default();
-    let action = if on_versions {
-        format!("{}/versions", href(name))
-    } else {
-        href(name)
-    };
+    let action = crate::pages::here_with_query();
     let body = h(format!(
         "<form method=\"post\" action=\"{}\" class=\"fui-form\">{version_field}{endpoints}\
          <p class=\"fui-small fui-muted\">{}</p>\

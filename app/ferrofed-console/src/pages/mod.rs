@@ -198,6 +198,20 @@ pub fn here() -> String {
     crate::visit::with(|visit| visit.path.clone())
 }
 
+/// The address of the page being drawn, its path and its query: where a
+/// form that answers on its page posts, so the page drawn again is the one
+/// the form was on.
+#[must_use]
+pub fn here_with_query() -> String {
+    crate::visit::with(|visit| {
+        if visit.query.is_empty() {
+            visit.path.clone()
+        } else {
+            format!("{}?{}", visit.path, visit.query)
+        }
+    })
+}
+
 /// Sets the answer's status to `status`, for a page that is a refusal or
 /// a fault of its own, unless an earlier part set a server error.
 pub fn set_status(status: http::StatusCode) {

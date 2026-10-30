@@ -18,7 +18,7 @@ use thirtyfour::By;
 use ferrofed_console::app::PRODUCT;
 
 use crate::journeys::browser::{Browser, with_browser};
-use crate::journeys::configure::{bodies, hydrated, listener, submit};
+use crate::journeys::configure::{bodies, scripted, listener, submit};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -61,7 +61,7 @@ async fn a_settings_tab_shows_the_running_settings_and_its_edit_saves_a_revision
     let stack = Stack::start_with_admin(&admin.uri()).await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        hydrated(browser, &stack, "/configuration").await?;
+        scripted(browser, &stack, "/configuration").await?;
         browser
             .element(By::Css(
                 r#"a[data-tab="tab-federation"][aria-current="page"]"#,
@@ -89,7 +89,7 @@ async fn a_settings_tab_shows_the_running_settings_and_its_edit_saves_a_revision
             .at(&stack.url("/configuration/federation/edit"))
             .await?;
         browser.console_clean("the settings tabs").await?;
-        hydrated(browser, &stack, "/configuration/federation/edit").await?;
+        scripted(browser, &stack, "/configuration/federation/edit").await?;
         edit_and_save(browser, &admin, "3000").await?;
         browser.console_clean("a saved setting").await
     })

@@ -20,6 +20,35 @@ use crate::act::fields::Fields;
 use crate::pages;
 use crate::visit::SessionState;
 
+/// Every page's route, each parameter named with a colon as the address
+/// path holds it: the routes the console draws a page for.
+pub const ROUTES: [&str; 24] = [
+    "/",
+    "/topology",
+    "/search",
+    "/organisations",
+    "/organisations/nodes",
+    "/organisations/:org",
+    "/organisations/:org/:node",
+    "/organisations/:org/:node/:tab",
+    "/services",
+    "/services/:service",
+    "/integrity",
+    "/query",
+    "/query/:tab",
+    "/stored-queries",
+    "/stored-queries/:name",
+    "/stored-queries/:name/:tab",
+    "/self-description",
+    "/self-description/:tab",
+    "/configuration",
+    "/configuration/:tab",
+    "/configuration/:tab/:item",
+    "/preferences",
+    "/preferences/:section",
+    "/about",
+];
+
 /// A console page, as its path names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Page {
@@ -171,37 +200,20 @@ pub async fn post(body: Bytes) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::Page;
+    use super::{Page, ROUTES};
 
     #[test]
-    fn every_page_is_named_by_its_address() {
-        for path in [
-            "/",
-            "/topology",
-            "/search",
-            "/organisations",
-            "/organisations/nodes",
-            "/organisations/org-a",
-            "/organisations/org-a/node-a",
-            "/organisations/org-a/node-a/routes",
-            "/services",
-            "/services/c",
-            "/integrity",
-            "/query",
-            "/query/a",
-            "/stored-queries",
-            "/stored-queries/d",
-            "/stored-queries/d/a",
-            "/self-description",
-            "/self-description/a",
-            "/configuration",
-            "/configuration/a",
-            "/configuration/a/b",
-            "/preferences",
-            "/preferences/e",
-            "/about",
-        ] {
-            assert!(Page::of(path).is_some(), "{path}");
+    fn every_route_names_a_page() {
+        for route in ROUTES {
+            let path = route
+                .replace(":org", "org-a")
+                .replace(":node", "node-a")
+                .replace(":tab", "a")
+                .replace(":item", "b")
+                .replace(":service", "c")
+                .replace(":name", "d")
+                .replace(":section", "e");
+            assert!(Page::of(&path).is_some(), "{route}");
         }
         assert_eq!(Some(Page::AllNodes), Page::of("/organisations/nodes"));
         assert_eq!(Some(Page::Organisation), Page::of("/organisations/org-a"));

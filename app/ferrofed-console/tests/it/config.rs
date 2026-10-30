@@ -106,7 +106,7 @@ fn a_site_root_is_read_does_nothing_and_is_named_deprecated() -> Result<(), Box<
     let overridden = Config::from_sources(None, &environment)?.resolve()?;
     assert_eq!(vec!["server.site_root"], overridden.deprecated);
     let plain = Config::from_sources(None, &BTreeMap::new())?.resolve()?;
-    assert!(plain.deprecated.is_empty());
+    assert_eq!(Vec::<&str>::new(), plain.deprecated);
     assert_eq!("0.0.17", ferrofed_console::config::SITE_ROOT_REFUSED_IN);
     Ok(())
 }

@@ -94,7 +94,7 @@ fn integrity(
 ) -> Html {
     let replicas = crate::visit::with(crate::visit::Visit::replicas);
     let held = read.as_ref().map(Incidents::held).unwrap_or_default();
-    let clear = (!replicas.is_empty()).then(|| clear_form(&replicas, &held, resolved));
+    let clear = (!replicas.is_empty()).then(|| clear_form(&replicas, &held));
     let heading = page_heading(
         &current(),
         Header {
@@ -114,8 +114,8 @@ fn integrity(
 
 /// The clear's form in its dialog: the `ehr_id`, offered from the open
 /// incidents' `held`, and the replica among `replicas` or every one. It
-/// posts to Integrity, on the tab in force (`resolved`).
-fn clear_form(replicas: &[String], held: &[String], resolved: bool) -> Html {
+/// posts to Integrity, on the tab it sits on.
+fn clear_form(replicas: &[String], held: &[String]) -> Html {
     let known = Html::join(
         held.iter()
             .map(|ehr_id| h(format!("<option value=\"{}\"></option>", t(ehr_id)))),
@@ -140,11 +140,7 @@ fn clear_form(replicas: &[String], held: &[String], resolved: bool) -> Html {
          <option value=\"{EVERY_REPLICA}\">{}</option>{choices}</select>",
         t(tr(Msg::ClearEveryReplica))
     )));
-    let action = if resolved {
-        format!("{INTEGRITY}?show=resolved")
-    } else {
-        String::from(INTEGRITY)
-    };
+    let action = crate::pages::here_with_query();
     let body = h(format!(
         "<form method=\"post\" action=\"{}\" class=\"fui-form\">{ehr_id}{replica}\
          <p class=\"fui-small fui-muted\">{}</p>\

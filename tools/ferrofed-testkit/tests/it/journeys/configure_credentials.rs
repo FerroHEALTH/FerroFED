@@ -20,7 +20,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::journeys::browser::{Browser, until, with_browser};
-use crate::journeys::configure::{bodies, confirmed, fill, hydrated, submit};
+use crate::journeys::configure::{bodies, confirmed, fill, scripted, submit};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -130,7 +130,7 @@ async fn secret_saved(
     stack: &Stack,
     admin: &Server,
 ) -> Result<(), Box<dyn Error>> {
-    hydrated(browser, stack, "/configuration/credentials/node-a-pub").await?;
+    scripted(browser, stack, "/configuration/credentials/node-a-pub").await?;
     let password = browser.element(value_field("password")).await?;
     assert!(
         !password.is_displayed().await?,
@@ -186,7 +186,7 @@ async fn rolled_back(
     stack: &Stack,
     admin: &Server,
 ) -> Result<(), Box<dyn Error>> {
-    hydrated(browser, stack, "/configuration/credentials").await?;
+    scripted(browser, stack, "/configuration/credentials").await?;
     browser
         .press(
             &browser
@@ -233,7 +233,7 @@ async fn a_credential_is_saved_with_a_secret_and_the_running_change_confirmed_ro
     let stack = Stack::start_with_admin(&admin.uri()).await?;
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
-        hydrated(browser, &stack, "/configuration/credentials").await?;
+        scripted(browser, &stack, "/configuration/credentials").await?;
         browser
             .text("li", "/var/lib/ferrofed/secrets/a.secret")
             .await?;
@@ -243,13 +243,13 @@ async fn a_credential_is_saved_with_a_secret_and_the_running_change_confirmed_ro
         browser.text("span", "left").await?;
         browser.text("h2", "Revision 3 changes 1 setting").await?;
         browser
-            .console_clean("the hydration of the credentials and bindings")
+            .console_clean("the modules of the credentials and bindings")
             .await?;
 
         secret_saved(browser, &stack, &admin).await?;
 
         // The confirmation of the running revision before its deadline.
-        hydrated(browser, &stack, "/configuration/credentials").await?;
+        scripted(browser, &stack, "/configuration/credentials").await?;
         confirmed(browser, "confirm-confirm").await?;
         browser
             .text(
@@ -262,7 +262,7 @@ async fn a_credential_is_saved_with_a_secret_and_the_running_change_confirmed_ro
         rolled_back(browser, &stack, &admin).await?;
 
         // The approval of the newest revision by a second operator.
-        hydrated(browser, &stack, "/configuration/credentials").await?;
+        scripted(browser, &stack, "/configuration/credentials").await?;
         confirmed(browser, "approve-confirm").await?;
         browser
             .text(

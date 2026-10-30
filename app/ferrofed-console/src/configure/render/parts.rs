@@ -209,13 +209,7 @@ pub(crate) fn reason() -> Html {
 /// The address a configuration form posts to: the page it sits on, with
 /// the query that names it, which the server draws again with the answer.
 pub(crate) fn action() -> String {
-    crate::visit::with(|visit| {
-        if visit.query.is_empty() {
-            visit.path.clone()
-        } else {
-            format!("{}?{}", visit.path, visit.query)
-        }
-    })
+    crate::pages::here_with_query()
 }
 
 /// A form posting to the configuration page it sits on ([`action`]),

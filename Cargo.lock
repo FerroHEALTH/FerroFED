@@ -1522,6 +1522,7 @@ dependencies = [
  "ferrofed-server",
  "ferrohealth-health",
  "ferrohealth-server",
+ "ferrohealth-ui",
  "fhir-types",
  "flate2",
  "http",

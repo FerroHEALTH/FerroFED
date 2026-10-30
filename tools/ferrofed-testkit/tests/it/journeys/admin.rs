@@ -19,7 +19,7 @@ use thirtyfour::{By, Key};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::journeys::browser::{Browser, hydrated, with_browser};
+use crate::journeys::browser::{Browser, scripted, with_browser};
 use crate::journeys::journeys_enabled;
 use crate::journeys::sign_in::sign_in;
 use crate::journeys::stack::Stack;
@@ -127,8 +127,8 @@ async fn a_held_collision_is_cleared_and_drift_repaired() -> Result<(), Box<dyn 
         // what the replica held.
         browser.goto(&stack.url("/integrity")).await?;
         browser.titled(&format!("Integrity · {PRODUCT}")).await?;
-        hydrated(browser).await?;
-        browser.console_clean("the hydration of the integrity page").await?;
+        scripted(browser).await?;
+        browser.console_clean("the modules of the integrity page").await?;
         open(browser, "clear-dialog").await?;
         fill(browser, "clear-ehr-id", EHR_ID).await?;
         run(browser, "clear-dialog").await?;
@@ -140,7 +140,7 @@ async fn a_held_collision_is_cleared_and_drift_repaired() -> Result<(), Box<dyn 
         // each member's outcome and the answer's completeness.
         browser.goto(&stack.url(&format!("/stored-queries/{NAME}?version=1.0.0"))).await?;
         browser.titled(&format!("{NAME} · {PRODUCT}")).await?;
-        hydrated(browser).await?;
+        scripted(browser).await?;
         open(browser, "repair-drift").await?;
         fill(browser, "repair-version", "1.0.0").await?;
         run(browser, "repair-drift").await?;

@@ -98,8 +98,10 @@ ferrofed-eehrxf.workspace = true
 # (#739).
 openehr-its = { workspace = true, features = ["rest"] }
 # The operator console, driven against a running gateway over stub nodes, as
-# an operator's browser reaches both (#276).
+# an operator's browser reaches both (#276), and the mark FerroUI's loader
+# writes once a page's modules have loaded (#1457).
 ferrofed-console.workspace = true
+ferrohealth-ui.workspace = true
 # The gateway and the console served as `ferrofed serve` serves its
 # listeners (#1397).
 ferrohealth-health.workspace = true

@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 use thirtyfour::{By, Cookie, WebElement};
 
-use crate::journeys::browser::{Browser, hydrated, with_browser};
+use crate::journeys::browser::{Browser, scripted, with_browser};
 use crate::journeys::configure;
 use crate::journeys::provider::OPERATOR;
 use crate::journeys::sign_in::sign_in;
@@ -124,7 +124,7 @@ async fn every_state(browser: &Browser, stack: &Stack, theme: &str) -> Result<()
     browser.driver().add_cookie(cookie).await?;
     sign_in(browser, stack).await?;
     browser.goto(&stack.url("/organisations/nodes")).await?;
-    hydrated(browser).await?;
+    scripted(browser).await?;
     let sidebar = browser.element(By::Id("sidebar")).await?;
     let entry = browser.element(By::LinkText("Integrity")).await?;
     hover(browser, &entry).await?;
@@ -145,7 +145,7 @@ async fn every_state(browser: &Browser, stack: &Stack, theme: &str) -> Result<()
     browser.element(By::Css("#user-menu:popover-open")).await?;
     shot_of_view(browser, "operator-menu", theme).await?;
     browser.goto(&stack.url("/query")).await?;
-    hydrated(browser).await?;
+    scripted(browser).await?;
     let run = browser
         .element(By::XPath(
             "//form[@id = 'query-form']//button[normalize-space(.) = 'Run']",
@@ -156,7 +156,7 @@ async fn every_state(browser: &Browser, stack: &Stack, theme: &str) -> Result<()
     shot_of(browser, &form, "focus-run", theme).await?;
     layout(browser, 390, 900, theme).await?;
     browser.goto(&stack.url("/organisations")).await?;
-    hydrated(browser).await?;
+    scripted(browser).await?;
     browser
         .element(By::XPath("//button[@aria-label = 'Menu']"))
         .await?
@@ -204,7 +204,7 @@ async fn row_removal(browser: &Browser, stack: &Stack, theme: &str) -> Result<()
     sign_in(browser, stack).await?;
     for (width, suffix) in [(1440, ""), (390, "-narrow")] {
         layout(browser, width, 900, theme).await?;
-        configure::hydrated(browser, stack, "/configuration/members").await?;
+        configure::scripted(browser, stack, "/configuration/members").await?;
         browser
             .element(By::Css(r#"summary[aria-label="Actions for node-b"]"#))
             .await?
