@@ -62,8 +62,6 @@
   armed PR unless it is still BLOCKED
 - [Merge queue with signed commits](merge-queue-signed.md): rebase locally,
   merge one at a time, never `gh pr update-branch --rebase`
-- [PR body licence checkbox](pr-body-licence-checkbox.md): every PR body from
-  the template with the licensing box ticked
 - [Upstream reports stay here](upstream-reports-stay-here.md): one standing
   issue (#212), one comment per report, written to the upstream's contributing
   rules: the problem and a proposed resolution with its rationale, never how
@@ -104,4 +102,3 @@
 - [Release closes milestone](release-closes-milestone.md): release.yml refuses a tag whose milestone is missing or not empty and closes it after every leg; check it after a manual or recovery release; owner 2026-10-19 (#1170)
 - [Helm and Kubernetes in Podman](helm-kubernetes-in-podman.md): owner 2026-10-25, test charts locally on kind over Podman; install helm when missing; never build images locally
 - [Reactive console UI](reactive-console-ui.md): owner 2026-10-29 (FerroUI #510), server-rendered consoles on FerroUI 0.6: in-page state kept by a module, a navigation one document; supersedes the 2026-10-25 client-navigation ruling
-- [Contribution licence attestation](contribution-licence-attestation.md): owner 2026-10-25, always tick the licence checkbox on PRs opened for the owner, never ask

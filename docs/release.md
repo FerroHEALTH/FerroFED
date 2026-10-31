@@ -394,8 +394,8 @@ slow one.
    is adopted, and this step is completed then.
 9. **The version bump lands as its own pull request** and merges like any
    other: the tier-1 gates (zizmor, actionlint, shellcheck, hadolint, comment
-   style, file length, versions, changelog), the tier-2 Rust lanes and the
-   `contribution-licence-guard` are green on it (`docs/ci-cd.md`). Run
+   style, file length, versions, changelog) and the tier-2 Rust lanes are
+   green on it (`docs/ci-cd.md`). Run
    `scripts/release/preflight.sh vX.Y.Z` on the branch before it merges and
    on the merge commit before the tag (§ Preflight).
 
@@ -620,7 +620,7 @@ planned under, so step 1 moves that milestone on by one.
    not have, resolve it against the release's own code, and when the fix
    needs a feature the release lacks, write the smallest fix of the
    release's code and say so in the pull request. CI runs on the pull request as on one into
-   `main`, and `contribution-licence-guard` reads its body. The branch has
+   `main`. The branch has
    no merge queue, so merge it once `conclusion` is green.
 5. **The version bump lands on the branch** from a `release/vX.Y.Z` branch,
    in a pull request into `release/0.0.x`, following § Before the tag steps 2

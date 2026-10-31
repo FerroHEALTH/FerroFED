@@ -130,7 +130,7 @@ request:
   included, and every version becomes Apache 2.0 on its Change Date. A
   contribution grants the Licensor the relicensing right in
   [CONTRIBUTING.md § Licensing of contributions](CONTRIBUTING.md#licensing-of-contributions),
-  recorded by the pull request checkbox, so the work stays one work under one
+  accepted by opening the pull request, so the work stays one work under one
   licensor. This is a deliberate position, not an oversight.
 - **No directly identifying patient identifier in a dispatched query.** The
   gateway resolves the patient outside AQL and sends each node its own

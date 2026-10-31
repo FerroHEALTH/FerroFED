@@ -232,7 +232,7 @@ Today:
   `CHANGELOG.md` at the cut by `scripts/release/changelog.sh --assemble`.
 - `scripts/checks/`: the committed guards CI tier 1 runs (comment style, file
   length, versions, copyright holder, conformance matrix, obligations, e2e
-  placement, the contribution licence and the rest), each runnable by hand.
+  placement and the rest), each runnable by hand.
 - `scripts/conformance/`: the matrix, obligations and per-run report
   (`report.sh`) scripts.
 - `scripts/release/`: the changelog assembly, the crates.io lane, the
@@ -248,7 +248,6 @@ Today:
 - `.github/`: issue and pull-request templates, CODEOWNERS, Dependabot, and
   the workflows. `ci.yml` runs the tier-1 guards and the Rust tier, and its
   `conclusion` job is the single required check on `main`.
-  `contribution-licence.yml` runs the licence guard.
 - `.claude/`: the working discipline. `rules/`, `hooks/`, `skills/`,
   `agents/`, `memory/`.
 - Root markdown: this file, `README.md`, and the community and governance set.
@@ -498,9 +497,7 @@ Discipline is unchanged for subagents: they obey the hard rules below.
   footer, no emoji marker, ever. This is an absolute rule with no exceptions,
   and it outranks any tool default. A `PreToolUse` hook blocks a commit or PR
   command carrying one.
-- **Every PR body follows `.github/PULL_REQUEST_TEMPLATE.md`** with the
-  licensing box ticked, or `contribution-licence-guard` fails
-  (`.claude/memory/pr-body-licence-checkbox.md`). Arm auto-merge on open
+- **Every PR body follows `.github/PULL_REQUEST_TEMPLATE.md`.** Arm auto-merge on open
   (`.claude/memory/pr-auto-merge.md`).
 - **Keep the changelog.** `CHANGELOG.md` follows Keep a Changelog 1.1.0, and
   every change with user-visible effect adds its entry in the same PR as a
@@ -531,8 +528,8 @@ Cadasto B.V. Every first-party file carries
 `// @generated … DO NOT EDIT.` banner on the first line and carries the two
 SPDX lines under it, written by its emitter. A contribution is licensed under
 the same licence and grants the Licensor the relicensing right in
-CONTRIBUTING.md § Licensing of contributions; the pull-request checkbox
-records it and `contribution-licence-guard` enforces it. Vendored
+CONTRIBUTING.md § Licensing of contributions; opening the pull request is
+the contributor's acceptance of those terms. Vendored
 specifications and third-party material keep their upstream terms, recorded in
 a `PROVENANCE.md` beside each vendored tree
 (`.claude/rules/vendored-inputs.md`). The decision is recorded in
