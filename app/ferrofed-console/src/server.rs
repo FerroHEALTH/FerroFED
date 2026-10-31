@@ -7,7 +7,8 @@
 //!
 //! Every response carries the browser security headers of
 //! `ferrohealth-server`'s `console` (`nosniff`, `DENY` framing, no referrer)
-//! and the console's own Content-Security-Policy, which admits scripts and
+//! and the Content-Security-Policy of a server-rendered console
+//! (`ConsoleHeaders::server_rendered`), which admits scripts and
 //! stylesheets from the console's own origin alone: `script-src 'self';
 //! style-src 'self'` with no nonce, since every page is drawn by the server
 //! and FerroUI's modules are files it serves (FerroUI `docs/consoles.md`,
@@ -34,7 +35,7 @@ use ferrohealth_server::health::Health;
 use ferrohealth_server::same_origin::SameOrigin;
 use ferrohealth_server::section::ServerSection;
 use ferrohealth_server::serve::Drained;
-use http::header::{CACHE_CONTROL, CONTENT_SECURITY_POLICY, CONTENT_TYPE};
+use http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use http::{HeaderValue, Method, StatusCode};
 
 use crate::config::settings::Settings;
@@ -124,7 +125,6 @@ impl ConsoleState {
 
 /// Builds the console's whole HTTP service over `state`.
 pub fn router(state: ConsoleState) -> axum::Router {
-    let policy = policy(&form_action(state.settings()));
     let health = ferrohealth_server::health::routes(state.health().clone());
     let pages = axum::Router::new()
         .merge(health)
@@ -167,13 +167,10 @@ pub fn router(state: ConsoleState) -> axum::Router {
         .layer(axum::extract::DefaultBodyLimit::max(CONFIGURE_BODY_LIMIT));
     // NOTE: no specification governs this: our own design; the origin check and the body
     // limit hold before a page reads a post, so a refused one reads nothing.
-    let headers = ConsoleHeaders::new("'self'");
+    let headers = ConsoleHeaders::server_rendered(form_action(state.settings()));
     pages
         .layer(axum::middleware::from_fn(
             move |request: Request, next: Next| console::headers(headers.clone(), request, next),
-        ))
-        .layer(axum::middleware::from_fn(
-            move |request: Request, next: Next| strict_policy(policy.clone(), request, next),
         ))
         .layer(axum::middleware::from_fn(same_origin_only))
         .layer(Extension(state))
@@ -188,40 +185,6 @@ async fn pages(method: Method, body: Bytes) -> Response {
         Method::POST => crate::routes::post(body).await,
         _ => StatusCode::METHOD_NOT_ALLOWED.into_response(),
     }
-}
-
-/// The console's Content-Security-Policy, whose forms post to `form_action`.
-///
-/// Scripts and stylesheets come from the console's own origin alone, with
-/// no nonce, no inline script or style and no WebAssembly (W3C Content
-/// Security Policy Level 3): FerroUI writes no inline script or `style`
-/// attribute and serves its modules as files.
-#[must_use]
-pub fn policy(form_action: &str) -> String {
-    format!(
-        "default-src 'self'; \
-         script-src 'self'; \
-         style-src 'self'; \
-         img-src 'self' data:; \
-         connect-src 'self'; \
-         object-src 'none'; \
-         base-uri 'self'; \
-         form-action {form_action}; \
-         frame-ancestors 'none'"
-    )
-}
-
-/// Sets the console's own policy `policy` on every answer, in place of the
-/// one `ferrohealth_server::console` writes, which admits a nonce and
-/// WebAssembly this console has no use for.
-async fn strict_policy(policy: String, request: Request, next: Next) -> Response {
-    let mut response = next.run(request).await;
-    let value = HeaderValue::from_str(&policy)
-        .unwrap_or_else(|_invalid| HeaderValue::from_static("default-src 'none'"));
-    response
-        .headers_mut()
-        .insert(CONTENT_SECURITY_POLICY, value);
-    response
 }
 
 /// The largest body a request to the console carries, but the

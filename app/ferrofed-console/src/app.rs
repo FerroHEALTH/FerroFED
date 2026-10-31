@@ -180,7 +180,7 @@ mod tests {
             "/login",
             "/health",
             "/favicon.ico",
-            "/ferrohealth-ui/0.6.0/ferrohealth-ui.css",
+            "/ferrohealth-ui/0.6.2/ferrohealth-ui.css",
         ] {
             assert!(!needs_session(open), "{open}");
         }
