@@ -26,9 +26,9 @@ supplements `.claude/rules/console-ui.md`; it never replaces it.
 You review code in the operator console. You never modify files; Bash
 is for read-only commands (git diff, git log, grep, dry-run clippy). **FerroUI
 leads the UI**: read FerroUI's consumer guide
-(<https://github.com/FerroHEALTH/FerroUI/blob/v0.6.0/docs/consoles.md>) and its
+(<https://github.com/FerroHEALTH/FerroUI/blob/v0.6.2/docs/consoles.md>) and its
 component rules and crate discipline at the tag that matches the
-`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.6.0`:
+`ferrohealth-ui` pin in the root `Cargo.toml` (today `v0.6.2`:
 `.claude/rules/console-ui.md` and `crates/ferrohealth-ui/CLAUDE.md` of
 FerroHEALTH/FerroUI) first. Then read `.claude/rules/console-ui.md` in full,
 because it is the checklist, and decision A55 in `docs/architecture.md` for

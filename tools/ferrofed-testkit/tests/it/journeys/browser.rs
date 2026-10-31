@@ -397,14 +397,28 @@ impl Browser {
 }
 
 /// Waits until FerroUI's loader has run its modules over the page: it marks
-/// the root element with `ferrohealth_ui::script::MARK` once every module
-/// the page names has loaded (FerroUI `docs/migration-0.6.md`, Tests).
+/// the root element with `ferrohealth_ui::script::MARK` before any module
+/// arrives, and each element that asks for a module
+/// (`ferrohealth_ui::script::HOOK`) with `ferrohealth_ui::script::READY` once
+/// its modules have enhanced it (FerroUI #523).
 pub(crate) async fn scripted(browser: &Browser) -> Result<(), Box<dyn Error>> {
     browser
         .element(By::Css(format!("html[{}]", ferrohealth_ui::script::MARK)))
         .await
         .map_err(|error| format!("the page's modules never loaded: {error}"))?;
-    Ok(())
+    let waiting = format!(
+        "return document.querySelectorAll('[{}]:not([{}])').length;",
+        ferrohealth_ui::script::HOOK,
+        ferrohealth_ui::script::READY
+    );
+    until(
+        "every module of the page has enhanced its element",
+        async || {
+            let left = browser.driver().execute(&waiting, Vec::new()).await?;
+            Ok(left.json().as_u64() == Some(0))
+        },
+    )
+    .await
 }
 
 /// Polls `check` every [`POLL`] until it holds, and fails naming `what` when

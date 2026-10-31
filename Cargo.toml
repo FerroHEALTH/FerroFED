@@ -287,8 +287,8 @@ rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs"
 # stylesheet and the role tokens, shared by every FerroHEALTH console. Pinned
 # exactly, so the console moves to a new version deliberately. From 0.6 every
 # page is one document the server draws, with no Leptos and no WebAssembly
-# (#1457, FerroUI#510). Verified against crates.io on 2026-10-30.
-ferrohealth-ui = "=0.6.0"
+# (#1457, FerroUI#510). Verified against crates.io on 2026-10-31 (0.6.2).
+ferrohealth-ui = "=0.6.2"
 # The FerroHEALTH SMART and OAuth 2.0 resource-server crate (#1174):
 # every caller's token checked against its issuer's metadata and key set,
 # the SMART on openEHR grant rules over the grammar it re-exports, the Basic
@@ -327,10 +327,11 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # healthcheck. Pinned exactly, as a product pins every family crate; 0.3.7
 # carries GHSA-2mc2-h3jq-c5wg, 0.3.8 refuses a client CA under
 # `client_auth = "none"` and keeps a listener's TLS reloadable from the
-# product's own reload path, 0.3.9 names that refusal's values readably, and
-# 0.4.1 keeps a product's own fallback and its layers through the stack.
-# Verified against crates.io on 2026-10-30.
-ferrohealth-server = { version = "=0.4.1", default-features = false }
+# product's own reload path, 0.3.9 names that refusal's values readably,
+# 0.4.1 keeps a product's own fallback and its layers through the stack, and
+# 0.4.2 writes the server-rendered console's policy. Verified against
+# crates.io on 2026-10-31.
+ferrohealth-server = { version = "=0.4.2", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.

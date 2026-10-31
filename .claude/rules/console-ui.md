@@ -8,25 +8,25 @@ paths: ["app/ferrofed-console/**"]
 # Operator console rules (`app/ferrofed-console`)
 
 **FerroUI leads the UI.** The console draws with `ferrohealth-ui`, pinned
-exactly in the root `[workspace.dependencies]` (today `=0.6.0`), and the
+exactly in the root `[workspace.dependencies]` (today `=0.6.2`), and the
 FerroUI repository (FerroHEALTH/FerroUI) is the source for its components,
 design, tokens, icons, script modules, accessibility bar, interaction
 contract, words and quality control. Read these first, at the git tag that
-matches the pin (today `v0.6.0`):
+matches the pin (today `v0.6.2`):
 
-- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.0/docs/consoles.md):
+- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.2/docs/consoles.md):
   the consumer guide, how a console uses the library.
-- [`docs/migration-0.6.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.0/docs/migration-0.6.md):
+- [`docs/migration-0.6.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.2/docs/migration-0.6.md):
   what replaced each 0.5 part, and why (FerroUI#510).
-- [`.claude/rules/console-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.0/.claude/rules/console-ui.md):
+- [`.claude/rules/console-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.2/.claude/rules/console-ui.md):
   the component rules of every FerroHEALTH console. The section numbers this
-  file cites (FerroUI §N) are those of the `v0.6.0` copy.
-- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.0/crates/ferrohealth-ui/CLAUDE.md):
+  file cites (FerroUI §N) are those of the `v0.6.2` copy.
+- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.2/crates/ferrohealth-ui/CLAUDE.md):
   the crate's own discipline.
-- [`app/ferrohealth-ui-gallery`](https://github.com/FerroHEALTH/FerroUI/tree/v0.6.0/app/ferrohealth-ui-gallery):
+- [`app/ferrohealth-ui-gallery`](https://github.com/FerroHEALTH/FerroUI/tree/v0.6.2/app/ferrohealth-ui-gallery):
   the worked example of a console on 0.6, its no-script and navigation
   journeys among them.
-- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.6.0/design/consoles/ferrofed):
+- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.6.2/design/consoles/ferrofed):
   the reviewed design of this console. Every page matches its mockup at
   1440 and 390 px, light and dark. FerroUI's `design/` is the only design
   source; a design folder anywhere else is stale.
@@ -149,7 +149,8 @@ console's own words.
   console's own refusal of input it cannot send is an alert notice.
 - The security headers (`server::router`): the family's `nosniff`, `DENY`
   framing and `no-referrer` from `ferrohealth_server::console`, and the
-  console's own Content-Security-Policy (`server::policy`), `script-src
+  Content-Security-Policy of a server-rendered console
+  (`ConsoleHeaders::server_rendered`, ferrohealth-server 0.4.2), `script-src
   'self'; style-src 'self'` with no nonce, `frame-ancestors 'none'`, and a
   `form-action` naming the provider's end-session origin. The body limit
   holds before anything reads a body (`tests/it/body_limit.rs`). Nothing is
@@ -186,7 +187,8 @@ for every page; the console keeps no stylesheet of its own.
   `thirtyfour` over chromedriver, in the testkit's `tests/it/journeys/`
   behind `FERROFED_JOURNEYS=1`. A journey fails on any error the browser
   logs, waits on elements, never on a sleep, and waits on FerroUI's loader
-  mark (`browser::scripted`, `ferrohealth_ui::script::MARK`) before it
+  mark (`browser::scripted`, `ferrohealth_ui::script::MARK`) and every
+  element's ready mark (`ferrohealth_ui::script::READY`) before it
   touches a module's behaviour. The journeys run with the modules loaded
   and refused (`views::every_page_reads_whole_with_the_modules_refused`
   withholds every module, as FerroUI's gallery does), and every page fits a
