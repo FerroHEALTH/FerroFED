@@ -26,7 +26,6 @@ has run on every change since the workspace landed.
 | Workflow | Runs on | What it does |
 |---|---|---|
 | `ci.yml` | push to `main`, pull request into `main` or a security patch branch, merge group, dispatch | the two tiers below and the `conclusion` check |
-| `contribution-licence.yml` | pull request opened, edited, reopened or synchronized | `contribution-licence-guard`: the pull request body accepts the contribution terms |
 | `label-guards.yml` | the `no-changelog` or `no-crate-bump` label added to or removed from a pull request | re-runs the guard that label escapes, and with it `conclusion`, in the CI run on the head commit (§Triggers and concurrency) |
 | `codeql.yml` | push to `main` and pull request into `main` or a security patch branch, touching workflows, actions, its configuration or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` and leaves out the `tests/` trees through `.github/codeql/codeql-config.yml` |
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
@@ -312,8 +311,7 @@ no changelog entry: it passes when the change adds a fragment under
 fragments still land. Like `crate-version-guard`, it reads the change from the
 merge base, so a fragment that reached `main` after the branch forked does not
 count. The `no-changelog` label is its escape for a change with no
-user-visible effect, and a pull request a bot opened is skipped, as
-`contribution-licence-guard` skips it. Both guards read their label from the
+user-visible effect, and a pull request a bot opened is skipped. Both guards read their label from the
 API when they run, and adding or removing either label re-runs its guard
 through `label-guards.yml`, so a label takes effect without a new push. The
 release cut turns
@@ -366,23 +364,13 @@ Reading the results through `env:` rather than splicing them into `run:` is
 the same template-injection rule every workflow follows
 (`.claude/rules/ci-cd.md`).
 
-## The two required checks
+## The required check
 
-The `main` ruleset requires exactly two status checks:
-
-- **`conclusion`**, the verdict over the whole of `ci.yml`, for the reason
-  above. It is the name that never changes as jobs come and go.
-- **`contribution-licence-guard`**, from `contribution-licence.yml`. A
-  contribution is licensed under the project licence and grants the Licensor
-  the relicensing right (`CONTRIBUTING.md` § Licensing of contributions); the
-  ticked checkbox in the pull request body is the record of acceptance, and
-  this check is what makes it binding. It stays a workflow of its own rather
-  than a `ci.yml` job because it reacts to a different event: editing the
-  pull request body re-runs the guard without re-running the build. The body
-  reaches `scripts/checks/contribution-licence.sh` through `env:`, because a
-  pull request body is attacker-controlled text. A bot author is skipped by
-  author type, since a bot cannot accept terms, and a skipped job satisfies
-  the required check.
+The `main` ruleset requires exactly one status check, **`conclusion`**, the
+verdict over the whole of `ci.yml`, for the reason above. It is the name that
+never changes as jobs come and go. Opening a pull request is the acceptance of
+the contribution terms (`CONTRIBUTING.md` § Licensing of contributions), so no
+check reads the pull request body for them.
 
 No other check joins the list. A new `ci.yml` job joins `conclusion`'s
 `needs`; a new workflow that must gate a merge is a decision recorded here
@@ -574,7 +562,7 @@ These are repository settings only the owner can change. The state on
 
 | Setting | State |
 |---|---|
-| `main` ruleset: a pull request, signed commits, the `conclusion` and `contribution-licence-guard` checks without the strict up-to-date policy (`strict_required_status_checks_policy: false`, read 2026-10-06), and the merge queue (squash, all green, up to five pull requests a group), which tests each pull request on top of `main` and the ones ahead of it, so a branch need not be up to date to merge; deletion and non-fast-forward pushes blocked; repository administrators may bypass | done |
+| `main` ruleset: a pull request, signed commits, the `conclusion` check without the strict up-to-date policy (`strict_required_status_checks_policy: false`, read 2026-10-06), and the merge queue (squash, all green, up to five pull requests a group), which tests each pull request on top of `main` and the ones ahead of it, so a branch need not be up to date to merge; deletion and non-fast-forward pushes blocked; repository administrators may bypass | done |
 | `release-tags` ruleset on `refs/tags/v*`: signed tags only, no deletion, no move | done |
 | Secret scanning with push protection | done |
 | Dependabot alerts and security updates | done |

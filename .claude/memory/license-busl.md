@@ -1,6 +1,6 @@
 ---
 name: license-busl
-description: "FerroFED's own code and text are under the Business Source License 1.1 with Cadasto B.V. as Licensor (#1, #2, 2026-09-16; holder changed by #602, 2026-10-05; the commercial licence contact since #616, 2026-10-05) and the contribution-licence terms, checkbox and guard (#3, #4); Apache 2.0 is the Change License four years after each version"
+description: "FerroFED's own code and text are under the Business Source License 1.1 with Cadasto B.V. as Licensor (#1, #2, 2026-09-16; holder changed by #602, 2026-10-05; the commercial licence contact since #616, 2026-10-05) and the contribution-licence terms (#3, #4), accepted by opening a pull request since 2026-10-31; Apache 2.0 is the Change License four years after each version"
 metadata:
   type: project
 ---
@@ -11,9 +11,8 @@ metadata:
 The repository opened under the Business Source License 1.1, the family's
 terms. On 2026-09-16 issue #1 (PR #2) named the Licensor and copyright
 holder, which the owner changed to Cadasto B.V. on 2026-10-05 (#602), and issue #3 (PR #4) added the contribution-licence
-terms in CONTRIBUTING.md, the pull-request checkbox, and the
-`contribution-licence-guard` workflow backed by
-`scripts/checks/contribution-licence.sh`.
+terms in CONTRIBUTING.md. Since the owner decision of 2026-10-31, opening a
+pull request is the acceptance of those terms, with no checkbox and no guard.
 
 The terms, as `LICENSE` and `NOTICE` state them:
 
@@ -38,6 +37,5 @@ The terms, as `LICENSE` and `NOTICE` state them:
   where it is the Change License.
 - Vendored material keeps its upstream terms (the specification is CC0 1.0,
   the reference implementation Apache-2.0), recorded in each `PROVENANCE.md`.
-- Every PR body ticks the licensing box ([[pr-body-licence-checkbox]]).
 - The licence is decided per repository by the owner and never assumed from a
   sibling ([[sibling-projects]]).

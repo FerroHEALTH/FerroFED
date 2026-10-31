@@ -17,8 +17,7 @@
 #      correct primitive.
 #
 # The `conclusion` job is the single required status check on main; it is what
-# makes a pipeline of gated jobs enforceable. The contribution-licence guard
-# is its own workflow (contribution-licence.yml) with its own check.
+# makes a pipeline of gated jobs enforceable.
 name: CI
 
 # A patch branch, release/<major>.<minor>.x, carries a security patch
@@ -1520,9 +1519,8 @@ jobs:
   # changelog.d/, or edits CHANGELOG.md while pull requests opened before the
   # fragments still land. `no-changelog` is the escape for a change with no
   # user-visible effect, read from the API when the job runs, as
-  # crate-version-guard reads its label. Bots are skipped by author type, as
-  # the contribution-licence guard skips them: a dependency or pin bump
-  # carries no entry of its own. The script diffs from the merge base of the
+  # crate-version-guard reads its label. Bots are skipped by author type: a
+  # dependency or pin bump carries no entry of its own. The script diffs from the merge base of the
   # two shas, so the full history is fetched.
   changelog-guard:
     name: changelog-guard

@@ -8,14 +8,10 @@ design of the workflows is in
 [`docs/ci-cd.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/ci-cd.md);
 this page is the short version.
 
-## Two required checks
+## The required check
 
-A pull request merges into `main` only when two checks pass:
-
-- **`conclusion`**, the one job of `ci.yml` that passes when every other job
-  in it passed or was skipped;
-- **`contribution-licence-guard`**, which reads the licence checkbox in the
-  pull request body.
+A pull request merges into `main` only when **`conclusion`** passes, the one
+job of `ci.yml` that passes when every other job in it passed or was skipped.
 
 `main` also requires signed commits and a branch that is up to date with it.
 

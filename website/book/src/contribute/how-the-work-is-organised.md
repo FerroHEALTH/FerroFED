@@ -48,5 +48,5 @@ on the issue thread.
 
 A pull request answers one issue and says so with `Closes #<n>`. Every commit
 is signed, every first-party file carries the SPDX header, and the pull
-request body accepts the contribution licence terms through its checkbox
+request is itself the acceptance of the contribution licence terms
 ([CONTRIBUTING.md](https://github.com/FerroHEALTH/FerroFED/blob/main/CONTRIBUTING.md)).
