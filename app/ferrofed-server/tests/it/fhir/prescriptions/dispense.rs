@@ -857,6 +857,31 @@ async fn a_dispensation_the_owner_already_holds_is_refused_as_a_duplicate_with_n
 }
 
 #[tokio::test]
+async fn a_withdrawal_sent_again_is_refused_as_a_duplicate_with_nothing_written() -> TestResult {
+    let members = members((&[RX_A], &[RX_B]), created()).await?;
+    dispensations_at_a(
+        &members,
+        page(searchset(
+            "https://cdr-a.example.org",
+            &[&already_held()],
+            None,
+        )),
+    )
+    .await;
+    let withdrawal = dispensation(BY_IDENTIFIER).replace("\"completed\"", "\"entered-in-error\"");
+    assert!(withdrawal.contains("\"status\":\"entered-in-error\""));
+    let dir = tempfile::tempdir()?;
+    let (status, text) = call(gateway(&members, dir.path())?, post(&withdrawal)?).await?;
+    assert_eq!(StatusCode::CONFLICT, status, "{text}");
+    assert!(text.contains("\"code\":\"duplicate\""), "{text}");
+    assert!(
+        none_written(&members).await?,
+        "the face offers no withdrawal: nothing reaches the owner"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn another_dispensation_of_the_patient_is_no_duplicate_and_is_written() -> TestResult {
     let members = members((&[RX_A], &[RX_B]), created()).await?;
     let other = already_held().replace(DISPENSATION_VALUE, "SYNTHETIC-MD-OTHER");
