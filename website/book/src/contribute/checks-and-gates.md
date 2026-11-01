@@ -29,7 +29,8 @@ manifest check installs the toolchain only to read the manifests):
 | kubeconform | the Kubernetes package under `deploy/kubernetes/`, its base and its example overlay rendered by `kustomize`, in strict mode |
 | observability | the Grafana dashboard and the Prometheus rule file under `deploy/observability/`: `promtool check rules`, and every metric they name is one the gateway exports (`scripts/checks/observability.sh`) |
 | comment-style | the comment budgets of the Rust sources |
-| file-length | no hand-written Rust file or book page over 1000 lines |
+| file-length | no hand-written Rust file or book page over 1000 lines; a listed file may shrink and never grow |
+| duplication | the duplicated lines of the hand-written Rust, measured by jscpd at 50 tokens over 5 lines, may fall and never rise; a rise names both places of each new block |
 | versions | every repeated pin agrees with `docs/VERSIONS.md` |
 | favicon-sync | the book's favicons match the brand mark |
 | conformance-matrix | the [conformance matrix](../evaluate/conformance.md) agrees with the specification and with the tests that claim each point, and the README conformance badges agree with the matrix and the AQL golden pass list |
@@ -92,6 +93,8 @@ bash scripts/checks/versions.sh
 bash scripts/checks/comment-style.sh --all
 bash scripts/checks/file-length.sh --self-test
 bash scripts/checks/file-length.sh
+bash scripts/checks/duplication.sh --self-test
+bash scripts/checks/duplication.sh
 bash scripts/checks/favicon-sync.sh
 bash scripts/checks/conformance-matrix.sh
 bash scripts/conformance/report.sh --self-test

@@ -10,18 +10,19 @@
 # are outside the rule. A file listed in scripts/checks/file-length-allow.txt
 # is a known breach with the issue that splits it: it passes while it does not
 # grow past the line count recorded beside it (the ratchet), and its entry is
-# removed by the split. A file over $SOFT and under $HARD that is not listed
-# is reported as a warning, never a failure.
+# removed by the split. A listed file that shrank passes with a note, and
+# --update lowers its entry; --update never raises an entry and never adds
+# one, so the list only tightens (#1463). A file over $SOFT and under $HARD
+# that is not listed is reported as a warning, never a failure.
 #
 # Usage:
 #   scripts/checks/file-length.sh            check every tracked .rs file and
 #                                            every tracked book page
 #   scripts/checks/file-length.sh --files F…  check the named files
-#   scripts/checks/file-length.sh --record    rewrite the allow-list from the
-#                                            current breaches (a split removes
-#                                            entries; --record never adds a
-#                                            new one without an issue number
-#                                            given as --issue N)
+#   scripts/checks/file-length.sh --update    lower each entry to its file's
+#                                            length and drop the entries of
+#                                            files gone or back under $SOFT;
+#                                            refused while a listed file grew
 #   scripts/checks/file-length.sh --self-test prove each refusal and each pass
 #                                            against fixture repositories
 #   --root DIR                               check the git tree at DIR instead
@@ -74,6 +75,26 @@ self_test() {
       failed=1
     fi
   }
+  # updates WANT NAME DIR: the guard's --update over DIR exits WANT.
+  updates() {
+    local want="$1" name="$2" dir="$3" status=0
+    bash "$self" --root "$dir" --update > /dev/null 2>&1 || status=$?
+    if [[ "$status" -ne "$want" ]]; then
+      echo "file-length: self-test failed: $name exited $status, wanted $want." >&2
+      failed=1
+    fi
+  }
+  # entry_is NAME DIR WANT: the allow-list of DIR holds WANT as its entries.
+  entry_is() {
+    local name="$1" dir="$2" want="$3" got=""
+    if [[ -f "$dir/$ALLOW" ]]; then
+      got="$(grep -v '^#' "$dir/$ALLOW" || true)"
+    fi
+    if [[ "$got" != "$want" ]]; then
+      echo "file-length: self-test failed: $name: the list holds '$got', wanted '$want'." >&2
+      failed=1
+    fi
+  }
   # allow DIR LINES PATH: an allow-list entry for PATH at LINES.
   allow() {
     local dir="$1" lines="$2" path="$3"
@@ -100,6 +121,31 @@ self_test() {
   case_dir; fixture "$d" crates/a/src/big.rs "$SOFT"
   allow "$d" $((HARD + 1)) crates/a/src/big.rs
   expect 1 "a listed Rust file back under $SOFT" "$d"
+  case_dir; fixture "$d" crates/a/src/big.rs $((HARD + 1))
+  allow "$d" $((HARD + 5)) crates/a/src/big.rs
+  expect 0 "a listed Rust file that shrank" "$d"
+  # The ratchet only tightens: --update lowers a shrunk entry, drops a gone
+  # one, refuses a grown one with the list unchanged, and adds no new breach.
+  case_dir; fixture "$d" crates/a/src/big.rs $((HARD + 1))
+  allow "$d" $((HARD + 5)) crates/a/src/big.rs
+  updates 0 "--update over a listed file that shrank" "$d"
+  entry_is "--update lowers a shrunk entry" "$d" "$((HARD + 1)) crates/a/src/big.rs #1"
+  expect 0 "the lowered entry" "$d"
+  case_dir; fixture "$d" crates/a/src/small.rs 10
+  allow "$d" $((HARD + 1)) crates/a/src/gone.rs
+  updates 0 "--update over an entry whose file is gone" "$d"
+  entry_is "--update drops a gone entry" "$d" ""
+  case_dir; fixture "$d" crates/a/src/big.rs "$SOFT"
+  allow "$d" $((HARD + 1)) crates/a/src/big.rs
+  updates 0 "--update over a listed file back under $SOFT" "$d"
+  entry_is "--update drops an entry back under $SOFT" "$d" ""
+  case_dir; fixture "$d" crates/a/src/big.rs $((HARD + 2))
+  allow "$d" $((HARD + 1)) crates/a/src/big.rs
+  updates 1 "--update over a listed file that grew" "$d"
+  entry_is "--update never raises an entry" "$d" "$((HARD + 1)) crates/a/src/big.rs #1"
+  case_dir; fixture "$d" crates/a/src/big.rs $((HARD + 1))
+  updates 1 "--update over an unlisted breach" "$d"
+  entry_is "--update never adds an entry" "$d" ""
   case_dir
   fixture "$d" website/book/src/long.md $((SOFT + 1))
   fixture "$d" crates/a/src/long.rs $((SOFT + 1))
@@ -114,13 +160,11 @@ self_test() {
 }
 
 mode=check
-issue=""
 files=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --files) mode=files; shift; while [[ $# -gt 0 ]] && [[ "${1#--}" = "$1" ]]; do files+=("$1"); shift; done ;;
-    --record) mode=record; shift ;;
-    --issue) issue="$2"; shift 2 ;;
+    --update) mode=update; shift ;;
     --root) root="$2"; shift 2 ;;
     --self-test) self_test; exit 0 ;;
     *) printf 'file-length: unknown argument %s\n' "$1" >&2; exit 2 ;;
@@ -162,7 +206,38 @@ listed() {
 
 fail=0
 warn=0
-breaches=()
+# --update lowers the list to what the tree holds and never raises it.
+if [[ "$mode" = "update" ]] && [[ -f "$ALLOW" ]]; then
+  kept=()
+  while IFS=' ' read -r recorded path tag; do
+    case "$recorded" in
+    '' | \#*) continue ;;
+    *) ;;
+    esac
+    if [[ ! "$recorded" =~ ^[0-9]+$ ]]; then
+      note "FAIL $path: its allow-list entry records '$recorded', not a line count"
+      exit 1
+    fi
+    [[ -f "$path" ]] || { note "dropped $path: the file is gone"; continue; }
+    n=$(wc -l < "$path" | tr -d " ")
+    if [[ "$n" -gt "$recorded" ]]; then
+      note "FAIL $path: $n lines, listed at $recorded; --update never raises an entry, split the file"
+      exit 1
+    elif [[ "$n" -le "$SOFT" ]]; then
+      note "dropped $path: $n lines, under $SOFT"
+      continue
+    fi
+    kept+=("$n $path $tag")
+  done < "$ALLOW"
+  {
+    printf '# Known file-length breaches: "<lines> <path> #<issue>". A listed file passes\n'
+    printf '# while it does not grow past its recorded count; the split removes the entry.\n'
+    for k in ${kept[@]+"${kept[@]}"}; do printf '%s\n' "$k"; done | sort -k2
+  } > "$ALLOW.tmp" && mv "$ALLOW.tmp" "$ALLOW"
+  note "lowered $ALLOW to ${#kept[@]} entries"
+fi
+# An unlisted breach is never written down: the check below still fails it.
+[[ "$mode" = "update" ]] && mode=check
 # A listed path that no longer exists is a stale entry: the split removed the
 # file, so the entry goes with it.
 if [[ "$mode" = "check" ]] && [[ -f "$ALLOW" ]]; then
@@ -180,9 +255,6 @@ for f in ${files[@]+"${files[@]}"}; do
   [[ -f "$f" ]] || continue
   hand_written "$f" || continue
   n=$(wc -l < "$f" | tr -d " ")
-  if [[ "$n" -gt "$SOFT" ]]; then
-    breaches+=("$n $f")
-  fi
   entry=$(listed "$f")
   if [[ -n "$entry" ]]; then
     recorded=${entry%% *}
@@ -198,6 +270,8 @@ for f in ${files[@]+"${files[@]}"}; do
     elif [[ "$n" -le "$SOFT" ]]; then
       note "FAIL $f: $n lines, under the limit; remove its allow-list entry"
       fail=1
+    elif [[ "$n" -lt "$recorded" ]]; then
+      note "note: $f shrank to $n lines from $recorded; --update lowers its entry"
     fi
     continue
   fi
@@ -209,27 +283,6 @@ for f in ${files[@]+"${files[@]}"}; do
     warn=$((warn + 1))
   fi
 done
-
-if [[ "$mode" = "record" ]]; then
-  {
-    printf '# Known file-length breaches: "<lines> <path> #<issue>". A listed file passes\n'
-    printf '# while it does not grow past its recorded count; the split removes the entry.\n'
-    for b in ${breaches[@]+"${breaches[@]}"}; do
-      n=${b%% *}; p=${b#* }
-      entry=$(listed "$p")
-      if [[ -n "$entry" ]]; then
-        printf '%s %s %s\n' "$n" "$p" "${entry#* }"
-      elif [[ -n "$issue" ]]; then
-        printf '%s %s #%s\n' "$n" "$p" "$issue"
-      else
-        printf 'file-length: %s is a new breach; pass --issue N to record it\n' "$p" >&2
-        exit 2
-      fi
-    done | sort -k2
-  } > "$ALLOW.tmp" && mv "$ALLOW.tmp" "$ALLOW"
-  note "recorded ${#breaches[@]} breaches in $ALLOW"
-  exit 0
-fi
 
 if [[ "$fail" -eq 0 ]]; then
   note "OK: no hand-written .rs file or book page over $HARD lines outside the allow-list ($warn over $SOFT unlisted)"
