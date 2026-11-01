@@ -39,9 +39,10 @@ has run on every change since the workspace landed.
 | `scan-and-tag.yml` | called by `release.yml` | the image gate: both pushed digests scanned on both platforms for HIGH and CRITICAL findings that have a fix (`trivy.yaml`), then the `<version>`, `<major>.<minor>` and `latest` tags applied to the digests that passed |
 | `image-scan.yml` | Mondays, dispatch | the published `latest` images, both platforms, scanned with `trivy.yaml` and every OpenVEX document under `security/vex/`, one issue when one carries a finding |
 | `publish-crates.yml` | a pushed `v*` tag, dispatch | the crates.io lane behind the workspace `publish` switch: the publishable set from `cargo metadata`, packaged, then uploaded in dependency order through Trusted Publishing; a successful no-op while the switch is `false` (`docs/release.md` § The crates.io lane) |
+| `ratchet-tighten.yml` | daily, dispatch, on `main` only | runs the stray-literal guard's `--update` and, when a count fell, opens one pull request holding only `scripts/checks/stray-literals.baseline`, or moves its open one; a rise fails the lane and nothing fell does nothing (#1467) |
 | `fuzz.yml` | Wednesdays, dispatch, and pull requests touching `crates/openehr-federation`, `app/ferrofed-server`, `fuzz/` or `scripts/fuzz/` | the four `cargo fuzz` targets over the untrusted inputs, time-boxed and advisory, after a check that the generated seeds are current (§The fuzz lane) |
 
-Dependabot (`.github/dependabot.yml`) is the fifteenth piece and is described
+Dependabot (`.github/dependabot.yml`) is the sixteenth piece and is described
 under the pins below.
 
 ## The two tiers of `ci.yml`

@@ -38,9 +38,11 @@
 #
 # The baseline file holds `<count> <path>` lines for a tree whose strings
 # are still moving to the catalogs: a file may hold up to its count and no
-# more, and a file not named may hold none. With --update the script
-# rewrites the baseline to the counts it finds, which only a change that
-# moves strings to the catalogs should need.
+# more, and a file not named may hold none. A rise fails; a fall passes with
+# a one-line note, so a pull request that moves strings to the catalogs
+# leaves the baseline alone (#1467). With --update the script rewrites the
+# baseline to the counts it finds, which only ratchet-tighten.yml runs, on
+# main.
 #
 # Usage:
 #   scripts/checks/stray-literals.sh [--update] [ROOT...]
@@ -269,5 +271,19 @@ done <<< "$counts"
 if [ "$status" -ne 0 ]; then
   echo "stray-literals: move each string into the catalog under locales/ and look it up, or allow a literal that is no reader's text in $allow with the reason." >&2
   exit 1
+fi
+fell=0
+if [ -f "$baseline" ]; then
+  fell="$(
+    printf '%s\n' "$counts" | awk '
+      NR == FNR { if (NF == 2) found[$2] = $1; next }
+      /^[ \t]*(#|$)/ { next }
+      { have = ($2 in found) ? found[$2] : 0; if (have + 0 < $1 + 0) n++ }
+      END { print n + 0 }
+    ' - "$baseline"
+  )"
+fi
+if [ "$fell" -gt 0 ]; then
+  echo "stray-literals: note: $fell file(s) hold fewer stray literals than $baseline allows; ratchet-tighten.yml lowers it on main."
 fi
 echo "stray-literals: no stray literal under $*"

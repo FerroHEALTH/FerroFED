@@ -17,7 +17,7 @@ the rules every workflow keeps.
 
 ## What runs
 
-Fourteen workflows:
+Fifteen workflows:
 
 - `.github/workflows/ci.yml`: the two-tier gate. Tier 1 needs no Rust
   (zizmor, actionlint, shellcheck, hadolint, kubeconform over the example
@@ -119,6 +119,14 @@ Fourteen workflows:
 - `.github/workflows/fuzz.yml`: the `cargo fuzz` targets over the untrusted
   inputs, time-boxed and advisory, weekly, on dispatch, and on a pull request
   that touches the code a target reads.
+- `.github/workflows/ratchet-tighten.yml`: the ratchet guards fail a rise
+  and pass a fall with a note, so a pull request never lowers a ratchet
+  file. Daily on `main` and on dispatch, this lane runs each guard's
+  `--update` and opens one pull request that holds only the ratchet files,
+  or moves its open one, and does nothing when nothing fell (#1467). Its
+  commit is made through the Git Data API, so it is signed, on a branch of
+  its own, never a push to `main`; `RATCHET_TIGHTEN_TOKEN` lets its pull
+  request start CI.
 
 `.github/release.yml` is a different file from the workflow: it configures
 GitHub's auto-generated release notes, which the lane never uses, because a

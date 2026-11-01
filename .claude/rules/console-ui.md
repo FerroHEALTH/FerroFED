@@ -228,7 +228,10 @@ No string the console draws lives outside a catalog (FerroUI §13).
   `println!` or `eprintln!` with every line of its arguments, the
   configuration's refusals and the command line's help, which stay in
   English as the log does), and each literal no reader sees as words is
-  allowed with its reason in `scripts/checks/stray-literals.allow`.
+  allowed with its reason in `scripts/checks/stray-literals.allow`. A
+  rise over `scripts/checks/stray-literals.baseline` fails; a fall passes
+  with a note, and a pull request never runs `--update`: the daily
+  `ratchet-tighten.yml` lowers the baseline on `main` (#1467).
 - The pseudo-locale `qps` (`crate::locale::PSEUDO_TAG`) draws every word
   of the console and of FerroUI accented and two fifths longer, as
   FerroUI's gallery does. It ships no catalog directory and no request can
