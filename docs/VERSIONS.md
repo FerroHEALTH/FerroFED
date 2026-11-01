@@ -495,11 +495,11 @@ stylesheet, its FerroFED theme and its script modules from the crate itself
 (#1457). It builds with `cargo build` alone: no WebAssembly target, no site
 bundle and no build tool of its own. FerroUI is pinned exactly, so the
 console moves to a new release deliberately, and the About page names the
-version it draws with. `scripts/checks/versions.sh` holds every row.
+version it draws with, read from the crate. `scripts/checks/versions.sh` holds every row.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ferrohealth-ui` (FerroUI) | 0.6.0 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `app/ferrofed-console/src/pages/about.rs`, `.claude/rules/console-ui.md` |
+| `ferrohealth-ui` (FerroUI) | 0.6.2 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `.claude/rules/console-ui.md` |
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only

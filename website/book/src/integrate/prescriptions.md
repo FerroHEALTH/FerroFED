@@ -316,8 +316,12 @@ nothing is written in any of the refusals below
 refusal is passed on as `409`, naming the member and its status
 (`the_owners_refusal_is_a_conflict_naming_it`).
 
-A withdrawal is a dispensation sent again with `status`
-`entered-in-error`, routed as any other; it has no route of its own.
+The face offers no withdrawal of a dispensation. A dispensation sent again
+under the same business identifier with `status` `entered-in-error` is a
+duplicate like any other: it is refused `409` `duplicate` and nothing reaches
+the owner
+(`a_withdrawal_sent_again_is_refused_as_a_duplicate_with_nothing_written`).
+Withdraw a dispensation at the member that holds it.
 
 ## Reading a dispensation
 
