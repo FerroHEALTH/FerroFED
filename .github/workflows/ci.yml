@@ -7,7 +7,8 @@
 #      over .github, actionlint over .github/workflows, shellcheck over the
 #      tracked shell programs, hadolint over any Dockerfile, kubeconform over
 #      the example Kubernetes manifests, the committed comment-style,
-#      file-length and versions guards, and the offline site link guard. These keep this very
+#      file-length, duplication and versions guards, and the offline site
+#      link guard. These keep this very
 #      file honest, so none of them may depend on the Rust toolchain.
 #   2. The Rust tier is gated behind a detection job that looks for a root
 #      Cargo.toml. The workspace carries one, so every cargo lane runs on
@@ -316,7 +317,8 @@ jobs:
   # The file-length guard: a hand-written Rust file or book page stays under
   # 1000 lines and a listed breach may not grow (no specification governs
   # this: our own design). It passes on a tree with no .rs file. Its
-  # self-test proves each refusal and each pass over fixture repositories.
+  # self-test proves each refusal and each pass over fixture repositories,
+  # and that --update lowers the list and never raises it (#1463).
   file-length:
     name: file-length
     runs-on: ubuntu-latest
@@ -331,6 +333,26 @@ jobs:
           set -euo pipefail
           bash scripts/checks/file-length.sh --self-test
           bash scripts/checks/file-length.sh
+
+  # The duplication ratchet (#1463): jscpd, pinned in docs/VERSIONS.md and
+  # run from its image by digest, over the hand-written Rust; the duplicated
+  # lines may fall and never rise (no specification governs this: our own
+  # design). A fall passes with a note, and ratchet-tighten.yml lowers the
+  # count on main.
+  duplication:
+    name: duplication
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Duplication ratchet self-test
+        run: bash scripts/checks/duplication.sh --self-test
+      - name: The duplicated lines have not risen
+        run: bash scripts/checks/duplication.sh
 
   # The version-drift guard. It compares every present config file against
   # docs/VERSIONS.md and skips loudly for the files that have not landed yet,
@@ -1596,6 +1618,7 @@ jobs:
       - comment-style
       - stray-literals
       - file-length
+      - duplication
       - versions
       - favicon-sync
       - copyright-holder

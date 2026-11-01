@@ -24,7 +24,9 @@ Fifteen workflows:
   Kubernetes manifests, the `observability` job, which checks the Grafana
   dashboard and the Prometheus rule file under `deploy/observability/` with
   promtool and holds both to the metrics the gateway exports, the
-  comment-style guard, the file-length guard, the
+  comment-style guard, the file-length guard, the duplication guard
+  (`scripts/checks/duplication.sh`, `rust-style.md` §Code is written once),
+  the
   versions guard, the favicon guard, the copyright-holder guard, the IHE
   citation guard over the vendored IHE texts, the AQL splice guard
   (`scripts/checks/aql-splice.sh`), the bash 3.2 guard, the
@@ -119,9 +121,9 @@ Fifteen workflows:
 - `.github/workflows/fuzz.yml`: the `cargo fuzz` targets over the untrusted
   inputs, time-boxed and advisory, weekly, on dispatch, and on a pull request
   that touches the code a target reads.
-- `.github/workflows/ratchet-tighten.yml`: the ratchet guards fail a rise
-  and pass a fall with a note, so a pull request never lowers a ratchet
-  file. Daily on `main` and on dispatch, this lane runs each guard's
+- `.github/workflows/ratchet-tighten.yml`: the ratchet guards
+  (duplication, file-length, stray literals) fail a rise and pass a fall
+  with a note, so a pull request never lowers a ratchet file. Daily on `main` and on dispatch, this lane runs each guard's
   `--update` and opens one pull request that holds only the ratchet files,
   or moves its open one, and does nothing when nothing fell (#1467). Its
   commit is made through the Git Data API, so it is signed, on a branch of

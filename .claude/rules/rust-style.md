@@ -62,7 +62,64 @@ use`. A split moves code without changing behaviour: the same tests pass
 before and after, and a defect found on the way is filed, never fixed in the
 split. Enforced by `scripts/checks/file-length.sh` (CI guard tier): a hard
 breach fails, a listed breach in `scripts/checks/file-length-allow.txt`
-passes only while it does not grow, and the split removes its entry.
+passes only while it does not grow, and the split removes its entry. The
+list only tightens (#1463): a listed file that shrank passes with a note,
+`scripts/checks/file-length.sh --update` lowers its entry and drops the
+entries of files gone or back under 750 lines, and `--update` never raises
+an entry and never adds one. Its `--self-test` proves both directions.
+
+## Code is written once
+
+No specification governs this: our own design (#1463, ported from
+VernumBOEK's rule of the same name and FerroEHR's guard).
+
+- **Share knowledge and decisions, never text that only looks alike.** Two
+  copies that change for the same reason (one business rule, one wire rule,
+  one security rule) move to one owner in the same change. Two pieces with
+  different reasons to change stay apart, however alike they read.
+- **The owner is the module that owns the concern.** Across crates it is the
+  crate lower in the layering (`openehr-federation` below the `app/` crates,
+  `ferrofed-registry` and `ferrofed-identity` below `ferrofed-engine`, the
+  engine below `ferrofed-server`). Within a crate it is the module whose part
+  of the domain the code serves. It is never a `util`, `utils`, `helpers` or
+  `common` module, whose name says nothing about what it holds, and never a
+  function that takes a flag to choose between two behaviours.
+- **One copy is fine, two are looked at, three are extracted.**
+- **The ratchet measures it.** `scripts/checks/duplication.sh` runs jscpd
+  (pinned by version and image digest in `docs/VERSIONS.md`, The clone
+  detector) over `app/*/src/`, `crates/*/src/` and `tools/*/src/` in the
+  `duplication` CI job and holds the total of duplicated lines to the count
+  in `scripts/checks/duplication.count`. A rise fails and names both places
+  of each new block. A fall passes with a one-line note, and your pull
+  request leaves the count alone: `ratchet-tighten.yml` runs
+  `scripts/checks/duplication.sh --update` on `main` each day and opens one
+  pull request with the lower count and
+  `scripts/checks/duplication-baseline.txt`, the guard's own key of every
+  counted block: its two paths and the sha256 of the lines at each, with no
+  line number, so a change that leaves a block's lines alone leaves its key
+  alone (#1467). `--update` never raises the count; a rise that has to stay
+  is a hand edit of the file in a change that says why. Locally the guard
+  takes a `jscpd` on `PATH` of the pinned version, then the pinned image
+  through docker or podman, then the release binary
+  `scripts/checks/duplication.sh --install` puts under `target/tools/`.
+- **The threshold is 50 tokens over at least 5 lines**, jscpd's own
+  defaults. The scan leaves out the `use` declarations, a file that opens
+  with `// @generated`, a file from its first column-one `#[cfg(test)]` line
+  on (the inline test module), and `tests/`. Measured on 2026-11-01 at
+  `fd946377` with those exclusions, over 540 files and 160,240 lines:
+
+  | Threshold | Blocks | Duplicated lines | Blocks across two files | Blocks in `tools/` |
+  | --- | --- | --- | --- | --- |
+  | 50 tokens, 5 lines | 175 | 1,780 | 126 | 30 |
+  | 70 tokens, 5 lines | 58 | 783 | 48 | 14 |
+  | 100 tokens, 5 lines | 22 | 366 | 20 | 9 |
+
+  Raising the threshold drops the short blocks (the same `From<ClientError>`
+  conversion in the mCSD and PMIR clients, the tail of a token response in
+  the Nuts and OAuth 2.0 grants, two URL builders in `single_node`) and
+  keeps the whole functions, yet each short block is code written twice as
+  well, so 50 it is. Raising the threshold is a change to this section and to the guard
+  together, with the table measured again.
 
 ## Comments and documentation
 

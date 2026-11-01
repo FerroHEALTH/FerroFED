@@ -231,8 +231,13 @@ Today:
 - `changelog.d/`: one changelog fragment per change, assembled into
   `CHANGELOG.md` at the cut by `scripts/release/changelog.sh --assemble`.
 - `scripts/checks/`: the committed guards CI tier 1 runs (comment style, file
-  length, versions, copyright holder, conformance matrix, obligations, e2e
-  placement and the rest), each runnable by hand.
+  length, duplication, versions, copyright holder, conformance matrix,
+  obligations, e2e placement and the rest), each runnable by hand. Two are
+  ratchets that only tighten (#1463): `file-length.sh` holds a hand-written
+  Rust file or book page to 1000 lines and a listed one to its recorded
+  length, and `duplication.sh` holds the duplicated lines jscpd measures to
+  `duplication.count`; a fall passes with a note and `ratchet-tighten.yml`
+  lowers the counts on `main` (#1467).
 - `scripts/conformance/`: the matrix, obligations and per-run report
   (`report.sh`) scripts.
 - `scripts/release/`: the changelog assembly, the crates.io lane, the

@@ -32,6 +32,7 @@ actionlint
 shellcheck --severity=style <tracked shell files>
 scripts/checks/comment-style.sh --all
 scripts/checks/file-length.sh
+scripts/checks/duplication.sh
 scripts/checks/versions.sh
 scripts/checks/favicon-sync.sh
 scripts/checks/conformance-matrix.sh
