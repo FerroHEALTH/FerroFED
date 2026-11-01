@@ -74,7 +74,7 @@
 #                          matches the root
 #                          Cargo.toml [workspace.dependencies] requirement.
 #  14. console toolchain    the FerroUI row against the root Cargo.toml
-#                          requirement and the version About names, the
+#                          requirement, the
 #                          thirtyfour row against the root Cargo.toml and the
 #                          Chrome for Testing row against the chrome-version
 #                          ci.yml installs.
@@ -1300,9 +1300,9 @@ for crate in opentelemetry opentelemetry_sdk opentelemetry-proto tracing-opentel
   fi
 done
 
-echo "== console toolchain ($matrix <-> Cargo.toml, the About page, ci.yml)"
-# FerroUI is pinned exactly, and About names the version the console draws
-# with, so both are held to its row.
+echo "== console toolchain ($matrix <-> Cargo.toml, ci.yml)"
+# FerroUI is pinned exactly, so the root Cargo.toml is held to its row; About
+# reads the version from the crate itself (#1471).
 want="$(pin_of "ferrohealth-ui (FerroUI)" "$matrix")"
 if [[ -z "$want" ]]; then
   bad "$matrix has no ferrohealth-ui (FerroUI) row"
@@ -1313,15 +1313,6 @@ else
       bad "ferrohealth-ui: root Cargo.toml requires ${req:-nothing}, $matrix pins =$want"
     else
       note "OK: ferrohealth-ui =$want (root Cargo.toml agrees)"
-    fi
-  fi
-  about=app/ferrofed-console/src/pages/about.rs
-  if [[ -f "$about" ]]; then
-    named="$(sed -nE 's|^const FERROUI: &str = "([^"]+)";|\1|p' "$about")"
-    if [[ "$named" != "$want" ]]; then
-      bad "ferrohealth-ui: $about names ${named:-nothing}, $matrix pins $want"
-    else
-      note "OK: $about names FerroUI $want"
     fi
   fi
 fi
