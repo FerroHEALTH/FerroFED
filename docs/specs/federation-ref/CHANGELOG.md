@@ -3,16 +3,48 @@
 Notable changes to this project. The version number tracks the specification
 version this implements — see [Versioning](CONTRIBUTING.md#versioning).
 
-## Unreleased
+## 1.0.1 (unreleased)
 
-Tracks the specification's three commits after 0.9.0, up to the SEC review
-amendments of 2026-09-28. **The spec changed the wire contract without moving
-`spec_version`** — it stays `"0.9"` and the spec owes a bump before release —
-so a client cannot detect the changes below from `OPTIONS {base}/`; this entry
-is the notice.
+Tracks spec **v1.0.1**, an erratum to 1.0.0. `federation.spec_version` stays
+`"1.0"`, because a patch release does not change the wire contract.
+
+### Fixed
+
+- **EHR-scoped version reads and writes are located by the path `ehr_id`**
+  (§12.5.1, N41). A request under `/v1/ehr/{ehr_id}/…` whose path carried an
+  `OBJECT_VERSION_ID` was routed by the uid's `creating_system_id`, ahead of
+  the explicit target, the resolution binding and the `ehr_id` index. For an
+  imported copy that sent the holder's `ehr_id` to the owner, where it yields a
+  `404` or, on an `ehr_id` collision, another patient's EHR. Spec 1.0.1 orders
+  the two rules: `creating_system_id` is now step 4 of the order, after the
+  index and before the ask-all probe, and is otherwise the write control test.
+  A read located at a copy holder returns the holder's copy, and
+  `openEHR-federation-system-id` naming the holder tells the client so. A write
+  located at a copy holder is rejected `409 FED_WRONG_CONTROLLING_SYSTEM` before
+  it is forwarded, and is never redirected to the owner (CP-14, CP-29, CP-33).
+- `system_id` mappings are learned only from write responses. A read can now
+  land on a copy holder, and learning from its `ETag` would have mapped a
+  foreign `creating_system_id` to the holder and let a later write to the copy
+  pass the control test.
+
+## 1.0.0 (unreleased)
+
+Tracks the specification from the SEC review amendments of 2026-09-28 up to
+its approval as **v1.0.0** by the openEHR Specifications Editorial Committee
+(SEC) on 2026-10-12. The spec changed the wire contract in its 0.9.x line
+without moving `spec_version`, so for a while a client could not detect the
+changes below from `OPTIONS {base}/`. Spec 1.0.0 paid that bump: this gateway
+now reports `"1.0"`, and `"1.0"` is the first value that unambiguously means
+the amended contract. A gateway reporting `"0.9"` may be either shape.
 
 ### Changed
 
+- **`federation.spec_version` reports `"1.0"`**, and the project version moves
+  to `1.0.0-SNAPSHOT`, tracking spec 1.0.0 (no wire change beyond the marker;
+  the amended contract below is what 1.0.0 approved). The vendored schemas were
+  refreshed from the spec 1.0.0 tree: `federated-result-set.schema.json` gains
+  the `node-error` status the spec added on 2026-09-28 (R1), and both `$id`
+  URLs now carry `federation-aql/1.0/`.
 - **Breaking wire change: the federation's `meta` additions are nested under
   `meta.federation`** (§9.1, N17, CP-35). `complete`, `endpoints`, `timeout`
   and `dedup` moved from direct members of `meta` to members of one unprefixed
@@ -93,6 +125,15 @@ is the notice.
 
 ### Added
 
+- **`X-Request-ID` on every `/v1` response.** The gateway assigns each request
+  an id; a client may send its own `X-Request-ID` (one token, up to 64 chars
+  of `A-Z a-z 0-9 . _ : -`) and gets it echoed back, otherwise the assigned id
+  is echoed. The value is carried on `FederationRequestContext`
+  (`requestId`, `correlationId`) for anything downstream that records
+  requests. Set before the filter chain runs, so the header is present on the
+  gateway's own 400s and on the security chain's 401s too. An unusable client
+  value is ignored, never a reason to refuse the request. Not a specification
+  header.
 - **A gateway-held stored-query registry** (§12.7, N44, new CP-40, Track 9).
   `PUT /v1/definition/query/{name}/{version}` stores a definition at the
   gateway (`text/plain` or JSON `{q}`); `GET` reads one version or the ITS-REST

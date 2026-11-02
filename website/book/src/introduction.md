@@ -17,7 +17,7 @@ data of its own.
 
 FerroFED implements the openEHR Federation Working Group's
 [Federation Tier with AQL](https://syntaric.github.io/openehr-federation-spec/)
-specification, release 1.0.0, and reaches every node over openEHR
+specification, release 1.0.1, and reaches every node over openEHR
 ITS-REST 1.1.0.
 
 This book covers FerroFED alone. What every FerroHEALTH product shares is in

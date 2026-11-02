@@ -22,13 +22,10 @@ use http::{Request, StatusCode};
 use openehr_federation::headers::ENDPOINT;
 
 use crate::facade::{EHR_A, PATIENT};
-use crate::path_ehr_id::{ENDPOINT_A, answer, holder, over, probe_at, stranger};
+use crate::path_ehr_id::{ENDPOINT_A, VERSION_A, answer, holder, over, probe_at, stranger};
 use crate::support::{asked, error_body};
 
 type TestResult = Result<(), Box<dyn Error>>;
-
-/// A version uid node A minted.
-const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
 /// The composition resource of [`EHR_A`] that `verb` addresses for the
 /// version `version`: `PUT` names the versioned object, the version's object

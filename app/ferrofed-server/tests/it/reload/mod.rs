@@ -37,11 +37,8 @@ use http::StatusCode;
 use wiremock::{Request, Respond, ResponseTemplate};
 
 use crate::facade::{EHR_A, body, patient_query, post, settings_with_room};
-use crate::path_ehr_id::holder;
+use crate::path_ehr_id::{VERSION_A, holder};
 use crate::support::call;
-
-/// A version uid node A minted, held by [`holder`].
-const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
 type TestResult = Result<(), Box<dyn Error>>;
 

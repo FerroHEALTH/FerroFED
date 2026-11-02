@@ -13,6 +13,7 @@ use ferrofed_registry::incident::Detection;
 use ferrofed_server::config::{Config, error};
 use ferrofed_server::facade::owner::{self, Held, Step};
 use http::HeaderMap;
+use openehr_base::prelude::ObjectVersionId;
 
 use super::{ENDPOINT_A, ENDPOINT_B, TestResult, collision, ehr, named, node, snapshot, targeting};
 
@@ -164,4 +165,32 @@ fn the_configured_index_capacity_is_the_one_resolved_and_zero_is_refused() -> Te
         Err(error::Error::Zero { key }) if key == "federation.ehr_index_capacity" => Ok(()),
         other => Err(format!("refused naming the key: {other:?}").into()),
     }
+}
+
+// conformance: CP-14 CP-33
+#[test]
+fn step_4_names_the_member_whose_system_id_is_the_creating_system_id() -> TestResult {
+    let snapshot = snapshot()?;
+    let version =
+        ObjectVersionId::new("8849182c-82ad-4088-a07f-48ead4180515::cdr-b.example.org::1")?;
+    let located = owner::created_by(&snapshot, &version).ok_or("step 4 names a member")?;
+    assert_eq!(
+        Some((ENDPOINT_B.to_owned(), Step::CreatingSystem)),
+        named(&located),
+        "§12.5.1 step 4, §12.2"
+    );
+    Ok(())
+}
+
+// conformance: CP-14 CP-33
+#[test]
+fn step_4_names_no_member_for_a_creating_system_id_the_registry_does_not_route() -> TestResult {
+    let snapshot = snapshot()?;
+    let version =
+        ObjectVersionId::new("8849182c-82ad-4088-a07f-48ead4180515::external.example.org::1")?;
+    assert!(
+        owner::created_by(&snapshot, &version).is_none(),
+        "no member's system_id and no registered mapping, so the next step is taken (§12.5.1)"
+    );
+    Ok(())
 }

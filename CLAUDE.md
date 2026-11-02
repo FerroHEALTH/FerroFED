@@ -159,9 +159,11 @@ is read from, the AQL function classification the rewrite reads, the
 model's primitives, `Ordered` marker and reference targets the rewrite orders
 keys by.
 
-The specification is pinned at its 1.0.0 release, tag `1.0.0` at commit
-`7dcf0f4`, approved by the openEHR SEC on 2026-10-12
-(`.claude/memory/spec-pin-1-0-0.md`). Every requirement (`N#`) and
+The specification is pinned at its 1.0.1 release, the erratum of
+2026-11-01 to the 1.0.0 release the openEHR SEC approved on 2026-10-12, at
+upstream's untagged commit `b4242c2` by the owner's exception of 2026-11-02
+(#1478, retired by #1480 when upstream tags it;
+`.claude/memory/spec-pin-1-0-0.md`). Every requirement (`N#`) and
 conformance point (`CP-#`) cited here is cited against that text.
 
 ## The two layers

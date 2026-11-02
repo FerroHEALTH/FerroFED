@@ -124,7 +124,7 @@ fn spec_version_is_major_minor() {
             .expect("the pinned release")
             .as_str(),
         "1.0",
-        "§7a.2: a gateway implementing 1.0.0 reports 1.0"
+        "§7a.2: a gateway implementing 1.0.1 reports 1.0"
     );
     assert!(SpecVersion::new("1.0").is_ok(), "major.minor");
     for refused in ["1.0.0", "0.9.0", "0", "0.", ".9", "v0.9", "0.9-rc", ""] {

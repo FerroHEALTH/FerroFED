@@ -42,7 +42,7 @@ use crate::facade::{
     EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, body, dev_gateway, node_answering, patient_query,
     post, registry,
 };
-use crate::path_ehr_id::{answer, holder, over, probe_at};
+use crate::path_ehr_id::{VERSION_A, answer, holder, over, probe_at};
 use crate::support::{Logs, asked, bearer_as, error_body, mount};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -52,9 +52,6 @@ const ENDPOINT_B: &str = "node-b-pub";
 
 /// The claimants as the `409` message and the incident list them.
 const BOTH: &str = "[node-a-pub, node-b-pub]";
-
-/// A version uid node A minted.
-const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
 /// An `ehr_id` that is a valid `HIER_OBJECT_ID` and no UUID: an ISO OID, the
 /// form a patient identifier written in a path could take.

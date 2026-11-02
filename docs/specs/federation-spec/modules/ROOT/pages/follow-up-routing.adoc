@@ -31,22 +31,18 @@ This spec recommends #4 (per-node sub-paths) combined with the openEHR-native `c
 
 Every openEHR `VERSION` carries an `OBJECT_VERSION_ID = object_id '::' creating_system_id '::' version_tree_id`. The `creating_system_id` identifies the system that created the version, which is the CDR that owns it. So:
 
-* A result row including a `c/uid/value`, a `COMPOSITION`/`VERSION` uid, already contains the owning system id. No separate routing token is needed, and no uid is ever rewritten (xref:requirements.adoc#n22[N22]).
+* A result row including a `c/uid/value`, a `COMPOSITION`/`VERSION` uid, already contains the owning system id, and no uid is ever rewritten (xref:requirements.adoc#n22[N22]). The uid identifies the owner. The node a follow-up request reaches is located by the path `ehr_id` (<<ehr-id-route-order,§12.5.1>>), because every ITS-REST version read and write is EHR-scoped.
 * The Tier's registry (xref:requirements.adoc#n21[N21]) maps `creating_system_id`/`system_id` → CDR base URL. The registry MUST include every observed `creating_system_id`, not just node `system_id`s, because a CDR can ingest versions created elsewhere (imported compositions, xref:deduplication.adoc[§10.2]).
 
 == 12.3 Follow-up reads (normative)
 
-To read a specific `COMPOSITION`/`VERSION` from a result row, the Tier resolves the owning CDR in priority order (xref:requirements.adoc#n22[N22]):
+ITS-REST addresses every version read under an EHR (`+{base}/v1/ehr/{ehr_id}/composition/{uid}+`, `+{base}/v1/ehr/{ehr_id}/versioned_composition/{versioned_object_uid}/version/{version_uid}+`), so a follow-up read of a specific `COMPOSITION`/`VERSION` is an EHR-scoped request, and the Tier locates its node in the order of <<ehr-id-route-order,§12.5.1>> (xref:requirements.adoc#n22[N22]). The `creating_system_id` parsed from the uid is step 4 of that order and is consulted only when the explicit target, the binding and the index have named no node.
 
-. the `creating_system_id` parsed from the row's `OBJECT_VERSION_ID`, looked up in the registry;
-. else the `endpoint_id` carried on the row (if endpoint provenance was selected, xref:result-set.adoc[§9]);
-. else an ask-all fallback (WP #1).
-
-The Tier then forwards the read to that CDR's base URL and returns the result. openEHR uids MUST NOT be mutated in the request or the response.
+The Tier forwards the read to the located node and returns what that node holds. If that node holds an imported copy (xref:deduplication.adoc[§10.2]), the client receives the copy. The Tier sets `openEHR-federation-system-id` as on every routed request (xref:rest-facade.adoc#write-headers[§7a.3]), and a client detects a copy when that value differs from the `creating_system_id` in the uid it requested. Reading the original needs the owner's own `ehr_id` for the patient, which a query row from the owner carries (opt-in dedup keeps the originating copy, xref:deduplication.adoc[§10.2]). openEHR uids MUST NOT be mutated in the request or the response.
 
 == 12.4 Follow-up writes (normative)
 
-* A *versioned write* (a `CONTRIBUTION`/commit against an existing object) MUST be routed to the single controlling CDR - the one whose `system_id` equals the `creating_system_id` of the target object. The Tier MUST reject (400) a write it cannot unambiguously route (xref:requirements.adoc#n23[N23]).
+* A *versioned write* (a `CONTRIBUTION`/commit against an existing object) is located like any EHR-scoped request, in the order of <<ehr-id-route-order,§12.5.1>>, and MUST then pass the control test: the located node MUST be the single controlling CDR, the one whose `system_id` equals the `creating_system_id` of the target object. If it is not, the Tier MUST reject the write with `409 Conflict` naming the controlling system, without forwarding it (xref:deduplication.adoc#copy-write-reject[§10.3]), and MUST NOT redirect it to the owner under the holder's `ehr_id`. The Tier MUST reject (400) a write it cannot unambiguously locate (xref:requirements.adoc#n23[N23]).
 * *New-object creation* MUST target an explicitly chosen node - named via `FROM ENDPOINT` or the equivalent `openEHR-federation-endpoint` header (xref:endpoint-directive.adoc[§8]). Creating a new object that spans multiple nodes is disallowed in v1 (xref:scope.adoc[§2.3]), matching the White Paper's "Handling new records" caution that a façade needs a definite rule and multi-server references might not be allowed.
 * On every write, the Tier MUST convey the authenticated client identity to the target CDR (xref:requirements.adoc#n24[N24], xref:security.adoc[§13]).
 * A write derived from a de-duplicated row is routed by these same rules, and MUST NOT be sent to a node that merely holds an imported copy - see the hazard in xref:deduplication.adoc#update-routing-hazard[§10.3].
@@ -59,29 +55,31 @@ Every ITS-REST resource below `+{base}/v1/ehr/{ehr_id}+` is addressed by an `ehr
 
 === 12.5.1 How the gateway resolves it (normative)
 
-* [[ehr-id-route-order]]The gateway MUST determine the owning node for a path `ehr_id` in this priority order, and MUST NOT skip to a later step while an earlier one yields an unambiguous answer:
+* [[ehr-id-route-order]]The gateway MUST determine the owning node for a path `ehr_id` in this priority order, for every request under `+{base}/v1/ehr/{ehr_id}/…+` including version reads and versioned writes, and MUST NOT skip to a later step while an earlier one yields an unambiguous answer:
 +
 --
-. An *explicit target* on the request, the `openEHR-federation-endpoint` header (xref:endpoint-directive.adoc#header-alternative[§8.4]). Step 1 is the unambiguous case and is *RECOMMENDED* for all clients doing follow-ups: the row the client is acting on carried its `endpoint_id` (xref:result-set.adoc#endpoint-attributes[§9.3]), so the client already knows the answer and should say so.
+. An *explicit target* on the request, the `openEHR-federation-endpoint` header (xref:endpoint-directive.adoc#header-alternative[§8.4]). Step 1 is the unambiguous case and is *RECOMMENDED* for all clients doing follow-ups. A row carries its `endpoint_id` only when the query selected ENDPOINT attributes (xref:result-set.adoc#endpoint-attributes[§9.3]); a client holding it already knows the answer and should say so, and an undirected client without it relies on steps 2–4.
 . A *resolution binding* the gateway holds for this client session, the `{node, ehr_id}` set from a preceding Step-1 resolution (xref:identity-resolution.adoc[§5.2]).
 . The gateway's *`ehr_id` → node index*, where it maintains one.
+. If the path carries an `OBJECT_VERSION_ID` (a version read or a versioned write), the node whose `system_id` equals its *`creating_system_id`*, looked up in the registry (§12.2).
 . An *ask-all* probe (`+GET {base}/v1/ehr/{ehr_id}+` at each member node), for *reads only*.
 --
 +
 _(xref:requirements.adoc#n41[N41].)_
-* [[ehr-id-write-explicit]]For writes, ask-all MUST NOT be used to disambiguate. If steps 1–3 do not yield exactly one node, the gateway MUST reject with `400` and require an explicit target, because a write destination is not something to find by trial. _(xref:requirements.adoc#n41[N41].)_
+* [[ehr-id-not-creating-system]]The gateway MUST NOT forward a path `ehr_id` to a node chosen by `creating_system_id` while steps 1–3 named a different node, because an `ehr_id` is meaningful only at the node that issued it: forwarded to another node it yields a `404` or, on an `ehr_id` collision, another patient's EHR. In the imported-copy case the two differ, and the located node is the holder. A read then returns the holder's copy (§12.3), and a write fails the control test with `409` (§12.4). _(xref:requirements.adoc#n41[N41].)_
+* [[ehr-id-write-explicit]]For writes, ask-all MUST NOT be used to disambiguate. If steps 1–4 do not yield exactly one node, the gateway MUST reject with `400` and require an explicit target, because a write destination is not something to find by trial. _(xref:requirements.adoc#n41[N41].)_
 
 === 12.5.2 When two nodes claim the same `ehr_id`
 
 Because `ehr_id` values are node-local, nothing in openEHR prevents two CDRs from holding the same `ehr_id` for two different patients. Since `ehr_id` s are UUIDs this is vanishingly rare in practice, but it remains possible.
 
-* [[ehr-id-collision]]If an ask-all probe (§12.5.1 step 4) finds the same `ehr_id` at more than one node, the gateway MUST NOT choose between them. It MUST fail the request with `409 Conflict`, listing the claiming endpoints, and MUST raise this as an operational incident to the federation operator, because a collision is a federation integrity defect and not a routine client error. _(xref:requirements.adoc#n42[N42].)_
+* [[ehr-id-collision]]If an ask-all probe (§12.5.1 step 5) finds the same `ehr_id` at more than one node, the gateway MUST NOT choose between them. It MUST fail the request with `409 Conflict`, listing the claiming endpoints, and MUST raise this as an operational incident to the federation operator, because a collision is a federation integrity defect and not a routine client error. _(xref:requirements.adoc#n42[N42].)_
 * The gateway MUST NOT use "the node where this patient resolved" to break a collision tie unless resolution produced exactly one candidate. A collision between two nodes where the patient resolves at both is the case where guessing is most dangerous.
 * A collision detected on a read is equally reportable, because returning either node's data would mean returning an unidentified patient's record.
 
 === 12.5.3 Prevention belongs to membership
 
-Rules for joining a federation, which prevent these collisions in the first place, are drafted in xref:membership.adoc#identifier-conditions[§12b.2].
+Rules for joining a federation, which prevent these collisions in the first place, are set out in xref:membership.adoc#identifier-conditions[§12b.2].
 
 [#definition-routing]
 == 12.6 Definitions, templates and stored queries

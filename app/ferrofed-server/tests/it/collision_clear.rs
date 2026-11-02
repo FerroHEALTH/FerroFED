@@ -38,15 +38,12 @@ use crate::facade::{
     EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, body, crossref, gateway_within_state, node_answering,
     patient_query, post, registry,
 };
-use crate::path_ehr_id::holder;
+use crate::path_ehr_id::{VERSION_A, holder};
 use crate::support::{
     self, ISSUER, Logs, asked, bearer, bearer_as, error_body, mount, operator_bearer, send_as_is,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
-
-/// A version uid node A minted, read under [`EHR_A`].
-const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
 /// An `ehr_id` that is a valid `HIER_OBJECT_ID` and no UUID, the form a
 /// patient identifier written in a path could take.
@@ -210,7 +207,7 @@ async fn a_cleared_collision_that_still_stands_is_probed_and_refused_409_again()
             Some("ask-all".to_owned())
         ),
         refusal(answers.first().ok_or("an answer")?, &logs)?,
-        "the read probes again and finds the collision standing (§12.5.1 step 4, N42): {logs}"
+        "the read probes again and finds the collision standing (§12.5.1 step 5, N42): {logs}"
     );
     for server in [&a, &b] {
         let probes = asked(server)
@@ -247,7 +244,7 @@ async fn a_remedied_collision_reads_from_the_claimant_left_once_cleared() -> Tes
     assert_eq!(
         Some("node-a-pub"),
         acting.as_deref(),
-        "the probe finds the one member left holding it (§12.5.1 step 4)"
+        "the probe finds the one member left holding it (§12.5.1 step 5)"
     );
     Ok(())
 }

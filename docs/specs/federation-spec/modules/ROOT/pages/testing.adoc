@@ -69,8 +69,8 @@ The thin profile has a consequence for scoring. A conformance point marked `Node
 
 | [[track-6]]6
 | *Follow-up read/write routing*
-| A follow-up read/write for a row routes to the owning CDR via `creating_system_id`; uids are unchanged; a write to an existing object hits exactly the controlling CDR; an unroutable write is rejected.
-| xref:requirements.adoc#n21[N21], xref:requirements.adoc#n22[N22], xref:requirements.adoc#n23[N23]
+| A follow-up read/write for a row is located by the path `ehr_id` (xref:follow-up-routing.adoc#ehr-id-route-order[§12.5.1]); uids are unchanged; a write to an existing object hits exactly the controlling CDR; an unroutable write is rejected. Assert the imported-copy cases: a read addressed with the holder's `ehr_id` returns the holder's copy, with `openEHR-federation-system-id` naming the holder and so differing from the uid's `creating_system_id`; a write addressed with the holder's `ehr_id` is rejected `409` naming the owner, and the owner is never called. Assert also that with no explicit target, binding or index a version read reaches the owner through `creating_system_id` (step 4), and that an explicit target contradicting the binding is followed (step 1).
+| xref:requirements.adoc#n21[N21], xref:requirements.adoc#n22[N22], xref:requirements.adoc#n23[N23], xref:requirements.adoc#n36[N36], xref:requirements.adoc#n41[N41]
 
 | [[track-7]]7
 | *Auth conveyance + consent-deny*

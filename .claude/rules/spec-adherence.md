@@ -183,8 +183,11 @@ so.
 
 ## Re-pinning the specification
 
-The pin is the 1.0.0 release, approved by the openEHR SEC on 2026-10-12, and
-a later release replaces it by tag. A re-pin is a deliberate act, not a
+The pin is the 1.0.1 release, the erratum of 2026-11-01 to the 1.0.0
+release the openEHR SEC approved on 2026-10-12, and a later release replaces
+it by tag. 1.0.1 is pinned at its untagged commit `b4242c2` by the owner's
+exception of 2026-11-02, which `docs/VERSIONS.md` records and #1480 retires
+when upstream tags it. A re-pin is a deliberate act, not a
 refresh: re-run the vendor script at the new pin, diff the vendored pages
 (the release carries no change record page of its own), diff every N and CP
 this repository cites, and update the tests, the issues and

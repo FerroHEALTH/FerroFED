@@ -6,15 +6,19 @@
 //! (§7a.1, §12.5, N41).
 //!
 //! The owner is found from the targeting headers, a resolution binding of
-//! the client session, the `ehr_id` index, and for a read only, the ask-all
-//! probe of every member, all within the request's budget (§11.5). A write
-//! none of the first three routes is a `400`, and is never probed (N41); so
+//! the client session, the `ehr_id` index, the member the registry routes
+//! the `creating_system_id` of a path `OBJECT_VERSION_ID` to, and for a read
+//! only, the ask-all probe of every member, all within the request's budget
+//! (§11.5, §12.5.1 as 1.0.1 orders it). A write none of the first four
+//! routes is a `400`, and is never probed (N41); so
 //! is a read whose `ehr_id` is no bare UUID, because the probe would carry it
 //! to every member (§5.4.1, N33). An `ehr_id` a binding, the index or the
 //! probe finds at several members is a `409` listing the claimants, and
 //! raises the integrity incident of N42; no claimant is sent the request
-//! (§12.5.2). A versioned write is sent only when the node controls the
-//! version it amends ([`write::controlled`]; §12.4, N23).
+//! (§12.5.2). A versioned write is sent only when the node it is located at
+//! controls the version it amends, and is refused `409` otherwise, never
+//! redirected ([`write::controlled`]; §10.3 `copy-write-reject`, §12.4, N23,
+//! N36).
 
 use std::time::Instant;
 
@@ -48,8 +52,9 @@ const EHR_ID_PARAM: &str = "ehr_id";
 /// declared kind, before anything is sent (§5.4.1, N33), and a `CONTRIBUTION` in
 /// canonical XML is a `415` ([`write::media_refused`]). The owner is then found in
 /// the order of §12.5.1 (N41): the targeting headers, a binding the client
-/// session holds, the `ehr_id` index, and for a read only, the ask-all probe.
-/// A write none of the first three routes is a `400` (`target-required`),
+/// session holds, the `ehr_id` index, the `creating_system_id` of a path
+/// `OBJECT_VERSION_ID`, and for a read only, the ask-all probe.
+/// A write none of the first four routes is a `400` (`target-required`),
 /// and so is a read whose `ehr_id` is no bare UUID (`probe-requires-uuid`):
 /// nothing is probed. A new EHR is routed by the targeting headers alone,
 /// and refused when another member holds its `ehr_id`; a versioned write is
@@ -79,7 +84,7 @@ pub(super) async fn route(
     };
     let snapshot = federation.snapshot();
     let asked = ((arrived.headers, arrived.session), &arrived.conveyance);
-    let located = match locate(federation, asked, write, &ehr_id, started) {
+    let located = match locate(federation, (asked, matched), write, &ehr_id, started) {
         Ok(located) => located,
         Err(Unlocated::Untargeted(untargeted)) => {
             return error::response(untargeted.code(), untargeted.to_string(), request_id);
@@ -126,8 +131,8 @@ pub(super) async fn route(
                 Err((code, message)) => return error::response(code, message, request_id),
             }
         }
-        // NOTE: §12a.1 route-ehr, N41: a write no earlier step routes is refused,
-        // never routed by its version's creating_system_id alone.
+        // NOTE: §12.5.1 ehr-id-write-explicit, N41: a write steps 1 to 4 do not
+        // locate is refused, never probed for.
         owner::Located::Unknown => return error::fixed(Code::TargetRequired, request_id),
     };
     if let Write::Versioned(preceding) = write
@@ -189,10 +194,12 @@ fn held_as(
     }
 }
 
-/// What the first three steps of §12.5.1 say about the owner of `ehr_id`
-/// for a request that writes `write`, read at `started` (N41), with the
-/// request's headers and the verified caller's `session`, whose resolution
-/// bindings are step 2.
+/// What the first four steps of §12.5.1 say about the owner of `ehr_id`
+/// for a request under `matched` that writes `write`, read at `started`
+/// (N41), with the request's headers and the verified caller's `session`,
+/// whose resolution bindings are step 2. Step 4, the `creating_system_id` of
+/// the path's `OBJECT_VERSION_ID`, is asked only when the first three name
+/// no member ([`owner::created_by`]).
 ///
 /// A new EHR has no owner for a binding or the index to name, so only the
 /// targeting headers route it (§12.4, §8.4, N23), and only while neither
@@ -209,7 +216,10 @@ fn held_as(
 /// confined caller creates an EHR or reaches beyond its patient's pairs.
 fn locate<'a>(
     federation: &'a Federation,
-    ((headers, session), conveyance): ((&HeaderMap, Option<&SessionKey>), &Conveyance),
+    (((headers, session), conveyance), matched): (
+        ((&HeaderMap, Option<&SessionKey>), &Conveyance),
+        &RouteMatch,
+    ),
     write: Write,
     ehr_id: &EhrId,
     started: Instant,
@@ -245,7 +255,13 @@ fn locate<'a>(
         let step = owner::Step::Target;
         return Ok(owner::Located::At { endpoint, step });
     }
-    Ok(owner::located(snapshot, headers, held, index, ehr_id)?)
+    let located = owner::located(snapshot, headers, held, index, ehr_id)?;
+    if !matches!(located, owner::Located::Unknown) {
+        return Ok(located);
+    }
+    Ok(follow_up::path_version(matched)
+        .and_then(|version| owner::created_by(snapshot, &version))
+        .unwrap_or(owner::Located::Unknown))
 }
 
 /// Why a routed request is refused before its owner is located.

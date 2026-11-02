@@ -15,9 +15,10 @@
   ceiling on what this repository may claim; a transparent ITS-REST gateway
   on the Federation Tier specification; everything structural was decided by
   the v0.0.1 research program into `docs/architecture.md`
-- [Spec pin 1.0.0](spec-pin-1-0-0.md): specification at tag `1.0.0`
-  (`7dcf0f4`, approved by the openEHR SEC 2026-10-12), re-pinned from the
-  0.9.0 release candidate by #17; reference implementation at `92aff3c`
+- [Spec pin 1.0.0](spec-pin-1-0-0.md): specification at its 1.0.1 erratum,
+  untagged commit `b4242c2` by the owner's exception of 2026-11-02 (#1478,
+  retired by #1480), after tag `1.0.0` (`7dcf0f4`, #17); reference
+  implementation at `9cb8606`
 - [Crate split](crate-split.md): spec-derived crates split from the app crates
   as in every product; nothing published for now, publishing is a one-line
   `publish` switch with the whole lane built; owner 2026-10-01

@@ -38,6 +38,6 @@ WHERE e/ehr_id/value = '550e8400-e29b-41d4-a716-446655440000'
   AND c/archetype_node_id = 'openEHR-EHR-COMPOSITION.encounter.v1'
 ----
 
-Here `'550e8400-…'` is the `ehr_id` the cross-reference service resolved for `subject = '12345'` at that particular node. A different node would receive a different `ehr_id`. Because `composition_id` is a `c/uid/value`, it is an `OBJECT_VERSION_ID` and already carries the `creating_system_id` that xref:follow-up-routing.adoc[§12] routes follow-ups on. No uid rewriting is needed.
+Here `'550e8400-…'` is the `ehr_id` the cross-reference service resolved for `subject = '12345'` at that particular node. A different node would receive a different `ehr_id`. Because `composition_id` is a `c/uid/value`, it is an `OBJECT_VERSION_ID` and already carries the `creating_system_id` that names its owner for follow-ups (xref:follow-up-routing.adoc[§12]). No uid rewriting is needed.
 
 If the façade AQL had also SELECTed `e/ehr_status/subject/external_ref/id/value AS patient_id`, the gateway would re-inject `patient_id = '12345'` (the input) into every row, even though no node stores it.

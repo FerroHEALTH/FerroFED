@@ -614,7 +614,11 @@ mod tests {
         );
         assert_eq!(Some("not-run".to_owned()), result("track", "1"));
         assert_eq!(Some("deferred".to_owned()), result("track", "8"));
-        assert_eq!(Some("deferred".to_owned()), result("gateway", "CP-14"));
+        assert_eq!(
+            Some("not-run".to_owned()),
+            result("gateway", "CP-14"),
+            "CP-14 is covered since the 1.0.1 re-pin, and no live scenario scores it"
+        );
         assert_eq!(Some("unchecked".to_owned()), result("node", "CP-18"));
         assert_eq!(
             Some("not-applicable".to_owned()),

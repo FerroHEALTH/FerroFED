@@ -556,11 +556,15 @@ security features of the EHR system in relation to its intended purpose".
 These are the ones to know before you deploy FerroFED; the
 [claims review](claims-review.md) records how this list is kept.
 
-- **The specification is release 1.0.0.** FerroFED implements the 1.0.0
-  release of the Federation Tier with AQL, approved by the openEHR SEC on
-  2026-10-12, and reports `spec_version` `"1.0"` in `OPTIONS {base}/`.
-  Releases up to v0.0.9 implement the 0.9.0 release candidate and report
-  `"0.9"`; v0.0.10 re-pinned it
+- **The specification is release 1.0.1.** FerroFED implements the 1.0.1
+  release of the Federation Tier with AQL, the erratum of 2026-11-01 to
+  the 1.0.0 release the openEHR SEC approved on 2026-10-12, and reports
+  `spec_version` `"1.0"` in `OPTIONS {base}/`, since a patch release keeps
+  the wire contract (§7a.2). Upstream has not tagged 1.0.1, so the
+  vendored text is its untagged release commit
+  ([#1478](https://github.com/FerroHEALTH/FerroFED/issues/1478)).
+  Releases up to v0.0.15 implement 1.0.0, and releases up to v0.0.9 the
+  0.9.0 release candidate, which report `"0.9"`; v0.0.10 re-pinned it
   ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
 - **No EHDS harmonised component is complete.** The gateway records every
   access to patient data as Annex II, point 3.2, asks of the European
@@ -658,6 +662,8 @@ runs it. The [conformance statement](conformance-statement.md) is that claim
 for the Federation-Gateway profile, with every deferral and its reason. The
 [conformance matrix](conformance.md) records where each point
 stands, and the [obligations checklist](obligations.md) does the same for
-every normative statement of the specification. Both are held to the 1.0.0
-release, to which the vendored text was re-pinned from the 0.9.0 release
-candidate ([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).
+every normative statement of the specification. Both are held to the 1.0.1
+release, to which the vendored text was re-pinned from 1.0.0
+([#1478](https://github.com/FerroHEALTH/FerroFED/issues/1478)), itself
+re-pinned from the 0.9.0 release candidate
+([#17](https://github.com/FerroHEALTH/FerroFED/issues/17)).

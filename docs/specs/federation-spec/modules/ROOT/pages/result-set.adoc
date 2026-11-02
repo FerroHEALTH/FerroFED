@@ -12,7 +12,7 @@ The transparency claim of xref:requirements.adoc#n1[N1] holds on the wire for th
 ITS-REST defines five top-level members of `RESULT_SET` (`meta`, `name`, `q`, `columns` and `rows`) with their types and obligation levels. This specification does not re-state them; the normative list is the one in ITS-REST Release-1.1.0 (`computable/OAS/query-validation.openapi.yaml`, schema `ResultSet`). Two consequences follow that a reader of this document alone would not know:
 
 * *`rows` is the only required member.* `meta`, `name`, `q` and `columns` are all optional in ITS-REST. Where this specification requires one of them, that is a federation constraint tightening the standard, not a restatement of it - see xref:requirements.adoc#n17[N17].
-* *`name` exists.* It carries the stored-query name in `+[{namespace}::]{query-name}+` form and means something only for stored queries. A gateway exposing `+{base}/v1/definition/query/…+` (xref:rest-facade.adoc[§7a.1]) SHOULD emit it when answering a stored query, exactly as a single CDR would, and *MUST* emit it where it offers the stored-query registry of xref:follow-up-routing.adoc#stored-query-registry[§12.7], where it names the gateway's definition and never a node's (xref:follow-up-routing.adoc#stored-query-name[§12.7], xref:requirements.adoc#n44[N44]). Earlier drafts enumerated four members and left it out; citing ITS-REST by reference stops that recurring.
+* *`name` exists.* It carries the stored-query name in `+[{namespace}::]{query-name}+` form and means something only for stored queries. A gateway exposing `+{base}/v1/definition/query/…+` (xref:rest-facade.adoc[§7a.1]) SHOULD emit it when answering a stored query, exactly as a single CDR would, and *MUST* emit it where it offers the stored-query registry of xref:follow-up-routing.adoc#stored-query-registry[§12.7], where it names the gateway's definition and never a node's (xref:follow-up-routing.adoc#stored-query-name[§12.7], xref:requirements.adoc#n44[N44]).
 
 *`rows` entries are ordered arrays of values, not objects.* ITS-REST defines `ResultSetRow` as a JSON array whose *i*-th element corresponds to `columns[i]`. This rule has the largest consequences of any inherited here: the two serialisations cannot be converted into each other without the column list, and a gateway that emits objects is not returning a `RESULT_SET`.
 
@@ -23,7 +23,7 @@ ITS-REST defines five top-level members of `RESULT_SET` (`meta`, `name`, `q`, `c
 [#federation-meta]
 The `federation` object carries four members: `complete` (xref:partial-results.adoc#completeness-flag[§11.4]), `endpoints[]` (<<endpoint-meta,§9.5>>), `timeout` (xref:partial-results.adoc#timeouts[§11.5]) and `dedup` (xref:deduplication.adoc[§10]). They are addressed as `meta.federation.complete`, `meta.federation.endpoints[]`, and so on.
 
-*Why they are grouped.* Earlier drafts placed all four directly on `meta`, beside openEHR's own members. Nesting them buys three things:
+*Why they are grouped.* Placing all four directly on `meta`, beside openEHR's own members, would also be conformant. Nesting them buys three things:
 
 * *One namespace, one owner.* A reader of a `meta` object can tell at a glance which members this specification is responsible for: exactly one, and everything reachable through it. A flat layout means knowing the list by heart.
 * *No collision with a future openEHR member.* `ResultSetMetadata` is open and openEHR may add to it. A future `meta.timeout` or `meta.complete` defined by openEHR would silently collide with a federation key of the same name, with no way to tell which document a given value answered to. One member named `federation` cannot collide with an openEHR member unless openEHR picks that name for a federation concept, in which case the collision is a real one worth having.
@@ -122,7 +122,7 @@ Including `system_id` in the row-level attribute set puts the openEHR-native rou
 
 Positional rows make the `columns[]` provenance rule of <<columns-provenance>> more load-bearing. A client matching an `ORDER BY` term or a projection against the result now depends on column order as well as path shape. If two nodes disagree on a path, the gateway's single rendering makes position *i* mean the same thing in every row; a gateway echoing a node's rendering would make the meaning of a row position depend on which node replied first.
 
-Each `composition_id` is an `OBJECT_VERSION_ID` whose middle segment is the `creating_system_id` (`cdr1.rso.nl`, `cdr2.rso.nl`), which xref:follow-up-routing.adoc[§12] routes on.
+Each `composition_id` is an `OBJECT_VERSION_ID` whose middle segment is the `creating_system_id` (`cdr1.rso.nl`, `cdr2.rso.nl`), which names the owning system for follow-ups (xref:follow-up-routing.adoc[§12]).
 
 `node_3` shows a reported-but-not-queried member. This query was directed at `node_1` and `node_2`, so the directive excluded it, and the gateway reports it as §11.1 says it SHOULD (xref:partial-results.adoc#endpoint-status[§11.1]). Had the query been undirected and localization simply not named it, its status would be `not-localized` instead. Neither clears `meta.federation.complete`, which is `true` here because every node that was in scope answered.
 

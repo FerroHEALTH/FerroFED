@@ -56,11 +56,11 @@ use crate::containers::images::{MAVEN, TEMURIN_JRE};
 use crate::containers::{self, HarnessError, retry};
 
 /// The upstream commit the vendored reference implementation is.
-pub const REFERENCE_COMMIT: &str = "92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5";
+pub const REFERENCE_COMMIT: &str = "9cb8606d1fce457b6b7f3a42f703d7069686a413";
 
 /// The sha256 of the Maven manifest at [`REFERENCE_COMMIT`], as the
 /// vendored provenance records it.
-pub const POM_SHA256: &str = "4447a33ca0d3321e812252e0a2bef4b454aa66ab83bb1837e88e63cd88d72dd1";
+pub const POM_SHA256: &str = "470aa82a47d477e926e10303622f3938cd066bb7141e421ed35cee0125b10a62";
 
 /// The host name a container reaches the Docker host by.
 pub const CONTAINER_HOST: &str = "host.docker.internal";

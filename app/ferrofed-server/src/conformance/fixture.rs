@@ -200,7 +200,7 @@ pub struct Holding {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Spares {
     /// An EHR the ask-all probe finds: the endpoint and the `ehr_id`
-    /// (§12.5.1 step 4).
+    /// (§12.5.1 step 5).
     pub probe: Option<(String, String)>,
     /// An EHR a write to is never probed for (§12.5.1, N41).
     pub unrouted: Option<String>,

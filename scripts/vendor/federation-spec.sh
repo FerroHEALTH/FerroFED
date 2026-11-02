@@ -10,7 +10,10 @@
 # manifests for its Antora build, which provenance lists with their sha256.
 #
 # The row pins the tag and the commit it resolved to; the script fails when
-# the tag has moved.
+# the tag has moved. A row that names its commit `untagged` pins a release
+# upstream declares in antora.yml and has not tagged, by the owner's
+# exception the row records; the script then fetches the commit itself and
+# writes the exception into the provenance.
 #
 # The tree carries the normative AsciiDoc pages (the N# requirements and the
 # CP# conformance points), the two published JSON schemas
@@ -42,17 +45,31 @@ schemas=(
 
 pin="$(corpus_pin_cell "Federation Tier with AQL specification")"
 repo="$(corpus_pin_repo "$pin")"
-tag="$(corpus_pin_tag "$pin")"
 want="$(corpus_pin_commit "$pin")"
+untagged=""
+if grep -qw untagged <<< "$pin"; then
+  untagged=1
+else
+  tag="$(corpus_pin_tag "$pin")"
+fi
 matrix_version="$(corpus_pin_cell "Federation Tier with AQL")"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-commit="$(corpus_resolve_tag "$repo" "$tag")"
-[ "$commit" = "$want" ] || die "tag $tag of $repo resolves to $commit, the pin records $want"
-
-say "$repo tag $tag resolves to $commit"
+if [ -n "$untagged" ]; then
+  # TODO(#1480): move the pin to the 1.0.1 tag once upstream cuts it, and drop this branch.
+  commit="$want"
+  pinned_as="commit \`$commit\`, which upstream has not tagged, by the owner's exception to the tag-only pin of this specification that docs/VERSIONS.md records"
+  version_pin="the untagged commit \`$commit\`"
+  say "$repo commit $commit, untagged"
+else
+  commit="$(corpus_resolve_tag "$repo" "$tag")"
+  [ "$commit" = "$want" ] || die "tag $tag of $repo resolves to $commit, the pin records $want"
+  pinned_as="tag \`$tag\`, which resolves to commit \`$commit\`"
+  version_pin="the \`$tag\` release tag"
+  say "$repo tag $tag resolves to $commit"
+fi
 tree_root="$(corpus_fetch "$repo" "$commit" "$tmp")"
 [ -f "$tree_root/LICENSE" ] || die "the archive has no LICENSE"
 grep -q 'CC0 1.0 Universal' "$tree_root/LICENSE" || die "the LICENSE is not CC0 1.0 Universal"
@@ -98,7 +115,7 @@ below. Never edit a file here: change the pin in docs/VERSIONS.md and re-run
 the script.
 
 - Source: <https://github.com/$repo>
-- Pin: tag \`$tag\`, which resolves to commit \`$commit\`
+- Pin: $pinned_as
 - Declared version: \`spec-version: '$spec_version'\`, status
   \`$spec_status\`, dated \`$spec_date\` (\`antora.yml\`)
 - Fetched: $fetched
@@ -108,7 +125,7 @@ the script.
 - Files: $files, of which $pages are \`modules/ROOT/pages/*.adoc\`
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: #25 (the CP and N traceability of the conformance instrument), #33 (the wire types validated against both schemas) and #17 (the re-pin to 1.0)
+- Read by: #25 (the CP and N traceability of the conformance instrument), #33 (the wire types validated against both schemas) and #17 (the re-pin to 1.0) and #1478 (the re-pin to 1.0.1)
 
 ## What is here
 
@@ -140,7 +157,7 @@ $dropped
 
 ## The version
 
-The pin is the \`$tag\` release tag, and the document at it declares
+The pin is $version_pin, and the document at it declares
 \`spec-version: '$spec_version'\` with status \`$spec_status\`.
 PROV
 

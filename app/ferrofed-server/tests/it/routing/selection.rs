@@ -16,13 +16,17 @@ use super::{
     refused, silent,
 };
 
+/// A version a system outside the registry minted, so §12.5.1 step 4 names
+/// no member for a write whose path carries it.
+const UNREGISTERED: &str = "8849182c-82ad-4088-a07f-48ead4180515::external.example.org::1";
+
 #[tokio::test]
 async fn a_write_that_names_no_node_is_a_400_target_required_and_probes_nobody() -> TestResult {
     for verb in [Method::POST, Method::PUT, Method::DELETE] {
         let at = if verb == Method::POST {
             format!("/v1/ehr/{EHR_A}/composition")
         } else {
-            composition_at(&verb, VERSION_A)
+            composition_at(&verb, UNREGISTERED)
         };
         let request = Request::builder()
             .method(verb.clone())

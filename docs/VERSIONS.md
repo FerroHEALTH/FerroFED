@@ -20,20 +20,29 @@ same row there.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Federation Tier with AQL | 1.0.0 | `docs/architecture.md`, the `FEDERATION_SPEC` constant of `openehr-federation`, the source of the `spec_version` an `OPTIONS {base}/` body carries |
+| Federation Tier with AQL | 1.0.1 | `docs/architecture.md`, the `FEDERATION_SPEC` constant of `openehr-federation`, the source of the `spec_version` an `OPTIONS {base}/` body carries |
 | openEHR ITS-REST | 1.1.0 | `docs/architecture.md`, the `ITS_REST` constant of `ferrofed-engine` |
 | openEHR AQL | 1.1.0 | `docs/architecture.md`, the `AQL` constant of `openehr-federation` |
 
-The federation specification is pinned at its 1.0.0 release, approved by the
-openEHR SEC on 2026-10-12 and tagged `1.0.0` upstream. The corpus row below
-pins that tag and the commit it resolves to, and the vendor script fails when
-the tag has moved. Against the `0.9.0` pin it replaced, the release changes
-the declared version, the `$id` of both schemas, and the
-`federation.spec_version` an `OPTIONS {base}/` body reports, now `"1.0"`
-(§7a.2), and it drops the change record page; no N, CP or section number
-moved. The reference implementation row below stays at commit `92aff3c`: the
-reference implementation has no release that matches 1.0.0, and its newest
-tag is `0.9.0`.
+The federation specification is pinned at its 1.0.1 release, the erratum
+to the 1.0.0 release the openEHR SEC approved on 2026-10-12. Upstream
+declares 1.0.1 in `antora.yml` on its `main` commit `b4242c2` ("release
+1.0.1", 2026-11-01) and has not tagged it; its newest tag is `1.0.0`. The
+pin on that untagged commit is the owner's exception of 2026-11-02 to the
+rule that this specification is pinned only at a release tag (#1478): 1.0.1
+corrects the routing of EHR-scoped version requests (§12.3, §12.4, §12.5.1,
+N22, N23, N36, N41), and the gateway follows the corrected text now rather
+than the 1.0.0 text it supersedes. The corpus row below names the commit
+and the newest tag, so the vendor script checks the commit's declared
+version and `scripts/checks/pin-freshness.sh` reports the row stale the day
+upstream tags a release after `1.0.0`; the pin then moves to the `1.0.1`
+tag and the exception is retired. Against `1.0.0`, the release changes the
+declared version and date, the routing rules above and the wording of the
+title; no N, CP or section number moved, and `federation.spec_version`
+stays `"1.0"`, because §7a.2 reports `major.minor` and a patch release
+keeps the wire contract. The reference implementation row below moves with
+it, to commit `9cb8606`, which tracks 1.0.1; it has no release tag after
+`0.9.0`.
 
 The federation specification binds ITS-REST by name, Release-1.1.0, so the
 ITS-REST row follows it rather than the latest ITS-REST development line.
@@ -106,8 +115,8 @@ reason no reader is needed; its self-test fails on a row with neither.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Federation Tier with AQL specification | `syntaric/openehr-federation-spec` tag `1.0.0`, commit `7dcf0f44ac122fe947b1e5ceba6bcbbb7721917d` | `scripts/vendor/federation-spec.sh`, `docs/specs/federation-spec/PROVENANCE.md` |
-| Federation Tier reference implementation | `syntaric/openehr-federation-ref` commit `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` | `scripts/vendor/federation-ref.sh`, `docs/specs/federation-ref/PROVENANCE.md` |
+| Federation Tier with AQL specification | `syntaric/openehr-federation-spec` commit `b4242c291b08990df718bbfaa1188e4865478e5a`, untagged (declares 1.0.1; the owner's exception of 2026-11-02, #1478), newest tag `1.0.0` | `scripts/vendor/federation-spec.sh`, `docs/specs/federation-spec/PROVENANCE.md` |
+| Federation Tier reference implementation | `syntaric/openehr-federation-ref` commit `9cb8606d1fce457b6b7f3a42f703d7069686a413` | `scripts/vendor/federation-ref.sh`, `docs/specs/federation-ref/PROVENANCE.md` |
 | FerroPULSE report envelope v2 | `FerroHEALTH/FerroPULSE` commit `f83df34cc968f5e0f916834508336c8eeb4c9e41` path `schemas/report-envelope.v2.json` sha256 `e609f17a5bfa78c6c08bdd3a28025889e20e0fde5c72fa881e7ed47b6abc8bc7`, with `docs/report-v2.md` and the examples under `schemas/examples/report-envelope.v2/` | `scripts/vendor/ferropulse.sh`, `docs/specs/ferropulse/PROVENANCE.md` |
 | openEHR ITS-REST OpenAPI | `openEHR/specifications-ITS-REST` tag `Release-1.1.0`, all seven API modules, the Query validation document and the SMART on openEHR source (`docs/smart_app_launch/`, DEVELOPMENT status in this release) | `scripts/vendor/its-rest.sh`, `docs/specs/its-rest/PROVENANCE.md` |
 | openEHR AQL specification source | `openEHR/specifications-QUERY` tag `Release-1.1.0`, the AQL and AQL examples documents and the grammar | `scripts/vendor/aql.sh`, `docs/specs/aql/PROVENANCE.md` |
