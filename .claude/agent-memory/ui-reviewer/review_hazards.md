@@ -34,5 +34,5 @@ Confirmed hazards worth checking on every console review. Verify each still appl
 - A second cookie contradicts any "one opaque cookie" text in console-ui.md §0, the session module doc and the data-protection table; update all three with the cookie (#1075).
 - A page writes its own markup with `crate::pages::h` from parts escaped with `crate::pages::t`; a value put into `h` raw is an injection, and FerroUI's highlighter escapes with named entities (`&lt;`) where `t` writes numeric ones (`&#60;`), so a hostile-value test names the escape of the part that drew the value (console-ui.md §1; #1457).
 - A form that answers on its page must post to the page's path with its query (`pages::here_with_query`): posting to the bare path drew a stored query's newest version in place of the one the address named (console-ui.md §1; #1457).
-- `ferrohealth_server::console::headers` writes a policy with a nonce and `'wasm-unsafe-eval'`; the console's `strict_policy` layer must stay outside it so the strict policy wins (console-ui.md §2; #1457).
+- The console's policy is `ConsoleHeaders::server_rendered` (ferrohealth-server 0.4.2), `script-src 'self'; style-src 'self'` with no nonce; `ConsoleHeaders::new` writes a nonce and `'wasm-unsafe-eval'`, which a server-rendered console never carries, and no local policy layer sits beside it (console-ui.md §2; #1466, #1475).
 
