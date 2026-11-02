@@ -5,13 +5,13 @@
 
 - Source: <https://github.com/FerroHEALTH/FerroPULSE> (private; Cadasto B.V., the Licensor
   of this repository too)
-- Pin: commit `26957066ad7a7dcd5fc38947b6baa8df0c08609d`
-- Schema sha256: `09048000b428cbb010d165b52a4579f60672c471f167a3b58410226dddfec9c2`
-- Fetched: 2026-10-21 by `scripts/vendor/ferropulse.sh`
+- Pin: commit `f83df34cc968f5e0f916834508336c8eeb4c9e41`
+- Schema sha256: `e609f17a5bfa78c6c08bdd3a28025889e20e0fde5c72fa881e7ed47b6abc8bc7`
+- Fetched: 2026-11-02 by `scripts/vendor/ferropulse.sh`
 - Licence: upstream declares `LicenseRef-Proprietary` in its `Cargo.toml`
   and ships no LICENSE file; Cadasto B.V. holds the copyright of both
   repositories and publishes this copy under this repository's licence
-- Files: 68, copied verbatim: `docs/report-v2.md` (the contract),
+- Files: 69, copied verbatim: `docs/report-v2.md` (the contract),
   `schemas/report-envelope.v2.json` (JSON Schema 2020-12) and `schemas/examples/report-envelope.v2/`
   (the contract's own valid and invalid examples)
 
