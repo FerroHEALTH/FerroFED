@@ -1,7 +1,7 @@
 # Report v2: the contract
 
 Envelope v2 is one report shape for every FerroHEALTH product: FerroEHR,
-FerroTERM, FerroBRIDGE and FerroFED. A new product reports on it with no
+FerroTERM, FerroBRIDGE, FerroFED and FerroPIX. A new product reports on it with no
 FerroPULSE change (owner decision 2026-10-16). The collector accepts v1
 ([report-v1.md](report-v1.md), FerroEHR only, for installed versions) and v2
 side by side; the body's `schema` selects the envelope. The JSON Schema is
@@ -35,7 +35,7 @@ Every member is required unless noted, and an unknown member is refused.
 | `schema` | integer | `2` |
 | `event` | string | `start`, `daily` |
 | `first_start` | boolean | `start` only: `true` when this start created the `instance_id` |
-| `product` | string | `ferroehr`, `ferroterm`, `ferrobridge`, `ferrofed` |
+| `product` | string | `ferroehr`, `ferroterm`, `ferrobridge`, `ferrofed`, `ferropix` |
 | `instance_id` | string | UUID, random per installation, hyphenated |
 | `version` | string | SemVer, at most 64 characters, at most 9 digits per number |
 | `git_sha` | string | 7 to 40 lower-case hex characters |
@@ -121,13 +121,23 @@ product's keys updates its list here.
 - `counters`: `fhir_r4`, `fhir_r4b`, `fhir_r5`, `fhir_r6`: FHIR-base requests
   per FHIR version.
 
-### FerroFED (proposed in FerroHEALTH/FerroFED#1122)
+### FerroFED (from its next release)
 
-- `status`: whether the registry and the identity cross-reference service
-  answer, the member node count as a bucket token, whether the viewer is
-  mounted.
-- `groups`: federated query, EHR, composition, admin, other.
-- `counters`: node timeouts, node errors, and the fan-out per query.
+- `status`: `profile` (token, `production` or `development`), `members`
+  (token, the member nodes of the registry as a range: `0`, `1-2`, `3-5`,
+  `6-10`, `11-50`, `51+`), `services` (tokens from `dev`, `mcsd`, `mitz`,
+  `nvi`, `pdqm`, `pixm`, `pmir`, `xcpd`: the identity, localization and
+  consent services the configuration names, never a URL), `stored_queries`
+  (boolean, the stored-query registry is offered), `fhir` (boolean, the
+  FHIR R4 face is served). FerroFED's console is a binary of its own, so its
+  status carries no `viewer`.
+- `groups`, by matched route template under the gateway's base: `query`
+  (the federated AQL query and stored queries), `composition`, `ehr`,
+  `definition`, `fhir` (the FHIR face), `operator`, `other`. The health
+  probes and the JWK Set are not counted.
+- `counters`: `node_requests` (requests sent to a member node; over the
+  `query` group's requests it is the fan-out), `node_timeouts`,
+  `node_errors` (`node-error` or `offline`), `responses_4xx`.
 
 ### FerroBRIDGE (proposed in FerroHEALTH/FerroBRIDGE#581)
 
@@ -135,6 +145,25 @@ product's keys updates its list here.
   mapping count as a bucket token, whether the openEHR CDR answers.
 - `groups`: openEHR to FHIR, FHIR to openEHR, openEHR to OMOP, other.
 - `counters`: mapping failures.
+
+### FerroPIX (from its next release)
+
+- `status`: `profile` (token, `production` or `development`), `services`
+  (tokens from `hl7v2`, `operator`, `pdqm`, `pixm`, `pmir`: the faces and
+  the operator API the configuration switches on), `domains` (token, the
+  identifier domains the store holds as a range: `0`, `1-2`, `3-5`, `6-10`,
+  `11-50`, `51+`; never a domain's system or name), `db_ok` (boolean, the
+  store answered its readiness check), `audit_spool_ok` (boolean, the BALP
+  audit spool had headroom). FerroPIX's console is a binary of its own, so
+  its status carries no `viewer`.
+- `groups`, by matched route template under the server's base, each the
+  transaction FerroPIX's permission table names for the route: `metadata`
+  (the capability statement and the SMART discovery document), `pix_query`
+  (ITI-83), `pix_feed` (ITI-104), `pdq_query` (ITI-78), `pdq_match`
+  (ITI-119), `pmir_feed` (ITI-93), `pmir_subscription` (ITI-94), `operator`
+  (the operator API), `other` (an unmatched request included). The health
+  probes are not counted.
+- `counters`: `responses_4xx`.
 
 Each product settles its proposed names in its issue and then lists them
 here.
