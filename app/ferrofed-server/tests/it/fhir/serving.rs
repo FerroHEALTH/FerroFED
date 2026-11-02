@@ -216,7 +216,7 @@ async fn a_declared_member_lists_both_resources_in_their_mpd_profiles() -> TestR
         .flatten()
         .filter_map(|interaction| interaction["code"].as_str())
         .collect();
-    assert_eq!(vec!["create", "read", "vread"], codes);
+    assert_eq!(vec!["create", "read", "vread", "update"], codes);
     Ok(())
 }
 
@@ -272,6 +272,7 @@ async fn every_interaction_declared_for_a_prescription_or_dispensation_is_one_th
     assert!(named("MedicationDispense", "create"), "{declared:?}");
     assert!(named("MedicationRequest", "vread"), "{declared:?}");
     assert!(named("MedicationDispense", "vread"), "{declared:?}");
+    assert!(named("MedicationDispense", "update"), "{declared:?}");
     for (kind, code) in &declared {
         let request = exercising(kind, code)?
             .ok_or_else(|| format!("{kind} {code} is declared and no route serves it"))?;
@@ -636,6 +637,16 @@ fn exercising(kind: &str, code: &str) -> Result<Option<Request<Body>>, Box<dyn E
                 super::prescriptions::dispense::BY_IDENTIFIER,
             ),
         )?,
+        ("MedicationDispense", "update") => {
+            let id = Locator::new(EndpointId::new("node-a-mpd")?, EhrId::new(EHR_A)?, "md-1")
+                .id()
+                .ok_or("the parts fit an id")?;
+            fhir_json(
+                http::Method::PUT,
+                &format!("/MedicationDispense/{id}"),
+                super::prescriptions::withdraw::withdrawal(&id),
+            )?
+        }
         ("MedicationDispense", "read") => Request::get(format!(
             "{FHIR}/MedicationDispense/{}",
             Locator::new(EndpointId::new("node-a-mpd")?, EhrId::new(EHR_A)?, "md-1")

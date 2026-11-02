@@ -144,36 +144,25 @@ async fn read_of(
     if !serves(&state, category) {
         return not_served(category);
     }
-    let admitted = admission::admit(
+    let forbidden = format!("the caller was not admitted to read {}s", noun(readable));
+    admission::served(
         &state,
         (outbound, caller.as_deref()),
         (&headers, started),
-        || {
-            refusal(
-                StatusCode::FORBIDDEN,
-                "forbidden",
-                &format!("the caller was not admitted to read {}s", noun(readable)),
+        &forbidden,
+        async |admitted, arrived| {
+            let federation = &admitted.federation;
+            let none = BTreeSet::new();
+            let declared = admitted.fhir.serving.members_of(category).unwrap_or(&none);
+            let read = prescription::read(federation, arrived, (readable, &id), declared).await;
+            answered(
+                federation,
+                (readable, read, version),
+                (&id, admitted.request_id, admitted.outbound),
             )
         },
-    );
-    let admitted = match admitted {
-        Ok(admitted) => admitted,
-        Err(refused) => return refused,
-    };
-    let confined = match admitted.confine().await {
-        Ok(confined) => confined,
-        Err(refused) => return refused,
-    };
-    let arrived = admitted.arrived(&confined);
-    let federation = &admitted.federation;
-    let none = BTreeSet::new();
-    let declared = admitted.fhir.serving.members_of(category).unwrap_or(&none);
-    let read = prescription::read(federation, &arrived, (readable, &id), declared).await;
-    answered(
-        federation,
-        (readable, read, version),
-        (&id, admitted.request_id, admitted.outbound),
     )
+    .await
 }
 
 /// The answer to the read of the prescription `id`, of the version
@@ -185,13 +174,6 @@ fn answered(
     (readable, read, version): (Readable, Result<prescription::Read, Unfound>, Option<&str>),
     (id, request_id, outbound): (&str, &str, OutboundId),
 ) -> Response {
-    let named = |endpoints: &[EndpointId]| {
-        endpoints
-            .iter()
-            .map(EndpointId::as_str)
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
     match read {
         Ok(read) if version.is_some_and(|version| !holds(&read, version)) => {
             tracing::info!(request_id = %outbound, "a version read names a version its member does not hold now");
@@ -210,7 +192,28 @@ fn answered(
             response
         }
         Ok(read) => found(federation, &read, id, request_id),
-        Err(Unfound::NoOwner(read)) => {
+        Err(unfound) => unread(federation, readable, unfound, (request_id, outbound)),
+    }
+}
+
+/// The answer to a read of `readable` that settled as `unfound`, to the
+/// request of the exchange id `request_id` and the gateway's id `outbound`,
+/// with the access it records.
+pub(super) fn unread(
+    federation: &Federation,
+    readable: Readable,
+    unfound: Unfound,
+    (request_id, outbound): (&str, OutboundId),
+) -> Response {
+    let named = |endpoints: &[EndpointId]| {
+        endpoints
+            .iter()
+            .map(EndpointId::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    match unfound {
+        Unfound::NoOwner(read) => {
             tracing::info!(request_id = %outbound, "a prescription or dispensation id has no owner");
             let mut response = outcome(
                 StatusCode::NOT_FOUND,
@@ -223,7 +226,7 @@ fn answered(
             );
             response
         }
-        Err(Unfound::Ambiguous(endpoints)) => refusal(
+        Unfound::Ambiguous(endpoints) => refusal(
             StatusCode::CONFLICT,
             "conflict",
             &format!(
@@ -231,7 +234,7 @@ fn answered(
                 named(&endpoints)
             ),
         ),
-        Err(Unfound::Claimed(claimants)) => refusal(
+        Unfound::Claimed(claimants) => refusal(
             StatusCode::CONFLICT,
             "conflict",
             &format!(
@@ -239,8 +242,8 @@ fn answered(
                 named(&claimants)
             ),
         ),
-        Err(Unfound::Confined) => crate::error::fixed(Code::PatientConfinement, request_id),
-        Err(Unfound::Offline(endpoint)) => refusal(
+        Unfound::Confined => crate::error::fixed(Code::PatientConfinement, request_id),
+        Unfound::Offline(endpoint) => refusal(
             StatusCode::GATEWAY_TIMEOUT,
             "timeout",
             &format!(
@@ -249,7 +252,7 @@ fn answered(
                 EndpointStatus::Offline.as_str()
             ),
         ),
-        Err(Unfound::Several(read)) => {
+        Unfound::Several(read) => {
             let mut response = outcome(
                 StatusCode::CONFLICT,
                 "conflict",
@@ -262,7 +265,7 @@ fn answered(
             attach(&mut response, prescription::accessed(federation, &read));
             response
         }
-        Err(Unfound::Unanswered(read)) => {
+        Unfound::Unanswered(read) => {
             let status = read.held.status();
             let (code, answer) = match status {
                 EndpointStatus::Offline | EndpointStatus::TimeOut => {
@@ -283,7 +286,7 @@ fn answered(
             attach(&mut response, prescription::accessed(federation, &read));
             response
         }
-        Err(Unfound::Failure(failure)) => failure.respond(request_id, outbound),
+        Unfound::Failure(failure) => failure.respond(request_id, outbound),
     }
 }
 

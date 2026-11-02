@@ -126,7 +126,7 @@ fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 12] {
         ),
         (
             medication::DISPENSATION,
-            get(medication::read::read_dispensation),
+            get(medication::read::read_dispensation).put(medication::withdraw::withdraw),
         ),
         (
             medication::DISPENSATION_VERSION,

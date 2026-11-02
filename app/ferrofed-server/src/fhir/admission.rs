@@ -9,7 +9,8 @@
 //! [`Admitted::confine`] conveys the caller and confines the request
 //! (§13.1, N24); [`Admitted::arrived`] is the request the façade runs. A
 //! route that checks something of its own before any member is reached does
-//! so between the first two. No specification governs this split: our own
+//! so between the first two, and one that checks nothing there takes all
+//! three from [`served`]. No specification governs this split: our own
 //! design.
 
 use std::sync::Arc;
@@ -148,4 +149,31 @@ impl Admitted<'_> {
             on_behalf: &confined.on_behalf,
         }
     }
+}
+
+/// Admits, conveys and confines a request on the FHIR face that arrived at
+/// `started` with `headers`, from `caller`, and answers it with `serve`
+/// over what was admitted and the request the façade runs; a caller the
+/// gate did not admit is refused `403` `forbidden` with `forbidden` as its
+/// text.
+pub(super) async fn served(
+    state: &AppState,
+    (outbound, caller): (Option<Extension<OutboundId>>, Option<&Caller>),
+    (headers, started): (&HeaderMap, Instant),
+    forbidden: &str,
+    serve: impl AsyncFnOnce(&Admitted<'_>, &Arrived<'_>) -> Response,
+) -> Response {
+    let admitted = admit(state, (outbound, caller), (headers, started), || {
+        super::refusal(http::StatusCode::FORBIDDEN, "forbidden", forbidden)
+    });
+    let admitted = match admitted {
+        Ok(admitted) => admitted,
+        Err(refused) => return refused,
+    };
+    let confined = match admitted.confine().await {
+        Ok(confined) => confined,
+        Err(refused) => return refused,
+    };
+    let arrived = admitted.arrived(&confined);
+    serve(&admitted, &arrived).await
 }

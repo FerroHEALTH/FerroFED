@@ -21,8 +21,13 @@
 //! after a time-out is refused, never written twice (hazard I-12 of the
 //! clinical safety risk file). The resource itself travels on as its
 //! text, never rewritten, so a prescription named by the face's reference
-//! alone, which the member cannot resolve, is refused. Which parts route it
-//! is our own design: no specification governs it.
+//! alone, which the member cannot resolve, is refused. A withdrawal,
+//! `PUT {fhir-base}/MedicationDispense/{id}` with `status`
+//! `entered-in-error`, is read the same way, and travels on with its
+//! top-level `id` alone replaced by the member's own ([`with_id`]), since
+//! an update names its resource by the id of the server it reaches (FHIR R4
+//! `http.html` §3.1.0.4). Which parts route it is our own design: no
+//! specification governs it.
 
 use eehrxf::medication::dispensation::Dispense;
 use eehrxf::medication::{Mpd, ReadError};
@@ -33,6 +38,8 @@ use fhir_types::r4::medication_dispense::MedicationDispense;
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
+use serde::de::{Deserialize, Deserializer, MapAccess, Visitor};
+use serde_json::value::RawValue;
 
 /// The resource type received.
 pub const RESOURCE: &str = "MedicationDispense";
@@ -73,6 +80,12 @@ pub struct Received {
     pub identifier: (String, String),
     /// Every constraint of the profiles the check did not evaluate.
     pub unevaluated: Vec<Unevaluated>,
+    /// Its logical id, which an update names it by (FHIR R4 `http.html`
+    /// §3.1.0.4).
+    pub id: Option<String>,
+    /// Its `status`, a code of the FHIR R4 `medicationdispense-status`
+    /// value set.
+    pub status: Option<String>,
 }
 
 impl std::fmt::Debug for Received {
@@ -82,6 +95,8 @@ impl std::fmt::Debug for Received {
             .field("named", &self.named.len())
             .field("identifier", &!self.identifier.1.is_empty())
             .field("unevaluated", &self.unevaluated.len())
+            .field("id", &self.id.is_some())
+            .field("status", &self.status)
             .finish()
     }
 }
@@ -211,7 +226,61 @@ pub fn read(text: &str, mpd: &Mpd) -> Result<Received, Unread> {
         named,
         identifier,
         unevaluated: conformance.unevaluated().to_vec(),
+        id: dispense.id.clone(),
+        status: dispense.status.value.clone(),
     })
+}
+
+/// The top-level members of a JSON object, each value as its own text.
+struct Members<'a>(Vec<(String, &'a RawValue)>);
+
+impl<'de> Deserialize<'de> for Members<'de> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        /// The visitor that keeps each member in its order.
+        struct Visit;
+
+        impl<'de> Visitor<'de> for Visit {
+            type Value = Members<'de>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a JSON object")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut members = Vec::new();
+                while let Some(member) = map.next_entry::<String, &'de RawValue>()? {
+                    members.push(member);
+                }
+                Ok(Members(members))
+            }
+        }
+
+        deserializer.deserialize_map(Visit)
+    }
+}
+
+/// `text`, a received resource, with the value of its top-level `id`
+/// replaced by `id` and every other byte as it was; `None` when `text` is
+/// no JSON object with a top-level `id`.
+///
+/// The face names a member's resource by its own id and the member by the
+/// member's, so an update reaches the member under the member's id (FHIR
+/// R4 `http.html` §3.1.0.4), the inverse of the rename a read makes
+/// (§3.1.0.2).
+#[must_use]
+pub fn with_id(text: &str, id: &str) -> Option<String> {
+    // NOTE: a text that is no object with an `id` has no id to replace, which the caller
+    // checked before it asks, so its absence is the answer and never a second error.
+    let members: Members<'_> = serde_json::from_str(text).ok()?;
+    let held = members.0.iter().find(|(name, _)| name == "id")?.1.get();
+    let start = held.as_ptr().addr().checked_sub(text.as_ptr().addr())?;
+    let end = start.checked_add(held.len())?;
+    let replacement = serde_json::to_string(id).ok()?;
+    Some(format!(
+        "{}{replacement}{}",
+        text.get(..start)?,
+        text.get(end..)?
+    ))
 }
 
 /// The prescription `reference` names.
@@ -284,13 +353,37 @@ pub fn written(
     (member, endpoint): (&str, &str),
     unlocated: Option<&str>,
 ) -> OperationOutcome {
-    let mut issues = vec![issue(
-        ("information", "informational"),
+    let mut outcome = told(
+        received,
         &format!(
             "the Electronic-Dispensations dispensation was written to member {member} through endpoint {endpoint}"
         ),
-        None,
-    )];
+    );
+    if let Some(unlocated) = unlocated {
+        outcome
+            .issue
+            .push(issue(("warning", "incomplete"), unlocated, None));
+    }
+    outcome
+}
+
+/// The `OperationOutcome` of a dispensation the member `member` withdrew,
+/// as [`written`] tells a receipt, naming the member and its endpoint
+/// `endpoint`.
+#[must_use]
+pub fn withdrawn(received: &Received, (member, endpoint): (&str, &str)) -> OperationOutcome {
+    told(
+        received,
+        &format!(
+            "the Electronic-Dispensations dispensation was withdrawn at member {member} through endpoint {endpoint}"
+        ),
+    )
+}
+
+/// One `information` issue saying `what` happened to `received`, and one
+/// `warning` per constraint of its profiles the check did not evaluate.
+fn told(received: &Received, what: &str) -> OperationOutcome {
+    let mut issues = vec![issue(("information", "informational"), what, None)];
     issues.extend(received.unevaluated.iter().map(|unevaluated| {
         issue(
             ("warning", "not-supported"),
@@ -301,9 +394,6 @@ pub fn written(
             Some(&unevaluated.element),
         )
     }));
-    if let Some(unlocated) = unlocated {
-        issues.push(issue(("warning", "incomplete"), unlocated, None));
-    }
     OperationOutcome {
         issue: issues,
         ..OperationOutcome::default()
@@ -328,7 +418,7 @@ fn issue(
 
 #[cfg(test)]
 mod tests {
-    use super::{Unread, read};
+    use super::{Unread, read, with_id};
     use eehrxf::medication::Mpd;
 
     fn mpd() -> Mpd {
@@ -372,6 +462,32 @@ mod tests {
             ))
         );
         assert!(!format!("{received:?}").contains("SYNTHETIC"));
+    }
+
+    #[test]
+    fn a_dispensation_carries_its_id_and_status() {
+        let text = DISPENSE.replace(
+            r#"{"resourceType":"MedicationDispense","#,
+            r#"{"resourceType":"MedicationDispense","id":"face-id","#,
+        );
+        let received = read(&text, &mpd()).unwrap();
+        assert_eq!(received.id.as_deref(), Some("face-id"));
+        assert_eq!(received.status.as_deref(), Some("completed"));
+    }
+
+    #[test]
+    fn the_id_alone_is_replaced_and_every_other_byte_kept() {
+        let text = "{ \"resourceType\" : \"MedicationDispense\",\n  \"id\" :  \"face-id\" ,\"note\":[{\"text\":\"id \\\"face-id\\\" é\"}],\"contained\":[{\"id\":\"face-id\"}]}\n";
+        let swapped = with_id(text, "member-1").unwrap();
+        assert_eq!(swapped, text.replacen("\"face-id\" ,", "\"member-1\" ,", 1));
+        assert!(swapped.contains("\"contained\":[{\"id\":\"face-id\"}]"));
+    }
+
+    #[test]
+    fn a_text_with_no_top_level_id_has_none_to_replace() {
+        assert_eq!(with_id(r#"{"contained":[{"id":"a"}]}"#, "b"), None);
+        assert_eq!(with_id("[]", "b"), None);
+        assert_eq!(with_id("{", "b"), None);
     }
 
     #[test]

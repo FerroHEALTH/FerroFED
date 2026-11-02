@@ -1,15 +1,17 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The create of one resource at a member's own exchange-format endpoint.
+//! The create or the update of one resource at a member's own
+//! exchange-format endpoint.
 //!
-//! It is one FHIR R4 `create` interaction, `POST {fhir}/{type}`, sent once,
-//! and the member's answer is returned as it sent it (FHIR R4 `http.html`
-//! §3.1.0.8).
+//! A create is one FHIR R4 `create` interaction, `POST {fhir}/{type}`, and
+//! an update one `update` interaction, `PUT {fhir}/{type}/{id}` by the
+//! member's own id (FHIR R4 `http.html` §3.1.0.8, §3.1.0.4); each is sent
+//! once, and the member's answer is returned as it sent it.
 //!
-//! The body is the client's resource, sent byte for byte as it was received:
-//! a write body is clinical content the client supplied, which the gateway
-//! never alters or reads for identifiers (§5.4 scope note, N33). Everything
+//! The body is the client's resource, sent byte for byte as the caller hands
+//! it over: a write body is clinical content the client supplied, which the
+//! gateway never reads for identifiers (§5.4 scope note, N33). Everything
 //! else the gateway composes leaves as the patient summary's request does
 //! ([`super::native`]): through the member's Query API client, with its
 //! onward credentials, the caller's identity signed for that endpoint and
@@ -18,7 +20,7 @@
 //! query and the conveyed claims against the identifiers resolution consumed.
 //!
 //! The request is sent once and never again, whatever the member answers or
-//! fails to: a create that left may have been made, so a second one could
+//! fails to: a write that left may have been made, so a second one could
 //! write twice. No specification governs how a member's answer is read: our
 //! own design.
 
@@ -34,6 +36,9 @@ use crate::single_node::native::FHIR_JSON;
 
 /// The operation a native create is traced under.
 const OPERATION: &str = "native_create";
+
+/// The operation a native update is traced under.
+const UPDATE: &str = "native_update";
 
 /// What one create at a member's own endpoint asks.
 ///
@@ -54,6 +59,34 @@ pub struct CreateAsked<'a> {
 impl std::fmt::Debug for CreateAsked<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CreateAsked")
+            .field("resource", &self.resource)
+            .field("body_bytes", &self.body.len())
+            .finish_non_exhaustive()
+    }
+}
+
+/// What one update at a member's own endpoint asks.
+///
+/// `Debug` shows the resource type and the body's size, never the id or the
+/// body.
+#[derive(Clone, Copy)]
+pub struct UpdateAsked<'a> {
+    /// The member's native endpoint.
+    pub native: &'a NativeEndpoint,
+    /// The member's own `ehr_id` for the patient, which the caller's
+    /// conveyed identity is held to.
+    pub ehr_id: &'a EhrId,
+    /// The resource type updated, such as `MedicationDispense`.
+    pub resource: &'a str,
+    /// The member's own logical id of the resource, a FHIR R4 `id`.
+    pub id: &'a str,
+    /// The resource, whose `id` is `id` (FHIR R4 `http.html` §3.1.0.4).
+    pub body: &'a [u8],
+}
+
+impl std::fmt::Debug for UpdateAsked<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UpdateAsked")
             .field("resource", &self.resource)
             .field("body_bytes", &self.body.len())
             .finish_non_exhaustive()
@@ -100,15 +133,16 @@ impl std::fmt::Debug for Answered {
     }
 }
 
-/// What a member answered a create with.
+/// What a member answered a create or an update with.
 #[derive(Debug)]
 pub enum Created {
     /// A success: the member's answer, as it sent it (FHIR R4 `http.html`
-    /// §3.1.0.8: `201 Created` with a `Location`).
+    /// §3.1.0.8: `201 Created` with a `Location`; §3.1.0.4: `200 OK` or
+    /// `201 Created` for an update).
     Made(Forwarded),
     /// A client-error status other than `401`: the member refused the
-    /// resource (FHIR R4 `http.html` §3.1.0.8: `400`, `422`), or its own
-    /// state no longer admits it.
+    /// resource (FHIR R4 `http.html` §3.1.0.8, §3.1.0.4.2: `400`, `422`), or
+    /// its own state no longer admits it.
     Refused(Answered),
     /// Any other status the member answered with.
     Erred(Answered),
@@ -168,15 +202,55 @@ impl<T: Transport + Clone> NodeClient<T> {
         options: &DispatchOptions,
         until: tokio::time::Instant,
     ) -> Created {
-        let mut outgoing = Request::new(Method::POST, format!("/{}", asked.resource));
-        outgoing.raw_body(
-            asked.body.to_vec(),
-            Some(HeaderValue::from_static(FHIR_JSON)),
-        );
-        let outgoing = self.native_admitted(asked.native, asked.ehr_id, outgoing, options);
+        let outgoing = Request::new(Method::POST, format!("/{}", asked.resource));
+        let to = (asked.native, asked.ehr_id);
+        self.native_written((to, outgoing, asked.body), (options, until), OPERATION)
+            .await
+    }
+
+    /// Asks the member this client reaches to update the resource `asked`
+    /// names by the member's own id at its native endpoint, `PUT
+    /// {fhir}/{type}/{id}`, once, under the deadline of `options`, and
+    /// abandons the request when the overall budget `until` runs out after
+    /// it left (FHIR R4 `http.html` §3.1.0.4).
+    ///
+    /// The outbound gate and the conveyance hold the request as
+    /// [`Self::native_create`] holds a create; the body is never read.
+    pub async fn native_update(
+        &self,
+        asked: UpdateAsked<'_>,
+        options: &DispatchOptions,
+        until: tokio::time::Instant,
+    ) -> Created {
+        let outgoing = Request::new(Method::PUT, format!("/{}/{}", asked.resource, asked.id));
+        let to = (asked.native, asked.ehr_id);
+        self.native_written((to, outgoing, asked.body), (options, until), UPDATE)
+            .await
+    }
+
+    /// Sends `outgoing` with the body `body` to the member's native
+    /// endpoint `native`, its patient located by its own `ehr_id`, once,
+    /// traced as `operation`, and reads what the member answered.
+    async fn native_written(
+        &self,
+        ((native, ehr_id), mut outgoing, body): ((&NativeEndpoint, &EhrId), Request, &[u8]),
+        (options, until): (&DispatchOptions, tokio::time::Instant),
+        operation: &'static str,
+    ) -> Created {
+        outgoing.raw_body(body.to_vec(), Some(HeaderValue::from_static(FHIR_JSON)));
+        let outgoing = self.native_admitted(native, ehr_id, outgoing, options);
         let answered = self
-            .native_sent(asked.native, outgoing, (options, until), OPERATION)
+            .native_sent(native, outgoing, (options, until), operation)
             .await;
+        self.written(answered)
+    }
+
+    /// What the member's answer `answered` to a write says, read by its
+    /// status.
+    fn written(
+        &self,
+        answered: Option<Result<openehr_its::rest::client::Answer, ForwardError>>,
+    ) -> Created {
         match answered {
             None => Created::Abandoned,
             Some(Err(ForwardError::Oversized {
@@ -184,7 +258,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             })) if status.is_success() => {
                 tracing::warn!(
                     endpoint = %endpoint,
-                    "a member created a resource and answered with a body longer than the gateway reads"
+                    "a member wrote a resource and answered with a body longer than the gateway reads"
                 );
                 Created::Made(Forwarded::bare(status))
             }

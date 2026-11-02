@@ -14,7 +14,7 @@ use axum::response::Response;
 use eehrxf::category::Category;
 use eehrxf::dataset::DatasetError;
 use eehrxf::medication::Mpd;
-use ferrofed_eehrxf::dispensations::{self, Unread};
+use ferrofed_eehrxf::dispensations::{self, Received, Unread};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
@@ -44,37 +44,9 @@ pub(in crate::fhir) async fn dispense(
     body: Bytes,
 ) -> Response {
     let started = Instant::now();
-    if !serves(&state, Category::Dispensation) {
-        return not_served(Category::Dispensation);
-    }
-    if !crate::fhir::fhir_json_body(&headers) {
-        return refusal(
-            StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            "not-supported",
-            "a dispensation is sent as application/fhir+json",
-        );
-    }
-    let Ok(text) = std::str::from_utf8(&body) else {
-        return refusal(
-            StatusCode::BAD_REQUEST,
-            "invalid",
-            "the dispensation is not UTF-8 text (RFC 8259 §8.1)",
-        );
-    };
-    let mpd = match &*MPD {
-        Ok(mpd) => mpd,
-        Err(failure) => {
-            tracing::error!(error = %crate::chain(failure), "the HL7 Europe MPD package this build carries could not be read");
-            return refusal(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "exception",
-                "the dispensation profiles could not be read",
-            );
-        }
-    };
-    let received = match dispensations::read(text, mpd) {
-        Ok(received) => received,
-        Err(unread) => return unread_answer(&unread),
+    let received = match received(&state, &headers, &body) {
+        Ok((received, _text)) => received,
+        Err(refused) => return refused,
     };
     let admitted = admission::admit(
         &state,
@@ -109,6 +81,56 @@ pub(in crate::fhir) async fn dispense(
         &targeted,
     )
     .await
+}
+
+/// The dispensation `body` carries with the `headers` it came with, read
+/// and held to its profiles before any member is asked, with its text.
+///
+/// # Errors
+///
+/// The answer to a category the deployment does not serve, a body that is
+/// no FHIR JSON text, or one [`unread_answer`] refuses.
+#[expect(
+    clippy::result_large_err,
+    reason = "the refusal is the handler's answer, returned at most once per request"
+)]
+pub(super) fn received<'a>(
+    state: &AppState,
+    headers: &http::HeaderMap,
+    body: &'a [u8],
+) -> Result<(Received, &'a str), Response> {
+    if !serves(state, Category::Dispensation) {
+        return Err(not_served(Category::Dispensation));
+    }
+    if !crate::fhir::fhir_json_body(headers) {
+        return Err(refusal(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "not-supported",
+            "a dispensation is sent as application/fhir+json",
+        ));
+    }
+    let Ok(text) = std::str::from_utf8(body) else {
+        return Err(refusal(
+            StatusCode::BAD_REQUEST,
+            "invalid",
+            "the dispensation is not UTF-8 text (RFC 8259 §8.1)",
+        ));
+    };
+    let mpd = match &*MPD {
+        Ok(mpd) => mpd,
+        Err(failure) => {
+            tracing::error!(error = %crate::chain(failure), "the HL7 Europe MPD package this build carries could not be read");
+            return Err(refusal(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "exception",
+                "the dispensation profiles could not be read",
+            ));
+        }
+    };
+    match dispensations::read(text, mpd) {
+        Ok(received) => Ok((received, text)),
+        Err(unread) => Err(unread_answer(&unread)),
+    }
 }
 
 /// The HL7 Europe MPD 1.0.0 profiles a received dispensation is held to,

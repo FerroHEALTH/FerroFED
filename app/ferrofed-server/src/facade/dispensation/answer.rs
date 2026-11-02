@@ -31,7 +31,7 @@ use ferrofed_engine::single_node::native_create::{Answered, Created};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::incident::Incident;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use fhir_types::r4::operation_outcome::OperationOutcomeIssue;
+use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use http::{HeaderValue, StatusCode, header};
 use secrecy::SecretString;
 
@@ -175,6 +175,136 @@ pub(super) fn unowned(
     refused_after(federation, lookup, (status, code), &diagnostics)
 }
 
+/// What a write is called in the answers to it.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Deed {
+    /// What was written, as a subject: "the dispensation".
+    pub(super) object: &'static str,
+    /// What the member did when it wrote it: "wrote the dispensation".
+    pub(super) did: &'static str,
+    /// How the write is said not to have been made: "written to".
+    pub(super) done: &'static str,
+}
+
+/// The receipt of a dispensation, a create.
+pub(super) const RECEIPT: Deed = Deed {
+    object: "the dispensation",
+    did: "wrote the dispensation",
+    done: "written to",
+};
+
+/// How a write ended.
+pub(super) enum Ended<'a> {
+    /// The member made it, and this is its answer.
+    Made(&'a Forwarded),
+    /// The member made nothing.
+    Unmade(Unmade<'a>),
+}
+
+/// How a write ended when the member made nothing.
+pub(super) enum Unmade<'a> {
+    /// The member refused or erred: the face's `status` and issue type
+    /// `code`, followed by the member's own answer, which it `verb`.
+    Relayed {
+        /// The face's status.
+        status: StatusCode,
+        /// The face's issue type.
+        code: &'static str,
+        /// The member's answer.
+        answered: &'a Answered,
+        /// What the member did with the write.
+        verb: &'static str,
+    },
+    /// Any other end, with the face's one issue.
+    Plain(StatusCode, &'static str, String),
+}
+
+/// How the write `deed` to `writing` that ended as `created` is answered.
+pub(super) fn ended<'a>(
+    (writing, created): (&Chosen, &'a Written),
+    deed: Deed,
+    logged: &str,
+) -> Ended<'a> {
+    let endpoint = &writing.native;
+    let member = &writing.node;
+    let Deed { object, did, done } = deed;
+    Ended::Unmade(match created {
+        Written::Sent(Created::Made(made)) => return Ended::Made(made),
+        Written::Sent(Created::Refused(answered)) => Unmade::Relayed {
+            status: StatusCode::CONFLICT,
+            code: "conflict",
+            answered,
+            verb: "refused",
+        },
+        Written::Sent(Created::Erred(answered)) => Unmade::Relayed {
+            status: StatusCode::BAD_GATEWAY,
+            code: "exception",
+            answered,
+            verb: "answered",
+        },
+        Written::Sent(Created::Abandoned | Created::Failed(ForwardError::TimeOut { .. })) => {
+            Unmade::Plain(
+                StatusCode::GATEWAY_TIMEOUT,
+                "timeout",
+                format!(
+                    "member {member} did not answer at endpoint {endpoint} before the deadline: whether it {did} is unknown, and the gateway did not send it again"
+                ),
+            )
+        }
+        Written::Sent(Created::Failed(ForwardError::Unreachable { .. })) => Unmade::Plain(
+            StatusCode::BAD_GATEWAY,
+            "exception",
+            format!(
+                "member {member} could not be reached at endpoint {endpoint}: whether it {did} is unknown, and the gateway did not send it again"
+            ),
+        ),
+        Written::Sent(Created::Failed(ForwardError::Withheld { endpoint, part })) => {
+            security::gate_stopped(endpoint, part, logged);
+            Unmade::Plain(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "security",
+                String::from(
+                    "the write would have carried a patient identifier outside its body, so it was not sent (§5.4.1, N33)",
+                ),
+            )
+        }
+        Written::Sent(Created::Failed(ForwardError::Capped(_) | ForwardError::Expired { .. }))
+        | Written::Unsent => Unmade::Plain(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "transient",
+            format!(
+                "{object} could not be sent to member {member} before the deadline, so nothing was sent"
+            ),
+        ),
+        Written::Sent(Created::Failed(failure)) => {
+            tracing::warn!(error = %crate::chain(failure), request_id = logged, "a dispensation write was not made");
+            Unmade::Plain(
+                StatusCode::BAD_GATEWAY,
+                "exception",
+                format!("{object} could not be {done} member {member} at endpoint {endpoint}"),
+            )
+        }
+    })
+}
+
+/// The status and the `OperationOutcome` of the write `deed` to `writing`
+/// that ended as `unmade`.
+pub(super) fn unmade_outcome(
+    writing: &Chosen,
+    deed: Deed,
+    unmade: &Unmade<'_>,
+) -> (StatusCode, OperationOutcome) {
+    match unmade {
+        Unmade::Relayed {
+            status,
+            code,
+            answered,
+            verb,
+        } => (*status, relayed(writing, deed, (code, answered, verb))),
+        Unmade::Plain(status, code, diagnostics) => (*status, face::outcome(code, diagnostics)),
+    }
+}
+
 /// The answer to the write to `writing` that ended as `created`, of the
 /// dispensation `received` after `lookup`, on the face `fhir`.
 pub(super) fn written(
@@ -184,8 +314,6 @@ pub(super) fn written(
     fhir: &FhirSettings,
     logged: &str,
 ) -> Response {
-    let endpoint = &writing.native;
-    let member = &writing.node;
     match created {
         Written::Sent(Created::Made(_)) => Outcome::Created,
         Written::Sent(Created::Refused(_)) => Outcome::Refused,
@@ -196,8 +324,8 @@ pub(super) fn written(
         Written::Sent(_) | Written::Unsent => Outcome::Failed,
     }
     .record();
-    let (status, code, diagnostics) = match created {
-        Written::Sent(Created::Made(made)) => {
+    let unmade = match ended((writing, created), RECEIPT, logged) {
+        Ended::Made(made) => {
             return made_answer(
                 federation,
                 (received, lookup),
@@ -205,68 +333,10 @@ pub(super) fn written(
                 fhir,
             );
         }
-        Written::Sent(Created::Refused(answered)) => {
-            return relayed(
-                federation,
-                lookup,
-                (writing, created),
-                (StatusCode::CONFLICT, "conflict"),
-                (answered, "refused"),
-            );
-        }
-        Written::Sent(Created::Erred(answered)) => {
-            return relayed(
-                federation,
-                lookup,
-                (writing, created),
-                (StatusCode::BAD_GATEWAY, "exception"),
-                (answered, "answered"),
-            );
-        }
-        Written::Sent(Created::Abandoned | Created::Failed(ForwardError::TimeOut { .. })) => (
-            StatusCode::GATEWAY_TIMEOUT,
-            "timeout",
-            format!(
-                "member {member} did not answer at endpoint {endpoint} before the deadline: whether it wrote the dispensation is unknown, and the gateway did not send it again"
-            ),
-        ),
-        Written::Sent(Created::Failed(ForwardError::Unreachable { .. })) => (
-            StatusCode::BAD_GATEWAY,
-            "exception",
-            format!(
-                "member {member} could not be reached at endpoint {endpoint}: whether it wrote the dispensation is unknown, and the gateway did not send it again"
-            ),
-        ),
-        Written::Sent(Created::Failed(ForwardError::Withheld { endpoint, part })) => {
-            security::gate_stopped(endpoint, part, logged);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "security",
-                String::from(
-                    "the write would have carried a patient identifier outside its body, so it was not sent (§5.4.1, N33)",
-                ),
-            )
-        }
-        Written::Sent(Created::Failed(ForwardError::Capped(_) | ForwardError::Expired { .. }))
-        | Written::Unsent => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "transient",
-            format!(
-                "the dispensation could not be sent to member {member} before the deadline, so nothing was sent"
-            ),
-        ),
-        Written::Sent(Created::Failed(failure)) => {
-            tracing::warn!(error = %crate::chain(failure), request_id = logged, "a dispensation was not written");
-            (
-                StatusCode::BAD_GATEWAY,
-                "exception",
-                format!(
-                    "the dispensation could not be written to member {member} at endpoint {endpoint}"
-                ),
-            )
-        }
+        Ended::Unmade(unmade) => unmade,
     };
-    let mut response = crate::fhir::fhir_json(status, &face::outcome(code, &diagnostics));
+    let (status, outcome) = unmade_outcome(writing, RECEIPT, &unmade);
+    let mut response = crate::fhir::fhir_json(status, &outcome);
     attach(
         &mut response,
         accessed(federation, lookup, Some((writing, created, None))),
@@ -274,19 +344,17 @@ pub(super) fn written(
     response
 }
 
-/// The answer to a member's refusal or error `answered` of the write to
-/// `writing`: the gateway's issue of `code` with `status`, naming the member
+/// The outcome of a member's refusal or error `answered` of the write
+/// `deed` to `writing`: the gateway's issue of `code`, naming the member
 /// and its status, and after it the member's own issues when its body is a
 /// FHIR `OperationOutcome`.
 // NOTE: MyHealth@EU Requirements Catalogue v10.0.0 §1.25: the national answer travels with the
 // business exception, so the member's issues follow the gateway's, unaltered.
 fn relayed(
-    federation: &Federation,
-    lookup: &Lookup<'_>,
-    (writing, created): (&Chosen, &Written),
-    (status, code): (StatusCode, &str),
-    (answered, verb): (&Answered, &str),
-) -> Response {
+    writing: &Chosen,
+    deed: Deed,
+    (code, answered, verb): (&str, &Answered, &str),
+) -> OperationOutcome {
     let (member, endpoint) = (&writing.node, &writing.native);
     let own = member_issues(answered.body());
     let follows = if own.is_empty() {
@@ -295,17 +363,13 @@ fn relayed(
         "; the member's own issues follow"
     };
     let diagnostics = format!(
-        "member {member} {verb} the dispensation at endpoint {endpoint} with {}{follows}",
+        "member {member} {verb} {} at endpoint {endpoint} with {}{follows}",
+        deed.object,
         answered.status().as_u16()
     );
     let mut outcome = face::outcome(code, &diagnostics);
     outcome.issue.extend(own);
-    let mut response = crate::fhir::fhir_json(status, &outcome);
-    attach(
-        &mut response,
-        accessed(federation, lookup, Some((writing, created, None))),
-    );
-    response
+    outcome
 }
 
 /// What a member's answer body is read for: whether it is an
@@ -365,18 +429,29 @@ fn made_answer(
             response.headers_mut().insert(header::LOCATION, value);
         }
     }
-    for name in [header::ETAG, header::LAST_MODIFIED] {
-        if let Some(value) = made.headers().get(&name) {
-            response.headers_mut().insert(name, value.clone());
-        }
-    }
-    let mut response =
-        Provenance::member(federation.snapshot(), &writing.native, &writing.node).stamp(response);
+    let mut response = from_member(federation, writing, made, response);
     attach(
         &mut response,
         accessed(federation, lookup, Some((writing, created, own.as_deref()))),
     );
     response
+}
+
+/// `response` to a write the member `writing` made with the answer `made`,
+/// carrying the member's `ETag` and `Last-Modified` (FHIR R4 `http.html`
+/// §3.1.0.8, §3.1.0.4) and naming the member.
+pub(super) fn from_member(
+    federation: &Federation,
+    writing: &Chosen,
+    made: &Forwarded,
+    mut response: Response,
+) -> Response {
+    for name in [header::ETAG, header::LAST_MODIFIED] {
+        if let Some(value) = made.headers().get(&name) {
+            response.headers_mut().insert(name, value.clone());
+        }
+    }
+    Provenance::member(federation.snapshot(), &writing.native, &writing.node).stamp(response)
 }
 
 /// What a created resource's body is read for: its id.
@@ -420,7 +495,7 @@ fn created_id(made: &Forwarded) -> (Option<String>, Option<String>) {
 
 /// Attaches `accessed` to `response`, or the statement that no member was
 /// asked.
-fn attach(response: &mut Response, accessed: Option<Accessed>) {
+pub(super) fn attach(response: &mut Response, accessed: Option<Accessed>) {
     match accessed {
         Some(accessed) => {
             response.extensions_mut().insert(accessed);
