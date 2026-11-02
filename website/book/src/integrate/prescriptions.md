@@ -316,12 +316,55 @@ nothing is written in any of the refusals below
 refusal is passed on as `409`, naming the member and its status
 (`the_owners_refusal_is_a_conflict_naming_it`).
 
-The face offers no withdrawal of a dispensation. A dispensation sent again
-under the same business identifier with `status` `entered-in-error` is a
-duplicate like any other: it is refused `409` `duplicate` and nothing reaches
-the owner
+A dispensation sent again by `POST` under the same business identifier with
+`status` `entered-in-error` is a duplicate like any other: it is refused
+`409` `duplicate` and nothing reaches the owner
 (`a_withdrawal_sent_again_is_refused_as_a_duplicate_with_nothing_written`).
-Withdraw a dispensation at the member that holds it.
+To withdraw a dispensation, update it as
+[Withdrawing a dispensation](#withdrawing-a-dispensation) describes.
+
+## Withdrawing a dispensation
+
+`PUT {fhir-base}/MedicationDispense/{id}` with `application/fhir+json`
+withdraws the dispensation the [locator id](#the-locator-ids) names, the
+FHIR R4 `update` interaction, and takes the `composition-` update scope over
+every template (`user/composition-*.u`, for example). The face takes an
+update of a dispensation only as its withdrawal.
+
+The body is the dispensation with `status` `entered-in-error`, checked
+before any member is asked as a receipt is: a body that is no
+`MedicationDispense` is a `400`, and one that breaks
+`MedicationDispense-eu-mpd` a `422` with one issue per finding
+(`fhir/prescriptions/withdraw.rs`:
+`a_withdrawal_that_breaks_its_profile_asks_no_member`). Its `id` must be the
+locator id in the path, as FHIR R4 asks of an update, or it is refused `400`
+`invalid` (`a_body_whose_id_is_not_the_requests_is_refused_asking_no_member`).
+Any other `status` is refused `422` `business-rule`
+(`an_update_that_withdraws_nothing_is_refused_asking_no_member`).
+
+The gateway reads the dispensation at the member the id names first, as
+[Reading a dispensation](#reading-a-dispensation) does, so a withdrawal of a
+dispensation that member does not hold for its patient answers as a read
+of it does and writes nothing
+(`a_withdrawal_of_a_dispensation_its_member_does_not_hold_writes_nothing`).
+It then sends the withdrawal to that member's own endpoint with
+`PUT {own}/MedicationDispense/{member's id}`, once. The body is the one you
+sent, byte for byte, except for its top-level `id`, which the gateway
+replaces with the member's own id, since an update names its resource by
+the id of the server it reaches
+(`a_withdrawal_reaches_its_member_alone_with_its_body_unchanged_but_for_its_id`).
+This is the inverse of the one change a read makes. A withdrawal the member
+made answers `200` with an `OperationOutcome` naming the member, the
+member's `ETag` and `Last-Modified`, and the member named in
+`openEHR-federation-endpoint`.
+
+The member decides whether its state still admits the withdrawal. Its
+refusal is passed on as `409`, naming the member and its status, with the
+member's own issues after the gateway's
+(`the_members_refusal_is_a_conflict_naming_it_with_its_own_issues`). A
+member that does not answer in time is `504`, saying whether it withdrew
+the dispensation is unknown; the gateway never sends the withdrawal again
+(`a_member_that_does_not_answer_is_asked_once_and_the_outcome_is_unknown`).
 
 ## Reading a dispensation
 
@@ -492,6 +535,7 @@ Each request that reached a member writes one access record
 | prescription read | a read under `Electronic-Prescriptions`, naming the member and the `ehr_id` it was asked by | `fhir/prescriptions/read.rs`: `a_read_is_recorded_once_under_electronic_prescriptions_naming_its_member` |
 | receipt | a creation under `Electronic-Dispensations` and `Electronic-Prescriptions`, naming every member the lookup asked and the owner | `fhir/prescriptions/dispense.rs`: `a_dispensation_is_recorded_as_a_creation_of_both_categories` |
 | dispensation read | a read under `Electronic-Dispensations` | `fhir/prescriptions/dispense.rs`: `a_dispensation_read_is_recorded_as_a_read_of_dispensations` |
+| withdrawal | an update under `Electronic-Dispensations`, naming the member and the `ehr_id` it was asked by | `fhir/prescriptions/withdraw.rs`: `a_withdrawal_is_recorded_as_an_update_of_dispensations` |
 | version read | a read as the read of the same resource records it | `fhir/prescriptions/dispense.rs`: `a_dispensation_version_read_is_recorded_as_a_read_of_dispensations` |
 
 A not-served answer, and a request refused before any member was asked,
@@ -522,7 +566,8 @@ declared for `Electronic-Prescriptions`, with the profile
 interactions and the `patient.identifier` search parameter. It lists
 `MedicationDispense` only when a member is declared for
 `Electronic-Dispensations`, with the profile `MedicationDispense-eu-mpd` and
-the `create`, `read` and `vread` interactions. Each interaction it declares is one its route serves
+the `create`, `read`, `vread` and `update` interactions, the last only as
+a withdrawal. Each interaction it declares is one its route serves
 (`fhir/serving.rs`:
 `with_no_member_declared_the_capability_statement_lists_neither_resource`,
 `a_declared_member_lists_both_resources_in_their_mpd_profiles`,

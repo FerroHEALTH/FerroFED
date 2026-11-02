@@ -6,8 +6,9 @@
 //!
 //! `GET {fhir-base}/MedicationRequest` searches a patient's prescriptions,
 //! `GET {fhir-base}/MedicationRequest/{id}` reads one,
-//! `POST {fhir-base}/MedicationDispense` receives a dispensation and
-//! `GET {fhir-base}/MedicationDispense/{id}` reads one it received, each at
+//! `POST {fhir-base}/MedicationDispense` receives a dispensation,
+//! `GET {fhir-base}/MedicationDispense/{id}` reads one it received and
+//! `PUT {fhir-base}/MedicationDispense/{id}` withdraws one, each at
 //! the members `[[fhir.serve]]` declares for its category; the two reads
 //! also answer at `{id}/_history/{vid}`, the version the member holds now
 //! (FHIR R4 `http.html` §3.1.0.3). A category no
@@ -24,6 +25,7 @@
 pub(super) mod dispense;
 pub(super) mod read;
 pub(super) mod search;
+pub(super) mod withdraw;
 
 use axum::response::Response;
 use eehrxf::category::Category;
@@ -131,7 +133,8 @@ pub fn addressed(fhir: &FhirSettings, path: &str) -> Option<Addressed> {
 /// dispensation, or of one version of either, a `GET` that takes the
 /// `composition-` read over every template, and the receipt of a
 /// dispensation a `POST` that takes the `composition-` create over every
-/// template; every other method is refused.
+/// template, and its withdrawal a `PUT` that takes the `composition-`
+/// update over every template; every other method is refused.
 #[must_use]
 pub fn requirement(addressed: Addressed, method: &Method) -> Requirement {
     match addressed {
@@ -162,6 +165,14 @@ pub fn requirement(addressed: Addressed, method: &Method) -> Requirement {
         Addressed::Dispensations if *method == Method::POST => Requirement::Scope {
             family: ResourceFamily::Composition,
             permission: Permission::Create,
+            resource: Resource::Unnamed,
+        },
+        // NOTE: no specification governs the scope of the FHIR face: our own design; a
+        // withdrawal changes EHR content its member holds, so it takes the `composition-` update
+        // of every template.
+        Addressed::Dispensation if *method == Method::PUT => Requirement::Scope {
+            family: ResourceFamily::Composition,
+            permission: Permission::Update,
             resource: Resource::Unnamed,
         },
         Addressed::Prescriptions

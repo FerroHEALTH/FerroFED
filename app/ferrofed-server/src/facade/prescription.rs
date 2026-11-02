@@ -39,12 +39,13 @@ use std::time::Instant;
 
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
-use ehds_logging::record::{Action, DataSubject, EhrAt, PatientLookup};
+use ehds_logging::record::{Action, DataSubject, EhrAt, PatientLookup, WrittenVersion};
 use ferrofed_eehrxf::dispensations;
 use ferrofed_eehrxf::prescriptions::page::Kept;
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::FanOutError;
 use ferrofed_engine::hygiene::Withheld;
+use ferrofed_engine::single_node::native_create::Created;
 use ferrofed_identity::role::resolver::Identification;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use http::HeaderMap;
@@ -369,30 +370,60 @@ async fn asked(
 /// answered the one prescription, and the record gate names the patient
 /// behind the `ehr_id`.
 pub(crate) fn accessed(federation: &Federation, read: &Read) -> Option<Accessed> {
-    recorded(federation, read, read.resource().is_some())
+    recorded(federation, read, (read.resource().is_some(), None))
+}
+
+/// The access record's facts of the update `created` of the one resource
+/// `read` found, the operation it is recorded under `operation`: a write
+/// whose member contributed when it made it (Annex II 3.2).
+pub(crate) fn accessed_written(
+    federation: &Federation,
+    read: &Read,
+    (created, operation): (&Created, &'static str),
+) -> Option<Accessed> {
+    let made = matches!(created, Created::Made(_));
+    recorded(federation, read, (made, Some((created, operation))))
 }
 
 /// The access record's facts of the read `read` whose one resource the
 /// face withholds, a version read whose member holds another version, so
 /// the member contributed nothing and nothing was delivered.
 pub(crate) fn accessed_withheld(federation: &Federation, read: &Read) -> Option<Accessed> {
-    recorded(federation, read, false)
+    recorded(federation, read, (false, None))
 }
 
 /// The access record's facts of the read `read`, its member contributing
-/// when `contributed`.
-fn recorded(federation: &Federation, read: &Read, contributed: bool) -> Option<Accessed> {
+/// when `contributed`, and of the update that followed it when `written`
+/// names one and the operation it is recorded under.
+fn recorded(
+    federation: &Federation,
+    read: &Read,
+    (contributed, written): (bool, Option<(&Created, &'static str)>),
+) -> Option<Accessed> {
     let log = federation.access_log()?;
     if !read.held.left() {
         return None;
     }
-    let evidence =
-        || Evidence::reached(Basis::Returned, Vec::new()).constructed(read.readable.category());
+    let (action, operation, basis, status) = match written {
+        Some((created, operation)) => (
+            Action::Update,
+            operation,
+            Basis::Written,
+            created.status().as_str(),
+        ),
+        None => (
+            Action::Read,
+            read.readable.resource(),
+            Basis::Returned,
+            read.held.status().as_str(),
+        ),
+    };
+    let evidence = || Evidence::reached(basis, Vec::new()).constructed(read.readable.category());
     let chosen = &read.chosen;
     Some(Accessed {
         log: Arc::clone(log),
-        action: Action::Read,
-        operation: read.readable.resource(),
+        action,
+        operation,
         resource: Some(format!(
             "{}/{}",
             read.readable.resource(),
@@ -418,9 +449,13 @@ fn recorded(federation: &Federation, read: &Read, contributed: bool) -> Option<A
                 .snapshot()
                 .node(&chosen.node)
                 .map(|node| node.system_id().as_str().to_owned()),
-            status: read.held.status().as_str().to_owned(),
-            rows: Some(read.held.prescriptions()),
-            version: None,
+            status: status.to_owned(),
+            rows: Some(if written.is_some() {
+                usize::from(contributed)
+            } else {
+                read.held.prescriptions()
+            }),
+            version: (written.is_some() && contributed).then_some(WrittenVersion::Unnamed),
             created_ehr: None,
             contributed,
             evidence: contributed.then(evidence),

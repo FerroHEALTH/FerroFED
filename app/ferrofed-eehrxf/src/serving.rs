@@ -193,8 +193,9 @@ impl Serving {
     /// The interactions are those the face serves for each: the search by
     /// the patient's identifier and the read of `MedicationRequest`, after
     /// the HL7 Europe EU Health Data API `EEHRxF-ResourceAccessProvider`, the
-    /// create and the read of `MedicationDispense`, and for both the vread
-    /// of the version the member holds now (FHIR R4 `http.html` §3.1.0.3).
+    /// create, the read and the update of `MedicationDispense`, the update
+    /// only as a withdrawal, and for both the vread of the version the
+    /// member holds now (FHIR R4 `http.html` §3.1.0.3, §3.1.0.4).
     #[must_use]
     pub fn resources(&self) -> Vec<CapabilityStatementRestResource> {
         let mut resources = Vec::new();
@@ -241,9 +242,9 @@ fn dispensations() -> CapabilityStatementRestResource {
         r#type: "MedicationDispense".into(),
         supported_profile: vec![MPD_MEDICATION_DISPENSE.into()],
         documentation: Some(
-            "A dispensation is written to the one member that owns the prescription it names; the answer is 201 with a Location naming it by the face's id, which the read takes, and an OperationOutcome naming that member.".into(),
+            "A dispensation is written to the one member that owns the prescription it names; the answer is 201 with a Location naming it by the face's id, which the read takes, and an OperationOutcome naming that member. An update by that id is taken only as the dispensation's withdrawal, status entered-in-error, written to the member that holds it.".into(),
         ),
-        interaction: ["create", "read", "vread"]
+        interaction: ["create", "read", "vread", "update"]
             .into_iter()
             .map(|code| CapabilityStatementRestResourceInteraction {
                 code: code.into(),

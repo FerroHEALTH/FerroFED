@@ -31,6 +31,7 @@
 mod answer;
 mod duplicate;
 mod lookup;
+pub(crate) mod withdrawal;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -41,7 +42,7 @@ use eehrxf::category::Category;
 use ferrofed_eehrxf::dispensations::{RESOURCE, Received};
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::single_node::native_create::CreateAsked;
+use ferrofed_engine::single_node::native_create::{CreateAsked, UpdateAsked};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
@@ -269,7 +270,8 @@ async fn owned(
             return refused_after(federation, lookup, (status, code), &diagnostics);
         }
     }
-    let created = write(federation, arrived, (&writing, body), withheld).await;
+    let sent = (&writing, Sent::Create(body));
+    let created = write(federation, arrived, sent, withheld).await;
     answer::written(
         federation,
         (received, lookup),
@@ -396,13 +398,28 @@ fn of_node(federation: &Federation, endpoint: &EndpointId, node: &NodeId) -> boo
         .unwrap_or(false)
 }
 
-/// Creates the dispensation `body` at `writing`, once, under the budget of
-/// the request `arrived`, refusing to send anything carrying one of
-/// `withheld` outside the body.
+/// What a write sends to a member.
+#[derive(Debug, Clone, Copy)]
+enum Sent<'a> {
+    /// A create of the dispensation, its body as the client sent it.
+    Create(&'a [u8]),
+    /// An update of the dispensation of the member's own id `id`, its
+    /// body as the client sent it with that `id`.
+    Update {
+        /// The member's own id of the dispensation.
+        id: &'a str,
+        /// The dispensation.
+        body: &'a [u8],
+    },
+}
+
+/// Writes `sent` at `writing`, once, under the budget of the request
+/// `arrived`, refusing to send anything carrying one of `withheld` outside
+/// the body.
 async fn write(
     federation: &Federation,
     arrived: &Arrived<'_>,
-    (writing, body): (&Chosen, &[u8]),
+    (writing, sent): (&Chosen, Sent<'_>),
     withheld: Arc<Withheld>,
 ) -> answer::Written {
     let budget = federation.budget();
@@ -422,12 +439,27 @@ async fn write(
     ) else {
         return answer::Written::Unsent;
     };
-    let asked = CreateAsked {
-        native,
-        ehr_id: &writing.ehr_id,
-        resource: RESOURCE,
-        body,
-    };
     let until = tokio::time::Instant::from_std(overall);
-    answer::Written::Sent(client.native_create(asked, &options, until).await)
+    let ehr_id = &writing.ehr_id;
+    answer::Written::Sent(match sent {
+        Sent::Create(body) => {
+            let asked = CreateAsked {
+                native,
+                ehr_id,
+                resource: RESOURCE,
+                body,
+            };
+            client.native_create(asked, &options, until).await
+        }
+        Sent::Update { id, body } => {
+            let asked = UpdateAsked {
+                native,
+                ehr_id,
+                resource: RESOURCE,
+                id,
+                body,
+            };
+            client.native_update(asked, &options, until).await
+        }
+    })
 }

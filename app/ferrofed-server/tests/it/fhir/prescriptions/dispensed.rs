@@ -21,10 +21,10 @@ use crate::fhir::{FHIR, TestResult};
 use crate::support::{call, send};
 
 /// The dispensation node A holds under [`CREATED`], at its version `1`.
-const HELD: &str = r#"{"resourceType":"MedicationDispense","id":"md-1","meta":{"versionId":"1","lastUpdated":"2026-10-16T10:00:00Z"},"status":"completed","medicationCodeableConcept":{"text":"Synthetic medicine A"},"subject":{"reference":"Patient/p-a"}}"#;
+pub(super) const HELD: &str = r#"{"resourceType":"MedicationDispense","id":"md-1","meta":{"versionId":"1","lastUpdated":"2026-10-16T10:00:00Z"},"status":"completed","medicationCodeableConcept":{"text":"Synthetic medicine A"},"subject":{"reference":"Patient/p-a"}}"#;
 
 /// A `searchset` holding the dispensation `resource`.
-fn dispensed(resource: &str) -> String {
+pub(super) fn dispensed(resource: &str) -> String {
     format!(
         r#"{{"resourceType":"Bundle","type":"searchset","total":1,"entry":[{{"fullUrl":"https://cdr-a.example.org/fhir/MedicationDispense/md-1","resource":{resource},"search":{{"mode":"match"}}}}]}}"#
     )

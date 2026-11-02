@@ -21,6 +21,7 @@ mod resolution;
 mod restricted;
 mod version;
 mod vread;
+pub(super) mod withdraw;
 
 use std::collections::BTreeMap;
 use std::error::Error;

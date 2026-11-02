@@ -139,7 +139,7 @@ pub(super) fn created() -> ResponseTemplate {
 }
 
 /// The creates that reached `server`, each body as it arrived.
-async fn creates(server: &Server) -> Result<Vec<Vec<u8>>, Box<dyn Error>> {
+pub(super) async fn creates(server: &Server) -> Result<Vec<Vec<u8>>, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await
@@ -608,7 +608,7 @@ async fn a_dispensation_with_no_owner_is_counted_with_no_value() -> TestResult {
     Ok(())
 }
 #[cfg(feature = "binding-ihe")]
-mod recorded {
+pub(super) mod recorded {
     //! The access record of a dispensation (Annex II 3.2) and its place,
     //! reserved before the write.
 
@@ -625,7 +625,7 @@ mod recorded {
 
     /// The gateway over `members` recording to `repository` with the
     /// `[audit.repository]` keys `extra`.
-    fn recording(
+    pub(in crate::fhir) fn recording(
         members: &Members,
         dir: &std::path::Path,
         repository: &FeedRepository,
@@ -876,7 +876,7 @@ async fn a_withdrawal_sent_again_is_refused_as_a_duplicate_with_nothing_written(
     assert!(text.contains("\"code\":\"duplicate\""), "{text}");
     assert!(
         none_written(&members).await?,
-        "the face offers no withdrawal: nothing reaches the owner"
+        "a withdrawal sent as a create is a duplicate: nothing reaches the owner"
     );
     Ok(())
 }
