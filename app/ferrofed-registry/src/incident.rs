@@ -28,8 +28,12 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
+
+use jiff::Timestamp;
 
 use crate::id::{EhrId, EndpointId, NodeId, SystemId};
 
@@ -40,7 +44,6 @@ pub const TARGET: &str = "ferrofed::integrity";
 /// A federation integrity defect: in the follow-up routing table (N21,
 /// §12.2), or in which member holds an `ehr_id` (§12.5.2, §12b.2).
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
 pub enum Incident {
     /// A `creating_system_id` no member or registered mapping answers for was
     /// seen at two nodes, so a learned mapping cannot name one.
@@ -116,6 +119,42 @@ static EHR_ID_COLLISIONS: AtomicU64 = AtomicU64::new(0);
 static INDEX_INSERT_COLLISIONS: AtomicU64 = AtomicU64::new(0);
 /// How many [`Kind::PrescriptionIdentifierCollision`] incidents were emitted.
 static PRESCRIPTION_IDENTIFIER_COLLISIONS: AtomicU64 = AtomicU64::new(0);
+
+/// How many incidents of each kind the process keeps, newest last: a burst
+/// of one kind never pushes another kind's incidents out.
+pub const RECENT_PER_KIND: usize = 20;
+
+/// The incidents emitted since the process started, by kind, each kind's
+/// newest last and at most [`RECENT_PER_KIND`] of them.
+static RECENT: Mutex<BTreeMap<Kind, VecDeque<(Timestamp, Incident)>>> = Mutex::new(BTreeMap::new());
+
+/// Keeps `incident`, emitted now, among the recent ones of its kind,
+/// dropping that kind's oldest beyond [`RECENT_PER_KIND`].
+fn record(incident: &Incident) {
+    // NOTE: no specification governs this: our own design; a lock a panic
+    // poisoned still holds whole entries, so recording goes on.
+    let mut recent = RECENT.lock().unwrap_or_else(PoisonError::into_inner);
+    let kind = recent.entry(incident.kind()).or_default();
+    while kind.len() >= RECENT_PER_KIND {
+        kind.pop_front();
+    }
+    kind.push_back((Timestamp::now(), incident.clone()));
+}
+
+/// The incidents the process keeps of every kind, with when each was
+/// emitted, oldest first.
+#[must_use]
+pub fn recent() -> Vec<(Timestamp, Incident)> {
+    let mut held: Vec<(Timestamp, Incident)> = RECENT
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .values()
+        .flatten()
+        .cloned()
+        .collect();
+    held.sort_by_key(|(at, _)| *at);
+    held
+}
 
 impl Kind {
     /// Every kind, in declaration order.
@@ -263,7 +302,7 @@ impl Incident {
         // NOTE: no specification governs this: our own design; an operator
         // alerts on this count, and no webhook is called.
         self.kind().counter().fetch_add(1, Ordering::Relaxed);
-        crate::operator::record(self);
+        record(self);
         match self {
             Self::LearnedCreatingSystemConflict {
                 creating_system_id,

@@ -15,7 +15,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_registry::health::Observed;
+use ferrofed_operator_api::health::Observed;
 use ferrofed_server::binding::ihe::pmir::IdentityFeed;
 use ferrofed_server::binding::ihe::pmir::subscription::{RegistryFault, backoff};
 use ferrofed_testkit::pmir::{LocationMode, PatientIdentityRegistry, merge_message};

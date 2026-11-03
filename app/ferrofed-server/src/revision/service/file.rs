@@ -7,8 +7,8 @@
 
 use std::sync::PoisonError;
 
-use ferrofed_registry::resource::Resource;
-use ferrofed_registry::revision::{Author, Current, Origin, Outcome, Revision};
+use ferrofed_operator_api::resource::Resource;
+use ferrofed_operator_api::revision::{Author, Current, Origin, Outcome, Revision};
 use jiff::Timestamp;
 
 use super::{

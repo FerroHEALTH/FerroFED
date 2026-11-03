@@ -16,7 +16,7 @@
 //! change but the audience's applies at the next reload. No specification
 //! governs this: our own design.
 
-use ferrofed_registry::running::{SecretSetting, Section, Setting, Source};
+use ferrofed_operator_api::running::{SecretSetting, Section, Setting, Source};
 
 use super::{Layers, at, indexed, provenance_key, sourced};
 
@@ -153,7 +153,7 @@ fn secret(layers: &Layers, key: &str) -> Setting {
 #[cfg(test)]
 mod tests {
     use super::super::{Layers, of};
-    use ferrofed_registry::running::{Section, Source};
+    use ferrofed_operator_api::running::{Section, Source};
 
     /// The tree `text` writes.
     fn tree(text: &str) -> toml::Table {

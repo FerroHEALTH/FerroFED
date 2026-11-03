@@ -61,7 +61,7 @@ use crate::federation::{Federation, Reconciled, error::FederationError, registry
 use crate::metrics::ReloadResult;
 use crate::revision::service::{FileRevision, RevisionError, Revisions};
 use crate::state::{AppState, StateError};
-use ferrofed_registry::revision::RevisionId;
+use ferrofed_operator_api::revision::RevisionId;
 use ferrohealth_config::provenance::Provenance;
 use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::tls::{ReloadableTls, TlsError};

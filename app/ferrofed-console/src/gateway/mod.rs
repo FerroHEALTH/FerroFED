@@ -11,9 +11,9 @@
 //! generated group clients of `openehr_its::rest::generated`;
 //! [`Gateway::self_description`] reads `OPTIONS {base}/` into the typed
 //! federation body (§7a.2, N30), [`Gateway::dependencies`] the health of
-//! each member and service into the report of `ferrofed_registry::health`,
+//! each member and service into the report of `ferrofed_operator_api::health`,
 //! and the operator reads the gateway's read-only operator surface into the
-//! reports of `ferrofed_registry::operator`. A refusal or a failure is a
+//! reports of `ferrofed_operator_api::operator`. A refusal or a failure is a
 //! typed [`GatewayError`] carrying the gateway's status, never an empty
 //! answer. [`Gateway::query`] runs an AQL or a stored query and reads the
 //! federated `RESULT_SET` with its `meta.federation` (§9.1, §11.4).
@@ -29,8 +29,8 @@ pub mod exchange;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use ferrofed_registry::health::DependencyReport;
-use ferrofed_registry::operator::{
+use ferrofed_operator_api::health::DependencyReport;
+use ferrofed_operator_api::operator::{
     CreatingSystemEntry, DeploymentReport, IncidentReport, Page, PageRequest, StoredVersion,
 };
 use ferrohealth_secret::secret::Secret;

@@ -17,7 +17,7 @@
 pub mod build;
 pub mod fields;
 
-use ferrofed_registry::resource::SecretSlot;
+use ferrofed_operator_api::resource::SecretSlot;
 
 use crate::locale::Msg;
 

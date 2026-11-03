@@ -27,12 +27,12 @@ mod queries;
 pub mod running;
 mod top;
 
-use ferrofed_registry::console::Resources;
-use ferrofed_registry::operator::Page;
-use ferrofed_registry::revision::{
+use ferrofed_operator_api::console::Resources;
+use ferrofed_operator_api::operator::Page;
+use ferrofed_operator_api::revision::{
     Author, Current, Difference, Outcome, Revision, RevisionId, Standing,
 };
-use ferrofed_registry::running::{RunningConfig, Section};
+use ferrofed_operator_api::running::{RunningConfig, Section};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::view::time::reading;
 

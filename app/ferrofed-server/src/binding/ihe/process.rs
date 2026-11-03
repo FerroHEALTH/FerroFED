@@ -21,7 +21,7 @@ use crate::binding::ihe::pmir::subscription;
 use crate::config::settings::Settings;
 use crate::reload::Reloader;
 use crate::state::{AppState, StateError};
-use ferrofed_registry::health::Indication;
+use ferrofed_operator_api::health::Indication;
 
 /// The directory and the identity feed of a running gateway.
 #[derive(Debug, Default)]

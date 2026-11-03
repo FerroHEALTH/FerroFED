@@ -22,8 +22,8 @@ use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use ferrofed_registry::revision::RevisionId;
-use ferrofed_registry::running::{RunningConfig, SecretSetting, Setting, Source};
+use ferrofed_operator_api::revision::RevisionId;
+use ferrofed_operator_api::running::{RunningConfig, SecretSetting, Setting, Source};
 use ferrohealth_config::provenance::{Provenance, Source as Origin};
 use http::HeaderMap;
 

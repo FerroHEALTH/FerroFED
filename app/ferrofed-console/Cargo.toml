@@ -31,6 +31,7 @@ serde_json.workspace = true
 fluent-templates.workspace = true
 # The gateway's operator reports and configuration resources a page draws,
 # and the `Secret` and `WriteOnly` its forms hold.
+ferrofed-operator-api.workspace = true
 ferrofed-registry.workspace = true
 ferrohealth-secret.workspace = true
 # The gateway's self-description and federation metadata (§7a.2, §11) a page

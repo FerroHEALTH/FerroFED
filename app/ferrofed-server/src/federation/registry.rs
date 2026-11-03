@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use ferrofed_registry::console::ConsoleMember;
+use ferrofed_operator_api::console::ConsoleMember;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::registry::RegistryFormat;

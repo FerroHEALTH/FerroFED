@@ -23,7 +23,7 @@ use ferrohealth_ui::view::toast::toast_region;
 use crate::app::{PRODUCT, VERSION};
 use crate::locale::{Msg, current, tr, tr_with};
 use crate::pages::{h, t};
-use ferrofed_registry::manufacturer::MANUFACTURER;
+use ferrofed_operator_api::manufacturer::MANUFACTURER;
 
 /// The route Download fetches the `OPTIONS {base}/` document from.
 pub const OPTIONS_DOCUMENT: &str = "/about/options.json";

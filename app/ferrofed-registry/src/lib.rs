@@ -58,44 +58,23 @@
 //! more, a [`LearnedMap`](creating_system::LearnedMap) learns the rest from
 //! answers, and a conflict raises an [`Incident`](incident::Incident). The
 //! [`EhrIndex`](ehr_index::EhrIndex) learns which member holds an `ehr_id`,
-//! the third step of path `ehr_id` routing (§12.5.1). [`operator`] holds
-//! the reports the gateway's read-only operator surface answers with, and
-//! [`health`] the body of the gateway's `GET {base}/operator/dependencies`. Each of them names
-//! the process that produced it, a [`replica::Replica`].
+//! the third step of path `ehr_id` routing (§12.5.1). A
+//! [`replica::Replica`] names the process whose state an operator report
+//! carries.
 //!
 //! Every credential FerroFED is configured with, and every URL that may carry
 //! one in its userinfo, is held in a [`Secret`](ferrohealth_secret::secret::Secret) or a
 //! [`SecretUrl`](ferrohealth_secret::secret_url::SecretUrl), whose renderings never show it.
-//!
-//! [`console`] holds a member the operator console manages beside the
-//! document's, owned whole, and the report of who owns each configured
-//! resource.
-//! [`resource`] holds the credentials and binding sections the console
-//! manages whole, with their secrets as references.
-//! [`revision`] holds the gateway's configuration revisions as its admin
-//! listener writes them and the console reads them.
-//! [`running`] holds the running configuration the admin listener answers:
-//! each deployment-wide setting with its value, source and default.
-//!
-//! [`manufacturer`] names the manufacturer of FerroFED, the one source the
-//! gateway and the operator console both read it from.
 #![doc(test(attr(deny(warnings))))]
 
-pub mod console;
 pub mod creating_system;
 pub mod definition;
 pub mod document;
 pub mod ehr_index;
 pub mod error;
 pub mod export;
-pub mod health;
 pub mod id;
 pub mod incident;
-pub mod manufacturer;
 pub mod native;
-pub mod operator;
 pub mod replica;
-pub mod resource;
-pub mod revision;
-pub mod running;
 pub mod snapshot;

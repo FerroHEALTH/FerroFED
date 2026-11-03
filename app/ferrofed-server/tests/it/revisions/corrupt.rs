@@ -7,7 +7,7 @@
 //! our own design.
 
 use crate::support::console::subscriber;
-use ferrofed_registry::revision::{Author, Origin};
+use ferrofed_operator_api::revision::{Author, Origin};
 use ferrofed_server::revision::{Draft, Saved};
 use ferrohealth_telemetry::section::Rendering;
 use http::StatusCode;

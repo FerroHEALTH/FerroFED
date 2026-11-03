@@ -5,7 +5,7 @@
 //! form that stores a new version, which is immutable once stored (§12.7,
 //! N44).
 
-use ferrofed_registry::console::{QueryRegistry, QueryResource};
+use ferrofed_operator_api::console::{QueryRegistry, QueryResource};
 use ferrohealth_ui::html::Html;
 
 use crate::configure::render::Loaded;

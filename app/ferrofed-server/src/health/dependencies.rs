@@ -31,7 +31,7 @@ use ferrofed_identity::role::demographics::{DemographicsError, Identification};
 use ferrofed_identity::role::header::HeaderAnswer;
 use ferrofed_identity::role::localizer::{Localization, LocalizerError};
 use ferrofed_identity::role::resolver::Resolution;
-use ferrofed_registry::health::{DependencyReport, Observed};
+use ferrofed_operator_api::health::{DependencyReport, Observed};
 use ferrofed_registry::id::{EndpointId, NodeId};
 
 use crate::binding::seam::Indicator;

@@ -294,8 +294,8 @@ pub fn marked(
 
 /// Who made or applied a revision, in words.
 #[must_use]
-pub fn author(author: &ferrofed_registry::revision::Author) -> String {
-    use ferrofed_registry::revision::Author;
+pub fn author(author: &ferrofed_operator_api::revision::Author) -> String {
+    use ferrofed_operator_api::revision::Author;
     match author {
         Author::Operator { subject, .. } => subject.clone(),
         Author::File => tr(Msg::AuthorFile),
@@ -331,8 +331,8 @@ pub fn latency_fact(ms: Option<u64>, title: String) -> Html {
 /// What owns a member entry, as a provenance tag (F4) where the console
 /// cannot change it.
 #[must_use]
-pub fn owner_tag(owner: ferrofed_registry::console::Owner) -> Html {
-    use ferrofed_registry::console::Owner;
+pub fn owner_tag(owner: ferrofed_operator_api::console::Owner) -> Html {
+    use ferrofed_operator_api::console::Owner;
     use ferrohealth_ui::view::tag::Tag;
     match owner {
         Owner::Console => Tag::new(tr(Msg::OwnerConsole)).view(),

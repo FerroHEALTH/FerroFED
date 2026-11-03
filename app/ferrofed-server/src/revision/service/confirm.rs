@@ -18,7 +18,7 @@
 
 use std::sync::PoisonError;
 
-use ferrofed_registry::revision::{
+use ferrofed_operator_api::revision::{
     Author, Awaiting, Current, Outcome, Review, Revision, RevisionId, Signed,
 };
 use jiff::Timestamp;

@@ -47,7 +47,7 @@ use crate::auth::Gate;
 use crate::auth::refusal::BasicRefusal;
 use crate::binding::ihe::pmir::config::{OnDrain, PmirSettings};
 use crate::service::{self, ServiceAuthError, TlsRefused};
-use ferrofed_registry::health::Observed;
+use ferrofed_operator_api::health::Observed;
 use subscription::{RegistryFault, Watch};
 
 /// The identity feed cannot be built from its settings.

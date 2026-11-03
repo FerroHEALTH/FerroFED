@@ -9,8 +9,8 @@
 
 use std::collections::BTreeMap;
 
-use ferrofed_registry::resource::SECRETS;
-use ferrofed_registry::revision::{Change, Difference};
+use ferrofed_operator_api::resource::SECRETS;
+use ferrofed_operator_api::revision::{Change, Difference};
 
 /// The top-level keys of the bootstrap core, which only the file sets and a
 /// revision never holds.

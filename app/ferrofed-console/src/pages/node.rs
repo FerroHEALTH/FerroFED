@@ -11,7 +11,7 @@
 //! `system_id`, a registered route or a learned one. A tab the console has
 //! no data for is left out (T2).
 
-use ferrofed_registry::operator::{CreatingSystemEntry, RouteSource};
+use ferrofed_operator_api::operator::{CreatingSystemEntry, RouteSource};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;

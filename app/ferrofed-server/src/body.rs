@@ -7,7 +7,7 @@
 //! The error bodies are [`crate::error`]'s. No specification governs these
 //! documents: our own design.
 
-use ferrofed_registry::manufacturer::{MANUFACTURER, Manufacturer};
+use ferrofed_operator_api::manufacturer::{MANUFACTURER, Manufacturer};
 use serde::Serialize;
 
 /// The product name the root document reports.

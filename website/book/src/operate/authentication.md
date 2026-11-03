@@ -387,7 +387,7 @@ stored query is the ITS-REST `StoredQuery`, `name`, `type`, `version`,
 the gateway takes no `PUT` under that name: the name sits in the gateway's
 own namespace `eu.ferrofed.eehrxf`, or the registry reads the read-only
 definition files (`backend = "files"`). The embedded and PostgreSQL stores
-take new versions, so a deployment's own query there is `false`. The bodies are the types of `ferrofed_registry::operator`,
+take new versions, so a deployment's own query there is `false`. The bodies are the types of `ferrofed_operator_api::operator`,
 which the operator console reads as well, and the stored query is the
 `openehr-its` `StoredQuery`, so the gateway and the console share one
 definition of each.

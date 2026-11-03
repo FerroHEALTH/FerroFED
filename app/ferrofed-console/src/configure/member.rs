@@ -11,7 +11,7 @@
 //! is about, by its id on the page, and the endpoint's position, never what
 //! it holds.
 
-use ferrofed_registry::console::{
+use ferrofed_operator_api::console::{
     ConsoleEndpoint, ConsoleMember, ConsoleNode, ConsoleOrganisation,
 };
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};

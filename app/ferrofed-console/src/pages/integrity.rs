@@ -11,7 +11,7 @@
 //! The tab is the query's `show`, which names no patient; the clear posts its
 //! fields, so no `ehr_id` reaches a URL.
 
-use ferrofed_registry::operator::HeldBefore;
+use ferrofed_operator_api::operator::HeldBefore;
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;

@@ -50,7 +50,7 @@ use tokio::task::JoinHandle;
 
 use super::IdentityFeed;
 use super::config::OnDrain;
-use ferrofed_registry::health::Observed;
+use ferrofed_operator_api::health::Observed;
 
 /// How many doublings the wait between two failed checks grows by at most:
 /// 32 times `check_interval_s`.

@@ -13,10 +13,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use axum::body::Body;
-use ferrofed_registry::console::{ConsoleMember, ConsoleState, Owner, QueryRegistry, Resources};
+use ferrofed_operator_api::console::{
+    ConsoleMember, ConsoleState, Owner, QueryRegistry, Resources,
+};
+use ferrofed_operator_api::operator::{Page, StoredVersion};
+use ferrofed_operator_api::revision::{Origin, Revision, RevisionId};
 use ferrofed_registry::id::NodeId;
-use ferrofed_registry::operator::{Page, StoredVersion};
-use ferrofed_registry::revision::{Origin, Revision, RevisionId};
 use http::{Method, Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 
@@ -91,7 +93,7 @@ async fn the_report_names_the_owner_of_every_member_and_stored_query() -> TestRe
     );
     assert_ne!(
         resources.stored_queries,
-        Vec::<ferrofed_registry::console::QueryResource>::new()
+        Vec::<ferrofed_operator_api::console::QueryResource>::new()
     );
     assert!(
         resources
@@ -172,7 +174,7 @@ async fn the_report_says_when_no_stored_query_registry_is_offered() -> TestResul
     assert_eq!(QueryRegistry::Absent, resources.stored_query_registry);
     assert_eq!(
         resources.stored_queries,
-        Vec::<ferrofed_registry::console::QueryResource>::new()
+        Vec::<ferrofed_operator_api::console::QueryResource>::new()
     );
     Ok(())
 }

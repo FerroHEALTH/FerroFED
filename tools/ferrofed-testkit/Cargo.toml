@@ -64,6 +64,7 @@ tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
 # directory writes its members with, as the FHIR form of the registry reads
 # them (#1072).
 ferrofed-identity = { workspace = true, features = ["ihe"] }
+ferrofed-operator-api.workspace = true
 ferrofed-registry.workspace = true
 # The RM identifiers the seed's EHR_STATUS names its subject with.
 openehr-base.workspace = true

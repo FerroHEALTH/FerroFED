@@ -12,8 +12,8 @@
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_registry::resource::{Resource, SecretChange, SectionRequest};
-use ferrofed_registry::revision::{Imported, Origin, Revision, RevisionId};
+use ferrofed_operator_api::resource::{Resource, SecretChange, SectionRequest};
+use ferrofed_operator_api::revision::{Imported, Origin, Revision, RevisionId};
 use ferrohealth_secret::secret::WriteOnly;
 use http::{Method, Request, StatusCode, header};
 

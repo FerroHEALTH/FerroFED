@@ -6,8 +6,8 @@
 //! Beside them, how a removal names a credential or a binding section. No
 //! specification governs this: our own design.
 
-use ferrofed_registry::resource::Resource;
-use ferrofed_registry::revision::{Current, Review};
+use ferrofed_operator_api::resource::Resource;
+use ferrofed_operator_api::revision::{Current, Review};
 use ferrohealth_ui::html::Html;
 
 use crate::act::{Acted, ReplicaAnswer};

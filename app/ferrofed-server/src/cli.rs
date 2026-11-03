@@ -17,7 +17,7 @@
 //! governs the command line: our own design.
 
 use clap::{Parser, Subcommand};
-use ferrofed_registry::manufacturer::MANUFACTURER;
+use ferrofed_operator_api::manufacturer::MANUFACTURER;
 use ferrohealth_server::cli::ConfigArgs;
 use std::path::PathBuf;
 use std::sync::LazyLock;

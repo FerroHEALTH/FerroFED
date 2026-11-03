@@ -19,7 +19,7 @@ use crate::support::console::subscriber;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_identity::profile::Profile;
-use ferrofed_registry::running::{RunningConfig, Source};
+use ferrofed_operator_api::running::{RunningConfig, Source};
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::config::Config;
 use ferrofed_server::reload::Reloader;

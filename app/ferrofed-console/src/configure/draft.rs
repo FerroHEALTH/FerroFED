@@ -11,7 +11,7 @@
 //! with the field a refusal names marked. A secret's value is never drawn
 //! again. No specification governs this: our own design.
 
-use ferrofed_registry::console::ConsoleMember;
+use ferrofed_operator_api::console::ConsoleMember;
 use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 
 use crate::configure::model::{ConfigForm, FhirEndpointInput, QueryEndpointInput, SettingInput};

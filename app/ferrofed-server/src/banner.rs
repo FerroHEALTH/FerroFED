@@ -20,7 +20,7 @@
 use std::fmt::Write as _;
 use std::net::SocketAddr;
 
-use ferrofed_registry::manufacturer::MANUFACTURER;
+use ferrofed_operator_api::manufacturer::MANUFACTURER;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::base_path::BasePath;

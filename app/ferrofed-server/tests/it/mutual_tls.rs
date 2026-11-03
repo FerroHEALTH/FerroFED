@@ -17,7 +17,7 @@ use std::error::Error;
 use std::fmt::Write as _;
 use std::path::Path;
 
-use ferrofed_registry::health::Observed;
+use ferrofed_operator_api::health::Observed;
 use ferrofed_server::config::{self, Config};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::error::FederationError;

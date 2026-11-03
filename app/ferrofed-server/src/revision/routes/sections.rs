@@ -20,10 +20,10 @@ use std::sync::Arc;
 use axum::body::Bytes;
 use axum::extract::{Extension, Path, State};
 use axum::response::Response;
-use ferrofed_registry::console::{ConsoleState, Owner};
+use ferrofed_operator_api::console::{ConsoleState, Owner};
+use ferrofed_operator_api::resource::{BindingSection, Resource, SectionRequest, SectionResource};
+use ferrofed_operator_api::revision::RevisionId;
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::resource::{BindingSection, Resource, SectionRequest, SectionResource};
-use ferrofed_registry::revision::RevisionId;
 use http::HeaderMap;
 
 use super::console::{ConsoleError, base_table, created, saved_as};

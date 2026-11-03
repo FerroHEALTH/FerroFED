@@ -11,7 +11,7 @@ use std::error::Error;
 use axum::body::Body;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::reserved;
-use ferrofed_registry::operator::{Page, StoredVersion};
+use ferrofed_operator_api::operator::{Page, StoredVersion};
 use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 

@@ -15,7 +15,7 @@ use std::error::Error;
 use std::process::Command;
 
 use clap::CommandFactory as _;
-use ferrofed_registry::manufacturer::MANUFACTURER;
+use ferrofed_operator_api::manufacturer::MANUFACTURER;
 use ferrofed_server::banner::{Deployment, Registry, render};
 use ferrofed_server::cli::Cli;
 use ferrofed_server::support::Support;

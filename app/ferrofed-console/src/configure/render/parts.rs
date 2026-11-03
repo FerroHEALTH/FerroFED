@@ -17,7 +17,7 @@
 
 use std::borrow::Cow;
 
-use ferrofed_registry::revision::{Change, Difference, RevisionId};
+use ferrofed_operator_api::revision::{Change, Difference, RevisionId};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::Column;

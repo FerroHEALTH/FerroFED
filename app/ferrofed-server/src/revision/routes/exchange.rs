@@ -26,7 +26,7 @@ use axum::body::Body;
 use axum::extract::rejection::QueryRejection;
 use axum::extract::{Extension, Path, Query, State};
 use axum::response::{IntoResponse, Response};
-use ferrofed_registry::revision::{Author, Diff, Imported, Origin, Revision, RevisionId};
+use ferrofed_operator_api::revision::{Author, Diff, Imported, Origin, Revision, RevisionId};
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 use serde::Deserialize;
 
@@ -236,7 +236,7 @@ fn imported(
 
 #[cfg(test)]
 mod tests {
-    use ferrofed_registry::revision::{Author, Origin, Revision, RevisionId};
+    use ferrofed_operator_api::revision::{Author, Origin, Revision, RevisionId};
 
     use super::exported;
 

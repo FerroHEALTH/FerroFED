@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use ferrofed_registry::operator::StoredVersion;
+use ferrofed_operator_api::operator::StoredVersion;
 use ferrohealth_ui::highlight::Language;
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;

@@ -4,7 +4,7 @@
 //! The answer of each form, as a replica reports it, or the refusal that
 //! kept it from any replica, with the field it names.
 
-use ferrofed_registry::revision::{Applied, Imported};
+use ferrofed_operator_api::revision::{Applied, Imported};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::notice::{Announce, notice};

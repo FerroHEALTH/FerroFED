@@ -303,7 +303,7 @@ pub(crate) fn save_c() -> String {
 pub(crate) struct SaveBody {
     pub(crate) base: Option<u64>,
     pub(crate) reason: String,
-    pub(crate) member: ferrofed_registry::console::ConsoleMember,
+    pub(crate) member: ferrofed_operator_api::console::ConsoleMember,
 }
 
 #[tokio::test]

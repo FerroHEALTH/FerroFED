@@ -11,7 +11,7 @@
 
 use std::error::Error;
 
-use ferrofed_registry::resource::SectionRequest;
+use ferrofed_operator_api::resource::SectionRequest;
 use ferrofed_testkit::mock::Server;
 
 use crate::configure::{

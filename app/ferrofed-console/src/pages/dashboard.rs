@@ -14,7 +14,7 @@
 //! refusal of either is the page's. Every other part the gateway refuses
 //! or cannot answer says so in its own card, and the rest still shows.
 
-use ferrofed_registry::revision::Standing;
+use ferrofed_operator_api::revision::Standing;
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;

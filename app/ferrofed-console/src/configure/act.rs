@@ -10,11 +10,11 @@
 //! operator's own access token, which never leaves the server.
 
 use crate::locale::{Msg, tr};
-use ferrofed_registry::console::ConsoleMember;
-use ferrofed_registry::operator::PageRequest;
-use ferrofed_registry::resource::{Resource, SecretChange, SectionRequest, SectionResource};
-use ferrofed_registry::revision::{Revision, RevisionId};
-use ferrofed_registry::running::SettingsRequest;
+use ferrofed_operator_api::console::ConsoleMember;
+use ferrofed_operator_api::operator::PageRequest;
+use ferrofed_operator_api::resource::{Resource, SecretChange, SectionRequest, SectionResource};
+use ferrofed_operator_api::revision::{Revision, RevisionId};
+use ferrofed_operator_api::running::SettingsRequest;
 
 use crate::config::settings::ReplicaSettings;
 use crate::configure::member::Shown;

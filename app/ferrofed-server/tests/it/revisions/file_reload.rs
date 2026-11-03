@@ -11,7 +11,7 @@
 use std::path::Path;
 
 use crate::support::console::subscriber;
-use ferrofed_registry::revision::{Author, Origin, RevisionId};
+use ferrofed_operator_api::revision::{Author, Origin, RevisionId};
 use ferrofed_server::reload::ReloadError;
 use ferrofed_server::revision::service::{self, Booted, Followed, REFUSED};
 use ferrohealth_telemetry::section::Rendering;

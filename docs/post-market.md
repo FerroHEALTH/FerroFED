@@ -27,7 +27,7 @@ design.
   serious incident.
 
 The single point of contact is `info@cadasto.com` (Art 30(1)(g)). It is
-named in the running system from `app/ferrofed-registry/src/manufacturer.rs`,
+named in the running system from `app/ferrofed-operator-api/src/manufacturer.rs`,
 and a change of address or contact changes that file, `LICENSE` and the image
 labels in one pull request; the tests fail on any that disagree.
 

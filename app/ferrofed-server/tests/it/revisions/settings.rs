@@ -7,8 +7,8 @@
 //! next start named with the value that start takes, and only an editable
 //! setting saved, a refused value never echoed.
 
-use ferrofed_registry::revision::{Revision, RevisionId};
-use ferrofed_registry::running::{RunningConfig, Source};
+use ferrofed_operator_api::revision::{Revision, RevisionId};
+use ferrofed_operator_api::running::{RunningConfig, Source};
 use http::{Method, StatusCode};
 
 use super::{Gateway, TestResult, operator};

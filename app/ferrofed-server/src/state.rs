@@ -8,8 +8,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
 
 use ferrofed_identity::profile::Profile;
+use ferrofed_operator_api::operator::DeploymentMode;
 use ferrofed_registry::definition::store::{DefinitionStore, Definitions, StoreError};
-use ferrofed_registry::operator::DeploymentMode;
 use ferrofed_registry::replica::Replica;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_health::lifecycle::Lifecycle;
@@ -290,7 +290,7 @@ impl AppState {
     /// processes indicate, such as a care services directory with why it is
     /// degraded.
     #[must_use]
-    pub fn dependencies(&self) -> ferrofed_registry::health::DependencyReport {
+    pub fn dependencies(&self) -> ferrofed_operator_api::health::DependencyReport {
         let mut report = self
             .federation()
             .map(|federation| federation.dependencies().report())

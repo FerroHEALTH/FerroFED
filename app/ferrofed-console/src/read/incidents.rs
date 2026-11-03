@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use ferrofed_registry::operator::{IncidentReport, RecordedClear, RecordedIncident};
+use ferrofed_operator_api::operator::{IncidentReport, RecordedClear, RecordedIncident};
 
 use serde::{Deserialize, Serialize};
 
@@ -126,7 +126,7 @@ pub async fn read() -> Result<Incidents, Stop> {
 
 #[cfg(test)]
 mod tests {
-    use ferrofed_registry::operator::{IncidentReport, RecordedClear, RecordedIncident};
+    use ferrofed_operator_api::operator::{IncidentReport, RecordedClear, RecordedIncident};
 
     use super::Incidents;
 

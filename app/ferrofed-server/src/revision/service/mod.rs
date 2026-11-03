@@ -31,8 +31,8 @@ use crate::revision::resources::present;
 use crate::revision::tree::{core_keys, inline_secrets, join, split};
 use crate::revision::{Draft, RevisionStore, StoreError, Swapped};
 use crate::state::StateError;
-use ferrofed_registry::resource::Resource;
-use ferrofed_registry::revision::{Author, Current, Origin, Outcome, Revision, RevisionId};
+use ferrofed_operator_api::resource::Resource;
+use ferrofed_operator_api::revision::{Author, Current, Origin, Outcome, Revision, RevisionId};
 
 use checks::{checked, configuration, reason_of, stored};
 use confirm::Reviewed;

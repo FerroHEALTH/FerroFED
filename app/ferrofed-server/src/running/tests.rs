@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-use ferrofed_registry::revision::RevisionId;
-use ferrofed_registry::running::{Section, Source};
+use ferrofed_operator_api::revision::RevisionId;
+use ferrofed_operator_api::running::{Section, Source};
 
 use std::collections::BTreeMap;
 

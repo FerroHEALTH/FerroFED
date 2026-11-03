@@ -15,7 +15,7 @@ use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_identity::role::localizer::Localizer;
 use ferrofed_identity::role::resolver::Resolver;
-use ferrofed_registry::health::Indication;
+use ferrofed_operator_api::health::Indication;
 use ferrofed_registry::id::EndpointId;
 
 use crate::config::settings::Settings;
