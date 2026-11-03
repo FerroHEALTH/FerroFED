@@ -4,25 +4,23 @@
 //! The receipt of a dispensation on the FHIR face.
 
 use std::collections::BTreeSet;
-use std::sync::{Arc, LazyLock};
+use std::ops::ControlFlow;
+use std::sync::LazyLock;
 use std::time::Instant;
 
-use axum::Extension;
 use axum::body::Bytes;
-use axum::extract::State;
 use axum::response::Response;
 use eehrxf::category::Category;
 use eehrxf::dataset::DatasetError;
 use eehrxf::medication::Mpd;
 use ferrofed_eehrxf::dispensations::{self, Received, Unread};
-use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
 
-use crate::auth::caller::Caller;
 use crate::federation::Federation;
 use crate::state::AppState;
 
+use crate::fhir::admission::Asked;
 use crate::fhir::{admission, fhir_json, refusal};
 
 use super::{not_served, serves};
@@ -36,22 +34,14 @@ use super::{not_served, serves};
 /// is asked: a text that is no `MedicationDispense` is `400`, and one that
 /// breaks its profiles `422` with one issue per finding. A written
 /// dispensation answers `201` with a `Location` naming it by the face's id.
-pub(in crate::fhir) async fn dispense(
-    State(state): State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    headers: http::HeaderMap,
-    body: Bytes,
-) -> Response {
+pub(in crate::fhir) async fn dispense(asked: Asked, body: Bytes) -> Response {
     let started = Instant::now();
-    let received = match received(&state, &headers, &body) {
+    let received = match received(&asked.state, &asked.headers, &body) {
         Ok((received, _text)) => received,
         Err(refused) => return refused,
     };
-    let admitted = admission::admit(
-        &state,
-        (outbound, caller.as_deref()),
-        (&headers, started),
+    admission::served(
+        (&asked, started),
         || {
             refusal(
                 StatusCode::FORBIDDEN,
@@ -59,26 +49,20 @@ pub(in crate::fhir) async fn dispense(
                 "the caller was not admitted to write a dispensation",
             )
         },
-    );
-    let admitted = match admitted {
-        Ok(admitted) => admitted,
-        Err(refused) => return refused,
-    };
-    let targeted = match targeted(&admitted.federation, &headers) {
-        Ok(targeted) => targeted,
-        Err(refused) => return refused,
-    };
-    let confined = match admitted.confine().await {
-        Ok(confined) => confined,
-        Err(refused) => return refused,
-    };
-    let arrived = admitted.arrived(&confined);
-    crate::facade::dispensation::dispense(
-        &admitted.federation,
-        admitted.fhir,
-        &arrived,
-        (&received, &body),
-        &targeted,
+        |admitted| match targeted(&admitted.federation, &asked.headers) {
+            Ok(targeted) => ControlFlow::Continue(targeted),
+            Err(refused) => ControlFlow::Break(refused),
+        },
+        async |admitted, arrived, targeted| {
+            crate::facade::dispensation::dispense(
+                &admitted.federation,
+                admitted.fhir,
+                &arrived,
+                (&received, &body),
+                &targeted,
+            )
+            .await
+        },
     )
     .await
 }

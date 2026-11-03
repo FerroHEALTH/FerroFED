@@ -5,11 +5,10 @@
 //! the id the face names it by.
 
 use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::ops::ControlFlow;
 use std::time::Instant;
 
-use axum::Extension;
-use axum::extract::{Path, State};
+use axum::extract::Path;
 use axum::response::Response;
 use eehrxf::category::Category;
 use ferrofed_eehrxf::prescriptions::page::Kept;
@@ -20,13 +19,12 @@ use http::{HeaderValue, StatusCode, header};
 use jiff::fmt::rfc2822::DateTimePrinter;
 use openehr_federation::status::EndpointStatus;
 
-use crate::auth::caller::Caller;
 use crate::error::Code;
 use crate::facade::prescription::{self, Readable, Unfound};
 use crate::facade::provenance::Provenance;
 use crate::federation::Federation;
-use crate::state::AppState;
 
+use crate::fhir::admission::Asked;
 use crate::fhir::locator;
 use crate::fhir::{admission, attach, fhir_json, outcome, refusal};
 
@@ -43,21 +41,8 @@ use super::{not_served, serves};
 /// `404` with one text whatever the reason, two members claiming its
 /// `ehr_id` `409` with the integrity incident of N42, and a member that
 /// does not answer `504` or `424` naming it (§11.1, §11.3).
-pub(in crate::fhir) async fn read(
-    state: State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    id: Path<String>,
-    headers: http::HeaderMap,
-) -> Response {
-    read_of(
-        (Readable::Prescription, None),
-        state,
-        (outbound, caller),
-        id,
-        headers,
-    )
-    .await
+pub(in crate::fhir) async fn read(asked: Asked, id: Path<String>) -> Response {
+    read_of((Readable::Prescription, None), asked, id).await
 }
 
 /// `GET {fhir-base}/MedicationDispense/{id}`: one dispensation, read at the
@@ -65,21 +50,8 @@ pub(in crate::fhir) async fn read(
 ///
 /// The id is the one the `Location` of the dispensation's receipt named
 /// (FHIR R4 `http.html` §3.1.0.8), so the face can read what it wrote.
-pub(in crate::fhir) async fn read_dispensation(
-    state: State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    id: Path<String>,
-    headers: http::HeaderMap,
-) -> Response {
-    read_of(
-        (Readable::Dispensation, None),
-        state,
-        (outbound, caller),
-        id,
-        headers,
-    )
-    .await
+pub(in crate::fhir) async fn read_dispensation(asked: Asked, id: Path<String>) -> Response {
+    read_of((Readable::Dispensation, None), asked, id).await
 }
 
 /// `GET {fhir-base}/MedicationRequest/{id}/_history/{vid}`: one version of
@@ -91,20 +63,10 @@ pub(in crate::fhir) async fn read_dispensation(
 /// member holds now, which the read's `ETag` names, and answers any other
 /// version `404`, saying that the face keeps no history.
 pub(in crate::fhir) async fn vread(
-    state: State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
+    asked: Asked,
     Path((id, version)): Path<(String, String)>,
-    headers: http::HeaderMap,
 ) -> Response {
-    read_of(
-        (Readable::Prescription, Some(&version)),
-        state,
-        (outbound, caller),
-        Path(id),
-        headers,
-    )
-    .await
+    read_of((Readable::Prescription, Some(&version)), asked, Path(id)).await
 }
 
 /// `GET {fhir-base}/MedicationDispense/{id}/_history/{vid}`: one version
@@ -114,47 +76,34 @@ pub(in crate::fhir) async fn vread(
 /// its member names the version it created (FHIR R4 `http.html` §3.1.0.8),
 /// so the face can read back what it located.
 pub(in crate::fhir) async fn vread_dispensation(
-    state: State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
+    asked: Asked,
     Path((id, version)): Path<(String, String)>,
-    headers: http::HeaderMap,
 ) -> Response {
-    read_of(
-        (Readable::Dispensation, Some(&version)),
-        state,
-        (outbound, caller),
-        Path(id),
-        headers,
-    )
-    .await
+    read_of((Readable::Dispensation, Some(&version)), asked, Path(id)).await
 }
 
 /// The read of `readable` by the id `id`, of the version `version` when one
 /// is named, for the request of `headers`.
 async fn read_of(
     (readable, version): (Readable, Option<&str>),
-    State(state): State<Arc<AppState>>,
-    (outbound, caller): (Option<Extension<OutboundId>>, Option<Extension<Caller>>),
+    asked: Asked,
     Path(id): Path<String>,
-    headers: http::HeaderMap,
 ) -> Response {
     let started = Instant::now();
     let category = served(readable);
-    if !serves(&state, category) {
+    if !serves(&asked.state, category) {
         return not_served(category);
     }
     let forbidden = format!("the caller was not admitted to read {}s", noun(readable));
     admission::served(
-        &state,
-        (outbound, caller.as_deref()),
-        (&headers, started),
-        &forbidden,
-        async |admitted, arrived| {
+        (&asked, started),
+        || refusal(StatusCode::FORBIDDEN, "forbidden", &forbidden),
+        |_| ControlFlow::Continue(()),
+        async |admitted, arrived, ()| {
             let federation = &admitted.federation;
             let none = BTreeSet::new();
             let declared = admitted.fhir.serving.members_of(category).unwrap_or(&none);
-            let read = prescription::read(federation, arrived, (readable, &id), declared).await;
+            let read = prescription::read(federation, &arrived, (readable, &id), declared).await;
             answered(
                 federation,
                 (readable, read, version),

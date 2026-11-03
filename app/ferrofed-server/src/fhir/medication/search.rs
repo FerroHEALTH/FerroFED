@@ -4,32 +4,28 @@
 //! The search of a patient's prescriptions on the FHIR face.
 
 use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::ops::ControlFlow;
 use std::time::Instant;
 
-use axum::Extension;
-use axum::extract::State;
 use axum::response::Response;
 use eehrxf::category::Category;
 use ferrofed_eehrxf::prescriptions::SearchRequest;
 use ferrofed_eehrxf::prescriptions::page::Page;
 use ferrofed_eehrxf::prescriptions::searchset::{Answered, Assembled, Silent, assemble};
 use ferrofed_eehrxf::summary::Organisation;
-use ferrofed_engine::outbound_id::OutboundId;
 use http::{StatusCode, Uri};
 use openehr_federation::status::EndpointStatus;
 
-use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::error::Code;
 use crate::facade::native::Chosen;
 use crate::facade::prescriptions::{self, Held, Prescribed, Unprescribed};
 use crate::facade::summary::organisation;
 use crate::federation::Federation;
-use crate::state::AppState;
 
+use crate::fhir::admission::Asked;
 use crate::fhir::locator::Locator;
-use crate::fhir::{admission, attach, fhir_json, outcome, refusal};
+use crate::fhir::{admission, attach, fhir_json, refusal};
 
 use super::{PRESCRIPTIONS, not_served, serves};
 
@@ -40,15 +36,9 @@ use super::{PRESCRIPTIONS, not_served, serves};
 /// A patient no member serving prescriptions holds, and one none may say
 /// anything about, both answer the same empty `searchset` (FHIR R4 search
 /// §3.1.1.3: an unknown subject is no failure; Federation Tier §11.3).
-pub(in crate::fhir) async fn search(
-    State(state): State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    uri: Uri,
-    headers: http::HeaderMap,
-) -> Response {
+pub(in crate::fhir) async fn search(asked: Asked, uri: Uri) -> Response {
     let started = Instant::now();
-    if !serves(&state, Category::Prescription) {
+    if !serves(&asked.state, Category::Prescription) {
         return not_served(Category::Prescription);
     }
     let read = match SearchRequest::from_query(uri.query()) {
@@ -57,10 +47,8 @@ pub(in crate::fhir) async fn search(
             return refusal(StatusCode::BAD_REQUEST, "invalid", &refused.to_string());
         }
     };
-    let admitted = admission::admit(
-        &state,
-        (outbound, caller.as_deref()),
-        (&headers, started),
+    admission::served(
+        (&asked, started),
         || {
             refusal(
                 StatusCode::FORBIDDEN,
@@ -68,69 +56,48 @@ pub(in crate::fhir) async fn search(
                 "the caller was not admitted to search prescriptions",
             )
         },
-    );
-    let admitted = match admitted {
-        Ok(admitted) => admitted,
-        Err(refused) => return refused,
-    };
-    let confined = match admitted.confine().await {
-        Ok(confined) => confined,
-        Err(refused) => return refused,
-    };
-    let arrived = admitted.arrived(&confined);
-    let (federation, fhir) = (&admitted.federation, admitted.fhir);
-    let none = BTreeSet::new();
-    let declared = fhir
-        .serving
-        .members_of(Category::Prescription)
-        .unwrap_or(&none);
-    let patient = (read.system(), read.value());
-    let searched = prescriptions::search(federation, &arrived, patient, declared).await;
-    let (request_id, outbound) = (admitted.request_id, admitted.outbound);
-    match searched {
-        Ok(prescribed) => listed(federation, fhir, (&read, &prescribed)),
-        Err(Unprescribed::NotFound(prescribed)) => {
-            let mut response = listed_none(fhir, &read);
-            let accessed = prescribed.and_then(|prescribed| {
-                prescriptions::accessed(federation, &prescribed, patient, None)
-            });
-            attach(&mut response, accessed);
-            response
+        |_| ControlFlow::Continue(()),
+        async |admitted, arrived, ()| {
+        let (federation, fhir) = (&admitted.federation, admitted.fhir);
+        let none = BTreeSet::new();
+        let declared = fhir
+            .serving
+            .members_of(Category::Prescription)
+            .unwrap_or(&none);
+        let patient = (read.system(), read.value());
+        let searched = prescriptions::search(federation, &arrived, patient, declared).await;
+        let (request_id, outbound) = (admitted.request_id, admitted.outbound);
+        match searched {
+            Ok(prescribed) => listed(federation, fhir, (&read, &prescribed)),
+            Err(Unprescribed::NotFound(prescribed)) => {
+                let mut response = listed_none(fhir, &read);
+                let accessed = prescribed.and_then(|prescribed| {
+                    prescriptions::accessed(federation, &prescribed, patient, None)
+                });
+                attach(&mut response, accessed);
+                response
+            }
+            Err(Unprescribed::Incomplete {
+                status,
+                silent,
+                prescribed,
+            }) => {
+                let mut response = crate::fhir::incomplete("search", status, &silent);
+                attach(
+                    &mut response,
+                    prescriptions::accessed(federation, &prescribed, patient, None),
+                );
+                response
+            }
+            Err(Unprescribed::Failure(failure)) => failure.respond(request_id, outbound),
+            Err(Unprescribed::Internal(what)) => {
+                tracing::error!(request_id = %outbound, what, "the prescription search could not be run");
+                crate::error::fixed(Code::Internal, request_id)
+            }
         }
-        Err(Unprescribed::Incomplete {
-            status,
-            silent,
-            prescribed,
-        }) => {
-            let named = silent
-                .iter()
-                .map(|(endpoint, status)| format!("{endpoint} ({status})"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let code = if status == StatusCode::GATEWAY_TIMEOUT {
-                "timeout"
-            } else {
-                "incomplete"
-            };
-            let diagnostics = if named.is_empty() {
-                "the search is incomplete: the patient could not be resolved at every member (§11.3)"
-                    .to_owned()
-            } else {
-                format!("the search is incomplete: no answer from {named} (§11.3)")
-            };
-            let mut response = outcome(status, code, &diagnostics);
-            attach(
-                &mut response,
-                prescriptions::accessed(federation, &prescribed, patient, None),
-            );
-            response
-        }
-        Err(Unprescribed::Failure(failure)) => failure.respond(request_id, outbound),
-        Err(Unprescribed::Internal(what)) => {
-            tracing::error!(request_id = %outbound, what, "the prescription search could not be run");
-            crate::error::fixed(Code::Internal, request_id)
-        }
-    }
+        },
+    )
+    .await
 }
 
 /// The page of the `searchset` `read` asks for of what `prescribed` holds,

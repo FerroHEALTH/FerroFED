@@ -33,10 +33,10 @@
 //! `issue-type` codes.
 
 use std::collections::BTreeSet;
+use std::ops::ControlFlow;
 use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
-use axum::Extension;
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
@@ -56,12 +56,12 @@ use secrecy::SecretString;
 use serde::Serialize;
 
 use crate::access::NoAccess;
-use crate::auth::caller::Caller;
 use crate::auth::permission::{Requirement, Resource};
 use crate::config::fhir::FhirSettings;
 use crate::error::Code;
 use crate::facade::demographics::{self, Unheaded};
 use crate::facade::summary::{self as gathered, Scope, Unsummarised};
+use crate::fhir::admission::Asked;
 use crate::state::AppState;
 
 mod admission;
@@ -296,33 +296,16 @@ async fn metadata(State(state): State<Arc<AppState>>) -> Response {
 }
 
 /// `GET {fhir-base}/Patient/$summary`.
-async fn summary_get(
-    State(state): State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    uri: Uri,
-    headers: http::HeaderMap,
-) -> Response {
+async fn summary_get(asked: Asked, uri: Uri) -> Response {
     let started = Instant::now();
     let read = SummaryRequest::from_query(uri.query());
-    summarised(&state, (outbound, caller), (&headers, started), read).await
+    summarised((&asked, started), read).await
 }
 
 /// `POST {fhir-base}/Patient/$summary` with a `Parameters` body.
-async fn summary_post(
-    State(state): State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    headers: http::HeaderMap,
-    body: Bytes,
-) -> Response {
+async fn summary_post(asked: Asked, body: Bytes) -> Response {
     let started = Instant::now();
-    let media = headers
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split(';').next())
-        .map(str::trim);
-    if !matches!(media, Some(FHIR_JSON | "application/json")) {
+    if !fhir_json_body(&asked.headers) {
         return outcome(
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
             "not-supported",
@@ -330,21 +313,15 @@ async fn summary_post(
         );
     }
     let read = SummaryRequest::from_parameters(&body);
-    summarised(&state, (outbound, caller), (&headers, started), read).await
+    summarised((&asked, started), read).await
 }
 
 /// `POST {fhir-base}/Bundle` with a document in the exchange format: the
 /// document written to the member that receives its category
 /// (`facade::receive`).
-async fn bundle_post(
-    State(state): State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    headers: http::HeaderMap,
-    body: Bytes,
-) -> Response {
+async fn bundle_post(asked: Asked, body: Bytes) -> Response {
     let started = Instant::now();
-    if !fhir_json_body(&headers) {
+    if !fhir_json_body(&asked.headers) {
         return refusal(
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
             "not-supported",
@@ -358,10 +335,8 @@ async fn bundle_post(
             "the document is not UTF-8 text (RFC 8259 §8.1)",
         );
     };
-    let admitted = admission::admit(
-        &state,
-        (outbound, caller.as_deref()),
-        (&headers, started),
+    admission::served(
+        (&asked, started),
         || {
             refusal(
                 StatusCode::FORBIDDEN,
@@ -369,21 +344,16 @@ async fn bundle_post(
                 "the caller was not admitted to create a composition",
             )
         },
-    );
-    let admitted = match admitted {
-        Ok(admitted) => admitted,
-        Err(refused) => return refused,
-    };
-    let confined = match admitted.confine().await {
-        Ok(confined) => confined,
-        Err(refused) => return refused,
-    };
-    let arrived = admitted.arrived(&confined);
-    crate::facade::receive::receive(
-        &admitted.federation,
-        admitted.fhir,
-        (arrived, admitted.caller),
-        text,
+        |_| ControlFlow::Continue(()),
+        async |admitted, arrived, ()| {
+            crate::facade::receive::receive(
+                &admitted.federation,
+                admitted.fhir,
+                (arrived, admitted.caller),
+                text,
+            )
+            .await
+        },
     )
     .await
 }
@@ -414,9 +384,7 @@ fn refusal(status: StatusCode, code: &str, diagnostics: &str) -> Response {
 /// The answer to a summary request `read` from the request's caller and
 /// headers.
 async fn summarised(
-    state: &AppState,
-    (outbound, caller): (Option<Extension<OutboundId>>, Option<Extension<Caller>>),
-    (headers, started): (&http::HeaderMap, Instant),
+    (asked, started): (&Asked, Instant),
     read: Result<SummaryRequest, Refusal>,
 ) -> Response {
     let read = match read {
@@ -425,21 +393,22 @@ async fn summarised(
             return outcome(StatusCode::BAD_REQUEST, "invalid", &refusal.to_string());
         }
     };
-    let admitted = admission::admit(
-        state,
-        (outbound, caller.as_deref()),
-        (headers, started),
+    admission::served(
+        (asked, started),
         || outcome(StatusCode::FORBIDDEN, "forbidden", UNADMITTED),
-    );
-    let admitted = match admitted {
-        Ok(admitted) => admitted,
-        Err(refused) => return refused,
-    };
-    let confined = match admitted.confine().await {
-        Ok(confined) => confined,
-        Err(refused) => return refused,
-    };
-    let arrived = admitted.arrived(&confined);
+        |_| ControlFlow::Continue(()),
+        async |admitted, arrived, ()| summary_of(admitted, arrived, &read).await,
+    )
+    .await
+}
+
+/// The summary `read` asks for, of the request `admitted` and `arrived`
+/// carry.
+async fn summary_of(
+    admitted: &admission::Admitted<'_>,
+    arrived: crate::facade::request::Arrived<'_>,
+    read: &SummaryRequest,
+) -> Response {
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
     let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
     let patient = (read.system(), read.value());
@@ -685,24 +654,7 @@ fn refused(
             silent,
             gathered,
         } => {
-            let named = silent
-                .iter()
-                .map(|(endpoint, status)| format!("{endpoint} ({status})"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let code = if status == StatusCode::GATEWAY_TIMEOUT {
-                "timeout"
-            } else {
-                "incomplete"
-            };
-            let diagnostics = if named.is_empty() {
-                format!(
-                    "the {what} is incomplete: the patient could not be resolved at every member (§11.3)",
-                )
-            } else {
-                format!("the {what} is incomplete: no answer from {named} (§11.3)")
-            };
-            let mut response = outcome(status, code, &diagnostics);
+            let mut response = incomplete(what, status, &silent);
             attach(
                 &mut response,
                 gathered::accessed(federation, &gathered, patient, (scope, delivered)),
@@ -710,6 +662,65 @@ fn refused(
             response
         }
     }
+}
+
+/// The `OperationOutcome` of a `what` that settled incomplete with
+/// `status`, naming each member in `silent` that gave no answer with its
+/// status (§11.3).
+fn incomplete(what: &str, status: StatusCode, silent: &[(String, String)]) -> Response {
+    let named = silent
+        .iter()
+        .map(|(endpoint, status)| format!("{endpoint} ({status})"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let code = if status == StatusCode::GATEWAY_TIMEOUT {
+        "timeout"
+    } else {
+        "incomplete"
+    };
+    let diagnostics = if named.is_empty() {
+        format!(
+            "the {what} is incomplete: the patient could not be resolved at every member (§11.3)",
+        )
+    } else {
+        format!("the {what} is incomplete: no answer from {named} (§11.3)")
+    };
+    outcome(status, code, &diagnostics)
+}
+
+/// The answer to a search of the face `asked`, begun at `started`, whose
+/// query read as `read`.
+///
+/// A query the face cannot read is `400`, stating that no member was sent
+/// anything; a caller the gate did not admit is `403` with `unadmitted` as
+/// its text; a search `held` breaks off is answered with its answer before
+/// anything is conveyed; every other is `serve`'s.
+async fn searched<R, E: std::fmt::Display>(
+    (asked, started): (&Asked, Instant),
+    read: Result<R, E>,
+    unadmitted: &str,
+    held: impl FnOnce(&R) -> ControlFlow<Response>,
+    serve: impl AsyncFnOnce(
+        &R,
+        &admission::Admitted<'_>,
+        crate::facade::request::Arrived<'_>,
+    ) -> Response,
+) -> Response {
+    let read = match read {
+        Ok(read) => read,
+        Err(refusal) => {
+            let mut response = outcome(StatusCode::BAD_REQUEST, "invalid", &refusal.to_string());
+            response.extensions_mut().insert(NoAccess);
+            return response;
+        }
+    };
+    admission::served(
+        (asked, started),
+        || outcome(StatusCode::FORBIDDEN, "forbidden", unadmitted),
+        |_| held(&read),
+        async |admitted, arrived, ()| serve(&read, admitted, arrived).await,
+    )
+    .await
 }
 
 /// Attaches `accessed` to `response` for the access log, or the statement

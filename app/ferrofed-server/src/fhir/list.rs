@@ -18,106 +18,89 @@
 //! under `partial` is named in an `outcome` entry (§11.3, §11.4).
 
 use std::collections::BTreeSet;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::Instant;
 
 use aws_lc_rs::digest::{SHA1_FOR_LEGACY_USE_ONLY, digest};
-use axum::Extension;
-use axum::extract::State;
 use axum::response::Response;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use ferrofed_eehrxf::list::{self, Fetched, ListRequest, Listing};
-use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native::Answer;
 use http::{StatusCode, Uri, header};
 use openehr_federation::status::EndpointStatus;
 
-use super::{UNADMITTED, admission, attach, fhir_json, outcome, refused};
+use super::admission::Asked;
+use super::{UNADMITTED, attach, fhir_json, outcome, refused};
 use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::facade::native::Native;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
-use crate::state::AppState;
 
 /// The media type of a member's document that names none (RFC 9110 §8.3).
 const OCTET_STREAM: &str = "application/octet-stream";
 
 /// `GET {fhir-base}/DocumentReference?patient.identifier=system|value`.
-pub(super) async fn documents(
-    State(state): State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    uri: Uri,
-    headers: http::HeaderMap,
-) -> Response {
-    let started = Instant::now();
-    let read = match ListRequest::from_query(uri.query()) {
-        Ok(read) => read,
-        Err(refusal) => {
-            let mut response = outcome(StatusCode::BAD_REQUEST, "invalid", &refusal.to_string());
-            response.extensions_mut().insert(NoAccess);
-            return response;
-        }
-    };
-    let admitted = admission::admit(
-        &state,
-        (outbound, caller.as_deref()),
-        (&headers, started),
-        || outcome(StatusCode::FORBIDDEN, "forbidden", UNADMITTED),
-    );
-    let admitted = match admitted {
-        Ok(admitted) => admitted,
-        Err(refused) => return refused,
-    };
-    // NOTE: FHIR R4 search; a `type` that admits no patient summary matches nothing the face
-    // lists, so the empty set is answered and nothing is resolved or sent.
-    if !read.admits_summaries() {
-        let mut response = fhir_json(StatusCode::OK, &list::searchset(Vec::new(), Vec::new()));
-        response.extensions_mut().insert(NoAccess);
-        return response;
-    }
-    let confined = match admitted.confine().await {
-        Ok(confined) => confined,
-        Err(refused) => return refused,
-    };
-    let arrived = admitted.arrived(&confined);
-    let (federation, fhir) = (&admitted.federation, admitted.fhir);
-    let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
-    let patient = (read.system(), read.value());
-    match gathered::gather(Arc::clone(federation), arrived, patient, Scope::List).await {
-        Ok(gathered) => listed(
-            federation,
-            (fhir, admitted.caller),
-            &gathered,
-            patient,
-            logged,
-        ),
-        // NOTE: FHIR R4 search, Federation Tier §11.3: a patient no member holds matches no
-        // document, and answers as one no member may disclose does.
-        Err(unsummarised) if unsummarised.reaches_no_member() => {
-            let mut response = fhir_json(StatusCode::OK, &list::searchset(Vec::new(), Vec::new()));
-            response.extensions_mut().insert(NoAccess);
-            response
-        }
-        Err(Unsummarised::NotFound(gathered)) => {
-            let mut response = fhir_json(StatusCode::OK, &list::searchset(Vec::new(), Vec::new()));
-            let accessed = gathered.and_then(|gathered| {
-                gathered::accessed(federation, &gathered, patient, (Scope::List, None))
-            });
-            attach(&mut response, accessed);
-            response
-        }
-        Err(unsummarised) => refused(
-            federation,
-            (unsummarised, Scope::List),
-            patient,
-            (request_id, outbound),
-        ),
-    }
+pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
+    let read = ListRequest::from_query(uri.query());
+    super::searched(
+        (&asked, Instant::now()),
+        read,
+        UNADMITTED,
+        |read| {
+            // NOTE: FHIR R4 search; a `type` that admits no patient summary matches nothing the
+            // face lists, so the empty set is answered and nothing is resolved or sent.
+            if read.admits_summaries() {
+                ControlFlow::Continue(())
+            } else {
+                let mut response =
+                    fhir_json(StatusCode::OK, &list::searchset(Vec::new(), Vec::new()));
+                response.extensions_mut().insert(NoAccess);
+                ControlFlow::Break(response)
+            }
+        },
+        async |read, admitted, arrived| {
+            let federation = &admitted.federation;
+            let patient = (read.system(), read.value());
+            match gathered::gather(Arc::clone(federation), arrived, patient, Scope::List).await {
+                Ok(gathered) => listed(
+                    federation,
+                    (admitted.fhir, admitted.caller),
+                    &gathered,
+                    patient,
+                    &admitted.logged,
+                ),
+                // NOTE: FHIR R4 search, Federation Tier §11.3: a patient no member holds matches no
+                // document, and answers as one no member may disclose does.
+                Err(unsummarised) if unsummarised.reaches_no_member() => {
+                    let mut response =
+                        fhir_json(StatusCode::OK, &list::searchset(Vec::new(), Vec::new()));
+                    response.extensions_mut().insert(NoAccess);
+                    response
+                }
+                Err(Unsummarised::NotFound(gathered)) => {
+                    let mut response =
+                        fhir_json(StatusCode::OK, &list::searchset(Vec::new(), Vec::new()));
+                    let accessed = gathered.and_then(|gathered| {
+                        gathered::accessed(federation, &gathered, patient, (Scope::List, None))
+                    });
+                    attach(&mut response, accessed);
+                    response
+                }
+                Err(unsummarised) => refused(
+                    federation,
+                    (unsummarised, Scope::List),
+                    patient,
+                    (admitted.request_id, admitted.outbound),
+                ),
+            }
+        },
+    )
+    .await
 }
 
 /// The `searchset` `gathered` gives for the patient `system`|`value` on the

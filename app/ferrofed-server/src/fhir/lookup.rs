@@ -18,91 +18,68 @@
 //! lookup that finds the patient is recorded, naming the members the patient
 //! resolved at (Annex II 3.2).
 
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::Instant;
 
-use axum::Extension;
-use axum::extract::State;
 use axum::response::Response;
 use ferrofed_eehrxf::lookup::{self, LookupRequest};
 use ferrofed_eehrxf::summary::header_patient;
-use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::header::PatientHeader;
 use http::{StatusCode, Uri};
 
-use super::{
-    Headless, admission, attach, fhir_json, header_of, outcome, refused, unheaded_outcome,
-};
+use super::admission::Asked;
+use super::{Headless, attach, fhir_json, header_of, refused, unheaded_outcome};
 use crate::access::NoAccess;
-use crate::auth::caller::Caller;
 use crate::facade::demographics::Unheaded;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
-use crate::state::AppState;
 
 /// `GET {fhir-base}/Patient?identifier=system|value`.
-pub(super) async fn patients(
-    State(state): State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    uri: Uri,
-    headers: http::HeaderMap,
-) -> Response {
-    let started = Instant::now();
-    let read = match LookupRequest::from_query(uri.query()) {
-        Ok(read) => read,
-        Err(refusal) => {
-            let mut response = outcome(StatusCode::BAD_REQUEST, "invalid", &refusal.to_string());
-            response.extensions_mut().insert(NoAccess);
-            return response;
-        }
-    };
-    let admitted = admission::admit(
-        &state,
-        (outbound, caller.as_deref()),
-        (&headers, started),
-        || outcome(StatusCode::FORBIDDEN, "forbidden", UNADMITTED),
-    );
-    let admitted = match admitted {
-        Ok(admitted) => admitted,
-        Err(refused) => return refused,
-    };
-    let confined = match admitted.confine().await {
-        Ok(confined) => confined,
-        Err(refused) => return refused,
-    };
-    let arrived = admitted.arrived(&confined);
-    let federation = &admitted.federation;
-    let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
-    let patient = (read.system(), read.value());
-    let header = match header_of(federation, &arrived, patient, (request_id, logged)).await {
-        Ok(header) => header,
-        // NOTE: Xt-EHR D5.1 §3.4.6 asks for a lookup that identifies the patient, which a
-        // Patient with no name still does; only a summary needs the name its profile requires.
-        Err(Headless::Unheaded(Unheaded::Unnamed(header))) => *header,
-        Err(headless) => return unfound(headless),
-    };
-    match gathered::gather(Arc::clone(federation), arrived, patient, Scope::Lookup).await {
-        Ok(gathered) => found(federation, &gathered, (patient, &header)),
-        // NOTE: FHIR R4 search, Federation Tier §11.3, Regulation (EU) 2025/327 Art 8: a patient
-        // no member holds matches nothing, and one no member may disclose answers alike.
-        Err(unsummarised) if unsummarised.reaches_no_member() => empty(),
-        Err(Unsummarised::NotFound(gathered)) => {
-            let mut response =
-                fhir_json(StatusCode::OK, &lookup::searchset(Vec::new(), Vec::new()));
-            let accessed = gathered.and_then(|gathered| {
-                gathered::accessed(federation, &gathered, patient, (Scope::Lookup, None))
-            });
-            attach(&mut response, accessed);
-            response
-        }
-        Err(unsummarised) => refused(
-            federation,
-            (unsummarised, Scope::Lookup),
-            patient,
-            (request_id, outbound),
-        ),
-    }
+pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {
+    let read = LookupRequest::from_query(uri.query());
+    super::searched(
+        (&asked, Instant::now()),
+        read,
+        UNADMITTED,
+        |_| ControlFlow::Continue(()),
+        async |read, admitted, arrived| {
+            let federation = &admitted.federation;
+            let (request_id, outbound, logged) =
+                (admitted.request_id, admitted.outbound, &admitted.logged);
+            let patient = (read.system(), read.value());
+            let header = match header_of(federation, &arrived, patient, (request_id, logged)).await
+            {
+                Ok(header) => header,
+                // NOTE: Xt-EHR D5.1 §3.4.6 asks for a lookup that identifies the patient, which a
+                // Patient with no name still does; only a summary needs the name its profile requires.
+                Err(Headless::Unheaded(Unheaded::Unnamed(header))) => *header,
+                Err(headless) => return unfound(headless),
+            };
+            match gathered::gather(Arc::clone(federation), arrived, patient, Scope::Lookup).await {
+                Ok(gathered) => found(federation, &gathered, (patient, &header)),
+                // NOTE: FHIR R4 search, Federation Tier §11.3, Regulation (EU) 2025/327 Art 8: a patient
+                // no member holds matches nothing, and one no member may disclose answers alike.
+                Err(unsummarised) if unsummarised.reaches_no_member() => empty(),
+                Err(Unsummarised::NotFound(gathered)) => {
+                    let mut response =
+                        fhir_json(StatusCode::OK, &lookup::searchset(Vec::new(), Vec::new()));
+                    let accessed = gathered.and_then(|gathered| {
+                        gathered::accessed(federation, &gathered, patient, (Scope::Lookup, None))
+                    });
+                    attach(&mut response, accessed);
+                    response
+                }
+                Err(unsummarised) => refused(
+                    federation,
+                    (unsummarised, Scope::Lookup),
+                    patient,
+                    (request_id, outbound),
+                ),
+            }
+        },
+    )
+    .await
 }
 
 /// The text of the `OperationOutcome` a caller the gate did not admit to the

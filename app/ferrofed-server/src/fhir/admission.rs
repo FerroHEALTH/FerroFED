@@ -4,25 +4,28 @@
 //! The admission of a request on the FHIR face, which every route that
 //! reaches a member makes the same way.
 //!
-//! [`admit`] reads the request's ids, holds the face to a configured
-//! federation and holds the caller to the one the gate admitted;
-//! [`Admitted::confine`] conveys the caller and confines the request
-//! (§13.1, N24); [`Admitted::arrived`] is the request the façade runs. A
-//! route that checks something of its own before any member is reached does
-//! so between the first two, and one that checks nothing there takes all
-//! three from [`served`]. No specification governs this split: our own
-//! design.
+//! Every handler takes the request as [`Asked`] and answers it through
+//! [`served`]: [`admit`] reads the request's ids, holds the face to a
+//! configured federation and holds the caller to the one the gate admitted;
+//! the route's own check of the admitted request runs before any member is
+//! reached; [`Admitted::confine`] conveys the caller and confines the
+//! request (§13.1, N24); [`Admitted::arrived`] is the request the façade
+//! runs. No specification governs this split: our own design.
 
+use std::convert::Infallible;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::Instant;
 
 use axum::Extension;
+use axum::extract::FromRequestParts;
 use axum::response::Response;
 use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::session::SessionKey;
 use http::HeaderMap;
+use http::request::Parts;
 
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
@@ -151,29 +154,62 @@ impl Admitted<'_> {
     }
 }
 
-/// Admits, conveys and confines a request on the FHIR face that arrived at
-/// `started` with `headers`, from `caller`, and answers it with `serve`
-/// over what was admitted and the request the façade runs; a caller the
-/// gate did not admit is refused `403` `forbidden` with `forbidden` as its
-/// text.
-pub(super) async fn served(
-    state: &AppState,
-    (outbound, caller): (Option<Extension<OutboundId>>, Option<&Caller>),
-    (headers, started): (&HeaderMap, Instant),
-    forbidden: &str,
-    serve: impl AsyncFnOnce(&Admitted<'_>, &Arrived<'_>) -> Response,
+/// What every request on the FHIR face brings its handler: the gateway's
+/// state, the gateway's id of the request, the caller the gate verified and
+/// the headers.
+pub(super) struct Asked {
+    /// The gateway's state.
+    pub(super) state: Arc<AppState>,
+    /// The gateway's id of the request, when the request layer minted one.
+    pub(super) outbound: Option<Extension<OutboundId>>,
+    /// The caller the gate verified, when it admitted one.
+    pub(super) caller: Option<Extension<Caller>>,
+    /// The request's headers.
+    pub(super) headers: HeaderMap,
+}
+
+impl FromRequestParts<Arc<AppState>> for Asked {
+    type Rejection = Infallible;
+
+    fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        std::future::ready(Ok(Self {
+            state: Arc::clone(state),
+            outbound: parts.extensions.get::<OutboundId>().copied().map(Extension),
+            caller: parts.extensions.get::<Caller>().cloned().map(Extension),
+            headers: parts.headers.clone(),
+        }))
+    }
+}
+
+/// Admits, conveys and confines the request `asked`, whose handler began
+/// at `started`, and answers it with `serve`
+/// over what was admitted, the request the façade runs and what `held`
+/// read of the admitted request before it was confined.
+///
+/// A caller the gate did not admit is answered as `forbidden` says, and a
+/// request `held` breaks off with its answer, before anything is conveyed.
+pub(super) async fn served<T>(
+    (asked, started): (&Asked, Instant),
+    forbidden: impl FnOnce() -> Response,
+    held: impl FnOnce(&Admitted<'_>) -> ControlFlow<Response, T>,
+    serve: impl AsyncFnOnce(&Admitted<'_>, Arrived<'_>, T) -> Response,
 ) -> Response {
-    let admitted = admit(state, (outbound, caller), (headers, started), || {
-        super::refusal(http::StatusCode::FORBIDDEN, "forbidden", forbidden)
-    });
-    let admitted = match admitted {
+    let ids = (asked.outbound, asked.caller.as_deref());
+    let admitted = match admit(&asked.state, ids, (&asked.headers, started), forbidden) {
         Ok(admitted) => admitted,
         Err(refused) => return refused,
+    };
+    let kept = match held(&admitted) {
+        ControlFlow::Continue(kept) => kept,
+        ControlFlow::Break(refused) => return refused,
     };
     let confined = match admitted.confine().await {
         Ok(confined) => confined,
         Err(refused) => return refused,
     };
     let arrived = admitted.arrived(&confined);
-    serve(&admitted, &arrived).await
+    serve(&admitted, arrived, kept).await
 }

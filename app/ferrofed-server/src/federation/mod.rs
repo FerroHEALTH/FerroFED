@@ -206,15 +206,6 @@ impl Federation {
         self.deployment_discloses_consent() && conveyance.relayed().is_none()
     }
 
-    /// This federation, applying the consent pre-filter's exclusion to a
-    /// request whose verified token declares an emergency purpose as
-    /// `emergency` says ([`Federation::sets_aside_consent_for`]).
-    #[must_use]
-    pub fn with_consent_emergency(mut self, emergency: EmergencyConsent) -> Self {
-        self.consent_emergency = emergency;
-        self
-    }
-
     /// What the consent pre-filter does for a request whose verified token
     /// declares an emergency purpose, as `OPTIONS {base}/` declares it.
     #[must_use]
@@ -279,14 +270,6 @@ impl Federation {
         self.signer.as_ref()
     }
 
-    /// This federation, recording every access to patient data it serves in
-    /// `log` (Regulation (EU) 2025/327 Annex II 3.2).
-    #[must_use]
-    pub fn with_access_log(mut self, log: AccessLog) -> Self {
-        self.access = Some(Arc::new(log));
-        self
-    }
-
     /// The access log every access to patient data is recorded in, when
     /// one is configured.
     #[must_use]
@@ -298,15 +281,6 @@ impl Federation {
     #[must_use]
     pub fn with_signer(mut self, signer: Arc<Signer>) -> Self {
         self.signer = Some(signer);
-        self
-    }
-
-    /// This federation reading at most `ceiling` rows of one node for a
-    /// query whose AQL carries no `LIMIT` (§11.5).
-    #[must_use]
-    pub fn with_max_node_rows(mut self, ceiling: NonZeroU32) -> Self {
-        self.clients = self.clients.with_row_ceiling(ceiling);
-        self.max_node_rows = Some(ceiling);
         self
     }
 

@@ -66,7 +66,7 @@ use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily, Smart
 use ferrohealth_smart::openehr::{self, granted};
 use ferrohealth_smart::refusal::Reason;
 use ferrohealth_smart::resource::{Access, Caller as SmartCaller, Honoured};
-use http::{HeaderMap, header};
+use http::HeaderMap;
 use secrecy::SecretString;
 
 use crate::auth::caller::{Caller, PatientContext, Stated, VerifiedBy};
@@ -465,25 +465,6 @@ fn scoped(
         caller = caller.with_patient(context);
     }
     Ok(caller)
-}
-
-/// Whether `headers` carry `expected` as their one bearer token (RFC 6750
-/// §2.1), compared in constant time: the check of the PMIR feed token.
-#[must_use]
-pub fn bearer_matches(headers: &HeaderMap, expected: &str) -> bool {
-    let mut values = headers.get_all(header::AUTHORIZATION).iter();
-    let (Some(value), None) = (values.next(), values.next()) else {
-        return false;
-    };
-    let Some((scheme, token)) = value.to_str().ok().and_then(|text| text.split_once(' ')) else {
-        return false;
-    };
-    scheme.eq_ignore_ascii_case("bearer")
-        && aws_lc_rs::constant_time::verify_slices_are_equal(
-            token.trim_start_matches(' ').as_bytes(),
-            expected.as_bytes(),
-        )
-        .is_ok()
 }
 
 /// The patient `caller`'s `patient/` grant is confined to: its token's
