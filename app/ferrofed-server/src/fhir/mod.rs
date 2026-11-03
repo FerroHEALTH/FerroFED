@@ -668,11 +668,7 @@ fn refused(
 /// `status`, naming each member in `silent` that gave no answer with its
 /// status (§11.3).
 fn incomplete(what: &str, status: StatusCode, silent: &[(String, String)]) -> Response {
-    let named = silent
-        .iter()
-        .map(|(endpoint, status)| format!("{endpoint} ({status})"))
-        .collect::<Vec<_>>()
-        .join(", ");
+    let named = gathered::named(silent);
     let code = if status == StatusCode::GATEWAY_TIMEOUT {
         "timeout"
     } else {
