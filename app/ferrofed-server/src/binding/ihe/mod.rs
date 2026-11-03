@@ -33,8 +33,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
 use crate::binding::seam::{LocalizerSeam, ResolverSeam};
-use crate::binding::{Binding, Offer, Reload, Role, Section, StepBudgets};
-use crate::config::Config;
+use crate::binding::{Binding, Offer, Reload, Role, Section};
 use crate::config::settings::Settings;
 use crate::federation::DemographicsStep;
 use crate::federation::error::FederationError;
@@ -85,13 +84,6 @@ impl Binding for Ihe {
 
     fn sections(&self) -> &'static [Section] {
         SECTIONS
-    }
-
-    fn budgets(&self, config: &Config) -> StepBudgets {
-        StepBudgets {
-            demographics_ms: config.pdqm.as_ref().map_or(0, |pdqm| pdqm.timeout_ms),
-            consent_ms: 0,
-        }
     }
 
     fn offers(&self, settings: &Settings) -> Vec<Offer> {

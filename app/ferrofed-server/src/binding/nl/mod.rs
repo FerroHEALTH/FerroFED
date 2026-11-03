@@ -19,19 +19,20 @@ pub mod mitz;
 pub mod nuts;
 pub mod nvi;
 
+use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::role::consent::ConsentPrefilter;
+use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use serde::Deserialize;
 
-use crate::binding::seam::{LocalizerSeam, OnwardGrant, PublicDocument};
-use crate::binding::{Binding, Offer, Reload, Role, Section, StepBudgets};
-use crate::config::error::Error;
+use crate::binding::seam::{LocalizerSeam, Provided, PublicDocument};
+use crate::binding::{Binding, Offer, Reload, Role, Section};
+use crate::config::nl::nuts::NutsOnward;
+use crate::config::settings::OnwardGrant;
 use crate::config::settings::Settings;
-use crate::config::transport::{self, CleartextError, ProtectedSite};
-use crate::config::{Config, Credentials, EmergencyConsent, Localization};
+use crate::config::{EmergencyConsent, Localization};
 use crate::federation::error::FederationError;
 use crate::localization::LocalizationError;
 
@@ -45,61 +46,6 @@ const SECTIONS: &[Section] = &[Section {
     reload: Reload::Applies,
 }];
 
-/// The Dutch Generic Functions, as the configuration writes them.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct NlGf {
-    /// The NVI localizer (`[nl_gf.nvi]`).
-    pub nvi: Option<nvi::Nvi>,
-    /// The Mitz consent pre-filter (`[nl_gf.mitz]`).
-    pub mitz: Option<mitz::Mitz>,
-}
-
-/// The Dutch Generic Functions, resolved.
-#[derive(Debug)]
-pub struct NlGfSettings {
-    /// The NVI localizer, when `[nl_gf.nvi]` is set.
-    pub nvi: Option<nvi::NviSettings>,
-    /// The Mitz consent pre-filter, when `[nl_gf.mitz]` is set.
-    pub mitz: Option<mitz::MitzSettings>,
-}
-
-/// Resolves `[nl_gf]`: an NVI URL that parses, carries no userinfo and is
-/// `https` outside development, basic credentials or the Nuts grant for the
-/// NVI, basic credentials or the `oauth` client credentials grant for Mitz,
-/// and every secret and file read.
-///
-/// # Errors
-/// [`BindingFault::BsnAsPseudonym`] for a BSN system listed in `namespaces`,
-/// [`Error::Missing`] for no registry or no `url`, [`Error::Url`] for a URL
-/// that does not parse, [`Error::UrlCredentials`] for one that carries a
-/// user name or a password, [`Error::Cleartext`] for one that is not
-/// `https` outside the development profile, [`BindingFault::NviGrant`] for an
-/// OAuth 2.0 or FAPI 2.0 grant for the NVI,
-/// [`CredentialsFault::ServiceGrantNotHere`] for an `oauth2`, Nuts or FAPI
-/// 2.0 grant for Mitz, the errors of a Nuts grant that cannot be built, and
-/// the errors of a secret or a file that cannot be read.
-///
-/// [`BindingFault::BsnAsPseudonym`]: crate::config::error::binding::BindingFault::BsnAsPseudonym
-/// [`BindingFault::NviGrant`]: crate::config::error::binding::BindingFault::NviGrant
-/// [`CredentialsFault::ServiceGrantNotHere`]: crate::config::error::credentials::CredentialsFault::ServiceGrantNotHere
-fn resolve(config: &Config) -> Result<Option<NlGfSettings>, Error> {
-    let Some(nl_gf) = &config.nl_gf else {
-        return Ok(None);
-    };
-    let nvi = nl_gf
-        .nvi
-        .as_ref()
-        .map(|nvi| nvi::resolve(config, nvi))
-        .transpose()?;
-    let mitz = nl_gf
-        .mitz
-        .as_ref()
-        .map(|mitz| mitz::resolve(config, mitz))
-        .transpose()?;
-    Ok(Some(NlGfSettings { nvi, mitz }))
-}
-
 impl Binding for Nl {
     fn name(&self) -> &'static str {
         "nl"
@@ -107,22 +53,6 @@ impl Binding for Nl {
 
     fn sections(&self) -> &'static [Section] {
         SECTIONS
-    }
-
-    fn resolve(&self, config: &Config, settings: &mut Settings) -> Result<(), Error> {
-        settings.nl_gf = resolve(config)?;
-        Ok(())
-    }
-
-    fn budgets(&self, config: &Config) -> StepBudgets {
-        StepBudgets {
-            demographics_ms: 0,
-            consent_ms: config
-                .nl_gf
-                .as_ref()
-                .and_then(|nl_gf| nl_gf.mitz.as_ref())
-                .map_or(0, |mitz| mitz.timeout_ms),
-        }
     }
 
     fn offers(&self, settings: &Settings) -> Vec<Offer> {
@@ -175,53 +105,16 @@ impl Binding for Nl {
         nuts::documents(settings)
     }
 
-    fn onward_table(&self, credentials: &Credentials) -> Option<&'static str> {
-        credentials.nuts.as_ref().map(|_| nuts::KEY)
-    }
-
-    fn onward(
+    fn provide(
         &self,
-        section: &str,
-        credentials: &Credentials,
-    ) -> Option<Result<Box<dyn OnwardGrant>, Error>> {
-        credentials.nuts.as_ref().map(|table| {
-            nuts::resolve(&format!("{section}.{}", nuts::KEY), table)
-                .map(|grant| -> Box<dyn OnwardGrant> { Box::new(grant) })
-        })
-    }
-
-    fn sites(&self, settings: &Settings) -> Result<Vec<ProtectedSite>, CleartextError> {
-        let Some(nl_gf) = &settings.nl_gf else {
-            return Ok(Vec::new());
-        };
-        let services = [
-            nl_gf
-                .nvi
-                .as_ref()
-                .map(|nvi| (nvi::NVI_KEY, nvi.url.expose(), nvi.credentials.is_some())),
-            nl_gf.mitz.as_ref().map(|mitz| {
-                (
-                    mitz::MITZ_KEY,
-                    mitz.url.expose(),
-                    mitz.credentials.is_some(),
-                )
-            }),
-        ];
-        let mut cleartext = Vec::new();
-        for (key, url, credentialed) in services.into_iter().flatten() {
-            let credentials = credentialed.then(|| format!("{key}.credentials"));
-            cleartext.extend(transport::protected_payload(
-                settings.profile,
-                url,
-                transport::identity_site(key, credentials.as_deref()),
-            )?);
-        }
-        // NOTE: Nuts RFC021 §7, every endpoint is TLS-protected, the NVI's
-        // authorization server as a node's.
-        if let Some((url, site)) = nl_gf.nvi.as_ref().and_then(nvi::NviSettings::grant_site) {
-            cleartext.extend(transport::protected_payload(settings.profile, &url, site)?);
-        }
-        Ok(cleartext)
+        grant: &dyn OnwardGrant,
+        endpoint: &EndpointId,
+        settings: &Settings,
+    ) -> Option<Result<Provided, FederationError>> {
+        let grant: &dyn Any = grant;
+        grant
+            .downcast_ref::<NutsOnward>()
+            .map(|nuts| nuts::provide(nuts, endpoint, settings))
     }
 
     fn class(&self, error: &FederationError) -> Option<&'static str> {
@@ -232,16 +125,6 @@ impl Binding for Nl {
             FederationError::NutsClient { .. } => Some("http-client"),
             _ => None,
         }
-    }
-
-    fn log_summary(&self, settings: &Settings) {
-        let nl_gf = settings.nl_gf.as_ref();
-        tracing::info!(
-            binding = self.name(),
-            nvi_localizer = nl_gf.is_some_and(|nl_gf| nl_gf.nvi.is_some()),
-            mitz_prefilter = nl_gf.is_some_and(|nl_gf| nl_gf.mitz.is_some()),
-            "binding configured"
-        );
     }
 
     fn notes(&self, settings: &Settings) -> Vec<String> {

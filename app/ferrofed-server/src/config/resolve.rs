@@ -181,9 +181,8 @@ impl Config {
         if let Ok(resolved) = &audit {
             settings.audit.clone_from(resolved);
         }
-        for binding in crate::binding::compiled() {
-            binding.resolve(self, &mut settings)?;
-        }
+        #[cfg(feature = "binding-nl")]
+        crate::config::nl::resolve(self, &mut settings)?;
         #[cfg(feature = "binding-ihe")]
         crate::config::ihe::resolve(self, &mut settings)?;
         // NOTE: no specification governs this: our own design; a binding refuses its own
