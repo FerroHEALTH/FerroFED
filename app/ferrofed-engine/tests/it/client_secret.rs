@@ -73,7 +73,7 @@ async fn endpoint(expires_in: Option<u64>) -> TokenEndpoint {
 
 /// The value of the form parameter `name` of the request at `index`.
 fn sent(endpoint: &TokenEndpoint, index: usize, name: &str) -> Option<String> {
-    endpoint.forms().get(index).and_then(|form| {
+    endpoint.issuance().forms().get(index).and_then(|form| {
         form.iter()
             .find(|(key, _)| key == name)
             .map(|(_, value)| value.clone())
@@ -146,14 +146,18 @@ async fn the_token_is_refreshed_before_it_expires() -> TestResult {
     let provider = provider(grant(&endpoint, SecretMethod::Basic)?, clock.clone())?;
     let first = provider.credentials().await?;
     let cached = provider.credentials().await?;
-    assert_eq!(1, endpoint.issued(), "a fresh token is reused");
+    assert_eq!(1, endpoint.issuance().issued(), "a fresh token is reused");
     assert_eq!(first.header_value()?, cached.header_value()?);
     let fresh_for = Duration::from_secs(120)
         .checked_sub(REFRESH_MARGIN)
         .ok_or("the lifetime outlasts the margin")?;
     clock.advance(fresh_for)?;
     let refreshed = provider.credentials().await?;
-    assert_eq!(2, endpoint.issued(), "a token near its end is replaced");
+    assert_eq!(
+        2,
+        endpoint.issuance().issued(),
+        "a token near its end is replaced"
+    );
     assert_ne!(first.header_value()?, refreshed.header_value()?);
     Ok(())
 }
@@ -168,7 +172,7 @@ async fn a_refusal_of_the_service_drops_the_cached_token() -> TestResult {
     let first = provider.credentials().await?;
     provider.refused();
     let fresh = provider.credentials().await?;
-    assert_eq!(2, endpoint.issued());
+    assert_eq!(2, endpoint.issuance().issued());
     assert_ne!(first.header_value()?, fresh.header_value()?);
     Ok(())
 }

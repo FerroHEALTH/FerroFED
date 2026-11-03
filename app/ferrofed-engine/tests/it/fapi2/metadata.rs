@@ -63,7 +63,7 @@ async fn refusal_of(
         .ok_or("the grant is refused")?;
     Ok(Refused {
         error,
-        sent: !server.endpoint().forms().is_empty(),
+        sent: !server.endpoint().issuance().forms().is_empty(),
     })
 }
 
@@ -238,7 +238,7 @@ async fn a_grant_without_details_needs_no_listed_type() -> TestResult {
         (Some(Scope::parse(SCOPE)?), None),
     )?;
     provider(grant)?.credentials().await?;
-    assert_eq!(1, server.endpoint().issued());
+    assert_eq!(1, server.endpoint().issuance().issued());
     Ok(())
 }
 

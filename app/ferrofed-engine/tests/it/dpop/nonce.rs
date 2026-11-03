@@ -23,9 +23,10 @@ use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::dpop::{self, HEADER};
+use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::issuer::Claims;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
+use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
@@ -48,7 +49,7 @@ fn jtis(
     field: &str,
 ) -> Result<Vec<String>, Box<dyn Error>> {
     let mut jtis = Vec::new();
-    for form in endpoint.forms() {
+    for form in endpoint.issuance().forms() {
         let assertion = form
             .iter()
             .find(|(name, _)| name == field)
@@ -74,7 +75,7 @@ fn jtis(
 async fn a_nonce_resend_signs_a_new_client_assertion() -> TestResult {
     let keys = keys()?;
     let endpoint = endpoint(&keys).await;
-    endpoint.require_nonce("synthetic-as-nonce-4");
+    endpoint.issuance().require_nonce("synthetic-as-nonce-4");
     let prover = prover()?;
     let provider = provider(grant(&endpoint, &prover)?, Arc::clone(&keys), transport()?)?;
 
@@ -84,7 +85,7 @@ async fn a_nonce_resend_signs_a_new_client_assertion() -> TestResult {
             Verdict::Refused(String::from("use_dpop_nonce")),
             Verdict::Issued
         ],
-        endpoint.verdicts()
+        endpoint.issuance().verdicts()
     );
     let sent = jtis(&endpoint, &keys, "client_assertion")?;
     let [first, again] = sent.as_slice() else {
@@ -103,7 +104,7 @@ async fn a_nonce_resend_of_an_exchange_signs_new_assertions() -> TestResult {
     let keys = keys()?;
     let endpoint = endpoint(&keys).await;
     endpoint.accept_exchange(CALLERS.jwks(), UPSTREAM);
-    endpoint.require_nonce("synthetic-as-nonce-5");
+    endpoint.issuance().require_nonce("synthetic-as-nonce-5");
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;

@@ -36,9 +36,7 @@
 //! identifier is ever committed. No specification governs the device: our
 //! own design.
 
-use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -49,8 +47,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, Request, Respond, ResponseTemplate};
 
 use crate::dpop;
+use crate::issuance::{Endpoint, Issuance, refused};
 use crate::mock::Server;
-use crate::nuts::token::Tokens;
 
 mod token;
 
@@ -144,15 +142,6 @@ pub fn credential(
     jsonwebtoken::encode(&header, &claims, &key).map_err(|e| KeyError(e.to_string()))
 }
 
-/// What the device made of one token request.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Verdict {
-    /// A token was issued.
-    Issued,
-    /// The request was refused, for this reason.
-    Refused(String),
-}
-
 /// A key the device trusts, by the DID URL that names it.
 #[derive(Debug, Clone)]
 struct Trusted {
@@ -161,29 +150,11 @@ struct Trusted {
     jwk: Jwk,
 }
 
-#[derive(Debug, Clone)]
-struct Refusal {
-    status: u16,
-    error: String,
-    description: String,
-}
-
 #[derive(Debug, Default)]
 struct State {
     definition: Option<String>,
     holder: Option<Trusted>,
     issuer: Option<Trusted>,
-    client_id: Option<String>,
-    expires_in: Option<u64>,
-    nonce: Option<String>,
-    refusal: Option<Refusal>,
-    delay: Option<Duration>,
-    bearer: bool,
-    seen: BTreeSet<String>,
-    accepted: BTreeSet<String>,
-    bound: std::collections::BTreeMap<String, String>,
-    verdicts: Vec<Verdict>,
-    forms: Vec<Vec<(String, String)>>,
     definitions_served: usize,
 }
 
@@ -206,6 +177,7 @@ impl Shared {
 pub struct NutsNode {
     server: Server,
     shared: Arc<Shared>,
+    issuance: Issuance,
 }
 
 impl NutsNode {
@@ -223,11 +195,9 @@ impl NutsNode {
             issuer: issuer.clone(),
             token_url: format!("{}{token_path}", server.uri()),
             scope: scope.to_owned(),
-            state: Mutex::new(State {
-                expires_in,
-                ..State::default()
-            }),
+            state: Mutex::new(State::default()),
         });
+        let issuance = Issuance::new(expires_in);
         let metadata = Metadata {
             issuer: &issuer,
             token_endpoint: &shared.token_url,
@@ -257,10 +227,17 @@ impl NutsNode {
             .await;
         Mock::given(method("POST"))
             .and(path(token_path))
-            .respond_with(Tokens(Arc::clone(&shared)))
+            .respond_with(Endpoint {
+                issuance: issuance.clone(),
+                grant: Arc::clone(&shared),
+            })
             .mount(&server)
             .await;
-        Self { server, shared }
+        Self {
+            server,
+            shared,
+            issuance,
+        }
     }
 
     /// The issuer identifier (RFC 8414 §2), the `aud` of every presentation.
@@ -305,57 +282,11 @@ impl NutsNode {
         });
     }
 
-    /// Refuses every later token request whose `client_id` is not
-    /// `client_id`.
-    pub fn expect_client_id(&self, client_id: &str) {
-        self.shared.lock().client_id = Some(client_id.to_owned());
-    }
-
-    /// Requires every later proof to name `nonce`, answering one that does
-    /// not with `400` `use_dpop_nonce` and the nonce (RFC 9449 §8).
-    pub fn require_nonce(&self, nonce: &str) {
-        self.shared.lock().nonce = Some(nonce.to_owned());
-    }
-
-    /// Answers every later token request with the RFC 6749 §5.2 error
-    /// `error`, `description` and `status`.
-    pub fn refuse(&self, status: u16, error: &str, description: &str) {
-        self.shared.lock().refusal = Some(Refusal {
-            status,
-            error: error.to_owned(),
-            description: description.to_owned(),
-        });
-    }
-
-    /// Answers every later token request after `delay`.
-    pub fn delay(&self, delay: Duration) {
-        self.shared.lock().delay = Some(delay);
-    }
-
-    /// Issues every later token typed `Bearer`, as a server that ignored
-    /// the proof would.
-    pub fn issue_bearer(&self) {
-        self.shared.lock().bearer = true;
-    }
-
-    /// Stops accepting every token issued so far.
-    pub fn revoke_all(&self) {
-        self.shared.lock().accepted.clear();
-    }
-
-    /// The verdict of every token request, in arrival order.
+    /// The refusals, delay and nonce a test sets, and the tokens and
+    /// verdicts it reads.
     #[must_use]
-    pub fn verdicts(&self) -> Vec<Verdict> {
-        self.shared.lock().verdicts.clone()
-    }
-
-    /// The tokens issued so far.
-    #[must_use]
-    pub fn issued(&self) -> usize {
-        self.verdicts()
-            .iter()
-            .filter(|verdict| **verdict == Verdict::Issued)
-            .count()
+    pub fn issuance(&self) -> &Issuance {
+        &self.issuance
     }
 
     /// The Presentation Definitions served so far.
@@ -364,19 +295,13 @@ impl NutsNode {
         self.shared.lock().definitions_served
     }
 
-    /// Every form parameter of every token request, in arrival order.
-    #[must_use]
-    pub fn forms(&self) -> Vec<Vec<(String, String)>> {
-        self.shared.lock().forms.clone()
-    }
-
     /// A matcher for a request carrying `Authorization: DPoP` with a token
     /// this device bound and still accepts, and a proof of the bound key
     /// over the request's method, URL and token (RFC 9449 §7.1).
     #[must_use]
     pub fn dpop_bound(&self) -> DpopBound {
         DpopBound {
-            shared: Arc::clone(&self.shared),
+            issuance: self.issuance.clone(),
         }
     }
 }
@@ -426,7 +351,7 @@ impl Respond for Definitions {
 /// The wiremock matcher of [`NutsNode::dpop_bound`].
 #[derive(Debug)]
 pub struct DpopBound {
-    shared: Arc<Shared>,
+    issuance: Issuance,
 }
 
 impl Match for DpopBound {
@@ -459,22 +384,9 @@ impl Match for DpopBound {
         let Ok(verified) = dpop::verify(proof, request.method.as_str(), &htu, Some(token)) else {
             return false;
         };
-        let state = self.shared.lock();
-        state.accepted.contains(token) && state.bound.get(token) == Some(&verified.jkt)
+        let ledger = self.issuance.lock();
+        ledger.accepted.contains(token) && ledger.bound.get(token) == Some(&verified.jkt)
     }
-}
-
-#[derive(Serialize)]
-struct Refused<'a> {
-    error: &'a str,
-    error_description: &'a str,
-}
-
-fn refused(status: u16, error: &str, description: &str) -> ResponseTemplate {
-    ResponseTemplate::new(status).set_body_json(Refused {
-        error,
-        error_description: description,
-    })
 }
 
 /// The base64url claims segment of the compact JWS `jwt`, decoded, for a

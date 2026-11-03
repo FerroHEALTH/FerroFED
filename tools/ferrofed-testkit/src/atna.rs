@@ -21,15 +21,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use rcgen::{
-    BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
-};
+use rcgen::ExtendedKeyUsagePurpose;
 use tokio::io::{AsyncRead, AsyncReadExt as _};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls::rustls::ServerConfig;
-use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+
+use crate::pki::{self, Authority};
 
 /// Why the harness repository could not start.
 #[derive(Debug, thiserror::Error)]
@@ -190,46 +189,14 @@ impl Drop for AuditRepository {
 /// The CA certificate as PEM, and a server configuration for `127.0.0.1`
 /// whose certificate it signs.
 fn certificates() -> Result<(String, ServerConfig), AtnaHarnessError> {
-    let today = jiff::Zoned::now().date();
-    let (yesterday, tomorrow) = (
-        today.yesterday().unwrap_or(today),
-        today.tomorrow().unwrap_or(today),
-    );
-    let ymd = |date: jiff::civil::Date| {
-        rcgen::date_time_ymd(
-            i32::from(date.year()),
-            u8::try_from(date.month()).unwrap_or(1),
-            u8::try_from(date.day()).unwrap_or(1),
-        )
-    };
-    let ca_key = KeyPair::generate()?;
-    let mut ca = CertificateParams::new(Vec::<String>::new())?;
-    ca.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-    ca.distinguished_name
-        .push(DnType::CommonName, "FerroFED harness audit repository CA");
-    ca.not_before = ymd(yesterday);
-    ca.not_after = ymd(tomorrow);
-    let ca_certificate = ca.self_signed(&ca_key)?;
-    let issuer = Issuer::new(ca, ca_key);
-
-    let server_key = KeyPair::generate()?;
-    let mut server = CertificateParams::new(vec![Ipv4Addr::LOCALHOST.to_string()])?;
-    server.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
-    server
-        .distinguished_name
-        .push(DnType::CommonName, "harness audit repository");
-    server.not_before = ymd(yesterday);
-    server.not_after = ymd(tomorrow);
-    let server_certificate = server.signed_by(&server_key, &issuer)?;
-
-    let chain: Vec<CertificateDer<'static>> = vec![server_certificate.der().clone()];
-    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(server_key.serialize_der()));
-    let provider = Arc::new(tokio_rustls::rustls::crypto::aws_lc_rs::default_provider());
-    let config = ServerConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()?
-        .with_no_client_auth()
-        .with_single_cert(chain, key)?;
-    Ok((ca_certificate.pem(), config))
+    let ca = Authority::generate("FerroFED harness audit repository CA")?;
+    let (server, key) = ca.issue(
+        "harness audit repository",
+        vec![Ipv4Addr::LOCALHOST.to_string()],
+        ExtendedKeyUsagePurpose::ServerAuth,
+    )?;
+    let config = pki::server_config(pki::provider(), (&server, &key), None)?;
+    Ok((ca.certificate.pem(), config))
 }
 
 /// What the repository keeps: the messages it read, and how each

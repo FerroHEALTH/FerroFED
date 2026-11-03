@@ -16,10 +16,9 @@ use std::io;
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 
-use rcgen::{
-    BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
-};
+use rcgen::ExtendedKeyUsagePurpose;
 
+use crate::pki::Authority;
 use crate::tls::TlsHarnessError;
 
 /// A server certificate with its CA, and a client certificate with its own
@@ -61,40 +60,25 @@ impl ListenerCertificates {
     /// [`TlsHarnessError::Certificate`] when a key or a certificate cannot be
     /// made.
     pub fn generate() -> Result<Self, TlsHarnessError> {
-        let (ca_params, ca_key) = authority("FerroFED harness listener CA")?;
-        let ca = ca_params.self_signed(&ca_key)?;
-        let issuer = Issuer::new(ca_params, ca_key);
-        let server_key = KeyPair::generate()?;
-        let mut server = CertificateParams::new(vec![
-            Ipv4Addr::LOCALHOST.to_string(),
-            String::from("localhost"),
-        ])?;
-        server.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
-        server
-            .distinguished_name
-            .push(DnType::CommonName, "harness gateway listener");
-        validity(&mut server);
-        let server_certificate = server.signed_by(&server_key, &issuer)?;
-
-        let (client_ca_params, client_ca_key) = authority("FerroFED harness proxy CA")?;
-        let client_ca = client_ca_params.self_signed(&client_ca_key)?;
-        let client_issuer = Issuer::new(client_ca_params, client_ca_key);
-        let client_key = KeyPair::generate()?;
-        let mut client = CertificateParams::new(Vec::<String>::new())?;
-        client.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
-        client
-            .distinguished_name
-            .push(DnType::CommonName, "harness proxy");
-        validity(&mut client);
-        let client_certificate = client.signed_by(&client_key, &client_issuer)?;
-
+        let ca = Authority::generate("FerroFED harness listener CA")?;
+        let (server, server_key) = ca.issue(
+            "harness gateway listener",
+            vec![Ipv4Addr::LOCALHOST.to_string(), String::from("localhost")],
+            ExtendedKeyUsagePurpose::ServerAuth,
+        )?;
+        let client_ca = Authority::generate("FerroFED harness proxy CA")?;
+        let (client, client_key) = client_ca.issue(
+            "harness proxy",
+            Vec::new(),
+            ExtendedKeyUsagePurpose::ClientAuth,
+        )?;
         Ok(Self {
-            ca: ca.pem(),
-            chain: server_certificate.pem(),
+            ca: ca.certificate.pem(),
+            chain: server.pem(),
             key: server_key.serialize_pem(),
-            leaf: server_certificate.der().to_vec(),
-            client_ca: client_ca.pem(),
-            client_identity: format!("{}{}", client_certificate.pem(), client_key.serialize_pem()),
+            leaf: server.der().to_vec(),
+            client_ca: client_ca.certificate.pem(),
+            client_identity: format!("{}{}", client.pem(), client_key.serialize_pem()),
         })
     }
 
@@ -156,32 +140,4 @@ impl ListenerCertificates {
         std::fs::write(&files.client_identity, &self.client_identity)?;
         Ok(files)
     }
-}
-
-/// The parameters and key of a CA named `name`.
-fn authority(name: &str) -> Result<(CertificateParams, KeyPair), TlsHarnessError> {
-    let key = KeyPair::generate()?;
-    let mut params = CertificateParams::new(Vec::<String>::new())?;
-    params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-    params.distinguished_name.push(DnType::CommonName, name);
-    validity(&mut params);
-    Ok((params, key))
-}
-
-/// Makes `params` valid from yesterday to tomorrow.
-fn validity(params: &mut CertificateParams) {
-    let today = jiff::Zoned::now().date();
-    let (yesterday, tomorrow) = (
-        today.yesterday().unwrap_or(today),
-        today.tomorrow().unwrap_or(today),
-    );
-    let ymd = |date: jiff::civil::Date| {
-        rcgen::date_time_ymd(
-            i32::from(date.year()),
-            u8::try_from(date.month()).unwrap_or(1),
-            u8::try_from(date.day()).unwrap_or(1),
-        )
-    };
-    params.not_before = ymd(yesterday);
-    params.not_after = ymd(tomorrow);
 }

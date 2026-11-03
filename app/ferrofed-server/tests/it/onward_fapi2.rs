@@ -169,7 +169,7 @@ async fn node_a_receives_the_dpop_bound_fapi2_token() -> TestResult {
 
     let (status, text) = call(app, patient_post()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(1, authority.endpoint().issued());
+    assert_eq!(1, authority.endpoint().issuance().issued());
     Ok(())
 }
 
@@ -182,6 +182,7 @@ async fn a_refused_fapi2_grant_fails_node_a_and_names_no_credential() -> TestRes
     let (authority, material) = material(dir.path()).await?;
     authority
         .endpoint()
+        .issuance()
         .refuse(401, "invalid_client", "the assertion was refused");
     let a = node(authority.endpoint().dpop_bound(None)).await;
     let (app, state) = gateway(dir.path(), &a.uri(), &material.tables)?;
@@ -201,6 +202,7 @@ async fn a_refused_fapi2_grant_fails_node_a_and_names_no_credential() -> TestRes
     );
     let assertions: Vec<String> = authority
         .endpoint()
+        .issuance()
         .forms()
         .into_iter()
         .flatten()
@@ -455,6 +457,7 @@ fn the_oauth2_assertion_audience_is_configured() -> TestResult {
 fn assertions_at(authority: &AuthorizationServer) -> Vec<String> {
     authority
         .endpoint()
+        .issuance()
         .forms()
         .into_iter()
         .flatten()

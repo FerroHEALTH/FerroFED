@@ -36,6 +36,9 @@
 //! - [`fapi`]: the harness FAPI 2.0 authorization server, the token
 //!   endpoint held to the profile with its RFC 8414 metadata beside it
 //!   (#497);
+//! - [`issuance`]: the token endpoint [`oauth`] and [`nuts`] share, and the
+//!   refusals, delay, nonce, tokens and verdicts a test sets and reads on
+//!   either (#1486);
 //! - [`issuer`]: a test issuer that mints RFC 9068 access tokens and serves
 //!   its key set (#80);
 //! - [`mcsd`]: the harness care services directory, a test device that
@@ -91,6 +94,7 @@ pub mod eps;
 pub mod fapi;
 pub mod fhir_packages;
 pub mod health_data_api;
+pub mod issuance;
 pub mod issuer;
 pub mod leak;
 pub mod listener;
@@ -105,6 +109,7 @@ pub mod oauth;
 pub mod otlp;
 pub mod pdqm_stub;
 pub mod pixm_stub;
+mod pki;
 pub mod pmir;
 pub mod proxy;
 pub mod reference;

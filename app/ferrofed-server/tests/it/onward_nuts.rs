@@ -185,7 +185,7 @@ async fn node_a_receives_the_dpop_bound_nuts_token() -> TestResult {
 
     let (status, text) = call(app, patient_post()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(1, authority.issued());
+    assert_eq!(1, authority.issuance().issued());
     Ok(())
 }
 
@@ -197,7 +197,9 @@ async fn node_a_receives_the_dpop_bound_nuts_token() -> TestResult {
 async fn a_refused_nuts_grant_fails_node_a_and_names_no_credential() -> TestResult {
     let dir = tempfile::tempdir()?;
     let (authority, material) = material(dir.path()).await?;
-    authority.refuse(400, "invalid_request", "the presentation was refused");
+    authority
+        .issuance()
+        .refuse(400, "invalid_request", "the presentation was refused");
     let a = node(authority.dpop_bound()).await;
     let (app, state) = gateway(dir.path(), &a.uri(), &material.tables)?;
 
@@ -215,6 +217,7 @@ async fn a_refused_nuts_grant_fails_node_a_and_names_no_credential() -> TestResu
         "node A was sent nothing"
     );
     let assertions: Vec<String> = authority
+        .issuance()
         .forms()
         .into_iter()
         .flatten()
@@ -392,8 +395,8 @@ async fn the_served_did_document_verifies_the_gateways_presentation() -> TestRes
     authority.trust_holder(HOLDER, HOLDER_KID, jwk.clone());
     let (status, text) = call(app, patient_post()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(1, authority.issued());
-    let forms = authority.forms();
+    assert_eq!(1, authority.issuance().issued());
+    let forms = authority.issuance().forms();
     let presentation = forms
         .first()
         .and_then(|form| form.iter().find(|(name, _)| name == "assertion"))

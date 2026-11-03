@@ -52,7 +52,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
 
 use aws_lc_rs::rand::SystemRandom;
 use aws_lc_rs::signature::{
@@ -66,8 +65,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, Request};
 
 use crate::dpop;
+use crate::issuance::{Endpoint, Issuance};
 use crate::mock::Server;
-use crate::oauth::respond::Responder;
 
 mod respond;
 
@@ -227,15 +226,6 @@ fn verify_subject(token: &str, jwks: &JwkSet, issuer: &str) -> Result<String, St
         .map_err(|error| format!("subject token: {error}"))
 }
 
-/// What the endpoint made of one token request.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Verdict {
-    /// A token was issued.
-    Issued,
-    /// The request was refused, for this reason.
-    Refused(String),
-}
-
 /// One token exchange the endpoint answered with a token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Exchanged {
@@ -245,15 +235,6 @@ pub struct Exchanged {
     pub scope: Option<String>,
     /// The `resource` named, when one was.
     pub resource: Option<String>,
-}
-
-/// A refusal the endpoint answers every request with, set by
-/// [`TokenEndpoint::refuse`].
-#[derive(Debug, Clone)]
-struct Refusal {
-    status: u16,
-    error: String,
-    description: String,
 }
 
 /// The caller issuer whose tokens the endpoint exchanges.
@@ -279,14 +260,10 @@ enum ClientAuth {
 #[derive(Debug, Default)]
 struct State {
     jwks: JwkSet,
-    expires_in: Option<u64>,
     scope: Option<String>,
     resource: Option<String>,
-    refusal: Option<Refusal>,
-    delay: Option<Duration>,
     callers: Option<Callers>,
     dpop: bool,
-    nonce: Option<String>,
     untyped: bool,
     algorithm: Option<Algorithm>,
     audience: Option<String>,
@@ -296,13 +273,8 @@ struct State {
     secret: Option<String>,
     secret_methods: Vec<&'static str>,
     certificate: Option<String>,
-    accepted: BTreeSet<String>,
     subjects: BTreeMap<String, String>,
-    bound: BTreeMap<String, String>,
-    jti: BTreeSet<String>,
     assertions: Vec<String>,
-    verdicts: Vec<Verdict>,
-    forms: Vec<Vec<(String, String)>>,
     exchanges: Vec<Exchanged>,
 }
 
@@ -324,6 +296,7 @@ impl Shared {
 pub struct TokenEndpoint {
     server: Server,
     shared: Arc<Shared>,
+    issuance: Issuance,
 }
 
 impl TokenEndpoint {
@@ -335,17 +308,22 @@ impl TokenEndpoint {
         let shared = Arc::new(Shared {
             client_id: client_id.to_owned(),
             token_url: token_url(&server),
-            state: Mutex::new(State {
-                expires_in,
-                ..State::default()
-            }),
+            state: Mutex::new(State::default()),
         });
+        let issuance = Issuance::new(expires_in);
         Mock::given(method("POST"))
             .and(path(TOKEN_PATH))
-            .respond_with(Responder(Arc::clone(&shared)))
+            .respond_with(Endpoint {
+                issuance: issuance.clone(),
+                grant: Arc::clone(&shared),
+            })
             .mount(&server)
             .await;
-        Self { server, shared }
+        Self {
+            server,
+            shared,
+            issuance,
+        }
     }
 
     /// The token URL, the `aud` every assertion must carry.
@@ -383,12 +361,6 @@ impl TokenEndpoint {
     /// token it issues to the proof's key, typed `DPoP` (RFC 9449 §5).
     pub fn require_dpop(&self) {
         self.shared.lock().dpop = true;
-    }
-
-    /// Requires every later proof to name `nonce`, answering one that does
-    /// not with `400` `use_dpop_nonce` and the nonce (RFC 9449 §8).
-    pub fn require_nonce(&self, nonce: &str) {
-        self.shared.lock().nonce = Some(nonce.to_owned());
     }
 
     /// Answers every later token exchange without the `issued_token_type`
@@ -453,47 +425,18 @@ impl TokenEndpoint {
         self.shared.lock().certificate = Some(thumbprint.to_owned());
     }
 
+    /// The refusals, delay and nonce a test sets, and the tokens and
+    /// verdicts it reads.
+    #[must_use]
+    pub fn issuance(&self) -> &Issuance {
+        &self.issuance
+    }
+
     /// The mock server the endpoint runs on, for a test device that serves
     /// more beside it on the same origin.
     #[must_use]
     pub fn server(&self) -> &Server {
         &self.server
-    }
-
-    /// Answers every later request with the RFC 6749 §5.2 error `error`,
-    /// `description` and `status`.
-    pub fn refuse(&self, status: u16, error: &str, description: &str) {
-        self.shared.lock().refusal = Some(Refusal {
-            status,
-            error: error.to_owned(),
-            description: description.to_owned(),
-        });
-    }
-
-    /// Answers every later request after `delay`.
-    pub fn delay(&self, delay: Duration) {
-        self.shared.lock().delay = Some(delay);
-    }
-
-    /// Stops accepting every token issued so far, as a node whose
-    /// authorization server revoked them would.
-    pub fn revoke_all(&self) {
-        self.shared.lock().accepted.clear();
-    }
-
-    /// The verdict of every request, in arrival order.
-    #[must_use]
-    pub fn verdicts(&self) -> Vec<Verdict> {
-        self.shared.lock().verdicts.clone()
-    }
-
-    /// The tokens issued so far.
-    #[must_use]
-    pub fn issued(&self) -> usize {
-        self.verdicts()
-            .iter()
-            .filter(|verdict| **verdict == Verdict::Issued)
-            .count()
     }
 
     /// Every client assertion received, in arrival order.
@@ -502,24 +445,10 @@ impl TokenEndpoint {
         self.shared.lock().assertions.clone()
     }
 
-    /// Every form parameter of every request, in arrival order.
-    #[must_use]
-    pub fn forms(&self) -> Vec<Vec<(String, String)>> {
-        self.shared.lock().forms.clone()
-    }
-
     /// Every token exchange answered with a token, in arrival order.
     #[must_use]
     pub fn exchanges(&self) -> Vec<Exchanged> {
         self.shared.lock().exchanges.clone()
-    }
-
-    /// Returns whether `token` is one this endpoint issued and still accepts,
-    /// for a test that reads the `Authorization` a real node received from a
-    /// proxy journal rather than through a `wiremock` matcher.
-    #[must_use]
-    pub fn accepts(&self, token: &str) -> bool {
-        self.shared.lock().accepted.contains(token)
     }
 
     /// A matcher for a request carrying `Authorization: Bearer` with a token
@@ -528,6 +457,7 @@ impl TokenEndpoint {
     pub fn bearer(&self) -> IssuedBearer {
         IssuedBearer {
             shared: Arc::clone(&self.shared),
+            issuance: self.issuance.clone(),
             subject: None,
         }
     }
@@ -538,6 +468,7 @@ impl TokenEndpoint {
     pub fn bearer_for(&self, subject: &str) -> IssuedBearer {
         IssuedBearer {
             shared: Arc::clone(&self.shared),
+            issuance: self.issuance.clone(),
             subject: Some(subject.to_owned()),
         }
     }
@@ -549,7 +480,7 @@ impl TokenEndpoint {
     #[must_use]
     pub fn dpop_bound(&self, nonce: Option<&str>) -> DpopBound {
         DpopBound {
-            shared: Arc::clone(&self.shared),
+            issuance: self.issuance.clone(),
             nonce: nonce.map(str::to_owned),
         }
     }
@@ -560,6 +491,7 @@ impl TokenEndpoint {
 #[derive(Debug)]
 pub struct IssuedBearer {
     shared: Arc<Shared>,
+    issuance: Issuance,
     subject: Option<String>,
 }
 
@@ -571,19 +503,19 @@ impl Match for IssuedBearer {
         let Some(token) = value.to_str().ok().and_then(|v| v.strip_prefix("Bearer ")) else {
             return false;
         };
-        let state = self.shared.lock();
-        state.accepted.contains(token)
+        let ledger = self.issuance.lock();
+        ledger.accepted.contains(token)
             && self
                 .subject
                 .as_ref()
-                .is_none_or(|subject| state.subjects.get(token) == Some(subject))
+                .is_none_or(|subject| self.shared.lock().subjects.get(token) == Some(subject))
     }
 }
 
 /// The wiremock matcher of [`TokenEndpoint::dpop_bound`].
 #[derive(Debug)]
 pub struct DpopBound {
-    shared: Arc<Shared>,
+    issuance: Issuance,
     nonce: Option<String>,
 }
 
@@ -617,9 +549,9 @@ impl Match for DpopBound {
         let Ok(verified) = dpop::verify(proof, request.method.as_str(), &htu, Some(token)) else {
             return false;
         };
-        let state = self.shared.lock();
-        state.accepted.contains(token)
-            && state.bound.get(token) == Some(&verified.jkt)
+        let ledger = self.issuance.lock();
+        ledger.accepted.contains(token)
+            && ledger.bound.get(token) == Some(&verified.jkt)
             && self
                 .nonce
                 .as_ref()

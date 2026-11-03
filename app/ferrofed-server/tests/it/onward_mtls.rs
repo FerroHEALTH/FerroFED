@@ -31,7 +31,8 @@ use ferrofed_server::config::tls::TlsFault;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::error::FederationError;
 use ferrofed_server::state::AppState;
-use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
+use ferrofed_testkit::issuance::Verdict;
+use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::tls::MutualTls;
 use ferrofed_testkit::unreachable;
 use http::{Request, StatusCode, header};
@@ -217,8 +218,8 @@ async fn a_node_is_reached_with_a_token_bound_to_the_certificate_its_section_nam
 
     let (status, text) = call(app, patient_post()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(vec![Verdict::Issued], a.endpoint.verdicts());
-    let forms = a.endpoint.forms();
+    assert_eq!(vec![Verdict::Issued], a.endpoint.issuance().verdicts());
+    let forms = a.endpoint.issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
@@ -268,7 +269,7 @@ async fn a_token_bound_to_another_certificate_never_reaches_the_node() -> TestRe
 
     let (status, text) = call(app, patient_post()?).await?;
     assert_ne!(StatusCode::OK, status, "{text}");
-    assert_eq!(vec![Verdict::Issued], a.endpoint.verdicts());
+    assert_eq!(vec![Verdict::Issued], a.endpoint.issuance().verdicts());
     assert!(
         a.node_requests().await?.is_empty(),
         "never sent to the node"

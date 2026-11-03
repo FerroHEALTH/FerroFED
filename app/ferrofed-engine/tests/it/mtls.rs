@@ -30,8 +30,9 @@ use ferrofed_engine::onward::token::{GRANT_TYPE, TokenError};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::issuer::{Claims, Issuer};
-use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
+use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::tls::MutualTls;
 use ferrohealth_secret::secret_url::SecretUrl;
 use jsonwebtoken::Algorithm;
@@ -245,8 +246,11 @@ async fn the_gateway_authenticates_by_its_certificate_and_sends_no_assertion() -
     let provider = by_certificate(harness.grant()?, harness.transport(true)?)?;
     provider.credentials().await?;
 
-    assert_eq!(vec![Verdict::Issued], harness.endpoint.verdicts());
-    let forms = harness.endpoint.forms();
+    assert_eq!(
+        vec![Verdict::Issued],
+        harness.endpoint.issuance().verdicts()
+    );
+    let forms = harness.endpoint.issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
@@ -276,7 +280,7 @@ async fn the_self_signed_method_sends_the_same_request() -> TestResult {
     by_certificate(grant, harness.transport(true)?)?
         .credentials()
         .await?;
-    let forms = harness.endpoint.forms();
+    let forms = harness.endpoint.issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
@@ -376,7 +380,7 @@ async fn without_its_certificate_the_gateway_reaches_neither_the_token_endpoint_
     assert_eq!(EndpointStatus::NodeError, reply.status());
     assert!(harness.front.refused() >= 1);
     assert_eq!(
-        harness.endpoint.forms(),
+        harness.endpoint.issuance().forms(),
         Vec::<Vec<(String, String)>>::new()
     );
     assert_eq!(0, harness.node_requests().await?);
@@ -398,7 +402,7 @@ async fn an_assertion_grant_without_a_key_sends_nothing() -> TestResult {
         .ok_or("the cause is the token error")?;
     assert!(matches!(unsigned, TokenError::Unsigned));
     assert_eq!(
-        harness.endpoint.forms(),
+        harness.endpoint.issuance().forms(),
         Vec::<Vec<(String, String)>>::new()
     );
     Ok(())
@@ -452,7 +456,7 @@ async fn token_exchange_composes_with_mutual_tls() -> TestResult {
         "{:?}",
         reply.outcome()
     );
-    let forms = harness.endpoint.forms();
+    let forms = harness.endpoint.issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one exchange, got {}", forms.len()).into());
     };

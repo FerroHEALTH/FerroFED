@@ -33,9 +33,10 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::dpop::{self, HEADER};
 use ferrofed_testkit::fapi::{AuthorizationServer, DETAILS_TYPE, METADATA_PATH};
+use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::oauth::{self, Verdict};
+use ferrofed_testkit::oauth;
 use jsonwebtoken::Algorithm;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
@@ -260,7 +261,10 @@ async fn a_dpop_bound_token_reaches_the_node() -> TestResult {
         "{:?}",
         reply.outcome()
     );
-    assert_eq!(vec![Verdict::Issued], server.endpoint().verdicts());
+    assert_eq!(
+        vec![Verdict::Issued],
+        server.endpoint().issuance().verdicts()
+    );
     let requests = node.received_requests().await.ok_or("recording is on")?;
     let [request] = requests.as_slice() else {
         return Err(format!("expected one node request, got {}", requests.len()).into());
@@ -296,7 +300,7 @@ async fn the_token_request_names_the_issuer_and_carries_the_details() -> TestRes
         .credentials()
         .await?;
 
-    let forms = server.endpoint().forms();
+    let forms = server.endpoint().issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
@@ -384,6 +388,7 @@ async fn a_refused_grant_fails_the_node_and_shows_no_credential() -> TestResult 
     let server = server(&key).await;
     server
         .endpoint()
+        .issuance()
         .refuse(401, "invalid_client", "synthetic refusal");
     let node = node(&server).await;
     let prover = prover()?;
@@ -410,7 +415,7 @@ async fn a_refused_grant_fails_the_node_and_shows_no_credential() -> TestResult 
 async fn a_token_endpoint_past_the_timeout_fails_the_node() -> TestResult {
     let key = client_key()?;
     let server = server(&key).await;
-    server.endpoint().delay(Duration::from_secs(8));
+    server.endpoint().issuance().delay(Duration::from_secs(8));
     let node = node(&server).await;
     let prover = prover()?;
     let client =
@@ -472,7 +477,10 @@ async fn a_failed_discovery_is_tried_again() -> TestResult {
 
     let first = query(&client, conveyance()).await?;
     assert_eq!(EndpointStatus::NodeError, first.status());
-    assert!(server.endpoint().forms().is_empty(), "no token request");
+    assert!(
+        server.endpoint().issuance().forms().is_empty(),
+        "no token request"
+    );
     server.publish(&server.metadata());
     let second = query(&client, conveyance()).await?;
     assert_eq!(EndpointStatus::Active, second.status());
@@ -510,7 +518,7 @@ async fn a_verified_callers_token_is_exchanged() -> TestResult {
     };
     assert_eq!("clinician-0042", exchanged.subject);
     assert_eq!(Some(RESOURCE), exchanged.resource.as_deref());
-    let forms = server.endpoint().forms();
+    let forms = server.endpoint().issuance().forms();
     let form = forms.first().ok_or("a token request")?;
     assert_eq!(Some(DETAILS), field(form, "authorization_details"));
     Ok(())
@@ -538,7 +546,7 @@ async fn a_callers_token_carrying_the_patient_is_never_sent() -> TestResult {
         server.endpoint().exchanges(),
         Vec::<oauth::Exchanged>::new()
     );
-    for form in server.endpoint().forms() {
+    for form in server.endpoint().issuance().forms() {
         for (_, value) in form {
             assert!(!value.contains(PATIENT), "the patient reached the server");
         }
@@ -566,7 +574,7 @@ async fn no_carrier_to_the_server_or_the_node_names_the_patient() -> TestResult 
 
     let reply = query(&client, conveyance()).await?;
     assert_eq!(EndpointStatus::Active, reply.status());
-    for form in server.endpoint().forms() {
+    for form in server.endpoint().issuance().forms() {
         for (_, value) in form {
             assert!(!value.contains(PATIENT));
         }

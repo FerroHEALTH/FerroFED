@@ -147,19 +147,20 @@ async fn the_manager_is_asked_with_a_token_the_grant_obtained_and_refreshed() ->
             "{text}"
         );
     }
-    assert_eq!(1, endpoint.issued(), "a fresh token is reused");
+    assert_eq!(1, endpoint.issuance().issued(), "a fresh token is reused");
     assert_eq!(vec!["client_secret_basic"], endpoint.secret_methods());
 
-    endpoint.revoke_all();
+    endpoint.issuance().revoke_all();
     let (status, text) = call(app, post(body(&patient_query())?)?).await?;
     assert_eq!(
         StatusCode::OK,
         status,
         "a refused token is replaced and the ITI-83 request sent once more: {text}"
     );
-    assert_eq!(2, endpoint.issued());
+    assert_eq!(2, endpoint.issuance().issued());
     assert!(
         endpoint
+            .issuance()
             .forms()
             .iter()
             .flatten()
@@ -189,7 +190,7 @@ async fn a_grant_the_token_endpoint_refuses_fails_the_query_424_and_no_node_is_a
     let (status, text) = call(app, post(body(&patient_query())?)?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
     assert!(!text.contains(SECRET), "{text}");
-    assert_eq!(0, endpoint.issued());
+    assert_eq!(0, endpoint.issuance().issued());
     assert_eq!(0, asked(&pix).await?, "nothing is sent without a token");
     assert_eq!(0, asked(&a).await? + asked(&b).await?, "no node is asked");
     Ok(())
@@ -220,7 +221,11 @@ async fn a_query_resolved_through_the_grant_writes_its_access_record() -> TestRe
 
     let (status, text) = call(app, post(body(&patient_query())?)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(1, endpoint.issued(), "the Manager was asked with a token");
+    assert_eq!(
+        1,
+        endpoint.issuance().issued(),
+        "the Manager was asked with a token"
+    );
     let records = repository.wait_for(2, SETTLE).await;
     let mut resolutions = 0;
     for record in &records {

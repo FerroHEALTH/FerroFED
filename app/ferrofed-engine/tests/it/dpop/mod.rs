@@ -27,9 +27,10 @@ use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::dpop::{self, HEADER};
+use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
+use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
 use jsonwebtoken::Algorithm;
 use openehr_federation::status::EndpointStatus;
@@ -213,7 +214,7 @@ async fn a_dpop_bound_token_reaches_the_node_with_a_proof_of_its_key() -> TestRe
         "{:?}",
         reply.outcome()
     );
-    assert_eq!(vec![Verdict::Issued], endpoint.verdicts());
+    assert_eq!(vec![Verdict::Issued], endpoint.issuance().verdicts());
     let requests = node.received_requests().await.ok_or("recording is on")?;
     let [request] = requests.as_slice() else {
         return Err(format!("expected one node request, got {}", requests.len()).into());
@@ -263,7 +264,7 @@ async fn a_dpop_bound_token_is_never_a_bearer_credential() -> TestResult {
 async fn the_token_endpoints_nonce_is_answered_once() -> TestResult {
     let keys = keys()?;
     let endpoint = endpoint(&keys).await;
-    endpoint.require_nonce("synthetic-as-nonce-1");
+    endpoint.issuance().require_nonce("synthetic-as-nonce-1");
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;
@@ -284,7 +285,7 @@ async fn the_token_endpoints_nonce_is_answered_once() -> TestResult {
             Verdict::Refused(String::from("use_dpop_nonce")),
             Verdict::Issued
         ],
-        endpoint.verdicts()
+        endpoint.issuance().verdicts()
     );
     Ok(())
 }
@@ -399,7 +400,11 @@ async fn the_nodes_nonce_is_answered_once() -> TestResult {
     assert_eq!(None, unprompted.nonce);
     assert_eq!(Some("synthetic-rs-nonce-1"), prompted.nonce.as_deref());
     assert_ne!(unprompted.jti, prompted.jti, "each proof has its own jti");
-    assert_eq!(1, endpoint.issued(), "the challenge drops no token");
+    assert_eq!(
+        1,
+        endpoint.issuance().issued(),
+        "the challenge drops no token"
+    );
     Ok(())
 }
 

@@ -173,7 +173,7 @@ async fn the_nvi_is_asked_with_the_dpop_bound_nuts_token() -> TestResult {
         ],
         statuses(&answer)
     );
-    assert_eq!(1, grant.authority.issued());
+    assert_eq!(1, grant.authority.issuance().issued());
     let [authorization] = <[String; 1]>::try_from(nvi.headers("authorization").await?)
         .map_err(|all| format!("one search, not {}", all.len()))?;
     assert!(authorization.starts_with("DPoP "), "the DPoP scheme");
@@ -192,6 +192,7 @@ async fn a_refused_nuts_grant_fails_the_localization_closed() -> TestResult {
     let grant = grant(dir.path(), 300).await?;
     grant
         .authority
+        .issuance()
         .refuse(400, "invalid_request", "the presentation was refused");
     let nvi = guarded_nvi(&grant.authority).await;
     let resolution = Resolution::start().await?;
@@ -224,6 +225,7 @@ async fn a_refused_nuts_grant_fails_the_localization_closed() -> TestResult {
 
     let assertions: Vec<String> = grant
         .authority
+        .issuance()
         .forms()
         .into_iter()
         .flatten()
@@ -334,7 +336,7 @@ async fn the_nuts_token_reaches_the_nvi_alone() -> TestResult {
             );
         }
     }
-    for (name, value) in grant.authority.forms().into_iter().flatten() {
+    for (name, value) in grant.authority.issuance().forms().into_iter().flatten() {
         assert!(
             !value.contains(&pseudonym),
             "the {name} form names the pseudonym"
@@ -359,7 +361,7 @@ async fn a_token_the_nvi_refuses_is_replaced_on_the_next_query() -> TestResult {
         &grant.tables,
     )?;
     ask(&app).await?;
-    grant.authority.revoke_all();
+    grant.authority.issuance().revoke_all();
 
     let (_status, _text, refused) = ask(&app).await?;
     assert!(
@@ -380,7 +382,11 @@ async fn a_token_the_nvi_refuses_is_replaced_on_the_next_query() -> TestResult {
         ],
         statuses(&replaced)
     );
-    assert_eq!(2, grant.authority.issued(), "a new token after the 401");
+    assert_eq!(
+        2,
+        grant.authority.issuance().issued(),
+        "a new token after the 401"
+    );
     Ok(())
 }
 
@@ -403,11 +409,19 @@ async fn a_token_near_the_end_of_its_lifetime_is_replaced() -> TestResult {
 
     ask(&app).await?;
     ask(&app).await?;
-    assert_eq!(1, grant.authority.issued(), "the token is cached");
+    assert_eq!(
+        1,
+        grant.authority.issuance().issued(),
+        "the token is cached"
+    );
     tokio::time::sleep(Duration::from_millis(1200)).await;
     let (_status, _text, answer) = ask(&app).await?;
     assert_eq!(("node-a-pub", "active"), statuses(&answer)[0]);
-    assert_eq!(2, grant.authority.issued(), "a new token near the end");
+    assert_eq!(
+        2,
+        grant.authority.issuance().issued(),
+        "a new token near the end"
+    );
     Ok(())
 }
 

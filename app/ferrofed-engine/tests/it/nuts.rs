@@ -23,8 +23,9 @@ use ferrofed_engine::onward::grant::nl::nuts::{NutsCredentials, NutsGrant};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::dpop::{self, HEADER};
+use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::nuts::{self, NutsNode, Verdict};
+use ferrofed_testkit::nuts::{self, NutsNode};
 use ferrofed_testkit::oauth;
 use jsonwebtoken::Algorithm;
 use nl_generic_functions::nuts_auth::holder::{Did, Holder, HolderKey};
@@ -186,7 +187,7 @@ async fn the_nuts_token_reaches_the_node_dpop_bound() -> TestResult {
         "{:?}",
         reply.outcome()
     );
-    assert_eq!(vec![Verdict::Issued], setup.authority.verdicts());
+    assert_eq!(vec![Verdict::Issued], setup.authority.issuance().verdicts());
     let requests = node.received_requests().await.ok_or("recording is on")?;
     let [request] = requests.as_slice() else {
         return Err(format!("expected one node request, got {}", requests.len()).into());
@@ -222,7 +223,7 @@ async fn the_nuts_token_is_cached() -> TestResult {
     for _ in 0..3 {
         assert_eq!(EndpointStatus::Active, query(&client).await?.status());
     }
-    assert_eq!(1, setup.authority.issued());
+    assert_eq!(1, setup.authority.issuance().issued());
     assert_eq!(1, setup.authority.definitions_served());
     Ok(())
 }
@@ -235,6 +236,7 @@ async fn a_refused_nuts_grant_fails_the_node() -> TestResult {
     let setup = setup().await?;
     setup
         .authority
+        .issuance()
         .refuse(400, "invalid_request", "the presentation was refused");
     let node = Server::start().await;
     answer_bound(&node, &setup.authority).await;
@@ -250,7 +252,7 @@ async fn a_refused_nuts_grant_fails_the_node() -> TestResult {
     for part in setup.credential.split('.') {
         assert!(!rendered.contains(part), "the failure names the credential");
     }
-    for form in setup.authority.forms() {
+    for form in setup.authority.issuance().forms() {
         for (name, value) in form {
             if name == "assertion" {
                 for part in value.split('.').filter(|part| part.len() > 8) {
@@ -270,7 +272,7 @@ async fn a_refused_nuts_grant_fails_the_node() -> TestResult {
 #[tokio::test]
 async fn a_slow_nuts_grant_fails_the_node() -> TestResult {
     let setup = setup().await?;
-    setup.authority.delay(Duration::from_secs(3));
+    setup.authority.issuance().delay(Duration::from_secs(3));
     let node = Server::start().await;
     answer_bound(&node, &setup.authority).await;
     let client = client(&node)?

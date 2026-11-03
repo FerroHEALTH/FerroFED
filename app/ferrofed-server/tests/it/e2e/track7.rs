@@ -20,7 +20,8 @@
 use ferrofed_engine::conveyance;
 use ferrofed_server::conformance::scenarios::track7;
 use ferrofed_testkit::containers::{self, TwoNodes};
-use ferrofed_testkit::oauth::{TokenEndpoint, Verdict};
+use ferrofed_testkit::issuance::Verdict;
+use ferrofed_testkit::oauth::TokenEndpoint;
 use ferrofed_testkit::proxy::Fault;
 use ferrofed_testkit::seed::PatientId;
 use http::{Request, StatusCode, header};
@@ -83,7 +84,7 @@ fn reached_as_the_gateway_for_the_caller(
                 .and_then(|value| value.strip_prefix("Bearer "))
                 .ok_or("CP-17: the node receives a bearer credential")?;
             assert!(
-                issuer.accepts(bearer),
+                issuer.issuance().accepts(bearer),
                 "CP-17: {endpoint} receives the token its token endpoint issued"
             );
             assert!(
@@ -131,6 +132,7 @@ async fn each_node_is_reached_with_its_onward_token_and_told_the_caller() -> Tes
     assert_eq!(2, reply.federated()?.rows.len(), "both nodes answered");
     assert!(
         issuer
+            .issuance()
             .verdicts()
             .iter()
             .all(|verdict| *verdict == Verdict::Issued),
