@@ -12,10 +12,9 @@ use crate::support::Support;
 use crate::{admin, binding, body, config, metrics};
 
 /// Reports the resolved configuration `settings`, its `cleartext`
-/// credentials, what a remote admin listener serves, every deprecated key
-/// it sets, every issuer that declares no assurance, an access log that
-/// declares no emergency purpose and a release past its support period, and
-/// exits.
+/// credentials, what a remote admin listener serves, every issuer that
+/// declares no assurance, an access log that declares no emergency purpose
+/// and a release past its support period, and exits.
 #[expect(
     clippy::print_stdout,
     reason = "`config check` answers the person or pipeline that ran it"
@@ -29,12 +28,6 @@ pub(super) fn config_checked(
     // support period says so to the operator who checks its configuration.
     if let Some(notice) = Support::current().notice(body::VERSION) {
         println!("ferrofed: warning: {notice}");
-    }
-    for key in &settings.deprecated {
-        println!(
-            "ferrofed: warning: {} is deprecated and read as {}; rename it, because FerroFED {} refuses it",
-            key.old, key.new, key.refused_in
-        );
     }
     for note in settings
         .server

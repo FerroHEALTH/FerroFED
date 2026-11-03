@@ -62,7 +62,7 @@ fn gateway(dir: &std::path::Path) -> Result<Router, Box<dyn Error>> {
     std::fs::write(&document, REGISTRY)?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n[server]\nreplica = \"{REPLICA}\"\n"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n[gateway]\nreplica = \"{REPLICA}\"\n"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
@@ -422,7 +422,7 @@ fn deployed(dir: &std::path::Path, text: &str) -> Result<Router, Box<dyn Error>>
 /// the test kit's fixed cross-reference.
 fn development(dir: &std::path::Path) -> Result<Router, Box<dyn Error>> {
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {{registry}}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n[server]\nreplica = \"{REPLICA}\"\n\n[[testkit.crossref]]\nnamespace = \"urn:oid:2.999.1\"\nvalue = \"synthetic-12345\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n"
+        "profile = \"development\"\n\n[registry]\ndocument = {{registry}}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n[gateway]\nreplica = \"{REPLICA}\"\n\n[[testkit.crossref]]\nnamespace = \"urn:oid:2.999.1\"\nvalue = \"synthetic-12345\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n"
     );
     deployed(dir, &text)
 }
@@ -487,7 +487,7 @@ async fn a_production_gateway_reports_production() -> TestResult {
     let dir = tempfile::tempdir()?;
     let report = deployment(deployed(
         dir.path(),
-        "profile = \"production\"\n\n[server]\nreplica = \"ferrofed-3\"\n",
+        "profile = \"production\"\n\n[gateway]\nreplica = \"ferrofed-3\"\n",
     )?)
     .await?;
     assert_eq!(DeploymentMode::Production, report.mode);

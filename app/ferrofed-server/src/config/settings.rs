@@ -108,9 +108,6 @@ pub struct Settings {
     pub revision_policy: crate::revision::policy::Policy,
     /// The installation report to `FerroPULSE`.
     pub usage_report: ferrohealth_usage_report::section::UsageReportSection,
-    /// The deprecated keys the configuration set, which `config check` and
-    /// the start-up log name.
-    pub deprecated: Vec<ferrohealth_config::loader::Deprecation>,
 }
 
 /// The gateway's signing keys, resolved.
@@ -481,14 +478,6 @@ impl Settings {
             bindings = bindings.join(","),
             "configuration resolved"
         );
-        for key in &self.deprecated {
-            tracing::warn!(
-                key = key.old,
-                replacement = key.new,
-                refused_in = key.refused_in,
-                "a deprecated configuration key is set"
-            );
-        }
         for binding in crate::binding::compiled() {
             binding.log_summary(self);
         }

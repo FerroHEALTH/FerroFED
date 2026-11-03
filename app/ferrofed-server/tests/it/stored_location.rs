@@ -44,7 +44,7 @@ const CLIENT_ORIGIN: &str = "http://gateway.test";
 /// The origin of the admin listener.
 const ADMIN_ORIGIN: &str = "http://127.0.0.1:9464";
 
-/// The `[server]` line that names [`PUBLIC`].
+/// The `[gateway]` line that names [`PUBLIC`].
 fn public_url() -> String {
     format!("public_url = \"{PUBLIC}\"")
 }
@@ -61,12 +61,12 @@ fn resolved(request: &str, location: &str) -> Result<Url, url::ParseError> {
 
 /// The client application and the admin listener's application of a gateway
 /// over three nodes that accept every definition, offering distribution,
-/// with `server` in its `[server]` table, and the nodes, which serve while
+/// with `gateway` in its `[gateway]` table, and the nodes, which serve while
 /// they are held.
-async fn both(dir: &Path, server: &str) -> Result<(Router, Router, [Server; 3]), Box<dyn Error>> {
+async fn both(dir: &Path, gateway: &str) -> Result<(Router, Router, [Server; 3]), Box<dyn Error>> {
     let (a, b, c) = (storing(200).await, storing(200).await, storing(200).await);
     let registry = three(&a, &b, &c);
-    let state = state_serving(dir, (&registry, "fan_out_stored_queries = true"), server)?;
+    let state = state_serving(dir, (&registry, "fan_out_stored_queries = true"), gateway)?;
     let client = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room());
     let access = Access::new(&crate::support::auth(), Profile::Production, Vec::new());
     Ok((client, admin::router(state, access), [a, b, c]))

@@ -32,31 +32,11 @@ pub fn loader() -> Result<Loader, Error> {
         file: None,
         source: Box::new(source),
     };
-    let loader = Loader::new(PREFIX)
+    Loader::new(PREFIX)
         .map_err(fault)?
         .defaults("server", &crate::config::server::defaults())
-        .map_err(fault)?;
-    Ok(RENAMED.iter().fold(loader, |loader, (old, new)| {
-        loader.rename(*old, *new, REFUSED_IN)
-    }))
+        .map_err(fault)
 }
-
-/// The keys this release reads under their old names, each as the old and
-/// the new dotted key: `[server]` became the section of
-/// `ferrohealth-server`, and the gateway's own keys moved to `[gateway]`
-/// (#1408).
-pub const RENAMED: &[(&str, &str)] = &[
-    ("server.public_url", "gateway.public_url"),
-    ("server.replica", "gateway.replica"),
-    (
-        "server.bindings_drain_timeout_ms",
-        "gateway.bindings_drain_timeout_ms",
-    ),
-    ("server.overload_retry_after_s", "server.retry_after_s"),
-];
-
-/// The release that refuses the old keys of [`RENAMED`].
-pub const REFUSED_IN: &str = "0.0.16";
 
 /// The dotted key whose source decides whether the drain follows the
 /// request timeout ([`Config::shutdown_timeout_written`]).
@@ -127,18 +107,15 @@ impl Config {
             .and_then(checked)
     }
 
-    /// Resolves the configuration `loaded` holds, with every renamed key it
-    /// still set under its old name, which `config check` and the start-up
-    /// log name.
+    /// Resolves the configuration `loaded` holds, knowing which of its
+    /// sources set `server.shutdown_timeout_ms`.
     ///
     /// # Errors
     /// Every error [`Config::resolve`] returns.
     pub fn resolve_loaded(loaded: &Loaded<Self>) -> Result<Settings, Error> {
         let mut config = loaded.settings().clone();
         config.shutdown_timeout_written = shutdown_written(loaded);
-        let mut settings = config.resolve()?;
-        settings.deprecated = loaded.deprecations().to_vec();
-        Ok(settings)
+        config.resolve()
     }
 }
 

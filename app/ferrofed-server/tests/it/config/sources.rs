@@ -6,7 +6,6 @@
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::config::error::Error;
 use ferrofed_server::config::error::server::ServerFault;
-use ferrofed_server::config::public_url::PublicUrl;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::{COMBINING_MARGIN_MS, Config};
 use ferrohealth_telemetry::section::Format;
@@ -16,7 +15,7 @@ use std::error::Error as StdError;
 use std::num::NonZeroU32;
 use std::time::Duration;
 
-use super::{FULL, env, federating, refusal};
+use super::{FULL, env, everything, federating, refusal};
 
 #[test]
 #[expect(
@@ -240,57 +239,30 @@ fn a_request_timeout_past_the_budget_and_the_margin_is_accepted() -> Result<(), 
     Ok(())
 }
 
-/// The keys `[server]` gave up to the shared section are read under their
-/// new names for one release, and `config check` and the start-up log name
-/// each one.
+/// The keys `[server]` gave up to `[gateway]` and to the shared section are
+/// read under their new names only: each old one is an unknown key, refused
+/// with its name (#1490).
 #[test]
 #[expect(
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
 )]
-fn a_key_from_the_old_server_table_is_read_under_its_new_name() -> Result<(), Box<dyn StdError>> {
-    let loaded = Config::loaded_from_sources(
-        Some(
-            "[server]\npublic_url = \"https://gateway.example.org\"\nreplica = \"gateway-eu-1\"\nbindings_drain_timeout_ms = 8000\noverload_retry_after_s = 3\n",
+fn a_key_from_the_old_server_table_is_refused_by_its_name() -> Result<(), Box<dyn StdError>> {
+    for (line, key) in [
+        ("public_url = \"https://gateway.example.org\"", "public_url"),
+        ("replica = \"gateway-eu-1\"", "replica"),
+        (
+            "bindings_drain_timeout_ms = 8000",
+            "bindings_drain_timeout_ms",
         ),
-        &BTreeMap::new(),
-    )?;
-    let settings = Config::resolve_loaded(&loaded)?;
-    assert_eq!(
-        Some("https://gateway.example.org"),
-        settings.server.public_url.as_ref().map(PublicUrl::as_str)
-    );
-    assert_eq!("gateway-eu-1", settings.server.replica.as_str());
-    assert_eq!(Duration::from_secs(8), settings.server.bindings_drain);
-    assert_eq!(Duration::from_secs(3), settings.server.overload.retry_after);
-    let renamed: Vec<(&str, &str)> = settings
-        .deprecated
-        .iter()
-        .map(|key| (key.old.as_str(), key.new.as_str()))
-        .collect();
-    assert_eq!(
-        vec![
-            ("server.public_url", "gateway.public_url"),
-            ("server.replica", "gateway.replica"),
-            (
-                "server.bindings_drain_timeout_ms",
-                "gateway.bindings_drain_timeout_ms"
-            ),
-            ("server.overload_retry_after_s", "server.retry_after_s"),
-        ],
-        renamed
-    );
-    let both = Config::from_sources(
-        Some("[server]\nreplica = \"a\"\n\n[gateway]\nreplica = \"b\"\n"),
-        &BTreeMap::new(),
-    );
-    assert!(
-        matches!(
-            &both,
-            Err(Error::Load { source, .. })
-                if matches!(source.as_ref(), ferrohealth_config::error::ConfigError::Renamed { .. })
-        ),
-        "an old key beside its new one is refused: {both:?}"
-    );
+        ("overload_retry_after_s = 3", "overload_retry_after_s"),
+    ] {
+        let error = refusal(&format!("[server]\n{line}\n"))?;
+        let shown = everything(&error);
+        assert!(
+            shown.contains(key),
+            "server.{key} is refused by its name: {shown}"
+        );
+    }
     Ok(())
 }

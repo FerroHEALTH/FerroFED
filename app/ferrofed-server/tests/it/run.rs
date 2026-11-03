@@ -129,6 +129,36 @@ fn the_binary_refuses_to_boot_on_an_unknown_key_and_on_a_doubly_set_secret()
     Ok(())
 }
 
+/// `config check` refuses each key `[server]` gave up, by its name, as it
+/// does any unknown key (#1490).
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn config_check_refuses_a_key_from_the_old_server_table_by_its_name()
+-> Result<(), Box<dyn StdError>> {
+    for (line, key) in [
+        ("public_url = \"https://gateway.example.org\"", "public_url"),
+        ("replica = \"gateway-eu-1\"", "replica"),
+        (
+            "bindings_drain_timeout_ms = 8000",
+            "bindings_drain_timeout_ms",
+        ),
+        ("overload_retry_after_s = 3", "overload_retry_after_s"),
+    ] {
+        let output = binary(&["config", "check"], &format!("[server]\n{line}\n"))?;
+        assert_eq!(
+            Some(i32::from(EXIT_CONFIG)),
+            output.status.code(),
+            "config check refuses server.{key}"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(key), "config check names {key}: {stderr}");
+    }
+    Ok(())
+}
+
 /// §11.5: `serve` and `config check` both refuse a request timeout that does
 /// not exceed the overall fan-out budget plus the combining margin.
 #[test]
