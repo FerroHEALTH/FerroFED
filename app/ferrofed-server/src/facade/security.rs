@@ -21,14 +21,7 @@ use openehr_federation::aql::PatientQuery;
 use openehr_federation::aql::refusal::Refusal;
 
 use crate::metrics::security::Event;
-
-/// The tracing target of every security event, so an operator can route them
-/// apart from the request log.
-pub const TARGET: &str = "ferrofed::security";
-
-/// The directive the console writes the security events through whatever
-/// `telemetry.filter` says: [`TARGET`] at `info` and above.
-pub const DIRECTIVE: &str = "ferrofed::security=info";
+use crate::security::TARGET;
 
 /// A query was refused before anything was dispatched (§5.4.3).
 pub(crate) fn refused(refusal: &Refusal, request_id: &str) {

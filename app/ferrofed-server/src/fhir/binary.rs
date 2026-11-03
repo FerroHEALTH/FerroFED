@@ -51,9 +51,6 @@ use crate::error::Code;
 use crate::facade::native::{self, Chosen, Native};
 use crate::federation::Federation;
 
-/// The path prefix of a member's document under `{fhir-base}`.
-pub(super) const BINARY: &str = "/Binary/";
-
 /// The route of a member's document under `{fhir-base}`.
 pub(super) const ROUTE: &str = "/Binary/{token}";
 

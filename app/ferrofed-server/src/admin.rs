@@ -462,7 +462,7 @@ impl Running {
         // NOTE: no specification governs this: our own design; tracing returns no error,
         // so the record cannot refuse the action, and the security target is never filtered.
         tracing::info!(
-            target: crate::facade::security::TARGET,
+            target: crate::security::TARGET,
             event = Event::AdminWriteAdmitted.as_str(),
             issuer = operator.issuer(),
             subject = operator.subject(),
@@ -490,7 +490,7 @@ impl Drop for Running {
             |status| status.as_u16().to_string(),
         );
         tracing::info!(
-            target: crate::facade::security::TARGET,
+            target: crate::security::TARGET,
             event = FINISHED,
             issuer = self.operator.issuer(),
             subject = self.operator.subject(),
@@ -525,7 +525,7 @@ fn refuse(access: &Access, refusal: AdminRefusal, headers: &HeaderMap) -> Respon
         AdminRefusal::Scrape(_) => None,
     };
     tracing::warn!(
-        target: crate::facade::security::TARGET,
+        target: crate::security::TARGET,
         event = refusal.event().as_str(),
         reason = refusal.reason(),
         check,

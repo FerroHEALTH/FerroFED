@@ -321,7 +321,7 @@ fn with_tls(listener: Listener, tls: Option<Arc<ReloadableTls>>) -> Listener {
 /// Returns the [`InitError`] of a security directive that does not parse,
 /// which a build never holds.
 fn console(stdout_is_terminal: bool) -> Result<Console, InitError> {
-    let security = Filter::new(crate::facade::security::DIRECTIVE)?;
+    let security = Filter::new(crate::security::DIRECTIVE)?;
     Ok(Console::new(stdout_is_terminal, std::env::var_os("NO_COLOR").as_deref()).force(security))
 }
 

@@ -15,6 +15,7 @@
 //! stays unserved.
 
 mod build;
+pub mod describe;
 pub mod error;
 pub mod registry;
 
@@ -430,7 +431,7 @@ impl Federation {
             jiff::Timestamp::now(),
         );
         tracing::info!(
-            target: crate::facade::security::TARGET,
+            target: crate::security::TARGET,
             format_version = export.format_version,
             learned_creating_systems = export.learned_creating_systems.len(),
             "the operator exported this process's routing state"

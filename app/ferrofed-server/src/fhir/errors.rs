@@ -14,7 +14,8 @@ use http::{Method, StatusCode, header};
 
 use crate::state::AppState;
 
-use super::{classify, outcome};
+use super::outcome;
+use crate::face_path::classify;
 
 /// The largest error body the face rewrites as an `OperationOutcome`; the
 /// gateway's own error bodies are far smaller.

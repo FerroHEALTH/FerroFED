@@ -20,7 +20,7 @@ use ihe_iti::pmir::feed::{EventKind, Feed, ResponseId, refusal};
 
 use crate::auth::trust::Trust;
 use crate::binding::ihe::metrics::FeedResult;
-use crate::facade::security::TARGET;
+use crate::security::TARGET;
 use crate::state::AppState;
 
 /// The media type of every FHIR answer the route gives (ITI TF-2 Appendix

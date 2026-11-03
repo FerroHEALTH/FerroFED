@@ -27,7 +27,7 @@ use crate::binding::{self, Role};
 use crate::config::NodeSelection;
 use crate::config::auth::PatientBinding;
 use crate::config::settings::{ConsentDisclosure, Scheme, Settings};
-use crate::facade::options;
+use crate::federation::describe;
 use crate::health::dependencies::Dependencies;
 use crate::localization::{self, LocalizationPolicy};
 use crate::metrics::nodes::NodeRequests;
@@ -216,7 +216,7 @@ impl Federation {
             documents,
             access,
         };
-        options::describe(&federation, false).map_err(FederationError::Describe)?;
+        describe::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
     }
 

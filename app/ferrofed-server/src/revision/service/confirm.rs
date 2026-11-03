@@ -288,7 +288,7 @@ fn unconfirmed(current: &Current) -> String {
 /// `revision`.
 fn recorded(unconfirmed: RevisionId, revision: &Revision) {
     tracing::warn!(
-        target: crate::facade::security::TARGET,
+        target: crate::security::TARGET,
         event = UNCONFIRMED,
         unconfirmed = %unconfirmed,
         revision = %revision.id,

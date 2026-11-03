@@ -89,14 +89,6 @@ use crate::facade::subject::unserved::Unserved;
 use crate::facade::{confined, consent};
 use crate::federation::Federation;
 
-/// The ITS-REST operation that reads an EHR by its subject.
-const OPERATION: &str = "ehr_get_by_subject";
-
-/// Whether `matched` is `GET {base}/v1/ehr`, the read of an EHR by subject.
-pub(crate) fn serves(matched: &RouteMatch) -> bool {
-    matched.operation_id == OPERATION
-}
-
 /// The namespace and the identifier of the patient the read of an EHR by
 /// subject `matched` names in `query`, read by the decoder [`serve`]
 /// resolves the subject with, or `None` when that decoder refuses the query

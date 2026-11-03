@@ -611,7 +611,7 @@ pub(super) async fn store_query(
     match inserted {
         Ok(Ok(Insertion::Stored)) => {
             tracing::info!(
-                target: crate::facade::security::TARGET,
+                target: crate::security::TARGET,
                 event = STORED,
                 name = definition.name().as_str(),
                 version = %definition.version(),

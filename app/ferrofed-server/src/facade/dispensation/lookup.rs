@@ -162,7 +162,7 @@ fn face_id<'r>(reference: &'r str, base: &str) -> Option<&'r str> {
         .and_then(|rest| rest.strip_prefix('/'))
         .unwrap_or(reference);
     let id = relative.strip_prefix(RESOURCE)?.strip_prefix('/')?;
-    crate::fhir::locator::is_fhir_id(id).then_some(id)
+    crate::face_path::is_fhir_id(id).then_some(id)
 }
 
 #[cfg(test)]

@@ -44,13 +44,11 @@ use axum::routing::{MethodRouter, get, post};
 use ferrofed_eehrxf::face::{self, FHIR_JSON, SummaryRequest};
 use ferrofed_eehrxf::receive::Receivers;
 use ferrofed_eehrxf::serving::Serving;
-use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily};
-use http::{HeaderValue, Method, StatusCode, Uri, header};
+use http::{HeaderValue, StatusCode, Uri, header};
 use serde::Serialize;
 
 use crate::access::NoAccess;
-use crate::auth::permission::{Requirement, Resource};
-use crate::config::fhir::FhirSettings;
+use crate::face_path::{BUNDLE, DOCUMENTS, METADATA, PATIENTS, SUMMARY};
 use crate::fhir::admission::Asked;
 use crate::state::AppState;
 
@@ -62,24 +60,6 @@ pub mod locator;
 mod lookup;
 pub mod medication;
 mod patient_summary;
-
-/// The path of the summary operation under `{fhir-base}`.
-pub const SUMMARY: &str = "/Patient/$summary";
-
-/// The path of the capability statement under `{fhir-base}`.
-pub const METADATA: &str = "/metadata";
-
-/// The path a document in the exchange format is received at under
-/// `{fhir-base}`, the `Bundle` end-point of FHIR R4 documents §3.3.4.
-pub const BUNDLE: &str = "/Bundle";
-
-/// The path of the document list under `{fhir-base}`, the
-/// `DocumentReference` search-type interaction.
-pub const DOCUMENTS: &str = "/DocumentReference";
-
-/// The path of the patient lookup under `{fhir-base}`, the `Patient`
-/// search-type interaction.
-pub const PATIENTS: &str = "/Patient";
 
 /// The product name the document's author `Device` and the capability
 /// statement carry.
@@ -105,22 +85,25 @@ fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 12] {
         (BUNDLE, post(bundle_post)),
         (DOCUMENTS, get(list::documents)),
         (binary::ROUTE, get(binary::read)),
-        (medication::PRESCRIPTIONS, get(medication::search::search)),
-        (medication::PRESCRIPTION, get(medication::read::read)),
         (
-            medication::PRESCRIPTION_VERSION,
+            crate::face_path::PRESCRIPTIONS,
+            get(medication::search::search),
+        ),
+        (crate::face_path::PRESCRIPTION, get(medication::read::read)),
+        (
+            crate::face_path::PRESCRIPTION_VERSION,
             get(medication::read::vread),
         ),
         (
-            medication::DISPENSATIONS,
+            crate::face_path::DISPENSATIONS,
             post(medication::dispense::dispense),
         ),
         (
-            medication::DISPENSATION,
+            crate::face_path::DISPENSATION,
             get(medication::read::read_dispensation).put(medication::withdraw::withdraw),
         ),
         (
-            medication::DISPENSATION_VERSION,
+            crate::face_path::DISPENSATION_VERSION,
             get(medication::read::vread_dispensation),
         ),
     ]
@@ -136,132 +119,6 @@ pub fn routes() -> Router<Arc<AppState>> {
         // NOTE: no specification governs this: our own design; every other path under
         // `{fhir-base}` is a `404` naming the paths the face serves, never the path asked for.
         .fallback(|| async { outcome(StatusCode::NOT_FOUND, "not-found", &UNSERVED) })
-}
-
-/// What a path under the face addresses, as the gate reads it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FacePath {
-    /// `{fhir-base}/metadata`, exactly.
-    Metadata,
-    /// `{fhir-base}/Patient`, exactly.
-    Patients,
-    /// `{fhir-base}/Patient/$summary`, exactly.
-    Summary,
-    /// `{fhir-base}/Bundle`, exactly.
-    Bundle,
-    /// `{fhir-base}/DocumentReference`, exactly.
-    Documents,
-    /// `{fhir-base}/Binary/{token}`, its token one segment of the compact
-    /// JWS alphabet.
-    Binary,
-    /// A path of the electronic prescriptions and dispensations, exactly.
-    Medication(medication::Addressed),
-    /// Any other path under the base, a variant of a path the face's route
-    /// table (`table`) names included: another letter case, a
-    /// percent-encoded character, a trailing or a doubled slash.
-    Other,
-}
-
-/// What `path`, the raw request path, addresses under the face `fhir`
-/// serves, or `None` for a path outside it.
-///
-/// A path is under the face when its letters, ASCII case ignored, start
-/// with the base, so a variant of the base is never read as a path outside
-/// the face; only the paths of the face's route table (`table`) are named,
-/// and every other one is [`FacePath::Other`], which the gate refuses.
-#[must_use]
-pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
-    let base = fhir.base.as_str().to_ascii_lowercase();
-    let folded = path.to_ascii_lowercase();
-    let under = folded == base
-        || folded
-            .strip_prefix(base.as_str())
-            .is_some_and(|rest| rest.starts_with('/') || rest.starts_with('%'));
-    if !under {
-        return None;
-    }
-    Some(if path == fhir.base.join(METADATA) {
-        FacePath::Metadata
-    } else if path == fhir.base.join(PATIENTS) {
-        FacePath::Patients
-    } else if path == fhir.base.join(SUMMARY) {
-        FacePath::Summary
-    } else if path == fhir.base.join(BUNDLE) {
-        FacePath::Bundle
-    } else if path == fhir.base.join(DOCUMENTS) {
-        FacePath::Documents
-    } else if is_binary(fhir, path) {
-        FacePath::Binary
-    } else if let Some(addressed) = medication::addressed(fhir, path) {
-        FacePath::Medication(addressed)
-    } else {
-        FacePath::Other
-    })
-}
-
-/// Whether `path` is `{fhir-base}/Binary/{token}`, the token one segment
-/// of the compact JWS alphabet (RFC 7515 §7.1).
-fn is_binary(fhir: &FhirSettings, path: &str) -> bool {
-    path.strip_prefix(fhir.base.join(binary::BINARY).as_str())
-        .is_some_and(|token| {
-            !token.is_empty()
-                && token
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-        })
-}
-
-/// Returns what a request of `method` to `face` requires at the gate.
-///
-/// The capability statement takes a verified caller, a `GET` of the patient
-/// lookup the `composition-` read of every template, a `GET` or `POST` of a
-/// summary, a `GET` of the document list or of a listed document the `aql-` search of every
-/// section query, a `POST` of a document
-/// the `composition-` create of every template, a prescription or
-/// dispensation path what [`medication::requirement`] says, and every other
-/// method and path is refused, so no variant of a path is let through on a
-/// weaker requirement.
-#[must_use]
-pub fn requirement(face: FacePath, method: &Method) -> Requirement {
-    match face {
-        FacePath::Medication(addressed) => medication::requirement(addressed, method),
-        FacePath::Metadata if matches!(*method, Method::GET | Method::HEAD) => Requirement::Caller,
-        // NOTE: no specification governs the scope of the FHIR face: our own design; a
-        // summary runs the section queries, so it takes the `aql-` search of each.
-        FacePath::Summary if matches!(*method, Method::GET | Method::POST) => Requirement::Scope {
-            family: ResourceFamily::Aql,
-            permission: Permission::Search,
-            resource: Resource::Sections,
-        },
-        // NOTE: no specification governs this: our own design; the list names the summary
-        // and carries the members' own ones, so it takes what a summary takes.
-        FacePath::Documents | FacePath::Binary if *method == Method::GET => Requirement::Scope {
-            family: ResourceFamily::Aql,
-            permission: Permission::Search,
-            resource: Resource::Sections,
-        },
-        // NOTE: SMART on openEHR master08 §Resource Scopes; the lookup finds whether members hold
-        // the patient's EHRs, as `GET /ehr?subject_id=` does, so it takes what that read takes.
-        FacePath::Patients if *method == Method::GET => Requirement::Scope {
-            family: ResourceFamily::Composition,
-            permission: Permission::Read,
-            resource: Resource::Unnamed,
-        },
-        // NOTE: SMART on openEHR master08 §Resource Scopes; a received document is written as
-        // a composition whose template the body decides, so only a create of every one covers it.
-        FacePath::Bundle if *method == Method::POST => Requirement::Scope {
-            family: ResourceFamily::Composition,
-            permission: Permission::Create,
-            resource: Resource::Unnamed,
-        },
-        FacePath::Metadata
-        | FacePath::Patients
-        | FacePath::Summary
-        | FacePath::Bundle
-        | FacePath::Documents
-        | FacePath::Binary
-        | FacePath::Other => Requirement::Refused,
-    }
 }
 
 /// `GET {fhir-base}/metadata`: the face's `CapabilityStatement`, with the
