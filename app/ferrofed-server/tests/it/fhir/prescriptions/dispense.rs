@@ -611,3 +611,22 @@ async fn a_dispensation_with_no_owner_is_counted_with_no_value() -> TestResult {
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn a_dispensation_with_no_business_identifier_is_refused_naming_the_element() -> TestResult {
+    let members = members((&[RX_A], &[RX_B]), created()).await?;
+    let dir = tempfile::tempdir()?;
+    let unidentified = dispensation(BY_IDENTIFIER).replace(
+        &format!(
+            r#"  "identifier":[{{"system":"{DISPENSATION_SYSTEM}","value":"{DISPENSATION_VALUE}"}}],
+"#
+        ),
+        "",
+    );
+    assert!(!unidentified.contains(DISPENSATION_VALUE));
+    let (status, text) = call(gateway(&members, dir.path())?, post(&unidentified)?).await?;
+    assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
+    assert!(text.contains("MedicationDispense.identifier"), "{text}");
+    assert!(none_written(&members).await?);
+    Ok(())
+}
