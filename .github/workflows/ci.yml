@@ -354,6 +354,32 @@ jobs:
       - name: The duplicated lines have not risen
         run: bash scripts/checks/duplication.sh
 
+  # The forwarder ratchet (#1484, carried from FerroHEALTH/FerroEHR#4663): the
+  # functions tools/forwarders finds in app/*/src, crates/*/src and
+  # tools/*/src whose whole body forwards to one other call may fall and never
+  # rise (no specification governs this: our own design). The count and the
+  # key of every counted forwarder are committed beside the guard. A rise
+  # fails and names each new forwarder with its target; a fall passes, and
+  # ratchet-tighten.yml lowers the count on main. No build cache: the tool
+  # builds proc-macro2, quote and syn alone.
+  forwarders:
+    name: forwarders
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: "false"
+      - name: Forwarder ratchet self-test
+        run: bash scripts/checks/forwarders.sh --self-test
+      - name: The forwarders have not risen
+        run: bash scripts/checks/forwarders.sh
+
   # The version-drift guard. It compares every present config file against
   # docs/VERSIONS.md and skips loudly for the files that have not landed yet,
   # so it is useful now and grows teeth as files appear. The self-tests of
@@ -1619,6 +1645,7 @@ jobs:
       - stray-literals
       - file-length
       - duplication
+      - forwarders
       - versions
       - favicon-sync
       - copyright-holder

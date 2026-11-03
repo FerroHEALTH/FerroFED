@@ -89,6 +89,13 @@ ferrofed-testkit = { path = "tools/ferrofed-testkit" }
 # (the anyhow docs.rs page, comparison to thiserror); every library crate
 # speaks thiserror.
 anyhow = "1.0.104"
+# The forwarder ratchet (tools/forwarders) parses the hand-written Rust;
+# `span-locations` gives a parsed span its line outside a proc macro.
+# Checked against crates.io on 2026-11-03; syn holds the 3.0.6 the lockfile
+# already resolves (3.0.9 is the newest).
+syn = { version = "3.0.6", default-features = false, features = ["full", "parsing", "printing"] }
+proc-macro2 = { version = "1.0.107", default-features = false, features = ["span-locations"] }
+quote = { version = "1.0.47", default-features = false }
 thiserror = "2.0.21"
 clap = { version = "4.6.7", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }

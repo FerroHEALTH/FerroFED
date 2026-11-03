@@ -234,12 +234,14 @@ Today:
   `CHANGELOG.md` at the cut by `scripts/release/changelog.sh --assemble`.
 - `scripts/checks/`: the committed guards CI tier 1 runs (comment style, file
   length, duplication, versions, copyright holder, conformance matrix,
-  obligations, e2e placement and the rest), each runnable by hand. Two are
+  obligations, e2e placement and the rest), each runnable by hand. Three are
   ratchets that only tighten (#1463): `file-length.sh` holds a hand-written
   Rust file or book page to 1000 lines and a listed one to its recorded
-  length, and `duplication.sh` holds the duplicated lines jscpd measures to
-  `duplication.count`; a fall passes with a note and `ratchet-tighten.yml`
-  lowers the counts on `main` (#1467).
+  length, `duplication.sh` holds the duplicated lines jscpd measures to
+  `duplication.count`, and `forwarders.sh` holds the functions that only
+  forward to another call, which `tools/forwarders` finds, to
+  `forwarders.count` (#1484); a fall passes with a note and
+  `ratchet-tighten.yml` lowers the counts on `main` (#1467).
 - `scripts/conformance/`: the matrix, obligations and per-run report
   (`report.sh`) scripts.
 - `scripts/release/`: the changelog assembly, the crates.io lane, the
@@ -393,6 +395,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   (`national_connector`, #735), with a mutual-TLS front. Its test binary also holds
   the operator console's browser journeys behind the `FERROFED_JOURNEYS` gate
   (#608): headless Chrome over WebDriver against a running gateway and console.
+- `tools/forwarders`: the forwarder ratchet's detector; never published.
+  It parses the hand-written Rust with `syn` and lists every function whose
+  whole body forwards to one other call, for `scripts/checks/forwarders.sh`.
 - The root `Cargo.toml` carries the lint set, the release profile, the
   `openehr-*` family as one pin group and the `publish` switch; `deny.toml`,
   `clippy.toml`, `rustfmt.toml` and `rust-toolchain.toml` sit beside it.
