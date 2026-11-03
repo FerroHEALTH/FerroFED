@@ -34,7 +34,7 @@ use http::Method;
 use openehr_its::rest::routes::{self, Lookup};
 
 use crate::ITS_REST_PREFIX;
-use crate::base_path::BasePath;
+use crate::config::base_path::BasePath;
 
 /// The query parameters whose values may reach the log.
 ///

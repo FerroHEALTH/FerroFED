@@ -14,7 +14,7 @@
 
 use url::Url;
 
-use crate::base_path::BasePath;
+use crate::config::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::error::server::ServerFault;
 
@@ -109,7 +109,7 @@ impl PublicUrl {
 #[cfg(test)]
 mod tests {
     use super::PublicUrl;
-    use crate::base_path::BasePath;
+    use crate::config::base_path::BasePath;
     use crate::config::error::Error;
     use crate::config::error::server::ServerFault;
 

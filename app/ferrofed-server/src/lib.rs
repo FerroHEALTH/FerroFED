@@ -15,7 +15,7 @@
 //! `serve` prints the [`banner`] before the subscriber starts. `main.rs` only
 //! hands in the arguments and returns the exit code.
 //!
-//! Every route sits under the configured base path ([`base_path`]; §4.1,
+//! Every route sits under the configured base path ([`config::base_path`]; §4.1,
 //! N28). The ITS-REST façade serves the federated query,
 //! `POST {base}/v1/query/aql` and its `GET` form ([`facade`], §7), and routes every request to
 //! an EHR resource under a path `ehr_id`, the creation of an EHR, and every
@@ -68,7 +68,6 @@ pub mod admission;
 pub mod audit;
 pub mod auth;
 pub mod banner;
-pub mod base_path;
 pub mod binding;
 pub mod body;
 pub mod cli;

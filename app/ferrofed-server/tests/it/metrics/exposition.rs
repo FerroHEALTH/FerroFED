@@ -115,7 +115,7 @@ async fn an_otlp_push_shares_the_provider_and_leaves_the_exposition_whole() -> T
             Service::new(SCOPE, VERSION),
         )?),
         ferrofed_server::usage_report::group::window(
-            ferrofed_server::base_path::BasePath::default(),
+            ferrofed_server::config::base_path::BasePath::default(),
             None,
         ),
     );

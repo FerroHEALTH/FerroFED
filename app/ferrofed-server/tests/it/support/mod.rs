@@ -182,7 +182,7 @@ pub(crate) fn toml_path(path: &Path) -> toml::Value {
 pub(crate) fn settings() -> ServerSettings {
     ServerSettings {
         listen: std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
-        base_path: ferrofed_server::base_path::BasePath::default(),
+        base_path: ferrofed_server::config::base_path::BasePath::default(),
         public_url: None,
         trusted_proxies: Vec::new(),
         forwarded_header: ferrohealth_server::client_address::ForwardedHeader::default(),

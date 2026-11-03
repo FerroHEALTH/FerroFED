@@ -70,7 +70,7 @@ use openehr_its::rest::routes::{self, Lookup};
 use secrecy::SecretString;
 
 use crate::auth::caller::Caller;
-use crate::base_path::BasePath;
+use crate::config::base_path::BasePath;
 use crate::error::{self, Code};
 use crate::metrics::security::Event;
 use crate::request_id;

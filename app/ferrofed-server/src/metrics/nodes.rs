@@ -113,7 +113,7 @@ impl Instruments {
             ),
             overload: overload(meter),
             usage: Arc::new(crate::usage_report::group::window(
-                crate::base_path::BasePath::default(),
+                crate::config::base_path::BasePath::default(),
                 None,
             )),
         }

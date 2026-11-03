@@ -15,7 +15,7 @@ use ferrohealth_server::section::{ClientAuth, ServerSection, TlsSection, TlsVers
 use ferrohealth_server::tls::{HealthcheckTls, TlsKeys, server_config_of};
 use serde::Deserialize;
 
-use crate::base_path::BasePath;
+use crate::config::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::error::server::ServerFault;
 
