@@ -162,8 +162,9 @@ impl Unsummarised {
     }
 }
 
-/// The silent members `silent` names, for a message.
-fn named(silent: &[(String, String)]) -> String {
+/// The silent members `silent` names, each with its §11.1 status, for a
+/// message.
+pub(crate) fn named(silent: &[(String, String)]) -> String {
     silent
         .iter()
         .map(|(endpoint, status)| format!("{endpoint} ({status})"))
