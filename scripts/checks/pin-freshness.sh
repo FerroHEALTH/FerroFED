@@ -156,15 +156,62 @@ OpenNCP Transformation Manager resources	ehdsi/ehealth	v	-"
 # stale only once a later RFC obsoletes it.
 readonly RFC_INDEX=https://www.rfc-editor.org/rfc
 
-# One "matrix label<TAB>W3C shortname<TAB>hold" record per line: a dated W3C
-# publication, read against the newest version of its specification the W3C
-# API lists.
+# One "matrix label<TAB>W3C shortname<TAB>hold<TAB>lag" record per line: a
+# dated W3C publication, read against the newest version of its
+# specification the W3C API lists. A lag (`-` for none) is the days a newer
+# dated version may be ahead of the pin before the pin is stale. DID
+# Resolution 1.0 has one of 90 days, the rule FerroPIX holds the same draft
+# to: W3C republishes its Candidate Recommendation Draft almost daily, and
+# nothing here cites a section of it, so a weekly issue for each draft would
+# be noise.
 readonly W3C_API=https://api.w3.org/specifications
 readonly WATCHED_W3C="\
-W3C Verifiable Credentials Data Model 1.1	vc-data-model	the version the pinned Netherlands Generic Functions IG cites
-W3C Decentralized Identifiers 1.0	did-core	-
-W3C DID Resolution 1.0	did-resolution	-
-W3C Bitstring Status List 1.0	vc-bitstring-status-list	-"
+W3C Verifiable Credentials Data Model 1.1	vc-data-model	the version the pinned Netherlands Generic Functions IG cites	-
+W3C Decentralized Identifiers 1.0	did-core	-	-
+W3C DID Resolution 1.0	did-resolution	-	90
+W3C Bitstring Status List 1.0	vc-bitstring-status-list	-	-"
+
+# day_number DATE: the day count of the YYYY-MM-DD DATE in the proleptic
+# Gregorian calendar, for a difference in days; nothing for text that is no
+# date.
+day_number() {
+  awk -v date="$1" '
+    BEGIN {
+      if (date !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) exit
+      split(date, part, "-"); y = part[1] + 0; m = part[2] + 0; d = part[3] + 0
+      if (m < 1 || m > 12 || d < 1 || d > 31) exit
+      if (m <= 2) y -= 1
+      era = int(y / 400); yoe = y - era * 400
+      doy = int((153 * (m > 2 ? m - 3 : m + 9) + 2) / 5) + d - 1
+      doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
+      print era * 146097 + doe
+    }'
+}
+
+# w3c_date URL: the date a dated W3C publication URL ends in, as
+# YYYY-MM-DD; nothing for a URL that names no date.
+w3c_date() {
+  sed -nE 's|^https://www\.w3\.org/TR/[0-9]{4}/[A-Za-z]+-.*-([0-9]{4})([0-9]{2})([0-9]{2})/?$|\1-\2-\3|p' <<< "$1"
+}
+
+# w3c_verdict PINNED LATEST HOLD LAG: how the pinned publication reads
+# against the newest one, `current`, `held`, `lagging <days>` (newer by no
+# more than LAG days) or `stale`.
+w3c_verdict() {
+  local pinned="$1" latest="$2" hold="$3" lag="$4" from to
+  if [[ "$pinned" = "$latest" ]]; then
+    echo current
+  elif [[ "$hold" != "-" ]]; then
+    echo held
+  elif [[ "$lag" =~ ^[0-9]+$ ]] \
+    && from="$(day_number "$(w3c_date "$pinned")")" && [[ -n "$from" ]] \
+    && to="$(day_number "$(w3c_date "$latest")")" && [[ -n "$to" ]] \
+    && (( to - from <= lag )); then
+    echo "lagging $(( to - from ))"
+  else
+    echo stale
+  fi
+}
 
 # One "vendor script<TAB>reason" record per line: a script whose corpus rows
 # no reader above watches, with the reason none is needed. The self-test
@@ -528,6 +575,21 @@ self_test() {
   rmdir "$work"
   got="$(unwatched_rows "$MATRIX" | paste -sd ';' -)"
   expect "" "$got" "the corpus rows of $MATRIX with no reader and no recorded reason"
+  expect 1 "$(( $(day_number 2026-03-01) - $(day_number 2026-02-28) ))" "the day after the end of February"
+  expect 366 "$(( $(day_number 2025-01-01) - $(day_number 2024-01-01) ))" "a leap year"
+  expect "" "$(day_number nightly)" "text that is no date"
+  local did=https://www.w3.org/TR/2026/CRD-did-resolution-1.0-20261026/
+  expect 2026-10-26 "$(w3c_date "$did")" "the date of a dated W3C publication"
+  expect "" "$(w3c_date https://www.w3.org/TR/did-resolution/)" "an undated W3C URL"
+  expect current "$(w3c_verdict "$did" "$did" - 90)" "the pinned W3C publication is the newest"
+  expect "lagging 1" "$(w3c_verdict "$did" "${did/20261026/20261027}" - 90)" "a draft one day newer, within the lag"
+  expect "lagging 90" "$(w3c_verdict "$did" "${did/20261026/20270124}" - 90)" "a draft exactly the lag newer"
+  expect stale "$(w3c_verdict "$did" "${did/20261026/20270125}" - 90)" "a draft past the lag"
+  expect stale "$(w3c_verdict "$did" "${did/20261026/20261027}" - -)" "a newer draft with no lag"
+  expect stale "$(w3c_verdict "$did" https://www.w3.org/TR/did-resolution/ - 90)" "a lag against an undated newest version"
+  expect held "$(w3c_verdict "$did" "${did/20261026/20270125}" "a cited version" -)" "a held W3C publication"
+  got="$(awk -F'\t' '$1 == "W3C DID Resolution 1.0" { print $4 }' <<< "$WATCHED_W3C")"
+  expect 90 "$got" "the lag of the DID Resolution draft"
 
   [[ "$failed" -eq 0 ]] || exit 1
   echo "pin-freshness: self-test OK."
@@ -835,7 +897,7 @@ done < <(corpus_rows "$MATRIX")
 
 # The dated W3C publications, each against the newest version of its
 # specification.
-while IFS=$'\t' read -r label shortname hold; do
+while IFS=$'\t' read -r label shortname hold lag; do
   [[ -n "$label" ]] || continue
 
   pinned="$(matrix_first "$label" 'https://www\.w3\.org/TR/[^ ,;]+')"
@@ -851,13 +913,20 @@ while IFS=$'\t' read -r label shortname hold; do
     printf 'UNREADABLE %s: could not read the newest version of %s from %s (%s)\n' \
       "$label" "$shortname" "$W3C_API" "$latest"
     unreadable=1
-  elif [[ "$pinned" = "$latest" ]]; then
-    printf 'current    %s %s\n' "$label" "$pinned"
-  elif [[ "$hold" != "-" ]]; then
-    printf 'held       %s: pinned %s, newest version %s, held at %s\n' "$label" "$pinned" "$latest" "$hold"
   else
-    printf 'STALE      %s: pinned %s, newest version %s\n' "$label" "$pinned" "$latest"
-    stale=1
+    verdict="$(w3c_verdict "$pinned" "$latest" "$hold" "$lag")"
+    case "$verdict" in
+      current) printf 'current    %s %s\n' "$label" "$pinned" ;;
+      held) printf 'held       %s: pinned %s, newest version %s, held at %s\n' "$label" "$pinned" "$latest" "$hold" ;;
+      lagging\ *)
+        printf 'current    %s %s (newest version %s, %s days newer, within the lag of %s days)\n' \
+          "$label" "$pinned" "$latest" "${verdict#lagging }" "$lag"
+        ;;
+      *)
+        printf 'STALE      %s: pinned %s, newest version %s\n' "$label" "$pinned" "$latest"
+        stale=1
+        ;;
+    esac
   fi
 done <<< "$WATCHED_W3C"
 
