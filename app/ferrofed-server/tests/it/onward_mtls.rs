@@ -40,7 +40,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{PATIENT, body, crossref, patient_query, post, registry, settings_with_room};
-use crate::support::{CLIENT_TOKEN, call, injected};
+use crate::support::caller::CLIENT_TOKEN;
+use crate::support::{call, injected};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

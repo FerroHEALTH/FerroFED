@@ -43,7 +43,8 @@ use crate::facade::{
     post, registry,
 };
 use crate::path_ehr_id::{VERSION_A, answer, holder, over, probe_at};
-use crate::support::{Logs, asked, bearer_as, error_body, mount};
+use crate::support::caller::bearer_as;
+use crate::support::{Logs, asked, error_body, mount};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

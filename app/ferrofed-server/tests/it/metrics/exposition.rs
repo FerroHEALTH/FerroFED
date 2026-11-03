@@ -163,7 +163,7 @@ fn a_remote_listener_is_refused_unless_allowed() -> TestResult {
         );
         let allowed = resolved(&format!(
             "{text}allow_remote = true\n{}",
-            crate::support::scraping()
+            crate::support::caller::scraping()
         ))?;
         assert_eq!(Some(remote.parse()?), allowed.metrics.listen);
     }
@@ -234,7 +234,7 @@ fn config_check_refuses_a_remote_listener_without_the_flag() -> TestResult {
         &["config", "check"],
         &format!(
             "{remote}allow_remote = true\n{}",
-            crate::support::scraping()
+            crate::support::caller::scraping()
         ),
     )?;
     assert_eq!(
@@ -249,7 +249,10 @@ fn config_check_refuses_a_remote_listener_without_the_flag() -> TestResult {
             && stdout.contains("product_scope"),
         "config check says who the remote listener answers: {stdout}"
     );
-    assert!(!stdout.contains(crate::support::SCRAPE_HASH), "{stdout}");
+    assert!(
+        !stdout.contains(crate::support::caller::SCRAPE_HASH),
+        "{stdout}"
+    );
     Ok(())
 }
 

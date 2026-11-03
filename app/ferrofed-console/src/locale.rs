@@ -193,6 +193,7 @@ mod describe;
 mod errors;
 mod federation;
 mod integrity;
+mod members;
 mod prefs;
 mod query;
 mod search;
@@ -214,6 +215,7 @@ const AREAS: &[&[Msg]] = &[
     errors::ALL,
     federation::ALL,
     integrity::ALL,
+    members::ALL,
     prefs::ALL,
     query::ALL,
     search::ALL,

@@ -133,7 +133,7 @@ async fn a_native_member_is_asked_by_its_ehr_id_alone_and_left_out_of_the_mapped
     let app = members.gateway(dir.path(), "")?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let findings = eps::check(&text)?;
+    let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
     ferrofed_testkit::emit::document("ferrofed-server-summary-beside-native-member", &text)?;
     let document: Value = serde_json::from_str(&text)?;
@@ -288,7 +288,7 @@ async fn under_partial_a_native_member_answering_a_document_with_no_identifier_i
         .insert("openehr-federation-completeness", "partial".parse()?);
     let (status, text) = call(app, request).await?;
     assert_eq!(StatusCode::OK, status, "§11.4: {text}");
-    let findings = eps::check(&text)?;
+    let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
     let document: Value = serde_json::from_str(&text)?;
     let allergies = section(&document, ALLERGIES_SECTION).ok_or("the allergies section")?;

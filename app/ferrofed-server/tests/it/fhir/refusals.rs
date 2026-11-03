@@ -13,7 +13,8 @@ use serde_json::Value;
 
 use super::{FHIR, TestResult, UID_A, UID_B, gateway, node_holding, summary, supplier};
 use crate::facade::{NAMESPACE, PATIENT, PATIENT_TAIL, received};
-use crate::support::{call, claims, exchange, field, issuer, send_as_is};
+use crate::support::caller::{claims, issuer};
+use crate::support::{call, exchange, field, send_as_is};
 
 /// The issue type of the `OperationOutcome` `text` holds.
 fn issue(text: &str) -> Result<String, Box<dyn std::error::Error>> {

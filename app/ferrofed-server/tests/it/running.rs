@@ -27,7 +27,8 @@ use ferrofed_server::state::AppState;
 use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
 
-use crate::support::{self, Logs, OPERATOR_SCOPE, send_as_is};
+use crate::support::caller::OPERATOR_SCOPE;
+use crate::support::{self, Logs, send_as_is};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -54,15 +55,18 @@ fn reloader() -> Result<Arc<Reloader>, Box<dyn Error>> {
 
 /// The `Authorization` value of an operator.
 fn operator() -> Result<String, Box<dyn Error>> {
-    let mut claims = support::claims();
+    let mut claims = support::caller::claims();
     let scope = claims.scope.take().unwrap_or_default();
     claims.scope = Some(format!("{scope} {OPERATOR_SCOPE}").trim().to_owned());
-    Ok(format!("Bearer {}", support::issuer().mint(&claims)?))
+    Ok(format!(
+        "Bearer {}",
+        support::caller::issuer().mint(&claims)?
+    ))
 }
 
 /// `GET /admin/config/running` as `authorization`, its status and body.
 async fn get(authorization: Option<&str>) -> Result<(StatusCode, String), Box<dyn Error>> {
-    let access = Access::new(&support::auth(), Profile::Production, Vec::new());
+    let access = Access::new(&support::caller::auth(), Profile::Production, Vec::new());
     let app = admin::router(
         Arc::new(AppState::default()),
         access,
@@ -110,7 +114,7 @@ async fn the_running_configuration_needs_the_operator_scope() -> TestResult {
     assert_eq!(StatusCode::UNAUTHORIZED, status);
     let (status, _) = get(Some(&format!(
         "Bearer {}",
-        support::issuer().mint(&support::claims())?
+        support::caller::issuer().mint(&support::caller::claims())?
     )))
     .await?;
     assert_eq!(StatusCode::FORBIDDEN, status);

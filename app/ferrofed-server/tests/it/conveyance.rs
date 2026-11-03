@@ -43,8 +43,9 @@ use crate::facade::{
     EHR_A, EHR_B, PATIENT, body, crossref, dev_gateway, gateway, patient_query, post, registry,
     wire,
 };
+use crate::support::caller::{AUDIENCE, CLIENT_TOKEN, ISSUER};
 use crate::support::conveyed::{Conveyed, ConveyedPurpose};
-use crate::support::{AUDIENCE, CLIENT_TOKEN, ISSUER, JWKS_URI, call, error_body, send};
+use crate::support::{JWKS_URI, call, error_body, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -343,7 +344,7 @@ const ROLE_SYSTEM: &str = "http://terminology.hl7.org/CodeSystem/practitioner-ro
 /// The suite's `[auth]`, its issuer naming [`AUTHORITY_CLAIM`] as the claim
 /// that carries the professional identifier's issuing authority.
 fn naming_the_issuing_authority() -> AuthSettings {
-    let mut auth = crate::support::auth();
+    let mut auth = crate::support::caller::auth();
     for issuer in &mut auth.issuers {
         issuer.professional_issuing_authority = Some(AUTHORITY_CLAIM.to_owned());
     }
@@ -479,7 +480,7 @@ async fn an_edge_asserted_caller_is_conveyed_as_edge_asserted() -> TestResult {
         audience: vec![AUDIENCE.to_owned()],
         issuers: vec![IssuerSettings::new(
             EDGE,
-            crate::support::key_set(EDGE, &crate::support::jwks_file_of(&edge)?),
+            crate::support::caller::key_set(EDGE, &crate::support::caller::jwks_file_of(&edge)?),
         )],
         ..AuthSettings::default()
     })

@@ -215,7 +215,7 @@ async fn names_each_under_partial(route: Route) -> TestResult {
     assert!(!queried, "{route:?}: no member is asked");
     let bundle: Value = serde_json::from_str(&text)?;
     if let Route::Summary = route {
-        let findings = eps::check(&text)?;
+        let findings = eps::profile::check(&text)?;
         assert!(findings.is_empty(), "the EPS profiles: {findings:#?}");
         let sections = bundle
             .pointer("/entry/0/resource/section")
@@ -353,7 +353,7 @@ async fn under_partial_a_summary_names_the_member_it_could_not_resolve_in_every_
     )
     .await?;
     assert_eq!(StatusCode::OK, status, "§11.4: {text}");
-    let findings = eps::check(&text)?;
+    let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "the EPS profiles: {findings:#?}");
     assert!(queried_a, "node A, which resolved, is asked: {text}");
     assert!(!queried_b, "node B, which did not, is never asked");

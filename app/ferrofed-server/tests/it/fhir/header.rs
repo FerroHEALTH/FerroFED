@@ -50,7 +50,7 @@ async fn the_header_is_the_supplier_s_and_no_header_value_reaches_a_node() -> Te
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let findings = eps::check(&text)?;
+    let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "the EPS profiles: {findings:#?}");
     ferrofed_testkit::emit::document("ferrofed-server-summary-supplier-header", &text)?;
     let document: Value = serde_json::from_str(&text)?;

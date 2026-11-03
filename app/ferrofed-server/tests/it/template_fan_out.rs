@@ -50,7 +50,7 @@ const ADL2: &str = "/v1/definition/template/adl2";
 const TEMPLATE: &str = "synthetic.fan_out.v1";
 
 /// The client's own credential, which no node ever sees.
-use crate::support::CLIENT_TOKEN;
+use crate::support::caller::CLIENT_TOKEN;
 
 /// A body an accepting node answers with, which the answer never copies.
 const ACCEPTED_BODY: &str = "SYNTHETIC-ACCEPTED-BODY-41fd";

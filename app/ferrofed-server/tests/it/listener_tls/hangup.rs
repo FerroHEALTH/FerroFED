@@ -14,7 +14,8 @@ use ferrohealth_server::health::READINESS;
 use http::StatusCode;
 
 use super::{TestResult, client, presented, quoted, written};
-use crate::support::{auth_toml, serving};
+use crate::support::caller::auth_toml;
+use crate::support::serving;
 
 /// How long the process may take to listen, and to take the new files.
 const PATIENCE: Duration = Duration::from_secs(20);

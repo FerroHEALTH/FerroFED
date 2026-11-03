@@ -376,7 +376,7 @@ managing_organisation = "org-a"
             path(&model),
             path(&context),
             eps::CONTEXT,
-            path(&eps::package()),
+            path(&eps::profile::package()),
             path(&eps::opt()),
             path(&model),
             path(&context),

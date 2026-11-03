@@ -41,7 +41,7 @@ async fn the_summary_is_an_eps_document_from_both_members_and_no_identifier_reac
         field(&headers, header::CONTENT_TYPE.as_str()),
         Some("application/fhir+json")
     );
-    let findings = eps::check(&text)?;
+    let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "the EPS profiles: {findings:#?}");
     ferrofed_testkit::emit::document("ferrofed-server-summary-two-members", &text)?;
     let document: Value = serde_json::from_str(&text)?;
@@ -124,7 +124,7 @@ async fn an_imported_copy_is_listed_once_from_the_member_that_created_it() -> Te
     let (status, _, body) = exchange(app, summary("")?).await?;
     let text = String::from_utf8(body)?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let findings = eps::check(&text)?;
+    let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "the EPS profiles: {findings:#?}");
     let document: Value = serde_json::from_str(&text)?;
     let allergies = section(&document, ALLERGIES_SECTION).ok_or("the allergies section")?;
@@ -289,7 +289,7 @@ async fn under_partial_a_silent_member_is_named_in_every_section() -> TestResult
         .insert("openehr-federation-completeness", "partial".parse()?);
     let (status, text) = call(app, request).await?;
     assert_eq!(StatusCode::OK, status, "§11.4: {text}");
-    let findings = eps::check(&text)?;
+    let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
     ferrofed_testkit::emit::document("ferrofed-server-summary-partial", &text)?;
     let document: Value = serde_json::from_str(&text)?;

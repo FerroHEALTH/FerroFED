@@ -87,7 +87,7 @@ async fn asked(federation: &str, identity: &str, claims: &Claims) -> Result<Aske
     )?;
     let state = Arc::new(AppState::build(&settings)?);
     let mut server = settings_with_room();
-    server.auth = support::auth();
+    server.auth = support::caller::auth();
     #[cfg(feature = "binding-nl")]
     if identity.contains("[nl_gf.mitz]") {
         for issuer in &mut server.auth.issuers {
@@ -263,7 +263,7 @@ impl SubjectGateway {
             (&format!("{RETENTION}{}", break_the_glass()), &identity),
         )?;
         let mut server = settings_with_room();
-        server.auth = support::auth();
+        server.auth = support::caller::auth();
         let app = ferrofed_server::router(Arc::new(AppState::build(&settings)?), &server);
         Ok(Self {
             app,
@@ -419,7 +419,7 @@ async fn the_next_ordinary_query_is_filtered_again() -> TestResult {
         ),
     )?;
     let mut server = settings_with_room();
-    server.auth = support::auth();
+    server.auth = support::caller::auth();
     let app = ferrofed_server::router(Arc::new(AppState::build(&settings)?), &server);
     let (status, text) = call(
         app.clone(),

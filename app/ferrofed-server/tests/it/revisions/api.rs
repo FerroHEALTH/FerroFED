@@ -13,7 +13,8 @@ use ferrofed_server::config::Config;
 use http::{Method, StatusCode};
 
 use super::{Applied, Diff, Gateway, HistoryPage, OPERATOR, Standing, TestResult, rest};
-use crate::support::{ISSUER, error_body};
+use crate::support::caller::ISSUER;
+use crate::support::error_body;
 
 /// The operator as a revision records them.
 fn the_operator() -> Author {
@@ -281,7 +282,7 @@ async fn a_configuration_config_check_refuses_is_refused_with_its_error() -> Tes
     assert_eq!("configuration-invalid", refused.code);
     let file = format!(
         "profile = \"development\"\n{}{toml}",
-        crate::support::auth_toml()
+        crate::support::caller::auth_toml()
     );
     let check = Config::from_sources(Some(&file), &std::collections::BTreeMap::new())?
         .resolve()
@@ -353,7 +354,7 @@ async fn the_history_reads_newest_first_and_one_revision_by_number() -> TestResu
 #[tokio::test]
 async fn every_route_needs_the_operator_scope() -> TestResult {
     let gateway = Gateway::start("")?;
-    let client = crate::support::bearer()?;
+    let client = crate::support::caller::bearer()?;
     for (method, path) in [
         (Method::GET, "/admin/config"),
         (Method::GET, "/admin/config/revisions"),

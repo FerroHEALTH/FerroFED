@@ -15,7 +15,8 @@ use http::{HeaderMap, HeaderName, header};
 use secrecy::ExposeSecret;
 
 use super::TestResult;
-use crate::support::{self, AUDIENCE};
+use crate::support::caller::AUDIENCE;
+use crate::support::{self};
 
 /// The headers of a request bearing `token`.
 fn bearing(token: &str) -> Result<HeaderMap, Box<dyn Error>> {
@@ -28,8 +29,8 @@ fn bearing(token: &str) -> Result<HeaderMap, Box<dyn Error>> {
 // conformance: CP-17
 #[tokio::test]
 async fn no_token_is_kept_where_no_node_exchanges_it() -> TestResult {
-    let gate = Gate::new(&support::auth());
-    let token = support::token()?;
+    let gate = Gate::new(&support::caller::auth());
+    let token = support::caller::token()?;
     let caller = gate
         .admit(&bearing(&token)?, (Requirement::Caller, None), false)
         .await
@@ -43,8 +44,8 @@ async fn no_token_is_kept_where_no_node_exchanges_it() -> TestResult {
 // conformance: CP-17
 #[tokio::test]
 async fn the_verified_token_is_kept_for_an_exchanging_node_and_never_shown() -> TestResult {
-    let gate = Gate::new(&support::auth());
-    let token = support::token()?;
+    let gate = Gate::new(&support::caller::auth());
+    let token = support::caller::token()?;
     let caller = gate
         .admit(&bearing(&token)?, (Requirement::Caller, None), true)
         .await
@@ -65,13 +66,13 @@ async fn the_verified_token_is_kept_for_an_exchanging_node_and_never_shown() -> 
 #[tokio::test]
 async fn an_edge_assertion_is_never_kept_as_a_token() -> TestResult {
     let edge = Issuer::new("https://edge.example.test")?;
-    let file = support::jwks_file_of(&edge)?;
+    let file = support::caller::jwks_file_of(&edge)?;
     let gate = Gate::new(&AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static("ferrofed-edge-assertion")),
         audience: vec![AUDIENCE.to_owned()],
         issuers: vec![IssuerSettings::new(
             "https://edge.example.test",
-            support::key_set("https://edge.example.test", &file),
+            support::caller::key_set("https://edge.example.test", &file),
         )],
         ..AuthSettings::default()
     });

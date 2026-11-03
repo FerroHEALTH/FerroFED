@@ -47,7 +47,7 @@ const PERSONS: &str = "/v1/demographic/person";
 const PARTY: &str = "6a1e7b1c-4d0f-4c3e-9a8e-5f2b1d0c9e7a::cdr-b.example.org::1";
 
 /// The client's own credential, which no node ever sees.
-use crate::support::CLIENT_TOKEN;
+use crate::support::caller::CLIENT_TOKEN;
 
 /// A synthetic PERSON, spaced and encoded as a re-serialisation would not
 /// keep it, carrying a synthetic identifier under the example arc.

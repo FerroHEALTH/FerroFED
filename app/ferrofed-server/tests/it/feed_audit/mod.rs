@@ -204,7 +204,7 @@ pub(crate) fn named_user(record: &str) -> Result<NamedUser, Box<dyn Error>> {
 /// `sub`, `requestor` and no `network` (BALP Query `agent:user`), the
 /// purpose of use `TREAT`, and one Application agent with its `client_id`.
 pub(crate) fn names_the_default_caller(record: &str) -> Result<(), Box<dyn Error>> {
-    let claims = crate::support::claims();
+    let claims = crate::support::caller::claims();
     let named = named_user(record)?;
     let expected = UserAgent {
         issuer: Some(claims.iss.clone()),
@@ -236,7 +236,7 @@ pub(crate) fn names_no_caller(record: &str) -> Result<(), Box<dyn Error>> {
     if !named.users.is_empty() {
         return Err(format!("no agent:user, got {named:?}").into());
     }
-    let claims = crate::support::claims();
+    let claims = crate::support::caller::claims();
     if record.contains(&claims.sub) || record.contains(&claims.client_id) {
         return Err("the gateway's own record names no caller".into());
     }

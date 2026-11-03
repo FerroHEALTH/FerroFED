@@ -53,7 +53,7 @@ pub(super) fn break_the_glass() -> String {
 
 /// The suite's claims declaring treatment and each code of `codes`.
 pub(super) fn declaring(codes: &[&str]) -> Claims {
-    let mut claims = support::claims();
+    let mut claims = support::caller::claims();
     let mut extensions = Extensions::treatment();
     extensions
         .ihe_iua
@@ -101,7 +101,7 @@ async fn recorded(
     )?;
     let state = Arc::new(AppState::build(&settings)?);
     let mut server = settings_with_room();
-    server.auth = support::auth();
+    server.auth = support::caller::auth();
     let app = ferrofed_server::router(state, &server);
     let keys = published(&app).await?;
     let logs = Logs::default();

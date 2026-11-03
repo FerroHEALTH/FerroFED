@@ -33,7 +33,7 @@ use crate::e2e::scenario::{
     queries, seed_both,
 };
 use crate::e2e::{EHR_A, EHR_B, PATIENT, TestResult};
-use crate::support::CLIENT_TOKEN;
+use crate::support::caller::CLIENT_TOKEN;
 
 /// The client the nodes' authorization server registered the gateway as.
 const CLIENT_ID: &str = "ferrofed-test-gateway";

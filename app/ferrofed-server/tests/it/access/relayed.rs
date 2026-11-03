@@ -28,7 +28,8 @@ use crate::contact_point::{
 };
 use crate::facade::settings_with_room;
 use crate::feed_audit::SETTLE;
-use crate::support::{ISSUER, call};
+use crate::support::call;
+use crate::support::caller::ISSUER;
 
 const UID_A: &str = "6a7b8c9d-1e2f-4a3b-8c4d-5e6f7a8b9c0d::cdr-a.example.org::1";
 

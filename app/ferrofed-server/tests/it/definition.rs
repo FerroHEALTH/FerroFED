@@ -45,7 +45,7 @@ const TEMPLATE: &str = "synthetic.vital_signs.v1";
 const QUERY: &str = "org.example::synthetic_compositions";
 
 /// The client's own credential, which no node ever sees.
-use crate::support::CLIENT_TOKEN;
+use crate::support::caller::CLIENT_TOKEN;
 
 /// A synthetic operational template, spaced and encoded as a re-serialisation
 /// would not keep it.

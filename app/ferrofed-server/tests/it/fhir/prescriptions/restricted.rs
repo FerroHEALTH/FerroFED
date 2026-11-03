@@ -19,7 +19,8 @@ use super::{
 };
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL};
 use crate::fhir::{FHIR, TestResult};
-use crate::support::{call, claims, issuer};
+use crate::support::call;
+use crate::support::caller::{claims, issuer};
 
 /// A `[[testkit.crossref]]` row knowing another patient at node A.
 fn another_patient() -> String {

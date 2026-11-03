@@ -246,7 +246,7 @@ async fn an_operator_reviews_by_ehr_id_endpoint_caller_and_outcome() -> TestResu
         actions(&found(&bundle)?),
         "only the query had node B as origin"
     );
-    let claims = crate::support::claims();
+    let claims = crate::support::caller::claims();
     let caller = format!("{}|{}", claims.iss, claims.sub);
     let (_, bundle) = search(&repository, &with(&[("agent.identifier", &caller)])?).await?;
     assert_eq!(3, found(&bundle)?.len(), "the caller's accesses");

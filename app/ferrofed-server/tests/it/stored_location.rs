@@ -29,7 +29,8 @@ use url::Url;
 use crate::stored_fan_out::{
     ENDPOINT, NAME, VERSION, definition, put, state_serving, storing, three,
 };
-use crate::support::{exchange, field, operator_bearer};
+use crate::support::caller::operator_bearer;
+use crate::support::{exchange, field};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -68,7 +69,11 @@ async fn both(dir: &Path, gateway: &str) -> Result<(Router, Router, [Server; 3])
     let registry = three(&a, &b, &c);
     let state = state_serving(dir, (&registry, "fan_out_stored_queries = true"), gateway)?;
     let client = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room());
-    let access = Access::new(&crate::support::auth(), Profile::Production, Vec::new());
+    let access = Access::new(
+        &crate::support::caller::auth(),
+        Profile::Production,
+        Vec::new(),
+    );
     Ok((client, admin::router(state, access, None, None), [a, b, c]))
 }
 

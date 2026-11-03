@@ -46,7 +46,8 @@ use ferrofed_server::revision::{Draft, RevisionStore, Saved, StoreError, Swapped
 use ferrofed_server::state::AppState;
 use http::{Request, StatusCode, header};
 
-use crate::support::{self, OPERATOR_SCOPE, send_as_is};
+use crate::support::caller::OPERATOR_SCOPE;
+use crate::support::{self, send_as_is};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -63,11 +64,14 @@ fn operator() -> Result<String, Box<dyn Error>> {
 
 /// The `Authorization` value of the operator whose subject is `subject`.
 pub(crate) fn operator_as(subject: &str) -> Result<String, Box<dyn Error>> {
-    let mut claims = support::claims();
+    let mut claims = support::caller::claims();
     subject.clone_into(&mut claims.sub);
     let scope = claims.scope.take().unwrap_or_default();
     claims.scope = Some(format!("{scope} {OPERATOR_SCOPE}").trim().to_owned());
-    Ok(format!("Bearer {}", support::issuer().mint(&claims)?))
+    Ok(format!(
+        "Bearer {}",
+        support::caller::issuer().mint(&claims)?
+    ))
 }
 
 /// One member `name`, at an address nothing listens on.
@@ -112,7 +116,7 @@ fn core(store: &Path, config: &str) -> String {
     format!(
         "profile = \"development\"\n\n[metrics]\nlisten = \"127.0.0.1:9\"\n\n\
          [config]\nui = \"managed\"\npath = {store}\n{config}\n{}\n",
-        support::auth_toml()
+        support::caller::auth_toml()
     )
 }
 
@@ -208,7 +212,7 @@ impl Gateway {
                 .with_revisions(Some(Arc::clone(&revisions))),
         );
         let managed = Arc::new(Managed::new(Arc::clone(&revisions), Arc::clone(&reloader)));
-        let access = Access::new(&support::auth(), Profile::Development, Vec::new());
+        let access = Access::new(&support::caller::auth(), Profile::Development, Vec::new());
         let admin = admin::router(
             Arc::clone(&state),
             access,

@@ -20,7 +20,7 @@ use serde::Deserialize;
 use super::{CORRELATION_HEADER, declared};
 use crate::auth::{Gateway, TestResult, bearing, minted, sent};
 use crate::facade::schema;
-use crate::support::{ISSUER, claims};
+use crate::support::caller::{ISSUER, claims};
 
 /// The members of `OPTIONS {base}/` this suite reads.
 #[derive(Debug, Deserialize)]

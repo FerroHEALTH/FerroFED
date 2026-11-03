@@ -147,13 +147,13 @@ pub(crate) fn naming_requester(
 /// The `Authorization` value of a caller whose token names the professional
 /// and role `asking`, or no requester at all.
 fn bearer_for(asking: Option<(&str, &str)>) -> Result<String, Box<dyn Error>> {
-    let mut claims = crate::support::claims();
+    let mut claims = crate::support::caller::claims();
     if let Some(asking) = asking {
         naming_requester(&mut claims, asking);
     }
     Ok(format!(
         "Bearer {}",
-        crate::support::issuer().mint(&claims)?
+        crate::support::caller::issuer().mint(&claims)?
     ))
 }
 

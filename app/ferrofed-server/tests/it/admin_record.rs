@@ -31,7 +31,8 @@ use http::{Request, StatusCode, header};
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 
-use crate::support::{self, ISSUER, Logs, OPERATOR_SCOPE, send_as_is};
+use crate::support::caller::{ISSUER, OPERATOR_SCOPE};
+use crate::support::{self, Logs, send_as_is};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -79,17 +80,20 @@ struct Record {
 
 /// The `Authorization` value of the operator [`OPERATOR`].
 fn operator() -> Result<String, Box<dyn Error>> {
-    let mut claims = support::claims();
+    let mut claims = support::caller::claims();
     OPERATOR.clone_into(&mut claims.sub);
     let scope = claims.scope.take().unwrap_or_default();
     claims.scope = Some(format!("{scope} {OPERATOR_SCOPE}").trim().to_owned());
-    Ok(format!("Bearer {}", support::issuer().mint(&claims)?))
+    Ok(format!(
+        "Bearer {}",
+        support::caller::issuer().mint(&claims)?
+    ))
 }
 
 /// The admin listener's application under `profile`, as a request from
 /// `peer` reaches it.
 fn listener(profile: Profile, peer: SocketAddr) -> Router {
-    let access = Access::new(&support::auth(), profile, Vec::new());
+    let access = Access::new(&support::caller::auth(), profile, Vec::new());
     admin::router(Arc::new(AppState::default()), access, None, None).layer(MockConnectInfo(peer))
 }
 
@@ -207,7 +211,7 @@ async fn no_log_filter_quiets_the_record() -> TestResult {
 #[tokio::test]
 async fn a_refused_write_leaves_no_action_record() -> TestResult {
     let loopback = SocketAddr::from(([127, 0, 0, 1], 40_000));
-    for authorization in [None, Some(support::bearer()?)] {
+    for authorization in [None, Some(support::caller::bearer()?)] {
         let before = Event::AdminWriteAdmitted.counted();
         let app = listener(Profile::Production, loopback);
         let (status, text) = write(app, authorization.as_deref(), DEFAULT_FILTER).await?;

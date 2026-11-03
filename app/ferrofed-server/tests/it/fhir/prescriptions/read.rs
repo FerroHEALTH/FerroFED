@@ -33,7 +33,8 @@ use crate::ehr_id_collision::{captured, incidents};
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, wire};
 use crate::fhir::receive::{OTHER_A, bound, rows};
 use crate::fhir::{FHIR, TestResult, UNREACHED_SUPPLIER, text_registered};
-use crate::support::{call, issuer};
+use crate::support::call;
+use crate::support::caller::issuer;
 
 /// `GET {fhir-base}/MedicationRequest/{id}`.
 fn read(id: &str) -> Result<Request<Body>, http::Error> {
@@ -310,7 +311,7 @@ async fn the_read_takes_the_composition_read_scope() -> TestResult {
         ("user/aql-*.s user/composition-org.example.rx.v1.r", false),
         ("user/composition-*.r", true),
     ] {
-        let mut claims = crate::support::claims();
+        let mut claims = crate::support::caller::claims();
         claims.scope = Some(scope.to_owned());
         let token = issuer().mint(&claims)?;
         let mut request = read(&id)?;

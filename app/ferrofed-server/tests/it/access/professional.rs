@@ -35,7 +35,7 @@ const SUBSTANTIAL: &str = "urn:example:loa:substantial";
 
 /// The suite's default claims stating `acr`.
 fn stating(acr: &str) -> Claims {
-    let mut stated = support::claims();
+    let mut stated = support::caller::claims();
     stated.other.insert(String::from("acr"), acr.to_owned());
     stated
 }
@@ -47,7 +47,7 @@ async fn a_request_refused_for_its_person_or_assurance_writes_no_access_record()
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
     let mut server = settings_with_room();
-    server.auth = support::auth();
+    server.auth = support::caller::auth();
     for issuer in &mut server.auth.issuers {
         issuer.assurance = Some(Assurance {
             claim: String::from("acr"),

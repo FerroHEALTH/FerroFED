@@ -22,7 +22,8 @@ use ferrohealth_server::tls::{ReloadableTls, TlsKeys};
 use http::{Request, StatusCode, header};
 
 use super::{TestResult, client, kept, presented, ready_over, tls_section};
-use crate::support::{AUDIENCE, auth_toml, call, settings};
+use crate::support::caller::{AUDIENCE, auth_toml};
+use crate::support::{call, settings};
 
 /// An issuer the reload would add.
 const ADDED: &str = "https://issuer-added.example.test";
@@ -61,7 +62,7 @@ fn with_added(added: &Issuer) -> Result<String, Box<dyn Error>> {
     Ok(format!(
         "{}{}",
         auth_toml(),
-        crate::support::issuer_toml(added)?
+        crate::support::caller::issuer_toml(added)?
     ))
 }
 

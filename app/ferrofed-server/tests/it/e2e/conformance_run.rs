@@ -22,7 +22,8 @@ use ferrofed_testkit::containers;
 use ferrofed_testkit::seed::DemoComposition;
 
 use crate::e2e::{EHR_A, EHR_B, PATIENT, TestResult, fixed_resolver, registry_document};
-use crate::support::{auth_toml, signing_toml, token};
+use crate::support::caller::{auth_toml, token};
+use crate::support::signing_toml;
 
 /// The live scenarios whose precondition the harness does not meet: both
 /// members resolve the patient, so none is left for the named-unresolved

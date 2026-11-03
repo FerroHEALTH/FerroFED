@@ -10,7 +10,7 @@
 use crate::auth::{Gateway, TestResult, assert_admitted, bearing, minted, query};
 use crate::conveyance::{published, verified};
 use crate::facade::wire;
-use crate::support::ISSUER;
+use crate::support::caller::ISSUER;
 use crate::support::conveyed::{
     ConveyedContactPoint, ConveyedProfessional, ConveyedProvider, ConveyedPurpose,
 };

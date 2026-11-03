@@ -26,7 +26,7 @@ use wiremock::ResponseTemplate;
 use wiremock::matchers::{method, path};
 
 use super::{Gateway, TestResult, assert_admitted, assert_refused, bearing, query};
-use crate::support::AUDIENCE;
+use crate::support::caller::AUDIENCE;
 
 /// The issuer identifier of the issuer these tests read from a file.
 const ROTATING: &str = "https://rotating-issuer.example.test";

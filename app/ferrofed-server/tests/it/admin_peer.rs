@@ -28,9 +28,8 @@ use ferrofed_server::state::AppState;
 use http::{HeaderMap, Request, StatusCode, header};
 use tokio::net::TcpListener;
 
-use crate::support::{
-    self, SCRAPE_PASSWORD, SCRAPE_USER, basic, bearer, error_body, operator_bearer, send_as_is,
-};
+use crate::support::caller::{SCRAPE_PASSWORD, SCRAPE_USER, basic, bearer, operator_bearer};
+use crate::support::{self, error_body, send_as_is};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -68,7 +67,7 @@ fn listener(
     } else {
         Vec::new()
     };
-    let auth = support::auth_with_basic(&[SCRAPE_USER, OTHER_USER])?;
+    let auth = support::caller::auth_with_basic(&[SCRAPE_USER, OTHER_USER])?;
     let access = Access::new(&auth, profile, users);
     let app = admin::router(Arc::new(AppState::default()), access, None, None);
     Ok(match peer {

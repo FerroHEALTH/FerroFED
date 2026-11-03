@@ -41,7 +41,8 @@ use crate::stored_fan_out::{
     COMMENT, ENDPOINT, NAME, Reported, VERSION, definition, get, node_path, put, state, statuses,
     storing, three,
 };
-use crate::support::{Logs, asked, call, error_body, exchange, field, mount, operator_bearer};
+use crate::support::caller::operator_bearer;
+use crate::support::{Logs, asked, call, error_body, exchange, field, mount};
 use crate::template_fan_out::schema::validate_federation;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -75,7 +76,11 @@ fn both(
 ) -> Result<(Router, Router), Box<dyn Error>> {
     let state = state(dir, &three(a, b, c), federation)?;
     let client = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room());
-    let access = Access::new(&crate::support::auth(), Profile::Production, Vec::new());
+    let access = Access::new(
+        &crate::support::caller::auth(),
+        Profile::Production,
+        Vec::new(),
+    );
     let operator = admin::router(state, access, None, None);
     Ok((client, operator))
 }
@@ -463,7 +468,7 @@ fn the_admin_listener_is_refused_off_loopback_without_allow_remote() -> TestResu
     let settings = Config::from_sources(
         Some(&crate::support::signed(&format!(
             "{remote}allow_remote = true\n{}",
-            crate::support::scraping()
+            crate::support::caller::scraping()
         ))),
         &BTreeMap::new(),
     )?

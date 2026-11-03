@@ -208,7 +208,7 @@ async fn every_page_reads_whole_with_the_modules_refused() -> Result<(), Box<dyn
     with_browser(async |browser| {
         sign_in(browser, &stack).await?;
         withhold_the_modules(browser).await?;
-        for shot in &crate::journeys::screenshots::PAGES {
+        for shot in &crate::journeys::shots::PAGES {
             browser.goto(&stack.url(shot.url)).await?;
             browser
                 .element(By::XPath(shot.ready.to_owned()))

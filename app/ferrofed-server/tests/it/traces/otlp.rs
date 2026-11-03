@@ -29,7 +29,8 @@ use opentelemetry_proto::tonic::trace::v1::Span;
 
 use super::TestResult;
 use crate::facade::{EHR_A, EHR_B, body, node_answering, registry};
-use crate::support::{MINTED_REQUEST_ID, auth_toml, bearer, is_minted_form, serving, spawned};
+use crate::support::caller::{auth_toml, bearer};
+use crate::support::{MINTED_REQUEST_ID, is_minted_form, serving, spawned};
 
 /// The synthetic patient, under the example OID arc, whose value carries
 /// letters so no timing or count a span records can spell it (#1198).

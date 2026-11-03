@@ -63,7 +63,7 @@ async fn a_purpose_in_authorization_details_is_admitted() -> TestResult {
 // conformance: CP-17
 #[tokio::test]
 async fn a_deployment_that_declares_it_optional_admits_a_token_without_one() -> TestResult {
-    let mut auth = support::auth();
+    let mut auth = support::caller::auth();
     auth.purpose_required = false;
     let gateway = Gateway::with(auth).await?;
     let mut purposeless = claims();

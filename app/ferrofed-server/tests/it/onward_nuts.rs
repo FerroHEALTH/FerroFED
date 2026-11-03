@@ -45,7 +45,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, ResponseTemplate};
 
 use crate::facade::{body, crossref, patient_query, post, registry, settings_with_room};
-use crate::support::{Logs, bearer_as, call, chain, send_as_is, signed};
+use crate::support::caller::bearer_as;
+use crate::support::{Logs, call, chain, send_as_is, signed};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

@@ -24,7 +24,7 @@ use std::time::Instant;
 
 use axum::response::Response;
 use ferrofed_eehrxf::lookup::{self, LookupRequest};
-use ferrofed_eehrxf::summary::header_patient;
+use ferrofed_eehrxf::summary::resources::header_patient;
 use ferrofed_identity::role::header::PatientHeader;
 use http::{StatusCode, Uri};
 

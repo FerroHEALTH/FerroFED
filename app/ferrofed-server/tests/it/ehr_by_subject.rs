@@ -31,7 +31,8 @@ use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, crossref, gateway, registry, wire,
 };
 use crate::request_log::logged;
-use crate::support::{CLIENT_TOKEN, error_body, request_lines, send};
+use crate::support::caller::CLIENT_TOKEN;
+use crate::support::{error_body, request_lines, send};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

@@ -270,7 +270,7 @@ impl Bench {
         let authorization = if step.call.anonymous {
             None
         } else {
-            Some(crate::support::bearer()?)
+            Some(crate::support::caller::bearer()?)
         };
         let ferrofed = self.ferrofed(&step, authorization.as_deref()).await;
         let reference = self.reference(&step, authorization.as_deref()).await;

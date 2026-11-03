@@ -254,7 +254,7 @@ async fn an_issuer_not_declared_a_contact_point_needs_no_annex_attribute() -> Te
     let gateway = Gateway::trusting_the_test_issuer().await?;
     assert_admitted(
         &gateway,
-        bearing(query()?, &minted(&crate::support::claims())?)?,
+        bearing(query()?, &minted(&crate::support::caller::claims())?)?,
     )
     .await
 }

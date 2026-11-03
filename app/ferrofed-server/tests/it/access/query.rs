@@ -269,7 +269,7 @@ async fn a_console_query_names_the_operator() -> TestResult {
     let mut request = post(body(&compositions(""))?)?;
     request.headers_mut().insert(
         header::AUTHORIZATION,
-        crate::support::bearer_as(operator)?.parse()?,
+        crate::support::caller::bearer_as(operator)?.parse()?,
     );
     let (status, text) = call(app, request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -377,7 +377,7 @@ async fn no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node() -> T
     drop(guard);
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(1, accesses(&records)?.len());
-    let claims = crate::support::claims();
+    let claims = crate::support::caller::claims();
     let log = logs.text();
     let exposition = state.metrics().render()?;
     recorded_the_query(&exposition, "node-a-pub")?;
