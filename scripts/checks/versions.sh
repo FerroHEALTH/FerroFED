@@ -1144,6 +1144,15 @@ for pair in "trivy|TRIVY_VERSION|.github/workflows/release.yml .github/workflows
     note "OK: $tool $found"
   fi
 done
+trivy_want="$(pin_of trivy "$matrix")"
+trivy_want="${trivy_want#v}"
+if [[ -n "$trivy_want" ]]; then
+  if bash scripts/release/install-trivy.sh --sha256 "$trivy_want" >/dev/null 2>&1; then
+    note "OK: trivy $trivy_want is pinned by sha256 in scripts/release/install-trivy.sh"
+  else
+    bad "trivy: scripts/release/install-trivy.sh pins no sha256 for $trivy_want"
+  fi
+fi
 
 echo "== docs toolchain (.github/actions/docs-toolchain <-> $matrix)"
 action=.github/actions/docs-toolchain/action.yml

@@ -796,12 +796,15 @@ release without a reviewed change.
 | `cargo-cyclonedx` | 0.5.9 | `.github/workflows/release-build.yml` |
 | `syft` | 1.51.1 | `.github/workflows/release-build.yml`, `.github/workflows/release-image.yml`, `.github/workflows/release-console.yml` |
 | `cargo-fuzz` | 0.13.2 | `.github/workflows/fuzz.yml` (the fuzz lane, the one nightly-toolchain job; #134) |
-| `trivy` | 0.73.0 | `.github/workflows/release.yml` (the vulnerability record), `.github/workflows/scan-and-tag.yml` (the image gate), `.github/workflows/image-scan.yml` (the weekly scan), each as `TRIVY_VERSION` for the digest-pinned `aquasecurity/setup-trivy` |
+| `trivy` | 0.73.0 | `.github/workflows/release.yml` (the vulnerability record), `.github/workflows/scan-and-tag.yml` (the image gate), `.github/workflows/image-scan.yml` (the weekly scan), each as `TRIVY_VERSION` for `scripts/release/install-trivy.sh`, which takes the GitHub release tarball checked against the sha256 it pins for that version (#1548) |
 | `yq` | v4.53.3 | `.github/workflows/ci.yml` (the `vex` job, as `YQ_VERSION` with its SHA-256) |
 
 `scripts/checks/versions.sh` reads every `tool:` line of the release and fuzz
 workflows, and every `TRIVY_VERSION` and `YQ_VERSION`, back against these rows,
-so a bump moves one row and the workflows follow it.
+so a bump moves one row and the workflows follow it; it also fails when
+`scripts/release/install-trivy.sh` pins no sha256 for the `trivy` row, so a
+Trivy bump adds the version's row to the script, read from the release's
+`trivy_<version>_checksums.txt`.
 
 ## GitHub Actions pins
 
