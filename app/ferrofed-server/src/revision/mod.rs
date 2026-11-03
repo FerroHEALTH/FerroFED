@@ -203,6 +203,16 @@ impl StoreError {
             error, text,
         )))
     }
+
+    /// The backend failure `error`, which either backend's store raises.
+    pub(crate) fn backend(error: impl Error + Send + Sync + 'static) -> Self {
+        Self::Backend(Box::new(error))
+    }
+
+    /// A held row that does not read as a revision, for `error`.
+    pub(crate) fn corrupt(error: serde_json::Error) -> Self {
+        Self::Corrupt(Corruption::from(error))
+    }
 }
 
 /// The words for a JSON reader fault of `category`.

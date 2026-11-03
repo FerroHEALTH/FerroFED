@@ -34,9 +34,11 @@ use crate::stored::schema::{self, SchemaError};
 pub const DEFINITIONS: TableDefinition<'static, (&str, &str), (&str, &str)> =
     TableDefinition::new("stored_query_definitions");
 
-/// The schema version each layout the file holds is at, by the name of its
-/// table.
-const SCHEMA: TableDefinition<'static, &str, u32> = TableDefinition::new("ferrofed_schema");
+/// The schema version each layout a gateway's `redb` file holds is at, by
+/// the name of its table: the stored-query definitions and the
+/// configuration revisions alike.
+pub(crate) const SCHEMA: TableDefinition<'static, &str, u32> =
+    TableDefinition::new("ferrofed_schema");
 
 /// The key [`SCHEMA`] records the definitions' layout under.
 const LAYOUT: &str = "stored_query_definitions";
@@ -60,16 +62,7 @@ impl RedbStore {
     /// records a newer schema than this binary knows; the file is then left
     /// as it was.
     pub fn open(path: &Path) -> Result<Self, StoreError> {
-        let database = Database::create(path).map_err(backend)?;
-        let write = database.begin_write().map_err(backend)?;
-        let migrated = migrate(&write);
-        match migrated {
-            Ok(()) => write.commit().map_err(backend)?,
-            Err(error) => {
-                write.abort().map_err(backend)?;
-                return Err(error);
-            }
-        }
+        let database = open_prepared(path, LAYOUT, migrate, backend)?;
         Ok(Self {
             database,
             path: path.to_path_buf(),
@@ -184,21 +177,56 @@ fn newest(
     Ok(newest)
 }
 
-/// Brings the layout `write` sees to [`schema::CURRENT`], recording the
-/// version it reaches.
-fn migrate(write: &WriteTransaction) -> Result<(), StoreError> {
-    let mut versions = write.open_table(SCHEMA).map_err(backend)?;
-    let found = versions
-        .get(LAYOUT)
-        .map_err(backend)?
-        .map_or(0, |version| version.value());
+/// The `redb` file at `path`, opened or created, with `prepare` run in its
+/// first write over the version the schema table records for `layout`, and the
+/// version it returns recorded: committed when it succeeds, aborted when it
+/// fails, which leaves the file as it was. Every error of the file is the
+/// store's own through `backend`.
+pub(crate) fn open_prepared<E>(
+    path: &Path,
+    layout: &str,
+    prepare: impl FnOnce(&WriteTransaction, u32) -> Result<u32, E>,
+    backend: impl Fn(redb::Error) -> E,
+) -> Result<Database, E> {
+    let database = Database::create(path).map_err(|error| backend(error.into()))?;
+    let write = database
+        .begin_write()
+        .map_err(|error| backend(error.into()))?;
+    let prepared = (|| {
+        let mut versions = write
+            .open_table(SCHEMA)
+            .map_err(|error| backend(error.into()))?;
+        let found = versions
+            .get(layout)
+            .map_err(|error| backend(error.into()))?
+            .map_or(0, |version| version.value());
+        let reached = prepare(&write, found)?;
+        versions
+            .insert(layout, reached)
+            .map_err(|error| backend(error.into()))?;
+        Ok(())
+    })();
+    match prepared {
+        Ok(()) => write.commit().map_err(|error| backend(error.into()))?,
+        Err(error) => {
+            write.abort().map_err(|error| backend(error.into()))?;
+            return Err(error);
+        }
+    }
+    Ok(database)
+}
+
+/// Brings the layout `write` sees from version `found` to
+/// [`schema::CURRENT`], and returns the version it reaches.
+fn migrate(write: &WriteTransaction, found: u32) -> Result<u32, StoreError> {
     let pending =
         schema::pending("redb", found).map_err(|newer| StoreError::Backend(Box::new(newer)))?;
+    let mut reached = found;
     for step in pending {
         apply(write, step)?;
-        versions.insert(LAYOUT, step).map_err(backend)?;
+        reached = step;
     }
-    Ok(())
+    Ok(reached)
 }
 
 /// Runs the migration that brings the layout to version `step`.

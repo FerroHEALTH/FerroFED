@@ -4,22 +4,19 @@
 //! The withdrawal of a dispensation on the FHIR face.
 
 use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::ops::ControlFlow;
 use std::time::Instant;
 
-use axum::Extension;
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::Path;
 use axum::response::Response;
 use eehrxf::category::Category;
-use ferrofed_engine::outbound_id::OutboundId;
 use http::StatusCode;
 
-use crate::auth::caller::Caller;
 use crate::facade::dispensation::withdrawal::{self, WITHDRAWN};
 use crate::facade::prescription::{self, Readable};
-use crate::state::AppState;
 
+use crate::fhir::admission::Asked;
 use crate::fhir::{admission, refusal};
 
 use super::dispense::received;
@@ -37,15 +34,12 @@ use super::read::unread;
 /// its withdrawal (§3.1.0.4.2). A withdrawal the member made answers `200`
 /// with an `OperationOutcome` naming the member.
 pub(in crate::fhir) async fn withdraw(
-    State(state): State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
+    asked: Asked,
     Path(id): Path<String>,
-    headers: http::HeaderMap,
     body: Bytes,
 ) -> Response {
     let started = Instant::now();
-    let (received, text) = match received(&state, &headers, &body) {
+    let (received, text) = match received(&asked.state, &asked.headers, &body) {
         Ok(received) => received,
         Err(refused) => return refused,
     };
@@ -68,11 +62,16 @@ pub(in crate::fhir) async fn withdraw(
         );
     }
     admission::served(
-        &state,
-        (outbound, caller.as_deref()),
-        (&headers, started),
-        "the caller was not admitted to withdraw a dispensation",
-        async |admitted, arrived| {
+        (&asked, started),
+        || {
+            refusal(
+                StatusCode::FORBIDDEN,
+                "forbidden",
+                "the caller was not admitted to withdraw a dispensation",
+            )
+        },
+        |_| ControlFlow::Continue(()),
+        async |admitted, arrived, ()| {
             let federation = &admitted.federation;
             let none = BTreeSet::new();
             let declared = admitted
@@ -81,9 +80,9 @@ pub(in crate::fhir) async fn withdraw(
                 .members_of(Category::Dispensation)
                 .unwrap_or(&none);
             let dispensation = (Readable::Dispensation, id.as_str());
-            match prescription::read(federation, arrived, dispensation, declared).await {
+            match prescription::read(federation, &arrived, dispensation, declared).await {
                 Ok(read) => {
-                    withdrawal::withdraw(federation, arrived, (&received, text), &read).await
+                    withdrawal::withdraw(federation, &arrived, (&received, text), &read).await
                 }
                 Err(unfound) => unread(
                     federation,

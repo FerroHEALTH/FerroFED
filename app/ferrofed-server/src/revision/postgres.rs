@@ -22,6 +22,7 @@
 
 use ferrofed_registry::definition::store;
 use ferrohealth_secret::secret_url::SecretUrl;
+use serde::de::DeserializeOwned;
 use tokio_postgres::Client;
 
 use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
@@ -138,6 +139,54 @@ impl PostgresRevisions {
     fn marked(&self) -> Result<Option<RevisionId>, StoreError> {
         Ok(self.current()?.map(|current| current.revision))
     }
+
+    /// The one JSON record `sql` selects, of the revision `id` when it
+    /// takes one, read as `T`.
+    fn one<T: DeserializeOwned>(
+        &self,
+        sql: &'static str,
+        id: Option<i64>,
+    ) -> Result<Option<T>, StoreError> {
+        let record = self.call(move |client| {
+            Box::pin(async move {
+                let row = match &id {
+                    Some(id) => client.query_opt(sql, &[id]).await,
+                    None => client.query_opt(sql, &[]).await,
+                }
+                .map_err(connection_backend)?;
+                row.map(|row| row.try_get::<usize, String>(0).map_err(connection_corrupt))
+                    .transpose()
+            })
+        })?;
+        record
+            .map(|json| serde_json::from_str(&json).map_err(StoreError::corrupt))
+            .transpose()
+    }
+
+    /// Every JSON record `sql` selects, of the revision `id` when it takes
+    /// one, each read as `T`.
+    fn all<T: DeserializeOwned>(
+        &self,
+        sql: &'static str,
+        id: Option<i64>,
+    ) -> Result<Vec<T>, StoreError> {
+        let records = self.call(move |client| {
+            Box::pin(async move {
+                let rows = match &id {
+                    Some(id) => client.query(sql, &[id]).await,
+                    None => client.query(sql, &[]).await,
+                }
+                .map_err(connection_backend)?;
+                rows.iter()
+                    .map(|row| row.try_get::<usize, String>(0).map_err(connection_corrupt))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+        })?;
+        records
+            .iter()
+            .map(|json| serde_json::from_str(json).map_err(StoreError::corrupt))
+            .collect()
+    }
 }
 
 impl RevisionStore for PostgresRevisions {
@@ -146,7 +195,7 @@ impl RevisionStore for PostgresRevisions {
             return Ok(Saved::Exhausted);
         };
         let revision = draft.numbered(id, base);
-        let json = serde_json::to_string(&revision).map_err(backend)?;
+        let json = serde_json::to_string(&revision).map_err(StoreError::backend)?;
         let (number, base_number) = (number(id)?, base.map_or(Ok(0), number)?);
         let rows = self.call(move |client| {
             Box::pin(async move {
@@ -166,38 +215,11 @@ impl RevisionStore for PostgresRevisions {
     }
 
     fn revision(&self, id: RevisionId) -> Result<Option<Revision>, StoreError> {
-        let id = number(id)?;
-        let record = self.call(move |client| {
-            Box::pin(async move {
-                let row = client
-                    .query_opt(SELECT_ONE, &[&id])
-                    .await
-                    .map_err(connection_backend)?;
-                row.map(|row| row.try_get::<usize, String>(0).map_err(connection_corrupt))
-                    .transpose()
-            })
-        })?;
-        record
-            .map(|json| serde_json::from_str(&json).map_err(corrupt))
-            .transpose()
+        self.one(SELECT_ONE, Some(number(id)?))
     }
 
     fn history(&self) -> Result<Vec<Revision>, StoreError> {
-        let records = self.call(|client| {
-            Box::pin(async move {
-                let rows = client
-                    .query(SELECT_ALL, &[])
-                    .await
-                    .map_err(connection_backend)?;
-                rows.iter()
-                    .map(|row| row.try_get::<usize, String>(0).map_err(connection_corrupt))
-                    .collect::<Result<Vec<_>, _>>()
-            })
-        })?;
-        records
-            .iter()
-            .map(|json| serde_json::from_str(json).map_err(corrupt))
-            .collect()
+        self.all(SELECT_ALL, None)
     }
 
     fn head(&self) -> Result<Option<RevisionId>, StoreError> {
@@ -205,19 +227,7 @@ impl RevisionStore for PostgresRevisions {
     }
 
     fn current(&self) -> Result<Option<Current>, StoreError> {
-        let record = self.call(|client| {
-            Box::pin(async move {
-                let row = client
-                    .query_opt(SELECT_CURRENT, &[])
-                    .await
-                    .map_err(connection_backend)?;
-                row.map(|row| row.try_get::<usize, String>(0).map_err(connection_corrupt))
-                    .transpose()
-            })
-        })?;
-        record
-            .map(|json| serde_json::from_str(&json).map_err(corrupt))
-            .transpose()
+        self.one(SELECT_CURRENT, None)
     }
 
     fn swap_current(
@@ -225,7 +235,7 @@ impl RevisionStore for PostgresRevisions {
         expected: Option<RevisionId>,
         next: &Current,
     ) -> Result<Swapped, StoreError> {
-        let json = serde_json::to_string(next).map_err(backend)?;
+        let json = serde_json::to_string(next).map_err(StoreError::backend)?;
         let revision = number(next.revision)?;
         let expected_number = expected.map(number).transpose()?;
         let rows = self.call(move |client| {
@@ -251,28 +261,13 @@ impl RevisionStore for PostgresRevisions {
     }
 
     fn approvals(&self, id: RevisionId) -> Result<Vec<Signed>, StoreError> {
-        let id = number(id)?;
-        let records = self.call(move |client| {
-            Box::pin(async move {
-                let rows = client
-                    .query(SELECT_APPROVALS, &[&id])
-                    .await
-                    .map_err(connection_backend)?;
-                rows.iter()
-                    .map(|row| row.try_get::<usize, String>(0).map_err(connection_corrupt))
-                    .collect::<Result<Vec<_>, _>>()
-            })
-        })?;
-        records
-            .iter()
-            .map(|json| serde_json::from_str(json).map_err(corrupt))
-            .collect()
+        self.all(SELECT_APPROVALS, Some(number(id)?))
     }
 
     fn approve(&self, id: RevisionId, approval: &Signed) -> Result<(), StoreError> {
         let id = number(id)?;
-        let approver = serde_json::to_string(&approval.by).map_err(backend)?;
-        let record = serde_json::to_string(approval).map_err(backend)?;
+        let approver = serde_json::to_string(&approval.by).map_err(StoreError::backend)?;
+        let record = serde_json::to_string(approval).map_err(StoreError::backend)?;
         self.call(move |client| {
             Box::pin(async move {
                 client
@@ -306,7 +301,7 @@ async fn head(client: &Client) -> Result<Option<RevisionId>, store::StoreError> 
 
 /// `id` as the database stores it.
 fn number(id: RevisionId) -> Result<i64, StoreError> {
-    i64::try_from(id.get()).map_err(backend)
+    i64::try_from(id.get()).map_err(StoreError::backend)
 }
 
 /// [`prepare`], as a connection runs it.
@@ -371,16 +366,6 @@ fn revision_error(error: store::StoreError) -> StoreError {
         }
         other => StoreError::Backend(Box::new(other)),
     }
-}
-
-/// The backend failure `error`.
-fn backend(error: impl std::error::Error + Send + Sync + 'static) -> StoreError {
-    StoreError::Backend(Box::new(error))
-}
-
-/// A held row that does not read as a revision, for `error`.
-fn corrupt(error: serde_json::Error) -> StoreError {
-    StoreError::Corrupt(Corruption::from(error))
 }
 
 /// The connection's backend failure `error`.

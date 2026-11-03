@@ -141,14 +141,6 @@ impl AppState {
         self
     }
 
-    /// Returns this state applying the ITI-93 messages of `feed` to its
-    /// federation's resolution bindings.
-    #[must_use]
-    pub fn with_identity_feed(mut self, feed: Arc<IdentityFeed>) -> Self {
-        self.processes_mut().ihe.identity_feed = Some(feed);
-        self
-    }
-
     /// Returns the PMIR identity feed, when `[pmir]` is set.
     #[must_use]
     pub fn identity_feed(&self) -> Option<&Arc<IdentityFeed>> {

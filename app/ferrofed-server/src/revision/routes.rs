@@ -60,7 +60,9 @@ use crate::request_id;
 use crate::revision::service::confirm::{APPROVED, CONFIRMED};
 use crate::revision::service::{APPLIED, ROLLED_BACK, RevisionError, Revisions, SAVED, held_table};
 use crate::revision::tree::diff;
-use ferrofed_registry::revision::{Applied, Author, Diff, Origin, Revision, RevisionId, Standing};
+use ferrofed_registry::revision::{
+    Applied, Author, Current, Diff, Origin, Revision, RevisionId, Standing,
+};
 
 /// The running revision's mark and the newest revision.
 pub const CONFIG: &str = "/admin/config";
@@ -137,12 +139,27 @@ pub fn reads(managed: Arc<Managed>) -> Router {
 pub fn writes(managed: Arc<Managed>) -> Router {
     Router::new()
         .route(REVISIONS, post(save))
-        .route(APPLY, post(apply))
+        .route(
+            APPLY,
+            post(|managed, operator, id, headers, body| {
+                reviewed(Review::Apply, managed, operator, id, headers, body)
+            }),
+        )
         .route(ROLLBACK, post(rollback))
         .route(MEMBER, put(console::save_member))
         .route(MEMBER_REMOVE, post(console::remove_member))
-        .route(CONFIRM, post(confirm))
-        .route(APPROVE, post(approve))
+        .route(
+            CONFIRM,
+            post(|managed, operator, id, headers, body| {
+                reviewed(Review::Confirm, managed, operator, id, headers, body)
+            }),
+        )
+        .route(
+            APPROVE,
+            post(|managed, operator, id, headers, body| {
+                reviewed(Review::Approve, managed, operator, id, headers, body)
+            }),
+        )
         .route(sections::CREDENTIALS, put(sections::save_credentials))
         .route(
             sections::CREDENTIALS_REMOVE,
@@ -169,11 +186,39 @@ struct SaveRequest {
     toml: String,
 }
 
-/// The members of a save's body.
-const SAVE_SHAPE: &str = r#"{"base": <revision or null>, "reason": "<text>", "toml": "<text>"}"#;
+impl Shaped for SaveRequest {
+    const SHAPE: &'static str =
+        r#"{"base": <revision or null>, "reason": "<text>", "toml": "<text>"}"#;
+}
 
-/// The members of a rollback's body.
-const ROLLBACK_SHAPE: &str = r#"{"current": <revision>, "reason": "<text>"}"#;
+impl Shaped for RollbackRequest {
+    const SHAPE: &'static str = r#"{"current": <revision>, "reason": "<text>"}"#;
+}
+
+/// The JSON object an action takes as its body, and the members it names
+/// when it refuses another.
+trait Shaped: serde::de::DeserializeOwned {
+    /// The members of the body, as the refusal of another names them.
+    const SHAPE: &'static str;
+}
+
+/// The body of an action, read as `T`; any other body is refused `400`
+/// (`body-invalid`) naming the members `T` takes, before the action runs.
+struct ActionBody<T>(T);
+
+impl<T: Shaped, S: Send + Sync> axum::extract::FromRequest<S> for ActionBody<T> {
+    type Rejection = Response;
+
+    async fn from_request(request: axum::extract::Request, state: &S) -> Result<Self, Response> {
+        let headers = request.headers().clone();
+        let body = Bytes::from_request(request, state)
+            .await
+            .map_err(IntoResponse::into_response)?;
+        serde_json::from_slice(&body)
+            .map(Self)
+            .map_err(|_unread| body_refused(&headers, T::SHAPE))
+    }
+}
 
 /// The body of a rollback.
 #[derive(Debug, Deserialize)]
@@ -364,11 +409,8 @@ async fn save(
     State(managed): State<Arc<Managed>>,
     Extension(operator): Extension<Operator>,
     headers: HeaderMap,
-    body: Bytes,
+    ActionBody(request): ActionBody<SaveRequest>,
 ) -> Response {
-    let Ok(request) = serde_json::from_slice::<SaveRequest>(&body) else {
-        return body_refused(&headers, SAVE_SHAPE);
-    };
     let managed = Arc::clone(&managed);
     let author = Author::from(&operator);
     let answer = answered(&headers, move || {
@@ -389,49 +431,14 @@ async fn save(
     }
 }
 
-/// The message of an apply that carries a body.
-const APPLY_TAKES_NO_BODY: &str =
-    "the apply of a revision takes no body: it names the revision in the path alone";
-
-/// `POST` [`APPLY`]: applies the revision through the reload path.
-async fn apply(
-    State(managed): State<Arc<Managed>>,
-    Extension(operator): Extension<Operator>,
-    Path(id): Path<String>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
-    if !body.is_empty() {
-        return error::response(
-            Code::BodyInvalid,
-            APPLY_TAKES_NO_BODY,
-            request_id::of(&headers).unwrap_or_default(),
-        );
-    }
-    let managed = Arc::clone(&managed);
-    answered(&headers, move || -> Result<_, RevisionError> {
-        let id = number(&id)?;
-        let revision = held(&managed.revisions, id)?;
-        let current = managed
-            .revisions
-            .apply(&managed.reloader, id, Author::from(&operator))?;
-        record(APPLIED, id, &operator);
-        Ok(Applied { revision, current })
-    })
-    .await
-}
-
 /// `POST` [`ROLLBACK`]: saves the content of the revision before the
 /// running one as a new revision, and applies it.
 async fn rollback(
     State(managed): State<Arc<Managed>>,
     Extension(operator): Extension<Operator>,
     headers: HeaderMap,
-    body: Bytes,
+    ActionBody(request): ActionBody<RollbackRequest>,
 ) -> Response {
-    let Ok(request) = serde_json::from_slice::<RollbackRequest>(&body) else {
-        return body_refused(&headers, ROLLBACK_SHAPE);
-    };
     let managed = Arc::clone(&managed);
     answered(&headers, move || -> Result<_, RevisionError> {
         let (revision, current) = managed.revisions.rollback(
@@ -449,54 +456,92 @@ async fn rollback(
 const TAKES_NO_BODY: &str =
     "a confirmation or an approval takes no body: it names the revision in the path alone";
 
-/// `POST` [`CONFIRM`]: confirms the running revision, which awaits its
-/// confirmation, as the operator.
-async fn confirm(
+/// The message of an apply that carries a body.
+const APPLY_TAKES_NO_BODY: &str =
+    "the apply of a revision takes no body: it names the revision in the path alone";
+
+/// What an action on the revision its path names does, with no body: the
+/// apply of it, the confirmation of the running one, or the approval of one
+/// by an operator other than its author.
+#[derive(Debug, Clone, Copy)]
+enum Review {
+    /// `POST` [`APPLY`]: applies the revision through the reload path.
+    Apply,
+    /// `POST` [`CONFIRM`]: confirms the running revision, which awaits its
+    /// confirmation, as the operator.
+    Confirm,
+    /// `POST` [`APPROVE`]: approves a revision as an operator other than its
+    /// author.
+    Approve,
+}
+
+/// The answer to an action on a revision: the revision and its mark after
+/// an apply, the running revision's mark after a confirmation, or the
+/// approvals after an approval, each its own body.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum Reviewed {
+    /// The revision applied, with the mark it now carries.
+    Applied(Applied),
+    /// The running revision, confirmed.
+    Confirmed(Current),
+    /// The revision's approvals.
+    Approved(ferrofed_registry::revision::Review),
+}
+
+/// Answers the review `review` of the revision the path names, by
+/// `operator`.
+async fn reviewed(
+    review: Review,
     State(managed): State<Arc<Managed>>,
     Extension(operator): Extension<Operator>,
     Path(id): Path<String>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    if !body.is_empty() {
-        return error::response(
-            Code::BodyInvalid,
-            TAKES_NO_BODY,
-            request_id::of(&headers).unwrap_or_default(),
-        );
+    let message = match review {
+        Review::Apply => APPLY_TAKES_NO_BODY,
+        Review::Confirm | Review::Approve => TAKES_NO_BODY,
+    };
+    if let Some(refused) = bodiless(&headers, &body, message) {
+        return refused;
     }
-    let revisions = Arc::clone(&managed.revisions);
+    let managed = Arc::clone(&managed);
     answered(&headers, move || -> Result<_, RevisionError> {
         let id = number(&id)?;
-        let current = revisions.confirm(id, Author::from(&operator), jiff::Timestamp::now())?;
-        record(CONFIRMED, id, &operator);
-        Ok(current)
+        let author = Author::from(&operator);
+        let revisions = &managed.revisions;
+        let reviewed = match review {
+            Review::Apply => {
+                let revision = held(revisions, id)?;
+                let current = revisions.apply(&managed.reloader, id, author)?;
+                record(APPLIED, id, &operator);
+                Reviewed::Applied(Applied { revision, current })
+            }
+            Review::Confirm => {
+                let current = revisions.confirm(id, author, jiff::Timestamp::now())?;
+                record(CONFIRMED, id, &operator);
+                Reviewed::Confirmed(current)
+            }
+            Review::Approve => {
+                let review = revisions.approve(id, author)?;
+                record(APPROVED, id, &operator);
+                Reviewed::Approved(review)
+            }
+        };
+        Ok(reviewed)
     })
     .await
 }
 
-/// `POST` [`APPROVE`]: approves a revision as an operator other than its
-/// author.
-async fn approve(
-    State(managed): State<Arc<Managed>>,
-    Extension(operator): Extension<Operator>,
-    Path(id): Path<String>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
-    if !body.is_empty() {
-        return error::response(
+/// A body that names its revision in the path alone and carries a body
+/// nonetheless, refused `400` (`body-invalid`) with `message`.
+fn bodiless(headers: &HeaderMap, body: &[u8], message: &str) -> Option<Response> {
+    (!body.is_empty()).then(|| {
+        error::response(
             Code::BodyInvalid,
-            TAKES_NO_BODY,
-            request_id::of(&headers).unwrap_or_default(),
-        );
-    }
-    let revisions = Arc::clone(&managed.revisions);
-    answered(&headers, move || -> Result<_, RevisionError> {
-        let id = number(&id)?;
-        let review = revisions.approve(id, Author::from(&operator))?;
-        record(APPROVED, id, &operator);
-        Ok(review)
+            message,
+            request_id::of(headers).unwrap_or_default(),
+        )
     })
-    .await
 }

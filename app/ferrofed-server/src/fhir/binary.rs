@@ -21,12 +21,12 @@
 //! named in `node-error` with `424` (§11.1, §11.3). No specification
 //! governs the token: our own design.
 
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::Instant;
 
-use axum::Extension;
 use axum::body::Body;
-use axum::extract::{Path, State};
+use axum::extract::Path;
 use axum::response::{IntoResponse, Response};
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
@@ -35,13 +35,13 @@ use ferrofed_eehrxf::face::EPS_COMPOSITION;
 use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::fanout::Completion;
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::single_node::native::Answer;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::{HeaderValue, StatusCode, header};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
+use super::admission::Asked;
 use super::{UNADMITTED, admission, attach, outcome};
 use crate::access::{Accessed, NoAccess};
 use crate::auth::caller::Caller;
@@ -50,7 +50,6 @@ use crate::conveyed;
 use crate::error::Code;
 use crate::facade::native::{self, Chosen, Native};
 use crate::federation::Federation;
-use crate::state::AppState;
 
 /// The path prefix of a member's document under `{fhir-base}`.
 pub(super) const BINARY: &str = "/Binary/";
@@ -209,64 +208,61 @@ fn untaken(untaken: &Untaken, logged: &str) -> Response {
 }
 
 /// `GET {fhir-base}/Binary/{token}`.
-pub(super) async fn read(
-    State(state): State<Arc<AppState>>,
-    outbound: Option<Extension<OutboundId>>,
-    caller: Option<Extension<Caller>>,
-    Path(token): Path<String>,
-    headers: http::HeaderMap,
-) -> Response {
+pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
     let started = Instant::now();
-    let admitted = admission::admit(
-        &state,
-        (outbound, caller.as_deref()),
-        (&headers, started),
+    admission::served(
+        (&asked, started),
         || outcome(StatusCode::FORBIDDEN, "forbidden", UNADMITTED),
-    );
-    let admitted = match admitted {
-        Ok(admitted) => admitted,
-        Err(refused) => return refused,
-    };
-    let (federation, fhir) = (&admitted.federation, admitted.fhir);
-    let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
-    let Some(signer) = federation.signer() else {
-        return conveyed::Unconveyed::Unsigned.respond(request_id, logged);
-    };
-    let claims = match verified(signer, fhir, &token) {
-        Ok(claims) => claims,
-        Err(refused) => return untaken(&refused, logged),
-    };
-    if claims.sub != admitted.caller.subject() || claims.caller_iss != admitted.caller.issuer() {
-        return untaken(&Untaken::OtherCaller, logged);
-    }
-    let member = match chosen(federation, &claims) {
-        Ok(member) => member,
-        Err(refused) => return untaken(&refused, logged),
-    };
-    let confined = match admitted.confine().await {
-        Ok(confined) => confined,
-        Err(refused) => return refused,
-    };
-    let arrived = admitted.arrived(&confined);
-    // NOTE: §5.4.1, N33; the read names no patient, so the gate withholds nothing beyond
-    // what it reads of every request, and the member is located by its ehr_id alone.
-    let asked = native::asked(
-        federation,
-        &arrived,
-        vec![member],
-        Arc::new(Withheld::default()),
+        |admitted| match taken(admitted, &token) {
+            Ok(member) => ControlFlow::Continue(member),
+            Err(refused) => ControlFlow::Break(refused),
+        },
+        async |admitted, arrived, member| {
+            let federation = &admitted.federation;
+            let (request_id, outbound) = (admitted.request_id, admitted.outbound);
+            // NOTE: §5.4.1, N33; the read names no patient, so the gate withholds nothing beyond
+            // what it reads of every request, and the member is located by its ehr_id alone.
+            let asked = native::asked(
+                federation,
+                &arrived,
+                vec![member],
+                Arc::new(Withheld::default()),
+            )
+            .await;
+            let natives = match asked {
+                Ok(natives) => natives,
+                Err(failure) => return failure.respond(request_id, outbound),
+            };
+            let Some(native) = natives.first() else {
+                return crate::error::fixed(Code::Internal, request_id);
+            };
+            let mut response = answered(native);
+            attach(&mut response, accessed(federation, native));
+            response
+        },
     )
-    .await;
-    let natives = match asked {
-        Ok(natives) => natives,
-        Err(failure) => return failure.respond(request_id, outbound),
+    .await
+}
+
+/// The member the URL `token` names, for the caller `admitted` names: the
+/// gateway's own signature over it, the caller it was signed for, and a
+/// member that still holds the document's EHR, or the answer that says why
+/// it is not taken.
+#[expect(
+    clippy::result_large_err,
+    reason = "the refusal is the handler's answer, returned at most once per request"
+)]
+fn taken(admitted: &admission::Admitted<'_>, token: &str) -> Result<Chosen, Response> {
+    let (federation, fhir) = (&admitted.federation, admitted.fhir);
+    let (request_id, logged) = (admitted.request_id, &admitted.logged);
+    let Some(signer) = federation.signer() else {
+        return Err(conveyed::Unconveyed::Unsigned.respond(request_id, logged));
     };
-    let Some(native) = natives.first() else {
-        return crate::error::fixed(Code::Internal, request_id);
-    };
-    let mut response = answered(native);
-    attach(&mut response, accessed(federation, native));
-    response
+    let claims = verified(signer, fhir, token).map_err(|refused| untaken(&refused, logged))?;
+    if claims.sub != admitted.caller.subject() || claims.caller_iss != admitted.caller.issuer() {
+        return Err(untaken(&Untaken::OtherCaller, logged));
+    }
+    chosen(federation, &claims).map_err(|refused| untaken(&refused, logged))
 }
 
 /// The answer to a read that asked `native`: the member's bytes as it sent
