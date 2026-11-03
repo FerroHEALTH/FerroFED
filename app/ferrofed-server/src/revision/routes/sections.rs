@@ -17,17 +17,15 @@
 
 use std::sync::Arc;
 
-use axum::body::Bytes;
 use axum::extract::{Extension, Path, State};
 use axum::response::Response;
 use ferrofed_operator_api::console::{ConsoleState, Owner};
 use ferrofed_operator_api::resource::{BindingSection, Resource, SectionRequest, SectionResource};
-use ferrofed_operator_api::revision::RevisionId;
 use ferrofed_registry::id::EndpointId;
 use http::HeaderMap;
 
-use super::console::{ConsoleError, base_table, created, saved_as};
-use super::{Managed, answered, body_refused, held};
+use super::console::{ConsoleError, RemoveRequest, base_table, created, saved_as};
+use super::{ActionBody, Managed, Shaped, answered, held};
 use crate::admin::Operator;
 use crate::error::{self, Code};
 use crate::request_id;
@@ -49,20 +47,8 @@ pub const BINDING: &str = "/admin/config/bindings/{section}";
 /// The removal of one binding section.
 pub const BINDING_REMOVE: &str = "/admin/config/bindings/{section}/remove";
 
-/// The members of a save's body.
-const SECTION_SHAPE: &str = r#"{"base": <revision>, "reason": "<text>", "settings": "<TOML>", "secrets": [{"key": "<key>", "value" | "file": "<text>" | "clear": true}]}"#;
-
-/// The members of a removal's body.
-const REMOVE_SHAPE: &str = r#"{"base": <revision>, "reason": "<text>"}"#;
-
-/// The body of a removal.
-#[derive(Debug, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RemoveRequest {
-    /// The revision the removal is based on, which must be the newest.
-    base: Option<RevisionId>,
-    /// Why the change is made.
-    reason: String,
+impl Shaped for SectionRequest {
+    const SHAPE: &'static str = r#"{"base": <revision>, "reason": "<text>", "settings": "<TOML>", "secrets": [{"key": "<key>", "value" | "file": "<text>" | "clear": true}]}"#;
 }
 
 /// The binding sections this gateway is built with.
@@ -204,10 +190,10 @@ pub(super) async fn save_credentials(
     Extension(operator): Extension<Operator>,
     Path(endpoint): Path<String>,
     headers: HeaderMap,
-    body: Bytes,
+    body: Result<ActionBody<SectionRequest>, Response>,
 ) -> Response {
     match credentials(endpoint) {
-        Some(resource) => save(managed, operator, resource, &headers, &body).await,
+        Some(resource) => save(managed, operator, resource, &headers, body).await,
         None => unknown(&headers, "endpoint_id"),
     }
 }
@@ -219,10 +205,10 @@ pub(super) async fn remove_credentials(
     Extension(operator): Extension<Operator>,
     Path(endpoint): Path<String>,
     headers: HeaderMap,
-    body: Bytes,
+    body: Result<ActionBody<RemoveRequest>, Response>,
 ) -> Response {
     match credentials(endpoint) {
-        Some(resource) => removal(managed, operator, resource, &headers, &body).await,
+        Some(resource) => removal(managed, operator, resource, &headers, body).await,
         None => unknown(&headers, "endpoint_id"),
     }
 }
@@ -234,10 +220,10 @@ pub(super) async fn save_binding(
     Extension(operator): Extension<Operator>,
     Path(section): Path<String>,
     headers: HeaderMap,
-    body: Bytes,
+    body: Result<ActionBody<SectionRequest>, Response>,
 ) -> Response {
     match binding(&section) {
-        Some(resource) => save(managed, operator, resource, &headers, &body).await,
+        Some(resource) => save(managed, operator, resource, &headers, body).await,
         None => unknown(&headers, "binding section"),
     }
 }
@@ -249,10 +235,10 @@ pub(super) async fn remove_binding(
     Extension(operator): Extension<Operator>,
     Path(section): Path<String>,
     headers: HeaderMap,
-    body: Bytes,
+    body: Result<ActionBody<RemoveRequest>, Response>,
 ) -> Response {
     match binding(&section) {
-        Some(resource) => removal(managed, operator, resource, &headers, &body).await,
+        Some(resource) => removal(managed, operator, resource, &headers, body).await,
         None => unknown(&headers, "binding section"),
     }
 }
@@ -265,10 +251,11 @@ async fn save(
     operator: Operator,
     resource: Resource,
     headers: &HeaderMap,
-    body: &[u8],
+    body: Result<ActionBody<SectionRequest>, Response>,
 ) -> Response {
-    let Ok(request) = serde_json::from_slice::<SectionRequest>(body) else {
-        return body_refused(headers, SECTION_SHAPE);
+    let ActionBody(request) = match body {
+        Ok(read) => read,
+        Err(refused) => return refused,
     };
     created(
         answered(headers, move || {
@@ -325,10 +312,11 @@ async fn removal(
     operator: Operator,
     resource: Resource,
     headers: &HeaderMap,
-    body: &[u8],
+    body: Result<ActionBody<RemoveRequest>, Response>,
 ) -> Response {
-    let Ok(request) = serde_json::from_slice::<RemoveRequest>(body) else {
-        return body_refused(headers, REMOVE_SHAPE);
+    let ActionBody(request) = match body {
+        Ok(read) => read,
+        Err(refused) => return refused,
     };
     created(
         answered(headers, move || {
