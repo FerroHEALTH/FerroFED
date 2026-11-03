@@ -54,8 +54,6 @@ openehr-query.workspace = true
 # The EHR_STATUS an admission check creates an EHR with, and the EHR it reads
 # back (§12b.1, #79).
 openehr-rm.workspace = true
-# The SMART on openEHR scope an onward token is requested with (#81).
-openehr-sdt.workspace = true
 # The identifiers the gate withholds are never printed (#45).
 secrecy.workspace = true
 http.workspace = true

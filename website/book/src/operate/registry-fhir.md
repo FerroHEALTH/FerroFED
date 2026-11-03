@@ -157,12 +157,13 @@ a document against it:
 
 The access log's default origin system,
 [`…/CodeSystem/access-log-origin`](access-labels.md#the-labels-a-record-carries),
-and the medication extension `…/StructureDefinition/remaining-dispensations`
-resolve the same way, and so does every other `https://ferrofed.eu/fhir/`
-URL FerroFED writes but one family, the
-[archetype-local code systems](#the-archetype-local-code-systems). A member
-writes the medication extension, and the gateway carries it as the member
-wrote it: no setting replaces its URL. FHIR R4
+resolves the same way, and so does every other `https://ferrofed.eu/fhir/`
+URL FerroFED writes. The medication extension
+`https://ferrobridge.eu/fhir/StructureDefinition/remaining-dispensations` and
+the [archetype-local code systems](#the-archetype-local-code-systems) are
+the interoperability component's, under FerroBRIDGE's base. A member writes
+the medication extension, and the gateway carries it as the member wrote
+it: no setting replaces its URL. FHIR R4
 gives a `NamingSystem` no canonical URL, so
 each identifier system's `NamingSystem` is served at the system's own URL.
 
@@ -182,7 +183,7 @@ canonical URL is hosted: this is FerroFED's own design.
 
 A FHIR document the gateway maps from openEHR writes an archetype's own
 codes, the `at` codes of its `local` terminology, in a code system per
-archetype: `https://ferrofed.eu/fhir/CodeSystem/archetype-local/` followed
+archetype: `https://ferrobridge.eu/fhir/CodeSystem/archetype-local/` followed
 by the archetype id, for example
 `…/archetype-local/openEHR-EHR-EVALUATION.ferrofed_allergy.v1`. No openEHR,
 HL7 or FHIRconnect text defines a URI for those codes, and two versions of
@@ -197,5 +198,6 @@ same section asks that "A scope of the code system URI and the correct
 usage of codes and displays in its namespace SHOULD be clearly defined",
 and this section is that definition: a code under
 `…/archetype-local/<archetype id>` means what the archetype with that id
-defines it to mean. The choice of URI is FerroFED's own design.
+defines it to mean. The URI is the interoperability component's, which
+FerroBRIDGE publishes; FerroFED writes it as the component does.
 

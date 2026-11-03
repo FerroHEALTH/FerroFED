@@ -26,7 +26,7 @@ This page is not legal advice.
 | Component | Where it is | What it does in this release |
 |---|---|---|
 | Logging (Art 2(2)(o)) | the `ehds-logging` crate (FerroAUDIT), with the record built in `app/ferrofed-server/src/access/` | records every access to patient data the gateway intermediates ([The access log](../operate/access-log.md)) |
-| Interoperability (Art 2(2)(n)) | the `eehrxf` crate 0.1.128, published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) and pinned exactly, with the federation half in `app/ferrofed-eehrxf/` | the EHDS dataset model and the mapping between openEHR and FHIR R4; the gateway serves it on its FHIR face, writing the patient summary and receiving a document in the exchange format ([Receiving documents](receiving-documents.md)) |
+| Interoperability (Art 2(2)(n)) | the `eehrxf` crate 0.1.142, published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) and pinned exactly, with the federation half in `app/ferrofed-eehrxf/` | the EHDS dataset model and the mapping between openEHR and FHIR R4; the gateway serves it on its FHIR face, writing the patient summary and receiving a document in the exchange format ([Receiving documents](receiving-documents.md)) |
 
 Both components ride on the federated query path: the logging component
 records what that path did, and the interoperability component builds
