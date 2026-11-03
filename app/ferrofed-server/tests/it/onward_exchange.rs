@@ -39,7 +39,8 @@ use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, ResponseTemplate};
 
 use crate::facade::{body, crossref, patient_query, post, registry, settings_with_room, wire};
-use crate::support::{AUDIENCE, ISSUER, Logs, bearer_as, call, issuer, signed};
+use crate::support::caller::{AUDIENCE, ISSUER, bearer_as, issuer};
+use crate::support::{Logs, call, signed};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -161,7 +162,12 @@ async fn node_a_receives_a_token_exchanged_for_the_verified_caller() -> TestResu
         &endpoint.token_url(),
         &format!("resource = \"{RESOURCE}\"\n"),
     );
-    let app = gateway(dir.path(), &a.uri(), &tables, crate::support::auth())?;
+    let app = gateway(
+        dir.path(),
+        &a.uri(),
+        &tables,
+        crate::support::caller::auth(),
+    )?;
     endpoint.trust(published(&app).await?);
     let authorization = bearer_as(CALLER)?;
 
@@ -201,9 +207,14 @@ async fn the_exchange_asks_for_the_covering_scope_in_canonical_form() -> TestRes
         &endpoint.token_url(),
         &format!("resource = \"{RESOURCE}\"\n"),
     );
-    let app = gateway(dir.path(), &a.uri(), &tables, crate::support::auth())?;
+    let app = gateway(
+        dir.path(),
+        &a.uri(),
+        &tables,
+        crate::support::caller::auth(),
+    )?;
     endpoint.trust(published(&app).await?);
-    let mut claims = crate::support::claims();
+    let mut claims = crate::support::caller::claims();
     CALLER.clone_into(&mut claims.sub);
     claims.scope = Some(String::from(
         "user/composition-*.r  user/aql-*.sdurc user/template-*.r",
@@ -238,7 +249,12 @@ async fn the_callers_token_reaches_no_log_span_metric_or_conveyed_claim() -> Tes
         &endpoint.token_url(),
         &format!("resource = \"{RESOURCE}\"\n"),
     );
-    let (app, state) = served(dir.path(), &a.uri(), &tables, crate::support::auth())?;
+    let (app, state) = served(
+        dir.path(),
+        &a.uri(),
+        &tables,
+        crate::support::caller::auth(),
+    )?;
     endpoint.trust(published(&app).await?);
     let authorization = bearer_as(CALLER)?;
     let token = authorization
@@ -317,7 +333,7 @@ async fn an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent() ->
         audience: vec![AUDIENCE.to_owned()],
         issuers: vec![IssuerSettings::new(
             EDGE,
-            crate::support::key_set(EDGE, &crate::support::jwks_file_of(&edge)?),
+            crate::support::caller::key_set(EDGE, &crate::support::caller::jwks_file_of(&edge)?),
         )],
         ..AuthSettings::default()
     };
@@ -363,7 +379,12 @@ async fn a_dpop_bound_grant_proves_every_request_to_its_node() -> TestResult {
         "[credentials.\"node-a-pub\".oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\ndpop_key_file = {key}\n",
         endpoint.token_url()
     );
-    let app = gateway(dir.path(), &a.uri(), &tables, crate::support::auth())?;
+    let app = gateway(
+        dir.path(),
+        &a.uri(),
+        &tables,
+        crate::support::caller::auth(),
+    )?;
     endpoint.trust(published(&app).await?);
 
     let (status, text) = call(app, patient_post(&bearer_as(CALLER)?)?).await?;

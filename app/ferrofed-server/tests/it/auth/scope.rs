@@ -70,7 +70,7 @@ async fn a_scope_outside_the_grammar_and_no_scope_grant_nothing() -> TestResult 
 // conformance: CP-17
 #[tokio::test]
 async fn a_system_wide_aql_grant_counts_only_for_a_listed_backend_client() -> TestResult {
-    let mut auth = support::auth();
+    let mut auth = support::caller::auth();
     for issuer in &mut auth.issuers {
         issuer
             .backend_clients
@@ -101,12 +101,12 @@ async fn a_patient_grant_admits_no_query() -> TestResult {
     let now = jiff::Timestamp::now().as_second();
     let payload = format!(
         r#"{{"iss":"{}","sub":"synthetic-patient-user","aud":"{}","exp":{},"iat":{now},"jti":"synthetic-jti","client_id":"synthetic-client","scope":"patient/aql-*.s launch/patient","ehrId":"{EHR_A}","extensions":{{"ihe_iua":{{"purpose_of_use":[{{"system":"{}","code":"TREAT"}}]}}}}}}"#,
-        support::ISSUER,
-        support::AUDIENCE,
+        support::caller::ISSUER,
+        support::caller::AUDIENCE,
         now + 600,
         ferrofed_testkit::issuer::ACT_REASON,
     );
-    let token = support::issuer().sign(&support::issuer().header(), &payload)?;
+    let token = support::caller::issuer().sign(&support::caller::issuer().header(), &payload)?;
     assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Scope).await
 }
 

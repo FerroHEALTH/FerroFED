@@ -13,7 +13,7 @@
 //! the one an identity service confirms (§5.2, N32), and a lookup by
 //! demographics is refused (§5.4.3). The one match is the `Patient` the
 //! identity binding's demographics service holds
-//! ([`crate::summary::header_patient`]).
+//! ([`crate::summary::resources::header_patient`]).
 
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};

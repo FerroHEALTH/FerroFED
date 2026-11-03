@@ -11,7 +11,7 @@ use ferrofed_server::EXIT_CONFIG;
 use ferrofed_testkit::listener::{ListenerCertificates, ListenerFiles};
 
 use super::{TestResult, ferrofed, quoted, written};
-use crate::support::auth_toml;
+use crate::support::caller::auth_toml;
 
 /// A marker a refused file holds, which no output may repeat.
 const MARKER: &str = "Qz7-synthetic-listener-file";

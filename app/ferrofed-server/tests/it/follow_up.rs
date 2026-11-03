@@ -47,7 +47,7 @@ const LATEST_ELSEWHERE: &str = "9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a::other.exam
 const LEARNED: &str = "learned a route for a creating_system_id";
 
 /// The client's own credential, which no node ever sees.
-use crate::support::CLIENT_TOKEN;
+use crate::support::caller::CLIENT_TOKEN;
 
 /// The gateway over node A and node B.
 fn over(dir: &std::path::Path, a: &Server, b: &Server) -> Result<Router, Box<dyn Error>> {

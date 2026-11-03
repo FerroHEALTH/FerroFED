@@ -28,7 +28,8 @@ use wiremock::{Mock, ResponseTemplate};
 
 use super::{TestResult, configuration, member};
 use crate::facade::settings_with_room;
-use crate::support::{self, AUDIENCE, call};
+use crate::support::caller::AUDIENCE;
+use crate::support::{self, call};
 
 /// The issuer a reload adds to the trust list.
 const ISSUER_B: &str = "https://issuer-b.example.test";
@@ -52,13 +53,17 @@ pub(super) fn bearer_b() -> Result<String, Box<dyn Error>> {
 /// `[auth]` trusting the suite's issuer, with the product scope that admits
 /// operators.
 pub(super) fn auth_a() -> String {
-    support::auth_toml()
+    support::caller::auth_toml()
 }
 
 /// `[auth]` trusting the suite's issuer and [`SECOND`], its key set in a
 /// file.
 pub(super) fn auth_a_and_b() -> Result<String, Box<dyn Error>> {
-    Ok(format!("{}{}", auth_a(), support::issuer_toml(&SECOND)?))
+    Ok(format!(
+        "{}{}",
+        auth_a(),
+        support::caller::issuer_toml(&SECOND)?
+    ))
 }
 
 /// A development gateway over one member whose client face, admin listener
@@ -157,7 +162,7 @@ async fn a_reload_adds_an_issuer_whose_tokens_are_admitted_after_it() -> TestRes
     assert_eq!(StatusCode::OK, status_of(&gateway.app, &b).await?);
     assert_eq!(
         StatusCode::OK,
-        status_of(&gateway.app, &support::bearer()?).await?,
+        status_of(&gateway.app, &support::caller::bearer()?).await?,
         "the issuer that stayed is still trusted"
     );
     Ok(())
@@ -264,7 +269,7 @@ async fn an_auth_that_does_not_load_is_refused_with_the_whole_reload() -> TestRe
     assert_eq!(1, gateway.members()?, "the registry change is not applied");
     assert_eq!(
         StatusCode::OK,
-        status_of(&gateway.app, &support::bearer()?).await?,
+        status_of(&gateway.app, &support::caller::bearer()?).await?,
         "the running issuers stay"
     );
     assert_eq!(
@@ -287,7 +292,7 @@ async fn an_auth_that_trusts_no_issuer_is_refused_and_the_running_issuers_stay()
     assert_eq!("auth", refused.class(), "{refused:?}");
     assert_eq!(
         StatusCode::OK,
-        status_of(&gateway.app, &support::bearer()?).await?,
+        status_of(&gateway.app, &support::caller::bearer()?).await?,
         "the running issuers stay"
     );
     Ok(())

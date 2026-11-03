@@ -27,7 +27,7 @@ pub(crate) fn binary(args: &[&str], toml: &str) -> Result<Output, Box<dyn StdErr
     let mut file = tempfile::NamedTempFile::new()?;
     file.write_all(toml.as_bytes())?;
     if !toml.contains("[auth") {
-        file.write_all(crate::support::auth_toml().as_bytes())?;
+        file.write_all(crate::support::caller::auth_toml().as_bytes())?;
     }
     let output = Command::new(env!("CARGO_BIN_EXE_ferrofed"))
         .args(args)

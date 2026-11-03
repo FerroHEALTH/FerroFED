@@ -29,7 +29,11 @@ async fn the_admin_listener_serves_tls_and_knows_its_loopback_peer() -> TestResu
     let tcp = TcpListener::bind("127.0.0.1:0").await?;
     let address = tcp.local_addr()?;
     let tls = kept(&tls_section(&files, false, false), METRICS_TLS)?;
-    let access = Access::new(&crate::support::auth(), Profile::Development, Vec::new());
+    let access = Access::new(
+        &crate::support::caller::auth(),
+        Profile::Development,
+        Vec::new(),
+    );
     let app = admin::router(Arc::new(AppState::default()), access, None, None);
     tokio::spawn(admin::serve(tcp, app, Some(tls)));
 
@@ -60,7 +64,11 @@ async fn an_admin_listener_with_a_client_ca_refuses_a_client_with_no_certificate
     let tcp = TcpListener::bind("127.0.0.1:0").await?;
     let address = tcp.local_addr()?;
     let tls = kept(&tls_section(&files, true, false), METRICS_TLS)?;
-    let access = Access::new(&crate::support::auth(), Profile::Development, Vec::new());
+    let access = Access::new(
+        &crate::support::caller::auth(),
+        Profile::Development,
+        Vec::new(),
+    );
     let app = admin::router(Arc::new(AppState::default()), access, None, None);
     tokio::spawn(admin::serve(tcp, app, Some(tls)));
 

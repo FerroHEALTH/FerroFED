@@ -48,7 +48,7 @@ const ONWARD_TOKEN: &str = "synthetic-onward-token";
 const ONWARD_BASIC: &str = "Basic Z2F0ZXdheTpzeW50aGV0aWMtb253YXJkLXRva2Vu";
 
 /// The client's own credential, which no node ever sees.
-use crate::support::CLIENT_TOKEN;
+use crate::support::caller::CLIENT_TOKEN;
 
 /// A `COMPOSITION` carrying the patient's identifier as a `DV_IDENTIFIER` in
 /// its content, written with spacing and member order a re-serialisation

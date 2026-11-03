@@ -225,7 +225,10 @@ async fn the_operator_surface_marks_a_definition_file_read_only() -> TestResult 
         format!("/operator/stored-queries/{NAME}"),
     ] {
         let request = Request::get(&path)
-            .header(header::AUTHORIZATION, crate::support::operator_bearer()?)
+            .header(
+                header::AUTHORIZATION,
+                crate::support::caller::operator_bearer()?,
+            )
             .body(Body::empty())?;
         let (status, text) = call(app.clone(), request).await?;
         assert_eq!(StatusCode::OK, status, "{path}: {text}");
@@ -476,7 +479,7 @@ async fn the_admin_distribution_at_a_read_only_registry_is_a_405_allowing_nothin
     write(&definitions, NAME, "1.0.0", parameterised().as_bytes())?;
     let settings = settings(dir.path(), (&a.uri(), &b.uri()), &definitions, "")?;
     let access = ferrofed_server::admin::Access::new(
-        &crate::support::auth(),
+        &crate::support::caller::auth(),
         ferrofed_identity::profile::Profile::Production,
         Vec::new(),
     );
@@ -484,7 +487,10 @@ async fn the_admin_distribution_at_a_read_only_registry_is_a_405_allowing_nothin
         ferrofed_server::admin::router(Arc::new(AppState::build(&settings)?), access, None, None);
     for target in ["*", "node-a-pub"] {
         let request = Request::post(format!("/admin/stored-queries/{NAME}/1.0.0/distribute"))
-            .header(header::AUTHORIZATION, crate::support::operator_bearer()?)
+            .header(
+                header::AUTHORIZATION,
+                crate::support::caller::operator_bearer()?,
+            )
             .header("openEHR-federation-endpoint", target)
             .body(Body::empty())?;
         let (status, headers, body) = exchange(operator.clone(), request).await?;

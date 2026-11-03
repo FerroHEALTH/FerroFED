@@ -16,7 +16,8 @@ use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::facade::node_answering;
-use crate::support::{bearer, call, error_body, operator_bearer, send_as_is};
+use crate::support::caller::{bearer, operator_bearer};
+use crate::support::{call, error_body, send_as_is};
 
 use super::{NAME, TestResult, parameterised, stored, two_members};
 

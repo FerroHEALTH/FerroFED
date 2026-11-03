@@ -55,7 +55,7 @@ pub(crate) const CREATED_BY_LEGACY: &str =
 pub(crate) const LEGACY_MAPPING: &str = "\n[[creating_system]]\ncreating_system_id = \"legacy-a.example.org\"\nendpoint = \"node-a-pub\"\n";
 
 /// The client's own credential, which no node ever sees.
-use crate::support::CLIENT_TOKEN;
+use crate::support::caller::CLIENT_TOKEN;
 
 /// The gateway over node A and node B, with the registry `extra` appended.
 pub(crate) fn over(

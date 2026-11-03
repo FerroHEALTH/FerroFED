@@ -22,7 +22,7 @@ use ferrofed_server::config::settings::Settings;
 use ferrofed_testkit::listener::ListenerCertificates;
 
 use super::{everything, refusal, secret_file};
-use crate::support::{SCRAPE_HASH, SCRAPE_USER};
+use crate::support::caller::{SCRAPE_HASH, SCRAPE_USER};
 
 type TestResult = Result<(), Box<dyn StdError>>;
 

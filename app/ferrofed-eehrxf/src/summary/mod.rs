@@ -55,34 +55,25 @@
 //! and the EPS composition's author, section and empty-reason elements.
 
 pub mod duplicates;
+pub mod error;
 pub mod mappings;
+mod narrative;
 pub mod once;
 pub mod repeated;
+pub mod resources;
 
-use once::ListedOnce;
 use std::collections::{BTreeMap, BTreeSet};
 
 use eehrxf::category::Category;
-use eehrxf::document::{Document, DocumentError, EmptyReason};
+use eehrxf::document::{Document, EmptyReason};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::terminology::Terminology;
 use eehrxf::terminology::ehn;
-use eehrxf::terminology::translation::{TranslationError, Translator};
+use eehrxf::terminology::translation::Translator;
 use eehrxf::terminology::withheld::Withheld;
-use eehrxf::transformation::{Direction, Pin, Report, ReportError, Tally};
-use ferrofed_identity::role::header::{PatientHeader, PersonName, PostalAddress, Telecom};
-use fhir_types::r4::address::Address;
+use eehrxf::transformation::{Direction, Pin, Report, Tally};
+use ferrofed_identity::role::header::PatientHeader;
 use fhir_types::r4::bundle::Bundle;
-use fhir_types::r4::codeable_concept::CodeableConcept;
-use fhir_types::r4::contact_point::ContactPoint;
-use fhir_types::r4::device::{Device, DeviceDeviceName, DeviceVersion};
-use fhir_types::r4::extension::{Extension, ExtensionValue};
-use fhir_types::r4::human_name::HumanName;
-use fhir_types::r4::identifier::Identifier;
-use fhir_types::r4::organization::Organization;
-use fhir_types::r4::patient::Patient;
-use fhir_types::r4::primitives::{Code, Date};
-use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
 use fhirconnect::engine::context::CallContext;
 use fhirconnect::engine::traverse::error::EngineError;
@@ -90,7 +81,11 @@ use fhirconnect::operations::error::OperationError;
 use fhirconnect::operations::run::Settings;
 
 use crate::patient_summary::{Reason, Section, UNSELECTED};
-use crate::summary::mappings::{Mappings, MappingsError, slot_of};
+use crate::summary::error::AssemblyError;
+use crate::summary::mappings::{Mappings, slot_of};
+use crate::summary::narrative::{authors_shown, covered_elsewhere, narrative};
+use crate::summary::once::ListedOnce;
+use crate::summary::resources::{device, organization, patient, reference};
 use crate::transformation::preferred;
 
 /// The extension that says why a required element has no value (FHIR R4
@@ -239,74 +234,6 @@ pub struct Assembled {
     pub transformations: Vec<Report>,
 }
 
-/// Why the document cannot be assembled.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum AssemblyError {
-    /// A section has no EPS slot.
-    #[error(transparent)]
-    Slot(#[from] MappingsError),
-    /// A mapping refused a composition a member answered with.
-    #[error("the mapping of a composition of the template {template} was refused")]
-    Mapping {
-        /// The composition's template id.
-        template: String,
-        /// Why.
-        #[source]
-        source: MappingError,
-    },
-    /// A composition a member answered with is no JSON.
-    #[error("a composition of the template {template} is no JSON")]
-    Composition {
-        /// The composition's template id.
-        template: String,
-        /// Why.
-        #[source]
-        source: serde_json::Error,
-    },
-    /// The document could not be written.
-    #[error(transparent)]
-    Document(#[from] DocumentError),
-    /// A crosswalk gap names no EPS section slot.
-    #[error("the gap {element} names no section of the patient summary composition")]
-    Gap {
-        /// The Xt-EHR element path of the gap.
-        element: &'static str,
-    },
-    /// A section answer names an origin that was not given.
-    #[error("a section answer names origin {index}, which was not given")]
-    Origin {
-        /// The index.
-        index: usize,
-    },
-    /// The transformation of a composition a member answered with could not
-    /// be counted.
-    #[error("the transformation of a composition of the template {template} could not be counted")]
-    Report {
-        /// The composition's template id.
-        template: String,
-        /// Why.
-        #[source]
-        source: ReportError,
-    },
-    /// The codes of a mapped resource could not be translated, because the
-    /// terminology server refused or did not answer, which fails the
-    /// document rather than leaving a code untranslated.
-    #[error(
-        "the codes mapped from a composition of the template {template} could not be translated"
-    )]
-    Translation {
-        /// The composition's template id.
-        template: String,
-        /// Why.
-        #[source]
-        source: TranslationError,
-    },
-    /// The header names the patient by no family name, given name or text,
-    /// which the HL7 Europe Patient Summary `Patient` requires (`ips-pat-1`).
-    #[error("the patient header holds no name, which the EPS Patient requires (ips-pat-1)")]
-    Unnamed,
-}
 /// Assembles the patient summary `request` asks for from the `sections`
 /// the `origins` answered, mapping each composition with `mappings`, as
 /// `author` writes it.
@@ -733,239 +660,5 @@ impl Assembly {
             .ok_or(AssemblyError::Origin { index })?;
         self.members.insert(index, url.clone());
         Ok(url)
-    }
-}
-
-/// The names of the organisations at `authors`.
-fn authors_shown(
-    authors: &BTreeSet<String>,
-    members: &BTreeMap<usize, String>,
-    origins: &[Origin],
-) -> Vec<String> {
-    members
-        .iter()
-        .filter(|(_, url)| authors.contains(*url))
-        .filter_map(|(index, _)| origins.get(*index))
-        .map(|origin| origin.organisation.shown().to_owned())
-        .collect()
-}
-
-/// The paragraphs of a section's generated narrative.
-fn narrative(
-    entries: usize,
-    (silent, uncovered): (&[String], &BTreeMap<(usize, String), usize>),
-    origins: &[Origin],
-    contributors: &[String],
-) -> Vec<String> {
-    let mut paragraphs = Vec::new();
-    paragraphs.push(if entries == 0 {
-        String::from("No entry.")
-    } else {
-        format!("{entries} entries, from {}.", contributors.join(", "))
-    });
-    paragraphs.push(NOT_EXHAUSTIVE.to_owned());
-    if !silent.is_empty() {
-        paragraphs.push(format!("No answer from: {}.", silent.join(", ")));
-    }
-    for ((index, template), count) in uncovered {
-        let member = origins
-            .get(*index)
-            .map_or("a member", |origin| origin.organisation.shown());
-        paragraphs.push(format!(
-            "Not shown: {count} record(s) of the template {template} from {member}, which no mapping covers."
-        ));
-    }
-    paragraphs
-}
-
-/// The paragraphs that name each member of `elsewhere` that answered as
-/// serving its own patient summary, which holds its data for the section.
-fn covered_elsewhere(elsewhere: &[Elsewhere]) -> Vec<String> {
-    elsewhere
-        .iter()
-        .filter_map(|member| {
-            let shown = member.organisation.shown();
-            match member.answer {
-                Covered::Document => Some(format!(
-                    "Not mapped here: the records of {shown}, which serves its own patient summary."
-                )),
-                Covered::Absent => Some(format!(
-                    "Not mapped here: the records of {shown}, which serves its own patient summary and holds none for this patient."
-                )),
-                Covered::Silent { .. } => None,
-            }
-        })
-        .collect()
-}
-
-/// The patient of `request`: the identifier it was asked by, and the
-/// header the identity binding holds, each element as the binding gives it.
-///
-/// An element the binding does not hold is left out, and the birth date,
-/// which the EPS `Patient` requires, then carries a `data-absent-reason` of
-/// `unknown` (eHN PS Art 10(5)).
-fn patient(request: &Request) -> Patient {
-    header_patient(
-        &request.patient_id,
-        (&request.system, &request.value),
-        &request.header,
-    )
-}
-
-/// Returns the `Patient` with the id `id` that the identity binding's
-/// `header` describes, named by the identifier `system`|`value` it was asked
-/// by, each element as the binding gives it.
-///
-/// An element the binding does not hold is left out, and the birth date
-/// then carries a `data-absent-reason` of `unknown` (eHN PS Art 10(5)).
-#[must_use]
-pub fn header_patient(id: &str, (system, value): (&str, &str), header: &PatientHeader) -> Patient {
-    Patient {
-        id: Some(id.to_owned()),
-        identifier: vec![Identifier {
-            system: Some(system.into()),
-            value: Some(value.into()),
-            ..Identifier::default()
-        }],
-        name: header.names.iter().map(human_name).collect(),
-        birth_date: Some(header.birth_date.as_deref().map_or_else(
-            || Date {
-                extension: vec![absent()],
-                ..Date::default()
-            },
-            Date::from,
-        )),
-        gender: header.gender.as_deref().map(Code::from),
-        address: header.addresses.iter().map(address).collect(),
-        telecom: header.telecoms.iter().map(contact_point).collect(),
-        ..Patient::default()
-    }
-}
-
-/// The FHIR name `name` is written as.
-fn human_name(name: &PersonName) -> HumanName {
-    HumanName {
-        r#use: name.purpose.as_deref().map(Code::from),
-        text: name
-            .text
-            .as_deref()
-            .map(fhir_types::r4::primitives::String::from),
-        family: name
-            .family
-            .as_deref()
-            .map(fhir_types::r4::primitives::String::from),
-        given: strings(&name.given),
-        prefix: strings(&name.prefix),
-        suffix: strings(&name.suffix),
-        ..HumanName::default()
-    }
-}
-
-/// The FHIR address `postal` is written as.
-fn address(postal: &PostalAddress) -> Address {
-    Address {
-        r#use: postal.purpose.as_deref().map(Code::from),
-        text: postal
-            .text
-            .as_deref()
-            .map(fhir_types::r4::primitives::String::from),
-        line: strings(&postal.lines),
-        city: postal
-            .city
-            .as_deref()
-            .map(fhir_types::r4::primitives::String::from),
-        district: postal
-            .district
-            .as_deref()
-            .map(fhir_types::r4::primitives::String::from),
-        state: postal
-            .state
-            .as_deref()
-            .map(fhir_types::r4::primitives::String::from),
-        postal_code: postal
-            .postal_code
-            .as_deref()
-            .map(fhir_types::r4::primitives::String::from),
-        country: postal
-            .country
-            .as_deref()
-            .map(fhir_types::r4::primitives::String::from),
-        ..Address::default()
-    }
-}
-
-/// The FHIR contact point `telecom` is written as.
-fn contact_point(telecom: &Telecom) -> ContactPoint {
-    ContactPoint {
-        system: telecom.system.as_deref().map(Code::from),
-        value: telecom
-            .value
-            .as_deref()
-            .map(fhir_types::r4::primitives::String::from),
-        r#use: telecom.purpose.as_deref().map(Code::from),
-        ..ContactPoint::default()
-    }
-}
-
-/// The FHIR `string`s `values` are written as.
-fn strings(values: &[String]) -> Vec<fhir_types::r4::primitives::String> {
-    values.iter().map(|value| value.as_str().into()).collect()
-}
-
-/// The `data-absent-reason` extension stating `unknown`.
-fn absent() -> Extension {
-    Extension {
-        url: DATA_ABSENT_REASON.to_owned(),
-        value: Some(ExtensionValue::Code("unknown".into())),
-        ..Extension::default()
-    }
-}
-
-/// The gateway's `Device`, owned by the operator at `operator`.
-fn device(author: &Author, operator: &str) -> Device {
-    Device {
-        id: Some(String::from("gateway")),
-        device_name: vec![DeviceDeviceName {
-            name: author.product.as_str().into(),
-            r#type: "manufacturer-name".into(),
-            ..DeviceDeviceName::default()
-        }],
-        version: vec![DeviceVersion {
-            value: author.version.as_str().into(),
-            ..DeviceVersion::default()
-        }],
-        // NOTE: eHN PS A.1.4.3: the nature of the summary is carried by its author device.
-        r#type: Some(CodeableConcept {
-            text: Some("Software that generates the patient summary automatically".into()),
-            ..CodeableConcept::default()
-        }),
-        owner: Some(reference(operator)),
-        ..Device::default()
-    }
-}
-
-/// The `Organization` of `organisation`, under the document id `id`.
-fn organization(id: &str, organisation: &Organisation) -> Organization {
-    Organization {
-        id: Some(id.to_owned()),
-        name: Some(organisation.shown().into()),
-        identifier: organisation
-            .identifiers
-            .iter()
-            .map(|(system, value)| Identifier {
-                system: Some(system.as_str().into()),
-                value: Some(value.as_str().into()),
-                ..Identifier::default()
-            })
-            .collect(),
-        ..Organization::default()
-    }
-}
-
-/// The literal reference `url`.
-fn reference(url: &str) -> Reference {
-    Reference {
-        reference: Some(url.into()),
-        ..Reference::default()
     }
 }

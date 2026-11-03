@@ -24,7 +24,8 @@ use super::list::{
     list, names, reads,
 };
 use crate::facade::{EHR_B, PATIENT, PATIENT_TAIL, wire};
-use crate::support::{call, claims, exchange, issuer};
+use crate::support::caller::{claims, issuer};
+use crate::support::{call, exchange};
 
 /// The URL the list names node B's document at, listed by the default
 /// caller through `app`.

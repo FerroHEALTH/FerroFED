@@ -79,7 +79,7 @@ fn rows(at_a: &str) -> String {
 
 /// The suite's `[auth]`, its issuer's patient tokens bound to node A.
 fn bound() -> Result<AuthSettings, Box<dyn Error>> {
-    let mut auth = support::auth();
+    let mut auth = support::caller::auth();
     for issuer in &mut auth.issuers {
         issuer.patient = Some(PatientBinding {
             endpoint: EndpointId::new("node-a-pub")?,
@@ -456,7 +456,7 @@ async fn a_refused_read_by_subject_records_nothing_of_the_other_patient() -> Tes
 #[tokio::test]
 async fn a_patient_grant_never_reaches_the_demographic_api() -> TestResult {
     let bound = gateway().await?;
-    let unbound = Gateway::with_rows(support::auth(), &rows(EHR_A)).await?;
+    let unbound = Gateway::with_rows(support::caller::auth(), &rows(EHR_A)).await?;
     for gateway in [bound, unbound] {
         let read =
             Request::get("/v1/demographic/person/8849182c-82ad-4088-a07f-48ead4180515::node-a::1")
@@ -527,7 +527,7 @@ async fn a_cross_reference_contradicting_the_token_is_a_424() -> TestResult {
 // conformance: CP-17
 #[tokio::test]
 async fn without_the_opt_in_a_patient_grant_still_admits_nothing() -> TestResult {
-    let gateway = Gateway::with_rows(support::auth(), &rows(EHR_A)).await?;
+    let gateway = Gateway::with_rows(support::caller::auth(), &rows(EHR_A)).await?;
     assert_refused(&gateway, as_the_patient(query()?)?, Refusal::Scope).await?;
     let route = get(&format!("/v1/ehr/{EHR_A}"), None)?;
     assert_refused(&gateway, as_the_patient(route)?, Refusal::Scope).await

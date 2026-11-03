@@ -20,7 +20,8 @@ use super::{
     Gateway, TestResult, assert_admitted, assert_refused, bearing, claims, minted, query, sent,
 };
 use crate::facade::wire;
-use crate::support::{self, AUDIENCE, ISSUER};
+use crate::support::caller::{AUDIENCE, ISSUER};
+use crate::support::{self};
 
 /// The current time, in seconds since the epoch.
 fn now() -> i64 {
@@ -76,7 +77,7 @@ async fn two_authorization_fields_are_400() -> TestResult {
     for _ in 0..2 {
         request
             .headers_mut()
-            .append(header::AUTHORIZATION, support::bearer()?.parse()?);
+            .append(header::AUTHORIZATION, support::caller::bearer()?.parse()?);
     }
     assert_refused(&gateway, request, Refusal::Malformed).await
 }
@@ -161,9 +162,9 @@ async fn a_token_signed_by_another_key_under_a_trusted_name_is_401() -> TestResu
 #[tokio::test]
 async fn a_token_naming_an_unpublished_key_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
-    let mut header = support::issuer().header();
+    let mut header = support::caller::issuer().header();
     header.kid = Some(String::from("k9"));
-    let token = support::issuer().mint_with(&header, &claims())?;
+    let token = support::caller::issuer().mint_with(&header, &claims())?;
     assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
 
@@ -179,7 +180,7 @@ async fn an_hmac_token_is_401() -> TestResult {
     let token = jsonwebtoken::encode(
         &header,
         &claims(),
-        &EncodingKey::from_secret(support::issuer().jwks_json()?.as_bytes()),
+        &EncodingKey::from_secret(support::caller::issuer().jwks_json()?.as_bytes()),
     )?;
     assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
@@ -202,9 +203,9 @@ async fn an_unsigned_token_is_401() -> TestResult {
 #[tokio::test]
 async fn a_token_not_typed_as_an_access_token_is_401() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
-    let mut header = support::issuer().header();
+    let mut header = support::caller::issuer().header();
     header.typ = Some(String::from("JWT"));
-    let token = support::issuer().mint_with(&header, &claims())?;
+    let token = support::caller::issuer().mint_with(&header, &claims())?;
     assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
 
@@ -219,7 +220,7 @@ async fn a_token_without_its_client_id_is_401() -> TestResult {
         r#"{{"iss":"{ISSUER}","sub":"synthetic-caller","aud":"{AUDIENCE}","exp":{},"iat":{now},"jti":"synthetic-jti","scope":"user/aql-*.s"}}"#,
         now + 600
     );
-    let token = support::issuer().sign(&support::issuer().header(), &payload)?;
+    let token = support::caller::issuer().sign(&support::caller::issuer().header(), &payload)?;
     assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Invalid).await
 }
 

@@ -26,7 +26,7 @@ use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::{Gateway, TestResult, assert_admitted, assert_refused, bearing, query};
-use crate::support::AUDIENCE;
+use crate::support::caller::AUDIENCE;
 
 /// The issuer whose tokens are introspected.
 const ISSUER: &str = "https://introspected-issuer.example.test";

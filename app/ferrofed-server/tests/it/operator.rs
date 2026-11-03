@@ -26,7 +26,8 @@ use ferrofed_server::state::AppState;
 use http::{Request, StatusCode, header};
 
 use crate::facade::settings_with_room;
-use crate::support::{bearer, error_body, operator_bearer, send, send_as_is};
+use crate::support::caller::{bearer, operator_bearer};
+use crate::support::{error_body, send, send_as_is};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -244,7 +245,7 @@ async fn a_scope_that_only_contains_or_starts_the_operator_scope_is_refused() ->
         "ferrofed:operat",
         "FERROFED:OPERATOR",
     ] {
-        let authorization = crate::support::bearer_adding_scope(near)?;
+        let authorization = crate::support::caller::bearer_adding_scope(near)?;
         let (status, text) =
             answer(app.clone(), get("/operator/incidents", &authorization)?).await?;
         assert_eq!(StatusCode::FORBIDDEN, status, "{near}: {text}");

@@ -341,7 +341,7 @@ async fn the_log_destination_records_each_resolution_without_the_patient() -> Te
         event.contains(r#""on_behalf":"caller""#),
         "the event says whose behalf: {event}"
     );
-    let claims = crate::support::claims();
+    let claims = crate::support::caller::claims();
     for value in [&claims.sub, &claims.client_id] {
         assert!(!log.contains(value.as_str()), "no caller in the log: {log}");
     }
@@ -443,7 +443,7 @@ async fn the_caller_reaches_the_repository_and_no_log_line_or_metric() -> TestRe
     );
     let resolutions = resolutions(&records);
     assert_eq!(1, resolutions.len(), "one record per ITI-83 exchange");
-    let claims = crate::support::claims();
+    let claims = crate::support::caller::claims();
     assert!(
         resolutions[0].contains(&claims.sub),
         "the caller reaches the repository in the ITI-83 record"

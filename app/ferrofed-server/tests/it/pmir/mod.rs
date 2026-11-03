@@ -26,7 +26,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 
 use crate::facade::{registry, settings_with_room};
-use crate::support::SCRAPE_HASH;
+use crate::support::caller::SCRAPE_HASH;
 
 /// The `ehr_id` domain of node A at the PIX Manager, which scopes a merge.
 pub(crate) const DOMAIN_A: &str = "urn:oid:2.999.1.910";
@@ -49,7 +49,7 @@ pub(crate) const OTHER_USER: &str = "another-client";
 
 /// The `Authorization` value of [`FEED_USER`] in the Basic scheme.
 pub(crate) fn feed_credentials() -> String {
-    crate::support::basic(FEED_USER, crate::support::SCRAPE_PASSWORD)
+    crate::support::caller::basic(FEED_USER, crate::support::caller::SCRAPE_PASSWORD)
 }
 
 /// The path the feed is served at.

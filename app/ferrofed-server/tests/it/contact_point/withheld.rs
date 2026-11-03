@@ -117,22 +117,22 @@ async fn the_deployments_own_caller_still_sees_the_exclusion_disclosed() -> Test
     let a = node_answering("uid-at-a").await;
     let b = node_answering("uid-at-b").await;
     let contact_point = Issuer::new("https://ncp.example.test")?;
-    let mut auth = crate::support::auth();
+    let mut auth = crate::support::caller::auth();
     let mut declared_issuer = declared()?
         .issuers
         .into_iter()
         .next()
         .ok_or("the declared issuer")?;
     contact_point.name().clone_into(&mut declared_issuer.issuer);
-    declared_issuer.verification = crate::support::key_set(
+    declared_issuer.verification = crate::support::caller::key_set(
         contact_point.name(),
-        &crate::support::jwks_file_of(&contact_point)?,
+        &crate::support::caller::jwks_file_of(&contact_point)?,
     );
     auth.issuers.push(declared_issuer);
     let app = disclosing((&a, &b), (Crossref::Knows(BOTH), Denies(true)), auth)?;
     let (status, _, text) = sent(
         &app,
-        bearing(query()?, &minted(&crate::support::claims())?)?,
+        bearing(query()?, &minted(&crate::support::caller::claims())?)?,
     )
     .await?;
     assert_eq!(StatusCode::OK, status, "{text}");

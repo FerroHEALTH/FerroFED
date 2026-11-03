@@ -31,7 +31,8 @@ use url::Url;
 
 use crate::facade::{Answer, body, gateway_within, node_answering, post, registry, statuses};
 use crate::pdqm::{ASK_ALL, gateway, local_query, manager, supplier};
-use crate::support::{SCRAPE_HASH, call};
+use crate::support::call;
+use crate::support::caller::SCRAPE_HASH;
 
 type TestResult = Result<(), Box<dyn Error>>;
 

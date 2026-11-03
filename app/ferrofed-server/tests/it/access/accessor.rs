@@ -56,7 +56,7 @@ const CONNECTOR: &str = "Qz7-national-connector";
 /// requiring `minimum`, and declaring its client tokens as acting for a
 /// professional when `clients` is set.
 fn assured(minimum: AssuranceLevel, clients: bool) -> AuthSettings {
-    let mut auth = support::auth();
+    let mut auth = support::caller::auth();
     for issuer in &mut auth.issuers {
         issuer.assurance = Some(Assurance {
             claim: String::from("acr"),
@@ -74,7 +74,7 @@ fn assured(minimum: AssuranceLevel, clients: bool) -> AuthSettings {
 /// The suite's default claims stating `acr` and naming the professional
 /// [`NAME`], [`IDENTIFIER`] in the IUA extension.
 fn professional(acr: &str) -> Claims {
-    let mut claims = support::claims();
+    let mut claims = support::caller::claims();
     claims.other.insert(String::from("acr"), acr.to_owned());
     if let Some(extensions) = claims.extensions.as_mut() {
         extensions.ihe_iua.subject_name = Some(NAME.to_owned());
@@ -289,7 +289,7 @@ async fn a_contact_point_caller_names_the_foreign_professional_and_provider() ->
     assert_eq!(details(&record, "ehds-relayed", "asserted"), ["true"]);
     assert_eq!(
         details(&record, "ehds-relayed", "contact-point"),
-        [support::ISSUER]
+        [support::caller::ISSUER]
     );
     only_in_the_person(&record, &[NAME, "ihe-assuranceLevel"]);
     Ok(())
@@ -299,7 +299,9 @@ async fn a_contact_point_caller_names_the_foreign_professional_and_provider() ->
 /// the record carries none, whatever the token states.
 #[tokio::test]
 async fn no_level_is_recorded_when_the_issuer_declares_none() -> TestResult {
-    let record = recorded(support::auth(), &professional(HIGH)).await?.record;
+    let record = recorded(support::caller::auth(), &professional(HIGH))
+        .await?
+        .record;
     let person = person(&record)?;
     assert!(levels(person).is_empty(), "never inferred: {person}");
     assert_eq!(acting(person), Some("person"));
@@ -310,7 +312,7 @@ async fn no_level_is_recorded_when_the_issuer_declares_none() -> TestResult {
 /// A token that states no professional is recorded with none.
 #[tokio::test]
 async fn a_token_naming_no_professional_records_none() -> TestResult {
-    let mut claims = support::claims();
+    let mut claims = support::caller::claims();
     claims
         .other
         .insert(String::from("acr"), SUBSTANTIAL.to_owned());

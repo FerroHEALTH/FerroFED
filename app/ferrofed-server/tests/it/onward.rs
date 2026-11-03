@@ -44,7 +44,8 @@ use crate::facade::{
     Answer, PATIENT, body, crossref, patient_query, post, registry, schema, settings_with_room,
     statuses,
 };
-use crate::support::{CLIENT_TOKEN, Logs, call, injected};
+use crate::support::caller::CLIENT_TOKEN;
+use crate::support::{Logs, call, injected};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

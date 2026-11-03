@@ -35,7 +35,8 @@ use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, body, crossref, gateway_within_state,
     node_answering, patient_query, post, registry,
 };
-use crate::support::{self, ISSUER, Logs, bearer, error_body, operator_bearer, send_as_is};
+use crate::support::caller::{ISSUER, bearer, operator_bearer};
+use crate::support::{self, Logs, error_body, send_as_is};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -53,7 +54,7 @@ const REMOTE: ([u8; 4], u16) = ([192, 0, 2, 10], 40_000);
 
 /// The admin listener's application over `state`, in production.
 fn admin_over(state: &Arc<AppState>) -> Router {
-    let access = Access::new(&support::auth(), Profile::Production, Vec::new());
+    let access = Access::new(&support::caller::auth(), Profile::Production, Vec::new());
     admin::router(Arc::clone(state), access, None, None)
         .layer(MockConnectInfo(SocketAddr::from(REMOTE)))
 }
@@ -214,7 +215,7 @@ async fn the_export_names_no_patient_identifier_while_bindings_exist_and_is_reco
     let record = finished.first().ok_or("a record")?;
     assert_eq!(Some(ISSUER), record.issuer.as_deref());
     assert_eq!(
-        Some(support::claims().sub.as_str()),
+        Some(support::caller::claims().sub.as_str()),
         record.subject.as_deref()
     );
     assert_eq!(

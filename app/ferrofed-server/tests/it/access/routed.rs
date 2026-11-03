@@ -333,7 +333,7 @@ async fn every_access_whose_record_the_spool_cannot_take_is_refused_with_no_data
     let mut console = post(body(&query)?)?;
     console.headers_mut().insert(
         header::AUTHORIZATION,
-        crate::support::operator_bearer()?.parse()?,
+        crate::support::caller::operator_bearer()?.parse()?,
     );
     withheld(call(app.clone(), console).await?);
     let get = Request::get(format!(

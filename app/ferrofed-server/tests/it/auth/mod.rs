@@ -99,7 +99,7 @@ impl Gateway {
 
     /// The gateway every other test drives: the suite's test issuer trusted.
     pub(crate) async fn trusting_the_test_issuer() -> Result<Self, Box<dyn Error>> {
-        Self::with(support::auth()).await
+        Self::with(support::caller::auth()).await
     }
 
     /// Asserts that neither node was asked anything.
@@ -128,12 +128,12 @@ pub(crate) fn bearing(
 
 /// The suite's default claims for a test to change.
 pub(crate) fn claims() -> Claims {
-    support::claims()
+    support::caller::claims()
 }
 
 /// A token the suite's test issuer signs over `claims`.
 pub(crate) fn minted(claims: &Claims) -> Result<String, Box<dyn Error>> {
-    Ok(support::issuer().mint(claims)?)
+    Ok(support::caller::issuer().mint(claims)?)
 }
 
 /// Sends `request` to `gateway` and asserts it is refused for `refusal`:

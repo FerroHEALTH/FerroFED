@@ -20,7 +20,8 @@ use ferrohealth_telemetry::section::Rendering;
 use http::{HeaderName, Request};
 
 use super::{Gateway, TestResult, assert_admitted, assert_refused, bearing, query};
-use crate::support::{self, AUDIENCE, Logs};
+use crate::support::caller::AUDIENCE;
+use crate::support::{self, Logs};
 
 /// The header the edge's assertion travels in.
 const HEADER: &str = "ferrofed-edge-assertion";
@@ -30,11 +31,14 @@ const EDGE: &str = "https://edge.example.test";
 
 /// `[auth]` in the edge mode, trusting `edge`.
 fn at_the_edge(edge: &Issuer) -> Result<AuthSettings, Box<dyn Error>> {
-    let file = support::jwks_file_of(edge)?;
+    let file = support::caller::jwks_file_of(edge)?;
     Ok(AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static(HEADER)),
         audience: vec![AUDIENCE.to_owned()],
-        issuers: vec![IssuerSettings::new(EDGE, support::key_set(EDGE, &file))],
+        issuers: vec![IssuerSettings::new(
+            EDGE,
+            support::caller::key_set(EDGE, &file),
+        )],
         ..AuthSettings::default()
     })
 }
@@ -123,6 +127,6 @@ async fn a_bearer_token_alone_is_401_at_the_edge() -> TestResult {
 async fn an_assertion_of_another_issuer_is_401() -> TestResult {
     let edge = Issuer::new(EDGE)?;
     let gateway = Gateway::with(at_the_edge(&edge)?).await?;
-    let token = support::token()?;
+    let token = support::caller::token()?;
     assert_refused(&gateway, asserted(&token)?, Refusal::Invalid).await
 }

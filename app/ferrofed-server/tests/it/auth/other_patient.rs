@@ -186,7 +186,7 @@ struct Harness {
 
 /// The suite's `[auth]`, its issuer's patient tokens bound to node A.
 fn bound() -> Result<AuthSettings, Box<dyn Error>> {
-    let mut auth = support::auth();
+    let mut auth = support::caller::auth();
     for issuer in &mut auth.issuers {
         issuer.patient = Some(PatientBinding {
             endpoint: EndpointId::new("node-a-pub")?,
