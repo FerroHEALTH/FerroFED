@@ -38,8 +38,8 @@ use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRefError};
 use serde::Deserialize;
 
-use crate::base_path::{BasePath, BasePathError};
 use crate::config::Config;
+use crate::config::base_path::{BasePath, BasePathError};
 use crate::config::public_url::PublicUrl;
 
 /// The path segments directly under `{base}` the gateway serves itself,
@@ -602,7 +602,7 @@ fn overlaps(base: &BasePath, server_base: &BasePath) -> bool {
 #[cfg(test)]
 mod tests {
     use super::overlaps;
-    use crate::base_path::BasePath;
+    use crate::config::base_path::BasePath;
 
     fn path(text: &str) -> BasePath {
         text.parse().unwrap()

@@ -26,8 +26,8 @@ use openehr_federation::aql::OffsetStrategy;
 use openehr_federation::id::FederationId;
 use openehr_federation::object::Uri;
 
-use crate::base_path::BasePath;
 use crate::config::auth::AuthSettings;
+use crate::config::base_path::BasePath;
 use crate::config::limits::Overload;
 use crate::config::public_url::PublicUrl;
 use crate::config::registry::RegistryFormat;

@@ -21,7 +21,7 @@ use crate::ITS_REST_PREFIX;
 use crate::auth::caller::VerifiedBy;
 use crate::auth::permission::{self, Requirement, Resource};
 use crate::auth::trust::Trust;
-use crate::base_path::BasePath;
+use crate::config::base_path::BasePath;
 use crate::request_id;
 use crate::security::TARGET;
 use crate::state::AppState;

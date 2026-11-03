@@ -34,7 +34,7 @@ use ferrofed_registry::replica::{HEADER, Replica};
 use http::{HeaderMap, HeaderName, HeaderValue};
 use openehr_its::rest::generated::definition::StoredQuery;
 
-use crate::base_path::BasePath;
+use crate::config::base_path::BasePath;
 use crate::error::{self, Code};
 use crate::request_id;
 use crate::state::AppState;

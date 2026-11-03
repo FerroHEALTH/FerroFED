@@ -18,7 +18,7 @@ pub enum ServerFault {
         key: String,
         /// Why the path is refused.
         #[source]
-        source: crate::base_path::BasePathError,
+        source: crate::config::base_path::BasePathError,
     },
     /// `telemetry.logged_query_parameters` names a parameter: the request log
     /// carries the ITS-REST paging values alone, a list fixed in code, since

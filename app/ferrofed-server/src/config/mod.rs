@@ -23,6 +23,7 @@ use ferrohealth_telemetry::section::TelemetrySection;
 pub mod access_log;
 pub mod audit;
 pub mod auth;
+pub mod base_path;
 pub mod eehrxf;
 pub mod error;
 pub mod fhir;

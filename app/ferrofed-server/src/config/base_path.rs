@@ -18,13 +18,13 @@ use std::str::FromStr;
 /// # Examples
 ///
 /// ```
-/// use ferrofed_server::base_path::BasePath;
+/// use ferrofed_server::config::base_path::BasePath;
 ///
 /// let base: BasePath = "/fed/openehr".parse()?;
 /// assert_eq!(base.join("/v1/query/aql"), "/fed/openehr/v1/query/aql");
 /// assert_eq!(BasePath::default().join("/v1/query/aql"), "/v1/query/aql");
 /// assert!("/fed/".parse::<BasePath>().is_err());
-/// # Ok::<(), ferrofed_server::base_path::BasePathError>(())
+/// # Ok::<(), ferrofed_server::config::base_path::BasePathError>(())
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BasePath(String);

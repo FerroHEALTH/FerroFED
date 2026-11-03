@@ -12,7 +12,7 @@ use std::num::NonZeroU64;
 use ferrofed_registry::replica::Replica;
 use serde::Deserialize;
 
-use crate::base_path::BasePath;
+use crate::config::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::error::server::ServerFault;
 use crate::config::public_url::PublicUrl;

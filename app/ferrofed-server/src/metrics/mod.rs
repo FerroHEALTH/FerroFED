@@ -348,7 +348,7 @@ impl Default for Metrics {
         .expect("the Prometheus reader should register in its own empty registry");
         Self::new(
             Arc::new(telemetry),
-            crate::usage_report::group::window(crate::base_path::BasePath::default(), None),
+            crate::usage_report::group::window(crate::config::base_path::BasePath::default(), None),
         )
     }
 }

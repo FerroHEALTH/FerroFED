@@ -12,7 +12,7 @@ use ferrohealth_usage_report::envelope::Key;
 use ferrohealth_usage_report::window::Window;
 use openehr_federation::status::EndpointStatus;
 
-use crate::base_path::BasePath;
+use crate::config::base_path::BasePath;
 use ferrohealth_telemetry::request_log::UNMATCHED;
 
 /// The counter of the requests the gateway sent to a member node.
@@ -129,7 +129,7 @@ mod tests {
     use openehr_federation::status::EndpointStatus;
 
     use super::{Group, node, window};
-    use crate::base_path::BasePath;
+    use crate::config::base_path::BasePath;
     use ferrohealth_telemetry::request_log::UNMATCHED;
 
     fn group(base: &str, template: &str) -> Option<Group> {

@@ -23,7 +23,7 @@ use std::net::SocketAddr;
 use ferrofed_operator_api::manufacturer::MANUFACTURER;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
-use crate::base_path::BasePath;
+use crate::config::base_path::BasePath;
 use crate::config::stored_queries::Backend;
 use crate::config::transport::{CleartextError, ProtectedSite};
 use crate::federation::error::FederationError;
