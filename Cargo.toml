@@ -71,6 +71,9 @@ ehds-logging = { version = "=0.3.2", default-features = false }
 # crate line moves by patch. Verified against crates.io on 2026-10-28.
 eehrxf = { version = "=0.1.128", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
+# The operator and console wire documents, which the gateway writes and the
+# console reads (#1489).
+ferrofed-operator-api = { path = "app/ferrofed-operator-api" }
 ferrofed-identity = { path = "app/ferrofed-identity" }
 ferrofed-engine = { path = "app/ferrofed-engine" }
 # The interoperability component's federation half: the stored queries that

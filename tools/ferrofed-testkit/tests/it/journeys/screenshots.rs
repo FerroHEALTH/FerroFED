@@ -28,9 +28,9 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use ferrofed_operator_api::operator::ClearedEhrId;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::incident::{Detection, Incident};
-use ferrofed_registry::operator::ClearedEhrId;
 use ferrofed_testkit::mock::Server;
 use serde::Deserialize;
 use serde_json::json;

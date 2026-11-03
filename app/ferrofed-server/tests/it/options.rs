@@ -523,7 +523,7 @@ async fn the_manufacturer_is_named_beside_federation_and_endpoints() -> TestResu
     let named = body.extra.get(MANUFACTURER).map(|raw| raw.get().to_owned());
     assert_eq!(
         Some(serde_json::to_string(
-            &ferrofed_registry::manufacturer::MANUFACTURER
+            &ferrofed_operator_api::manufacturer::MANUFACTURER
         )?),
         named,
         "Regulation (EU) 2025/327 Art 30(1)(g): the name, the postal address and the contact"

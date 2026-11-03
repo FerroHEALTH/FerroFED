@@ -25,7 +25,7 @@ use axum::body::Bytes;
 use axum::extract::{Extension, Path, State};
 use axum::response::{IntoResponse, Response};
 use ferrofed_eehrxf::reserved;
-use ferrofed_registry::console::{
+use ferrofed_operator_api::console::{
     ConsoleMember, ConsoleState, MemberResource, Owner, QueryRegistry, QueryResource, Resources,
 };
 use ferrofed_registry::definition::store::Insertion;
@@ -44,8 +44,8 @@ use crate::error::{self, Code};
 use crate::request_id;
 use crate::revision::service::{Refused, RevisionError, SAVED, held_table};
 use crate::stored::{self, Inadmissible};
-use ferrofed_registry::resource::Resource;
-use ferrofed_registry::revision::{Author, Origin, Revision, RevisionId};
+use ferrofed_operator_api::resource::Resource;
+use ferrofed_operator_api::revision::{Author, Origin, Revision, RevisionId};
 
 use super::sections;
 use crate::revision::resources::SectionFault;

@@ -20,7 +20,7 @@ pub mod incidents;
 
 use std::collections::BTreeSet;
 
-use ferrofed_registry::operator::{DeploymentMode, DeploymentReport};
+use ferrofed_operator_api::operator::{DeploymentMode, DeploymentReport};
 use ferrofed_registry::replica::UNNAMED;
 use serde::{Deserialize, Serialize};
 
@@ -376,8 +376,8 @@ pub async fn described() -> Result<(String, String), Stop> {
 /// The page of at most `limit` items that starts at `offset`, held to the
 /// most the gateway answers at once.
 #[must_use]
-pub fn stored_page(offset: u64, limit: u64) -> ferrofed_registry::operator::PageRequest {
-    ferrofed_registry::operator::PageRequest {
+pub fn stored_page(offset: u64, limit: u64) -> ferrofed_operator_api::operator::PageRequest {
+    ferrofed_operator_api::operator::PageRequest {
         offset,
         limit: limit.clamp(1, PAGE_SIZE),
     }

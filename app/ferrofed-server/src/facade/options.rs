@@ -35,7 +35,7 @@ use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use ferrofed_identity::role::consent::{ConsentPrefilter, ON_UNAVAILABLE};
-use ferrofed_registry::manufacturer;
+use ferrofed_operator_api::manufacturer;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use openehr_federation::aql::Targeting;

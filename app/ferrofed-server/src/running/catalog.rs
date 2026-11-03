@@ -12,7 +12,7 @@
 //! without one to being outside each of them. No specification governs
 //! this: our own design.
 
-use ferrofed_registry::running::Section;
+use ferrofed_operator_api::running::Section;
 
 /// What a setting holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

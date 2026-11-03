@@ -11,7 +11,7 @@
 
 use std::error::Error;
 
-use ferrofed_registry::console::{ConsoleEndpoint, ConsoleMember};
+use ferrofed_operator_api::console::{ConsoleEndpoint, ConsoleMember};
 use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 use ferrofed_testkit::mock::Server;
 

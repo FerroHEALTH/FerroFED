@@ -5,7 +5,7 @@
 //! as the one TOML inline table the gateway takes, and the secret changes
 //! it asks for.
 
-use ferrofed_registry::resource::{SECRETS, SecretChange};
+use ferrofed_operator_api::resource::{SECRETS, SecretChange};
 
 use crate::configure::model::{SecretInput, SettingInput};
 use crate::configure::plan::{Refused, at, given, invalid};

@@ -1296,6 +1296,7 @@ dependencies = [
  "base64 0.23.1",
  "clap",
  "cookie",
+ "ferrofed-operator-api",
  "ferrofed-registry",
  "ferrofed-testkit",
  "ferrohealth-config",
@@ -1423,6 +1424,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferrofed-operator-api"
+version = "0.0.0"
+dependencies = [
+ "ferrofed-registry",
+ "ferrohealth-secret",
+ "jiff",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "ferrofed-registry"
 version = "0.0.2"
 dependencies = [
@@ -1431,7 +1444,6 @@ dependencies = [
  "jiff",
  "openehr-base",
  "proptest",
- "secrecy",
  "serde",
  "serde_json",
  "thiserror",
@@ -1456,6 +1468,7 @@ dependencies = [
  "ferrofed-eehrxf",
  "ferrofed-engine",
  "ferrofed-identity",
+ "ferrofed-operator-api",
  "ferrofed-registry",
  "ferrofed-server",
  "ferrofed-testkit",
@@ -1518,6 +1531,7 @@ dependencies = [
  "ferrofed-console",
  "ferrofed-eehrxf",
  "ferrofed-identity",
+ "ferrofed-operator-api",
  "ferrofed-registry",
  "ferrofed-server",
  "ferrohealth-health",

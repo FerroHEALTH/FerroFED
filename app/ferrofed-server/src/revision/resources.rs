@@ -15,7 +15,9 @@
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use ferrofed_registry::resource::{BindingSection, Resource, SECRETS, SecretChange, SecretSlot};
+use ferrofed_operator_api::resource::{
+    BindingSection, Resource, SECRETS, SecretChange, SecretSlot,
+};
 use ferrohealth_secret::secret::WriteOnly;
 use ferrohealth_secret::secret_url::SecretUrl;
 
@@ -502,7 +504,7 @@ pub fn write_secret(
 mod tests {
     use std::path::PathBuf;
 
-    use ferrofed_registry::resource::{BindingSection, Resource, SecretChange};
+    use ferrofed_operator_api::resource::{BindingSection, Resource, SecretChange};
     use ferrohealth_secret::secret::WriteOnly;
 
     use super::{

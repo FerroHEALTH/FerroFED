@@ -10,8 +10,8 @@
 //! The page answers with one line per replica. An `ehr_id` is a routing id,
 //! never a patient identifier (§5.4.1, N33), and the clear is recorded with
 //! the operator by the gateway.
-use ferrofed_registry::operator::ClearedEhrId;
-use ferrofed_registry::operator::HeldBefore;
+use ferrofed_operator_api::operator::ClearedEhrId;
+use ferrofed_operator_api::operator::HeldBefore;
 
 use crate::act::ReplicaAnswer;
 use crate::act::fields::Fields;

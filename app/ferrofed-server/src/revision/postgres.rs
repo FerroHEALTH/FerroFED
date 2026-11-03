@@ -25,7 +25,7 @@ use ferrohealth_secret::secret_url::SecretUrl;
 use serde::de::DeserializeOwned;
 use tokio_postgres::Client;
 
-use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
+use ferrofed_operator_api::revision::{Current, Revision, RevisionId, Signed};
 
 use crate::revision::{Corruption, Draft, RevisionStore, Saved, StoreError, Swapped};
 use crate::stored::postgres::{Connection, Statement, lock};

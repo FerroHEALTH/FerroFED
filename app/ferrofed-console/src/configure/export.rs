@@ -15,7 +15,7 @@ use crate::server::ConsoleState;
 use axum::Extension;
 use axum::extract::Path;
 use axum::response::{IntoResponse, Response};
-use ferrofed_registry::revision::RevisionId;
+use ferrofed_operator_api::revision::RevisionId;
 use http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE, LOCATION};
 use http::{HeaderMap, HeaderValue, StatusCode};
 

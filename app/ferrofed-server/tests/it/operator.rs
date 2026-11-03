@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_registry::incident::Incident;
-use ferrofed_registry::operator::{
+use ferrofed_operator_api::operator::{
     CreatingSystemEntry, DeploymentMode, DeploymentReport, IncidentReport, Page, RouteSource,
 };
+use ferrofed_registry::incident::Incident;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
@@ -282,7 +282,7 @@ async fn the_routing_table_answers_one_page_and_says_how_many_there_are() -> Tes
 async fn a_page_beyond_the_bound_or_of_nothing_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path())?;
-    let beyond = ferrofed_registry::operator::MAX_PAGE + 1;
+    let beyond = ferrofed_operator_api::operator::MAX_PAGE + 1;
     for path in [
         format!("/operator/creating-systems?limit={beyond}"),
         String::from("/operator/creating-systems?limit=0"),
@@ -305,7 +305,7 @@ async fn an_operator_reads_the_dependency_report() -> TestResult {
     )
     .await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let report: ferrofed_registry::health::DependencyReport = serde_json::from_str(&text)?;
+    let report: ferrofed_operator_api::health::DependencyReport = serde_json::from_str(&text)?;
     assert!(
         report
             .endpoints

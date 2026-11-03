@@ -5,8 +5,8 @@
 //! setting it holds a field of its own, a row each for a new one, and a
 //! choice for each secret, whose value the page never shows.
 
-use ferrofed_registry::console::Owner;
-use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot};
+use ferrofed_operator_api::console::Owner;
+use ferrofed_operator_api::resource::{BindingSection, Resource, SecretSlot};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::view::form::{Field, SELECT, error_id};
 use ferrohealth_ui::view::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};

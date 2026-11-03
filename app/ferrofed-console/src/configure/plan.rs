@@ -11,10 +11,10 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use ferrofed_registry::console::ConsoleMember;
+use ferrofed_operator_api::console::ConsoleMember;
+use ferrofed_operator_api::resource::{BindingSection, Resource, SecretChange};
+use ferrofed_operator_api::revision::RevisionId;
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::resource::{BindingSection, Resource, SecretChange};
-use ferrofed_registry::revision::RevisionId;
 
 use crate::configure::member::Shown;
 use crate::configure::model::{ConfigForm, SettingInput};

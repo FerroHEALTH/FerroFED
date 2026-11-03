@@ -22,36 +22,15 @@ use std::sync::{Mutex, PoisonError};
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::creating_system::LearnedMap;
-use crate::id::{EhrId, NodeId};
-use crate::incident::{Incident, Kind};
-use crate::replica::Replica;
-use crate::snapshot::RegistrySnapshot;
-
-/// How many incidents of each kind the report keeps, newest last: a burst of
-/// one kind never pushes another kind's incidents out.
-pub const RECENT_PER_KIND: usize = 20;
+use ferrofed_registry::creating_system::LearnedMap;
+use ferrofed_registry::id::{EhrId, NodeId};
+use ferrofed_registry::incident::{self, Incident, Kind, RECENT_PER_KIND};
+use ferrofed_registry::replica::Replica;
+use ferrofed_registry::snapshot::RegistrySnapshot;
 
 /// The most a page of the operator surface holds, and the size of a page a
 /// request does not size.
 pub const MAX_PAGE: u64 = 100;
-
-/// The incidents emitted since the process started, by kind, each kind's
-/// newest last and at most [`RECENT_PER_KIND`] of them.
-static RECENT: Mutex<BTreeMap<Kind, VecDeque<(Timestamp, Incident)>>> = Mutex::new(BTreeMap::new());
-
-/// Keeps `incident`, emitted now, among the recent ones of its kind,
-/// dropping that kind's oldest beyond [`RECENT_PER_KIND`].
-pub(crate) fn record(incident: &Incident) {
-    // NOTE: no specification governs this: our own design; a lock a panic
-    // poisoned still holds whole entries, so recording goes on.
-    let mut recent = RECENT.lock().unwrap_or_else(PoisonError::into_inner);
-    let kind = recent.entry(incident.kind()).or_default();
-    while kind.len() >= RECENT_PER_KIND {
-        kind.pop_front();
-    }
-    kind.push_back((Timestamp::now(), incident.clone()));
-}
 
 /// The body of `GET {base}/operator/incidents`.
 ///
@@ -85,15 +64,7 @@ impl IncidentReport {
             .iter()
             .map(|kind| (kind.as_str().to_owned(), kind.emitted()))
             .collect();
-        let mut held: Vec<(Timestamp, Incident)> = RECENT
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .values()
-            .flatten()
-            .cloned()
-            .collect();
-        held.sort_by_key(|(at, _)| *at);
-        let recent = held
+        let recent = incident::recent()
             .iter()
             .map(|(at, incident)| RecordedIncident::of(incident, *at))
             .collect();
@@ -488,10 +459,10 @@ mod tests {
 
     use super::{
         ClearScope, ClearedEhrId, HeldBefore, IncidentReport, MAX_PAGE, Page, PageRequest,
-        RECENT_PER_KIND, RecordedClear, RecordedIncident, record,
+        RecordedClear, RecordedIncident,
     };
-    use crate::id::{EhrId, NodeId};
-    use crate::incident::{Detection, Incident, Kind};
+    use ferrofed_registry::id::{EhrId, NodeId};
+    use ferrofed_registry::incident::{Detection, Incident, Kind, RECENT_PER_KIND};
     use jiff::Timestamp;
 
     #[test]
@@ -529,11 +500,12 @@ mod tests {
 
     #[test]
     fn a_burst_of_one_kind_keeps_the_other_kinds_and_stays_bounded() {
-        record(&Incident::LearnedCreatingSystemConflict {
+        Incident::LearnedCreatingSystemConflict {
             creating_system_id: "legacy-x.example.org".parse().expect("a system id"),
             first: "node-a-pub".parse().expect("an endpoint"),
             second: "node-b-pub".parse().expect("an endpoint"),
-        });
+        }
+        .emit();
         let collision = Incident::EhrIdCollision {
             ehr_id: "7d44b88c-4199-4bad-97dc-d78268e01398"
                 .parse()
@@ -542,7 +514,7 @@ mod tests {
             claimants: vec!["node-a-pub".parse().expect("an endpoint")],
         };
         for _ in 0..1000 {
-            record(&collision);
+            collision.emit();
         }
         let report = IncidentReport::current();
         assert_eq!(Kind::ALL.len(), report.counts.len());

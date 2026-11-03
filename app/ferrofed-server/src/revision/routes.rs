@@ -49,7 +49,7 @@ use axum::extract::{Extension, Path, Query, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
-use ferrofed_registry::operator::{MAX_PAGE, Page, PageRequest};
+use ferrofed_operator_api::operator::{MAX_PAGE, Page, PageRequest};
 use http::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 
@@ -60,7 +60,7 @@ use crate::request_id;
 use crate::revision::service::confirm::{APPROVED, CONFIRMED};
 use crate::revision::service::{APPLIED, ROLLED_BACK, RevisionError, Revisions, SAVED, held_table};
 use crate::revision::tree::diff;
-use ferrofed_registry::revision::{
+use ferrofed_operator_api::revision::{
     Applied, Author, Current, Diff, Origin, Revision, RevisionId, Standing,
 };
 
@@ -486,7 +486,7 @@ enum Reviewed {
     /// The running revision, confirmed.
     Confirmed(Current),
     /// The revision's approvals.
-    Approved(ferrofed_registry::revision::Review),
+    Approved(ferrofed_operator_api::revision::Review),
 }
 
 /// Answers the review `review` of the revision the path names, by

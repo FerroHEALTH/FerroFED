@@ -104,6 +104,7 @@ ferrofed-eehrxf.workspace = true
 # The BALP recorders the access record is written through, in every build
 # (#697); binding-ihe adds the IHE binding's adapters.
 ferrofed-identity = { workspace = true, features = ["balp"] }
+ferrofed-operator-api.workspace = true
 ferrofed-registry.workspace = true
 # With binding-ihe, the PMIR ITI-94 subscriber and ITI-93 feed reader of the
 # identity feed (#147), the ITI-83 invocation each [[pixm.manager]] names

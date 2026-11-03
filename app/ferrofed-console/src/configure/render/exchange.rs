@@ -6,7 +6,7 @@
 //! tab: the running revision's download and the import of TOML as a dry
 //! run.
 
-use ferrofed_registry::revision::{Origin, Revision, RevisionId};
+use ferrofed_operator_api::revision::{Origin, Revision, RevisionId};
 use ferrohealth_ui::html::Html;
 
 use crate::configure::render::parts::{diff_table, error_line, form, head, hidden, reason};

@@ -36,7 +36,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_identity::profile::Profile;
-use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
+use ferrofed_operator_api::revision::{Current, Revision, RevisionId, Signed};
 use ferrofed_server::admin::{self, Access};
 use ferrofed_server::reload::Reloader;
 use ferrofed_server::revision::embedded::RedbRevisions;
@@ -318,7 +318,7 @@ pub(crate) struct Standing {
     pub(crate) in_step: bool,
     pub(crate) refused: Option<u64>,
     #[serde(default)]
-    pub(crate) review: Option<ferrofed_registry::revision::Review>,
+    pub(crate) review: Option<ferrofed_operator_api::revision::Review>,
 }
 
 /// The body of an apply or a rollback.

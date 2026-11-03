@@ -12,7 +12,7 @@
 //! (`GET /admin/config/running`), never from a revision's text, so a
 //! secret is named by the file it is read from and never by a value.
 
-use ferrofed_registry::running::{RunningConfig, Section, Setting, Source};
+use ferrofed_operator_api::running::{RunningConfig, Section, Setting, Source};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::view::button::Variant;

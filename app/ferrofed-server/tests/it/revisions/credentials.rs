@@ -11,9 +11,9 @@
 
 use std::error::Error;
 
-use ferrofed_registry::console::{ConsoleState, Owner};
-use ferrofed_registry::resource::{BindingSection, Resource, SecretChange, SectionRequest};
-use ferrofed_registry::revision::{Applied, Author, Current, Review, Revision, RevisionId};
+use ferrofed_operator_api::console::{ConsoleState, Owner};
+use ferrofed_operator_api::resource::{BindingSection, Resource, SecretChange, SectionRequest};
+use ferrofed_operator_api::revision::{Applied, Author, Current, Review, Revision, RevisionId};
 use ferrohealth_secret::secret::WriteOnly;
 use http::{Method, StatusCode};
 use jiff::{SignedDuration, Timestamp};
@@ -411,7 +411,7 @@ async fn a_secret_value_is_written_to_an_owner_only_file_and_never_shown() -> Te
         assert!(!answer.contains(VALUE), "{answer}");
     }
     let (_, resources) = gateway.get("/admin/config/resources").await?;
-    let resources: ferrofed_registry::console::Resources = serde_json::from_str(&resources)?;
+    let resources: ferrofed_operator_api::console::Resources = serde_json::from_str(&resources)?;
     let section = resources
         .sections
         .iter()
@@ -479,7 +479,7 @@ async fn a_credential_in_a_url_setting_never_reaches_the_resources_answer() -> T
         base.toml
     );
     let draft = ferrofed_server::revision::Draft {
-        origin: ferrofed_registry::revision::Origin::Operator,
+        origin: ferrofed_operator_api::revision::Origin::Operator,
         restores: None,
         author: operator_author(),
         at: Timestamp::now(),
@@ -537,7 +537,7 @@ async fn a_credential_the_file_provides_is_read_only() -> TestResult {
     assert_eq!(StatusCode::CONFLICT, status, "{text}");
     assert_eq!("resource-file-owned", error_body(&text)?.code);
     let (_, text) = gateway.get("/admin/config/resources").await?;
-    let resources: ferrofed_registry::console::Resources = serde_json::from_str(&text)?;
+    let resources: ferrofed_operator_api::console::Resources = serde_json::from_str(&text)?;
     let section = resources
         .sections
         .iter()

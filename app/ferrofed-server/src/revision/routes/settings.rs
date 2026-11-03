@@ -17,7 +17,7 @@ use std::sync::Arc;
 use axum::body::Bytes;
 use axum::extract::{Extension, State};
 use axum::response::Response;
-use ferrofed_registry::running::SettingsRequest;
+use ferrofed_operator_api::running::SettingsRequest;
 use http::HeaderMap;
 
 use super::console::{base_table, created, saved_as};

@@ -8,7 +8,7 @@
 //! post's handler runs the form into an [`Answer`], and the page it draws
 //! again shows it.
 
-use ferrofed_registry::revision::{Applied, Current, Imported, Review};
+use ferrofed_operator_api::revision::{Applied, Current, Imported, Review};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::notice::{Announce, notice};

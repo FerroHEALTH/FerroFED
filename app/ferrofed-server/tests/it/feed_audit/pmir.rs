@@ -203,7 +203,7 @@ async fn a_create_whose_record_is_refused_is_adopted_by_the_next_check_and_never
         "the delivered record has left the spool"
     );
     assert_eq!(
-        ferrofed_registry::health::Observed::Up,
+        ferrofed_operator_api::health::Observed::Up,
         feed.check().await,
         "the next check's search adopts the subscription the Registry holds"
     );

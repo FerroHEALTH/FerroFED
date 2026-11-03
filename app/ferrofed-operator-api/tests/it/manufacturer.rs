@@ -7,7 +7,7 @@
 
 use std::error::Error;
 
-use ferrofed_registry::manufacturer::MANUFACTURER;
+use ferrofed_operator_api::manufacturer::MANUFACTURER;
 
 #[test]
 fn the_manufacturer_is_the_licensor_with_its_address_and_contact() {

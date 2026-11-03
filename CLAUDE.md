@@ -295,7 +295,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   (`nl-generic-functions = "=0.0.33"`) and keeps no copy.
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
-  trait), `ferrofed-identity` (laid out by role and binding: `role/` holds
+  trait), `ferrofed-operator-api` (the operator and console wire documents
+  the gateway writes and the console reads, #1489), `ferrofed-identity` (laid out by role and binding: `role/` holds
   the seams and `PatientRef`; `ihe/`, behind feature `ihe`, the PIXm
   resolver and localizer, the PDQm demographics step, the XCPD localizer,
   the PMIR identity feed and the mCSD directory over `ihe-iti`, and the

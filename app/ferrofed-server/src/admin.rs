@@ -562,7 +562,7 @@ const CLEAR_TAKES_NO_BODY: &str =
 /// `POST` [`CLEAR_EHR_ID`]: forgets the path `ehr_id` from this process's
 /// `ehr_id` index and from the resolution bindings of every session, and
 /// answers `200` with the
-/// [`ClearedEhrId`](ferrofed_registry::operator::ClearedEhrId) saying what was held.
+/// [`ClearedEhrId`](ferrofed_operator_api::operator::ClearedEhrId) saying what was held.
 ///
 /// The action takes no `body`. An `ehr_id` this process holds nothing for
 /// answers `200` too, with `held` saying `nothing`: each replica holds its

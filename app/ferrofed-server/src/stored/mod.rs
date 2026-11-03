@@ -23,7 +23,7 @@
 use std::fmt;
 use std::ops::Range;
 
-use ferrofed_registry::console::Owner;
+use ferrofed_operator_api::console::Owner;
 use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertion, StoreError};
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use jiff::Timestamp;
@@ -226,7 +226,7 @@ mod tests {
     use openehr_federation::aql::definition::SubjectOrigin;
     use openehr_federation::aql::{Context, Targeting};
 
-    use ferrofed_registry::console::Owner;
+    use ferrofed_operator_api::console::Owner;
     use ferrofed_registry::definition::QueryName;
 
     use super::{admit, is_read_only, owner};

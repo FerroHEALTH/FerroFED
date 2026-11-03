@@ -34,8 +34,8 @@ use std::fs::File;
 use std::io::Write as _;
 use std::path::Path;
 
-use ferrofed_registry::health::DependencyReport;
-use ferrofed_registry::manufacturer::{MANUFACTURER, Manufacturer};
+use ferrofed_operator_api::health::DependencyReport;
+use ferrofed_operator_api::manufacturer::{MANUFACTURER, Manufacturer};
 use http::StatusCode;
 use jiff::Timestamp;
 use secrecy::SecretString;

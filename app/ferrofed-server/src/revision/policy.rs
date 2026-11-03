@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
-use ferrofed_registry::resource::{BindingSection, Resource};
+use ferrofed_operator_api::resource::{BindingSection, Resource};
 
 use crate::revision::resources::{present, value_at};
 
@@ -183,7 +183,7 @@ pub fn named(resources: &[Resource]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use ferrofed_registry::resource::{BindingSection, Resource};
+    use ferrofed_operator_api::resource::{BindingSection, Resource};
 
     use super::{ApprovalRule, Kind, Policy, changed};
 

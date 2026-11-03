@@ -41,7 +41,7 @@ use crate::facade::consent;
 use crate::facade::demographics::{self, Identified};
 use crate::facade::localize::{Localized, localize};
 use crate::federation::Federation;
-use ferrofed_registry::health::Observed;
+use ferrofed_operator_api::health::Observed;
 
 /// The plan of one query, and where each façade column of a node row comes
 /// from.

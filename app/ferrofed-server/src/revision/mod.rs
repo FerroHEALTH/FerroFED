@@ -23,9 +23,9 @@
 use std::error::Error;
 use std::fmt;
 
+use ferrofed_operator_api::resource::Resource;
+use ferrofed_operator_api::revision::{Author, Current, Origin, Revision, RevisionId, Signed};
 use ferrofed_registry::error::document::DocumentFault;
-use ferrofed_registry::resource::Resource;
-use ferrofed_registry::revision::{Author, Current, Origin, Revision, RevisionId, Signed};
 use jiff::Timestamp;
 use serde_json::error::Category;
 

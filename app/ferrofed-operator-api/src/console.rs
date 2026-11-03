@@ -15,11 +15,11 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::document::{Document, EndpointDoc, NodeDoc, OrganisationDoc};
-use crate::id::{EndpointId, NodeId, OrganisationId, SystemId};
 use crate::resource::{BindingSection, SectionResource};
 use crate::revision::RevisionId;
-use crate::snapshot::{ConnectionType, EndpointStatus};
+use ferrofed_registry::document::{Document, EndpointDoc, NodeDoc, OrganisationDoc};
+use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
+use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus};
 use ferrohealth_secret::secret_url::SecretUrl;
 
 /// One member the operator console manages: an organisation, the node it
@@ -109,7 +109,7 @@ impl fmt::Debug for ConsoleEndpoint {
 impl ConsoleMember {
     /// The member as a registry document of one organisation, one node and
     /// its endpoints, which
-    /// [`RegistrySnapshot::with_console`](crate::snapshot::RegistrySnapshot::with_console)
+    /// [`RegistrySnapshot::with_console`](ferrofed_registry::snapshot::RegistrySnapshot::with_console)
     /// validates and joins.
     #[must_use]
     pub fn document(&self) -> Document {

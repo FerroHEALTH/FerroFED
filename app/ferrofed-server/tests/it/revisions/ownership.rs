@@ -33,7 +33,7 @@ fn first(gateway: &Gateway) -> Result<toml::Table, Box<dyn Error>> {
     let revision = gateway
         .revisions
         .store()
-        .revision(ferrofed_registry::revision::RevisionId::FIRST)?
+        .revision(ferrofed_operator_api::revision::RevisionId::FIRST)?
         .ok_or("the file's revision is held")?;
     Ok(toml::from_str(&revision.toml)?)
 }
@@ -52,7 +52,7 @@ async fn refused(gateway: &Gateway, table: &toml::Table) -> TestResult {
             .revisions
             .store()
             .head()?
-            .map(ferrofed_registry::revision::RevisionId::get),
+            .map(ferrofed_operator_api::revision::RevisionId::get),
         "a refused save saves nothing"
     );
     Ok(())

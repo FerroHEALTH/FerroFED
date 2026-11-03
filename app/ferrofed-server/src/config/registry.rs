@@ -16,7 +16,7 @@
 
 use std::path::PathBuf;
 
-use ferrofed_registry::console::ConsoleMember;
+use ferrofed_operator_api::console::ConsoleMember;
 use serde::Deserialize;
 
 use crate::config::error::Error;

@@ -10,8 +10,8 @@
 //! Set a value, Read from a file or Clear, and its value field is a
 //! password field the page never fills (§13.1, N25).
 
-use ferrofed_registry::console::{ConsoleState, Owner};
-use ferrofed_registry::resource::{BindingSection, Resource, SecretSlot, SectionResource};
+use ferrofed_operator_api::console::{ConsoleState, Owner};
+use ferrofed_operator_api::resource::{BindingSection, Resource, SecretSlot, SectionResource};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::{ACTIONS, Column};

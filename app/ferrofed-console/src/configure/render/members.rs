@@ -5,7 +5,7 @@
 //! a read-only member, and the form that adds or edits a console member,
 //! each endpoint a row of its own fields.
 
-use ferrofed_registry::console::{ConsoleMember, ConsoleState, MemberResource, Owner};
+use ferrofed_operator_api::console::{ConsoleMember, ConsoleState, MemberResource, Owner};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::{ACTIONS, Column, NUM};

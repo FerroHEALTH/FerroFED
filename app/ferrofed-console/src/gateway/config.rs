@@ -13,11 +13,13 @@
 //! retried. No specification governs the admin listener: the gateway's own
 //! design.
 
-use ferrofed_registry::console::{ConsoleMember, Resources};
-use ferrofed_registry::operator::{Page, PageRequest};
-use ferrofed_registry::resource::{Resource, SectionRequest};
-use ferrofed_registry::revision::{Applied, Current, Diff, Review, Revision, RevisionId, Standing};
-use ferrofed_registry::running::{RunningConfig, SettingsRequest};
+use ferrofed_operator_api::console::{ConsoleMember, Resources};
+use ferrofed_operator_api::operator::{Page, PageRequest};
+use ferrofed_operator_api::resource::{Resource, SectionRequest};
+use ferrofed_operator_api::revision::{
+    Applied, Current, Diff, Review, Revision, RevisionId, Standing,
+};
+use ferrofed_operator_api::running::{RunningConfig, SettingsRequest};
 use http::{Method, StatusCode};
 use openehr_its::rest::client::{Request, path_segment};
 use openehr_its::rest::generated::definition::StoredQuery;

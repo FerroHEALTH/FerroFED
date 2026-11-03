@@ -44,7 +44,7 @@ readonly OWNER=conformance/eu-declaration-of-conformity.toml
 readonly CITATION=CITATION.cff
 readonly PINS=docs/VERSIONS.md
 readonly CHANGELOG=CHANGELOG.md
-readonly MAKER=app/ferrofed-registry/src/manufacturer.rs
+readonly MAKER=app/ferrofed-operator-api/src/manufacturer.rs
 readonly SHEET=website/book/src/evaluate/information-sheet.md
 readonly INDEX=conformance/technical-documentation.tsv
 # The two harmonised components are published crates, each version the one
@@ -365,7 +365,7 @@ self_test() {
     local repo="$work/repo"
     if [[ -d "$repo" ]]; then rm -r "$repo"; fi
     if [[ -d "$work/out" ]]; then rm -r "$work/out"; fi
-    mkdir -p "$repo/conformance" "$repo/docs" "$repo/app/ferrofed-registry/src" \
+    mkdir -p "$repo/conformance" "$repo/docs" "$repo/app/ferrofed-operator-api/src" \
       "$repo/website/book/src/evaluate"
     printf 'title: "FerroFED"\nversion: %s\n' "$1" > "$repo/$CITATION"
     printf '| Item | Pin |\n|---|---|\n| Product version | %s | x |\n' "$1" > "$repo/$PINS"

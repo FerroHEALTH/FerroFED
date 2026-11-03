@@ -37,7 +37,7 @@ use ehds_logging::sink::AccessSink;
 use ferrofed_identity::ihe::audit::balp::{
     FeedAudit, FeedConfigError, LogFeedAudit, feed_repository,
 };
-use ferrofed_registry::health::{Indication, Observed};
+use ferrofed_operator_api::health::{Indication, Observed};
 use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::RepositoryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};

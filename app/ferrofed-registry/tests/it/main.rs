@@ -12,13 +12,11 @@
 
 mod assigned;
 mod connection_type;
-mod console;
 mod creating_system;
 mod definition;
 mod fixture;
 mod ids;
 mod load;
-mod manufacturer;
 mod namespaces;
 mod native;
 mod refusal;

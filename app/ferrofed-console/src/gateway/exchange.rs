@@ -10,7 +10,7 @@
 //! gateway sent; the import is never retried. No specification governs the
 //! admin listener: the gateway's own design.
 
-use ferrofed_registry::revision::{Imported, RevisionId};
+use ferrofed_operator_api::revision::{Imported, RevisionId};
 use http::{Method, StatusCode};
 use openehr_its::rest::client::Request;
 

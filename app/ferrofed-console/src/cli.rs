@@ -15,7 +15,7 @@ use std::sync::LazyLock;
 use clap::Parser;
 use ferrohealth_server::cli::{Common, ConfigArgs};
 
-use ferrofed_registry::manufacturer::MANUFACTURER;
+use ferrofed_operator_api::manufacturer::MANUFACTURER;
 
 /// What `ferrofed-console --version` prints after the binary's name.
 ///

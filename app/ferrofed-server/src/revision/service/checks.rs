@@ -8,8 +8,8 @@
 
 use std::collections::BTreeMap;
 
-use ferrofed_registry::resource::Resource;
-use ferrofed_registry::revision::{Origin, Revision, RevisionId};
+use ferrofed_operator_api::resource::Resource;
+use ferrofed_operator_api::revision::{Origin, Revision, RevisionId};
 
 use super::{REASON_LIMIT, Refused, RevisionError, Revisions, Stale, held_table};
 use crate::config::Config;

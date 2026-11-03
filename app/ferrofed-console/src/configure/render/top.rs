@@ -6,7 +6,7 @@
 //! apply, and of the confirmation the running revision awaits, with its
 //! confirm and its roll back (§13.1 onward credentials, commit-confirm).
 
-use ferrofed_registry::revision::{Current, Review, RevisionId, Signed};
+use ferrofed_operator_api::revision::{Current, Review, RevisionId, Signed};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::tone::Tone;

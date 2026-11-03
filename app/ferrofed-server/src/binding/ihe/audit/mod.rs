@@ -23,7 +23,7 @@ use ihe_atna::atna::spool::Content;
 use crate::audit::{AuditTrailError, Forwarding, Stopping, observed, spool, started};
 use crate::binding::ihe::audit::repository::AuditRepositorySettings;
 use crate::binding::seam::Indicator;
-use ferrofed_registry::health::Indication;
+use ferrofed_operator_api::health::Indication;
 
 impl Forwarding for RepositoryAudit {
     fn start(&self) {

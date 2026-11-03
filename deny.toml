@@ -72,6 +72,7 @@ exceptions = [
   # (#813).
   { allow = ["BUSL-1.1"], crate = "eehrxf" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-registry" },
+  { allow = ["BUSL-1.1"], crate = "ferrofed-operator-api" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-identity" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-engine" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-eehrxf" },

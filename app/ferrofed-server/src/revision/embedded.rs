@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, WriteTransaction};
 
-use ferrofed_registry::revision::{Current, Revision, RevisionId, Signed};
+use ferrofed_operator_api::revision::{Current, Revision, RevisionId, Signed};
 
 use crate::revision::{Corruption, Draft, RevisionStore, Saved, StoreError, Swapped};
 use crate::stored::embedded::open_prepared;

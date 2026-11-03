@@ -7,7 +7,7 @@
 
 use std::error::Error;
 
-use ferrofed_registry::console::ConsoleMember;
+use ferrofed_operator_api::console::ConsoleMember;
 use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;

@@ -12,7 +12,7 @@
 //! retried, so an action runs at most once per call. No specification
 //! governs the admin listener: the gateway's own design.
 
-use ferrofed_registry::operator::ClearedEhrId;
+use ferrofed_operator_api::operator::ClearedEhrId;
 use http::{Method, StatusCode};
 use openehr_federation::headers::ENDPOINT;
 use openehr_federation::meta::FederationMeta;

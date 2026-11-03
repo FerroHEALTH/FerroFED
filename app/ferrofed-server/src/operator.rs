@@ -11,7 +11,7 @@
 //! scope its issuer's entry names
 //! ([`Requirement::Operator`](crate::auth::permission::Requirement::Operator)).
 //! It answers routing ids, states, counts and stored definitions only, the
-//! bodies of [`ferrofed_registry::operator`], [`ferrofed_registry::health`]
+//! bodies of [`ferrofed_operator_api::operator`], [`ferrofed_operator_api::health`]
 //! and the ITS-REST `StoredQuery`, never a patient identifier (§5.4.1, N33),
 //! and none of it is part of the ITS-REST surface. The listings answer one
 //! page at a time, `offset` and `limit` in the query, at most [`MAX_PAGE`]
@@ -25,11 +25,11 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Response};
-use ferrofed_registry::creating_system::LearnedMap;
-use ferrofed_registry::definition::QueryName;
-use ferrofed_registry::operator::{
+use ferrofed_operator_api::operator::{
     DeploymentReport, IncidentReport, MAX_PAGE, Page, PageRequest, StoredVersion, routing_table,
 };
+use ferrofed_registry::creating_system::LearnedMap;
+use ferrofed_registry::definition::QueryName;
 use ferrofed_registry::replica::{HEADER, Replica};
 use http::{HeaderMap, HeaderName, HeaderValue};
 use openehr_its::rest::generated::definition::StoredQuery;
@@ -112,7 +112,7 @@ pub fn routes(
 /// naming the replica that observed them.
 async fn dependencies(
     State(state): State<Arc<AppState>>,
-) -> Json<ferrofed_registry::health::DependencyReport> {
+) -> Json<ferrofed_operator_api::health::DependencyReport> {
     Json(state.dependencies())
 }
 

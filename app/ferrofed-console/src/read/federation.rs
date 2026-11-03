@@ -16,8 +16,8 @@
 
 use std::collections::BTreeMap;
 
-use ferrofed_registry::console::Owner;
-use ferrofed_registry::health::{DependencyReport, Indication, Observed};
+use ferrofed_operator_api::console::Owner;
+use ferrofed_operator_api::health::{DependencyReport, Indication, Observed};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::flow::FlowState;
 use ferrohealth_ui::view::state::Mark;
@@ -573,7 +573,7 @@ pub async fn read() -> Result<Federation, Stop> {
 #[cfg(test)]
 mod tests {
     use super::{Endpoint, Health, Node};
-    use ferrofed_registry::health::Observed;
+    use ferrofed_operator_api::health::Observed;
 
     fn endpoint(id: &str, latency: Option<(u64, u64)>) -> Endpoint {
         Endpoint {

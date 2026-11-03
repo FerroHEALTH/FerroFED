@@ -8,7 +8,7 @@
 
 use std::sync::{Arc, PoisonError};
 
-use ferrofed_registry::revision::RevisionId;
+use ferrofed_operator_api::revision::RevisionId;
 use ferrohealth_config::provenance::Provenance;
 
 use super::Reloader;

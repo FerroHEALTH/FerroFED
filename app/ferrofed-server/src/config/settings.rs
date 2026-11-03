@@ -55,7 +55,7 @@ pub struct Settings {
     /// The form the registry document is written in.
     pub registry_format: RegistryFormat,
     /// The members the operator console manages, joined to the document's.
-    pub registry_members: Vec<ferrofed_registry::console::ConsoleMember>,
+    pub registry_members: Vec<ferrofed_operator_api::console::ConsoleMember>,
     /// The mCSD care services directory the registry is read from, when it
     /// is read from one (§15.1, Annex A.5).
     #[cfg(feature = "binding-ihe")]
