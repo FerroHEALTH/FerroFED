@@ -28,7 +28,8 @@ use ferrofed_engine::onward::{ClientAuthentication, Scope, SenderConstraint, Sys
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
-use ferrofed_testkit::oauth::{self, Verdict};
+use ferrofed_testkit::issuance::Verdict;
+use ferrofed_testkit::oauth;
 use ferrofed_testkit::tls::MutualTls;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
@@ -187,8 +188,11 @@ async fn a_fapi2_grant_authenticates_and_binds_its_tokens_by_certificate() -> Te
         "{:?}",
         reply.outcome()
     );
-    assert_eq!(vec![Verdict::Issued], harness.server.endpoint().verdicts());
-    let forms = harness.server.endpoint().forms();
+    assert_eq!(
+        vec![Verdict::Issued],
+        harness.server.endpoint().issuance().verdicts()
+    );
+    let forms = harness.server.endpoint().issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
@@ -218,7 +222,7 @@ async fn refused_after(
         .err()
         .ok_or("the grant is refused")?;
     assert!(
-        harness.server.endpoint().forms().is_empty(),
+        harness.server.endpoint().issuance().forms().is_empty(),
         "a refused discovery sends no token request"
     );
     Ok(
@@ -304,7 +308,10 @@ async fn an_alias_on_a_host_the_grant_names_is_taken() -> TestResult {
         "{:?}",
         reply.outcome()
     );
-    assert_eq!(vec![Verdict::Issued], harness.server.endpoint().verdicts());
+    assert_eq!(
+        vec![Verdict::Issued],
+        harness.server.endpoint().issuance().verdicts()
+    );
     assert_eq!(
         vec![harness.door.client_thumbprint().to_owned()],
         harness.door.presented(),
@@ -342,7 +349,10 @@ async fn an_alias_on_a_host_the_grant_does_not_name_is_refused() -> TestResult {
             ),
             "{named:?}: {met:?}"
         );
-        assert!(harness.server.endpoint().forms().is_empty(), "{named:?}");
+        assert!(
+            harness.server.endpoint().issuance().forms().is_empty(),
+            "{named:?}"
+        );
         assert_eq!(
             0,
             harness.door.handshakes(),

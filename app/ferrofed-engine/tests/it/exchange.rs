@@ -28,9 +28,10 @@ use ferrofed_engine::onward::token::{ACCESS_TOKEN_TYPE, JWT_TOKEN_TYPE, TOKEN_EX
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::oauth::{self, Exchanged, TokenEndpoint, Verdict};
+use ferrofed_testkit::oauth::{self, Exchanged, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
@@ -252,7 +253,7 @@ async fn the_node_receives_a_token_exchanged_for_the_verified_caller() -> TestRe
         }],
         endpoint.exchanges()
     );
-    let forms = endpoint.forms();
+    let forms = endpoint.issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
@@ -303,7 +304,7 @@ async fn an_exchanged_token_is_cached_per_caller() -> TestResult {
             reply.outcome()
         );
     }
-    assert_eq!(2, endpoint.issued(), "one exchange per caller");
+    assert_eq!(2, endpoint.issuance().issued(), "one exchange per caller");
     assert_eq!(2, exchange.cached());
     Ok(())
 }
@@ -324,7 +325,7 @@ async fn a_node_401_drops_the_exchanged_token() -> TestResult {
         EndpointStatus::Active,
         query(&client, conveyed()).await?.status()
     );
-    endpoint.revoke_all();
+    endpoint.issuance().revoke_all();
     assert_eq!(
         EndpointStatus::NodeError,
         query(&client, conveyed()).await?.status()
@@ -335,7 +336,7 @@ async fn a_node_401_drops_the_exchanged_token() -> TestResult {
     );
     assert_eq!(
         2,
-        endpoint.issued(),
+        endpoint.issuance().issued(),
         "the refused token was exchanged again"
     );
     Ok(())
@@ -355,7 +356,10 @@ async fn an_edge_asserted_caller_is_refused_with_nothing_sent() -> TestResult {
     let reply = query(&client, conveyance_of(Some(&token), Verification::Edge)).await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
     assert_eq!(UNAUTHENTICATED, error_text(&reply)?);
-    assert!(endpoint.forms().is_empty(), "no token request was sent");
+    assert!(
+        endpoint.issuance().forms().is_empty(),
+        "no token request was sent"
+    );
     let requests = node.received_requests().await.ok_or("recording is on")?;
     assert!(requests.is_empty(), "the node was sent nothing");
     Ok(())
@@ -373,7 +377,10 @@ async fn a_caller_without_its_token_is_refused_with_nothing_sent() -> TestResult
 
     let reply = query(&client, conveyance_of(None, Verification::Signature)).await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
-    assert!(endpoint.forms().is_empty(), "no token request was sent");
+    assert!(
+        endpoint.issuance().forms().is_empty(),
+        "no token request was sent"
+    );
     let requests = node.received_requests().await.ok_or("recording is on")?;
     assert!(requests.is_empty(), "the node was sent nothing");
     Ok(())
@@ -398,7 +405,7 @@ async fn a_caller_token_carrying_the_withheld_identifier_is_never_exchanged() ->
     .await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
     assert!(
-        endpoint.forms().is_empty(),
+        endpoint.issuance().forms().is_empty(),
         "the token endpoint was sent nothing"
     );
     let requests = node.received_requests().await.ok_or("recording is on")?;
@@ -429,7 +436,7 @@ async fn an_operation_no_scope_covers_is_never_exchanged() -> TestResult {
         assert_eq!(EndpointStatus::NodeError, reply.status(), "{uncovered:?}");
     }
     assert!(
-        endpoint.forms().is_empty(),
+        endpoint.issuance().forms().is_empty(),
         "no exchange was sent without a scope"
     );
     let requests = node.received_requests().await.ok_or("recording is on")?;
@@ -460,7 +467,10 @@ async fn an_exchange_naming_no_resource_is_never_sent() -> TestResult {
     )
     .await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
-    assert!(endpoint.forms().is_empty(), "no exchange was sent");
+    assert!(
+        endpoint.issuance().forms().is_empty(),
+        "no exchange was sent"
+    );
     Ok(())
 }
 
@@ -481,7 +491,7 @@ async fn every_exchange_carries_its_scope_and_resource() -> TestResult {
         )
         .await?;
     }
-    let forms = endpoint.forms();
+    let forms = endpoint.issuance().forms();
     assert_eq!(2, forms.len(), "one exchange per caller, none shared");
     for form in &forms {
         assert_eq!(Some(COVERING), field(form, "scope"));
@@ -507,7 +517,7 @@ async fn the_gateways_own_request_uses_client_credentials() -> TestResult {
         "{:?}",
         reply.outcome()
     );
-    let forms = endpoint.forms();
+    let forms = endpoint.issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
@@ -524,7 +534,9 @@ async fn the_gateways_own_request_uses_client_credentials() -> TestResult {
 async fn a_refused_exchange_names_the_token_endpoints_code() -> TestResult {
     let keys = keys()?;
     let endpoint = endpoint(&keys).await;
-    endpoint.refuse(400, "invalid_grant", "synthetic: the subject is unknown");
+    endpoint
+        .issuance()
+        .refuse(400, "invalid_grant", "synthetic: the subject is unknown");
     let node = node(&endpoint, None).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
     let token = caller_token("clinician-0042")?;
@@ -541,7 +553,7 @@ async fn a_refused_exchange_names_the_token_endpoints_code() -> TestResult {
     );
     assert_eq!(
         vec![Verdict::Refused(String::from("invalid_grant"))],
-        endpoint.verdicts()
+        endpoint.issuance().verdicts()
     );
     let requests = node.received_requests().await.ok_or("recording is on")?;
     assert!(requests.is_empty(), "the node was sent nothing");

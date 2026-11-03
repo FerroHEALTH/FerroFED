@@ -6,16 +6,12 @@
 //! §4.2) and every credential the submission maps. No specification governs
 //! the device: our own design.
 
-use std::sync::Arc;
-
 use jsonwebtoken::{DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
-use wiremock::{Request, Respond, ResponseTemplate};
+use wiremock::ResponseTemplate;
 
-use crate::dpop;
-use crate::nuts::{
-    GRANT_TYPE, PRESENTATION_LIFETIME_S, SKEW_S, Shared, State, Trusted, Verdict, refused,
-};
+use crate::issuance::{Grant, Ledger, TokenRequest};
+use crate::nuts::{GRANT_TYPE, PRESENTATION_LIFETIME_S, SKEW_S, Shared, State, Trusted};
 
 /// The members of a Presentation Definition the device reads.
 #[derive(Deserialize)]
@@ -78,122 +74,49 @@ struct TokenBody<'a> {
     scope: &'a str,
 }
 
-/// The answer of the token endpoint.
-pub(super) struct Tokens(pub(super) Arc<Shared>);
+impl Grant for Shared {
+    fn token_url(&self) -> &str {
+        &self.token_url
+    }
 
-impl Respond for Tokens {
-    fn respond(&self, request: &Request) -> ResponseTemplate {
-        let form: Vec<(String, String)> = url::form_urlencoded::parse(&request.body)
-            .map(|(name, value)| (name.into_owned(), value.into_owned()))
-            .collect();
-        let proof = request
-            .headers
-            .get(dpop::HEADER)
-            .and_then(|value| value.to_str().ok())
-            .map(str::to_owned);
-        let mut state = self.0.lock();
-        state.forms.push(form.clone());
-        let delay = state.delay;
-        let answer = self.answer(&mut state, &form, proof.as_deref());
-        match delay {
-            Some(delay) => answer.set_delay(delay),
-            None => answer,
+    fn requires_proof(&self) -> bool {
+        true
+    }
+
+    fn answer(
+        &self,
+        ledger: &mut Ledger,
+        request: &TokenRequest,
+        jkt: Option<String>,
+    ) -> ResponseTemplate {
+        if let Err(reason) = self.granted(&self.lock(), ledger, request) {
+            return ledger.refuse(400, "invalid_request", &reason);
         }
+        let token = uuid::Uuid::new_v4().simple().to_string();
+        ledger.issue(&token, jkt);
+        ResponseTemplate::new(200).set_body_json(TokenBody {
+            access_token: &token,
+            token_type: "DPoP",
+            expires_in: ledger.expires_in,
+            scope: &self.scope,
+        })
     }
 }
 
-impl Tokens {
-    fn answer(
+impl Shared {
+    /// Checks the grant `request` carries, or says why it is refused.
+    fn granted(
         &self,
-        state: &mut State,
-        form: &[(String, String)],
-        proof: Option<&str>,
-    ) -> ResponseTemplate {
-        if let Some(refusal) = state.refusal.clone() {
-            state.verdicts.push(Verdict::Refused(refusal.error.clone()));
-            return refused(refusal.status, &refusal.error, &refusal.description);
-        }
-        let jkt = match self.proven(state, proof) {
-            Ok(jkt) => jkt,
-            Err(answer) => return *answer,
-        };
-        if let Err(reason) = self.granted(state, form) {
-            state.verdicts.push(Verdict::Refused(reason.clone()));
-            return refused(400, "invalid_request", &reason);
-        }
-        let token = uuid::Uuid::new_v4().simple().to_string();
-        state.accepted.insert(token.clone());
-        state.bound.insert(token.clone(), jkt);
-        state.verdicts.push(Verdict::Issued);
-        ResponseTemplate::new(200).set_body_json(TokenBody {
-            access_token: &token,
-            token_type: if state.bearer { "Bearer" } else { "DPoP" },
-            expires_in: state.expires_in,
-            scope: &self.0.scope,
-        })
-    }
-
-    /// The thumbprint of the proof's key, or the answer to a request whose
-    /// proof is refused.
-    fn proven(
-        &self,
-        state: &mut State,
-        proof: Option<&str>,
-    ) -> Result<String, Box<ResponseTemplate>> {
-        let Some(proof) = proof else {
-            state
-                .verdicts
-                .push(Verdict::Refused("no DPoP proof".to_owned()));
-            return Err(Box::new(refused(
-                400,
-                "invalid_dpop_proof",
-                "no DPoP proof",
-            )));
-        };
-        let verified = match dpop::verify(proof, "POST", &self.0.token_url, None) {
-            Ok(verified) => verified,
-            Err(reason) => {
-                state.verdicts.push(Verdict::Refused(reason.clone()));
-                return Err(Box::new(refused(400, "invalid_dpop_proof", &reason)));
-            }
-        };
-        if let Some(nonce) = state.nonce.clone()
-            && verified.proof.nonce.as_ref() != Some(&nonce)
-        {
-            state
-                .verdicts
-                .push(Verdict::Refused("use_dpop_nonce".to_owned()));
-            return Err(Box::new(
-                refused(400, "use_dpop_nonce", "a nonce is required")
-                    .insert_header(dpop::NONCE_HEADER, nonce.as_str()),
-            ));
-        }
-        if !state.seen.insert(format!("dpop:{}", verified.proof.jti)) {
-            state.verdicts.push(Verdict::Refused(
-                "the proof's jti was used before".to_owned(),
-            ));
-            return Err(Box::new(refused(400, "invalid_dpop_proof", "jti")));
-        }
-        Ok(verified.jkt)
-    }
-
-    /// Checks the grant `form` carries, or says why it is refused.
-    fn granted(&self, state: &mut State, form: &[(String, String)]) -> Result<(), String> {
-        let field = |name: &str| {
-            form.iter()
-                .find(|(key, _)| key == name)
-                .map(|(_, value)| value.clone())
-        };
+        state: &State,
+        ledger: &mut Ledger,
+        request: &TokenRequest,
+    ) -> Result<(), String> {
+        let field = |name: &str| request.field(name);
         if field("grant_type").as_deref() != Some(GRANT_TYPE) {
             return Err("grant_type".to_owned());
         }
-        if field("scope").as_deref() != Some(self.0.scope.as_str()) {
+        if field("scope").as_deref() != Some(self.scope.as_str()) {
             return Err("scope".to_owned());
-        }
-        if let Some(expected) = &state.client_id
-            && field("client_id").as_deref() != Some(expected.as_str())
-        {
-            return Err("client_id".to_owned());
         }
         let definition: Definition = state
             .definition
@@ -208,12 +131,12 @@ impl Tokens {
         }
         let assertion = field("assertion").ok_or("no assertion")?;
         let holder = state.holder.clone().ok_or("no trusted holder")?;
-        let claims = presentation(&assertion, &holder, &self.0.issuer)?;
+        let claims = presentation(&assertion, &holder, &self.issuer)?;
         let nonce = claims
             .nonce
             .clone()
             .ok_or("the presentation has no nonce")?;
-        if !state.seen.insert(format!("vp:{nonce}")) {
+        if !ledger.spent.insert(format!("vp:{nonce}")) {
             return Err("the presentation nonce was used before".to_owned());
         }
         for descriptor in &definition.input_descriptors {

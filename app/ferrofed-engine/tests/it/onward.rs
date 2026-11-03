@@ -25,8 +25,9 @@ use ferrofed_engine::onward::token::{CLIENT_ASSERTION_TYPE, GRANT_TYPE};
 use ferrofed_engine::onward::{Clock, Grant, Scope, ScopeError};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
+use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::unreachable;
 use ferrohealth_secret::secret_url::SecretUrl;
 use openehr_federation::outcome::ErrorDetail;
@@ -214,7 +215,7 @@ async fn the_assertion_verifies_against_the_published_jwks_and_the_token_reaches
         "{:?}",
         reply.outcome()
     );
-    assert_eq!(vec![Verdict::Issued], endpoint.verdicts());
+    assert_eq!(vec![Verdict::Issued], endpoint.issuance().verdicts());
     Ok(())
 }
 
@@ -233,7 +234,7 @@ async fn the_token_request_carries_the_rfc_7523_parameters() -> TestResult {
         .with_audience("cdr-a")?;
     provider(grant, keys, clock)?.credentials().await?;
 
-    let forms = endpoint.forms();
+    let forms = endpoint.issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
@@ -429,7 +430,7 @@ async fn a_token_is_cached_until_thirty_seconds_before_it_expires() -> TestResul
 
     let first = bearer(&provider.credentials().await?)?;
     assert_eq!(first, bearer(&provider.credentials().await?)?);
-    assert_eq!(1, endpoint.issued());
+    assert_eq!(1, endpoint.issuance().issued());
 
     let fresh_until = Duration::from_secs(120)
         .checked_sub(REFRESH_MARGIN)
@@ -440,12 +441,12 @@ async fn a_token_is_cached_until_thirty_seconds_before_it_expires() -> TestResul
             .ok_or("a second short of the margin")?,
     )?;
     assert_eq!(first, bearer(&provider.credentials().await?)?);
-    assert_eq!(1, endpoint.issued(), "still inside the margin");
+    assert_eq!(1, endpoint.issuance().issued(), "still inside the margin");
 
     clock.advance(Duration::from_secs(1))?;
     let second = bearer(&provider.credentials().await?)?;
     assert_ne!(first, second);
-    assert_eq!(2, endpoint.issued(), "replaced at the margin");
+    assert_eq!(2, endpoint.issuance().issued(), "replaced at the margin");
     Ok(())
 }
 
@@ -459,7 +460,7 @@ async fn a_token_shorter_than_the_margin_is_not_cached() -> TestResult {
     let provider = provider(grant(&endpoint)?, keys, clock)?;
     provider.credentials().await?;
     provider.credentials().await?;
-    assert_eq!(2, endpoint.issued());
+    assert_eq!(2, endpoint.issuance().issued());
     Ok(())
 }
 
@@ -468,7 +469,7 @@ async fn a_token_shorter_than_the_margin_is_not_cached() -> TestResult {
 #[tokio::test]
 async fn concurrent_requests_share_one_token_request() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.delay(Duration::from_millis(200));
+    endpoint.issuance().delay(Duration::from_millis(200));
     let clock = ManualClock::new();
     let keys = ring(key()?, clock.clone())?;
     endpoint.trust(keys.published());
@@ -490,7 +491,11 @@ async fn concurrent_requests_share_one_token_request() -> TestResult {
     }
     tokens.dedup();
     assert_eq!(1, tokens.len(), "every request has the one token");
-    assert_eq!(1, endpoint.forms().len(), "one token request was sent");
+    assert_eq!(
+        1,
+        endpoint.issuance().forms().len(),
+        "one token request was sent"
+    );
     Ok(())
 }
 
@@ -507,10 +512,10 @@ async fn a_401_drops_the_token_and_the_next_request_obtains_a_new_one() -> TestR
     let client = client(&node, provider(grant(&endpoint)?, keys, clock)?)?;
 
     assert_eq!(EndpointStatus::Active, query(&client).await?.status());
-    endpoint.revoke_all();
+    endpoint.issuance().revoke_all();
     let refused = query(&client).await?;
     assert_eq!(EndpointStatus::NodeError, refused.status());
-    assert_eq!(1, endpoint.issued(), "the cached token was sent");
+    assert_eq!(1, endpoint.issuance().issued(), "the cached token was sent");
     let again = query(&client).await?;
     assert_eq!(
         EndpointStatus::Active,
@@ -518,7 +523,7 @@ async fn a_401_drops_the_token_and_the_next_request_obtains_a_new_one() -> TestR
         "{:?}",
         again.outcome()
     );
-    assert_eq!(2, endpoint.issued(), "the 401 dropped the token");
+    assert_eq!(2, endpoint.issuance().issued(), "the 401 dropped the token");
     Ok(())
 }
 
@@ -576,7 +581,7 @@ async fn the_token_request_carries_the_canonical_scope() -> TestResult {
     )?;
     provider(grant, keys, clock)?.credentials().await?;
 
-    let forms = endpoint.forms();
+    let forms = endpoint.issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
@@ -612,7 +617,7 @@ async fn refused_with(
     description: &str,
 ) -> Result<(NodeReply, bool), Box<dyn Error>> {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.refuse(status, error, description);
+    endpoint.issuance().refuse(status, error, description);
     let clock: Arc<dyn Clock> = ManualClock::new();
     let keys = ring(key()?, Arc::clone(&clock))?;
     let node = node_requiring(&endpoint).await;

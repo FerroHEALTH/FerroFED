@@ -71,7 +71,7 @@ async fn only_the_current_client_key_signs_while_the_previous_one_is_published()
             "only the new key signs"
         );
     }
-    assert_eq!(1, server.endpoint().issued());
+    assert_eq!(1, server.endpoint().issuance().issued());
     Ok(())
 }
 

@@ -72,7 +72,7 @@ async fn mitz_is_asked_with_the_token_the_grant_obtained_and_reused() -> TestRes
     assert_eq!(4, mitz.questions().await?.len(), "two holders, two queries");
     assert_eq!(
         1,
-        endpoint.issued(),
+        endpoint.issuance().issued(),
         "the token is reused while it is fresh"
     );
     Ok(())
@@ -95,9 +95,9 @@ async fn a_question_mitz_refuses_with_401_is_asked_once_more_with_a_fresh_token(
     let (app, _) = metered_with(dir.path(), (&a.uri(), &b.uri()), &table)?;
     let (status, text, _) = ask(app.clone()).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(1, endpoint.issued());
+    assert_eq!(1, endpoint.issuance().issued());
 
-    endpoint.revoke_all();
+    endpoint.issuance().revoke_all();
     let (status, text, answer) = ask(app).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(
@@ -109,7 +109,10 @@ async fn a_question_mitz_refuses_with_401_is_asked_once_more_with_a_fresh_token(
         vec![("node-a-pub", "active"), ("node-b-pub", "consent-denied")],
         statuses(&answer)
     );
-    assert!(endpoint.issued() >= 2, "a fresh token was obtained");
+    assert!(
+        endpoint.issuance().issued() >= 2,
+        "a fresh token was obtained"
+    );
     Ok(())
 }
 

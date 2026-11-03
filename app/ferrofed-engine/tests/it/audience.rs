@@ -19,7 +19,8 @@ use ferrofed_engine::onward::issuer::Issuer;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::{AssertionAudience, Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
-use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
+use ferrofed_testkit::issuance::Verdict;
+use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
 use jsonwebtoken::Algorithm;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
@@ -77,7 +78,7 @@ async fn the_token_endpoint_is_the_default_audience() -> TestResult {
         provider.grant().assertion_audience()
     );
     provider.credentials().await?;
-    assert_eq!(vec![Verdict::Issued], endpoint.verdicts());
+    assert_eq!(vec![Verdict::Issued], endpoint.issuance().verdicts());
     Ok(())
 }
 
@@ -92,7 +93,7 @@ async fn the_issuer_audience_names_the_issuer() -> TestResult {
             .await?;
     endpoint.expect_assertion(Algorithm::ES384, ISSUER);
     provider.credentials().await?;
-    assert_eq!(vec![Verdict::Issued], endpoint.verdicts());
+    assert_eq!(vec![Verdict::Issued], endpoint.issuance().verdicts());
     assert_eq!(ISSUER, provider.grant().assertion_aud());
     Ok(())
 }
@@ -104,7 +105,7 @@ async fn a_server_taking_only_its_issuer_refuses_the_token_endpoint() -> TestRes
     let (endpoint, provider) = provider_of(grant).await?;
     endpoint.expect_assertion(Algorithm::ES384, ISSUER);
     assert!(provider.credentials().await.is_err());
-    assert_eq!(1, endpoint.verdicts().len());
-    assert_eq!(0, endpoint.issued());
+    assert_eq!(1, endpoint.issuance().verdicts().len());
+    assert_eq!(0, endpoint.issuance().issued());
     Ok(())
 }

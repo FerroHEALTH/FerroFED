@@ -30,15 +30,14 @@ use std::sync::{Arc, Mutex, PoisonError};
 use aws_lc_rs::digest::{SHA256, digest};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use rcgen::{
-    BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
-};
+use rcgen::ExtendedKeyUsagePurpose;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use tokio_rustls::TlsAcceptor;
-use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
-use tokio_rustls::rustls::server::WebPkiClientVerifier;
-use tokio_rustls::rustls::{RootCertStore, ServerConfig};
+use tokio_rustls::rustls::ServerConfig;
+use tokio_rustls::rustls::pki_types::CertificateDer;
+
+use crate::pki::{self, Authority, PkiError};
 
 /// Why the front could not start.
 #[derive(Debug, thiserror::Error)]
@@ -47,12 +46,9 @@ pub enum TlsHarnessError {
     /// The certificates could not be generated.
     #[error("the harness certificates could not be generated")]
     Certificate(#[from] rcgen::Error),
-    /// The TLS configuration was refused.
-    #[error("the harness TLS configuration was refused")]
-    Tls(#[from] tokio_rustls::rustls::Error),
-    /// The client verifier could not be built.
-    #[error("the harness client verifier could not be built")]
-    Verifier(#[from] tokio_rustls::rustls::server::VerifierBuilderError),
+    /// The TLS configuration could not be built.
+    #[error("the harness TLS configuration could not be built")]
+    Tls(#[from] PkiError),
     /// The listener could not be bound.
     #[error("the harness front could not listen")]
     Listen(#[from] std::io::Error),
@@ -251,64 +247,22 @@ struct Material {
 /// signs, and a server configuration that requires a client certificate the
 /// CA signed.
 fn material() -> Result<Material, TlsHarnessError> {
-    let today = jiff::Zoned::now().date();
-    let (yesterday, tomorrow) = (
-        today.yesterday().unwrap_or(today),
-        today.tomorrow().unwrap_or(today),
-    );
-    let ymd = |date: jiff::civil::Date| {
-        rcgen::date_time_ymd(
-            i32::from(date.year()),
-            u8::try_from(date.month()).unwrap_or(1),
-            u8::try_from(date.day()).unwrap_or(1),
-        )
-    };
-    let ca_key = KeyPair::generate()?;
-    let mut ca = CertificateParams::new(Vec::<String>::new())?;
-    ca.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-    ca.distinguished_name
-        .push(DnType::CommonName, "FerroFED harness mutual TLS CA");
-    ca.not_before = ymd(yesterday);
-    ca.not_after = ymd(tomorrow);
-    let ca_certificate = ca.self_signed(&ca_key)?;
-    let issuer = Issuer::new(ca, ca_key);
-
-    let server_key = KeyPair::generate()?;
-    let mut server = CertificateParams::new(vec![Ipv4Addr::LOCALHOST.to_string()])?;
-    server.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
-    server
-        .distinguished_name
-        .push(DnType::CommonName, "harness mutual TLS front");
-    server.not_before = ymd(yesterday);
-    server.not_after = ymd(tomorrow);
-    let server_certificate = server.signed_by(&server_key, &issuer)?;
-
-    let client_key = KeyPair::generate()?;
-    let mut client = CertificateParams::new(Vec::<String>::new())?;
-    client.extended_key_usages = vec![ExtendedKeyUsagePurpose::ClientAuth];
-    client
-        .distinguished_name
-        .push(DnType::CommonName, "harness gateway client");
-    client.not_before = ymd(yesterday);
-    client.not_after = ymd(tomorrow);
-    let client_certificate = client.signed_by(&client_key, &issuer)?;
-
-    let mut roots = RootCertStore::empty();
-    roots.add(ca_certificate.der().clone())?;
-    let provider = Arc::new(tokio_rustls::rustls::crypto::aws_lc_rs::default_provider());
-    let verifier =
-        WebPkiClientVerifier::builder_with_provider(Arc::new(roots), Arc::clone(&provider))
-            .build()?;
-    let chain: Vec<CertificateDer<'static>> = vec![server_certificate.der().clone()];
-    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(server_key.serialize_der()));
-    let config = ServerConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()?
-        .with_client_cert_verifier(verifier)
-        .with_single_cert(chain, key)?;
+    let ca = Authority::generate("FerroFED harness mutual TLS CA")?;
+    let (server, server_key) = ca.issue(
+        "harness mutual TLS front",
+        vec![Ipv4Addr::LOCALHOST.to_string()],
+        ExtendedKeyUsagePurpose::ServerAuth,
+    )?;
+    let (client, client_key) = ca.issue(
+        "harness gateway client",
+        Vec::new(),
+        ExtendedKeyUsagePurpose::ClientAuth,
+    )?;
+    let config = pki::server_tls((&server, &server_key), Some(&ca.certificate))?;
     Ok(Material {
-        trust_roots: ca_certificate.pem(),
-        client_identity: format!("{}{}", client_certificate.pem(), client_key.serialize_pem()),
-        client_thumbprint: thumbprint(client_certificate.der()),
+        trust_roots: ca.certificate.pem(),
+        client_identity: format!("{}{}", client.pem(), client_key.serialize_pem()),
+        client_thumbprint: thumbprint(client.der()),
         config,
     })
 }

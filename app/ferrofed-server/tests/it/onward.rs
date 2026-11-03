@@ -28,8 +28,9 @@ use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::oauth::{self, TokenEndpoint, Verdict};
+use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::unreachable;
 use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
@@ -188,7 +189,7 @@ async fn the_node_receives_the_token_its_endpoint_issued_against_the_published_j
 
     let (status, text) = call(app, patient_post()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(vec![Verdict::Issued], endpoint.verdicts());
+    assert_eq!(vec![Verdict::Issued], endpoint.issuance().verdicts());
     let requests = a.received_requests().await.ok_or("recording is on")?;
     let [request] = requests.as_slice() else {
         return Err(format!("expected one node request, got {}", requests.len()).into());
@@ -203,7 +204,7 @@ async fn the_node_receives_the_token_its_endpoint_issued_against_the_published_j
         !sent.contains(CLIENT_TOKEN.as_str()),
         "the caller's token is never forwarded"
     );
-    for form in endpoint.forms() {
+    for form in endpoint.issuance().forms() {
         for (name, value) in form {
             assert!(
                 !value.contains(CLIENT_TOKEN.as_str()),
@@ -383,7 +384,7 @@ async fn a_token_endpoint_down_fails_the_node_and_sends_it_nothing() -> TestResu
 #[tokio::test]
 async fn a_refusal_description_reaches_the_log_and_never_the_answer() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.refuse(
+    endpoint.issuance().refuse(
         400,
         "invalid_client",
         "key /etc/ferrofed/secret.pem rejected at https://idp.internal.example/realm",

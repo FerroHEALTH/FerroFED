@@ -332,7 +332,10 @@ async fn an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent() ->
 
     let (status, text) = call(app, request).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
-    assert!(endpoint.forms().is_empty(), "no token request was sent");
+    assert!(
+        endpoint.issuance().forms().is_empty(),
+        "no token request was sent"
+    );
     assert!(
         a.received_requests()
             .await
@@ -365,7 +368,7 @@ async fn a_dpop_bound_grant_proves_every_request_to_its_node() -> TestResult {
 
     let (status, text) = call(app, patient_post(&bearer_as(CALLER)?)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(1, endpoint.issued());
+    assert_eq!(1, endpoint.issuance().issued());
     Ok(())
 }
 

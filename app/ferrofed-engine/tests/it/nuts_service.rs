@@ -101,7 +101,7 @@ async fn the_search_carries_the_dpop_bound_nuts_token() -> TestResult {
             .map(Ura::as_str)
             .collect::<Vec<_>>()
     );
-    assert_eq!(1, setup.authority.issued());
+    assert_eq!(1, setup.authority.issuance().issued());
     let [authorization] = nvi
         .headers("authorization")
         .await?
@@ -135,7 +135,7 @@ async fn the_pseudonym_reaches_neither_the_authorization_server_nor_a_proof() ->
     let (nvi, client) = service(&setup, Arc::new(SystemClock)).await?;
     client.localize(&patient()?, PROMPT).await?;
 
-    for form in setup.authority.forms() {
+    for form in setup.authority.issuance().forms() {
         for (name, value) in form {
             assert!(
                 !value.contains(PSEUDONYM),
@@ -160,15 +160,27 @@ async fn the_token_is_cached_and_replaced_as_it_nears_its_end() -> TestResult {
 
     client.localize(&patient()?, PROMPT).await?;
     client.localize(&patient()?, PROMPT).await?;
-    assert_eq!(1, setup.authority.issued(), "the token is cached");
+    assert_eq!(
+        1,
+        setup.authority.issuance().issued(),
+        "the token is cached"
+    );
 
     clock.advance(Duration::from_secs(269))?;
     client.localize(&patient()?, PROMPT).await?;
-    assert_eq!(1, setup.authority.issued(), "still fresh at 269 of 300 s");
+    assert_eq!(
+        1,
+        setup.authority.issuance().issued(),
+        "still fresh at 269 of 300 s"
+    );
 
     clock.advance(Duration::from_secs(1))?;
     client.localize(&patient()?, PROMPT).await?;
-    assert_eq!(2, setup.authority.issued(), "replaced 30 s before its end");
+    assert_eq!(
+        2,
+        setup.authority.issuance().issued(),
+        "replaced 30 s before its end"
+    );
     Ok(())
 }
 
@@ -180,6 +192,7 @@ async fn a_refused_grant_sends_the_service_nothing() -> TestResult {
     let setup = setup().await?;
     setup
         .authority
+        .issuance()
         .refuse(400, "invalid_request", "the presentation was refused");
     let (nvi, client) = service(&setup, Arc::new(SystemClock)).await?;
 
@@ -200,7 +213,7 @@ async fn a_refused_grant_sends_the_service_nothing() -> TestResult {
     for part in setup.credential.split('.').filter(|part| part.len() > 8) {
         assert!(!rendered.contains(part), "the failure names the credential");
     }
-    for form in setup.authority.forms() {
+    for form in setup.authority.issuance().forms() {
         for (name, value) in form {
             if name == "assertion" {
                 for part in value.split('.').filter(|part| part.len() > 8) {
@@ -226,7 +239,7 @@ async fn a_token_the_service_refuses_is_dropped() -> TestResult {
     let setup = setup().await?;
     let (_nvi, client) = service(&setup, Arc::new(SystemClock)).await?;
     client.localize(&patient()?, PROMPT).await?;
-    setup.authority.revoke_all();
+    setup.authority.issuance().revoke_all();
 
     let Err(error) = client.localize(&patient()?, PROMPT).await else {
         return Err("a revoked token localized".into());
@@ -236,7 +249,11 @@ async fn a_token_the_service_refuses_is_dropped() -> TestResult {
         "{error:?}"
     );
     client.localize(&patient()?, PROMPT).await?;
-    assert_eq!(2, setup.authority.issued(), "a new token after the 401");
+    assert_eq!(
+        2,
+        setup.authority.issuance().issued(),
+        "a new token after the 401"
+    );
     Ok(())
 }
 
@@ -258,7 +275,7 @@ async fn a_nonce_the_service_demands_is_answered_once() -> TestResult {
     assert_eq!(3, nvi.searches().await?.len(), "the nonce is kept");
     assert_eq!(
         1,
-        setup.authority.issued(),
+        setup.authority.issuance().issued(),
         "the token is kept across the challenge"
     );
     Ok(())

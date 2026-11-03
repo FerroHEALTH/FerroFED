@@ -93,6 +93,6 @@ async fn the_admission_check_authenticates_with_the_onward_grant() -> TestResult
         verdict(&report, Condition::EhrIdGeneration)?,
         "{report}"
     );
-    assert!(endpoint.issued() >= 1, "a token was obtained");
+    assert!(endpoint.issuance().issued() >= 1, "a token was obtained");
     Ok(())
 }
