@@ -110,7 +110,7 @@ const BUILD_DIRECTORY: &str = "/build";
 const REPOSITORY_TARGET: &str = "/maven-repository";
 
 /// The jar Maven packages, under [`BUILD_DIRECTORY`].
-const JAR: &str = "target/openehr-federation-ref-0.9.0-SNAPSHOT.jar";
+const JAR: &str = "target/openehr-federation-ref-1.0.1-SNAPSHOT.jar";
 
 /// How long the Maven build may run, downloads included.
 const BUILD_BUDGET: Duration = Duration::from_mins(15);

@@ -229,11 +229,11 @@ async fn a_read_and_a_query_of_the_duplicate_are_refused_and_only_the_probe_reac
     let seeded = seeded().await?;
     let nodes = &seeded.nodes;
     let dir = tempfile::tempdir()?;
-    let read = Request::get(format!(
-        "/v1/ehr/{DUPLICATE}/composition/{}",
-        seeded.duplicate_at_a
-    ))
-    .body(Body::empty())?;
+    // NOTE: §12.5.1 step 4 would locate a read naming the version at its creator, so
+    // the read names the versioned object, which carries no creating_system_id.
+    let object = object_of(&seeded.duplicate_at_a)?;
+    let read =
+        Request::get(format!("/v1/ehr/{DUPLICATE}/composition/{object}")).body(Body::empty())?;
     let scoped = query(&scoped_to_the_duplicate())?;
     for (what, request) in [("the read", read), ("the scoped query", scoped)] {
         // NOTE: §12.5.1 step 5: a fresh gateway holds no index entry, so the
