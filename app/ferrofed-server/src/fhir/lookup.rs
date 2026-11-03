@@ -29,7 +29,8 @@ use ferrofed_identity::role::header::PatientHeader;
 use http::{StatusCode, Uri};
 
 use super::admission::Asked;
-use super::{Headless, attach, fhir_json, header_of, refused, unheaded_outcome};
+use super::patient_summary::{Headless, header_of, refused, unheaded_outcome};
+use super::{attach, fhir_json};
 use crate::access::NoAccess;
 use crate::facade::demographics::Unheaded;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
@@ -65,7 +66,12 @@ pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {
                     let mut response =
                         fhir_json(StatusCode::OK, &lookup::searchset(Vec::new(), Vec::new()));
                     let accessed = gathered.and_then(|gathered| {
-                        gathered::accessed(federation, &gathered, patient, (Scope::Lookup, None))
+                        gathered::access::accessed(
+                            federation,
+                            &gathered,
+                            patient,
+                            (Scope::Lookup, None),
+                        )
                     });
                     attach(&mut response, accessed);
                     response
@@ -145,7 +151,7 @@ fn found(
     let mut response = fhir_json(StatusCode::OK, &lookup::searchset(matches, outcomes));
     attach(
         &mut response,
-        gathered::accessed(federation, gathered, (system, value), (Scope::Lookup, None)),
+        gathered::access::accessed(federation, gathered, (system, value), (Scope::Lookup, None)),
     );
     response
 }
