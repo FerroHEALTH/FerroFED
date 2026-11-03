@@ -1209,6 +1209,9 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    env:
+      FHIR_VALIDATOR_VERSION: 7.0.4
+      FHIR_VALIDATOR_SHA256: 43e29fa8822d670740a909c395ca5b70a3d07fbaa8936f8dedc6a98b007f555b
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1224,10 +1227,19 @@ jobs:
           path: ${{ runner.temp }}/eehrxf-documents
       - name: The judge holds to its rules
         run: bash scripts/checks/fhir-validator.sh --self-test
+      # The jar and the registry packages the validator reads (#1501), so a
+      # run with the cache warm makes no request to packages.fhir.org. The
+      # key is a digest of every pin, and the script holds each restored file
+      # to its sha256. This is a test lane: no release is built from it.
+      - name: The cache key of the pinned downloads
+        id: downloads
+        run: echo "key=$(bash scripts/checks/fhir-validator.sh --cache-key)" >> "$GITHUB_OUTPUT"
+      - name: Restore the pinned downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/fhir-validator/downloads
+          key: ${{ steps.downloads.outputs.key }}
       - name: Every document passes the HL7 FHIR Validator
-        env:
-          FHIR_VALIDATOR_VERSION: 7.0.4
-          FHIR_VALIDATOR_SHA256: 43e29fa8822d670740a909c395ca5b70a3d07fbaa8936f8dedc6a98b007f555b
         run: |
           set -euo pipefail
           status=0

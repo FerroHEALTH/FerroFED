@@ -42,13 +42,17 @@
 #     scripts/checks/fhir-validator.sh DOCUMENTS OUT
 #   scripts/checks/fhir-validator.sh --judge OUTPUT DOCUMENTS OUT
 #   scripts/checks/fhir-validator.sh --self-test
+#   FHIR_VALIDATOR_VERSION=x.y.z FHIR_VALIDATOR_SHA256=<hex> \
+#     scripts/checks/fhir-validator.sh --cache-key
 #
 # DOCUMENTS is the directory the tests wrote (FERROFED_EMIT_DIR), OUT the
 # directory the results go to: validation.json (the validator's
 # OperationOutcome output), validation.html, validator.log, summary.tsv and
 # summary.md. FHIR_VALIDATOR_JAR names a local copy of the jar in place of a
-# download; it is held to the same sha256. --judge reads an existing
-# validator output alone. Needs java 17 or later, curl, jq, tar and
+# download; it is held to the same sha256. Every download is retried with
+# backoff, and the CI job caches the downloads directory under the key
+# --cache-key prints, so a run with the cache warm fetches nothing. --judge
+# reads an existing validator output alone. Needs java 17 or later, curl, jq, tar and
 # sha256sum or shasum. Exit 1 naming each failure; 0 otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -123,13 +127,45 @@ sha256() {
   fi
 }
 
-# fetch URL FILE SHA256: downloads URL to FILE unless it is there, and holds
-# it to SHA256.
+# The attempts fetch makes at one URL, and the delay before the second in
+# seconds, doubled before each one after it.
+readonly FETCH_ATTEMPTS=5
+FETCH_DELAY=2
+
+# download URL FILE: downloads URL to FILE in up to FETCH_ATTEMPTS attempts,
+# backing off between them. curl's own --retry leaves a failed name lookup
+# (exit 6) alone, which is the failure a registry outage shows, so every
+# failure is retried here; the last one is named with the host it came from.
+download() {
+  local url="$1" file="$2" attempt=1 delay="$FETCH_DELAY" code=0 host
+  host="${url#*://}"
+  host="${host%%/*}"
+  while :; do
+    code=0
+    curl -sSfL -o "$file.part" "$url" || code=$?
+    if [[ "$code" -eq 0 ]]; then
+      mv "$file.part" "$file"
+      return 0
+    fi
+    rm -f "$file.part"
+    if [[ "$attempt" -ge "$FETCH_ATTEMPTS" ]]; then
+      echo "::error::$host did not serve $url in $attempt attempts (curl exit $code on the last); the package registry or the release host is unreachable, re-run once it answers" >&2
+      return 1
+    fi
+    echo "fetch: $host: curl exit $code on attempt $attempt, retrying in ${delay}s" >&2
+    sleep "$delay"
+    attempt=$((attempt + 1))
+    delay=$((delay * 2))
+  done
+}
+
+# fetch URL FILE SHA256: downloads URL to FILE unless it is there, from the
+# cache the CI job restores into the downloads directory, and holds it to
+# SHA256.
 fetch() {
   local url="$1" file="$2" want="$3" got
   if [[ ! -f "$file" ]]; then
-    curl -sSfL --retry 3 -o "$file.part" "$url"
-    mv "$file.part" "$file"
+    download "$url" "$file" || return 1
   fi
   got="$(sha256 "$file")"
   if [[ "$got" != "$want" ]]; then
@@ -346,7 +382,19 @@ $VENDORED"
   judge "$out/validation.json" "$documents" "$out"
 }
 
-# self_test: holds judge to its rules over synthetic validator outputs.
+# cache_key: the key of the CI cache of the downloads directory, a digest of
+# everything fetched into it: the jar's version and sha256 and every registry
+# package with its version and sha256. A re-pin changes the key, and fetch
+# holds each restored file to its sha256 all the same.
+cache_key() {
+  local list="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/fhir-validator-cache-key"
+  printf '%s\t%s\n%s\n' "$FHIR_VALIDATOR_VERSION" "$FHIR_VALIDATOR_SHA256" "$REGISTRY_PACKAGES" > "$list"
+  echo "fhir-validator-$(sha256 "$list")"
+  rm -f "$list"
+}
+
+# self_test: holds judge to its rules over synthetic validator outputs, and
+# download to its retries over a URL that never answers.
 self_test() {
   local scratch
   scratch="$(mktemp -d)"
@@ -391,6 +439,16 @@ self_test() {
   check "no validator output fails" 1 '{"resourceType":"Parameters"}'
   rm -f "$scratch/docs/"*.json
   check "no document fails" 1 '{"resourceType":"OperationOutcome","issue":[]}'
+  local said
+  cases=$((cases + 1))
+  if said="$(FETCH_DELAY=0 download "file://$scratch/absent.tgz" "$scratch/absent.tgz" 2>&1)"; then
+    echo "::error::self-test: a URL that never answers was downloaded" >&2
+    wrong=1
+  elif [[ "$(grep -c 'retrying' <<< "$said")" -ne $((FETCH_ATTEMPTS - 1)) ]] ||
+    ! grep -q "in $FETCH_ATTEMPTS attempts" <<< "$said"; then
+    echo "::error::self-test: a URL that never answers was not retried $FETCH_ATTEMPTS times: $said" >&2
+    wrong=1
+  fi
   if [[ "$wrong" -ne 0 ]]; then
     return 1
   fi
@@ -401,6 +459,11 @@ case "${1:-}" in
 --self-test)
   self_test
   ;;
+--cache-key)
+  : "${FHIR_VALIDATOR_VERSION:?the validator version to run}"
+  : "${FHIR_VALIDATOR_SHA256:?the sha256 of validator_cli.jar at that version}"
+  cache_key
+  ;;
 --judge)
   [[ "$#" -eq 4 ]] || {
     echo "usage: $0 --judge OUTPUT DOCUMENTS OUT" >&2
@@ -409,7 +472,7 @@ case "${1:-}" in
   judge "$2" "$3" "$4"
   ;;
 -* | '')
-  echo "usage: $0 DOCUMENTS OUT | --judge OUTPUT DOCUMENTS OUT | --self-test" >&2
+  echo "usage: $0 DOCUMENTS OUT | --judge OUTPUT DOCUMENTS OUT | --self-test | --cache-key" >&2
   exit 2
   ;;
 *)

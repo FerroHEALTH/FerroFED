@@ -189,7 +189,12 @@ repository does not vendor (the R4 core, HL7 Terminology, the HL7 extension
 packages, IPS 1.1.0, IPA, SMART App Launch, DICOM and the validator's own
 `hl7.fhir.xver-extensions`), each fetched from the FHIR package registry at
 the version a manifest names and checked against the SHA-256 the script
-pins. A package it would have to fetch fails the run.
+pins. A package it would have to fetch fails the run. The job caches the
+jar and the registry packages with `actions/cache` under a key that digests
+every pin (`fhir-validator.sh --cache-key`), so a run with the cache warm
+makes no request; on a miss each download is tried up to five times with
+doubling backoff, and the last failure names the host that did not answer
+(#1501).
 
 The job fails on an issue of severity error or fatal, on a document with no
 outcome, and on a claimed profile the validator could not find, at whatever
