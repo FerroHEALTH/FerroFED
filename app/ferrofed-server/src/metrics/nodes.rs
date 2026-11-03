@@ -299,7 +299,7 @@ impl NodeRequests {
         }
         let status = match &probed.answer {
             Answer::Holds(forwarded) => answered(forwarded.status(), false),
-            // NOTE: §12.5.1 step 4, ITS-REST 1.1.0 EHR API `404_unknown_ehr_id`: a probed member's
+            // NOTE: §12.5.1 step 5, ITS-REST 1.1.0 EHR API `404_unknown_ehr_id`: a probed member's
             // `404` answers what the probe asks, that it holds no such EHR, so it is `active`.
             Answer::Absent => EndpointStatus::Active,
             Answer::Erred(status) => answered(*status, false),

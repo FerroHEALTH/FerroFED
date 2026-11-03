@@ -197,7 +197,7 @@ Item names its row in the matrix exactly.
 | Item | Pin | What FerroFED does with it |
 |---|---|---|
 | Product version | 0.0.15 | the FerroFED version this sheet describes |
-| Federation Tier with AQL | 1.0.0 | the federation it implements: the façade, the rewrite per node, the merged answer with `meta.federation`, follow-up routing; the release the openEHR SEC approved |
+| Federation Tier with AQL | 1.0.1 | the federation it implements: the façade, the rewrite per node, the merged answer with `meta.federation`, follow-up routing; the release the openEHR SEC approved, with its 1.0.1 erratum to the routing of EHR-scoped version requests |
 | openEHR ITS-REST | 1.1.0 | the API a client calls and the API it calls at each member |
 | openEHR AQL | 1.1.0 | the query language a client sends and each member answers |
 | openEHR Reference Model specification source | tag Release-1.1.0 | the identifiers and versioning model routing reads, RM 1.1.0 |

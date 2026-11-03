@@ -179,7 +179,7 @@ async fn a_scoped_query_reaches_only_the_member_that_holds_the_ehr_id() -> TestR
     assert_eq!(
         vec![("GET".to_owned(), format!("/v1/ehr/{EHR_A}"))],
         run.b,
-        "node B is probed for the ehr_id and never sent the query (§12.5.1 step 4)"
+        "node B is probed for the ehr_id and never sent the query (§12.5.1 step 5)"
     );
     let answer: Answer = serde_json::from_str(&run.text)?;
     assert_eq!(

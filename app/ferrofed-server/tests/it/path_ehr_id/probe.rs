@@ -43,7 +43,7 @@ async fn a_read_no_earlier_step_routes_goes_to_the_one_member_the_probe_finds() 
     assert_eq!(
         vec![probe_at()],
         asked(&b).await?,
-        "the other member is only probed (§12.5.1 step 4)"
+        "the other member is only probed (§12.5.1 step 5)"
     );
     Ok(())
 }

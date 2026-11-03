@@ -5,22 +5,30 @@
 //!
 //! An `ehr_id` carries no system component, so a request under
 //! `{base}/v1/ehr/{ehr_id}` names its node only through what surrounds it.
-//! [`located`] takes the first three steps of §12.5.1 in order and never
-//! moves past a step that names exactly one member:
+//! Every request under it, a version read and a versioned write included,
+//! is located in the order of §12.5.1 (1.0.1), and no step is taken past
+//! one that names exactly one member:
 //!
 //! 1. the targeting headers, `openEHR-federation-endpoint` and
 //!    `openEHR-federation-organisation` (§8.4);
 //! 2. a resolution binding the client session holds (§5.2);
-//! 3. the `ehr_id` to node index.
+//! 3. the `ehr_id` to node index;
+//! 4. when the path carries an `OBJECT_VERSION_ID`, the member whose
+//!    `system_id` is its `creating_system_id`, looked up in the registry
+//!    ([`created_by`], §12.2);
+//! 5. for a read only, the ask-all probe.
 //!
-//! A binding or an index entry naming several members is a collision: no
-//! later step picks one of them, and the request, a read or a write, is
-//! refused `409` listing the claimants (§12.5.2, N42). The fourth step, the
-//! ask-all probe, is for reads only and is [`settled`] from what every member
-//! answered: one member holding the `ehr_id` owns it, two are a `409`, none is
-//! a `404`, and a member that gave no answer leaves the owner unknown, which
-//! fails the read (§11.2, §11.5). Every collision raises the integrity
-//! incident of N42 ([`collided`]).
+//! [`located`] takes the first three. A binding or an index entry naming
+//! several members is a collision: no later step picks one of them, and the
+//! request, a read or a write, is refused `409` listing the claimants
+//! (§12.5.2, N42). Step 4 is consulted only when the first three named no
+//! member, so a path `ehr_id` is never sent to a member chosen by
+//! `creating_system_id` while an earlier step named another (§12.5.1
+//! `ehr-id-not-creating-system`). The ask-all probe is [`settled`] from what
+//! every member answered: one member holding the `ehr_id` owns it, two are a
+//! `409`, none is a `404`, and a member that gave no answer leaves the owner
+//! unknown, which fails the read (§11.2, §11.5). Every collision raises the
+//! integrity incident of N42 ([`collided`]).
 //!
 //! A new EHR under a path `ehr_id` goes only where the targeting headers
 //! send it (§12.4, N23), and [`held_elsewhere`] reads steps 2 and 3 for it
@@ -37,10 +45,11 @@ use ferrofed_engine::single_node::forward::{ForwardError, Forwarded};
 use ferrofed_engine::single_node::probe::Answer;
 use ferrofed_identity::session::{Bound, ResolutionBindings, SessionKey};
 use ferrofed_registry::ehr_index::{EhrIndex, Indexed};
-use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
+use ferrofed_registry::id::{EhrId, EndpointId, NodeId, SystemId};
 use ferrofed_registry::incident::{Detection, Incident};
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use http::{HeaderMap, StatusCode};
+use openehr_base::prelude::ObjectVersionId;
 
 use crate::error::Code;
 use crate::facade::target;
@@ -54,7 +63,10 @@ pub enum Step {
     Binding,
     /// Step 3: the `ehr_id` to node index.
     Index,
-    /// Step 4: the ask-all probe.
+    /// Step 4: the member the `creating_system_id` of the path's
+    /// `OBJECT_VERSION_ID` names.
+    CreatingSystem,
+    /// Step 5: the ask-all probe.
     AskAll,
 }
 
@@ -66,6 +78,7 @@ impl Step {
             Self::Target => "target",
             Self::Binding => "binding",
             Self::Index => "index",
+            Self::CreatingSystem => "creating-system",
             Self::AskAll => "ask-all",
         }
     }
@@ -152,6 +165,34 @@ pub fn located<'a>(
     }
     let indexed = indexed(snapshot, index, ehr_id);
     Ok(among(snapshot, &indexed, Step::Index, Detection::Index).unwrap_or(Located::Unknown))
+}
+
+/// Step 4 of §12.5.1: the member whose `system_id` is the
+/// `creating_system_id` of `version`, the `OBJECT_VERSION_ID` the request
+/// path carries, or `None` when the registry names no member for it (§12.2,
+/// N22, N41).
+///
+/// The registry answers for a member's own `system_id` and for a registered
+/// `[[creating_system]]` mapping. A learned route is never read: it records
+/// a node seen holding a version, which need not be the node whose
+/// `system_id` equals its `creating_system_id` (§10.2). Only a request the
+/// first three steps did not locate is asked this.
+#[must_use]
+pub fn created_by<'a>(
+    snapshot: &'a RegistrySnapshot,
+    version: &ObjectVersionId,
+) -> Option<Located<'a>> {
+    // NOTE: BASE OBJECT_VERSION_ID, §12.2: a creating_system_id that is no uid names
+    // no system, so step 4 legitimately names no member and the next step is taken.
+    let creating_system_id = SystemId::creating_system_id_of(version).ok()?;
+    let (_, route) = snapshot.registered_creating_system(&creating_system_id)?;
+    let step = Step::CreatingSystem;
+    match route.endpoint() {
+        Some(mapped) => snapshot
+            .endpoint(mapped)
+            .map(|endpoint| Located::At { endpoint, step }),
+        None => member(snapshot, route.node(), step),
+    }
 }
 
 /// Locates the owner of a path `ehr_id` for a caller confined to one patient.
@@ -335,7 +376,7 @@ fn endpoint_of<'a>(snapshot: &'a RegistrySnapshot, node: &NodeId) -> Option<&'a 
     })
 }
 
-/// The endpoint each member is probed through in step 4, in `node_id` order;
+/// The endpoint each member is probed through in step 5, in `node_id` order;
 /// a member with no active endpoint is never contacted (§11.1).
 #[must_use]
 pub fn probed(snapshot: &RegistrySnapshot) -> Vec<EndpointId> {
@@ -437,7 +478,7 @@ impl Untargeted {
     }
 }
 
-/// What the ask-all probe settled (§12.5.1 step 4).
+/// What the ask-all probe settled (§12.5.1 step 5).
 #[derive(Debug)]
 pub enum Settled {
     /// Exactly one member holds the `ehr_id`, and every other member said it

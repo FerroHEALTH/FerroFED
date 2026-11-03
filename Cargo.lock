@@ -3127,7 +3127,7 @@ dependencies = [
 
 [[package]]
 name = "openehr-federation"
-version = "0.0.55"
+version = "0.0.56"
 dependencies = [
  "ferrofed-testkit",
  "jsonschema",

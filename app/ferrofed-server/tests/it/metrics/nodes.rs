@@ -36,7 +36,7 @@ use crate::facade::{
     settings_with_room,
 };
 use crate::metrics::{Metered, count, parse, value};
-use crate::path_ehr_id::{holder, stranger};
+use crate::path_ehr_id::{VERSION_A, holder, stranger};
 use crate::support::{SLACK, call, millis, observed, states};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -177,8 +177,8 @@ async fn a_routed_read_counts_and_times_the_probe_of_each_member_and_the_read() 
         ("", ""),
         (2_000, 3_000),
     )?;
-    let version = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
-    let read = Request::get(format!("/v1/ehr/{EHR_A}/composition/{version}")).body(Body::empty())?;
+    let read =
+        Request::get(format!("/v1/ehr/{EHR_A}/composition/{VERSION_A}")).body(Body::empty())?;
     let (status, text) = call(gateway.app.clone(), read).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
 
@@ -225,7 +225,8 @@ async fn a_routed_read_the_node_answers_with_a_4xx_is_a_node_error() -> TestResu
         ("", ""),
         (2_000, 3_000),
     )?;
-    let unknown = "0e2c2f4b-5b0a-4f4e-9d1a-2f7d1c0b9a11::cdr-a.example.org::1";
+    // NOTE: §12.5.1 step 4: a system outside the registry minted it, so the read is probed.
+    let unknown = "0e2c2f4b-5b0a-4f4e-9d1a-2f7d1c0b9a11::external.example.org::1";
     let read = Request::get(format!("/v1/ehr/{EHR_A}/composition/{unknown}")).body(Body::empty())?;
     let (status, text) = call(gateway.app.clone(), read).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "{text}");

@@ -9,6 +9,6 @@ nav:
   - modules/ROOT/nav.adoc
 asciidoc:
   attributes:
-    spec-version: '1.0.0'
+    spec-version: '1.0.1'
     spec-status: 'Approved by the openEHR SEC'
-    spec-date: '2026-10-12'
+    spec-date: '2026-11-01'

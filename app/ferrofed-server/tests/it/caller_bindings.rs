@@ -24,13 +24,10 @@ use serde::Deserialize;
 use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, body, dev_gateway, patient_query, post};
-use crate::path_ehr_id::{answer, holder};
+use crate::path_ehr_id::{VERSION_A, answer, holder};
 use crate::support::{Logs, asked, bearer_as, mount};
 
 type TestResult = Result<(), Box<dyn Error>>;
-
-/// A version uid node A minted, which [`holder`] serves.
-const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
 
 /// The debug event of a routed path `ehr_id`, read for the step that found
 /// its owner.
@@ -146,7 +143,8 @@ async fn a_caller_with_no_query_has_no_binding() -> TestResult {
     assert_eq!(
         vec!["ask-all".to_owned()],
         found,
-        "nothing was resolved, so nothing is bound and a read is probed (step 4)"
+        "nothing was resolved, so nothing is bound, and no registered system created the \
+         version, so a read is probed (step 5)"
     );
     Ok(())
 }

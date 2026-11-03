@@ -1,10 +1,10 @@
 # Contributing
 
-Thanks for your interest! This specification is a **work in progress**, and input at
-every level is genuinely welcome: typo fixes, wording clarifications, technical
-objections, alternative bindings, implementation experience - all of it. Don't hesitate
-to open an issue even for a half-formed thought; discussion is the point of publishing
-this as a draft.
+Thanks for your interest! This specification is approved by the openEHR SEC and
+released, and input at every level is still welcome: typo fixes, wording clarifications,
+technical objections, alternative bindings, implementation experience - all of it.
+Accepted changes land in a later release. Don't hesitate to open an issue even for a
+half-formed thought.
 
 ## Where discussion happens
 

@@ -30,12 +30,17 @@ pub fn object_of(version: &str) -> Result<&str, Failure> {
         .ok_or_else(|| Failure::Check(format!("{version} names no versioned object")))
 }
 
+/// A `system_id` no member and no registered mapping carries.
+const OUTSIDE_SYSTEM: &str = "outside.example.org";
+
 /// Holds that a versioned write nothing routes is refused.
 ///
-/// An update naming `version` in `If-Match` and a delete of `version`, both
-/// under `ehr_id`, which nothing routes, are each refused
-/// `400 target-required` with no endpoint acting (§12.5.1, N41); returns
-/// the refusals.
+/// An update naming `version` in `If-Match`, and a delete of a version of
+/// the same object that a system outside the registry created, both under
+/// `ehr_id`, which nothing routes, are each refused `400 target-required`
+/// with no endpoint acting (§12.5.1, N41); returns the refusals. The delete
+/// names an unregistered system because §12.5.1 step 4 locates a write whose
+/// path carries a version a member created at that member (1.0.1).
 ///
 /// # Errors
 ///
@@ -47,6 +52,7 @@ pub async fn versioned_writes_unrouted<G: Gateway>(
     composition: &str,
 ) -> Result<Vec<Reply>, Failure> {
     let if_match = format!("\"{version}\"");
+    let unregistered = format!("{}::{OUTSIDE_SYSTEM}::1", object_of(version)?);
     let writes = [
         request(
             Method::PUT,
@@ -56,7 +62,7 @@ pub async fn versioned_writes_unrouted<G: Gateway>(
         )?,
         request(
             Method::DELETE,
-            &format!("/v1/ehr/{ehr_id}/composition/{version}"),
+            &format!("/v1/ehr/{ehr_id}/composition/{unregistered}"),
             &[],
             None,
         )?,

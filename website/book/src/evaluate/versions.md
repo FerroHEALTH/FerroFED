@@ -12,8 +12,8 @@ so the guard can hold every row here to its source.
 
 | Item | Pin | Why |
 |---|---|---|
-| Federation Tier with AQL | 1.0.0, approved by the openEHR SEC | the governing specification |
-| Federation Tier with AQL specification | tag `1.0.0`, commit `7dcf0f4` | the vendored source of that release |
+| Federation Tier with AQL | 1.0.1, the erratum to the release the openEHR SEC approved | the governing specification |
+| Federation Tier with AQL specification | commit `b4242c2`, untagged upstream | the vendored source of that release |
 | openEHR ITS-REST | 1.1.0 | the façade a client sees and the API each node exposes |
 | openEHR AQL | 1.1.0 | the query language on both sides of the gateway |
 | `openehr-query`, `openehr-its`, `openehr-base`, `openehr-rm` | 0.0.109 | the published crates the gateway builds on, moved together as one family |

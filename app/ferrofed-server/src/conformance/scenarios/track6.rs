@@ -97,7 +97,7 @@ pub async fn follow_up_read<'f, G: Gateway>(
 
 /// Holds that a read of `ehr_id`, which only `endpoint` of `system_id`
 /// holds and the gateway has not seen, is found by the ask-all probe and
-/// answered by that member (§12.5.1 step 4, CP-33).
+/// answered by that member (§12.5.1 step 5, CP-33).
 ///
 /// # Errors
 ///

@@ -26,8 +26,9 @@ use crate::support::{self, request_lines};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-/// A version uid node A minted.
-const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
+/// A version uid node A holds, minted by a system outside the registry, so
+/// §12.5.1 step 4 names no member and an untargeted read is probed.
+const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::external.example.org::1";
 
 /// A request of `uri` that names itself with the patient identifier, and
 /// names `endpoint` as its target when one is given.

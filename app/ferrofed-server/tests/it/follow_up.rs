@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The follow-up routing table every answer teaches (§12.2, N21, CP-13), and
-//! follow-up reads of one version, routed by their path `ehr_id` (§12a.1,
-//! §12.5.1, N41).
+//! follow-up reads of one version, located by their path `ehr_id` in the
+//! order of §12.5.1 as 1.0.1 sets it (§12.3, §12a.1, N22, N41, CP-14).
 //!
 //! A read of a version under `{base}/v1/ehr/{ehr_id}/…` goes where the
-//! path `ehr_id` routes it, never where the version's `creating_system_id`
-//! points: §12a.1 routes an EHR-scoped request on the `ehr_id`, N22 forbids
-//! rewriting the `ehr_id` for another node, and that node never adopted it
-//! (N42a). Every assertion on what a node received reads the node's own
-//! capture (§16, track 6 and track 10).
+//! explicit target, the binding or the index places the path `ehr_id`; the
+//! version's `creating_system_id` is step 4, consulted only when those named
+//! no member, and never while they named another. A read located at a
+//! copy's holder returns the copy, with `openEHR-federation-system-id`
+//! naming the holder (§7a.3). Every assertion on what a node received reads
+//! the node's own capture (§16, track 6 and track 10).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -166,33 +167,98 @@ fn logged_with(text: &str, message: &str, fields: &[&str]) -> bool {
         .any(|line| fields.iter().all(|field| line.contains(field)))
 }
 
-// conformance: CP-33
+/// The `openEHR-federation-system-id` an answer of `app` to `request` names.
+async fn system_id_of(app: &Router, request: Request<Body>) -> Result<String, Box<dyn Error>> {
+    let response = send(app.clone(), request).await?;
+    assert_eq!(StatusCode::OK, response.status(), "the read is answered");
+    Ok(response
+        .headers()
+        .get("openEHR-federation-system-id")
+        .ok_or("the answer names the acting system (§7a.3)")?
+        .to_str()?
+        .to_owned())
+}
+
+// conformance: CP-14 CP-33
 #[tokio::test]
-async fn an_imported_copy_is_read_where_the_path_ehr_id_routes_never_at_its_creator() -> TestResult
-{
+async fn an_imported_copy_is_read_where_the_index_places_the_path_ehr_id_never_at_its_creator()
+-> TestResult {
     let a = node(EHR_A, &[CREATED_AT_A], &[]).await;
     let b = node(EHR_B, &[CREATED_AT_A], &[]).await;
     let dir = tempfile::tempdir()?;
     let app = over(dir.path(), &a, &b)?;
-    let resource = composition(EHR_B, CREATED_AT_A);
-    let (status, acting, _, text) = answer(&app, read(&resource, None)?).await?;
+    let ehr = format!("/v1/ehr/{EHR_B}");
+    let (status, acting, _, text) = answer(&app, read(&ehr, None)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(
         Some(ENDPOINT_B),
         acting.as_deref(),
-        "the holder of the path ehr_id answers (§12a.1, N41)"
+        "the probe teaches the index"
     );
+    let resource = composition(EHR_B, CREATED_AT_A);
+    let system_id = system_id_of(&app, read(&resource, None)?).await?;
     assert_eq!(
-        read_body(CREATED_AT_A),
-        text,
-        "the copy carries the same version (N22)"
+        "cdr-b.example.org", system_id,
+        "the holder answers with its copy and names itself, which differs from the uid's \
+         creating_system_id, so the client can tell a copy (§12.3, §7a.3, N22)"
     );
     let probe = |ehr_id: &str| get(format!("/v1/ehr/{ehr_id}"));
     assert_eq!(
         vec![probe(EHR_B)],
         asked(&a).await?,
-        "the creator is only probed for the ehr_id, never read"
+        "step 3 named the holder, so the creator is never sent the path ehr_id \
+         (§12.5.1 ehr-id-not-creating-system, N41)"
     );
+    assert_eq!(
+        Some(&get(resource)),
+        asked(&b).await?.last(),
+        "the holder is sent the read"
+    );
+    Ok(())
+}
+
+// conformance: CP-14 CP-33
+#[tokio::test]
+async fn with_no_target_binding_or_index_a_version_read_reaches_its_creator_by_step_4() -> TestResult
+{
+    let a = node(EHR_A, &[CREATED_AT_A], &[]).await;
+    let b = node(EHR_B, &[], &[]).await;
+    let dir = tempfile::tempdir()?;
+    let app = over(dir.path(), &a, &b)?;
+    let resource = composition(EHR_A, CREATED_AT_A);
+    let (status, acting, tag, text) = answer(&app, read(&resource, None)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(
+        Some("node-a-pub"),
+        acting.as_deref(),
+        "§12.5.1 step 4: the member whose system_id is the creating_system_id (N22, N41)"
+    );
+    assert_eq!(Some(format!("\"{CREATED_AT_A}\"")), tag, "N22");
+    assert_eq!(vec![get(resource)], asked(&a).await?, "nothing is probed");
+    assert!(
+        asked(&b).await?.is_empty(),
+        "step 4 named a member, so the ask-all probe of step 5 is never taken"
+    );
+    Ok(())
+}
+
+// conformance: CP-14 CP-33
+#[tokio::test]
+async fn a_version_read_whose_creator_the_registry_does_not_map_falls_to_the_probe() -> TestResult {
+    let a = node(EHR_A, &[], &[]).await;
+    let b = node(EHR_B, &[CREATED_ELSEWHERE], &[]).await;
+    let dir = tempfile::tempdir()?;
+    let app = over(dir.path(), &a, &b)?;
+    let resource = composition(EHR_B, CREATED_ELSEWHERE);
+    let (status, acting, _, text) = answer(&app, read(&resource, None)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(
+        Some(ENDPOINT_B),
+        acting.as_deref(),
+        "§12.5.1: step 4 names no member, so the read is probed for (step 5)"
+    );
+    let probe = |ehr_id: &str| get(format!("/v1/ehr/{ehr_id}"));
+    assert_eq!(vec![probe(EHR_B)], asked(&a).await?);
     assert_eq!(vec![probe(EHR_B), get(resource)], asked(&b).await?);
     Ok(())
 }
@@ -433,6 +499,67 @@ async fn a_version_read_reaches_the_node_byte_identical_and_carries_no_identifie
     assert!(
         !captured.contains_ignoring_ascii_case("openehr-federation"),
         "{captured}"
+    );
+    Ok(())
+}
+
+// conformance: CP-15 CP-33
+#[tokio::test]
+async fn a_versioned_write_no_earlier_step_locates_reaches_its_creator_by_step_4() -> TestResult {
+    let a = node(EHR_A, &[], &[]).await;
+    let b = node(EHR_B, &[], &[]).await;
+    let resource = composition(EHR_A, CREATED_AT_A);
+    Mock::given(method("DELETE"))
+        .and(path(resource.as_str()))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&a)
+        .await;
+    let dir = tempfile::tempdir()?;
+    let app = over(dir.path(), &a, &b)?;
+    let delete = Request::delete(resource.as_str()).body(Body::empty())?;
+    let (status, acting, _, text) = answer(&app, delete).await?;
+    assert_eq!(StatusCode::NO_CONTENT, status, "{text}");
+    assert_eq!(
+        Some("node-a-pub"),
+        acting.as_deref(),
+        "§12.5.1 step 4 locates a versioned write whose path carries the version, and its \
+         node controls it (§12.4, N23, N41)"
+    );
+    assert_eq!(vec![("DELETE".to_owned(), resource)], asked(&a).await?);
+    assert!(asked(&b).await?.is_empty(), "a write is never probed for");
+    Ok(())
+}
+
+// conformance: CP-15 CP-33
+#[tokio::test]
+async fn a_versioned_write_whose_path_carries_no_version_is_still_a_400_with_no_earlier_step()
+-> TestResult {
+    let a = node(EHR_A, &[], &[]).await;
+    let b = node(EHR_B, &[], &[]).await;
+    let dir = tempfile::tempdir()?;
+    let app = over(dir.path(), &a, &b)?;
+    let object = CREATED_AT_A.split("::").next().ok_or("an object id")?;
+    let update = Request::put(composition(EHR_A, object))
+        .header(header::IF_MATCH, format!("\"{CREATED_AT_A}\""))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(read_body(CREATED_AT_A)))?;
+    let (status, acting, _, text) = answer(&app, update).await?;
+    assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
+    assert_eq!(
+        "target-required",
+        error_body(&text)?.code,
+        "§12.5.1 step 4 reads the path alone, and If-Match is no part of it (N41)"
+    );
+    assert!(acting.is_none());
+    assert_eq!(
+        Vec::<(String, String)>::new(),
+        asked(&a).await?,
+        "no node is sent it"
+    );
+    assert_eq!(
+        Vec::<(String, String)>::new(),
+        asked(&b).await?,
+        "nothing is probed"
     );
     Ok(())
 }

@@ -25,5 +25,5 @@
 * Annexes
 ** xref:annex-a-ihe.adoc[]
 ** xref:annex-b-dutch-gf.adoc[]
-* About this revision
+* About this specification
 ** xref:contributors.adoc[]

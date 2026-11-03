@@ -40,8 +40,9 @@ pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 pub(crate) const ENDPOINT_A: &str = "node-a-pub";
 const ENDPOINT_B: &str = "node-b-pub";
 
-/// A version uid node A minted.
-const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
+/// A version uid node A holds, minted by a system outside the registry,
+/// so §12.5.1 step 4 names no member for it and an untargeted read is probed.
+pub(crate) const VERSION_A: &str = "8849182c-82ad-4088-a07f-48ead4180515::external.example.org::1";
 
 /// The client's own credential, which no node ever sees.
 use crate::support::CLIENT_TOKEN;

@@ -98,7 +98,7 @@ Every normative requirement should be named by at least one conformance point or
 
 | [[cp-14]]*CP-14*
 | Gateway
-| Follow-up reads route to the owning CDR by `creating_system_id` (then `endpoint_id`, then ask-all); uids are never rewritten.
+| Follow-up reads are located by the path `ehr_id` in the order of N41, with `creating_system_id` as step 4; a read located at a node holding an imported copy returns that copy with `openEHR-federation-system-id` naming the holder; uids are never rewritten.
 | xref:requirements.adoc#n22[N22]
 | xref:testing.adoc#track-6[6]
 
@@ -188,7 +188,7 @@ Every normative requirement should be named by at least one conformance point or
 
 | [[cp-29]]*CP-29*
 | Gateway
-| A write derived from a de-duplicated row reaches the originating CDR; a write whose only reachable holder is a copy is rejected `409` and the object is never forked, and suppressed endpoints stay visible in `meta.federation.dedup`.
+| A write derived from a de-duplicated row reaches the originating CDR when addressed with that CDR's `ehr_id`; a write located at a node holding a copy is rejected `409` naming the controlling system, is never redirected to the owner, and the object is never forked; suppressed endpoints stay visible in `meta.federation.dedup`.
 | xref:requirements.adoc#n36[N36]
 | xref:testing.adoc#track-5[5], xref:testing.adoc#track-6[6]
 
@@ -212,7 +212,7 @@ Every normative requirement should be named by at least one conformance point or
 
 | [[cp-33]]*CP-33*
 | Gateway
-| `ehr_id` routing and integrity: a path `ehr_id` routes by explicit target / binding / index, a write is rejected `400` and never ask-all-probed, and an `ehr_id` claimed by two nodes yields `409` plus an integrity incident - never a guess.
+| `ehr_id` routing and integrity: a path `ehr_id` routes in the five-step order explicit target / binding / index / `creating_system_id` (version uid in the path) / ask-all (reads only), and is never forwarded to a `creating_system_id` node while an earlier step named another; a write the first four steps cannot locate is rejected `400` and never ask-all-probed, and an `ehr_id` claimed by two nodes yields `409` plus an integrity incident - never a guess.
 | xref:requirements.adoc#n41[N41], xref:requirements.adoc#n42[N42]
 | xref:testing.adoc#track-6[6], xref:testing.adoc#track-11[11]
 

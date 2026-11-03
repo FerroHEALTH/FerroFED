@@ -46,7 +46,7 @@ async fn the_ehr_declaration_states_how_a_path_ehr_id_finds_its_owner() -> TestR
         assert_eq!(
             (vec![probe.clone()], vec![probe.clone()]),
             (probed.a, probed.b),
-            "§12.5.1 step 4: every member is probed"
+            "§12.5.1 step 5: every member is probed"
         );
 
         states(&declared, "the ehr_id index", mode);

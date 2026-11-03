@@ -56,19 +56,23 @@ non-federated AQL scoped to its `ehr_id` (§4, §7). The patient identifier used
 for resolution is consumed at the gateway and never reaches a node, in any
 carrier (§5.4, N33).
 
-The specification is pinned at its 1.0.0 release, approved by the openEHR
-SEC on 2026-10-12. #17 re-pinned to it from the 0.9.0 release candidate: the
-release moves `federation.spec_version` to `"1.0"` (§7a.2) and the `$id` of
-both schemas, and drops the change record page, and no N, CP or section
-number moved.
+The specification is pinned at its 1.0.1 release of 2026-11-01, the
+erratum to the 1.0.0 release the openEHR SEC approved on 2026-10-12. 1.0.1
+locates every EHR-scoped version request by its path `ehr_id`, with the
+version's `creating_system_id` as step 4 of §12.5.1, and refuses a write
+located at a copy's holder `409` without redirecting it (§12.3, §12.4,
+N22, N23, N36, N41). Upstream has not tagged 1.0.1, so the pin is its
+untagged commit, by the owner's exception of 2026-11-02 to the tag-only pin
+(#1478). No N, CP or section number moved, and `federation.spec_version`
+stays `"1.0"` (§7a.2).
 
 **Pinned versions.** The pins live in `docs/VERSIONS.md`; this table records
 the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 
 | Component | Pin | Ground |
 |---|---|---|
-| Federation Tier with AQL | 1.0.0 (`syntaric/openehr-federation-spec` tag `1.0.0`, commit `7dcf0f44ac122fe947b1e5ceba6bcbbb7721917d`, 2026-10-12, CC0 1.0) | the specification FerroFED implements, as approved by the openEHR SEC. It carries the SEC review amendments (the `meta.federation` nesting, the all-or-nothing default, the `node-error` status), and its `spec_version` `"1.0"` is the first value that names that contract unambiguously (§7a.2) |
-| Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `92aff3cb1d8738ea0ce0e013b5a8fc2942438fd5` (Apache-2.0) | it has no release matching 1.0.0 (its newest tag is `0.9.0`), so the pin stays. Evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
+| Federation Tier with AQL | 1.0.1 (`syntaric/openehr-federation-spec` commit `b4242c291b08990df718bbfaa1188e4865478e5a`, untagged, 2026-11-01, CC0 1.0) | the specification FerroFED implements, as approved by the openEHR SEC, with the 1.0.1 erratum to the routing of EHR-scoped version requests; pinned at its untagged commit by the owner's exception of 2026-11-02 (#1478), and moved to the `1.0.1` tag when upstream cuts it. It carries the SEC review amendments (the `meta.federation` nesting, the all-or-nothing default, the `node-error` status), and its `spec_version` `"1.0"` is the first value that names that contract unambiguously (§7a.2) |
+| Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `9cb8606d1fce457b6b7f3a42f703d7069686a413` (Apache-2.0) | the commit that tracks 1.0.1 and reports `spec_version` `"1.0"`; it has no release tag after `0.9.0`, so it is pinned by commit and moves with the specification. Evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
 | openEHR ITS-REST | 1.1.0 (`openEHR/specifications-ITS-REST` tag `Release-1.1.0`, commit `24058992`) | the federation specification binds ITS-REST by name at `Release-1.1.0`; the façade serves all 96 operations of its seven modules |
 | openEHR AQL | 1.1.0 (`openEHR/specifications-QUERY` tag `Release-1.1.0`, commit `b03c4800`) | the query language. AQL 1.1.0 leaves the default order, the order of nulls and string collation undefined and has no `GROUP BY` clause, which sections 4 and 9 build on |
 | `openehr-query` | 0.0.109 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529); 0.0.87 renders a column path with its AQL variable (FerroEHR #3782) |
@@ -411,14 +415,18 @@ and the conflict is a draft on #17 to revisit at the re-pin (decision A13).
 **Follow-up routing.** A follow-up names its node in one of four ways, and
 each has its own normative order (§12.3 to §12.5, the routing-key table of
 §12a.2). A path `ehr_id` is resolved by the explicit target, the session's
-resolution binding, the `ehr_id` index, and only for a read an ask-all probe,
-never skipping a step that answers (N41); several claimants are a `409` and an
+resolution binding, the `ehr_id` index, then, when the path carries an
+`OBJECT_VERSION_ID`, the member whose `system_id` is its
+`creating_system_id`, and only for a read an ask-all probe, never skipping a
+step that answers (N41, 1.0.1); several claimants are a `409` and an
 integrity incident, never a choice (N42). A read of a `VERSION` under a path
-`ehr_id` routes by that `ehr_id` in the same order, never by its
-`creating_system_id` (decision A46): every ITS-REST version read is
-EHR-scoped, so the order of §12.3 routes none of them. A versioned write is
-EHR-scoped too: it routes by its path `ehr_id` in the same order, never by
-ask-all, and is sent only when the registry routes the preceding version's
+`ehr_id` is located in that order (§12.3, N22, decision A113): the
+`creating_system_id` is consulted only when the first three steps name no
+member, so a path `ehr_id` is never sent to the creator while an earlier
+step named the holder, and a read located at a holder returns its copy with
+`openEHR-federation-system-id` naming the holder. A versioned write is
+EHR-scoped too: it is located in the same order, never by ask-all, and is
+sent only when the registry routes the preceding version's
 `creating_system_id` to that same node, as the member's own `system_id` or a
 registered mapping, never a learned one (§12a.1 `route-write`, N23). When the
 two name different nodes, or the registry names none, the write is a `409`
@@ -432,18 +440,21 @@ byte-identical, and no uid is rewritten.
 ```mermaid
 flowchart TD
     req["follow-up request"] --> kind{"what does it address?"}
-    kind -->|"path ehr_id, version reads included, §12.5.1, A46"| s1{"1. openEHR-federation-endpoint header?"}
+    kind -->|"path ehr_id, version reads and writes included, §12.5.1, A113"| s1{"1. openEHR-federation-endpoint header?"}
     s1 -->|yes| one["route to that node"]
     s1 -->|no| s2{"2. resolution binding held for this session?"}
     s2 -->|exactly one node| one
     s2 -->|none| s3{"3. ehr_id index entry?"}
     s3 -->|exactly one node| one
-    s3 -->|none or several| rw{"read or write?"}
+    s3 -->|none| s4{"4. path carries an OBJECT_VERSION_ID whose creating_system_id the registry maps?"}
+    s3 -->|several| r409["409 listing the claimants, integrity incident (N42)"]
+    s4 -->|yes| one
+    s4 -->|no| rw{"read or write?"}
     rw -->|write| r400["400, explicit target required (N41)"]
-    rw -->|read| s4["4. ask-all probe GET ehr/{ehr_id}"]
-    s4 -->|one claimant| one
-    s4 -->|none| r404["404"]
-    s4 -->|several claimants| r409["409 listing the claimants, integrity incident (N42)"]
+    rw -->|read| s5["5. ask-all probe GET ehr/{ehr_id}"]
+    s5 -->|one claimant| one
+    s5 -->|none| r404["404"]
+    s5 -->|several claimants| r409
     one --> vw{"versioned write, §12.4?"}
     vw -->|no| pass
     vw -->|yes| w1{"registry routes the preceding version's creating_system_id here (member system_id or registered mapping)?"}
@@ -1486,7 +1497,7 @@ each PIXm and PMIR record names the patient as its profile requires.
 `ehr_id` index live in one process's memory, as decisions A20 and A25 place
 them, so several replicas hold several copies, each filled by the requests
 that replica served. A read routes the same on every replica, because a
-replica without the binding probes (§12.5.1 step 4). A write does not: §12.5.1
+replica without the binding probes (§12.5.1 step 5). A write does not: §12.5.1
 never probes for a write's destination (N41), so the replica that resolved
 the patient routes a write that names no node, and any other replica refuses
 it `400` `target-required` before a node is asked. Nothing is misrouted, but
@@ -1624,7 +1635,8 @@ routed id seen elsewhere is a copy and teaches nothing. One sighting learns a
 read route to the endpoint it was seen at, because more sightings would still
 not prove that the holder created the version (§12.2, §10.3), and a learned
 route is never a write's controlling CDR. A read of a version under a path
-`ehr_id` never takes a learned route (decision A46); the map answers which
+`ehr_id` never takes a learned route: step 4 of §12.5.1 reads only the
+document's routes (decision A113), and the map answers which
 node holds a `creating_system_id`'s versions for the write routing of §12.4
 and §10.3. A sighting at a second node, or a
 learned route a reloaded document contradicts, withdraws it and raises an
@@ -2892,7 +2904,7 @@ R4 is #23, #25 and #27).
 | A43 | `ORDER BY` with `LIMIT` [owner, superseding A27] | dispatch the client's `LIMIT n`; re-apply `ORDER BY` and `LIMIT n` at the Tier; tie-break on `endpoint_id`, then the uid, the uid also appended as the last dispatched key; a node that returned `n` rows out of the Tier order, or more than `n`, is `node-error` | §11.6.1 [[limit-reorder]] and N39 say "MUST dispatch `LIMIT n`"; an appended key refines the client's order, so the node's top `n` stays a top `n` under it; the containment precondition is a specification gap held on #17 (T167) | decided (owner, 2026-10-02) |
 | A44 | The test topology [owner, superseding A40 and A41] | two FerroEHR instances, each on its own database with a distinct `system_id`, a third for three-node cases; EHRbase leaves the harness and the quickstart | EHRbase 2.36.0 refuses a `.` in `PARTY_REF.namespace`, which BASE `object_ref.adoc` §Attributes allows, so its EHRs could not carry the example-arc subject; a second product returns when one admits the BASE namespace | decided (owner, 2026-10-02) |
 | A45 | The `OperationOutcome` of CP-12 [owner, #58] | none on the ITS-REST face; `meta.federation.complete` carries incompleteness, and CP-12 is scored on its status codes | §11.4, CP-12 and track 4 condition it on a FHIR-facing consumer; N17 and §9.1 admit no member outside ITS-REST's own and `meta.federation`; where it would travel is a gap (upstream report on #212) | decided (owner, 2026-10-02) |
-| A46 | Follow-up reads of EHR-scoped versions [owner, #64] | route by N41, not `creating_system_id`: a read of a version under `{base}/v1/ehr/{ehr_id}/…` goes by the explicit target, the binding, the index and the ask-all probe of the path `ehr_id`; the learned `creating_system_id` map is still fed from every answer (CP-13) | N41 and §12.5.1 order every path `ehr_id` and forbid skipping a step that answers; §12a.1 [[route-ehr]] routes an EHR-scoped request "not on `creating_system_id`"; N22 forbids mutating the uid-bearing path, so the holder's `ehr_id` cannot be rewritten for the creator; N42a means the creator never adopted that `ehr_id`, so the forwarded read would `404`, against N1; the holder's copy carries the same immutable version; the contradiction with §12.3 and N22's order is on #212, and CP-14 is deferred on this decision until the 1.0 re-pin settles the text (#354) | decided (owner, 2026-10-03) |
+| A46 | Follow-up reads of EHR-scoped versions [owner, #64] | route by N41, not `creating_system_id`: a read of a version under `{base}/v1/ehr/{ehr_id}/…` goes by the explicit target, the binding, the index and the ask-all probe of the path `ehr_id`; the learned `creating_system_id` map is still fed from every answer (CP-13) | N41 and §12.5.1 order every path `ehr_id` and forbid skipping a step that answers; §12a.1 [[route-ehr]] routes an EHR-scoped request "not on `creating_system_id`"; N22 forbids mutating the uid-bearing path, so the holder's `ehr_id` cannot be rewritten for the creator; N42a means the creator never adopted that `ehr_id`, so the forwarded read would `404`, against N1; the holder's copy carries the same immutable version; the contradiction with §12.3 and N22's order is on #212, and CP-14 is deferred on this decision until the 1.0 re-pin settles the text (#354) | superseded by A113, when 1.0.1 settled the contradiction in the order A46 followed (#1478) |
 | A47 | The quickstart topology and the node databases [owner, #322, amending A44] | the compose quickstart runs four FerroEHR nodes, `ferroehr-a` to `ferroehr-d`, each with its own `system_id`, over synthetic patients at four, two, one and no nodes; the quickstart and the e2e harness run one PostgreSQL server with a database per node, each owned by its own role, created by FerroEHR's init script run once per node; CI stays at two nodes plus the third for three-node cases | two nodes show one gateway asking two servers, four show a patient missing at some members (§11.3), a directed query leaving the rest `excluded` (§8) and the merge over more than two answers (§10, §11.6); schemas cannot separate the nodes because FerroEHR fixes its schema names; one server per topology starts one database server instead of one per node (#320); no specification governs this: our own design | decided (owner, 2026-10-03) |
 | A48 | The URL authority and `Host` at the outbound gate [owner, #309] | the gate reads the path, the query string, the fragment and the headers the gateway composes, and never the authority of a node's URL or the `Host` header the HTTP client writes from it; a client `Host` is never forwarded | §5.4.1 [[no-identifier-fanout]] and N33 forbid a directly identifying identifier "in the parts of the outbound request the gateway composes (the dispatched AQL, the request path, the query string and the headers)"; the authority, and `Host` with it, is the operator's registry endpoint URL, fixed before any request and composed from none, so it cannot carry a client-supplied identifier, and searching it refused every query for a patient whose identifier occurs in a node's port (#232); the silence on the authority is on #212 | decided by the specification text under the owner's spec-first rule (2026-10-03) |
 | A49 | `AVG` over integers [owner, #309, amending A30] | an integer when every node `SUM` is an integer: the one nearest the exact quotient of the federation's sum and count, a tie to the even one, rounded once at the gateway and never per node; the decimal mean, written as the nearest JSON number, when a node `SUM` is a real | AQL 1.1.0 §3.9.1.5: "Input values type should be either Integer or Real, and it will also determine the return type"; §3.9.1.4 says the same of `SUM`, so the node sums carry the input type; AQL gives no rounding, and the rounding is our own design: the nearest integer is the Integer closest to the arithmetic mean §3.9.1 defines, and ties to even is the rule the gateway already applies writing a real mean as the nearest binary64 (IEEE 754 roundTiesToEven), with no bias toward zero or upward; the silence on the rounding is on #212 | decided by the specification text under the owner's spec-first rule (2026-10-03) for the return type; the ties-to-even rounding is our own design within that |
@@ -2959,6 +2971,7 @@ R4 is #23, #25 and #27).
 | A110 | No patient index, not even for development [#1377, amending A14] | the static cross-reference `[dev]` (`[[dev.crossref]]`, `[[dev.consent_denied]]`) leaves the product: a configuration that sets `[dev]` is refused at load naming the table and `[[pixm.manager]]`; every patient resolves through a PIX Manager, FerroPIX in the quickstart and the end-to-end lane; `binding-nl` turns on `binding-ihe` for resolution; the offline suites take a fixed cross-reference and consent table from `ferrofed-testkit`, injected through the non-default `test-seam` feature of `ferrofed-server`, which only the server's own tests enable; the operator deployment report drops `development_crossref` and the identity-state export its `development_cross_reference` entry | patient identity is FerroPIX's, and a gateway that held a table of patient identifiers to `ehr_id`s would be a patient index in every profile; a test seam no shipped build compiles keeps that table out of every release | decided (owner ruling on #367, 2026-10-25; rulings on #1377) |
 | A111 | The operator console hydrates the whole page on FerroUI 0.5 [#1397, amending A55 and A104] | the console moves to `ferrohealth-ui` 0.5 and hydrates the whole page: the server draws the first page and the browser draws every page after it, the pages grouped into five lazy routes built with `cargo leptos build --split` (overview, federation, queries, configuration, console), so no link or form reloads the document; every page reads the gateway through a server function under a `Resource`, and what the server read of the request (the session state, the operator, the preference cookies, the locale, the replica names) reaches the browser as one serialized visit, never a cookie or the request a component reads; every action (the collision clear, the drift repair, a query, a configuration form) is a server function behind FerroUI's `<ActionForm>` in its answer mode, so with no WebAssembly the post goes to the function and FerroUI's wrapper draws the page it came from with the answer; a form with rows posts its fields whole, a repeated field named with `[]` and a row's field in one dotted step, read back by the console's own `Fields`; the origin check and the body limit hold before that wrapper reads a post; the browser half links `ferrofed-registry`, `openehr-federation` and `openehr-its` with no feature, and no other FerroFED crate; a resource carries only what its page draws; a configuration table's removal posts natively until FerroUI's danger dialog takes a server action (#1414); the islands, the plain posts to each page and the A104 rule that the console has no server function are gone | FerroUI 0.5 removes islands mode and leads every console to whole-page hydration (FerroUI `docs/consoles.md`, How a console builds), which the owner asked of every console (FerroUI #410); answer mode keeps every page working with no WebAssembly as A104 required; the token, the session and the gateway calls stay on the console's server as A55 requires; no specification governs this: our own design | decided on #1397 (2026-10-28, under the owner's standing delegation for the FerroUI rollout) |
 | A112 | The operator console draws every page on its server on FerroUI 0.6 [#1457, amending A55 and A111] | the console moves to `ferrohealth-ui` 0.6.0 and links no Leptos crate and no WebAssembly: each page is one document an axum handler draws whole through `view::shell::document`, after it reads what the page draws of the gateway, and FerroUI's script modules, served by the library's own asset router under its versioned path, add the in-page behaviour on top; what the server read of the request (the session state, the operator, the preference cookies, the locale, the replica names) is the request's visit, kept for the request's task; every action (the collision clear, the drift repair, a query, a configuration form) is a plain form that posts to the page it sits on, with its query, and the server draws that page again with the answer and the fields as posted, a secret field drawn empty; a form with rows posts its fields as the browser encodes them, a repeated field named with `[]` and a row's field in one dotted step, read by the console's own `Fields`; a configuration table's removal is FerroUI's `danger_form_dialog`; the commit-confirm countdown is FerroUI's F2; the Content-Security-Policy admits scripts and styles of the console's own origin alone, with no nonce; `[server] site_root` is read for one release and does nothing; the lazy route groups, the server functions, the serialized visit and the site bundle are gone | FerroUI 0.6.0 renders every component on the server and depends on no Leptos crate, so a console moves whole (FerroUI `docs/migration-0.6.md`); the hydrated mode flickered and lost in-page state (FerroUI #510); every page reads and every action posts with the modules refused, as A104 and A111 required; the token, the session and the gateway calls stay on the console's server as A55 requires; no specification governs this: our own design | decided by the owner on FerroUI #510 (2026-10-29) for every console, carried out on #1457 |
+| A113 | Follow-up reads and versioned writes on the 1.0.1 order [#1478, superseding A46] | every request under a path `ehr_id`, a version read and a versioned write included, is located by the explicit target, the binding, the index, then the member the registry routes the path `OBJECT_VERSION_ID`'s `creating_system_id` to (a member's `system_id` or a registered mapping, never a learned route), then for a read only the ask-all probe; a read located at a copy's holder returns the copy with `openEHR-federation-system-id` naming the holder, and a write located at a node that does not control the version is refused `409` naming the controlling system and never redirected | Federation Tier 1.0.1 §12.3, §12.4, §12.5.1 `ehr-id-route-order` and `ehr-id-not-creating-system`, §10.3 `copy-write-reject`, §12a.1, N22, N23, N36, N41; step 4 reads only what makes a node's `system_id` equal the `creating_system_id`, so a learned holder is never step 4 | decided (owner, 2026-11-02) |
 
 ## 16. Regulatory status
 

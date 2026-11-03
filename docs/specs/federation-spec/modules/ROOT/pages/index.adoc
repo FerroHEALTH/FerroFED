@@ -1,14 +1,13 @@
-= Proposal for Federation Tier with AQL - revised
+= Federation Tier with AQL
 :navtitle: Overview
 
 *Status:* {spec-status} · *Version:* {spec-version} · *Date:* {spec-date} ·
-*Supersedes:* _Proposal for Federation Tier with AQL_, openEHR Federation Working Group, 2025-08-20 ·
 *License:* Creative Commons Zero v1.0 Universal (CC0)
 
 [NOTE]
 .Editorial note
 ====
-This specification was approved by the openEHR Specifications Editorial Committee (SEC) at its meeting of 2026-10-12 and is published as release 1.0.0. Comments remain welcome and are taken up in a later release.
+This specification was approved by the openEHR Specifications Editorial Committee (SEC) at its meeting of 2026-10-12 and published as release 1.0.0. Release 1.0.1 is an erratum to the routing of EHR-scoped version requests: the path `ehr_id` locates the node, and `creating_system_id` is a later routing step and the control test for writes (xref:follow-up-routing.adoc#ehr-id-route-order[§12.5.1]), so a 1.0.0 gateway that routed version reads on `creating_system_id` needs to change. Comments remain welcome and are taken up in a later release.
 ====
 
 == Referenced documents
@@ -20,7 +19,7 @@ The following documents and sources informed several design decisions here.
 | Document | Role in the specification
 
 | _Proposal for Federation Tier with AQL_, openEHR Federation WG, 2025-08-20
-| The proposal this revision builds on and supersedes.
+| The earlier proposal this specification builds on and supersedes.
 
 | HL7 https://confluence.hl7.org/spaces/FHIR/pages/144967060/Intermediaries+White+Paper[_Intermediaries White Paper_]
 | Façade transparency; the four follow-up-routing approaches; de-duplication provenance; unresponsive-server handling; auth conveyance; numbered Conformance Points.

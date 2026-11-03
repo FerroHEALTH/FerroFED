@@ -14,11 +14,12 @@
 //! `.await` (no specification governs where learned state lives: our own
 //! design).
 //!
-//! A follow-up read of a version under `{base}/v1/ehr/{ehr_id}/…` is routed
-//! by its path `ehr_id` in the order of §12.5.1 (N41), never by the version's
-//! `creating_system_id`: §12a.1 routes an EHR-scoped request on the `ehr_id`,
-//! N22 forbids rewriting that `ehr_id` for another node, and that node never
-//! adopted it (N42a). The learned routes serve the versioned writes of §12.4.
+//! A follow-up read of a version under `{base}/v1/ehr/{ehr_id}/…` is located
+//! by its path `ehr_id` in the order of §12.5.1 (1.0.1, N22, N41): the
+//! version's `creating_system_id` is step 4, read from the registry's own
+//! routes only, after the explicit target, the binding and the index named
+//! no member. A learned route is never a step of that order, because a node
+//! seen holding a version need not have created it (§10.2).
 
 use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_registry::creating_system::Sighting;
@@ -32,16 +33,23 @@ use crate::federation::Federation;
 /// The version a read under `matched` names in its path, or `None` when it
 /// is a write or names no full `OBJECT_VERSION_ID`.
 ///
-/// The path parameters read are those `openehr-its`'s table states as an
-/// `OBJECT_VERSION_ID` or a `UID_BASED_ID`, in path order. A node that
-/// answers such a read with a success holds the version (§12.2). A
-/// `UID_BASED_ID` may be a `HIER_OBJECT_ID`, which carries no
-/// `creating_system_id`.
+/// A node that answers such a read with a success holds the version (§12.2).
 #[must_use]
 pub fn version_of(method: &Method, matched: &RouteMatch) -> Option<ObjectVersionId> {
     if !method.is_safe() {
         return None;
     }
+    path_version(matched)
+}
+
+/// The `OBJECT_VERSION_ID` the path of `matched` carries, a read's or a
+/// write's, or `None` when it carries none (§12.5.1 step 4).
+///
+/// The path parameters read are those `openehr-its`'s table states as an
+/// `OBJECT_VERSION_ID` or a `UID_BASED_ID`, in path order. A `UID_BASED_ID`
+/// may be a `HIER_OBJECT_ID`, which carries no `creating_system_id`.
+#[must_use]
+pub fn path_version(matched: &RouteMatch) -> Option<ObjectVersionId> {
     matched.path_params.iter().find_map(|segment| {
         let names_version = matched.params.iter().any(|param| {
             param.location == ParamLocation::Path

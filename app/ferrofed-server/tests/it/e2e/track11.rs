@@ -150,7 +150,7 @@ fn steps(node: &ProxiedNode) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The ask-all probe of §12.5.1 step 4 for `ehr_id`, as a node receives it.
+/// The ask-all probe of §12.5.1 step 5 for `ehr_id`, as a node receives it.
 fn probe_of(ehr_id: Uuid) -> (String, String) {
     ("GET".to_owned(), format!("{API_PATH}/v1/ehr/{ehr_id}"))
 }
@@ -229,14 +229,14 @@ async fn a_read_and_a_query_of_the_duplicate_are_refused_and_only_the_probe_reac
     let seeded = seeded().await?;
     let nodes = &seeded.nodes;
     let dir = tempfile::tempdir()?;
-    let read = Request::get(format!(
-        "/v1/ehr/{DUPLICATE}/composition/{}",
-        seeded.duplicate_at_a
-    ))
-    .body(Body::empty())?;
+    // NOTE: §12.5.1 step 4 would locate a read naming the version at its creator, so
+    // the read names the versioned object, which carries no creating_system_id.
+    let object = object_of(&seeded.duplicate_at_a)?;
+    let read =
+        Request::get(format!("/v1/ehr/{DUPLICATE}/composition/{object}")).body(Body::empty())?;
     let scoped = query(&scoped_to_the_duplicate())?;
     for (what, request) in [("the read", read), ("the scoped query", scoped)] {
-        // NOTE: §12.5.1 step 4: a fresh gateway holds no index entry, so the
+        // NOTE: §12.5.1 step 5: a fresh gateway holds no index entry, so the
         // ask-all probe is the step that finds both claimants.
         let app = fresh_gateway(dir.path(), nodes)?;
         clear(nodes);
@@ -355,8 +355,8 @@ async fn a_versioned_write_no_earlier_step_routes_is_refused_and_no_node_is_aske
         (DUPLICATE, seeded.duplicate_at_a.as_str()),
         (ONLY_AT_A, seeded.only_at_a.as_str()),
     ] {
-        // NOTE: §12.4, §12.5.1: the preceding version names node A's
-        // system_id, and the path ehr_id still routes first, so no owner is guessed.
+        // NOTE: §12.4, §12.5.1: If-Match is no part of the path step 4 reads, so no
+        // owner is guessed for the update, and the delete names an unregistered system.
         answers.extend(
             track11::versioned_writes_unrouted(
                 &gateway,

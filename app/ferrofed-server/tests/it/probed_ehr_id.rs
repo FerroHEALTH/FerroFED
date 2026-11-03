@@ -74,7 +74,7 @@ async fn a_read_whose_ehr_id_is_a_uuid_is_still_resolved_by_the_probe() -> TestR
     )
     .await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    assert_eq!(Some(ENDPOINT_A), acting.as_deref(), "§12.5.1 step 4");
+    assert_eq!(Some(ENDPOINT_A), acting.as_deref(), "§12.5.1 step 5");
     for server in [&a, &b] {
         assert_eq!(
             vec![probe_at()],

@@ -383,8 +383,9 @@ deployment in the EU must plan for are:
 - **No EU declaration of conformity has been drawn up**, and no release
   carries the CE marking
   ([Regulatory status](../evaluate/regulatory-status.md#what-is-built-and-what-is-planned)).
-- **The Federation Tier specification is release 1.0.0**, approved by the
-  openEHR SEC on 2026-10-12. Builds up to v0.0.9 implement the 0.9.0
+- **The Federation Tier specification is release 1.0.1**, the erratum of
+  2026-11-01 to the 1.0.0 release the openEHR SEC approved on 2026-10-12.
+  Builds up to v0.0.15 implement 1.0.0, and builds up to v0.0.9 the 0.9.0
   release candidate.
 
 ## Accessible formats
