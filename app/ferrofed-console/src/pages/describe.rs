@@ -23,7 +23,7 @@ use openehr_federation::options::{GatewayDescription, OptionsRoot};
 
 use crate::app::{ABOUT, SELF_DESCRIPTION};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, stopped, t};
+use crate::pages::stopped;
 
 /// The tabs, each its key, its words and its intro.
 const TABS: [(&str, Msg, Msg); 5] = [
@@ -68,9 +68,9 @@ pub async fn page() -> Html {
                     &[],
                     vec![(
                         "about",
-                        h(format!(
+                        Html::raw(format!(
                             "<a href=\"{ABOUT}\">{}</a>",
-                            t(tr(Msg::DescribeSubtitleAbout))
+                            Html::text(tr(Msg::DescribeSubtitleAbout))
                         )),
                     )],
                 )),
@@ -105,7 +105,7 @@ pub async fn page() -> Html {
 /// self-description the gateway refused or did not answer.
 pub async fn description_now() -> Result<(OptionsRoot, Option<String>), crate::read::Stop> {
     let (state, token) = crate::read::signed_in()?;
-    let description = state.gateway().self_description(&token).await?;
+    let description = state.gateway().report::<OptionsRoot>(&token).await?;
     let replica = crate::read::deployment()
         .await
         .ok()
@@ -132,7 +132,7 @@ fn row(label: Msg, line: Msg, value: Html, term: &str) -> Html {
 
 /// A value in the code face.
 fn code(text: impl Into<String>) -> Html {
-    h(format!("<code>{}</code>", t(text.into())))
+    Html::raw(format!("<code>{}</code>", Html::text(text.into())))
 }
 
 /// `offered` as a tag in words.
@@ -155,7 +155,7 @@ fn tab_panel(key: &str, intro: Msg, description: &OptionsRoot, replica: Option<S
         "endpoints" => return endpoints_panel(intro, description),
         _ => federation(description, replica),
     };
-    settings_panel(t(tr(intro)), None, rows)
+    settings_panel(Html::text(tr(intro)), None, rows)
 }
 
 /// The Federation tab: the federation, the specification, the key set and
@@ -172,7 +172,7 @@ fn federation(description: &OptionsRoot, replica: Option<String>) -> Vec<Html> {
         row(
             Msg::DescribeSpecification,
             Msg::DescribeSpecificationLine,
-            t(tr_with(
+            Html::text(tr_with(
                 Msg::AboutSpecificationValue,
                 &[("version", gateway.spec_version.as_str().to_owned().into())],
             )),
@@ -197,7 +197,7 @@ fn federation(description: &OptionsRoot, replica: Option<String>) -> Vec<Html> {
         Setting {
             label: tr(Msg::DescribeAnsweredBy),
             description: tr(Msg::DescribeAnsweredByLine),
-            value: replica.map_or_else(|| t(tr(Msg::ReplicaUnnamed)), code),
+            value: replica.map_or_else(|| Html::text(tr(Msg::ReplicaUnnamed)), code),
             keys: Vec::new(),
             next_start: false,
             source: None,
@@ -233,7 +233,8 @@ struct Manufacturer {
 /// The rows of the manufacturer and the support period `description`
 /// declares, each said as not declared where it names none.
 fn manufacturer(description: &OptionsRoot) -> Vec<Html> {
-    let said = |value: Option<String>| t(value.unwrap_or_else(|| tr(Msg::DescribeNotDeclared)));
+    let said =
+        |value: Option<String>| Html::text(value.unwrap_or_else(|| tr(Msg::DescribeNotDeclared)));
     let supported = match description.extra.get(SUPPORTED_UNTIL) {
         None => tr(Msg::DescribeNotDeclared),
         Some(raw) => match serde_json::from_str::<Option<String>>(raw.get()) {
@@ -245,7 +246,7 @@ fn manufacturer(description: &OptionsRoot) -> Vec<Html> {
     let fixes = row(
         Msg::DescribeFixesUntil,
         Msg::DescribeFixesUntilLine,
-        t(supported),
+        Html::text(supported),
         SUPPORTED_UNTIL,
     );
     let declared = match description.extra.get(MANUFACTURER) {
@@ -259,7 +260,7 @@ fn manufacturer(description: &OptionsRoot) -> Vec<Html> {
             row(
                 Msg::DescribeManufacturer,
                 Msg::DescribeManufacturerLine,
-                t(tr(Msg::DescribeUnreadable)),
+                Html::text(tr(Msg::DescribeUnreadable)),
                 MANUFACTURER,
             ),
             fixes,
@@ -385,7 +386,7 @@ fn limits(gateway: &GatewayDescription) -> Vec<Html> {
         row(
             Msg::DescribePerNode,
             Msg::DescribePerNodeLine,
-            t(tr_with(
+            Html::text(tr_with(
                 Msg::Milliseconds,
                 &[("count", Arg::from(gateway.timeout.per_node_ms))],
             )),
@@ -394,7 +395,7 @@ fn limits(gateway: &GatewayDescription) -> Vec<Html> {
         row(
             Msg::DescribeOverall,
             Msg::DescribeOverallLine,
-            t(tr_with(
+            Html::text(tr_with(
                 Msg::Milliseconds,
                 &[("count", Arg::from(gateway.timeout.overall_ms))],
             )),
@@ -416,7 +417,7 @@ fn limits(gateway: &GatewayDescription) -> Vec<Html> {
             Msg::DescribeAggregates,
             Msg::DescribeAggregatesLine,
             if aggregates.is_empty() {
-                t(tr(Msg::None))
+                Html::text(tr(Msg::None))
             } else {
                 code(aggregates.join(", "))
             },
@@ -449,7 +450,7 @@ fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> Html {
     ];
     let rows = description.endpoints.iter().map(|endpoint| {
         let active = endpoint.status.as_str() == "active";
-        h(format!(
+        Html::raw(format!(
             "<tr{}>{}{}{}{}{}{}</tr>",
             if active { "" } else { " class=\"is-excluded\"" },
             title_cell(None, code(endpoint.id.to_string()), None),
@@ -469,7 +470,7 @@ fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> Html {
             ),
         ))
     });
-    settings_panel(t(tr(intro)), None, Vec::new()).then(data_table(DataTable {
+    settings_panel(Html::text(tr(intro)), None, Vec::new()).then(data_table(DataTable {
         caption: &tr(Msg::DescribeEndpoints),
         columns: &columns,
         sorting: Sorting::default(),

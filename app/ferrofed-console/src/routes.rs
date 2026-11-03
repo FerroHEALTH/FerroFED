@@ -124,8 +124,10 @@ async fn signed_in_page(page: Option<Page>) -> Html {
         Some(Page::Dashboard) => pages::dashboard::page().await,
         Some(Page::Topology) => pages::topology::page().await,
         Some(Page::Search) => pages::search::page().await,
-        Some(Page::Organisations) => pages::organisations::list().await,
-        Some(Page::AllNodes) => pages::organisations::all_nodes().await,
+        Some(Page::Organisations) => {
+            pages::organisations::page(pages::organisations::View::Organisations).await
+        }
+        Some(Page::AllNodes) => pages::organisations::page(pages::organisations::View::Nodes).await,
         Some(Page::Organisation) => pages::organisation::page().await,
         Some(Page::Node) => pages::node::page().await,
         Some(Page::Services) => pages::services::list().await,

@@ -15,7 +15,7 @@ use ferrohealth_ui::view::shell::centred;
 use ferrohealth_ui::view::toast::toast_region;
 
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, set_status, t};
+use crate::pages::set_status;
 
 /// The page for an address the console does not serve.
 #[must_use]
@@ -27,9 +27,9 @@ pub fn not_found() -> Html {
         ErrorPage {
             status: Status::NotFound,
             title: tr(Msg::NotFoundTitle),
-            body: h(format!(
+            body: Html::raw(format!(
                 "<p>{}</p>",
-                t(tr_with(Msg::NotFoundBody, &[("path", here.into())]))
+                Html::text(tr_with(Msg::NotFoundBody, &[("path", here.into())]))
             )),
             hint: None,
             ways: vec![
@@ -60,10 +60,10 @@ pub fn forbidden() -> Html {
         ErrorPage {
             status: Status::Forbidden,
             title: tr(Msg::ForbiddenTitle),
-            body: h(format!("<p>{}</p>", t(tr(Msg::ForbiddenBody)))),
-            hint: Some(h(format!(
+            body: Html::raw(format!("<p>{}</p>", Html::text(tr(Msg::ForbiddenBody)))),
+            hint: Some(Html::raw(format!(
                 "<p class=\"fui-small fui-muted\">{}</p>",
-                t(tr(Msg::ForbiddenHint))
+                Html::text(tr(Msg::ForbiddenHint))
             ))),
             ways: vec![Way {
                 label: tr(Msg::SignInAgain),
@@ -88,7 +88,7 @@ pub fn unreadable() -> Html {
         ErrorPage {
             status: Status::Fault,
             title: tr(Msg::UnreadableTitle),
-            body: h(format!("<p>{}</p>", t(tr(Msg::UnreadableBody)))),
+            body: Html::raw(format!("<p>{}</p>", Html::text(tr(Msg::UnreadableBody)))),
             hint: None,
             ways: vec![Way {
                 label: tr(Msg::TryAgain),

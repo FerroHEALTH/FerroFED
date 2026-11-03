@@ -56,10 +56,6 @@ pub const PREFERENCE_PREFIX: &str = "ferrofed_console_";
 /// its rail.
 pub const SIDEBAR_COOKIE: &str = "ferrofed_console_sidebar";
 
-/// The name of the short-lived cookie that carries the outcome of the
-/// operator's last form post to the page it returns to, read once.
-pub const FLASH_COOKIE: &str = "ferrofed_console_flash";
-
 /// The cookie name prefix that binds a cookie to the host that set it.
 ///
 /// It holds for a `Secure`, `Path=/` cookie with no `Domain`, so no sibling

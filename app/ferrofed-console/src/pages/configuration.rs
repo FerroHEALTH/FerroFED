@@ -24,7 +24,7 @@ use crate::configure::model::{ConfigView, Screen};
 use crate::configure::render::Tab;
 use crate::configure::said::{ActionAnswer, Answer};
 use crate::locale::{Msg, current, tr};
-use crate::pages::{h, opt, stopped, t};
+use crate::pages::{opt, stopped};
 
 /// The path of the form that adds a member: an organisation with its first
 /// node and that node's first endpoint.
@@ -130,7 +130,7 @@ fn drawn(view: ConfigView, answer: Option<Html>) -> Html {
                 tr(Msg::Configuration),
                 tabs,
                 tab.id(),
-                h(format!(
+                Html::raw(format!(
                     "<div class=\"fui-stack fui-panel-body\">{} {}</div>",
                     opt(lead),
                     opt(main)
@@ -139,7 +139,8 @@ fn drawn(view: ConfigView, answer: Option<Html>) -> Html {
         }
         None => opt(main),
     };
-    let answer = answer.map(|answer| h(format!("<div id=\"config-outcome\">{answer}</div>")));
+    let answer =
+        answer.map(|answer| Html::raw(format!("<div id=\"config-outcome\">{answer}</div>")));
     opt(header).then(stack(Html::join([opt(answer), opt(pending), section])))
 }
 
@@ -149,10 +150,10 @@ fn no_admin() -> Html {
     Html::join([
         crate::app::title(tr(Msg::Configuration)),
         heading(),
-        h(format!(
+        Html::raw(format!(
             "<section class=\"fui-card\"><p>{}</p><p class=\"fui-small fui-muted\">{}</p></section>",
-            t(tr(Msg::ConfigNoAdminBody)),
-            t(tr(Msg::ConfigNoAdminHow))
+            Html::text(tr(Msg::ConfigNoAdminBody)),
+            Html::text(tr(Msg::ConfigNoAdminHow))
         )),
     ])
 }

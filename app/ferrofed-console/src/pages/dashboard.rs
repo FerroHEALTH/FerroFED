@@ -14,6 +14,7 @@
 //! refusal of either is the page's. Every other part the gateway refuses
 //! or cannot answer says so in its own card, and the rest still shows.
 
+use ferrofed_operator_api::operator::StoredVersion;
 use ferrofed_operator_api::revision::Standing;
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
@@ -29,10 +30,11 @@ use ferrohealth_ui::view::surface::{
     stat_grid, titled_panel,
 };
 use ferrohealth_ui::view::tag::Tag;
+use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::app::{ALL_NODES, CONFIGURATION, INTEGRITY, ORGANISATIONS, TOPOLOGY};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, opt, relative, stopped, t};
+use crate::pages::{opt, relative, stopped};
 use crate::read::Stop;
 use crate::read::federation::{Federation, Health};
 use crate::read::incidents::Incidents;
@@ -69,7 +71,7 @@ async fn reads() -> Reads {
         }
         stored = state
             .gateway()
-            .stored_queries(&token, crate::read::stored_page(0, 1))
+            .page::<StoredVersion<StoredQuery>>(&token, crate::read::stored_page(0, 1))
             .await
             .ok()
             .map(|page| page.total);
@@ -135,14 +137,14 @@ fn dashboard(reads: Reads) -> Html {
 /// A federation with no organisation: one quiet line with the way to
 /// Organisations, and the order in which a federation is set up.
 fn empty_federation() -> Html {
-    h(format!(
+    Html::raw(format!(
         "<section class=\"fui-card\"><p>{} <a href=\"{ORGANISATIONS}\">{}</a></p>\
          <ol class=\"fui-small\"><li>{}</li><li>{}</li><li>{}</li></ol></section>",
-        t(tr(Msg::DashboardEmpty)),
-        t(tr(Msg::DashboardEmptyLink)),
-        t(tr(Msg::DashboardSetupOrganisation)),
-        t(tr(Msg::DashboardSetupCredentials)),
-        t(tr(Msg::DashboardSetupQuery)),
+        Html::text(tr(Msg::DashboardEmpty)),
+        Html::text(tr(Msg::DashboardEmptyLink)),
+        Html::text(tr(Msg::DashboardSetupOrganisation)),
+        Html::text(tr(Msg::DashboardSetupCredentials)),
+        Html::text(tr(Msg::DashboardSetupQuery)),
     ))
 }
 
@@ -336,26 +338,26 @@ fn attention(federation: &Federation) -> Html {
             } else {
                 ""
             };
-            h(format!(
+            Html::raw(format!(
                 "<tr{class}>{}{}{}{}</tr>",
                 title_cell(
                     href.as_deref(),
-                    h(format!("<code>{}</code>", t(&node.id))),
+                    Html::raw(format!("<code>{}</code>", Html::text(&node.id))),
                     None
                 ),
-                cell(&columns[1], t(organisation.shown())),
+                cell(&columns[1], Html::text(organisation.shown())),
                 cell(
                     &columns[2],
                     state(node.health().mark(), node.health().word(), None)
                 ),
-                cell(&columns[3], t(why)),
+                cell(&columns[3], Html::text(why)),
             ))
         })
         .collect();
     let body = if rows.is_empty() {
-        h(format!(
+        Html::raw(format!(
             "<p class=\"fui-panel-body fui-muted\">{}</p>",
-            t(tr(Msg::AttentionNone))
+            Html::text(tr(Msg::AttentionNone))
         ))
     } else {
         data_table(DataTable {
@@ -386,17 +388,17 @@ fn topology_card(federation: &Federation) -> Html {
             let dots = Html::join(dots);
             let name = organisation.shown();
             let link = if organisation.routable() {
-                h(format!(
+                Html::raw(format!(
                     "<a href=\"{}\">{}</a>",
-                    t(organisation.href()),
-                    t(name)
+                    Html::text(organisation.href()),
+                    Html::text(name)
                 ))
             } else {
-                t(name)
+                Html::text(name)
             };
             (
                 link,
-                h(format!("<span class=\"fui-cluster\">{dots}</span>")),
+                Html::raw(format!("<span class=\"fui-cluster\">{dots}</span>")),
             )
         })
         .collect::<Vec<_>>();
@@ -425,14 +427,14 @@ fn topology_card(federation: &Federation) -> Html {
             ),
         ],
     );
-    let body = h(format!(
+    let body = Html::raw(format!(
         "<div class=\"fui-panel-body fui-stack\">{} <p class=\"fui-small fui-muted\">{}</p></div>",
         definitions(
             rows.into_iter()
-                .map(|(name, dots)| (String::new(), h(format!("{name} {dots}"))))
+                .map(|(name, dots)| (String::new(), Html::raw(format!("{name} {dots}"))))
                 .collect::<Vec<_>>(),
         ),
-        t(line)
+        Html::text(line)
     ));
     titled_panel(
         tr(Msg::TopologyTitle),
@@ -444,13 +446,13 @@ fn topology_card(federation: &Federation) -> Html {
 /// The open incidents, leading to Integrity.
 fn incidents_card(incidents: &Result<Incidents, Stop>) -> Html {
     let body = match incidents {
-        Err(stop) => h(format!(
+        Err(stop) => Html::raw(format!(
             "<div class=\"fui-panel-body\">{}</div>",
             stopped(stop)
         )),
-        Ok(incidents) if incidents.open.is_empty() => h(format!(
+        Ok(incidents) if incidents.open.is_empty() => Html::raw(format!(
             "<p class=\"fui-panel-body fui-muted\">{}</p>",
-            t(tr(Msg::IncidentsNoneOpen))
+            Html::text(tr(Msg::IncidentsNoneOpen))
         )),
         Ok(incidents) => {
             let columns = [
@@ -462,15 +464,15 @@ fn incidents_card(incidents: &Result<Incidents, Stop>) -> Html {
                 Column::text("detected", tr(Msg::ColumnDetected)),
             ];
             let rows = incidents.open.iter().take(5).map(|incident| {
-                let sub = h(format!("<code>{}</code>", t(&incident.kind)));
-                h(format!(
+                let sub = Html::raw(format!("<code>{}</code>", Html::text(&incident.kind)));
+                Html::raw(format!(
                     "<tr>{} {}{}</tr>",
                     title_cell(
                         None,
-                        t(crate::pages::integrity::what(&incident.kind)),
+                        Html::text(crate::pages::integrity::what(&incident.kind)),
                         Some(sub),
                     ),
-                    cell(&columns[1], t(incident.nodes.join(", "))),
+                    cell(&columns[1], Html::text(incident.nodes.join(", "))),
                     cell(&columns[2], relative(&incident.at)),
                 ))
             });
@@ -499,9 +501,9 @@ fn configuration_card(
     match standings {
         None => rows.push((
             tr(Msg::ConfigRevisions),
-            h(format!(
+            Html::raw(format!(
                 "<span class=\"fui-muted\">{}</span>",
-                t(tr(Msg::ConfigNoAdmin))
+                Html::text(tr(Msg::ConfigNoAdmin))
             )),
         )),
         Some(standings) => {
@@ -515,7 +517,7 @@ fn configuration_card(
             if let Some(current) = running.and_then(|standing| standing.current.as_ref()) {
                 rows.push((
                     tr(Msg::ConfigRunning),
-                    t(tr_with(
+                    Html::text(tr_with(
                         Msg::ConfigRunningValue,
                         &[
                             ("revision", current.revision.to_string().into()),
@@ -538,19 +540,19 @@ fn configuration_card(
                     Ok(_) => pill(Tone::Warn, &tr(Msg::NotInStep)),
                     Err(_) => pill(Tone::Bad, &tr(Msg::NoAnswer)),
                 };
-                h(format!("<code>{}</code> {mark} ", t(name)))
+                Html::raw(format!("<code>{}</code> {mark} ", Html::text(name)))
             });
             let replicas = Html::join(replicas);
             rows.push((
                 tr(Msg::ConfigReplicas),
-                h(format!("<span class=\"fui-cluster\">{replicas}</span>")),
+                Html::raw(format!("<span class=\"fui-cluster\">{replicas}</span>")),
             ));
         }
     }
     if let Some(stored) = stored {
         rows.push((
             tr(Msg::ConfigStored),
-            t(tr_with(
+            Html::text(tr_with(
                 Msg::ConfigStoredValue,
                 &[("count", Arg::from(stored))],
             )),
@@ -559,7 +561,7 @@ fn configuration_card(
     titled_panel(
         tr(Msg::ConfigurationTitle),
         card_action(CONFIGURATION, tr(Msg::ConfigurationTitle)),
-        h(format!(
+        Html::raw(format!(
             "<div class=\"fui-panel-body\">{}</div>",
             definitions(rows)
         )),

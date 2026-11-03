@@ -12,7 +12,7 @@
 //! JSON; the find page lists every match in the page.
 use crate::app::{QUERY, STORED_QUERIES};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, t};
+
 use crate::read::federation::Federation;
 use axum::response::{IntoResponse, Response};
 use ferrohealth_ui::html::Html;
@@ -233,9 +233,9 @@ pub async fn page() -> Html {
         );
         let found = match found {
             Some(answer) => find_results(&current(), &answer),
-            None => h(format!(
+            None => Html::raw(format!(
                 "<p class=\"fui-muted\">{}</p>",
-                t(tr(Msg::SearchNothingLine))
+                Html::text(tr(Msg::SearchNothingLine))
             )),
         };
         heading.then(found)

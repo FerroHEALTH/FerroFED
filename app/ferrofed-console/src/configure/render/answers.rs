@@ -16,8 +16,9 @@ use crate::configure::render::{SavedLine, StoredLine, mark_said};
 use crate::configure::said::replica_said;
 use crate::configure::said::{ActionAnswer, Answer, FieldNote};
 use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{h, opt, t};
+use crate::pages::opt;
 use crate::read::Refusal;
+use ferrofed_operator_api::revision::RevisionId;
 
 /// The answer of a form `refused` kept from reaching any replica, marking
 /// the field it names.
@@ -60,9 +61,9 @@ pub fn saved_view(answer: &ReplicaAnswer<SavedLine>) -> Html {
 fn saved_line(replica: &str, line: &SavedLine) -> Html {
     let id = line.revision.id;
     let preview = match (&line.changes, line.running) {
-        (Some(changes), Some(running)) => h(format!(
+        (Some(changes), Some(running)) => Html::raw(format!(
             "<p>{}</p>{}",
-            t(tr_with(
+            Html::text(tr_with(
                 Msg::WhatChangesAgainstRunningRevision,
                 &[("running", (running).to_string().into())],
             )),
@@ -72,21 +73,10 @@ fn saved_line(replica: &str, line: &SavedLine) -> Html {
             Tone::Warn,
             Announce::Alert,
             None,
-            t(tr(Msg::PreviewChangesCouldNotReadReload)),
+            Html::text(tr(Msg::PreviewChangesCouldNotReadReload)),
         ),
     };
-    said(h(format!(
-        "<strong>{}</strong>{}",
-        t(tr_with(
-            Msg::ReplicaSavedRevision,
-            &[
-                ("replica", (replica).to_string().into()),
-                ("id", (id).to_string().into()),
-            ],
-        )),
-        t(tr(Msg::NotAppliedApplyFromCardTop)),
-    )))
-    .then(preview)
+    unapplied(Msg::ReplicaSavedRevision, replica, id).then(preview)
 }
 
 /// The answer of an apply or a rollback at `answer`'s replica.
@@ -122,19 +112,24 @@ fn applied_line(replica: &str, line: &Applied) -> Html {
         .awaiting
         .as_ref()
         .map(|_| tr(Msg::AwaitsYourConfirmationConfirmCardTop));
-    said(h(format!(
-        "<strong>{}</strong> {}{}",
-        t(tr_with(
-            Msg::ReplicaAppliedRevision,
-            &[
-                ("replica", (replica).to_string().into()),
-                ("id", (line.revision.id).to_string().into()),
-                ("restored", (restored).clone().into()),
-            ],
+    notice(
+        Tone::Ok,
+        Announce::Status,
+        None,
+        Html::raw(format!(
+            "<strong>{}</strong> {}{}",
+            Html::text(tr_with(
+                Msg::ReplicaAppliedRevision,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("id", (line.revision.id).to_string().into()),
+                    ("restored", (restored).clone().into()),
+                ],
+            )),
+            Html::text(mark_said(&line.current)),
+            opt(awaits.map(Html::text)),
         )),
-        t(mark_said(&line.current)),
-        opt(awaits.map(t)),
-    )))
+    )
 }
 
 /// The answer of a stored-query version stored at `answer`'s replica.
@@ -155,17 +150,22 @@ pub fn stored_view(answer: &ReplicaAnswer<StoredLine>) -> Html {
 
 /// What a replica reports of a stored-query version stored.
 fn stored_line(replica: &str, line: &StoredLine) -> Html {
-    said(h(format!(
-        "<strong>{}</strong>",
-        t(tr_with(
-            Msg::ReplicaStoredVersion,
-            &[
-                ("replica", (replica).to_string().into()),
-                ("name", (line.name).clone().into()),
-                ("version", (line.version).clone().into()),
-            ],
-        ))
-    )))
+    notice(
+        Tone::Ok,
+        Announce::Status,
+        None,
+        Html::raw(format!(
+            "<strong>{}</strong>",
+            Html::text(tr_with(
+                Msg::ReplicaStoredVersion,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("name", (line.name).clone().into()),
+                    ("version", (line.version).clone().into()),
+                ],
+            ))
+        )),
+    )
 }
 
 /// The answer of an import at `answer`'s replica, with its changes.
@@ -178,6 +178,28 @@ pub fn imported(answer: &ReplicaAnswer<Imported>) -> ActionAnswer {
     }
 }
 
+/// The notice that `replica` holds the revision `id`, which `said` words,
+/// and that it is not applied: the operator applies it from the card at the
+/// top.
+fn unapplied(said: Msg, replica: &str, id: RevisionId) -> Html {
+    notice(
+        Tone::Ok,
+        Announce::Status,
+        None,
+        Html::raw(format!(
+            "<strong>{}</strong>{}",
+            Html::text(tr_with(
+                said,
+                &[
+                    ("replica", replica.to_string().into()),
+                    ("id", id.to_string().into()),
+                ],
+            )),
+            Html::text(tr(Msg::NotAppliedApplyFromCardTop)),
+        )),
+    )
+}
+
 /// The answer of `answer` drawn.
 #[must_use]
 pub fn imported_view(answer: &ReplicaAnswer<Imported>) -> Html {
@@ -188,29 +210,14 @@ pub fn imported_view(answer: &ReplicaAnswer<Imported>) -> Html {
 fn imported_line(replica: &str, line: &Imported) -> Html {
     let id = line.revision.id;
     Html::join([
-        said(h(format!(
-            "<strong>{}</strong>{}",
-            t(tr_with(
-                Msg::ReplicaImportedRevisionDryRun,
-                &[
-                    ("replica", (replica).to_string().into()),
-                    ("id", (id).to_string().into()),
-                ],
-            )),
-            t(tr(Msg::NotAppliedApplyFromCardTop)),
-        ))),
-        h(format!(
+        unapplied(Msg::ReplicaImportedRevisionDryRun, replica, id),
+        Html::raw(format!(
             "<p>{}</p>",
-            t(tr_with(
+            Html::text(tr_with(
                 Msg::WhatChangesAgainstRunningRevision2,
                 &[("from", (line.diff.from).to_string().into())],
             ))
         )),
         diff_table(&line.diff.changes, (Some(line.diff.from), id)),
     ])
-}
-
-/// The notice of what a replica did, `body` in words.
-pub(crate) fn said(body: Html) -> Html {
-    notice(Tone::Ok, Announce::Status, None, body)
 }

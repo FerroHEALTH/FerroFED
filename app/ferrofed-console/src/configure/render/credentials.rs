@@ -36,7 +36,7 @@ use crate::configure::settings::build::{secret_field, setting_field};
 use crate::configure::settings::fields::TLS;
 use crate::configure::settings::{self, Field, Grant, Kind, Secret, TLS_SECRET};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, opt, t};
+use crate::pages::opt;
 use crate::read::Refusal;
 
 /// The path of `resource`'s form.
@@ -51,20 +51,20 @@ fn href(resource: &Resource) -> String {
 /// The secrets `slots` name, each set and read from its file, or none.
 fn secrets_said(slots: &[SecretSlot]) -> Html {
     if slots.is_empty() {
-        return h(format!(
+        return Html::raw(format!(
             "<span class=\"fui-muted\">{}</span>",
-            t(tr(Msg::NotSet2))
+            Html::text(tr(Msg::NotSet2))
         ));
     }
     let items = Html::join(slots.iter().map(|slot| {
-        h(format!(
+        Html::raw(format!(
             "<li><code>{}</code>{}<code>{}</code></li>",
-            t(&slot.key),
-            t(tr(Msg::SetReadFrom)),
-            t(&slot.reference)
+            Html::text(&slot.key),
+            Html::text(tr(Msg::SetReadFrom)),
+            Html::text(&slot.reference)
         ))
     }));
-    h(format!("<ul class=\"fui-divided\">{items}</ul>"))
+    Html::raw(format!("<ul class=\"fui-divided\">{items}</ul>"))
 }
 
 /// The settings of `section` in a few words: its grant and how many keys
@@ -161,21 +161,21 @@ fn row(loaded: &Loaded<'_>, section: &SectionResource) -> Html {
             Some(removes),
         )
     });
-    h(format!(
+    Html::raw(format!(
         "<tr><th scope=\"row\"><code>{}</code></th>\
          <td data-label=\"{}\">{}</td><td data-label=\"{}\">{}</td>\
          <td data-label=\"{}\">{}</td><td data-label=\"{}\">{}</td>\
          <td data-label=\"{}\" class=\"{ACTIONS}\">{}</td></tr>",
-        t(&shown),
-        t(tr(Msg::Owner)),
+        Html::text(&shown),
+        Html::text(tr(Msg::Owner)),
         owner(section.owner),
-        t(tr(Msg::State)),
+        Html::text(tr(Msg::State)),
         state(if console { section.state } else { None }),
-        t(tr(Msg::Secrets)),
+        Html::text(tr(Msg::Secrets)),
         secrets_said(&section.secrets),
-        t(tr(Msg::Settings)),
-        t(settings_said(section)),
-        t(tr(Msg::Actions)),
+        Html::text(tr(Msg::Settings)),
+        Html::text(settings_said(section)),
+        Html::text(tr(Msg::Actions)),
         opt(actions),
     ))
 }
@@ -213,18 +213,18 @@ fn section_columns() -> [Column; 6] {
 pub(super) fn tab(loaded: &Loaded<'_>) -> Html {
     let sections = &loaded.resources.sections;
     let rows = if sections.is_empty() {
-        h(format!(
+        Html::raw(format!(
             "<tr><td colspan=\"6\" class=\"fui-muted\">{}</td></tr>",
-            t(tr(Msg::NoOnwardCredentialBindingSectionSet))
+            Html::text(tr(Msg::NoOnwardCredentialBindingSectionSet))
         ))
     } else {
         Html::join(sections.iter().map(|section| row(loaded, section)))
     };
     let binding = (!addable(loaded).is_empty()).then(|| {
-        h(format!(
+        Html::raw(format!(
             "<a href=\"/configuration/bindings/new\" class=\"{}\">{}</a>",
             Variant::Secondary.class(),
-            t(tr(Msg::AddBindingSection))
+            Html::text(tr(Msg::AddBindingSection))
         ))
     });
     head(
@@ -233,11 +233,11 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> Html {
             tr(Msg::CredentialBindingSectionFileProvidesRead),
             "credentials-and-binding-sections",
         ),
-        opt(binding).then(h(format!(
+        opt(binding).then(Html::raw(format!(
             "<a href=\"/configuration/credentials/new\" class=\"{}\">{}{}</a>",
             Variant::Primary.class(),
             icon(Glyph::PLUS, "16"),
-            t(tr(Msg::AddCredentials))
+            Html::text(tr(Msg::AddCredentials))
         ))),
     )
     .then(crate::pages::table(
@@ -288,13 +288,13 @@ pub(super) fn secret_row(
     }
     let segments = Html::join(choices.into_iter().map(|(value, word)| {
         let id = secret_field(row, value);
-        h(format!(
+        Html::raw(format!(
             "<label for=\"{id}\" class=\"fui-segment\"><input type=\"radio\" id=\"{id}\" \
              class=\"fui-sr-only\" name=\"{}\" value=\"{value}\"{}>{}</label>",
-            t(name("choice")),
+            Html::text(name("choice")),
             if value == chosen { " checked" } else { "" },
-            t(word),
-            id = t(&id),
+            Html::text(word),
+            id = Html::text(&id),
         ))
     }));
     let group = secret_field(row, "choice");
@@ -309,7 +309,7 @@ pub(super) fn secret_row(
             ..Text::default()
         },
     );
-    h(format!(
+    Html::raw(format!(
         "<div class=\"fui-reveal\"><fieldset class=\"fui-fieldset fui-choice\" id=\"{}\">\
          <legend class=\"fui-label\">{}</legend>\
          <input type=\"hidden\" name=\"form[secret_rows][]\" value=\"{}\">\
@@ -318,13 +318,13 @@ pub(super) fn secret_row(
          <div class=\"fui-segmented\">{segments}</div>{}</fieldset>\
          <div class=\"fui-reveal-parts\"><div class=\"fui-revealed\"></div>\
          <div class=\"fui-revealed\">{set}</div><div class=\"fui-revealed\">{file}</div></div></div>",
-        t(&group),
-        t(label),
-        t(row),
-        t(name("key")),
-        t(key),
-        t(key),
-        t(status),
+        Html::text(&group),
+        Html::text(label),
+        Html::text(row),
+        Html::text(name("key")),
+        Html::text(key),
+        Html::text(key),
+        Html::text(status),
         error_line(&group),
     ))
 }
@@ -346,12 +346,12 @@ fn list_value(row: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
     let id = format!("{}-{at}", setting_field(row, "list"));
     let fields = FormField::new(id.clone(), tr(Msg::Value))
         .label_hidden()
-        .view(h(format!(
+        .view(Html::raw(format!(
             "<input type=\"text\" id=\"{}\" name=\"form[setting.{}.values][]\" value=\"{}\" \
              class=\"{INPUT} fui-mono\" autocomplete=\"off\">",
-            t(&id),
-            t(row),
-            t(value)
+            Html::text(&id),
+            Html::text(row),
+            Html::text(value)
         )));
     RepeatRow {
         key: at.to_owned(),
@@ -474,37 +474,37 @@ fn setting(row: &str, field: &Field, shown: Shown<'_>) -> Html {
     let control = match field.kind {
         Kind::Choice(options) => {
             let options = Html::join(options.iter().map(|(choice, label)| {
-                h(format!(
+                Html::raw(format!(
                     "<option value=\"{}\"{}>{}</option>",
-                    t(choice),
+                    Html::text(choice),
                     if *choice == value.as_str() {
                         " selected"
                     } else {
                         ""
                     },
-                    t(tr(*label))
+                    Html::text(tr(*label))
                 ))
             }));
             FormField::new(id.clone(), tr(field.label))
                 .after(error_line(&id))
-                .view(h(format!(
+                .view(Html::raw(format!(
                     "<select id=\"{}\" name=\"{}\" class=\"{SELECT}\" aria-describedby=\"{}\">{options}</select>",
-                    t(&id),
-                    t(name("value")),
-                    t(error_id(&id))
+                    Html::text(&id),
+                    Html::text(name("value")),
+                    Html::text(error_id(&id))
                 )))
         }
-        Kind::Switch => h(format!(
+        Kind::Switch => Html::raw(format!(
             "<div class=\"fui-check\"><input type=\"checkbox\" role=\"switch\" class=\"{SWITCH}\" \
              id=\"{id}\" name=\"{}\" value=\"true\"{}><label for=\"{id}\">{}</label></div>",
-            t(name("value")),
+            Html::text(name("value")),
             if value == "true" { " checked" } else { "" },
-            t(tr(field.label)),
-            id = t(&id),
+            Html::text(tr(field.label)),
+            id = Html::text(&id),
         )),
-        Kind::List => h(format!(
+        Kind::List => Html::raw(format!(
             "<fieldset class=\"fui-fieldset fui-choice\"><legend class=\"fui-label\">{}</legend>{}</fieldset>",
-            t(tr(field.label)),
+            Html::text(tr(field.label)),
             list(row, shown.values(field.key))
         )),
         Kind::Text | Kind::Url | Kind::Path => text(
@@ -523,12 +523,12 @@ fn setting(row: &str, field: &Field, shown: Shown<'_>) -> Html {
             },
         ),
     };
-    h(format!(
+    Html::raw(format!(
         "<input type=\"hidden\" name=\"form[setting_rows][]\" value=\"{}\">\
          <input type=\"hidden\" name=\"{}\" value=\"{}\">{control}",
-        t(row),
-        t(name("key")),
-        t(field.key)
+        Html::text(row),
+        Html::text(name("key")),
+        Html::text(field.key)
     ))
 }
 
@@ -570,7 +570,7 @@ fn part(
             )
         })
         .collect::<Vec<_>>();
-    h(format!("<div class=\"fui-columns\">{fields}</div>")).then(Html::join(secrets))
+    Html::raw(format!("<div class=\"fui-columns\">{fields}</div>")).then(Html::join(secrets))
 }
 
 /// The endpoints the members declare that hold no credentials yet.
@@ -597,24 +597,24 @@ fn uncredentialed(loaded: &Loaded<'_>) -> Vec<String> {
 /// of those that hold none.
 fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>, chosen: Option<&str>) -> Html {
     if let Some(endpoint) = endpoint {
-        return hidden("endpoint", endpoint.to_owned()).then(h(format!(
+        return hidden("endpoint", endpoint.to_owned()).then(Html::raw(format!(
             "<p>{} <code>{}</code></p>",
-            t(tr(Msg::Endpoint2)),
-            t(endpoint)
+            Html::text(tr(Msg::Endpoint2)),
+            Html::text(endpoint)
         )));
     }
     let options = Html::join(uncredentialed(loaded).into_iter().map(|endpoint| {
         let selected = chosen == Some(endpoint.as_str());
-        h(format!(
+        Html::raw(format!(
             "<option value=\"{endpoint}\"{}>{endpoint}</option>",
             if selected { " selected" } else { "" },
-            endpoint = t(&endpoint),
+            endpoint = Html::text(&endpoint),
         ))
     }));
-    let select = h(format!(
+    let select = Html::raw(format!(
         "<select id=\"cfg-endpoint\" class=\"{SELECT}\" name=\"form[endpoint]\" required \
          aria-describedby=\"{}\">{options}</select>",
-        t(described_by("cfg-endpoint", true, true).unwrap_or_default())
+        Html::text(described_by("cfg-endpoint", true, true).unwrap_or_default())
     ));
     FormField::new("cfg-endpoint", tr(Msg::Endpoint))
         .help(tr(Msg::EndpointsMembersDeclareHoldNoCredentials))
@@ -626,17 +626,17 @@ fn endpoint_choice(loaded: &Loaded<'_>, endpoint: Option<&str>, chosen: Option<&
 /// grant's fields alone.
 fn grant_choice(grant: Grant) -> Html {
     let grants = Html::join(Grant::ALL.into_iter().map(|option| {
-        h(format!(
+        Html::raw(format!(
             "<option value=\"{}\"{}>{}</option>",
-            t(option.as_str()),
+            Html::text(option.as_str()),
             if option == grant { " selected" } else { "" },
-            t(tr(option.label()))
+            Html::text(tr(option.label()))
         ))
     }));
-    let select = h(format!(
+    let select = Html::raw(format!(
         "<select id=\"cfg-grant\" class=\"{SELECT}\" name=\"form[grant]\" data-grant=\"\" \
          aria-describedby=\"{}\">{grants}</select>",
-        t(described_by("cfg-grant", true, true).unwrap_or_default())
+        Html::text(described_by("cfg-grant", true, true).unwrap_or_default())
     ));
     FormField::new("cfg-grant", tr(Msg::GrantType))
         .help(tr(Msg::HowGatewayReachesEndpointFormShows))
@@ -693,10 +693,10 @@ pub(super) fn credential_form(
             let inner = part(option.fields(), option.secrets(), (shown, slots), &mut rows);
             // NOTE: no specification governs this: our own design; each grant's settings
             // fold in one exclusive disclosure, the grant held open, with no script.
-            h(format!(
+            Html::raw(format!(
                 "<details name=\"cfg-grant-parts\"{}><summary>{}</summary>{inner}</details>",
                 if option == grant { " open" } else { "" },
-                t(tr(option.label()))
+                Html::text(tr(option.label()))
             ))
         })
         .collect::<Vec<_>>();
@@ -714,15 +714,15 @@ pub(super) fn credential_form(
     let body = Html::join([
         hidden("action", String::from("save-credentials")),
         hidden("base", loaded.base()),
-        h(format!(
+        Html::raw(format!(
             "<fieldset class=\"{GROUP}\"><legend>{}</legend>{}{}</fieldset>\
              <fieldset class=\"{GROUP}\"><legend>{}</legend><div class=\"fui-stack\">{parts}</div></fieldset>\
              <fieldset class=\"{GROUP}\"><legend>{}</legend>{tls}</fieldset>",
-            t(tr(Msg::EndpointAndGrant)),
+            Html::text(tr(Msg::EndpointAndGrant)),
             endpoint_choice(loaded, endpoint, posted.map(|form| form.endpoint.as_str())),
             grant_choice(grant),
-            t(tr(Msg::GrantSettings)),
-            t(tr(Msg::Tls)),
+            Html::text(tr(Msg::GrantSettings)),
+            Html::text(tr(Msg::Tls)),
         )),
         reason(),
         save_bar(loaded, "/configuration/credentials"),
@@ -739,7 +739,7 @@ pub(super) fn credential_form(
         ),
         form("fui-stack", body),
         opt(endpoint.map(|endpoint| {
-            h(format!(
+            Html::raw(format!(
                 "<div class=\"fui-actions\">{}</div>",
                 remove(loaded, &Resource::Credentials(endpoint.to_owned()))
             ))

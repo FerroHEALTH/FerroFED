@@ -9,11 +9,11 @@
 //! authenticates the console's requests exactly as it does any other
 //! client's. [`Gateway::its`] is the ITS-REST surface at `{base}/v1`, for the
 //! generated group clients of `openehr_its::rest::generated`;
-//! [`Gateway::self_description`] reads `OPTIONS {base}/` into the typed
-//! federation body (§7a.2, N30), [`Gateway::dependencies`] the health of
-//! each member and service into the report of `ferrofed_operator_api::health`,
-//! and the operator reads the gateway's read-only operator surface into the
-//! reports of `ferrofed_operator_api::operator`. A refusal or a failure is a
+//! [`Gateway::report`] reads `OPTIONS {base}/` into the typed federation body
+//! (§7a.2, N30), the health of each member and service into the report of
+//! `ferrofed_operator_api::health`, and the gateway's read-only operator
+//! surface into the reports of `ferrofed_operator_api::operator`, which
+//! [`Gateway::page`] reads a page at a time. A refusal or a failure is a
 //! typed [`GatewayError`] carrying the gateway's status, never an empty
 //! answer. [`Gateway::query`] runs an AQL or a stored query and reads the
 //! federated `RESULT_SET` with its `meta.federation` (§9.1, §11.4).
@@ -394,74 +394,30 @@ impl Gateway {
         self.client(self.api.clone(), token)
     }
 
-    /// Reads the gateway's self-description, `OPTIONS {base}/` (§7a.2, N30).
+    /// Reads the report `R` names: the gateway's self-description,
+    /// `OPTIONS {base}/` (§7a.2, N30), or one of the operator surface's
+    /// reports under `{base}/operator/`.
     ///
     /// # Errors
-    /// Returns [`GatewayError::Status`] for any answer but `200`, and
+    /// Returns [`GatewayError::Status`] for any answer but `200`, a `403`
+    /// among them when the operator's token carries no operator scope, and
     /// [`GatewayError::Call`] when the call failed or the body is not a
-    /// conformant `OPTIONS {base}/` body.
-    pub async fn self_description(&self, token: &AccessToken) -> Result<OptionsRoot, GatewayError> {
-        self.read(Method::OPTIONS, "/", token).await
-    }
-
-    /// Reads the last state the gateway observed of each member and service,
-    /// `GET {base}/operator/dependencies`.
-    ///
-    /// # Errors
-    /// As [`Gateway::self_description`].
-    pub async fn dependencies(
-        &self,
-        token: &AccessToken,
-    ) -> Result<DependencyReport, GatewayError> {
-        self.read(Method::GET, "/operator/dependencies", token)
+    /// conformant `R`.
+    pub async fn report<R: Report>(&self, token: &AccessToken) -> Result<R, GatewayError> {
+        self.send(Request::new(R::METHOD, R::PATH.to_owned()), token)
             .await
     }
 
-    /// Reads how the gateway is deployed: its profile, its product version
-    /// and its replica, `GET {base}/operator/deployment`.
+    /// Reads one page of the listing `T` names, under `{base}/operator/`.
     ///
     /// # Errors
-    /// As [`Gateway::incidents`].
-    pub async fn deployment(&self, token: &AccessToken) -> Result<DeploymentReport, GatewayError> {
-        self.read(Method::GET, "/operator/deployment", token).await
-    }
-
-    /// Reads the integrity incidents, `GET {base}/operator/incidents`.
-    ///
-    /// # Errors
-    /// As [`Gateway::self_description`]; a `403` when the operator's token
-    /// carries no operator scope.
-    pub async fn incidents(&self, token: &AccessToken) -> Result<IncidentReport, GatewayError> {
-        self.read(Method::GET, "/operator/incidents", token).await
-    }
-
-    /// Reads one page of the `creating_system_id` routing table,
-    /// `GET {base}/operator/creating-systems`.
-    ///
-    /// # Errors
-    /// As [`Gateway::incidents`].
-    pub async fn creating_systems(
+    /// As [`Gateway::report`].
+    pub async fn page<T: Listed>(
         &self,
         token: &AccessToken,
         page: PageRequest,
-    ) -> Result<Page<CreatingSystemEntry>, GatewayError> {
-        self.read_page("/operator/creating-systems", token, page)
-            .await
-    }
-
-    /// Reads one page of the held stored-query versions, as ITS-REST
-    /// `StoredQuery`s each marked read-only or not,
-    /// `GET {base}/operator/stored-queries`.
-    ///
-    /// # Errors
-    /// As [`Gateway::incidents`].
-    pub async fn stored_queries(
-        &self,
-        token: &AccessToken,
-        page: PageRequest,
-    ) -> Result<Page<StoredVersion<StoredQuery>>, GatewayError> {
-        self.read_page("/operator/stored-queries", token, page)
-            .await
+    ) -> Result<Page<T>, GatewayError> {
+        self.read_page(T::PATH.to_owned(), token, page).await
     }
 
     /// Reads one page of the versions held under the qualified query name
@@ -469,7 +425,7 @@ impl Gateway {
     /// `GET {base}/operator/stored-queries/{qualified_query_name}`.
     ///
     /// # Errors
-    /// As [`Gateway::incidents`]; a `404` when the gateway holds no version
+    /// As [`Gateway::report`]; a `404` when the gateway holds no version
     /// under `name`.
     pub async fn stored_query(
         &self,
@@ -478,7 +434,7 @@ impl Gateway {
         page: PageRequest,
     ) -> Result<Page<StoredVersion<StoredQuery>>, GatewayError> {
         let path = format!("/operator/stored-queries/{}", path_segment(&name));
-        self.read_page(&path, token, page).await
+        self.read_page(path, token, page).await
     }
 
     /// Runs `call` through the gateway's ITS-REST query surface as the
@@ -507,8 +463,8 @@ impl Gateway {
         let answered = match &call.target {
             QueryTarget::Aql(q) => {
                 let params = QueryExecuteAdhocQueryBodyParams {
-                    accept: Some(json()),
-                    content_type: Some(json()),
+                    accept: Some(JSON.to_owned()),
+                    content_type: Some(JSON.to_owned()),
                 };
                 let body = AdhocQueryExecute {
                     q: q.clone(),
@@ -550,26 +506,14 @@ impl Gateway {
     /// Reads the page `page` of the listing at `path`.
     async fn read_page<T: serde::de::DeserializeOwned>(
         &self,
-        path: &str,
+        path: String,
         token: &AccessToken,
         page: PageRequest,
     ) -> Result<Page<T>, GatewayError> {
-        let mut request = Request::new(Method::GET, path.to_owned());
+        let mut request = Request::new(Method::GET, path);
         request.query("offset", page.offset);
         request.query("limit", page.limit);
         self.send(request, token).await
-    }
-
-    /// Sends `method` to `path` below `{base}` as the operator and decodes a
-    /// `200` answer.
-    async fn read<T: serde::de::DeserializeOwned>(
-        &self,
-        method: Method,
-        path: &str,
-        token: &AccessToken,
-    ) -> Result<T, GatewayError> {
-        self.send(Request::new(method, path.to_owned()), token)
-            .await
     }
 
     /// Sends `request` below `{base}` as the operator and decodes a `200`
@@ -608,8 +552,50 @@ impl Gateway {
 }
 
 /// The `Accept` and `Content-Type` every query call sends.
-fn json() -> String {
-    String::from("application/json")
+const JSON: &str = "application/json";
+
+/// A document the gateway answers at one path of its own, read whole with
+/// [`Gateway::report`].
+pub trait Report: serde::de::DeserializeOwned {
+    /// The method it is read with.
+    const METHOD: Method;
+    /// Its path below `{base}`.
+    const PATH: &'static str;
+}
+
+impl Report for OptionsRoot {
+    const METHOD: Method = Method::OPTIONS;
+    const PATH: &'static str = "/";
+}
+
+impl Report for DependencyReport {
+    const METHOD: Method = Method::GET;
+    const PATH: &'static str = "/operator/dependencies";
+}
+
+impl Report for DeploymentReport {
+    const METHOD: Method = Method::GET;
+    const PATH: &'static str = "/operator/deployment";
+}
+
+impl Report for IncidentReport {
+    const METHOD: Method = Method::GET;
+    const PATH: &'static str = "/operator/incidents";
+}
+
+/// An item of a listing the operator surface answers a page at a time, read
+/// with [`Gateway::page`].
+pub trait Listed: serde::de::DeserializeOwned {
+    /// The listing's path below `{base}`.
+    const PATH: &'static str;
+}
+
+impl Listed for CreatingSystemEntry {
+    const PATH: &'static str = "/operator/creating-systems";
+}
+
+impl Listed for StoredVersion<StoredQuery> {
+    const PATH: &'static str = "/operator/stored-queries";
 }
 
 /// Runs the stored query `name` at its latest version.
@@ -620,8 +606,8 @@ async fn stored(
 ) -> Result<ResultSet, Unanswered> {
     let params = QueryExecuteStoredQueryBodyParams {
         qualified_query_name: name.to_owned(),
-        accept: Some(json()),
-        content_type: Some(json()),
+        accept: Some(JSON.to_owned()),
+        content_type: Some(JSON.to_owned()),
     };
     match group.query_execute_stored_query_body(&params, body).await {
         Ok(QueryExecuteStoredQueryBodyOutcome::Ok { body, .. }) => Ok(body),
@@ -648,8 +634,8 @@ async fn stored_version(
     let params = QueryExecuteStoredQueryVersionBodyParams {
         qualified_query_name: name.to_owned(),
         version: version.to_owned(),
-        accept: Some(json()),
-        content_type: Some(json()),
+        accept: Some(JSON.to_owned()),
+        content_type: Some(JSON.to_owned()),
     };
     match group
         .query_execute_stored_query_version_body(&params, body)

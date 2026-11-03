@@ -27,6 +27,7 @@ use ferrohealth_ui::view::surface::{
 };
 use ferrohealth_ui::view::tabs::{Tab, binder};
 use ferrohealth_ui::view::template::list::HeadingCount;
+use openehr_federation::options::OptionsRoot;
 use openehr_federation::status::EndpointStatus;
 
 use crate::act::fields::Fields as Posted;
@@ -37,7 +38,7 @@ use crate::act::query::{
 use crate::app::QUERY;
 use crate::editors::{AQL, aql_editor};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{fault_view, h, opt, refused_view, t};
+use crate::pages::{fault_view, opt, refused_view};
 use crate::read::Stop;
 
 /// The id of the query form.
@@ -94,7 +95,7 @@ pub async fn options_now() -> Result<QueryOptions, Stop> {
     let (state, token) = crate::read::signed_in()?;
     Ok(state
         .gateway()
-        .self_description(&token)
+        .report::<OptionsRoot>(&token)
         .await
         .ok()
         .map(|description| QueryOptions::of(&description))
@@ -124,7 +125,7 @@ fn console(form: &QueryForm, stored: bool, options: &QueryOptions, ran: Option<R
     let window = window(form);
     let federation = federation_options(form, options);
     let action = if stored { STORED_TAB } else { QUERY };
-    let editor = h(format!(
+    let editor = Html::raw(format!(
         "<form method=\"post\" action=\"{action}\" id=\"{FORM}\" class=\"fui-form fui-stack\">\
          <input type=\"hidden\" name=\"kind\" value=\"{}\">{query}{rows}{window}{federation}\
          <div class=\"fui-actions\"><button type=\"submit\" class=\"{}\">{}</button></div></form>",
@@ -143,18 +144,18 @@ fn console(form: &QueryForm, stored: bool, options: &QueryOptions, ran: Option<R
         editor,
     );
     let answer = match ran {
-        None => h(format!(
+        None => Html::raw(format!(
             "<p class=\"fui-muted\">{}</p>",
-            t(tr(Msg::QueryBeforeRun))
+            Html::text(tr(Msg::QueryBeforeRun))
         )),
         Some(Ran::Refused(refused)) => refused_view(&refused),
         Some(Ran::Fault(failed)) => fault_view(&failed),
         Some(Ran::Answered(answer)) => answered(&answer),
     };
-    heading.then(h(format!(
+    heading.then(Html::raw(format!(
         "<div class=\"fui-stack\">{tabs} <section aria-labelledby=\"query-answer-title\" class=\"fui-stack\">\
          <h2 id=\"query-answer-title\" class=\"fui-sr-only\">{}</h2>{answer}</section></div>",
-        t(tr(Msg::QueryAnswerTitle))
+        Html::text(tr(Msg::QueryAnswerTitle))
     )))
 }
 
@@ -167,11 +168,11 @@ fn aql_field(form: &QueryForm) -> Html {
 
 /// A text input `id`, named `name`, holding `value`.
 fn input(id: &str, name: &str, value: &str, extra: &str) -> Html {
-    h(format!(
+    Html::raw(format!(
         "<input type=\"text\" id=\"{}\" name=\"{}\" class=\"{INPUT}\" value=\"{}\"{extra}>",
-        t(id),
-        t(name),
-        t(value)
+        Html::text(id),
+        Html::text(name),
+        Html::text(value)
     ))
 }
 
@@ -259,9 +260,9 @@ fn parameters(form: &QueryForm) -> Html {
     });
     fieldset(
         tr(Msg::QueryParameters),
-        h(format!(
+        Html::raw(format!(
             "<p class=\"fui-help\">{}</p>{list}",
-            t(tr(Msg::QueryParametersHelp))
+            Html::text(tr(Msg::QueryParametersHelp))
         )),
     )
 }
@@ -286,11 +287,11 @@ fn window(form: &QueryForm) -> Html {
 /// A check box `id` named `name` with the value `value`, checked when
 /// `checked`.
 fn checkbox(id: &str, name: &str, value: &str, checked: bool) -> Html {
-    h(format!(
+    Html::raw(format!(
         "<input type=\"checkbox\" id=\"{}\" name=\"{}\" value=\"{}\"{}>",
-        t(id),
-        t(name),
-        t(value),
+        Html::text(id),
+        Html::text(name),
+        Html::text(value),
         if checked { " checked" } else { "" }
     ))
 }
@@ -313,15 +314,15 @@ fn federation_options(form: &QueryForm, options: &QueryOptions) -> Html {
     let dedup = (!options.dedup_modes.is_empty()).then(|| {
         let modes = Html::join(options.dedup_modes.iter().map(|mode| {
             let chosen = form.dedup == *mode;
-            h(format!(
+            Html::raw(format!(
                 "<option value=\"{mode}\"{}>{mode}</option>",
                 if chosen { " selected" } else { "" },
-                mode = t(mode),
+                mode = Html::text(mode),
             ))
         }));
-        Field::new("query-dedup", tr(Msg::QueryDedup)).view(h(format!(
+        Field::new("query-dedup", tr(Msg::QueryDedup)).view(Html::raw(format!(
             "<select id=\"query-dedup\" name=\"dedup\" class=\"{SELECT}\"><option value=\"\">{}</option>{modes}</select>",
-            t(tr(Msg::QueryDedupDefault))
+            Html::text(tr(Msg::QueryDedupDefault))
         )))
     });
     let partial = options.best_effort.then(|| {
@@ -332,13 +333,13 @@ fn federation_options(form: &QueryForm, options: &QueryOptions) -> Html {
             checkbox("query-partial", "partial", "on", checked),
         )
     });
-    let body = h(format!(
+    let body = Html::raw(format!(
         "<div class=\"fui-stack\">{}{} {} {}</div>",
         fieldset(
             tr(Msg::QueryEndpoints),
-            h(format!(
+            Html::raw(format!(
                 "<p class=\"fui-help\">{}</p>{}",
-                t(tr(Msg::QueryEndpointsHelp)),
+                Html::text(tr(Msg::QueryEndpointsHelp)),
                 checks("endpoint", &options.endpoints, &form.endpoints)
             )),
         ),
@@ -454,14 +455,14 @@ fn answered(answer: &QueryAnswer) -> Html {
         let cells = Html::join(
             row.iter()
                 .zip(columns.iter())
-                .map(|(value, column)| cell(column, t(value))),
+                .map(|(value, column)| cell(column, Html::text(value))),
         );
-        h(format!("<tr>{cells}</tr>"))
+        Html::raw(format!("<tr>{cells}</tr>"))
     }));
     let table = if answer.rows.is_empty() {
-        h(format!(
+        Html::raw(format!(
             "<p class=\"fui-panel-body fui-muted\">{}</p>",
-            t(tr(if succeeded(answer.status) {
+            Html::text(tr(if succeeded(answer.status) {
                 Msg::QueryNoRows
             } else {
                 Msg::QueryNoRowsFailed
@@ -510,9 +511,9 @@ fn answered(answer: &QueryAnswer) -> Html {
                 actions: None,
             }),
             opt(window.map(|window| {
-                h(format!(
+                Html::raw(format!(
                     "<p class=\"fui-small fui-muted fui-panel-body\">{}</p>",
-                    t(window)
+                    Html::text(window)
                 ))
             }))
             .then(table),

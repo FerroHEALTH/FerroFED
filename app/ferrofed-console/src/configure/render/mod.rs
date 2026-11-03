@@ -474,10 +474,10 @@ impl Shown {
 /// of `section` as `running` holds them, read-only.
 #[must_use]
 pub fn file_only(running: &RunningConfig, section: Section) -> ConfigView {
-    let line = crate::pages::h(format!(
+    let line = Html::raw(format!(
         "<p class=\"fui-small fui-muted\">{} {}</p>",
         ferrohealth_ui::icon::icon(ferrohealth_ui::icon::Glyph::LOCK, "12"),
-        crate::pages::t(tr(Msg::SettingsFileLine))
+        Html::text(tr(Msg::SettingsFileLine))
     ));
     let header = ferrohealth_ui::view::surface::page_heading(
         &crate::locale::current(),
@@ -507,9 +507,9 @@ pub fn unmanaged(replica: &str) -> ConfigView {
     );
     ConfigView {
         header: Some(top::title(Html::empty())),
-        main: Some(crate::pages::h(format!(
+        main: Some(Html::raw(format!(
             "<p role=\"status\">{}</p>",
-            crate::pages::t(said)
+            Html::text(said)
         ))),
         ..ConfigView::default()
     }

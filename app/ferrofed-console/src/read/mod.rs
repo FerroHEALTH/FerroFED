@@ -18,6 +18,7 @@
 pub mod federation;
 pub mod incidents;
 
+use openehr_federation::options::OptionsRoot;
 use std::collections::BTreeSet;
 
 use ferrofed_operator_api::operator::{DeploymentMode, DeploymentReport};
@@ -347,7 +348,7 @@ pub async fn deployment() -> Result<Deployment, Stop> {
     let (state, token) = signed_in()?;
     let report = state
         .gateway()
-        .deployment(&token)
+        .report::<DeploymentReport>(&token)
         .await
         .map_err(|error| stopped(&error, Asked::Status))?;
     Ok(Deployment::from(&report))
@@ -364,7 +365,7 @@ pub async fn described() -> Result<(String, String), Stop> {
     let (state, token) = signed_in()?;
     let description = state
         .gateway()
-        .self_description(&token)
+        .report::<OptionsRoot>(&token)
         .await
         .map_err(|error| stopped(&error, Asked::Status))?;
     Ok((

@@ -104,58 +104,78 @@ pub fn replica_said<T>(answer: &ReplicaAnswer<T>, what: &str, done: fn(&str, &T)
                 ),
                 None => String::new(),
             };
-            refused_by(crate::pages::t(tr_with(
-                Msg::ReplicaRefusedThe,
-                &[
-                    ("replica", replica.to_owned().into()),
-                    ("what", what.to_owned().into()),
-                    ("status", status.to_string().into()),
-                    ("code", code.into()),
-                    ("hint", hint.into()),
-                ],
-            )))
-        }
-        Acted::Refused(Refusal::NotAuthenticated { code }) => {
-            let code = code.clone().unwrap_or_else(|| tr(Msg::NoCode));
-            refused_by(crate::pages::h(format!(
-                "{}<a href=\"{}\" rel=\"external\">{}</a>",
-                crate::pages::t(tr_with(
-                    Msg::ReplicaDidNotAcceptYourSign,
+            notice(
+                Tone::Bad,
+                Announce::Alert,
+                None,
+                Html::text(tr_with(
+                    Msg::ReplicaRefusedThe,
                     &[
                         ("replica", replica.to_owned().into()),
                         ("what", what.to_owned().into()),
+                        ("status", status.to_string().into()),
                         ("code", code.into()),
+                        ("hint", hint.into()),
                     ],
                 )),
-                crate::app::SIGN_IN,
-                crate::pages::t(tr(Msg::SignInAgain)),
-            )))
+            )
         }
-        Acted::Refused(Refusal::Invalid { reason }) => refused_by(crate::pages::t(tr_with(
-            Msg::Replica2,
-            &[
-                ("replica", replica.to_owned().into()),
-                ("reason", reason.clone().into()),
-            ],
-        ))),
-        Acted::Fault(Fault::Unreachable) => refused_by(crate::pages::t(tr_with(
-            Msg::ReplicaAdminListenerGaveNoAnswer,
-            &[
-                ("replica", replica.to_owned().into()),
-                ("what", what.to_owned().into()),
-            ],
-        ))),
-        Acted::Fault(fault) => refused_by(crate::pages::t(tr_with(
-            Msg::Replica3,
-            &[
-                ("replica", replica.to_owned().into()),
-                ("fault", fault.to_string().into()),
-            ],
-        ))),
+        Acted::Refused(Refusal::NotAuthenticated { code }) => {
+            let code = code.clone().unwrap_or_else(|| tr(Msg::NoCode));
+            notice(
+                Tone::Bad,
+                Announce::Alert,
+                None,
+                Html::raw(format!(
+                    "{}<a href=\"{}\" rel=\"external\">{}</a>",
+                    Html::text(tr_with(
+                        Msg::ReplicaDidNotAcceptYourSign,
+                        &[
+                            ("replica", replica.to_owned().into()),
+                            ("what", what.to_owned().into()),
+                            ("code", code.into()),
+                        ],
+                    )),
+                    crate::app::SIGN_IN,
+                    Html::text(tr(Msg::SignInAgain)),
+                )),
+            )
+        }
+        Acted::Refused(Refusal::Invalid { reason }) => notice(
+            Tone::Bad,
+            Announce::Alert,
+            None,
+            Html::text(tr_with(
+                Msg::Replica2,
+                &[
+                    ("replica", replica.to_owned().into()),
+                    ("reason", reason.clone().into()),
+                ],
+            )),
+        ),
+        Acted::Fault(Fault::Unreachable) => notice(
+            Tone::Bad,
+            Announce::Alert,
+            None,
+            Html::text(tr_with(
+                Msg::ReplicaAdminListenerGaveNoAnswer,
+                &[
+                    ("replica", replica.to_owned().into()),
+                    ("what", what.to_owned().into()),
+                ],
+            )),
+        ),
+        Acted::Fault(fault) => notice(
+            Tone::Bad,
+            Announce::Alert,
+            None,
+            Html::text(tr_with(
+                Msg::Replica3,
+                &[
+                    ("replica", replica.to_owned().into()),
+                    ("fault", fault.to_string().into()),
+                ],
+            )),
+        ),
     }
-}
-
-/// The alert `body` says, for a replica that refused or did not answer.
-fn refused_by(body: Html) -> Html {
-    notice(Tone::Bad, Announce::Alert, None, body)
 }

@@ -552,8 +552,8 @@ fn services(dependencies: &DependencyReport) -> Vec<Service> {
 pub async fn read() -> Result<Federation, Stop> {
     let (state, token) = signed_in()?;
     let gateway = state.gateway();
-    let description = gateway.self_description(&token).await?;
-    let dependencies = gateway.dependencies(&token).await?;
+    let description = gateway.report::<OptionsRoot>(&token).await?;
+    let dependencies = gateway.report::<DependencyReport>(&token).await?;
     let mut known = Known::default();
     if let Some(replica) = state.settings().admin.first()
         // NOTE: no specification governs this: our own design; a name is a courtesy, so a

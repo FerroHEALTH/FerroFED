@@ -12,7 +12,7 @@ use ferrohealth_ui::html::Html;
 use crate::configure::render::parts::{diff_table, error_line, form, head, hidden, reason};
 use crate::configure::render::{Loaded, author};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, opt, t};
+use crate::pages::opt;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::filter::{FilterChoice, FilterMenu, MenuForm, filter_menu};
 use ferrohealth_ui::tone::Tone;
@@ -130,30 +130,30 @@ fn entry(loaded: &Loaded<'_>, revision: &Revision) -> Html {
     let previous = mark.and_then(|mark| mark.previous);
     let id = revision.id;
     let compare = (Some(id) != running && running.is_some()).then(|| {
-        h(format!(
+        Html::raw(format!(
             "<a href=\"/configuration/history?compare={id}\" class=\"{}\">{}<span class=\"fui-sr-only\">{}</span></a>",
             Variant::Ghost.class(),
-            t(tr(Msg::CompareWithRunning)),
-            t(tr_with(Msg::Revision, &[("id", (id).to_string().into())])),
+            Html::text(tr(Msg::CompareWithRunning)),
+            Html::text(tr_with(Msg::Revision, &[("id", (id).to_string().into())])),
         ))
     });
     let rollback = mark
         .filter(|mark| mark.revision == id && mark.awaiting.is_none())
         .map(|mark| crate::configure::render::top::rollback(mark, "main"));
-    h(format!(
+    Html::raw(format!(
         "<li class=\"fui-stack\"><div class=\"fui-cluster\"><h3 class=\"fui-card-title\">{}</h3>{}{}</div>\
          <p class=\"fui-muted\">{} · {}</p><p class=\"fui-small\">{}</p>\
          <div class=\"fui-cluster\"><a href=\"{}\" rel=\"external\" download=\"\" class=\"{}\">{}{}</a>{}{}</div></li>",
-        t(tr_with(Msg::Revision2, &[("id", (id).to_string().into())])),
+        Html::text(tr_with(Msg::Revision2, &[("id", (id).to_string().into())])),
         origin(revision),
         standing(revision, (running, previous)),
-        t(author(&revision.author)),
+        Html::text(author(&revision.author)),
         timestamp(&current(), &revision.at.to_string()),
-        t(&revision.reason),
-        t(crate::configure::export::href(id)),
+        Html::text(&revision.reason),
+        Html::text(crate::configure::export::href(id)),
         Variant::Ghost.class(),
         icon(Glyph::DOWNLOAD, "16"),
-        t(tr_with(
+        Html::text(tr_with(
             Msg::ExportRevisionAsToml,
             &[("id", (id).to_string().into())]
         )),
@@ -187,13 +187,13 @@ pub(super) fn history(loaded: &Loaded<'_>) -> Html {
         })
         .collect();
     let entries = if kept.is_empty() {
-        h(format!(
+        Html::raw(format!(
             "<p class=\"fui-muted\">{}</p>",
-            t(tr(Msg::HistoryNoneOfOrigin))
+            Html::text(tr(Msg::HistoryNoneOfOrigin))
         ))
     } else {
         let items = Html::join(kept.into_iter().map(|revision| entry(loaded, revision)));
-        h(format!(
+        Html::raw(format!(
             "<ol class=\"fui-divided\" aria-labelledby=\"history-title\">{items}</ol>"
         ))
     };
@@ -203,9 +203,9 @@ pub(super) fn history(loaded: &Loaded<'_>) -> Html {
             (tr(Msg::EveryRevisionWhoMadeWhyEach), "export-and-import"),
             Html::empty(),
         ),
-        h(format!(
+        Html::raw(format!(
             "<div class=\"fui-split\"><p class=\"fui-help\">{}</p>{}</div>",
-            t(shown),
+            Html::text(shown),
             origin_menu(&history.items, &asked)
         )),
         entries,
@@ -231,13 +231,13 @@ pub(super) fn compared(loaded: &Loaded<'_>) -> Html {
             )
         },
     );
-    h(format!(
+    Html::raw(format!(
         "<section class=\"fui-card\" aria-labelledby=\"compare-title\"><div class=\"fui-split\">\
          <h2 id=\"compare-title\" class=\"fui-card-title\">{}</h2>\
          <a href=\"/configuration/history\" class=\"{}\">{}</a></div>{}</section>",
-        t(title),
+        Html::text(title),
         Variant::Ghost.class(),
-        t(tr(Msg::CloseTheComparison)),
+        Html::text(tr(Msg::CloseTheComparison)),
         diff_table(changes, (running, other)),
     ))
 }
@@ -245,19 +245,19 @@ pub(super) fn compared(loaded: &Loaded<'_>) -> Html {
 /// The download of the running revision, above the import.
 pub(super) fn export(loaded: &Loaded<'_>) -> Html {
     let download = match loaded.running() {
-        Some(running) => h(format!(
+        Some(running) => Html::raw(format!(
             "<a href=\"{}\" rel=\"external\" download=\"\" class=\"{}\">{}{}</a>",
-            t(crate::configure::export::href(running)),
+            Html::text(crate::configure::export::href(running)),
             Variant::Secondary.class(),
             icon(Glyph::DOWNLOAD, "16"),
-            t(tr(Msg::DownloadAsToml)),
+            Html::text(tr(Msg::DownloadAsToml)),
         )),
-        None => h(format!(
+        None => Html::raw(format!(
             "<p class=\"fui-muted\">{}</p>",
-            t(tr(Msg::NoRevisionRunsSoNoneDownloads))
+            Html::text(tr(Msg::NoRevisionRunsSoNoneDownloads))
         )),
     };
-    h(format!(
+    Html::raw(format!(
         "<section class=\"fui-card\" aria-labelledby=\"export-title\">{}{download}</section>",
         head(
             ("export-title", tr(Msg::Export)),
@@ -281,18 +281,18 @@ pub(super) fn import(loaded: &Loaded<'_>) -> Html {
         hidden("base", loaded.base()),
         Field::new("cfg-toml", tr(Msg::Toml))
             .after(error_line("cfg-toml"))
-            .view(h(format!(
+            .view(Html::raw(format!(
                 "<textarea id=\"cfg-toml\" name=\"form[toml]\" rows=\"12\" spellcheck=\"false\" required \
                  class=\"{TEXTAREA} fui-mono\" aria-describedby=\"cfg-toml-error\">{}</textarea>",
-                t(posted)
+                Html::text(posted)
             ))),
         reason(),
-        h(format!(
+        Html::raw(format!(
             "<div class=\"fui-actions\"><button type=\"submit\" class=\"{}\" aria-describedby=\"cfg-import-hint\">{}</button>\
              <p id=\"cfg-import-hint\" class=\"fui-help\">{}</p></div>",
             Variant::Primary.class(),
-            t(tr(Msg::ImportDryRunRevision)),
-            t(tr_with(
+            Html::text(tr(Msg::ImportDryRunRevision)),
+            Html::text(tr_with(
                 Msg::SavedNotAppliedOutcomeShowsWhat,
                 &[("loaded", (loaded.next()).clone().into())],
             )),

@@ -154,7 +154,9 @@ impl Visit {
     /// The visit of the request `parts` on the console `state`.
     #[must_use]
     pub fn of(state: &ConsoleState, parts: &http::request::Parts) -> Self {
-        let prefix = state.sessions().preference_prefix();
+        let prefix = state
+            .sessions()
+            .cookie_name(crate::session::PREFERENCE_PREFIX);
         let preferences = preference_cookies(&parts.headers, &prefix);
         let session = match crate::read::signed_in_with(state, &parts.headers) {
             Ok(_) => SessionState::SignedIn,

@@ -128,8 +128,11 @@ pub fn router(state: ConsoleState) -> axum::Router {
     let health = ferrohealth_server::health::routes(state.health().clone());
     let pages = axum::Router::new()
         .merge(health)
-        .route(crate::app::MARK_LIGHT, get(mark_light))
-        .route(crate::app::MARK_DARK, get(mark_dark))
+        .route(
+            crate::app::MARK_LIGHT,
+            get(|| async { svg(MARK_LIGHT_SVG) }),
+        )
+        .route(crate::app::MARK_DARK, get(|| async { svg(MARK_DARK_SVG) }))
         .route(crate::app::FAVICON, get(favicon))
         .route(
             crate::pages::about::OPTIONS_DOCUMENT,
@@ -413,16 +416,6 @@ fn svg(text: &'static str) -> Response {
         text,
     )
         .into_response()
-}
-
-/// Serves the brand mark for a light ground.
-async fn mark_light() -> Response {
-    svg(MARK_LIGHT_SVG)
-}
-
-/// Serves the brand mark for a dark ground.
-async fn mark_dark() -> Response {
-    svg(MARK_DARK_SVG)
 }
 
 /// The brand favicon.

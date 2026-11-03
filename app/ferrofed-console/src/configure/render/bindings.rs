@@ -23,7 +23,7 @@ use crate::configure::settings;
 use crate::configure::settings::build::{secret_field, setting_field};
 
 use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{h, opt, t};
+use crate::pages::opt;
 use crate::read::Refusal;
 
 /// One setting row of a binding section as the form shows it.
@@ -46,10 +46,10 @@ fn binding_row(setting: &SettingRow) -> RepeatRow {
     let name = |part: &str| format!("form[setting.{row}.{part}]");
     let value_id = setting_field(row, "value");
     let key = if setting.held {
-        h(format!(
+        Html::raw(format!(
             "<input type=\"hidden\" name=\"{}\" value=\"{}\">",
-            t(name("key")),
-            t(&setting.key)
+            Html::text(name("key")),
+            Html::text(&setting.key)
         ))
     } else {
         text(
@@ -73,9 +73,9 @@ fn binding_row(setting: &SettingRow) -> RepeatRow {
         (tr(Msg::NewSetting), tr(Msg::Value), tr(Msg::ThisNewSetting))
     };
     let fields = Html::join([
-        h(format!(
+        Html::raw(format!(
             "<input type=\"hidden\" name=\"form[setting_rows][]\" value=\"{}\">",
-            t(row)
+            Html::text(row)
         )),
         key,
         text(
@@ -105,9 +105,9 @@ fn binding_row(setting: &SettingRow) -> RepeatRow {
 fn new_secret(row: &str, key: String) -> RepeatRow {
     let name = |part: &str| format!("form[secret.{row}.{part}]");
     let fields = Html::join([
-        h(format!(
+        Html::raw(format!(
             "<input type=\"hidden\" name=\"form[secret_rows][]\" value=\"{}\">",
-            t(row)
+            Html::text(row)
         )),
         text(
             (&secret_field(row, "key"), &name("key")),
@@ -119,9 +119,9 @@ fn new_secret(row: &str, key: String) -> RepeatRow {
                 ..Text::default()
             },
         ),
-        h(format!(
+        Html::raw(format!(
             "<input type=\"hidden\" name=\"{}\" value=\"set\">",
-            t(name("choice"))
+            Html::text(name("choice"))
         )),
         masked(&secret_field(row, "value"), &name("value")),
     ]);
@@ -145,16 +145,16 @@ fn section_choice(loaded: &Loaded<'_>, held: Option<BindingSection>, chosen: Opt
     }
     let options = Html::join(addable(loaded).into_iter().map(|binding| {
         let selected = chosen == Some(binding.as_str());
-        h(format!(
+        Html::raw(format!(
             "<option value=\"{}\"{}>{}</option>",
-            t(binding.as_str()),
+            Html::text(binding.as_str()),
             if selected { " selected" } else { "" },
-            t(Resource::Binding(binding).to_string())
+            Html::text(Resource::Binding(binding).to_string())
         ))
     }));
-    let select = h(format!(
+    let select = Html::raw(format!(
         "<select id=\"cfg-section\" name=\"form[section]\" class=\"{SELECT}\" aria-describedby=\"{}\">{options}</select>",
-        t(error_id("cfg-section"))
+        Html::text(error_id("cfg-section"))
     ));
     Field::new("cfg-section", tr(Msg::BindingSection))
         .after(error_line("cfg-section"))
@@ -211,17 +211,17 @@ fn settings_group(table: &toml::Table, posted: Option<&ConfigForm>) -> Html {
         .map(|(key, _)| key.clone())
         .collect();
     let kept = (!kept.is_empty()).then(|| {
-        h(format!(
+        Html::raw(format!(
             "<p class=\"fui-muted\">{}</p>",
-            t(tr_with(
+            Html::text(tr_with(
                 Msg::KeptRevisionHoldsThem,
                 &[("kept", (kept.join(", ")).clone().into())]
             ))
         ))
     });
-    h(format!(
+    Html::raw(format!(
         "<fieldset class=\"{GROUP}\"><legend>{}</legend>{}{}</fieldset>",
-        t(tr(Msg::Settings)),
+        Html::text(tr(Msg::Settings)),
         opt(kept),
         repeat(Repeat {
             id: String::from("cfg-setting-rows"),
@@ -267,9 +267,9 @@ fn secrets_group(slots: &[SecretSlot], posted: Option<&ConfigForm>) -> Html {
                 .collect()
         })
         .unwrap_or_default();
-    h(format!(
+    Html::raw(format!(
         "<fieldset class=\"{GROUP}\"><legend>{}</legend>{secrets}{}</fieldset>",
-        t(tr(Msg::Secrets)),
+        Html::text(tr(Msg::Secrets)),
         repeat(Repeat {
             id: String::from("cfg-secret-rows"),
             label: tr(Msg::Secrets),
@@ -341,9 +341,9 @@ pub(super) fn binding_form(loaded: &Loaded<'_>, section: Option<&str>) -> Result
     let body = Html::join([
         hidden("action", String::from("save-binding")),
         hidden("base", loaded.base()),
-        h(format!(
+        Html::raw(format!(
             "<fieldset class=\"{GROUP}\"><legend>{}</legend>{chosen}</fieldset>",
-            t(tr(Msg::Section))
+            Html::text(tr(Msg::Section))
         )),
         settings_group(&table, posted),
         secrets_group(slots, posted),
@@ -362,7 +362,7 @@ pub(super) fn binding_form(loaded: &Loaded<'_>, section: Option<&str>) -> Result
         ),
         form("fui-stack", body),
         opt(held.map(|(binding, _)| {
-            h(format!(
+            Html::raw(format!(
                 "<div class=\"fui-actions\">{}</div>",
                 crate::configure::render::credentials::remove(loaded, &Resource::Binding(binding))
             ))

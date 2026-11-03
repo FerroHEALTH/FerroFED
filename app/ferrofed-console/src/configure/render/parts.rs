@@ -34,7 +34,6 @@ use crate::configure::plan::removal_reason;
 use crate::configure::render::Loaded;
 use crate::configure::said::FieldNote;
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, t};
 
 /// The book page that explains the configuration page.
 pub(crate) const LEARN: &str = "https://ferrofed.eu/docs/operate/configuration-revisions.html";
@@ -58,10 +57,10 @@ pub(crate) fn posted() -> Option<Draft> {
 
 /// One line of explanation and a link to the book's section `anchor`.
 pub(crate) fn lede(text: String, anchor: &'static str) -> Html {
-    h(format!(
+    Html::raw(format!(
         "<p class=\"fui-muted\">{} <a href=\"{LEARN}#{anchor}\" rel=\"external\">{}</a></p>",
-        t(text),
-        t(tr(Msg::LearnMore))
+        Html::text(text),
+        Html::text(tr(Msg::LearnMore))
     ))
 }
 
@@ -73,20 +72,20 @@ pub(crate) fn head(
     actions: Html,
 ) -> Html {
     let actions = String::from(actions);
-    h(format!(
+    Html::raw(format!(
         "<div class=\"fui-split\"><div><h2 id=\"{id}\" class=\"fui-card-title\">{}</h2>{}</div>\
          <div class=\"fui-cluster\">{actions}</div></div>",
-        t(title),
+        Html::text(title),
         lede(line, anchor)
     ))
 }
 
 /// A hidden field `name` of a form, holding `value`.
 pub(crate) fn hidden(name: &str, value: String) -> Html {
-    h(format!(
+    Html::raw(format!(
         "<input type=\"hidden\" name=\"form[{}]\" value=\"{}\">",
-        t(name),
-        t(value)
+        Html::text(name),
+        Html::text(value)
     ))
 }
 
@@ -102,11 +101,11 @@ fn refusal(id: &str) -> Option<String> {
 /// page answers none of it.
 pub(crate) fn error_line(id: &str) -> Html {
     let said = refusal(id);
-    h(format!(
+    Html::raw(format!(
         "<p id=\"{}\" class=\"{ERROR}\"{}>{}</p>",
-        t(error_id(id)),
+        Html::text(error_id(id)),
         if said.is_none() { " hidden" } else { "" },
-        t(said.unwrap_or_default())
+        Html::text(said.unwrap_or_default())
     ))
 }
 
@@ -160,15 +159,15 @@ pub(crate) fn text((id, name): (&str, &str), label: String, value: String, shown
     }
     if let Some(described) = described {
         attributes.push_str(" aria-describedby=\"");
-        attributes.push_str(t(described).as_str());
+        attributes.push_str(Html::text(described).as_str());
         attributes.push('"');
     }
-    let input = h(format!(
+    let input = Html::raw(format!(
         "<input type=\"{kind}\" id=\"{}\" name=\"{}\" value=\"{}\" class=\"{class}\" \
          autocomplete=\"off\" spellcheck=\"false\"{attributes}>",
-        t(id),
-        t(name),
-        t(value)
+        Html::text(id),
+        Html::text(name),
+        Html::text(value)
     ));
     Field::new(id, label)
         .help_if(shown.hint)
@@ -180,13 +179,13 @@ pub(crate) fn text((id, name): (&str, &str), label: String, value: String, shown
 /// titled `current`, the current one last (WAI-ARIA Authoring Practices, the
 /// breadcrumb pattern).
 pub(crate) fn trail((label, href): (String, &'static str), current: String) -> Html {
-    h(format!(
+    Html::raw(format!(
         "<nav class=\"fui-crumbs\" aria-label=\"{}\"><ol><li><a href=\"{href}\">{}</a>\
          <span class=\"fui-crumb-sep\" aria-hidden=\"true\">/</span></li>\
          <li aria-current=\"page\">{}</li></ol></nav>",
-        t(tr(Msg::Breadcrumb)),
-        t(label),
-        t(current)
+        Html::text(tr(Msg::Breadcrumb)),
+        Html::text(label),
+        Html::text(current)
     ))
 }
 
@@ -206,13 +205,7 @@ pub(crate) fn reason() -> Html {
     )
 }
 
-/// The address a configuration form posts to: the page it sits on, with
-/// the query that names it, which the server draws again with the answer.
-pub(crate) fn action() -> String {
-    crate::pages::here_with_query()
-}
-
-/// A form posting to the configuration page it sits on ([`action`]),
+/// A form posting to the configuration page it sits on ([`crate::pages::here_with_query`]),
 /// holding `body`, with `class`.
 ///
 /// Its first submit button posts the form as it stands and is hidden from
@@ -220,11 +213,11 @@ pub(crate) fn action() -> String {
 /// the first Add or Remove (HTML, "implicit submission").
 pub(crate) fn form(class: &'static str, body: Html) -> Html {
     let body = String::from(body);
-    h(format!(
+    Html::raw(format!(
         "<form method=\"post\" action=\"{}\" class=\"{class}\">\
          <button type=\"submit\" class=\"fui-sr-only\" tabindex=\"-1\" aria-hidden=\"true\"></button>\
          {body}</form>",
-        t(action())
+        Html::text(crate::pages::here_with_query())
     ))
 }
 
@@ -269,7 +262,7 @@ pub(crate) fn row_actions(
         tr(Msg::Remove),
         Act::Dialog(dialog.to_owned()),
     ))]);
-    let confirm = h(format!(
+    let confirm = Html::raw(format!(
         "<button type=\"submit\" class=\"{}\">{}</button>",
         Variant::Destructive.class(),
         ferrohealth_ui::view::button::label(Some(Glyph::TRASH), tr(Msg::SaveTheRemoval))
@@ -283,7 +276,7 @@ pub(crate) fn row_actions(
             message: removal.message.into(),
         },
         ConfirmForm {
-            action: action(),
+            action: crate::pages::here_with_query(),
             fields,
         },
         confirm,
@@ -322,15 +315,15 @@ pub(crate) fn confirmed(
         Variant::Primary
     };
     let inside = String::from(inside);
-    let body = h(format!(
+    let body = Html::raw(format!(
         "<div class=\"fui-form\">{inside}</div><div class=\"fui-dialog-actions\">\
          <button type=\"button\" class=\"{}\" command=\"close\" commandfor=\"{}\">{}</button>\
          <button type=\"submit\" class=\"{}\">{}</button></div>{}",
         Variant::Secondary.class(),
-        t(&*id),
+        Html::text(&*id),
         ferrohealth_ui::view::button::label(Some(Glyph::X), tr(Msg::Cancel)),
         confirm.class(),
-        t(submit),
+        Html::text(submit),
         hidden("confirm", String::from("yes")),
     ));
     ferrohealth_ui::view::popover::popover_form(ferrohealth_ui::view::popover::PopoverForm {
@@ -348,17 +341,17 @@ pub(crate) fn confirmed(
 /// does not apply it.
 pub(crate) fn save_bar(loaded: &Loaded<'_>, back: &'static str) -> Html {
     let next = tr_with(Msg::SaveAs, &[("loaded", (loaded.next()).clone().into())]);
-    h(format!(
+    Html::raw(format!(
         "<div class=\"fui-actions\">\
          <button type=\"submit\" class=\"{}\" aria-describedby=\"cfg-save-hint\">{}{}</button>\
          <a href=\"{back}\" class=\"{}\">{}</a>\
          <p id=\"cfg-save-hint\" class=\"fui-help\">{}</p></div>",
         Variant::Primary.class(),
         icon(Glyph::SAVE, "16"),
-        t(next),
+        Html::text(next),
         Variant::Secondary.class(),
-        t(tr(Msg::Cancel)),
-        t(tr(Msg::SavingDoesNotApplyApplyFrom)),
+        Html::text(tr(Msg::Cancel)),
+        Html::text(tr(Msg::SavingDoesNotApplyApplyFrom)),
     ))
 }
 
@@ -385,21 +378,21 @@ pub(crate) fn row_remove(edit: &Edit, named: String) -> RowEnd {
 /// The value `value` of a setting in a diff, or "not set".
 fn diff_value(value: Option<&String>, sign: &'static str, removed: bool) -> Html {
     match value {
-        Some(value) if removed => h(format!(
+        Some(value) if removed => Html::raw(format!(
             "<del class=\"fui-change fui-change-removed\"><span aria-hidden=\"true\" class=\"fui-change-sign\">{sign}</span>\
              <span class=\"fui-sr-only\">{}</span><code>{}</code></del>",
-            t(tr(Msg::RunningValue2)),
-            t(value)
+            Html::text(tr(Msg::RunningValue2)),
+            Html::text(value)
         )),
-        Some(value) => h(format!(
+        Some(value) => Html::raw(format!(
             "<ins class=\"fui-change fui-change-added\"><span aria-hidden=\"true\" class=\"fui-change-sign\">{sign}</span>\
              <span class=\"fui-sr-only\">{}</span><code>{}</code></ins>",
-            t(tr(Msg::NewValue)),
-            t(value)
+            Html::text(tr(Msg::NewValue)),
+            Html::text(value)
         )),
-        None => h(format!(
+        None => Html::raw(format!(
             "<span class=\"fui-muted\">{}</span>",
-            t(tr(Msg::NotSet2))
+            Html::text(tr(Msg::NotSet2))
         )),
     }
 }
@@ -411,9 +404,9 @@ pub(crate) fn diff_table(
     (from, to): (Option<RevisionId>, RevisionId),
 ) -> Html {
     if changes.is_empty() {
-        return h(format!(
+        return Html::raw(format!(
             "<p class=\"fui-muted\">{}</p>",
-            t(tr(Msg::ItChangesNoSetting))
+            Html::text(tr(Msg::ItChangesNoSetting))
         ));
     }
     let running = from.map_or_else(
@@ -436,13 +429,13 @@ pub(crate) fn diff_table(
             _ => Msg::DiffChanged,
         });
         let mark = badge(Tone::Neutral, &what);
-        h(format!(
+        Html::raw(format!(
             "<tr><th scope=\"row\"><code>{}</code> {mark}</th>\
              <td data-label=\"{}\">{}</td><td data-label=\"{}\">{}</td></tr>",
-            t(&change.key),
-            t(&from_label),
+            Html::text(&change.key),
+            Html::text(&from_label),
             diff_value(change.from.as_ref(), "\u{2212}", true),
-            t(&to_label),
+            Html::text(&to_label),
             diff_value(change.to.as_ref(), "+", false),
         ))
     });

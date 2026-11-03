@@ -23,7 +23,7 @@ use ferrohealth_ui::view::template::list::{
 
 use crate::app::SERVICES;
 use crate::locale::{Msg, current, tr};
-use crate::pages::{h, stopped, t};
+use crate::pages::stopped;
 use crate::read::federation::{Federation, Service};
 
 /// The services.
@@ -62,14 +62,14 @@ fn services(federation: &Federation) -> Html {
     for service in &federation.services {
         if group != Some(service.group) {
             group = Some(service.group);
-            rows.push(group_row(&columns, t(service.group.title())));
+            rows.push(group_row(&columns, Html::text(service.group.title())));
         }
-        rows.push(h(format!(
+        rows.push(Html::raw(format!(
             "<tr>{}{}{}</tr>",
             title_cell(
                 Some(&service.href()),
-                t(service.name()),
-                Some(t(service.role())),
+                Html::text(service.name()),
+                Some(Html::text(service.role())),
             ),
             cell(
                 &columns[1],
@@ -77,9 +77,9 @@ fn services(federation: &Federation) -> Html {
             ),
             cell(
                 &columns[2],
-                h(format!(
+                Html::raw(format!(
                     "<code>{}</code>",
-                    t(service.fault.clone().unwrap_or_default())
+                    Html::text(service.fault.clone().unwrap_or_default())
                 )),
             ),
         )));
@@ -143,9 +143,9 @@ fn service_page(service: &Service, replica: Option<&str>) -> Html {
         },
         ActionGroup::none(),
     );
-    let code = |text: &str| h(format!("<code>{}</code>", t(text)));
+    let code = |text: &str| Html::raw(format!("<code>{}</code>", Html::text(text)));
     let facts = facts_row(vec![
-        (tr(Msg::ColumnGroup), t(service.group.title())),
+        (tr(Msg::ColumnGroup), Html::text(service.group.title())),
         (
             tr(Msg::ColumnState),
             state(service.health.mark(), service.health.word(), None),
@@ -156,11 +156,11 @@ fn service_page(service: &Service, replica: Option<&str>) -> Html {
             service
                 .fault
                 .as_deref()
-                .map_or_else(|| t(tr(Msg::None)), code),
+                .map_or_else(|| Html::text(tr(Msg::None)), code),
         ),
         (
             tr(Msg::ColumnObservedBy),
-            replica.map_or_else(|| t(tr(Msg::ReplicaUnnamed)), code),
+            replica.map_or_else(|| Html::text(tr(Msg::ReplicaUnnamed)), code),
         ),
     ]);
     Html::join([
@@ -168,9 +168,9 @@ fn service_page(service: &Service, replica: Option<&str>) -> Html {
         heading,
         card(
             tr(Msg::ServiceHealth),
-            facts.then(h(format!(
+            facts.then(Html::raw(format!(
                 "<p class=\"fui-small fui-muted\">{}</p>",
-                t(tr(Msg::ServiceHealthLine))
+                Html::text(tr(Msg::ServiceHealthLine))
             ))),
         ),
     ])

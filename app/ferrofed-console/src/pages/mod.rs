@@ -9,7 +9,8 @@
 //! gateway refused draws its status and stable code in words, and a fault
 //! of the console says what failed with the way to try again; neither
 //! draws an empty view, as FerroUI asks. Each page writes its own markup
-//! from escaped parts ([`h`], [`t`]) beside the library's components.
+//! from escaped parts ([`Html::raw`], [`Html::text`]) beside the library's
+//! components.
 
 pub mod about;
 pub mod configuration;
@@ -36,18 +37,6 @@ use ferrohealth_ui::view::surface::disclosure;
 
 use crate::locale::{Msg, current, tr, tr_with};
 use crate::read::{Fault, Refusal, Stop};
-
-/// The markup `markup`, made by the page from escaped parts.
-#[must_use]
-pub const fn h(markup: String) -> Html {
-    Html::raw(markup)
-}
-
-/// `text` escaped as a text node or an attribute value.
-#[must_use]
-pub fn t(text: impl AsRef<str>) -> Html {
-    Html::text(text)
-}
 
 /// `part`, or no markup at all.
 #[must_use]
@@ -90,10 +79,10 @@ pub fn refused_view(refused: &Refusal) -> Html {
         .map(|code| vec![Issue::new(Severity::Error, code)])
         .unwrap_or_default();
     let sign_in = matches!(refused, Refusal::NotAuthenticated { .. }).then(|| {
-        h(format!(
+        Html::raw(format!(
             "<p><a href=\"{}\" rel=\"external\">{}</a></p>",
             crate::app::SIGN_IN,
-            t(tr(Msg::SignInAgain))
+            Html::text(tr(Msg::SignInAgain))
         ))
     });
     refusal(
@@ -126,7 +115,7 @@ pub fn fault_view(failed: &Fault) -> Html {
     };
     Html::join([
         fault(words),
-        h(format!(
+        Html::raw(format!(
             "<p class=\"fui-actions\">{}</p>",
             link_button(
                 here(),
@@ -137,7 +126,7 @@ pub fn fault_view(failed: &Fault) -> Html {
         )),
         disclosure(
             tr(Msg::TechnicalDetail),
-            h(format!("<p class=\"fui-small\">{}</p>", t(detail))),
+            Html::raw(format!("<p class=\"fui-small\">{}</p>", Html::text(detail))),
         ),
     ])
 }
@@ -223,7 +212,7 @@ pub fn set_status(status: http::StatusCode) {
 #[must_use]
 pub fn relative(at: &str) -> Html {
     let Ok(then) = at.parse::<jiff::Timestamp>() else {
-        return h(format!("<span>{}</span>", t(at)));
+        return Html::raw(format!("<span>{}</span>", Html::text(at)));
     };
     let seconds = u64::try_from(jiff::Timestamp::now().duration_since(then).as_secs()).unwrap_or(0);
     let words = if seconds < 60 {
@@ -238,10 +227,10 @@ pub fn relative(at: &str) -> Html {
             &[("count", seconds.div_euclid(86_400).into())],
         )
     };
-    h(format!(
+    Html::raw(format!(
         "<time datetime=\"{at}\" title=\"{at}\">{}</time>",
-        t(words),
-        at = t(at)
+        Html::text(words),
+        at = Html::text(at)
     ))
 }
 
@@ -273,7 +262,7 @@ pub fn marked(
     let mut parts: Vec<Html> = Vec::new();
     let mut pieces = text.split(SLOT_OPEN);
     if let Some(lead) = pieces.next() {
-        parts.push(t(lead));
+        parts.push(Html::text(lead));
     }
     for piece in pieces {
         let (index, rest) = piece.split_once(SLOT_CLOSE).unwrap_or(("", piece));
@@ -285,9 +274,9 @@ pub fn marked(
             .and_then(Option::take)
         {
             Some(slot) => parts.push(slot),
-            None => parts.push(t(index)),
+            None => parts.push(Html::text(index)),
         }
-        parts.push(t(rest));
+        parts.push(Html::text(rest));
     }
     Html::join(parts)
 }
@@ -309,10 +298,10 @@ pub fn author(author: &ferrofed_operator_api::revision::Author) -> String {
 #[must_use]
 pub fn latency(ms: Option<u64>) -> Html {
     match ms {
-        Some(ms) => t(tr_with(Msg::Milliseconds, &[("count", ms.into())])),
-        None => h(format!(
+        Some(ms) => Html::text(tr_with(Msg::Milliseconds, &[("count", ms.into())])),
+        None => Html::raw(format!(
             "<span class=\"fui-muted\" title=\"{}\">\u{2013}</span>",
-            t(tr(Msg::NoMeasure))
+            Html::text(tr(Msg::NoMeasure))
         )),
     }
 }
@@ -321,9 +310,9 @@ pub fn latency(ms: Option<u64>) -> Html {
 /// window, shown on hover and read by assistive technology.
 #[must_use]
 pub fn latency_fact(ms: Option<u64>, title: String) -> Html {
-    h(format!(
+    Html::raw(format!(
         "<span title=\"{}\">{}</span>",
-        t(title),
+        Html::text(title),
         latency(ms)
     ))
 }

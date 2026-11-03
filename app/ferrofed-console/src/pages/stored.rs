@@ -46,7 +46,7 @@ use crate::act::fields::Fields;
 use crate::act::repair::RepairOutcome;
 use crate::app::STORED_QUERIES;
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, opt, refused_view, stopped, t};
+use crate::pages::{opt, refused_view, stopped};
 use crate::read::Stop;
 /// The most pages of stored versions a page reads.
 const PAGES: u64 = 20;
@@ -151,7 +151,7 @@ async fn held() -> Result<Vec<Held>, Stop> {
     for _ in 0..PAGES {
         let page = state
             .gateway()
-            .stored_queries(
+            .page::<StoredVersion<StoredQuery>>(
                 &token,
                 crate::read::stored_page(offset, crate::read::PAGE_SIZE),
             )
@@ -262,9 +262,9 @@ pub async fn list() -> Html {
         );
         match held_read {
             Err(stop) => heading.then(stopped(&stop)),
-            Ok(held) if held.is_empty() => heading.then(h(format!(
+            Ok(held) if held.is_empty() => heading.then(Html::raw(format!(
                 "<p class=\"fui-muted\">{}</p>",
-                t(tr(Msg::StoredNone))
+                Html::text(tr(Msg::StoredNone))
             ))),
             Ok(held) => {
                 let sections = Html::join(
@@ -324,16 +324,16 @@ fn namespace_card(namespace: &str, names: &BTreeMap<String, Vec<&Held>>) -> Html
                 .iter()
                 .map(|version| Tag::new(version.definition.version.clone()).mono().view()),
         );
-        h(format!(
+        Html::raw(format!(
             "<tr>{}{}</tr>",
             title_cell(
                 Some(&href(name)),
-                h(format!("<code>{}</code>", t(name))),
+                Html::raw(format!("<code>{}</code>", Html::text(name))),
                 None
             ),
             cell(
                 &columns[1],
-                h(format!("<span class=\"fui-cluster\">{shown}</span>"))
+                Html::raw(format!("<span class=\"fui-cluster\">{shown}</span>"))
             ),
         ))
     }));
@@ -418,7 +418,7 @@ fn detail(
             Tone::Warn,
             Announce::Status,
             None,
-            t(tr_with(
+            Html::text(tr_with(
                 Msg::StoredVersionNotHeld,
                 &[("version", asked.to_owned().into())],
             )),
@@ -463,7 +463,10 @@ fn detail(
                 subtitle_view: Some(crate::pages::marked(
                     Msg::StoredSubtitleOne,
                     &[("version", version.clone().into())],
-                    vec![("name", h(format!("<code>{}</code>", t(name))))],
+                    vec![(
+                        "name",
+                        Html::raw(format!("<code>{}</code>", Html::text(name))),
+                    )],
                 )),
                 crumbs: vec![Crumb::new(tr(Msg::StoredTitle), STORED_QUERIES)],
                 mono: true,
@@ -527,9 +530,13 @@ fn versions_table(name: &str, versions: &[Held]) -> Html {
         } else {
             Tag::new(tr(Msg::OwnerStore)).view()
         };
-        h(format!(
+        Html::raw(format!(
             "<tr>{}{}{}</tr>",
-            title_cell(Some(&link), h(format!("<code>{}</code>", t(&number))), None),
+            title_cell(
+                Some(&link),
+                Html::raw(format!("<code>{}</code>", Html::text(&number))),
+                None
+            ),
             cell(
                 &columns[1],
                 crate::pages::relative(&version.definition.saved)
@@ -548,13 +555,13 @@ fn versions_table(name: &str, versions: &[Held]) -> Html {
 /// The drift repair's form in its dialog: the version and the members,
 /// posting to the stored query's page it sits on.
 fn repair_form(version: &str) -> Html {
-    let version_field = Field::new("repair-version", tr(Msg::ColumnVersion)).view(h(format!(
+    let version_field = Field::new("repair-version", tr(Msg::ColumnVersion)).view(Html::raw(format!(
         "<input type=\"text\" id=\"repair-version\" name=\"version\" class=\"{INPUT}\" value=\"{}\" required>",
-        t(version)
+        Html::text(version)
     )));
     let endpoints = Field::new("repair-endpoints", tr(Msg::RepairEndpoints))
         .help(tr(Msg::RepairEndpointsHelp))
-        .view(h(format!(
+        .view(Html::raw(format!(
             "<input type=\"text\" id=\"repair-endpoints\" name=\"endpoint\" class=\"{INPUT}\" value=\"*\" required>"
         )));
     let replica = crate::visit::with(crate::visit::Visit::replicas)
@@ -562,20 +569,20 @@ fn repair_form(version: &str) -> Html {
         .next()
         .unwrap_or_default();
     let action = crate::pages::here_with_query();
-    let body = h(format!(
+    let body = Html::raw(format!(
         "<form method=\"post\" action=\"{}\" class=\"fui-form\">{version_field}{endpoints}\
          <p class=\"fui-small fui-muted\">{}</p>\
          <input type=\"hidden\" name=\"{}\" value=\"yes\">\
          <div class=\"fui-dialog-actions\">\
          <button type=\"button\" class=\"{}\" command=\"close\" commandfor=\"{REPAIR_DIALOG}\">{}</button>\
          <button type=\"submit\" class=\"{}\">{}</button></div></form>",
-        t(action),
-        t(tr_with(Msg::RepairReplica, &[("replica", replica.into())])),
+        Html::text(action),
+        Html::text(tr_with(Msg::RepairReplica, &[("replica", replica.into())])),
         crate::act::clear::CONFIRM,
         Variant::Secondary.class(),
-        t(tr(Msg::Cancel)),
+        Html::text(tr(Msg::Cancel)),
         Variant::Primary.class(),
-        t(tr(Msg::RepairSubmit)),
+        Html::text(tr(Msg::RepairSubmit)),
     ));
     popover_form(PopoverForm {
         id: REPAIR_DIALOG.into(),
@@ -609,7 +616,7 @@ fn repair_answer(outcome: RepairOutcome) -> Html {
             load_report(LoadReport {
                 outcome,
                 arrival: Arrival::AfterAction,
-                title: t(tr_with(
+                title: Html::text(tr_with(
                     if line.complete {
                         Msg::RepairDone
                     } else {
