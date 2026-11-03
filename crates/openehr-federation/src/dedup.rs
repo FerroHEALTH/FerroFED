@@ -73,7 +73,7 @@ impl DedupMode {
             mode: Some(self.name().to_owned()),
             suppressed_rows: None,
             suppressed_endpoints: None,
-            extra: Extra::new(),
+            extra: Extra::default(),
         }
     }
 }

@@ -46,7 +46,7 @@
 //! request body (RFC 6749 §2.3.1), as an IHE IUA Authorization Server does
 //! (ITI-71 §3.71.4.1.3.1).
 //!
-//! [`es384_pem`] and [`p256_pem`] generate a synthetic private key in PKCS#8
+//! [`Curve::pem`] generates a synthetic private key in PKCS#8
 //! PEM at run time, so no key is ever committed. No specification governs the
 //! device: our own design.
 
@@ -94,41 +94,36 @@ pub const MAX_LIFETIME_S: i64 = 300;
 #[error("a synthetic signing key could not be generated")]
 pub struct KeyGenError;
 
-/// A fresh ES384 (P-384) private key in PKCS#8 PEM.
-///
-/// # Errors
-///
-/// Returns [`KeyGenError`] when the crypto library cannot generate one.
-pub fn es384_pem() -> Result<String, KeyGenError> {
-    generated(&ECDSA_P384_SHA384_FIXED_SIGNING)
+/// The elliptic curve of a synthetic ECDSA signing key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Curve {
+    /// P-256, a key ES384 cannot sign with.
+    P256,
+    /// P-384, the ES384 key.
+    P384,
+    /// P-521, a key neither ES256 nor ES384 can sign with.
+    P521,
 }
 
-/// A fresh P-256 private key in PKCS#8 PEM, a key ES384 cannot sign with.
-///
-/// # Errors
-///
-/// Returns [`KeyGenError`] when the crypto library cannot generate one.
-pub fn p256_pem() -> Result<String, KeyGenError> {
-    generated(&ECDSA_P256_SHA256_FIXED_SIGNING)
-}
-
-/// A fresh P-521 private key in PKCS#8 PEM, a key neither ES256 nor ES384
-/// can sign with.
-///
-/// # Errors
-///
-/// Returns [`KeyGenError`] when the crypto library cannot generate one.
-pub fn p521_pem() -> Result<String, KeyGenError> {
-    generated(&ECDSA_P521_SHA512_FIXED_SIGNING)
-}
-
-fn generated(algorithm: &'static EcdsaSigningAlgorithm) -> Result<String, KeyGenError> {
-    let document = EcdsaKeyPair::generate_pkcs8(algorithm, &SystemRandom::new())
-        .map_err(|_unspecified| KeyGenError)?;
-    Ok(pem::encode(&pem::Pem::new(
-        "PRIVATE KEY",
-        document.as_ref().to_vec(),
-    )))
+impl Curve {
+    /// A fresh private key on this curve in PKCS#8 PEM.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyGenError`] when the crypto library cannot generate one.
+    pub fn pem(self) -> Result<String, KeyGenError> {
+        let algorithm: &'static EcdsaSigningAlgorithm = match self {
+            Self::P256 => &ECDSA_P256_SHA256_FIXED_SIGNING,
+            Self::P384 => &ECDSA_P384_SHA384_FIXED_SIGNING,
+            Self::P521 => &ECDSA_P521_SHA512_FIXED_SIGNING,
+        };
+        let document = EcdsaKeyPair::generate_pkcs8(algorithm, &SystemRandom::new())
+            .map_err(|_unspecified| KeyGenError)?;
+        Ok(pem::encode(&pem::Pem::new(
+            "PRIVATE KEY",
+            document.as_ref().to_vec(),
+        )))
+    }
 }
 
 /// The claims a verified assertion carried.

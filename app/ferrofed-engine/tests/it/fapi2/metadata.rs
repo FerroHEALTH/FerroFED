@@ -282,12 +282,14 @@ fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
             Some(AuthorizationDetails::parse(DETAILS)?),
         ))
     };
-    let es384 = SigningKey::from_pem(&SecretString::from(oauth::es384_pem()?))?;
+    let es384 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
     assert!(matches!(
         Fapi2Grant::new(issuer()?, CLIENT_ID, (es384, prover()?), request()?),
         Err(Fapi2GrantError::ClientKey)
     ));
-    let p384 = Arc::new(Prover::from_pem(&SecretString::from(oauth::es384_pem()?))?);
+    let p384 = Arc::new(Prover::from_pem(&SecretString::from(
+        oauth::Curve::P384.pem()?,
+    ))?);
     assert!(matches!(
         Fapi2Grant::new(issuer()?, CLIENT_ID, (client_key()?, p384), request()?),
         Err(Fapi2GrantError::DpopKey)
@@ -314,7 +316,7 @@ fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
 /// The client key and the grant's `Debug` show no key material.
 #[test]
 fn debug_shows_no_key() -> TestResult {
-    let pem = oauth::p256_pem()?;
+    let pem = oauth::Curve::P256.pem()?;
     let key = SigningKey::from_p256_pem(&SecretString::from(pem.clone()))?;
     let grant = Fapi2Grant::new(
         Issuer::parse("https://as.example.org")?,

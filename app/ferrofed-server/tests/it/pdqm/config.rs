@@ -112,7 +112,7 @@ fn a_fapi2_grant_in_its_section_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
     let file = |name: &str| -> Result<toml::Value, Box<dyn Error>> {
         let path = dir.path().join(name);
-        std::fs::write(&path, ferrofed_testkit::oauth::p256_pem()?)?;
+        std::fs::write(&path, ferrofed_testkit::oauth::Curve::P256.pem()?)?;
         Ok(toml::Value::String(path.display().to_string()))
     };
     let (client, dpop) = (file("client.pem")?, file("dpop.pem")?);

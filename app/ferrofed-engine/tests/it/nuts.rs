@@ -61,8 +61,8 @@ pub(crate) struct Setup {
 pub(crate) async fn setup() -> Result<Setup, Box<dyn Error>> {
     let authority = NutsNode::start("hospital-a", SCOPE, Some(300)).await;
     authority.define(DEFINITION);
-    let holder_pem = oauth::p256_pem()?;
-    let issuer_pem = oauth::p256_pem()?;
+    let holder_pem = oauth::Curve::P256.pem()?;
+    let issuer_pem = oauth::Curve::P256.pem()?;
     authority.trust_holder(
         HOLDER,
         HOLDER_KID,
@@ -93,7 +93,9 @@ pub(crate) async fn setup() -> Result<Setup, Box<dyn Error>> {
             SecretString::from(credential.clone()),
         )],
     )?;
-    let prover = Arc::new(Prover::from_pem(&SecretString::from(oauth::p256_pem()?))?);
+    let prover = Arc::new(Prover::from_pem(&SecretString::from(
+        oauth::Curve::P256.pem()?,
+    ))?);
     let grant = NutsGrant::new(
         Grant::new(&authority.issuer(), SCOPE)?,
         Arc::new(holder),

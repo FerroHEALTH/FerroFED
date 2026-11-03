@@ -17,7 +17,7 @@ use std::error::Error;
 use std::fmt::Write as _;
 
 use ferrofed_testkit::pixm_stub;
-use ferrofed_testkit::proxy::CapturingProxy;
+use ferrofed_testkit::proxy::{Bind, CapturingProxy};
 use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain, PatientId};
 use http::StatusCode;
 use uuid::Uuid;
@@ -104,7 +104,7 @@ async fn an_undirected_patient_query_over_three_members_dispatches_to_the_two_th
         },
     ];
     let pix = pixm_stub::manager(&feeds).await;
-    let proxy = CapturingProxy::start(pix.uri()).await?;
+    let proxy = CapturingProxy::start(pix.uri(), Bind::Loopback).await?;
     let a = node_answering("a-uid::cdr-a.example.org::1").await;
     let b = node_answering("b-uid::cdr-b.example.org::1").await;
     let c = node_answering("c-uid::cdr-c.example.org::1").await;

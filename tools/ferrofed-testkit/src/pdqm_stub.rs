@@ -6,10 +6,10 @@
 //! The offline suites test the gateway's side of PDQm: what it sends, and
 //! what it makes of the Supplier's answer, a match, no match, several
 //! patients, a deprecated record or an outage. Each test states the answer,
-//! and [`supplier`] serves it on a [`Server`]: every ITI-78
-//! `POST [base]/Patient/_search` gets a `searchset` of the given entries with
+//! and [`answering`] serves it on a [`Server`]: every ITI-78
+//! `POST [base]/Patient/_search` gets a `searchset` of the search entries with
 //! its `total` (IHE PDQm 3.2.0 §2:3.78.4.1.3), and every ITI-119
-//! `POST [base]/Patient/$match` gets the same entries, each a `certain`
+//! `POST [base]/Patient/$match` gets the match entries, each a `certain`
 //! match (§2:3.119.4.2.2.4); every entry has a score of 1. The stub matches
 //! nothing and decides nothing: patient identity is FerroPIX's. No specification governs
 //! the stub: our own design.
@@ -118,12 +118,6 @@ impl Entry {
     }
 }
 
-/// Starts a stub Supplier that answers every ITI-78 search and every ITI-119
-/// match with `entries`.
-pub async fn supplier(entries: &[Entry]) -> Server {
-    answering(entries, entries).await
-}
-
 /// Starts a stub Supplier that answers every ITI-78 search with `search` and
 /// every ITI-119 match with `matched`.
 ///
@@ -206,7 +200,7 @@ pub async fn bodies(server: &Server) -> Vec<String> {
 /// # Panics
 ///
 /// Never: `wiremock` records every request unless recording is switched
-/// off, and [`supplier`] leaves it on.
+/// off, and [`answering`] leaves it on.
 #[expect(
     clippy::expect_used,
     reason = "a server started by Server::start records its requests, the wiremock default"

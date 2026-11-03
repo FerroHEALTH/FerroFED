@@ -390,7 +390,7 @@ fn same(registry: &str, node: &str) -> bool {
 
 /// The structured `error` of a drifted member, its `code` and `message`.
 fn drifted(code: &str, message: &str) -> ErrorDetail {
-    let mut members = Extra::new();
+    let mut members = Extra::default();
     // NOTE: no specification governs this: our own design; a string always
     // serializes, and the text form keeps both should it ever not.
     let built = members

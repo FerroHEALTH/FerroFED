@@ -29,12 +29,6 @@ use crate::error::WireError;
 pub struct Extra(BTreeMap<String, Box<RawValue>>);
 
 impl Extra {
-    /// An empty set of extra members.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Whether the object carried no member beyond the modelled ones.
     #[must_use]
     pub fn is_empty(&self) -> bool {

@@ -78,7 +78,7 @@ fn basic() -> String {
 /// `private_key_jwt` assertion signed by a key written under `dir`.
 fn grant(dir: &Path, token_endpoint: &str) -> Result<String, Box<dyn Error>> {
     let key = dir.join("client.pem");
-    std::fs::write(&key, oauth::es384_pem()?)?;
+    std::fs::write(&key, oauth::Curve::P384.pem()?)?;
     let key = toml::Value::String(key.display().to_string());
     Ok(format!(
         "[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\

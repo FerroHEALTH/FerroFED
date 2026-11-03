@@ -345,7 +345,7 @@ managing_organisation = "org-a"
         let registry = dir.join("registry.toml");
         std::fs::write(&registry, REGISTRY)?;
         let key = dir.join("signing-key.pem");
-        std::fs::write(&key, ferrofed_testkit::oauth::es384_pem()?)?;
+        std::fs::write(&key, ferrofed_testkit::oauth::Curve::P384.pem()?)?;
         let [model, context] = eps::mapping_files();
         let dependencies = fhir_packages::dependencies()?
             .iter()

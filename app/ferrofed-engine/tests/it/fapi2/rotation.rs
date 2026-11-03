@@ -84,7 +84,7 @@ async fn a_previous_client_key_that_is_the_current_one_or_no_es256_key_is_refuse
         matches!(same, Err(Fapi2GrantError::Keys(KeyError::SameKey { .. }))),
         "{same:?}"
     );
-    let p384 = SigningKey::from_pem(&SecretString::from(oauth::es384_pem()?))?;
+    let p384 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
     let es384 = grant(&server, key, &prover()?)?.with_previous_client_key(p384);
     assert!(
         matches!(es384, Err(Fapi2GrantError::PreviousClientKey)),

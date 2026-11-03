@@ -28,7 +28,7 @@ use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pixm_stub;
-use ferrofed_testkit::proxy::{CapturingProxy, Fault};
+use ferrofed_testkit::proxy::{Bind, CapturingProxy, Fault};
 use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain, PatientId};
 use http::{Request, StatusCode};
 use openehr_federation::options::OptionsRoot;
@@ -144,7 +144,7 @@ async fn asked_counts(servers: &[Server; 3]) -> Result<[usize; 3], Box<dyn Error
 #[tokio::test]
 async fn the_members_whose_domain_holds_the_patient_are_asked_over_one_iti_83_call() -> TestResult {
     let pix = fed_manager().await;
-    let proxy = CapturingProxy::start(pix.uri()).await?;
+    let proxy = CapturingProxy::start(pix.uri(), Bind::Loopback).await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(
@@ -211,7 +211,7 @@ async fn the_members_whose_domain_holds_the_patient_are_asked_over_one_iti_83_ca
 #[tokio::test]
 async fn a_manager_asked_by_post_resolves_and_no_composed_url_names_the_patient() -> TestResult {
     let pix = fed_manager().await;
-    let proxy = CapturingProxy::start(pix.uri()).await?;
+    let proxy = CapturingProxy::start(pix.uri(), Bind::Loopback).await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway_asking(
@@ -281,7 +281,7 @@ async fn a_manager_asked_by_post_resolves_and_no_composed_url_names_the_patient(
 #[tokio::test]
 async fn a_pix_manager_that_does_not_answer_fails_the_query_closed() -> TestResult {
     let pix = fed_manager().await;
-    let proxy = CapturingProxy::start(pix.uri()).await?;
+    let proxy = CapturingProxy::start(pix.uri(), Bind::Loopback).await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(
@@ -357,7 +357,7 @@ struct LocalizationDiagnostic {
 async fn the_localizer_error_names_the_manager_status_once_and_the_log_keeps_the_chain()
 -> TestResult {
     let pix = fed_manager().await;
-    let proxy = CapturingProxy::start(pix.uri()).await?;
+    let proxy = CapturingProxy::start(pix.uri(), Bind::Loopback).await?;
     let servers = members().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(

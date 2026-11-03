@@ -90,7 +90,7 @@ fn known() -> Entry {
 
 /// A stub Supplier answering every search and match with the patient alone.
 async fn supplier() -> Server {
-    pdqm_stub::supplier(&[known()]).await
+    pdqm_stub::answering(&[known()], &[known()]).await
 }
 
 /// The header answer `supplier` gives with `transaction` for the client's
@@ -184,7 +184,7 @@ async fn a_namespace_that_names_no_system_is_not_handled() -> TestResult {
 async fn an_identifier_the_supplier_does_not_know_is_no_match() -> TestResult {
     // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
     // the identifier answers an empty searchset.
-    let supplier = pdqm_stub::supplier(&[]).await;
+    let supplier = pdqm_stub::answering(&[], &[]).await;
     for transaction in [Transaction::Search, Transaction::Match] {
         let answer = step(&pdqm_stub::base_url(&supplier), transaction)?
             .header(

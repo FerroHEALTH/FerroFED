@@ -191,7 +191,7 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
         spec_version: SpecVersion::of_release(openehr_federation::FEDERATION_SPEC)?,
         aql: AqlBehaviour {
             fan_out: fans_out(federation.context().targeting()),
-            extra: Extra::new(),
+            extra: Extra::default(),
         },
         dedup: DedupPolicy {
             default: DedupDefault,
@@ -202,7 +202,7 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
                     .collect(),
             )?,
             request_header: Some(headers::DEDUP.to_owned()),
-            extra: Extra::new(),
+            extra: Extra::default(),
         },
         timeout: timeout(federation)?,
         completeness: completeness(federation.best_effort()),
@@ -213,7 +213,7 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
                 .iter()
                 .map(|function| function.name().to_owned())
                 .collect(),
-            extra: Extra::new(),
+            extra: Extra::default(),
         },
         // NOTE: §12.7 stored-query-fanout, N44: definition fan-out is declared only
         // beside the registry it distributes from.
@@ -225,12 +225,12 @@ pub fn describe(federation: &Federation, registry: bool) -> Result<OptionsRoot, 
         // whenever keys are configured, and the member is absent otherwise.
         auth: federation.signing().map(|signing| AuthDescription {
             jwks_uri: Some(signing.jwks_uri.clone()),
-            extra: Extra::new(),
+            extra: Extra::default(),
         }),
         its_rest: its_rest(federation, registry)?,
         extra: consent(federation)?,
     };
-    let mut extra = Extra::new();
+    let mut extra = Extra::default();
     extra.insert_serialized(MANUFACTURER, &manufacturer::MANUFACTURER)?;
     extra.insert_serialized(
         SUPPORTED_UNTIL,
@@ -264,7 +264,7 @@ fn consent(federation: &Federation) -> Result<Extra, DescribeError> {
         disclose: bool,
         emergency: &'static str,
     }
-    let mut extra = Extra::new();
+    let mut extra = Extra::default();
     if let Some(prefilter) = federation.consent_prefilter() {
         let declared = Consent {
             prefilter: prefilter.mode(),
@@ -405,7 +405,7 @@ fn fans_out(targeting: Targeting) -> bool {
 /// declared it (§14.1, N4, N30), and, with a localizer configured, which
 /// binding it is as `mode`, with where its audit messages go as `audit`.
 fn localization(policy: &LocalizationPolicy) -> Result<Localization, DescribeError> {
-    let mut extra = Extra::new();
+    let mut extra = Extra::default();
     if let Some(mode) = policy.mode() {
         // NOTE: §14.1 asks only for `on_failure`, and the schema leaves the object
         // open: our own design, `mode` names the binding a client is localized by.
@@ -431,7 +431,7 @@ fn timeout(federation: &Federation) -> Result<TimeoutPolicy, DescribeError> {
     let millis = |member: &'static str, duration: std::time::Duration| {
         u64::try_from(duration.as_millis()).map_err(|_overflow| DescribeError::Budget { member })
     };
-    let mut extra = Extra::new();
+    let mut extra = Extra::default();
     if federation.localization().localizer().is_some() {
         let localization = millis(LOCALIZATION_MS, federation.localization().timeout())?;
         // NOTE: §11.5 declares the budgets and its `timeout` object is open: our own
@@ -467,7 +467,7 @@ fn completeness(best_effort: bool) -> Completeness {
         Completeness::with_best_effort(OptIn {
             header: Some(headers::COMPLETENESS.to_owned()),
             value: Some(headers::COMPLETENESS_PARTIAL.to_owned()),
-            extra: Extra::new(),
+            extra: Extra::default(),
         })
     } else {
         Completeness::all_or_nothing_only()
@@ -480,7 +480,7 @@ fn completeness(best_effort: bool) -> Completeness {
 /// the strategy is never `cursor` (§11.6.4).
 fn paging(federation: &Federation) -> Result<Paging, DescribeError> {
     let strategy = federation.offset_strategy();
-    let mut extra = Extra::new();
+    let mut extra = Extra::default();
     if let Some(window) = strategy.max_window() {
         extra.insert_serialized(MAX_WINDOW, &window.get())?;
     }
@@ -566,7 +566,7 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
             ),
             None => "unsupported: 501".to_owned(),
         })?,
-        extra: Extra::new(),
+        extra: Extra::default(),
     })
 }
 
@@ -595,7 +595,7 @@ fn member(
         })?;
     // NOTE: §7a.2 leaves the membership vocabulary open; `active` is its
     // conventional value and `suspended` the registry's own.
-    let mut extra = Extra::new();
+    let mut extra = Extra::default();
     if let Some(latency) = latency {
         extra.insert_serialized(LATENCY_MS_P95, &latency.p95)?;
     }

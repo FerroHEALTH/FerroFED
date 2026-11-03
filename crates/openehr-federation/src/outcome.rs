@@ -309,7 +309,7 @@ impl EndpointOutcome {
             version: None,
             row_count: None,
             url: None,
-            extra: Extra::new(),
+            extra: Extra::default(),
         }
     }
 
@@ -502,7 +502,7 @@ fn read_outcome(members: &mut Members) -> Result<EndpointOutcome, WireError> {
         version: members.optional("version")?,
         row_count,
         url: members.optional("url")?,
-        extra: Extra::new(),
+        extra: Extra::default(),
     })
 }
 

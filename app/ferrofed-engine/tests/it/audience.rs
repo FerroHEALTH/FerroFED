@@ -39,7 +39,7 @@ async fn provider_of(
     grant: impl FnOnce(&TokenEndpoint) -> Result<Grant, Box<dyn Error>>,
 ) -> Result<(TokenEndpoint, ClientCredentials<ReqwestTransport>), Box<dyn Error>> {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    let key = SigningKey::from_pem(&SecretString::from(oauth::es384_pem()?))?;
+    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
     let keys = Arc::new(KeyRing::new(
         key,
         None,

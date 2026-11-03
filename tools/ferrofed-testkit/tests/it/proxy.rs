@@ -4,7 +4,7 @@
 //! The capturing and fault proxy, offline, in front of a `wiremock` node.
 
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::proxy::{CapturingProxy, Fault};
+use ferrofed_testkit::proxy::{Bind, CapturingProxy, Fault};
 use http::StatusCode;
 use std::time::{Duration, Instant};
 use wiremock::matchers::{method, path};
@@ -34,7 +34,9 @@ async fn node() -> Server {
 #[tokio::test]
 async fn forwards_unmodified_and_journals_every_carrier() {
     let node = node().await;
-    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    let proxy = CapturingProxy::start(node.uri(), Bind::Loopback)
+        .await
+        .unwrap();
     let client = reqwest::Client::new();
 
     let answer = client
@@ -94,7 +96,9 @@ async fn forwards_unmodified_and_journals_every_carrier() {
 #[tokio::test]
 async fn the_journal_finds_a_needle_in_any_carrier_and_only_there() {
     let node = node().await;
-    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    let proxy = CapturingProxy::start(node.uri(), Bind::Loopback)
+        .await
+        .unwrap();
     let client = reqwest::Client::new();
     let base = format!("{}/ferroehr/rest/openehr/v1", proxy.origin());
 
@@ -141,7 +145,9 @@ async fn the_journal_finds_a_needle_in_any_carrier_and_only_there() {
 #[tokio::test]
 async fn a_status_fault_answers_without_reaching_the_node() {
     let node = node().await;
-    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    let proxy = CapturingProxy::start(node.uri(), Bind::Loopback)
+        .await
+        .unwrap();
     proxy.set_fault(Fault::Status(StatusCode::INTERNAL_SERVER_ERROR));
 
     let answer = reqwest::get(format!(
@@ -165,7 +171,7 @@ async fn a_status_fault_answers_without_reaching_the_node() {
         "an injected status never reaches the node"
     );
 
-    proxy.clear_fault();
+    proxy.set_fault(Fault::Forward);
     let answer = reqwest::get(format!(
         "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
         proxy.origin()
@@ -182,7 +188,9 @@ async fn a_status_fault_answers_without_reaching_the_node() {
 #[tokio::test]
 async fn a_reply_fault_answers_its_status_and_json_body_without_reaching_the_node() {
     let node = node().await;
-    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    let proxy = CapturingProxy::start(node.uri(), Bind::Loopback)
+        .await
+        .unwrap();
     let error = r#"{"message":"synthetic refusal","code":"synthetic-code"}"#;
     proxy.set_fault(Fault::Reply(StatusCode::FORBIDDEN, error));
 
@@ -211,7 +219,9 @@ async fn a_reply_fault_answers_its_status_and_json_body_without_reaching_the_nod
 #[tokio::test]
 async fn a_delay_fault_holds_the_request_then_forwards_it() {
     let node = node().await;
-    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    let proxy = CapturingProxy::start(node.uri(), Bind::Loopback)
+        .await
+        .unwrap();
     let delay = Duration::from_millis(400);
     proxy.set_fault(Fault::Delay(delay));
 
@@ -241,7 +251,9 @@ async fn a_delay_fault_holds_the_request_then_forwards_it() {
 #[tokio::test]
 async fn a_delay_past_the_client_budget_is_a_time_out() {
     let node = node().await;
-    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    let proxy = CapturingProxy::start(node.uri(), Bind::Loopback)
+        .await
+        .unwrap();
     proxy.set_fault(Fault::Delay(Duration::from_secs(5)));
 
     let client = reqwest::Client::builder()
@@ -264,7 +276,9 @@ async fn a_delay_past_the_client_budget_is_a_time_out() {
 #[tokio::test]
 async fn a_refuse_fault_closes_the_connection_without_an_answer() {
     let node = node().await;
-    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    let proxy = CapturingProxy::start(node.uri(), Bind::Loopback)
+        .await
+        .unwrap();
     proxy.set_fault(Fault::Refuse);
 
     let outcome = reqwest::get(format!(
@@ -287,7 +301,7 @@ async fn a_refuse_fault_closes_the_connection_without_an_answer() {
     let refused = proxy.refused();
     assert!(refused > 0, "the refused connection is counted");
 
-    proxy.clear_fault();
+    proxy.set_fault(Fault::Forward);
     let answer = reqwest::get(format!(
         "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
         proxy.origin()
@@ -309,7 +323,9 @@ async fn a_refuse_fault_closes_the_connection_without_an_answer() {
 #[tokio::test]
 async fn a_proxy_that_refused_nothing_counts_nothing() {
     let node = node().await;
-    let proxy = CapturingProxy::start(node.uri()).await.unwrap();
+    let proxy = CapturingProxy::start(node.uri(), Bind::Loopback)
+        .await
+        .unwrap();
     proxy.set_fault(Fault::Refuse);
     assert_eq!(0, proxy.refused(), "no connection was tried");
 }
@@ -318,9 +334,12 @@ async fn a_proxy_that_refused_nothing_counts_nothing() {
 async fn an_unreachable_node_is_a_bad_gateway() {
     // A dropped `MockServer` returns to wiremock's pool still serving, so the
     // node is the base nothing can listen on.
-    let proxy = CapturingProxy::start(ferrofed_testkit::unreachable::BASE.to_owned())
-        .await
-        .unwrap();
+    let proxy = CapturingProxy::start(
+        ferrofed_testkit::unreachable::BASE.to_owned(),
+        Bind::Loopback,
+    )
+    .await
+    .unwrap();
 
     let answer = reqwest::get(format!(
         "{}/ferroehr/rest/openehr/v1/ehr/7f4c",
@@ -339,8 +358,12 @@ async fn an_unreachable_node_is_a_bad_gateway() {
 async fn faults_are_per_proxy() {
     let first = node().await;
     let second = node().await;
-    let a = CapturingProxy::start(first.uri()).await.unwrap();
-    let b = CapturingProxy::start(second.uri()).await.unwrap();
+    let a = CapturingProxy::start(first.uri(), Bind::Loopback)
+        .await
+        .unwrap();
+    let b = CapturingProxy::start(second.uri(), Bind::Loopback)
+        .await
+        .unwrap();
     b.set_fault(Fault::Status(StatusCode::SERVICE_UNAVAILABLE));
 
     let via_a = reqwest::get(format!("{}/ferroehr/rest/openehr/v1/ehr/7f4c", a.origin()))

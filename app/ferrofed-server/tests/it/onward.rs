@@ -63,7 +63,7 @@ const ONE_ROW: &str =
 /// A key file holding a fresh ES384 key, in `dir` under `name`.
 fn key_file(dir: &Path, name: &str) -> Result<toml::Value, Box<dyn Error>> {
     let file = dir.join(name);
-    std::fs::write(&file, oauth::es384_pem()?)?;
+    std::fs::write(&file, oauth::Curve::P384.pem()?)?;
     Ok(toml::Value::String(file.display().to_string()))
 }
 
@@ -440,9 +440,9 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
     let dir = tempfile::tempdir()?;
     let good_key = key_file(dir.path(), "good.pem")?;
     let p521 = dir.path().join("p521.pem");
-    std::fs::write(&p521, oauth::p521_pem()?)?;
+    std::fs::write(&p521, oauth::Curve::P521.pem()?)?;
     let p521 = toml::Value::String(p521.display().to_string());
-    std::fs::write(dir.path().join("current.pem"), oauth::es384_pem()?)?;
+    std::fs::write(dir.path().join("current.pem"), oauth::Curve::P384.pem()?)?;
     let grant = oauth(dir.path(), "https://idp.example.org/token");
     let signing_with = |extra: &str, key: &toml::Value| {
         format!("[signing]\nkey_file = {key}\njwks_uri = \"{JWKS_URI}\"\n{extra}\n")

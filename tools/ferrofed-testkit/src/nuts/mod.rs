@@ -32,7 +32,7 @@
 //! [`NutsNode::dpop_bound`] is the matcher a mock node requires an issued
 //! token with, proven by the bound key. [`credential`] mints a synthetic
 //! JWT Verifiable Credential (VC Data Model 1.1 §6.3.1) with a key a test
-//! generates at run time ([`crate::oauth::p256_pem`]), so no key and no real
+//! generates at run time ([`crate::oauth::Curve::P256`]), so no key and no real
 //! identifier is ever committed. No specification governs the device: our
 //! own design.
 

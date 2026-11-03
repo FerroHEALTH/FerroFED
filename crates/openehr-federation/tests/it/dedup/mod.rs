@@ -89,7 +89,7 @@ fn spelled(uid: &str, case: u8) -> String {
 // conformance: CP-9
 #[test]
 fn by_default_both_copies_of_an_imported_composition_come_back() {
-    let merged = accepted(imported(), &ResultOrder::unordered());
+    let merged = accepted(imported(), &ResultOrder::default());
     assert_eq!(
         merged.rows().len(),
         3,

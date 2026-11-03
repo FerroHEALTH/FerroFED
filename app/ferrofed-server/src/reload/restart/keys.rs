@@ -201,7 +201,7 @@ mod every_key {
     use std::path::Path;
 
     use ferrofed_testkit::listener::ListenerCertificates;
-    use ferrofed_testkit::oauth::es384_pem;
+    use ferrofed_testkit::oauth::Curve;
     use toml::{Table, Value};
 
     use crate::config::Config;
@@ -443,7 +443,7 @@ secrets_dir = "@DIR@/secrets"
         std::fs::write(dir.join("collector-ca.pem"), collector.ca())?;
         std::fs::write(
             dir.join("signing.pem"),
-            es384_pem().map_err(|_unavailable| "a key")?,
+            Curve::P384.pem().map_err(|_unavailable| "a key")?,
         )?;
         std::fs::write(dir.join("registry.toml"), "")?;
         for secret in ["token", "password"] {

@@ -34,7 +34,7 @@ use std::time::Duration;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_testkit::containers::{self, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, TwoNodes};
-use ferrofed_testkit::proxy::{Capture, CapturingProxy, Fault};
+use ferrofed_testkit::proxy::{Bind, Capture, CapturingProxy, Fault};
 use ferrofed_testkit::reference::{self, Reference};
 use ferrofed_testkit::seed::PatientId;
 use http::{Method, Request};
@@ -233,8 +233,10 @@ impl Bench {
     /// Starts the reference implementation and FerroFED in front of `nodes`,
     /// which the caller has seeded.
     pub(crate) async fn start(nodes: TwoNodes) -> Result<Self, Box<dyn Error>> {
-        let reference_a = CapturingProxy::start_reachable(nodes.a.node.origin()).await?;
-        let reference_b = CapturingProxy::start_reachable(nodes.b.node.origin()).await?;
+        let reference_a =
+            CapturingProxy::start(nodes.a.node.origin(), Bind::EveryInterface).await?;
+        let reference_b =
+            CapturingProxy::start(nodes.b.node.origin(), Bind::EveryInterface).await?;
         let reference = Reference::start(
             &reference_registry(&reference_a, &reference_b)?,
             &reference_settings(),
@@ -277,7 +279,7 @@ impl Bench {
             .into_iter()
             .chain(self.proxies(Faulted::B))
         {
-            proxy.clear_fault();
+            proxy.set_fault(Fault::Forward);
         }
         let (ferrofed, reference) = (ferrofed?, reference?);
         Ok(Outcome {

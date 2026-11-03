@@ -96,7 +96,7 @@ fn known() -> Entry {
 
 /// A stub Supplier answering every search and match with the patient alone.
 async fn supplier() -> Server {
-    pdqm_stub::supplier(&[known()]).await
+    pdqm_stub::answering(&[known()], &[known()]).await
 }
 
 /// A stub Supplier answering every `$match` with `status` and `body`.
@@ -227,7 +227,7 @@ async fn an_iti_119_certain_match_names_the_master_identity() -> TestResult {
 async fn an_identifier_the_supplier_does_not_know_is_no_match() -> TestResult {
     // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
     // the client's identifier answers an empty searchset.
-    let supplier = pdqm_stub::supplier(&[]).await;
+    let supplier = pdqm_stub::answering(&[], &[]).await;
     for transaction in [Transaction::Search, Transaction::Match] {
         let answer = step(&pdqm_stub::base_url(&supplier), transaction)
             .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
@@ -242,11 +242,11 @@ async fn an_identifier_the_supplier_does_not_know_is_no_match() -> TestResult {
 
 #[tokio::test]
 async fn a_match_without_a_master_identifier_is_no_match() -> TestResult {
-    let supplier = pdqm_stub::supplier(&[Entry::new(&[
+    let entries = [Entry::new(&[
         (LOCAL_SYSTEM, CLIENT_ID),
         ("urn:oid:2.999.3", "X-1"),
-    ])])
-    .await;
+    ])];
+    let supplier = pdqm_stub::answering(&entries, &entries).await;
     let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
@@ -256,11 +256,11 @@ async fn a_match_without_a_master_identifier_is_no_match() -> TestResult {
 
 #[tokio::test]
 async fn several_matched_patients_are_refused_and_none_is_picked() -> TestResult {
-    let supplier = pdqm_stub::supplier(&[
+    let entries = [
         known(),
         Entry::new(&[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2")]),
-    ])
-    .await;
+    ];
+    let supplier = pdqm_stub::answering(&entries, &entries).await;
     let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
@@ -294,11 +294,11 @@ async fn several_matched_patients_are_refused_and_none_is_picked() -> TestResult
 
 #[tokio::test]
 async fn a_deprecated_record_beside_the_active_one_is_no_second_match() -> TestResult {
-    let supplier = pdqm_stub::supplier(&[
+    let entries = [
         known(),
         Entry::new(&[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, "SENTINEL-DEPRECATED")]).deprecated(),
-    ])
-    .await;
+    ];
+    let supplier = pdqm_stub::answering(&entries, &entries).await;
     let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
@@ -309,12 +309,12 @@ async fn a_deprecated_record_beside_the_active_one_is_no_second_match() -> TestR
 
 #[tokio::test]
 async fn a_patient_with_two_master_identifiers_is_refused() -> TestResult {
-    let supplier = pdqm_stub::supplier(&[Entry::new(&[
+    let entries = [Entry::new(&[
         (LOCAL_SYSTEM, CLIENT_ID),
         (MASTER, MASTER_ID),
         (MASTER, "SENTINEL-MASTER-2"),
-    ])])
-    .await;
+    ])];
+    let supplier = pdqm_stub::answering(&entries, &entries).await;
     let answer = step(&pdqm_stub::base_url(&supplier), Transaction::Search)
         .identify(&client_patient(), &OnBehalfOf::Gateway, soon())
         .await;
@@ -487,11 +487,11 @@ fn a_configuration_the_step_cannot_use_is_refused() {
 
 #[tokio::test]
 async fn no_rendering_names_the_client_or_the_master_identifier() -> TestResult {
-    let supplier = pdqm_stub::supplier(&[
+    let entries = [
         known(),
         Entry::new(&[(LOCAL_SYSTEM, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2")]),
-    ])
-    .await;
+    ];
+    let supplier = pdqm_stub::answering(&entries, &entries).await;
     let searching = step(&pdqm_stub::base_url(&supplier), Transaction::Search);
     let mut text = format!("{searching:?}");
     let answer = searching

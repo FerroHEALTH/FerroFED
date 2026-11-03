@@ -33,6 +33,19 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 
+/// The interfaces a proxy listens on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Bind {
+    /// The loopback interface only.
+    Loopback,
+    /// Every interface, so a container reaches the proxy through the Docker
+    /// host gateway as well as the host through loopback.
+    ///
+    /// [`CapturingProxy::origin`] still names the loopback address, and
+    /// [`CapturingProxy::port`] is the port a container dials.
+    EveryInterface,
+}
+
 /// What the proxy does with the next request it receives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Fault {
@@ -149,38 +162,18 @@ pub struct CapturingProxy {
 struct Refused;
 
 impl CapturingProxy {
-    /// Starts a proxy on a free loopback port that forwards to `upstream`,
+    /// Starts a proxy on a free port of `bind` that forwards to `upstream`,
     /// the node's origin with no path (`http://host:port`).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ProxyError::Bind`] when no loopback port can be bound and
-    /// [`ProxyError::Client`] when the forwarding client cannot be built.
-    pub async fn start(upstream: impl Into<String>) -> Result<Self, ProxyError> {
-        Self::start_on(upstream, Ipv4Addr::LOCALHOST).await
-    }
-
-    /// Starts a proxy that forwards to `upstream` on a free port of every
-    /// interface, so a container reaches it through the Docker host gateway
-    /// as well as the host through loopback.
-    ///
-    /// [`CapturingProxy::origin`] still names the loopback address, and
-    /// [`CapturingProxy::port`] is the port a container dials.
     ///
     /// # Errors
     ///
     /// Returns [`ProxyError::Bind`] when no port can be bound and
     /// [`ProxyError::Client`] when the forwarding client cannot be built.
-    pub async fn start_reachable(upstream: impl Into<String>) -> Result<Self, ProxyError> {
-        Self::start_on(upstream, Ipv4Addr::UNSPECIFIED).await
-    }
-
-    /// Starts a proxy on a free port of `interface` that forwards to
-    /// `upstream`.
-    async fn start_on(
-        upstream: impl Into<String>,
-        interface: Ipv4Addr,
-    ) -> Result<Self, ProxyError> {
+    pub async fn start(upstream: impl Into<String>, bind: Bind) -> Result<Self, ProxyError> {
+        let interface = match bind {
+            Bind::Loopback => Ipv4Addr::LOCALHOST,
+            Bind::EveryInterface => Ipv4Addr::UNSPECIFIED,
+        };
         let listener = TcpListener::bind(SocketAddr::from((interface, 0)))
             .await
             .map_err(ProxyError::Bind)?;
@@ -230,11 +223,6 @@ impl CapturingProxy {
             .fault
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = fault;
-    }
-
-    /// Returns to forwarding every request unmodified.
-    pub fn clear_fault(&self) {
-        self.set_fault(Fault::Forward);
     }
 
     /// Returns a copy of every request received so far, in arrival order.

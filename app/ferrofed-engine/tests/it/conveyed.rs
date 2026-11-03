@@ -66,7 +66,7 @@ static SIGNER: LazyLock<Arc<Signer>> =
 
 /// A signer over a fresh ES384 key, naming the gateway [`GATEWAY`].
 pub(crate) fn signer() -> Result<Signer, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::es384_pem()?))?;
+    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
     let keys = KeyRing::new(key, None, Duration::ZERO, Arc::new(SystemClock))?;
     Ok(Signer::new(Arc::new(keys), GATEWAY))
 }

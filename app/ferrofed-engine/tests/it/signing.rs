@@ -63,10 +63,10 @@ fn published_algorithm(key: &SigningKey) -> Option<KeyAlgorithm> {
 
 #[test]
 fn a_p256_key_signs_es256_and_a_p384_key_es384() -> TestResult {
-    let p256 = read(oauth::p256_pem()?)?;
+    let p256 = read(oauth::Curve::P256.pem()?)?;
     assert_eq!(Algorithm::ES256, p256.algorithm());
     assert_eq!(Some(KeyAlgorithm::ES256), published_algorithm(&p256));
-    let p384 = read(oauth::es384_pem()?)?;
+    let p384 = read(oauth::Curve::P384.pem()?)?;
     assert_eq!(Algorithm::ES384, p384.algorithm());
     assert_eq!(Some(KeyAlgorithm::ES384), published_algorithm(&p384));
     Ok(())
@@ -74,7 +74,7 @@ fn a_p256_key_signs_es256_and_a_p384_key_es384() -> TestResult {
 
 #[test]
 fn a_key_on_neither_curve_is_refused_and_quotes_nothing() -> TestResult {
-    let p521 = read(oauth::p521_pem()?);
+    let p521 = read(oauth::Curve::P521.pem()?);
     assert!(
         matches!(p521, Err(KeyError::CurveUnsupported(_))),
         "{p521:?}"
@@ -92,7 +92,7 @@ fn a_key_on_neither_curve_is_refused_and_quotes_nothing() -> TestResult {
 #[tokio::test]
 async fn an_es256_signing_key_signs_the_client_assertion_es256() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, None).await;
-    let keys = ring(read(oauth::p256_pem()?)?)?;
+    let keys = ring(read(oauth::Curve::P256.pem()?)?)?;
     endpoint.trust(keys.published());
     endpoint.expect_assertion(Algorithm::ES256, &endpoint.token_url());
     let grant = Grant::new(
@@ -133,8 +133,8 @@ async fn an_es256_signing_key_signs_the_client_assertion_es256() -> TestResult {
 #[test]
 fn the_conveyance_is_signed_with_the_current_keys_algorithm() -> TestResult {
     for (pem, algorithm) in [
-        (oauth::p256_pem()?, Algorithm::ES256),
-        (oauth::es384_pem()?, Algorithm::ES384),
+        (oauth::Curve::P256.pem()?, Algorithm::ES256),
+        (oauth::Curve::P384.pem()?, Algorithm::ES384),
     ] {
         let keys = ring(read(pem)?)?;
         let signer = Arc::new(Signer::new(Arc::clone(&keys), conveyed::GATEWAY));
@@ -153,8 +153,8 @@ fn the_conveyance_is_signed_with_the_current_keys_algorithm() -> TestResult {
 // conformance: CP-16
 #[test]
 fn a_rotation_across_curves_publishes_both_and_signs_with_the_new() -> TestResult {
-    let old = read(oauth::es384_pem()?)?;
-    let new = read(oauth::p256_pem()?)?;
+    let old = read(oauth::Curve::P384.pem()?)?;
+    let new = read(oauth::Curve::P256.pem()?)?;
     let node = EndpointId::new(NODE)?;
     let before = ring(old.clone())?;
     let signed_by_old = Conveyance::new(
@@ -201,8 +201,8 @@ fn a_rotation_across_curves_publishes_both_and_signs_with_the_new() -> TestResul
 // conformance: CP-16
 #[test]
 fn a_next_key_is_published_ahead_and_never_signs() -> TestResult {
-    let old = read(oauth::es384_pem()?)?;
-    let new = read(oauth::es384_pem()?)?;
+    let old = read(oauth::Curve::P384.pem()?)?;
+    let new = read(oauth::Curve::P384.pem()?)?;
     let node = EndpointId::new(NODE)?;
     let ahead = Arc::new(
         KeyRing::new(old.clone(), None, Duration::ZERO, Arc::new(SystemClock))?
@@ -246,8 +246,8 @@ fn a_next_key_is_published_ahead_and_never_signs() -> TestResult {
 
 #[test]
 fn a_next_key_that_is_the_current_or_the_previous_key_is_refused() -> TestResult {
-    let current_pem = oauth::es384_pem()?;
-    let previous_pem = oauth::es384_pem()?;
+    let current_pem = oauth::Curve::P384.pem()?;
+    let previous_pem = oauth::Curve::P384.pem()?;
     for reused in [&current_pem, &previous_pem] {
         let ring = KeyRing::new(
             read(current_pem.clone())?,

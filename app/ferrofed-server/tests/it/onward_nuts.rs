@@ -83,8 +83,8 @@ async fn material_as(
 ) -> Result<(NutsNode, Material), Box<dyn Error>> {
     let authority = NutsNode::start("hospital-a", SCOPE, Some(300)).await;
     authority.define(DEFINITION);
-    let holder_pem = oauth::p256_pem()?;
-    let issuer_pem = oauth::p256_pem()?;
+    let holder_pem = oauth::Curve::P256.pem()?;
+    let issuer_pem = oauth::Curve::P256.pem()?;
     authority.trust_holder(did, kid, nuts::public_jwk(&holder_pem, Algorithm::ES256)?);
     authority.trust_issuer(
         ISSUER,
@@ -107,7 +107,7 @@ async fn material_as(
         Ok(toml::Value::String(file.display().to_string()))
     };
     let key = file("holder.pem", &holder_pem)?;
-    let dpop = file("dpop.pem", &oauth::p256_pem()?)?;
+    let dpop = file("dpop.pem", &oauth::Curve::P256.pem()?)?;
     let held = file("organization.jwt", &credential)?;
     let tables = format!(
         "[credentials.\"{endpoint}\".nuts]\nauthorization_server = \"{}\"\nscope = \"{SCOPE}\"\ndid = \"{did}\"\nkid = \"{kid}\"\nkey_file = {key}\ndpop_key_file = {dpop}\n\n[[credentials.\"{endpoint}\".nuts.credential]]\ninput_descriptor = \"organization_credential\"\nfile = {held}\n",
@@ -419,7 +419,7 @@ async fn a_new_holder_key_is_served_in_the_did_document() -> TestResult {
         &material.tables,
     )?;
     let (before, _) = did_document(&app, "/.well-known/did.json").await?;
-    let new_pem = oauth::p256_pem()?;
+    let new_pem = oauth::Curve::P256.pem()?;
     std::fs::write(dir.path().join("node-a-pub-holder.pem"), &new_pem)?;
     let (app, _state) = gateway(
         dir.path(),

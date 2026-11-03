@@ -354,7 +354,7 @@ async fn a_dpop_bound_grant_proves_every_request_to_its_node() -> TestResult {
     let a = node(endpoint.dpop_bound(None)).await;
     let dir = tempfile::tempdir()?;
     let key = dir.path().join("dpop.pem");
-    std::fs::write(&key, oauth::p256_pem()?)?;
+    std::fs::write(&key, oauth::Curve::P256.pem()?)?;
     let key = toml::Value::String(key.display().to_string());
     let tables = format!(
         "[credentials.\"node-a-pub\".oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\ndpop_key_file = {key}\n",

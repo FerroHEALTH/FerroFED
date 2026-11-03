@@ -20,7 +20,7 @@ use ferrofed_server::federation::error::FederationError;
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdqm_stub;
-use ferrofed_testkit::proxy::{CapturingProxy, Fault};
+use ferrofed_testkit::proxy::{Bind, CapturingProxy, Fault};
 use http::{Request, StatusCode, header};
 use serde_json::Value;
 use wiremock::matchers::{method, path};
@@ -78,7 +78,7 @@ impl Members {
     /// The members, node A's own endpoint answering with `response`.
     async fn start(response: ResponseTemplate) -> Result<Self, Box<dyn std::error::Error>> {
         let own = own_endpoint(response).await;
-        let proxy = CapturingProxy::start(own.uri()).await?;
+        let proxy = CapturingProxy::start(own.uri(), Bind::Loopback).await?;
         Ok(Self {
             a: Server::start().await,
             own,

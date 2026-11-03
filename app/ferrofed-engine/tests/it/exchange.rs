@@ -84,7 +84,7 @@ fn caller_token(subject: &str) -> Result<String, Box<dyn Error>> {
 
 /// The gateway's keys, the ones the token endpoint trusts.
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::es384_pem()?))?;
+    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
     Ok(Arc::new(KeyRing::new(
         key,
         None,

@@ -161,7 +161,7 @@ async fn a_span_reaches_a_mutual_tls_collector_only_with_the_identity_and_the_ro
 {
     let dir = tempfile::tempdir()?;
     let certificates = ListenerCertificates::generate()?;
-    let collector = Collector::start_tls(&certificates)?;
+    let collector = Collector::start(Some(&certificates))?;
     assert!(collector.endpoint().starts_with("https://"));
     // NOTE: the refusal is the client's own, of a server certificate no root it holds signed, so
     // it is decided in the handshake; a TLS 1.3 server refuses a missing client certificate only

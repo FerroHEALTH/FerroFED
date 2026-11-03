@@ -212,7 +212,7 @@ fn field<'f>(form: &'f [(String, String)], name: &str) -> Option<&'f str> {
 
 /// The gateway's keys, which sign the actor token of a token exchange.
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::es384_pem()?))?;
+    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
     Ok(Arc::new(KeyRing::new(
         key,
         None,

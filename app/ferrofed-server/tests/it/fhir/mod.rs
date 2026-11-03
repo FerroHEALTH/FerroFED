@@ -93,7 +93,7 @@ fn known() -> Entry {
 
 /// A stub PDQm Supplier answering every search with the test patient.
 async fn supplier() -> Server {
-    pdqm_stub::supplier(&[known()]).await
+    pdqm_stub::answering(&[known()], &[known()]).await
 }
 
 /// The `[fhir]` tables of the face, its allergies fed by the testkit's

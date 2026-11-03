@@ -18,7 +18,7 @@
 use ferrofed_server::conformance::client::Federated;
 use ferrofed_server::conformance::scenarios::track3;
 use ferrofed_testkit::containers::{self, TwoNodes};
-use ferrofed_testkit::proxy::{CapturingProxy, Fault};
+use ferrofed_testkit::proxy::{Bind, CapturingProxy, Fault};
 use http::StatusCode;
 use openehr_federation::options::OptionsRoot;
 
@@ -154,7 +154,7 @@ async fn an_undirected_query_asks_only_the_members_the_localizer_names() -> Test
         return Ok(());
     }
     let (nodes, pix) = Box::pin(nodes_and_pix(vec![(DOMAIN_A, EHR_A)])).await?;
-    let proxy = CapturingProxy::start(pix.origin()).await?;
+    let proxy = CapturingProxy::start(pix.origin(), Bind::Loopback).await?;
     let dir = tempfile::tempdir()?;
     let options = Options {
         resolver: pixm_resolver_at(&format!("{}/fhir/", proxy.origin())),

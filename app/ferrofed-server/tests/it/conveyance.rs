@@ -592,8 +592,8 @@ async fn a_p256_signing_key_conveys_the_caller_es256_beside_the_previous_es384_k
     let a = routed_node().await;
     let b = Server::start().await;
     let dir = tempfile::tempdir()?;
-    let current = key_file(dir.path(), "current.pem", &oauth::p256_pem()?)?;
-    let previous = key_file(dir.path(), "previous.pem", &oauth::es384_pem()?)?;
+    let current = key_file(dir.path(), "current.pem", &oauth::Curve::P256.pem()?)?;
+    let previous = key_file(dir.path(), "previous.pem", &oauth::Curve::P384.pem()?)?;
     let tables = format!(
         "{}\n[signing]\nkey_file = {current}\nprevious_key_file = {previous}\njwks_uri = \"{JWKS_URI}\"\n",
         crossref(&[("node-a", EHR_A)]),

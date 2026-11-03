@@ -121,7 +121,7 @@ async fn a_subject_the_supplier_knows_no_patient_for_is_the_operations_404() -> 
     let pix = manager_at_a().await;
     // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
     // the identifier answers an empty searchset.
-    let pdq = pdqm_stub::supplier(&[]).await;
+    let pdq = pdqm_stub::answering(&[], &[]).await;
     let (status, text) = read(&a, &b, &pix, &pdqm_stub::base_url(&pdq)).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
     assert_eq!("no-destination", error_body(&text)?.code);
@@ -133,11 +133,11 @@ async fn several_matched_patients_are_a_424_and_no_node_is_asked() -> TestResult
     let a = holder(EHR_A).await;
     let b = holder("1111bbbb-1111-4111-8111-111111111111").await;
     let pix = manager_at_a().await;
-    let pdq = pdqm_stub::supplier(&[
+    let entries = [
         super::known(),
         Entry::new(&[(LOCAL, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2b8m")]),
-    ])
-    .await;
+    ];
+    let pdq = pdqm_stub::answering(&entries, &entries).await;
     let (status, text) = read(&a, &b, &pix, &pdqm_stub::base_url(&pdq)).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
     let error = error_body(&text)?;

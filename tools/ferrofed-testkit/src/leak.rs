@@ -115,23 +115,6 @@ impl Needles {
         &self.needles
     }
 
-    /// Returns every sighting of a needle in `journal`, in every carrier of
-    /// every request, the body included.
-    #[must_use]
-    pub fn in_journal(&self, journal: &[Capture]) -> Vec<Sighting> {
-        self.search(journal, true)
-    }
-
-    /// Returns every sighting of a needle in `journal` outside the request
-    /// bodies: in a path, a query string, a header name or a header value.
-    ///
-    /// This is the search over a forwarded write, whose body is client
-    /// content the gateway passes through unmodified (§5.4 scope note, N33).
-    #[must_use]
-    pub fn in_journal_outside_bodies(&self, journal: &[Capture]) -> Vec<Sighting> {
-        self.search(journal, false)
-    }
-
     /// Returns the needles `text` holds, raw or percent-decoded, ASCII case
     /// ignored.
     #[must_use]
@@ -144,8 +127,10 @@ impl Needles {
             .collect()
     }
 
-    /// The sightings in `journal`, bodies included when `bodies` is set.
-    fn search(&self, journal: &[Capture], bodies: bool) -> Vec<Sighting> {
+    /// Returns every sighting of a needle in `journal`, in every carrier of
+    /// every request that `scope` reaches.
+    #[must_use]
+    pub fn in_journal(&self, journal: &[Capture], scope: Scope) -> Vec<Sighting> {
         let mut sightings = Vec::new();
         for (index, capture) in journal.iter().enumerate() {
             let mut carriers: Vec<(Carrier, &[u8])> =
@@ -157,7 +142,7 @@ impl Needles {
                 carriers.push((Carrier::HeaderName, name.as_bytes()));
                 carriers.push((Carrier::Header(name.clone()), value));
             }
-            if bodies {
+            if scope == Scope::WholeRequest {
                 carriers.push((Carrier::Body, &capture.body));
             }
             for (carrier, bytes) in carriers {
@@ -177,6 +162,19 @@ impl Needles {
         }
         sightings
     }
+}
+
+/// The carriers of a captured request that [`Needles::in_journal`] searches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// Every carrier, the body included.
+    WholeRequest,
+    /// A path, a query string, a header name or a header value, never the
+    /// body.
+    ///
+    /// This is the search over a forwarded write, whose body is client
+    /// content the gateway passes through unmodified (§5.4 scope note, N33).
+    OutsideBodies,
 }
 
 /// The part of a captured request a needle was seen in.

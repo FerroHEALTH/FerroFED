@@ -9,7 +9,7 @@ use std::error::Error;
 
 use ferrofed_testkit::containers;
 use ferrofed_testkit::containers::ferropix::{self, CONSUMER, FerroPix, SOURCE, Xcpd};
-use ferrofed_testkit::proxy::CapturingProxy;
+use ferrofed_testkit::proxy::{Bind, CapturingProxy};
 use ferrofed_testkit::seed::{self, CrossReferenceSeed, DemoComposition, EhrDomain, PatientId};
 use http::StatusCode;
 use uuid::Uuid;
@@ -95,10 +95,7 @@ pub(crate) async fn nodes_and_responding_pix(
         namespaces.push(OTHER.namespace());
     }
     let locals = [DOMAIN_A.system(), DOMAIN_B.system()];
-    let manager = match xcpd {
-        Some(xcpd) => ferropix::ferropix_responding(&namespaces, &locals, xcpd).await?,
-        None => ferropix::ferropix(&namespaces, &locals).await?,
-    };
+    let manager = ferropix::start(&namespaces, &locals, xcpd).await?;
     let fed = [
         CrossReferenceSeed {
             patient: PATIENT,
@@ -130,7 +127,7 @@ pub(crate) async fn nodes_and_responding_pix(
             "ITI-104 creates each member's record: {statuses:?}"
         );
     }
-    let proxy = CapturingProxy::start(manager.origin()).await?;
+    let proxy = CapturingProxy::start(manager.origin(), Bind::Loopback).await?;
     Ok((nodes, Pix { manager, proxy }))
 }
 
