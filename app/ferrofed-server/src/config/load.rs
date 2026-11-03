@@ -189,7 +189,7 @@ fn checked(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
 fn console_free(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
     // NOTE: no specification governs this: our own design; what the console owns
     // lives only in a revision, so the file never sets it and nothing is written back.
-    match crate::revision::tree::console_keys(loaded.table_with_secrets())
+    match crate::config::tree::console_keys(loaded.table_with_secrets())
         .into_iter()
         .next()
     {

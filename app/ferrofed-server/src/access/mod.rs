@@ -35,7 +35,6 @@
 //! no value. No specification governs where the record is built: our own
 //! design.
 
-pub mod config;
 pub(crate) mod patient;
 pub(crate) mod routed;
 pub(crate) mod transformation;
@@ -110,7 +109,7 @@ impl AccessLog {
             labels: LabelPolicy::default(),
             emergency: EmergencyPurposes::default(),
             patient_namespaces: Vec::new(),
-            max_named_ehrs: config::AccessLog::default().max_named_ehrs,
+            max_named_ehrs: crate::config::access_log::AccessLog::default().max_named_ehrs,
             sink,
         }
     }

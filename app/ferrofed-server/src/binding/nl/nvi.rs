@@ -73,11 +73,11 @@ use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::error::credentials::CredentialsFault;
 use crate::config::secrets::resolve_credentials;
+use crate::config::service;
 use crate::config::settings::Scheme;
 use crate::config::transport::ProtectedSite;
 use crate::config::{Config, Credentials, transport};
 use crate::localization::LocalizationError;
-use crate::service;
 use ferrohealth_secret::file::read_secret;
 
 /// The `localization.mode` of the NVI localizer of the Dutch Generic

@@ -23,7 +23,7 @@
 //! directory `secrets_dir` a secret value is written to.
 //!
 //! The table is part of the bootstrap core, which a revision never holds
-//! ([`crate::revision::tree::CORE`]). No specification governs this: our own
+//! ([`crate::config::tree::CORE`]). No specification governs this: our own
 //! design.
 
 use std::fmt;
@@ -35,7 +35,7 @@ use serde::Deserialize;
 
 use crate::config::Config;
 use crate::config::error::Error;
-use crate::revision::policy::Policy;
+use crate::config::revision_policy::Policy;
 use ferrohealth_secret::file::read_secret;
 
 /// Whether the configuration is managed as revisions, `config.ui`.
@@ -242,7 +242,7 @@ pub enum RevisionsFault {
     },
     /// An entry of `config.approval` names no kind and no resource.
     #[error(transparent)]
-    Approval(#[from] crate::revision::policy::UnknownRule),
+    Approval(#[from] crate::config::revision_policy::UnknownRule),
     /// `config.secrets_dir` is no absolute path of a directory.
     #[error("config.secrets_dir is not an absolute path to a directory that exists")]
     SecretsDir,
@@ -357,7 +357,7 @@ fn url(section: &Revisions) -> Result<SecretUrl, Error> {
             key: String::from(key),
         })?;
     #[cfg(feature = "postgres")]
-    if !crate::stored::postgres::parses(&url) {
+    if !crate::config::postgres::parses(&url) {
         let key = if section.url_file.is_some() {
             "config.url_file"
         } else {
@@ -370,7 +370,7 @@ fn url(section: &Revisions) -> Result<SecretUrl, Error> {
 
 /// Refuses `tree`, the merged configuration, when the configuration is
 /// managed and a part a revision holds carries a secret inline
-/// ([`crate::revision::tree::inline_secrets`]).
+/// ([`crate::config::tree::inline_secrets`]).
 ///
 /// # Errors
 ///
@@ -379,8 +379,8 @@ pub fn check_tree(store: Option<&Store>, tree: &toml::Table) -> Result<(), Error
     if store.is_none() {
         return Ok(());
     }
-    let (_core, revision) = crate::revision::tree::split(tree);
-    match crate::revision::tree::inline_secrets(&revision)
+    let (_core, revision) = crate::config::tree::split(tree);
+    match crate::config::tree::inline_secrets(&revision)
         .into_iter()
         .next()
     {

@@ -280,7 +280,7 @@ async fn a_running_gateway_is_reported_without_a_patient_identifier_or_a_credent
     assert!(incidents.contains("EhrIdCollision"), "{incidents}");
     assert!(incidents.contains("node-a-pub"), "{incidents}");
     let manifest = String::from_utf8(files["manifest.json"].clone())?;
-    let digest = ferrofed_server::conformance::fixture::sha256(&files["metrics.txt"]);
+    let digest = ferrofed_server::digest::sha256(&files["metrics.txt"]);
     assert!(manifest.contains(&digest), "the manifest hashes every file");
     assert!(
         String::from_utf8(files["metrics.txt"].clone())?.contains("ferrofed_"),

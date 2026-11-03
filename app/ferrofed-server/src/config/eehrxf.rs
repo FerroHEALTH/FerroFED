@@ -40,11 +40,11 @@ use serde::Deserialize;
 
 use crate::config::error::Error;
 use crate::config::secrets::resolve_credentials;
+use crate::config::service::{GrantRefused, TlsRefused};
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
 use crate::config::transport::{self, Encryption, ProtectedSite};
 use crate::config::{Config, Credentials};
-use crate::service::{GrantRefused, TlsRefused};
 
 /// The key of the terminology table.
 const KEY: &str = "eehrxf.terminology";
@@ -207,8 +207,8 @@ pub fn terminology(
     let Some(settings) = settings else {
         return Ok((Terminology::none(), None));
     };
-    let tls = crate::service::tls_of(KEY, &settings.tls)?;
-    let auth = crate::service::authentication(
+    let tls = crate::config::service::tls_of(KEY, &settings.tls)?;
+    let auth = crate::config::service::authentication(
         &format!("{KEY}.credentials"),
         settings.credentials.as_ref(),
     )?;

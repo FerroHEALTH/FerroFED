@@ -23,12 +23,12 @@ use jiff::Timestamp;
 
 use crate::config::Config;
 use crate::config::error::Error;
+use crate::config::revision_policy::Policy;
 use crate::config::revisions::RevisionsFault;
 use crate::config::settings::Settings;
+use crate::config::tree::{core_keys, inline_secrets, join, split};
 use crate::reload::{ReloadError, Reloader};
-use crate::revision::policy::Policy;
 use crate::revision::resources::present;
-use crate::revision::tree::{core_keys, inline_secrets, join, split};
 use crate::revision::{Draft, RevisionStore, StoreError, Swapped};
 use crate::state::StateError;
 use ferrofed_operator_api::resource::Resource;

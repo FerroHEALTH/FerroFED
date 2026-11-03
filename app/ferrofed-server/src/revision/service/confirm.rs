@@ -26,7 +26,7 @@ use jiff::Timestamp;
 use super::{RevisionError, Revisions, Stale, Unconfirmable, held_table};
 use crate::reload::Reloader;
 use crate::revision::Swapped;
-use crate::revision::policy::{changed, named};
+use crate::revision::resources::{changed, named};
 
 /// The `event` of the record of a confirmation.
 pub const CONFIRMED: &str = "config-revision-confirmed";

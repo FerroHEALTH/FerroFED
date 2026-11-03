@@ -108,8 +108,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{effective, needs_restart};
-    use crate::audit::AuditDestination;
     use crate::config::Config;
+    use crate::config::audit::AuditDestination;
     use crate::config::settings::Settings;
 
     /// The settings of a development gateway whose XCPD audit messages go

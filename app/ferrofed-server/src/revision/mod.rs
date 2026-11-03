@@ -4,9 +4,9 @@
 //! Configuration revisions, under `config.ui = "managed"`.
 //!
 //! A revision is a complete configuration less its bootstrap core
-//! ([`tree::CORE`]), held as TOML text with every secret only as a `_file`
-//! reference ([`tree::inline_secrets`]). Each one records who saved it,
-//! when and why, and the revision it was based on; the store keeps them all
+//! ([`crate::config::tree::CORE`]), held as TOML text with every secret
+//! only as a `_file` reference ([`crate::config::tree::inline_secrets`]).
+//! Each one records who saved it, when and why, and the revision it was based on; the store keeps them all
 //! as history and marks the one the gateway runs as [`Current`].
 //!
 //! A save names the revision it is based on and is refused when another
@@ -33,13 +33,11 @@ use crate::admin::Operator;
 use crate::config::revisions::Store;
 
 pub mod embedded;
-pub mod policy;
 #[cfg(feature = "postgres")]
 pub mod postgres;
 pub mod resources;
 pub mod routes;
 pub mod service;
-pub mod tree;
 pub mod watch;
 
 impl From<&Operator> for Author {

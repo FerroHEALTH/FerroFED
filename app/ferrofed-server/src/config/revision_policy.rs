@@ -15,15 +15,12 @@
 //! operator other than its author approved it. No specification governs
 //! this: our own design.
 
-use std::collections::BTreeSet;
 use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
 use ferrofed_operator_api::resource::{BindingSection, Resource};
-
-use crate::revision::resources::{present, value_at};
 
 /// A kind of resource `config.approval` may name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -164,32 +161,11 @@ impl Policy {
     }
 }
 
-/// The resources whose settings differ from `from` to `to`, a resource set
-/// in one and not in the other among them, in resource order.
-#[must_use]
-pub fn changed(from: &toml::Table, to: &toml::Table) -> Vec<Resource> {
-    let every: BTreeSet<Resource> = present(from).into_iter().chain(present(to)).collect();
-    every
-        .into_iter()
-        .filter(|resource| value_at(from, resource) != value_at(to, resource))
-        .collect()
-}
-
-/// `resources` as their tables are written.
-#[must_use]
-pub fn named(resources: &[Resource]) -> Vec<String> {
-    resources.iter().map(ToString::to_string).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use ferrofed_operator_api::resource::{BindingSection, Resource};
 
-    use super::{ApprovalRule, Kind, Policy, changed};
-
-    fn table(text: &str) -> toml::Table {
-        toml::from_str(text).unwrap()
-    }
+    use super::{ApprovalRule, Kind, Policy};
 
     #[test]
     fn an_approval_rule_reads_a_kind_or_a_resource() {
@@ -211,26 +187,6 @@ mod tests {
         );
         assert!("auth".parse::<ApprovalRule>().is_err());
         assert!("credentials.".parse::<ApprovalRule>().is_err());
-    }
-
-    #[test]
-    fn the_changed_resources_are_named_whole() {
-        let from = table(
-            "[credentials.a]\npassword_file = \"/s/a\"\n[credentials.b]\nuser = \"x\"\n\
-             [federation]\nbest_effort = true\n[federation.consent]\ndisclose = true\n",
-        );
-        let to = table(
-            "[credentials.a]\npassword_file = \"/s/a2\"\n[credentials.b]\nuser = \"x\"\n\
-             [federation]\nbest_effort = false\n[pixm]\ntimeout_ms = 1\n",
-        );
-        assert_eq!(
-            vec![
-                Resource::Credentials(String::from("a")),
-                Resource::Binding(BindingSection::Pixm),
-                Resource::Binding(BindingSection::Consent),
-            ],
-            changed(&from, &to)
-        );
     }
 
     #[test]

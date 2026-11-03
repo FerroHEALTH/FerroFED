@@ -37,9 +37,9 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use crate::audit::AuditTrailError;
 use crate::binding::seam::{Indicator, LocalizerSeam, ResolverSeam};
 use crate::binding::{self, Offer, Role};
+use crate::config::service::{GrantRefused, TlsRefused};
 use crate::config::settings::{LocalizationSettings, Settings};
 use crate::config::{self, NodeSelection};
-use crate::service::{GrantRefused, TlsRefused};
 
 /// The localizer of a federation, with its failure policy and budget.
 #[derive(Clone)]

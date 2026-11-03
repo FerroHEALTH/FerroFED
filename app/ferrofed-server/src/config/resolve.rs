@@ -163,8 +163,8 @@ impl Config {
             stored_queries,
             metrics,
             signing,
-            access_log: crate::access::config::resolve(&self.access_log)?,
-            audit: crate::audit::config::AuditSettings::default(),
+            access_log: crate::config::access_log::resolve(&self.access_log)?,
+            audit: crate::config::audit::AuditSettings::default(),
             revisions: crate::config::revisions::resolve(self)?,
             revision_poll: crate::config::revisions::poll(&self.revisions)?,
             revision_policy: crate::config::revisions::policy(&self.revisions)?,
@@ -177,7 +177,7 @@ impl Config {
         {
             return Err(Error::Federation(FederationFault::EmergencyWithoutPurpose));
         }
-        let audit = crate::audit::config::resolve(self);
+        let audit = crate::config::audit::resolve(self);
         if let Ok(resolved) = &audit {
             settings.audit.clone_from(resolved);
         }

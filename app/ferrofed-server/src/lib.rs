@@ -77,6 +77,7 @@ pub mod command;
 pub mod config;
 pub mod conformance;
 pub mod conveyed;
+pub mod digest;
 pub mod documents;
 pub mod edge;
 pub mod error;
@@ -96,7 +97,6 @@ pub mod request_id;
 pub mod request_log;
 pub mod revision;
 pub mod running;
-pub mod service;
 pub mod state;
 pub mod stored;
 pub mod support;
@@ -208,7 +208,7 @@ pub fn trusted_router(state: Arc<AppState>, server: &ServerSettings, trust: Arc<
     let surface = Router::new()
         // NOTE: RFC 7517 §5, §13.1 jwks-discovery: public keys are public material,
         // so the JWK Set stays outside every client authentication layer.
-        .route(jwks::JWKS_PATH, get(jwks::jwks))
+        .route(config::settings::JWKS_PATH, get(jwks::jwks))
         .route(
             facade::QUERY_AQL,
             get(facade::query_aql_get)

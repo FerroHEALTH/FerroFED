@@ -21,7 +21,6 @@
 //! here, keyed by their spool, and the metrics read their depth. No
 //! specification governs where the code lives: our own design.
 
-pub mod config;
 pub mod metrics;
 
 use std::any::Any;
@@ -42,41 +41,11 @@ use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::RepositoryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
 use ihe_atna::balp::{AuditRecorder, NetworkAddress};
-use serde::Deserialize;
 
-use crate::audit::config::{AuditSettings, FeedRepositorySettings};
 use crate::binding::seam::Indicator;
+use crate::config::audit::{AuditDestination, AuditSettings, FeedRepositorySettings};
+use crate::config::service::{self, TlsRefused};
 use crate::config::settings::Settings;
-use crate::config::transport::{self, CleartextError, ProtectedSite};
-use crate::service::{self, TlsRefused};
-
-/// Where audit records go: the `destination` of `[audit]`, and the `audit`
-/// of the IHE binding's `[xcpd]`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AuditDestination {
-    /// The Audit Record Repository the table's own repository section
-    /// names.
-    Repository,
-    /// A structured event at the `ferrofed::audit` log target, without a
-    /// patient identifier, for a deployment that routes its log to its audit
-    /// repository.
-    Log,
-    /// No record: development only.
-    Off,
-}
-
-impl AuditDestination {
-    /// The value as the configuration and `OPTIONS {base}/` spell it.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Repository => "repository",
-            Self::Log => "log",
-            Self::Off => "off",
-        }
-    }
-}
 
 /// Returns what an audit forwarder's `status` says of its repository.
 ///
@@ -444,31 +413,6 @@ pub fn indicators(settings: &AuditSettings) -> Result<Vec<Arc<dyn Indicator>>, A
         }
         _ => Vec::new(),
     })
-}
-
-/// Holds the repository `settings` send to to the transport policy, and
-/// returns it when it is reached in cleartext under the development profile.
-///
-/// # Errors
-///
-/// The [`CleartextError`] of a repository the policy refuses.
-pub fn sites(settings: &Settings) -> Result<Vec<ProtectedSite>, CleartextError> {
-    let Some(repository) = &settings.audit.repository else {
-        return Ok(Vec::new());
-    };
-    Ok(transport::protected_payload(
-        settings.profile,
-        repository.url.as_str(),
-        ProtectedSite {
-            url_key: String::from("audit.repository.url"),
-            payload: String::from(
-                "the access records and the IHE transactions' audit records, which name the patient",
-            ),
-            requires: transport::Encryption::Https,
-        },
-    )?
-    .into_iter()
-    .collect())
 }
 
 /// Whether the records `settings` send to a repository wait in a spool held

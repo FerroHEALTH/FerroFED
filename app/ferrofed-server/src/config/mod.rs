@@ -20,6 +20,8 @@ use std::path::PathBuf;
 
 use ferrohealth_telemetry::section::TelemetrySection;
 
+pub mod access_log;
+pub mod audit;
 pub mod auth;
 pub mod eehrxf;
 pub mod error;
@@ -29,18 +31,23 @@ pub mod grant;
 pub mod limits;
 pub mod load;
 pub mod oauth;
+#[cfg(feature = "postgres")]
+pub mod postgres;
 pub mod public_url;
 pub mod registry;
 pub(crate) mod resolve;
+pub mod revision_policy;
 pub mod revisions;
 pub(crate) mod secrets;
 pub mod server;
+pub mod service;
 #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub mod service_grant;
 pub mod settings;
 pub mod stored_queries;
 pub mod tls;
 pub mod transport;
+pub mod tree;
 
 /// The namespace of the configuration ([`load::loader`]).
 ///
@@ -134,10 +141,10 @@ pub struct Config {
     pub trust: auth::trust::Trust,
     /// The category map every access record is classified with
     /// (`[access_log]`, #623).
-    pub access_log: crate::access::config::AccessLog,
+    pub access_log: access_log::AccessLog,
     /// Where the access records and the IHE binding's BALP records go
     /// (`[audit]`, #486, #697).
-    pub audit: crate::audit::config::Audit,
+    pub audit: audit::Audit,
     /// Configuration revisions (`[config]`): `ui`, off by default, and the store.
     #[serde(rename = "config")]
     pub revisions: revisions::Revisions,
@@ -183,8 +190,8 @@ impl Default for Config {
             signing: None,
             auth: auth::Auth::default(),
             trust: auth::trust::Trust::default(),
-            access_log: crate::access::config::AccessLog::default(),
-            audit: crate::audit::config::Audit::default(),
+            access_log: access_log::AccessLog::default(),
+            audit: audit::Audit::default(),
             revisions: revisions::Revisions::default(),
             usage_report: ferrohealth_usage_report::section::UsageReportSection::default(),
             dev: None,

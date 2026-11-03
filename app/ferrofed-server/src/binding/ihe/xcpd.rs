@@ -43,15 +43,15 @@ use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
-use crate::audit::AuditDestination;
 use crate::binding::ihe::audit::repository::{AuditRepository, AuditRepositorySettings};
 use crate::binding::ihe::audit::{RepositoryTrail, trail};
 use crate::binding::seam::{Indicator, LocalizerSeam};
+use crate::config::audit::AuditDestination;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
+use crate::config::service;
 use crate::config::{Config, transport};
 use crate::localization::LocalizationError;
-use crate::service;
 use ferrohealth_secret::file::read_secret;
 
 /// The XCPD localizer, as the configuration writes it.

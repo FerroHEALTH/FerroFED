@@ -36,10 +36,10 @@ use http::StatusCode;
 use serde::Serialize;
 
 use crate::binding::ihe::mcsd::DirectorySettings;
+use crate::config::service;
 use crate::config::settings::Settings;
 use crate::federation::{error::FederationError, registry::read_registry};
 use crate::reload::{Applied, ReloadError, Reloader};
-use crate::service;
 use ferrofed_operator_api::health::Observed;
 
 /// The directory a running gateway keeps its registry in step with.

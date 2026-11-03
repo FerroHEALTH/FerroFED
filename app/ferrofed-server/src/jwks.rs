@@ -25,9 +25,6 @@ use crate::error::{self, Code};
 use crate::request_id;
 use crate::state::AppState;
 
-/// The path of the JWK Set under `{base}`.
-pub const JWKS_PATH: &str = "/.well-known/jwks.json";
-
 /// `GET {base}/.well-known/jwks.json`: the keys the gateway publishes now.
 pub async fn jwks(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default();

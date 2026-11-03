@@ -12,6 +12,7 @@
 //! and a secret the change does not name keeps its reference. No
 //! specification governs this: our own design.
 
+use std::collections::BTreeSet;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -500,6 +501,23 @@ pub fn write_secret(
     Ok(path)
 }
 
+/// The resources whose settings differ from `from` to `to`, a resource set
+/// in one and not in the other among them, in resource order.
+#[must_use]
+pub fn changed(from: &toml::Table, to: &toml::Table) -> Vec<Resource> {
+    let every: BTreeSet<Resource> = present(from).into_iter().chain(present(to)).collect();
+    every
+        .into_iter()
+        .filter(|resource| value_at(from, resource) != value_at(to, resource))
+        .collect()
+}
+
+/// `resources` as their tables are written.
+#[must_use]
+pub fn named(resources: &[Resource]) -> Vec<String> {
+    resources.iter().map(ToString::to_string).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -508,8 +526,8 @@ mod tests {
     use ferrohealth_secret::secret::WriteOnly;
 
     use super::{
-        SectionFault, compose, present, remove, set, settings_of, slots, value_at, without_secrets,
-        write_secret,
+        SectionFault, changed, compose, present, remove, set, settings_of, slots, value_at,
+        without_secrets, write_secret,
     };
 
     fn table(text: &str) -> toml::Table {
@@ -700,5 +718,25 @@ mod tests {
             assert_eq!(0o600, std::fs::metadata(&one)?.permissions().mode() & 0o777);
         }
         Ok(())
+    }
+
+    #[test]
+    fn the_changed_resources_are_named_whole() {
+        let from = table(
+            "[credentials.a]\npassword_file = \"/s/a\"\n[credentials.b]\nuser = \"x\"\n\
+             [federation]\nbest_effort = true\n[federation.consent]\ndisclose = true\n",
+        );
+        let to = table(
+            "[credentials.a]\npassword_file = \"/s/a2\"\n[credentials.b]\nuser = \"x\"\n\
+             [federation]\nbest_effort = false\n[pixm]\ntimeout_ms = 1\n",
+        );
+        assert_eq!(
+            vec![
+                Resource::Credentials(String::from("a")),
+                Resource::Binding(BindingSection::Pixm),
+                Resource::Binding(BindingSection::Consent),
+            ],
+            changed(&from, &to)
+        );
     }
 }

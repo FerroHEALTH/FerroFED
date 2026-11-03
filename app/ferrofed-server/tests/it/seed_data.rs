@@ -17,8 +17,8 @@ use std::process::Command;
 
 use ferrofed_server::conformance::fixture::{
     BUNDLE_FILE, BUNDLE_FORMAT, CLINIC_FILE, HOSPITAL_FILE, SeedData, SeedDataError, TEMPLATE_FILE,
-    sha256,
 };
+use ferrofed_server::digest::sha256;
 
 type TestResult = Result<(), Box<dyn Error>>;
 

@@ -14,8 +14,8 @@ use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
-use crate::audit::config::AuditSettings;
 use crate::config::Credentials;
+use crate::config::audit::AuditSettings;
 use crate::config::error::Error;
 use crate::config::resolve::{positive, positive_ms};
 use crate::config::service_grant::{ServiceContext, resolve_service};

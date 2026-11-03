@@ -25,10 +25,9 @@ use crate::config::error::basic::BasicFault;
 use crate::config::error::credentials::CredentialsFault;
 use crate::config::grant;
 use crate::config::public_url::PublicUrl;
-use crate::config::settings::{Scheme, SigningSettings};
+use crate::config::settings::{JWKS_PATH, Scheme, SigningSettings};
 use crate::config::tls::{self, TlsFault, TlsSettings};
 use crate::config::{Credentials, GrantKind, OAuth2, Signing, SigningAlgorithm};
-use crate::jwks::JWKS_PATH;
 
 /// Returns the scheme a service's `credentials` describe, once it is known
 /// to fit the `Authorization` header it is sent in.

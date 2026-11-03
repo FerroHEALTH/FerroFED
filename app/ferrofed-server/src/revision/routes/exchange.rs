@@ -33,10 +33,10 @@ use serde::Deserialize;
 use super::console::{ConsoleError, created, guarded};
 use super::{Managed, answered, held, number, record, refused};
 use crate::admin::Operator;
+use crate::config::tree::{CORE, diff};
 use crate::error::{self, Code};
 use crate::request_id;
 use crate::revision::service::{RevisionError, held_table};
-use crate::revision::tree::{CORE, diff};
 
 /// The export of one revision as TOML.
 pub const EXPORT: &str = "/admin/config/revisions/{id}/export";

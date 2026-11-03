@@ -329,7 +329,7 @@ pub fn check(
     for (url, site) in credential_sites(settings, registry) {
         cleartext.extend(protected_payload(profile, &url, site)?);
     }
-    cleartext.extend(crate::audit::sites(settings)?);
+    cleartext.extend(crate::config::audit::sites(settings)?);
     for binding in crate::binding::compiled() {
         cleartext.extend(binding.sites(settings)?);
     }
@@ -353,7 +353,7 @@ pub fn check(
             payload: String::from("the password in stored_queries.url"),
             requires: Encryption::Tls,
         };
-        let requires_tls = !crate::stored::postgres::exposes_password(url);
+        let requires_tls = !crate::config::postgres::exposes_password(url);
         cleartext.extend(encrypted_connection(profile, requires_tls, site)?);
     }
     #[cfg(feature = "postgres")]
@@ -363,7 +363,7 @@ pub fn check(
             payload: String::from("the password in config.url"),
             requires: Encryption::Tls,
         };
-        let requires_tls = !crate::stored::postgres::exposes_password(url);
+        let requires_tls = !crate::config::postgres::exposes_password(url);
         cleartext.extend(encrypted_connection(profile, requires_tls, site)?);
     }
     Ok(cleartext)
