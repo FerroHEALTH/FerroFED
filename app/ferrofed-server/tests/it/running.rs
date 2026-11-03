@@ -63,7 +63,7 @@ fn operator() -> Result<String, Box<dyn Error>> {
 /// `GET /admin/config/running` as `authorization`, its status and body.
 async fn get(authorization: Option<&str>) -> Result<(StatusCode, String), Box<dyn Error>> {
     let access = Access::new(&support::auth(), Profile::Production, Vec::new());
-    let app = admin::serving_router(
+    let app = admin::router(
         Arc::new(AppState::default()),
         access,
         None,

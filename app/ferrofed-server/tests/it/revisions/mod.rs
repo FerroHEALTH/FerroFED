@@ -209,7 +209,7 @@ impl Gateway {
         );
         let managed = Arc::new(Managed::new(Arc::clone(&revisions), Arc::clone(&reloader)));
         let access = Access::new(&support::auth(), Profile::Development, Vec::new());
-        let admin = admin::serving_router(
+        let admin = admin::router(
             Arc::clone(&state),
             access,
             Some(managed),

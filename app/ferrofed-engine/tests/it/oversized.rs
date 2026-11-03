@@ -65,7 +65,7 @@ fn bounded() -> Result<(RegistrySnapshot, NodeClients<Bounded>), Box<dyn Error>>
 async fn an_answer_past_the_bound_is_node_error_and_fails_the_query_424() -> TestResult {
     let (snapshot, clients) = bounded()?;
     let endpoint = EndpointId::new("node-a-pub")?;
-    let plan = Plan::new().dispatch(endpoint.clone(), NodeQuery::new(NODE_AQL))?;
+    let plan = Plan::default().dispatch(endpoint.clone(), NodeQuery::new(NODE_AQL))?;
     let budget = Budget::new(Duration::from_secs(2), Duration::from_secs(5))?;
     let answer = fan_out(
         &clients,

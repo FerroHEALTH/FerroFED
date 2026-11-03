@@ -12,12 +12,13 @@
 
 use std::collections::BTreeMap;
 
+use ferrofed_server::body::VERSION;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::transport::{self, CleartextError, Encryption, ProtectedSite};
-use ferrofed_server::metrics::service;
+use ferrofed_server::metrics::SCOPE;
 use ferrohealth_secret::secret_url::SecretUrl;
-use ferrohealth_telemetry::telemetry::Telemetry;
+use ferrohealth_telemetry::telemetry::{Service, Telemetry};
 
 use super::TestResult;
 
@@ -97,7 +98,7 @@ fn a_trace_collector_carrying_userinfo_is_refused_outside_development_and_report
 #[tokio::test]
 async fn the_export_builds_inside_the_runtime_and_flushes_on_shutdown() -> TestResult {
     let settings = resolved("[telemetry.otlp]\nendpoint = \"http://127.0.0.1:4317\"\n")?;
-    let telemetry = Telemetry::new(&settings.telemetry, service())?;
+    let telemetry = Telemetry::new(&settings.telemetry, Service::new(SCOPE, VERSION))?;
     assert!(telemetry.tracer().is_some(), "the spans are exported");
     tokio::task::spawn_blocking(move || telemetry.shutdown()).await??;
     Ok(())

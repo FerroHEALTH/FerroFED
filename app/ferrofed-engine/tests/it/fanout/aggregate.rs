@@ -42,7 +42,7 @@ fn recombination() -> Recombination {
 }
 
 fn plan(endpoints: &[&str]) -> Result<Plan, Box<dyn std::error::Error>> {
-    let mut plan = Plan::new().recombining(recombination());
+    let mut plan = Plan::default().recombining(recombination());
     for id in endpoints {
         plan = plan.dispatch(EndpointId::new(*id)?, NodeQuery::new(NODE_AQL))?;
     }

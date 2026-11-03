@@ -34,7 +34,7 @@ use ferrofed_engine::single_node::native::Answer;
 use http::{StatusCode, Uri, header};
 use openehr_federation::status::EndpointStatus;
 
-use super::{admission, attach, fhir_json, outcome, refused, unadmitted};
+use super::{UNADMITTED, admission, attach, fhir_json, outcome, refused};
 use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
@@ -67,7 +67,7 @@ pub(super) async fn documents(
         &state,
         (outbound, caller.as_deref()),
         (&headers, started),
-        unadmitted,
+        || outcome(StatusCode::FORBIDDEN, "forbidden", UNADMITTED),
     );
     let admitted = match admitted {
         Ok(admitted) => admitted,

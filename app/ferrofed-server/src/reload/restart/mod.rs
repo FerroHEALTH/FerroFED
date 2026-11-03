@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! What a reload applies and what waits for a restart: the settings a
-//! reload builds the federation from, and the changed keys it leaves to the
-//! next start. Of `[federation]`, a reload applies the localization policy
+//! What a reload applies and what waits for a restart.
+//!
+//! The settings a reload builds the federation from, and the changed keys
+//! it leaves to the next start. Of `[federation]`, a reload applies the localization policy
 //! (`[federation.localization]`) and the consent reporting
 //! (`[federation.consent]`); of `[server]`, `[auth]` less its audience. No
 //! specification governs this: our own design.
@@ -17,7 +18,12 @@ mod keys;
 use keys::RESTART_KEYS;
 
 /// Returns the core's keys a reload leaves to the next start.
-pub(super) fn keys() -> Vec<&'static str> {
+///
+/// Each is a section or a dotted key, in the order a reload names them; a
+/// binding's own sections say whether a reload applies them
+/// ([`Binding::sections`](crate::binding::Binding::sections)).
+#[must_use]
+pub fn keys() -> Vec<&'static str> {
     RESTART_KEYS.iter().map(|(key, _)| *key).collect()
 }
 

@@ -44,7 +44,7 @@ async fn ordered_node(rows: &[(i64, &str)], delay: Duration) -> Server {
 /// The façade asked for `ORDER BY` node column 0 `LIMIT limit`, with the uid
 /// in node column 1.
 fn ordered_plan(endpoints: &[&str], limit: u64) -> Result<Plan, Box<dyn Error>> {
-    let mut plan = Plan::new().ordered(ResultOrder::new(
+    let mut plan = Plan::default().ordered(ResultOrder::new(
         vec![SortKey::new(0, Direction::Ascending)],
         vec![1],
         Some(limit),
@@ -201,7 +201,7 @@ async fn under_best_effort_a_disagreeing_node_leaves_the_others_top_n() -> TestR
 /// The façade asked for `ORDER BY` node column 0 `LIMIT n OFFSET k`: every
 /// node was sent `LIMIT k + n` (`window`) and the Tier skips `k` (§11.6.2).
 fn paged_plan(endpoints: &[&str], window: u64, offset: u64) -> Result<Plan, Box<dyn Error>> {
-    let mut plan = Plan::new().ordered(
+    let mut plan = Plan::default().ordered(
         ResultOrder::new(
             vec![SortKey::new(0, Direction::Ascending)],
             vec![1],

@@ -210,7 +210,7 @@ pub fn snapshot_from_directory(directory: &Directory) -> Result<RegistrySnapshot
 /// How an organisation's listing of an `Endpoint` the content does not hold
 /// is read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Listings {
+pub(super) enum Listings {
     /// The content is the whole registry, so every listing has to name one of
     /// its endpoints.
     Complete,
@@ -220,19 +220,13 @@ enum Listings {
     Selected,
 }
 
-/// The registry document the federation's selection from a shared directory
-/// makes, with the reference of each listing it ignored: one that names no
-/// `Endpoint` of the selection.
+/// The registry document `directory` makes, read by `listings`, with the
+/// reference of each listing it ignored: one that names no `Endpoint` of a
+/// [`Listings::Selected`] selection.
 ///
 /// The same content gives the same registry whether it was read whole or
 /// kept in step, so a start and a refresh agree.
-fn selection_document(
-    selection: &Directory,
-) -> Result<(Document, BTreeSet<String>), FhirFormError> {
-    document(selection, Listings::Selected)
-}
-
-fn document(
+pub(super) fn document(
     directory: &Directory,
     listings: Listings,
 ) -> Result<(Document, BTreeSet<String>), FhirFormError> {

@@ -261,7 +261,7 @@ async fn every_node_not_resolved_is_a_200_with_no_rows_in_either_mode() -> TestR
         error: ErrorDetail::Text("the cross-reference holds no ehr_id here".to_owned()),
     };
     for mode in MODES {
-        let plan = Plan::new()
+        let plan = Plan::default()
             .settle(EndpointId::new("node-a-pub")?, not_resolved())?
             .settle(EndpointId::new("node-b-pub")?, not_resolved())?
             .completing(mode);
@@ -333,7 +333,7 @@ async fn a_candidate_set_localization_left_empty_answers_two_hundred() -> TestRe
     let outage = ErrorDetail::Text("the localizer did not answer".to_owned());
     for error in [None, Some(outage)] {
         for mode in MODES {
-            let plan = Plan::new()
+            let plan = Plan::default()
                 .settle(
                     EndpointId::new("node-a-pub")?,
                     Outcome::NotLocalized {

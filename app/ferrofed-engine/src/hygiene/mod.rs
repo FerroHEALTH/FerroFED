@@ -71,12 +71,6 @@ pub mod mask;
 pub struct Withheld(Vec<SecretString>);
 
 impl Withheld {
-    /// No identifier is withheld: a query that named no patient.
-    #[must_use]
-    pub fn none() -> Self {
-        Self::default()
-    }
-
     /// The identifiers `values`, ignoring empty ones, which no request could
     /// be checked against.
     #[must_use]
@@ -377,7 +371,7 @@ mod tests {
             "SELECT c FROM EHR e CONTAINS COMPOSITION c WHERE c/name/value='O\\'Sentinel-4711'";
         assert_eq!(
             None,
-            Withheld::none().found_in(&request(aql, &QUERY_URL, &[]))
+            Withheld::default().found_in(&request(aql, &QUERY_URL, &[]))
         );
     }
 

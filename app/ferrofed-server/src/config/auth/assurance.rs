@@ -82,44 +82,39 @@ impl AssuranceClaims {
     /// [`Error::Auth`] with [`AuthFault::AssuranceValue`] or
     /// [`AuthFault::AssuranceUnreachable`].
     pub fn resolve(&self, key: &str) -> Result<Assurance, Error> {
-        resolve(key, self)
-    }
-}
-
-/// Resolves `written` at `key`, as [`AssuranceClaims::resolve`] says.
-fn resolve(key: &str, written: &AssuranceClaims) -> Result<Assurance, Error> {
-    if written.claim.is_empty() {
-        return Err(Error::Missing {
-            key: format!("{key}.claim"),
-        });
-    }
-    let minimum = written.minimum.ok_or_else(|| Error::Missing {
-        key: format!("{key}.minimum"),
-    })?;
-    let mut values = BTreeMap::new();
-    for (level, listed) in [
-        (AssuranceLevel::Low, &written.low),
-        (AssuranceLevel::Substantial, &written.substantial),
-        (AssuranceLevel::High, &written.high),
-    ] {
-        for value in listed {
-            if value.is_empty() || values.insert(value.clone(), level).is_some() {
-                return Err(fault(
-                    &format!("{key}.{}", level.as_str()),
-                    AuthFault::AssuranceValue,
-                ));
+        if self.claim.is_empty() {
+            return Err(Error::Missing {
+                key: format!("{key}.claim"),
+            });
+        }
+        let minimum = self.minimum.ok_or_else(|| Error::Missing {
+            key: format!("{key}.minimum"),
+        })?;
+        let mut values = BTreeMap::new();
+        for (level, listed) in [
+            (AssuranceLevel::Low, &self.low),
+            (AssuranceLevel::Substantial, &self.substantial),
+            (AssuranceLevel::High, &self.high),
+        ] {
+            for value in listed {
+                if value.is_empty() || values.insert(value.clone(), level).is_some() {
+                    return Err(fault(
+                        &format!("{key}.{}", level.as_str()),
+                        AuthFault::AssuranceValue,
+                    ));
+                }
             }
         }
+        if !values.values().any(|level| *level >= minimum) {
+            return Err(fault(
+                &format!("{key}.minimum"),
+                AuthFault::AssuranceUnreachable,
+            ));
+        }
+        Ok(Assurance {
+            claim: self.claim.clone(),
+            minimum,
+            values,
+        })
     }
-    if !values.values().any(|level| *level >= minimum) {
-        return Err(fault(
-            &format!("{key}.minimum"),
-            AuthFault::AssuranceUnreachable,
-        ));
-    }
-    Ok(Assurance {
-        claim: written.claim.clone(),
-        minimum,
-        values,
-    })
 }

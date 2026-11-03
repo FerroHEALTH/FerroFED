@@ -8,7 +8,7 @@
 //! design.
 
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
-use ferrofed_engine::onward::keys::{KeyError, SigningKey};
+use ferrofed_engine::onward::keys::{Curve, KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::TlsClientAuth;
 use ferrofed_engine::onward::{ClientAuthentication, Scope, SenderConstraint};
 use ferrofed_testkit::oauth;
@@ -84,7 +84,7 @@ async fn a_previous_client_key_that_is_the_current_one_or_no_es256_key_is_refuse
         matches!(same, Err(Fapi2GrantError::Keys(KeyError::SameKey { .. }))),
         "{same:?}"
     );
-    let p384 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
+    let p384 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
     let es384 = grant(&server, key, &prover()?)?.with_previous_client_key(p384);
     assert!(
         matches!(es384, Err(Fapi2GrantError::PreviousClientKey)),

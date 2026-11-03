@@ -22,7 +22,7 @@ use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeRepl
 use ferrofed_engine::onward::dpop::{DpopKeyError, Prover};
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
-use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
+use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -67,7 +67,7 @@ static CALLERS: LazyLock<Issuer> =
 
 /// The gateway's signing keys.
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
+    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
     Ok(Arc::new(KeyRing::new(
         key,
         None,

@@ -350,7 +350,7 @@ async fn asked(
     // what it reads of every request, and the member is located by its ehr_id alone.
     let options = DispatchOptions::new(per_node, arrived.conveyance.clone())
         .with_request_id(arrived.outbound)
-        .with_withheld(Arc::new(Withheld::none()));
+        .with_withheld(Arc::new(Withheld::default()));
     let until = tokio::time::Instant::from_std(overall);
     prescriptions::paged(
         federation,

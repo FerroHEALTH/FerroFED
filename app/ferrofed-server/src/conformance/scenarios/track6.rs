@@ -16,7 +16,7 @@ use http::{Method, StatusCode};
 use openehr_federation::headers::{ENDPOINT, SYSTEM_ID};
 use uuid::Uuid;
 
-use crate::conformance::client::{Gateway, answered, ask, get, post_aql, request};
+use crate::conformance::client::{Gateway, answered, ask, post_aql, request};
 use crate::conformance::fixture::{Fixture, Member};
 use crate::conformance::scenarios::patient_compositions;
 use crate::conformance::{Failure, ensure, ensure_eq};
@@ -77,7 +77,12 @@ pub async fn follow_up_read<'f, G: Gateway>(
         .ok_or_else(|| Failure::Check(format!("{} holds the patient", member.endpoint)))?;
     let followed = ask(
         gateway,
-        get(&format!("/v1/ehr/{ehr_id}/composition/{uid}"), &[])?,
+        request(
+            Method::GET,
+            &format!("/v1/ehr/{ehr_id}/composition/{uid}"),
+            &[],
+            None,
+        )?,
     )
     .await?;
     followed.expect(StatusCode::OK, "CP-33: the follow-up read")?;
@@ -108,7 +113,11 @@ pub async fn probe_read<G: Gateway>(
     system_id: &str,
     ehr_id: &str,
 ) -> Result<(), Failure> {
-    let found = ask(gateway, get(&format!("/v1/ehr/{ehr_id}"), &[])?).await?;
+    let found = ask(
+        gateway,
+        request(Method::GET, &format!("/v1/ehr/{ehr_id}"), &[], None)?,
+    )
+    .await?;
     found.expect(StatusCode::OK, "CP-33: an ehr_id found by the probe")?;
     ensure_eq(
         &Some(endpoint),

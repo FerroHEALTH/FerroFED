@@ -428,7 +428,7 @@ fn outcome(
     let error = |message: String| ErrorDetail::Text(message);
     // NOTE: §12.6: a template is not patient data, and no resolution precedes
     // its upload, so the gateway withholds no identifier for the request.
-    let withheld = Withheld::none();
+    let withheld = Withheld::default();
     match answer {
         Ok(forwarded) if forwarded.status().is_success() => Outcome::Active { latency_ms },
         Ok(forwarded) => {

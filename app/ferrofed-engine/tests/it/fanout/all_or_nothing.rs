@@ -204,7 +204,7 @@ async fn every_node_not_resolved_is_a_200_with_no_rows_and_incomplete() -> TestR
     let not_resolved = || Outcome::NotResolved {
         error: ErrorDetail::Text("the cross-reference holds no ehr_id here".to_owned()),
     };
-    let plan = Plan::new()
+    let plan = Plan::default()
         .settle(EndpointId::new("node-a-pub")?, not_resolved())?
         .settle(EndpointId::new("node-b-pub")?, not_resolved())?;
     let answer = run(&snapshot, plan, budget(2_000, 5_000)?).await?;

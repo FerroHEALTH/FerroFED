@@ -12,10 +12,10 @@
 //! routing state at `POST` [`CLEAR_EHR_ID`], and the export of the routing
 //! state this process learned at `POST` [`EXPORT_IDENTITY_STATE`], and the
 //! reload `SIGHUP` asks for at `POST` [`RELOAD`], for a container no
-//! signal reaches ([`serving_router`]), with the running configuration
+//! signal reaches ([`router`]), with the running configuration
 //! at `GET` [`crate::running::RUNNING`] beside it, a read. Under
 //! `config.ui = "managed"` it also serves the configuration revisions under
-//! `/admin/config` ([`revision::routes`], [`managed_router`]), whose reads
+//! `/admin/config` ([`revision::routes`], [`router`]), whose reads
 //! pass [`operator_read`]. Every other path is `404`. No route is on the
 //! gateway's client listener, and none is part of the ITS-REST surface.
 //!
@@ -262,33 +262,18 @@ impl Access {
 /// without a credential; the peer is the [`ConnectInfo<SocketAddr>`] the
 /// server records, so the application is served with
 /// `into_make_service_with_connect_info::<SocketAddr>()`.
-pub fn router(state: Arc<AppState>, access: Access) -> Router {
-    managed_router(state, access, None)
-}
-
-/// Returns the admin listener's application with the revision routes of `managed`.
 ///
-/// It is [`router`] with the configuration revisions of [`revision::routes`]
-/// beside it when `managed` is set (`config.ui = "managed"`); without it, as
-/// under `config.ui = "off"`, no revision route exists and each of their
-/// paths is `404`.
-pub fn managed_router(
-    state: Arc<AppState>,
-    access: Access,
-    managed: Option<Arc<Managed>>,
-) -> Router {
-    serving_router(state, access, managed, None)
-}
-
-/// Returns the admin listener's application as [`managed_router`] does,
-/// with `POST` [`RELOAD`] and `GET` [`crate::running::RUNNING`] beside it
-/// when `reloader` is set.
+/// With `managed` set (`config.ui = "managed"`) the configuration revisions
+/// of [`revision::routes`] stand beside them; without it, as under
+/// `config.ui = "off"`, no revision route exists and each of their paths is
+/// `404`.
 ///
-/// The reload is a write action: admitted for the operator scope and
-/// recorded with its operator ([`operator_only`]); the running
-/// configuration is a read ([`operator_read`]). Without `reloader` both
-/// paths are `404`.
-pub fn serving_router(
+/// With `reloader` set, `POST` [`RELOAD`] and `GET`
+/// [`crate::running::RUNNING`] stand beside them. The reload is a write
+/// action: admitted for the operator scope and recorded with its operator
+/// ([`operator_only`]); the running configuration is a read
+/// ([`operator_read`]). Without `reloader` both paths are `404`.
+pub fn router(
     state: Arc<AppState>,
     access: Access,
     managed: Option<Arc<Managed>>,
@@ -344,20 +329,8 @@ pub fn serving_router(
 /// unset, so no admin route exists.
 #[must_use]
 pub fn listener(settings: &Settings, state: &Arc<AppState>) -> Option<(SocketAddr, Router)> {
-    managed_listener(settings, state, None)
-}
-
-/// Returns the address and the application of the admin listener as
-/// [`listener`] does, with the configuration revisions `managed` serves
-/// ([`managed_router`]).
-#[must_use]
-pub fn managed_listener(
-    settings: &Settings,
-    state: &Arc<AppState>,
-    managed: Option<Arc<Managed>>,
-) -> Option<(SocketAddr, Router)> {
     settings.metrics.listen.map(|address| {
-        let app = managed_router(Arc::clone(state), Access::of(settings), managed);
+        let app = router(Arc::clone(state), Access::of(settings), None, None);
         (address, app)
     })
 }

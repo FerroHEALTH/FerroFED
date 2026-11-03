@@ -9,7 +9,7 @@
 //! fan-out budget (§5.2, §7.1, §11.5).
 //!
 //! [`Federation::load`] builds it at boot from the resolved settings, and
-//! [`Federation::reloaded`] builds its successor when the registry is
+//! [`Federation::build`] builds its successor when the registry is
 //! reloaded ([`crate::reload`]). Without a registry document the gateway
 //! federates nothing, so there is no federation and the ITS-REST surface
 //! stays unserved.
@@ -140,7 +140,7 @@ impl Observed {
         Self {
             bindings,
             index: EhrIndex::new(widened(capacity)),
-            learned: Mutex::new(LearnedMap::new()),
+            learned: Mutex::new(LearnedMap::default()),
             latencies: Arc::default(),
         }
     }

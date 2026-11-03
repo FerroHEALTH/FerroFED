@@ -16,7 +16,7 @@ use ferrofed_engine::conveyance::relayed::{HealthProfessional, HealthcareProvide
 use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::conveyance::{Conveyance, TYPE};
 use ferrofed_engine::onward::SystemClock;
-use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
+use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
 use ferrofed_testkit::oauth;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use secrecy::SecretString;
@@ -66,7 +66,7 @@ static SIGNER: LazyLock<Arc<Signer>> =
 
 /// A signer over a fresh ES384 key, naming the gateway [`GATEWAY`].
 pub(crate) fn signer() -> Result<Signer, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
+    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
     let keys = KeyRing::new(key, None, Duration::ZERO, Arc::new(SystemClock))?;
     Ok(Signer::new(Arc::new(keys), GATEWAY))
 }

@@ -70,7 +70,7 @@ fn listener(
     };
     let auth = support::auth_with_basic(&[SCRAPE_USER, OTHER_USER])?;
     let access = Access::new(&auth, profile, users);
-    let app = admin::router(Arc::new(AppState::default()), access);
+    let app = admin::router(Arc::new(AppState::default()), access, None, None);
     Ok(match peer {
         Some(peer) => app.layer(MockConnectInfo(peer)),
         None => app,

@@ -19,7 +19,7 @@ use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::fapi2::metadata::{DiscoveryError, RESPONSE_LIMIT};
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Error, Fapi2Grant, Fapi2GrantError};
 use ferrofed_engine::onward::issuer::{EndpointError, Issuer};
-use ferrofed_engine::onward::keys::SigningKey;
+use ferrofed_engine::onward::keys::{Curve, SigningKey};
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
 use ferrofed_testkit::oauth;
 use openehr_its::rest::client::{CredentialsError, CredentialsProvider as _};
@@ -282,7 +282,7 @@ fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
             Some(AuthorizationDetails::parse(DETAILS)?),
         ))
     };
-    let es384 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
+    let es384 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
     assert!(matches!(
         Fapi2Grant::new(issuer()?, CLIENT_ID, (es384, prover()?), request()?),
         Err(Fapi2GrantError::ClientKey)
@@ -317,7 +317,7 @@ fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
 #[test]
 fn debug_shows_no_key() -> TestResult {
     let pem = oauth::Curve::P256.pem()?;
-    let key = SigningKey::from_p256_pem(&SecretString::from(pem.clone()))?;
+    let key = SigningKey::from_pem(&SecretString::from(pem.clone()), Curve::P256)?;
     let grant = Fapi2Grant::new(
         Issuer::parse("https://as.example.org")?,
         CLIENT_ID,

@@ -481,15 +481,6 @@ pub fn request(
     })
 }
 
-/// Returns `GET path` under the base, with the header fields `fields`.
-///
-/// # Errors
-///
-/// Returns [`Failure::Check`] when the path or a header field is not one.
-pub fn get(path: &str, fields: &[(&str, &str)]) -> Result<Request<Vec<u8>>, Failure> {
-    request(Method::GET, path, fields, None)
-}
-
 /// Sends `request` through `gateway`, naming the request in a failure.
 ///
 /// # Errors

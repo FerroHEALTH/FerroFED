@@ -250,7 +250,7 @@ async fn a_fan_out_query_that_never_got_a_slot_is_capped_and_never_sent() -> Tes
     // The per-node timeout and the overall budget end together, so the
     // budget runs out while the query still waits for a slot.
     let budget = Budget::new(Duration::from_millis(300), Duration::from_millis(300))?;
-    let plan = Plan::new().dispatch(endpoint.clone(), NodeQuery::new(NODE_AQL))?;
+    let plan = Plan::default().dispatch(endpoint.clone(), NodeQuery::new(NODE_AQL))?;
     let answer = fan_out(
         &clients,
         &snapshot,

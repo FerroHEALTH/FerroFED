@@ -10,7 +10,7 @@
 //! (RFC 7518 §3.4): a P-256 key signs ES256, a P-384 key ES384
 //! ([`SigningKey::from_ec_pem`]). A grant whose profile admits no ES384, the
 //! FAPI 2.0 grant, holds a P-256 key of its own
-//! ([`SigningKey::from_p256_pem`]). Its `kid` is its RFC 7638 JWK thumbprint over
+//! ([`SigningKey::from_pem`] with [`Curve::P256`]). Its `kid` is its RFC 7638 JWK thumbprint over
 //! SHA-256, so the same key always has the same `kid` and no operator names
 //! one. The previous key is published, and never signs, for one overlap
 //! window from the moment the ring is built ([`KeyRing::new`]), or until the
@@ -72,6 +72,16 @@ pub enum KeyError {
     },
 }
 
+/// The curve a signing key lies on, which decides the algorithm it signs
+/// with (RFC 7518 §3.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Curve {
+    /// P-256, signing ES256.
+    P256,
+    /// P-384, signing ES384.
+    P384,
+}
+
 /// One signing key, ES384 or ES256, its public half as a JWK, and its `kid`.
 ///
 /// `Debug` shows the `kid` and the algorithm alone.
@@ -84,15 +94,20 @@ pub struct SigningKey {
 }
 
 impl SigningKey {
-    /// Reads the ES384 private key `pem` holds in PKCS#8 PEM.
+    /// Reads the private key on `curve` that `pem` holds in PKCS#8 PEM, to
+    /// sign with the algorithm of that curve (RFC 7518 §3.4).
     ///
     /// # Errors
     ///
     /// Returns [`KeyError::Pem`] for text that is no EC private key in
-    /// PKCS#8 PEM, [`KeyError::Curve`] for a key on a curve other than P-384,
-    /// and [`KeyError::Thumbprint`] when its `kid` cannot be computed.
-    pub fn from_pem(pem: &SecretString) -> Result<Self, KeyError> {
-        Self::read(pem, Algorithm::ES384, KeyError::Curve)
+    /// PKCS#8 PEM, [`KeyError::CurveP256`] or [`KeyError::Curve`] for a key
+    /// on a curve other than P-256 or P-384, and [`KeyError::Thumbprint`]
+    /// when its `kid` cannot be computed.
+    pub fn from_pem(pem: &SecretString, curve: Curve) -> Result<Self, KeyError> {
+        match curve {
+            Curve::P256 => Self::read(pem, Algorithm::ES256, KeyError::CurveP256),
+            Curve::P384 => Self::read(pem, Algorithm::ES384, KeyError::Curve),
+        }
     }
 
     /// Reads the private key `pem` holds in PKCS#8 PEM, its algorithm
@@ -106,23 +121,12 @@ impl SigningKey {
     /// curve, and [`KeyError::Thumbprint`] when its `kid` cannot be
     /// computed.
     pub fn from_ec_pem(pem: &SecretString) -> Result<Self, KeyError> {
-        match Self::read(pem, Algorithm::ES256, KeyError::CurveP256) {
+        match Self::from_pem(pem, Curve::P256) {
             Err(KeyError::CurveP256(_not_p256)) => {
                 Self::read(pem, Algorithm::ES384, KeyError::CurveUnsupported)
             }
             read => read,
         }
-    }
-
-    /// Reads the ES256 private key `pem` holds in PKCS#8 PEM.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`KeyError::Pem`] for text that is no EC private key in
-    /// PKCS#8 PEM, [`KeyError::CurveP256`] for a key on a curve other than
-    /// P-256, and [`KeyError::Thumbprint`] when its `kid` cannot be computed.
-    pub fn from_p256_pem(pem: &SecretString) -> Result<Self, KeyError> {
-        Self::read(pem, Algorithm::ES256, KeyError::CurveP256)
     }
 
     /// Reads the private key `pem` holds for `algorithm`, refusing a key on

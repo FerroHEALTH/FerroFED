@@ -105,7 +105,7 @@ fn clients(snapshot: &RegistrySnapshot) -> Result<NodeClients<ReqwestTransport>,
 
 /// A plan dispatching `NODE_AQL` to every listed endpoint.
 fn plan_for(endpoints: &[&str]) -> Result<Plan, Box<dyn Error>> {
-    let mut plan = Plan::new();
+    let mut plan = Plan::default();
     for id in endpoints {
         plan = plan.dispatch(EndpointId::new(*id)?, NodeQuery::new(NODE_AQL))?;
     }

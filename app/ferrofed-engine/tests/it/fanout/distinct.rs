@@ -35,7 +35,7 @@ async fn distinct_node(cells: &[&str]) -> Server {
 
 /// `SELECT DISTINCT` over node column 0, ordered on it, `LIMIT 2`.
 fn distinct_plan(endpoints: &[&str]) -> Result<Plan, Box<dyn Error>> {
-    let mut plan = Plan::new().ordered(
+    let mut plan = Plan::default().ordered(
         ResultOrder::new(
             vec![SortKey::new(0, Direction::Ascending)],
             Vec::new(),

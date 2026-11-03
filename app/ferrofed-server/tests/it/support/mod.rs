@@ -851,10 +851,10 @@ pub(crate) fn signer(
     federation: &str,
 ) -> Result<Arc<ferrofed_engine::conveyance::signer::Signer>, Box<dyn StdError>> {
     use ferrofed_engine::onward::SystemClock;
-    use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
+    use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
     let pem = secrecy::SecretString::from(ferrofed_testkit::oauth::Curve::P384.pem()?);
     let keys = KeyRing::new(
-        SigningKey::from_pem(&pem)?,
+        SigningKey::from_pem(&pem, Curve::P384)?,
         None,
         Duration::ZERO,
         Arc::new(SystemClock),

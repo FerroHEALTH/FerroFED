@@ -43,7 +43,7 @@
 //!     endpoint = "node-a-pub"
 //!     "#,
 //! )?;
-//! let learned = LearnedMap::new();
+//! let learned = LearnedMap::default();
 //!
 //! let legacy: SystemId = "legacy-a.example.org".parse()?;
 //! let route = learned.route(&registry, &legacy)?;
@@ -157,12 +157,6 @@ pub struct LearnedMap {
 }
 
 impl LearnedMap {
-    /// Creates an empty map.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Routes a `creating_system_id`: a member's own `system_id`, then a
     /// registered mapping, then a learned one (N21, §12.3 step 1).
     ///

@@ -26,7 +26,7 @@ use ferrofed_engine::onward::authorization_details::AuthorizationDetails;
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::exchange::SubjectToken;
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
-use ferrofed_engine::onward::keys::SigningKey;
+use ferrofed_engine::onward::keys::{Curve, SigningKey};
 use ferrofed_engine::onward::token::{CLIENT_ASSERTION_TYPE, GRANT_TYPE};
 use ferrofed_engine::onward::{Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
@@ -87,9 +87,10 @@ static CALLERS: LazyLock<Issuer> =
 
 /// A fresh P-256 client key.
 fn client_key() -> Result<SigningKey, Box<dyn Error>> {
-    Ok(SigningKey::from_p256_pem(&SecretString::from(
-        oauth::Curve::P256.pem()?,
-    ))?)
+    Ok(SigningKey::from_pem(
+        &SecretString::from(oauth::Curve::P256.pem()?),
+        Curve::P256,
+    )?)
 }
 
 /// A fresh P-256 `DPoP` key.

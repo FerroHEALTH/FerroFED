@@ -18,6 +18,7 @@ use std::sync::Arc;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_server::admission::report::Condition;
 use ferrofed_server::config::Config;
+use ferrofed_server::conformance::node_profile::checks::Release;
 use ferrofed_server::conformance::node_profile::interface::{Arrangement, Interface, Principal};
 use ferrofed_server::conformance::node_profile::{Check, Finding, Profile, Verdict, checks};
 use ferrofed_server::conformance::report::FINDINGS_HEADER;
@@ -322,7 +323,12 @@ async fn a_refusal_held_on_the_read_and_both_query_forms_is_the_nodes_decision()
     arranged(&server, 403, 403, 0).await;
     let arrangement = Arrangement::new(EHR, refused());
 
-    let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    let finding = checks::refused(
+        Release::AccessDecidedAtNode,
+        &interface(&server)?,
+        &arrangement,
+    )
+    .await?;
     assert_eq!(Verdict::Pass, finding.verdict(), "{finding:?}");
     assert_eq!(Check::AccessDecidedAtNode, finding.check());
     Ok(())
@@ -334,7 +340,12 @@ async fn a_scoped_query_answering_no_row_withholds_the_ehr() -> TestResult {
     arranged(&server, 403, 200, 0).await;
     let arrangement = Arrangement::new(EHR, refused());
 
-    let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    let finding = checks::refused(
+        Release::AccessDecidedAtNode,
+        &interface(&server)?,
+        &arrangement,
+    )
+    .await?;
     assert_eq!(Verdict::Pass, finding.verdict(), "{finding:?}");
     Ok(())
 }
@@ -345,7 +356,12 @@ async fn a_scoped_query_releasing_what_the_read_refuses_fails_the_decision() -> 
     arranged(&server, 403, 200, 1).await;
     let arrangement = Arrangement::new(EHR, refused());
 
-    let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    let finding = checks::refused(
+        Release::AccessDecidedAtNode,
+        &interface(&server)?,
+        &arrangement,
+    )
+    .await?;
     assert_eq!(Verdict::Fail, finding.verdict(), "{finding:?}");
     let released = finding
         .evidence()
@@ -362,7 +378,12 @@ async fn a_read_released_to_the_refused_principal_fails_the_decision() -> TestRe
     arranged(&server, 200, 403, 0).await;
     let arrangement = Arrangement::new(EHR, refused());
 
-    let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    let finding = checks::refused(
+        Release::AccessDecidedAtNode,
+        &interface(&server)?,
+        &arrangement,
+    )
+    .await?;
     assert_eq!(Verdict::Fail, finding.verdict(), "{finding:?}");
     Ok(())
 }
@@ -380,7 +401,12 @@ async fn a_refusal_the_permitted_principal_gets_too_shows_nothing() -> TestResul
         .await;
     let arrangement = Arrangement::new(EHR, refused());
 
-    let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    let finding = checks::refused(
+        Release::AccessDecidedAtNode,
+        &interface(&server)?,
+        &arrangement,
+    )
+    .await?;
     assert_eq!(Verdict::NotObservable, finding.verdict(), "{finding:?}");
     Ok(())
 }
@@ -415,7 +441,12 @@ async fn a_query_form_that_serves_no_row_to_the_permitted_principal_shows_nothin
         .await;
     let arrangement = Arrangement::new(EHR, refused());
 
-    let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    let finding = checks::refused(
+        Release::AccessDecidedAtNode,
+        &interface(&server)?,
+        &arrangement,
+    )
+    .await?;
     assert_eq!(
         Verdict::NotObservable,
         finding.verdict(),
@@ -430,7 +461,12 @@ async fn a_consent_refusal_is_observed_under_its_own_point() -> TestResult {
     arranged(&server, 403, 403, 0).await;
     let arrangement = Arrangement::new(EHR, refused());
 
-    let finding = checks::consent_before_release(&interface(&server)?, &arrangement).await?;
+    let finding = checks::refused(
+        Release::ConsentBeforeRelease,
+        &interface(&server)?,
+        &arrangement,
+    )
+    .await?;
     assert_eq!(Verdict::Pass, finding.verdict(), "{finding:?}");
     assert_eq!(Check::ConsentBeforeRelease, finding.check());
     assert_eq!(&["CP-19"], finding.check().points());
@@ -531,7 +567,12 @@ async fn a_401_to_the_refused_principal_is_its_refusal_and_never_an_error() -> T
     arranged(&server, 401, 401, 0).await;
     let arrangement = Arrangement::new(EHR, refused());
 
-    let finding = checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    let finding = checks::refused(
+        Release::AccessDecidedAtNode,
+        &interface(&server)?,
+        &arrangement,
+    )
+    .await?;
     assert_eq!(Verdict::Pass, finding.verdict(), "{finding:?}");
     let refusals = finding
         .evidence()
@@ -611,7 +652,12 @@ async fn the_refusal_queries_carry_the_ehr_id_as_a_parameter_value_alone() -> Te
     arranged(&server, 403, 403, 0).await;
     let arrangement = Arrangement::new(EHR, refused());
 
-    checks::access_decided_at_node(&interface(&server)?, &arrangement).await?;
+    checks::refused(
+        Release::AccessDecidedAtNode,
+        &interface(&server)?,
+        &arrangement,
+    )
+    .await?;
     let requests = server.received_requests().await.unwrap_or_default();
     let forms = ehr_id_as_a_parameter_alone(&requests)?;
     assert_eq!(4, forms.len(), "both forms, as each principal: {forms:?}");

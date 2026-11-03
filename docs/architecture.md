@@ -1585,7 +1585,7 @@ organisation's list. The server keeps them in step: every
 seconds before the `Date` the directory stamped its previous answer with, so
 the directory's clock decides and a version applied twice changes nothing; a
 directory that sent no readable `Date` is read again whole. A changed
-registry goes through `Federation::reloaded_over`, the reload's own checks,
+registry goes through `Federation::build`, the reload's own checks,
 with the settings the last reload applied: it replaces the running one, or
 it is refused, logged and counted as a refused reload with the running
 registry kept, and the content advances only with an applied registry, so the

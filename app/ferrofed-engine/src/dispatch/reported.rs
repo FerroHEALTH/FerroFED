@@ -392,7 +392,7 @@ mod tests {
     #[test]
     fn a_message_with_nothing_printable_leaves_the_status_alone() {
         let body = ErrorBody::from_bytes(b"\n\t\r\n".to_vec());
-        let error = answered(StatusCode::SERVICE_UNAVAILABLE, &body, &Withheld::none());
+        let error = answered(StatusCode::SERVICE_UNAVAILABLE, &body, &Withheld::default());
         assert_eq!("the node answered 503 Service Unavailable", text(&error));
     }
 
@@ -416,7 +416,7 @@ mod tests {
         let body = ErrorBody::from_bytes(
             br#"{"type":"about:blank","title":"Conflict","status":409,"detail":" "}"#.to_vec(),
         );
-        let error = answered(StatusCode::CONFLICT, &body, &Withheld::none());
+        let error = answered(StatusCode::CONFLICT, &body, &Withheld::default());
         assert_eq!("the node answered 409 Conflict: Conflict", text(&error));
     }
 
@@ -428,7 +428,7 @@ mod tests {
             text(&answered(
                 StatusCode::BAD_REQUEST,
                 &error,
-                &Withheld::none()
+                &Withheld::default()
             ))
         );
         let neither = ErrorBody::from_bytes(br#"{"status":400}"#.to_vec());
@@ -437,7 +437,7 @@ mod tests {
             text(&answered(
                 StatusCode::BAD_REQUEST,
                 &neither,
-                &Withheld::none()
+                &Withheld::default()
             ))
         );
     }

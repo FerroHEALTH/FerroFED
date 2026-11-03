@@ -7,7 +7,7 @@
 //! started from, the file `--config` or `FERROFED_CONFIG` names and the
 //! `FERROFED__` environment, and checks it exactly as at boot:
 //! [`Config::load`], [`Config::resolve`], then
-//! [`Federation::reloaded`](crate::federation::Federation::reloaded),
+//! [`Federation::build`](crate::federation::Federation::build),
 //! which is [`Federation::load`](crate::federation::Federation::load) over
 //! what the process has learned, and [`transport::check`] under the profile
 //! the process started with. A valid
@@ -67,7 +67,7 @@ use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::tls::{ReloadableTls, TlsError};
 
 pub mod action;
-mod restart;
+pub mod restart;
 mod trees;
 
 /// What a fresh read of the configuration gives: the settings, the revision
@@ -75,16 +75,6 @@ mod trees;
 type Fresh = (Settings, Option<FileRevision>, Option<toml::Table>);
 
 use restart::{effective, needs_restart};
-
-/// Returns the core's keys a reload leaves to the next start.
-///
-/// Each is a section or a dotted key, in the order a reload names them; a
-/// binding's own sections say whether a reload applies them
-/// ([`Binding::sections`](crate::binding::Binding::sections)).
-#[must_use]
-pub fn restart_keys() -> Vec<&'static str> {
-    restart::keys()
-}
 
 /// Reloads the registry the server started with.
 ///
@@ -553,8 +543,7 @@ impl Reloader {
         document: Option<Result<RegistrySnapshot, FederationError>>,
         needs_restart: Vec<&'static str>,
     ) -> Result<Applied, ReloadError> {
-        let next = running
-            .reloaded(settings, document)
+        let next = Federation::build(settings, document, Some(running))
             .map_err(|source| ReloadError::Federation {
                 document: settings.registry_document.clone(),
                 source: Box::new(source),

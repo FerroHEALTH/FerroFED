@@ -37,7 +37,7 @@ use http::{HeaderMap, StatusCode};
 use jiff::Timestamp;
 use serde::Deserialize;
 
-use super::{Answer, Managed, answered, blocking, body_refused, held, record, refused};
+use super::{Answer, Managed, answered, body_refused, held, record, refused};
 use crate::admin::Operator;
 use crate::config::error::Error;
 use crate::error::{self, Code};
@@ -224,7 +224,7 @@ fn snapshot(managed: &Managed) -> Option<RegistrySnapshot> {
 /// `GET` [`super::RESOURCES`]: every member and stored query, with its owner.
 pub(super) async fn resources(State(managed): State<Arc<Managed>>, headers: HeaderMap) -> Response {
     let managed = Arc::clone(&managed);
-    blocking(&headers, move || report(&managed)).await
+    answered(&headers, move || report(&managed)).await
 }
 
 /// The members and stored queries `managed` serves, with their owners.

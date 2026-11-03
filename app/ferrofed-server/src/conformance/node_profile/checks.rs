@@ -344,51 +344,6 @@ fn error_observed(status: StatusCode, what: &str, due: StatusCode) -> Observatio
     }
 }
 
-/// Checks that the node makes and holds its own access decision (§13, N26;
-/// assists CP-18).
-///
-/// An EHR its policy withholds from one principal is refused to that
-/// principal on the read and on both `ehr_id`-scoped query forms, while it
-/// is served to the principal the policy admits. The check binds the
-/// `ehr_id` as a query parameter, while the gateway's own dispatch prints it
-/// into the AQL text as a literal (§7, N7): the check reads the node's
-/// decision on the parameter form, and FerroFED's dispatch sends the
-/// literal form.
-///
-/// The operator arranges the refusal with the node's own access controls.
-///
-/// # Errors
-///
-/// Returns [`CheckError`] when a query of the check cannot be built or a
-/// request reaches no answer.
-pub async fn access_decided_at_node(
-    interface: &Interface,
-    arrangement: &Arrangement,
-) -> Result<Finding, CheckError> {
-    refusal(Check::AccessDecidedAtNode, interface, arrangement).await
-}
-
-/// Checks that the node checks consent before it releases data (§13.2, N27,
-/// N27a; assists CP-19).
-///
-/// An EHR whose patient refused consent to one principal is refused to that
-/// principal on the read and on both `ehr_id`-scoped query forms, however the
-/// request reached the node.
-///
-/// The operator arranges the consent refusal at the node; where nothing can
-/// arrange one, the finding is [`Finding::not_arranged`].
-///
-/// # Errors
-///
-/// Returns [`CheckError`] when a query of the check cannot be built or a
-/// request reaches no answer.
-pub async fn consent_before_release(
-    interface: &Interface,
-    arrangement: &Arrangement,
-) -> Result<Finding, CheckError> {
-    refusal(Check::ConsentBeforeRelease, interface, arrangement).await
-}
-
 /// Checks that the node withholds a composition it holds a restriction of
 /// processing for, from every principal, before it releases anything (§13.2,
 /// N27; assists CP-19).
@@ -469,12 +424,52 @@ pub async fn restriction_before_release(
     ))
 }
 
-/// The refusal both release checks observe, recorded under `check`.
-async fn refusal(
-    check: Check,
+/// A release check: a refusal the node makes of one principal, arranged by
+/// the operator at the node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Release {
+    /// The node makes and holds its own access decision (§13, N26; assists
+    /// CP-18).
+    ///
+    /// The operator arranges the refusal with the node's own access controls.
+    /// The check binds the `ehr_id` as a query parameter, while the gateway's
+    /// own dispatch prints it into the AQL text as a literal (§7, N7): the
+    /// check reads the node's decision on the parameter form, and FerroFED's
+    /// dispatch sends the literal form.
+    AccessDecidedAtNode,
+    /// The node checks consent before it releases data (§13.2, N27, N27a;
+    /// assists CP-19), however the request reached the node.
+    ///
+    /// The operator arranges the consent refusal at the node; where nothing
+    /// can arrange one, the finding is [`Finding::not_arranged`].
+    ConsentBeforeRelease,
+}
+
+impl From<Release> for Check {
+    fn from(release: Release) -> Self {
+        match release {
+            Release::AccessDecidedAtNode => Self::AccessDecidedAtNode,
+            Release::ConsentBeforeRelease => Self::ConsentBeforeRelease,
+        }
+    }
+}
+
+/// Checks the refusal `release` names.
+///
+/// An EHR withheld from one principal is refused to that principal on the
+/// read and on both `ehr_id`-scoped query forms, while it is served to the
+/// principal the node admits.
+///
+/// # Errors
+///
+/// Returns [`CheckError`] when a query of the check cannot be built or a
+/// request reaches no answer.
+pub async fn refused(
+    release: Release,
     interface: &Interface,
     arrangement: &Arrangement,
 ) -> Result<Finding, CheckError> {
+    let check = Check::from(release);
     let ehr_id = arrangement.ehr_id();
     let refused = arrangement.refused();
     let mut seen = Vec::new();

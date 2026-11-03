@@ -8,7 +8,7 @@
 //! A default is written as the configuration spells it, and the tests hold
 //! each one to the value the configuration takes when the key is unset; a
 //! restart key is one the reload names as waiting for the next start
-//! ([`crate::reload::restart_keys`]), and the tests hold every setting
+//! ([`crate::reload::restart::keys`]), and the tests hold every setting
 //! without one to being outside each of them. No specification governs
 //! this: our own design.
 
@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn each_restart_key_is_one_a_reload_names_and_every_other_setting_reloads() {
-        let restart = crate::reload::restart_keys();
+        let restart = crate::reload::restart::keys();
         for entry in ENTRIES {
             if let Some(key) = entry.restart {
                 assert!(restart.contains(&key), "{}: {key}", entry.key);

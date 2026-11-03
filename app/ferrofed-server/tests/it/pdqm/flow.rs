@@ -402,8 +402,7 @@ async fn a_reload_that_changes_the_supplier_url_asks_the_new_supplier() -> TestR
         ASK_ALL,
         &tables(&pix.uri(), &pdqm_stub::base_url(&second), "iti-78"),
     )?;
-    let next = running
-        .reloaded(&fresh, read_registry(&fresh))?
+    let next = Federation::build(&fresh, read_registry(&fresh), Some(&running))?
         .ok_or("a registry is configured")?;
     let app = ferrofed_server::router(
         Arc::new(AppState::with_federation(next)),
