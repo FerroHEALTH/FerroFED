@@ -38,6 +38,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_atna::balp::AuditRecorder;
+use ihe_iti::authorizer::Authorizable;
 use ihe_iti::pdqm::PdqmClient;
 use ihe_iti::pdqm::error::{InvalidInput, PdqmError};
 use ihe_iti::pdqm::input::MatchInput;
@@ -375,7 +376,7 @@ impl Demographics for PdqmDemographics {
         let audited = audited_as(on_behalf);
         match self.transaction {
             Transaction::Search => {
-                let query = PatientQuery::new()
+                let query = PatientQuery::default()
                     .identifier(Some(system), &value)
                     .and_then(|query| query.identifier_domains(&[self.master.as_str()]));
                 let query = match query {
@@ -417,7 +418,7 @@ impl Demographics for PdqmDemographics {
         let audited = audited_as(on_behalf);
         match self.transaction {
             Transaction::Search => {
-                let query = match PatientQuery::new().identifier(Some(system), &value) {
+                let query = match PatientQuery::default().identifier(Some(system), &value) {
                     Ok(query) => query,
                     Err(refused) => {
                         return HeaderAnswer::Unavailable(DemographicsError::Backend(Box::new(

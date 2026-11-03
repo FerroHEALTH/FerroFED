@@ -16,7 +16,7 @@ use ferrofed_identity::nl::nvi::{NviConfig, NviLocalizer};
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use nl_generic_functions::authorizer::Authorizer;
+use ihe_iti::authorizer::Authorizer;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;

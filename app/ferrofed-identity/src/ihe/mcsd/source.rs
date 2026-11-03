@@ -30,6 +30,7 @@ use std::time::{Duration, Instant};
 
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_secret::secret_url::SecretUrl;
+use ihe_iti::authorizer::Authorizable;
 use ihe_iti::mcsd::budget::{Budget, Limits};
 use ihe_iti::mcsd::client::McsdClient;
 use ihe_iti::mcsd::error::{InvalidBase, McsdError};

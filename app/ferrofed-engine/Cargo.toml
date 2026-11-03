@@ -19,7 +19,7 @@ publish = false
 # The onward credential kinds of the Dutch binding: the Nuts grant of Annex B
 # §B.4 (onward::grant::nl::nuts). The server's binding-nl turns it on; no specification
 # governs the split: our own design.
-nl = ["dep:nl-generic-functions"]
+nl = ["dep:ihe-iti", "dep:nl-generic-functions"]
 
 [dependencies]
 ferrohealth-secret.workspace = true
@@ -37,11 +37,12 @@ ferrofed-registry.workspace = true
 # whose RFC 6749 §5.2 code a node's answer names when the token endpoint
 # refused with one.
 ferrohealth-smart.workspace = true
-# The access token request of the Nuts grant, Annex B §B.4 (#88), and the
-# authorizer trait the Nuts grant implements for a Generic Functions client
-# (#539), under nl. Neither feature compiles a FHIR model, so the engine
-# builds none (#730).
-nl-generic-functions = { workspace = true, optional = true, features = ["authorizer", "nuts-auth"] }
+# The authorizer trait the Nuts grant implements for a Generic Functions
+# client (#539), under nl; ihe-iti carries it since 0.0.73 (#1516). The
+# `authorizer` feature compiles no FHIR model, so the engine builds none (#730).
+ihe-iti = { workspace = true, optional = true, features = ["authorizer"] }
+# The access token request of the Nuts grant, Annex B §B.4 (#88), under nl.
+nl-generic-functions = { workspace = true, optional = true, features = ["nuts-auth"] }
 # The typed `ehr_id` a node query is scoped to (#45).
 openehr-base.workspace = true
 openehr-federation = { workspace = true, features = ["merge"] }
@@ -92,7 +93,9 @@ uuid.workspace = true
 [dev-dependencies]
 ferrofed-testkit.workspace = true
 jsonschema.workspace = true
-# The NVI client the Nuts grant's authorizer is tested in (#539).
+# The NVI client the Nuts grant's authorizer is tested in (#539), and the
+# trait its `with_authorizer` belongs to.
+ihe-iti = { workspace = true, features = ["authorizer"] }
 nl-generic-functions = { workspace = true, features = ["nuts-auth", "nvi"] }
 # The HTTP client the Nuts grant's tests hand its client (#88).
 reqwest.workspace = true

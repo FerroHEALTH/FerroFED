@@ -21,6 +21,7 @@ publish = false
 # ITI-55 audit recorder. The server's binding-ihe turns it on.
 ihe = [
   "balp",
+  "dep:fhir-types",
   "ihe-iti/mcsd",
   "ihe-iti/pdqm",
   "ihe-iti/pixm",
@@ -35,7 +36,7 @@ ihe = [
 balp = ["dep:ihe-atna"]
 # The adapters of the Dutch binding (Annex B): NVI and Mitz, with the LRZa
 # URAs they read. The server's binding-nl turns it on.
-nl = ["dep:nl-generic-functions"]
+nl = ["dep:nl-generic-functions", "ihe-iti/authorizer"]
 
 [dependencies]
 ferrohealth-secret.workspace = true
@@ -53,6 +54,9 @@ http.workspace = true
 # PDQm ITI-78 and ITI-119 client. Its `atna` and `balp` features turn on the
 # audit records those clients write through ihe-atna.
 ihe-iti = { workspace = true, optional = true, features = ["atna", "balp"] }
+# The R4 `Endpoint` an mCSD directory entry holds (`DirectoryEntry<Endpoint>`,
+# #1516), the model ihe-iti already compiles under `mcsd`.
+fhir-types = { workspace = true, optional = true, features = ["r4", "resources"] }
 # The audit types every recorder here speaks: the ATNA spool, forwarder and
 # syslog sender (ITI-20) and the BALP AuditEvent with its FHIR Feed, from the
 # family's audit library (FerroHEALTH/FerroAUDIT).
