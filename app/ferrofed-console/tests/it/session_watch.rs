@@ -13,6 +13,15 @@ use wiremock::MockServer;
 
 use crate::support::{COOKIE, console, establish, get, get_as, send, signed_in};
 
+/// What the watch answers a live session has left, in seconds.
+#[derive(serde::Deserialize)]
+struct Left {
+    /// The idle lifetime left.
+    idle: u64,
+    /// The absolute lifetime left.
+    absolute: u64,
+}
+
 /// A console over the stub gateway `gateway`, with no provider.
 fn configuration(gateway: &MockServer) -> String {
     format!(
@@ -36,19 +45,8 @@ async fn the_watch_answers_what_the_session_has_left_and_401_once_it_is_gone()
     ] {
         let (response, body) = send(&service, request).await?;
         assert_eq!(StatusCode::OK, response.status(), "{body}");
-        let left: serde_json::Value = serde_json::from_str(&body)?;
-        assert!(
-            left.get("idle")
-                .and_then(serde_json::Value::as_u64)
-                .is_some(),
-            "{body}"
-        );
-        assert!(
-            left.get("absolute")
-                .and_then(serde_json::Value::as_u64)
-                .is_some(),
-            "{body}"
-        );
+        let left: Left = serde_json::from_str(&body)?;
+        assert!(left.idle > 0 && left.absolute > 0, "{body}");
     }
     crate::support::end(&state, &session)?;
     let (gone, _body) = send(
