@@ -35,7 +35,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
 use serde::Serialize;
 
-use crate::binding::ihe::mcsd::DirectorySettings;
+use crate::config::ihe::mcsd::DirectorySettings;
 use crate::config::service;
 use crate::config::settings::Settings;
 use crate::federation::{error::FederationError, registry::read_registry};

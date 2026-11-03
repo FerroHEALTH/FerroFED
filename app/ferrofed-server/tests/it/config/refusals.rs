@@ -4,10 +4,10 @@
 //! The refusals that name their key, line and file, and never echo a value.
 
 use ferrofed_server::EXIT_CONFIG;
-#[cfg(feature = "binding-ihe")]
-use ferrofed_server::binding::ihe::pixm::PixmMethod;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error;
+#[cfg(feature = "binding-ihe")]
+use ferrofed_server::config::ihe::pixm::PixmMethod;
 use ferrohealth_config::error::ConfigError;
 #[cfg(feature = "binding-ihe")]
 use std::collections::BTreeMap;

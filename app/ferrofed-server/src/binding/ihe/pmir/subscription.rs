@@ -49,7 +49,7 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use super::IdentityFeed;
-use super::config::OnDrain;
+use crate::config::ihe::pmir::OnDrain;
 use ferrofed_operator_api::health::Observed;
 
 /// How many doublings the wait between two failed checks grows by at most:

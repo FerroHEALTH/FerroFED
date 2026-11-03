@@ -28,6 +28,8 @@ pub mod error;
 pub mod fhir;
 pub mod gateway;
 pub mod grant;
+#[cfg(feature = "binding-ihe")]
+pub mod ihe;
 pub mod limits;
 pub mod load;
 pub mod oauth;
@@ -70,8 +72,8 @@ pub const COMBINING_MARGIN_MS: u64 = 1_000;
 ///
 /// The sections of a binding exist only in a build with its feature
 /// (`binding-ihe`, `binding-nl`), so a build without it refuses them as
-/// unknown keys; each binding resolves its own
-/// ([`Binding::resolve`](crate::binding::Binding::resolve)).
+/// unknown keys. The IHE binding's sections are resolved here
+/// (`config::ihe::resolve`).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
@@ -99,11 +101,11 @@ pub struct Config {
     /// The PIXm resolver (`[pixm]`): the PIX Managers and each member's
     /// `ehr_id` domain there (#43).
     #[cfg(feature = "binding-ihe")]
-    pub pixm: Option<crate::binding::ihe::pixm::Pixm>,
+    pub pixm: Option<ihe::pixm::Pixm>,
     /// The XCPD localizer (`[xcpd]`): the responding gateways and the
     /// community each member serves (Annex A.3, #85).
     #[cfg(feature = "binding-ihe")]
-    pub xcpd: Option<crate::binding::ihe::xcpd::Xcpd>,
+    pub xcpd: Option<ihe::xcpd::Xcpd>,
     /// The Dutch Generic Functions (`[nl_gf]`): the NVI localizer and the
     /// care provider each member holds the data of (Annex B, #87).
     #[cfg(feature = "binding-nl")]
@@ -112,12 +114,12 @@ pub struct Config {
     /// gateway subscribes to with ITI-94, and the path its ITI-93 messages
     /// arrive at (track 8 of §16.3, Annex A.4).
     #[cfg(feature = "binding-ihe")]
-    pub pmir: Option<crate::binding::ihe::pmir::config::Pmir>,
+    pub pmir: Option<ihe::pmir::Pmir>,
     /// The PDQm demographics step (`[pdqm]`): the Patient Demographics
     /// Supplier asked for the master identity of an identifier the
     /// cross-reference does not map (Annex A §A.2, #487).
     #[cfg(feature = "binding-ihe")]
-    pub pdqm: Option<crate::binding::ihe::pdqm::Pdqm>,
+    pub pdqm: Option<ihe::pdqm::Pdqm>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
     /// The FHIR R4 face of the European exchange format (`[fhir]`,

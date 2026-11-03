@@ -11,8 +11,6 @@
 //! forwarder drains each spool whatever the reloads. No specification
 //! governs the process model: our own design.
 
-pub mod repository;
-
 use std::sync::Arc;
 
 use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
@@ -21,8 +19,8 @@ use ihe_atna::atna::repository::{Repository, TlsSettings};
 use ihe_atna::atna::spool::Content;
 
 use crate::audit::{AuditTrailError, Forwarding, Stopping, observed, spool, started};
-use crate::binding::ihe::audit::repository::AuditRepositorySettings;
 use crate::binding::seam::Indicator;
+use crate::config::ihe::audit_repository::AuditRepositorySettings;
 use ferrofed_operator_api::health::Indication;
 
 impl Forwarding for RepositoryAudit {

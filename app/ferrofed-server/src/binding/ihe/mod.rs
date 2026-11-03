@@ -35,12 +35,7 @@ use crate::binding::ihe::mcsd::registry::DirectoryFailure;
 use crate::binding::seam::{LocalizerSeam, ResolverSeam};
 use crate::binding::{Binding, Offer, Reload, Role, Section, StepBudgets};
 use crate::config::Config;
-use crate::config::error::Error;
-use crate::config::error::federation::FederationFault;
-use crate::config::service_grant::{self, ServiceContext};
-use crate::config::settings::Scheme;
 use crate::config::settings::Settings;
-use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::federation::DemographicsStep;
 use crate::federation::error::FederationError;
 use crate::localization::LocalizationError;
@@ -90,49 +85,6 @@ impl Binding for Ihe {
 
     fn sections(&self) -> &'static [Section] {
         SECTIONS
-    }
-
-    fn audits(&self, config: &Config) -> bool {
-        config.pixm.is_some()
-            || config.pdqm.is_some()
-            || config.pmir.is_some()
-            || config.registry.mcsd.is_some()
-    }
-
-    fn resolve(&self, config: &Config, settings: &mut Settings) -> Result<(), Error> {
-        settings.pixm = config
-            .pixm
-            .as_ref()
-            .map(|section| pixm::resolve(section, ServiceContext::of(settings)))
-            .transpose()?;
-        settings.xcpd = xcpd::resolve(config)?;
-        settings.pmir = pmir::config::resolve(
-            config,
-            ServiceContext::of(settings),
-            settings.server.public_url.as_ref(),
-            settings.server.auth.basic.as_ref(),
-        )?;
-        if let (Some(fhir), Some(pmir)) = (&settings.fhir, &settings.pmir) {
-            let route = settings.server.base_path.join(&pmir.path);
-            crate::config::fhir::apart(fhir, &route, "pmir.path")?;
-        }
-        if config.registry.document.is_some() && config.registry.mcsd.is_some() {
-            return Err(Error::Federation(FederationFault::TwoRegistrySources));
-        }
-        settings.registry_directory = config
-            .registry
-            .mcsd
-            .as_ref()
-            .map(|directory| {
-                mcsd::resolve(
-                    directory,
-                    ServiceContext::of(settings),
-                    settings.audit.clone(),
-                )
-            })
-            .transpose()?;
-        settings.pdqm = pdqm::resolve(config, ServiceContext::of(settings))?;
-        Ok(())
     }
 
     fn budgets(&self, config: &Config) -> StepBudgets {
@@ -232,73 +184,6 @@ impl Binding for Ihe {
             .map(mcsd::registry::read)
     }
 
-    fn sites(&self, settings: &Settings) -> Result<Vec<ProtectedSite>, CleartextError> {
-        let profile = settings.profile;
-        let mut cleartext = Vec::new();
-        let mut hold = |url: &str, site: ProtectedSite| {
-            transport::protected_payload(profile, url, site)
-                .map(|exposed| cleartext.extend(exposed))
-        };
-        for (index, manager) in settings
-            .pixm
-            .iter()
-            .flat_map(|pixm| pixm.managers.iter().enumerate())
-        {
-            let key = format!("pixm.manager[{index}]");
-            let credentials = manager
-                .credentials
-                .is_some()
-                .then(|| format!("{key}.credentials"));
-            hold(
-                manager.url.expose(),
-                transport::identity_site(&key, credentials.as_deref()),
-            )?;
-        }
-        if let Some(pdqm) = &settings.pdqm {
-            let key = pdqm::PDQM_KEY;
-            let credentials = pdqm
-                .credentials
-                .is_some()
-                .then(|| format!("{key}.credentials"));
-            hold(
-                pdqm.url.expose(),
-                transport::identity_site(key, credentials.as_deref()),
-            )?;
-        }
-        let mut audit = None;
-        if let Some(xcpd) = &settings.xcpd {
-            let assertion = xcpd.assertion.as_ref().map(|_| xcpd.assertion_key);
-            for (index, gateway) in xcpd.gateways.iter().enumerate() {
-                let key = format!("xcpd.gateway[{index}]");
-                hold(
-                    gateway.url.expose(),
-                    transport::identity_site(&key, assertion),
-                )?;
-            }
-            if let Some(repository) = &xcpd.audit_repository {
-                let site = ProtectedSite {
-                    url_key: String::from("xcpd.audit_repository.url"),
-                    payload: String::from("the ITI-55 audit messages, which name the patient"),
-                    requires: transport::Encryption::SyslogTls,
-                };
-                audit = transport::encrypted_syslog(profile, &repository.url, site)?;
-            }
-        }
-        if let Some(directory) = settings
-            .registry_directory
-            .as_ref()
-            .filter(|directory| directory.credentials.is_some())
-        {
-            hold(directory.url.expose(), mcsd::site())?;
-        }
-        for (url, site) in token_endpoints(settings) {
-            hold(&url, site)?;
-        }
-        cleartext.extend(pmir::config::sites(profile, settings.pmir.as_ref())?);
-        cleartext.extend(audit);
-        Ok(cleartext)
-    }
-
     fn effective(&self, boot: &Settings, fresh: &mut Settings) {
         // NOTE: no specification governs this: our own design; one forwarder
         // drains each audit spool, so where the audit messages go takes a restart.
@@ -370,67 +255,4 @@ impl Binding for Ihe {
                 .is_some_and(|repository| repository.spool_dir.is_none())
         })
     }
-
-    fn log_summary(&self, settings: &Settings) {
-        tracing::info!(
-            binding = self.name(),
-            registry_directory = settings.registry_directory.is_some(),
-            registry_refresh_s = settings
-                .registry_directory
-                .as_ref()
-                .map(|directory| directory.refresh_interval.as_secs()),
-            pix_managers = settings.pixm.as_ref().map_or(0, |pixm| pixm.managers.len()),
-            pmir_feed = settings.pmir.is_some(),
-            pdqm_transaction = settings.pdqm.as_ref().map(|pdqm| pdqm.transaction.as_str()),
-            xcpd_localizer = settings.xcpd.is_some(),
-            "binding configured"
-        );
-    }
-}
-
-/// The token endpoint of every IHE FHIR service whose credentials are a
-/// client-credentials grant, with its site: the gateway's client
-/// credentials travel to it (RFC 6749 §2.3.1).
-fn token_endpoints(settings: &Settings) -> Vec<(String, ProtectedSite)> {
-    let pixm = settings
-        .pixm
-        .iter()
-        .flat_map(|pixm| pixm.managers.iter().enumerate())
-        .map(|(index, manager)| {
-            (
-                format!("pixm.manager[{index}].credentials"),
-                manager.credentials.as_ref(),
-            )
-        });
-    let pdqm = settings.pdqm.iter().map(|pdqm| {
-        (
-            format!("{}.credentials", pdqm::PDQM_KEY),
-            pdqm.credentials.as_ref(),
-        )
-    });
-    let directory = settings.registry_directory.iter().map(|directory| {
-        (
-            String::from("registry.mcsd.credentials"),
-            directory.credentials.as_ref(),
-        )
-    });
-    let feed = settings
-        .pmir
-        .iter()
-        .map(|pmir| (String::from("pmir.credentials"), pmir.credentials.as_ref()));
-    pixm.chain(pdqm)
-        .chain(directory)
-        .chain(feed)
-        .filter_map(|(section, scheme)| match scheme {
-            Some(Scheme::Oauth { grant, .. }) => {
-                crate::config::oauth::token_endpoint(grant).map(|endpoint| {
-                    (
-                        endpoint.to_string(),
-                        service_grant::site(&format!("{section}.oauth")),
-                    )
-                })
-            }
-            _ => None,
-        })
-        .collect()
 }

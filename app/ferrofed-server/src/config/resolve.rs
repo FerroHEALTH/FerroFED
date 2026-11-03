@@ -184,6 +184,8 @@ impl Config {
         for binding in crate::binding::compiled() {
             binding.resolve(self, &mut settings)?;
         }
+        #[cfg(feature = "binding-ihe")]
+        crate::config::ihe::resolve(self, &mut settings)?;
         // NOTE: no specification governs this: our own design; a binding refuses its own
         // section before the `[audit]` its records and the access records go to.
         audit?;

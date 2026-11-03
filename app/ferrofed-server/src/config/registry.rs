@@ -36,7 +36,7 @@ pub struct Registry {
     /// in step with (`[registry.mcsd]`, §15.1, Annex A.5), in place of a
     /// document.
     #[cfg(feature = "binding-ihe")]
-    pub mcsd: Option<crate::binding::ihe::mcsd::McsdDirectory>,
+    pub mcsd: Option<crate::config::ihe::mcsd::McsdDirectory>,
     /// The members the operator console manages (`[[registry.members]]`),
     /// which only a configuration revision holds, joined to the document's.
     pub members: Vec<ConsoleMember>,
