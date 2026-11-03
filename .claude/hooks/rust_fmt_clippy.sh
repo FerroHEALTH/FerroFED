@@ -22,10 +22,13 @@
 # thrashes the cargo cache; clippy is a per-phase gate the agent runs
 # explicitly (`cargo clippy --workspace --all-targets`).
 #
-# No cargo command runs here: rustfmt formats the one edited file on its own
-# (edition 2024), the comment guard and shellcheck read that one file, and a
-# missing tool is skipped. Any other file, and a path that no longer exists,
-# is a quiet exit 0.
+# Last, for a .rs file under app/*/src, crates/*/src or tools/*/src, run
+# scripts/checks/forwarders.sh on the one file, which CAN block when the file
+# carries a forwarder its baseline lacks. That is the one cargo command here:
+# it builds tools/forwarders in the one ./target on first use, a few seconds.
+# rustfmt formats the one edited file on its own (edition 2024), the comment
+# guard and shellcheck read that one file, and a missing tool is skipped.
+# Any other file, and a path that no longer exists, is a quiet exit 0.
 
 set -uo pipefail
 
@@ -91,5 +94,21 @@ if [[ -n "$file_root" && -f "$guard" ]]; then
     exit 2
   }
 fi
+
+# Forwarder guard (.claude/rules/rust-style.md, No function only forwards to
+# another): the edited file carries no forwarder the baseline lacks. The
+# guard measures only a file of its own checkout and passes any other.
+forwarders="$repo_root/scripts/checks/forwarders.sh"
+case "$file_path" in
+*/app/*/src/*.rs | */crates/*/src/*.rs | */tools/*/src/*.rs)
+  if [[ -n "$file_root" && -f "$forwarders" ]]; then
+    findings="$(bash "$forwarders" --files "$file_path" 2>&1)" || {
+      printf '%s\n' "$findings" >&2
+      exit 2
+    }
+  fi
+  ;;
+*) ;;
+esac
 
 exit 0
