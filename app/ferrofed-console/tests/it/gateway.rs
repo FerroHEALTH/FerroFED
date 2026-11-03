@@ -5,6 +5,7 @@
 //! self-description of §7a.2 read into its typed body, sent as the operator,
 //! and every other answer a typed refusal.
 
+use openehr_federation::options::OptionsRoot;
 use std::error::Error;
 use std::time::Duration;
 
@@ -66,9 +67,8 @@ async fn the_self_description_is_read_as_the_operator() -> Result<(), Box<dyn Er
         .mount(&server)
         .await;
     let gateway = gateway(&format!("{}/fed", server.uri()))?;
-    let description = gateway.self_description(&token()).await?;
-    let expected: openehr_federation::options::OptionsRoot =
-        serde_json::from_str(&options_example()?)?;
+    let description = gateway.report::<OptionsRoot>(&token()).await?;
+    let expected: OptionsRoot = serde_json::from_str(&options_example()?)?;
     assert_eq!(expected.federation.id, description.federation.id);
     assert_eq!(
         expected.federation.spec_version,
@@ -85,7 +85,7 @@ async fn a_refused_self_description_carries_the_gateway_status() -> Result<(), B
         .mount(&server)
         .await;
     let refused = gateway(&server.uri())?
-        .self_description(&token())
+        .report::<OptionsRoot>(&token())
         .await
         .expect_err("a 404 is no self-description");
     assert!(
@@ -103,7 +103,7 @@ async fn a_refused_operator_token_is_a_typed_refusal() -> Result<(), Box<dyn Err
         .mount(&server)
         .await;
     let refused = gateway(&server.uri())?
-        .self_description(&token())
+        .report::<OptionsRoot>(&token())
         .await
         .expect_err("a 401 is no self-description");
     assert!(
@@ -130,7 +130,7 @@ async fn a_body_that_is_not_a_self_description_is_refused() -> Result<(), Box<dy
         .mount(&server)
         .await;
     let refused = gateway(&server.uri())?
-        .self_description(&token())
+        .report::<OptionsRoot>(&token())
         .await
         .expect_err("an incomplete body is refused");
     assert!(matches!(refused, GatewayError::Call { .. }), "{refused:?}");

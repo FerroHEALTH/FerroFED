@@ -31,13 +31,13 @@ use ferrohealth_ui::view::template::list::{
 
 use crate::app::{ALL_NODES, ORGANISATIONS};
 use crate::locale::{Msg, current, message, tr, tr_with};
-use crate::pages::{h, stopped, t};
+use crate::pages::stopped;
 use crate::read::federation::{Federation, Health, Node, Organisation};
 use ferrohealth_ui::view::state::state;
 
 /// Which of the two views the page shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum View {
+pub(crate) enum View {
     /// The organisations.
     Organisations,
     /// Every node across them.
@@ -64,18 +64,8 @@ fn asked() -> Asked {
     }
 }
 
-/// The organisations.
-pub async fn list() -> Html {
-    page(View::Organisations).await
-}
-
-/// Every node across the organisations.
-pub async fn all_nodes() -> Html {
-    page(View::Nodes).await
-}
-
 /// The page of `view_of`.
-async fn page(view_of: View) -> Html {
+pub(crate) async fn page(view_of: View) -> Html {
     let asked = asked();
     let managed = crate::pages::configuration::console_manages();
     let body = match crate::read::federation::read().await {
@@ -321,13 +311,13 @@ fn organisation_table(organisations: &[&Organisation]) -> Html {
         let href = organisation.routable().then(|| organisation.href());
         let health = organisation.health();
         let locale = current();
-        h(format!(
+        Html::raw(format!(
             "<tr{}>{}{}{}{} {}</tr>",
             excluded(health),
-            title_cell(href.as_deref(), t(organisation.shown()), None),
+            title_cell(href.as_deref(), Html::text(organisation.shown()), None),
             cell(
                 &columns[1],
-                h(format!("<code>{}</code>", t(&organisation.id)))
+                Html::raw(format!("<code>{}</code>", Html::text(&organisation.id)))
             ),
             count_cell(
                 &locale,
@@ -389,20 +379,20 @@ fn node_table(nodes: &[(&Organisation, &Node)]) -> Html {
         let href =
             (node.routable() && organisation.routable()).then(|| organisation.node_href(node));
         let health = node.health();
-        h(format!(
+        Html::raw(format!(
             "<tr{}>{}{}{} {}{}{}</tr>",
             excluded(health),
             title_cell(
                 href.as_deref(),
-                h(format!("<code>{}</code>", t(&node.id))),
+                Html::raw(format!("<code>{}</code>", Html::text(&node.id))),
                 None
             ),
-            cell(&columns[1], t(organisation.shown())),
+            cell(&columns[1], Html::text(organisation.shown())),
             cell(
                 &columns[2],
-                h(format!(
+                Html::raw(format!(
                     "<code>{}</code>",
-                    t(node.system_id.clone().unwrap_or_default())
+                    Html::text(node.system_id.clone().unwrap_or_default())
                 )),
             ),
             cell(&columns[3], state(health.mark(), health.word(), None)),

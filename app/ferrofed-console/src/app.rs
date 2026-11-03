@@ -24,7 +24,6 @@ use ferrohealth_ui::view::shell::{Document, document};
 use http::header::CACHE_CONTROL;
 use http::{HeaderValue, StatusCode};
 
-use crate::locale::{Msg, tr};
 use crate::visit::Visit;
 
 /// The product name as an operator reads it.
@@ -117,12 +116,6 @@ pub fn needs_session(path: &str) -> bool {
 pub fn title(title: String) -> Html {
     crate::visit::with(|visit| visit.title(title));
     Html::empty()
-}
-
-/// The words of the product's name, for a title with no page of its own.
-#[must_use]
-pub fn product() -> String {
-    tr(Msg::Product)
 }
 
 /// The document title of a page that named `title`.

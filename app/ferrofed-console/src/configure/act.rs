@@ -9,6 +9,8 @@
 //! what the page draws. The first replica configured is called with the
 //! operator's own access token, which never leaves the server.
 
+use std::convert::identity;
+
 use crate::locale::{Msg, tr};
 use ferrofed_operator_api::console::ConsoleMember;
 use ferrofed_operator_api::operator::PageRequest;
@@ -16,6 +18,7 @@ use ferrofed_operator_api::resource::{Resource, SecretChange, SectionRequest, Se
 use ferrofed_operator_api::revision::{Revision, RevisionId};
 use ferrofed_operator_api::running::SettingsRequest;
 
+use crate::act::acted;
 use crate::config::settings::ReplicaSettings;
 use crate::configure::member::Shown;
 use crate::configure::model::Screen;
@@ -26,6 +29,7 @@ use crate::configure::sections;
 use crate::configure::settings;
 use crate::gateway::config::Change;
 use crate::gateway::{AccessToken, Gateway, GatewayError};
+use crate::read::ActionKind;
 use crate::read::Refusal;
 use crate::read::Stop;
 
@@ -152,6 +156,9 @@ fn unmanaged(error: &GatewayError) -> bool {
     })
 }
 
+/// The kind every configuration action reports its answer as.
+const CONFIGURATION: ActionKind = ActionKind::Configuration;
+
 /// Runs `plan` at `replica` as the operator, and renders its answer.
 pub async fn run(
     gateway: &Gateway,
@@ -178,17 +185,21 @@ pub async fn run(
                 base,
                 reason: &reason,
             };
-            let saved = gateway.remove_member(replica, token, change, &node).await;
-            let saved = previewed(gateway, replica, token, saved).await;
-            render::answers::saved(&acted((name, "member removal"), saved, |line| line))
+            remove_member(gateway, (replica, token), change, &node).await
         }
         Plan::Apply { revision } => {
             let applied = gateway.apply_revision(replica, token, revision).await;
-            render::answers::applied(&acted((name, "apply"), applied, |line| line), "apply")
+            render::answers::applied(
+                &acted(CONFIGURATION, (name, "apply"), applied, identity),
+                "apply",
+            )
         }
         Plan::Rollback { current, reason } => {
             let applied = gateway.rollback(replica, token, current, &reason).await;
-            render::answers::applied(&acted((name, "rollback"), applied, |line| line), "rollback")
+            render::answers::applied(
+                &acted(CONFIGURATION, (name, "rollback"), applied, identity),
+                "rollback",
+            )
         }
         Plan::StoreQuery {
             name: query,
@@ -214,11 +225,7 @@ pub async fn run(
                 base,
                 reason: &reason,
             };
-            let saved = gateway
-                .remove_section(replica, token, change, &resource)
-                .await;
-            let saved = previewed(gateway, replica, token, saved).await;
-            render::answers::saved(&acted((name, "section removal"), saved, |line| line))
+            remove_section(gateway, (replica, token), change, &resource).await
         }
         Plan::SaveSettings {
             base,
@@ -230,22 +237,71 @@ pub async fn run(
                 reason,
                 settings,
             };
-            let saved = gateway.save_settings(replica, token, &request).await;
-            let saved = previewed(gateway, replica, token, saved).await;
-            render::answers::saved(&acted((name, "settings-save"), saved, |line| line))
+            save_settings(gateway, (replica, token), &request).await
         }
         Plan::Confirm { revision } => {
             let confirmed = gateway.confirm_revision(replica, token, revision).await;
-            sections::confirmed(&acted((name, "confirmation"), confirmed, |mark| mark))
+            sections::confirmed(&acted(
+                CONFIGURATION,
+                (name, "confirmation"),
+                confirmed,
+                identity,
+            ))
         }
         Plan::Approve { revision } => {
             let approved = gateway.approve_revision(replica, token, revision).await;
-            sections::approved(&acted((name, "approval"), approved, |review| review))
+            sections::approved(&acted(
+                CONFIGURATION,
+                (name, "approval"),
+                approved,
+                identity,
+            ))
         }
         Plan::Import { base, reason, toml } => {
             import(gateway, (replica, token), (base, &reason, &toml)).await
         }
     }
+}
+
+/// Removes the console member `node` on `change`, as `replica` answers.
+async fn remove_member(
+    gateway: &Gateway,
+    (replica, token): (&ReplicaSettings, &AccessToken),
+    change: Change<'_>,
+    node: &str,
+) -> ActionAnswer {
+    let saved = gateway.remove_member(replica, token, change, node).await;
+    let saved = previewed(gateway, replica, token, saved).await;
+    let at = (replica.name.as_str(), "member removal");
+    render::answers::saved(&acted(CONFIGURATION, at, saved, identity))
+}
+
+/// Removes the managed section `resource` on `change`, as `replica`
+/// answers.
+async fn remove_section(
+    gateway: &Gateway,
+    (replica, token): (&ReplicaSettings, &AccessToken),
+    change: Change<'_>,
+    resource: &Resource,
+) -> ActionAnswer {
+    let saved = gateway
+        .remove_section(replica, token, change, resource)
+        .await;
+    let saved = previewed(gateway, replica, token, saved).await;
+    let at = (replica.name.as_str(), "section removal");
+    render::answers::saved(&acted(CONFIGURATION, at, saved, identity))
+}
+
+/// Saves the settings `request` changes, as `replica` answers.
+async fn save_settings(
+    gateway: &Gateway,
+    (replica, token): (&ReplicaSettings, &AccessToken),
+    request: &SettingsRequest,
+) -> ActionAnswer {
+    let saved = gateway.save_settings(replica, token, request).await;
+    let saved = previewed(gateway, replica, token, saved).await;
+    let at = (replica.name.as_str(), "settings-save");
+    render::answers::saved(&acted(CONFIGURATION, at, saved, identity))
 }
 
 /// Stores the stored-query version `query` names with its AQL at
@@ -259,6 +315,7 @@ async fn store(
         .store_query(replica, token, (query, version), aql)
         .await;
     render::answers::stored(&acted(
+        CONFIGURATION,
         (replica.name.as_str(), &tr(Msg::StoredQueryStore)),
         stored,
         |stored| StoredLine {
@@ -284,7 +341,7 @@ async fn save_section(
             Ok(Err(refused)) => return render::answers::refused(&refused),
             Err(error) => {
                 let failed = Err::<SavedLine, GatewayError>(error);
-                return render::answers::saved(&acted(at, failed, |line| line));
+                return render::answers::saved(&acted(CONFIGURATION, at, failed, |line| line));
             }
         };
     let mut changes = secrets;
@@ -308,7 +365,7 @@ async fn save_section(
         .save_section(replica, token, resource, &request)
         .await;
     let saved = previewed(gateway, replica, token, saved).await;
-    render::answers::saved(&acted(at, saved, |line| line))
+    render::answers::saved(&acted(CONFIGURATION, at, saved, |line| line))
 }
 
 /// The settings `settings` give `resource`, merged onto those the
@@ -371,7 +428,7 @@ async fn import(
     let name = replica.name.as_str();
     let change = Change { base, reason };
     let imported = gateway.import_config(replica, token, change, toml).await;
-    render::answers::imported(&acted((name, "import"), imported, |line| line))
+    render::answers::imported(&acted(CONFIGURATION, (name, "import"), imported, identity))
 }
 
 /// Saves `member` as [`save`] does, and renders the answer with its preview.
@@ -390,7 +447,7 @@ async fn save_member(
         Ok(saved) => {
             let saved = previewed(gateway, replica, token, saved).await;
             let at = (replica.name.as_str(), what);
-            render::answers::saved(&acted(at, saved, |line| line))
+            render::answers::saved(&acted(CONFIGURATION, at, saved, |line| line))
         }
         Err(refused) => render::answers::refused(&refused),
     }
@@ -467,14 +524,4 @@ async fn previewed(
         running,
         changes,
     })
-}
-
-/// What `replica` did with the configuration action `what` that
-/// `answered`, its report read by `read`.
-fn acted<A, T>(
-    at: (&str, &str),
-    answered: Result<A, GatewayError>,
-    read: impl FnOnce(A) -> T,
-) -> crate::act::ReplicaAnswer<T> {
-    crate::act::acted(crate::read::ActionKind::Configuration, at, answered, read)
 }

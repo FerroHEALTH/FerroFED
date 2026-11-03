@@ -19,10 +19,11 @@ use ferrohealth_ui::view::template::about::{
     AboutPage, Link, Manufacturer, SelfDescription, about_page,
 };
 use ferrohealth_ui::view::toast::toast_region;
+use openehr_federation::options::OptionsRoot;
 
 use crate::app::{PRODUCT, VERSION};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, t};
+
 use ferrofed_operator_api::manufacturer::MANUFACTURER;
 
 /// The route Download fetches the `OPTIONS {base}/` document from.
@@ -57,7 +58,7 @@ async fn gateway() -> Gateway {
     let (address, description) = match crate::read::signed_in() {
         Ok((state, token)) => (
             Some(state.settings().gateway.base.to_string()),
-            state.gateway().self_description(&token).await.ok(),
+            state.gateway().report::<OptionsRoot>(&token).await.ok(),
         ),
         Err(_) => (None, None),
     };
@@ -78,7 +79,7 @@ async fn gateway() -> Gateway {
 
 /// The page's cards for `gateway`.
 fn about(gateway: Gateway) -> Html {
-    let text = |words: String| t(words);
+    let text = |words: String| Html::text(words);
     let signed_in = gateway.address.is_some();
     let mut versions = vec![(
         tr(Msg::AboutGateway),
@@ -96,7 +97,7 @@ fn about(gateway: Gateway) -> Html {
     if let Some(address) = gateway.address {
         versions.push((
             tr(Msg::AboutGatewayAddress),
-            h(format!("<code>{}</code>", t(address))),
+            Html::raw(format!("<code>{}</code>", Html::text(address))),
         ));
     }
     if let Some(spec) = gateway.spec {
@@ -119,13 +120,16 @@ fn about(gateway: Gateway) -> Html {
     let address = card(
         tr(Msg::AboutContactTitle),
         definitions(vec![
-            (tr(Msg::AboutName), t(MANUFACTURER.name)),
-            (tr(Msg::AboutAddress), t(MANUFACTURER.postal_address)),
+            (tr(Msg::AboutName), Html::text(MANUFACTURER.name)),
+            (
+                tr(Msg::AboutAddress),
+                Html::text(MANUFACTURER.postal_address),
+            ),
             (
                 tr(Msg::AboutWebsite),
-                h(format!(
+                Html::raw(format!(
                     "<a href=\"{website}\">{website}</a>",
-                    website = t(MANUFACTURER.website)
+                    website = Html::text(MANUFACTURER.website)
                 )),
             ),
         ]),
@@ -178,7 +182,7 @@ pub fn centred() -> Html {
     let locale = current();
     crate::app::title(tr(Msg::AboutTitle)).then(centred_layout(
         &locale,
-        h(format!("<div class=\"fui-column\">{body}</div>")),
+        Html::raw(format!("<div class=\"fui-column\">{body}</div>")),
         toast_region(&locale, Vec::new()),
         crate::shell::footer(),
     ))

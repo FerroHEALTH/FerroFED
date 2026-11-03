@@ -26,7 +26,7 @@ use ferrohealth_ui::view::topology::{
 
 use crate::app::{SELF_DESCRIPTION, TOPOLOGY};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, latency_fact, stopped, t};
+use crate::pages::{latency_fact, stopped};
 use crate::read::federation::{Federation, Health, Node, Organisation, ServiceGroup};
 use ferrohealth_ui::view::state::state;
 
@@ -151,9 +151,9 @@ pub async fn page() -> Html {
         Err(stop) => Html::join([
             heading,
             stopped(&stop),
-            h(format!(
+            Html::raw(format!(
                 "<p class=\"fui-small fui-muted\">{}</p>",
-                t(tr(Msg::TopologyNoStale))
+                Html::text(tr(Msg::TopologyNoStale))
             )),
         ]),
         Ok(federation) => Html::join([heading, map(&federation, &asked), edge_rule()]),
@@ -370,9 +370,9 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
     let close = asked.href(|next| next.look = None);
     if let Some((organisation, node)) = federation.node(id) {
         let endpoints = node.endpoints.iter().map(|endpoint| {
-            h(format!(
+            Html::raw(format!(
                 "<li><code>{}</code> {}</li>",
-                t(&endpoint.id),
+                Html::text(&endpoint.id),
                 state(endpoint.health.mark(), endpoint.health.word(), None)
             ))
         });
@@ -386,7 +386,7 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
                 &[("organisation", organisation.shown().to_owned().into())],
             )),
             close,
-            body: h(format!(
+            body: Html::raw(format!(
                 "{}<ul class=\"fui-stack\">{endpoints}</ul><p><a href=\"{}\">{}</a></p>",
                 facts_row(vec![
                     (
@@ -402,8 +402,8 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
                         latency_fact(node.latency_ms_p95(), tr(Msg::ColumnP95Title)),
                     ),
                 ]),
-                t(organisation.node_href(node)),
-                t(tr(Msg::TopologyOpenPage)),
+                Html::text(organisation.node_href(node)),
+                Html::text(tr(Msg::TopologyOpenPage)),
             )),
         });
     }
@@ -413,7 +413,7 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
         mono: false,
         line: Some(organisation.id.clone()),
         close,
-        body: h(format!(
+        body: Html::raw(format!(
             "{}<p><a href=\"{}\">{}</a></p>",
             facts_row(vec![(
                 tr(Msg::ColumnState),
@@ -423,8 +423,8 @@ fn quick_look(federation: &Federation, id: &str, asked: &Asked) -> Option<QuickL
                     None
                 ),
             )]),
-            t(organisation.href()),
-            t(tr(Msg::TopologyOpenPage)),
+            Html::text(organisation.href()),
+            Html::text(tr(Msg::TopologyOpenPage)),
         )),
     })
 }

@@ -25,7 +25,7 @@ use ferrohealth_ui::view::template::detail::{DetailPage, detail_page};
 
 use crate::app::ORGANISATIONS;
 use crate::locale::{Msg, current, message, tr, tr_with};
-use crate::pages::{h, owner_tag, stopped, t};
+use crate::pages::{owner_tag, stopped};
 use crate::read::federation::{Health, Organisation};
 
 /// One organisation, on the tab the path names.
@@ -96,7 +96,10 @@ fn organisation_page(organisation: &Organisation, tab: &str) -> Html {
                 subtitle_view: Some(crate::pages::marked(
                     Msg::OrganisationSubtitle,
                     &[("count", Arg::from(count))],
-                    vec![("id", h(format!("<code>{}</code>", t(&organisation.id))))],
+                    vec![(
+                        "id",
+                        Html::raw(format!("<code>{}</code>", Html::text(&organisation.id))),
+                    )],
                 )),
                 crumbs: crumbs(),
                 mono: false,
@@ -116,11 +119,11 @@ fn overview(organisation: &Organisation) -> Html {
         .nodes
         .iter()
         .find_map(|node| node.owner)
-        .map_or_else(|| t(tr(Msg::None)), owner_tag);
+        .map_or_else(|| Html::text(tr(Msg::None)), owner_tag);
     let facts = facts_row(vec![
         (
             tr(Msg::ColumnId),
-            h(format!("<code>{}</code>", t(&organisation.id))),
+            Html::raw(format!("<code>{}</code>", Html::text(&organisation.id))),
         ),
         (
             tr(Msg::ColumnState),
@@ -132,13 +135,15 @@ fn overview(organisation: &Organisation) -> Html {
         ),
         (
             tr(Msg::ColumnNodes),
-            t(u64::try_from(organisation.nodes.len())
-                .unwrap_or(u64::MAX)
-                .to_string()),
+            Html::text(
+                u64::try_from(organisation.nodes.len())
+                    .unwrap_or(u64::MAX)
+                    .to_string(),
+            ),
         ),
         (
             tr(Msg::ColumnEndpoints),
-            t(organisation.endpoint_count().to_string()),
+            Html::text(organisation.endpoint_count().to_string()),
         ),
         (tr(Msg::ColumnOwner), owner),
     ]);
@@ -173,21 +178,24 @@ fn nodes(organisation: &Organisation) -> Html {
         } else {
             ""
         };
-        h(format!(
+        Html::raw(format!(
             "<tr{class}>{}{} {}{} {}</tr>",
             title_cell(
                 href.as_deref(),
-                h(format!("<code>{}</code>", t(&node.id))),
+                Html::raw(format!("<code>{}</code>", Html::text(&node.id))),
                 None
             ),
             cell(
                 &columns[1],
-                h(format!(
+                Html::raw(format!(
                     "<code>{}</code>",
-                    t(node.system_id.clone().unwrap_or_default())
+                    Html::text(node.system_id.clone().unwrap_or_default())
                 )),
             ),
-            cell(&columns[2], t(node.product.clone().unwrap_or_default())),
+            cell(
+                &columns[2],
+                Html::text(node.product.clone().unwrap_or_default())
+            ),
             count_cell(
                 &locale,
                 &columns[3],

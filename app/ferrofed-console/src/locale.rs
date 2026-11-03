@@ -308,8 +308,12 @@ pub fn requested_from(state: &crate::server::ConsoleState, headers: &http::Heade
         .get(http::header::COOKIE)
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default();
-    let preferences =
-        ferrohealth_ui::theme::Preferences::read(cookies, &state.sessions().preference_prefix());
+    let preferences = ferrohealth_ui::theme::Preferences::read(
+        cookies,
+        &state
+            .sessions()
+            .cookie_name(crate::session::PREFERENCE_PREFIX),
+    );
     chosen(
         preferences.language.tag(),
         header,

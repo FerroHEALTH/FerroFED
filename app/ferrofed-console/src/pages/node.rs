@@ -29,7 +29,7 @@ use ferrohealth_ui::view::template::list::list_empty;
 
 use crate::app::ORGANISATIONS;
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, latency, latency_fact, owner_tag, stopped, t};
+use crate::pages::{latency, latency_fact, owner_tag, stopped};
 use crate::read::Stop;
 use crate::read::federation::{Health, Node, Organisation};
 
@@ -101,7 +101,7 @@ async fn routes_of(node: &str) -> Result<Vec<CreatingSystemEntry>, Stop> {
     for _ in 0..ROUTE_PAGES {
         let page = state
             .gateway()
-            .creating_systems(
+            .page::<CreatingSystemEntry>(
                 &token,
                 crate::read::stored_page(offset, crate::read::PAGE_SIZE),
             )
@@ -178,10 +178,10 @@ fn node_page(
                     &[],
                     vec![(
                         "organisation",
-                        h(format!(
+                        Html::raw(format!(
                             "<a href=\"{}\">{}</a>",
-                            t(organisation.href()),
-                            t(organisation.shown())
+                            Html::text(organisation.href()),
+                            Html::text(organisation.shown())
                         )),
                     )],
                 )),
@@ -205,21 +205,21 @@ fn overview(organisation: &Organisation, node: &Node) -> Html {
     let facts = facts_row(vec![
         (
             tr(Msg::ColumnSystemId),
-            h(format!(
+            Html::raw(format!(
                 "<code>{}</code>",
-                t(node.system_id.clone().unwrap_or_default())
+                Html::text(node.system_id.clone().unwrap_or_default())
             )),
         ),
         (
             tr(Msg::ColumnCdr),
-            t(node.product.clone().unwrap_or_else(|| tr(Msg::None))),
+            Html::text(node.product.clone().unwrap_or_else(|| tr(Msg::None))),
         ),
         (
             tr(Msg::ColumnOrganisation),
-            h(format!(
+            Html::raw(format!(
                 "<a href=\"{}\">{}</a>",
-                t(organisation.href()),
-                t(organisation.shown())
+                Html::text(organisation.href()),
+                Html::text(organisation.shown())
             )),
         ),
         (
@@ -232,21 +232,22 @@ fn overview(organisation: &Organisation, node: &Node) -> Html {
         ),
         (
             tr(Msg::ColumnOwner),
-            node.owner.map_or_else(|| t(tr(Msg::None)), owner_tag),
+            node.owner
+                .map_or_else(|| Html::text(tr(Msg::None)), owner_tag),
         ),
     ]);
     let health = Html::join(node.endpoints.iter().map(|endpoint| {
-        h(format!(
+        Html::raw(format!(
             "<li><code>{}</code> {}</li>",
-            t(&endpoint.id),
+            Html::text(&endpoint.id),
             state(endpoint.health.mark(), endpoint.health.word(), None)
         ))
     }));
     card(tr(Msg::NodeFacts), facts).then(card(
         tr(Msg::NodeHealth),
-        h(format!(
+        Html::raw(format!(
             "<p class=\"fui-small fui-muted\">{}</p><ul class=\"fui-stack\">{health}</ul>",
-            t(tr(Msg::NodeHealthLine))
+            Html::text(tr(Msg::NodeHealthLine))
         )),
     ))
 }
@@ -276,15 +277,19 @@ fn endpoints(node: &Node) -> Html {
         },
     ];
     let rows = node.endpoints.iter().map(|endpoint| {
-        h(format!(
+        Html::raw(format!(
             "<tr{}>{}{} {}{}{}{}</tr>",
             muted(endpoint.health == Health::Excluded),
-            title_cell(None, h(format!("<code>{}</code>", t(&endpoint.id))), None),
+            title_cell(
+                None,
+                Html::raw(format!("<code>{}</code>", Html::text(&endpoint.id))),
+                None
+            ),
             cell(
                 &columns[1],
-                h(format!(
+                Html::raw(format!(
                     "<code>{}</code>",
-                    t(endpoint.url.clone().unwrap_or_default())
+                    Html::text(endpoint.url.clone().unwrap_or_default())
                 )),
             ),
             cell(&columns[2], Tag::new(endpoint.status.clone()).view()),
@@ -336,27 +341,30 @@ fn routes_tab(node: &Node, routes: Option<Result<Vec<CreatingSystemEntry>, Stop>
         Column::text("endpoint", tr(Msg::ColumnEndpoint)),
     ];
     let rows = routes.into_iter().map(|route| {
-        h(format!(
+        Html::raw(format!(
             "<tr{}>{} {}{}</tr>",
             muted(route.source == RouteSource::Withdrawn),
             title_cell(
                 None,
-                h(format!("<code>{}</code>", t(&route.creating_system_id))),
+                Html::raw(format!(
+                    "<code>{}</code>",
+                    Html::text(&route.creating_system_id)
+                )),
                 None,
             ),
             cell(&columns[1], Tag::new(ground(route.source)).view()),
             cell(
                 &columns[2],
-                h(format!(
+                Html::raw(format!(
                     "<code>{}</code>",
-                    t(route.endpoint.clone().unwrap_or_default())
+                    Html::text(route.endpoint.clone().unwrap_or_default())
                 )),
             ),
         ))
     });
-    h(format!(
+    Html::raw(format!(
         "<p class=\"fui-small fui-muted\">{}</p>",
-        t(tr(Msg::RoutesLine))
+        Html::text(tr(Msg::RoutesLine))
     ))
     .then(data_table(DataTable {
         caption: &tr(Msg::TabRoutes),

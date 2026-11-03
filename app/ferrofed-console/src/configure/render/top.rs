@@ -20,7 +20,7 @@ use ferrohealth_ui::view::time::{reading, timestamp};
 use crate::configure::render::parts::{Text, confirmed, diff_table, form, hidden, lede, text};
 use crate::configure::render::{Loaded, ROLLBACK_REASON, author};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, opt, t};
+use crate::pages::opt;
 
 /// The page's title and its one line with the mode badge, and `pills` in
 /// the revision line under it (T3).
@@ -40,12 +40,12 @@ pub(super) fn title(pills: Html) -> Html {
             },
             ferrohealth_ui::view::action::ActionGroup::none(),
         ),
-        ferrohealth_ui::view::template::settings::revision_line(h(format!(
+        ferrohealth_ui::view::template::settings::revision_line(Html::raw(format!(
             "{pills}<button type=\"button\" class=\"{}\" command=\"show-modal\" \
              commandfor=\"{HOW}\" aria-haspopup=\"dialog\">{}{}</button>",
             Variant::Ghost.class(),
             icon(Glyph::INFO, "16"),
-            t(tr(Msg::ConfigHowTitle)),
+            Html::text(tr(Msg::ConfigHowTitle)),
         ))),
         how(),
     ])
@@ -63,17 +63,17 @@ fn how() -> Html {
             id: HOW.into(),
             title: tr(Msg::ConfigHowTitle).into(),
         },
-        h(format!(
+        Html::raw(format!(
             "<p>{}</p><h3>{}</h3><p class=\"fui-small fui-muted\">{}</p><h3>{}</h3>\
              <p class=\"fui-small fui-muted\">{}</p><p class=\"fui-small fui-muted\">{}</p>\
              <p class=\"fui-small fui-muted\">{}</p>",
-            t(tr(Msg::ConfigHowLead)),
-            t(tr(Msg::ConfigHowCoreTitle)),
-            t(tr(Msg::ConfigHowCore)),
-            t(tr(Msg::ConfigHowRestTitle)),
-            t(tr(Msg::ConfigHowRest)),
-            t(tr(Msg::ConfigHowOwners)),
-            t(tr(Msg::ConfigHowOff)),
+            Html::text(tr(Msg::ConfigHowLead)),
+            Html::text(tr(Msg::ConfigHowCoreTitle)),
+            Html::text(tr(Msg::ConfigHowCore)),
+            Html::text(tr(Msg::ConfigHowRestTitle)),
+            Html::text(tr(Msg::ConfigHowRest)),
+            Html::text(tr(Msg::ConfigHowOwners)),
+            Html::text(tr(Msg::ConfigHowOff)),
         )),
     )
 }
@@ -202,19 +202,19 @@ fn awaiting(mark: &Current) -> Html {
             ),
         ]),
     );
-    h(format!(
+    Html::raw(format!(
         "<div class=\"fui-split\"><div><h2 id=\"awaiting-title\" class=\"fui-card-title\">{}</h2>{}</div>{}</div>\
          <p>{}{}{}{by}{}</p><div class=\"fui-cluster\">{confirm} {}</div>",
-        t(tr_with(
+        Html::text(tr_with(
             Msg::RevisionAwaitsYourConfirmation,
             &[("revision", (revision).to_string().into())],
         )),
         lede(tr(Msg::ConfirmOnceGatewayWorksRollBack), "commit-confirm"),
         commit_countdown(mark.applied_at, awaiting.deadline),
-        t(tr(Msg::ItChanged)),
-        t(changed),
-        t(tr(Msg::UnlessOperatorConfirms)),
-        t(tr(Msg::GatewayRollsBack)),
+        Html::text(tr(Msg::ItChanged)),
+        Html::text(changed),
+        Html::text(tr(Msg::UnlessOperatorConfirms)),
+        Html::text(tr(Msg::GatewayRollsBack)),
         rollback(mark, "pending"),
     ))
 }
@@ -289,8 +289,8 @@ fn review(review: &Review) -> Html {
         )
     });
     Html::join([
-        opt(confirms.map(|said| notice(Tone::Info, Announce::Status, None, t(said)))),
-        opt(approval.map(|said| notice(Tone::Info, Announce::Status, None, t(said)))),
+        opt(confirms.map(|said| notice(Tone::Info, Announce::Status, None, Html::text(said)))),
+        opt(approval.map(|said| notice(Tone::Info, Announce::Status, None, Html::text(said)))),
         opt(approve),
     ])
 }
@@ -349,10 +349,10 @@ fn saved(loaded: &Loaded<'_>, head: RevisionId) -> Html {
             ),
         ]),
     );
-    h(format!(
+    Html::raw(format!(
         "<div class=\"fui-split\"><div><h2 id=\"pending-title\" class=\"fui-card-title\">{}</h2>{}</div>\
          <div class=\"fui-cluster\">{apply}</div></div>{}{}",
-        t(heading),
+        Html::text(heading),
         lede(
             tr(Msg::SavedNotAppliedReadWhatChanges),
             "what-a-revision-holds"
@@ -376,6 +376,6 @@ pub(super) fn pending(loaded: &Loaded<'_>) -> Html {
     }
     let first = mark.map(awaiting);
     let second = head.map(|head| saved(loaded, head));
-    let between = (awaits && head.is_some()).then(|| h(String::from("<hr>")));
+    let between = (awaits && head.is_some()).then(|| Html::raw(String::from("<hr>")));
     Html::join([opt(first), opt(between), opt(second)])
 }

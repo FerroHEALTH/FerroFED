@@ -11,10 +11,11 @@ use ferrofed_operator_api::revision::{Current, Review};
 use ferrohealth_ui::html::Html;
 
 use crate::act::{Acted, ReplicaAnswer};
-use crate::configure::render::answers::said;
 use crate::configure::said::replica_said;
 use crate::configure::said::{ActionAnswer, Answer};
 use crate::locale::{Msg, tr, tr_with};
+use ferrohealth_ui::tone::Tone;
+use ferrohealth_ui::view::notice::{Announce, notice};
 
 /// How a removal names `resource`: `credentials:<endpoint id>` or
 /// `binding:<section>`.
@@ -45,17 +46,22 @@ pub fn confirmed_view(answer: &ReplicaAnswer<Current>) -> Html {
 
 /// What a replica reports of a confirmation.
 fn confirmed_line(replica: &str, mark: &Current) -> Html {
-    said(crate::pages::h(format!(
-        "<strong>{}</strong>{}",
-        crate::pages::t(tr_with(
-            Msg::ReplicaRecordedConfirmationRevision,
-            &[
-                ("replica", (replica).to_string().into()),
-                ("revision", (mark.revision).to_string().into()),
-            ],
+    notice(
+        Tone::Ok,
+        Announce::Status,
+        None,
+        Html::raw(format!(
+            "<strong>{}</strong>{}",
+            Html::text(tr_with(
+                Msg::ReplicaRecordedConfirmationRevision,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("revision", (mark.revision).to_string().into()),
+                ],
+            )),
+            Html::text(tr(Msg::StaysRunningGatewayNoLongerRolls)),
         )),
-        crate::pages::t(tr(Msg::StaysRunningGatewayNoLongerRolls)),
-    )))
+    )
 }
 
 /// The answer of an approval at `answer`'s replica.
@@ -81,15 +87,20 @@ fn approved_line(replica: &str, review: &Review) -> Html {
     } else {
         tr(Msg::StillTakesApprovalBeforeApplies)
     };
-    said(crate::pages::h(format!(
-        "<strong>{}</strong>{}",
-        crate::pages::t(tr_with(
-            Msg::ReplicaRecordedApprovalRevision,
-            &[
-                ("replica", (replica).to_string().into()),
-                ("revision", (review.revision).to_string().into()),
-            ],
+    notice(
+        Tone::Ok,
+        Announce::Status,
+        None,
+        Html::raw(format!(
+            "<strong>{}</strong>{}",
+            Html::text(tr_with(
+                Msg::ReplicaRecordedApprovalRevision,
+                &[
+                    ("replica", (replica).to_string().into()),
+                    ("revision", (review.revision).to_string().into()),
+                ],
+            )),
+            Html::text(next),
         )),
-        crate::pages::t(next),
-    )))
+    )
 }

@@ -14,7 +14,7 @@ use crate::configure::render::parts::{
     Text, confirmed, error_line, form, head, hidden, text, trail,
 };
 use crate::locale::{Msg, tr};
-use crate::pages::{h, opt, t};
+use crate::pages::opt;
 use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::table::view::Column;
 use ferrohealth_ui::tone::Tone;
@@ -48,11 +48,11 @@ fn query_columns() -> [Column; 3] {
 pub(super) fn tab(loaded: &Loaded<'_>) -> Html {
     let registry = loaded.resources.stored_query_registry;
     let store = (registry == QueryRegistry::Writable).then(|| {
-        h(format!(
+        Html::raw(format!(
             "<a href=\"/configuration/stored-queries/new\" class=\"{}\">{}{}</a>",
             Variant::Primary.class(),
             icon(Glyph::PLUS, "16"),
-            t(tr(Msg::StoreANewVersion)),
+            Html::text(tr(Msg::StoreANewVersion)),
         ))
     });
     let header = head(
@@ -64,22 +64,22 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> Html {
         opt(store),
     );
     if registry == QueryRegistry::Absent {
-        return header.then(h(format!(
+        return header.then(Html::raw(format!(
             "<p class=\"fui-muted\">{}</p>",
-            t(tr(Msg::GatewayOffersNoStoredQueryRegistry))
+            Html::text(tr(Msg::GatewayOffersNoStoredQueryRegistry))
         )));
     }
     let read_only = (registry == QueryRegistry::ReadOnly).then(|| {
-        h(format!(
+        Html::raw(format!(
             "<p role=\"note\">{}</p>",
-            t(tr(Msg::StoredQueriesComeFromReadOnly))
+            Html::text(tr(Msg::StoredQueriesComeFromReadOnly))
         ))
     });
     let groups = grouped(&loaded.resources.stored_queries);
     let rows = if groups.is_empty() {
-        h(format!(
+        Html::raw(format!(
             "<tr><td colspan=\"3\" class=\"fui-muted\">{}</td></tr>",
-            t(tr(Msg::NoVersionStoredYet))
+            Html::text(tr(Msg::NoVersionStoredYet))
         ))
     } else {
         Html::join(groups.into_iter().map(|(name, versions)| {
@@ -89,13 +89,13 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> Html {
                     .map(|query| badge(Tone::Neutral, &query.version)),
             );
             let held = versions.first().map(|query| owner(query.owner));
-            h(format!(
+            Html::raw(format!(
                 "<tr><th scope=\"row\"><code>{}</code></th>\
                  <td data-label=\"{}\"><div class=\"fui-cluster\">{badges}</div></td>\
                  <td data-label=\"{}\">{}</td></tr>",
-                t(name),
-                t(tr(Msg::Versions)),
-                t(tr(Msg::Owner)),
+                Html::text(name),
+                Html::text(tr(Msg::Versions)),
+                Html::text(tr(Msg::Owner)),
                 opt(held),
             ))
         }))
@@ -117,7 +117,9 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> Html {
     let names = Html::join(
         grouped(&loaded.resources.stored_queries)
             .into_iter()
-            .map(|(name, _)| h(format!("<option value=\"{}\"></option>", t(name)))),
+            .map(|(name, _)| {
+                Html::raw(format!("<option value=\"{}\"></option>", Html::text(name)))
+            }),
     );
     let name = text(
         ("cfg-name", "form[name]"),
@@ -153,25 +155,25 @@ pub(super) fn form_page(loaded: &Loaded<'_>) -> Html {
     );
     let body = Html::join([
         hidden("action", String::from("store-query")),
-        h(format!(
+        Html::raw(format!(
             "<fieldset class=\"{GROUP}\"><legend>{}</legend>\
              <div class=\"fui-field-row fui-field-row-halves\">{name}{version}</div>\
              <datalist id=\"cfg-names\">{names}</datalist></fieldset>",
-            t(tr(Msg::Version))
+            Html::text(tr(Msg::Version))
         )),
-        h(format!(
+        Html::raw(format!(
             "<fieldset class=\"{GROUP}\"><legend>{aql}</legend>\
              <label for=\"cfg-aql\" class=\"fui-sr-only\">{aql}</label>\
              <textarea id=\"cfg-aql\" name=\"form[aql]\" rows=\"14\" spellcheck=\"false\" required \
              class=\"{TEXTAREA} fui-mono\" aria-describedby=\"cfg-aql-error\">{}</textarea>{}</fieldset>",
-            t(&posted.aql),
+            Html::text(&posted.aql),
             error_line("cfg-aql"),
-            aql = t(tr(Msg::Aql)),
+            aql = Html::text(tr(Msg::Aql)),
         )),
-        h(format!(
+        Html::raw(format!(
             "<div class=\"fui-actions\">{store} <a href=\"/configuration/stored-queries\" class=\"{}\">{}</a></div>",
             Variant::Secondary.class(),
-            t(tr(Msg::Cancel)),
+            Html::text(tr(Msg::Cancel)),
         )),
     ]);
     Html::join([

@@ -12,6 +12,7 @@
 //! fields, so no `ehr_id` reaches a URL.
 
 use ferrofed_operator_api::operator::HeldBefore;
+use ferrofed_operator_api::operator::IncidentReport;
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
@@ -33,7 +34,7 @@ use crate::act::fields::Fields;
 use crate::act::{Acted, ReplicaAnswer};
 use crate::app::INTEGRITY;
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, opt, refused_view, relative, stopped, t};
+use crate::pages::{opt, refused_view, relative, stopped};
 use crate::read::incidents::{Incident, Incidents};
 
 /// The id of the clear's dialog.
@@ -44,7 +45,7 @@ pub async fn open_count() -> Option<u32> {
     let (state, token) = crate::read::signed_in().ok()?;
     // NOTE: no specification governs this: our own design; the count is the shell's,
     // so a refusal is logged as the status read, and the navigation says it is unread.
-    match state.gateway().incidents(&token).await {
+    match state.gateway().report::<IncidentReport>(&token).await {
         Ok(report) => {
             let incidents = Incidents::of(&report);
             Some(u32::try_from(incidents.open.len()).unwrap_or(u32::MAX))
@@ -116,45 +117,47 @@ fn integrity(
 /// incidents' `held`, and the replica among `replicas` or every one. It
 /// posts to Integrity, on the tab it sits on.
 fn clear_form(replicas: &[String], held: &[String]) -> Html {
-    let known = Html::join(
-        held.iter()
-            .map(|ehr_id| h(format!("<option value=\"{}\"></option>", t(ehr_id)))),
-    );
+    let known = Html::join(held.iter().map(|ehr_id| {
+        Html::raw(format!(
+            "<option value=\"{}\"></option>",
+            Html::text(ehr_id)
+        ))
+    }));
     let choices = Html::join(replicas.iter().map(|name| {
-        h(format!(
+        Html::raw(format!(
             "<option value=\"{name}\">{name}</option>",
-            name = t(name)
+            name = Html::text(name)
         ))
     }));
     let ehr_id = Field::new("clear-ehr-id", tr(Msg::ClearEhrIdLabel))
         .help(tr(Msg::ClearEhrIdHelp))
         .holds_id()
-        .view(h(format!(
+        .view(Html::raw(format!(
             "<input type=\"text\" id=\"clear-ehr-id\" name=\"ehr_id\" class=\"{INPUT}\" \
              list=\"clear-ehr-ids\" autocomplete=\"off\" spellcheck=\"false\" required \
              value=\"{}\"><datalist id=\"clear-ehr-ids\">{known}</datalist>",
-            t(held.first().cloned().unwrap_or_default())
+            Html::text(held.first().cloned().unwrap_or_default())
         )));
-    let replica = Field::new("clear-replica", tr(Msg::ClearReplicaLabel)).view(h(format!(
+    let replica = Field::new("clear-replica", tr(Msg::ClearReplicaLabel)).view(Html::raw(format!(
         "<select id=\"clear-replica\" name=\"replica\" class=\"{SELECT}\">\
          <option value=\"{EVERY_REPLICA}\">{}</option>{choices}</select>",
-        t(tr(Msg::ClearEveryReplica))
+        Html::text(tr(Msg::ClearEveryReplica))
     )));
     let action = crate::pages::here_with_query();
-    let body = h(format!(
+    let body = Html::raw(format!(
         "<form method=\"post\" action=\"{}\" class=\"fui-form\">{ehr_id}{replica}\
          <p class=\"fui-small fui-muted\">{}</p>\
          <input type=\"hidden\" name=\"{}\" value=\"yes\">\
          <div class=\"fui-dialog-actions\">\
          <button type=\"button\" class=\"{}\" command=\"close\" commandfor=\"{CLEAR_DIALOG}\">{}</button>\
          <button type=\"submit\" class=\"{}\">{}</button></div></form>",
-        t(action),
-        t(tr(Msg::ClearRecorded)),
+        Html::text(action),
+        Html::text(tr(Msg::ClearRecorded)),
         crate::act::clear::CONFIRM,
         Variant::Secondary.class(),
-        t(tr(Msg::Cancel)),
+        Html::text(tr(Msg::Cancel)),
         Variant::Primary.class(),
-        t(tr(Msg::ClearSubmit)),
+        Html::text(tr(Msg::ClearSubmit)),
     ));
     popover_form(PopoverForm {
         id: CLEAR_DIALOG.into(),
@@ -189,7 +192,7 @@ fn answer(outcome: ClearOutcome) -> Html {
     load_report(LoadReport {
         outcome: report,
         arrival: Arrival::AfterAction,
-        title: t(tr(match report {
+        title: Html::text(tr(match report {
             Outcome::Ok => Msg::ClearDone,
             Outcome::Warn => Msg::ClearPartly,
             Outcome::Bad => Msg::ClearNotDone,
@@ -197,14 +200,16 @@ fn answer(outcome: ClearOutcome) -> Html {
         counts: Vec::new(),
         action: None,
     })
-    .then(h(format!("<ul class=\"fui-stack fui-small\">{lines}</ul>")))
+    .then(Html::raw(format!(
+        "<ul class=\"fui-stack fui-small\">{lines}</ul>"
+    )))
 }
 
 /// What one replica did with the clear: what it held, or its refusal
 /// with its status and code, or that it gave no answer.
 fn replica_line(answer: &ReplicaAnswer<ClearLine>) -> Html {
     let said = crate::configure::said::replica_said(answer, "clear", cleared_line);
-    h(format!("<li>{said}</li>"))
+    Html::raw(format!("<li>{said}</li>"))
 }
 
 /// What `replica` held before it cleared the `ehr_id`, as `line` reports.
@@ -216,7 +221,7 @@ fn cleared_line(replica: &str, line: &ClearLine) -> Html {
             &[("claimants", line.claimants.join(", ").into())],
         ),
     };
-    t(tr_with(
+    Html::text(tr_with(
         Msg::ClearReplicaDone,
         &[
             ("replica", replica.to_owned().into()),
@@ -254,9 +259,9 @@ fn tabs(incidents: &Incidents, resolved: bool) -> Html {
         &incidents.open
     };
     let list = if shown.is_empty() {
-        h(format!(
+        Html::raw(format!(
             "<p class=\"fui-panel-body fui-muted\">{}</p>",
-            t(tr(if resolved {
+            Html::text(tr(if resolved {
                 Msg::IntegrityNoneResolved
             } else {
                 Msg::IntegrityNoneOpen
@@ -269,14 +274,14 @@ fn tabs(incidents: &Incidents, resolved: bool) -> Html {
         .counts
         .iter()
         .map(|(kind, count)| {
-            h(format!(
+            Html::raw(format!(
                 "<tr>{} <td class=\"fui-num\">{}</td></tr>",
                 title_cell(
                     None,
-                    t(what(kind)),
-                    Some(h(format!("<code>{}</code>", t(kind)))),
+                    Html::text(what(kind)),
+                    Some(Html::raw(format!("<code>{}</code>", Html::text(kind)))),
                 ),
-                t(ferrohealth_ui::i18n::number::grouped(&current(), *count)),
+                Html::text(ferrohealth_ui::i18n::number::grouped(&current(), *count)),
             ))
         })
         .collect();
@@ -343,24 +348,24 @@ fn incident_table(incidents: &[Incident], resolved: bool) -> Html {
         ),
     ];
     let rows = incidents.iter().map(|incident| {
-        let sub = h(format!("<code>{}</code>", t(&incident.kind)));
+        let sub = Html::raw(format!("<code>{}</code>", Html::text(&incident.kind)));
         let ehr_id = incident
             .ehr_id
             .clone()
             .or_else(|| incident.creating_system_id.clone())
             .map_or_else(
-                || t(tr(Msg::None)),
-                |id| h(format!("<code>{}</code>", t(id))),
+                || Html::text(tr(Msg::None)),
+                |id| Html::raw(format!("<code>{}</code>", Html::text(id))),
             );
         let when = match (&incident.cleared, resolved) {
             (Some(clear), true) => relative(&clear.at),
             _ => relative(&incident.at),
         };
-        h(format!(
+        Html::raw(format!(
             "<tr>{} {}{} {}</tr>",
-            title_cell(None, t(what(&incident.kind)), Some(sub)),
+            title_cell(None, Html::text(what(&incident.kind)), Some(sub)),
             cell(&columns[1], ehr_id),
-            cell(&columns[2], t(incident.nodes.join(", "))),
+            cell(&columns[2], Html::text(incident.nodes.join(", "))),
             cell(&columns[3], when),
         ))
     });

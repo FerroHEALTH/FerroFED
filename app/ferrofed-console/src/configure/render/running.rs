@@ -24,7 +24,7 @@ use ferrohealth_ui::view::template::settings::{
 use crate::configure::render::Loaded;
 use crate::configure::render::parts::{error_line, form, hidden, reason, save_bar};
 use crate::locale::{Msg, current, tr, tr_with};
-use crate::pages::{h, opt, t};
+use crate::pages::opt;
 
 /// `key` with each array position written `[]`, as the book's tables name
 /// a key of every `[[trust.issuer]]`.
@@ -186,19 +186,23 @@ fn unit(key: &str) -> Option<Msg> {
 /// `value`, the value of the setting `key`, in words.
 fn shown(key: &str, value: &toml::Value) -> Html {
     match value {
-        toml::Value::Integer(_) | toml::Value::Boolean(_) => t(plain(key, value)),
-        toml::Value::String(text) => h(format!("<code class=\"fui-break\">{}</code>", t(text))),
-        toml::Value::Array(items) if items.is_empty() => t(tr(Msg::SettingsNotSet)),
-        toml::Value::Array(items) => Html::join(
-            items
-                .iter()
-                .map(|item| h(format!("<span class=\"fui-tag\">{}</span> ", t(tag(item))))),
-        ),
-        toml::Value::Table(table) => t(tr_with(
+        toml::Value::Integer(_) | toml::Value::Boolean(_) => Html::text(plain(key, value)),
+        toml::Value::String(text) => Html::raw(format!(
+            "<code class=\"fui-break\">{}</code>",
+            Html::text(text)
+        )),
+        toml::Value::Array(items) if items.is_empty() => Html::text(tr(Msg::SettingsNotSet)),
+        toml::Value::Array(items) => Html::join(items.iter().map(|item| {
+            Html::raw(format!(
+                "<span class=\"fui-tag\">{}</span> ",
+                Html::text(tag(item))
+            ))
+        })),
+        toml::Value::Table(table) => Html::text(tr_with(
             Msg::SettingsMapped,
             &[("count", table.len().into())],
         )),
-        other => t(other.to_string()),
+        other => Html::text(other.to_string()),
     }
 }
 
@@ -250,25 +254,25 @@ fn marker(setting: &Setting, managed: bool) -> Option<ValueSource> {
 fn value_cell(setting: &Setting) -> Html {
     let value = match (&setting.secret, &setting.value) {
         (Some(secret), _) if secret.set => match &secret.reference {
-            Some(file) => h(format!(
+            Some(file) => Html::raw(format!(
                 "<span>{} {} <code class=\"fui-break\">{}</code></span>",
                 icon(Glyph::LOCK, "12"),
-                t(tr(Msg::SettingsSecretSetFile)),
-                t(file)
+                Html::text(tr(Msg::SettingsSecretSetFile)),
+                Html::text(file)
             )),
-            None => h(format!(
+            None => Html::raw(format!(
                 "<span>{} {}</span>",
                 icon(Glyph::LOCK, "12"),
-                t(tr(Msg::SettingsSecretSetInline))
+                Html::text(tr(Msg::SettingsSecretSetInline))
             )),
         },
-        (Some(_), _) | (None, None) => t(tr(Msg::SettingsNotSet)),
+        (Some(_), _) | (None, None) => Html::text(tr(Msg::SettingsNotSet)),
         (None, Some(value)) => shown(&setting.key, value),
     };
     let next = setting.next.as_ref().map(|next| {
-        h(format!(
+        Html::raw(format!(
             " <span class=\"fui-small fui-muted\">{}</span>",
-            t(tr_with(
+            Html::text(tr_with(
                 Msg::SettingsNextValue,
                 &[("value", plain(&setting.key, next).into())]
             ))
@@ -307,15 +311,15 @@ pub fn panel(running: &RunningConfig, section: Section) -> Html {
     let (_, intro) = section_words(section);
     let editable = running.of(section).any(|setting| setting.editable);
     let edit = editable.then(|| {
-        h(format!(
+        Html::raw(format!(
             "<a href=\"{}\" class=\"{} fui-button-small\">{}{}</a>",
-            t(edit_href(section)),
+            Html::text(edit_href(section)),
             Variant::Secondary.class(),
             icon(Glyph::PENCIL, "16"),
-            t(tr(Msg::SettingsEdit)),
+            Html::text(tr(Msg::SettingsEdit)),
         ))
     });
-    settings_panel(t(tr(intro)), edit, rows(running, section))
+    settings_panel(Html::text(tr(intro)), edit, rows(running, section))
 }
 
 /// The tab of `section`, or the line that the running configuration could
@@ -330,9 +334,9 @@ pub fn tab(loaded: &Loaded<'_>, section: Section) -> Html {
 
 /// The line that the running configuration could not be read.
 fn unreadable(loaded: &Loaded<'_>) -> Html {
-    h(format!(
+    Html::raw(format!(
         "<p role=\"status\" class=\"fui-muted\">{}</p>",
-        t(tr_with(
+        Html::text(tr_with(
             Msg::SettingsUnreadable,
             &[("replica", loaded.replica.to_owned().into())]
         ))
@@ -370,22 +374,22 @@ fn control(row: usize, setting: &Setting, posted: Option<&str>) -> Html {
     let described = described_by(&id, false, true);
     let label = tr(words(&setting.key).0);
     let described = described
-        .map(|described| format!(" aria-describedby=\"{}\"", t(described)))
+        .map(|described| format!(" aria-describedby=\"{}\"", Html::text(described)))
         .unwrap_or_default();
     let option = |value: &str, words: &str, chosen: bool| {
-        h(format!(
+        Html::raw(format!(
             "<option value=\"{}\"{}>{}</option>",
-            t(value),
+            Html::text(value),
             if chosen { " selected" } else { "" },
-            t(words)
+            Html::text(words)
         ))
     };
     let select = |options: Html| {
-        h(format!(
+        Html::raw(format!(
             "<select id=\"{}\" name=\"{}\" class=\"{SELECT}\" aria-label=\"{}\"{described}>{options}</select>",
-            t(&id),
-            t(&name),
-            t(&label)
+            Html::text(&id),
+            Html::text(&name),
+            Html::text(&label)
         ))
     };
     let input = match (&setting.value, choices(&setting.key)) {
@@ -406,21 +410,21 @@ fn control(row: usize, setting: &Setting, posted: Option<&str>) -> Html {
                 )),
             )
         }
-        _ => h(format!(
+        _ => Html::raw(format!(
             "<input type=\"text\" id=\"{}\" name=\"{}\" value=\"{}\" class=\"{INPUT}\" \
              autocomplete=\"off\" spellcheck=\"false\" aria-label=\"{}\"{described}>",
-            t(&id),
-            t(&name),
-            t(&current),
-            t(&label)
+            Html::text(&id),
+            Html::text(&name),
+            Html::text(&current),
+            Html::text(&label)
         )),
     };
-    h(format!(
+    Html::raw(format!(
         "<input type=\"hidden\" name=\"form[setting_rows][]\" value=\"{row}\">\
          <input type=\"hidden\" name=\"form[setting.{row}.key]\" value=\"{}\">\
          <input type=\"hidden\" name=\"form[setting.{row}.was]\" value=\"{}\">{input}{}",
-        t(&setting.key),
-        t(&held),
+        Html::text(&setting.key),
+        Html::text(&held),
         error_line(&id)
     ))
 }
@@ -452,9 +456,9 @@ pub fn edit(loaded: &Loaded<'_>, section: Section) -> Html {
                 row = row.saturating_add(1);
                 drawn
             } else {
-                value_cell(setting).then(h(format!(
+                value_cell(setting).then(Html::raw(format!(
                     " <span class=\"fui-small fui-muted\">{}</span>",
-                    t(tr(Msg::SettingsReadOnlyHere))
+                    Html::text(tr(Msg::SettingsReadOnlyHere))
                 )))
             };
             setting_row(
@@ -480,10 +484,10 @@ pub fn edit(loaded: &Loaded<'_>, section: Section) -> Html {
         Html::join([
             hidden("action", String::from("save-settings")),
             hidden("base", loaded.base()),
-            settings_panel(t(intro), None, rows),
-            h(format!(
+            settings_panel(Html::text(intro), None, rows),
+            Html::raw(format!(
                 "<p class=\"fui-help\">{}</p>",
-                t(tr(Msg::SettingsChangedOnlyHint))
+                Html::text(tr(Msg::SettingsChangedOnlyHint))
             )),
             reason(),
             save_bar(loaded, tab_href(section)),

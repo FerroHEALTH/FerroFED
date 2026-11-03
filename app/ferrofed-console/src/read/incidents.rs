@@ -120,7 +120,7 @@ fn clear_of(incident: &RecordedIncident, cleared: &[RecordedClear]) -> Option<Re
 /// refused or did not answer.
 pub async fn read() -> Result<Incidents, Stop> {
     let (state, token) = signed_in()?;
-    let report = state.gateway().incidents(&token).await?;
+    let report = state.gateway().report::<IncidentReport>(&token).await?;
     Ok(Incidents::of(&report))
 }
 

@@ -6,8 +6,7 @@
 use cookie::{Cookie, SameSite};
 
 use crate::session::{
-    COOKIE, FLASH_COOKIE, HOST_PREFIX, PREFERENCE_PREFIX, SIDEBAR_COOKIE, SIGN_IN_COOKIE,
-    SessionId, Sessions,
+    COOKIE, HOST_PREFIX, PREFERENCE_PREFIX, SIDEBAR_COOKIE, SIGN_IN_COOKIE, SessionId, Sessions,
 };
 
 impl Sessions {
@@ -55,12 +54,6 @@ impl Sessions {
             .build()
     }
 
-    /// The prefix the operator's preference cookies carry on this console.
-    #[must_use]
-    pub fn preference_prefix(&self) -> String {
-        self.cookie_name(PREFERENCE_PREFIX)
-    }
-
     /// The `Set-Cookie` value that keeps the preference `name` at `value`
     /// for one year (FerroUI family rule 9).
     #[must_use]
@@ -84,24 +77,6 @@ impl Sessions {
     pub fn sidebar_cookie(&self, state: &str) -> Cookie<'static> {
         self.cookie(SIDEBAR_COOKIE, state)
             .max_age(cookie::time::Duration::days(365))
-            .build()
-    }
-
-    /// The `Set-Cookie` value that carries the outcome `value` of a form post
-    /// to the next page, for a minute at most.
-    #[must_use]
-    pub fn flash_cookie(&self, value: &str) -> Cookie<'static> {
-        self.cookie(FLASH_COOKIE, value)
-            .max_age(cookie::time::Duration::seconds(60))
-            .build()
-    }
-
-    /// The `Set-Cookie` value that removes the flash cookie once its page
-    /// read it.
-    #[must_use]
-    pub fn flash_cookie_removal(&self) -> Cookie<'static> {
-        self.cookie(FLASH_COOKIE, "")
-            .max_age(cookie::time::Duration::ZERO)
             .build()
     }
 
@@ -151,7 +126,10 @@ mod tests {
             "__Host-ferrofed_console_theme=dark; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=31536000",
             sessions.preference_cookie("theme", "dark").to_string()
         );
-        assert_eq!("__Host-ferrofed_console_", sessions.preference_prefix());
+        assert_eq!(
+            "__Host-ferrofed_console_",
+            sessions.cookie_name(crate::session::PREFERENCE_PREFIX)
+        );
         assert!(
             sessions
                 .preference_cookie_removal("density")

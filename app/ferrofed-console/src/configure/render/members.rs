@@ -26,7 +26,7 @@ use crate::configure::render::parts::{
     row_actions, row_add, row_remove, save_bar, text, trail,
 };
 use crate::locale::{Msg, tr, tr_with};
-use crate::pages::{h, t};
+
 use crate::read::Refusal;
 
 /// The path of the member `node`'s form or detail.
@@ -128,15 +128,15 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> Html {
         let removes = member.member.is_some().then(|| row_removal(loaded, &node));
         row_actions(&removal_dialog(&node), &node, href(&node), removes)
     } else {
-        h(format!(
+        Html::raw(format!(
             "<a href=\"{}\" class=\"{}\">{}<span class=\"fui-sr-only\"> {}</span></a>",
-            t(href(&node)),
+            Html::text(href(&node)),
             Variant::Ghost.class(),
-            t(tr(Msg::View)),
-            t(&node),
+            Html::text(tr(Msg::View)),
+            Html::text(&node),
         ))
     };
-    h(format!(
+    Html::raw(format!(
         "<tr><th scope=\"row\"><code>{}</code></th>\
          <td data-label=\"{}\">{}</td>\
          <td data-label=\"{}\"><code>{}</code></td>\
@@ -144,19 +144,19 @@ fn row(loaded: &Loaded<'_>, member: &MemberResource) -> Html {
          <td data-label=\"{}\">{}</td>\
          <td data-label=\"{}\">{}</td>\
          <td data-label=\"{}\" class=\"{ACTIONS}\">{actions}</td></tr>",
-        t(&node),
-        t(tr(Msg::Organisation)),
-        t(member.organisation.as_str()),
-        t(tr(Msg::SystemId)),
-        t(member.system_id.as_str()),
-        t(tr(Msg::Endpoints)),
-        t(ids),
-        t(count),
-        t(tr(Msg::Owner)),
+        Html::text(&node),
+        Html::text(tr(Msg::Organisation)),
+        Html::text(member.organisation.as_str()),
+        Html::text(tr(Msg::SystemId)),
+        Html::text(member.system_id.as_str()),
+        Html::text(tr(Msg::Endpoints)),
+        Html::text(ids),
+        Html::text(count),
+        Html::text(tr(Msg::Owner)),
         owner(member.owner),
-        t(tr(Msg::State)),
+        Html::text(tr(Msg::State)),
         state(member.state),
-        t(tr(Msg::Actions)),
+        Html::text(tr(Msg::Actions)),
     ))
 }
 
@@ -177,9 +177,9 @@ fn member_columns() -> [Column; 7] {
 pub(super) fn tab(loaded: &Loaded<'_>) -> Html {
     let members = &loaded.resources.members;
     let rows = if members.is_empty() {
-        h(format!(
+        Html::raw(format!(
             "<tr><td colspan=\"7\" class=\"fui-muted\">{}</td></tr>",
-            t(tr(Msg::NoMemberConfiguredYet))
+            Html::text(tr(Msg::NoMemberConfiguredYet))
         ))
     } else {
         Html::join(members.iter().map(|member| row(loaded, member)))
@@ -190,11 +190,11 @@ pub(super) fn tab(loaded: &Loaded<'_>) -> Html {
             tr(Msg::MemberRegistryDocumentCareServicesDirectory),
             "console-managed-resources",
         ),
-        h(format!(
+        Html::raw(format!(
             "<a href=\"/configuration/members/new\" class=\"{}\">{}{}</a>",
             Variant::Primary.class(),
             icon(Glyph::PLUS, "16"),
-            t(tr(Msg::AddMember)),
+            Html::text(tr(Msg::AddMember)),
         )),
     )
     .then(crate::pages::table(
@@ -226,7 +226,7 @@ pub(super) fn member(loaded: &Loaded<'_>, node: &str) -> Result<Html, Refusal> {
         Some(ConsoleState::Running | ConsoleState::Pending)
     );
     match (&found.member, editable) {
-        (Some(held), true) => Ok(member_form(loaded, Some(held)).then(h(format!(
+        (Some(held), true) => Ok(member_form(loaded, Some(held)).then(Html::raw(format!(
             "<div class=\"fui-actions\">{}</div>",
             removal(
                 loaded,
@@ -248,34 +248,40 @@ fn detail(member: &MemberResource) -> Html {
         (_, Some(ConsoleState::Shadowed)) => tr(Msg::RegistryDocumentProvidesMemberSameIdentity),
         _ => tr(Msg::ConsoleDoesNotChangeMember),
     };
-    let endpoints = Html::join(
-        member
-            .endpoints
-            .iter()
-            .map(|endpoint| h(format!("<li><code>{}</code></li>", t(endpoint.as_str())))),
-    );
+    let endpoints = Html::join(member.endpoints.iter().map(|endpoint| {
+        Html::raw(format!(
+            "<li><code>{}</code></li>",
+            Html::text(endpoint.as_str())
+        ))
+    }));
     Html::join([
         trail(
             (tr(Msg::Members), "/configuration/members"),
             member.node.as_str().to_owned(),
         ),
-        h(format!(
+        Html::raw(format!(
             "<h2 id=\"member-title\" class=\"fui-card-title\"><code>{}</code></h2>\
              <p class=\"fui-muted\" role=\"note\">{}</p>",
-            t(member.node.as_str()),
-            t(source)
+            Html::text(member.node.as_str()),
+            Html::text(source)
         )),
         definitions(vec![
-            (tr(Msg::Organisation), t(member.organisation.as_str())),
+            (
+                tr(Msg::Organisation),
+                Html::text(member.organisation.as_str()),
+            ),
             (
                 tr(Msg::SystemId),
-                h(format!("<code>{}</code>", t(member.system_id.as_str()))),
+                Html::raw(format!(
+                    "<code>{}</code>",
+                    Html::text(member.system_id.as_str())
+                )),
             ),
             (tr(Msg::Owner), owner(member.owner)),
             (tr(Msg::State), state(member.state)),
             (
                 tr(Msg::Endpoints),
-                h(format!("<ul class=\"fui-bullets\">{endpoints}</ul>")),
+                Html::raw(format!("<ul class=\"fui-bullets\">{endpoints}</ul>")),
             ),
         ]),
     ])
@@ -286,13 +292,13 @@ pub(super) const GROUP: &str = "fui-fieldset";
 
 /// The "In service" switch of the endpoint field `id`, named `name`.
 fn in_service(id: String, name: String, on: bool) -> Html {
-    h(format!(
+    Html::raw(format!(
         "<div class=\"fui-check\"><input type=\"checkbox\" role=\"switch\" class=\"{SWITCH}\" \
          id=\"{id}\" name=\"{}\" value=\"on\"{}><label for=\"{id}\">{}</label></div>",
-        t(name),
+        Html::text(name),
         if on { " checked" } else { "" },
-        t(tr(Msg::InService)),
-        id = t(id),
+        Html::text(tr(Msg::InService)),
+        id = Html::text(id),
     ))
 }
 
@@ -314,11 +320,11 @@ fn query_row(row: &QueryEndpointInput) -> RepeatRow {
     let named = query_named(row);
     let name = |part: &str| format!("form[query.{key}.{part}]");
     let fields = Html::join([
-        h(format!(
+        Html::raw(format!(
             "<input type=\"hidden\" name=\"form[query_rows][]\" value=\"{}\">",
-            t(key)
+            Html::text(key)
         )),
-        h(format!(
+        Html::raw(format!(
             "<div class=\"fui-field-row fui-field-row-narrow-wide\">{}{}</div>",
             text(
                 (&query_field(key, "id"), &name("id")),
@@ -383,12 +389,12 @@ fn profile(key: &str, at: &str, value: String, removes: &Edit) -> RepeatRow {
     let id = format!("cfg-f-{key}-p-{at}");
     let fields = Field::new(id.clone(), tr(Msg::Profile))
         .label_hidden()
-        .view(h(format!(
+        .view(Html::raw(format!(
             "<input type=\"url\" id=\"{}\" name=\"form[fhir.{}.profiles][]\" value=\"{}\" \
              class=\"{INPUT} fui-mono\" autocomplete=\"off\" spellcheck=\"false\">",
-            t(&id),
-            t(key),
-            t(value)
+            Html::text(&id),
+            Html::text(key),
+            Html::text(value)
         )));
     RepeatRow {
         key: at.to_owned(),
@@ -457,22 +463,22 @@ fn categories(key: &str, served: &[String]) -> Html {
     let boxes = Html::join(offered.into_iter().map(|(code, name)| {
         let id = format!("{group}-{code}");
         let on = served.contains(&code);
-        h(format!(
+        Html::raw(format!(
             "<label for=\"{id}\" class=\"fui-chip-check\"><input type=\"checkbox\" id=\"{id}\" \
              name=\"form[fhir.{}.categories][]\" value=\"{}\"{}>{}</label>",
-            t(key),
-            t(&code),
+            Html::text(key),
+            Html::text(&code),
             if on { " checked" } else { "" },
-            t(name),
-            id = t(&id),
+            Html::text(name),
+            id = Html::text(&id),
         ))
     }));
-    h(format!(
+    Html::raw(format!(
         "<fieldset id=\"{group}\" class=\"fui-fieldset fui-choice\" aria-describedby=\"{group}-error\">\
          <legend class=\"fui-label\">{}</legend><div class=\"fui-chip-checks\">{boxes}</div>{}</fieldset>",
-        t(tr(Msg::Categories)),
+        Html::text(tr(Msg::Categories)),
         error_line(&group),
-        group = t(&group),
+        group = Html::text(&group),
     ))
 }
 
@@ -492,11 +498,11 @@ fn fhir_row(row: &FhirEndpointInput) -> RepeatRow {
     let named = fhir_named(row);
     let name = |part: &str| format!("form[fhir.{key}.{part}]");
     let fields = Html::join([
-        h(format!(
+        Html::raw(format!(
             "<input type=\"hidden\" name=\"form[fhir_rows][]\" value=\"{}\">",
-            t(key)
+            Html::text(key)
         )),
-        h(format!(
+        Html::raw(format!(
             "<div class=\"fui-field-row fui-field-row-narrow-wide\">{}{}</div>",
             text(
                 (&fhir_field(key, "id"), &name("id")),
@@ -607,13 +613,13 @@ fn identity(form: &ConfigForm) -> Html {
         form.product_version.clone(),
         Text::default(),
     );
-    h(format!(
+    Html::raw(format!(
         "<fieldset class=\"{GROUP}\"><legend>{}</legend>\
          <div class=\"fui-field-row fui-field-row-halves\">{organisation}{organisation_name}</div></fieldset>\
          <fieldset class=\"{GROUP}\"><legend>{}</legend>\
          <div class=\"fui-field-row fui-field-row-halves\">{node}{system}{product}{product_version}</div></fieldset>",
-        t(tr(Msg::Organisation)),
-        t(tr(Msg::Node)),
+        Html::text(tr(Msg::Organisation)),
+        Html::text(tr(Msg::Node)),
     ))
 }
 
@@ -656,14 +662,14 @@ fn endpoint_groups(form: &ConfigForm) -> Html {
         empty: tr(Msg::NoFhirEndpointYet),
         form: None,
     });
-    h(format!(
+    Html::raw(format!(
         "<fieldset class=\"{GROUP}\"><legend>{}</legend><p class=\"fui-muted\">{}</p>{query}{}</fieldset>\
          <fieldset class=\"{GROUP}\"><legend>{}</legend><p class=\"fui-muted\">{}</p>{fhir}{}</fieldset>",
-        t(tr(Msg::QueryApiEndpoints)),
-        t(tr(Msg::RestEndpointsGatewaySendsEachMember)),
+        Html::text(tr(Msg::QueryApiEndpoints)),
+        Html::text(tr(Msg::RestEndpointsGatewaySendsEachMember)),
         error_line(ADD_QUERY),
-        t(tr(Msg::FhirEndpoints)),
-        t(tr(Msg::ExchangeFormatEndpointsServeCategoriesEach)),
+        Html::text(tr(Msg::FhirEndpoints)),
+        Html::text(tr(Msg::ExchangeFormatEndpointsServeCategoriesEach)),
         error_line(ADD_FHIR),
     ))
 }

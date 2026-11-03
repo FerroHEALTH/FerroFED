@@ -27,6 +27,7 @@ use crate::read::{Fault, Refusal};
 use crate::server::ConsoleState;
 use axum::response::{IntoResponse, Response};
 use http::{HeaderMap, StatusCode};
+use openehr_federation::options::OptionsRoot;
 use serde::{Deserialize, Serialize};
 
 /// What one replica did with an action: its report, or why it gave none.
@@ -110,16 +111,6 @@ pub fn field<'a>(fields: &'a [(String, String)], name: &str) -> Option<&'a str> 
         .filter(|value| !value.is_empty())
 }
 
-/// Every value of the field `name` of a posted form, in the order posted.
-#[must_use]
-pub fn fields_named<'a>(fields: &'a [(String, String)], name: &str) -> Vec<&'a str> {
-    fields
-        .iter()
-        .filter(|(key, _)| key == name)
-        .map(|(_, value)| value.as_str())
-        .collect()
-}
-
 /// Serves the gateway's `OPTIONS {base}/` document as a download, read as
 /// the operator of the request: About's Download. A refusal answers with
 /// the gateway's status, never an empty file.
@@ -130,7 +121,7 @@ pub async fn options_document(
     let Ok(token) = crate::read::signed_in_with(&state, &headers) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    match state.gateway().self_description(&token).await {
+    match state.gateway().report::<OptionsRoot>(&token).await {
         Ok(description) => match serde_json::to_string_pretty(&description) {
             Ok(text) => (
                 [
