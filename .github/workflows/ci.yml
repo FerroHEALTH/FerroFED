@@ -1638,6 +1638,22 @@ jobs:
 
   # ---- The single required check -------------------------------------------
 
+  # No tracked file keeps an unresolved merge conflict (#1539; no
+  # specification governs the guard: our own design).
+  conflict-markers:
+    name: conflict-markers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The guard refuses each marker and skips the vendored trees
+        run: bash scripts/checks/conflict-markers.sh --self-test
+      - run: bash scripts/checks/conflict-markers.sh
+
   # conclusion is the one status check the branch ruleset requires. It `needs`
   # every other job and runs on always(), so it reports even when every gated
   # Rust lane is skipped. It fails when a needed job failed or was cancelled
@@ -1702,6 +1718,7 @@ jobs:
       - crate-version-guard
       - changelog-guard
       - dependency-review
+      - conflict-markers
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
