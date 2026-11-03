@@ -37,7 +37,7 @@ use std::time::{Duration, Instant};
 use ferrofed_registry::id::EndpointId;
 use http::header::WWW_AUTHENTICATE;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
-use nl_generic_functions::authorizer::{Authorized, Authorizer, AuthorizerError, Retry};
+use ihe_iti::authorizer::{Authorized, Authorizer, AuthorizerError, Retry};
 use nl_generic_functions::nuts_auth::error::{NutsAuthError, ProofError};
 use nl_generic_functions::nuts_auth::holder::Holder;
 use nl_generic_functions::nuts_auth::{DpopProver, Grant, NutsClient};

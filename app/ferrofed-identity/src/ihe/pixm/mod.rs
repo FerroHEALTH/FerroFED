@@ -31,6 +31,7 @@ use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_atna::balp::AuditRecorder;
+use ihe_iti::authorizer::Authorizable;
 use ihe_iti::pixm::error::{InvalidInput, PixmError};
 use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
 use ihe_iti::pixm::{Invocation, PixmClient};

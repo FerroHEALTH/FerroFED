@@ -1445,6 +1445,7 @@ dependencies = [
  "ferrohealth-secret",
  "ferrohealth-smart",
  "http",
+ "ihe-iti",
  "jiff",
  "jsonschema",
  "jsonwebtoken",
@@ -2605,9 +2606,9 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.0.66"
+version = "0.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa97ab6c1b07c8cfaa6ba7b507abb10791d54cba54c9c6fa7bc20eddf33c1238"
+checksum = "da315587bbb290035969ee63b40822a20be6cb17ec2c5c4d1f54cb9fcdae652d"
 dependencies = [
  "async-trait",
  "ferrohealth-smart",
@@ -3077,14 +3078,15 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "nl-generic-functions"
-version = "0.0.33"
+version = "0.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a29710ebab8c13a88e90ecc97824f664b354e9155025e4874ae0fdd459cbfc02"
+checksum = "1f9aea52a0c5cb2388530a832bd9aa7da3cbc2f0b5e138d1b0dc286aa2835111"
 dependencies = [
  "base64 0.23.1",
  "ferrohealth-smart",
  "fhir-types",
  "http",
+ "ihe-iti",
  "jiff",
  "jsonwebtoken",
  "quick-xml",

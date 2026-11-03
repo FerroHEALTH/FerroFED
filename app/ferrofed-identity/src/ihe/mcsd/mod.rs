@@ -102,7 +102,8 @@ use ferrofed_registry::error::IdError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId, SystemId};
 use ferrofed_registry::snapshot::{ConnectionType, EndpointStatus, RegistrySnapshot};
 use ferrohealth_secret::secret_url::SecretUrl;
-use ihe_iti::mcsd::directory::{Directory, DirectoryEndpoint, Resolution};
+use fhir_types::r4::endpoint::Endpoint;
+use ihe_iti::mcsd::directory::{Directory, DirectoryEntry, Resolution};
 
 use error::{
     ConnectionTypeFault, Entry, FhirFormError, IdentifierFault, OperatorFault, ReferenceFault,
@@ -306,7 +307,7 @@ struct Member {
 
 fn member(
     directory: &Directory,
-    endpoint: &DirectoryEndpoint,
+    endpoint: &DirectoryEntry<Endpoint>,
     organisation_at: &BTreeMap<usize, OrganisationId>,
     operators: &BTreeMap<usize, Vec<OrganisationId>>,
 ) -> Result<Member, FhirFormError> {
@@ -421,7 +422,10 @@ struct NativeKeys {
 /// Reads the native keys of any endpoint, so the registry holds an
 /// `openehr-rest-query` endpoint that carries one to the rule the native form
 /// holds it to.
-fn native_keys(endpoint: &DirectoryEndpoint, id: &EndpointId) -> Result<NativeKeys, FhirFormError> {
+fn native_keys(
+    endpoint: &DirectoryEntry<Endpoint>,
+    id: &EndpointId,
+) -> Result<NativeKeys, FhirFormError> {
     let mut categories = Vec::new();
     for code in endpoint.payload_type_codes(CATEGORY_SYSTEM) {
         let Some(code) = code else {
@@ -549,7 +553,9 @@ fn join_node(
 /// The connection type an endpoint's `connectionType` codes (N19, §15.2).
 // NOTE: N19, §15.2: only a defined code is accepted for a Query API, and none is
 // registered, so its system is FerroFED's own; `hl7-fhir-rest` is HL7's, a native endpoint.
-fn connection_type(endpoint: &DirectoryEndpoint) -> Result<ConnectionType, ConnectionTypeFault> {
+fn connection_type(
+    endpoint: &DirectoryEntry<Endpoint>,
+) -> Result<ConnectionType, ConnectionTypeFault> {
     let Some(code) = endpoint.connection_type_code() else {
         return Err(ConnectionTypeFault::NoCode);
     };
@@ -574,7 +580,7 @@ fn connection_type(endpoint: &DirectoryEndpoint) -> Result<ConnectionType, Conne
 /// The organisation an endpoint's `managingOrganization` names (N20).
 fn managing_organisation(
     directory: &Directory,
-    endpoint: &DirectoryEndpoint,
+    endpoint: &DirectoryEntry<Endpoint>,
     organisation_at: &BTreeMap<usize, OrganisationId>,
 ) -> Result<OrganisationId, ReferenceFault> {
     match directory.managing_organization(endpoint) {

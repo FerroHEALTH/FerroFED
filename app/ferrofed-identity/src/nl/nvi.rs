@@ -35,7 +35,7 @@ use async_trait::async_trait;
 use ferrofed_registry::id::{NodeId, OrganisationId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_secret::secret_url::SecretUrl;
-use nl_generic_functions::authorizer::Authorizer;
+use ihe_iti::authorizer::{Authorizable, Authorizer};
 use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, PseudoBsn, Ura, is_bsn_system};
 use nl_generic_functions::lrza::LrzaError;
 use nl_generic_functions::nvi::NviClient;

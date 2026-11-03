@@ -25,6 +25,7 @@ use ferrofed_engine::onward::{Clock, SystemClock};
 use ferrofed_testkit::dpop;
 use ferrofed_testkit::nvi::LocalizationService;
 use http::StatusCode;
+use ihe_iti::authorizer::Authorizable;
 use nl_generic_functions::identification::{PseudoBsn, Ura};
 use nl_generic_functions::nuts_auth::NutsClient;
 use nl_generic_functions::nvi::NviClient;
