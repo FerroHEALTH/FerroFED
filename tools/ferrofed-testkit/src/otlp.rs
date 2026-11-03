@@ -100,14 +100,20 @@ impl Collector {
         let received = Received::default();
         let service = TraceServiceServer::new(Keeper(Arc::clone(&received)));
         let (stop, stopped) = oneshot::channel::<()>();
+        // NOTE: tonic's `serve_with_incoming_shutdown` waits for accepted connections to close
+        // (tonic 0.14 `Server` docs); a client on the test's blocked runtime never closes one (#1507).
         let thread = std::thread::spawn(move || {
-            runtime.block_on(builder.add_service(service).serve_with_incoming_shutdown(
-                TcpIncoming::from(listener),
-                async move {
-                    // A dropped sender stops the collector as the sent signal does.
-                    let _stopped: Result<(), oneshot::error::RecvError> = stopped.await;
-                },
-            ))
+            let serving = builder
+                .add_service(service)
+                .serve_with_incoming(TcpIncoming::from(listener));
+            // A dropped sender stops the collector as the sent signal does. Dropping the
+            // runtime with the thread then drops every connection task it still holds.
+            runtime.block_on(async move {
+                tokio::select! {
+                    served = serving => served,
+                    _stopped = stopped => Ok(()),
+                }
+            })
         });
         Ok(Self {
             endpoint: format!("{scheme}://{address}"),
@@ -148,7 +154,8 @@ impl Collector {
 
 impl Drop for Collector {
     /// Stops the server and joins its thread, re-raising a panic it raised
-    /// unless this thread is already panicking.
+    /// unless this thread is already panicking. It never waits for a client
+    /// to close its connection.
     fn drop(&mut self) {
         if let Some(stop) = self.stop.take() {
             // A server that already stopped dropped the receiver; nothing is left to stop.
