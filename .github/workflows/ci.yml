@@ -1200,8 +1200,8 @@ jobs:
         run: bash scripts/checks/fhir-validator.sh --self-test
       - name: Every document passes the HL7 FHIR Validator
         env:
-          FHIR_VALIDATOR_VERSION: 7.0.3
-          FHIR_VALIDATOR_SHA256: 57aa43fb40cec5de41def81c927725fd85908eeb71509b7f9313e04d9b8ec79b
+          FHIR_VALIDATOR_VERSION: 7.0.4
+          FHIR_VALIDATOR_SHA256: 43e29fa8822d670740a909c395ca5b70a3d07fbaa8936f8dedc6a98b007f555b
         run: |
           set -euo pipefail
           status=0

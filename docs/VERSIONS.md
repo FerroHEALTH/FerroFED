@@ -749,7 +749,7 @@ versions the vendored manifests name.
 | `kustomize` | 5.8.3 | `.github/workflows/ci.yml` |
 | `lychee` | 0.24.2 | `.github/workflows/ci.yml` |
 | `promtool` | 3.15.1 | `.github/workflows/ci.yml` |
-| `validator_cli` | 7.0.3 | `.github/workflows/ci.yml` |
+| `validator_cli` | 7.0.4 | `.github/workflows/ci.yml` |
 
 Keep the locally installed versions on these numbers, so a finding costs a
 local run rather than a CI round trip (`.claude/rules/ci-cd.md`).
