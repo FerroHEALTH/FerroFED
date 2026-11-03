@@ -134,7 +134,10 @@ async fn the_console_owner_and_the_operator_read_only_flag_agree() -> TestResult
         &crate::facade::settings_with_room(),
     );
     let request = Request::get("/operator/stored-queries")
-        .header(header::AUTHORIZATION, crate::support::operator_bearer()?)
+        .header(
+            header::AUTHORIZATION,
+            crate::support::caller::operator_bearer()?,
+        )
         .body(Body::empty())?;
     let (status, text) = crate::support::call(client, request).await?;
     assert_eq!(StatusCode::OK, status, "{text}");

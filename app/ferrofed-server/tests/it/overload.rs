@@ -38,7 +38,8 @@ use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{EHR_A, EHR_B, body, crossref, node_answering, patient_query, registry};
 use crate::metrics::{count, parse};
-use crate::support::{call, claims, error_body, issuer, send, settings};
+use crate::support::caller::{claims, issuer};
+use crate::support::{call, error_body, send, settings};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

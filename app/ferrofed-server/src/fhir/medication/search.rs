@@ -82,7 +82,7 @@ pub(in crate::fhir) async fn search(asked: Asked, uri: Uri) -> Response {
                 silent,
                 prescribed,
             }) => {
-                let mut response = crate::fhir::incomplete("search", status, &silent);
+                let mut response = crate::fhir::patient_summary::incomplete("search", status, &silent);
                 attach(
                     &mut response,
                     prescriptions::accessed(federation, &prescribed, patient, None),

@@ -73,7 +73,7 @@ pub(crate) fn claim_names() -> ContactPointClaims {
 
 /// The suite's `[auth]`, its test issuer declared a national contact point.
 pub(crate) fn declared() -> Result<AuthSettings, Box<dyn std::error::Error>> {
-    let mut auth = support::auth();
+    let mut auth = support::caller::auth();
     let resolved = claim_names().resolve("trust.issuer[0].national_contact_point")?;
     for issuer in &mut auth.issuers {
         issuer.national_contact_point = Some(resolved.clone());
@@ -85,7 +85,7 @@ pub(crate) fn declared() -> Result<AuthSettings, Box<dyn std::error::Error>> {
 /// `client_id`, carrying every Annex attribute and a purpose of use, and an
 /// IUA `person_id`.
 pub(crate) fn relaying() -> Claims {
-    let mut claims = support::claims();
+    let mut claims = support::caller::claims();
     claims.sub.clone_from(&claims.client_id);
     if let Some(extensions) = claims.extensions.as_mut() {
         let iua = &mut extensions.ihe_iua;

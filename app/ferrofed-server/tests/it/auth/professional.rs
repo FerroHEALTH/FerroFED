@@ -51,7 +51,7 @@ const PROFESSIONAL: &str = "urn:oid:2.999.7.1|hp-0042";
 /// above, `minimum` the least level for patient data, and declaring its
 /// client tokens as acting for a professional when `clients` is set.
 fn requiring(minimum: AssuranceLevel, clients: bool) -> AuthSettings {
-    let mut auth = support::auth();
+    let mut auth = support::caller::auth();
     for issuer in &mut auth.issuers {
         issuer.assurance = Some(Assurance {
             claim: String::from("acr"),
@@ -191,7 +191,7 @@ async fn a_client_token_is_refused_patient_data_by_default() -> TestResult {
 /// whatever its `sub`.
 #[tokio::test]
 async fn a_token_only_a_system_scope_covers_is_refused_patient_data() -> TestResult {
-    let mut auth = support::auth();
+    let mut auth = support::caller::auth();
     for issuer in &mut auth.issuers {
         issuer
             .backend_clients
@@ -214,7 +214,7 @@ async fn a_token_only_a_system_scope_covers_is_refused_patient_data() -> TestRes
 #[tokio::test]
 async fn a_declared_issuer_admits_a_client_token_only_when_it_names_the_professional() -> TestResult
 {
-    let mut auth = support::auth();
+    let mut auth = support::caller::auth();
     for issuer in &mut auth.issuers {
         issuer.client_tokens_act_for_professional = true;
     }

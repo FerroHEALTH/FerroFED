@@ -25,7 +25,8 @@ use http::header;
 use tokio::net::TcpListener;
 
 use crate::run::binary;
-use crate::support::{auth_toml, bearer, operator_bearer, signed};
+use crate::support::caller::{auth_toml, bearer, operator_bearer};
+use crate::support::signed;
 
 type TestResult = Result<(), Box<dyn Error>>;
 

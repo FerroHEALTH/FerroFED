@@ -673,7 +673,7 @@ async fn a_confirmation_needs_a_verified_operator_and_a_binding_this_build_lacks
 /// The first operator, as a revision records an author.
 fn operator_author() -> Author {
     Author::Operator {
-        issuer: String::from(crate::support::ISSUER),
+        issuer: String::from(crate::support::caller::ISSUER),
         subject: String::from(OPERATOR),
     }
 }

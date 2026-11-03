@@ -231,7 +231,7 @@ fn a_face_with_no_registry_is_refused() -> TestResult {
 fn pmir(path: &str) -> String {
     format!(
         "\n[[auth.basic.users]]\nuser = \"pmir-registry\"\npassword_hash = \"{}\"\n\n[pmir]\nurl = \"https://pmir.example.org/fhir/\"\nfeed_users = [\"pmir-registry\"]\npath = \"{path}\"\n",
-        crate::support::SCRAPE_HASH
+        crate::support::caller::SCRAPE_HASH
     )
 }
 

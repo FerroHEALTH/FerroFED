@@ -39,9 +39,8 @@ use crate::facade::{
     patient_query, post, registry,
 };
 use crate::path_ehr_id::{VERSION_A, holder};
-use crate::support::{
-    self, ISSUER, Logs, asked, bearer, bearer_as, error_body, mount, operator_bearer, send_as_is,
-};
+use crate::support::caller::{ISSUER, bearer, bearer_as, operator_bearer};
+use crate::support::{self, Logs, asked, error_body, mount, send_as_is};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -54,7 +53,7 @@ const REMOTE: ([u8; 4], u16) = ([192, 0, 2, 10], 40_000);
 
 /// The admin listener's application over `state`, in production.
 fn admin_over(state: &Arc<AppState>) -> Router {
-    let access = Access::new(&support::auth(), Profile::Production, Vec::new());
+    let access = Access::new(&support::caller::auth(), Profile::Production, Vec::new());
     admin::router(Arc::clone(state), access, None, None)
         .layer(MockConnectInfo(SocketAddr::from(REMOTE)))
 }
@@ -439,7 +438,7 @@ async fn the_clear_is_recorded_with_its_operator_listed_and_names_no_patient_ide
     for record in &finished {
         assert_eq!(Some(ISSUER), record.issuer.as_deref());
         assert_eq!(
-            Some(support::claims().sub.as_str()),
+            Some(support::caller::claims().sub.as_str()),
             record.subject.as_deref()
         );
         assert_eq!(

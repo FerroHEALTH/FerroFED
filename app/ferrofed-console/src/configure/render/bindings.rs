@@ -14,7 +14,8 @@ use ferrohealth_ui::view::repeat::{Fields, ROW, Repeat, RepeatRow, repeat};
 use crate::configure::draft::Edit;
 use crate::configure::model::ConfigForm;
 use crate::configure::render::Loaded;
-use crate::configure::render::credentials::{addable, back, masked, secret_row};
+use crate::configure::render::credentials::{addable, back};
+use crate::configure::render::fields::{masked, secret_row};
 use crate::configure::render::members::GROUP;
 use crate::configure::render::parts::{
     Text, error_line, form, head, hidden, reason, row_add, row_remove, save_bar, text,

@@ -32,6 +32,7 @@ mod query;
 mod reflow;
 mod screenshots;
 mod shell;
+mod shots;
 mod sign_in;
 mod sign_out;
 mod stack;

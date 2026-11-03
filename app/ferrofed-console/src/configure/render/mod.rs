@@ -21,6 +21,7 @@ pub mod answers;
 mod bindings;
 mod credentials;
 mod exchange;
+mod fields;
 mod members;
 pub(crate) mod parts;
 mod queries;

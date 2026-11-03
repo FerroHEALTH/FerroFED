@@ -17,7 +17,7 @@ use openehr_federation::headers::ENDPOINT;
 use uuid::Uuid;
 
 use super::{Case, ENDPOINT_A, Expect, PATIENT, Payload, Side};
-use crate::support::CLIENT_TOKEN;
+use crate::support::caller::CLIENT_TOKEN;
 
 /// The organisation header (§8.4).
 const ORGANISATION: &str = "openEHR-federation-organisation";

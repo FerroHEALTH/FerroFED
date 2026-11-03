@@ -99,7 +99,7 @@ pub(super) fn receiving(member: &str, namespaces: &[&str]) -> String {
             "\n[[fhir.receive]]\ncategory = \"Patient-Summaries\"\nmember = \"{member}\"\n\
              package = {}\ndependencies = [{dependencies}]\ntemplate = {}\n\
              files = [{}, {}]\ncontext = \"{}\"\nlanguage = \"en\"\nterritory = \"NL\"\n",
-            path(&eps::package()),
+            path(&eps::profile::package()),
             path(&eps::opt()),
             path(&model),
             path(&context),

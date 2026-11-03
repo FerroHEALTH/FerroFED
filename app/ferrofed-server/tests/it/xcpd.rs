@@ -553,7 +553,7 @@ fn confined_gateway(text: &str) -> Result<(Router, String), Box<dyn Error>> {
         Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
     let mut server = settings_with_room();
-    server.auth = crate::support::auth();
+    server.auth = crate::support::caller::auth();
     for issuer in &mut server.auth.issuers {
         issuer.patient = Some(PatientBinding {
             endpoint: EndpointId::new("node-a-pub")?,
@@ -561,10 +561,10 @@ fn confined_gateway(text: &str) -> Result<(Router, String), Box<dyn Error>> {
             act_is_representative: false,
         });
     }
-    let mut claims = crate::support::claims();
+    let mut claims = crate::support::caller::claims();
     claims.scope = Some("patient/aql-*.s".to_owned());
     claims.ehr_id = Some(EHR_IDS[0].to_owned());
-    let token = crate::support::issuer().mint(&claims)?;
+    let token = crate::support::caller::issuer().mint(&claims)?;
     let app = ferrofed_server::router(Arc::new(AppState::with_federation(federation)), &server);
     Ok((app, token))
 }

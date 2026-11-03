@@ -287,7 +287,7 @@ impl Gateway for InProcess {
         async move {
             let mut request = request.map(Body::from);
             if !request.headers().contains_key(header::AUTHORIZATION) {
-                let bearer = crate::support::bearer()
+                let bearer = crate::support::caller::bearer()
                     .map_err(|error| GatewayError::Transport(Box::new(error)))?;
                 request.headers_mut().insert(
                     header::AUTHORIZATION,

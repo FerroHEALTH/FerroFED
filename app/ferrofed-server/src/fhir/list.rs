@@ -33,7 +33,8 @@ use http::{StatusCode, Uri, header};
 use openehr_federation::status::EndpointStatus;
 
 use super::admission::Asked;
-use super::{UNADMITTED, attach, fhir_json, outcome, refused};
+use super::patient_summary::refused;
+use super::{UNADMITTED, attach, fhir_json, outcome};
 use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
@@ -86,7 +87,12 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
                     let mut response =
                         fhir_json(StatusCode::OK, &list::searchset(Vec::new(), Vec::new()));
                     let accessed = gathered.and_then(|gathered| {
-                        gathered::accessed(federation, &gathered, patient, (Scope::List, None))
+                        gathered::access::accessed(
+                            federation,
+                            &gathered,
+                            patient,
+                            (Scope::List, None),
+                        )
                     });
                     attach(&mut response, accessed);
                     response
@@ -150,7 +156,7 @@ fn listed(
                         "exception",
                         "a member's document could not be listed",
                     );
-                    let accessed = gathered::accessed(
+                    let accessed = gathered::access::accessed(
                         federation,
                         gathered,
                         (system, value),
@@ -188,7 +194,7 @@ fn listed(
     let mut response = fhir_json(StatusCode::OK, &list::searchset(matches, outcomes));
     attach(
         &mut response,
-        gathered::accessed(
+        gathered::access::accessed(
             federation,
             gathered,
             (system, value),

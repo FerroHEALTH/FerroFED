@@ -16,22 +16,12 @@ messages! {
     ActionsFor = "actions-for",
     /// `Add a binding section`
     AddABindingSection = "add-a-binding-section",
-    /// `Add a member`
-    AddAMember = "add-a-member",
     /// `Add binding section`
     AddBindingSection = "add-binding-section",
     /// `Add credentials`
     AddCredentials = "add-credentials",
-    /// `Add endpoint`
-    AddEndpoint = "add-endpoint",
-    /// `Add FHIR endpoint`
-    AddFhirEndpoint = "add-fhir-endpoint",
-    /// `Add member`
-    AddMember = "add-member",
     /// `Add onward credentials`
     AddOnwardCredentials = "add-onward-credentials",
-    /// `Add profile`
-    AddProfile = "add-profile",
     /// `Add secret`
     AddSecret = "add-secret",
     /// `Add setting`
@@ -70,10 +60,6 @@ messages! {
     AwaitsYourConfirmationConfirmCardTop = "awaits-your-confirmation-confirm-card-top",
     /// `base revision`
     BaseRevision = "base-revision",
-    /// `Base URL`
-    BaseUrl = "base-url",
-    /// `The base URL of … endpoint … is not an absolute http or https URL.`
-    BaseUrlEndpointNotAbsoluteHttp = "base-url-endpoint-not-absolute-http",
     /// `Basic authentication`
     BasicAuthentication = "basic-authentication",
     /// `Bind tokens to the TLS client certificate`
@@ -82,14 +68,6 @@ messages! {
     BindingSection = "binding-section",
     /// `Breadcrumb`
     Breadcrumb = "breadcrumb",
-    /// `The care services directory provides this member: change it there.`
-    CareServicesDirectoryProvidesMemberChange = "care-services-directory-provides-member-change",
-    /// `Categories`
-    Categories = "categories",
-    /// `CDR product`
-    CdrProduct = "cdr-product",
-    /// `CDR product version`
-    CdrProductVersion = "cdr-product-version",
     /// `It changes …, which take the approval of an operator other than …`
     ChangesWhichTakeApprovalOperatorOther = "changes-which-take-approval-operator-other",
     /// `Choose the console member to remove.`
@@ -150,10 +128,6 @@ messages! {
     Configuration = "configuration",
     /// `Configuration changes`
     ConfigurationChanges = "configuration-changes",
-    /// `The configuration file's registry document provides this member: …`
-    ConfigurationFileSRegistryDocumentProvides = "configuration-file-s-registry-document-provides",
-    /// `Configuration key: …`
-    ConfigurationKey = "configuration-key",
     /// `The configuration less its bootstrap core, each secret as its file …`
     ConfigurationLessBootstrapCoreEachSecret = "configuration-less-bootstrap-core-each-secret",
     /// `Confirm`
@@ -164,14 +138,10 @@ messages! {
     ConfirmOnceGatewayWorksRollBack = "confirm-once-gateway-works-roll-back",
     /// `Confirm revision …? The gateway keeps it and stops the countdown.`
     ConfirmRevisionGatewayKeepsStopsCountdown = "confirm-revision-gateway-keeps-stops-countdown",
-    /// `Console`
-    Console = "console",
     /// `This console is configured with no admin listener, so it shows no …`
     ConsoleConfiguredNoAdminListenerSo2 = "console-configured-no-admin-listener-so-2",
     /// `This console is configured with no admin listener, so it exports …`
     ConsoleConfiguredNoAdminListenerSo3 = "console-configured-no-admin-listener-so-3",
-    /// `The console does not change this member.`
-    ConsoleDoesNotChangeMember = "console-does-not-change-member",
     /// `The console holds no credentials of ….`
     ConsoleHoldsNoCredentials = "console-holds-no-credentials",
     /// `The console holds no … section.`
@@ -192,10 +162,6 @@ messages! {
     DiffChanged = "diff-changed",
     /// `removed`
     DiffRemoved = "diff-removed",
-    /// `Directory, read-only`
-    DirectoryReadOnly = "directory-read-only",
-    /// `Discharge reports`
-    DischargeReports2 = "discharge-reports-2",
     /// `Download as TOML`
     DownloadAsToml = "download-as-toml",
     /// `DPoP key file`
@@ -206,70 +172,36 @@ messages! {
     Edit = "edit",
     /// `Edit …`
     Edit2 = "edit-2",
-    /// `Edit member …`
-    EditMember = "edit-member",
     /// `Edit the credentials of …`
     EditTheCredentialsOf = "edit-the-credentials-of",
-    /// `Electronic dispensations`
-    ElectronicDispensations2 = "electronic-dispensations-2",
-    /// `Electronic prescriptions`
-    ElectronicPrescriptions2 = "electronic-prescriptions-2",
-    /// `Elsewhere, read-only`
-    ElsewhereReadOnly = "elsewhere-read-only",
     /// `Endpoint`
     Endpoint = "endpoint",
     /// `Endpoint…`
     Endpoint2 = "endpoint-2",
     /// `Endpoint and grant`
     EndpointAndGrant = "endpoint-and-grant",
-    /// `Endpoint id`
-    EndpointId = "endpoint-id",
-    /// `The endpoint_id of … endpoint … is not 1 to 64 letters, digits, …`
-    EndpointIdEndpointNot164 = "endpoint-id-endpoint-not-1-64",
     /// `The endpoint_id is not 1 to 64 letters, digits, '.', '-' or '_'.`
     EndpointIdNot164Letters = "endpoint-id-not-1-64-letters",
-    /// `Endpoints`
-    Endpoints = "endpoints",
     /// `The endpoints the members declare that hold no credentials yet.`
     EndpointsMembersDeclareHoldNoCredentials = "endpoints-members-declare-hold-no-credentials",
     /// `Every revision, who made it and why; each one downloads as TOML.`
     EveryRevisionWhoMadeWhyEach = "every-revision-who-made-why-each",
-    /// `The exchange-format endpoints that serve the categories each one …`
-    ExchangeFormatEndpointsServeCategoriesEach = "exchange-format-endpoints-serve-categories-each",
     /// `Export`
     Export = "export",
     /// `Export revision … as TOML`
     ExportRevisionAsToml = "export-revision-as-toml",
     /// `FAPI 2.0`
     Fapi20 = "fapi-2-0",
-    /// `FHIR`
-    Fhir = "fhir",
-    /// `FHIR endpoint …`
-    FhirEndpoint = "fhir-endpoint",
-    /// `FHIR endpoint … names no identifier system for the ehr_id.`
-    FhirEndpointNamesNoIdentifierSystem = "fhir-endpoint-names-no-identifier-system",
-    /// `FHIR endpoint … names no profile: add at least one.`
-    FhirEndpointNamesNoProfileAdd = "fhir-endpoint-names-no-profile-add",
-    /// `FHIR endpoint … serves no category: choose at least one.`
-    FhirEndpointServesNoCategoryChoose = "fhir-endpoint-serves-no-category-choose",
-    /// `FHIR endpoints`
-    FhirEndpoints = "fhir-endpoints",
     /// `The file … is read from is not an absolute path.`
     FileReadFromNotAbsolutePath = "file-read-from-not-absolute-path",
-    /// `File, read-only`
-    FileReadOnly = "file-read-only",
     /// `The form names no action this page offers.`
     FormNamesNoActionPageOffers = "form-names-no-action-page-offers",
     /// `The form names a setting this grant does not take; reload the page.`
     FormNamesSettingGrantDoesNot = "form-names-setting-grant-does-not",
-    /// `The form's endpoint rows do not read; reload the page.`
-    FormSEndpointRowsDoNot = "form-s-endpoint-rows-do-not",
     /// `the gateway, as no operator confirmed in time`
     GatewayNoOperatorConfirmedTime = "gateway-no-operator-confirmed-time",
     /// `The gateway offers no stored-query registry.`
     GatewayOffersNoStoredQueryRegistry = "gateway-offers-no-stored-query-registry",
-    /// `Gateway, read-only`
-    GatewayReadOnly = "gateway-read-only",
     /// `, the gateway rolls it back.`
     GatewayRollsBack = "gateway-rolls-back",
     /// `The gateway's settings for this resource do not read as TOML.`
@@ -282,8 +214,6 @@ messages! {
     GiveAbsolutePathFileReadFrom = "give-absolute-path-file-read-from",
     /// `Give the AQL to store.`
     GiveAqlStore = "give-aql-store",
-    /// `Give at least one Query API endpoint.`
-    GiveLeastOneQueryApiEndpoint = "give-least-one-query-api-endpoint",
     /// `Give the reason for the change.`
     GiveReasonChange = "give-reason-change",
     /// `Grant`
@@ -304,16 +234,12 @@ messages! {
     HistoryRecordsRevision = "history-records-revision",
     /// `How the gateway reaches the endpoint; the form shows that grant's …`
     HowGatewayReachesEndpointFormShows = "how-gateway-reaches-endpoint-form-shows",
-    /// `Identifier system of the ehr_id`
-    IdentifierSystemEhrId = "identifier-system-ehr-id",
     /// `Import`
     Import = "import",
     /// `Import and export`
     ImportAndExport = "import-and-export",
     /// `Import as a dry-run revision`
     ImportDryRunRevision = "import-dry-run-revision",
-    /// `In service`
-    InService = "in-service",
     /// `Issuer`
     Issuer = "issuer",
     /// `It changed…`
@@ -330,8 +256,6 @@ messages! {
     KeyFile = "key-file",
     /// `Key id`
     KeyId = "key-id",
-    /// `Laboratory reports`
-    LaboratoryReports2 = "laboratory-reports-2",
     /// `Learn more`
     LearnMore = "learn-more",
     /// `Leave unset`
@@ -344,24 +268,12 @@ messages! {
     MajorMinorPatchSuch10 = "major-minor-patch-such-1-0",
     /// `…It may now be applied.`
     MayNowApplied = "may-now-applied",
-    /// `Medical imaging`
-    MedicalImaging2 = "medical-imaging-2",
     /// `A member with this node_id exists: change it with its own edit form.`
     MemberNodeIdExistsChangeOwn = "member-node-id-exists-change-own",
-    /// `A member the registry document or a care services directory …`
-    MemberRegistryDocumentCareServicesDirectory = "member-registry-document-care-services-directory",
-    /// `A member's node_id is its identity: add a new member to change it.`
-    MemberSNodeIdIdentityAdd = "member-s-node-id-identity-add",
-    /// `A member is saved as a new revision, which you apply separately.`
-    MemberSavedNewRevisionWhichYou = "member-saved-new-revision-which-you",
     /// `Members`
     Members = "members",
-    /// `Members and their owners`
-    MembersAndTheirOwners = "members-and-their-owners",
     /// `Mutual TLS alias hosts`
     MutualTlsAliasHosts = "mutual-tls-alias-hosts",
-    /// `1 to 64 letters, digits, '.', '-' or '_', starting with a letter …`
-    N164LettersDigitsStartingLetter = "n-1-64-letters-digits-starting-letter",
     /// `1 setting`
     N1Setting = "n-1-setting",
     /// `Name`
@@ -376,38 +288,22 @@ messages! {
     NameVersionStore = "name-version-store",
     /// `A namespace and a name, such as org.example::vital-signs.`
     NamespaceNameSuchOrgExampleVital = "namespace-name-such-org-example-vital",
-    /// `New FHIR endpoint`
-    NewFhirEndpoint = "new-fhir-endpoint",
-    /// `New Query API endpoint`
-    NewQueryApiEndpoint = "new-query-api-endpoint",
     /// `New secret`
     NewSecret = "new-secret",
     /// `New setting`
     NewSetting = "new-setting",
     /// `New value:…`
     NewValue = "new-value",
-    /// `The newest revision removes this member; apply it from the card above.`
-    NewestRevisionRemovesMemberApplyFrom = "newest-revision-removes-member-apply-from",
     /// `The … newest of … revisions, newest first.`
     NewestRevisionsNewestFirst = "newest-revisions-newest-first",
     /// `No binding section is called ….`
     NoBindingSectionCalled = "no-binding-section-called",
     /// `no code`
     NoCode = "no-code",
-    /// `No FHIR endpoint yet.`
-    NoFhirEndpointYet = "no-fhir-endpoint-yet",
-    /// `No member is configured yet.`
-    NoMemberConfiguredYet = "no-member-configured-yet",
-    /// `No member has the node_id ….`
-    NoMemberHasNodeId = "no-member-has-node-id",
     /// `No new secret.`
     NoNewSecretYet = "no-new-secret-yet",
     /// `No onward credential or binding section is set.`
     NoOnwardCredentialBindingSectionSet = "no-onward-credential-binding-section-set",
-    /// `No profile yet.`
-    NoProfileYet = "no-profile-yet",
-    /// `No Query API endpoint yet.`
-    NoQueryEndpointYet = "no-query-endpoint-yet",
     /// `No revision runs`
     NoRevisionRuns = "no-revision-runs",
     /// `No revision runs, so none downloads.`
@@ -420,12 +316,6 @@ messages! {
     NoValueYet = "no-value-yet",
     /// `No version is stored yet.`
     NoVersionStoredYet = "no-version-stored-yet",
-    /// `Node`
-    Node = "node",
-    /// `Node id`
-    NodeIdLabel = "node-id-label",
-    /// `The node_id is not ….`
-    NodeIdNot = "node-id-not",
     /// `none yet`
     NoneYet = "none-yet",
     /// `…It is not applied: apply it from the card at the top once you …`
@@ -452,14 +342,6 @@ messages! {
     OnceAppliedAwaitsConfirmationChanges = "once-applied-awaits-confirmation-changes",
     /// `operator …`
     Operator2 = "operator-2",
-    /// `Organisation`
-    Organisation = "organisation",
-    /// `Organisation id`
-    OrganisationId = "organisation-id",
-    /// `The organisation id is not ….`
-    OrganisationIdNot = "organisation-id-not",
-    /// `Organisation name`
-    OrganisationName = "organisation-name",
     /// `File`
     OriginFile = "origin-file",
     /// `Import`
@@ -484,60 +366,34 @@ messages! {
     PathNamesNoPartConfigurationPage = "path-names-no-part-configuration-page",
     /// `The path names no revision number.`
     PathNamesNoRevisionNumber = "path-names-no-revision-number",
-    /// `Patient summaries`
-    PatientSummaries2 = "patient-summaries-2",
     /// `The preview of its changes could not be read; reload the page to …`
     PreviewChangesCouldNotReadReload = "preview-changes-could-not-read-reload",
     /// `Previous client key file`
     PreviousClientKeyFile = "previous-client-key-file",
-    /// `Profile`
-    Profile = "profile",
-    /// `Profiles`
-    Profiles = "profiles",
     /// `Qualified name`
     QualifiedName = "qualified-name",
-    /// `Query API`
-    QueryApi = "query-api",
-    /// `Query API endpoint …`
-    QueryApiEndpoint = "query-api-endpoint",
-    /// `Query API endpoints`
-    QueryApiEndpoints = "query-api-endpoints",
     /// `Read from a file`
     ReadFromAFile = "read-from-a-file",
     /// `Reason`
     Reason = "reason",
     /// `The reason is longer than 1000 characters.`
     ReasonLongerThan1000Characters = "reason-longer-than-1000-characters",
-    /// `The registry document provides a member with the same identity, …`
-    RegistryDocumentProvidesMemberSameIdentity = "registry-document-provides-member-same-identity",
     /// `It is saved as … without it, which you apply separately.`
     RemovalSavedWithoutIt = "removal-saved-without-it",
     /// `Remove`
     Remove = "remove",
     /// `Remove …`
     Remove2 = "remove-2",
-    /// `Remove …`
-    Remove3 = "remove-3",
-    /// `Remove …`
-    Remove4 = "remove-4",
-    /// `Remove member …? It is saved as … without it, which you apply …`
-    RemoveMemberSavedWithoutWhichYou = "remove-member-saved-without-which-you",
-    /// `Remove member …?`
-    RemoveMemberTitle = "remove-member-title",
     /// `Remove …? It is saved as … without it, which you apply separately.`
     RemoveSavedWithoutWhichYouApply = "remove-saved-without-which-you-apply",
     /// `Remove …?`
     RemoveSectionTitle = "remove-section-title",
     /// `Remove this new secret`
     RemoveThisNewSecret = "remove-this-new-secret",
-    /// `Remove this profile`
-    RemoveThisProfile = "remove-this-profile",
     /// `Remove this value`
     RemoveThisValue = "remove-this-value",
     /// `Show the value while held`
     ShowSecretWhileHeld = "show-secret-while-held",
-    /// `removing`
-    StateRemovingWord = "state-removing-word",
     /// `Replica …: …`
     Replica2 = "replica-2",
     /// `Replica …: ….`
@@ -568,8 +424,6 @@ messages! {
     ReplicaStoredVersion = "replica-stored-version",
     /// `Resource`
     Resource = "resource",
-    /// `The ITS-REST endpoints the gateway sends each member's AQL to.`
-    RestEndpointsGatewaySendsEachMember = "rest-endpoints-gateway-sends-each-member",
     /// `, restoring the content of revision …`
     RestoringContentRevision = "restoring-content-revision",
     /// `…(revision …)`
@@ -666,8 +520,6 @@ messages! {
     Settings3 = "settings-3",
     /// `settings = …`
     Settings4 = "settings-4",
-    /// `shadowed by the file`
-    ShadowedByTheFile = "shadowed-by-the-file",
     /// `Signed client assertion (private_key_jwt)`
     SignedClientAssertionPrivateKeyJwt = "signed-client-assertion-private-key-jwt",
     /// `…Some of its settings take effect only at a restart: ….`
@@ -676,8 +528,6 @@ messages! {
     State = "state",
     /// `running`
     StateRunning = "state-running",
-    /// `unknown`
-    StateUnknown = "state-unknown",
     /// `…It stays running, and the gateway no longer rolls it back.`
     StaysRunningGatewayNoLongerRolls = "stays-running-gateway-no-longer-rolls",
     /// `…It still takes an approval before it applies.`
@@ -686,8 +536,6 @@ messages! {
     Store = "store",
     /// `Store a new version`
     StoreANewVersion = "store-a-new-version",
-    /// `Store, immutable`
-    StoreImmutable = "store-immutable",
     /// `Store the version`
     StoreTheVersion = "store-the-version",
     /// `Store this version? A stored version cannot be changed or removed …`
@@ -704,12 +552,6 @@ messages! {
     StoredVersionImmutableChangeNewVersion = "stored-version-immutable-change-new-version",
     /// `Such as oauth2.client_secret.`
     SuchOauth2ClientSecret = "such-oauth2-client-secret",
-    /// `The system the endpoint is told the ehr_id in, such as …`
-    SystemEndpointToldEhrIdSuch = "system-endpoint-told-ehr-id-such",
-    /// `System id`
-    SystemId = "system-id",
-    /// `The system_id is not an openEHR UID.`
-    SystemIdNotOpenehrUid = "system-id-not-openehr-uid",
     /// `text/plain; charset=utf-8`
     TextPlainCharsetUtf8 = "text-plain-charset-utf-8",
     /// `the configuration file`
@@ -758,8 +600,6 @@ messages! {
     Version = "version",
     /// `Versions`
     Versions = "versions",
-    /// `View`
-    View = "view",
     /// `What it changes against the running revision …:`
     WhatChangesAgainstRunningRevision = "what-changes-against-running-revision",
     /// `What it changes against the running revision …:`

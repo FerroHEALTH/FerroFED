@@ -27,7 +27,8 @@ use super::{
 use crate::auth::{bearing, minted};
 use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL};
 use crate::fhir::TestResult;
-use crate::support::{ISSUER, call};
+use crate::support::call;
+use crate::support::caller::ISSUER;
 
 /// The synthetic representative who acts for [`PERSON`]: the `act` `sub`.
 pub(super) const REPRESENTATIVE: &str = "synthetic-representative-5t7w";

@@ -84,7 +84,7 @@ async fn an_unmodified_client_given_only_the_base_url_reads_and_writes_at_a_pref
     ));
     let client = Validated(HttpGateway::new(
         base.parse()?,
-        SecretString::from(crate::support::token()?),
+        SecretString::from(crate::support::caller::token()?),
     )?);
     let fixture = fixture(Some(1), Some(0))?;
     let node_a = fixture.member("node-a-pub").ok_or("node A is a member")?;

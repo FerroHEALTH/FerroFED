@@ -25,7 +25,8 @@ use wiremock::ResponseTemplate;
 
 use crate::facade::{EHR_A, body, dev_gateway, patient_query, post};
 use crate::path_ehr_id::{VERSION_A, answer, holder};
-use crate::support::{Logs, asked, bearer_as, mount};
+use crate::support::caller::bearer_as;
+use crate::support::{Logs, asked, mount};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

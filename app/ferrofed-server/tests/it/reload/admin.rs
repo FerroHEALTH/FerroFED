@@ -23,7 +23,8 @@ use serde::Deserialize;
 
 use super::TestResult;
 use super::auth::{Trusting, auth_a, auth_a_and_b, bearer_b, status_of};
-use crate::support::{self, Logs, error_body, operator_bearer, send_as_is};
+use crate::support::caller::operator_bearer;
+use crate::support::{self, Logs, error_body, send_as_is};
 
 /// The fields of an answer the tests read.
 #[derive(Debug, Deserialize)]
@@ -85,7 +86,7 @@ async fn the_reload_needs_the_operator_scope() -> TestResult {
     let app = listener(&gateway);
     let (status, _, _) = reload(app.clone(), None).await?;
     assert_eq!(StatusCode::UNAUTHORIZED, status, "no credential");
-    let (status, _, _) = reload(app, Some(&support::bearer()?)).await?;
+    let (status, _, _) = reload(app, Some(&support::caller::bearer()?)).await?;
     assert_eq!(StatusCode::FORBIDDEN, status, "a token without the scope");
     Ok(())
 }
@@ -120,7 +121,7 @@ async fn the_reload_applies_what_sighup_applies_and_is_recorded() -> TestResult 
         .find(|record| record.event == "admin-write-admitted")
         .ok_or("the action is recorded before it runs")?;
     assert_eq!(Some(action.as_str()), admitted.action.as_deref());
-    assert_eq!(Some(support::ISSUER), admitted.issuer.as_deref());
+    assert_eq!(Some(support::caller::ISSUER), admitted.issuer.as_deref());
     let finished = records
         .iter()
         .find(|record| record.event == FINISHED)

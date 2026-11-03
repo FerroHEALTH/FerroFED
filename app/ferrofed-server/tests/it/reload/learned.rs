@@ -22,7 +22,8 @@ use ferrofed_server::auth::caller::{Caller, Stated, VerifiedBy};
 
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, node_answering};
 use crate::path_ehr_id::{answer, probe_at};
-use crate::support::{Logs, asked, claims, error_body};
+use crate::support::caller::claims;
+use crate::support::{Logs, asked, error_body};
 
 use super::{
     Gateway, LEGACY, TestResult, VERSION_A, indexed_at_a_departed_member, member,

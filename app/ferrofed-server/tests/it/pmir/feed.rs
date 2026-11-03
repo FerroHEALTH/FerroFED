@@ -23,7 +23,8 @@ use serde::Deserialize;
 use super::{
     DOMAIN_A, EHR_A, EHR_A2, FEED_USER, Gateway, OTHER_USER, PATH, feed_credentials, gateway, text,
 };
-use crate::support::{Logs, SCRAPE_PASSWORD, basic, send_as_is};
+use crate::support::caller::{SCRAPE_PASSWORD, basic};
+use crate::support::{Logs, send_as_is};
 
 type TestResult = Result<(), Box<dyn Error>>;
 

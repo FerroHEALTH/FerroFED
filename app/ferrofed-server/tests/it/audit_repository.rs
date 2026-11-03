@@ -304,7 +304,7 @@ async fn each_discovery_names_the_verified_caller_as_its_human_requestor_toward_
     drop(guard);
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(1, messages.len(), "one ITI-20 message per exchange");
-    let claims = crate::support::claims();
+    let claims = crate::support::caller::claims();
     // NOTE: ITI TF-2 §3.55.5.1.1 Human Requestor UserID is the human's identity, and IUA
     // ITI TF-2 §3.72.5.1 writes the JWT's aud, sub and iss into UserName.
     let requestor = format!(

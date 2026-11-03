@@ -98,7 +98,7 @@ fn managed_refuses_a_secret_inline_outside_the_core() -> TestResult {
     let managed = format!(
         "[metrics]\nlisten = \"127.0.0.1:9\"\n{}\n\
          [config]\nui = \"managed\"\npath = \"r.redb\"\n",
-        crate::support::scraping()
+        crate::support::caller::scraping()
     );
     assert!(
         resolved(&managed)?.is_ok(),
@@ -125,7 +125,11 @@ fn managed_refuses_a_secret_inline_outside_the_core() -> TestResult {
 
 #[tokio::test]
 async fn off_serves_no_revision_route() -> TestResult {
-    let access = Access::new(&crate::support::auth(), Profile::Development, Vec::new());
+    let access = Access::new(
+        &crate::support::caller::auth(),
+        Profile::Development,
+        Vec::new(),
+    );
     let app = admin::router(Arc::new(AppState::default()), access, None, None)
         .layer(MockConnectInfo(SocketAddr::from(REMOTE)));
     for (method, path) in [

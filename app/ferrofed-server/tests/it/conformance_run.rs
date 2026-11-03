@@ -36,7 +36,8 @@ use secrecy::SecretString;
 use wiremock::matchers::any;
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::support::{Logs, asked, auth_toml, spawned};
+use crate::support::caller::auth_toml;
+use crate::support::{Logs, asked, spawned};
 
 /// A token no part of a run may print, log or forward.
 const SENTINEL: &str = "sentinel-token-that-never-appears";
@@ -338,7 +339,7 @@ async fn a_run_writes_the_callers_token_to_no_report_and_no_log() -> TestResult 
     let config = deployment(dir.path(), &a, &b, "profile = \"development\"")?;
     let text = std::fs::read_to_string(&config)?;
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
-    let token = crate::support::token()?;
+    let token = crate::support::caller::token()?;
     let out = dir.path().join("report");
     let logs = Logs::default();
     let capture = subscriber(Rendering::Json, "trace", false, logs.clone())?;
@@ -415,7 +416,7 @@ async fn the_node_profile_reports_each_point_against_every_member() -> TestResul
         &settings,
         RunOptions {
             gateway: None,
-            token: SecretString::from(crate::support::token()?),
+            token: SecretString::from(crate::support::caller::token()?),
             patient: SyntheticPatient::new(
                 "urn:oid:2.999.1.1",
                 SecretString::from("ffd-test-0038".to_owned()),
