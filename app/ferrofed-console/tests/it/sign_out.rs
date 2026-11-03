@@ -9,12 +9,12 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
+use crate::support::{COOKIE, SessionId};
 use axum::body::Body;
-use ferrofed_console::session::{COOKIE, SessionId};
 use http::{Request, StatusCode};
 use url::Url;
 
-use crate::support::{OPERATOR_ID_TOKEN, WITH_OIDC, console, header, send, settings, signed_in};
+use crate::support::{WITH_OIDC, console, header, send, settings, signed_in};
 
 /// [`WITH_OIDC`] with the provider's end-session endpoint and a registered
 /// post-logout redirect.
@@ -45,12 +45,12 @@ const SAME_ORIGIN: (&str, &str) = ("sec-fetch-site", "same-origin");
 
 #[tokio::test]
 async fn a_sign_out_ends_the_session_and_removes_the_cookie() -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(WITH_OIDC)?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(WITH_OIDC).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (response, _body) = send(&service, sign_out(Some(&session), Some(SAME_ORIGIN))?).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
-    assert!(state.sessions().access_token(&session)?.is_none());
-    assert_eq!(0, state.sessions().occupancy()?.sessions);
+    assert!(crate::support::access_token(&state, &session)?.is_none());
+    assert_eq!(0, crate::support::occupancy(&state)?.sessions);
     let removal = header(&response, "set-cookie");
     assert!(
         removal.starts_with("ferrofed_console_session=;"),
@@ -68,8 +68,10 @@ async fn a_sign_out_ends_the_session_and_removes_the_cookie() -> Result<(), Box<
 #[tokio::test]
 async fn a_sign_out_redirects_to_the_end_session_endpoint_with_the_id_token_hint()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&with_end_session())?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&with_end_session()).await?;
+    let (signed, id_token) =
+        crate::support::signed_in_as(Some(crate::support::OPERATOR_NAME), None, None).await?;
+    let session = crate::support::establish(&state, signed)?;
     let (response, _body) = send(&service, sign_out(Some(&session), Some(SAME_ORIGIN))?).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
     let location = Url::parse(header(&response, "location"))?;
@@ -86,13 +88,13 @@ async fn a_sign_out_redirects_to_the_end_session_endpoint_with_the_id_token_hint
     let pair = |name: &str| query.get(name).map(String::as_str);
     // The query the endpoint already carries is kept.
     assert_eq!(Some("en"), pair("ui_locales"));
-    assert_eq!(Some(OPERATOR_ID_TOKEN), pair("id_token_hint"));
+    assert_eq!(Some(id_token.as_str()), pair("id_token_hint"));
     assert_eq!(Some("ferrofed-console"), pair("client_id"));
     assert_eq!(
         Some("https://console.example.org/"),
         pair("post_logout_redirect_uri")
     );
-    assert!(state.sessions().access_token(&session)?.is_none());
+    assert!(crate::support::access_token(&state, &session)?.is_none());
     assert!(header(&response, "set-cookie").contains("Max-Age=0"));
     Ok(())
 }
@@ -100,7 +102,7 @@ async fn a_sign_out_redirects_to_the_end_session_endpoint_with_the_id_token_hint
 #[tokio::test]
 async fn a_sign_out_without_a_session_still_reaches_the_provider_without_a_hint()
 -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(&with_end_session())?;
+    let (_state, service) = console(&with_end_session()).await?;
     let (response, _body) = send(&service, sign_out(None, Some(SAME_ORIGIN))?).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
     let location = Url::parse(header(&response, "location"))?;
@@ -119,19 +121,19 @@ async fn a_sign_out_without_a_session_still_reaches_the_provider_without_a_hint(
 #[tokio::test]
 async fn a_sign_out_from_the_consoles_own_origin_is_taken_without_fetch_metadata()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(WITH_OIDC)?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(WITH_OIDC).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let request = sign_out(Some(&session), Some(("origin", "http://127.0.0.1:3000")))?;
     let (response, _body) = send(&service, request).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
-    assert!(state.sessions().access_token(&session)?.is_none());
+    assert!(crate::support::access_token(&state, &session)?.is_none());
     Ok(())
 }
 
 #[tokio::test]
 async fn a_cross_site_sign_out_is_refused_and_the_session_lives_on() -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&with_end_session())?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&with_end_session()).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     for origin in [
         Some(("sec-fetch-site", "cross-site")),
         Some(("sec-fetch-site", "same-site")),
@@ -146,7 +148,7 @@ async fn a_cross_site_sign_out_is_refused_and_the_session_lives_on() -> Result<(
         assert!(header(&response, "set-cookie").is_empty(), "{origin:?}");
         assert!(header(&response, "location").is_empty(), "{origin:?}");
         assert!(
-            state.sessions().access_token(&session)?.is_some(),
+            crate::support::access_token(&state, &session)?.is_some(),
             "{origin:?}"
         );
     }
@@ -155,24 +157,29 @@ async fn a_cross_site_sign_out_is_refused_and_the_session_lives_on() -> Result<(
 
 #[tokio::test]
 async fn sign_out_is_never_a_get() -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(WITH_OIDC)?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(WITH_OIDC).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let request = Request::get("/logout")
         .header("cookie", format!("{COOKIE}={}", session.as_str()))
         .header(SAME_ORIGIN.0, SAME_ORIGIN.1)
         .body(Body::empty())?;
     let (response, _body) = send(&service, request).await?;
     assert_eq!(StatusCode::METHOD_NOT_ALLOWED, response.status());
-    assert!(state.sessions().access_token(&session)?.is_some());
+    assert!(crate::support::access_token(&state, &session)?.is_some());
     Ok(())
 }
 
+// NOTE: no specification governs this: our own design; a sign-out ends the session and
+// removes its cookie whatever the provider, so with none it lands on the console's page.
 #[tokio::test]
-async fn sign_out_answers_unavailable_when_no_provider_is_configured() -> Result<(), Box<dyn Error>>
-{
-    let (_state, service) = console("")?;
-    let (response, _body) = send(&service, sign_out(None, Some(SAME_ORIGIN))?).await?;
-    assert_eq!(StatusCode::SERVICE_UNAVAILABLE, response.status());
+async fn sign_out_with_no_provider_configured_ends_the_session_on_the_console()
+-> Result<(), Box<dyn Error>> {
+    let (state, service) = console("[session]\nsecure_cookie = false\n").await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
+    let (response, _body) = send(&service, sign_out(Some(&session), Some(SAME_ORIGIN))?).await?;
+    assert_eq!(StatusCode::SEE_OTHER, response.status());
+    assert_eq!("/", header(&response, "location"));
+    assert!(crate::support::access_token(&state, &session)?.is_none());
     Ok(())
 }
 
@@ -198,8 +205,8 @@ fn an_end_session_endpoint_over_plain_http_off_loopback_is_refused() {
 
 #[tokio::test]
 async fn the_console_offers_sign_out_as_a_post_form() -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(WITH_OIDC)?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(WITH_OIDC).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (response, body) = send(&service, crate::support::get_as("/", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status());
     assert!(
@@ -225,13 +232,13 @@ fn form_action(response: &http::Response<()>) -> String {
 #[tokio::test]
 async fn the_policy_lets_the_sign_out_form_reach_the_end_session_endpoint()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&with_end_session())?;
+    let (state, service) = console(&with_end_session()).await?;
     let (page, _body) = send(&service, crate::support::get("/")?).await?;
     assert_eq!(
         "form-action 'self' https://idp.example.org",
         form_action(&page)
     );
-    let session = state.sessions().establish(signed_in())?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (response, _body) = send(&service, sign_out(Some(&session), Some(SAME_ORIGIN))?).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
     assert_eq!(
@@ -253,7 +260,7 @@ async fn no_origin_a_request_names_joins_the_form_action() -> Result<(), Box<dyn
         ),
         (WITH_OIDC.to_owned(), "form-action 'self'"),
     ] {
-        let (_state, service) = console(&text)?;
+        let (_state, service) = console(&text).await?;
         let request = Request::get("/")
             .header("host", "attacker.example.net")
             .header("origin", FOREIGN)
@@ -272,7 +279,7 @@ async fn no_origin_a_request_names_joins_the_form_action() -> Result<(), Box<dyn
 async fn without_an_end_session_endpoint_forms_lead_only_to_the_console()
 -> Result<(), Box<dyn Error>> {
     for text in ["", WITH_OIDC] {
-        let (_state, service) = console(text)?;
+        let (_state, service) = console(text).await?;
         let (response, _body) = send(&service, crate::support::get("/")?).await?;
         assert_eq!("form-action 'self'", form_action(&response), "{text}");
     }

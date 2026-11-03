@@ -11,7 +11,6 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use ferrofed_console::config::Config;
-use ferrofed_console::server::ConsoleState;
 
 /// The console component's `ConfigMap`.
 const CONFIGMAP: &str = include_str!(concat!(
@@ -70,6 +69,6 @@ fn the_packaged_console_configuration_passes_config_check() -> Result<(), Box<dy
         "the gateway's Service"
     );
     assert!(settings.oidc.is_some(), "the console offers sign-in");
-    ConsoleState::new(settings)?;
+    ferrofed_console::gateway::Gateway::new(&settings.gateway)?;
     Ok(())
 }

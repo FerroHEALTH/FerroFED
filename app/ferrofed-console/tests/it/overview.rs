@@ -34,7 +34,7 @@ fn incidents(body: &str) -> &str {
 async fn a_nodes_page_shows_its_endpoints_and_an_unknown_one_is_not_found()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) =
         send(&service, get_as("/organisations/Org%20A/node_1", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
@@ -82,7 +82,7 @@ async fn a_nodes_page_shows_its_endpoints_and_an_unknown_one_is_not_found()
 async fn the_integrity_page_filters_the_open_and_the_resolved_incidents()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (_response, open) = send(&service, get_as("/integrity", &session)?).await?;
     assert!(
         incidents(&open).contains("7d44b88c-4199-4bad-97dc-d78268e01398"),
@@ -114,7 +114,7 @@ async fn the_integrity_page_filters_the_open_and_the_resolved_incidents()
 #[tokio::test]
 async fn the_dashboard_counts_the_federation_and_shows_each_part() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(&service, get_as("/", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
@@ -157,7 +157,7 @@ async fn a_dashboard_part_the_gateway_refuses_is_named_and_the_rest_shows()
         )
         .mount(&gateway)
         .await;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(&service, get_as("/", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(

@@ -39,7 +39,7 @@ const PAGES: [(&str, &str); 18] = [
 async fn every_page_answers_whole_with_its_words_and_the_security_headers()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let dump = std::env::var("FERROFED_CONSOLE_DUMP").ok();
     for (path, words) in PAGES {
         let (response, body) = send(&service, get_as(path, &session)?).await?;
@@ -70,7 +70,7 @@ async fn every_page_answers_whole_with_its_words_and_the_security_headers()
 #[tokio::test]
 async fn a_page_with_no_session_sends_the_visitor_to_sign_in() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, _session) = signed_in_console(&gateway)?;
+    let (_state, service, _session) = signed_in_console(&gateway).await?;
     for (path, _) in PAGES
         .into_iter()
         .filter(|(path, _)| !matches!(*path, "/" | "/about"))
@@ -99,7 +99,7 @@ async fn a_query_answers_on_its_own_page_and_logs_nothing_it_carried() -> Result
     let gateway = gateway().await?;
     let answer = crate::stub::result_set_example()?;
     crate::stub::answers(&gateway, ("POST", "/v1/query/aql"), 200, &answer).await;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let captured = crate::support::Captured::default();
     let guard = captured.logging();
     let (response, body) = send(
@@ -134,7 +134,7 @@ async fn a_query_answers_on_its_own_page_and_logs_nothing_it_carried() -> Result
 #[tokio::test]
 async fn a_parameter_row_is_added_and_removed_by_a_plain_post() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (_response, body) = send(
         &service,
         crate::stub::post_as(
@@ -178,7 +178,7 @@ async fn a_parameter_row_is_added_and_removed_by_a_plain_post() -> Result<(), Bo
 #[tokio::test]
 async fn a_page_a_post_answers_carries_the_strict_policy() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(
         &service,
         crate::stub::post_as(
@@ -214,7 +214,7 @@ async fn the_node_and_endpoint_lists_show_the_median_and_the_95th_percentile()
         .with_priority(1)
         .mount(&gateway)
         .await;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     for path in ["/organisations/nodes", "/self-description/endpoints"] {
         let (response, body) = send(&service, get_as(path, &session)?).await?;
         assert_eq!(StatusCode::OK, response.status(), "{path}: {body}");

@@ -23,6 +23,7 @@ use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::menu::{ThemeChoice, UserMenu, user_menu};
 use ferrohealth_ui::view::nav::{Count, Entry, Group, Nest, NestItem, Rail, Sidebar, sidebar};
 use ferrohealth_ui::view::search::{SearchBox, search_box};
+use ferrohealth_ui::view::session::{Watch, session_watch};
 use ferrohealth_ui::view::shell::{
     Footer, Shell, TopBar, brand_mark, lockup, shell as shell_view, topbar,
 };
@@ -141,6 +142,23 @@ pub async fn shell(content: Html) -> Html {
             footer: footer(),
         },
     )
+    .then(watch(&visit, &locale))
+}
+
+/// FerroUI's watch over the operator's session, from what it had left as
+/// the server drew the page (FerroUI `docs/consoles.md`, "The session's
+/// end"); nothing on a page drawn with no live session.
+fn watch(visit: &crate::visit::Visit, locale: &ferrohealth_ui::i18n::Locale) -> Html {
+    match visit.held() {
+        ferrohealth_session::record::Held::SignedIn(session) => session_watch(&Watch::new(
+            locale,
+            ferrohealth_session::paths::SESSION,
+            "/",
+            SIGN_OUT,
+            session.left(),
+        )),
+        _ => Html::empty(),
+    }
 }
 
 /// The top bar of the shell drawn at `path` from `reads`, with the find's

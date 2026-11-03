@@ -11,7 +11,7 @@
 
 use std::error::Error;
 
-use ferrofed_console::session::SessionId;
+use crate::support::SessionId;
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use wiremock::matchers::{header, method, path};
@@ -113,15 +113,16 @@ pub(crate) async fn listener() -> Server {
 }
 
 /// A console with `listener` as its one replica, and a signed-in operator.
-pub(crate) fn signed_in_console(
+pub(crate) async fn signed_in_console(
     listener: &Server,
 ) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"http://127.0.0.1:9/\"\n\n[session]\nsecure_cookie = false\n\n\
          [[admin.replicas]]\nname = \"gateway-0\"\nadmin_url = \"{}\"\n",
         listener.uri()
-    ))?;
-    let session = state.sessions().establish(signed_in())?;
+    ))
+    .await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     Ok((service, session))
 }
 
@@ -317,7 +318,7 @@ async fn a_save_reaches_the_replica_with_the_member_and_previews_its_changes()
         SAVED,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = posted(
         &service,
         &session,
@@ -364,7 +365,7 @@ async fn an_apply_and_a_rollback_post_to_their_routes() -> Result<(), Box<dyn Er
     )
     .await;
     answers(&listener, ("POST", "/admin/config/rollback"), 200, APPLIED).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = configured(
         &service,
         &session,
@@ -409,7 +410,7 @@ async fn a_stored_query_version_is_put_with_its_aql() -> Result<(), Box<dyn Erro
             "q":"SELECT c FROM EHR e CONTAINS COMPOSITION c"}"#,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = posted(
         &service,
         &session,
@@ -452,7 +453,7 @@ async fn a_gateway_whose_configuration_is_not_managed_shows_so_and_no_form()
         r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#configuration-unmanaged","detail":"not managed","code":"configuration-unmanaged"}"#,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let (response, body) = send(&service, get_as("/configuration", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(body.contains("its configuration is not managed"), "{body}");
@@ -491,7 +492,7 @@ async fn a_save_keeps_what_the_form_does_not_show() -> Result<(), Box<dyn Error>
         SAVED,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     configured(&service, &session, save_c()).await?;
     let sent = bodies(&listener, ("PUT", "/admin/config/members/node-c")).await?;
     let [sent] = sent.as_slice() else {
@@ -537,7 +538,7 @@ async fn an_empty_stored_query_registry_still_offers_a_version() -> Result<(), B
         DIFF,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let body = page(&service, &session, "/configuration/stored-queries").await?;
     assert!(!body.contains("offers no stored-query registry"), "{body}");
     assert!(body.contains("Store a new version"), "{body}");
@@ -579,12 +580,13 @@ async fn a_console_with_no_admin_listener_offers_no_configuration_link()
 -> Result<(), Box<dyn Error>> {
     let (state, service) = console(
         "[gateway]\nbase_url = \"http://127.0.0.1:9/\"\n\n[session]\nsecure_cookie = false\n",
-    )?;
-    let session = state.sessions().establish(signed_in())?;
+    )
+    .await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(!body.contains(r#"href="/configuration""#), "{body}");
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(body.contains(r#"href="/configuration""#), "{body}");
     Ok(())
@@ -596,7 +598,7 @@ async fn a_console_with_no_admin_listener_offers_no_configuration_link()
 async fn an_endpoint_row_is_added_and_removed_with_no_script_and_keeps_what_was_typed()
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let mut fields = save_c_fields();
     fields.push((String::from("edit"), String::from("add-query")));
     let fields_shown: Vec<(&str, &str)> = fields

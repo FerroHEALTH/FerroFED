@@ -9,13 +9,13 @@
 //! and answers it as an attachment that no cache keeps. A replica's refusal
 //! is answered with its status and stable code, never an empty file. No
 //! specification governs this: our own design.
-use crate::gateway::AccessToken;
 use crate::locale::{Msg, tr, tr_with};
 use crate::server::ConsoleState;
 use axum::Extension;
 use axum::extract::Path;
 use axum::response::{IntoResponse, Response};
 use ferrofed_operator_api::revision::RevisionId;
+use ferrohealth_session::record::Held;
 use http::header::{CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_TYPE, LOCATION};
 use http::{HeaderMap, HeaderValue, StatusCode};
 
@@ -46,21 +46,19 @@ fn plain(status: StatusCode, said: String) -> Response {
 pub async fn export(
     Extension(state): Extension<ConsoleState>,
     Path(id): Path<String>,
-    headers: HeaderMap,
+    held: Option<Extension<Held>>,
+    _headers: HeaderMap,
 ) -> Response {
-    let sessions = state.sessions();
-    let held = crate::oidc::cookie_named(&headers, &sessions.cookie_name(crate::session::COOKIE))
-        .map(|session| sessions.access_token(&session));
-    let token = match held {
-        Some(Ok(Some(token))) => AccessToken::new(token),
-        Some(Err(error)) => {
-            tracing::error!(%error, "the session store could not be read");
+    let token = match crate::read::signed_in_held(held.as_ref().map(|held| &held.0)) {
+        Ok(token) => token,
+        Err(crate::read::Fault::Unavailable) => {
+            tracing::error!("the session store could not be read");
             return plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 tr(Msg::SessionStoreCouldNotRead),
             );
         }
-        Some(Ok(None)) | None => {
+        Err(_) => {
             let mut response = StatusCode::SEE_OTHER.into_response();
             response
                 .headers_mut()

@@ -86,6 +86,7 @@
 
 pub mod atna;
 pub mod atna_feed;
+pub mod console_sign_in;
 pub mod containers;
 pub mod crossref;
 pub mod dpop;

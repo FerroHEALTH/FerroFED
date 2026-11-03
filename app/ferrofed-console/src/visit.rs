@@ -25,6 +25,8 @@ use ferrohealth_ui::i18n::Locale;
 use ferrohealth_ui::theme::{Preferences, cookie};
 use http::StatusCode;
 
+use ferrohealth_session::record::Held;
+
 use crate::server::ConsoleState;
 
 /// The name of the navigation's cookie after the preference prefix.
@@ -91,8 +93,11 @@ struct Drawn {
 pub struct Visit {
     /// The console's state, absent outside a request the console serves.
     state: Option<ConsoleState>,
-    /// The request's headers, which the session is read from.
+    /// The request's headers.
     headers: http::HeaderMap,
+    /// What the request's session cookie holds, as the session middleware
+    /// read it.
+    held: Held,
     /// The address path.
     pub path: String,
     /// The address query, after the `?`, empty for none.
@@ -135,6 +140,7 @@ impl Default for Visit {
         Self {
             state: None,
             headers: http::HeaderMap::new(),
+            held: Held::Absent,
             path: String::from("/"),
             query: String::new(),
             session: SessionState::SignedOut,
@@ -154,14 +160,25 @@ impl Visit {
     /// The visit of the request `parts` on the console `state`.
     #[must_use]
     pub fn of(state: &ConsoleState, parts: &http::request::Parts) -> Self {
-        let prefix = state
-            .sessions()
-            .cookie_name(crate::session::PREFERENCE_PREFIX);
+        let prefix = state.preference_prefix();
         let preferences = preference_cookies(&parts.headers, &prefix);
-        let session = match crate::read::signed_in_with(state, &parts.headers) {
-            Ok(_) => SessionState::SignedIn,
-            Err(crate::read::Fault::SignedOut) => SessionState::SignedOut,
-            Err(_) => SessionState::Unreadable,
+        // NOTE: no specification governs this: our own design; a route the session
+        // middleware does not sit in front of reads the store itself, and a store it
+        // cannot read is the unreadable page.
+        let held = match parts.extensions.get::<Held>() {
+            Some(held) => Ok(held.clone()),
+            None => state
+                .sessions()
+                .held(&parts.headers)
+                .map(|with_cookies| with_cookies.value),
+        };
+        let (session, held) = match held {
+            Ok(held @ Held::SignedIn(_)) => (SessionState::SignedIn, held),
+            Ok(held) => (SessionState::SignedOut, held),
+            Err(error) => {
+                tracing::error!(%error, "the session store could not be read");
+                (SessionState::Unreadable, Held::Absent)
+            }
         };
         let settings = (session == SessionState::SignedIn).then(|| Settings {
             gateway: state.settings().gateway.base.to_string(),
@@ -176,7 +193,7 @@ impl Visit {
             path: parts.uri.path().to_owned(),
             query: parts.uri.query().unwrap_or_default().to_owned(),
             session,
-            operator: crate::read::operator_of(state, &parts.headers),
+            operator: crate::read::operator_of(&held),
             locale: crate::locale::requested_from(state, &parts.headers),
             browser: crate::locale::browser_of(&parts.headers),
             preferences,
@@ -184,6 +201,7 @@ impl Visit {
             settings,
             sign_in: state.settings().oidc.is_some(),
             headers: parts.headers.clone(),
+            held,
             state: Some(state.clone()),
             drawn: Arc::default(),
         }
@@ -233,6 +251,12 @@ impl Visit {
     #[must_use]
     pub const fn headers(&self) -> &http::HeaderMap {
         &self.headers
+    }
+
+    /// What the request's session cookie holds.
+    #[must_use]
+    pub const fn held(&self) -> &Held {
+        &self.held
     }
 
     /// Names the page's title, which the document writes before the

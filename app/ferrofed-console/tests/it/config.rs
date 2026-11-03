@@ -13,7 +13,6 @@ use ferrofed_console::config::Config;
 use ferrofed_console::config::error;
 use ferrohealth_config::error::ConfigError;
 use ferrohealth_secret::file::SecretError;
-use secrecy::ExposeSecret as _;
 
 use crate::support::{WITH_OIDC, settings};
 
@@ -31,7 +30,7 @@ fn the_defaults_resolve_to_a_console_on_loopback_without_sign_in() -> Result<(),
     assert_eq!("http://127.0.0.1:8080/", settings.gateway.base.as_str());
     assert_eq!(Duration::from_secs(30), settings.gateway.timeout);
     assert_eq!("en", settings.locale.tag(), "English unless configured");
-    assert!(settings.session.secure_cookie);
+    assert!(settings.session.secure_cookie());
     assert!(settings.oidc.is_none());
     Ok(())
 }
@@ -54,7 +53,7 @@ fn an_environment_override_replaces_the_file_value() -> Result<(), Box<dyn Error
         "https://gateway.example.org/fed",
         settings.gateway.base.as_str()
     );
-    assert!(!settings.session.secure_cookie);
+    assert!(!settings.session.secure_cookie());
     Ok(())
 }
 
@@ -252,21 +251,6 @@ fn an_unknown_variable_is_refused_by_its_name() {
 }
 
 #[test]
-fn the_client_secret_is_read_from_its_file_trimmed() -> Result<(), Box<dyn Error>> {
-    let mut file = tempfile::NamedTempFile::new()?;
-    writeln!(file, "s3cret-from-a-file")?;
-    let text = format!(
-        "{WITH_OIDC}client_secret_file = \"{}\"\n",
-        file.path().display()
-    );
-    let settings = settings(&text)?;
-    let oidc = settings.oidc.ok_or("the provider is configured")?;
-    let secret = oidc.client_secret.ok_or("the secret is read")?;
-    assert_eq!("s3cret-from-a-file", secret.expose_secret());
-    Ok(())
-}
-
-#[test]
 fn a_secret_set_inline_and_in_a_file_is_refused() {
     let text =
         format!("{WITH_OIDC}client_secret = \"inline\"\nclient_secret_file = \"/run/secrets/x\"\n");
@@ -439,7 +423,7 @@ fn cookies_without_secure_are_admitted_on_a_loopback_console() -> Result<(), Box
         "http://[::1]:3000/auth/callback",
     ] {
         let settings = settings(&insecure_at(redirect_uri))?;
-        assert!(!settings.session.secure_cookie, "{redirect_uri}");
+        assert!(!settings.session.secure_cookie(), "{redirect_uri}");
     }
     Ok(())
 }
@@ -449,6 +433,6 @@ fn the_cookies_are_secure_by_default_on_an_https_console() -> Result<(), Box<dyn
     let text = insecure_at("https://console.example.org/auth/callback")
         .replace("secure_cookie = false\n", "");
     let settings = settings(&text)?;
-    assert!(settings.session.secure_cookie);
+    assert!(settings.session.secure_cookie());
     Ok(())
 }

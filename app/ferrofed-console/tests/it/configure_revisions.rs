@@ -11,8 +11,8 @@
 
 use std::error::Error;
 
+use crate::support::COOKIE;
 use axum::body::Body;
-use ferrofed_console::session::COOKIE;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use wiremock::matchers::{header, method, path};
@@ -89,7 +89,7 @@ async fn exports(listener: &Server) {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_history_keeps_the_origins_its_address_names() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let (_response, every) = send(&service, get_as("/configuration/history", &session)?).await?;
     assert!(
         every.contains(r#"<form method="get" action="/configuration/history""#),
@@ -125,7 +125,7 @@ async fn the_history_keeps_the_origins_its_address_names() -> Result<(), Box<dyn
 async fn each_revision_offers_its_download_and_the_page_offers_an_import()
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let (response, body) = send(&service, get_as("/configuration/history", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     for id in [1, 2] {
@@ -157,7 +157,7 @@ async fn a_download_is_the_replicas_toml_as_an_attachment_never_cached()
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     exports(&listener).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let (response, body) = send(
         &service,
         get_as("/configuration/revisions/2/export", &session)?,
@@ -195,7 +195,8 @@ async fn a_download_without_a_session_asks_no_replica() -> Result<(), Box<dyn Er
         "[gateway]\nbase_url = \"http://127.0.0.1:9/\"\n\n[session]\nsecure_cookie = false\n\n\
          [[admin.replicas]]\nname = \"gateway-0\"\nadmin_url = \"{}\"\n",
         listener.uri()
-    ))?;
+    ))
+    .await?;
     let request = Request::get("/configuration/revisions/2/export")
         .header("cookie", format!("{COOKIE}=forged-session"))
         .body(Body::empty())?;
@@ -224,7 +225,7 @@ async fn a_refused_download_shows_the_status_and_code() -> Result<(), Box<dyn Er
         r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#revision-unknown","detail":"no revision 9 is held","code":"revision-unknown"}"#,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let (response, body) = send(
         &service,
         get_as("/configuration/revisions/9/export", &session)?,
@@ -241,7 +242,7 @@ async fn an_import_sends_the_toml_to_the_replica_and_shows_its_changes_escaped()
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     answers(&listener, ("POST", "/admin/config/import"), 201, IMPORTED).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = posted(
         &service,
         &session,
@@ -319,7 +320,7 @@ async fn a_refused_import_shows_the_status_and_code() -> Result<(), Box<dyn Erro
         r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#resource-file-owned","detail":"[credentials.\"node-a-pub\"] is provided by the configuration file","code":"resource-file-owned"}"#,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = posted(
         &service,
         &session,
@@ -343,7 +344,7 @@ async fn a_refused_import_shows_the_status_and_code() -> Result<(), Box<dyn Erro
 #[tokio::test(flavor = "multi_thread")]
 async fn an_empty_import_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = posted(
         &service,
         &session,
@@ -367,7 +368,7 @@ async fn an_empty_import_asks_no_replica() -> Result<(), Box<dyn Error>> {
 #[tokio::test]
 async fn an_import_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let request = Request::post("/configuration/import-export")
         .header("content-type", "application/x-www-form-urlencoded")
         .header("sec-fetch-site", "cross-site")

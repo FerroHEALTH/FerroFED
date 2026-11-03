@@ -11,10 +11,10 @@ use std::error::Error;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use crate::support::COOKIE;
 use axum::body::{Body, Bytes, HttpBody};
 use ferrofed_console::configure::import::IMPORT_LIMIT;
 use ferrofed_console::server::{BODY_LIMIT, BODY_READ_TIMEOUT, CONFIGURE_BODY_LIMIT};
-use ferrofed_console::session::COOKIE;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use http_body_util::{BodyExt as _, Full};
@@ -59,7 +59,7 @@ async fn asked(listener: &Server) -> Result<usize, Box<dyn Error>> {
 async fn an_oversized_body_with_no_session_is_refused_before_any_form_runs()
 -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
-    let (service, _session) = signed_in_console(&listener)?;
+    let (service, _session) = signed_in_console(&listener).await?;
     let toml = "#".repeat(CONFIGURE_BODY_LIMIT);
     let body = form(&[("action", "import"), ("toml", &toml), ("confirm", "yes")]);
     let (response, _) = send(&service, post(IMPORT, body, None)?).await?;
@@ -77,7 +77,7 @@ async fn an_oversized_body_with_no_session_is_refused_before_any_form_runs()
 #[tokio::test(flavor = "multi_thread")]
 async fn an_oversized_body_to_any_other_route_is_refused() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     for path in [
         "/configuration",
         "/query",
@@ -97,7 +97,7 @@ async fn an_oversized_body_to_any_other_route_is_refused() -> Result<(), Box<dyn
 #[tokio::test(flavor = "multi_thread")]
 async fn an_oversized_body_sent_without_its_length_runs_no_form() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let request = Request::post(IMPORT)
         .header("content-type", "application/x-www-form-urlencoded")
         .header("accept", "application/json")
@@ -120,7 +120,7 @@ async fn an_oversized_body_sent_without_its_length_runs_no_form() -> Result<(), 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_chunked_body_over_the_limit_is_413_and_runs_no_form() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     for (path, limit) in [
         (IMPORT, CONFIGURE_BODY_LIMIT),
         ("/configuration", BODY_LIMIT),
@@ -204,10 +204,13 @@ fn started() -> VecDeque<Bytes> {
 
 // NOTE: RFC 9110 §15.5.9; a body still unread at the deadline is 408, so a
 // body sent slowly holds the task no longer than the deadline.
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn a_body_that_never_ends_is_408_and_runs_no_form() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
+    // The clock pauses once the operator is signed in, so the sign-in's own
+    // calls run on real time and the body's deadline on the paused clock.
+    tokio::time::pause();
     let stalled = Chunked {
         chunks: started(),
         end: End::Stalled,
@@ -227,7 +230,7 @@ async fn a_body_that_never_ends_is_408_and_runs_no_form() -> Result<(), Box<dyn 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_body_that_breaks_off_is_400_and_runs_no_form() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let broken = Chunked {
         chunks: started(),
         end: End::Broken,
@@ -243,7 +246,7 @@ async fn a_body_that_breaks_off_is_400_and_runs_no_form() -> Result<(), Box<dyn 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_body_longer_than_its_declared_length_is_413() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let mut chunks = started();
     chunks.push_back(Bytes::from("x".repeat(CONFIGURE_BODY_LIMIT)));
     let long = Chunked {
@@ -264,7 +267,7 @@ async fn a_body_longer_than_its_declared_length_is_413() -> Result<(), Box<dyn E
 async fn an_import_at_its_own_limit_still_runs() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
     answers(&listener, ("POST", "/admin/config/import"), 201, IMPORTED).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let toml = "#".repeat(IMPORT_LIMIT);
     let body = form(&[
         ("action", "import"),

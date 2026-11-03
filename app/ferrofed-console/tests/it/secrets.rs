@@ -159,10 +159,10 @@ fn nothing_traced_while_the_console_loads_starts_and_serves_shows_a_secret()
         Config::from_sources(Some(PROVIDER), &environment)?.resolve()?;
         let settings = Config::from_sources(Some(&from_file), &BTreeMap::new())?.resolve()?;
         refusal(&format!("{PROVIDER}client_secret = \"{SENTINEL}\n"), &[]);
-        let service = router(ConsoleState::new(settings)?);
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
+        let service = router(runtime.block_on(ConsoleState::new(settings))?);
         runtime.block_on(async {
             for path in ["/", "/health", "/login", "/auth/callback?code=c&state=s"] {
                 service

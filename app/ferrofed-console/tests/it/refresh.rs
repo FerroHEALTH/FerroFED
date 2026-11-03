@@ -15,18 +15,17 @@ use std::io::Write;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
+use crate::support::SessionId;
 use ferrofed_console::config::Config;
 use ferrofed_console::config::error;
 use ferrofed_console::server::{ConsoleState, router};
-use ferrofed_console::session::{SessionId, SignedIn};
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
-use secrecy::{ExposeSecret as _, SecretString};
 use url::Url;
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::support::{OPERATOR_ID_TOKEN, OPERATOR_TOKEN, get, get_as, header, send, settings};
+use crate::support::{get, get_as, header, send, settings};
 
 /// The refresh token every test session starts with.
 const FIRST: &str = "synthetic-refresh-first";
@@ -43,30 +42,34 @@ fn configuration(uri: &str, oidc: &str) -> String {
     )
 }
 
-/// A console at the provider `server`, with `absolute` as the absolute
-/// timeout when given.
-fn console(
+/// A console at the provider `server`, with `absolute` seconds as both the
+/// absolute and the idle timeout when given.
+async fn console(
     server: &Server,
-    absolute: Option<Duration>,
+    absolute: Option<u64>,
 ) -> Result<(ConsoleState, axum::Router), Box<dyn Error>> {
-    let mut settings = settings(&configuration(&server.uri(), ""))?;
+    let mut text = configuration(&server.uri(), "");
     if let Some(absolute) = absolute {
-        settings.session.absolute_timeout = absolute;
+        text = text.replace(
+            "[session]\nsecure_cookie = false\n",
+            &format!(
+                "[session]\nsecure_cookie = false\nidle_timeout_s = {absolute}\nabsolute_timeout_s = {absolute}\n"
+            ),
+        );
     }
-    let state = ConsoleState::new(settings)?;
+    let state = ConsoleState::new(settings(&text)?).await?;
     let service = router(state.clone());
     Ok((state, service))
 }
 
 /// A session whose access token lasts `lifetime` and that holds [`FIRST`].
-fn session(state: &ConsoleState, lifetime: Duration) -> Result<SessionId, Box<dyn Error>> {
-    Ok(state.sessions().establish(SignedIn {
-        access_token: SecretString::from(OPERATOR_TOKEN),
-        expires_in: Some(lifetime),
-        refresh_token: Some(SecretString::from(FIRST)),
-        id_token: Some(SecretString::from(OPERATOR_ID_TOKEN)),
-        operator: None,
-    })?)
+async fn session(state: &ConsoleState, lifetime: Duration) -> Result<SessionId, Box<dyn Error>> {
+    crate::support::establish(
+        state,
+        crate::support::signed_in_as(None, Some(lifetime), Some(FIRST))
+            .await?
+            .0,
+    )
 }
 
 /// Answers a refresh with `refresh` by the access token `access`, lasting
@@ -101,20 +104,15 @@ async fn answers(
 
 /// The access token the session `id` holds now.
 fn held(state: &ConsoleState, id: &SessionId) -> Result<String, Box<dyn Error>> {
-    Ok(state
-        .sessions()
-        .access_token(id)?
-        .ok_or("a live session")?
-        .expose_secret()
-        .to_owned())
+    Ok(crate::support::access_token(state, id)?.ok_or("a live session")?)
 }
 
 #[tokio::test]
 async fn a_session_outlives_its_access_token_by_refreshing_it() -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, None)?;
-    let id = session(&state, Duration::ZERO)?;
-    assert!(state.sessions().access_token(&id)?.is_none());
+    let (state, service) = console(&server, None).await?;
+    let id = session(&state, Duration::ZERO).await?;
+    assert!(crate::support::access_token(&state, &id)?.is_none());
     answers(&server, FIRST, "synthetic-access-second", 3600, None).await;
     for _ in 0..3 {
         let (response, _body) = send(&service, get_as("/health", &id)?).await?;
@@ -129,8 +127,8 @@ async fn a_session_outlives_its_access_token_by_refreshing_it() -> Result<(), Bo
 #[tokio::test]
 async fn a_rotated_refresh_token_is_the_one_sent_next() -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, None)?;
-    let id = session(&state, Duration::ZERO)?;
+    let (state, service) = console(&server, None).await?;
+    let id = session(&state, Duration::ZERO).await?;
     let second = "synthetic-refresh-second";
     answers(&server, FIRST, "synthetic-access-second", 0, Some(second)).await;
     answers(&server, second, "synthetic-access-third", 3600, None).await;
@@ -145,8 +143,8 @@ async fn a_rotated_refresh_token_is_the_one_sent_next() -> Result<(), Box<dyn Er
 async fn requests_that_arrive_together_refresh_once_and_keep_the_rotated_token()
 -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, None)?;
-    let id = session(&state, Duration::ZERO)?;
+    let (state, service) = console(&server, None).await?;
+    let id = session(&state, Duration::ZERO).await?;
     let second = "synthetic-refresh-second";
     Mock::given(method("POST"))
         .and(path("/token"))
@@ -179,12 +177,24 @@ async fn requests_that_arrive_together_refresh_once_and_keep_the_rotated_token()
     assert_eq!("synthetic-access-second", held(&state, &id)?);
     // The refreshed token lasts 2 s, so it is due again after its first half.
     tokio::time::sleep(Duration::from_millis(1100)).await;
-    let grant = state
-        .sessions()
-        .refresh_grant(&id, Duration::from_secs(60))?
-        .ok_or("a refresh token")?;
-    assert_eq!(second, grant.expose_secret());
-    assert_eq!(1, state.sessions().occupancy()?.sessions);
+    // The next refresh presents the rotated refresh token (RFC 6749 §6).
+    Mock::given(method("POST"))
+        .and(path("/token"))
+        .and(body_string_contains(format!("refresh_token={second}")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_string(
+                    r#"{"access_token":"synthetic-access-third","token_type":"Bearer","expires_in":3600}"#,
+                ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (response, _body) = send(&service, get_as("/health", &id)?).await?;
+    assert_eq!(StatusCode::OK, response.status());
+    assert_eq!("synthetic-access-third", held(&state, &id)?);
+    assert_eq!(1, crate::support::occupancy(&state)?.sessions);
     server.verify().await;
     Ok(())
 }
@@ -192,8 +202,8 @@ async fn requests_that_arrive_together_refresh_once_and_keep_the_rotated_token()
 #[tokio::test]
 async fn sign_out_with_a_trailing_slash_sends_no_refresh() -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, None)?;
-    let id = session(&state, Duration::ZERO)?;
+    let (state, service) = console(&server, None).await?;
+    let id = session(&state, Duration::ZERO).await?;
     Mock::given(method("POST"))
         .and(path("/token"))
         .respond_with(ResponseTemplate::new(200))
@@ -213,11 +223,10 @@ async fn a_refused_refresh_ends_the_session_and_sends_the_operator_to_sign_in()
     for (status, body) in [
         (400, r#"{"error":"invalid_grant"}"#),
         (401, r#"{"error":"invalid_client"}"#),
-        (503, ""),
     ] {
         let server = Server::start().await;
-        let (state, service) = console(&server, None)?;
-        let id = session(&state, Duration::ZERO)?;
+        let (state, service) = console(&server, None).await?;
+        let id = session(&state, Duration::ZERO).await?;
         Mock::given(method("POST"))
             .and(path("/token"))
             .respond_with(ResponseTemplate::new(status).set_body_string(body))
@@ -237,9 +246,32 @@ async fn a_refused_refresh_ends_the_session_and_sends_the_operator_to_sign_in()
                     && cookie.contains("Max-Age=0")),
             "{status}"
         );
-        assert_eq!(0, state.sessions().occupancy()?.sessions, "{status}");
+        assert_eq!(0, crate::support::occupancy(&state)?.sessions, "{status}");
         server.verify().await;
     }
+    Ok(())
+}
+
+// NOTE: RFC 6749 §5.2: a refusal is the provider's error answer; a provider that is down
+// answers none, so the session is kept for the next request to try again, and the page
+// still sends the operator to sign in while the token is expired.
+#[tokio::test]
+async fn an_unreached_refresh_keeps_the_session_and_sends_the_operator_to_sign_in()
+-> Result<(), Box<dyn Error>> {
+    let server = Server::start().await;
+    let (state, service) = console(&server, None).await?;
+    let id = session(&state, Duration::ZERO).await?;
+    Mock::given(method("POST"))
+        .and(path("/token"))
+        .respond_with(ResponseTemplate::new(503))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (response, _body) = send(&service, get_as("/members", &id)?).await?;
+    assert_eq!(StatusCode::SEE_OTHER, response.status());
+    assert_eq!("/login", header(&response, "location"));
+    assert_eq!(1, crate::support::occupancy(&state)?.sessions);
+    server.verify().await;
     Ok(())
 }
 
@@ -247,8 +279,11 @@ async fn a_refused_refresh_ends_the_session_and_sends_the_operator_to_sign_in()
 async fn the_absolute_timeout_ends_a_session_whatever_its_refresh_token()
 -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, Some(Duration::ZERO))?;
-    let id = session(&state, Duration::from_secs(3600))?;
+    let (state, service) = console(&server, Some(1)).await?;
+    let id = session(&state, Duration::from_secs(3600)).await?;
+    // NOTE: no specification governs this: our own design; the lifetimes count whole
+    // seconds from the sign-in, so two seconds on the session is past its one.
+    tokio::time::sleep(Duration::from_secs(2)).await;
     Mock::given(method("POST"))
         .and(path("/token"))
         .respond_with(ResponseTemplate::new(200))
@@ -258,7 +293,7 @@ async fn the_absolute_timeout_ends_a_session_whatever_its_refresh_token()
     let (response, _body) = send(&service, get_as("/members", &id)?).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
     assert_eq!("/login", header(&response, "location"));
-    assert_eq!(0, state.sessions().occupancy()?.sessions);
+    assert_eq!(0, crate::support::occupancy(&state)?.sessions);
     server.verify().await;
     Ok(())
 }
@@ -301,8 +336,8 @@ async fn the_refresh_token_reaches_no_answer_cookie_or_log_line() -> Result<(), 
     let _logging = tracing::subscriber::set_default(subscriber);
 
     let server = Server::start().await;
-    let (state, service) = console(&server, None)?;
-    let id = session(&state, Duration::ZERO)?;
+    let (state, service) = console(&server, None).await?;
+    let id = session(&state, Duration::ZERO).await?;
     let second = "synthetic-refresh-second";
     answers(&server, FIRST, "synthetic-access-second", 0, Some(second)).await;
     Mock::given(method("POST"))
@@ -325,21 +360,21 @@ async fn the_refresh_token_reaches_no_answer_cookie_or_log_line() -> Result<(), 
     }
     let logged = captured.text();
     assert!(
-        logged.contains("could not be refreshed"),
+        logged.contains("refused a refresh"),
         "the capture saw the refused refresh: {logged}"
     );
     seen.push(logged);
     for text in &seen {
         assert!(!text.contains("synthetic-refresh-"), "{text}");
     }
-    assert_eq!(0, state.sessions().occupancy()?.sessions);
+    assert_eq!(0, crate::support::occupancy(&state)?.sessions);
     server.verify().await;
     Ok(())
 }
 
 /// The query of the authorization request a `GET /login` redirects to.
 async fn authorization_request(oidc: &str) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
-    let state = ConsoleState::new(settings(&configuration("http://127.0.0.1:9", oidc))?)?;
+    let state = ConsoleState::new(settings(&configuration("http://127.0.0.1:9", oidc))?).await?;
     let (response, _body) = send(&router(state), get("/login")?).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
     let location = Url::parse(header(&response, "location"))?;

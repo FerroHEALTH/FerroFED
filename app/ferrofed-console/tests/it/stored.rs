@@ -129,14 +129,15 @@ async fn gateway(items: &[Held], split: usize) -> Result<MockServer, Box<dyn Err
 }
 
 /// A console over `gateway` with one signed-in operator.
-fn signed_in_console(
+async fn signed_in_console(
     gateway: &MockServer,
-) -> Result<(axum::Router, ferrofed_console::session::SessionId), Box<dyn Error>> {
+) -> Result<(axum::Router, crate::support::SessionId), Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"{}\"\n\n[session]\nsecure_cookie = false\n",
         gateway.uri()
-    ))?;
-    let session = state.sessions().establish(signed_in())?;
+    ))
+    .await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     Ok((service, session))
 }
 
@@ -174,7 +175,7 @@ fn three_versions() -> Vec<Held> {
 #[tokio::test]
 async fn the_detail_shows_the_newest_version_and_reads_every_page() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(&three_versions(), 2).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(
         &service,
         get_as("/stored-queries/org.example::weights", &session)?,
@@ -232,7 +233,7 @@ async fn the_detail_shows_the_newest_version_and_reads_every_page() -> Result<()
 #[tokio::test]
 async fn the_version_switch_shows_the_version_the_url_names() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(&three_versions(), 4).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(
         &service,
         get_as(
@@ -259,7 +260,7 @@ async fn the_version_switch_shows_the_version_the_url_names() -> Result<(), Box<
 async fn a_version_the_gateway_does_not_hold_is_said_and_the_newest_shown()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway(&three_versions(), 4).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (_, body) = send(
         &service,
         get_as(
@@ -282,7 +283,7 @@ async fn a_version_the_gateway_does_not_hold_is_said_and_the_newest_shown()
 #[tokio::test]
 async fn a_query_the_gateway_does_not_hold_is_said() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(&three_versions(), 4).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(
         &service,
         get_as("/stored-queries/org.example::absent", &session)?,
@@ -314,7 +315,7 @@ async fn the_gateways_own_namespace_is_marked_read_only() -> Result<(), Box<dyn 
         ),
     ];
     let gateway = gateway(&items, 2).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (_, list) = send(&service, get_as("/stored-queries", &session)?).await?;
     assert_eq!(1, list.matches(">Read-only<").count(), "{list}");
     let reserved = list
@@ -363,7 +364,7 @@ async fn a_version_the_gateway_marks_read_only_is_shown_read_only() -> Result<()
         ),
     ];
     let gateway = gateway(&items, 2).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (_, list) = send(&service, get_as("/stored-queries", &session)?).await?;
     assert_eq!(1, list.matches(">Read-only<").count(), "{list}");
     let marked = list
@@ -392,7 +393,7 @@ async fn a_version_the_gateway_marks_read_only_is_shown_read_only() -> Result<()
 async fn the_detail_reads_its_versions_by_name_and_never_the_listing() -> Result<(), Box<dyn Error>>
 {
     let gateway = gateway(&three_versions(), 2).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(
         &service,
         get_as("/stored-queries/org.example::weights", &session)?,
@@ -438,7 +439,7 @@ async fn a_refused_by_name_read_shows_the_refusal() -> Result<(), Box<dyn Error>
         .with_priority(1)
         .mount(&gateway)
         .await;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (_, body) = send(
         &service,
         get_as("/stored-queries/org.example::denied", &session)?,
@@ -464,7 +465,7 @@ async fn hostile_values_in_a_stored_query_render_escaped() -> Result<(), Box<dyn
         aql,
     )];
     let stub = gateway(&items, 1).await?;
-    let (service, session) = signed_in_console(&stub)?;
+    let (service, session) = signed_in_console(&stub).await?;
     let (_, detail) = send(
         &service,
         get_as("/stored-queries/org.example::hostile", &session)?,
@@ -504,7 +505,7 @@ async fn hostile_values_in_a_stored_query_render_escaped() -> Result<(), Box<dyn
         "SELECT 1",
     )];
     let stub = gateway(&items, 1).await?;
-    let (service, session) = signed_in_console(&stub)?;
+    let (service, session) = signed_in_console(&stub).await?;
     let (_, list) = send(&service, get_as("/stored-queries", &session)?).await?;
     for raw in [
         "<i>ns</i>",
@@ -536,7 +537,7 @@ async fn hostile_values_in_a_stored_query_render_escaped() -> Result<(), Box<dyn
 #[tokio::test]
 async fn the_detail_of_a_stored_query_needs_a_session() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(&three_versions(), 4).await?;
-    let (service, _session) = signed_in_console(&gateway)?;
+    let (service, _session) = signed_in_console(&gateway).await?;
     for detail in [
         "/stored-queries/org.example::weights",
         "/Stored-Queries/org.example::weights/",
@@ -558,7 +559,7 @@ async fn the_detail_of_a_stored_query_needs_a_session() -> Result<(), Box<dyn Er
 #[tokio::test]
 async fn the_console_opens_on_the_stored_query_its_url_names() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(&three_versions(), 4).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(
         &service,
         get_as(

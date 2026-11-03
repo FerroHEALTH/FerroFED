@@ -34,6 +34,8 @@ fluent-templates.workspace = true
 ferrofed-operator-api.workspace = true
 ferrofed-registry.workspace = true
 ferrohealth-secret.workspace = true
+ferrohealth-session = { workspace = true, features = ["axum"] }
+ferrohealth-smart = { workspace = true, features = ["oidc"] }
 # The gateway's self-description and federation metadata (§7a.2, §11) a page
 # draws, and the ITS-REST stored query definition and query parameters, with
 # the client the gateway is called through.
@@ -55,14 +57,8 @@ percent-encoding.workspace = true
 toml.workspace = true
 # A secret the operator types into a form, zeroed when dropped.
 secrecy.workspace = true
-# The random session ids, PKCE verifiers and states, and the SHA-256 of the
-# PKCE challenge (RFC 7636 §4.2), from the crypto library rustls already
-# builds on.
-aws-lc-rs.workspace = true
 axum.workspace = true
-base64.workspace = true
 clap.workspace = true
-cookie.workspace = true
 # The configuration loader, the command line, the health routes and their
 # lifecycle, the drain, the healthcheck, the console's browser security
 # headers and same-origin check, and the console log of FerroHEALTH/FerroSYS
@@ -73,17 +69,16 @@ ferrohealth-server = { workspace = true, features = ["console"] }
 ferrohealth-telemetry.workspace = true
 # Each request's body is read up to its limit before anything else reads it.
 http-body-util.workspace = true
-# The ID Token of a sign-in, verified against the provider's JWK Set
-# (OpenID Connect Core 1.0 §3.1.3.7).
-jsonwebtoken.workspace = true
-# The client of the OpenID Provider, the one openehr-its already brings in.
 reqwest.workspace = true
-# `sync` holds one refresh of a session's access token at a time; the
-# request's visit rides a task-local beside the handler that draws it.
+# The request's visit rides a task-local beside the handler that draws it.
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
 tracing.workspace = true
 
 [dev-dependencies]
+# The S256 code challenge a test computes from the verifier the token request
+# carries (RFC 7636 §4.2), and a published `oct` key.
+aws-lc-rs.workspace = true
+base64.workspace = true
 # The log lines a test captures and reads.
 tracing-subscriber.workspace = true
 # The test OpenID Provider: an issuer whose key pair is generated at run

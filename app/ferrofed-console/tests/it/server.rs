@@ -13,7 +13,7 @@ use crate::support::{WITH_OIDC, console, get, get_as, header, send, signed_in};
 
 #[tokio::test]
 async fn the_health_route_answers_up() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
+    let (_state, service) = console("").await?;
     let (response, body) = send(&service, get("/health")?).await?;
     assert_eq!(StatusCode::OK, response.status());
     assert_eq!(r#"{"state":"up"}"#, body);
@@ -22,7 +22,7 @@ async fn the_health_route_answers_up() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn the_liveness_and_readiness_routes_answer_with_no_session() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(WITH_OIDC)?;
+    let (_state, service) = console(WITH_OIDC).await?;
     for path in ["/health/liveness", "/health/readiness"] {
         let (response, _body) = send(&service, get(path)?).await?;
         assert_eq!(StatusCode::OK, response.status(), "{path}");
@@ -32,7 +32,7 @@ async fn the_liveness_and_readiness_routes_answer_with_no_session() -> Result<()
 
 #[tokio::test]
 async fn the_landing_page_names_the_console_and_offers_sign_in() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(WITH_OIDC)?;
+    let (_state, service) = console(WITH_OIDC).await?;
     let (response, body) = send(&service, get("/")?).await?;
     assert_eq!(StatusCode::OK, response.status());
     assert!(
@@ -52,7 +52,7 @@ async fn the_landing_page_names_the_console_and_offers_sign_in() -> Result<(), B
 // since no operator can sign in to it.
 #[tokio::test]
 async fn a_console_with_no_provider_says_sign_in_is_not_set_up() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
+    let (_state, service) = console("").await?;
     let (response, body) = send(&service, get("/")?).await?;
     assert_eq!(StatusCode::SERVICE_UNAVAILABLE, response.status());
     assert!(
@@ -66,7 +66,7 @@ async fn a_console_with_no_provider_says_sign_in_is_not_set_up() -> Result<(), B
 #[tokio::test]
 async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(WITH_OIDC)?;
+    let (state, service) = console(WITH_OIDC).await?;
     for path in ["/", "/about"] {
         let (_response, body) = send(&service, get(path)?).await?;
         assert!(!body.contains("<nav"), "{path}: {body}");
@@ -74,7 +74,7 @@ async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
         assert!(!body.contains(r#"href="/organisations""#), "{path}: {body}");
     }
 
-    let session = state.sessions().establish(signed_in())?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     for path in ["/", "/no/such/page", "/about"] {
         let (_response, body) = send(&service, get_as(path, &session)?).await?;
         assert!(
@@ -88,7 +88,7 @@ async fn the_navigation_and_the_sign_out_show_only_for_a_signed_in_operator()
     assert!(!body.contains(r#"href="/login""#), "{body}");
     assert_eq!("no-store", header(&response, "cache-control"));
 
-    state.sessions().end(&session)?;
+    crate::support::end(&state, &session)?;
     let (_response, body) = send(&service, get_as("/", &session)?).await?;
     assert!(!body.contains("<nav"), "an ended session: {body}");
     Ok(())
@@ -108,8 +108,8 @@ fn footer<'a>(path: &str, body: &'a str) -> Result<&'a str, String> {
 #[tokio::test]
 async fn every_page_links_the_about_page_which_names_the_manufacturer_in_full()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(WITH_OIDC)?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(WITH_OIDC).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     for (path, signed) in [
         ("/", false),
         ("/about", false),
@@ -170,8 +170,8 @@ fn the_long_version_names_the_manufacturer() {
 
 #[tokio::test]
 async fn a_path_the_console_does_not_serve_answers_not_found() -> Result<(), Box<dyn Error>> {
-    let (state, service) = console("[session]\nsecure_cookie = false\n")?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console("[session]\nsecure_cookie = false\n").await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (response, body) = send(&service, get_as("/no/such/page", &session)?).await?;
     assert_eq!(StatusCode::NOT_FOUND, response.status());
     assert!(body.contains("/no/such/page"), "{body}");
@@ -186,7 +186,7 @@ async fn a_path_the_console_does_not_serve_answers_not_found() -> Result<(), Box
 
 #[tokio::test]
 async fn every_answer_carries_the_browser_security_headers() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
+    let (_state, service) = console("").await?;
     for path in ["/", "/health", "/login", "/no/such/page"] {
         let (response, _body) = send(&service, get(path)?).await?;
         assert_eq!(
@@ -217,7 +217,7 @@ async fn every_answer_carries_the_browser_security_headers() -> Result<(), Box<d
 #[tokio::test]
 async fn the_policy_admits_the_consoles_own_scripts_and_styles_alone() -> Result<(), Box<dyn Error>>
 {
-    let (_state, service) = console("")?;
+    let (_state, service) = console("").await?;
     let (response, body) = send(&service, get("/")?).await?;
     let policy = header(&response, "content-security-policy");
     assert!(policy.contains("script-src 'self';"), "{policy}");
@@ -268,7 +268,7 @@ async fn fetch(
 // the sign-in works before a session exists.
 #[tokio::test]
 async fn ferroui_s_modules_are_served_as_the_crate_ships_them() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
+    let (_state, service) = console("").await?;
     let base = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed).base;
     for module in ferrohealth_ui::script::MODULES {
         let path = format!("{base}/scripts/{}", module.file);
@@ -293,7 +293,7 @@ async fn ferroui_s_modules_are_served_as_the_crate_ships_them() -> Result<(), Bo
 // want, so it is never compressed (BREACH); nothing the console serves is.
 #[tokio::test]
 async fn a_document_is_never_compressed() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
+    let (_state, service) = console("").await?;
     let loader = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed).loader();
     for path in ["/", "/health", "/no/such/page", loader.as_str()] {
         let (response, _body) = fetch(&service, path, "gzip, br").await?;
@@ -304,7 +304,7 @@ async fn a_document_is_never_compressed() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn the_page_loads_ferroui_s_assets_from_their_versioned_path() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
+    let (_state, service) = console("").await?;
     let (_response, body) = send(&service, get("/")?).await?;
     let assets = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed);
     for asset in [
@@ -327,7 +327,7 @@ async fn the_page_loads_ferroui_s_assets_from_their_versioned_path() -> Result<(
 // own.
 #[tokio::test]
 async fn the_stylesheets_are_ferroui_s_own() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console("")?;
+    let (_state, service) = console("").await?;
     let assets = ferrohealth_ui::serve::Assets::of(ferrohealth_ui::style::Brand::Fed);
     for (path, shipped) in [
         (assets.stylesheet(), ferrohealth_ui::style::STYLESHEET),
@@ -358,7 +358,8 @@ async fn a_post_or_a_read_asks_nothing_for_a_visitor() -> Result<(), Box<dyn Err
         "[gateway]\nbase_url = \"{uri}\"\n\n[session]\nsecure_cookie = false\n\n\
          [[admin.replicas]]\nname = \"gateway-0\"\nadmin_url = \"{uri}\"\n",
         uri = gateway.uri()
-    ))?;
+    ))
+    .await?;
     for (route, body) in [
         ("/query", "kind=aql&aql=SELECT+1"),
         (

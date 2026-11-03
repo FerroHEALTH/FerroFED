@@ -13,9 +13,9 @@ use axum::body::Body;
 use ferrofed_console::config::Config;
 use ferrofed_console::config::settings::Settings;
 use ferrofed_console::server::{ConsoleState, router};
-use ferrofed_console::session::{SessionId, SignedIn};
-use http::{Request, Response};
-use secrecy::SecretString;
+use ferrohealth_session::record::{Credential, Ended, Held, SignedIn};
+use ferrohealth_session::sessions::Occupancy;
+use http::{HeaderMap, HeaderValue, Request, Response};
 use tower::ServiceExt as _;
 
 /// A configuration with an OpenID Provider on loopback, for the sign-in
@@ -40,8 +40,8 @@ pub(crate) fn settings(text: &str) -> Result<Settings, Box<dyn Error>> {
 }
 
 /// The state and the service for the configuration `text` writes.
-pub(crate) fn console(text: &str) -> Result<(ConsoleState, axum::Router), Box<dyn Error>> {
-    let state = ConsoleState::new(settings(text)?)?;
+pub(crate) async fn console(text: &str) -> Result<(ConsoleState, axum::Router), Box<dyn Error>> {
+    let state = ConsoleState::new(settings(text)?).await?;
     let service = router(state.clone());
     Ok((state, service))
 }
@@ -78,10 +78,7 @@ pub(crate) fn answer_post(
         .header("content-type", "application/x-www-form-urlencoded")
         .header("accept", "text/html,application/xhtml+xml");
     if let Some(session) = session {
-        request = request.header(
-            "cookie",
-            format!("{}={}", ferrofed_console::session::COOKIE, session.as_str()),
-        );
+        request = request.header("cookie", format!("{COOKIE}={}", session.as_str()));
     }
     for (name, value) in from {
         request = request.header(*name, *value);
@@ -101,31 +98,131 @@ pub(crate) fn header<'a>(response: &'a Response<()>, name: &str) -> &'a str {
 /// The synthetic access token every test operator signs in with.
 pub(crate) const OPERATOR_TOKEN: &str = "synthetic-operator-token";
 
-/// The synthetic ID Token every test operator's sign-in leaves.
-pub(crate) const OPERATOR_ID_TOKEN: &str = "synthetic.operator.id-token";
-
 /// The synthetic name every test operator signs in under.
 pub(crate) const OPERATOR_NAME: &str = "Synthetic Operator";
 
-/// What a completed sign-in leaves a session: [`OPERATOR_TOKEN`] and
-/// [`OPERATOR_ID_TOKEN`].
-pub(crate) fn signed_in() -> SignedIn {
-    SignedIn {
-        access_token: SecretString::from(OPERATOR_TOKEN),
-        expires_in: None,
-        refresh_token: None,
-        id_token: Some(SecretString::from(OPERATOR_ID_TOKEN)),
-        operator: Some(String::from(OPERATOR_NAME)),
+/// What a completed sign-in leaves a session: [`OPERATOR_TOKEN`] under
+/// [`OPERATOR_NAME`].
+pub(crate) async fn signed_in() -> Result<SignedIn, Box<dyn Error>> {
+    Ok(signed_in_as(Some(OPERATOR_NAME), None, None).await?.0)
+}
+
+/// What a completed sign-in leaves a session, with the ID Token it was
+/// completed with: [`OPERATOR_TOKEN`] living `expires_in`, the refresh
+/// token `refresh_token`, and an ID Token naming the operator `name`.
+///
+/// The sign-in is completed at a test OpenID Provider of its own
+/// (`ferrofed_testkit::console_sign_in`), so the session holds what a real
+/// sign-in leaves.
+pub(crate) async fn signed_in_as(
+    name: Option<&str>,
+    expires_in: Option<std::time::Duration>,
+    refresh_token: Option<&str>,
+) -> Result<(SignedIn, String), Box<dyn Error>> {
+    ferrofed_testkit::console_sign_in::signed_in(ferrofed_testkit::console_sign_in::Answer {
+        access_token: OPERATOR_TOKEN,
+        name,
+        expires_in,
+        refresh_token,
+    })
+    .await
+}
+
+/// The name of the cookie that carries a session on a console whose cookies
+/// are not `Secure`.
+pub(crate) const COOKIE: &str = "ferrofed_console_session";
+
+/// The value of a session cookie the console set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionId(String);
+
+impl SessionId {
+    /// The session the cookie value `value` names.
+    pub(crate) fn from_cookie(value: &str) -> Self {
+        Self(value.to_owned())
     }
+
+    /// The cookie's value.
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// The `Cookie` header a request carrying the session sends.
+    fn headers(&self) -> Result<HeaderMap, Box<dyn Error>> {
+        let mut headers = HeaderMap::new();
+        let cookie = format!("{COOKIE}={}", self.0);
+        headers.insert(http::header::COOKIE, HeaderValue::from_str(&cookie)?);
+        Ok(headers)
+    }
+}
+
+/// Begins a session for `signed_in` at the console `state`, as a completed
+/// sign-in does, and returns the session its cookie names.
+pub(crate) fn establish(
+    state: &ConsoleState,
+    signed_in: SignedIn,
+) -> Result<SessionId, Box<dyn Error>> {
+    let set = state.sessions().establish(&HeaderMap::new(), signed_in)?;
+    session_of(set.to_str()?).ok_or_else(|| "the sign-in set no session cookie".into())
+}
+
+/// The session a `Set-Cookie` value `set` names, when it is the session
+/// cookie and not its removal.
+pub(crate) fn session_of(set: &str) -> Option<SessionId> {
+    let pair = set.split(';').next()?;
+    let (name, value) = pair.split_once('=')?;
+    (name.trim_start_matches("__Host-") == COOKIE && !value.is_empty())
+        .then(|| SessionId::from_cookie(value))
+}
+
+/// What the session `id` holds at the console `state`.
+pub(crate) fn held(state: &ConsoleState, id: &SessionId) -> Result<Held, Box<dyn Error>> {
+    Ok(state.sessions().held(&id.headers()?)?.value)
+}
+
+/// The access token the live session `id` carries, or `None` when it has
+/// ended.
+pub(crate) fn access_token(
+    state: &ConsoleState,
+    id: &SessionId,
+) -> Result<Option<String>, Box<dyn Error>> {
+    Ok(match held(state, id)? {
+        Held::SignedIn(session) => match session.credential() {
+            Credential::Bearer(token) => Some(token.expose().to_owned()),
+            Credential::Basic { .. } => None,
+        },
+        Held::TokenExpired | Held::Ended | Held::Absent => None,
+    })
+}
+
+/// The operator the live session `id` names.
+pub(crate) fn operator(
+    state: &ConsoleState,
+    id: &SessionId,
+) -> Result<Option<String>, Box<dyn Error>> {
+    Ok(match held(state, id)? {
+        Held::SignedIn(session) => session.operator().map(str::to_owned),
+        Held::TokenExpired | Held::Ended | Held::Absent => None,
+    })
+}
+
+/// Ends the session `id` at the console `state`, as a sign-out does.
+pub(crate) fn end(state: &ConsoleState, id: &SessionId) -> Result<Option<Ended>, Box<dyn Error>> {
+    Ok(state.sessions().end(&id.headers()?)?.value)
+}
+
+/// How many sign-ins and sessions the console `state` holds in memory.
+pub(crate) fn occupancy(state: &ConsoleState) -> Result<Occupancy, Box<dyn Error>> {
+    state
+        .sessions()
+        .occupancy()?
+        .ok_or_else(|| "the console keeps its sessions in memory".into())
 }
 
 /// A `GET` of `path` carrying the session cookie of `session`.
 pub(crate) fn get_as(path: &str, session: &SessionId) -> Result<Request<Body>, Box<dyn Error>> {
     Ok(Request::get(path)
-        .header(
-            "cookie",
-            format!("{}={}", ferrofed_console::session::COOKIE, session.as_str()),
-        )
+        .header("cookie", format!("{COOKIE}={}", session.as_str()))
         .body(Body::empty())?)
 }
 

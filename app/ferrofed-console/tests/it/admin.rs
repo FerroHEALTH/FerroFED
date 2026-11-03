@@ -10,8 +10,8 @@
 
 use std::error::Error;
 
+use crate::support::SessionId;
 use axum::body::Body;
-use ferrofed_console::session::SessionId;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use wiremock::matchers::{header, method, path};
@@ -90,15 +90,16 @@ fn admin_table(replicas: &[(&str, String)]) -> String {
 
 /// A console over the gateway at `gateway` with the admin listeners
 /// `replicas`, and one signed-in operator.
-fn signed_in_console(
+async fn signed_in_console(
     gateway: &str,
     replicas: &[(&str, String)],
 ) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"{gateway}\"\n\n[session]\nsecure_cookie = false\n\n{}",
         admin_table(replicas)
-    ))?;
-    let session = state.sessions().establish(signed_in())?;
+    ))
+    .await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     Ok((service, session))
 }
 
@@ -164,7 +165,7 @@ async fn the_clear_at_every_replica_reaches_each_with_the_operators_token_and_na
     answers(&first, &clear_path(), 200, cleared(&["node-a", "node-b"])).await;
     answers(&second, &clear_path(), 200, cleared(&["node-a", "node-c"])).await;
     let replicas = [("gateway-0", first.uri()), ("gateway-1", second.uri())];
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
     let html = acted(&service, &session, "/integrity", clear_at("*")).await?;
     assert!(
         html.contains("gateway-0 cleared it: it held it at node-a, node-b."),
@@ -187,7 +188,7 @@ async fn the_clear_at_one_replica_reaches_that_replica_alone() -> Result<(), Box
     answers(&first, &clear_path(), 200, cleared(&["node-a", "node-b"])).await;
     answers(&second, &clear_path(), 200, cleared(&["node-a", "node-b"])).await;
     let replicas = [("gateway-0", first.uri()), ("gateway-1", second.uri())];
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
     let html = acted(&service, &session, "/integrity", clear_at("gateway-1")).await?;
     assert!(html.contains("gateway-1 cleared it"), "{html}");
     assert!(!html.contains("gateway-0 cleared it"), "{html}");
@@ -224,7 +225,7 @@ async fn the_drift_repair_goes_to_the_first_replica_with_the_members_named()
         .mount(&first)
         .await;
     let replicas = [("gateway-0", first.uri()), ("gateway-1", second.uri())];
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
     let html = acted(&service, &session, REPAIR_PAGE, repair_every_member()).await?;
     assert!(
         html.contains(
@@ -254,7 +255,7 @@ async fn an_action_without_its_confirmation_asks_no_replica() -> Result<(), Box<
     )
     .await;
     let replicas = [("gateway-0", listener.uri())];
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
     let unconfirmed = form(&[("replica", "*"), ("ehr_id", EHR_ID)]);
     let html = acted(&service, &session, "/integrity", unconfirmed).await?;
     assert!(
@@ -290,7 +291,7 @@ async fn a_refusal_shows_the_replica_its_status_and_its_code() -> Result<(), Box
         )
         .await;
         let replicas = [("gateway-0", listener.uri())];
-        let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+        let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
         let html = acted(&service, &session, "/integrity", clear_at("*")).await?;
         assert!(html.contains(r#"role="alert""#), "{status}: {html}");
         if status == 401 {
@@ -330,7 +331,7 @@ async fn an_unreachable_replica_is_named_and_the_others_still_clear() -> Result<
         ("gateway-0", String::from("http://127.0.0.1:9/")),
         ("gateway-1", listener.uri()),
     ];
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
     let html = acted(&service, &session, "/integrity", clear_at("*")).await?;
     assert!(
         html.contains("Replica gateway-0: its admin listener gave no answer, so whether the clear ran there is unknown."),
@@ -365,7 +366,7 @@ async fn hostile_values_in_a_replicas_answer_render_escaped() -> Result<(), Box<
     )
     .await;
     let replicas = [("gateway-0", listener.uri()), ("gateway-1", refusing.uri())];
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
     let html = acted(&service, &session, "/integrity", clear_at("*")).await?;
     for escaped in [
         "&#60;script&#62;alert(1)&#60;/script&#62;",
@@ -406,7 +407,7 @@ async fn a_refused_action_is_logged_as_that_action_with_no_identifier() -> Resul
         ("gateway-0", refusing.uri()),
         ("gateway-1", String::from("http://127.0.0.1:9/")),
     ];
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
     acted(&service, &session, "/integrity", clear_at("*")).await?;
     acted(&service, &session, REPAIR_PAGE, repair_every_member()).await?;
 
@@ -441,7 +442,7 @@ async fn a_hostile_refusal_code_of_an_action_renders_escaped() -> Result<(), Box
         )
         .await;
         let replicas = [("gateway-0", listener.uri())];
-        let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+        let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
         let html = acted(&service, &session, REPAIR_PAGE, repair_every_member()).await?;
         for escaped in [
             "&#60;script&#62;alert(1)&#60;/script&#62;",
@@ -468,7 +469,7 @@ async fn hostile_values_in_a_drift_repair_answer_render_escaped() -> Result<(), 
         "registry":"<b onmouseover=alert(3)>held</b>"}}"#;
     answers(&listener, DISTRIBUTE, 207, String::from(body)).await;
     let replicas = [("gateway-0", listener.uri())];
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
     let html = acted(&service, &session, REPAIR_PAGE, repair_every_member()).await?;
     for raw in ["<script>alert", "<img src=x", "<b onmouseover"] {
         assert!(!html.contains(raw), "{raw}: {html}");
@@ -489,7 +490,7 @@ async fn a_clear_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Err
     )
     .await;
     let replicas = [("gateway-0", listener.uri())];
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas)?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &replicas).await?;
     let request = crate::support::answer_post(
         "/integrity",
         &clear_at("*"),
@@ -560,7 +561,7 @@ async fn views_gateway_naming(ehr_id: &str, name: &str) -> Result<Server, Box<dy
 async fn hostile_values_in_the_form_fields_render_escaped() -> Result<(), Box<dyn Error>> {
     let gateway = views_gateway_naming(r#""><script>alert(1)</script>"#, NAME).await?;
     let replicas = [("gateway-0", String::from("http://127.0.0.1:9/"))];
-    let (service, session) = signed_in_console(&gateway.uri(), &replicas)?;
+    let (service, session) = signed_in_console(&gateway.uri(), &replicas).await?;
     let (_, integrity) = send(&service, get_as("/integrity", &session)?).await?;
     let start = integrity
         .find(r#"<datalist id="clear-ehr-ids">"#)
@@ -584,7 +585,7 @@ async fn hostile_values_in_the_form_fields_render_escaped() -> Result<(), Box<dy
 #[tokio::test]
 async fn the_actions_are_offered_only_with_an_admin_listener() -> Result<(), Box<dyn Error>> {
     let gateway = views_gateway_naming(EHR_ID, NAME).await?;
-    let (service, session) = signed_in_console(&gateway.uri(), &[])?;
+    let (service, session) = signed_in_console(&gateway.uri(), &[]).await?;
     let (_, integrity) = send(&service, get_as("/integrity", &session)?).await?;
     let (_, stored) = send(&service, get_as(REPAIR_PAGE, &session)?).await?;
     assert!(!integrity.contains("Clear a held EHR id"), "{integrity}");
@@ -596,7 +597,7 @@ async fn the_actions_are_offered_only_with_an_admin_listener() -> Result<(), Box
         ("gateway-0", String::from("http://127.0.0.1:9/")),
         ("gateway-1", String::from("http://127.0.0.1:9/")),
     ];
-    let (service, session) = signed_in_console(&gateway.uri(), &replicas)?;
+    let (service, session) = signed_in_console(&gateway.uri(), &replicas).await?;
     let (_, integrity) = send(&service, get_as("/integrity", &session)?).await?;
     assert!(integrity.contains("Clear a held EHR id"), "{integrity}");
     assert!(integrity.contains(r#"action="/integrity""#), "{integrity}");
@@ -625,7 +626,7 @@ async fn the_actions_are_offered_only_with_an_admin_listener() -> Result<(), Box
 // with a refusal that says so, and asks nothing.
 #[tokio::test]
 async fn an_action_on_a_console_with_no_admin_listener_is_refused() -> Result<(), Box<dyn Error>> {
-    let (service, session) = signed_in_console("http://127.0.0.1:9/", &[])?;
+    let (service, session) = signed_in_console("http://127.0.0.1:9/", &[]).await?;
     let html = acted(&service, &session, "/integrity", clear_at("*")).await?;
     assert!(html.contains("configured with no admin listener"), "{html}");
     Ok(())

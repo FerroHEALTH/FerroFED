@@ -55,7 +55,7 @@ async fn running(listener: &Server, running: &str) {
 /// The page at `path`, as the signed-in operator reads it.
 async fn page(
     service: &axum::Router,
-    session: &ferrofed_console::session::SessionId,
+    session: &crate::support::SessionId,
     path: &str,
 ) -> Result<String, Box<dyn Error>> {
     let (response, body) = send(service, get_as(path, session)?).await?;
@@ -68,7 +68,7 @@ async fn each_tab_draws_its_settings_with_their_values_sources_keys_and_next_sta
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     running(&listener, RUNNING).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let body = page(&service, &session, "/configuration").await?;
     assert!(body.contains("Federation behaviour"), "{body}");
     assert!(body.contains("Per-node timeout"), "{body}");
@@ -123,7 +123,7 @@ async fn the_edit_is_a_plain_form_with_a_control_for_each_editable_setting()
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     running(&listener, RUNNING).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let body = page(&service, &session, "/configuration/federation/edit").await?;
     assert!(body.contains(r#"method="post""#), "{body}");
     assert!(
@@ -159,7 +159,7 @@ async fn a_save_sends_only_the_settings_the_operator_changed() -> Result<(), Box
         .expect(1)
         .mount(&listener)
         .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let body = form(&[
         ("action", "save-settings"),
         ("base", "2"),
@@ -192,7 +192,7 @@ async fn a_save_that_changes_nothing_is_refused_before_any_replica_is_asked()
         .expect(0)
         .mount(&listener)
         .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let body = form(&[
         ("action", "save-settings"),
         ("base", "2"),
@@ -223,7 +223,7 @@ async fn with_revisions_off_the_settings_tabs_show_alone_and_read_only()
         .replace(r#""source":"revision""#, r#""source":"file""#)
         .replace(r#""editable":true"#, r#""editable":false"#);
     answers(&listener, ("GET", "/admin/config/running"), 200, &off).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let body = page(&service, &session, "/configuration").await?;
     assert!(body.contains("Revisions are off on this gateway"), "{body}");
     assert!(body.contains("Per-node timeout"), "{body}");
@@ -270,7 +270,7 @@ async fn the_authentication_tab_shows_the_national_contact_point_read_only()
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     running(&listener, AUTHENTICATION).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let overview = page(&service, &session, "/configuration").await?;
     assert!(
         overview.contains(r#"href="/configuration/authentication""#),

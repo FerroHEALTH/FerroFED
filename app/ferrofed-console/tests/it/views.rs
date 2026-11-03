@@ -33,7 +33,7 @@ const READING: [(&str, &str); 8] = [
 #[tokio::test]
 async fn the_nodes_page_lists_every_endpoint_with_its_health() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(&service, get_as("/organisations/nodes", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
@@ -67,7 +67,7 @@ async fn the_nodes_page_lists_every_endpoint_with_its_health() -> Result<(), Box
 #[tokio::test]
 async fn the_integrity_page_lists_the_collisions_cleared_recently() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(&service, get_as("/integrity?show=resolved", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
@@ -85,7 +85,7 @@ async fn the_integrity_page_lists_the_collisions_cleared_recently() -> Result<()
 #[tokio::test]
 async fn the_self_description_shows_what_options_declares() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(&service, get_as("/self-description", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     let example: openehr_federation::options::OptionsRoot =
@@ -102,7 +102,7 @@ async fn the_self_description_shows_what_options_declares() -> Result<(), Box<dy
 async fn a_page_without_a_signed_in_session_sends_the_browser_to_sign_in()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, _session) = signed_in_console(&gateway)?;
+    let (_state, service, _session) = signed_in_console(&gateway).await?;
     let node = example_endpoints()?;
     let node = node.first().ok_or("the example declares an endpoint")?;
     for page in [
@@ -116,7 +116,7 @@ async fn a_page_without_a_signed_in_session_sends_the_browser_to_sign_in()
         let (response, _body) = send(&service, get(page)?).await?;
         assert_eq!(StatusCode::SEE_OTHER, response.status(), "{page}");
         assert_eq!("/login", header(&response, "location"), "{page}");
-        let unknown = ferrofed_console::session::SessionId::from_cookie("forged");
+        let unknown = crate::support::SessionId::from_cookie("forged");
         let (response, _body) = send(&service, get_as(page, &unknown)?).await?;
         assert_eq!(StatusCode::SEE_OTHER, response.status(), "{page}");
     }
@@ -146,7 +146,7 @@ async fn a_page_the_gateway_refuses_shows_the_status_and_the_code() -> Result<()
         )
         .mount(&gateway)
         .await;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(&service, get_as("/stored-queries", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
@@ -161,8 +161,8 @@ async fn a_page_the_gateway_refuses_shows_the_status_and_the_code() -> Result<()
 async fn a_page_the_gateway_cannot_answer_says_so() -> Result<(), Box<dyn Error>> {
     let (state, service) = console(
         "[gateway]\nbase_url = \"http://127.0.0.1:9/\"\ntimeout_ms = 2000\n\n[session]\nsecure_cookie = false\n",
-    )?;
-    let session = state.sessions().establish(signed_in())?;
+    ).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, body) = send(&service, get_as("/integrity", &session)?).await?;
     assert!(
         body.contains("The console could not reach the gateway."),
@@ -175,7 +175,7 @@ async fn a_page_the_gateway_cannot_answer_says_so() -> Result<(), Box<dyn Error>
 async fn no_page_renders_the_operators_token_and_each_carries_the_security_headers()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     for (page, _) in READING {
         let (response, body) = send(&service, get_as(page, &session)?).await?;
         assert!(!body.contains(OPERATOR_TOKEN), "{page}: {body}");
@@ -194,7 +194,7 @@ async fn no_page_renders_the_operators_token_and_each_carries_the_security_heade
 async fn a_path_in_another_case_or_with_a_trailing_slash_still_needs_a_session()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, _session) = signed_in_console(&gateway)?;
+    let (_state, service, _session) = signed_in_console(&gateway).await?;
     for page in [
         "/organisations/",
         "/ORGANISATIONS",
@@ -243,7 +243,7 @@ async fn paged_gateway(total: u64) -> Result<MockServer, Box<dyn Error>> {
 async fn a_nodes_routes_are_read_from_every_page_of_the_routing_table() -> Result<(), Box<dyn Error>>
 {
     let gateway = paged_gateway(6).await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(
         &service,
         get_as("/organisations/Org%20A/node_1/routes", &session)?,
@@ -271,7 +271,7 @@ async fn a_page_the_gateway_does_not_authenticate_links_back_to_sign_in()
         )
         .mount(&gateway)
         .await;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(&service, get_as("/stored-queries", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
@@ -293,7 +293,7 @@ async fn a_page_whose_answer_the_console_cannot_read_says_so() -> Result<(), Box
         r#"{"definitions":"of a shape this console does not know"}"#,
     )
     .await;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     let (response, body) = send(&service, get_as("/stored-queries", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(
@@ -343,7 +343,7 @@ async fn slow_gateway(delay: Duration) -> Result<MockServer, Box<dyn Error>> {
 #[tokio::test(flavor = "multi_thread")]
 async fn every_gateway_page_is_whole_in_the_html_the_server_sends() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     for (page, content) in READING {
         for round in 1..=5 {
             let (response, body) = send(&service, get_as(page, &session)?).await?;
@@ -360,7 +360,7 @@ async fn every_gateway_page_is_whole_in_the_html_the_server_sends() -> Result<()
         }
     }
     let slow = slow_gateway(Duration::from_millis(50)).await?;
-    let (_state, service, session) = signed_in_console(&slow)?;
+    let (_state, service, session) = signed_in_console(&slow).await?;
     let (_response, body) = send(&service, get_as("/self-description", &session)?).await?;
     let document = body
         .split_once("</html>")
@@ -379,7 +379,7 @@ async fn every_gateway_page_is_whole_in_the_html_the_server_sends() -> Result<()
 #[tokio::test]
 async fn every_page_names_the_replica_that_answered() -> Result<(), Box<dyn Error>> {
     let gateway = gateway().await?;
-    let (_state, service, session) = signed_in_console(&gateway)?;
+    let (_state, service, session) = signed_in_console(&gateway).await?;
     for (page, _) in READING {
         let (response, body) = send(&service, get_as(page, &session)?).await?;
         assert_eq!(StatusCode::OK, response.status(), "{page}: {body}");
@@ -397,7 +397,7 @@ async fn every_page_names_the_replica_that_answered() -> Result<(), Box<dyn Erro
         r#"{"mode":"production","product":"FerroFED","version":"0.0.12"}"#,
     )
     .await;
-    let (_state, service, session) = signed_in_console(&unnamed)?;
+    let (_state, service, session) = signed_in_console(&unnamed).await?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(!body.contains("answered by replica"), "{body}");
     Ok(())

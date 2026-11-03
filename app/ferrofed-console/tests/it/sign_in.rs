@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_console::session::Occupancy;
+use ferrohealth_session::sessions::Occupancy;
 use http::{Request, StatusCode};
 use url::Url;
 
@@ -59,7 +59,7 @@ fn callback(query: &str, cookie: Option<&str>) -> Result<Request<Body>, Box<dyn 
 #[tokio::test]
 async fn sign_in_answers_unavailable_when_no_provider_is_configured() -> Result<(), Box<dyn Error>>
 {
-    let (state, service) = console("")?;
+    let (state, service) = console("").await?;
     let (response, _body) = send(&service, get("/login")?).await?;
     assert_eq!(StatusCode::SERVICE_UNAVAILABLE, response.status());
     assert_eq!(
@@ -67,7 +67,7 @@ async fn sign_in_answers_unavailable_when_no_provider_is_configured() -> Result<
             sign_ins: 0,
             sessions: 0
         },
-        state.sessions().occupancy()?
+        crate::support::occupancy(&state)?
     );
     Ok(())
 }
@@ -75,7 +75,7 @@ async fn sign_in_answers_unavailable_when_no_provider_is_configured() -> Result<
 #[tokio::test]
 async fn sign_in_redirects_with_the_code_grant_and_an_s256_challenge() -> Result<(), Box<dyn Error>>
 {
-    let (_state, service) = console(WITH_OIDC)?;
+    let (_state, service) = console(WITH_OIDC).await?;
     let redirect = sign_in(&service).await?;
     assert_eq!(
         "https://idp.example.org/realms/ferrofed/auth",
@@ -105,7 +105,7 @@ async fn sign_in_redirects_with_the_code_grant_and_an_s256_challenge() -> Result
 #[tokio::test]
 async fn sign_in_holds_its_state_on_the_server_and_creates_no_session() -> Result<(), Box<dyn Error>>
 {
-    let (state, service) = console(WITH_OIDC)?;
+    let (state, service) = console(WITH_OIDC).await?;
     let (response, _body) = send(&service, get("/login")?).await?;
     let set_cookie = header(&response, "set-cookie");
     assert!(
@@ -128,7 +128,7 @@ async fn sign_in_holds_its_state_on_the_server_and_creates_no_session() -> Resul
             sign_ins: 1,
             sessions: 0
         },
-        state.sessions().occupancy()?
+        crate::support::occupancy(&state)?
     );
     Ok(())
 }
@@ -136,7 +136,7 @@ async fn sign_in_holds_its_state_on_the_server_and_creates_no_session() -> Resul
 #[tokio::test]
 async fn the_callback_with_the_session_state_reaches_the_code_exchange()
 -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(WITH_OIDC)?;
+    let (_state, service) = console(WITH_OIDC).await?;
     let redirect = sign_in(&service).await?;
     let query = format!("code=an-authorization-code&state={}", redirect.state());
     let (response, _body) = send(&service, callback(&query, Some(&redirect.cookie))?).await?;
@@ -148,7 +148,7 @@ async fn the_callback_with_the_session_state_reaches_the_code_exchange()
 
 #[tokio::test]
 async fn the_callback_refuses_a_state_that_is_not_the_sessions() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(WITH_OIDC)?;
+    let (_state, service) = console(WITH_OIDC).await?;
     let redirect = sign_in(&service).await?;
     let (response, body) = send(
         &service,
@@ -162,7 +162,7 @@ async fn the_callback_refuses_a_state_that_is_not_the_sessions() -> Result<(), B
 
 #[tokio::test]
 async fn the_callback_refuses_a_request_without_a_session() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(WITH_OIDC)?;
+    let (_state, service) = console(WITH_OIDC).await?;
     let redirect = sign_in(&service).await?;
     let query = format!("code=c&state={}", redirect.state());
     let (response, _body) = send(&service, callback(&query, None)?).await?;
@@ -172,7 +172,7 @@ async fn the_callback_refuses_a_request_without_a_session() -> Result<(), Box<dy
 
 #[tokio::test]
 async fn a_pending_sign_in_answers_one_callback_only() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(WITH_OIDC)?;
+    let (_state, service) = console(WITH_OIDC).await?;
     let redirect = sign_in(&service).await?;
     let query = format!("code=c&state={}", redirect.state());
     let (first, _body) = send(&service, callback(&query, Some(&redirect.cookie))?).await?;
@@ -185,7 +185,7 @@ async fn a_pending_sign_in_answers_one_callback_only() -> Result<(), Box<dyn Err
 // RFC 6749 §4.1.2.1: the provider answers a refused request with `error`.
 #[tokio::test]
 async fn a_refusal_from_the_provider_answers_unauthorized() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(WITH_OIDC)?;
+    let (_state, service) = console(WITH_OIDC).await?;
     let redirect = sign_in(&service).await?;
     let query = format!("error=access_denied&state={}", redirect.state());
     let (response, _body) = send(&service, callback(&query, Some(&redirect.cookie))?).await?;
@@ -195,7 +195,7 @@ async fn a_refusal_from_the_provider_answers_unauthorized() -> Result<(), Box<dy
 
 #[tokio::test]
 async fn the_callback_tells_the_browser_to_drop_the_spent_sign_in() -> Result<(), Box<dyn Error>> {
-    let (_state, service) = console(WITH_OIDC)?;
+    let (_state, service) = console(WITH_OIDC).await?;
     let redirect = sign_in(&service).await?;
     let query = format!("code=c&state={}", redirect.state());
     let (response, _body) = send(&service, callback(&query, Some(&redirect.cookie))?).await?;
@@ -227,17 +227,17 @@ redirect_uri = "http://127.0.0.1:3000/auth/callback"
 #[tokio::test]
 async fn a_flood_of_sign_ins_stays_bounded_and_leaves_signed_in_sessions_alone()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(SMALL_SIGN_IN_POOL)?;
-    let operator = state.sessions().establish(crate::support::signed_in())?;
+    let (state, service) = console(SMALL_SIGN_IN_POOL).await?;
+    let operator = crate::support::establish(&state, crate::support::signed_in().await?)?;
     let first = sign_in(&service).await?;
     let mut last = sign_in(&service).await?;
     for _ in 0..200 {
         last = sign_in(&service).await?;
-        let occupancy = state.sessions().occupancy()?;
+        let occupancy = crate::support::occupancy(&state)?;
         assert!(occupancy.sign_ins <= 4, "{occupancy:?}");
         assert_eq!(1, occupancy.sessions, "{occupancy:?}");
     }
-    assert!(state.sessions().access_token(&operator)?.is_some());
+    assert!(crate::support::access_token(&state, &operator)?.is_some());
     // The oldest sign-in made room for the flood; the newest still completes.
     let dropped_query = format!("code=c&state={}", first.state());
     let (dropped, _body) = send(&service, callback(&dropped_query, Some(&first.cookie))?).await?;
@@ -251,7 +251,7 @@ async fn a_flood_of_sign_ins_stays_bounded_and_leaves_signed_in_sessions_alone()
 #[tokio::test]
 async fn a_sign_in_past_its_timeout_is_refused_and_a_new_one_recovers() -> Result<(), Box<dyn Error>>
 {
-    let (state, service) = console(SMALL_SIGN_IN_POOL)?;
+    let (state, service) = console(SMALL_SIGN_IN_POOL).await?;
     for _ in 0..10 {
         sign_in(&service).await?;
     }
@@ -261,9 +261,74 @@ async fn a_sign_in_past_its_timeout_is_refused_and_a_new_one_recovers() -> Resul
     let (refused, _body) = send(&service, callback(&query, Some(&expired.cookie))?).await?;
     assert_eq!(StatusCode::BAD_REQUEST, refused.status());
     let fresh = sign_in(&service).await?;
-    assert!(state.sessions().occupancy()?.sign_ins <= 2);
+    assert!(crate::support::occupancy(&state)?.sign_ins <= 2);
     let query = format!("code=c&state={}", fresh.state());
     let (completed, _body) = send(&service, callback(&query, Some(&fresh.cookie))?).await?;
     assert_eq!(StatusCode::BAD_GATEWAY, completed.status());
+    Ok(())
+}
+
+/// The configuration of a console whose `[oidc]` names the issuer `issuer`
+/// alone.
+fn issuer_only(issuer: &str) -> String {
+    format!(
+        "[session]\nsecure_cookie = false\n\n[oidc]\nissuer = \"{issuer}\"\n\
+         client_id = \"ferrofed-console\"\n\
+         redirect_uri = \"http://127.0.0.1:3000/auth/callback\"\n"
+    )
+}
+
+// NOTE: OpenID Connect Discovery 1.0 §4: with the issuer alone, the console reads the
+// provider's endpoints from its discovery document when it starts, and never at config check.
+#[tokio::test]
+async fn an_issuer_alone_is_discovered_at_start_and_the_sign_in_goes_there()
+-> Result<(), Box<dyn Error>> {
+    let provider = ferrofed_testkit::mock::Server::start().await;
+    let issuer = provider.uri();
+    wiremock::Mock::given(wiremock::matchers::method("GET"))
+        .and(wiremock::matchers::path("/.well-known/openid-configuration"))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_string(format!(
+                    r#"{{"issuer":"{issuer}","authorization_endpoint":"{issuer}/discovered/auth","token_endpoint":"{issuer}/discovered/token","jwks_uri":"{issuer}/discovered/jwks","response_types_supported":["code"],"subject_types_supported":["public"],"id_token_signing_alg_values_supported":["ES256"]}}"#
+                )),
+        )
+        .expect(1)
+        .mount(&provider)
+        .await;
+    let settings = crate::support::settings(&issuer_only(&issuer))?;
+    let state = ferrofed_console::server::ConsoleState::new(settings).await?;
+    let service = ferrofed_console::server::router(state);
+    let (response, _body) = send(&service, get("/login")?).await?;
+    assert_eq!(StatusCode::SEE_OTHER, response.status());
+    assert!(
+        header(&response, "location").starts_with(&format!("{issuer}/discovered/auth?")),
+        "{}",
+        header(&response, "location")
+    );
+    provider.verify().await;
+    Ok(())
+}
+
+// NOTE: OpenID Connect Discovery 1.0 §4: a provider whose discovery document is missing or
+// cannot be reached names no endpoint, so the console refuses to start and says why.
+#[tokio::test]
+async fn an_issuer_with_no_discovery_document_refuses_the_start() -> Result<(), Box<dyn Error>> {
+    let missing = ferrofed_testkit::mock::Server::start().await;
+    for issuer in [missing.uri(), String::from("http://127.0.0.1:9")] {
+        let settings = crate::support::settings(&issuer_only(&issuer))?;
+        let refused = ferrofed_console::server::ConsoleState::new(settings)
+            .await
+            .map(|_| ())
+            .map_err(|error| ferrofed_console::command::chain(&error));
+        let Err(chain) = refused else {
+            return Err(format!("{issuer}: the console started with no discovery document").into());
+        };
+        assert!(
+            chain.contains("the OpenID Provider cannot be used"),
+            "{issuer}: {chain}"
+        );
+    }
     Ok(())
 }

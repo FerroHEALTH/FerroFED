@@ -8,7 +8,8 @@
 //! The console is one more client of the gateway's public surface: its
 //! server reaches the gateway over HTTP alone, through [`gateway`], and
 //! never links the engine. It holds the operator's sign-in session on the
-//! server ([`session`], [`oidc`]), so the browser carries an opaque cookie
+//! server through `ferrohealth-session`, whose sign-in pages are
+//! [`sign_in`]'s, so the browser carries an opaque cookie
 //! and never a token, and it holds no clinical data. [`routes`] draws the
 //! page an address names, in the [`shell`] with the FerroUI components
 //! (`ferrohealth_ui`) and the document of [`app`]; [`pages`] are the pages,
@@ -37,12 +38,11 @@ pub mod configure;
 pub mod editors;
 pub mod gateway;
 pub mod locale;
-pub mod oidc;
 pub mod pages;
 pub mod prefs;
 pub mod read;
 pub mod routes;
 pub mod server;
-pub mod session;
 pub mod shell;
+pub mod sign_in;
 pub mod visit;

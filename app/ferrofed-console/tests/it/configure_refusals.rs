@@ -30,7 +30,7 @@ async fn a_change_the_gateway_refuses_shows_its_status_and_code() -> Result<(), 
         r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#resource-file-owned","detail":"member node-c is provided by the file","code":"resource-file-owned"}"#,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = posted(
         &service,
         &session,
@@ -62,7 +62,7 @@ async fn a_configuration_invalid_refusal_shows_the_key_the_gateway_names()
         r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#configuration-invalid","detail":"the revision's configuration is refused: registry.timeout_ms <b>is</b> zero; it must be positive","code":"configuration-invalid"}"#,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = configured(&service, &session, save_c()).await?;
     assert!(
         html.contains("Replica gateway-0 refused the save: 422 (configuration-invalid)."),
@@ -102,7 +102,7 @@ async fn another_refusal_shows_its_code_and_not_the_gateway_message() -> Result<
             &body,
         )
         .await;
-        let (service, session) = signed_in_console(&listener)?;
+        let (service, session) = signed_in_console(&listener).await?;
         let html = configured(&service, &session, save_c()).await?;
         assert!(html.contains(said), "{html}");
         assert!(!html.contains("the hidden text"), "{html}");
@@ -113,7 +113,7 @@ async fn another_refusal_shows_its_code_and_not_the_gateway_message() -> Result<
 #[tokio::test]
 async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     for unconfirmed in [
         form(&[("action", "apply"), ("revision", "2")]),
         form(&[("action", "rollback"), ("current", "2"), ("reason", "r")]),
@@ -216,7 +216,7 @@ async fn a_form_not_confirmed_or_not_readable_asks_no_replica() -> Result<(), Bo
 async fn a_bare_not_found_is_shown_as_a_refusal() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
     answers(&listener, ("GET", "/admin/config"), 404, "").await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let (_response, body) = send(&service, get_as("/configuration", &session)?).await?;
     assert!(!body.contains("its configuration is not managed"), "{body}");
     assert!(
@@ -231,7 +231,7 @@ async fn a_bare_not_found_is_shown_as_a_refusal() -> Result<(), Box<dyn Error>> 
 #[tokio::test]
 async fn a_post_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     for site in [Some("cross-site"), Some("same-site"), None] {
         let from: Vec<(&str, &str)> = site
             .map(|site| ("sec-fetch-site", site))
@@ -260,7 +260,7 @@ async fn a_post_from_another_origin_asks_no_replica() -> Result<(), Box<dyn Erro
 async fn a_save_whose_held_member_cannot_be_read_sends_nothing() -> Result<(), Box<dyn Error>> {
     let listener = Server::start().await;
     answers(&listener, ("GET", "/admin/config/resources"), 500, "").await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let request = crate::support::answer_post(
         "/configuration",
         &save_c(),
@@ -292,7 +292,7 @@ async fn a_refused_configuration_action_is_logged_as_what_it_is() -> Result<(), 
     ] {
         answers(&listener, route, 409, refused).await;
     }
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     for body in [
         save_c(),
         form(&[("action", "apply"), ("revision", "2"), ("confirm", "yes")]),

@@ -72,7 +72,7 @@ fn removal_is_in_the_row_menu(body: &str) -> Result<(), Box<dyn Error>> {
 async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member()
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     for path in ["/configuration/members"] {
         let body = page(&service, &session, path).await?;
         assert!(body.contains("<title>Configuration · "), "{body}");
@@ -166,7 +166,7 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
 #[tokio::test(flavor = "multi_thread")]
 async fn a_path_that_names_no_part_of_the_page_is_refused() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let body = page(&service, &session, "/configuration/revisions").await?;
     assert!(
         body.contains("This path names no part of the configuration page."),
@@ -182,7 +182,7 @@ async fn a_path_that_names_no_part_of_the_page_is_refused() -> Result<(), Box<dy
 #[tokio::test(flavor = "multi_thread")]
 async fn every_value_the_gateway_answers_is_escaped_on_the_page() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let mut body = String::new();
     for path in [
         "/configuration/members",

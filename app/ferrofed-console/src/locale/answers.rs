@@ -22,10 +22,14 @@ messages! {
     AnswerPreferenceUnknown = "answer-preference-unknown",
     /// `the OpenID Provider did not sign the operator in`
     AnswerProviderRefused = "answer-provider-refused",
+    /// `the session has ended; sign in again to go on`
+    AnswerSessionGone = "answer-session-gone",
     /// `the session could not be begun`
     AnswerSessionNotBegun = "answer-session-not-begun",
     /// `the session could not be ended`
     AnswerSessionNotEnded = "answer-session-not-ended",
+    /// `the session store could not be read`
+    AnswerSessionUnreadable = "answer-session-unreadable",
     /// `the console holds as many sessions as it may; try again later`
     AnswerSessionsFull = "answer-sessions-full",
     /// `the sidebar is not rail or full`

@@ -142,8 +142,13 @@ pub async fn choose(
             Msg::AnswerPreferenceUnknown,
         );
     };
-    let cookie = state.sessions().preference_cookie(name, &value).to_string();
-    redirect_with(&preference_return(back, name), &[cookie])
+    let cookies = state
+        .sessions()
+        .preference(name, &value, PREFERENCE_LIFETIME);
+    redirect_with(
+        &preference_return(back, name),
+        cookies.map(|cookie| vec![cookie]),
+    )
 }
 /// What Reset to defaults posts.
 #[derive(Debug, serde::Deserialize)]
@@ -159,9 +164,9 @@ pub async fn reset(
 ) -> Response {
     let cleared = Preferences::COOKIES
         .into_iter()
-        .map(|name| state.sessions().preference_cookie_removal(name).to_string())
-        .collect::<Vec<_>>();
-    redirect_with(return_path(&reset.back), &cleared)
+        .map(|name| state.sessions().preference_removal(name))
+        .collect::<Result<Vec<_>, _>>();
+    redirect_with(return_path(&reset.back), cleared)
 }
 /// What the navigation's Collapse or Expand posts.
 #[derive(Debug, serde::Deserialize)]
@@ -186,23 +191,38 @@ pub async fn sidebar(
             Msg::AnswerSidebarUnknown,
         );
     }
-    let cookie = state.sessions().sidebar_cookie(&choice.sidebar).to_string();
-    redirect_with(return_path(&choice.back), &[cookie])
+    let cookies =
+        state
+            .sessions()
+            .preference(crate::visit::RAIL, &choice.sidebar, PREFERENCE_LIFETIME);
+    redirect_with(
+        return_path(&choice.back),
+        cookies.map(|cookie| vec![cookie]),
+    )
 }
 /// The `303` redirect to `location` that sets each of `cookies`.
 #[must_use]
-pub fn redirect_with(location: &str, cookies: &[String]) -> Response {
+pub fn redirect_with(
+    location: &str,
+    cookies: Result<Vec<HeaderValue>, ferrohealth_session::sessions::SessionError>,
+) -> Response {
+    let cookies = match cookies {
+        Ok(cookies) => cookies,
+        Err(error) => {
+            tracing::error!(%error, "a preference cookie could not be written");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
     let mut response = Redirect::to(location).into_response();
     for cookie in cookies {
-        match HeaderValue::from_str(cookie) {
-            Ok(value) => {
-                response.headers_mut().append(SET_COOKIE, value);
-            }
-            Err(_invalid) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-        }
+        response.headers_mut().append(SET_COOKIE, cookie);
     }
     response
 }
+
+/// How long a preference cookie keeps its choice: one year (FerroUI family
+/// rule 9).
+const PREFERENCE_LIFETIME: std::time::Duration = std::time::Duration::from_hours(365 * 24);
 
 #[cfg(test)]
 mod tests {

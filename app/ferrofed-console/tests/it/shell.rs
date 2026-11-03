@@ -40,17 +40,13 @@ fn configured(base: &str) -> String {
 /// `cookies`.
 fn get_with(
     path: &str,
-    session: &ferrofed_console::session::SessionId,
+    session: &crate::support::SessionId,
     cookies: &str,
 ) -> Result<Request<Body>, Box<dyn Error>> {
     Ok(Request::get(path)
         .header(
             "cookie",
-            format!(
-                "{}={}; {cookies}",
-                ferrofed_console::session::COOKIE,
-                session.as_str()
-            ),
+            format!("{}={}; {cookies}", crate::support::COOKIE, session.as_str()),
         )
         .body(Body::empty())?)
 }
@@ -60,22 +56,22 @@ fn get_with(
 fn post(
     path: &str,
     form: &str,
-    session: &ferrofed_console::session::SessionId,
+    session: &crate::support::SessionId,
 ) -> Result<Request<Body>, Box<dyn Error>> {
     Ok(Request::post(path)
         .header("content-type", "application/x-www-form-urlencoded")
         .header("sec-fetch-site", "same-origin")
         .header(
             "cookie",
-            format!("{}={}", ferrofed_console::session::COOKIE, session.as_str()),
+            format!("{}={}", crate::support::COOKIE, session.as_str()),
         )
         .body(Body::from(form.to_owned()))?)
 }
 
 #[tokio::test]
 async fn the_page_arrives_in_the_preferences_its_cookies_name() -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured("http://127.0.0.1:9/")).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(body.contains(r#"data-theme="system""#), "{body}");
     for (cookie, drawn) in [
@@ -117,8 +113,8 @@ async fn the_page_arrives_in_the_preferences_its_cookies_name() -> Result<(), Bo
 #[tokio::test]
 async fn the_top_bar_carries_no_theme_toggle_and_the_user_menu_offers_the_theme()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured("http://127.0.0.1:9/")).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     let top = body
         .split_once(r#"<header class="fui-topbar""#)
@@ -137,8 +133,8 @@ async fn the_top_bar_carries_no_theme_toggle_and_the_user_menu_offers_the_theme(
 #[tokio::test]
 async fn a_preference_post_keeps_its_value_in_a_cookie_of_its_own_and_refuses_any_other()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured("http://127.0.0.1:9/")).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     for (form, cookie) in [
         ("theme=dark&back=%2Fabout", "ferrofed_console_theme=dark;"),
         (
@@ -174,8 +170,8 @@ async fn a_preference_post_keeps_its_value_in_a_cookie_of_its_own_and_refuses_an
 #[tokio::test]
 async fn a_preference_post_returns_to_its_own_page_and_never_off_the_console()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured("http://127.0.0.1:9/")).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     for (form, location) in [
         ("theme=dark&back=%2Forganisations", "/organisations"),
         ("theme=dark&back=%2Fconfiguration", "/configuration"),
@@ -221,8 +217,8 @@ async fn a_preference_post_returns_to_its_own_page_and_never_off_the_console()
 async fn the_top_bar_names_the_operator_and_the_gateway_that_answered() -> Result<(), Box<dyn Error>>
 {
     let up = gateway(200, options_example()?).await;
-    let (state, service) = console(&configured(&up.uri()))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured(&up.uri())).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (response, body) = send(&service, get_as("/about", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     assert!(body.contains(OPERATOR_NAME), "{body}");
@@ -237,13 +233,13 @@ async fn the_top_bar_names_the_operator_and_the_gateway_that_answered() -> Resul
         String::from(r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#insufficient-scope","detail":"no operator scope","code":"insufficient-scope"}"#),
     )
     .await;
-    let (state, service) = console(&configured(&refusing.uri()))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured(&refusing.uri())).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(!body.contains("fui-tone-ok fui-topbar-status"), "{body}");
 
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured("http://127.0.0.1:9/")).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(body.contains("fui-tone-bad fui-topbar-status"), "{body}");
     Ok(())
@@ -252,8 +248,8 @@ async fn the_top_bar_names_the_operator_and_the_gateway_that_answered() -> Resul
 #[tokio::test]
 async fn the_navigation_marks_the_page_and_groups_its_entries() -> Result<(), Box<dyn Error>> {
     let up = gateway(200, options_example()?).await;
-    let (state, service) = console(&configured(&up.uri()))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured(&up.uri())).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     for (page, link) in [
         ("/", r#"href="/""#),
         ("/self-description", r#"href="/self-description""#),
@@ -291,10 +287,10 @@ async fn the_navigation_marks_the_page_and_groups_its_entries() -> Result<(), Bo
 async fn the_about_page_shows_the_gateway_to_a_signed_in_operator_alone()
 -> Result<(), Box<dyn Error>> {
     let base = "https://gateway.example.org/ferrofed/";
-    let (state, service) = console(&configured(base))?;
+    let (state, service) = console(&configured(base)).await?;
     let (_response, body) = send(&service, get("/about")?).await?;
     assert!(!body.contains(base), "{body}");
-    let session = state.sessions().establish(signed_in())?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, body) = send(&service, get_as("/about", &session)?).await?;
     assert!(body.contains(base), "{body}");
     Ok(())
@@ -302,8 +298,8 @@ async fn the_about_page_shows_the_gateway_to_a_signed_in_operator_alone()
 
 #[tokio::test]
 async fn a_page_the_console_does_not_serve_offers_the_way_back() -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured("http://127.0.0.1:9/")).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (response, body) = send(&service, get_as("/no/such/page", &session)?).await?;
     assert_eq!(StatusCode::NOT_FOUND, response.status());
     assert!(body.contains("<title>"), "{body}");
@@ -331,8 +327,8 @@ async fn deployed(status: u16, deployment: &str) -> Result<MockServer, Box<dyn E
 /// The top of the page at `/about` over `gateway`: the top bar and what
 /// sits under it, before the navigation.
 async fn top_of(gateway: &MockServer) -> Result<String, Box<dyn Error>> {
-    let (state, service) = console(&configured(&gateway.uri()))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured(&gateway.uri())).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (response, body) = send(&service, get_as("/about", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     body.split_once(r#"<nav aria-label="Console""#)
@@ -402,8 +398,8 @@ async fn a_production_gateway_or_a_refused_deployment_shows_no_banner() -> Resul
 #[tokio::test]
 async fn the_find_answers_the_panel_as_json_and_says_when_a_read_failed()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured("http://127.0.0.1:9/")).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (response, body) = send(&service, get_as("/search/answer?q=node-b", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{body}");
     let answer: ferrohealth_ui::view::search::SearchAnswer = serde_json::from_str(&body)?;
@@ -427,8 +423,8 @@ const ANSWER_ROUTE: &str = "/search/answer?q=node-b";
 #[tokio::test]
 async fn the_top_bar_find_asks_the_answer_route_and_submits_to_the_find_page()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(&configured("http://127.0.0.1:9/"))?;
-    let session = state.sessions().establish(signed_in())?;
+    let (state, service) = console(&configured("http://127.0.0.1:9/")).await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, body) = send(&service, get_as("/search?q=node-b", &session)?).await?;
     assert!(body.contains(r#"action="/search""#), "{body}");
     // NOTE: FerroUI `docs/consoles.md`, The top bar's search: the panel is the `search`

@@ -12,12 +12,11 @@ use std::error::Error;
 
 use axum::body::Body;
 use ferrofed_console::server::ConsoleState;
-use ferrofed_console::session::Occupancy;
 use ferrofed_testkit::issuer::{Issuer, JWKS_PATH};
 use ferrofed_testkit::mock::Server;
+use ferrohealth_session::sessions::Occupancy;
 use http::{Request, StatusCode};
 use jsonwebtoken::{Algorithm, Header};
-use secrecy::ExposeSecret as _;
 use url::Url;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -141,7 +140,7 @@ async fn complete(
 
 /// How many signed-in sessions `state` holds.
 fn sessions(state: &ConsoleState) -> Result<usize, Box<dyn Error>> {
-    let Occupancy { sessions, .. } = state.sessions().occupancy()?;
+    let Occupancy { sessions, .. } = crate::support::occupancy(state)?;
     Ok(sessions)
 }
 
@@ -149,7 +148,7 @@ fn sessions(state: &ConsoleState) -> Result<usize, Box<dyn Error>> {
 async fn a_verified_sign_in_begins_a_session_and_returns_to_the_console()
 -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (state, service) = console(&provider.configuration(None))?;
+    let (state, service) = console(&provider.configuration(None)).await?;
     let begun = begin(&service).await?;
     let token = Provider::id_token(
         &provider.issuer,
@@ -180,23 +179,19 @@ async fn a_verified_sign_in_begins_a_session_and_returns_to_the_console()
         .split(';')
         .next()
         .and_then(|pair| pair.split_once('='))
-        .map(|(_, value)| ferrofed_console::session::SessionId::from_cookie(value))
+        .map(|(_, value)| crate::support::SessionId::from_cookie(value))
         .ok_or("a session id")?;
-    let held = state
-        .sessions()
-        .access_token(&id)?
-        .ok_or("a live session")?;
-    assert_eq!(OPERATOR_TOKEN, held.expose_secret());
+    let held = crate::support::access_token(&state, &id)?.ok_or("a live session")?;
+    assert_eq!(OPERATOR_TOKEN, held);
     // The verified ID Token stays on the server as a sign-out's hint.
-    let hint = state.sessions().end(&id)?.ok_or("the ID Token")?;
-    assert_eq!(token, hint.expose_secret());
+    let ended = crate::support::end(&state, &id)?.ok_or("the ended session")?;
+    let hint = ended.id_token.ok_or("the ID Token")?;
+    assert_eq!(token, hint.expose());
     Ok(())
 }
 
 /// The session id of the cookie a completed sign-in `response` sets.
-fn session_of(
-    response: &http::Response<()>,
-) -> Result<ferrofed_console::session::SessionId, Box<dyn Error>> {
+fn session_of(response: &http::Response<()>) -> Result<crate::support::SessionId, Box<dyn Error>> {
     response
         .headers()
         .get_all("set-cookie")
@@ -204,7 +199,7 @@ fn session_of(
         .filter_map(|value| value.to_str().ok())
         .find_map(|cookie| cookie.strip_prefix("ferrofed_console_session="))
         .and_then(|rest| rest.split(';').next())
-        .map(ferrofed_console::session::SessionId::from_cookie)
+        .map(crate::support::SessionId::from_cookie)
         .ok_or_else(|| "a session cookie".into())
 }
 
@@ -227,7 +222,7 @@ async fn the_session_holds_the_operator_name_the_id_token_gives() -> Result<(), 
         (vec![], None),
     ] {
         let provider = Provider::start().await?;
-        let (state, service) = console(&provider.configuration(None))?;
+        let (state, service) = console(&provider.configuration(None)).await?;
         let begun = begin(&service).await?;
         claims.push(("nonce", format!("\"{}\"", begun.nonce)));
         let token = Provider::id_token(&provider.issuer, &claims)?;
@@ -237,7 +232,7 @@ async fn the_session_holds_the_operator_name_the_id_token_gives() -> Result<(), 
         let id = session_of(&response)?;
         assert_eq!(
             expected,
-            state.sessions().operator(&id)?.as_deref(),
+            crate::support::operator(&state, &id)?.as_deref(),
             "{claims:?}"
         );
     }
@@ -247,7 +242,7 @@ async fn the_session_holds_the_operator_name_the_id_token_gives() -> Result<(), 
 #[tokio::test]
 async fn the_token_request_carries_the_code_and_the_pkce_verifier() -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (_state, service) = console(&provider.configuration(None))?;
+    let (_state, service) = console(&provider.configuration(None)).await?;
     let begun = begin(&service).await?;
     let token = Provider::id_token(
         &provider.issuer,
@@ -275,10 +270,7 @@ async fn the_token_request_carries_the_code_and_the_pkce_verifier() -> Result<()
     assert_eq!(Some(CLIENT_ID), form.get("client_id").map(String::as_str));
     let verifier = form.get("code_verifier").ok_or("a code verifier")?;
     // RFC 7636 §4.6: the verifier hashes to the challenge the redirect sent.
-    assert_eq!(
-        begun.challenge,
-        ferrofed_console::session::challenge(&secrecy::SecretString::from(verifier.clone()))
-    );
+    assert_eq!(begun.challenge, challenge(verifier));
     assert!(!token_request.headers.contains_key("authorization"));
     Ok(())
 }
@@ -287,7 +279,7 @@ async fn the_token_request_carries_the_code_and_the_pkce_verifier() -> Result<()
 async fn a_confidential_client_authenticates_with_basic_and_names_no_client_id_in_the_form()
 -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (_state, service) = console(&provider.configuration(Some("synthetic-secret")))?;
+    let (_state, service) = console(&provider.configuration(Some("synthetic-secret"))).await?;
     let begun = begin(&service).await?;
     let token = Provider::id_token(
         &provider.issuer,
@@ -323,7 +315,7 @@ async fn a_confidential_client_authenticates_with_basic_and_names_no_client_id_i
 async fn an_id_token_with_another_nonce_is_refused_and_begins_no_session()
 -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (state, service) = console(&provider.configuration(None))?;
+    let (state, service) = console(&provider.configuration(None)).await?;
     let begun = begin(&service).await?;
     let token = Provider::id_token(
         &provider.issuer,
@@ -339,7 +331,7 @@ async fn an_id_token_with_another_nonce_is_refused_and_begins_no_session()
 #[tokio::test]
 async fn an_id_token_with_no_nonce_is_refused() -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (state, service) = console(&provider.configuration(None))?;
+    let (state, service) = console(&provider.configuration(None)).await?;
     let begun = begin(&service).await?;
     provider
         .answers(&Provider::id_token(&provider.issuer, &[])?)
@@ -358,7 +350,7 @@ async fn an_id_token_of_another_issuer_or_audience_is_refused() -> Result<(), Bo
         ("azp", String::from("\"another-client\"")),
     ] {
         let provider = Provider::start().await?;
-        let (state, service) = console(&provider.configuration(None))?;
+        let (state, service) = console(&provider.configuration(None)).await?;
         let begun = begin(&service).await?;
         let token = Provider::id_token(
             &provider.issuer,
@@ -376,7 +368,7 @@ async fn an_id_token_of_another_issuer_or_audience_is_refused() -> Result<(), Bo
 async fn an_id_token_signed_by_a_key_the_provider_does_not_publish_is_refused()
 -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (state, service) = console(&provider.configuration(None))?;
+    let (state, service) = console(&provider.configuration(None)).await?;
     let begun = begin(&service).await?;
     let stranger = Issuer::new(provider.server.uri())?;
     let token = Provider::id_token(&stranger, &[("nonce", format!("\"{}\"", begun.nonce))])?;
@@ -390,7 +382,7 @@ async fn an_id_token_signed_by_a_key_the_provider_does_not_publish_is_refused()
 #[tokio::test]
 async fn a_refusing_token_endpoint_answers_bad_gateway() -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (state, service) = console(&provider.configuration(None))?;
+    let (state, service) = console(&provider.configuration(None)).await?;
     let begun = begin(&service).await?;
     Mock::given(method("POST"))
         .and(path("/token"))
@@ -412,7 +404,7 @@ async fn a_refusing_token_endpoint_answers_bad_gateway() -> Result<(), Box<dyn E
 #[tokio::test]
 async fn an_expired_id_token_is_refused() -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (state, service) = console(&provider.configuration(None))?;
+    let (state, service) = console(&provider.configuration(None)).await?;
     let begun = begin(&service).await?;
     let now = jiff::Timestamp::now().as_second();
     let token = Provider::id_token(
@@ -436,7 +428,7 @@ async fn an_expired_id_token_is_refused() -> Result<(), Box<dyn Error>> {
 async fn an_id_token_for_two_audiences_is_refused() -> Result<(), Box<dyn Error>> {
     for azp in [None, Some(format!("\"{CLIENT_ID}\""))] {
         let provider = Provider::start().await?;
-        let (state, service) = console(&provider.configuration(None))?;
+        let (state, service) = console(&provider.configuration(None)).await?;
         let begun = begin(&service).await?;
         let mut claims = vec![
             ("nonce", format!("\"{}\"", begun.nonce)),
@@ -457,7 +449,7 @@ async fn an_id_token_for_two_audiences_is_refused() -> Result<(), Box<dyn Error>
 #[tokio::test]
 async fn an_id_token_with_its_one_audience_in_an_array_is_accepted() -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (state, service) = console(&provider.configuration(None))?;
+    let (state, service) = console(&provider.configuration(None)).await?;
     let begun = begin(&service).await?;
     let token = Provider::id_token(
         &provider.issuer,
@@ -491,7 +483,7 @@ fn session_cookie(response: &http::Response<()>) -> Result<String, Box<dyn Error
 #[tokio::test]
 async fn a_new_sign_in_ends_the_session_it_replaces() -> Result<(), Box<dyn Error>> {
     let provider = Provider::start().await?;
-    let (state, service) = console(&provider.configuration(None))?;
+    let (state, service) = console(&provider.configuration(None)).await?;
     let first = begin(&service).await?;
     let token = Provider::id_token(
         &provider.issuer,
@@ -501,9 +493,9 @@ async fn a_new_sign_in_ends_the_session_it_replaces() -> Result<(), Box<dyn Erro
     let old = session_cookie(&complete(&service, &first).await?)?;
     let old_id = old
         .split_once('=')
-        .map(|(_, value)| ferrofed_console::session::SessionId::from_cookie(value))
+        .map(|(_, value)| crate::support::SessionId::from_cookie(value))
         .ok_or("a session id")?;
-    assert!(state.sessions().access_token(&old_id)?.is_some());
+    assert!(crate::support::access_token(&state, &old_id)?.is_some());
 
     let second = begin(&service).await?;
     provider.server.reset().await;
@@ -523,7 +515,7 @@ async fn a_new_sign_in_ends_the_session_it_replaces() -> Result<(), Box<dyn Erro
     assert_eq!(StatusCode::SEE_OTHER, response.status());
     let new = session_cookie(&response)?;
     assert_ne!(old, new);
-    assert!(state.sessions().access_token(&old_id)?.is_none());
+    assert!(crate::support::access_token(&state, &old_id)?.is_none());
     assert_eq!(1, sessions(&state)?);
     Ok(())
 }
@@ -560,7 +552,7 @@ async fn an_id_token_signed_with_a_published_shared_secret_is_refused() -> Resul
         .mount(&server)
         .await;
     let provider = Provider { server, issuer };
-    let (state, service) = console(&provider.configuration(None))?;
+    let (state, service) = console(&provider.configuration(None)).await?;
     let begun = begin(&service).await?;
     let now = jiff::Timestamp::now().as_second();
     let mut header = Header::new(Algorithm::HS256);
@@ -581,5 +573,62 @@ async fn an_id_token_signed_with_a_published_shared_secret_is_refused() -> Resul
     let response = complete(&service, &begun).await?;
     assert_eq!(StatusCode::UNAUTHORIZED, response.status());
     assert_eq!(0, sessions(&state)?);
+    Ok(())
+}
+
+/// The S256 code challenge of `verifier`: the unpadded base64url of its
+/// SHA-256 (RFC 7636 §4.2).
+fn challenge(verifier: &str) -> String {
+    let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, verifier.as_bytes());
+    base64::Engine::encode(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+        digest.as_ref(),
+    )
+}
+
+// NOTE: RFC 6749 §2.3.1: the secret a file holds is the client's secret without the
+// file's line ending, so the Basic credential carries it trimmed.
+#[tokio::test]
+async fn the_client_secret_is_read_from_its_file_trimmed() -> Result<(), Box<dyn Error>> {
+    use std::io::Write as _;
+    let provider = Provider::start().await?;
+    let mut file = tempfile::NamedTempFile::new()?;
+    writeln!(file, "s3cret-from-a-file")?;
+    let text = format!(
+        "{}client_secret_file = \"{}\"\n",
+        provider.configuration(None),
+        file.path().display()
+    );
+    let (_state, service) = console(&text).await?;
+    let begun = begin(&service).await?;
+    let token = Provider::id_token(
+        &provider.issuer,
+        &[("nonce", format!("\"{}\"", begun.nonce))],
+    )?;
+    provider.answers(&token).await;
+    complete(&service, &begun).await?;
+    let requests = provider
+        .server
+        .received_requests()
+        .await
+        .ok_or("the provider records requests")?;
+    let token_request = requests
+        .iter()
+        .find(|request| request.url.path() == "/token")
+        .ok_or("a token request")?;
+    let expected = format!(
+        "Basic {}",
+        base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            format!("{CLIENT_ID}:s3cret-from-a-file")
+        )
+    );
+    assert_eq!(
+        Some(expected.as_str()),
+        token_request
+            .headers
+            .get("authorization")
+            .and_then(|value| value.to_str().ok())
+    );
     Ok(())
 }

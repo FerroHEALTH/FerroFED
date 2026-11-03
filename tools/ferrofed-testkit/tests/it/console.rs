@@ -14,13 +14,12 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_console::session::SignedIn;
 use ferrofed_registry::incident::{Detection, Incident};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::console_sign_in;
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
-use secrecy::SecretString;
 use tokio::net::TcpListener;
 
 /// The issuer the gateway trusts and the operator's token comes from.
@@ -118,17 +117,27 @@ impl Running {
             &BTreeMap::new(),
         )?
         .resolve()?;
-        let state = ferrofed_console::server::ConsoleState::new(console_settings)?;
+        let state = ferrofed_console::server::ConsoleState::new(console_settings).await?;
         let mut claims = Claims::new(ISSUER, AUDIENCE);
         let scope = claims.scope.take().unwrap_or_default();
         claims.scope = Some(format!("{scope} {OPERATOR_SCOPE}"));
-        let session = state.sessions().establish(SignedIn {
-            access_token: SecretString::from(issuer.mint(&claims)?),
+        let token = issuer.mint(&claims)?;
+        let (signed, _id_token) = console_sign_in::signed_in(console_sign_in::Answer {
+            access_token: &token,
+            name: None,
             expires_in: None,
             refresh_token: None,
-            id_token: None,
-            operator: None,
-        })?;
+        })
+        .await?;
+        let set = state
+            .sessions()
+            .establish(&http::HeaderMap::new(), signed)?;
+        let cookie = set
+            .to_str()?
+            .split(';')
+            .next()
+            .ok_or("the sign-in set a session cookie")?
+            .to_owned();
         let console = TcpListener::bind("127.0.0.1:0").await?;
         let console_address = console.local_addr()?;
         tokio::spawn(ferrohealth_server::serve::serve(
@@ -143,7 +152,7 @@ impl Running {
             _node: node,
             _dir: dir,
             console: format!("http://{console_address}"),
-            cookie: format!("{}={}", ferrofed_console::session::COOKIE, session.as_str()),
+            cookie,
         })
     }
 

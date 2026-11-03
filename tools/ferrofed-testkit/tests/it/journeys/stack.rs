@@ -168,10 +168,16 @@ impl Stack {
         let settings =
             ferrofed_console::config::Config::from_sources(Some(&text), &BTreeMap::new())?
                 .resolve()?;
-        let state = ferrofed_console::server::ConsoleState::new(settings)?;
-        let cookie = state
-            .sessions()
-            .cookie_name(ferrofed_console::session::COOKIE);
+        let state = ferrofed_console::server::ConsoleState::new(settings).await?;
+        let cookie = format!(
+            "{}{}_session",
+            if state.settings().session.secure_cookie() {
+                ferrohealth_session::cookies::HOST_PREFIX
+            } else {
+                ""
+            },
+            ferrofed_console::server::COOKIES
+        );
         tokio::spawn(ferrohealth_server::serve::serve(
             listener,
             ferrofed_console::server::router(state),
