@@ -19,7 +19,7 @@ use aws_lc_rs::hmac::{self, HMAC_SHA256, Key};
 use aws_lc_rs::rand::SystemRandom;
 
 use crate::auth::caller::Caller;
-use crate::facade::security::TARGET;
+use crate::security::TARGET;
 
 /// What the log writes in place of a reference when the process could draw
 /// no key.

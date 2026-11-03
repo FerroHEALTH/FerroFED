@@ -42,11 +42,10 @@ use openehr_its::json::from_canonical_json;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 use openehr_rm::v1_2::common::change_control::original_version::OriginalVersion;
 use openehr_rm::v1_2::composition::composition::Composition;
+use secrecy::SecretString;
 
 use super::{AccessLog, Accessed, Asked, ConsentSetAside, Reached, version};
 use crate::error::{self, Code};
-use crate::facade::route::{self, Arrived};
-use crate::facade::subject;
 use crate::federation::Federation;
 
 /// The operations whose resource holds data of no category.
@@ -99,21 +98,48 @@ pub(crate) struct Routed {
     request_id: String,
 }
 
+/// A request under the ITS-REST prefix as the access record reads it.
+#[derive(Debug)]
+pub(crate) struct Arriving<'a> {
+    /// The request method.
+    pub(crate) method: &'a Method,
+    /// The path relative to the ITS-REST base, still percent-encoded.
+    pub(crate) path: &'a str,
+    /// The query string, when the request carries one.
+    pub(crate) query: Option<&'a str>,
+    /// Every header the client sent.
+    pub(crate) headers: &'a HeaderMap,
+    /// The body bytes the client sent.
+    pub(crate) body: &'a [u8],
+    /// The request id, empty when the client sent none.
+    pub(crate) request_id: &'a str,
+}
+
+/// The namespace and the identifier of the patient a read of an EHR by
+/// subject names in its query string, read as the route that serves it
+/// reads them.
+pub(crate) type Named = fn(&RouteMatch, Option<&str>) -> Option<(String, SecretString)>;
+
 impl Routed {
     /// The access the request `arrived` would make, when it reaches patient
-    /// data and `federation` keeps an access log.
-    pub(crate) fn of(federation: &Federation, arrived: &Arrived<'_>) -> Option<Self> {
+    /// data and `federation` keeps an access log, the patient of a read by
+    /// subject read by `named`.
+    pub(crate) fn of(
+        federation: &Federation,
+        arrived: &Arriving<'_>,
+        named: Named,
+    ) -> Option<Self> {
         let Lookup::Matched(matched) = routes::lookup(arrived.method, arrived.path) else {
             return None;
         };
-        let (method, query) = (arrived.method, arrived.uri.query());
-        let (headers, body) = (arrived.headers, arrived.body.as_ref());
+        let (method, query) = (arrived.method, arrived.query);
+        let (headers, body) = (arrived.headers, arrived.body);
         let matched = &matched;
         let log = federation.access_log()?;
-        let patient_data = route::in_ehr_area(matched)
-            || crate::facade::write::creates_ehr(matched)
-            || route::in_demographic_area(matched)
-            || subject::serves(matched);
+        let patient_data = crate::route_area::in_ehr_area(matched)
+            || crate::route_area::creates_ehr(matched)
+            || crate::route_area::in_demographic_area(matched)
+            || crate::route_area::reads_ehr_by_subject(matched);
         if !patient_data {
             return None;
         }
@@ -128,16 +154,16 @@ impl Routed {
             .then(|| written(matched.operation_id, headers, body));
         // NOTE: no specification governs this: our own design; the record reads the
         // `ehr_id` and the subject with the parsers the route itself is served by.
-        let ehr_id = route::ehr::path_ehr_id(matched);
-        let patient = subject::serves(matched)
-            .then(|| subject::named(matched, query))
+        let ehr_id = crate::route_area::path_ehr_id(matched);
+        let patient = crate::route_area::reads_ehr_by_subject(matched)
+            .then(|| named(matched, query))
             .flatten()
             .map(|(namespace, value)| PatientIdentifier {
                 namespace: Some(namespace),
                 value,
             });
         let unread = (matched.path_param(EHR_ID).is_some() && ehr_id.is_none())
-            || (subject::serves(matched) && patient.is_none());
+            || (crate::route_area::reads_ehr_by_subject(matched) && patient.is_none());
         Some(Self {
             log: Arc::clone(log),
             action,

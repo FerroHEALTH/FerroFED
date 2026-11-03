@@ -64,7 +64,6 @@ use openehr_its::rest::routes::{IdentifierClass, ParamLocation, RouteMatch};
 use openehr_its::rest::runtime::Payload;
 
 use crate::error::Code;
-use crate::facade::route::EHR_GROUP;
 
 /// The canonical XML media type (ITS-REST 1.1.0 overview, §XML Format).
 const CANONICAL_XML: &str = "application/xml";
@@ -104,7 +103,7 @@ impl Write {
     /// classified operation is matched in the EHR group alone.
     #[must_use]
     pub fn of(matched: &RouteMatch) -> Self {
-        if matched.group != EHR_GROUP {
+        if matched.group != crate::route_area::EHR_GROUP {
             return Self::Routed;
         }
         match matched.operation_id {
@@ -116,13 +115,6 @@ impl Write {
             _ => Self::Routed,
         }
     }
-}
-
-/// Whether `matched` is the creation of an EHR with no `ehr_id` in its path,
-/// `POST {base}/v1/ehr`, routed only by the targeting headers (§12.4).
-#[must_use]
-pub fn creates_ehr(matched: &RouteMatch) -> bool {
-    matched.group == EHR_GROUP && matched.operation_id == "ehr_create"
 }
 
 /// Why a versioned write routed to `at` is refused before anything is sent.
@@ -450,7 +442,8 @@ impl fmt::Display for Through<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Preceding, PrecedingInvalid, Write, creates_ehr, if_match};
+    use super::{Preceding, PrecedingInvalid, Write, if_match};
+    use crate::route_area::creates_ehr;
     use http::{HeaderMap, HeaderValue, Method, header};
     use openehr_its::rest::routes::{Lookup, RouteMatch, lookup};
 

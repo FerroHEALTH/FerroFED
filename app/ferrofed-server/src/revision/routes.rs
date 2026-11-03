@@ -393,7 +393,7 @@ fn body_refused(headers: &HeaderMap, shape: &str) -> Response {
 /// its reason.
 fn record(event: &'static str, revision: RevisionId, operator: &Operator) {
     tracing::info!(
-        target: crate::facade::security::TARGET,
+        target: crate::security::TARGET,
         event,
         revision = %revision,
         issuer = operator.issuer(),

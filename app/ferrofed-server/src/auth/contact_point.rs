@@ -31,8 +31,13 @@ use http::HeaderMap;
 use crate::auth::caller::Caller;
 use crate::auth::claims::IuaAnnex;
 use crate::auth::refusal::{Refusal, Refused};
+use crate::config::auth::AuthSettings;
 use crate::config::auth::IssuerSettings;
 use crate::config::auth::contact_point::{ContactPoint, is_alpha_2};
+use crate::federation::describe::NATIONAL_CONTACT_POINT;
+use openehr_federation::error::WireError;
+use openehr_federation::options::OptionsRoot;
+use std::collections::BTreeMap;
 
 /// The most bytes a correlation identifier may carry.
 // NOTE: no specification governs this: our own design; 128 holds a UUID, a URN or a
@@ -262,4 +267,120 @@ pub(super) fn correlation(
     String::from_utf8(value.to_vec())
         .map(Some)
         .map_err(|_unreachable| Refusal::Correlation)
+}
+/// The issuers a deployment declares as national contact points, as
+/// `OPTIONS {base}/` declares them under `federation.national_contact_point`.
+///
+/// The member is present only when some issuer is declared one. It says that
+/// such a request is served with `disclose: false`, whatever
+/// `federation.consent.disclose` declares (Regulation (EU) 2025/327 Art 8,
+/// Art 11(5)); that the professional is authenticated by the contact point's
+/// side and asserted to the gateway, never authenticated by it (Implementing
+/// Regulation (EU) 2026/2099 Art 6(1) and (2); §13.4 authn-end-user, CP-39);
+/// that a patient-data request needs a purpose of use; and, per issuer, the
+/// claim each 2026/2099 Annex attribute is read from and the correlation
+/// header.
+// NOTE: §7a.2 leaves the `federation` object open and names no such member (N30 requires
+// none), so the member is our own design.
+#[derive(Debug, Clone, Default)]
+pub struct ContactPoints(Vec<DeclaredContactPoint>);
+
+/// One issuer declared a national contact point, as `OPTIONS {base}/`
+/// declares it.
+#[derive(Debug, Clone, serde::Serialize)]
+struct DeclaredContactPoint {
+    issuer: String,
+    claims: BTreeMap<&'static str, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    correlation_header: Option<String>,
+}
+
+impl ContactPoints {
+    /// The national contact points `auth` declares.
+    #[must_use]
+    pub fn of(auth: &AuthSettings) -> Self {
+        let iua = |claim: &str| format!("extensions.ihe_iua.{claim}");
+        Self(
+            auth.issuers
+                .iter()
+                .filter_map(|issuer| {
+                    let declared = issuer.national_contact_point.as_ref()?;
+                    let named = &declared.claims;
+                    let claims = BTreeMap::from([
+                        ("health_professional.family_name", named.family_name.clone()),
+                        ("health_professional.given_name", named.given_name.clone()),
+                        (
+                            "health_professional.country_code",
+                            named.country_code.clone(),
+                        ),
+                        (
+                            "health_professional.hp_identifier",
+                            iua("national_provider_identifier"),
+                        ),
+                        (
+                            "health_professional.issuing_authority_name",
+                            named.professional_issuing_authority.clone(),
+                        ),
+                        (
+                            "health_professional.hp_professional_role",
+                            iua("subject_role"),
+                        ),
+                        (
+                            "healthcare_provider.healthcare_provider_identifier",
+                            iua("subject_organization_id"),
+                        ),
+                        (
+                            "healthcare_provider.issuing_authority_name",
+                            named.provider_issuing_authority.clone(),
+                        ),
+                        (
+                            "healthcare_provider.healthcare_provider_name",
+                            iua("subject_organization"),
+                        ),
+                        (
+                            "healthcare_provider.healthcare_provider_address",
+                            named.provider_address.clone(),
+                        ),
+                    ]);
+                    Some(DeclaredContactPoint {
+                        issuer: issuer.issuer.clone(),
+                        claims,
+                        correlation_header: declared
+                            .correlation_header
+                            .as_ref()
+                            .map(|header| header.as_str().to_owned()),
+                    })
+                })
+                .collect(),
+        )
+    }
+
+    /// `body`, with the `national_contact_point` member when some issuer is
+    /// declared one.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`WireError`] when the member cannot be written.
+    pub fn declared_in(&self, mut body: OptionsRoot) -> Result<OptionsRoot, WireError> {
+        #[derive(serde::Serialize)]
+        struct Member<'a> {
+            disclose: bool,
+            professional: &'static str,
+            purpose_of_use: &'static str,
+            issuers: &'a [DeclaredContactPoint],
+        }
+        if self.0.is_empty() {
+            return Ok(body);
+        }
+        let member = Member {
+            disclose: false,
+            professional: "asserted-by-contact-point",
+            purpose_of_use: "required",
+            issuers: &self.0,
+        };
+        body.federation
+            .extra
+            .insert_serialized(NATIONAL_CONTACT_POINT, &member)?;
+        Ok(body)
+    }
 }

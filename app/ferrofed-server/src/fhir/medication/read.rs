@@ -25,7 +25,6 @@ use crate::facade::provenance::Provenance;
 use crate::federation::Federation;
 
 use crate::fhir::admission::Asked;
-use crate::fhir::locator;
 use crate::fhir::{admission, attach, fhir_json, outcome, refusal};
 
 use super::{not_served, serves};
@@ -278,7 +277,7 @@ fn version_tag(kept: &Kept, request_id: &str) -> Option<HeaderValue> {
     // versionId as a weak `ETag`, and a versionId is valid as the `id` data type is.
     let version = kept.resource.get("meta")?.get("versionId")?;
     let shape = match version.as_str() {
-        Some(text) if locator::is_fhir_id(text) => {
+        Some(text) if crate::face_path::is_fhir_id(text) => {
             match HeaderValue::try_from(format!("W/\"{text}\"")) {
                 Ok(tag) => return Some(tag),
                 Err(_unfit) => "no header value",

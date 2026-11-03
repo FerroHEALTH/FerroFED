@@ -29,8 +29,8 @@ use ferrohealth_smart::resource::{
 
 use crate::auth::introspection::Introspector;
 use crate::config::auth::IssuerSettings;
-use crate::facade::security::TARGET;
 use crate::metrics::security::Event;
+use crate::security::TARGET;
 
 /// Every way the gate's issuers verify a token.
 #[derive(Debug)]

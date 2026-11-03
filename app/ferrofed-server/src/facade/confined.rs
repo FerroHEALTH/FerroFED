@@ -38,8 +38,8 @@ use secrecy::SecretString;
 use crate::auth::caller::Caller;
 use crate::error::{self, Code};
 use crate::facade::owner;
-use crate::facade::security::TARGET;
 use crate::federation::Federation;
+use crate::security::TARGET;
 
 /// Why the patient of a confined grant could not be resolved, so the grant
 /// cannot be confined and nothing is sent.

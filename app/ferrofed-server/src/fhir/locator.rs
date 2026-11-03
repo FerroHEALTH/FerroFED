@@ -26,8 +26,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use uuid::Uuid;
 
-/// The longest FHIR R4 `id`.
-pub const LENGTH: usize = 64;
+use crate::face_path::{LENGTH, is_fhir_id};
 
 /// The most bytes an id packs: [`LENGTH`] characters of 6 bits each.
 const PACKED: usize = 48;
@@ -252,15 +251,6 @@ fn uuid_of(bytes: &[u8]) -> Result<String, Unlocated> {
 /// The text `bytes` are, when they are UTF-8.
 fn text_of(bytes: &[u8]) -> Result<&str, Unlocated> {
     std::str::from_utf8(bytes).map_err(|_unread| Unlocated::Malformed)
-}
-
-/// Whether `text` is a FHIR R4 `id`: 1 to 64 of `[A-Za-z0-9\-\.]`.
-#[must_use]
-pub fn is_fhir_id(text: &str) -> bool {
-    (1..=LENGTH).contains(&text.len())
-        && text
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.'))
 }
 
 #[cfg(test)]

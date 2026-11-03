@@ -22,8 +22,8 @@ use crate::auth::caller::VerifiedBy;
 use crate::auth::permission::{self, Requirement, Resource};
 use crate::auth::trust::Trust;
 use crate::base_path::BasePath;
-use crate::facade::security::TARGET;
 use crate::request_id;
+use crate::security::TARGET;
 use crate::state::AppState;
 
 /// The gate and where it stands: the middleware's state.
@@ -66,9 +66,9 @@ impl Guard {
         if let Some(face) = self
             .state
             .fhir()
-            .and_then(|fhir| crate::fhir::classify(fhir, path))
+            .and_then(|fhir| crate::face_path::classify(fhir, path))
         {
-            return Some((crate::fhir::requirement(face, method), None));
+            return Some((crate::auth::face::requirement(face, method), None));
         }
         let root = path == self.base.as_str() || path == self.base.join("/");
         if root && method == Method::OPTIONS {

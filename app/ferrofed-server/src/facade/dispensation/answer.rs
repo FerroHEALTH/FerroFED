@@ -43,8 +43,9 @@ use crate::facade::native::Chosen;
 use crate::facade::prescriptions::Member;
 use crate::facade::provenance::Provenance;
 use crate::facade::security;
+use crate::face_path::is_fhir_id;
 use crate::federation::Federation;
-use crate::fhir::locator::{Locator, is_fhir_id};
+use crate::fhir::locator::Locator;
 use crate::metrics::dispensations::Outcome;
 
 /// What the lookup reached: the patient it was named by, each member asked

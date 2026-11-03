@@ -8,8 +8,8 @@
 use std::ffi::OsStr;
 
 use ferrofed_server::body::VERSION;
-use ferrofed_server::facade::security::DIRECTIVE;
 use ferrofed_server::metrics::SCOPE;
+use ferrofed_server::security::DIRECTIVE;
 use ferrohealth_telemetry::section::{Filter, Format, Rendering, TelemetrySection};
 use ferrohealth_telemetry::telemetry::{Console, InitError, Layers, Service, Telemetry};
 use opentelemetry_sdk::trace::SdkTracer;

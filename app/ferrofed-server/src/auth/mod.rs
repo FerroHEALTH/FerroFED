@@ -47,6 +47,7 @@
 pub mod caller;
 mod claims;
 pub mod contact_point;
+pub mod face;
 pub mod guard;
 mod introspection;
 pub mod permission;
@@ -71,13 +72,13 @@ use secrecy::SecretString;
 
 use crate::auth::caller::{Caller, PatientContext, Stated, VerifiedBy};
 use crate::auth::claims::Claims;
+use crate::auth::contact_point::ContactPoints;
 use crate::auth::contact_point::MissingAnnex;
 use crate::auth::introspection::Introspector;
 use crate::auth::permission::{Requirement, Resource};
 use crate::auth::refusal::{BasicRefusal, Refusal, Refused};
 use crate::auth::verify::Verifiers;
 use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
-use crate::facade::options::ContactPoints;
 
 /// The verifier of every caller, built from `[auth]` and `[trust]`.
 #[derive(Debug)]

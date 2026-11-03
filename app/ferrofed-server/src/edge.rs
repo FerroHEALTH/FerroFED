@@ -79,7 +79,7 @@ fn answered(
     (request_id, reason): (&str, &str),
 ) -> Response {
     match (state.fhir(), code) {
-        (Some(fhir), _) if crate::fhir::classify(fhir, uri.path()).is_some() => {
+        (Some(fhir), _) if crate::face_path::classify(fhir, uri.path()).is_some() => {
             crate::fhir::errors::refused(
                 status,
                 code.map_or("the request was refused", Code::message),

@@ -30,7 +30,7 @@ use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError
 use ferrofed_identity::role::patient::PatientRef;
 use ferrofed_registry::id::NodeId;
 use ferrofed_server::config::Config;
-use ferrofed_server::facade::options::{LOCALIZATION_MODE, LOCALIZATION_MS};
+use ferrofed_server::federation::describe::{LOCALIZATION_MODE, LOCALIZATION_MS};
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::localization::{LocalizationError, LocalizationPolicy};
 use ferrofed_server::state::AppState;

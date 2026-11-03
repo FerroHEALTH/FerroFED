@@ -27,7 +27,8 @@ use crate::fhir::admission::Asked;
 use crate::fhir::locator::Locator;
 use crate::fhir::{admission, attach, fhir_json, refusal};
 
-use super::{PRESCRIPTIONS, not_served, serves};
+use super::{not_served, serves};
+use crate::face_path::PRESCRIPTIONS;
 
 /// `GET {fhir-base}/MedicationRequest?patient.identifier=system|value`: a
 /// patient's prescriptions, at every member that serves them

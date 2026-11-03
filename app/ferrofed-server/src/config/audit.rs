@@ -4,7 +4,7 @@
 //! Where the access records and the IHE binding's BALP records go, `[audit]`.
 //!
 //! The access log of every federated query, stored-query execution, routed
-//! read and routed write writes its records here ([`crate::access`];
+//! read and routed write writes its records here (`crate::access`;
 //! Regulation (EU) 2025/327 Annex II 3.2) in every build, so a gateway with
 //! a registry needs a destination outside development whatever its
 //! bindings. Under the IHE binding the PIXm ITI-83 (`[pixm]`), PDQm ITI-78

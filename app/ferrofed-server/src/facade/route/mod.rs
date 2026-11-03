@@ -28,7 +28,7 @@
 //!
 //! A versioned write routes by its path `ehr_id` too, and is sent only when
 //! that node controls every version it amends, a `CONTRIBUTION`'s included
-//! ([`write`](mod@write); §12.4, §12a.1, N23): one that does not is refused
+//! ([`write`](mod@crate::facade::write); §12.4, §12a.1, N23): one that does not is refused
 //! `409`, and no node is sent the write (§10.3).
 //! A new EHR has no owner, so only the targeting headers route it,
 //! `POST {base}/v1/ehr` included, to exactly one endpoint (§12.4, §2.3); a
@@ -80,7 +80,6 @@ use crate::conveyed;
 use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
 use crate::facade::route::chosen::{Chooser, named};
-use crate::facade::write;
 use crate::facade::{confined, follow_up, owner, security, subject};
 use crate::federation::Federation;
 use crate::request_id;
@@ -91,18 +90,8 @@ pub(crate) mod ehr;
 pub(crate) mod fan_out;
 pub(crate) mod status;
 
-/// The API group of the EHR area (§7a.1).
-pub(crate) const EHR_GROUP: &str = "ehr";
-
 /// The API group of the definition area (§7a.1).
 const DEFINITION_GROUP: &str = "definition";
-
-/// The API group of the DEMOGRAPHIC area (§7a.1).
-const DEMOGRAPHIC_GROUP: &str = "demographic";
-
-/// The path template every single-node EHR resource sits at or below
-/// (§7a.1).
-const EHR_RESOURCE: &str = "/ehr/{ehr_id}";
 
 /// One client request under the ITS-REST prefix, as it arrived.
 #[derive(Debug)]
@@ -223,7 +212,15 @@ pub(crate) async fn unrouted(
             Err(unanswered) => arrived = unanswered,
         }
     }
-    let routed = crate::access::routed::Routed::of(serving, &arrived);
+    let arriving = crate::access::routed::Arriving {
+        method: arrived.method,
+        path: arrived.path,
+        query: arrived.uri.query(),
+        headers: arrived.headers,
+        body: arrived.body.as_ref(),
+        request_id: arrived.request_id,
+    };
+    let routed = crate::access::routed::Routed::of(serving, &arriving, subject::named);
     let response = serve(Some(serving), arrived).await;
     match routed {
         Some(routed) => routed.attach(serving, response).await,
@@ -249,53 +246,49 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
     // NOTE: master08 §Resource Scopes, §12.4: a patient grant reaches data in its patient's
     // existing EHRs, so a new EHR, a definition and a party are beyond it.
     if confined::is_confined(&arrived.conveyance)
-        && !matches!(&looked_up, Lookup::Matched(matched) if in_ehr_area(matched) || subject::serves(matched))
+        && !matches!(&looked_up, Lookup::Matched(matched) if crate::route_area::in_ehr_area(matched) || crate::route_area::reads_ehr_by_subject(matched))
     {
         let logged = arrived.outbound.to_string();
         return confined::refused("area", arrived.request_id, &logged);
     }
     match looked_up {
-        Lookup::Matched(matched) if in_ehr_area(&matched) => {
+        Lookup::Matched(matched) if crate::route_area::in_ehr_area(&matched) => {
             ehr::route(federation, arrived, &matched).await
         }
-        Lookup::Matched(matched) if write::creates_ehr(&matched) => {
-            named(federation, arrived, EHR_GROUP, Chooser::Client).await
+        Lookup::Matched(matched) if crate::route_area::creates_ehr(&matched) => {
+            named(
+                federation,
+                arrived,
+                crate::route_area::EHR_GROUP,
+                Chooser::Client,
+            )
+            .await
         }
         Lookup::Matched(matched) if in_definition_area(&matched) => {
             fan_out::definition(federation, arrived, &matched).await
         }
-        Lookup::Matched(matched) if in_demographic_area(&matched) => {
+        Lookup::Matched(matched) if crate::route_area::in_demographic_area(&matched) => {
             match federation.demographic_endpoint() {
                 Some(declared) => {
                     let chooser = Chooser::Declared(declared);
-                    named(federation, arrived, DEMOGRAPHIC_GROUP, chooser).await
+                    named(
+                        federation,
+                        arrived,
+                        crate::route_area::DEMOGRAPHIC_GROUP,
+                        chooser,
+                    )
+                    .await
                 }
                 None => error::fixed(Code::NotImplemented, arrived.request_id),
             }
         }
-        Lookup::Matched(matched) if subject::serves(&matched) => {
+        Lookup::Matched(matched) if crate::route_area::reads_ehr_by_subject(&matched) => {
             subject::serve(federation, arrived, &matched).await
         }
         Lookup::Matched(_) | Lookup::MethodNotAllowed { .. } | Lookup::NotFound => {
             error::fixed(Code::NotImplemented, arrived.request_id)
         }
     }
-}
-
-/// Whether `matched` is an operation of the DEMOGRAPHIC area under
-/// `{base}/v1/demographic/` (§7a.1, N32).
-pub(crate) fn in_demographic_area(matched: &RouteMatch) -> bool {
-    matched.group == DEMOGRAPHIC_GROUP
-}
-
-/// Whether `matched` is an operation on an EHR resource addressed by a path
-/// `ehr_id` (§7a.1).
-pub(crate) fn in_ehr_area(matched: &RouteMatch) -> bool {
-    matched.group == EHR_GROUP
-        && matched
-            .template
-            .strip_prefix(EHR_RESOURCE)
-            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
 }
 
 /// Whether `matched` is an operation of the definition area, a template or
@@ -622,12 +615,13 @@ pub(crate) fn failed(
 
 #[cfg(test)]
 mod tests {
-    use super::{in_definition_area, in_demographic_area, in_ehr_area};
+    use super::in_definition_area;
+
     use http::Method;
     use openehr_its::rest::routes::{Lookup, lookup};
 
     fn ehr_area(method: &Method, path: &str) -> bool {
-        matches!(lookup(method, path), Lookup::Matched(matched) if in_ehr_area(&matched))
+        matches!(lookup(method, path), Lookup::Matched(matched) if crate::route_area::in_ehr_area(&matched))
     }
 
     #[test]
@@ -674,7 +668,7 @@ mod tests {
     }
 
     fn demographic(method: &Method, path: &str) -> bool {
-        matches!(lookup(method, path), Lookup::Matched(matched) if in_demographic_area(&matched))
+        matches!(lookup(method, path), Lookup::Matched(matched) if crate::route_area::in_demographic_area(&matched))
     }
 
     #[test]

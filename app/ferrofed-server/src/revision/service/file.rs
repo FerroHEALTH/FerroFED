@@ -111,7 +111,7 @@ impl Revisions {
             };
             let running = current.map(|current| current.revision);
             tracing::info!(
-                target: crate::facade::security::TARGET,
+                target: crate::security::TARGET,
                 event = SAVED,
                 revision = %revision.id,
                 origin = "file",
@@ -153,7 +153,7 @@ impl Revisions {
             .swap_current(file.previous, &file.mark(needs_restart))?
         {
             Swapped::Swapped => tracing::info!(
-                target: crate::facade::security::TARGET,
+                target: crate::security::TARGET,
                 event = APPLIED,
                 revision = %file.revision,
                 origin = "file",
@@ -260,7 +260,7 @@ impl FileRevision {
             return;
         }
         tracing::warn!(
-            target: crate::facade::security::TARGET,
+            target: crate::security::TARGET,
             event = REFUSED,
             revision = %self.revision,
             origin = "file",

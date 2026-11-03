@@ -509,13 +509,13 @@ impl Gate {
         if let Some(face) = self
             .state
             .fhir()
-            .and_then(|fhir| crate::fhir::classify(fhir, path))
+            .and_then(|fhir| crate::face_path::classify(fhir, path))
         {
             return match face {
-                crate::fhir::FacePath::Metadata => Reach::None,
-                crate::fhir::FacePath::Bundle
-                | crate::fhir::FacePath::Medication(
-                    crate::fhir::medication::Addressed::Dispensations,
+                crate::face_path::FacePath::Metadata => Reach::None,
+                crate::face_path::FacePath::Bundle
+                | crate::face_path::FacePath::Medication(
+                    crate::face_path::Addressed::Dispensations,
                 ) if *method == Method::POST => Reach::Write,
                 _ => Reach::Read,
             };
@@ -534,10 +534,10 @@ impl Gate {
         if matched.group == QUERY_GROUP && matched.operation_id.starts_with(QUERY_EXECUTION) {
             return Reach::Read;
         }
-        let routed = crate::facade::route::in_ehr_area(&matched)
-            || crate::facade::write::creates_ehr(&matched)
-            || crate::facade::route::in_demographic_area(&matched)
-            || crate::facade::subject::serves(&matched);
+        let routed = crate::route_area::in_ehr_area(&matched)
+            || crate::route_area::creates_ehr(&matched)
+            || crate::route_area::in_demographic_area(&matched)
+            || crate::route_area::reads_ehr_by_subject(&matched);
         match *method {
             _ if !routed => Reach::None,
             Method::POST | Method::PUT | Method::DELETE => Reach::Write,
@@ -678,7 +678,7 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
         Err(failure) => {
             Event::WriteUnrecorded.record();
             tracing::error!(
-                target: crate::facade::security::TARGET,
+                target: crate::security::TARGET,
                 event = Event::WriteUnrecorded.as_str(),
                 error = %crate::chain(&failure),
                 request_id = logged,

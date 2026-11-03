@@ -25,7 +25,7 @@ use crate::binding::RoleConflict;
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
 use crate::config::service::{GrantRefused, TlsRefused};
-use crate::facade::options::DescribeError;
+use crate::federation::describe::DescribeError;
 use crate::localization;
 
 /// A federation that cannot be built from the settings.

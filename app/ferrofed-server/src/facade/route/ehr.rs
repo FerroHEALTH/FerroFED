@@ -40,9 +40,6 @@ use crate::facade::write::{self, Write};
 use crate::facade::{confined, follow_up, owner, security};
 use crate::federation::Federation;
 
-/// The path parameter that names the EHR (§12.5).
-const EHR_ID_PARAM: &str = "ehr_id";
-
 /// Routes one request in the EHR area to the owner of its path `ehr_id` and
 /// answers as the owner did.
 ///
@@ -71,7 +68,7 @@ pub(super) async fn route(
     // NOTE: §5.4.1, N33: the client's id is free text that may carry an
     // identifier, so every log event names the gateway's own id instead.
     let logged = arrived.outbound.to_string();
-    let Some(ehr_id) = path_ehr_id(matched) else {
+    let Some(ehr_id) = crate::route_area::path_ehr_id(matched) else {
         return error::fixed(Code::EhrIdInvalid, request_id);
     };
     let write = Write::of(matched);
@@ -326,15 +323,6 @@ fn collision(ehr_id: &EhrId, claimed: owner::Claimed, request_id: &str) -> Respo
     owner::collided(ehr_id, claimed.detection, &claimed.claimants);
     let refused = owner::Unsettled::Claimed(claimed.claimants);
     error::response(refused.code(), refused.to_string(), request_id)
-}
-
-/// The `ehr_id` the path segment of `matched` decodes to, or `None` when it
-/// is no `HIER_OBJECT_ID`.
-pub(crate) fn path_ehr_id(matched: &RouteMatch) -> Option<EhrId> {
-    let param = matched.path_param(EHR_ID_PARAM)?;
-    // NOTE: §12.5, a segment that is not UTF-8 or not a HIER_OBJECT_ID names
-    // no EHR, so either failure is the malformed-ehr_id answer.
-    EhrId::new(param.decoded().ok()?).ok()
 }
 
 /// Runs the ask-all probe and returns the one owner it found with its

@@ -19,7 +19,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
-use ferrofed_server::facade::options::{
+use ferrofed_server::federation::describe::{
     LATENCY_MS_P95, MANUFACTURER, MAX_NODE_ROWS, MAX_WINDOW, SUPPORTED_UNTIL,
 };
 use ferrofed_server::federation::{Federation, error::FederationError};
