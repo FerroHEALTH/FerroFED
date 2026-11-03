@@ -15,11 +15,11 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
-use ferrofed_server::binding::ihe::pmir::config::OnDrain;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::binding::BindingFault;
 use ferrofed_server::config::error::credentials::CredentialsFault;
+use ferrofed_server::config::ihe::pmir::OnDrain;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::settings::Settings;
 

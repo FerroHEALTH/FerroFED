@@ -21,7 +21,6 @@
 //! and their counts, never an identifier. The bindings' time-to-live bounds
 //! every change the gateway never hears of.
 
-pub mod config;
 pub mod route;
 pub mod subscription;
 
@@ -45,7 +44,7 @@ use url::Url;
 
 use crate::auth::Gate;
 use crate::auth::refusal::BasicRefusal;
-use crate::binding::ihe::pmir::config::{OnDrain, PmirSettings};
+use crate::config::ihe::pmir::{OnDrain, PmirSettings};
 use crate::config::service::{self, ServiceAuthError, TlsRefused};
 use ferrofed_operator_api::health::Observed;
 use subscription::{RegistryFault, Watch};

@@ -38,9 +38,8 @@ use ferrohealth_telemetry::section::TelemetrySection;
 
 /// The settings the run path holds, with every secret already read.
 ///
-/// The sections of a binding are resolved by the binding
-/// ([`Binding::resolve`](crate::binding::Binding::resolve)), each into the
-/// field that carries it.
+/// The sections of a binding are each resolved into the field that carries
+/// it: the IHE binding's by `config::ihe::resolve`.
 #[derive(Debug)]
 pub struct Settings {
     /// The deployment profile.
@@ -59,7 +58,7 @@ pub struct Settings {
     /// The mCSD care services directory the registry is read from, when it
     /// is read from one (§15.1, Annex A.5).
     #[cfg(feature = "binding-ihe")]
-    pub registry_directory: Option<crate::binding::ihe::mcsd::DirectorySettings>,
+    pub registry_directory: Option<crate::config::ihe::mcsd::DirectorySettings>,
     /// The federated query.
     pub federation: FederationSettings,
     /// The outbound credentials, by endpoint id.
@@ -70,19 +69,19 @@ pub struct Settings {
     pub onward_tls: BTreeMap<EndpointId, TlsSettings>,
     /// The PIXm resolver, with every secret read.
     #[cfg(feature = "binding-ihe")]
-    pub pixm: Option<crate::binding::ihe::pixm::PixmSettings>,
+    pub pixm: Option<crate::config::ihe::pixm::PixmSettings>,
     /// The XCPD localizer, with every secret and file read.
     #[cfg(feature = "binding-ihe")]
-    pub xcpd: Option<crate::binding::ihe::xcpd::XcpdSettings>,
+    pub xcpd: Option<crate::config::ihe::xcpd::XcpdSettings>,
     /// The Dutch Generic Functions, with every secret and file read.
     #[cfg(feature = "binding-nl")]
     pub nl_gf: Option<crate::binding::nl::NlGfSettings>,
     /// The PMIR identity feed, with every secret read.
     #[cfg(feature = "binding-ihe")]
-    pub pmir: Option<crate::binding::ihe::pmir::config::PmirSettings>,
+    pub pmir: Option<crate::config::ihe::pmir::PmirSettings>,
     /// The PDQm demographics step, with every secret read.
     #[cfg(feature = "binding-ihe")]
-    pub pdqm: Option<crate::binding::ihe::pdqm::PdqmSettings>,
+    pub pdqm: Option<crate::config::ihe::pdqm::PdqmSettings>,
     /// The store of the stored-query registry, when it is offered (§12.7).
     pub stored_queries: Option<Store>,
     /// The FHIR R4 face of the exchange format, when it is served (Regulation
@@ -485,5 +484,7 @@ impl Settings {
         for binding in crate::binding::compiled() {
             binding.log_summary(self);
         }
+        #[cfg(feature = "binding-ihe")]
+        crate::config::ihe::log_summary(self);
     }
 }

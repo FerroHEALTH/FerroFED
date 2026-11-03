@@ -333,6 +333,8 @@ pub fn check(
     for binding in crate::binding::compiled() {
         cleartext.extend(binding.sites(settings)?);
     }
+    #[cfg(feature = "binding-ihe")]
+    cleartext.extend(crate::config::ihe::sites(settings)?);
     if let Some(otlp) = &settings.telemetry.otlp {
         let (key, endpoint) = ("telemetry.otlp.endpoint", &otlp.endpoint);
         let carries = Url::parse(endpoint.expose())

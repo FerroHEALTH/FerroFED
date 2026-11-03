@@ -214,10 +214,10 @@ const KEY: &str = "audit";
 pub(crate) fn resolve(config: &Config) -> Result<AuditSettings, Error> {
     let profile = config.profile;
     let table = &config.audit;
-    let audited = config.registry.configured()
-        || crate::binding::compiled()
-            .iter()
-            .any(|binding| binding.audits(config));
+    #[cfg(feature = "binding-ihe")]
+    let audited = config.registry.configured() || crate::config::ihe::audits(config);
+    #[cfg(not(feature = "binding-ihe"))]
+    let audited = config.registry.configured();
     // NOTE: PIXm §2:3.83.5.1, PDQm §2:3.78.5.1, mCSD §2:3.90.5.1, PMIR §2:3.93.5.1 and
     // Regulation (EU) 2025/327 Annex II 3.2 have every exchange and access recorded.
     let destination = match table.destination {

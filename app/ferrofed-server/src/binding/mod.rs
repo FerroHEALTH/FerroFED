@@ -183,13 +183,16 @@ pub trait Binding: fmt::Debug + Sync {
     /// a registry reload does with it.
     fn sections(&self) -> &'static [Section];
 
-    /// Resolves the binding's sections of `config` into `settings`.
+    /// Resolves the binding's sections of `config` into `settings`, for a
+    /// binding whose sections `config` does not resolve itself.
     ///
     /// # Errors
     ///
     /// The [`Error`] of the first value the binding refuses, under the key
     /// that carries it.
-    fn resolve(&self, config: &Config, settings: &mut Settings) -> Result<(), Error>;
+    fn resolve(&self, _config: &Config, _settings: &mut Settings) -> Result<(), Error> {
+        Ok(())
+    }
 
     /// Returns the budgets of the Step-1 services the binding's sections of
     /// `config` ask.
@@ -299,13 +302,6 @@ pub trait Binding: fmt::Debug + Sync {
     /// The [`FederationError`] of a document that cannot be built.
     fn documents(&self, _settings: &Settings) -> Result<Vec<PublicDocument>, FederationError> {
         Ok(Vec::new())
-    }
-
-    /// Whether a section of the binding that `config` sets records its
-    /// transactions through `[audit]`, which then needs a destination outside
-    /// development.
-    fn audits(&self, _config: &Config) -> bool {
-        false
     }
 
     /// Returns the table of the binding's onward grant that `credentials`
