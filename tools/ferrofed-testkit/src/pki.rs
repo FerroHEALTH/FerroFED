@@ -6,19 +6,20 @@
 //! the Audit Record Repository ([`crate::atna`]).
 //!
 //! Each is a CA generated at run time and the server or client certificates
-//! it signs, valid from yesterday to tomorrow and never committed, and a
-//! rustls server configuration over the crypto library rustls builds on. No
+//! it signs, valid from yesterday to tomorrow and never committed, and the
+//! server configuration `ferrohealth-server` builds over them. No
 //! specification governs the harness: our own design.
 
+use std::io;
 use std::sync::Arc;
 
+use ferrohealth_server::section::{ClientAuth, TlsSection, TlsVersion};
+use ferrohealth_server::tls::{self, TlsError};
 use rcgen::{
     BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa,
     Issuer, KeyPair,
 };
-use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
-use tokio_rustls::rustls::server::danger::ClientCertVerifier;
-use tokio_rustls::rustls::{ServerConfig, crypto::CryptoProvider};
+use tokio_rustls::rustls::ServerConfig;
 
 /// A CA: its self-signed certificate and the issuer that signs with its key.
 pub(crate) struct Authority {
@@ -60,29 +61,54 @@ impl Authority {
     }
 }
 
-/// The rustls provider every harness server runs on.
-pub(crate) fn provider() -> Arc<CryptoProvider> {
-    Arc::new(tokio_rustls::rustls::crypto::aws_lc_rs::default_provider())
+/// Why a harness server's TLS configuration could not be built.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum PkiError {
+    /// The certificate files `ferrohealth-server` reads could not be
+    /// written.
+    #[error("the harness certificate files could not be written")]
+    Write(#[source] io::Error),
+    /// `ferrohealth-server` refused the certificates.
+    #[error("the harness TLS configuration was refused")]
+    Tls(#[source] TlsError),
 }
 
-/// A server configuration over `provider` that presents `certificate` with
-/// `key`, and requires a client certificate `clients` verifies when it is
-/// given.
-pub(crate) fn server_config(
-    provider: Arc<CryptoProvider>,
+/// The configuration of a harness server that presents `certificate` with
+/// `key`, built by `ferrohealth-server` as a listener's is, and requires a
+/// client certificate `clients` signed when it is given. It speaks TLS 1.2
+/// and 1.3 and offers no ALPN protocol, so a client speaks the protocol of
+/// the server behind it.
+pub(crate) fn server_tls(
     (certificate, key): (&Certificate, &KeyPair),
-    clients: Option<Arc<dyn ClientCertVerifier>>,
-) -> Result<ServerConfig, tokio_rustls::rustls::Error> {
-    let chain: Vec<CertificateDer<'static>> = vec![certificate.der().clone()];
-    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key.serialize_der()));
-    let builder =
-        ServerConfig::builder_with_provider(provider).with_safe_default_protocol_versions()?;
-    match clients {
-        Some(verifier) => builder
-            .with_client_cert_verifier(verifier)
-            .with_single_cert(chain, key),
-        None => builder.with_no_client_auth().with_single_cert(chain, key),
-    }
+    clients: Option<&Certificate>,
+) -> Result<ServerConfig, PkiError> {
+    let dir = tempfile::tempdir().map_err(PkiError::Write)?;
+    let write = |name: &str, pem: String| {
+        let path = dir.path().join(name);
+        std::fs::write(&path, pem)
+            .map(|()| path)
+            .map_err(PkiError::Write)
+    };
+    let client_ca_file = clients
+        .map(|ca| write("client-ca.pem", ca.pem()))
+        .transpose()?;
+    let section = TlsSection {
+        certificate_file: write("server.pem", certificate.pem())?,
+        key_file: write("server.key", key.serialize_pem())?,
+        client_auth: if client_ca_file.is_some() {
+            ClientAuth::Required
+        } else {
+            ClientAuth::None
+        },
+        client_ca_file,
+        reload_interval_s: None,
+        healthcheck_identity_file: None,
+        min_version: TlsVersion::Tls12,
+    };
+    let mut config = Arc::unwrap_or_clone(tls::server_config(&section).map_err(PkiError::Tls)?);
+    config.alpn_protocols.clear();
+    Ok(config)
 }
 
 /// Makes `params` valid from yesterday to tomorrow.

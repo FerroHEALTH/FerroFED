@@ -51,6 +51,10 @@ async-trait.workspace = true
 opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
 # `tls-aws-lc` serves the collector over TLS with a client certificate (#644).
 tonic = { workspace = true, features = ["server", "router", "tls-aws-lc"] }
+# The TLS configuration of every harness server, built as a listener's is
+# from the certificate files written to a temporary directory (#1486).
+ferrohealth-server.workspace = true
+tempfile.workspace = true
 # The harness audit repository (#418) generates its CA and server
 # certificate at run time, so no private key is ever committed, and serves
 # syslog over TLS with them.
@@ -105,8 +109,6 @@ ferrohealth-ui.workspace = true
 # The gateway and the console served as `ferrofed serve` serves its
 # listeners (#1397).
 ferrohealth-health.workspace = true
-ferrohealth-server.workspace = true
-tempfile.workspace = true
 # The XCPD client the stub responding gateway is held to (#85), the mCSD
 # client the harness directory is held to (#86), and the PMIR subscriber and
 # feed reader the harness Patient Identity Registry is held to (#147).

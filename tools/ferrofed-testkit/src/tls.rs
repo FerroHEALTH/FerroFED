@@ -34,11 +34,10 @@ use rcgen::ExtendedKeyUsagePurpose;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use tokio_rustls::TlsAcceptor;
+use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::rustls::pki_types::CertificateDer;
-use tokio_rustls::rustls::server::WebPkiClientVerifier;
-use tokio_rustls::rustls::{RootCertStore, ServerConfig};
 
-use crate::pki::{self, Authority};
+use crate::pki::{self, Authority, PkiError};
 
 /// Why the front could not start.
 #[derive(Debug, thiserror::Error)]
@@ -47,12 +46,9 @@ pub enum TlsHarnessError {
     /// The certificates could not be generated.
     #[error("the harness certificates could not be generated")]
     Certificate(#[from] rcgen::Error),
-    /// The TLS configuration was refused.
-    #[error("the harness TLS configuration was refused")]
-    Tls(#[from] tokio_rustls::rustls::Error),
-    /// The client verifier could not be built.
-    #[error("the harness client verifier could not be built")]
-    Verifier(#[from] tokio_rustls::rustls::server::VerifierBuilderError),
+    /// The TLS configuration could not be built.
+    #[error("the harness TLS configuration could not be built")]
+    Tls(#[from] PkiError),
     /// The listener could not be bound.
     #[error("the harness front could not listen")]
     Listen(#[from] std::io::Error),
@@ -262,13 +258,7 @@ fn material() -> Result<Material, TlsHarnessError> {
         Vec::new(),
         ExtendedKeyUsagePurpose::ClientAuth,
     )?;
-    let mut roots = RootCertStore::empty();
-    roots.add(ca.certificate.der().clone())?;
-    let provider = pki::provider();
-    let verifier =
-        WebPkiClientVerifier::builder_with_provider(Arc::new(roots), Arc::clone(&provider))
-            .build()?;
-    let config = pki::server_config(provider, (&server, &server_key), Some(verifier))?;
+    let config = pki::server_tls((&server, &server_key), Some(&ca.certificate))?;
     Ok(Material {
         trust_roots: ca.certificate.pem(),
         client_identity: format!("{}{}", client.pem(), client_key.serialize_pem()),

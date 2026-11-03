@@ -28,7 +28,7 @@ use tokio::task::JoinHandle;
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls::rustls::ServerConfig;
 
-use crate::pki::{self, Authority};
+use crate::pki::{self, Authority, PkiError};
 
 /// Why the harness repository could not start.
 #[derive(Debug, thiserror::Error)]
@@ -37,9 +37,9 @@ pub enum AtnaHarnessError {
     /// The certificates could not be generated.
     #[error("the harness certificates could not be generated")]
     Certificate(#[from] rcgen::Error),
-    /// The TLS configuration was refused.
-    #[error("the harness TLS configuration was refused")]
-    Tls(#[from] tokio_rustls::rustls::Error),
+    /// The TLS configuration could not be built.
+    #[error("the harness TLS configuration could not be built")]
+    Tls(#[from] PkiError),
     /// The listener could not be bound.
     #[error("the harness repository could not listen")]
     Listen(#[from] std::io::Error),
@@ -195,7 +195,7 @@ fn certificates() -> Result<(String, ServerConfig), AtnaHarnessError> {
         vec![Ipv4Addr::LOCALHOST.to_string()],
         ExtendedKeyUsagePurpose::ServerAuth,
     )?;
-    let config = pki::server_config(pki::provider(), (&server, &key), None)?;
+    let config = pki::server_tls((&server, &key), None)?;
     Ok((ca.certificate.pem(), config))
 }
 

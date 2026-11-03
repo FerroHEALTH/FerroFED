@@ -109,7 +109,7 @@ pub mod oauth;
 pub mod otlp;
 pub mod pdqm_stub;
 pub mod pixm_stub;
-mod pki;
+pub mod pki;
 pub mod pmir;
 pub mod proxy;
 pub mod reference;
