@@ -242,7 +242,7 @@ impl Report {
                     content: part.content,
                     source: part.source.as_deref(),
                     bytes: part.bytes.len(),
-                    sha256: crate::conformance::fixture::sha256(&part.bytes),
+                    sha256: crate::digest::sha256(&part.bytes),
                 })
                 .collect(),
             missing: &self.missing,

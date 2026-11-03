@@ -24,9 +24,9 @@ use ferrofed_registry::id::EndpointId;
 use crate::binding::RoleConflict;
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
+use crate::config::service::{GrantRefused, TlsRefused};
 use crate::facade::options::DescribeError;
 use crate::localization;
-use crate::service::{GrantRefused, TlsRefused};
 
 /// A federation that cannot be built from the settings.
 #[derive(Debug, thiserror::Error)]
@@ -406,11 +406,11 @@ impl From<GrantRefused> for FederationError {
 }
 
 #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
-impl From<crate::service::ServiceAuthError> for FederationError {
-    fn from(error: crate::service::ServiceAuthError) -> Self {
+impl From<crate::config::service::ServiceAuthError> for FederationError {
+    fn from(error: crate::config::service::ServiceAuthError) -> Self {
         match error {
-            crate::service::ServiceAuthError::Refused(refused) => refused.into(),
-            crate::service::ServiceAuthError::TokenTransport { section, source } => {
+            crate::config::service::ServiceAuthError::Refused(refused) => refused.into(),
+            crate::config::service::ServiceAuthError::TokenTransport { section, source } => {
                 Self::TokenTransport { section, source }
             }
         }

@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 
-use ferrofed_server::audit::AuditDestination;
 use ferrofed_server::config::Config;
+use ferrofed_server::config::audit::AuditDestination;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::access_log::AccessLogFault;
 use ferrofed_server::config::settings::Settings;

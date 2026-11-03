@@ -54,12 +54,12 @@ use http::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 
 use crate::admin::Operator;
+use crate::config::tree::diff;
 use crate::error::{self, Code};
 use crate::reload::Reloader;
 use crate::request_id;
 use crate::revision::service::confirm::{APPROVED, CONFIRMED};
 use crate::revision::service::{APPLIED, ROLLED_BACK, RevisionError, Revisions, SAVED, held_table};
-use crate::revision::tree::diff;
 use ferrofed_operator_api::revision::{
     Applied, Author, Current, Diff, Origin, Revision, RevisionId, Standing,
 };

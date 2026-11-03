@@ -48,17 +48,17 @@ use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
-use crate::audit::config::AuditSettings;
+use crate::config::audit::AuditSettings;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::resolve::localization_budget_ms;
+use crate::config::service;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
 use crate::config::{Config, Credentials, transport};
 use crate::federation::DemographicsStep;
 use crate::federation::error::FederationError;
-use crate::service;
 
 /// The key of the table.
 pub const PDQM_KEY: &str = "pdqm";

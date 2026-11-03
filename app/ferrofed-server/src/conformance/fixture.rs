@@ -16,7 +16,6 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
@@ -29,6 +28,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::conformance::Failure;
+use crate::digest::sha256;
 
 /// The example arc every synthetic patient's namespace lies in (ITU-T
 /// X.660, ISO/IEC 9834).
@@ -526,18 +526,6 @@ impl fmt::Debug for SeedData {
             .field("clinic_bytes", &self.clinic.len())
             .finish()
     }
-}
-
-/// Returns the hexadecimal SHA-256 digest of `bytes` (FIPS 180-4).
-#[must_use]
-pub fn sha256(bytes: &[u8]) -> String {
-    aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, bytes)
-        .as_ref()
-        .iter()
-        .fold(String::new(), |mut hex, byte| {
-            let _hex_written = write!(hex, "{byte:02x}");
-            hex
-        })
 }
 
 /// The composer line of the vendored hospital composition.

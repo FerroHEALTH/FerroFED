@@ -23,15 +23,15 @@ use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::pixm::Invocation;
 use serde::Deserialize;
 
-use crate::audit::config::AuditSettings;
 use crate::config::Credentials;
+use crate::config::audit::AuditSettings;
 use crate::config::error::Error;
+use crate::config::service;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::tls::TlsSettings;
 use crate::config::transport;
 use crate::federation::error::FederationError;
-use crate::service;
 
 /// The PIXm resolver: the identity binding of N3 over ITI-83 (Annex A.1).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]

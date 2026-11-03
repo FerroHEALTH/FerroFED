@@ -250,7 +250,7 @@ fn transport(
     endpoint: &EndpointId,
     tls: &TlsSettings,
 ) -> Result<NodeTransport, FederationError> {
-    let material = crate::service::tls_of(&format!("credentials.{endpoint}"), tls)
+    let material = crate::config::service::tls_of(&format!("credentials.{endpoint}"), tls)
         .map_err(FederationError::Tls)?;
     let failed =
         |source: Box<dyn std::error::Error + Send + Sync>| FederationError::NodeTransport {

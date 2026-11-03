@@ -160,7 +160,8 @@ impl Default for Retention {
 ///
 /// Its codes are a deployment's endpoint ids, so its `content` is
 /// `not-present` and it lists none.
-pub const ORIGIN_SYSTEM_DEFINITION: &str = include_str!("CodeSystem-access-log-origin.json");
+pub const ORIGIN_SYSTEM_DEFINITION: &str =
+    include_str!("../access/CodeSystem-access-log-origin.json");
 
 /// `[access_log.labels]`, as the configuration writes it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -265,7 +266,7 @@ pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
         &table.archetypes,
     )
     .map_err(AccessLogFault::Map)?;
-    let digest = crate::conformance::fixture::sha256(map.canonical().as_bytes());
+    let digest = crate::digest::sha256(map.canonical().as_bytes());
     let map = map.with_digest(format!("sha256:{digest}"));
     let retention = RetentionPolicy::declare(
         table.retention.years,

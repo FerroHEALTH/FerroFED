@@ -65,11 +65,11 @@ use crate::binding::nl::NlGfSettings;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::resolve::localization_budget_ms;
+use crate::config::service;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::{Scheme, Settings};
 use crate::config::{Config, Credentials, transport};
 use crate::federation::error::FederationError;
-use crate::service;
 use ferrohealth_secret::file::read_secret;
 
 /// The key of the Mitz table.

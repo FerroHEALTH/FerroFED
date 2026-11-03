@@ -14,7 +14,7 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use ferrofed_server::access::config::{Labels, ORIGIN_SYSTEM_DEFINITION};
+use ferrofed_server::config::access_log::{Labels, ORIGIN_SYSTEM_DEFINITION};
 use fhir_types::codec::{Json, Object, Path, Value};
 use fhir_types::r4::code_system::CodeSystem;
 

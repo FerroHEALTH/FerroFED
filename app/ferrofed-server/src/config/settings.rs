@@ -95,9 +95,9 @@ pub struct Settings {
     pub signing: Option<SigningSettings>,
     /// The category map every access record is classified with, named by
     /// its digest, and how long each record is kept.
-    pub access_log: crate::access::config::AccessLogSettings,
+    pub access_log: crate::config::access_log::AccessLogSettings,
     /// Where the access records and the IHE binding's BALP records go.
-    pub audit: crate::audit::config::AuditSettings,
+    pub audit: crate::config::audit::AuditSettings,
     /// The store of the configuration revisions, under `config.ui = "managed"`.
     pub revisions: Option<crate::config::revisions::Store>,
     /// How often the running mark of the revision store is read, under
@@ -105,10 +105,14 @@ pub struct Settings {
     pub revision_poll: Duration,
     /// What a revision that changes a credential or a binding section
     /// takes, under `config.ui = "managed"`.
-    pub revision_policy: crate::revision::policy::Policy,
+    pub revision_policy: crate::config::revision_policy::Policy,
     /// The installation report to `FerroPULSE`.
     pub usage_report: ferrohealth_usage_report::section::UsageReportSection,
 }
+
+/// The path of the JWK Set under `{base}`, which `signing.jwks_uri` names
+/// when unset and the gateway serves the signing keys at.
+pub const JWKS_PATH: &str = "/.well-known/jwks.json";
 
 /// The gateway's signing keys, resolved.
 #[derive(Debug, Clone)]

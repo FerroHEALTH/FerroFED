@@ -46,7 +46,7 @@ use url::Url;
 use crate::auth::Gate;
 use crate::auth::refusal::BasicRefusal;
 use crate::binding::ihe::pmir::config::{OnDrain, PmirSettings};
-use crate::service::{self, ServiceAuthError, TlsRefused};
+use crate::config::service::{self, ServiceAuthError, TlsRefused};
 use ferrofed_operator_api::health::Observed;
 use subscription::{RegistryFault, Watch};
 

@@ -193,7 +193,7 @@ fn url(section: &StoredQueries) -> Result<SecretUrl, Error> {
             key: String::from(key),
         })?;
     #[cfg(feature = "postgres")]
-    if !crate::stored::postgres::parses(&url) {
+    if !crate::config::postgres::parses(&url) {
         let key = if section.url_file.is_some() {
             "stored_queries.url_file"
         } else {

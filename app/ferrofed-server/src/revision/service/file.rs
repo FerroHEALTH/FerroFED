@@ -17,8 +17,8 @@ use super::{
 };
 use crate::config::Config;
 use crate::config::error::Error;
+use crate::config::tree::{console_keys, split, with_console_of, without_console};
 use crate::revision::resources::{remove, set, value_at};
-use crate::revision::tree::{console_keys, split, with_console_of, without_console};
 use crate::revision::{Draft, Saved, Swapped};
 
 impl Revisions {

@@ -45,7 +45,6 @@ use jiff::Timestamp;
 use rustls::ClientConfig;
 use rustls_platform_verifier::BuilderVerifierExt;
 use tokio::runtime::Runtime;
-use tokio_postgres::config::{Host, SslMode};
 use tokio_postgres::{Client, Config, Row};
 use tokio_postgres_rustls::MakeRustlsConnect;
 
@@ -158,40 +157,6 @@ pub(crate) type Prepare = for<'c> fn(&'c mut Client) -> Statement<'c, ()>;
 pub(crate) struct Connection {
     jobs: Sender<Job>,
 }
-/// Whether `url` parses as a PostgreSQL connection string, a URL or libpq
-/// key/value pairs.
-#[must_use]
-pub fn parses(url: &SecretUrl) -> bool {
-    // NOTE: no specification governs this: our own design; a parse failure is
-    // the answer here, and its message may quote the secret.
-    Config::from_str(url.expose()).is_ok()
-}
-
-/// Whether the connection `url` names sends a password over a network
-/// without requiring TLS.
-///
-/// The driver reads `sslmode` as `disable`, `prefer` (its default) or
-/// `require`, and refuses any other value, so only `require` encrypts for
-/// certain; the connector then verifies the server against the platform's
-/// roots. A connection whose every host is a Unix socket, with no `hostaddr`,
-/// crosses no network.
-/// A string that does not parse cannot be shown to require TLS, so it counts
-/// as exposing its password.
-#[must_use]
-pub fn exposes_password(url: &SecretUrl) -> bool {
-    let Ok(config) = Config::from_str(url.expose()) else {
-        return true;
-    };
-    let networked = !config.get_hostaddrs().is_empty()
-        || config
-            .get_hosts()
-            .iter()
-            .any(|host| !matches!(host, Host::Unix(_)));
-    config.get_password().is_some()
-        && networked
-        && !matches!(config.get_ssl_mode(), SslMode::Require)
-}
-
 impl Connection {
     /// Connects to the database `url` names on a thread named `name`,
     /// running `prepare` first, so a database that cannot be reached or
@@ -522,23 +487,10 @@ fn fault<E>(field: Field, kind: FieldFault) -> impl FnOnce(E) -> StoreError {
 
 #[cfg(test)]
 mod tests {
-    use super::{MIGRATION_1, PostgresError, PostgresStore, migration, parses};
+    use super::{MIGRATION_1, PostgresError, PostgresStore, migration};
     use crate::stored::schema::{CURRENT, SchemaError};
     use ferrofed_registry::definition::store::StoreError;
     use ferrohealth_secret::secret_url::SecretUrl;
-
-    #[test]
-    fn a_url_and_libpq_pairs_parse_and_garbage_does_not() {
-        for parsed in [
-            "postgres://ferrofed:secret@db.example.org:5432/ferrofed?sslmode=require",
-            "host=db.example.org user=ferrofed password=secret dbname=ferrofed",
-        ] {
-            assert!(parses(&SecretUrl::new(parsed)), "{parsed}");
-        }
-        for refused in ["postgres://a:b@host:notaport/db", "host='unterminated"] {
-            assert!(!parses(&SecretUrl::new(refused)), "{refused}");
-        }
-    }
 
     #[test]
     fn every_version_up_to_the_current_one_has_its_migration() {
