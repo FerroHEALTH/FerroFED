@@ -259,6 +259,8 @@ fn locate<'a>(
     if !matches!(located, owner::Located::Unknown) {
         return Ok(located);
     }
+    // NOTE: §12.5.1 step 4 reads the path alone, so a PUT naming its version only in
+    // If-Match is never located by it; the ambiguity is upstream report T199 on #212.
     Ok(follow_up::path_version(matched)
         .and_then(|version| owner::created_by(snapshot, &version))
         .unwrap_or(owner::Located::Unknown))
