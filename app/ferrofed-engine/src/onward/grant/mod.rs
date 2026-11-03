@@ -13,6 +13,7 @@
 //! grant of Annex B §B.4. No specification governs the grouping: our own
 //! design.
 
+mod cache;
 pub mod client_credentials;
 pub mod exchange;
 pub mod fapi2;

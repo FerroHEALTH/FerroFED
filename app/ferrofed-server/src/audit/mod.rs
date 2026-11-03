@@ -115,15 +115,15 @@ pub type Stopping<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 
 impl Forwarding for FeedAudit {
     fn start(&self) {
-        FeedAudit::start(self);
+        self.delivery().start();
     }
 
     fn stop(&self) -> Stopping<'_> {
-        Box::pin(FeedAudit::stop(self))
+        Box::pin(self.delivery().stop())
     }
 
     fn status(&self) -> Status {
-        FeedAudit::status(self)
+        self.delivery().status()
     }
 }
 

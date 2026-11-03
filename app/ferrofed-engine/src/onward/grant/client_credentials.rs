@@ -8,7 +8,7 @@
 //! N25); an identity service's serves the IHE FHIR client of that service
 //! (IHE IUA ITI-71 §3.71.4.1.2.1, ITI-72 §3.72.4.2).
 //!
-//! A token is cached until [`REFRESH_MARGIN`] before the end of the lifetime
+//! A token is cached until [`REFRESH_MARGIN`](crate::onward::token::REFRESH_MARGIN) before the end of the lifetime
 //! its `expires_in` stated, counted from when the request left. A token with
 //! no stated lifetime, or one shorter than the margin, serves the one
 //! request it was obtained for. One token request per provider runs at a
@@ -18,14 +18,15 @@
 //! governs the caching: our own design.
 
 use std::fmt;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_registry::id::EndpointId;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 
+use crate::onward::grant::cache::TokenCache;
 use crate::onward::keys::KeyRing;
-use crate::onward::token::{self, MAX_ASSERTION_LIFETIME, REFRESH_MARGIN, TokenError};
+use crate::onward::token::{self, MAX_ASSERTION_LIFETIME, TokenError};
 use crate::onward::{Clock, Grant};
 
 /// Whom a [`ClientCredentials`] provider obtains its tokens for, named in
@@ -55,12 +56,6 @@ impl fmt::Display for Recipient {
     }
 }
 
-/// A token in the cache, and when it is replaced.
-struct Cached {
-    credentials: Credentials,
-    refresh_at: Instant,
-}
-
 /// One client-credentials grant, as a [`CredentialsProvider`] for the
 /// client of the service it is for.
 ///
@@ -72,9 +67,7 @@ pub struct ClientCredentials<T> {
     lifetime: Duration,
     transport: T,
     timeout: Duration,
-    clock: Arc<dyn Clock>,
-    cached: Mutex<Option<Cached>>,
-    fetch: tokio::sync::Mutex<()>,
+    cache: TokenCache<Credentials>,
 }
 
 impl<T: Transport> ClientCredentials<T> {
@@ -151,9 +144,7 @@ impl<T: Transport> ClientCredentials<T> {
             lifetime: MAX_ASSERTION_LIFETIME,
             transport,
             timeout,
-            clock,
-            cached: Mutex::new(None),
-            fetch: tokio::sync::Mutex::new(()),
+            cache: TokenCache::new(clock),
         }
     }
 
@@ -163,22 +154,9 @@ impl<T: Transport> ClientCredentials<T> {
         &self.grant
     }
 
-    /// The cached token, when one is still fresh.
-    fn fresh(&self) -> Option<Credentials> {
-        let now = self.clock.now();
-        // NOTE: no specification governs this: our own design; a panic while
-        // the lock was held leaves at worst a stale token, which a 401 drops.
-        let cached = self.cached.lock().unwrap_or_else(PoisonError::into_inner);
-        cached
-            .as_ref()
-            .filter(|cached| now < cached.refresh_at)
-            .map(|cached| cached.credentials.clone())
-    }
-
-    /// Obtains a new token, and caches it when its lifetime outlasts the
-    /// margin.
-    async fn obtain(&self) -> Result<Credentials, TokenError> {
-        let started = self.clock.now();
+    /// Obtains a new token, requested at `started`, and caches it when its
+    /// lifetime outlasts the margin.
+    async fn obtain(&self, started: Instant) -> Result<Credentials, TokenError> {
         let issued = token::request(
             &self.grant,
             self.keys
@@ -188,20 +166,12 @@ impl<T: Transport> ClientCredentials<T> {
             self.timeout,
         )
         .await?;
-        let refresh_at = issued
-            .expires_in
-            .and_then(|lifetime| lifetime.checked_sub(REFRESH_MARGIN))
-            .filter(|left| !left.is_zero())
-            .and_then(|left| started.checked_add(left));
-        let mut cached = self.cached.lock().unwrap_or_else(PoisonError::into_inner);
-        *cached = refresh_at.map(|refresh_at| Cached {
-            credentials: issued.credentials.clone(),
-            refresh_at,
-        });
-        drop(cached);
+        let cached = self
+            .cache
+            .keep(&issued.credentials, started, issued.expires_in);
         tracing::debug!(
             recipient = %self.recipient,
-            cached = refresh_at.is_some(),
+            cached,
             "an onward token was obtained"
         );
         Ok(issued.credentials)
@@ -211,21 +181,14 @@ impl<T: Transport> ClientCredentials<T> {
 #[async_trait::async_trait]
 impl<T: Transport + 'static> CredentialsProvider for ClientCredentials<T> {
     async fn credentials(&self) -> Result<Credentials, CredentialsError> {
-        if let Some(fresh) = self.fresh() {
-            return Ok(fresh);
-        }
-        let fetching = self.fetch.lock().await;
-        if let Some(fresh) = self.fresh() {
-            return Ok(fresh);
-        }
-        let obtained = self.obtain().await;
-        drop(fetching);
-        obtained.map_err(CredentialsError::new)
+        self.cache
+            .token(async |started| self.obtain(started).await)
+            .await
+            .map_err(CredentialsError::new)
     }
 
     fn refused(&self) {
-        let mut cached = self.cached.lock().unwrap_or_else(PoisonError::into_inner);
-        *cached = None;
+        self.cache.clear();
     }
 }
 

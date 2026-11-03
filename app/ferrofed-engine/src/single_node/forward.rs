@@ -35,12 +35,13 @@ use std::fmt;
 
 use crate::conveyance::ConveyanceError;
 use crate::declared::{self, Refusal};
-use crate::dispatch::cap::{Capped, Slot};
+use crate::dispatch::cap::{Capped, Expired, Slot};
 use crate::dispatch::oversized::Oversized;
 use crate::dispatch::reported;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::forwarded::UnlistedParameter;
-use crate::hygiene::{self, Composed, Outbound, Part};
+use crate::hygiene::{self, Composed, Part};
+use crate::single_node::{under, withheld_part};
 use crate::trace_context;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, UPGRADE};
@@ -220,14 +221,8 @@ pub enum ForwardError {
     Capped(#[from] Capped),
     /// The deadline passed before the request left the gateway, so nothing
     /// was sent and the node was never asked (§11.5).
-    #[error("the deadline for endpoint {endpoint} passed before the request was sent")]
-    Expired {
-        /// The endpoint.
-        endpoint: EndpointId,
-        /// What the client runtime reported.
-        #[source]
-        source: Box<ClientError>,
-    },
+    #[error(transparent)]
+    Expired(#[from] Expired),
     /// The node was sent the request and did not answer before the deadline
     /// (§11.2).
     #[error("endpoint {endpoint} did not answer before the deadline")]
@@ -279,6 +274,24 @@ pub enum ForwardError {
     /// what the request may carry and nothing was sent.
     #[error("the request addresses no ITS-REST operation, so it was not sent")]
     Unrouted,
+}
+
+impl ForwardError {
+    /// The error of a request to `endpoint` whose call options could not
+    /// be built: the caller's identity unsigned, or a header the client
+    /// refuses.
+    pub(crate) fn of_options(endpoint: &EndpointId, error: OptionsError) -> Self {
+        match error {
+            OptionsError::Conveyance(source) => Self::Conveyance {
+                endpoint: endpoint.clone(),
+                source,
+            },
+            OptionsError::Client(source) => Self::Compose {
+                endpoint: endpoint.clone(),
+                source: Box::new(source),
+            },
+        }
+    }
 }
 
 /// How a request's declared values are held to its operation:
@@ -501,16 +514,7 @@ impl<T: Transport + Clone> NodeClient<T> {
         outgoing.headers_mut().extend(headers);
         let call = options
             .call_options(self.endpoint())
-            .map_err(|error| match error {
-                OptionsError::Conveyance(source) => ForwardError::Conveyance {
-                    endpoint: self.endpoint().clone(),
-                    source,
-                },
-                OptionsError::Client(source) => ForwardError::Compose {
-                    endpoint: self.endpoint().clone(),
-                    source: Box::new(source),
-                },
-            })?;
+            .map_err(|error| ForwardError::of_options(self.endpoint(), error))?;
         outgoing.apply_options(&call);
         if !body.is_empty() {
             outgoing.raw_body(body, None);
@@ -563,17 +567,11 @@ impl<T: Transport + Clone> NodeClient<T> {
                 endpoint: self.endpoint().clone(),
                 source,
             })?;
-        let withheld = options.withheld();
-        if withheld.is_empty() {
+        if options.withheld().is_empty() {
             return Ok(());
         }
         let base = self.base();
-        let mut url = base.clone();
-        url.set_path(&format!(
-            "{}{}",
-            base.path().trim_end_matches('/'),
-            request.path()
-        ));
+        let mut url = under(base, request.path());
         let query = request.query_string();
         url.set_query((!query.is_empty()).then_some(query));
         let mut sent: Vec<(&'static str, String)> = Vec::new();
@@ -591,24 +589,15 @@ impl<T: Transport + Clone> NodeClient<T> {
             .iter()
             .map(|(name, value)| (*name, value.as_str()))
             .collect();
-        let conveyed = options.conveyance().carried();
         let ehr_prefix = format!("{}/ehr/", base.path().trim_end_matches('/'));
         let segment = options
             .composed_ehr_id()
             .map(|ehr_id| path_segment(&ehr_id.as_str()));
-        let outbound = Outbound {
-            aql: "",
-            scope: None,
-            paging: &[],
-            url: &url,
-            composed: Composed {
-                ehr_prefix: &ehr_prefix,
-                ehr_segment: segment.as_deref(),
-            },
-            headers: &headers,
-            conveyed: &conveyed,
+        let composed = Composed {
+            ehr_prefix: &ehr_prefix,
+            ehr_segment: segment.as_deref(),
         };
-        match withheld.found_in(&outbound) {
+        match withheld_part(options, &url, composed, &headers) {
             Some(part) => Err(ForwardError::Withheld {
                 endpoint: self.endpoint().clone(),
                 part,
@@ -640,10 +629,10 @@ impl<T: Transport + Clone> NodeClient<T> {
                 endpoint,
                 source: Box::new(error),
             },
-            ClientError::DeadlineElapsed { .. } => ForwardError::Expired {
+            ClientError::DeadlineElapsed { .. } => ForwardError::Expired(Expired {
                 endpoint,
                 source: Box::new(error),
-            },
+            }),
             ClientError::Transport {
                 source: TransportError::Timeout { .. },
                 ..

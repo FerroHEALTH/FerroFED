@@ -64,7 +64,7 @@ async fn delivered(
     let settled = async {
         loop {
             let messages = repository.messages();
-            let status = audit.status();
+            let status = audit.delivery().status();
             if messages.len() >= count && status.delivered >= expected && status.depth.messages == 0
             {
                 return messages;
@@ -79,7 +79,7 @@ async fn delivered(
                 "{count} messages delivered within {:?}: the repository read {}, the forwarder reports {:?}",
                 timing::HANG,
                 repository.messages().len(),
-                audit.status()
+                audit.delivery().status()
             )
             .into()
         })
@@ -89,7 +89,7 @@ async fn delivered(
 /// attempts, bounded only by [`timing::HANG`].
 async fn retried(audit: &RepositoryAudit, retries: u64) -> Result<(), Box<dyn Error>> {
     let failed = async {
-        while audit.status().retries <= retries {
+        while audit.delivery().status().retries <= retries {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     };
@@ -99,7 +99,7 @@ async fn retried(audit: &RepositoryAudit, retries: u64) -> Result<(), Box<dyn Er
             format!(
                 "a failed attempt after the {retries} before within {:?}: the forwarder reports {:?}",
                 timing::HANG,
-                audit.status()
+                audit.delivery().status()
             )
             .into()
         })
@@ -155,7 +155,11 @@ async fn each_discovery_reaches_the_repository_as_one_iti_20_message() -> TestRe
         !message.contains(PATIENT_VALUE),
         "the identifier travels only base64-encoded inside the query"
     );
-    assert_eq!(0, audit.status().depth.messages, "delivered, not held");
+    assert_eq!(
+        0,
+        audit.delivery().status().depth.messages,
+        "delivered, not held"
+    );
     Ok(())
 }
 
@@ -174,13 +178,13 @@ async fn a_stopped_recorder_closes_its_connection_and_its_last_message_arrives()
         ));
     }
     let status = async {
-        while audit.status().delivered < 2 {
+        while audit.delivery().status().delivered < 2 {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     };
     tokio::time::timeout(timing::HANG, status).await?;
 
-    tokio::time::timeout(timing::HANG, audit.stop()).await?;
+    tokio::time::timeout(timing::HANG, audit.delivery().stop()).await?;
     let endings = repository.wait_for_endings(1, timing::HANG).await;
     assert_eq!(
         vec![Ending::CloseNotify],
@@ -240,11 +244,15 @@ async fn a_repository_that_is_down_delays_delivery_and_fails_nothing() -> TestRe
     }
     // The outage is observed for at least 300 ms and until an attempt fails
     // after every message is spooled, so a slow host waits longer, not less.
-    let before = audit.status().retries;
+    let before = audit.delivery().status().retries;
     tokio::time::sleep(Duration::from_millis(300)).await;
     retried(&audit, before).await?;
     assert_eq!(repository.messages(), Vec::<String>::new());
-    assert_eq!(3, audit.status().depth.messages, "every message is held");
+    assert_eq!(
+        3,
+        audit.delivery().status().depth.messages,
+        "every message is held"
+    );
 
     repository.set_up(true);
     let messages = delivered(&repository, &audit, 3).await?;
@@ -253,8 +261,8 @@ async fn a_repository_that_is_down_delays_delivery_and_fails_nothing() -> TestRe
         messages.len(),
         "the spool drains once the repository is back"
     );
-    assert_eq!(0, audit.status().depth.messages);
-    assert!(audit.status().reachable);
+    assert_eq!(0, audit.delivery().status().depth.messages);
+    assert!(audit.delivery().status().reachable);
     Ok(())
 }
 
@@ -277,10 +285,10 @@ async fn a_repository_that_hangs_in_the_handshake_is_given_up_and_retried() -> T
     );
     let deadline =
         std::time::Instant::now() + timing::within(TIMEOUTS.connect.saturating_add(TIMEOUTS.send));
-    while audit.status().retries == 0 && std::time::Instant::now() < deadline {
+    while audit.delivery().status().retries == 0 && std::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    let stalled = audit.status();
+    let stalled = audit.delivery().status();
     assert!(
         stalled.retries >= 1,
         "the handshake is given up within the send timeout"
@@ -293,7 +301,7 @@ async fn a_repository_that_hangs_in_the_handshake_is_given_up_and_retried() -> T
     // off, then delivers over a new connection.
     let messages = delivered(&repository, &audit, 1).await?;
     assert_eq!(1, messages.len(), "delivered once the repository answers");
-    assert_eq!(0, audit.status().depth.messages);
+    assert_eq!(0, audit.delivery().status().depth.messages);
     Ok(())
 }
 
@@ -360,14 +368,14 @@ async fn a_forwarder_whose_runtime_ended_is_started_again() -> TestResult {
             .enable_all()
             .build()?;
         runtime.block_on(async {
-            short.start();
+            short.delivery().start();
             tokio::task::yield_now().await;
         });
         Ok(())
     })
     .join()
     .map_err(|_panic| "the short-lived runtime's thread")??;
-    audit.start();
+    audit.delivery().start();
     let frame = sender.frame(
         jiff::Timestamp::now(),
         &secrecy::SecretSlice::from(b"<AuditMessage/>".to_vec()),

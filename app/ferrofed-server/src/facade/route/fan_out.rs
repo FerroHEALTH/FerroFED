@@ -454,7 +454,7 @@ fn outcome(
             latency_ms,
             error: error("no answer before the deadline".to_owned()),
         },
-        Err(ForwardError::Expired { .. }) => Outcome::TimeOut {
+        Err(ForwardError::Expired(_)) => Outcome::TimeOut {
             latency_ms,
             error: error(
                 "no answer before the deadline, which passed before the request was sent"

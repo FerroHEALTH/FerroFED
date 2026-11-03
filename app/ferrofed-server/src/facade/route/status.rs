@@ -33,7 +33,7 @@ pub(crate) fn answered(status: StatusCode, refused: bool) -> EndpointStatus {
 /// could not be reached, and `node-error` otherwise.
 pub(crate) fn unanswered(failure: &ForwardError) -> EndpointStatus {
     match failure {
-        ForwardError::TimeOut { .. } | ForwardError::Expired { .. } | ForwardError::Capped(_) => {
+        ForwardError::TimeOut { .. } | ForwardError::Expired(_) | ForwardError::Capped(_) => {
             EndpointStatus::TimeOut
         }
         ForwardError::Unreachable { .. } => EndpointStatus::Offline,

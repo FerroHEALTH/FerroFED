@@ -536,7 +536,7 @@ async fn a_forward_whose_deadline_passed_before_it_left_is_expired_and_never_sen
         .forward(request(Method::GET, &at, HeaderMap::new(), b""), &passed)
         .await;
     assert!(
-        matches!(&forwarded, Err(ForwardError::Expired { .. })),
+        matches!(&forwarded, Err(ForwardError::Expired(_))),
         "§11.5: the node was never asked: {forwarded:?}"
     );
     assert_eq!(Contact::Unsent, Contact::of_forwarded(&forwarded));

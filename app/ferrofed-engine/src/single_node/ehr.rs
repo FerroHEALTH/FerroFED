@@ -23,9 +23,10 @@ use openehr_rm::v1_2::ehr::ehr::Ehr;
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 
 use crate::conveyance::ConveyanceError;
-use crate::dispatch::cap::Capped;
+use crate::dispatch::cap::{Capped, Expired};
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
-use crate::hygiene::{Composed, Outbound, Part};
+use crate::hygiene::{Composed, Part};
+use crate::single_node::{under, withheld_part};
 use crate::trace_context;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::StatusCode;
@@ -56,14 +57,8 @@ pub enum EhrCallError {
     Capped(#[from] Capped),
     /// The deadline passed before the request left the gateway, so nothing
     /// was sent and the node was never asked (§11.5).
-    #[error("the deadline for endpoint {endpoint} passed before the request was sent")]
-    Expired {
-        /// The endpoint.
-        endpoint: EndpointId,
-        /// What the client runtime reported.
-        #[source]
-        source: Box<ClientError>,
-    },
+    #[error(transparent)]
+    Expired(#[from] Expired),
     /// The caller's identity could not be signed for the node, so nothing
     /// was sent (§13.1, N24).
     #[error("the caller's identity could not be conveyed to endpoint {endpoint}")]
@@ -291,24 +286,11 @@ impl<T: Transport + Clone> NodeClient<T> {
             .conveyance()
             .holds_own(self.endpoint(), composed.as_ref())
             .map_err(|source| self.options_failure(OptionsError::Conveyance(source)))?;
-        let withheld = options.withheld();
-        if withheld.is_empty() {
+        if options.withheld().is_empty() {
             return Ok(());
         }
-        let base = self.base();
-        let mut url = base.clone();
-        url.set_path(&format!("{}{path}", base.path().trim_end_matches('/')));
-        let conveyed = options.conveyance().carried();
-        let outbound = Outbound {
-            aql: "",
-            scope: None,
-            paging: &[],
-            url: &url,
-            composed: Composed::default(),
-            headers,
-            conveyed: &conveyed,
-        };
-        match withheld.found_in(&outbound) {
+        let url = under(self.base(), path);
+        match withheld_part(options, &url, Composed::default(), headers) {
             Some(part) => Err(EhrCallError::Withheld {
                 endpoint: self.endpoint().clone(),
                 part,
@@ -353,10 +335,10 @@ impl<T: Transport + Clone> NodeClient<T> {
                 endpoint,
                 source: Box::new(error),
             },
-            ClientError::DeadlineElapsed { .. } => EhrCallError::Expired {
+            ClientError::DeadlineElapsed { .. } => EhrCallError::Expired(Expired {
                 endpoint,
                 source: Box::new(error),
-            },
+            }),
             ClientError::Transport {
                 source: TransportError::Timeout { .. },
                 ..

@@ -21,3 +21,37 @@ pub mod native;
 pub mod native_create;
 pub mod native_search;
 pub mod probe;
+
+use url::Url;
+
+use crate::dispatch::DispatchOptions;
+use crate::hygiene::{Composed, Outbound, Part};
+
+/// The URL of a request to `path` under `base`, as the outbound gate reads
+/// it.
+fn under(base: &Url, path: &str) -> Url {
+    let mut url = base.clone();
+    url.set_path(&format!("{}{path}", base.path().trim_end_matches('/')));
+    url
+}
+
+/// The part of a request to `url`, composed as `composed` and carrying
+/// `headers` and the caller claims `options` convey, that holds an
+/// identifier `options` withhold (§5.4.1, N33).
+fn withheld_part(
+    options: &DispatchOptions,
+    url: &Url,
+    composed: Composed<'_>,
+    headers: &[(&'static str, &str)],
+) -> Option<Part> {
+    let conveyed = options.conveyance().carried();
+    options.withheld().found_in(&Outbound {
+        aql: "",
+        scope: None,
+        paging: &[],
+        url,
+        composed,
+        headers,
+        conveyed: &conveyed,
+    })
+}

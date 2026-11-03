@@ -589,7 +589,7 @@ pub(crate) fn failed(
             security::forward_withheld(endpoint, *part, logged);
             Code::Internal
         }
-        ForwardError::TimeOut { .. } | ForwardError::Expired { .. } | ForwardError::Capped(_) => {
+        ForwardError::TimeOut { .. } | ForwardError::Expired(_) | ForwardError::Capped(_) => {
             Code::NodeTimeout
         }
         ForwardError::Unreachable { .. } => Code::NodeUnreachable,

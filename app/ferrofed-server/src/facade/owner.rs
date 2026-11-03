@@ -638,9 +638,7 @@ pub fn settled(answers: Vec<(EndpointId, Answer)>, disclosed: bool) -> Settled {
             }
             Answer::Abandoned
             | Answer::Failed(
-                ForwardError::TimeOut { .. }
-                | ForwardError::Expired { .. }
-                | ForwardError::Capped(_),
+                ForwardError::TimeOut { .. } | ForwardError::Expired(_) | ForwardError::Capped(_),
             ) => Silence::TimedOut,
             Answer::Failed(ForwardError::Unreachable { .. }) => Silence::Unreachable,
             Answer::Failed(ForwardError::Refused { .. }) => Silence::Refused,
