@@ -21,7 +21,6 @@
 use std::sync::Arc;
 
 use axum::Json;
-use axum::body::Bytes;
 use axum::extract::{Extension, Path, State};
 use axum::response::{IntoResponse, Response};
 use ferrofed_eehrxf::reserved;
@@ -37,7 +36,7 @@ use http::{HeaderMap, StatusCode};
 use jiff::Timestamp;
 use serde::Deserialize;
 
-use super::{Answer, Managed, answered, body_refused, held, record, refused};
+use super::{ActionBody, Answer, Managed, Shaped, answered, held, record, refused};
 use crate::admin::Operator;
 use crate::config::error::Error;
 use crate::error::{self, Code};
@@ -109,7 +108,7 @@ impl<T: serde::Serialize> Answer for Result<T, ConsoleError> {
 /// The body of a member's save.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct MemberRequest {
+pub(super) struct MemberRequest {
     /// The revision the save is based on, which must be the newest.
     base: Option<RevisionId>,
     /// Why the change is made.
@@ -118,32 +117,35 @@ struct MemberRequest {
     member: ConsoleMember,
 }
 
-/// The members of a member's save.
-const MEMBER_SHAPE: &str = r#"{"base": <revision>, "reason": "<text>", "member": {"organisation": {...}, "node": {...}, "endpoints": [...]}}"#;
-
-/// The body of a member's removal.
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RemoveRequest {
-    /// The revision the removal is based on, which must be the newest.
-    base: Option<RevisionId>,
-    /// Why the change is made.
-    reason: String,
+impl Shaped for MemberRequest {
+    const SHAPE: &'static str = r#"{"base": <revision>, "reason": "<text>", "member": {"organisation": {...}, "node": {...}, "endpoints": [...]}}"#;
 }
 
-/// The members of a member's removal.
-const REMOVE_SHAPE: &str = r#"{"base": <revision>, "reason": "<text>"}"#;
+/// The body of a removal, of a member or of a section.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RemoveRequest {
+    /// The revision the removal is based on, which must be the newest.
+    pub(super) base: Option<RevisionId>,
+    /// Why the change is made.
+    pub(super) reason: String,
+}
+
+impl Shaped for RemoveRequest {
+    const SHAPE: &'static str = r#"{"base": <revision>, "reason": "<text>"}"#;
+}
 
 /// The body of a stored-query version's store.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct QueryRequest {
+pub(super) struct QueryRequest {
     /// The AQL text.
     aql: String,
 }
 
-/// The members of a stored-query version's store.
-const QUERY_SHAPE: &str = r#"{"aql": "<text>"}"#;
+impl Shaped for QueryRequest {
+    const SHAPE: &'static str = r#"{"aql": "<text>"}"#;
+}
 
 /// The members `table`, a revision's configuration, holds under
 /// `[[registry.members]]`.
@@ -448,11 +450,8 @@ pub(super) async fn save_member(
     Extension(operator): Extension<Operator>,
     Path(node): Path<String>,
     headers: HeaderMap,
-    body: Bytes,
+    ActionBody(request): ActionBody<MemberRequest>,
 ) -> Response {
-    let Ok(request) = serde_json::from_slice::<MemberRequest>(&body) else {
-        return body_refused(&headers, MEMBER_SHAPE);
-    };
     if request.member.node.id.as_str() != node {
         return error::response(
             Code::BodyInvalid,
@@ -502,11 +501,8 @@ pub(super) async fn remove_member(
     Extension(operator): Extension<Operator>,
     Path(node): Path<String>,
     headers: HeaderMap,
-    body: Bytes,
+    ActionBody(request): ActionBody<RemoveRequest>,
 ) -> Response {
-    let Ok(request) = serde_json::from_slice::<RemoveRequest>(&body) else {
-        return body_refused(&headers, REMOVE_SHAPE);
-    };
     let Ok(node) = NodeId::new(node) else {
         return error::response(
             Code::BodyInvalid,
@@ -561,12 +557,9 @@ pub(super) async fn store_query(
     Extension(operator): Extension<Operator>,
     Path((name, version)): Path<(String, String)>,
     headers: HeaderMap,
-    body: Bytes,
+    ActionBody(request): ActionBody<QueryRequest>,
 ) -> Response {
     let request_id = request_id::of(&headers).unwrap_or_default().to_owned();
-    let Ok(request) = serde_json::from_slice::<QueryRequest>(&body) else {
-        return body_refused(&headers, QUERY_SHAPE);
-    };
     let state = managed.reloader.state();
     let (Some(definitions), Some(federation)) = (state.definitions(), state.federation()) else {
         return error::fixed(Code::NotImplemented, &request_id);

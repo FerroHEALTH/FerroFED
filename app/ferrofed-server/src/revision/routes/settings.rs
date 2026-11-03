@@ -14,14 +14,13 @@
 
 use std::sync::Arc;
 
-use axum::body::Bytes;
 use axum::extract::{Extension, State};
 use axum::response::Response;
 use ferrofed_operator_api::running::SettingsRequest;
 use http::HeaderMap;
 
 use super::console::{base_table, created, saved_as};
-use super::{Managed, answered, body_refused};
+use super::{ActionBody, Managed, Shaped, answered};
 use crate::admin::Operator;
 use crate::config::load::with_pairs;
 use crate::error::{self, Code};
@@ -32,9 +31,10 @@ use crate::running::catalog;
 /// The save of settings.
 pub const SETTINGS: &str = "/admin/config/settings";
 
-/// The members of a save's body.
-const SETTINGS_SHAPE: &str =
-    r#"{"base": <revision>, "reason": "<text>", "settings": {"<dotted key>": "<value>"}}"#;
+impl Shaped for SettingsRequest {
+    const SHAPE: &'static str =
+        r#"{"base": <revision>, "reason": "<text>", "settings": {"<dotted key>": "<value>"}}"#;
+}
 
 /// `PUT` [`SETTINGS`]: saves a revision on the base the body names with each
 /// of its settings changed, `201` with the revision; it is not applied.
@@ -45,11 +45,8 @@ pub(super) async fn save_settings(
     State(managed): State<Arc<Managed>>,
     Extension(operator): Extension<Operator>,
     headers: HeaderMap,
-    body: Bytes,
+    ActionBody(request): ActionBody<SettingsRequest>,
 ) -> Response {
-    let Ok(request) = serde_json::from_slice::<SettingsRequest>(&body) else {
-        return body_refused(&headers, SETTINGS_SHAPE);
-    };
     let request_id = request_id::of(&headers).unwrap_or_default();
     if request.settings.is_empty() {
         return error::response(Code::BodyInvalid, "the body names no setting", request_id);
