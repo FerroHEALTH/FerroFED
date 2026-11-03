@@ -35,9 +35,6 @@ pub struct Settings {
     pub admin: Vec<ReplicaSettings>,
     /// The console log, the family's `[telemetry]` section.
     pub telemetry: ferrohealth_telemetry::section::TelemetrySection,
-    /// The deprecated keys the configuration set that the console reads no
-    /// more, which `config check` and the start-up log name.
-    pub deprecated: Vec<&'static str>,
 }
 
 /// One resolved `[[admin.replicas]]` entry.
@@ -173,13 +170,6 @@ impl Config {
             oidc,
             admin,
             telemetry: self.telemetry.clone(),
-            deprecated: self
-                .server
-                .site_root
-                .as_ref()
-                .map(|_| "server.site_root")
-                .into_iter()
-                .collect(),
         })
     }
 }

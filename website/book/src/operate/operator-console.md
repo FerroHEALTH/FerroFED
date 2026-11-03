@@ -582,9 +582,9 @@ presents no client certificate, so an admin listener that asks for mutual
 TLS cannot be reached from the console.
 
 The image sets `server.listen` to `0.0.0.0:3000`, runs as the numeric user
-`65532`, and runs `healthcheck` as its `HEALTHCHECK`. `server.site_root` is
-deprecated: the console serves no site bundle, so the key does nothing,
-`config check` warns that it is set, and release 0.0.17 refuses it.
+`65532`, and runs `healthcheck` as its `HEALTHCHECK`. The console serves no
+site bundle, so `server.site_root` is an unknown key, which it refuses by
+name.
 
 ## From the release compose file
 
