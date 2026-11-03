@@ -8,8 +8,8 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `ff1ccf6ae282fe84c0127141f423dbd7ae434337d4f27bc6fafc64a830c39c6a`
-- Fetched: 2026-10-04, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+  the pins): `aa41d180cf81657955611e73da4f36a83c93dd393395d74d1f20a5c664972aef`
+- Fetched: 2026-11-03, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 0 committed, 1 cache only, 0 needing
   manual retrieval
 - Files in this directory: 0 besides this one, each verbatim as the
@@ -30,8 +30,8 @@ provenance alone.
 
 - Source: <https://gemspec.gematik.de/docs/gemSpec/gemSpec_ZETA/gemSpec_ZETA_V1.3.2/>
 - Version: 1.3.2 (26.06.2026)
-- sha256: `463c1cbda7f832d2bb2705ef19927f2957854a5579463829ce95081429ba2347`
+- sha256: `1eaf66b09fd4b57f3bda5d601cbd74a1bc14e5f35ce00b51b40de69b04b4a1fe`
 - Licence: "© 2026 gematik Alle Rechte vorbehalten" (page footer)
 - Not redistributed: the script fetches it into `.vendor-cache/de-gematik-zeta/`, which git
   ignores; this repository carries none of its content.
-- Note: Rendered HTML page whose bytes may change on a re-render; re-fetched on 2026-10-04 with the same sha256.
+- Note: Rendered HTML page whose bytes change on a re-render; re-pinned on 2026-11-03, when a re-render had moved the bytes under an unchanged version label (#1478).

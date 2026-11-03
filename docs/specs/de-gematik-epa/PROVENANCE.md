@@ -8,8 +8,8 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `ec39f57443d348a3e61330a380644c13c5ba5804e11f2a416ba0429ba031114a`
-- Fetched: 2026-10-04, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+  the pins): `87efc96370677f5f61f4d836863292eebcddefc4a961affde56b807ece1ac40b`
+- Fetched: 2026-11-03, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 5 committed, 2 cache only, 0 needing
   manual retrieval
 - Files in this directory: 5 besides this one, each verbatim as the
@@ -33,21 +33,21 @@ vorbehalten" and stay in the cache.
 
 - Source: <https://gemspec.gematik.de/docs/gemILF/gemILF_PS_ePA/gemILF_PS_ePA_V3.8.1/>
 - Version: 3.8.1 (24.03.2026)
-- sha256: `c03d39145f08a4eaffade5cd3a0c033d732efc1aba6d27fb62674393849388d1`
+- sha256: `e65916e0d3bc323f19c43f99a69945798ea57184af3c2fd6bcafaa05928ee134`
 - Licence: "© 2026 gematik Alle Rechte vorbehalten" (page footer)
 - Not redistributed: the script fetches it into `.vendor-cache/de-gematik-epa/`, which git
   ignores; this repository carries none of its content.
-- Note: Rendered HTML page whose bytes may change on a re-render; re-fetched on 2026-10-04 with the same sha256.
+- Note: Rendered HTML page whose bytes change on a re-render; re-pinned on 2026-11-03, when a re-render had moved the bytes under an unchanged version label (#1478).
 
 ### `gemSpec_Aktensystem_ePAfueralle_V1.8.2.html` (cache only, not redistributed)
 
 - Source: <https://gemspec.gematik.de/docs/gemSpec/gemSpec_Aktensystem_ePAfueralle/gemSpec_Aktensystem_ePAfueralle_V1.8.2/>
 - Version: 1.8.2 (14.07.2026)
-- sha256: `9443b45f4a8242174002fb3572d2e0ae8c924b60e39f09642ec089f6c5bd04b1`
+- sha256: `5991f7ba24bf2983604e8ef9c306b9ff27c74a5f62f911b00edc41ed5e203b34`
 - Licence: "© 2026 gematik Alle Rechte vorbehalten" (page footer)
 - Not redistributed: the script fetches it into `.vendor-cache/de-gematik-epa/`, which git
   ignores; this repository carries none of its content.
-- Note: Rendered HTML page whose bytes may change on a re-render; re-fetched on 2026-10-04 with the same sha256.
+- Note: Rendered HTML page whose bytes change on a re-render; re-pinned on 2026-11-03, when a re-render had moved the bytes under an unchanged version label (#1478).
 
 ### `I_Information_Service-ePA-3.1.3.yaml` (committed)
 

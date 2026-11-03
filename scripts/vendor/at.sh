@@ -34,7 +34,7 @@ cd "$root"
 corpus_require curl shasum awk
 pinned_begin
 
-rendered='Rendered HTML page whose bytes may change on a re-render; re-fetched on 2026-10-04 with the same sha256.'
+rendered='Rendered HTML page whose bytes change on a re-render; re-pinned on 2026-11-03, when a re-render had moved the bytes under an unchanged version label (#1478).'
 
 pin commit GTelG2012-20261004.pdf "Fassung vom 04.10.2026" \
   'https://www.ris.bka.gv.at/GeltendeFassung/Bundesnormen/20008120/GTelG%202012%2c%20Fassung%20vom%2004.10.2026.pdf' \
@@ -56,22 +56,22 @@ elga='"Copyright © 2026 ELGA GmbH" (page footer), with the portal'"'"'s AGB at 
 bes='https://developer.elga.gv.at/apis/BeS/v5.5'
 pin cache elga-bes-v5.5-bes_public_aufbau_des_berechtigungssystems.html "BeS v5.5" \
   "$bes/bes/public/aufbau_des_berechtigungssystems/" \
-  9ea022f4d571f7e693e4709994e340c39f3493dea96bdec0a63dbb8f2ba42ba0 "$elga" "$rendered"
+  7e5b0a1cf268b43ae4accb98487946af894da46bfe32f5a40a777f199684b433 "$elga" "$rendered"
 pin cache elga-bes-v5.5-bes_public_schnittstellen_des_berechtigungssystems.html "BeS v5.5" \
   "$bes/bes/public/schnittstellen_des_berechtigungssystems/" \
-  95c22b15c4ff9d343cf23a0ae67cf29109a4352b994556f9e3c3e9c292407c00 "$elga" "$rendered"
+  be717cce52f6fe2d33c80b27d304fba65b6d27d56d8857b600506da570834f1d "$elga" "$rendered"
 pin cache elga-bes-v5.5-bes_public_saml_assertion_uebersicht.html "BeS v5.5" \
   "$bes/bes/public/saml_assertion_uebersicht/" \
-  bec13638636cc289d6570cc9da9a2042e8adb53a476bb330bb0fafdbbdf802f9 "$elga" "$rendered"
+  1be8bea4918e3b578980b152f80dbb7d19340f9fbb2784694e9c13d4be0c05b9 "$elga" "$rendered"
 pin cache elga-bes-v5.5-bes_public_elga_policies.html "BeS v5.5" \
   "$bes/bes/public/elga_policies/" \
-  6680b00182b36a02209bb46c5c53597c7c14d9917954d1b166bd147f80e7aeee "$elga" "$rendered"
+  c62f0e6ff6101f55fd6872f9ef41f3a290cfe65da3a95972f2b9260271b150b1 "$elga" "$rendered"
 pin cache elga-bes-v5.5-ac_public_patientenidentifikation.html "BeS v5.5" \
   "$bes/ac/public/patientenidentifikation/" \
-  99bba37c9848ec21557699a887359c09cc7f1ed2db15433bc5f7dba1e8cb2a04 "$elga" "$rendered"
+  568f7533d547c855a20bc5ea5e0300d0d5ae5c719c84ed74e30a16d320749d22 "$elga" "$rendered"
 pin cache elga-bes-v5.5-ac_public_kontaktbestaetigungen.html "BeS v5.5" \
   "$bes/ac/public/kontaktbestaetigungen/" \
-  d4bc5eb6c75d3aefbfb4d4e8f11a12969d8f6f847771f55d10e62c325c1ca9a9 "$elga" "$rendered"
+  5ead93ba1f8187b06c6908c2a054e86a2a74e684c189330dc57c64d0c833c6de "$elga" "$rendered"
 pinned_corpus at-elga-bes "Austrian ELGA Berechtigungssystem" \
   "the ELGA Berechtigungssystem v5.5 developer pages" \
   "Six pages of the ELGA developer portal on the Berechtigungssystem (ETS,
@@ -80,9 +80,9 @@ identification and contact confirmations for application containers. The
 portal reserves its content to ELGA GmbH, so every page stays in the cache
 and this directory holds the provenance alone." browser
 
-pin cache elga-technischer-aufbau.html "as served on 2026-10-04" \
+pin cache elga-technischer-aufbau.html "as served on 2026-11-03" \
   https://www.elga.gv.at/technischer-hintergrund/technischer-aufbau-im-ueberblick/ \
-  ccefcf215408b6bb390d4150ca8c8b801df16178dc053872159dd8f7096eaf65 \
+  84ad3805e124fe3f2885582658fe0e8474ed2ee8d24adbce1cf4b0a99016eec0 \
   'No licence statement: the page names no licence, and its only copyright line is that of the TYPO3 software it is served with' \
   "$rendered"
 pin cache Digital_Health_Standards_Catalogue_Austria_2026.pdf "2026" \

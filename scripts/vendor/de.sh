@@ -39,18 +39,18 @@ corpus_require curl shasum awk
 pinned_begin
 
 gematik_reserved='"© 2026 gematik Alle Rechte vorbehalten" (page footer)'
-rendered='Rendered HTML page whose bytes may change on a re-render; re-fetched on 2026-10-04 with the same sha256.'
+rendered='Rendered HTML page whose bytes change on a re-render; re-pinned on 2026-11-03, when a re-render had moved the bytes under an unchanged version label (#1478).'
 epa_basic='tag ePA-3.1.3, commit 3186ad27a1a865bc3b9ccbe6a4d4c697883903e6'
 epa_raw='https://raw.githubusercontent.com/gematik/ePA-Basic/3186ad27a1a865bc3b9ccbe6a4d4c697883903e6'
 epa_apache='Apache-2.0: the document'"'"'s info.license is "Apache 2.0" (https://www.apache.org/licenses/LICENSE-2.0), and the repository LICENSE is vendored beside it as ePA-Basic-LICENSE'
 
 pin cache gemILF_PS_ePA_V3.8.1.html "3.8.1 (24.03.2026)" \
   https://gemspec.gematik.de/docs/gemILF/gemILF_PS_ePA/gemILF_PS_ePA_V3.8.1/ \
-  c03d39145f08a4eaffade5cd3a0c033d732efc1aba6d27fb62674393849388d1 \
+  e65916e0d3bc323f19c43f99a69945798ea57184af3c2fd6bcafaa05928ee134 \
   "$gematik_reserved" "$rendered"
 pin cache gemSpec_Aktensystem_ePAfueralle_V1.8.2.html "1.8.2 (14.07.2026)" \
   https://gemspec.gematik.de/docs/gemSpec/gemSpec_Aktensystem_ePAfueralle/gemSpec_Aktensystem_ePAfueralle_V1.8.2/ \
-  9443b45f4a8242174002fb3572d2e0ae8c924b60e39f09642ec089f6c5bd04b1 \
+  5991f7ba24bf2983604e8ef9c306b9ff27c74a5f62f911b00edc41ed5e203b34 \
   "$gematik_reserved" "$rendered"
 pin commit I_Information_Service-ePA-3.1.3.yaml "$epa_basic, API 1.5.1" \
   "$epa_raw/src/openapi/I_Information_Service.yaml" \
@@ -79,7 +79,7 @@ vorbehalten\" and stay in the cache."
 
 pin cache gemSpec_VZD_FHIR_Directory_V1.7.0.html "1.7.0 (17.02.2026)" \
   https://gemspec.gematik.de/docs/gemSpec/gemSpec_VZD_FHIR_Directory/gemSpec_VZD_FHIR_Directory_V1.7.0/ \
-  bd8d56eb36eeff9ee65ce5b4a5562e9914a79466dae1b0a4d2c6b53b4f0b54dd \
+  4783fd207194ccbd31998291900cdb0dc3fdffa624da1698c1fccd59318e2a7f \
   "$gematik_reserved" "$rendered"
 pin commit de.gematik.fhir.directory-1.3.0.tgz "1.3.0" \
   https://packages.simplifier.net/de.gematik.fhir.directory/1.3.0 \
@@ -105,7 +105,7 @@ page stays in the cache."
 
 pin cache gemSpec_ZETA_V1.3.2.html "1.3.2 (26.06.2026)" \
   https://gemspec.gematik.de/docs/gemSpec/gemSpec_ZETA/gemSpec_ZETA_V1.3.2/ \
-  463c1cbda7f832d2bb2705ef19927f2957854a5579463829ce95081429ba2347 \
+  1eaf66b09fd4b57f3bda5d601cbd74a1bc14e5f35ce00b51b40de69b04b4a1fe \
   "$gematik_reserved" "$rendered"
 pinned_corpus de-gematik-zeta "German ZETA (gematik)" \
   "the gematik Zero Trust Access specification" \
