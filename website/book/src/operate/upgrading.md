@@ -97,12 +97,22 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
+### To v0.0.16, from v0.0.15
+
+- Write `server.public_url`, `server.replica` and
+  `server.bindings_drain_timeout_ms` as `gateway.public_url`,
+  `gateway.replica` and `gateway.bindings_drain_timeout_ms`, and
+  `server.overload_retry_after_s` as `server.retry_after_s`, with the
+  `FERROFED__` overrides to match. This release refuses each old key at
+  start-up and in `config check`, naming it, as it refuses any unknown key
+  (#1490).
+
 ### To v0.0.15, from v0.0.14
 
 - Move `server.public_url`, `server.replica` and
   `server.bindings_drain_timeout_ms` to a new `[gateway]` table, and rename
-  `server.overload_retry_after_s` to `server.retry_after_s`. This release
-  still reads each old key and names it in `config check` and the start-up
+  `server.overload_retry_after_s` to `server.retry_after_s`. That release
+  still read each old key and named it in `config check` and the start-up
   log; FerroFED 0.0.16 refuses it. The `FERROFED__` overrides follow, as
   `FERROFED__GATEWAY__PUBLIC_URL` (#1408).
 - Remove `base_path = "/"`, or write `base_path = ""`: the root is the

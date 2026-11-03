@@ -90,7 +90,7 @@ async fn learned_and_bound(dir: &std::path::Path) -> Result<Arc<AppState>, Box<d
         &registry(&a.uri(), &b.uri(), ""),
         "profile = \"development\"",
         &format!(
-            "{}\n\n[server]\nreplica = \"{REPLICA}\"\n",
+            "{}\n\n[gateway]\nreplica = \"{REPLICA}\"\n",
             crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
         ),
         (2_000, 3_000),

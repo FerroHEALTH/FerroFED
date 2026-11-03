@@ -353,7 +353,7 @@ managing_organisation = "org-a"
             .collect::<Vec<_>>()
             .join(", ");
         let text = format!(
-            "profile = \"development\"\n\n[server]\npublic_url = \"https://gw.example.org\"\n\n\
+            "profile = \"development\"\n\n[gateway]\npublic_url = \"https://gw.example.org\"\n\n\
              [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
              node_selection = \"ask-all\"\n\n\
              [[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/\"\n\n\

@@ -122,18 +122,18 @@ pub(crate) fn state(
     state_serving(dir, (registry, federation), "")
 }
 
-/// The state [`state`] builds, with `server` in its `[server]` table.
+/// The state [`state`] builds, with `gateway` in its `[gateway]` table.
 pub(crate) fn state_serving(
     dir: &Path,
     (registry, federation): (&str, &str),
-    server: &str,
+    gateway: &str,
 ) -> Result<Arc<AppState>, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let store = toml::Value::String(dir.join("definitions.redb").display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[server]\n{server}\n\n[registry]\ndocument = {document}\n\n\
+        "profile = \"development\"\n\n[gateway]\n{gateway}\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
          per_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n{federation}\n\n\
          [stored_queries]\npath = {store}\n{}",

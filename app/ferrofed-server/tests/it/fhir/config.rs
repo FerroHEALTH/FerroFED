@@ -22,8 +22,8 @@ use super::{FHIR, PUBLIC, TestResult, UNREACHED_SUPPLIER, fhir_tables};
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 
 /// The configuration of a gateway over a registry document in `dir`, with
-/// `server` as its `[server]` keys and `fhir` as its `[fhir]` tables.
-fn resolved(dir: &Path, server: &str, fhir: &str) -> Result<(), Error> {
+/// `gateway` as its `[gateway]` keys and `fhir` as its `[fhir]` tables.
+fn resolved(dir: &Path, gateway: &str, fhir: &str) -> Result<(), Error> {
     let document = dir.join("registry.toml");
     std::fs::write(
         &document,
@@ -38,7 +38,7 @@ fn resolved(dir: &Path, server: &str, fhir: &str) -> Result<(), Error> {
     })?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[server]\n{server}\n\n[registry]\ndocument = {document}\n\n\
+        "profile = \"development\"\n\n[gateway]\n{gateway}\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\n{fhir}"
     );
     Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?
@@ -213,7 +213,7 @@ fn a_mapping_that_does_not_compile_or_read_is_refused() -> TestResult {
 #[test]
 fn a_face_with_no_registry_is_refused() -> TestResult {
     let text = format!(
-        "profile = \"development\"\n\n[server]\n{}\n{}",
+        "profile = \"development\"\n\n[gateway]\n{}\n{}",
         public(),
         fhir_tables(UNREACHED_SUPPLIER)
     );
