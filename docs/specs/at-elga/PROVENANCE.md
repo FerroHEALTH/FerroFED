@@ -8,8 +8,8 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `08326503145045a59936fd3b2780d9a570de4fc087676603f044e54572db4374`
-- Fetched: 2026-10-04, with the User-Agent `Mozilla/5.0`
+  the pins): `1056aadafce195494be7d65625ac77dd42141df0e4312464dda3029b8d662e7f`
+- Fetched: 2026-11-03, with the User-Agent `Mozilla/5.0`
 - Artefacts: 0 committed, 2 cache only, 0 needing
   manual retrieval
 - Files in this directory: 0 besides this one, each verbatim as the
@@ -30,12 +30,12 @@ alone.
 ### `elga-technischer-aufbau.html` (cache only, not redistributed)
 
 - Source: <https://www.elga.gv.at/technischer-hintergrund/technischer-aufbau-im-ueberblick/>
-- Version: as served on 2026-10-04
-- sha256: `ccefcf215408b6bb390d4150ca8c8b801df16178dc053872159dd8f7096eaf65`
+- Version: as served on 2026-11-03
+- sha256: `84ad3805e124fe3f2885582658fe0e8474ed2ee8d24adbce1cf4b0a99016eec0`
 - Licence: No licence statement: the page names no licence, and its only copyright line is that of the TYPO3 software it is served with
 - Not redistributed: the script fetches it into `.vendor-cache/at-elga/`, which git
   ignores; this repository carries none of its content.
-- Note: Rendered HTML page whose bytes may change on a re-render; re-fetched on 2026-10-04 with the same sha256.
+- Note: Rendered HTML page whose bytes change on a re-render; re-pinned on 2026-11-03, when a re-render had moved the bytes under an unchanged version label (#1478).
 
 ### `Digital_Health_Standards_Catalogue_Austria_2026.pdf` (cache only, not redistributed)
 

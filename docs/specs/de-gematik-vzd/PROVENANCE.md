@@ -8,8 +8,8 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `099fb9c34136d4c7de5b9b95f07e6efda0c9b667cb19e17075d431e7b65fb562`
-- Fetched: 2026-10-04, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+  the pins): `cae31b8824c9b4100dd44f25ecf6fa0ac742d7f3cacebcddaee45d9526a93ea9`
+- Fetched: 2026-11-03, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 3 committed, 1 cache only, 0 needing
   manual retrieval
 - Files in this directory: 3 besides this one, each verbatim as the
@@ -32,11 +32,11 @@ page stays in the cache.
 
 - Source: <https://gemspec.gematik.de/docs/gemSpec/gemSpec_VZD_FHIR_Directory/gemSpec_VZD_FHIR_Directory_V1.7.0/>
 - Version: 1.7.0 (17.02.2026)
-- sha256: `bd8d56eb36eeff9ee65ce5b4a5562e9914a79466dae1b0a4d2c6b53b4f0b54dd`
+- sha256: `4783fd207194ccbd31998291900cdb0dc3fdffa624da1698c1fccd59318e2a7f`
 - Licence: "© 2026 gematik Alle Rechte vorbehalten" (page footer)
 - Not redistributed: the script fetches it into `.vendor-cache/de-gematik-vzd/`, which git
   ignores; this repository carries none of its content.
-- Note: Rendered HTML page whose bytes may change on a re-render; re-fetched on 2026-10-04 with the same sha256.
+- Note: Rendered HTML page whose bytes change on a re-render; re-pinned on 2026-11-03, when a re-render had moved the bytes under an unchanged version label (#1478).
 
 ### `de.gematik.fhir.directory-1.3.0.tgz` (committed)
 

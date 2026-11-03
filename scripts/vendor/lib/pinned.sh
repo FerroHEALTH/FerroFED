@@ -30,6 +30,12 @@
 # digest and fetches nothing, which is how a re-pin reads the digest it
 # writes into docs/VERSIONS.md.
 #
+# With PINNED_ONLY set to a space-separated list of corpus directories, a
+# script checks every corpus's pins against docs/VERSIONS.md and fetches and
+# writes only the listed ones, so one corpus can be re-pinned while another
+# of the same script cannot be fetched (a publisher answering with a bot
+# check) and keeps its tree.
+#
 # Requires: curl, shasum, awk, and scripts/vendor/lib/corpus.sh sourced first.
 #
 # No specification governs this file; it is FerroFED's own design.
@@ -124,6 +130,10 @@ pinned_corpus() {
   [ -n "$want" ] || die "the '$item' row of $corpus_matrix names no pin-set digest"
   [ "$digest" = "$want" ] \
     || die "$dir: the pins have pin-set digest $digest, $corpus_matrix records $want"
+  if [ -n "${PINNED_ONLY:-}" ] && ! grep -qxF "$dir" <<< "${PINNED_ONLY// /$'\n'}"; then
+    say "$dir: not in PINNED_ONLY, left as it is"
+    return 0
+  fi
 
   tmp="$pinned_scratch/$dir"
   mkdir -p "$tmp"

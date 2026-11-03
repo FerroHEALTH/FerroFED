@@ -44,34 +44,34 @@ live='A rendered page of a live portal; an edit or a re-render moves the hash.'
 
 pin cache no-pjd-iti83.html "published 28.08.2026" \
   "$pjd/endpoints/iti83_patientidentifierxreferencequerymd" \
-  561508b2d218aa9285acee82fa46c6c76fcc7e1b6cee4c09ef9cb54f641f81da "$none" "$live"
+  7691a9369a6d796292d424c44de2499d46284a4b9e09da91d6dac7a281caa1de "$none" "$live"
 pin cache no-pjd-iti104.html "published 28.08.2026" \
   "$pjd/endpoints/iti104_patientidentityfeedmd" \
-  24404205d106bec5137a1f5ec4b1dbabe39eaca60a91bcbc130b9bcd0342d4e9 "$none" "$live"
+  d983a34567af97c218d13b94fb661bb9886b95484ae01621b98259cdd7e3e499 "$none" "$live"
 pin cache no-pjd-introduction.html "published 28.08.2026" \
   "$pjd/introduction-en-md" \
-  4ec272c6e04e2eaeebaa683ac331e46d2bfd56f30b0b9000fedbf50b8b6cf7e3 "$none" "$live"
+  b23920305cfd37191216bd6456484bfa93c494437161b4f10743ffd71f305aa8 "$none" "$live"
 pin cache no-pjd-jwt2saml.html "published 28.08.2026" \
   "$pjd/jwt2samlspecificationmd" \
-  70573bfd42ca325feae7555567ea2b678c558cf68e0c670f14083e07d5b2c3d5 "$none" "$live"
+  e23a5e33842ee11145b9f9713a83e4ccb2c484feb2b21a9db4abbce51502de6e "$none" "$live"
 pin cache no-helseid-security-profile.html "published 04.05.2026" \
   "$helseid/protokoller-og-sikkerhetsprofil/sikkerhetsprofil/docs/sikkerhetsprofil_enmd" \
-  9e99c5f493e142eae7d977d428c6f66c4dbf2aa42e74ccb9e43ca61d23c8ac8d "$none" "$live"
+  f24c660231d777dcb2db87a8857c0a3ae9fb6a0788cb3ebe0c9ce0beeb48f268 "$none" "$live"
 pin cache no-helseid-crypto.html "published 05.05.2026" \
   "$helseid/protokoller-og-sikkerhetsprofil/sikkerhetsprofil/docs/vedlegg/krav_til_kryptografi_enmd" \
-  2161b50d32d3143549cac0bc441b5e035edde72e3a32a9a225b442f3e5a88d13 "$none" "$live"
+  9c08a105c3a74ec0bd3dca1b302e09c62835f2f80b07fbc615f4b7aca7532c74 "$none" "$live"
 pin cache no-helseid-dpop.html "published 15.04.2026" \
   "$helseid/bruksmoenstre-og-eksempelkode/bruk-av-helseid/docs/dpop/dpop_enmd" \
-  930a5a5620a834907433115552e7fb43d100bf905b4fc02e02da4a0eb4038dfd "$none" "$live"
+  f7a9b43eb579ddde7fa5fab434a032dc179c5541330a10428499b063a114f213 "$none" "$live"
 pin cache no-helseid-token-exchange.html "published 27.04.2026" \
   "$helseid/bruksmoenstre-og-eksempelkode/bruk-av-helseid/docs/teknisk-referanse/token_exchange_enmd" \
-  f11f24294f93cd51f4a78d9e8818f3d30a1454a861bf74883a1800b53be287b1 "$none" "$live"
-pin cache no-helseid-token-endpoint.html "as served on 2026-10-04" \
+  e5d0e6b76704972fc6467566b43bf3af595de3ed12c01762ff00e19b892aa87f "$none" "$live"
+pin cache no-helseid-token-endpoint.html "as served on 2026-11-03" \
   "$helseid/bruksmoenstre-og-eksempelkode/bruk-av-helseid/docs/teknisk-referanse/endepunkt/token-endepunktet_enmd" \
-  1cea97865390deb4c2f3815fa68ac9eb689f7872247f935f95b83711fa005632 "$none" "$live"
-pin cache no-deling-av-journaldokumenter.html "as served on 2026-10-04" \
+  9263611dabacb3ef1030764d506120cf458beefe7da76a4b39ba741f495edd50 "$none" "$live"
+pin cache no-deling-av-journaldokumenter.html "as served on 2026-11-03" \
   "$portal/deling-av-journaldokumenter" \
-  9adfde76dc15ba60f4269cce35403ec63e9770f4a9d389db007becf6eac0c955 "$none" "$live"
+  4ffb644138bc95d301eea00f03403c7b70e9f5a1809a4874a40256b38d1ecf14 "$none" "$live"
 pinned_corpus no-nhn "Norwegian NHN developer portal" \
   "the Norsk helsenett developer portal pages" \
   "The Pasientens journaldokumenter REST API (PIXm ITI-83 and ITI-104 at
