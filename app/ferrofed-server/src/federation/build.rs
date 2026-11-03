@@ -59,44 +59,35 @@ impl Federation {
     }
 
     /// Builds the federation `settings` describe over `document`, the
-    /// registry document [`read_registry`] read from the same settings.
+    /// registry document [`read_registry`] read from the same settings, or,
+    /// after a registry reload, read again or refreshed from the care services
+    /// directory.
     ///
     /// The boot reads the document once, describes it in the startup banner,
-    /// and builds over it here, so the gateway serves the document the banner
-    /// described. The checks are [`Federation::load`]'s, in the same order.
+    /// and builds over it here with no `previous`, so the gateway serves the
+    /// document the banner described. The checks are [`Federation::load`]'s,
+    /// in the same order.
+    ///
+    /// A reload builds in place of `previous`. The new federation has its own
+    /// snapshot, node clients and resolver, and keeps what `previous` learned:
+    /// the resolution bindings, the `ehr_id` index and the learned
+    /// `creating_system_id` map, which [`Federation::reconcile`] then holds to
+    /// the new snapshot, and records its node requests through the instruments
+    /// of `previous`. `previous` is unchanged, so a request that took it
+    /// finishes on it.
     ///
     /// # Errors
     /// Returns the [`FederationError`] [`Federation::load`] returns, the
     /// read's own error included.
-    pub fn load_read(
+    pub fn build(
         settings: &Settings,
         document: Option<Result<RegistrySnapshot, FederationError>>,
+        previous: Option<&Self>,
     ) -> Result<Option<Self>, FederationError> {
-        Self::assemble(settings, document, None)
-    }
-
-    /// Builds the federation `settings` describe after a registry reload over
-    /// `document`, the registry [`read_registry`] read again or a refresh of
-    /// the care services directory read, checked as [`Federation::load_read`]
-    /// checks it at boot.
-    ///
-    /// The new federation has its own snapshot, node clients and resolver,
-    /// and keeps what this one learned: the resolution bindings, the `ehr_id`
-    /// index and the learned `creating_system_id` map, which
-    /// [`Federation::reconcile`] then holds to the new snapshot, and records
-    /// its node requests through this one's instruments. This federation is
-    /// unchanged, so a request that took it finishes on it.
-    ///
-    /// # Errors
-    /// Returns the [`FederationError`] [`Federation::load_read`] returns for
-    /// the same settings and document.
-    pub fn reloaded(
-        &self,
-        settings: &Settings,
-        document: Option<Result<RegistrySnapshot, FederationError>>,
-    ) -> Result<Option<Self>, FederationError> {
-        let mut next = Self::assemble(settings, document, Some(Arc::clone(&self.observed)))?;
-        if let (Some(next), Some(instruments)) = (next.as_mut(), self.requests.instruments()) {
+        let observed = previous.map(|previous| Arc::clone(&previous.observed));
+        let mut next = Self::assemble(settings, document, observed)?;
+        let instruments = previous.and_then(|previous| previous.requests.instruments());
+        if let (Some(next), Some(instruments)) = (next.as_mut(), instruments) {
             next.meter(instruments.clone());
         }
         Ok(next)

@@ -52,15 +52,21 @@ const CREDENTIAL_WORDS: &[&str] = &[
 /// keeps.
 const TOKEN_LENGTH: usize = 40;
 
-/// Returns `tree` with every key and value [this module](self) does not
-/// know to be safe replaced by [`REDACTED`].
-#[must_use]
-pub fn redact(tree: &toml::Table) -> toml::Table {
-    redact_table(tree, false)
+/// What the keys of a table name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Keys {
+    /// Settings, each shown when it is one of [`KNOWN_KEYS`]: the tree of
+    /// the configuration file.
+    Settings,
+    /// Data, each replaced: a table of [`DATA_KEYED`].
+    Data,
 }
 
-/// Returns `table` redacted; `data_keyed` when its keys are data.
-fn redact_table(table: &toml::Table, data_keyed: bool) -> toml::Table {
+/// Returns `table`, whose keys name `keys`, with every key and value [this
+/// module](self) does not know to be safe replaced by [`REDACTED`].
+#[must_use]
+pub fn redact(table: &toml::Table, keys: Keys) -> toml::Table {
+    let data_keyed = keys == Keys::Data;
     table
         .iter()
         .enumerate()
@@ -83,9 +89,14 @@ fn redact_table(table: &toml::Table, data_keyed: bool) -> toml::Table {
 /// Returns `value`, held under `key`, redacted.
 fn redact_value(key: &str, value: &toml::Value) -> toml::Value {
     match value {
-        toml::Value::Table(table) => {
-            toml::Value::Table(redact_table(table, DATA_KEYED.contains(&key)))
-        }
+        toml::Value::Table(table) => toml::Value::Table(redact(
+            table,
+            if DATA_KEYED.contains(&key) {
+                Keys::Data
+            } else {
+                Keys::Settings
+            },
+        )),
         toml::Value::Array(items) => {
             toml::Value::Array(items.iter().map(|item| redact_value(key, item)).collect())
         }
@@ -210,7 +221,7 @@ fn redacted() -> toml::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{credential_key, redact, stripped_url, words};
+    use super::{Keys, credential_key, redact, stripped_url, words};
 
     /// A configuration with a canary in every form the gateway reads a
     /// credential, a personal name, a namespace or a patient identifier: as
@@ -315,7 +326,8 @@ count = 7
     #[test]
     fn every_canary_value_and_key_is_redacted() {
         let tree: toml::Table = toml::from_str(CONFIGURATION).expect("the fixture parses");
-        let written = toml::to_string(&redact(&tree)).expect("the redacted tree writes");
+        let written =
+            toml::to_string(&redact(&tree, Keys::Settings)).expect("the redacted tree writes");
         for canary in CANARIES {
             assert!(!written.contains(canary), "{canary} leaked: {written}");
         }
@@ -335,7 +347,7 @@ count = 7
     #[test]
     fn the_shape_and_the_safe_values_stay() {
         let tree: toml::Table = toml::from_str(CONFIGURATION).expect("the fixture parses");
-        let redacted = redact(&tree);
+        let redacted = redact(&tree, Keys::Settings);
         assert_eq!("development", redacted["profile"].as_str().expect("kept"));
         assert_eq!(
             "0.0.0.0:8080",
@@ -429,7 +441,8 @@ client_secret = 333333330
     #[test]
     fn no_bypass_shape_carries_a_canary_through() {
         let tree: toml::Table = toml::from_str(BYPASSES).expect("the fixture parses");
-        let written = toml::to_string(&redact(&tree)).expect("the redacted tree writes");
+        let written =
+            toml::to_string(&redact(&tree, Keys::Settings)).expect("the redacted tree writes");
         for canary in [
             "CANARY",
             "canary",

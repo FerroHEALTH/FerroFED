@@ -379,7 +379,7 @@ pub(crate) async fn paged(
             silent => return Ok(Held::Silent(silent)),
         };
         let status = page.status();
-        let read = match Page::read_of(page.body(), endpoint.url(), searched) {
+        let read = match Page::read(page.body(), endpoint.url(), searched) {
             Ok(read) => read,
             Err(reason) => {
                 return Ok(Held::Unusable {

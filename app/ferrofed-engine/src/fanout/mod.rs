@@ -201,12 +201,6 @@ pub struct Plan {
 }
 
 impl Plan {
-    /// An empty plan.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// This plan refusing to send any request that carries one of the
     /// identifiers `withheld`, the ones resolution consumed (§5.4.1, N33).
     #[must_use]

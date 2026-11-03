@@ -41,7 +41,7 @@ use thiserror::Error;
 use url::Url;
 
 use super::error::FhirFormError;
-use super::{ENDPOINT_ID_SYSTEM, ORGANISATION_ID_SYSTEM, selection_document};
+use super::{ENDPOINT_ID_SYSTEM, Listings, ORGANISATION_ID_SYSTEM, document};
 use crate::fhir::{Authentication, ClientError, Tls};
 use crate::ihe::iua;
 
@@ -265,9 +265,13 @@ impl DirectorySource {
     /// and [`DirectoryReadError::Registry`] when its content is no registry
     /// the gateway admits.
     pub async fn read(&self) -> Result<Materialised, DirectoryReadError> {
-        let replica = Replica::read(&self.client, scope(), &mut self.budget())
-            .await
-            .map_err(|error| DirectoryReadError::Exchange(ExchangeError(error)))?;
+        let replica = Replica::read(
+            &self.client,
+            Scope::identified(ORGANISATION_ID_SYSTEM, ENDPOINT_ID_SYSTEM),
+            &mut self.budget(),
+        )
+        .await
+        .map_err(|error| DirectoryReadError::Exchange(ExchangeError(error)))?;
         let snapshot = snapshot_of(&replica).map_err(DirectoryReadError::Registry)?;
         Ok(Materialised {
             content: Content(replica),
@@ -353,18 +357,13 @@ fn since(answered_at: Option<&str>) -> Option<String> {
     )
 }
 
-/// The directory resources that are the federation's.
-fn scope() -> Scope {
-    Scope::identified(ORGANISATION_ID_SYSTEM, ENDPOINT_ID_SYSTEM)
-}
-
 /// The registry `replica` makes.
 ///
 /// Each listing of an endpoint outside the selection is logged once, by its
 /// reference alone.
 fn snapshot_of(replica: &Replica) -> Result<RegistrySnapshot, FhirFormError> {
     let selection = replica.directory().map_err(FhirFormError::Directory)?;
-    let (document, ignored) = selection_document(&selection)?;
+    let (document, ignored) = document(&selection, Listings::Selected)?;
     if !ignored.is_empty() {
         tracing::info!(
             listings = ignored.len(),

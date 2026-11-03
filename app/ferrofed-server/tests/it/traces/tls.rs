@@ -17,13 +17,14 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use ferrofed_server::body::VERSION;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::transport;
-use ferrofed_server::metrics::service;
+use ferrofed_server::metrics::SCOPE;
 use ferrofed_testkit::listener::ListenerCertificates;
 use ferrofed_testkit::otlp::Collector;
-use ferrohealth_telemetry::telemetry::{InitError, Telemetry};
+use ferrohealth_telemetry::telemetry::{InitError, Service, Telemetry};
 use opentelemetry::trace::Tracer as _;
 
 use super::TestResult;
@@ -39,7 +40,10 @@ fn resolved(text: &str) -> Result<Settings, Box<dyn std::error::Error>> {
 /// The export the configuration `text` builds, or the refusal it is built
 /// with.
 fn built(text: &str) -> Result<Result<Telemetry, InitError>, Box<dyn std::error::Error>> {
-    Ok(Telemetry::new(&resolved(text)?.telemetry, service()))
+    Ok(Telemetry::new(
+        &resolved(text)?.telemetry,
+        Service::new(SCOPE, VERSION),
+    ))
 }
 
 /// Writes the client identity and the trust roots of `certificates` into

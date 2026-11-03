@@ -7,10 +7,11 @@
 
 use std::ffi::OsStr;
 
+use ferrofed_server::body::VERSION;
 use ferrofed_server::facade::security::DIRECTIVE;
-use ferrofed_server::metrics::service;
+use ferrofed_server::metrics::SCOPE;
 use ferrohealth_telemetry::section::{Filter, Format, Rendering, TelemetrySection};
-use ferrohealth_telemetry::telemetry::{Console, InitError, Layers, Telemetry};
+use ferrohealth_telemetry::telemetry::{Console, InitError, Layers, Service, Telemetry};
 use opentelemetry_sdk::trace::SdkTracer;
 use tracing::Subscriber;
 use tracing_subscriber::Layer as _;
@@ -60,9 +61,9 @@ where
     };
     let no_color = (!ansi).then_some(OsStr::new("1"));
     let console = Console::new(false, no_color).force(Filter::new(DIRECTIVE)?);
-    let telemetry = Telemetry::new(&TelemetrySection::default(), service())?;
+    let telemetry = Telemetry::new(&TelemetrySection::default(), Service::new(SCOPE, VERSION))?;
     let Layers { layers, .. } = telemetry.layers(&section, &console, writer)?;
-    let exported = service();
+    let exported = Service::new(SCOPE, VERSION);
     let export = tracer.map(move |tracer| {
         tracing_opentelemetry::layer()
             .with_tracer(tracer)

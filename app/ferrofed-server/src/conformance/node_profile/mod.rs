@@ -19,8 +19,8 @@
 //! | [`checks::invocable_on_ehr_id`] | the EHR, its `EHR_STATUS` and its compositions answer to the `ehr_id` alone | CP-27 |
 //! | [`checks::subject_not_required`] | an EHR created with no subject is read and queried by its `ehr_id` | CP-27 |
 //! | [`checks::errors_passed_through`] | an unknown `ehr_id` and an unparsable query answer the ITS-REST error status | CP-18 |
-//! | [`checks::access_decided_at_node`] | an EHR the node's own policy withholds from a principal is refused on the read and on the `ehr_id`-scoped query | CP-18 |
-//! | [`checks::consent_before_release`] | the same, for a refusal the operator arranged as a consent refusal | CP-19 |
+//! | [`checks::refused`] with [`checks::Release::AccessDecidedAtNode`] | an EHR the node's own policy withholds from a principal is refused on the read and on the `ehr_id`-scoped query | CP-18 |
+//! | [`checks::refused`] with [`checks::Release::ConsentBeforeRelease`] | the same, for a refusal the operator arranged as a consent refusal | CP-19 |
 //!
 //! Every request goes through the endpoint's [`NodeClient`] and its outbound
 //! gate, with the endpoint's onward credentials ([`interface::Interface`]).

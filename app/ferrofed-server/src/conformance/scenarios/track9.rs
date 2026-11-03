@@ -27,7 +27,7 @@ use secrecy::ExposeSecret;
 use serde::Serialize;
 
 use crate::conformance::aql::ClientQuery;
-use crate::conformance::client::{Gateway, Reply, answered, ask, checked, get, post_aql, request};
+use crate::conformance::client::{Gateway, Reply, answered, ask, checked, post_aql, request};
 use crate::conformance::fixture::{Fixture, Member};
 use crate::conformance::scenarios::{directed_at, undirected};
 use crate::conformance::{Failure, ensure, ensure_eq};
@@ -35,31 +35,13 @@ use crate::conformance::{Failure, ensure, ensure_eq};
 /// The declaration of a gateway that federates no DEMOGRAPHIC request.
 pub const DEMOGRAPHIC_UNSUPPORTED: &str = "unsupported: 501";
 
-/// The query of the EHR `ehr_id` in the `WHERE` form of N29.
-///
-/// # Errors
-///
-/// Returns [`Failure::Query`] when the query cannot be built from its
-/// template, which a fixed template never gives cause for.
-pub fn where_form(ehr_id: &str) -> Result<String, Failure> {
-    of_ehr(
-        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = $ehr_id",
-        ehr_id,
-    )
-}
+/// The query of the EHR `$ehr_id` in the `WHERE` form of N29.
+const WHERE_FORM: &str =
+    "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = $ehr_id";
 
 /// The same query in the `FROM EHR` form of N29.
-///
-/// # Errors
-///
-/// Returns [`Failure::Query`] when the query cannot be built from its
-/// template, which a fixed template never gives cause for.
-pub fn from_form(ehr_id: &str) -> Result<String, Failure> {
-    of_ehr(
-        "SELECT c/uid/value FROM EHR e[ehr_id/value=$ehr_id] CONTAINS COMPOSITION c",
-        ehr_id,
-    )
-}
+const FROM_FORM: &str =
+    "SELECT c/uid/value FROM EHR e[ehr_id/value=$ehr_id] CONTAINS COMPOSITION c";
 
 /// The query `template` with `ehr_id` bound to its `$ehr_id`, as the
 /// literal a client writes.
@@ -106,13 +88,13 @@ pub async fn plain_client<G: Gateway>(
     options(gateway).await?;
     let (_, where_rows) = answered(
         gateway,
-        post_aql(&where_form(ehr_id)?, &[])?,
+        post_aql(&of_ehr(WHERE_FORM, ehr_id)?, &[])?,
         "N29: the WHERE form",
     )
     .await?;
     let (_, from_rows) = answered(
         gateway,
-        post_aql(&from_form(ehr_id)?, &[])?,
+        post_aql(&of_ehr(FROM_FORM, ehr_id)?, &[])?,
         "N29: the FROM EHR form",
     )
     .await?;
@@ -127,7 +109,11 @@ pub async fn plain_client<G: Gateway>(
         "N29: both forms answer the same rows",
     )?;
 
-    let read = ask(gateway, get(&format!("/v1/ehr/{ehr_id}"), &[])?).await?;
+    let read = ask(
+        gateway,
+        request(Method::GET, &format!("/v1/ehr/{ehr_id}"), &[], None)?,
+    )
+    .await?;
     read.expect(StatusCode::OK, "the read at the canonical path")?;
     ensure_eq(
         &Some(member.endpoint.as_str()),
@@ -209,7 +195,16 @@ pub async fn self_description<G: Gateway>(
         &listed,
         "CP-23: the member endpoints behind the gateway",
     )?;
-    let read = ask(gateway, get("/v1/demographic/person/synthetic-party", &[])?).await?;
+    let read = ask(
+        gateway,
+        request(
+            Method::GET,
+            "/v1/demographic/person/synthetic-party",
+            &[],
+            None,
+        )?,
+    )
+    .await?;
     if root.federation.its_rest.demographic.as_str() == DEMOGRAPHIC_UNSUPPORTED {
         read.expect(
             StatusCode::NOT_IMPLEMENTED,
@@ -239,7 +234,11 @@ pub const TEMPLATES: &str = "/v1/definition/template/adl1.4";
 ///
 /// Returns [`Failure`] naming the first expectation that did not hold.
 pub async fn definition_named<G: Gateway>(gateway: &G, endpoint: &str) -> Result<(), Failure> {
-    let listed = ask(gateway, get(TEMPLATES, &[(ENDPOINT, endpoint)])?).await?;
+    let listed = ask(
+        gateway,
+        request(Method::GET, TEMPLATES, &[(ENDPOINT, endpoint)], None)?,
+    )
+    .await?;
     listed.expect(
         StatusCode::OK,
         "CP-34: the template list of the named member",
@@ -265,10 +264,12 @@ pub async fn definition_unnamed<G: Gateway>(
         .map(|target| (ENDPOINT, target))
         .into_iter()
         .collect();
-    ask(gateway, get(TEMPLATES, &fields)?).await?.expect(
-        StatusCode::BAD_REQUEST,
-        &format!("CP-34: {target:?} chooses no one node"),
-    )
+    ask(gateway, request(Method::GET, TEMPLATES, &fields, None)?)
+        .await?
+        .expect(
+            StatusCode::BAD_REQUEST,
+            &format!("CP-34: {target:?} chooses no one node"),
+        )
 }
 
 /// The patient's compositions, directed at `endpoint` when one is given, the

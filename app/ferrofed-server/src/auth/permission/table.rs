@@ -22,7 +22,11 @@ const fn scope(family: ResourceFamily, permission: Permission, resource: Resourc
 /// A requirement on an EHR resource that is not a COMPOSITION: the
 /// `composition-` family, over every template, with `permission`.
 const fn ehr(permission: Permission) -> Requirement {
-    scope(ResourceFamily::Composition, permission, Resource::Unnamed)
+    Requirement::Scope {
+        family: ResourceFamily::Composition,
+        permission,
+        resource: Resource::Unnamed,
+    }
 }
 
 /// The ad hoc query's resource and the stored query's.

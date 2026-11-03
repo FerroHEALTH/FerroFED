@@ -251,7 +251,7 @@ impl Interface {
             client,
             conveyance: conveyed::gateway(federation).map_err(CheckError::Unconveyed)?,
             budget: federation.budget().per_node(),
-            withheld: Arc::new(Withheld::none()),
+            withheld: Arc::new(Withheld::default()),
         })
     }
 

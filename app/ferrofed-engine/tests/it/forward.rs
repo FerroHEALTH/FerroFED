@@ -119,7 +119,7 @@ async fn the_body_arrives_byte_for_byte_and_only_the_declared_headers_travel() -
     let forwarded = client(&server.uri())?
         .forward(
             request(Method::POST, &at, headers, body.as_bytes()),
-            &options_under(Withheld::none(), outbound)?,
+            &options_under(Withheld::default(), outbound)?,
         )
         .await?;
     assert_eq!(StatusCode::CREATED, forwarded.status());
@@ -176,7 +176,7 @@ async fn a_header_the_operation_declares_travels_and_one_it_does_not_is_stripped
     headers.insert("x-patient", PATIENT.parse()?);
     for verb in [Method::PUT, Method::GET] {
         let sent = request(verb, &at, headers.clone(), b"");
-        client.forward(sent, &options(Withheld::none())?).await?;
+        client.forward(sent, &options(Withheld::default())?).await?;
     }
     let requests = received(&server).await?;
     let [update, read] = requests.as_slice() else {
@@ -208,7 +208,7 @@ async fn a_query_parameter_the_operation_does_not_declare_is_refused_unsent() ->
     let mut commit = request(Method::POST, &at, HeaderMap::new(), b"{}");
     commit.query = Some("version_at_time=2026-01-01T00:00:00Z".to_owned());
     let refused = client(&server.uri())?
-        .forward(commit, &options(Withheld::none())?)
+        .forward(commit, &options(Withheld::default())?)
         .await;
     assert!(
         matches!(
@@ -226,7 +226,7 @@ async fn a_request_that_names_no_operation_is_never_sent() -> TestResult {
     let server = Server::start().await;
     let unrouted = request(Method::PATCH, &format!("/ehr/{EHR}"), HeaderMap::new(), b"");
     let refused = client(&server.uri())?
-        .forward(unrouted, &options(Withheld::none())?)
+        .forward(unrouted, &options(Withheld::default())?)
         .await;
     assert!(
         matches!(&refused, Err(ForwardError::Unrouted)),
@@ -514,7 +514,7 @@ async fn a_401_is_the_node_refusing_the_onward_credentials() -> TestResult {
     let refused = client(&server.uri())?
         .forward(
             request(Method::GET, &at, HeaderMap::new(), b""),
-            &options(Withheld::none())?,
+            &options(Withheld::default())?,
         )
         .await;
     match refused {
@@ -596,7 +596,7 @@ async fn directory_read(
     let mut read = request(Method::GET, &at, headers, b"");
     read.query = Some(query.to_owned());
     let answered = client(&server.uri())?
-        .forward(read, &options(Withheld::none())?)
+        .forward(read, &options(Withheld::default())?)
         .await
         .map(|answer| answer.status());
     Ok((answered, received(&server).await?))

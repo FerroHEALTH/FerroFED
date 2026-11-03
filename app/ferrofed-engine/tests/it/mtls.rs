@@ -24,7 +24,7 @@ use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeRepl
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
-use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
+use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::token::{GRANT_TYPE, TokenError};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
@@ -213,7 +213,7 @@ fn field<'f>(form: &'f [(String, String)], name: &str) -> Option<&'f str> {
 
 /// The gateway's keys, which sign the actor token of a token exchange.
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
+    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
     Ok(Arc::new(KeyRing::new(
         key,
         None,

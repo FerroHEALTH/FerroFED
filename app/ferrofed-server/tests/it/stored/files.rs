@@ -480,7 +480,8 @@ async fn the_admin_distribution_at_a_read_only_registry_is_a_405_allowing_nothin
         ferrofed_identity::profile::Profile::Production,
         Vec::new(),
     );
-    let operator = ferrofed_server::admin::router(Arc::new(AppState::build(&settings)?), access);
+    let operator =
+        ferrofed_server::admin::router(Arc::new(AppState::build(&settings)?), access, None, None);
     for target in ["*", "node-a-pub"] {
         let request = Request::post(format!("/admin/stored-queries/{NAME}/1.0.0/distribute"))
             .header(header::AUTHORIZATION, crate::support::operator_bearer()?)

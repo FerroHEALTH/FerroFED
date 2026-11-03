@@ -82,7 +82,7 @@ pub enum TargetsError {
     Patient(#[source] PatientRefError),
     /// An endpoint status could not be described.
     #[error("an endpoint status could not be described")]
-    Detail(#[source] WireError),
+    Detail(#[from] WireError),
     /// The plan refused an endpoint.
     #[error("the fan-out plan refused an endpoint")]
     Plan(#[source] PlanError),
@@ -220,7 +220,7 @@ pub async fn patient(
         deadline,
     )
     .await?;
-    let mut plan = exclude(Plan::new().withholding(withheld), &membership.excluded)?;
+    let mut plan = exclude(Plan::default().withholding(withheld), &membership.excluded)?;
     let located = match (&unidentified, &patient) {
         (Some(Unidentified::ClosedOut(failure)), _) => Localized::closed(failure.clone()),
         (None, Some(patient)) if undirected => {
@@ -345,7 +345,7 @@ pub fn retarget(
             .ok_or(TargetsError::Unbound)?;
         let node = query.for_node(ehr_id.hier_object_id());
         sources.get_or_insert_with(|| node.columns().to_vec());
-        Ok(sent(&node).with_scope(ehr_id.hier_object_id()))
+        Ok::<_, TargetsError>(sent(&node).with_scope(ehr_id.hier_object_id()))
     })?;
     Ok((plan, sources.unwrap_or_default()))
 }
@@ -362,16 +362,21 @@ fn unresolved(
     unknown: &str,
 ) -> Result<(ErrorDetail, bool), TargetsError> {
     match answer {
-        Some(Resolution::Resolved(_) | Resolution::Unknown) => Ok((detail(unknown)?, false)),
+        Some(Resolution::Resolved(_) | Resolution::Unknown) => {
+            Ok((ErrorDetail::text(unknown)?, false))
+        }
         Some(Resolution::Unavailable(failure)) => Ok((
-            detail(&format!("the cross-reference could not answer: {failure}"))?,
+            ErrorDetail::text(format!("the cross-reference could not answer: {failure}"))?,
             true,
         )),
         None if configured => Ok((
-            detail("the cross-reference gave no answer for this member")?,
+            ErrorDetail::text("the cross-reference gave no answer for this member")?,
             true,
         )),
-        None => Ok((detail("no cross-reference service is configured")?, true)),
+        None => Ok((
+            ErrorDetail::text("no cross-reference service is configured")?,
+            true,
+        )),
     }
 }
 
@@ -535,7 +540,7 @@ fn settle_denied(
         let Some(endpoint) = asked.remove(member) else {
             continue;
         };
-        let error = Some(detail(
+        let error = Some(ErrorDetail::text(
             "the consent pre-filter does not permit asking this member (N27a)",
         )?);
         let outcome = Outcome::ConsentDenied {
@@ -565,9 +570,9 @@ pub fn unscoped(
     query: &UnscopedQuery,
 ) -> Result<Targets, TargetsError> {
     let membership = membership(snapshot, selection);
-    let mut plan = exclude(Plan::new(), &membership.excluded)?;
+    let mut plan = exclude(Plan::default(), &membership.excluded)?;
     for (_, endpoint, reason) in membership.alternates {
-        let error = Some(detail(&reason)?);
+        let error = Some(ErrorDetail::text(&reason)?);
         plan = settle(plan, endpoint, Outcome::Excluded { error })?;
     }
     let node = query.node_query();
@@ -652,7 +657,7 @@ fn settle_alternates(
     for (member, endpoint, reason) in alternates {
         let outcome = if located.admits(&member) {
             Outcome::Excluded {
-                error: Some(detail(&reason)?),
+                error: Some(ErrorDetail::text(&reason)?),
             }
         } else {
             located.not_localized()
@@ -665,7 +670,7 @@ fn settle_alternates(
 /// `plan` with every endpoint of `excluded` settled as `excluded`.
 fn exclude(mut plan: Plan, excluded: &[(EndpointId, String)]) -> Result<Plan, TargetsError> {
     for (endpoint, reason) in excluded {
-        let error = Some(detail(reason)?);
+        let error = Some(ErrorDetail::text(reason)?);
         plan = settle(plan, endpoint.clone(), Outcome::Excluded { error })?;
     }
     Ok(plan)
@@ -673,10 +678,6 @@ fn exclude(mut plan: Plan, excluded: &[(EndpointId, String)]) -> Result<Plan, Ta
 
 fn settle(plan: Plan, endpoint: EndpointId, outcome: Outcome) -> Result<Plan, TargetsError> {
     plan.settle(endpoint, outcome).map_err(TargetsError::Plan)
-}
-
-fn detail(message: &str) -> Result<ErrorDetail, TargetsError> {
-    ErrorDetail::text(message).map_err(TargetsError::Detail)
 }
 
 /// The patient reference the resolver is asked about.

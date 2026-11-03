@@ -42,7 +42,7 @@ use http::{HeaderValue, StatusCode, header};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
-use super::{admission, attach, outcome, unadmitted};
+use super::{UNADMITTED, admission, attach, outcome};
 use crate::access::{Accessed, NoAccess};
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
@@ -221,7 +221,7 @@ pub(super) async fn read(
         &state,
         (outbound, caller.as_deref()),
         (&headers, started),
-        unadmitted,
+        || outcome(StatusCode::FORBIDDEN, "forbidden", UNADMITTED),
     );
     let admitted = match admitted {
         Ok(admitted) => admitted,
@@ -254,7 +254,7 @@ pub(super) async fn read(
         federation,
         &arrived,
         vec![member],
-        Arc::new(Withheld::none()),
+        Arc::new(Withheld::default()),
     )
     .await;
     let natives = match asked {

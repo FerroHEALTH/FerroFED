@@ -26,7 +26,7 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_engine::onward::AssertionAudience;
 use ferrofed_engine::onward::grant::fapi2::Fapi2GrantError;
-use ferrofed_engine::onward::keys::SigningKey;
+use ferrofed_engine::onward::keys::{Curve, SigningKey};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::credentials::CredentialsFault;
@@ -160,7 +160,7 @@ async fn node_a_receives_the_dpop_bound_fapi2_token() -> TestResult {
     let a = node(authority.endpoint().dpop_bound(None)).await;
     let (app, _state) = gateway(dir.path(), &a.uri(), &material.tables)?;
     let jwks = published(&app).await?;
-    let client_key = SigningKey::from_p256_pem(&SecretString::from(material.client_pem))?;
+    let client_key = SigningKey::from_pem(&SecretString::from(material.client_pem), Curve::P256)?;
     assert!(
         jwks.find(client_key.kid()).is_some(),
         "the client key is published"
@@ -488,9 +488,12 @@ async fn a_rotated_client_key_is_published_beside_the_previous_one_and_alone_sig
         .try_into()
         .map_err(|_more| "one assertion before the rotation")?;
 
-    let old = SigningKey::from_p256_pem(&SecretString::from(material.client_pem.clone()))?;
+    let old = SigningKey::from_pem(
+        &SecretString::from(material.client_pem.clone()),
+        Curve::P256,
+    )?;
     let new_pem = oauth::Curve::P256.pem()?;
-    let new = SigningKey::from_p256_pem(&SecretString::from(new_pem.clone()))?;
+    let new = SigningKey::from_pem(&SecretString::from(new_pem.clone()), Curve::P256)?;
     let new_file = dir.path().join("fapi2-client-new.pem");
     std::fs::write(&new_file, &new_pem)?;
     let new_file = toml::Value::String(new_file.display().to_string());

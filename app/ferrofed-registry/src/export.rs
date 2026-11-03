@@ -34,7 +34,7 @@
 //!     managing_organisation = "org-a"
 //!     "#,
 //! )?;
-//! let (learned, at) = (LearnedMap::new(), jiff::Timestamp::UNIX_EPOCH);
+//! let (learned, at) = (LearnedMap::default(), jiff::Timestamp::UNIX_EPOCH);
 //! let replica = "ferrofed-0".parse()?;
 //! let export = IdentityStateExport::of("example-federation", &replica, &registry, &learned, at);
 //! assert_eq!(FORMAT_VERSION, export.format_version);
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn learned_and_withdrawn_mappings_are_exported_in_order() {
         let snapshot = RegistrySnapshot::from_toml_str(REGISTRY).expect("a registry");
-        let mut learned = LearnedMap::new();
+        let mut learned = LearnedMap::default();
         let version = |system: &str| {
             format!("8849182c-82ad-4088-a07f-48ead4180515::{system}::1")
                 .parse()

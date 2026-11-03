@@ -184,17 +184,6 @@ struct RollbackRequest {
     /// Why the rollback is made.
     reason: String,
 }
-/// Runs `work` on a thread that may block, and answers what it returns or
-/// the failure that stopped it.
-async fn blocking<T, F>(headers: &HeaderMap, work: F) -> Response
-where
-    T: Send + 'static,
-    F: FnOnce() -> Result<T, RevisionError> + Send + 'static,
-    Result<T, RevisionError>: Answer,
-{
-    answered(headers, work).await
-}
-
 /// Runs `work` on a thread that may block, and answers the outcome it
 /// returns or the failure that stopped it.
 async fn answered<R, F>(headers: &HeaderMap, work: F) -> Response
@@ -258,7 +247,7 @@ fn refused(refusal: &RevisionError, request_id: &str) -> Response {
 /// `GET` [`CONFIG`].
 async fn config(State(managed): State<Arc<Managed>>, headers: HeaderMap) -> Response {
     let revisions = Arc::clone(&managed.revisions);
-    blocking(&headers, move || {
+    answered(&headers, move || -> Result<_, RevisionError> {
         let store = revisions.store();
         let current = store.current()?;
         let replica = revisions.replica();
@@ -294,7 +283,7 @@ async fn history(
         );
     }
     let revisions = Arc::clone(&managed.revisions);
-    blocking(&headers, move || {
+    answered(&headers, move || -> Result<_, RevisionError> {
         let mut history = revisions.store().history()?;
         history.reverse();
         Ok(Page::of(history, page))
@@ -322,7 +311,7 @@ async fn revision(
     headers: HeaderMap,
 ) -> Response {
     let revisions = Arc::clone(&managed.revisions);
-    blocking(&headers, move || held(&revisions, number(&id)?)).await
+    answered(&headers, move || held(&revisions, number(&id)?)).await
 }
 
 /// `GET` [`DIFF`].
@@ -332,7 +321,7 @@ async fn difference(
     headers: HeaderMap,
 ) -> Response {
     let revisions = Arc::clone(&managed.revisions);
-    blocking(&headers, move || {
+    answered(&headers, move || -> Result<_, RevisionError> {
         let from = held(&revisions, number(&id)?)?;
         let to = held(&revisions, number(&other)?)?;
         Ok(Diff {
@@ -420,7 +409,7 @@ async fn apply(
         );
     }
     let managed = Arc::clone(&managed);
-    blocking(&headers, move || {
+    answered(&headers, move || -> Result<_, RevisionError> {
         let id = number(&id)?;
         let revision = held(&managed.revisions, id)?;
         let current = managed
@@ -444,7 +433,7 @@ async fn rollback(
         return body_refused(&headers, ROLLBACK_SHAPE);
     };
     let managed = Arc::clone(&managed);
-    blocking(&headers, move || {
+    answered(&headers, move || -> Result<_, RevisionError> {
         let (revision, current) = managed.revisions.rollback(
             &managed.reloader,
             request.current,
@@ -477,7 +466,7 @@ async fn confirm(
         );
     }
     let revisions = Arc::clone(&managed.revisions);
-    blocking(&headers, move || {
+    answered(&headers, move || -> Result<_, RevisionError> {
         let id = number(&id)?;
         let current = revisions.confirm(id, Author::from(&operator), jiff::Timestamp::now())?;
         record(CONFIRMED, id, &operator);
@@ -503,7 +492,7 @@ async fn approve(
         );
     }
     let revisions = Arc::clone(&managed.revisions);
-    blocking(&headers, move || {
+    answered(&headers, move || -> Result<_, RevisionError> {
         let id = number(&id)?;
         let review = revisions.approve(id, Author::from(&operator))?;
         record(APPROVED, id, &operator);

@@ -22,7 +22,7 @@ fn failure() -> ErrorDetail {
 
 /// A plan in which localization named neither endpoint.
 fn not_localized(error: Option<&ErrorDetail>) -> Result<Plan, Box<dyn std::error::Error>> {
-    let mut plan = Plan::new();
+    let mut plan = Plan::default();
     for id in ["node_a", "node_b"] {
         plan = plan.settle(
             EndpointId::new(id)?,

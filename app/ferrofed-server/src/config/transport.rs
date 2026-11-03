@@ -136,7 +136,24 @@ pub fn protected_payload(
     site: ProtectedSite,
 ) -> Result<Option<ProtectedSite>, CleartextError> {
     let protected = Url::parse(url).is_ok_and(|parsed| parsed.scheme() == "https");
-    admit(profile, protected, site)
+    encrypted_connection(profile, protected, site)
+}
+
+/// Holds a syslog address to the protected-payload policy: `tls://` (RFC
+/// 5425), or anything else under development alone.
+///
+/// It answers as [`protected_payload`] does.
+///
+/// # Errors
+///
+/// Returns [`CleartextError`] naming `site` when `url` is not `tls://` and
+/// `profile` is not development.
+pub fn encrypted_syslog(
+    profile: Profile,
+    url: &Url,
+    site: ProtectedSite,
+) -> Result<Option<ProtectedSite>, CleartextError> {
+    encrypted_connection(profile, url.scheme() == "tls", site)
 }
 
 /// Holds one database connection to the encrypted-connection policy:
@@ -154,33 +171,7 @@ pub fn encrypted_connection(
     requires_tls: bool,
     site: ProtectedSite,
 ) -> Result<Option<ProtectedSite>, CleartextError> {
-    admit(profile, requires_tls, site)
-}
-
-/// Holds a syslog address to the protected-payload policy: `tls://` (RFC
-/// 5425), or anything else under development alone.
-///
-/// It answers as [`protected_payload`] does.
-///
-/// # Errors
-///
-/// Returns [`CleartextError`] naming `site` when `url` is not `tls://` and
-/// `profile` is not development.
-pub fn encrypted_syslog(
-    profile: Profile,
-    url: &Url,
-    site: ProtectedSite,
-) -> Result<Option<ProtectedSite>, CleartextError> {
-    admit(profile, url.scheme() == "tls", site)
-}
-
-/// The answer for `site`, `protected` or not, under `profile`.
-fn admit(
-    profile: Profile,
-    protected: bool,
-    site: ProtectedSite,
-) -> Result<Option<ProtectedSite>, CleartextError> {
-    if protected {
+    if requires_tls {
         return Ok(None);
     }
     match profile {

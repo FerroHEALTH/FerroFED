@@ -8,8 +8,12 @@
 //! select, by `POST` and by the ITS-REST `GET` form (§16.3 track 1; N1, N2,
 //! N17, N18; CP-1, CP-35).
 
+use http::Method;
+
 use crate::conformance::aql::ClientQuery;
-use crate::conformance::client::{Federated, Gateway, answered, get, percent_encoded, post_aql};
+use crate::conformance::client::{
+    Federated, Gateway, answered, percent_encoded, post_aql, request,
+};
 use crate::conformance::fixture::Fixture;
 use crate::conformance::scenarios::{as_count, undirected};
 use crate::conformance::{Failure, ensure, ensure_eq};
@@ -86,7 +90,12 @@ pub async fn single_cdr_shaped<G: Gateway>(
     let encoded = percent_encoded(&aql);
     let (_, fetched) = answered(
         gateway,
-        get(&format!("/v1/query/aql?q={encoded}"), &[])?,
+        request(
+            Method::GET,
+            &format!("/v1/query/aql?q={encoded}"),
+            &[],
+            None,
+        )?,
         "CP-1: the ITS-REST GET form",
     )
     .await?;

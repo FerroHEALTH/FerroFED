@@ -158,8 +158,8 @@ impl Report {
             "the release artefacts and how their attestations are verified",
             &release,
         )?;
-        let configuration =
-            toml::to_string(&redact::redact(tree)).map_err(|source| ReportError::Serialize {
+        let configuration = toml::to_string(&redact::redact(tree, redact::Keys::Settings))
+            .map_err(|source| ReportError::Serialize {
                 path: "configuration.toml",
                 source: Box::new(source),
             })?;

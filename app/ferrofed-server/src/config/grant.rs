@@ -41,7 +41,7 @@ use ferrofed_engine::onward::authorization_details::{
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
 use ferrofed_engine::onward::issuer::{AliasHost, InvalidAliasHost, InvalidIssuer, Issuer};
-use ferrofed_engine::onward::keys::{KeyError, SigningKey};
+use ferrofed_engine::onward::keys::{Curve, KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SenderConstraint};
 use ferrohealth_secret::secret::Secret;
@@ -562,7 +562,7 @@ fn p256_key(key: &str, path: &Path) -> Result<SigningKey, Error> {
     let named = format!("{key}_file");
     let pem = read_secret::<Secret>(key, None, Some(path))?
         .ok_or_else(|| Error::Missing { key: named.clone() })?;
-    SigningKey::from_p256_pem(&pem.to_secret_string())
+    SigningKey::from_pem(&pem.to_secret_string(), Curve::P256)
         .map_err(|source| GrantFault::ClientKey { key: named, source }.into())
 }
 

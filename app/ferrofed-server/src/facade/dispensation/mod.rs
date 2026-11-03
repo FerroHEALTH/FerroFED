@@ -66,6 +66,11 @@ use lookup::Owned;
 /// FHIR R4 `create` interaction on `MedicationDispense`.
 pub(crate) const OPERATION: &str = "create MedicationDispense";
 
+/// The text a dispensation whose patient identifiers name different
+/// patients is refused with.
+const DISAGREE: &str =
+    "the identifiers of the dispensation's subject do not name one patient at every member";
+
 /// The one text every dispensation with no owner is answered with, whether
 /// no member holds its patient, none may say so, or none holds the
 /// prescription (RFC 9110 §15.5.5; Federation Tier §11.3).
@@ -328,7 +333,11 @@ async fn resolved(
             None => Some((held, pairs, (*withheld).clone())),
             Some((kept, kept_pairs, kept_withheld)) => {
                 if kept_pairs != pairs {
-                    return Err(disagree());
+                    return Err(refused(
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                        "business-rule",
+                        DISAGREE,
+                    ));
                 }
                 let joined = kept_withheld.joined(&withheld);
                 Some((kept, kept_pairs, joined))
@@ -339,7 +348,11 @@ async fn resolved(
         (None, _) => Ok(None),
         // NOTE: Regulation (EU) 2025/327 Art 13(3): an identifier no member knows beside one a
         // member does may name another person, so nothing is written.
-        (Some(_), true) => Err(disagree()),
+        (Some(_), true) => Err(refused(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "business-rule",
+            DISAGREE,
+        )),
         (Some((located, _, withheld)), false) => Ok(Some((located, Arc::new(withheld)))),
     }
 }
@@ -353,16 +366,6 @@ fn unowned(logged: &str) -> Response {
     );
     Outcome::Unowned.record();
     refused(StatusCode::NOT_FOUND, "not-found", UNOWNED)
-}
-
-/// The refusal of a dispensation whose patient identifiers name different
-/// patients.
-fn disagree() -> Response {
-    refused(
-        StatusCode::UNPROCESSABLE_ENTITY,
-        "business-rule",
-        "the identifiers of the dispensation's subject do not name one patient at every member",
-    )
 }
 
 /// The owner `chosen`, as the dispensation reaches it: its own endpoint for

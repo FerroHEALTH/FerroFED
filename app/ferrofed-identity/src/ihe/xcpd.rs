@@ -358,8 +358,12 @@ impl XcpdLocalizer {
             };
             namespaces.insert(namespace, oid);
         }
+        // NOTE: no specification governs this: our own design; the gateways are asked
+        // with no `Authorization` header and no redirect, since the body names the patient.
+        let http = fhir::http_client(&Authentication::None, &config.tls)
+            .map_err(XcpdConfigError::Client)?;
         Ok(Self {
-            client: XcpdClient::new(http_client(&config.tls)?),
+            client: XcpdClient::new(http),
             sender,
             home,
             gateways,
@@ -603,11 +607,4 @@ fn communities(
         return Err(XcpdConfigError::UnlocatedMember(unlocated.clone()));
     }
     Ok(mapped)
-}
-
-/// The HTTP client the gateways are asked through: no redirects, because the
-/// request body holds the patient identifier, no `Authorization` header, and
-/// the network's TLS material.
-fn http_client(tls: &Tls) -> Result<reqwest::Client, XcpdConfigError> {
-    fhir::http_client(&Authentication::None, tls).map_err(XcpdConfigError::Client)
 }

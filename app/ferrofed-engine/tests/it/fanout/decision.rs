@@ -188,7 +188,7 @@ fn the_statuses_map_to_their_http_status() {
 )]
 fn a_plan_names_each_endpoint_once() -> TestResult {
     let endpoint = EndpointId::new("node-a-pub")?;
-    let plan = Plan::new().dispatch(endpoint.clone(), NodeQuery::new("SELECT 1"))?;
+    let plan = Plan::default().dispatch(endpoint.clone(), NodeQuery::new("SELECT 1"))?;
     assert_eq!(
         plan.clone()
             .dispatch(endpoint.clone(), NodeQuery::new("SELECT 2"))
@@ -214,7 +214,7 @@ fn a_status_only_a_request_produces_is_never_settled() -> TestResult {
         let status = outcome.status();
         let endpoint = EndpointId::new("node-a-pub")?;
         assert_eq!(
-            Plan::new().settle(endpoint.clone(), outcome).err(),
+            Plan::default().settle(endpoint.clone(), outcome).err(),
             Some(PlanError::DispatchedStatus { endpoint, status })
         );
     }
@@ -223,7 +223,7 @@ fn a_status_only_a_request_produces_is_never_settled() -> TestResult {
         error: None,
     };
     assert!(
-        Plan::new()
+        Plan::default()
             .settle(EndpointId::new("node-a-pub")?, refused_by_node)
             .is_err(),
         "a node's own consent refusal needs a request"
@@ -287,7 +287,7 @@ fn a_client_wait_shortens_the_budget_and_never_extends_it() -> TestResult {
 /// The plan of `settled`, each `(endpoint id, outcome)` settled with no
 /// request.
 fn settled(settled: Vec<(&str, Outcome)>) -> Result<Plan, Box<dyn std::error::Error>> {
-    let mut plan = Plan::new();
+    let mut plan = Plan::default();
     for (endpoint, outcome) in settled {
         plan = plan.settle(EndpointId::new(endpoint)?, outcome)?;
     }
@@ -311,7 +311,7 @@ fn a_plan_that_excludes_every_endpoint_has_no_destination() -> TestResult {
     let plan = settled(vec![("node-a-pub", excluded()), ("node-b-pub", excluded())])?;
     assert!(plan.has_no_destination(), "every endpoint was ruled out");
     assert!(
-        Plan::new().has_no_destination(),
+        Plan::default().has_no_destination(),
         "a plan that names no endpoint has none either"
     );
     Ok(())
@@ -361,7 +361,7 @@ fn an_in_scope_endpoint_keeps_the_destination() -> TestResult {
         ("node-b-pub", excluded()),
     ])?;
     assert!(!resolved_nowhere.has_no_destination());
-    let asked = Plan::new()
+    let asked = Plan::default()
         .dispatch(EndpointId::new("node-a-pub")?, NodeQuery::new("SELECT 1"))?
         .settle(EndpointId::new("node-b-pub")?, excluded())?;
     assert!(!asked.has_no_destination());

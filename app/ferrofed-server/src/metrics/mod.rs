@@ -173,13 +173,6 @@ impl FollowResult {
     }
 }
 
-/// Returns the service the gateway's telemetry describes: `ferrofed` at
-/// this build's version, exporting the spans of every `ferrofed` crate.
-#[must_use]
-pub fn service() -> Service {
-    Service::new(SCOPE, crate::body::VERSION)
-}
-
 /// The telemetry whose provider the gateway's instruments sit on, and the
 /// instruments the gateway records through.
 pub struct Metrics {
@@ -348,8 +341,11 @@ impl Default for Metrics {
         reason = "with no [telemetry.otlp] the provider builds the pull reader alone, in a registry built empty beside it, so the registration cannot collide"
     )]
     fn default() -> Self {
-        let telemetry = Telemetry::new(&TelemetrySection::default(), service())
-            .expect("the Prometheus reader should register in its own empty registry");
+        let telemetry = Telemetry::new(
+            &TelemetrySection::default(),
+            Service::new(SCOPE, crate::body::VERSION),
+        )
+        .expect("the Prometheus reader should register in its own empty registry");
         Self::new(
             Arc::new(telemetry),
             crate::usage_report::group::window(crate::base_path::BasePath::default(), None),

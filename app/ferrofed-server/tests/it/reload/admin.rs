@@ -50,7 +50,7 @@ struct Record {
 fn listener(gateway: &Trusting) -> Router {
     let access = Access::sharing(Arc::clone(&gateway.trust), Profile::Production, Vec::new());
     let remote = SocketAddr::from(([192, 0, 2, 10], 40_000));
-    admin::serving_router(
+    admin::router(
         Arc::clone(&gateway.state),
         access,
         None,

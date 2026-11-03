@@ -23,7 +23,7 @@ use super::error::FederationError;
 /// refuses to load, [`FederationError::ConsoleMembers`] when the members the
 /// operator console manages cannot be joined to it, and with the binding's error, such as
 /// [`FederationError::Directory`] for a care services directory, for a source
-/// that cannot be read or holds no valid registry; [`Federation::load_read`](super::Federation::load_read)
+/// that cannot be read or holds no valid registry; [`Federation::build`](super::Federation::build)
 /// stops on that error.
 #[must_use]
 pub fn read_registry(settings: &Settings) -> Option<Result<RegistrySnapshot, FederationError>> {

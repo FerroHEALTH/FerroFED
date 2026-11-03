@@ -13,6 +13,7 @@
 //! governs which products the harness runs: our own design.
 
 use ferrofed_registry::id::EndpointId;
+use ferrofed_server::conformance::node_profile::checks::Release;
 use ferrofed_server::conformance::node_profile::interface::Arrangement;
 use ferrofed_server::conformance::node_profile::{Check, Finding, Profile, Verdict, checks};
 use ferrofed_testkit::containers::ehrbase::{
@@ -174,7 +175,8 @@ async fn ehrbase_is_checked_for_holding_its_own_access_decision() -> TestResult 
     created_by_the_administrator(&node.api_root(), WITHHELD).await?;
     let arrangement = Arrangement::new(WITHHELD, principal(RESTRICTED_USER));
 
-    let observed = checks::access_decided_at_node(
+    let observed = checks::refused(
+        Release::AccessDecidedAtNode,
         &interface(&node.api_root(), Some(RESTRICTED_ADMIN))?,
         &arrangement,
     )

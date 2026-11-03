@@ -256,8 +256,7 @@ fn a_reload_that_unsets_the_table_drops_the_step() -> TestResult {
     assert!(running.demographics().is_some());
     // The reload applies `[pdqm]` as it applies `[pixm]`, so unsetting it stops the step.
     let fresh = settings(dir.path(), &unreached_pixm())?;
-    let next = running
-        .reloaded(&fresh, read_registry(&fresh))?
+    let next = Federation::build(&fresh, read_registry(&fresh), Some(&running))?
         .ok_or("a registry is configured")?;
     assert!(
         next.demographics().is_none(),

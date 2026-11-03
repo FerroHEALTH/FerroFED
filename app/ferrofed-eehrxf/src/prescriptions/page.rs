@@ -22,8 +22,6 @@ use serde::Deserialize;
 use serde_json::value::RawValue;
 use url::Url;
 
-use super::RESOURCE;
-
 /// A resource of a member's page, its JSON value as the member sent it,
 /// under the entry's `fullUrl` when the member gave one.
 ///
@@ -206,16 +204,6 @@ struct Identifier {
 }
 
 impl Page {
-    /// Reads `body`, a member's answer to a search, as a page of the
-    /// member whose base is `base`.
-    ///
-    /// # Errors
-    ///
-    /// The [`Unusable`] that says why the body is no page of prescriptions.
-    pub fn read(body: &[u8], base: &Url) -> Result<Self, Unusable> {
-        Self::read_of(body, base, RESOURCE)
-    }
-
     /// Reads `body`, a member's answer to a search of the resource type
     /// `matched`, as a page of the member whose base is `base`; each match is
     /// kept in [`Page::prescriptions`] whatever its type is named.
@@ -223,7 +211,7 @@ impl Page {
     /// # Errors
     ///
     /// The [`Unusable`] that says why the body is no page of `matched`.
-    pub fn read_of(body: &[u8], base: &Url, matched: &str) -> Result<Self, Unusable> {
+    pub fn read(body: &[u8], base: &Url, matched: &str) -> Result<Self, Unusable> {
         let head: Head = serde_json::from_slice(body).map_err(Unusable::Unreadable)?;
         if head.resource_type.as_deref() != Some("Bundle") {
             return Err(Unusable::NotBundle);
@@ -286,6 +274,7 @@ impl Page {
 #[cfg(test)]
 mod tests {
     use super::{Page, Unusable};
+    use crate::prescriptions::RESOURCE;
     use url::Url;
 
     fn base() -> Url {
@@ -298,7 +287,7 @@ mod tests {
             {"fullUrl":"https://member.example.org/fhir/MedicationRequest/rx-1","resource":{ "resourceType" :"MedicationRequest","id":"rx-1","identifier":[{"system":"urn:oid:2.999.5","value":"rx-1"},{"value":"no-system"}]},"search":{"mode":"match"}},
             {"resource":{"resourceType":"Medication","id":"m-1"},"search":{"mode":"include"}},
             {"resource":{"resourceType":"OperationOutcome","issue":[]},"search":{"mode":"outcome"}}]}"#;
-        let page = Page::read(body, &base()).unwrap();
+        let page = Page::read(body, &base(), RESOURCE).unwrap();
         let [prescription] = page.prescriptions.as_slice() else {
             panic!("one prescription: {page:?}");
         };
@@ -322,7 +311,7 @@ mod tests {
     #[test]
     fn a_renamed_prescription_changes_its_id_alone() {
         let body = br#"{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"MedicationRequest","id":"rx-1","dispenseRequest":{"quantity":{"value":1.50}}}}]}"#;
-        let page = Page::read(body, &base()).unwrap();
+        let page = Page::read(body, &base(), RESOURCE).unwrap();
         let mut kept = page.prescriptions.first().unwrap().kept.clone();
         assert_eq!(Some("rx-1"), kept.id());
         kept.rename("face-1");
@@ -340,7 +329,12 @@ mod tests {
 
     #[test]
     fn an_empty_searchset_is_a_page_with_no_prescription() {
-        let page = Page::read(br#"{"resourceType":"Bundle","type":"searchset"}"#, &base()).unwrap();
+        let page = Page::read(
+            br#"{"resourceType":"Bundle","type":"searchset"}"#,
+            &base(),
+            RESOURCE,
+        )
+        .unwrap();
         assert!(page.prescriptions.is_empty() && page.next.is_none());
     }
 
@@ -367,7 +361,7 @@ mod tests {
                 "Mode",
             ),
         ] {
-            let read = Page::read(body, &base());
+            let read = Page::read(body, &base(), RESOURCE);
             let name = match read {
                 Err(Unusable::Unreadable(_)) => "Unreadable",
                 Err(Unusable::NotBundle) => "NotBundle",

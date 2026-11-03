@@ -142,7 +142,9 @@ pub fn routes() -> Router<Arc<AppState>> {
         .fold(Router::new(), |router, (path, handlers)| {
             router.route(path, handlers)
         })
-        .fallback(unserved)
+        // NOTE: no specification governs this: our own design; every other path under
+        // `{fhir-base}` is a `404` naming the paths the face serves, never the path asked for.
+        .fallback(|| async { outcome(StatusCode::NOT_FOUND, "not-found", &UNSERVED) })
 }
 
 /// What a path under the face addresses, as the gate reads it.
@@ -293,12 +295,6 @@ async fn metadata(State(state): State<Arc<AppState>>) -> Response {
     )
 }
 
-/// Every other path under `{fhir-base}`: a `404` naming the paths the face
-/// serves, never the path asked for.
-async fn unserved() -> Response {
-    outcome(StatusCode::NOT_FOUND, "not-found", &UNSERVED)
-}
-
 /// `GET {fhir-base}/Patient/$summary`.
 async fn summary_get(
     State(state): State<Arc<AppState>>,
@@ -402,15 +398,10 @@ fn fhir_json_body(headers: &http::HeaderMap) -> bool {
     matches!(media, Some(FHIR_JSON | "application/json"))
 }
 
-/// The `OperationOutcome` of a caller the gate did not admit to the section
-/// queries a summary, a list or a listed document runs over.
-fn unadmitted() -> Response {
-    outcome(
-        StatusCode::FORBIDDEN,
-        "forbidden",
-        "the caller was not admitted to the section queries",
-    )
-}
+/// The text of the `OperationOutcome` a caller the gate did not admit to the
+/// section queries a summary, a list or a listed document runs over is
+/// answered `403` with.
+const UNADMITTED: &str = "the caller was not admitted to the section queries";
 
 /// The `OperationOutcome` of one error, answered with `status`, stating that
 /// no member was sent anything.
@@ -438,7 +429,7 @@ async fn summarised(
         state,
         (outbound, caller.as_deref()),
         (headers, started),
-        unadmitted,
+        || outcome(StatusCode::FORBIDDEN, "forbidden", UNADMITTED),
     );
     let admitted = match admitted {
         Ok(admitted) => admitted,

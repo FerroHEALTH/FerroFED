@@ -173,7 +173,7 @@ impl DispatchOptions {
             deadline,
             conveyance,
             request_id: None,
-            withheld: Arc::new(Withheld::none()),
+            withheld: Arc::new(Withheld::default()),
             composed_ehr_id: None,
         }
     }

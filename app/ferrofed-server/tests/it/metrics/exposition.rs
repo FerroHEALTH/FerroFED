@@ -19,9 +19,10 @@ use std::time::{Duration, Instant};
 
 use axum::body::Body;
 use ferrofed_server::EXIT_CONFIG;
+use ferrofed_server::body::VERSION;
 use ferrofed_server::config::Config;
-use ferrofed_server::metrics::{self, Metrics, service};
-use ferrohealth_telemetry::telemetry::Telemetry;
+use ferrofed_server::metrics::{self, Metrics, SCOPE};
+use ferrohealth_telemetry::telemetry::{Service, Telemetry};
 use http::{Request, StatusCode, header};
 
 use crate::metrics::{count, parse};
@@ -109,7 +110,10 @@ async fn the_admin_listener_serves_a_parseable_text_exposition() -> TestResult {
 async fn an_otlp_push_shares_the_provider_and_leaves_the_exposition_whole() -> TestResult {
     let settings = resolved("[telemetry.otlp]\nendpoint = \"http://127.0.0.1:4317\"\n")?;
     let pushed = Metrics::new(
-        Arc::new(Telemetry::new(&settings.telemetry, service())?),
+        Arc::new(Telemetry::new(
+            &settings.telemetry,
+            Service::new(SCOPE, VERSION),
+        )?),
         ferrofed_server::usage_report::group::window(
             ferrofed_server::base_path::BasePath::default(),
             None,

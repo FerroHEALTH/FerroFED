@@ -23,7 +23,7 @@ const EXTERNAL: &str = "ext.example.org";
 #[test]
 fn an_imported_version_resolves_to_its_creating_node_through_a_registered_mapping() -> TestResult {
     let snapshot = registered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     let expected = CreatingSystemRoute::Registered {
         node: node("node-a")?,
         endpoint: endpoint("node-a-pub")?,
@@ -35,7 +35,11 @@ fn an_imported_version_resolves_to_its_creating_node_through_a_registered_mappin
         Sighting::Known(expected.clone()),
         "a copy at node-b"
     );
-    assert_eq!(learned, LearnedMap::new(), "nothing is learned from a copy");
+    assert_eq!(
+        learned,
+        LearnedMap::default(),
+        "nothing is learned from a copy"
+    );
     assert_eq!(
         learned.route(&snapshot, &system(LEGACY)?)?,
         expected,
@@ -47,7 +51,7 @@ fn an_imported_version_resolves_to_its_creating_node_through_a_registered_mappin
 #[test]
 fn a_members_own_system_id_routes_to_the_member_in_any_case() -> TestResult {
     let snapshot = unregistered()?;
-    let learned = LearnedMap::new();
+    let learned = LearnedMap::default();
     let route = learned.route(&snapshot, &system("CDR-A.EXAMPLE.ORG")?)?;
     assert_eq!(
         route,
@@ -68,7 +72,7 @@ fn a_members_own_system_id_routes_to_the_member_in_any_case() -> TestResult {
 fn an_imported_copy_of_a_members_version_teaches_nothing() -> TestResult {
     // §10.2: an import keeps the uid, so node-b holding cdr-a's version is a copy.
     let snapshot = unregistered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     let sighting = learned.observe(
         &snapshot,
         &version("cdr-a.example.org")?,
@@ -80,14 +84,14 @@ fn an_imported_copy_of_a_members_version_teaches_nothing() -> TestResult {
             node: node("node-a")?
         })
     );
-    assert_eq!(learned, LearnedMap::new(), "no mapping and no incident");
+    assert_eq!(learned, LearnedMap::default(), "no mapping and no incident");
     Ok(())
 }
 
 #[test]
 fn an_unknown_creating_system_id_is_a_typed_miss() -> TestResult {
     let snapshot = registered()?;
-    let learned = LearnedMap::new();
+    let learned = LearnedMap::default();
     assert_eq!(
         learned.route(&snapshot, &system(EXTERNAL)?),
         Err(CreatingSystemMiss::Unknown(system(EXTERNAL)?)),
@@ -100,7 +104,7 @@ fn an_unknown_creating_system_id_is_a_typed_miss() -> TestResult {
 #[test]
 fn one_sighting_learns_a_route_to_the_endpoint_it_was_seen_at() -> TestResult {
     let snapshot = unregistered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     let expected = CreatingSystemRoute::Learned {
         node: node("node-b")?,
         endpoint: endpoint("node-b-pub")?,
@@ -114,7 +118,7 @@ fn one_sighting_learns_a_route_to_the_endpoint_it_was_seen_at() -> TestResult {
 #[test]
 fn a_second_endpoint_of_the_same_node_confirms_the_learned_mapping() -> TestResult {
     let snapshot = unregistered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     let first = CreatingSystemRoute::Learned {
         node: node("node-a")?,
         endpoint: endpoint("node-a-pub")?,
@@ -134,7 +138,7 @@ fn a_second_endpoint_of_the_same_node_confirms_the_learned_mapping() -> TestResu
 #[test]
 fn a_sighting_at_a_second_node_raises_the_incident_and_withdraws_the_mapping() -> TestResult {
     let snapshot = unregistered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     learned.observe(&snapshot, &version(EXTERNAL)?, &endpoint("node-a-pub")?)?;
 
     let sighting = learned.observe(&snapshot, &version(EXTERNAL)?, &endpoint("node-b-pub")?)?;
@@ -160,7 +164,7 @@ fn a_sighting_at_a_second_node_raises_the_incident_and_withdraws_the_mapping() -
 fn a_learned_mapping_never_overrides_a_registered_one() -> TestResult {
     let before = unregistered()?;
     let after = registered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     learned.observe(&before, &version(LEGACY)?, &endpoint("node-b-pub")?)?;
     assert_eq!(
         learned.route(&before, &system(LEGACY)?)?,
@@ -186,7 +190,7 @@ fn a_learned_mapping_conflicting_with_a_registered_one_raises_the_incident_and_i
 -> TestResult {
     let before = unregistered()?;
     let after = registered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     learned.observe(&before, &version(LEGACY)?, &endpoint("node-b-pub")?)?;
 
     let sighting = learned.observe(&after, &version(LEGACY)?, &endpoint("node-b-pub")?)?;
@@ -214,7 +218,7 @@ fn a_learned_mapping_conflicting_with_a_registered_one_raises_the_incident_and_i
 fn reconciling_a_new_document_raises_the_incident_for_a_contradicted_mapping() -> TestResult {
     let before = unregistered()?;
     let after = registered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     learned.observe(&before, &version(LEGACY)?, &endpoint("node-b-pub")?)?;
 
     let incidents = learned.reconcile(&after);
@@ -238,14 +242,14 @@ fn reconciling_a_new_document_raises_the_incident_for_a_contradicted_mapping() -
 fn reconciling_a_new_document_drops_a_mapping_it_confirms() -> TestResult {
     let before = unregistered()?;
     let after = registered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     learned.observe(&before, &version(LEGACY)?, &endpoint("node-a-region")?)?;
 
     assert!(
         learned.reconcile(&after).is_empty(),
         "same node, no incident"
     );
-    assert_eq!(learned, LearnedMap::new(), "the document now answers");
+    assert_eq!(learned, LearnedMap::default(), "the document now answers");
     Ok(())
 }
 
@@ -253,7 +257,7 @@ fn reconciling_a_new_document_drops_a_mapping_it_confirms() -> TestResult {
 fn a_learned_endpoint_that_left_the_snapshot_is_a_miss() -> TestResult {
     let before = unregistered()?;
     let after = RegistrySnapshot::from_toml_str(ONE_NODE)?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     learned.observe(&before, &version(EXTERNAL)?, &endpoint("node-b-pub")?)?;
 
     assert_eq!(
@@ -262,18 +266,22 @@ fn a_learned_endpoint_that_left_the_snapshot_is_a_miss() -> TestResult {
         "a stale mapping is a miss, never a route to a non-member"
     );
     assert_eq!(learned.reconcile(&after), Vec::<Incident>::new());
-    assert_eq!(learned, LearnedMap::new(), "the stale mapping is dropped");
+    assert_eq!(
+        learned,
+        LearnedMap::default(),
+        "the stale mapping is dropped"
+    );
     Ok(())
 }
 
 #[test]
 fn a_sighting_at_an_endpoint_outside_the_snapshot_is_refused() -> TestResult {
     let snapshot = unregistered()?;
-    let mut learned = LearnedMap::new();
+    let mut learned = LearnedMap::default();
     assert_eq!(
         learned.observe(&snapshot, &version(EXTERNAL)?, &endpoint("node-z-pub")?),
         Err(ObserveError::UnknownEndpoint(endpoint("node-z-pub")?))
     );
-    assert_eq!(learned, LearnedMap::new());
+    assert_eq!(learned, LearnedMap::default());
     Ok(())
 }

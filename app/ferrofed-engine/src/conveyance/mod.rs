@@ -381,7 +381,7 @@ pub(crate) mod tests {
     use crate::conveyance::relayed::Role;
     use crate::conveyance::signer::Signer;
     use crate::onward::SystemClock;
-    use crate::onward::keys::{KeyRing, SigningKey};
+    use crate::onward::keys::{Curve, KeyRing, SigningKey};
 
     /// The code system of the synthetic caller's role.
     const PRACTITIONER_ROLE: &str = "http://terminology.hl7.org/CodeSystem/practitioner-role";
@@ -391,7 +391,8 @@ pub(crate) mod tests {
         let pem = ferrofed_testkit::oauth::Curve::P384
             .pem()
             .expect("a test key should generate");
-        let key = SigningKey::from_pem(&SecretString::from(pem)).expect("an ES384 key");
+        let key =
+            SigningKey::from_pem(&SecretString::from(pem), Curve::P384).expect("an ES384 key");
         Arc::new(
             KeyRing::new(key, None, Duration::ZERO, Arc::new(SystemClock))
                 .expect("one key is a ring"),

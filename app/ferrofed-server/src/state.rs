@@ -28,7 +28,7 @@ use crate::health::Built;
 use crate::metrics::Metrics;
 use crate::stored;
 use ferrohealth_telemetry::section::TelemetrySection;
-use ferrohealth_telemetry::telemetry::{InitError, Telemetry};
+use ferrohealth_telemetry::telemetry::{InitError, Service, Telemetry};
 
 /// The state the router is built over.
 ///
@@ -141,7 +141,7 @@ impl AppState {
     /// document [`read_registry`] read from the same settings.
     ///
     /// The boot reads the document once, before the startup banner, and
-    /// builds over that read here ([`Federation::load_read`]).
+    /// builds over that read here ([`Federation::build`]).
     ///
     /// # Errors
     /// Returns the [`StateError`] [`AppState::build`] returns, the read's own
@@ -152,8 +152,11 @@ impl AppState {
     ) -> Result<Self, StateError> {
         // NOTE: no specification governs this: our own design; a state built apart from
         // `serve` exports nothing, so its metrics are read by Prometheus alone.
-        let telemetry = Telemetry::new(&TelemetrySection::default(), crate::metrics::service())
-            .map_err(StateError::Metrics)?;
+        let telemetry = Telemetry::new(
+            &TelemetrySection::default(),
+            Service::new(crate::metrics::SCOPE, crate::body::VERSION),
+        )
+        .map_err(StateError::Metrics)?;
         Self::build_telemetered(settings, document, Arc::new(telemetry))
     }
 
@@ -170,7 +173,7 @@ impl AppState {
         telemetry: Arc<Telemetry>,
     ) -> Result<Self, StateError> {
         settings.log_summary();
-        let federation = Federation::load_read(settings, document)?;
+        let federation = Federation::build(settings, document, None)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
         transport::warn(&cleartext);
         let usage = crate::usage_report::group::window(

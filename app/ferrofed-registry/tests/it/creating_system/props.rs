@@ -38,7 +38,7 @@ proptest! {
         sightings in prop::collection::vec((0..SYSTEMS.len(), 0..ENDPOINTS.len()), 0..40),
     ) {
         let snapshot = registered().map_err(fail)?;
-        let mut learned = LearnedMap::new();
+        let mut learned = LearnedMap::default();
         let mut seen: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
         let mut incidents: BTreeMap<&str, usize> = BTreeMap::new();
         for (s, e) in sightings {

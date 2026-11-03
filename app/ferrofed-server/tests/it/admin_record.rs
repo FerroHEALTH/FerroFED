@@ -90,7 +90,7 @@ fn operator() -> Result<String, Box<dyn Error>> {
 /// `peer` reaches it.
 fn listener(profile: Profile, peer: SocketAddr) -> Router {
     let access = Access::new(&support::auth(), profile, Vec::new());
-    admin::router(Arc::new(AppState::default()), access).layer(MockConnectInfo(peer))
+    admin::router(Arc::new(AppState::default()), access, None, None).layer(MockConnectInfo(peer))
 }
 
 /// Sends a `POST` of [`WRITE`] with `authorization` to `app`, logging

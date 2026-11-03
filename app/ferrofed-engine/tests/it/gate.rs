@@ -358,7 +358,7 @@ async fn a_fan_out_with_a_leaking_query_fails_closed_and_asks_nobody() -> TestRe
         &ReqwestTransport::with_timeout(Duration::from_secs(10))?,
         &std::collections::BTreeMap::new(),
     )?;
-    let plan = Plan::new().withholding(withheld()).dispatch(
+    let plan = Plan::default().withholding(withheld()).dispatch(
         EndpointId::new("node-a-pub")?,
         NodeQuery::new(LEAKING_ESCAPED),
     )?;

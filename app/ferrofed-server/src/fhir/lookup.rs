@@ -61,7 +61,7 @@ pub(super) async fn patients(
         &state,
         (outbound, caller.as_deref()),
         (&headers, started),
-        unadmitted,
+        || outcome(StatusCode::FORBIDDEN, "forbidden", UNADMITTED),
     );
     let admitted = match admitted {
         Ok(admitted) => admitted,
@@ -105,14 +105,9 @@ pub(super) async fn patients(
     }
 }
 
-/// The `OperationOutcome` of a caller the gate did not admit to the lookup.
-fn unadmitted() -> Response {
-    outcome(
-        StatusCode::FORBIDDEN,
-        "forbidden",
-        "the caller was not admitted to read the patient's EHRs",
-    )
-}
+/// The text of the `OperationOutcome` a caller the gate did not admit to the
+/// lookup is answered `403` with.
+const UNADMITTED: &str = "the caller was not admitted to read the patient's EHRs";
 
 /// The empty `searchset`, with the statement that no member was sent
 /// anything.

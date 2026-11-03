@@ -69,7 +69,7 @@ async fn both(dir: &Path, gateway: &str) -> Result<(Router, Router, [Server; 3])
     let state = state_serving(dir, (&registry, "fan_out_stored_queries = true"), gateway)?;
     let client = ferrofed_server::router(Arc::clone(&state), &crate::facade::settings_with_room());
     let access = Access::new(&crate::support::auth(), Profile::Production, Vec::new());
-    Ok((client, admin::router(state, access), [a, b, c]))
+    Ok((client, admin::router(state, access, None, None), [a, b, c]))
 }
 
 /// Sends `request` to `app` and returns the `Location` of its `200`.

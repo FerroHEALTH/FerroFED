@@ -29,7 +29,7 @@ use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::serve::Listener;
 use ferrohealth_server::tls::ReloadableTls;
 use ferrohealth_telemetry::section::Filter;
-use ferrohealth_telemetry::telemetry::{Console, InitError, Telemetry};
+use ferrohealth_telemetry::telemetry::{Console, InitError, Service, Telemetry};
 
 /// Runs `serve`: the banner on a terminal, the runtime, the telemetry with
 /// the trace export and the metrics push `[telemetry.otlp]` asks for, the
@@ -233,7 +233,7 @@ fn serve_command(
         if let Some((address, access)) = admin {
             let managed =
                 revisions.map(|revisions| Arc::new(Managed::new(revisions, Arc::clone(&reloader))));
-            let app = admin::serving_router(
+            let app = admin::router(
                 Arc::clone(state),
                 access,
                 managed,
@@ -340,5 +340,8 @@ fn telemetry(
     // NOTE: no specification governs this: our own design; the OTLP export is a tonic
     // client, which is built inside the runtime it will run on.
     let _entered = runtime.enter();
-    Telemetry::new(&settings.telemetry, metrics::service())
+    Telemetry::new(
+        &settings.telemetry,
+        Service::new(metrics::SCOPE, body::VERSION),
+    )
 }

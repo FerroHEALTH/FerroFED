@@ -141,16 +141,6 @@ pub async fn order_and_limit<G: Gateway>(
     Ok(union)
 }
 
-/// The undirected `COUNT` of the patient's compositions.
-///
-/// # Errors
-///
-/// Returns [`Failure::Query`] when the query cannot be built from its
-/// template, which a fixed template never gives cause for.
-pub fn count(fixture: &Fixture) -> Result<String, Failure> {
-    compositions(fixture, COUNT)
-}
-
 /// Returns the count rows of a `200` answer.
 fn counts<G: Gateway>(gateway: &G, reply: &Reply) -> Result<Vec<Vec<u64>>, Failure> {
     gateway
@@ -174,7 +164,7 @@ pub async fn aggregate_recombined<G: Gateway>(
     gateway: &G,
     fixture: &Fixture,
 ) -> Result<(), Failure> {
-    let reply = ask(gateway, post_aql(&count(fixture)?, &[])?).await?;
+    let reply = ask(gateway, post_aql(&compositions(fixture, COUNT)?, &[])?).await?;
     reply.expect(StatusCode::OK, "CP-10: a declared undirected aggregate")?;
     let total = as_count(fixture.compositions())?;
     ensure_eq(
@@ -191,7 +181,7 @@ pub async fn aggregate_recombined<G: Gateway>(
 ///
 /// Returns [`Failure`] naming the first expectation that did not hold.
 pub async fn aggregate_refused<G: Gateway>(gateway: &G, fixture: &Fixture) -> Result<(), Failure> {
-    let refused = ask(gateway, post_aql(&count(fixture)?, &[])?).await?;
+    let refused = ask(gateway, post_aql(&compositions(fixture, COUNT)?, &[])?).await?;
     refused.expect(
         StatusCode::BAD_REQUEST,
         "CP-10: an undirected aggregate that is not cross-node-correct",

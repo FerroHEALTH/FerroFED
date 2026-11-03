@@ -55,7 +55,7 @@ fn plan(endpoints: &[&str], mode: DedupMode) -> Result<Plan, Box<dyn Error>> {
         DedupMode::VersionIdentity => ResultOrder::default().with_version_key(0),
         _ => ResultOrder::default(),
     };
-    let mut plan = Plan::new().ordered(order).deduplicating(mode);
+    let mut plan = Plan::default().ordered(order).deduplicating(mode);
     for id in endpoints {
         plan = plan.dispatch(EndpointId::new(*id)?, NodeQuery::new(NODE_AQL))?;
     }
