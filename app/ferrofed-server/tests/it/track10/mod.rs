@@ -48,7 +48,7 @@ use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
-use ferrofed_testkit::leak::{Carrier, Needles, Sighting};
+use ferrofed_testkit::leak::{Carrier, Needles, Scope, Sighting};
 use ferrofed_testkit::proxy::{Capture, CapturingProxy};
 use ferrofed_testkit::seed::PatientId;
 use ferrohealth_telemetry::section::Rendering;
@@ -319,7 +319,7 @@ pub(crate) async fn run(app: &Router, topology: &Topology<'_>, case: &Case) -> T
     let name = case.name.as_str();
     let needles = needles()?;
     for member in [&topology.a, &topology.b] {
-        let sightings = needles.in_journal(&member.proxy.journal());
+        let sightings = needles.in_journal(&member.proxy.journal(), Scope::WholeRequest);
         assert!(
             sightings.is_empty(),
             "{name}: {} received the identifier (§5.4.1, N33, CP-26):\n  {}",
@@ -489,13 +489,13 @@ pub(crate) async fn commit_lands_byte_identical(
         "byte for byte"
     );
     let needles = needles()?;
-    let in_body = needles.in_journal(&journal);
+    let in_body = needles.in_journal(&journal, Scope::WholeRequest);
     assert!(
         !in_body.is_empty() && in_body.iter().all(|seen| seen.carrier == Carrier::Body),
         "the identifier rides in the body alone, so the check is not vacuous:\n  {}",
         listed(&in_body)
     );
-    let outside = needles.in_journal_outside_bodies(&journal);
+    let outside = needles.in_journal(&journal, Scope::OutsideBodies);
     assert!(
         outside.is_empty(),
         "the identifier outside the body (N33):\n  {}",

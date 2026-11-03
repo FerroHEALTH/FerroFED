@@ -36,7 +36,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::fhir::locator::Locator;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::proxy::{CapturingProxy, Fault};
+use ferrofed_testkit::proxy::{Bind, CapturingProxy, Fault};
 use http::{Request, StatusCode};
 use serde_json::Value;
 use wiremock::matchers::{method, path};
@@ -193,8 +193,8 @@ impl Members {
 
     /// The members whose own endpoints are `own_a` and `own_b`.
     async fn over(own_a: Server, own_b: Server) -> Result<Self, Box<dyn Error>> {
-        let proxy_a = CapturingProxy::start(own_a.uri()).await?;
-        let proxy_b = CapturingProxy::start(own_b.uri()).await?;
+        let proxy_a = CapturingProxy::start(own_a.uri(), Bind::Loopback).await?;
+        let proxy_b = CapturingProxy::start(own_b.uri(), Bind::Loopback).await?;
         Ok(Self {
             a: Server::start().await,
             b: Server::start().await,

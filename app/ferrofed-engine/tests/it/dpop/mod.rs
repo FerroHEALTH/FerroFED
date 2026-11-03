@@ -66,7 +66,7 @@ static CALLERS: LazyLock<Issuer> =
 
 /// The gateway's signing keys.
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::es384_pem()?))?;
+    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
     Ok(Arc::new(KeyRing::new(
         key,
         None,
@@ -78,7 +78,7 @@ fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
 /// A fresh `DPoP` key of the P-256 curve.
 fn prover() -> Result<Arc<Prover>, Box<dyn Error>> {
     Ok(Arc::new(Prover::from_pem(&SecretString::from(
-        oauth::p256_pem()?,
+        oauth::Curve::P256.pem()?,
     ))?))
 }
 
@@ -517,9 +517,9 @@ async fn a_request_without_a_bound_token_carries_no_proof() -> TestResult {
 /// no EC key in PKCS#8 PEM is refused naming no part of it (RFC 7518 §3.4).
 #[test]
 fn a_dpop_key_signs_with_the_algorithm_of_its_curve() -> TestResult {
-    let p256 = Prover::from_pem(&SecretString::from(oauth::p256_pem()?))?;
+    let p256 = Prover::from_pem(&SecretString::from(oauth::Curve::P256.pem()?))?;
     assert_eq!(Algorithm::ES256, p256.algorithm());
-    let p384 = Prover::from_pem(&SecretString::from(oauth::es384_pem()?))?;
+    let p384 = Prover::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
     assert_eq!(Algorithm::ES384, p384.algorithm());
     let refused = Prover::from_pem(&SecretString::from(String::from("synthetic: no key")));
     assert!(matches!(refused, Err(DpopKeyError::Pem(_))), "{refused:?}");

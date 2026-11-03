@@ -84,7 +84,7 @@ async fn a_patient_the_binding_does_not_know_is_not_found_and_nothing_is_sent() 
     let dir = tempfile::tempdir()?;
     // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
     // the identifier answers an empty searchset.
-    let pdq = pdqm_stub::supplier(&[]).await;
+    let pdq = pdqm_stub::answering(&[], &[]).await;
     let app = gateway_asking(dir.path(), (&a, &b), &pdqm_stub::base_url(&pdq))?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
@@ -101,7 +101,11 @@ async fn a_patient_the_binding_does_not_know_is_not_found_and_nothing_is_sent() 
 async fn a_patient_the_binding_holds_no_name_for_writes_no_document() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = pdqm_stub::supplier(&[Entry::new(&[(NAMESPACE, PATIENT)])]).await;
+    let pdq = pdqm_stub::answering(
+        &[Entry::new(&[(NAMESPACE, PATIENT)])],
+        &[Entry::new(&[(NAMESPACE, PATIENT)])],
+    )
+    .await;
     let app = gateway_asking(dir.path(), (&a, &b), &pdqm_stub::base_url(&pdq))?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
@@ -118,11 +122,11 @@ async fn a_patient_the_binding_holds_no_name_for_writes_no_document() -> TestRes
 async fn several_patients_under_the_identifier_write_no_document() -> TestResult {
     let (a, b) = (node_holding(UID_A).await, node_holding(UID_B).await);
     let dir = tempfile::tempdir()?;
-    let pdq = pdqm_stub::supplier(&[
+    let entries = [
         known(),
         Entry::new(&[(NAMESPACE, PATIENT)]).named(("SENTINEL-FAMILY-2", "SENTINEL-GIVEN-2"), None),
-    ])
-    .await;
+    ];
+    let pdq = pdqm_stub::answering(&entries, &entries).await;
     let app = gateway_asking(dir.path(), (&a, &b), &pdqm_stub::base_url(&pdq))?;
     let (status, text) = call(app, summary("")?).await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");

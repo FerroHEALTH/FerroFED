@@ -34,7 +34,7 @@ harness is `tools/ferrofed-testkit`:
   headers, body) and injects `Fault::Refuse`, `Fault::Delay`,
   `Fault::Status` or `Fault::Reply` (a status with an ITS-REST `Error` body)
   per proxy, at any point in a test. Track 10 is judged on that journal,
-  never on the gateway's logs (§16.3). `CapturingProxy::start_reachable`
+  never on the gateway's logs (§16.3). A proxy started on `Bind::EveryInterface`
   listens on every interface, so a container reaches the proxy through the
   Docker host gateway.
 - `seed.rs`: `seed()` writes EHRs, the vendored template and the vendored
@@ -48,8 +48,8 @@ harness is `tools/ferrofed-testkit`:
 - `reference.rs`: the reference implementation as a second gateway for the
   differential run (#94), built from its vendored source with the Maven
   manifest fetched from the pinned commit and held to its digest, in
-  digest-pinned images, reaching the nodes through `start_reachable`
-  proxies. It is evidence, never an oracle.
+  digest-pinned images, reaching the nodes through proxies on
+  `Bind::EveryInterface`. It is evidence, never an oracle.
 
 The Connectathon tracks of §16.3 are scenarios under
 `app/ferrofed-server/tests/it/e2e/` (`scenario.rs` and a `track<n>.rs` per

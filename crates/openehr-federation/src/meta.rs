@@ -95,7 +95,7 @@ impl FederationMeta {
             endpoints,
             timeout: None,
             dedup: None,
-            extra: Extra::new(),
+            extra: Extra::default(),
         })
     }
 

@@ -367,9 +367,10 @@ async fn the_national_connector_reads_the_summary_and_prescriptions_and_dispense
         return Ok(());
     }
     let harness = Box::pin(Harness::start()).await?;
-    let pix = ferropix::ferropix(
+    let pix = ferropix::start(
         &[PATIENT.namespace()],
         &[DOMAIN_A.system(), DOMAIN_B.system()],
+        None,
     )
     .await?;
     let statuses = seed::feed_records_as(

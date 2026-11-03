@@ -78,7 +78,7 @@ impl Clock for ManualClock {
 /// A fresh synthetic ES384 key.
 fn key() -> Result<SigningKey, Box<dyn Error>> {
     Ok(SigningKey::from_pem(&SecretString::from(
-        oauth::es384_pem()?,
+        oauth::Curve::P384.pem()?,
     ))?)
 }
 
@@ -311,7 +311,7 @@ async fn the_assertion_carries_the_rfc_7523_claims() -> TestResult {
 /// the same `kid`, and the JWK carries `use` `sig` and `alg` `ES384`.
 #[test]
 fn the_kid_is_the_rfc_7638_thumbprint_of_the_key() -> TestResult {
-    let pem = oauth::es384_pem()?;
+    let pem = oauth::Curve::P384.pem()?;
     let once = SigningKey::from_pem(&SecretString::from(pem.clone()))?;
     let again = SigningKey::from_pem(&SecretString::from(pem))?;
     assert_eq!(once.kid(), again.kid());
@@ -330,7 +330,7 @@ fn the_kid_is_the_rfc_7638_thumbprint_of_the_key() -> TestResult {
 
 #[test]
 fn a_key_that_is_no_es384_key_is_refused() -> TestResult {
-    let p256 = SigningKey::from_pem(&SecretString::from(oauth::p256_pem()?));
+    let p256 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P256.pem()?));
     assert!(matches!(p256, Err(KeyError::Curve(_))), "{p256:?}");
     let garbage = SigningKey::from_pem(&SecretString::from("not a key"));
     assert!(matches!(garbage, Err(KeyError::Pem(_))), "{garbage:?}");
@@ -339,7 +339,7 @@ fn a_key_that_is_no_es384_key_is_refused() -> TestResult {
 
 #[test]
 fn a_previous_key_that_is_the_current_key_is_refused() -> TestResult {
-    let pem = oauth::es384_pem()?;
+    let pem = oauth::Curve::P384.pem()?;
     let current = SigningKey::from_pem(&SecretString::from(pem.clone()))?;
     let previous = SigningKey::from_pem(&SecretString::from(pem))?;
     let refused = KeyRing::new(

@@ -12,7 +12,7 @@ use std::path::Path;
 use axum::Router;
 use axum::routing::get;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::proxy::CapturingProxy;
+use ferrofed_testkit::proxy::{Bind, CapturingProxy};
 use http::{Request, StatusCode};
 use tokio::process::Command;
 use wiremock::matchers::{method, path_regex};
@@ -78,8 +78,8 @@ impl MockNodes {
     async fn start() -> Result<Self, Box<dyn Error>> {
         let a = node("cdr-a.example.org").await;
         let b = node("cdr-b.example.org").await;
-        let proxy_a = CapturingProxy::start(a.uri()).await?;
-        let proxy_b = CapturingProxy::start(b.uri()).await?;
+        let proxy_a = CapturingProxy::start(a.uri(), Bind::Loopback).await?;
+        let proxy_b = CapturingProxy::start(b.uri(), Bind::Loopback).await?;
         Ok(Self {
             _servers: [a, b],
             a: proxy_a,

@@ -25,7 +25,7 @@ use std::error::Error;
 
 use axum::Router;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::proxy::{CapturingProxy, Fault};
+use ferrofed_testkit::proxy::{Bind, CapturingProxy, Fault};
 use http::{HeaderMap, Method, StatusCode};
 use tempfile::TempDir;
 use wiremock::ResponseTemplate;
@@ -114,7 +114,7 @@ impl Scenario {
                 .set_body_raw(WRITTEN.as_bytes().to_vec(), "application/json"),
         )
         .await;
-        let owner = CapturingProxy::start(a.uri()).await?;
+        let owner = CapturingProxy::start(a.uri(), Bind::Loopback).await?;
         let b = node_answering(ORIGINAL).await;
         let dir = tempfile::tempdir()?;
         let app = gateway(

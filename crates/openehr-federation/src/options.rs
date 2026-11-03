@@ -387,7 +387,7 @@ impl Completeness {
         Self {
             best_effort: false,
             opt_in: None,
-            extra: Extra::new(),
+            extra: Extra::default(),
         }
     }
 
@@ -398,7 +398,7 @@ impl Completeness {
         Self {
             best_effort: true,
             opt_in: Some(opt_in),
-            extra: Extra::new(),
+            extra: Extra::default(),
         }
     }
 
@@ -462,7 +462,7 @@ fn read_completeness(members: &mut Members) -> Result<Completeness, WireError> {
     Ok(Completeness {
         best_effort,
         opt_in,
-        extra: Extra::new(),
+        extra: Extra::default(),
     })
 }
 
@@ -519,7 +519,7 @@ impl DefinitionBehaviour {
             fan_out_template_upload,
             stored_query_registry: None,
             stored_query_fan_out: None,
-            extra: Extra::new(),
+            extra: Extra::default(),
         }
     }
 
@@ -620,7 +620,7 @@ fn read_definition(members: &mut Members) -> Result<DefinitionBehaviour, WireErr
         fan_out_template_upload: members.required("fan_out_template_upload")?,
         stored_query_registry: members.optional("stored_query_registry")?,
         stored_query_fan_out: members.optional("stored_query_fan_out")?,
-        extra: Extra::new(),
+        extra: Extra::default(),
     };
     definition.check()?;
     Ok(definition)

@@ -666,7 +666,9 @@ pub(crate) const JWKS_URI: &str = "https://gw.example.org/.well-known/jwks.json"
 static SIGNING_KEY: LazyLock<(tempfile::TempDir, String)> = LazyLock::new(|| {
     let dir = tempfile::tempdir().expect("a temporary directory should be made");
     let file = dir.path().join("signing-key.pem");
-    let pem = ferrofed_testkit::oauth::es384_pem().expect("a test key should generate");
+    let pem = ferrofed_testkit::oauth::Curve::P384
+        .pem()
+        .expect("a test key should generate");
     std::fs::write(&file, pem).expect("the key file should be written");
     (dir, file.display().to_string())
 });
@@ -850,7 +852,7 @@ pub(crate) fn signer(
 ) -> Result<Arc<ferrofed_engine::conveyance::signer::Signer>, Box<dyn StdError>> {
     use ferrofed_engine::onward::SystemClock;
     use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
-    let pem = secrecy::SecretString::from(ferrofed_testkit::oauth::es384_pem()?);
+    let pem = secrecy::SecretString::from(ferrofed_testkit::oauth::Curve::P384.pem()?);
     let keys = KeyRing::new(
         SigningKey::from_pem(&pem)?,
         None,

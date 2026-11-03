@@ -69,7 +69,7 @@ fn without_an_order_each_row_keeps_its_endpoint_attributes() {
             answer("node-b", "org-b", &["beta"]),
             answer("node-a", "org-a", &["alpha"]),
         ],
-        &ResultOrder::unordered(),
+        &ResultOrder::default(),
     );
     assert_eq!(
         vec![
@@ -148,7 +148,7 @@ fn a_recombined_row_carries_no_endpoint_attributes() {
     let merged = combine(
         vec![node("node-a"), node("node-b")],
         &recombination,
-        &ResultOrder::unordered(),
+        &ResultOrder::default(),
     )
     .expect("a count recombines");
     assert_eq!([vec![json!(4)]], merged.rows());

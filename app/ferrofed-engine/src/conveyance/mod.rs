@@ -388,7 +388,9 @@ pub(crate) mod tests {
 
     /// The keys of every unit test's conveyance, generated once.
     pub(super) static KEYS: LazyLock<Arc<KeyRing>> = LazyLock::new(|| {
-        let pem = ferrofed_testkit::oauth::es384_pem().expect("a test key should generate");
+        let pem = ferrofed_testkit::oauth::Curve::P384
+            .pem()
+            .expect("a test key should generate");
         let key = SigningKey::from_pem(&SecretString::from(pem)).expect("an ES384 key");
         Arc::new(
             KeyRing::new(key, None, Duration::ZERO, Arc::new(SystemClock))

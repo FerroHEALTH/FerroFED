@@ -37,7 +37,7 @@ use ferrofed_testkit::issuer::Issuer;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::national_connector::{CLAIMS, NationalConnector, NationalId};
 use ferrofed_testkit::pdqm_stub::{self, Entry};
-use ferrofed_testkit::proxy::CapturingProxy;
+use ferrofed_testkit::proxy::{Bind, CapturingProxy};
 use tokio::net::TcpListener;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -211,13 +211,13 @@ impl Harness {
         .await?;
         nodes.a.proxy.clear_journal();
         nodes.b.proxy.clear_journal();
-        let pdq = pdqm_stub::supplier(&[Entry::new(&[(&PATIENT.namespace(), &PATIENT.value())])
-            .named((FAMILY, GIVEN), Some(BIRTH_DATE))])
-        .await;
+        let entries = [Entry::new(&[(&PATIENT.namespace(), &PATIENT.value())])
+            .named((FAMILY, GIVEN), Some(BIRTH_DATE))];
+        let pdq = pdqm_stub::answering(&entries, &entries).await;
         let own_a = own_endpoint(RX_A, "rx-a1").await;
         let own_b = own_endpoint(RX_B, "rx-b1").await;
-        let proxy_a = CapturingProxy::start(own_a.uri()).await?;
-        let proxy_b = CapturingProxy::start(own_b.uri()).await?;
+        let proxy_a = CapturingProxy::start(own_a.uri(), Bind::Loopback).await?;
+        let proxy_b = CapturingProxy::start(own_b.uri(), Bind::Loopback).await?;
         Ok(Self {
             nodes,
             pdq,

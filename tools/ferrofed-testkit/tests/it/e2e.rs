@@ -239,7 +239,7 @@ async fn every_fault_is_injectable_per_node() {
         "a refusing proxy answers nothing"
     );
 
-    nodes.b.proxy.clear_fault();
+    nodes.b.proxy.set_fault(Fault::Forward);
     assert_eq!(
         read_ehr(&nodes.b, FIRST_ON_B).await.unwrap().status(),
         StatusCode::OK,

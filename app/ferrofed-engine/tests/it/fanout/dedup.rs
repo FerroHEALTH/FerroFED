@@ -52,8 +52,8 @@ async fn versions(rows: &[(&str, &str)]) -> Server {
 /// The plan over `endpoints` under `mode`, the uid in node column 0.
 fn plan(endpoints: &[&str], mode: DedupMode) -> Result<Plan, Box<dyn Error>> {
     let order = match mode {
-        DedupMode::VersionIdentity => ResultOrder::unordered().with_version_key(0),
-        _ => ResultOrder::unordered(),
+        DedupMode::VersionIdentity => ResultOrder::default().with_version_key(0),
+        _ => ResultOrder::default(),
     };
     let mut plan = Plan::new().ordered(order).deduplicating(mode);
     for id in endpoints {

@@ -93,7 +93,7 @@ async fn order_by_and_limit_return_the_global_top_rows_deterministically() -> Te
         slow.proxy
             .set_fault(Fault::Delay(Duration::from_millis(1_500)));
         let reply = exchange(&app, post_aql(&top, &[])?).await?;
-        slow.proxy.clear_fault();
+        slow.proxy.set_fault(Fault::Forward);
         assert_eq!(StatusCode::OK, reply.status, "{}", reply.text);
         assert_eq!(
             union.first().cloned().into_iter().collect::<Vec<_>>(),

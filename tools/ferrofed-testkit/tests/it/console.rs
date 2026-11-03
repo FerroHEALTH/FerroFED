@@ -90,7 +90,7 @@ impl Running {
         let document = dir.path().join("registry.toml");
         std::fs::write(&document, registry(&node.uri()))?;
         let key_file = dir.path().join("signing-key.pem");
-        std::fs::write(&key_file, ferrofed_testkit::oauth::es384_pem()?)?;
+        std::fs::write(&key_file, ferrofed_testkit::oauth::Curve::P384.pem()?)?;
         let issuer = Issuer::new(ISSUER)?;
         let text = gateway_configuration(&document, &issuer, &key_file)?;
         let settings =

@@ -34,32 +34,32 @@ fn built() -> OptionsRoot {
                 .expect("a release"),
             aql: AqlBehaviour {
                 fan_out: true,
-                extra: Extra::new(),
+                extra: Extra::default(),
             },
             dedup: DedupPolicy {
                 default: DedupDefault,
                 modes: DedupModes::new(vec!["none".to_owned()]).expect("one mode"),
                 request_header: None,
-                extra: Extra::new(),
+                extra: Extra::default(),
             },
             timeout: TimeoutPolicy {
                 per_node_ms: 5000,
                 overall_ms: 15000,
                 policy: "all-or-nothing".to_owned(),
-                extra: Extra::new(),
+                extra: Extra::default(),
             },
             completeness: Completeness::with_best_effort(OptIn {
                 header: Some(openehr_federation::headers::COMPLETENESS.to_owned()),
                 value: Some(openehr_federation::headers::COMPLETENESS_PARTIAL.to_owned()),
-                extra: Extra::new(),
+                extra: Extra::default(),
             }),
             paging: Paging {
                 offset_strategy: "reject".to_owned(),
-                extra: Extra::new(),
+                extra: Extra::default(),
             },
             aggregates: Aggregates {
                 decomposable: Vec::new(),
-                extra: Extra::new(),
+                extra: Extra::default(),
             },
             definition: DefinitionBehaviour::new(false)
                 .with_stored_query_registry(true)
@@ -67,7 +67,7 @@ fn built() -> OptionsRoot {
                 .expect("registry without fan-out"),
             localization: Localization {
                 on_failure: "closed".to_owned(),
-                extra: Extra::new(),
+                extra: Extra::default(),
             },
             auth: None,
             its_rest: ItsRestAreas {
@@ -75,9 +75,9 @@ fn built() -> OptionsRoot {
                 ehr: "routed".to_owned(),
                 definition: "routed".to_owned(),
                 demographic: DemographicSupport::new("unsupported").expect("not federated"),
-                extra: Extra::new(),
+                extra: Extra::default(),
             },
-            extra: Extra::new(),
+            extra: Extra::default(),
         },
         endpoints: vec![MemberEndpoint {
             id: EndpointId::new("node_1").expect("non-empty"),
@@ -89,9 +89,9 @@ fn built() -> OptionsRoot {
             version: None,
             latency_ms_p50: None,
             url: None,
-            extra: Extra::new(),
+            extra: Extra::default(),
         }],
-        extra: Extra::new(),
+        extra: Extra::default(),
     }
 }
 

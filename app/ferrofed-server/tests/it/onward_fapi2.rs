@@ -76,14 +76,14 @@ async fn material(dir: &Path) -> Result<(AuthorizationServer, Material), Box<dyn
     authority
         .endpoint()
         .require_authorization_details([DETAILS_TYPE]);
-    let client_pem = oauth::p256_pem()?;
+    let client_pem = oauth::Curve::P256.pem()?;
     let file = |name: &str, contents: &str| -> Result<toml::Value, Box<dyn Error>> {
         let file = dir.join(name);
         std::fs::write(&file, contents)?;
         Ok(toml::Value::String(file.display().to_string()))
     };
     let client = file("fapi2-client.pem", &client_pem)?;
-    let dpop = file("fapi2-dpop.pem", &oauth::p256_pem()?)?;
+    let dpop = file("fapi2-dpop.pem", &oauth::Curve::P256.pem()?)?;
     let tables = format!(
         "[credentials.\"node-a-pub\".fapi2]\nissuer = \"{}\"\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\nclient_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\nauthorization_details = '''{DETAILS}'''\n",
         authority.issuer()
@@ -292,7 +292,7 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
     );
 
     let p384 = dir.path().join("p384.pem");
-    std::fs::write(&p384, oauth::es384_pem()?)?;
+    std::fs::write(&p384, oauth::Curve::P384.pem()?)?;
     let p384 = toml::Value::String(p384.display().to_string());
     let error = refused(&with_line(
         tables,
@@ -486,7 +486,7 @@ async fn a_rotated_client_key_is_published_beside_the_previous_one_and_alone_sig
         .map_err(|_more| "one assertion before the rotation")?;
 
     let old = SigningKey::from_p256_pem(&SecretString::from(material.client_pem.clone()))?;
-    let new_pem = oauth::p256_pem()?;
+    let new_pem = oauth::Curve::P256.pem()?;
     let new = SigningKey::from_p256_pem(&SecretString::from(new_pem.clone()))?;
     let new_file = dir.path().join("fapi2-client-new.pem");
     std::fs::write(&new_file, &new_pem)?;
@@ -558,7 +558,7 @@ async fn the_configuration_refuses_a_previous_client_key_it_cannot_publish() -> 
     let dir = tempfile::tempdir()?;
     let (_authority, material) = material(dir.path()).await?;
     let p384 = dir.path().join("p384.pem");
-    std::fs::write(&p384, oauth::es384_pem()?)?;
+    std::fs::write(&p384, oauth::Curve::P384.pem()?)?;
     let p384 = toml::Value::String(p384.display().to_string());
     let error = refused(&format!(
         "{}previous_client_key_file = {p384}\n",

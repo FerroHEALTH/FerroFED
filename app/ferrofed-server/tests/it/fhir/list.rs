@@ -25,7 +25,7 @@ use ferrofed_server::state::AppState;
 use ferrofed_testkit::health_data_api;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdqm_stub;
-use ferrofed_testkit::proxy::{CapturingProxy, Fault};
+use ferrofed_testkit::proxy::{Bind, CapturingProxy, Fault};
 use http::{Request, StatusCode};
 use serde_json::Value;
 use wiremock::matchers::{method, path};
@@ -94,8 +94,8 @@ impl Members {
         b: ResponseTemplate,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let (own_a, own_b) = (own_endpoint(a).await, own_endpoint(b).await);
-        let proxy_a = CapturingProxy::start(own_a.uri()).await?;
-        let proxy_b = CapturingProxy::start(own_b.uri()).await?;
+        let proxy_a = CapturingProxy::start(own_a.uri(), Bind::Loopback).await?;
+        let proxy_b = CapturingProxy::start(own_b.uri(), Bind::Loopback).await?;
         Ok(Self {
             a: node_holding(UID_A).await,
             b: node_holding(UID_B).await,

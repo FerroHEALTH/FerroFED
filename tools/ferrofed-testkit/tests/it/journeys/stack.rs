@@ -293,7 +293,7 @@ async fn gateway(
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(a, b))?;
     let key_file = dir.join("signing-key.pem");
-    std::fs::write(&key_file, ferrofed_testkit::oauth::es384_pem()?)?;
+    std::fs::write(&key_file, ferrofed_testkit::oauth::Curve::P384.pem()?)?;
     let definitions = dir.join("stored.redb");
     stored_queries(&definitions)?;
     let jwks = dir.join("issuer-jwks.json");

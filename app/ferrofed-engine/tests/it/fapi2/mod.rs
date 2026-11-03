@@ -87,14 +87,14 @@ static CALLERS: LazyLock<Issuer> =
 /// A fresh P-256 client key.
 fn client_key() -> Result<SigningKey, Box<dyn Error>> {
     Ok(SigningKey::from_p256_pem(&SecretString::from(
-        oauth::p256_pem()?,
+        oauth::Curve::P256.pem()?,
     ))?)
 }
 
 /// A fresh P-256 `DPoP` key.
 fn prover() -> Result<Arc<Prover>, Box<dyn Error>> {
     Ok(Arc::new(Prover::from_pem(&SecretString::from(
-        oauth::p256_pem()?,
+        oauth::Curve::P256.pem()?,
     ))?))
 }
 

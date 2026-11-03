@@ -5,8 +5,8 @@
 //! port, keeping every export request it receives for a test to read
 //! (<https://opentelemetry.io/docs/specs/otlp/>).
 //!
-//! [`Collector::start_tls`] serves it over TLS instead, requiring a client
-//! certificate, with the synthetic set of [`ListenerCertificates`].
+//! [`Collector::start`] serves it over TLS, requiring a client certificate,
+//! when it is given the synthetic set of [`ListenerCertificates`].
 //!
 //! It runs on a thread and a runtime of its own, so a gateway exporting from
 //! its batch thread, a `serve` process, or a test runtime that has stopped
@@ -58,39 +58,27 @@ pub struct Collector {
 }
 
 impl Collector {
-    /// Starts a collector on a free loopback port.
+    /// Starts a collector on a free loopback port, over TLS when
+    /// `certificates` is set: it then presents their server certificate,
+    /// admits only a client that presents a certificate their client CA
+    /// signed, and its endpoint is `https://127.0.0.1:<port>`.
     ///
     /// # Errors
     ///
-    /// Returns [`CollectorError::Bind`] when no port can be bound, and
+    /// Returns [`CollectorError::Bind`] when no port can be bound,
     /// [`CollectorError::Runtime`] when the collector's runtime cannot be
-    /// built.
-    pub fn start() -> Result<Self, CollectorError> {
-        Self::serve(None)
-    }
-
-    /// Starts a collector over TLS on a free loopback port, presenting the
-    /// server certificate of `certificates` and admitting only a client that
-    /// presents a certificate its client CA signed; its endpoint is
-    /// `https://127.0.0.1:<port>`.
-    ///
-    /// # Errors
-    ///
-    /// The errors of [`Collector::start`], and [`CollectorError::Tls`] when
-    /// the TLS configuration is refused.
-    pub fn start_tls(certificates: &ListenerCertificates) -> Result<Self, CollectorError> {
-        // NOTE: tonic's server reads rustls's process-level provider, ambiguous while two crypto
-        // crates are linked; an earlier install wins, so the result is dropped.
-        let _installed: Result<(), Arc<tokio_rustls::rustls::crypto::CryptoProvider>> =
-            tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
-        let tls = ServerTlsConfig::new()
-            .identity(Identity::from_pem(certificates.chain(), certificates.key()))
-            .client_ca_root(Certificate::from_pem(certificates.client_ca()));
-        Self::serve(Some(tls))
-    }
-
-    /// Starts the collector, over `tls` when it is set.
-    fn serve(tls: Option<ServerTlsConfig>) -> Result<Self, CollectorError> {
+    /// built, and [`CollectorError::Tls`] when the TLS configuration is
+    /// refused.
+    pub fn start(certificates: Option<&ListenerCertificates>) -> Result<Self, CollectorError> {
+        let tls = certificates.map(|certificates| {
+            // NOTE: tonic's server reads rustls's process-level provider, ambiguous while two crypto
+            // crates are linked; an earlier install wins, so the result is dropped.
+            let _installed: Result<(), Arc<tokio_rustls::rustls::crypto::CryptoProvider>> =
+                tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
+            ServerTlsConfig::new()
+                .identity(Identity::from_pem(certificates.chain(), certificates.key()))
+                .client_ca_root(Certificate::from_pem(certificates.client_ca()))
+        });
         let scheme = if tls.is_some() { "https" } else { "http" };
         let mut builder = Server::builder();
         if let Some(tls) = tls {
@@ -130,7 +118,7 @@ impl Collector {
     }
 
     /// The URL an OTLP exporter sends to: `http://`, or `https://` for a
-    /// collector [`Collector::start_tls`] started.
+    /// collector started over TLS.
     #[must_use]
     pub fn endpoint(&self) -> &str {
         &self.endpoint

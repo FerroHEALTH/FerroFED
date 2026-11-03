@@ -122,7 +122,7 @@ impl NodeA {
 /// The `[signing]` table with a fresh ES384 key, written into `dir`.
 fn signing(dir: &Path) -> Result<String, Box<dyn Error>> {
     let file = dir.join("signing.pem");
-    std::fs::write(&file, oauth::es384_pem()?)?;
+    std::fs::write(&file, oauth::Curve::P384.pem()?)?;
     Ok(format!(
         "[signing]\nkey_file = {}\njwks_uri = \"{JWKS_URI}\"\n",
         toml::Value::String(file.display().to_string())
@@ -310,7 +310,7 @@ fn dpop_and_certificate_binding_on_one_grant_are_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
     let identity = dir.path().join("client.pem");
     let dpop = dir.path().join("dpop.pem");
-    std::fs::write(&dpop, oauth::p256_pem()?)?;
+    std::fs::write(&dpop, oauth::Curve::P256.pem()?)?;
     let front = MutualTls::front("http://127.0.0.1:9")?;
     std::fs::write(&identity, front.client_identity())?;
     let tls = format!(
@@ -397,7 +397,7 @@ fn mutual_tls_without_a_certificate_or_over_http_is_refused() -> TestResult {
     );
 
     let keyless = dir.path().join("keyless.pem");
-    std::fs::write(&keyless, oauth::p256_pem()?)?;
+    std::fs::write(&keyless, oauth::Curve::P256.pem()?)?;
     let error = refused(&format!(
         "{base}{}",
         credentials(
@@ -605,8 +605,8 @@ fn alias_hosts_without_a_mutual_tls_fapi2_grant_are_refused() -> TestResult {
     );
     let client_key = dir.path().join("client.pem");
     let dpop = dir.path().join("dpop.pem");
-    std::fs::write(&client_key, oauth::p256_pem()?)?;
-    std::fs::write(&dpop, oauth::p256_pem()?)?;
+    std::fs::write(&client_key, oauth::Curve::P256.pem()?)?;
+    std::fs::write(&dpop, oauth::Curve::P256.pem()?)?;
     let by_key = format!(
         "[credentials.\"node-a-pub\"]\n{hosts}\n[credentials.\"node-a-pub\".fapi2]\nissuer = \"https://as.cdr-a.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\nclient_key_file = {}\ndpop_key_file = {}\nscope = \"{SCOPE}\"\n",
         toml::Value::String(client_key.display().to_string()),

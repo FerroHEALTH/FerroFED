@@ -34,7 +34,7 @@
 //! No specification governs the harness, and none governs which CDR products
 //! it runs: our own design.
 
-use crate::proxy::{CapturingProxy, ProxyError};
+use crate::proxy::{Bind, CapturingProxy, ProxyError};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
@@ -277,7 +277,7 @@ impl ProxiedNode {
     ///
     /// Returns [`HarnessError::Proxy`] when the proxy cannot be started.
     pub async fn new(node: Node) -> Result<Self, HarnessError> {
-        let proxy = CapturingProxy::start(node.origin())
+        let proxy = CapturingProxy::start(node.origin(), Bind::Loopback)
             .await
             .map_err(HarnessError::Proxy)?;
         Ok(Self { node, proxy })

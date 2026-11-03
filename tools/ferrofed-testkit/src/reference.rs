@@ -34,7 +34,7 @@
 //! The reference container reaches the nodes and its database through the
 //! Docker host gateway, as [`CONTAINER_HOST`]: each node sits behind a
 //! [`CapturingProxy`](crate::proxy::CapturingProxy) started with
-//! [`CapturingProxy::start_reachable`](crate::proxy::CapturingProxy::start_reachable),
+//! [`Bind::EveryInterface`](crate::proxy::Bind::EveryInterface),
 //! so its journal shows what the reference implementation dispatched.
 //!
 //! No specification governs the harness; it is FerroFED's own design.
@@ -109,8 +109,15 @@ const BUILD_DIRECTORY: &str = "/build";
 /// Where the build container holds Maven's local repository.
 const REPOSITORY_TARGET: &str = "/maven-repository";
 
-/// The jar Maven packages, under [`BUILD_DIRECTORY`].
-const JAR: &str = "target/openehr-federation-ref-1.0.1-SNAPSHOT.jar";
+/// The provenance record of the vendored source, whose `Declared version`
+/// line is the `pom.xml` project version the jar is named after.
+const PROVENANCE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../docs/specs/federation-ref/PROVENANCE.md"
+));
+
+/// The line of [`PROVENANCE`] that declares the version, up to the version.
+const DECLARED: &str = "- Declared version: `";
 
 /// How long the Maven build may run, downloads included.
 const BUILD_BUDGET: Duration = Duration::from_mins(15);
@@ -195,6 +202,9 @@ pub enum ReferenceError {
     /// The database or the readiness probe failed.
     #[error("the reference implementation's harness failed")]
     Harness(#[source] Box<HarnessError>),
+    /// The provenance record declares no version to name the jar by.
+    #[error("docs/specs/federation-ref/PROVENANCE.md declares no version")]
+    Version,
     /// The reference implementation started and never became ready.
     #[error("the reference implementation did not become ready; its output ends:\n{log}")]
     NotReady {
@@ -463,9 +473,25 @@ async fn package(pom: Vec<u8>, repository: Option<&str>) -> Result<Vec<u8>, Refe
         });
     }
     build
-        .copy_file_from(format!("{BUILD_DIRECTORY}/{JAR}"), Vec::new())
+        .copy_file_from(format!("{BUILD_DIRECTORY}/{}", jar()?), Vec::new())
         .await
         .map_err(|source| ReferenceError::Container { stage, source })
+}
+
+/// Returns the jar Maven packages, under [`BUILD_DIRECTORY`], named after
+/// the version [`PROVENANCE`] declares.
+///
+/// # Errors
+///
+/// [`ReferenceError::Version`] when the record declares no version.
+fn jar() -> Result<String, ReferenceError> {
+    PROVENANCE
+        .lines()
+        .find_map(|line| line.strip_prefix(DECLARED))
+        .and_then(|rest| rest.split_once('`'))
+        .filter(|(version, _)| !version.is_empty())
+        .map(|(version, _)| format!("target/openehr-federation-ref-{version}.jar"))
+        .ok_or(ReferenceError::Version)
 }
 
 /// Returns the arguments Maven packages the reference implementation with.
@@ -566,6 +592,20 @@ async fn tail(server: &ContainerAsync<GenericImage>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_jar_is_named_after_the_declared_version() {
+        let declared = PROVENANCE
+            .lines()
+            .find_map(|line| line.strip_prefix(DECLARED))
+            .and_then(|rest| rest.split('`').next())
+            .expect("the provenance record should declare a version");
+        assert_ne!(declared, "");
+        assert_eq!(
+            jar().expect("the declared version should name the jar"),
+            format!("target/openehr-federation-ref-{declared}.jar")
+        );
+    }
 
     #[test]
     fn the_tag_names_the_commit_and_the_dockerfile() {

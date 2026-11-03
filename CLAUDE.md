@@ -378,7 +378,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   from the book page as it prints it (`containers::keycloak`, #724); the
   capturing and fault proxy in front of each node (`proxy`, with
   `Fault::Reply` for an ITS-REST `Error` answer and
-  `CapturingProxy::start_reachable` for a proxy a container dials); the
+  `Bind::EveryInterface` for a proxy a container dials); the
   synthetic seed builder that writes over ITS-REST alone inside the
   `urn:oid:2.999` example arc (`seed`); where the node profile findings of
   each product are written (`node_profile`, #93); and the reference

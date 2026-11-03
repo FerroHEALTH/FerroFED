@@ -156,7 +156,7 @@ fn hex(bytes: &[u8]) -> String {
 #[tokio::test]
 async fn a_federated_querys_spans_reach_an_otlp_collector_and_are_flushed_on_the_drain()
 -> TestResult {
-    let collector = Collector::start()?;
+    let collector = Collector::start(None)?;
     let a = node_answering("uid-at-a").await;
     let b = node_answering("uid-at-b").await;
     let dir = tempfile::tempdir()?;

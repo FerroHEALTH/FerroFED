@@ -180,7 +180,7 @@ fn answers(values: &[(Option<i128>, usize)], nodes: usize, scale: u32) -> Vec<No
 }
 
 fn combined(nodes: Vec<NodeAnswer>, recombination: &Recombination) -> Merged {
-    combine(nodes, recombination, &ResultOrder::unordered()).expect("the value is written exactly")
+    combine(nodes, recombination, &ResultOrder::default()).expect("the value is written exactly")
 }
 
 proptest! {
@@ -484,7 +484,7 @@ fn a_value_the_gateway_cannot_write_exactly_is_an_error_never_a_rounding() {
         NodeAnswer::new("node-a", vec![vec![json!(u64::MAX)]]),
         NodeAnswer::new("node-b", vec![vec![json!(1)]]),
     ];
-    let error = combine(past_u64, &recombination, &ResultOrder::unordered()).unwrap_err();
+    let error = combine(past_u64, &recombination, &ResultOrder::default()).unwrap_err();
     assert_eq!(error.column(), 0);
     for cells in [
         vec![number("1e30"), json!(1)],
@@ -499,7 +499,7 @@ fn a_value_the_gateway_cannot_write_exactly_is_an_error_never_a_rounding() {
             combine(
                 nodes,
                 &Recombination::new(vec![SUM]),
-                &ResultOrder::unordered()
+                &ResultOrder::default()
             )
             .is_err(),
             "{cells:?}: the decimal would round the sum"

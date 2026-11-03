@@ -71,8 +71,8 @@ struct Grant {
 async fn grant(dir: &Path, expires_in: u64) -> Result<Grant, Box<dyn Error>> {
     let authority = NutsNode::start("nvi", SCOPE, Some(expires_in)).await;
     authority.define(DEFINITION);
-    let holder_pem = oauth::p256_pem()?;
-    let issuer_pem = oauth::p256_pem()?;
+    let holder_pem = oauth::Curve::P256.pem()?;
+    let issuer_pem = oauth::Curve::P256.pem()?;
     authority.trust_holder(
         HOLDER,
         HOLDER_KID,
@@ -99,7 +99,7 @@ async fn grant(dir: &Path, expires_in: u64) -> Result<Grant, Box<dyn Error>> {
         Ok(toml::Value::String(file.display().to_string()))
     };
     let key = file("holder.pem", &holder_pem)?;
-    let dpop = file("dpop.pem", &oauth::p256_pem()?)?;
+    let dpop = file("dpop.pem", &oauth::Curve::P256.pem()?)?;
     let held = file("organization.jwt", &credential)?;
     let tables = format!(
         "\n[{SECTION}]\nauthorization_server = \"{}\"\nscope = \"{SCOPE}\"\ndid = \"{HOLDER}\"\nkid = \"{HOLDER_KID}\"\nkey_file = {key}\ndpop_key_file = {dpop}\n\n[[{SECTION}.credential]]\ninput_descriptor = \"organization_credential\"\nfile = {held}\n",

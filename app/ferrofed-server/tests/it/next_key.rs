@@ -109,8 +109,8 @@ fn kids(set: &JwkSet) -> Vec<Option<String>> {
 #[tokio::test]
 async fn the_next_key_is_published_and_never_signs() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let (current, current_kid) = key_file(dir.path(), "current.pem", &oauth::es384_pem()?)?;
-    let (next, next_kid) = key_file(dir.path(), "next.pem", &oauth::es384_pem()?)?;
+    let (current, current_kid) = key_file(dir.path(), "current.pem", &oauth::Curve::P384.pem()?)?;
+    let (next, next_kid) = key_file(dir.path(), "next.pem", &oauth::Curve::P384.pem()?)?;
     let (set, signing_kid) = served(&text(
         dir.path(),
         &format!("key_file = {current}\nnext_key_file = {next}\n"),
@@ -130,9 +130,10 @@ async fn the_next_key_is_published_and_never_signs() -> TestResult {
 #[tokio::test]
 async fn a_previous_and_a_next_key_are_published_together() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let (current, current_kid) = key_file(dir.path(), "current.pem", &oauth::es384_pem()?)?;
-    let (previous, previous_kid) = key_file(dir.path(), "previous.pem", &oauth::es384_pem()?)?;
-    let (next, next_kid) = key_file(dir.path(), "next.pem", &oauth::es384_pem()?)?;
+    let (current, current_kid) = key_file(dir.path(), "current.pem", &oauth::Curve::P384.pem()?)?;
+    let (previous, previous_kid) =
+        key_file(dir.path(), "previous.pem", &oauth::Curve::P384.pem()?)?;
+    let (next, next_kid) = key_file(dir.path(), "next.pem", &oauth::Curve::P384.pem()?)?;
     let (set, _) = served(&text(
         dir.path(),
         &format!("key_file = {current}\nprevious_key_file = {previous}\nnext_key_file = {next}\n"),
@@ -151,8 +152,8 @@ async fn a_previous_and_a_next_key_are_published_together() -> TestResult {
 #[tokio::test]
 async fn a_next_key_on_another_curve_is_refused_unless_intended() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let (current, _) = key_file(dir.path(), "current.pem", &oauth::es384_pem()?)?;
-    let (p256, p256_kid) = key_file(dir.path(), "p256.pem", &oauth::p256_pem()?)?;
+    let (current, _) = key_file(dir.path(), "current.pem", &oauth::Curve::P384.pem()?)?;
+    let (p256, p256_kid) = key_file(dir.path(), "p256.pem", &oauth::Curve::P256.pem()?)?;
     let error = refused(&text(
         dir.path(),
         &format!("key_file = {current}\nnext_key_file = {p256}\n"),
@@ -165,7 +166,7 @@ async fn a_next_key_on_another_curve_is_refused_unless_intended() -> TestResult 
         ),
         "{error:?}"
     );
-    let (current_p384, _) = key_file(dir.path(), "current2.pem", &oauth::es384_pem()?)?;
+    let (current_p384, _) = key_file(dir.path(), "current2.pem", &oauth::Curve::P384.pem()?)?;
     let error = refused(&text(
         dir.path(),
         &format!(
@@ -200,7 +201,7 @@ async fn a_next_key_on_another_curve_is_refused_unless_intended() -> TestResult 
 #[test]
 fn a_reused_or_missing_next_key_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let (current, _) = key_file(dir.path(), "current.pem", &oauth::es384_pem()?)?;
+    let (current, _) = key_file(dir.path(), "current.pem", &oauth::Curve::P384.pem()?)?;
     let error = refused(&text(
         dir.path(),
         &format!("key_file = {current}\nnext_key_file = {current}\n"),
@@ -229,8 +230,8 @@ fn a_reused_or_missing_next_key_is_refused() -> TestResult {
 #[test]
 fn config_check_refuses_a_next_key_on_another_curve() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let (current, _) = key_file(dir.path(), "current.pem", &oauth::es384_pem()?)?;
-    let (p256, _) = key_file(dir.path(), "p256.pem", &oauth::p256_pem()?)?;
+    let (current, _) = key_file(dir.path(), "current.pem", &oauth::Curve::P384.pem()?)?;
+    let (p256, _) = key_file(dir.path(), "p256.pem", &oauth::Curve::P256.pem()?)?;
     let toml = format!(
         "[signing]\nkey_file = {current}\nnext_key_file = {p256}\njwks_uri = \"{JWKS_URI}\"\n"
     );

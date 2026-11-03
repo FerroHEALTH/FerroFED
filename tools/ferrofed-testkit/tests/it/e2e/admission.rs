@@ -108,7 +108,7 @@ fn federation(dir: &Path, registry: &str) -> Result<Option<Federation>, Box<dyn 
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     let key = dir.join("signing-key.pem");
-    std::fs::write(&key, oauth::es384_pem()?)?;
+    std::fs::write(&key, oauth::Curve::P384.pem()?)?;
     let quoted = |path: &Path| toml::Value::String(path.display().to_string());
     let text = format!(
         "[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",

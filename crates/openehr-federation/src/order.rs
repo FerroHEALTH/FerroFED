@@ -98,6 +98,9 @@ impl SortKey {
 /// Under version-identity dedup (§10.2), [`ResultOrder::version_key`] names
 /// the node column that holds each row's version uid, and the Tier breaks a
 /// tie on the keys by the tie-break columns before `endpoint_id`.
+///
+/// The default is an answer with no Tier order and no limit: the rows of the
+/// nodes in endpoint order.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ResultOrder {
     keys: Vec<SortKey>,
@@ -109,13 +112,6 @@ pub struct ResultOrder {
 }
 
 impl ResultOrder {
-    /// An answer with no Tier order and no limit: the rows of the nodes in
-    /// endpoint order.
-    #[must_use]
-    pub fn unordered() -> Self {
-        Self::default()
-    }
-
     /// An answer ordered by `keys`, tie-broken after `endpoint_id` on the node
     /// columns `tie_break` ascending, and cut at `limit` rows.
     #[must_use]

@@ -179,7 +179,7 @@ async fn an_identifier_the_supplier_knows_no_patient_for_is_not_resolved_anywher
     let pix = manager().await;
     // NOTE: PDQm §2:3.78.4.1.3 Case 1: a Supplier that knows no patient under
     // the identifier answers an empty searchset.
-    let pdq = pdqm_stub::supplier(&[]).await;
+    let pdq = pdqm_stub::answering(&[], &[]).await;
     let dir = tempfile::tempdir()?;
     let (app, state) = gateway(
         dir.path(),
@@ -219,11 +219,11 @@ async fn several_matched_patients_refuse_the_resolution_and_fail_the_query() -> 
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let pix = manager().await;
-    let pdq = pdqm_stub::supplier(&[
+    let entries = [
         known(),
         Entry::new(&[(LOCAL, CLIENT_ID), (MASTER, "SENTINEL-MASTER-2b8m")]),
-    ])
-    .await;
+    ];
+    let pdq = pdqm_stub::answering(&entries, &entries).await;
     let dir = tempfile::tempdir()?;
     let (app, state) = gateway(
         dir.path(),

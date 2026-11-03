@@ -4,7 +4,7 @@
 //! FerroPIX in the harness: the PIX Manager the end-to-end lane resolves
 //! patients through.
 //!
-//! [`ferropix`] starts the pinned [`FERROPIX`] image on its pinned
+//! [`start`] starts the pinned [`FERROPIX`] image on its pinned
 //! PostgreSQL, [`FERROPIX_POSTGRES`], under FerroPIX's development profile:
 //! the patient namespaces as `authoritative` domains and each member's
 //! `ehr_id` domain as a `local` one, two Basic users, the Patient Identity
@@ -220,36 +220,14 @@ fn config(
 }
 
 /// Starts FerroPIX with the patient namespaces `authoritative` and the
-/// member `ehr_id` domains `local`, and waits until it reports ready.
+/// member `ehr_id` domains `local`, its XCPD Responding Gateway `xcpd`
+/// switched on when one is given, and waits until it reports ready.
 ///
 /// # Errors
 ///
 /// Returns [`HarnessError::Container`] when Docker refuses a container and
 /// [`HarnessError::NotReady`] when FerroPIX does not become ready in time.
-pub async fn ferropix(
-    authoritative: &[String],
-    local: &[String],
-) -> Result<FerroPix, HarnessError> {
-    start(authoritative, local, None).await
-}
-
-/// Starts FerroPIX as [`ferropix`] does, its XCPD Responding Gateway `xcpd`
-/// switched on.
-///
-/// # Errors
-///
-/// The errors of [`ferropix`].
-pub async fn ferropix_responding(
-    authoritative: &[String],
-    local: &[String],
-    xcpd: &Xcpd,
-) -> Result<FerroPix, HarnessError> {
-    start(authoritative, local, Some(xcpd)).await
-}
-
-/// Starts FerroPIX with the domains `authoritative` and `local` and the
-/// Responding Gateway `xcpd` when one is given.
-async fn start(
+pub async fn start(
     authoritative: &[String],
     local: &[String],
     xcpd: Option<&Xcpd>,

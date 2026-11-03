@@ -80,10 +80,10 @@ async fn the_columns_are_the_same_whichever_node_answers_first() -> TestResult {
 
     nodes.a.proxy.set_fault(hold);
     let b_first = exchange(&app, post_aql(&plain_query()?, &[])?).await?;
-    nodes.a.proxy.clear_fault();
+    nodes.a.proxy.set_fault(Fault::Forward);
     nodes.b.proxy.set_fault(hold);
     let a_first = exchange(&app, post_aql(&plain_query()?, &[])?).await?;
-    nodes.b.proxy.clear_fault();
+    nodes.b.proxy.set_fault(Fault::Forward);
 
     assert_eq!(StatusCode::OK, b_first.status, "{}", b_first.text);
     assert_eq!(StatusCode::OK, a_first.status, "{}", a_first.text);

@@ -204,7 +204,7 @@ async fn a_definition_fan_out_reports_a_one_node_rejection_as_partial() -> TestR
     assert_eq!(1, puts, "node A received the definition once");
 
     clear(&nodes);
-    nodes.b.proxy.clear_fault();
+    nodes.b.proxy.set_fault(Fault::Forward);
     let directed = track9::parameterised(&fixture, Some("node-a-pub"))?;
     let refused = exchange(&app, put_naming(DIRECTED, &directed, "*")?).await?;
     assert_eq!(

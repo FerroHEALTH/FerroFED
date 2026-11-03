@@ -64,7 +64,7 @@ pub(crate) fn known() -> Entry {
 
 /// A stub Supplier answering every search and match with the patient alone.
 pub(crate) async fn supplier() -> Server {
-    pdqm_stub::supplier(&[known()]).await
+    pdqm_stub::answering(&[known()], &[known()]).await
 }
 
 /// A PIX Manager that resolves the master identifier at node A and node B,
