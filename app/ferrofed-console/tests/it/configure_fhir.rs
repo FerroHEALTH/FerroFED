@@ -172,7 +172,7 @@ async fn saved_fhir(listener: &Server) -> Result<Vec<ConsoleEndpoint>, Box<dyn E
 #[tokio::test(flavor = "multi_thread")]
 async fn the_edit_form_shows_each_fhir_endpoint_with_every_key() -> Result<(), Box<dyn Error>> {
     let listener = listener(HELD_FHIR).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let page_text = page(&service, &session, "/configuration/members/node-c").await?;
     for shown in [
         r#"name="form[fhir.0.id]" value="node-c-fhir""#,
@@ -207,7 +207,7 @@ async fn the_edit_form_shows_each_fhir_endpoint_with_every_key() -> Result<(), B
 #[tokio::test]
 async fn a_save_adds_a_fhir_endpoint_with_every_key() -> Result<(), Box<dyn Error>> {
     let listener = listener("").await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = configured(
         &service,
         &session,
@@ -248,7 +248,7 @@ async fn a_save_adds_a_fhir_endpoint_with_every_key() -> Result<(), Box<dyn Erro
 #[tokio::test]
 async fn a_save_edits_a_held_fhir_endpoint_by_its_endpoint_id() -> Result<(), Box<dyn Error>> {
     let listener = listener(HELD_FHIR).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     configured(
         &service,
         &session,
@@ -285,7 +285,7 @@ async fn a_save_edits_a_held_fhir_endpoint_by_its_endpoint_id() -> Result<(), Bo
 #[tokio::test]
 async fn a_save_removes_a_fhir_endpoint_the_form_no_longer_names() -> Result<(), Box<dyn Error>> {
     let listener = listener(HELD_FHIR).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     configured(&service, &session, save_c(&[])).await?;
     assert_eq!(saved_fhir(&listener).await?, Vec::<ConsoleEndpoint>::new());
     Ok(())
@@ -295,7 +295,7 @@ async fn a_save_removes_a_fhir_endpoint_the_form_no_longer_names() -> Result<(),
 async fn a_fhir_endpoint_that_does_not_read_asks_no_replica_and_is_refused_at_its_field()
 -> Result<(), Box<dyn Error>> {
     let listener = listener(HELD_FHIR).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let whole = Fhir {
         id: "node-c-fhir",
         url: "https://cdr-c.example.org/fhir",
@@ -373,7 +373,7 @@ async fn a_hostile_fhir_endpoint_is_escaped_in_the_edit_form() -> Result<(), Box
         "connection_type":"hl7-fhir-rest","categories":["<b>c</b>"],"profiles":["\" onfocus=\"alert(2)"],
         "ehr_id_system":"<img src=x onerror=alert(3)>"}"#;
     let listener = listener(hostile).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let page_text = page(&service, &session, "/configuration/members/node-c").await?;
     for raw in [
         "\"><script>alert(1)",
@@ -406,7 +406,7 @@ async fn a_url_holding_a_semicolon_round_trips_through_the_edit_form() -> Result
         "categories":["Patient-Summaries"],"profiles":["http://example.org/ps;1","http://example.org/%3Bq"],
         "ehr_id_system":"urn:oid:2.999.1"}"#;
     let listener = listener(held).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let page_text = page(&service, &session, "/configuration/members/node-c").await?;
     for shown in [
         r#"value="https://cdr-c.example.org/fhir;v=4""#,
@@ -470,7 +470,7 @@ async fn kept_whole(listener: &Server) -> Result<(), Box<dyn Error>> {
 #[tokio::test]
 async fn the_add_form_refuses_a_node_id_the_gateway_holds() -> Result<(), Box<dyn Error>> {
     let listener = listener(HELD_FHIR).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = crate::configure::posted(
         &service,
         &session,
@@ -491,7 +491,7 @@ async fn the_add_form_refuses_a_node_id_the_gateway_holds() -> Result<(), Box<dy
 async fn a_form_drawn_before_the_fhir_rows_keeps_the_held_fhir_endpoints()
 -> Result<(), Box<dyn Error>> {
     let listener = listener(HELD_FHIR).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     configured(&service, &session, posted("save-member", &[], false)).await?;
     kept_whole(&listener).await
 }
@@ -502,7 +502,7 @@ async fn a_form_drawn_before_the_fhir_rows_keeps_the_held_fhir_endpoints()
 async fn a_post_without_the_fhir_marker_keeps_the_held_fhir_endpoints() -> Result<(), Box<dyn Error>>
 {
     let listener = listener(HELD_FHIR).await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let other = Fhir {
         id: "node-c-other",
         url: "https://other.example.org/fhir",

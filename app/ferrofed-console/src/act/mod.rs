@@ -116,9 +116,9 @@ pub fn field<'a>(fields: &'a [(String, String)], name: &str) -> Option<&'a str> 
 /// the gateway's status, never an empty file.
 pub async fn options_document(
     axum::Extension(state): axum::Extension<ConsoleState>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
 ) -> Response {
-    let Ok(token) = crate::read::signed_in_with(&state, &headers) else {
+    let Ok((_, token)) = crate::read::signed_in() else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
     match state.gateway().report::<OptionsRoot>(&token).await {

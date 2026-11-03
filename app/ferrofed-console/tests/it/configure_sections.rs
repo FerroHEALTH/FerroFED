@@ -94,7 +94,7 @@ fn no_password_filled(body: &str) {
 async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let body = page(&service, &session, "/configuration/credentials").await?;
     assert!(body.contains("Credentials and bindings"), "{body}");
     assert!(
@@ -180,7 +180,7 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
 #[tokio::test(flavor = "multi_thread")]
 async fn every_value_of_a_section_is_escaped() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let mut body = page(&service, &session, "/configuration/credentials").await?;
     body.push_str(&page(&service, &session, "/configuration/credentials/node-c-pub").await?);
     for raw in ["<script>u</script>", "<img src=x onerror=1>", "<b>1</b>"] {
@@ -241,7 +241,7 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
         SAVED,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = posted(
         &service,
         &session,
@@ -305,7 +305,7 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
 #[tokio::test]
 async fn a_section_form_that_does_not_read_asks_no_replica() -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     for (secret, said, at) in [
         (
             ("password", "set", "", ""),
@@ -426,7 +426,7 @@ async fn a_confirmation_an_approval_and_a_removal_post_to_their_routes()
         SAVED,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = configured(
         &service,
         &session,
@@ -481,7 +481,7 @@ async fn an_approval_the_gateway_refuses_shows_its_status_and_code() -> Result<(
         r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#approval-own-revision","detail":"revision 3 is approved by an operator other than its author","code":"approval-own-revision"}"#,
     )
     .await;
-    let (service, session) = signed_in_console(&listener)?;
+    let (service, session) = signed_in_console(&listener).await?;
     let html = configured(
         &service,
         &session,

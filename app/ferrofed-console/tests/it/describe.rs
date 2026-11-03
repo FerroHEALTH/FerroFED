@@ -30,8 +30,9 @@ async fn described(body: String) -> Result<String, Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"{}\"\n\n[session]\nsecure_cookie = false\n",
         gateway.uri()
-    ))?;
-    let session = state.sessions().establish(signed_in())?;
+    ))
+    .await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (response, page) = send(&service, get_as("/self-description", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{page}");
     Ok(page)
@@ -115,8 +116,9 @@ async fn about_carries_the_options_document_and_its_download() -> Result<(), Box
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"{}\"\n\n[session]\nsecure_cookie = false\n",
         gateway.uri()
-    ))?;
-    let session = state.sessions().establish(signed_in())?;
+    ))
+    .await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, page) = send(&service, get_as("/about", &session)?).await?;
     assert!(
         page.contains(r#"<span class="fui-tok-key">&quot;spec_version&quot;</span>"#),

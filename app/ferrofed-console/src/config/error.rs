@@ -93,4 +93,41 @@ pub enum Error {
         /// The key.
         key: String,
     },
+    /// A refusal of `[oidc]` or `[session]` the keys above do not name, such
+    /// as a sealed store with no key.
+    #[error(transparent)]
+    Session(Box<ferrohealth_session::config::ConfigError>),
+}
+
+impl From<ferrohealth_session::config::ConfigError> for Error {
+    /// The refusal of a `[oidc]` or `[session]` key, by its key as the
+    /// console's own refusals name one.
+    fn from(error: ferrohealth_session::config::ConfigError) -> Self {
+        use ferrohealth_session::config::ConfigError;
+        match error {
+            ConfigError::Secret(source) => Self::SecretFile(source),
+            ConfigError::Missing { key } => Self::Missing {
+                key: key.to_owned(),
+            },
+            ConfigError::Url { key, source } => Self::Url {
+                key: key.to_owned(),
+                source,
+            },
+            ConfigError::Zero { key } => Self::Zero {
+                key: key.to_owned(),
+            },
+            ConfigError::UrlShape { key, reason } => Self::UrlShape {
+                key: key.to_owned(),
+                reason,
+            },
+            ConfigError::NoOpenId => Self::Missing {
+                key: String::from("oidc.scopes (openid)"),
+            },
+            ConfigError::OfflineAccessScope => Self::Scope {
+                key: String::from("oidc.scopes"),
+                reason: "must not list offline_access; set oidc.offline_access = true",
+            },
+            other => Self::Session(Box::new(other)),
+        }
+    }
 }

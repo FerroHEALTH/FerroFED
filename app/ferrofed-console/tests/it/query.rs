@@ -11,8 +11,8 @@
 
 use std::error::Error;
 
+use crate::support::{COOKIE, SessionId};
 use axum::body::Body;
-use ferrofed_console::session::{COOKIE, SessionId};
 use http::{Request, StatusCode};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -90,12 +90,15 @@ async fn gateway(status: u16, body: String) -> Result<MockServer, Box<dyn Error>
 }
 
 /// A console over `gateway` with one signed-in operator.
-fn signed_in_console(gateway: &MockServer) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
+async fn signed_in_console(
+    gateway: &MockServer,
+) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"{}\"\n\n[session]\nsecure_cookie = false\n",
         gateway.uri()
-    ))?;
-    let session = state.sessions().establish(signed_in())?;
+    ))
+    .await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     Ok((service, session))
 }
 
@@ -168,7 +171,7 @@ fn reports(html: &str, id: &str, status: &str) -> bool {
 async fn a_query_over_two_nodes_shows_the_rows_every_endpoint_and_complete()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let html = answered(&service, &session, patient_query()).await?;
     for column in ["endpoint_id", "system_id", "composition_id"] {
         assert!(html.contains(column), "{column}: {html}");
@@ -198,7 +201,7 @@ async fn a_query_over_two_nodes_shows_the_rows_every_endpoint_and_complete()
 async fn a_best_effort_answer_a_node_did_not_complete_is_flagged_incomplete()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, incomplete_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let html = answered(&service, &session, patient_query()).await?;
     assert!(
         html.contains("8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1"),
@@ -220,7 +223,7 @@ async fn a_best_effort_answer_a_node_did_not_complete_is_flagged_incomplete()
 async fn an_all_or_nothing_failure_shows_its_status_and_every_endpoint()
 -> Result<(), Box<dyn Error>> {
     let gateway = gateway(504, failed_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let html = answered(&service, &session, patient_query()).await?;
     assert!(html.contains("504"), "{html}");
     assert!(html.contains("The answer holds no rows."), "{html}");
@@ -241,7 +244,7 @@ async fn a_refused_query_shows_its_status_and_stable_code() -> Result<(), Box<dy
         String::from(r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#aql-not-federable","detail":"the query cannot be federated","code":"aql-not-federable"}"#),
     )
     .await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let html = answered(&service, &session, patient_query()).await?;
     assert!(html.contains(r#"role="alert""#), "{html}");
     assert!(html.contains("400"), "{html}");
@@ -257,7 +260,7 @@ async fn a_result_set_with_no_federation_record_is_not_shown_as_an_answer()
         String::from(r#"{"columns":[{"name":"c"}],"rows":[["x"]],"meta":{}}"#),
     )
     .await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let html = answered(&service, &session, patient_query()).await?;
     assert!(html.contains(r#"role="alert""#), "{html}");
     assert!(
@@ -270,7 +273,7 @@ async fn a_result_set_with_no_federation_record_is_not_shown_as_an_answer()
 #[tokio::test]
 async fn a_query_without_a_live_session_asks_the_gateway_nothing() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, _session) = signed_in_console(&gateway)?;
+    let (service, _session) = signed_in_console(&gateway).await?;
     for forged in [None, Some(SessionId::from_cookie("forged"))] {
         let (response, _text) = send(&service, run(&patient_query(), forged.as_ref())?).await?;
         assert_eq!(StatusCode::SEE_OTHER, response.status());
@@ -286,7 +289,7 @@ async fn a_query_without_a_live_session_asks_the_gateway_nothing() -> Result<(),
 #[tokio::test]
 async fn the_federation_choices_go_to_the_gateway_as_its_headers() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let body = form(&[
         ("kind", "aql"),
         (
@@ -332,7 +335,7 @@ async fn the_federation_choices_go_to_the_gateway_as_its_headers() -> Result<(),
 #[tokio::test]
 async fn a_query_without_choices_sends_no_federation_header() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     answered(&service, &session, patient_query()).await?;
     let asked = gateway
         .received_requests()
@@ -351,7 +354,7 @@ async fn a_query_without_choices_sends_no_federation_header() -> Result<(), Box<
 #[tokio::test]
 async fn a_form_that_cannot_be_sent_is_refused_without_quoting_it() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     for body in [
         form(&[("kind", "aql"), ("aql", " ")]),
         form(&[("kind", "stored"), ("name", "")]),
@@ -409,7 +412,7 @@ async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
     let _logging = captured.logging();
 
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     answered(&service, &session, patient_query()).await?;
 
     let refusing = self::gateway(
@@ -417,7 +420,7 @@ async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
         String::from(r#"{"type":"https://ferrofed.eu/docs/integrate/errors.html#aql-invalid","detail":"refused","code":"aql-invalid"}"#),
     )
     .await?;
-    let (refused_service, refused_session) = signed_in_console(&refusing)?;
+    let (refused_service, refused_session) = signed_in_console(&refusing).await?;
     answered(&refused_service, &refused_session, patient_query()).await?;
 
     // A query string is never read as a query: a GET draws the empty form.
@@ -469,7 +472,7 @@ async fn an_identifier_entered_in_the_console_reaches_no_url_and_no_log()
 #[tokio::test]
 async fn the_query_page_offers_what_the_gateway_declares() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (response, page) = send(&service, get_as("/query", &session)?).await?;
     assert_eq!(StatusCode::OK, response.status(), "{page}");
     assert!(
@@ -502,13 +505,16 @@ async fn the_query_page_offers_what_the_gateway_declares() -> Result<(), Box<dyn
 
 /// A console over `gateway` that knows its own origin from `[oidc]`, with
 /// one signed-in operator.
-fn console_with_origin(gateway: &MockServer) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
+async fn console_with_origin(
+    gateway: &MockServer,
+) -> Result<(axum::Router, SessionId), Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"{}\"\n{}",
         gateway.uri(),
         crate::support::WITH_OIDC
-    ))?;
-    let session = state.sessions().establish(signed_in())?;
+    ))
+    .await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     Ok((service, session))
 }
 
@@ -523,7 +529,7 @@ fn run_from(session: &SessionId, from: &[(&str, &str)]) -> Result<Request<Body>,
 #[tokio::test]
 async fn a_query_from_another_origin_or_from_nowhere_is_refused() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = console_with_origin(&gateway)?;
+    let (service, session) = console_with_origin(&gateway).await?;
     for from in [
         vec![("sec-fetch-site", "cross-site")],
         vec![("sec-fetch-site", "same-site")],
@@ -547,7 +553,7 @@ async fn a_query_from_another_origin_or_from_nowhere_is_refused() -> Result<(), 
 #[tokio::test]
 async fn a_query_from_the_consoles_own_origin_runs() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = console_with_origin(&gateway)?;
+    let (service, session) = console_with_origin(&gateway).await?;
     for from in [
         vec![("sec-fetch-site", "same-origin")],
         vec![("origin", "http://127.0.0.1:3000")],
@@ -562,7 +568,7 @@ async fn a_query_from_the_consoles_own_origin_runs() -> Result<(), Box<dyn Error
 #[tokio::test]
 async fn a_get_never_runs_a_query() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = console_with_origin(&gateway)?;
+    let (service, session) = console_with_origin(&gateway).await?;
     let request = Request::get("/query?kind=aql&aql=SELECT%201")
         .header("cookie", format!("{COOKIE}={}", session.as_str()))
         .header("sec-fetch-site", "same-origin")
@@ -592,7 +598,7 @@ async fn a_get_never_runs_a_query() -> Result<(), Box<dyn Error>> {
 #[tokio::test]
 async fn the_query_page_needs_a_signed_in_session() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, _session) = signed_in_console(&gateway)?;
+    let (service, _session) = signed_in_console(&gateway).await?;
     let (response, _page) = send(&service, crate::support::get("/query")?).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
     assert_eq!("/login", crate::support::header(&response, "location"));
@@ -604,7 +610,7 @@ async fn the_query_page_needs_a_signed_in_session() -> Result<(), Box<dyn Error>
 #[tokio::test]
 async fn an_answer_is_neither_compressed_nor_cached() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let mut request = run(&patient_query(), Some(&session))?;
     request.headers_mut().insert(
         "accept-encoding",
@@ -634,7 +640,7 @@ async fn a_nodes_hostile_values_reach_the_page_escaped() -> Result<(), Box<dyn E
         "<img src=x onerror=alert(2)>",
     )?;
     let gateway = gateway(200, text).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let html = answered(&service, &session, patient_query()).await?;
     for raw in ["<script>alert(1)", "<img src=x"] {
         assert!(!html.contains(raw), "{raw}: {html}");
@@ -674,7 +680,7 @@ const HOSTILE: &str = r#"{
 #[tokio::test]
 async fn every_value_a_node_wrote_reaches_the_answer_escaped() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, HOSTILE.to_owned()).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let html = answered(&service, &session, patient_query()).await?;
     let answer = html
         .split_once("query-answer-title")
@@ -707,7 +713,7 @@ async fn every_value_a_node_wrote_reaches_the_answer_escaped() -> Result<(), Box
 #[tokio::test]
 async fn the_run_works_with_the_scripts_refused() -> Result<(), Box<dyn Error>> {
     let gateway = gateway(200, result_set_example()?).await?;
-    let (service, session) = signed_in_console(&gateway)?;
+    let (service, session) = signed_in_console(&gateway).await?;
     let (_response, page) = send(&service, get_as("/query", &session)?).await?;
     let form = page
         .split_once(r#"id="query-form""#)

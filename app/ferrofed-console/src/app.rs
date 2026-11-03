@@ -83,11 +83,12 @@ pub const SEARCH: &str = "/search";
 /// The pages a visitor may read with no session: the sign-in at `/` and
 /// About, and the routes of the sign-in, the health routes, the brand marks,
 /// the favicon and the preference posts.
-pub const PUBLIC: [&str; 12] = [
+pub const PUBLIC: [&str; 13] = [
     "/",
     ABOUT,
     SIGN_IN,
-    crate::oidc::CALLBACK,
+    ferrohealth_session::paths::CALLBACK,
+    ferrohealth_session::paths::SESSION,
     SIGN_OUT,
     crate::server::HEALTH,
     ferrohealth_server::health::LIVENESS,

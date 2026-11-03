@@ -318,6 +318,12 @@ ferrohealth-smart = { version = "=0.8.6", default-features = false, features = [
 # a product pins every family crate, at the version ferrohealth-smart
 # requires. Verified against crates.io on 2026-10-28.
 ferrohealth-secret = "=0.2.0"
+# The operator console's OpenID Connect sign-in and its session of
+# FerroHEALTH/FerroAUTH (#1504): the `[oidc]` and `[session]` sections, the
+# session store, the four sign-in routes and the middleware every page sits
+# behind, over ferrohealth-smart's relying party. Pinned exactly, as a
+# product pins every family crate. Verified against crates.io on 2026-11-03.
+ferrohealth-session = { version = "=0.1.1", default-features = false }
 # The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
 # defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
 # into one typed tree, with where each key came from and the merged table the

@@ -9,9 +9,9 @@
 
 use std::error::Error;
 
+use crate::support::SessionId;
 use axum::body::Body;
 use ferrofed_console::server::ConsoleState;
-use ferrofed_console::session::SessionId;
 use http::Request;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -193,15 +193,16 @@ pub(crate) async fn gateway() -> Result<MockServer, Box<dyn Error>> {
 
 /// A console over `gateway`, its admin listener the same server, with one
 /// signed-in operator.
-pub(crate) fn signed_in_console(
+pub(crate) async fn signed_in_console(
     gateway: &MockServer,
 ) -> Result<(ConsoleState, axum::Router, SessionId), Box<dyn Error>> {
     let (state, service) = console(&format!(
         "[gateway]\nbase_url = \"{uri}\"\n\n[session]\nsecure_cookie = false\n\n\
          [[admin.replicas]]\nname = \"gateway-0\"\nadmin_url = \"{uri}\"\n",
         uri = gateway.uri()
-    ))?;
-    let session = state.sessions().establish(signed_in())?;
+    ))
+    .await?;
+    let session = crate::support::establish(&state, signed_in().await?)?;
     Ok((state, service, session))
 }
 

@@ -302,6 +302,17 @@ pub fn browser_of(headers: &http::HeaderMap) -> Locale {
 /// `state`.
 #[must_use]
 pub fn requested_from(state: &crate::server::ConsoleState, headers: &http::HeaderMap) -> Locale {
+    requested(
+        headers,
+        &state.preference_prefix(),
+        state.settings().locale.clone(),
+    )
+}
+
+/// The locale of a request whose headers are `headers`, whose preference
+/// cookies start with `prefix`, falling back to `fallback`.
+#[must_use]
+pub fn requested(headers: &http::HeaderMap, prefix: &str, fallback: Locale) -> Locale {
     let header = headers
         .get(http::header::ACCEPT_LANGUAGE)
         .and_then(|value| value.to_str().ok())
@@ -310,17 +321,8 @@ pub fn requested_from(state: &crate::server::ConsoleState, headers: &http::Heade
         .get(http::header::COOKIE)
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default();
-    let preferences = ferrohealth_ui::theme::Preferences::read(
-        cookies,
-        &state
-            .sessions()
-            .cookie_name(crate::session::PREFERENCE_PREFIX),
-    );
-    chosen(
-        preferences.language.tag(),
-        header,
-        state.settings().locale.clone(),
-    )
+    let preferences = ferrohealth_ui::theme::Preferences::read(cookies, prefix);
+    chosen(preferences.language.tag(), header, fallback)
 }
 
 #[cfg(test)]

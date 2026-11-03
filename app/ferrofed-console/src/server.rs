@@ -38,10 +38,22 @@ use ferrohealth_server::serve::Drained;
 use http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use http::{HeaderValue, Method, StatusCode};
 
+use ferrohealth_session::cookies::{CookieNames, HOST_PREFIX};
+use ferrohealth_session::record::Held;
+use ferrohealth_session::routes::{SignIn, keep_session};
+use ferrohealth_session::sessions::Sessions;
+use ferrohealth_smart::oidc::RelyingParty;
+
 use crate::config::settings::Settings;
 use crate::gateway::{Gateway, GatewayError};
 use crate::locale::Msg;
-use crate::session::Sessions;
+use crate::sign_in::SignInPages;
+
+/// The base name of every cookie the console sets:
+/// `ferrofed_console_session` carries the session,
+/// `ferrofed_console_sign_in` a pending sign-in, and each preference
+/// `ferrofed_console_<preference>`.
+pub const COOKIES: &str = "ferrofed_console";
 
 /// The path of the console's summary health route.
 pub const HEALTH: &str = ferrohealth_server::health::SUMMARY;
@@ -50,36 +62,59 @@ pub const HEALTH: &str = ferrohealth_server::health::SUMMARY;
 #[derive(Debug, Clone)]
 pub struct ConsoleState {
     settings: Arc<Settings>,
-    sessions: Sessions,
+    sign_in: SignIn<SignInPages>,
     gateway: Gateway,
-    provider: reqwest::Client,
     health: Health,
 }
 
+/// Why the console's state could not be built.
+#[derive(Debug, thiserror::Error)]
+pub enum StateError {
+    /// The client of the gateway could not be built.
+    #[error(transparent)]
+    Gateway(#[from] GatewayError),
+    /// The relying party at the OpenID Provider could not be built: its
+    /// client, its discovery (OpenID Connect Discovery 1.0 §4), or endpoints
+    /// it cannot use.
+    #[error("the OpenID Provider cannot be used")]
+    Provider {
+        /// What the relying party refused.
+        #[source]
+        source: Box<ferrohealth_session::config::ConfigError>,
+    },
+}
+
 impl ConsoleState {
-    /// The state for `settings`, with an empty session store.
+    /// The state for `settings`, with an empty session store; the relying
+    /// party discovers the provider's endpoints first when the configuration
+    /// does not name them.
     ///
     /// # Errors
-    /// Returns the [`GatewayError`] of a gateway client, or of the client of
-    /// the OpenID Provider, that cannot be built.
-    pub fn new(settings: Settings) -> Result<Self, GatewayError> {
+    /// Returns [`StateError::Gateway`] when the client of the gateway cannot
+    /// be built, and [`StateError::Provider`] for a relying party that
+    /// cannot be built or a provider whose metadata cannot be read.
+    pub async fn new(settings: Settings) -> Result<Self, StateError> {
         let gateway = Gateway::new(&settings.gateway)?;
-        // NOTE: RFC 6749 §3.2: the token endpoint answers the request itself, so
-        // the provider's client follows no redirect.
-        let provider = reqwest::Client::builder()
-            .timeout(settings.gateway.timeout)
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|source| GatewayError::Transport { source })?;
+        let party =
+            match &settings.oidc {
+                Some(oidc) => Some(oidc.checked.relying_party().await.map_err(|source| {
+                    StateError::Provider {
+                        source: Box::new(source),
+                    }
+                })?),
+                None => None,
+            };
+        let sessions = Sessions::new(settings.session.clone(), CookieNames::for_console(COOKIES));
+        let pages = SignInPages::new(settings.locale.clone(), prefix(&settings));
+        let sign_in = SignIn::new(sessions, party, pages);
         // NOTE: no specification governs this: our own design; the settings are
         // resolved and the clients built, so the console serves from here.
         let lifecycle = Lifecycle::default();
         lifecycle.booted();
         Ok(Self {
-            sessions: Sessions::new(settings.session),
             settings: Arc::new(settings),
+            sign_in,
             gateway,
-            provider,
             health: Health::new(Registry::default(), lifecycle),
         })
     }
@@ -97,23 +132,36 @@ impl ConsoleState {
         self.health.lifecycle()
     }
 
-    /// The HTTP client of the OpenID Provider, which the sign-in exchanges
-    /// its code with.
-    #[must_use]
-    pub fn provider(&self) -> &reqwest::Client {
-        &self.provider
-    }
-
     /// The resolved configuration.
     #[must_use]
     pub fn settings(&self) -> &Settings {
         &self.settings
     }
 
+    /// The sign-in: the session store and the relying party.
+    #[must_use]
+    pub fn sign_in(&self) -> &SignIn<SignInPages> {
+        &self.sign_in
+    }
+
     /// The session store.
     #[must_use]
     pub fn sessions(&self) -> &Sessions {
-        &self.sessions
+        self.sign_in.sessions()
+    }
+
+    /// The relying party of the OpenID Provider; `None` when no provider is
+    /// configured.
+    #[must_use]
+    pub fn relying_party(&self) -> Option<&RelyingParty> {
+        self.sign_in.party()
+    }
+
+    /// The name every preference cookie starts with on this console, under
+    /// the `__Host-` prefix when the cookies are `Secure`.
+    #[must_use]
+    pub fn preference_prefix(&self) -> String {
+        prefix(&self.settings)
     }
 
     /// The gateway client.
@@ -149,12 +197,6 @@ pub fn router(state: ConsoleState) -> axum::Router {
             crate::pages::search::ANSWER,
             get(crate::pages::search::find_answer),
         )
-        .route(crate::oidc::LOGIN, get(crate::oidc::login))
-        .route(crate::oidc::CALLBACK, get(crate::oidc::callback))
-        .route(
-            crate::oidc::logout::LOGOUT,
-            post(crate::oidc::logout::logout),
-        )
         .nest(
             ferrohealth_ui::serve::PREFIX,
             ferrohealth_ui::serve::axum_router::router(),
@@ -163,14 +205,16 @@ pub fn router(state: ConsoleState) -> axum::Router {
         .layer(axum::middleware::from_fn(crate::visit::scoped))
         .layer(axum::middleware::from_fn(clean_query_address))
         .layer(axum::middleware::from_fn(require_session))
-        .layer(axum::middleware::from_fn(
-            crate::oidc::refresh::refresh_session,
+        .layer(axum::middleware::from_fn_with_state(
+            state.sign_in().clone(),
+            keep_session::<SignInPages>,
         ))
+        .merge(ferrohealth_session::routes::router(state.sign_in().clone()))
         .layer(Extension(state.clone()))
         .layer(axum::extract::DefaultBodyLimit::max(CONFIGURE_BODY_LIMIT));
     // NOTE: no specification governs this: our own design; the origin check and the body
     // limit hold before a page reads a post, so a refused one reads nothing.
-    let headers = ConsoleHeaders::server_rendered(form_action(state.settings()));
+    let headers = ConsoleHeaders::server_rendered(form_action(&state));
     pages
         .layer(axum::middleware::from_fn(
             move |request: Request, next: Next| console::headers(headers.clone(), request, next),
@@ -247,11 +291,7 @@ pub const BODY_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// session to sign-in, before anything is rendered or asked of the gateway.
 ///
 /// A form's handler checks the session again before it asks a replica.
-async fn require_session(
-    Extension(state): Extension<ConsoleState>,
-    request: Request,
-    next: Next,
-) -> Response {
+async fn require_session(request: Request, next: Next) -> Response {
     // NOTE: no specification governs this: our own design; a trailing slash or
     // another case names the same view, so the gate never misses one the router serves.
     let path = request
@@ -262,30 +302,15 @@ async fn require_session(
     if !crate::app::needs_session(&path) {
         return next.run(request).await;
     }
-    let name = state.sessions().cookie_name(crate::session::COOKIE);
-    let signed_in = crate::oidc::cookie_named(request.headers(), &name)
-        .map(|id| state.sessions().access_token(&id));
-    match signed_in {
-        Some(Ok(Some(_token))) => next.run(request).await,
-        // NOTE: RFC 9110 §15.6.1: the answer stays a 500, and the page says why
-        // in the shell's notice; its loaders read the store again and show nothing.
-        Some(Err(error)) => {
-            tracing::error!(%error, "the session store could not be read");
-            let mut response = next.run(request).await;
-            if !response.status().is_server_error() {
-                *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-            }
-            response
-        }
-        Some(Ok(None)) | None => {
-            let mut response = StatusCode::SEE_OTHER.into_response();
-            response.headers_mut().insert(
-                http::header::LOCATION,
-                HeaderValue::from_static(crate::app::SIGN_IN),
-            );
-            response
-        }
+    if matches!(request.extensions().get::<Held>(), Some(Held::SignedIn(_))) {
+        return next.run(request).await;
     }
+    let mut response = StatusCode::SEE_OTHER.into_response();
+    response.headers_mut().insert(
+        http::header::LOCATION,
+        HeaderValue::from_static(crate::app::SIGN_IN),
+    );
+    response
 }
 
 /// The query keys the query console reads from its address: the stored
@@ -439,16 +464,26 @@ async fn favicon() -> Response {
 /// Connect RP-Initiated Logout 1.0 §2), so without its origin the browser
 /// blocks the sign-out on its way to the provider.
 #[must_use]
-pub fn form_action(settings: &Settings) -> String {
-    let end_session = settings
-        .oidc
-        .as_ref()
-        .and_then(|oidc| oidc.end_session_endpoint.as_ref())
+pub fn form_action(state: &ConsoleState) -> String {
+    let end_session = state
+        .relying_party()
+        .and_then(|party| party.provider().end_session_endpoint())
         .map(url::Url::origin)
         .filter(url::Origin::is_tuple);
     match end_session {
         Some(origin) => format!("'self' {}", origin.ascii_serialization()),
         None => String::from("'self'"),
+    }
+}
+
+/// The name every preference cookie of the console `settings` describe
+/// starts with, under the `__Host-` prefix when its cookies are `Secure`.
+fn prefix(settings: &Settings) -> String {
+    let base = format!("{COOKIES}_");
+    if settings.session.secure_cookie() {
+        format!("{HOST_PREFIX}{base}")
+    } else {
+        base
     }
 }
 

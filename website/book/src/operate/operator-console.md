@@ -74,10 +74,12 @@ service worker or a URL.
   as HTTP Basic for a confidential client, and the session goes on with the
   new access token. A rotated refresh token replaces the old one, which is
   never sent again, and one refresh of a session runs at a time, so
-  requests that arrive together spend a rotated token once. A refresh that
-  fails for any reason, an `invalid_grant` refusal, any other refusal, or a
-  provider that cannot be reached, ends the session: a view sends the
-  browser to `/login` and drops the session cookie. A session with no
+  requests that arrive together spend a rotated token once. A refresh the
+  provider refuses with an error answer (RFC 6749 §5.2), `invalid_grant` or
+  any other, ends the session: a view sends the browser to `/login` and
+  drops the session cookie. A provider that cannot be reached, or that
+  answers with a server error, leaves the session to try again on the next
+  request, and a view sends the browser to `/login` meanwhile. A session with no
   refresh token ends when its access token expires, and one whose provider
   sends no `expires_in` is never refreshed. The ID Token of the sign-in
   stays the sign-out's hint; one a refresh answers is not read. Set
@@ -91,8 +93,15 @@ service worker or a URL.
   `end_session_endpoint`, the console then redirects the browser there with
   the session's ID Token as `id_token_hint`, its `client_id`, and the
   `post_logout_redirect_uri` you registered with the provider (OpenID
-  Connect RP-Initiated Logout 1.0 §2); without one the browser goes back to
-  `/`. A `GET /logout` is `405`.
+  Connect RP-Initiated Logout 1.0 §2); without one, or with no `[oidc]` at
+  all, the browser goes back to `/`. A sign-out never answers `503`. A
+  `GET /logout` is `405`.
+- **The session watch.** `GET /session` answers what the session has left,
+  `{"idle": s, "absolute": s}` in seconds, and `POST /session` extends it
+  as activity does; once the session is gone both answer `401` with an RFC
+  9457 problem body. Every page carries FerroUI's session watch over it,
+  which warns before the idle timeout, offers "Stay signed in", and ends
+  every tab together.
 - **Requests from the console's own pages only.** Every request that is not
   a `GET`, `HEAD` or `OPTIONS`, the sign-out and every form among them, must
   come from the console's own pages: a request the browser marks
@@ -513,6 +522,8 @@ max_sessions = 10000
 
 [oidc]
 issuer = "https://idp.example.org/realms/ferrofed"
+# The three endpoints are read from the issuer's discovery document when
+# they are left out (OpenID Connect Discovery 1.0 §4).
 authorization_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/auth"
 token_endpoint = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/token"
 jwks_uri = "https://idp.example.org/realms/ferrofed/protocol/openid-connect/certs"
@@ -541,6 +552,14 @@ today, and a language joins as a catalog directory with no code change.
 two fifths longer to show where a longer translation would not fit; it is
 for checking the layout, never offered to an operator.
 
+The `[oidc]` and `[session]` tables are those of `ferrohealth-session`, the
+family's console sign-in. `[session] store` is `memory` by default, the
+sessions held in the console's process; `store = "sealed"` keeps each one
+in an AES-256-GCM sealed cookie instead, for a console that runs as several
+instances, with the same `key_file` (base64 of at least 64 bytes) on every
+instance, and refuses `offline_access`, so no refresh token is ever put in
+a cookie.
+
 With `secure_cookie = true` the session and sign-in cookies carry the
 `__Host-` prefix, which binds each to the console's host (RFC 6265bis
 §4.1.3.2); with it off, for a loopback trial, they carry none.
@@ -552,8 +571,18 @@ host (`localhost`, `127.0.0.0/8` or `::1`). The refusal names
 key has nothing to govern there and is not checked.
 
 Without an `[oidc]` table the console offers no sign-in, and `GET /login`
-answers `503`. The provider's URLs must be `https` unless their host is
-loopback, and `scopes` must include `openid`. `offline_access`, off by
+answers `503`. With `issuer` alone, the console reads the provider's
+authorization, token and key-set endpoints, and its end-session and
+revocation endpoints, from the issuer's discovery document when it starts
+(OpenID Connect Discovery 1.0 §4); a document that is missing or cannot be
+reached refuses the start. Each endpoint the table names takes the place of
+the discovered one, and with all three named the console asks the provider
+nothing at start. `config check` never asks the provider. `revocation_endpoint`
+has a sign-out revoke the session's refresh token (RFC 7009), `ca_file`
+adds PEM trust roots for a provider behind a private certificate authority,
+and `timeout_s` (10 by default) bounds each call to the provider. The
+provider's URLs must be `https` unless their host is loopback, and `scopes`
+must include `openid`. `offline_access`, off by
 default, adds the `offline_access` scope and `prompt=consent` to the
 sign-in; `scopes` must not list `offline_access` itself, and the refusal
 names `oidc.scopes`. The console refreshes the access token with whatever

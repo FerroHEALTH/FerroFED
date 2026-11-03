@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 use crate::gateway::{AccessToken, GatewayError};
 use crate::locale::{Msg, tr, tr_with};
 use crate::server::ConsoleState;
+use ferrohealth_session::record::{Credential, Held};
 
 /// The most rows a paged read asks the gateway for at once.
 pub const PAGE_SIZE: u64 = 100;
@@ -117,44 +118,34 @@ impl From<GatewayError> for Stop {
 pub fn signed_in() -> Result<(ConsoleState, AccessToken), Fault> {
     crate::visit::with(|visit| {
         let state = visit.state().ok_or(Fault::Unavailable)?;
-        signed_in_with(state, visit.headers()).map(|token| (state.clone(), token))
+        signed_in_held(Some(visit.held())).map(|token| (state.clone(), token))
     })
 }
 
-/// The operator's access token for a request whose headers are `headers`,
-/// on the console `state`.
+/// The operator's access token that `held`, what a request's session cookie
+/// holds, carries.
 ///
 /// # Errors
-/// As [`signed_in`].
-pub fn signed_in_with(
-    state: &ConsoleState,
-    headers: &http::HeaderMap,
-) -> Result<AccessToken, Fault> {
-    let id = crate::oidc::cookie_named(
-        headers,
-        &state.sessions().cookie_name(crate::session::COOKIE),
-    )
-    .ok_or(Fault::SignedOut)?;
-    let token = state
-        .sessions()
-        .access_token(&id)
-        .map_err(|_unusable| Fault::Unavailable)?
-        .ok_or(Fault::SignedOut)?;
-    Ok(AccessToken::new(token))
+/// Returns [`Fault::SignedOut`] when it holds no live session that signed in
+/// with a bearer token.
+pub fn signed_in_held(held: Option<&Held>) -> Result<AccessToken, Fault> {
+    match held {
+        Some(Held::SignedIn(session)) => match session.credential() {
+            Credential::Bearer(token) => Ok(AccessToken::new(token.to_secret_string())),
+            Credential::Basic { .. } => Err(Fault::SignedOut),
+        },
+        Some(Held::TokenExpired | Held::Ended | Held::Absent) | None => Err(Fault::SignedOut),
+    }
 }
 
-/// The name of the operator of the live signed-in session of a request
-/// whose headers are `headers`, on the console `state`, as the provider
-/// gave it.
+/// The name of the operator of the live signed-in session `held` names, as
+/// the provider gave it.
 #[must_use]
-pub fn operator_of(state: &ConsoleState, headers: &http::HeaderMap) -> Option<String> {
-    let id = crate::oidc::cookie_named(
-        headers,
-        &state.sessions().cookie_name(crate::session::COOKIE),
-    )?;
-    // NOTE: no specification governs this: our own design; a store that cannot be read
-    // names no operator, and the session check of every page reports that fault itself.
-    state.sessions().operator(&id).ok().flatten()
+pub fn operator_of(held: &Held) -> Option<String> {
+    match held {
+        Held::SignedIn(session) => session.operator().map(str::to_owned),
+        Held::TokenExpired | Held::Ended | Held::Absent => None,
+    }
 }
 
 /// What a failed gateway call asked for, as its log line names it.

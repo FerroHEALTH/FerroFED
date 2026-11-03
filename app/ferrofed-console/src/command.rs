@@ -81,7 +81,7 @@ where
         Common::Healthcheck => runtime_then(|| healthcheck(&settings)),
         Common::Config {
             command: ConfigCommand::Check,
-        } => config_check(settings, report),
+        } => config_check(&settings, report),
         Common::Serve => runtime_then(|| serve(settings)),
     }
 }
@@ -119,7 +119,7 @@ where
     reason = "the job's refusal goes to standard error"
 )]
 fn config_check(
-    settings: Settings,
+    settings: &Settings,
     report: Option<Result<String, ferrohealth_config::error::ConfigError>>,
 ) -> ExitCode {
     match report {
@@ -130,8 +130,10 @@ fn config_check(
         }
         None => {}
     }
-    match ConsoleState::new(settings) {
-        Ok(_state) => {
+    // NOTE: no specification governs this: our own design; the check builds the
+    // gateway's client and never asks the OpenID Provider, so it runs offline.
+    match crate::gateway::Gateway::new(&settings.gateway) {
+        Ok(_gateway) => {
             println!("ferrofed-console: the configuration is valid");
             ExitCode::SUCCESS
         }
@@ -185,7 +187,7 @@ async fn serve(settings: Settings) -> ExitCode {
     };
     ferrohealth_telemetry::panic::install_hook();
     let listen = settings.listen;
-    let state = match ConsoleState::new(settings) {
+    let state = match ConsoleState::new(settings).await {
         Ok(state) => state,
         Err(error) => {
             tracing::error!(error = %chain(&error), "cannot start");
