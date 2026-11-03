@@ -10,6 +10,7 @@
 #[cfg(feature = "ihe")]
 pub mod atna;
 pub mod balp;
+pub mod delivery;
 
 /// The `tracing` target the log recorders write to: the ITI-55 recorder
 /// [`LogAudit`](crate::ihe::xcpd::LogAudit) and the BALP recorder

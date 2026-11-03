@@ -123,7 +123,7 @@ async fn a_probe_the_budget_overtook_is_unsent_at_every_member() -> TestResult {
     assert_eq!(2, answers.len());
     for (endpoint, probed) in &answers {
         assert!(
-            matches!(probed.answer, Answer::Failed(ForwardError::Expired { .. })),
+            matches!(probed.answer, Answer::Failed(ForwardError::Expired(_))),
             "§11.5: {endpoint} was never asked: {:?}",
             probed.answer
         );

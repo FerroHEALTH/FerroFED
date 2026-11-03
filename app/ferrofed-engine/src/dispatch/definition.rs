@@ -26,9 +26,9 @@ use openehr_its::rest::generated::definition::{
     DefinitionQueryVersionGetParams, DefinitionQueryVersionStoreYamlParams,
 };
 
+use super::gate::Told;
 use super::oversized::Oversized;
 use super::{Contact, DispatchError, DispatchOptions, NodeClient, cap, classify, dpop, reported};
-use crate::hygiene::{Composed, Outbound};
 use crate::trace_context;
 
 /// The query language a distributed definition is stored as, the ITS-REST
@@ -348,44 +348,22 @@ impl<T: Transport + Clone> NodeClient<T> {
         aql: &str,
         options: &DispatchOptions,
     ) -> Result<(), DispatchError> {
-        // NOTE: SMART on openEHR master08 §Resource Scopes: a definition is no EHR's data, so
-        // it is composed for no ehr_id and a confined conveyance is never sent with it.
-        options
-            .conveyance()
-            .holds_own(&self.endpoint, None)
-            .map_err(|source| DispatchError::Conveyance {
-                endpoint: self.endpoint.clone(),
-                source,
-            })?;
-        if options.withheld.is_empty() {
-            return Ok(());
-        }
-        let base = self.client.base();
-        let mut url = base.clone();
-        url.set_path(&format!(
-            "{}/definition/query/{}/{}",
-            base.path().trim_end_matches('/'),
-            path_segment(&definition.name),
-            path_segment(&definition.version)
-        ));
-        let headers: [(&'static str, &str); 0] = [];
-        let conveyed = options.conveyance().carried();
-        let outbound = Outbound {
+        let path = |base: &str| {
+            format!(
+                "{}/definition/query/{}/{}",
+                base.trim_end_matches('/'),
+                path_segment(&definition.name),
+                path_segment(&definition.version)
+            )
+        };
+        let told = Told {
             aql,
             scope: None,
             paging: &[],
-            url: &url,
-            composed: Composed::default(),
-            headers: &headers,
-            conveyed: &conveyed,
         };
-        match options.withheld.found_in(&outbound) {
-            Some(part) => Err(DispatchError::Withheld {
-                endpoint: self.endpoint.clone(),
-                part,
-            }),
-            None => Ok(()),
-        }
+        // NOTE: SMART on openEHR master08 §Resource Scopes: a definition is no EHR's data, so
+        // it is composed for no ehr_id and a confined conveyance is never sent with it.
+        self.gate_told(None, options, &told, path)
     }
 }
 

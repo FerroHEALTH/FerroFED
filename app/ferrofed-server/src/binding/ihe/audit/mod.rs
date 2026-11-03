@@ -27,15 +27,15 @@ use ferrofed_registry::health::Indication;
 
 impl Forwarding for RepositoryAudit {
     fn start(&self) {
-        RepositoryAudit::start(self);
+        self.delivery().start();
     }
 
     fn status(&self) -> Status {
-        RepositoryAudit::status(self)
+        self.delivery().status()
     }
 
     fn stop(&self) -> Stopping<'_> {
-        Box::pin(RepositoryAudit::stop(self))
+        Box::pin(self.delivery().stop())
     }
 }
 

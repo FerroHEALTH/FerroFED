@@ -22,7 +22,7 @@ use std::time::Instant;
 
 use ferrofed_registry::id::EndpointId;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
-use openehr_its::rest::client::Transport;
+use openehr_its::rest::client::{ClientError, Transport};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use super::{Contact, NodeClient, NodeClients, NodeReply};
@@ -67,6 +67,18 @@ pub(crate) struct Slot {
 pub struct Capped {
     /// The endpoint.
     pub endpoint: EndpointId,
+}
+
+/// The deadline passed before the request left the gateway, so nothing was
+/// sent and the node was never asked (§11.5).
+#[derive(Debug, thiserror::Error)]
+#[error("the deadline for endpoint {endpoint} passed before the request was sent")]
+pub struct Expired {
+    /// The endpoint.
+    pub endpoint: EndpointId,
+    /// What the client runtime reported.
+    #[source]
+    pub source: Box<ClientError>,
 }
 
 impl<T: Transport + Clone> NodeClient<T> {

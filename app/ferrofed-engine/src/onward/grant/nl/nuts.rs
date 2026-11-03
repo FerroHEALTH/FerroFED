@@ -22,7 +22,7 @@
 //! with a proof of the grant's key over the request (GFI-005).
 //!
 //! A token is cached as the client-credentials provider caches one: until
-//! [`REFRESH_MARGIN`] before the end of the lifetime its `expires_in`
+//! [`REFRESH_MARGIN`](crate::onward::token::REFRESH_MARGIN) before the end of the lifetime its `expires_in`
 //! stated, one token request per endpoint or service at a time, and dropped
 //! when the node or the service answers `401`. A token that cannot be
 //! obtained fails that node or that request; the gateway never sends either
@@ -31,7 +31,7 @@
 //! the token.
 
 use std::fmt;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_registry::id::EndpointId;
@@ -47,7 +47,7 @@ use url::Url;
 
 use crate::onward::Clock;
 use crate::onward::dpop::{self, Prover, Role};
-use crate::onward::token::REFRESH_MARGIN;
+use crate::onward::grant::cache::TokenCache;
 
 /// What a Nuts grant at one node's authorization server asks for, as whom,
 /// and the key its tokens are bound to.
@@ -124,12 +124,6 @@ impl DpopProver for AuthorizationProver<'_> {
     }
 }
 
-/// A token in the cache, and when it is replaced.
-struct Cached {
-    token: SecretString,
-    refresh_at: Instant,
-}
-
 /// Where a grant's tokens are sent: one node's endpoint, or a service of the
 /// Generic Functions, by the key of its configuration table.
 #[derive(Debug, Clone)]
@@ -147,9 +141,7 @@ pub struct NutsCredentials {
     grant: NutsGrant,
     client: NutsClient,
     timeout: Duration,
-    clock: Arc<dyn Clock>,
-    cached: Mutex<Option<Cached>>,
-    fetch: tokio::sync::Mutex<()>,
+    cache: TokenCache<SecretString>,
 }
 
 impl NutsCredentials {
@@ -179,43 +171,13 @@ impl NutsCredentials {
             grant,
             client,
             timeout,
-            clock,
-            cached: Mutex::new(None),
-            fetch: tokio::sync::Mutex::new(()),
+            cache: TokenCache::new(clock),
         }
     }
 
-    /// The cached token, when one is still fresh.
-    fn fresh(&self) -> Option<SecretString> {
-        let now = self.clock.now();
-        // NOTE: no specification governs this: our own design; a panic while
-        // the lock was held leaves at worst a stale token, which a 401 drops.
-        let cached = self.cached.lock().unwrap_or_else(PoisonError::into_inner);
-        cached
-            .as_ref()
-            .filter(|cached| now < cached.refresh_at)
-            .map(|cached| cached.token.clone())
-    }
-
-    /// The token for the next request: the cached one while it is fresh,
-    /// and otherwise a new one, one token request at a time.
-    async fn token(&self) -> Result<SecretString, NutsCredentialsError> {
-        if let Some(fresh) = self.fresh() {
-            return Ok(fresh);
-        }
-        let fetching = self.fetch.lock().await;
-        if let Some(fresh) = self.fresh() {
-            return Ok(fresh);
-        }
-        let obtained = self.obtain().await;
-        drop(fetching);
-        obtained
-    }
-
-    /// Obtains a new token, and caches it when its lifetime outlasts the
-    /// margin.
-    async fn obtain(&self) -> Result<SecretString, NutsCredentialsError> {
-        let started = self.clock.now();
+    /// Obtains a new token, requested at `started`, and caches it when its
+    /// lifetime outlasts the margin.
+    async fn obtain(&self, started: Instant) -> Result<SecretString, NutsCredentialsError> {
         let token = self
             .client
             .request_access_token(
@@ -230,26 +192,16 @@ impl NutsCredentials {
         Credentials::dpop(issued.clone())
             .header_value()
             .map_err(NutsCredentialsError::Unsendable)?;
-        let refresh_at = token
-            .expires_in()
-            .and_then(|lifetime| lifetime.checked_sub(REFRESH_MARGIN))
-            .filter(|left| !left.is_zero())
-            .and_then(|left| started.checked_add(left));
-        let mut cached = self.cached.lock().unwrap_or_else(PoisonError::into_inner);
-        *cached = refresh_at.map(|refresh_at| Cached {
-            token: issued.clone(),
-            refresh_at,
-        });
-        drop(cached);
+        let cached = self.cache.keep(&issued, started, token.expires_in());
         match &self.recipient {
             Recipient::Endpoint(endpoint) => tracing::debug!(
                 endpoint = %endpoint,
-                cached = refresh_at.is_some(),
+                cached,
                 "an onward token was obtained with the Nuts grant"
             ),
             Recipient::Service(service) => tracing::debug!(
                 service,
-                cached = refresh_at.is_some(),
+                cached,
                 "a service token was obtained with the Nuts grant"
             ),
         }
@@ -275,15 +227,15 @@ pub enum NutsCredentialsError {
 #[async_trait::async_trait]
 impl CredentialsProvider for NutsCredentials {
     async fn credentials(&self) -> Result<Credentials, CredentialsError> {
-        self.token()
+        self.cache
+            .token(async |started| self.obtain(started).await)
             .await
             .map(Credentials::dpop)
             .map_err(CredentialsError::new)
     }
 
     fn refused(&self) {
-        let mut cached = self.cached.lock().unwrap_or_else(PoisonError::into_inner);
-        *cached = None;
+        self.cache.clear();
     }
 }
 
@@ -344,9 +296,10 @@ impl NutsAuthorizer {
     /// The `Authorization` and `DPoP` headers of a request with `method` to
     /// `url`, each marked sensitive.
     async fn headers(&self, method: &Method, url: &Url) -> Result<HeaderMap, AuthorizerError> {
-        let token = self
-            .credentials
-            .token()
+        let credentials = &self.credentials;
+        let token = credentials
+            .cache
+            .token(async |started| credentials.obtain(started).await)
             .await
             .map_err(AuthorizerError::new)?;
         let authorization = Credentials::dpop(token.clone())

@@ -268,7 +268,7 @@ pub(super) fn ended<'a>(
                 ),
             )
         }
-        Written::Sent(Created::Failed(ForwardError::Capped(_) | ForwardError::Expired { .. }))
+        Written::Sent(Created::Failed(ForwardError::Capped(_) | ForwardError::Expired(_)))
         | Written::Unsent => Unmade::Plain(
             StatusCode::SERVICE_UNAVAILABLE,
             "transient",

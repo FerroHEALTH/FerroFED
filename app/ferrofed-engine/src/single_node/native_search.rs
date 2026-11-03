@@ -151,9 +151,7 @@ impl Searched {
             Self::Page(_) => EndpointStatus::Active,
             Self::Abandoned
             | Self::Failed(
-                ForwardError::TimeOut { .. }
-                | ForwardError::Expired { .. }
-                | ForwardError::Capped(_),
+                ForwardError::TimeOut { .. } | ForwardError::Expired(_) | ForwardError::Capped(_),
             ) => EndpointStatus::TimeOut,
             Self::Failed(ForwardError::Unreachable { .. }) => EndpointStatus::Offline,
             Self::Erred(_) | Self::Failed(_) => EndpointStatus::NodeError,

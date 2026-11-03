@@ -31,21 +31,21 @@
 //! [`LogFeedAudit`] says whose behalf a record was made on, never who.
 
 use std::fmt;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use ihe_atna::atna::feed::{FeedAddressError, FeedRepository};
-use ihe_atna::atna::forwarder::{Forwarder, Status};
+use ihe_atna::atna::forwarder::Forwarder;
 use ihe_atna::atna::spool::reserve::Reservation;
 use ihe_atna::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer, Reserved};
 #[cfg(feature = "ihe")]
 use ihe_atna::user::{PurposeOfUse, User};
-use tokio::task::JoinHandle;
 use url::Url;
 
 use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::ihe::audit::AUDIT_TARGET;
+use crate::ihe::audit::delivery::Delivery;
 #[cfg(feature = "ihe")]
 use crate::role::behalf::OnBehalfOf;
 
@@ -126,16 +126,15 @@ pub fn feed_repository(
 
 /// The recorder over one FHIR Feed repository and its spool.
 pub struct FeedAudit {
-    forwarder: Arc<Forwarder>,
+    delivery: Delivery,
     observer: Observer,
-    running: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl fmt::Debug for FeedAudit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FeedAudit")
             .field("observer", &self.observer)
-            .field("status", &self.forwarder.status())
+            .field("delivery", &self.delivery)
             .finish_non_exhaustive()
     }
 }
@@ -146,73 +145,37 @@ impl FeedAudit {
     #[must_use]
     pub fn new(forwarder: Arc<Forwarder>, observer: Observer) -> Self {
         Self {
-            forwarder,
+            delivery: Delivery::new(forwarder),
             observer,
-            running: Mutex::new(None),
         }
     }
 
-    /// Starts delivering the spooled records on the Tokio runtime the caller
-    /// runs on, unless a delivery is running already; without a runtime it
-    /// does nothing, and the next record starts it.
-    ///
-    /// A delivery started on a runtime that has since shut down has ended,
-    /// so it is started again: a read on a short-lived runtime of its own
-    /// never leaves the spool undelivered.
-    pub fn start(&self) {
-        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-            return;
-        };
-        let mut running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
-        if running.as_ref().is_some_and(|task| !task.is_finished()) {
-            return;
-        }
-        *running = Some(runtime.spawn(Arc::clone(&self.forwarder).run()));
-    }
-
-    /// What the spool holds and how the deliveries went.
+    /// The delivery of the spool to the repository.
     #[must_use]
-    pub fn status(&self) -> Status {
-        self.forwarder.status()
-    }
-
-    /// Stops delivering and waits for the delivery to end: the forwarder
-    /// finishes the message it is writing, closes its repository connection
-    /// with a TLS `close_notify` (RFC 5425 §4.4) and returns, so the frames
-    /// it wrote last are not lost to a reset. A message not yet written
-    /// stays in the spool. The gateway calls it once, on its drain.
-    pub async fn stop(&self) {
-        self.forwarder.stop();
-        let running = self
-            .running
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .take();
-        if let Some(task) = running
-            && let Err(error) = task.await
-        {
-            tracing::warn!(%error, "an audit delivery ended without returning");
-        }
+    pub fn delivery(&self) -> &Delivery {
+        &self.delivery
     }
 }
 
 #[async_trait]
 impl AuditRecorder for FeedAudit {
     async fn record(&self, exchange: Exchange) -> Result<(), AuditError> {
-        self.start();
+        self.delivery.start();
         let record = exchange
             .audit_event(&self.observer)
             .map_err(|error| AuditError(Box::new(error)))?;
-        self.forwarder
+        self.delivery
+            .forwarder()
             .submit(record.into_bytes())
             .await
             .map_err(|error| AuditError(Box::new(error)))
     }
 
     async fn reserve(&self) -> Result<Option<Box<dyn Reserved>>, AuditError> {
-        self.start();
+        self.delivery.start();
         let reservation = self
-            .forwarder
+            .delivery
+            .forwarder()
             .reserve(RESERVED_BYTES)
             .map_err(|error| AuditError(Box::new(error)))?;
         Ok(Some(Box::new(FeedPlace {

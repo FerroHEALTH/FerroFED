@@ -120,7 +120,7 @@ pub(super) fn failed(
             "timeout",
             format!("member {member} did not answer at endpoint {endpoint} before the deadline"),
         ),
-        EhrCallError::Capped(_) | EhrCallError::Expired { .. } => (
+        EhrCallError::Capped(_) | EhrCallError::Expired(_) => (
             StatusCode::SERVICE_UNAVAILABLE,
             "transient",
             format!("the write to member {member} could not be sent before the deadline"),
@@ -287,7 +287,7 @@ mod tests {
     use ehds_logging::record::{PatientIdentifier, WrittenVersion};
     use ferrobridge_validator::validate::ValidateError;
     use ferrofed_eehrxf::receive::{Prepared, Unreceived};
-    use ferrofed_engine::dispatch::cap::Capped;
+    use ferrofed_engine::dispatch::cap::{Capped, Expired};
     use ferrofed_engine::hygiene::Part;
     use ferrofed_engine::single_node::ehr::EhrCallError;
     use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
@@ -542,10 +542,10 @@ managing_organisation = "org-a"
     -> TestResult {
         let dir = tempfile::tempdir()?;
         let state = state(dir.path())?;
-        let expired = EhrCallError::Expired {
+        let expired = EhrCallError::Expired(Expired {
             endpoint: EndpointId::new("node-a-pub")?,
             source: Box::new(elapsed()),
-        };
+        });
         let response = written(&state, &expired).await?;
         assert!(nothing_sent(&response), "§11.5: the member was never asked");
         let (status, code, diagnostics) = wire(&state, response).await?;
@@ -668,10 +668,10 @@ managing_organisation = "org-a"
                 Some((Some(WrittenVersion::Unnamed), EndpointStatus::Active)),
             ),
             (
-                EhrCallError::Expired {
+                EhrCallError::Expired(Expired {
                     endpoint: endpoint()?,
                     source: Box::new(elapsed()),
-                },
+                }),
                 None,
             ),
         ];

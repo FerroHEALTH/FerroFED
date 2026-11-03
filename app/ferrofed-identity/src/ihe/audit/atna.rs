@@ -17,22 +17,22 @@
 //! log line and no error carries it.
 
 use std::fmt;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use ihe_atna::atna::forwarder::{Forwarder, Status};
+use ihe_atna::atna::forwarder::Forwarder;
 use ihe_atna::atna::message::{AccessPoint, AuditSource};
 use ihe_atna::atna::syslog::Sender;
 use ihe_iti::xcpd::audit::{AuditError, AuditEvent, AuditRecorder};
-use tokio::task::JoinHandle;
+
+use crate::ihe::audit::delivery::Delivery;
 
 /// The recorder over one repository and its spool.
 pub struct RepositoryAudit {
-    forwarder: Arc<Forwarder>,
+    delivery: Delivery,
     sender: Sender,
     source: AuditSource,
     host: AccessPoint,
-    running: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl fmt::Debug for RepositoryAudit {
@@ -40,7 +40,7 @@ impl fmt::Debug for RepositoryAudit {
         f.debug_struct("RepositoryAudit")
             .field("sender", &self.sender)
             .field("source", &self.source)
-            .field("status", &self.forwarder.status())
+            .field("delivery", &self.delivery)
             .finish_non_exhaustive()
     }
 }
@@ -61,70 +61,34 @@ impl RepositoryAudit {
             "1"
         };
         Self {
-            forwarder,
+            delivery: Delivery::new(forwarder),
             sender,
             source,
             host: AccessPoint {
                 type_code,
                 id: hostname,
             },
-            running: Mutex::new(None),
         }
     }
 
-    /// Starts delivering the spooled messages on the Tokio runtime the caller
-    /// runs on, unless a delivery is running already; without a runtime it
-    /// does nothing, and the next recorded event starts it.
-    ///
-    /// A delivery started on a runtime that has since shut down has ended,
-    /// so it is started again: the spool is never left undelivered.
-    pub fn start(&self) {
-        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-            return;
-        };
-        let mut running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
-        if running.as_ref().is_some_and(|task| !task.is_finished()) {
-            return;
-        }
-        *running = Some(runtime.spawn(Arc::clone(&self.forwarder).run()));
-    }
-
-    /// What the spool holds and how the deliveries went.
+    /// The delivery of the spool to the repository.
     #[must_use]
-    pub fn status(&self) -> Status {
-        self.forwarder.status()
-    }
-
-    /// Stops delivering and waits for the delivery to end: the forwarder
-    /// finishes the message it is writing, closes its repository connection
-    /// with a TLS `close_notify` (RFC 5425 §4.4) and returns, so the frames
-    /// it wrote last are not lost to a reset. A message not yet written
-    /// stays in the spool. The gateway calls it once, on its drain.
-    pub async fn stop(&self) {
-        self.forwarder.stop();
-        let running = self
-            .running
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .take();
-        if let Some(task) = running
-            && let Err(error) = task.await
-        {
-            tracing::warn!(%error, "an audit delivery ended without returning");
-        }
+    pub fn delivery(&self) -> &Delivery {
+        &self.delivery
     }
 }
 
 #[async_trait]
 impl AuditRecorder for RepositoryAudit {
     async fn record(&self, event: AuditEvent) -> Result<(), AuditError> {
-        self.start();
+        self.delivery.start();
         let xml = event
             .message(&self.source, &self.host)
             .to_xml()
             .map_err(|error| AuditError(Box::new(error)))?;
         let frame = self.sender.frame(jiff::Timestamp::now(), &xml);
-        self.forwarder
+        self.delivery
+            .forwarder()
             .submit(frame)
             .await
             .map_err(|error| AuditError(Box::new(error)))

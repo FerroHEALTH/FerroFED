@@ -327,7 +327,7 @@ impl Contact {
             | ForwardError::Unreachable { .. }
             | ForwardError::Credentials { sent: true, .. } => Self::Silent,
             ForwardError::QueryParameter(_)
-            | ForwardError::Expired { .. }
+            | ForwardError::Expired(_)
             | ForwardError::Value(_)
             | ForwardError::Withheld { .. }
             | ForwardError::Credentials { .. }
@@ -349,7 +349,7 @@ impl Contact {
             EhrCallError::TimeOut { .. } | EhrCallError::Unreachable { .. } => Self::Silent,
             EhrCallError::Capped(_) => Self::Capped,
             EhrCallError::Withheld { .. }
-            | EhrCallError::Expired { .. }
+            | EhrCallError::Expired(_)
             | EhrCallError::Conveyance { .. } => Self::Unsent,
             EhrCallError::Failed { source, .. } => Self::of_client_error(source),
         }

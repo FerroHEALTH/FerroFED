@@ -33,9 +33,10 @@ use http::{HeaderValue, Method, StatusCode};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{Request, Transport};
 
-use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError};
-use crate::hygiene::{Composed, Outbound};
+use crate::dispatch::{Contact, DispatchOptions, NodeClient};
+use crate::hygiene::Composed;
 use crate::single_node::forward::{ForwardError, Forwarded};
+use crate::single_node::{under, withheld_part};
 use crate::trace_context;
 
 /// The path of the summary operation under the member's FHIR base.
@@ -207,9 +208,7 @@ impl Answer {
             Self::Document(_) | Self::Absent => EndpointStatus::Active,
             Self::Abandoned
             | Self::Failed(
-                ForwardError::TimeOut { .. }
-                | ForwardError::Expired { .. }
-                | ForwardError::Capped(_),
+                ForwardError::TimeOut { .. } | ForwardError::Expired(_) | ForwardError::Capped(_),
             ) => EndpointStatus::TimeOut,
             Self::Failed(ForwardError::Unreachable { .. }) => EndpointStatus::Offline,
             Self::Erred(_) | Self::Unusable { .. } | Self::Failed(_) => EndpointStatus::NodeError,
@@ -367,16 +366,7 @@ impl<T: Transport + Clone> NodeClient<T> {
         // credential the request carries, since no directive names a native endpoint.
         let call = options
             .call_options(self.endpoint())
-            .map_err(|error| match error {
-                OptionsError::Conveyance(source) => ForwardError::Conveyance {
-                    endpoint: self.endpoint().clone(),
-                    source,
-                },
-                OptionsError::Client(source) => ForwardError::Compose {
-                    endpoint: self.endpoint().clone(),
-                    source: Box::new(source),
-                },
-            })?;
+            .map_err(|error| ForwardError::of_options(self.endpoint(), error))?;
         outgoing.apply_options(&call);
         self.gate_native(native, &outgoing, options)?;
         Ok(outgoing)
@@ -395,30 +385,14 @@ impl<T: Transport + Clone> NodeClient<T> {
         request: &Request,
         options: &DispatchOptions,
     ) -> Result<(), ForwardError> {
-        let withheld = options.withheld();
-        if withheld.is_empty() {
+        if options.withheld().is_empty() {
             return Ok(());
         }
-        let base = native.url();
-        let mut url = base.clone();
-        url.set_path(&format!(
-            "{}{}",
-            base.path().trim_end_matches('/'),
-            request.path()
-        ));
+        let mut url = under(native.url(), request.path());
         let query = request.query_string();
         url.set_query((!query.is_empty()).then_some(query));
-        let conveyed = options.conveyance().carried();
-        let outbound = Outbound {
-            aql: "",
-            scope: None,
-            paging: &[],
-            url: &url,
-            composed: Composed::default(),
-            headers: &[("accept", FHIR_JSON)],
-            conveyed: &conveyed,
-        };
-        match withheld.found_in(&outbound) {
+        let headers = [("accept", FHIR_JSON)];
+        match withheld_part(options, &url, Composed::default(), &headers) {
             Some(part) => Err(ForwardError::Withheld {
                 endpoint: self.endpoint().clone(),
                 part,

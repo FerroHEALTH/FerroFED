@@ -124,7 +124,7 @@ async fn a_create_whose_deadline_passed_before_it_left_is_expired_and_never_sent
         return Err(format!("an expired create succeeded: {created:?}").into());
     };
     assert!(
-        matches!(error, EhrCallError::Expired { .. }),
+        matches!(error, EhrCallError::Expired(_)),
         "§11.5: the node was never asked: {error:?}"
     );
     assert_eq!(Contact::Unsent, Contact::of_ehr_call_error(&error));
