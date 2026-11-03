@@ -32,6 +32,8 @@ pub mod grant;
 pub mod ihe;
 pub mod limits;
 pub mod load;
+#[cfg(feature = "binding-nl")]
+pub mod nl;
 pub mod oauth;
 #[cfg(feature = "postgres")]
 pub mod postgres;
@@ -109,7 +111,7 @@ pub struct Config {
     /// The Dutch Generic Functions (`[nl_gf]`): the NVI localizer and the
     /// care provider each member holds the data of (Annex B, #87).
     #[cfg(feature = "binding-nl")]
-    pub nl_gf: Option<crate::binding::nl::NlGf>,
+    pub nl_gf: Option<nl::NlGf>,
     /// The PMIR identity feed (`[pmir]`): the Patient Identity Registry the
     /// gateway subscribes to with ITI-94, and the path its ITI-93 messages
     /// arrive at (track 8 of §16.3, Annex A.4).
@@ -506,7 +508,7 @@ pub struct Credentials {
     /// (`[credentials."<endpoint id>".nuts]`), the regional realisation of
     /// §13.3 (Annex B §B.4).
     #[cfg(feature = "binding-nl")]
-    pub nuts: Option<crate::binding::nl::nuts::Nuts>,
+    pub nuts: Option<nl::nuts::Nuts>,
     /// A grant under the FAPI 2.0 Security Profile
     /// (`[credentials."<endpoint id>".fapi2]`), the BgZ/eOverdracht track of
     /// Annex B §B.4a.

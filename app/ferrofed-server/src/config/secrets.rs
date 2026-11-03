@@ -19,7 +19,6 @@ use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 
-use crate::binding::Binding;
 use crate::config::error::Error;
 use crate::config::error::basic::BasicFault;
 use crate::config::error::credentials::CredentialsFault;
@@ -123,11 +122,10 @@ fn scheme(
         credentials.password.clone(),
         credentials.password_file.as_deref(),
     )?;
-    let bound: Vec<&dyn Binding> = crate::binding::compiled()
-        .iter()
-        .copied()
-        .filter(|binding| binding.onward_table(credentials).is_some())
-        .collect();
+    #[cfg(feature = "binding-nl")]
+    let bound = crate::config::nl::sets_onward(credentials);
+    #[cfg(not(feature = "binding-nl"))]
+    let bound = false;
     let refused = || {
         Error::Credentials(CredentialsFault::Scheme {
             section: section.to_owned(),
@@ -135,8 +133,7 @@ fn scheme(
     };
     let basic = credentials.user.is_some() || password.is_some();
     if let Some(fapi2) = &credentials.fapi2 {
-        if basic || credentials.oauth.is_some() || credentials.oauth2.is_some() || !bound.is_empty()
-        {
+        if basic || credentials.oauth.is_some() || credentials.oauth2.is_some() || bound {
             return Err(refused());
         }
         let resolved = grant::resolve_fapi2(&format!("{section}.fapi2"), fapi2, certificate)?;
@@ -149,16 +146,14 @@ fn scheme(
         }
         .into());
     }
-    if let [binding] = bound.as_slice() {
+    if bound {
         if basic || credentials.oauth.is_some() || credentials.oauth2.is_some() {
             return Err(refused());
         }
-        if let Some(grant) = binding.onward(section, credentials) {
+        #[cfg(feature = "binding-nl")]
+        if let Some(grant) = crate::config::nl::onward(section, credentials) {
             return grant.map(Scheme::Binding);
         }
-    }
-    if bound.len() > 1 {
-        return Err(refused());
     }
     if let Some(oauth) = &credentials.oauth {
         if basic || credentials.oauth2.is_some() {

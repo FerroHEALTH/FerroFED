@@ -7,7 +7,6 @@
 //! and the public documents it has the gateway serve. No specification governs
 //! the module layout: our own design.
 
-use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
 
@@ -16,11 +15,6 @@ use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_identity::role::localizer::Localizer;
 use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_operator_api::health::Indication;
-use ferrofed_registry::id::EndpointId;
-
-use crate::config::settings::Settings;
-use crate::config::transport::ProtectedSite;
-use crate::federation::error::FederationError;
 
 /// The resolver a binding builds, with the localizer it doubles as.
 #[derive(Clone)]
@@ -67,33 +61,6 @@ impl fmt::Debug for LocalizerSeam {
 pub trait Indicator: fmt::Debug + Send + Sync {
     /// Returns its indications, each under the key the report names it by.
     fn indicate(&self) -> Vec<(&'static str, Indication)>;
-}
-
-/// An onward credential kind a binding adds beside the core's basic
-/// credentials, OAuth 2.0 and FAPI 2.0 grants (§13.1, §13.3).
-///
-/// A grant is [`Any`], so the binding that added it can read its own grants
-/// back from the settings ([`Binding::documents`](crate::binding::Binding::documents)).
-pub trait OnwardGrant: Any + fmt::Debug + Send + Sync {
-    /// Returns the table under `[credentials."<endpoint id>"]` it is
-    /// configured by, such as `nuts`.
-    fn key(&self) -> &'static str;
-
-    /// Returns the URL the grant sends the gateway's credentials to, with its
-    /// site under the transport policy, for the credentials `section`.
-    fn site(&self, section: &str) -> (String, ProtectedSite);
-
-    /// Returns the credentials the client of `endpoint` sends, under the
-    /// budgets of `settings`.
-    ///
-    /// # Errors
-    ///
-    /// The [`FederationError`] of a provider that cannot be built.
-    fn provide(
-        &self,
-        endpoint: &EndpointId,
-        settings: &Settings,
-    ) -> Result<Provided, FederationError>;
 }
 
 /// A public document a binding has the gateway serve.

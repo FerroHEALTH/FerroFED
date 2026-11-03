@@ -60,7 +60,7 @@ fn resolved(dir: &Path, table: &str) -> Result<Result<Option<Store>, ConfigError
 fn logged(settings: &Settings) -> Result<String, Box<dyn Error>> {
     let logs = Logs::default();
     let capture = subscriber(Rendering::Json, DEFAULT_FILTER, false, logs.clone())?;
-    tracing::subscriber::with_default(capture, || settings.log_summary());
+    tracing::subscriber::with_default(capture, || ferrofed_server::binding::log_summary(settings));
     Ok(logs.text())
 }
 

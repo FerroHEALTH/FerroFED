@@ -168,7 +168,7 @@ pub(crate) fn onward(
                 continue;
             }
             Scheme::Binding(grant) => {
-                let provided = grant.provide(endpoint, settings)?;
+                let provided = crate::binding::provide(grant.as_ref(), endpoint, settings)?;
                 if let Some(prover) = provided.dpop {
                     dpop.insert(endpoint.clone(), prover);
                 }

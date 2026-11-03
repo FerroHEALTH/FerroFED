@@ -30,8 +30,9 @@
 //! `[credentials."<id>"]` section, the token endpoint of that section's OAuth
 //! 2.0 grant, the issuer of its FAPI 2.0 grant (sent the client assertion and
 //! the callers' tokens), the site of a grant a binding adds, and
-//! `telemetry.otlp.endpoint` when it carries a user name or a password. Each binding holds its own sites
-//! ([`Binding::sites`](crate::binding::Binding::sites)): the IHE binding every
+//! `telemetry.otlp.endpoint` when it carries a user name or a password.
+//! Each binding's sections hold their own sites (`config::ihe::sites`,
+//! `config::nl::sites`): the IHE binding every
 //! PIX Manager, the PDQm Supplier of `[pdqm]`, every XCPD responding gateway,
 //! the Patient Identity Registry of `[pmir]` and its callback URL, the care
 //! services directory of `[registry.mcsd]` when it has credentials, the
@@ -330,9 +331,8 @@ pub fn check(
         cleartext.extend(protected_payload(profile, &url, site)?);
     }
     cleartext.extend(crate::config::audit::sites(settings)?);
-    for binding in crate::binding::compiled() {
-        cleartext.extend(binding.sites(settings)?);
-    }
+    #[cfg(feature = "binding-nl")]
+    cleartext.extend(crate::config::nl::sites(settings)?);
     #[cfg(feature = "binding-ihe")]
     cleartext.extend(crate::config::ihe::sites(settings)?);
     if let Some(otlp) = &settings.telemetry.otlp {

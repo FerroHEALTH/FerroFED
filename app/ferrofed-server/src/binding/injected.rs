@@ -19,8 +19,6 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::binding::seam::ResolverSeam;
 use crate::binding::{Binding, Offer, Role, Section};
-use crate::config::Config;
-use crate::config::error::Error;
 use crate::config::settings::Settings;
 use crate::federation::error::FederationError;
 
@@ -79,10 +77,6 @@ impl Binding for Injected {
 
     fn sections(&self) -> &'static [Section] {
         &[]
-    }
-
-    fn resolve(&self, _config: &Config, _settings: &mut Settings) -> Result<(), Error> {
-        Ok(())
     }
 
     fn offers(&self, _settings: &Settings) -> Vec<Offer> {

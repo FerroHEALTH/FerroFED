@@ -16,10 +16,11 @@
 //! the resolver that also localizes ([`single`], [`RoleConflict`]).
 //!
 //! A binding also declares the configuration sections it reads and what a
-//! reload does with each ([`Binding::sections`]), the sites its
-//! services are reached at for the transport policy ([`Binding::sites`]), the
-//! health indicators of what it runs ([`seam::Indicator`]), and the onward
-//! credential kinds it adds ([`seam::OnwardGrant`]). Its self-description is the
+//! reload does with each ([`Binding::sections`]), the health indicators of
+//! what it runs ([`seam::Indicator`]), and what each onward credential kind
+//! its sections add provides a node client ([`Binding::provide`]). Its
+//! sections, their resolution and their transport sites are `config`'s
+//! (`config::ihe`, `config::nl`). Its self-description is the
 //! mode each role it builds carries, which `OPTIONS {base}/` declares from
 //! the running roles. No specification governs the module layout: our own
 //! design.
@@ -34,16 +35,17 @@ pub mod process;
 pub mod seam;
 
 use std::fmt;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use ferrofed_identity::role::consent::ConsentPrefilter;
+use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use openehr_federation::id::FederationId;
 
-use crate::binding::seam::{Indicator, LocalizerSeam, OnwardGrant, PublicDocument, ResolverSeam};
-use crate::config::error::Error;
+use crate::binding::seam::{Indicator, LocalizerSeam, Provided, PublicDocument, ResolverSeam};
+use crate::config::settings::OnwardGrant;
 use crate::config::settings::Settings;
-use crate::config::transport::{CleartextError, ProtectedSite};
-use crate::config::{Config, Credentials};
 use crate::federation::DemographicsStep;
 use crate::federation::error::FederationError;
 use crate::localization::LocalizationError;
@@ -135,17 +137,6 @@ pub enum Reload {
     Restart,
 }
 
-/// The budgets of the Step-1 services a binding's sections ask, each a part
-/// of the overall budget (§11.5), in milliseconds; zero for a service it
-/// does not configure.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct StepBudgets {
-    /// The demographics step's budget.
-    pub demographics_ms: u64,
-    /// The consent pre-filter's budget.
-    pub consent_ms: u64,
-}
-
 /// More than one configured section fills a role exactly one may.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
@@ -172,8 +163,8 @@ fn listed(sections: &[&'static str]) -> String {
 
 /// One regional or national binding.
 ///
-/// Every method but [`Binding::name`], [`Binding::sections`],
-/// [`Binding::resolve`] and [`Binding::offers`] has a default that fills no
+/// Every method but [`Binding::name`], [`Binding::sections`] and
+/// [`Binding::offers`] has a default that fills no
 /// role, so a binding implements the hooks of the roles it fills.
 pub trait Binding: fmt::Debug + Sync {
     /// Returns the binding's name, which its Cargo feature carries.
@@ -182,23 +173,6 @@ pub trait Binding: fmt::Debug + Sync {
     /// Returns the configuration sections the binding reads, each with what
     /// a registry reload does with it.
     fn sections(&self) -> &'static [Section];
-
-    /// Resolves the binding's sections of `config` into `settings`, for a
-    /// binding whose sections `config` does not resolve itself.
-    ///
-    /// # Errors
-    ///
-    /// The [`Error`] of the first value the binding refuses, under the key
-    /// that carries it.
-    fn resolve(&self, _config: &Config, _settings: &mut Settings) -> Result<(), Error> {
-        Ok(())
-    }
-
-    /// Returns the budgets of the Step-1 services the binding's sections of
-    /// `config` ask.
-    fn budgets(&self, _config: &Config) -> StepBudgets {
-        StepBudgets::default()
-    }
 
     /// Returns the roles the binding's configured sections fill, read from
     /// `settings` without building anything.
@@ -304,26 +278,6 @@ pub trait Binding: fmt::Debug + Sync {
         Ok(Vec::new())
     }
 
-    /// Returns the table of the binding's onward grant that `credentials`
-    /// sets, when one is.
-    fn onward_table(&self, _credentials: &Credentials) -> Option<&'static str> {
-        None
-    }
-
-    /// Resolves the binding's onward grant `credentials` configures under
-    /// `section`, when [`Binding::onward_table`] names one.
-    ///
-    /// # Errors
-    ///
-    /// The [`Error`] of a grant the binding refuses.
-    fn onward(
-        &self,
-        _section: &str,
-        _credentials: &Credentials,
-    ) -> Option<Result<Box<dyn OnwardGrant>, Error>> {
-        None
-    }
-
     /// Reads the registry from the binding's registry source, blocking the
     /// caller, when it is the source `settings` name.
     fn read_registry(
@@ -331,17 +285,6 @@ pub trait Binding: fmt::Debug + Sync {
         _settings: &Settings,
     ) -> Option<Result<RegistrySnapshot, FederationError>> {
         None
-    }
-
-    /// Holds the sites the binding's services are reached at to the
-    /// transport policy, and returns those that travel in cleartext under the
-    /// development profile.
-    ///
-    /// # Errors
-    ///
-    /// The [`CleartextError`] of the first site the policy refuses.
-    fn sites(&self, _settings: &Settings) -> Result<Vec<ProtectedSite>, CleartextError> {
-        Ok(Vec::new())
     }
 
     /// Keeps in `fresh` the boot's value of every binding setting a reload
@@ -352,6 +295,22 @@ pub trait Binding: fmt::Debug + Sync {
     /// differs from the boot's and that take a restart.
     fn needs_restart(&self, _boot: &Settings, _fresh: &Settings) -> Vec<&'static str> {
         Vec::new()
+    }
+
+    /// Returns what the onward grant `grant` provides the client of
+    /// `endpoint`, under the budgets of `settings`, when the grant is one the
+    /// binding added.
+    ///
+    /// # Errors
+    ///
+    /// The [`FederationError`] of a provider that cannot be built.
+    fn provide(
+        &self,
+        _grant: &dyn OnwardGrant,
+        _endpoint: &EndpointId,
+        _settings: &Settings,
+    ) -> Option<Result<Provided, FederationError>> {
+        None
     }
 
     /// Returns the class a refused reload is logged under, when `error` is
@@ -373,9 +332,6 @@ pub trait Binding: fmt::Debug + Sync {
     fn check_scope(&self) -> Option<Box<dyn fmt::Debug>> {
         None
     }
-
-    /// Logs what the binding is configured to reach, never a value.
-    fn log_summary(&self, _settings: &Settings) {}
 
     /// What `config check` notes about the binding's sections in
     /// `settings`, each a sentence an operator acts on; none by default.
@@ -435,19 +391,6 @@ pub fn single(offers: &[Offer], role: Role) -> Result<Option<Offer>, RoleConflic
             sections: filling.iter().map(|offer| offer.section).collect(),
         }),
     }
-}
-
-/// Returns the budgets of the Step-1 services every binding configures in
-/// `config`, summed per service.
-#[must_use]
-pub fn budgets(config: &Config) -> StepBudgets {
-    compiled()
-        .iter()
-        .map(|binding| binding.budgets(config))
-        .fold(StepBudgets::default(), |sum, budgets| StepBudgets {
-            demographics_ms: sum.demographics_ms.saturating_add(budgets.demographics_ms),
-            consent_ms: sum.consent_ms.saturating_add(budgets.consent_ms),
-        })
 }
 
 /// Returns how a missing localizer names every compiled localizer: the
@@ -568,6 +511,108 @@ pub fn sources_registry(settings: &Settings) -> bool {
     offers(settings)
         .iter()
         .any(|offer| offer.role == Role::RegistrySource)
+}
+
+/// Logs what this process is configured to reach, never a value.
+///
+/// The line names the endpoints that carry credentials and never the
+/// credentials, so a start-up log states what the process can reach
+/// without stating any of it; each binding then logs what it reaches.
+pub fn log_summary(settings: &Settings) {
+    let endpoints: Vec<&str> = settings
+        .credentials
+        .keys()
+        .map(EndpointId::as_str)
+        .collect();
+    let mutual: Vec<&str> = settings
+        .onward_tls
+        .iter()
+        .filter(|(_, tls)| tls.client_identity.is_some())
+        .map(|(endpoint, _)| endpoint.as_str())
+        .collect();
+    let decomposable: Vec<&str> = settings
+        .federation
+        .decomposable
+        .iter()
+        .map(|function| function.name())
+        .collect();
+    let bindings: Vec<&str> = compiled().iter().map(|binding| binding.name()).collect();
+    tracing::info!(
+        listen = %settings.server.listen,
+        base_path = %settings.server.base_path,
+        profile = ?settings.profile,
+        registry = settings.registry_document.is_some(),
+        registry_format = ?settings.registry_format,
+        federation_id = settings.federation.id.as_ref().map(FederationId::as_str),
+        node_selection = ?settings.federation.node_selection,
+        best_effort = settings.federation.best_effort,
+        offset_strategy = settings.federation.offset.name(),
+        max_offset_window = settings.federation.offset.max_window().map(NonZeroU32::get),
+        max_node_rows = settings.federation.max_node_rows.get(),
+        decomposable_aggregates = decomposable.join(","),
+        demographic_endpoint = settings
+            .federation
+            .demographic_endpoint
+            .as_ref()
+            .map(EndpointId::as_str),
+        fan_out_template_upload = settings.federation.fan_out_template_upload,
+        fan_out_stored_queries = settings.federation.fan_out_stored_queries,
+        consent_disclose = settings.federation.consent_disclosure.is_disclosed(),
+        consent_emergency = settings.federation.consent_emergency.as_str(),
+        stored_query_backend = settings
+            .stored_queries
+            .as_ref()
+            .map(|store| store.backend().name()),
+        metrics_listen = settings.metrics.listen.map(|address| address.to_string()),
+        metrics_otlp_push = settings.telemetry.otlp.as_ref().is_some_and(|otlp| otlp.metrics),
+        traces_otlp_export = settings.telemetry.otlp.as_ref().is_some_and(|otlp| otlp.traces),
+        trace_sample_ratio = settings
+            .telemetry
+            .otlp
+            .as_ref()
+            .map(|otlp| otlp.sample_ratio.get()),
+        credentials = endpoints.join(","),
+        client_certificates = mutual.join(","),
+        max_concurrent_requests = settings.server.overload.max_concurrent_requests.get(),
+        caller_rate = settings
+            .server
+            .overload
+            .caller_rate
+            .map(|rate| rate.requests_per_second.get()),
+        max_in_flight_per_node = settings.federation.max_in_flight_per_node.get(),
+        max_node_answer_bytes = settings.federation.max_node_answer_bytes.get(),
+        auth_issuers = settings.server.auth.issuers.len(),
+        auth_edge = matches!(settings.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),
+        purpose_of_use_required = settings.server.auth.purpose_required,
+        bindings = bindings.join(","),
+        "configuration resolved"
+    );
+    #[cfg(feature = "binding-nl")]
+    crate::config::nl::log_summary(settings);
+    #[cfg(feature = "binding-ihe")]
+    crate::config::ihe::log_summary(settings);
+}
+
+/// Returns what the onward grant `grant` of `endpoint` provides its node
+/// client, from the binding that added it.
+///
+/// # Errors
+///
+/// The [`FederationError`] of a provider that cannot be built, and
+/// [`FederationError::Grant`] for a grant no compiled binding added.
+pub fn provide(
+    grant: &dyn OnwardGrant,
+    endpoint: &EndpointId,
+    settings: &Settings,
+) -> Result<Provided, FederationError> {
+    compiled()
+        .iter()
+        .find_map(|binding| binding.provide(grant, endpoint, settings))
+        .unwrap_or_else(|| {
+            Err(FederationError::Grant {
+                section: format!("credentials.{endpoint}.{}", grant.key()),
+            })
+        })
 }
 
 /// Returns the class a refused reload over `error` is logged under, when a

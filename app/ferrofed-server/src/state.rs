@@ -172,7 +172,7 @@ impl AppState {
         document: Option<Result<RegistrySnapshot, FederationError>>,
         telemetry: Arc<Telemetry>,
     ) -> Result<Self, StateError> {
-        settings.log_summary();
+        crate::binding::log_summary(settings);
         let federation = Federation::build(settings, document, None)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
         transport::warn(&cleartext);

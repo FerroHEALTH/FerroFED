@@ -3,7 +3,9 @@
 
 //! The settings the run path holds, resolved from the configuration tree.
 
+use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use std::net::SocketAddr;
 use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::PathBuf;
@@ -25,7 +27,6 @@ use openehr_federation::id::FederationId;
 use openehr_federation::object::Uri;
 
 use crate::base_path::BasePath;
-use crate::binding::seam::OnwardGrant;
 use crate::config::auth::AuthSettings;
 use crate::config::limits::Overload;
 use crate::config::public_url::PublicUrl;
@@ -33,6 +34,7 @@ use crate::config::registry::RegistryFormat;
 use crate::config::server::ListenerTlsSettings;
 use crate::config::stored_queries::Store;
 use crate::config::tls::TlsSettings;
+use crate::config::transport::ProtectedSite;
 use crate::config::{EmergencyConsent, NodeSelection};
 use ferrohealth_telemetry::section::TelemetrySection;
 
@@ -75,7 +77,7 @@ pub struct Settings {
     pub xcpd: Option<crate::config::ihe::xcpd::XcpdSettings>,
     /// The Dutch Generic Functions, with every secret and file read.
     #[cfg(feature = "binding-nl")]
-    pub nl_gf: Option<crate::binding::nl::NlGfSettings>,
+    pub nl_gf: Option<crate::config::nl::NlGfSettings>,
     /// The PMIR identity feed, with every secret read.
     #[cfg(feature = "binding-ihe")]
     pub pmir: Option<crate::config::ihe::pmir::PmirSettings>,
@@ -338,6 +340,21 @@ pub struct MetricsSettings {
     pub scrape_users: Vec<String>,
 }
 
+/// An onward credential kind a binding adds beside the core's basic
+/// credentials, OAuth 2.0 and FAPI 2.0 grants (§13.1, §13.3).
+///
+/// A grant is [`Any`], so the binding that added it reads its own grants
+/// back from the settings and builds what each provides its node client.
+pub trait OnwardGrant: Any + fmt::Debug + Send + Sync {
+    /// Returns the table under `[credentials."<endpoint id>"]` it is
+    /// configured by, such as `nuts`.
+    fn key(&self) -> &'static str;
+
+    /// Returns the URL the grant sends the gateway's credentials to, with its
+    /// site under the transport policy, for the credentials `section`.
+    fn site(&self, section: &str) -> (String, ProtectedSite);
+}
+
 /// The authentication scheme a credentials section resolves to.
 ///
 /// `Debug` redacts every secret, because [`Secret`] does.
@@ -405,86 +422,10 @@ impl Settings {
     /// registry source names its members.
     #[must_use]
     pub fn federates(&self) -> bool {
-        self.registry_document.is_some() || crate::binding::sources_registry(self)
-    }
-
-    /// Logs what this process is configured to reach, never a value.
-    ///
-    /// The line names the endpoints that carry credentials and never the
-    /// credentials, so a start-up log states what the process can reach
-    /// without stating any of it; each binding then logs what it reaches.
-    pub fn log_summary(&self) {
-        let endpoints: Vec<&str> = self.credentials.keys().map(EndpointId::as_str).collect();
-        let mutual: Vec<&str> = self
-            .onward_tls
-            .iter()
-            .filter(|(_, tls)| tls.client_identity.is_some())
-            .map(|(endpoint, _)| endpoint.as_str())
-            .collect();
-        let decomposable: Vec<&str> = self
-            .federation
-            .decomposable
-            .iter()
-            .map(|function| function.name())
-            .collect();
-        let bindings: Vec<&str> = crate::binding::compiled()
-            .iter()
-            .map(|binding| binding.name())
-            .collect();
-        tracing::info!(
-            listen = %self.server.listen,
-            base_path = %self.server.base_path,
-            profile = ?self.profile,
-            registry = self.registry_document.is_some(),
-            registry_format = ?self.registry_format,
-            federation_id = self.federation.id.as_ref().map(FederationId::as_str),
-            node_selection = ?self.federation.node_selection,
-            best_effort = self.federation.best_effort,
-            offset_strategy = self.federation.offset.name(),
-            max_offset_window = self.federation.offset.max_window().map(NonZeroU32::get),
-            max_node_rows = self.federation.max_node_rows.get(),
-            decomposable_aggregates = decomposable.join(","),
-            demographic_endpoint = self
-                .federation
-                .demographic_endpoint
-                .as_ref()
-                .map(EndpointId::as_str),
-            fan_out_template_upload = self.federation.fan_out_template_upload,
-            fan_out_stored_queries = self.federation.fan_out_stored_queries,
-            consent_disclose = self.federation.consent_disclosure.is_disclosed(),
-            consent_emergency = self.federation.consent_emergency.as_str(),
-            stored_query_backend = self
-                .stored_queries
-                .as_ref()
-                .map(|store| store.backend().name()),
-            metrics_listen = self.metrics.listen.map(|address| address.to_string()),
-            metrics_otlp_push = self.telemetry.otlp.as_ref().is_some_and(|otlp| otlp.metrics),
-            traces_otlp_export = self.telemetry.otlp.as_ref().is_some_and(|otlp| otlp.traces),
-            trace_sample_ratio = self
-                .telemetry
-                .otlp
-                .as_ref()
-                .map(|otlp| otlp.sample_ratio.get()),
-            credentials = endpoints.join(","),
-            client_certificates = mutual.join(","),
-            max_concurrent_requests = self.server.overload.max_concurrent_requests.get(),
-            caller_rate = self
-                .server
-                .overload
-                .caller_rate
-                .map(|rate| rate.requests_per_second.get()),
-            max_in_flight_per_node = self.federation.max_in_flight_per_node.get(),
-            max_node_answer_bytes = self.federation.max_node_answer_bytes.get(),
-            auth_issuers = self.server.auth.issuers.len(),
-            auth_edge = matches!(self.server.auth.mode, crate::config::auth::AuthMode::Edge(_)),
-            purpose_of_use_required = self.server.auth.purpose_required,
-            bindings = bindings.join(","),
-            "configuration resolved"
-        );
-        for binding in crate::binding::compiled() {
-            binding.log_summary(self);
-        }
         #[cfg(feature = "binding-ihe")]
-        crate::config::ihe::log_summary(self);
+        let directory = self.registry_directory.is_some();
+        #[cfg(not(feature = "binding-ihe"))]
+        let directory = false;
+        self.registry_document.is_some() || directory
     }
 }
