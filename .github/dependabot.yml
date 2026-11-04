@@ -61,8 +61,8 @@ updates:
       interval: "daily"
     # Longer for a major than for an action: a compromised crate executes in
     # the build and ships in the binary, which is the higher-consequence case.
-    # The family crates are this organisation's own releases, pinned exactly
-    # and moved together, so they are excluded from the cooldown.
+    # The family crates are excluded: our own crates, published through
+    # crates.io Trusted Publishing, so waiting on them gains nothing.
     cooldown:
       default-days: 7
       semver-major-days: 14
