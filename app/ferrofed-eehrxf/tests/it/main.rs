@@ -18,6 +18,7 @@
 
 mod crosswalk;
 mod laboratory;
+mod medication;
 mod query;
 mod receive;
 mod sheet;
