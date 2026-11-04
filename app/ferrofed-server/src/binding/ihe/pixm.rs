@@ -14,31 +14,30 @@ use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ihe_iti::pixm::Invocation;
 
+use crate::binding::error::BindingError;
 use crate::config::audit::AuditSettings;
 use crate::config::ihe::pixm::{PixmMethod, PixmSettings};
 use crate::config::service;
-use crate::federation::error::FederationError;
 
 /// The PIXm resolver `[pixm]` describes over the members of `snapshot`.
 pub(super) fn resolver(
     pixm: &PixmSettings,
     audit: &AuditSettings,
     snapshot: &RegistrySnapshot,
-) -> Result<Arc<PixmResolver>, FederationError> {
+) -> Result<Arc<PixmResolver>, BindingError> {
     let mut managers = Vec::with_capacity(pixm.managers.len());
     for (index, manager) in pixm.managers.iter().enumerate() {
         let mut members = BTreeMap::new();
         for (key, domain) in &manager.members {
-            let member =
-                NodeId::new(key.as_str()).map_err(|source| FederationError::PixmMember {
-                    manager: index,
-                    key: key.clone(),
-                    source,
-                })?;
+            let member = NodeId::new(key.as_str()).map_err(|source| BindingError::PixmMember {
+                manager: index,
+                key: key.clone(),
+                source,
+            })?;
             members.insert(member, domain.clone());
         }
         let key = format!("pixm.manager[{index}]");
-        let tls = service::tls_of(&key, &manager.tls).map_err(FederationError::Tls)?;
+        let tls = service::tls_of(&key, &manager.tls).map_err(BindingError::Tls)?;
         let auth = service::service_authentication(
             &format!("{key}.credentials"),
             manager.credentials.as_ref(),
@@ -57,15 +56,15 @@ pub(super) fn resolver(
     let mut namespaces = BTreeMap::new();
     for (namespace, system) in &pixm.namespaces {
         let namespace =
-            IdentifierNamespace::new(namespace.as_str()).map_err(FederationError::PixmNamespace)?;
+            IdentifierNamespace::new(namespace.as_str()).map_err(BindingError::PixmNamespace)?;
         namespaces.insert(namespace, system.clone());
     }
     let resolver =
-        PixmResolver::from_config(managers, namespaces, snapshot).map_err(FederationError::Pixm)?;
+        PixmResolver::from_config(managers, namespaces, snapshot).map_err(BindingError::Pixm)?;
     // NOTE: PIXm §2:3.83.5.1.1: each ITI-83 exchange is audited, and one whose
     // record is refused fails, so the query fails closed.
     Ok(Arc::new(
-        match crate::audit::recorder(audit).map_err(FederationError::Audit)? {
+        match crate::audit::recorder(audit).map_err(BindingError::Audit)? {
             Some(recorder) => resolver.audited(&recorder),
             None => resolver,
         },

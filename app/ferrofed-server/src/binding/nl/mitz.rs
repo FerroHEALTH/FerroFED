@@ -5,11 +5,11 @@
 //! §B.2), built from the `[nl_gf.mitz]` settings `crate::config::nl::mitz`
 //! resolves.
 
+use crate::binding::error::BindingError;
 use crate::config::nl::NlGfSettings;
 use crate::config::nl::mitz::{MITZ_KEY, MitzSettings};
 use crate::config::service;
 use crate::config::settings::Settings;
-use crate::federation::error::FederationError;
 use ferrofed_identity::nl::mitz::{HolderConfig, MitzConfig, MitzPrefilter};
 use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::consent::ConsentPrefilter;
@@ -26,7 +26,7 @@ pub(super) fn prefilter(
     settings: &Settings,
     nl_gf: &NlGfSettings,
     snapshot: &RegistrySnapshot,
-) -> Result<Option<Arc<dyn ConsentPrefilter>>, FederationError> {
+) -> Result<Option<Arc<dyn ConsentPrefilter>>, BindingError> {
     let Some(mitz) = &nl_gf.mitz else {
         return Ok(None);
     };
@@ -55,7 +55,7 @@ pub(super) fn prefilter(
             mitz.client_identity.as_ref(),
             mitz.trust_roots.as_deref(),
         )
-        .map_err(FederationError::Tls)?,
+        .map_err(BindingError::Tls)?,
         namespaces: namespaces(mitz)?,
         categories: mitz.data_categories.clone(),
         purpose: mitz.purpose.clone(),
@@ -63,29 +63,29 @@ pub(super) fn prefilter(
         custodians,
         timeout: mitz.timeout,
     };
-    let prefilter = MitzPrefilter::from_config(config, snapshot).map_err(FederationError::Mitz)?;
+    let prefilter = MitzPrefilter::from_config(config, snapshot).map_err(BindingError::Mitz)?;
     Ok(Some(Arc::new(prefilter)))
 }
 
 /// The member `value` names, read at `key`.
-fn node(key: &str, value: &str) -> Result<NodeId, FederationError> {
-    NodeId::new(value).map_err(|source| FederationError::MitzMember {
+fn node(key: &str, value: &str) -> Result<NodeId, BindingError> {
+    NodeId::new(value).map_err(|source| BindingError::MitzMember {
         key: key.to_owned(),
         source,
     })
 }
 
 /// The namespaces that stand for the BSN.
-fn namespaces(mitz: &MitzSettings) -> Result<BTreeSet<IdentifierNamespace>, FederationError> {
+fn namespaces(mitz: &MitzSettings) -> Result<BTreeSet<IdentifierNamespace>, BindingError> {
     mitz.namespaces
         .iter()
         .map(|namespace| IdentifierNamespace::new(namespace.as_str()))
         .collect::<Result<BTreeSet<_>, _>>()
-        .map_err(FederationError::MitzNamespace)
+        .map_err(BindingError::MitzNamespace)
 }
 
 /// Each member's data holder, by member id.
-fn holders(mitz: &MitzSettings) -> Result<BTreeMap<NodeId, HolderConfig>, FederationError> {
+fn holders(mitz: &MitzSettings) -> Result<BTreeMap<NodeId, HolderConfig>, BindingError> {
     let mut holders = BTreeMap::new();
     for (member, holder) in &mitz.holders {
         let key = format!("{MITZ_KEY}.holders.{member:?}");

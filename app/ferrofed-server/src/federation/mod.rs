@@ -22,7 +22,6 @@ pub mod registry;
 use std::collections::BTreeSet;
 use std::num::{NonZeroU32, NonZeroUsize};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
 
 use ehds_logging::record::Purpose;
 use ferrofed_engine::conveyance::Conveyance;
@@ -31,7 +30,6 @@ use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::dispatch::NodeClients;
 use ferrofed_engine::fanout::Budget;
 use ferrofed_identity::role::consent::ConsentPrefilter;
-use ferrofed_identity::role::demographics::Demographics;
 use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_identity::session::{IdentityChange, ResolutionBindings};
 use ferrofed_operator_api::operator::ClearedEhrId;
@@ -48,6 +46,7 @@ use openehr_federation::dedup::DedupMode;
 use openehr_federation::id::FederationId;
 
 use crate::access::AccessLog;
+use crate::binding::seam::DemographicsStep;
 use crate::binding::seam::PublicDocument;
 use crate::config::EmergencyConsent;
 use crate::config::settings::{ConsentDisclosure, SigningSettings};
@@ -84,45 +83,6 @@ pub struct Federation {
     client_keys: Vec<Jwk>,
     documents: Vec<PublicDocument>,
     access: Option<Arc<AccessLog>>,
-}
-
-/// The demographics step a patient identifier the cross-reference does not
-/// map is taken to before localization and resolution, with its budget
-/// (Annex A §A.2).
-///
-/// A registry reload builds it again from `[pdqm]`, as it builds the resolver.
-#[derive(Clone)]
-pub struct DemographicsStep {
-    step: Arc<dyn Demographics>,
-    timeout: Duration,
-}
-
-impl DemographicsStep {
-    /// The step `step`, each exchange of which may take `timeout`.
-    #[must_use]
-    pub fn new(step: Arc<dyn Demographics>, timeout: Duration) -> Self {
-        Self { step, timeout }
-    }
-
-    /// The demographics service.
-    #[must_use]
-    pub fn step(&self) -> &dyn Demographics {
-        self.step.as_ref()
-    }
-
-    /// How long one exchange may take.
-    #[must_use]
-    pub fn timeout(&self) -> Duration {
-        self.timeout
-    }
-}
-
-impl std::fmt::Debug for DemographicsStep {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DemographicsStep")
-            .field("timeout", &self.timeout)
-            .finish_non_exhaustive()
-    }
 }
 
 /// What the process learns while it serves, which a registry reload carries

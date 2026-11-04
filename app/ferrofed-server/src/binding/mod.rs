@@ -25,6 +25,7 @@
 //! the running roles. No specification governs the module layout: our own
 //! design.
 
+pub mod error;
 #[cfg(feature = "binding-ihe")]
 pub mod ihe;
 #[cfg(feature = "test-seam")]
@@ -43,13 +44,13 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::id::FederationId;
 
+use crate::binding::error::BindingError;
+use crate::binding::seam::DemographicsStep;
 use crate::binding::seam::{
     LocalizationError, LocalizerSeam, ProvideError, Provided, PublicDocument, ResolverSeam,
 };
 use crate::config::settings::OnwardGrant;
 use crate::config::settings::Settings;
-use crate::federation::DemographicsStep;
-use crate::federation::error::FederationError;
 use crate::health::dependencies::Indicator;
 
 /// Every binding this build compiles, in the order the gateway wires them.
@@ -197,8 +198,8 @@ pub trait Binding: fmt::Debug + Sync {
     ///
     /// # Errors
     ///
-    /// The binding's [`FederationError`] naming the section.
-    fn unregistered(&self, _settings: &Settings) -> Result<(), FederationError> {
+    /// The binding's [`BindingError`] naming the section.
+    fn unregistered(&self, _settings: &Settings) -> Result<(), BindingError> {
         Ok(())
     }
 
@@ -206,12 +207,12 @@ pub trait Binding: fmt::Debug + Sync {
     ///
     /// # Errors
     ///
-    /// The [`FederationError`] of a resolver that refuses its configuration.
+    /// The [`BindingError`] of a resolver that refuses its configuration.
     fn resolver(
         &self,
         _settings: &Settings,
         _snapshot: &RegistrySnapshot,
-    ) -> Result<Option<ResolverSeam>, FederationError> {
+    ) -> Result<Option<ResolverSeam>, BindingError> {
         Ok(None)
     }
 
@@ -220,13 +221,13 @@ pub trait Binding: fmt::Debug + Sync {
     ///
     /// # Errors
     ///
-    /// The [`FederationError`] of a step that refuses its configuration or
+    /// The [`BindingError`] of a step that refuses its configuration or
     /// that no resolver follows.
     fn demographics(
         &self,
         _settings: &Settings,
         _resolving: bool,
-    ) -> Result<Option<DemographicsStep>, FederationError> {
+    ) -> Result<Option<DemographicsStep>, BindingError> {
         Ok(None)
     }
 
@@ -250,13 +251,13 @@ pub trait Binding: fmt::Debug + Sync {
     ///
     /// # Errors
     ///
-    /// The [`FederationError`] of a pre-filter that refuses its
+    /// The [`BindingError`] of a pre-filter that refuses its
     /// configuration.
     fn prefilter(
         &self,
         _settings: &Settings,
         _snapshot: &RegistrySnapshot,
-    ) -> Result<Option<Arc<dyn ConsentPrefilter>>, FederationError> {
+    ) -> Result<Option<Arc<dyn ConsentPrefilter>>, BindingError> {
         Ok(None)
     }
 
@@ -265,8 +266,8 @@ pub trait Binding: fmt::Debug + Sync {
     ///
     /// # Errors
     ///
-    /// The [`FederationError`] of a trail that cannot start.
-    fn indicators(&self, _settings: &Settings) -> Result<Vec<Arc<dyn Indicator>>, FederationError> {
+    /// The [`BindingError`] of a trail that cannot start.
+    fn indicators(&self, _settings: &Settings) -> Result<Vec<Arc<dyn Indicator>>, BindingError> {
         Ok(Vec::new())
     }
 
@@ -275,8 +276,8 @@ pub trait Binding: fmt::Debug + Sync {
     ///
     /// # Errors
     ///
-    /// The [`FederationError`] of a document that cannot be built.
-    fn documents(&self, _settings: &Settings) -> Result<Vec<PublicDocument>, FederationError> {
+    /// The [`BindingError`] of a document that cannot be built.
+    fn documents(&self, _settings: &Settings) -> Result<Vec<PublicDocument>, BindingError> {
         Ok(Vec::new())
     }
 
@@ -285,7 +286,7 @@ pub trait Binding: fmt::Debug + Sync {
     fn read_registry(
         &self,
         _settings: &Settings,
-    ) -> Option<Result<RegistrySnapshot, FederationError>> {
+    ) -> Option<Result<RegistrySnapshot, BindingError>> {
         None
     }
 
@@ -317,7 +318,7 @@ pub trait Binding: fmt::Debug + Sync {
 
     /// Returns the class a refused reload is logged under, when `error` is
     /// one of the binding's.
-    fn class(&self, _error: &FederationError) -> Option<&'static str> {
+    fn class(&self, _error: &BindingError) -> Option<&'static str> {
         None
     }
 
@@ -437,11 +438,11 @@ pub fn resolver_list() -> String {
 ///
 /// # Errors
 ///
-/// The [`FederationError`] of the resolver.
+/// The [`BindingError`] of the resolver.
 pub fn resolver(
     settings: &Settings,
     snapshot: &RegistrySnapshot,
-) -> Result<Option<ResolverSeam>, FederationError> {
+) -> Result<Option<ResolverSeam>, BindingError> {
     first(|binding| binding.resolver(settings, snapshot))
 }
 
@@ -450,11 +451,11 @@ pub fn resolver(
 ///
 /// # Errors
 ///
-/// The [`FederationError`] of the step.
+/// The [`BindingError`] of the step.
 pub fn demographics(
     settings: &Settings,
     resolving: bool,
-) -> Result<Option<DemographicsStep>, FederationError> {
+) -> Result<Option<DemographicsStep>, BindingError> {
     first(|binding| binding.demographics(settings, resolving))
 }
 
@@ -476,11 +477,11 @@ pub fn localizer(
 ///
 /// # Errors
 ///
-/// The [`FederationError`] of the pre-filter.
+/// The [`BindingError`] of the pre-filter.
 pub fn prefilter(
     settings: &Settings,
     snapshot: &RegistrySnapshot,
-) -> Result<Option<Arc<dyn ConsentPrefilter>>, FederationError> {
+) -> Result<Option<Arc<dyn ConsentPrefilter>>, BindingError> {
     first(|binding| binding.prefilter(settings, snapshot))
 }
 
@@ -489,8 +490,8 @@ pub fn prefilter(
 ///
 /// # Errors
 ///
-/// The [`FederationError`] of a trail that cannot start.
-pub fn indicators(settings: &Settings) -> Result<Vec<Arc<dyn Indicator>>, FederationError> {
+/// The [`BindingError`] of a trail that cannot start.
+pub fn indicators(settings: &Settings) -> Result<Vec<Arc<dyn Indicator>>, BindingError> {
     let mut indicators = Vec::new();
     for binding in compiled() {
         indicators.extend(binding.indicators(settings)?);
@@ -501,7 +502,7 @@ pub fn indicators(settings: &Settings) -> Result<Vec<Arc<dyn Indicator>>, Federa
 /// Reads the registry from the binding that is the source `settings` name,
 /// when one is.
 #[must_use]
-pub fn read_registry(settings: &Settings) -> Option<Result<RegistrySnapshot, FederationError>> {
+pub fn read_registry(settings: &Settings) -> Option<Result<RegistrySnapshot, BindingError>> {
     compiled()
         .iter()
         .find_map(|binding| binding.read_registry(settings))
@@ -620,7 +621,7 @@ pub fn provide(
 /// Returns the class a refused reload over `error` is logged under, when a
 /// binding claims it.
 #[must_use]
-pub fn class(error: &FederationError) -> Option<&'static str> {
+pub fn class(error: &BindingError) -> Option<&'static str> {
     compiled().iter().find_map(|binding| binding.class(error))
 }
 

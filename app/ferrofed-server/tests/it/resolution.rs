@@ -19,6 +19,7 @@ use std::path::Path;
 
 use axum::Router;
 use ferrofed_identity::ihe::pixm::PixmConfigError;
+use ferrofed_server::binding::error::BindingError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error;
 use ferrofed_server::federation::{Federation, error::FederationError};
@@ -398,7 +399,7 @@ fn a_pix_manager_that_leaves_a_member_unresolved_refuses_to_boot() -> TestResult
     assert!(
         matches!(
             &error,
-            FederationError::Pixm(PixmConfigError::UnresolvedMember(member)) if member.as_str() == "node-b"
+            FederationError::Binding(BindingError::Pixm(PixmConfigError::UnresolvedMember(member))) if member.as_str() == "node-b"
         ),
         "{error:?}"
     );
@@ -452,7 +453,7 @@ fn a_pix_manager_without_a_registry_refuses_to_boot() -> TestResult {
     )?
     .resolve()?;
     match Federation::load(&settings) {
-        Err(FederationError::PixmWithoutRegistry) => Ok(()),
+        Err(FederationError::Binding(BindingError::PixmWithoutRegistry)) => Ok(()),
         other => Err(format!("refused for its missing registry: {other:?}").into()),
     }
 }
@@ -462,7 +463,7 @@ fn a_pix_manager_without_a_registry_refuses_to_boot() -> TestResult {
 #[test]
 fn a_refusal_asking_for_a_registry_names_both_sources() {
     for refused in [
-        FederationError::PixmWithoutRegistry,
+        FederationError::Binding(BindingError::PixmWithoutRegistry),
         FederationError::DemographicWithoutRegistry,
         FederationError::NodeSelectionUndeclared,
         FederationError::IdUndeclared,

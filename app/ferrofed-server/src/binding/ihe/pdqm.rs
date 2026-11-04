@@ -10,23 +10,23 @@ use std::sync::Arc;
 use ferrofed_identity::ihe::pdqm::{PdqmConfig, PdqmDemographics};
 use ferrofed_identity::role::patient::IdentifierNamespace;
 
+use crate::binding::error::BindingError;
+use crate::binding::seam::DemographicsStep;
 use crate::config::audit::AuditSettings;
 use crate::config::ihe::pdqm::PdqmSettings;
 use crate::config::service;
-use crate::federation::DemographicsStep;
-use crate::federation::error::FederationError;
 
 /// The demographics step `pdqm` describes, audited through `[audit]`.
 pub(super) fn step(
     pdqm: &PdqmSettings,
     audit: &AuditSettings,
-) -> Result<DemographicsStep, FederationError> {
-    let tls = service::tls_of("pdqm", &pdqm.tls).map_err(FederationError::Tls)?;
+) -> Result<DemographicsStep, BindingError> {
+    let tls = service::tls_of("pdqm", &pdqm.tls).map_err(BindingError::Tls)?;
     let auth = service::service_authentication("pdqm.credentials", pdqm.credentials.as_ref())?;
     let mut namespaces = BTreeMap::new();
     for (namespace, system) in &pdqm.namespaces {
         let namespace =
-            IdentifierNamespace::new(namespace.as_str()).map_err(FederationError::PdqmNamespace)?;
+            IdentifierNamespace::new(namespace.as_str()).map_err(BindingError::PdqmNamespace)?;
         namespaces.insert(namespace, system.clone());
     }
     let step = PdqmDemographics::from_config(PdqmConfig {
@@ -37,10 +37,10 @@ pub(super) fn step(
         master: pdqm.master.clone(),
         namespaces,
     })
-    .map_err(FederationError::Pdqm)?;
+    .map_err(BindingError::Pdqm)?;
     // NOTE: PDQm §2:3.78.5.1 and §2:3.119.5.1.1: each exchange is audited, and one
     // whose record is refused fails, so the patient's resolution fails closed.
-    let step = match crate::audit::recorder(audit).map_err(FederationError::Audit)? {
+    let step = match crate::audit::recorder(audit).map_err(BindingError::Audit)? {
         Some(recorder) => step.audited(&recorder),
         None => step,
     };

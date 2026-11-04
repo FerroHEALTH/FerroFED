@@ -35,10 +35,9 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::StatusCode;
 use serde::Serialize;
 
+use crate::binding::error::BindingError;
 use crate::config::ihe::mcsd::DirectorySettings;
 use crate::config::service;
-use crate::config::settings::Settings;
-use crate::federation::{error::FederationError, registry::read_registry};
 use crate::reload::{Applied, ReloadError, Reloader};
 use ferrofed_operator_api::health::Observed;
 
@@ -119,10 +118,10 @@ impl DirectoryRegistry {
     /// The read runs on a runtime of its own, so it blocks the caller.
     ///
     /// # Errors
-    /// [`FederationError::Directory`] for a directory that cannot be asked as
+    /// [`BindingError::Directory`] for a directory that cannot be asked as
     /// configured, a read that cannot run, and a directory that
     /// cannot be read or holds no valid registry.
-    pub fn open(settings: &DirectorySettings) -> Result<(Self, RegistrySnapshot), FederationError> {
+    pub fn open(settings: &DirectorySettings) -> Result<(Self, RegistrySnapshot), BindingError> {
         let source = source(settings)?;
         let materialised = blocking(&source)?;
         let (content, snapshot) = materialised.into_parts();
@@ -176,9 +175,14 @@ impl DirectoryRegistry {
                 // NOTE: no specification governs this: our own design; an answer past
                 // the budget, or one that breaks ITI-91, is refused as a broken registry is.
                 if error.exceeded() || (error.answered() && error.status().is_none()) {
-                    return RefreshOutcome::Refused(reloader.directory_refused(directory_error(
-                        DirectoryFailure::Read(DirectoryReadError::Exchange(error)),
-                    )));
+                    return RefreshOutcome::Refused(
+                        reloader.directory_refused(
+                            directory_error(DirectoryFailure::Read(DirectoryReadError::Exchange(
+                                error,
+                            )))
+                            .into(),
+                        ),
+                    );
                 }
                 return RefreshOutcome::Unreachable(error);
             }
@@ -205,9 +209,14 @@ impl DirectoryRegistry {
             }
             Refreshed::Refused(error) => {
                 self.refuse(DirectoryFault::RegistryInvalid);
-                RefreshOutcome::Refused(reloader.directory_refused(directory_error(
-                    DirectoryFailure::Read(DirectoryReadError::Registry(error)),
-                )))
+                RefreshOutcome::Refused(
+                    reloader.directory_refused(
+                        directory_error(DirectoryFailure::Read(DirectoryReadError::Registry(
+                            error,
+                        )))
+                        .into(),
+                    ),
+                )
             }
         }
     }
@@ -256,25 +265,10 @@ impl DirectoryRegistry {
 /// The fault a refused change shows: a registry that breaks a rule of its
 /// own, or a sound one the rest of the configuration does not fit.
 fn fault_of(error: &ReloadError) -> DirectoryFault {
-    match error {
-        ReloadError::Federation { source, .. }
-            if matches!(
-                **source,
-                FederationError::Registry { .. }
-                    | FederationError::FhirRegistry { .. }
-                    | FederationError::Directory(_)
-            ) =>
-        {
-            DirectoryFault::RegistryInvalid
-        }
-        ReloadError::Federation { .. }
-        | ReloadError::Config(_)
-        | ReloadError::RegistryPresence
-        | ReloadError::Profile
-        | ReloadError::Cleartext(_)
-        | ReloadError::Revisions(_)
-        | ReloadError::Auth(_)
-        | ReloadError::Certificate { .. } => DirectoryFault::ConfigurationMismatch,
+    if error.registry_invalid() {
+        DirectoryFault::RegistryInvalid
+    } else {
+        DirectoryFault::ConfigurationMismatch
     }
 }
 
@@ -294,44 +288,23 @@ pub enum DirectoryFailure {
     Runtime(#[source] std::io::Error),
 }
 
-/// `failure` as the federation error a boot or a reload reports.
-fn directory_error(failure: DirectoryFailure) -> FederationError {
-    FederationError::Directory(Box::new(failure))
-}
-
-/// The registry's first read and, when it comes from a care services
-/// directory, the directory the gateway then keeps it in step with.
-///
-/// A document is read as [`read_registry`] reads it; a directory is read
-/// once here, so the banner, the build and the refreshes share one read.
-#[must_use]
-pub fn read_source(
-    settings: &Settings,
-) -> (
-    Option<Result<RegistrySnapshot, FederationError>>,
-    Option<Arc<DirectoryRegistry>>,
-) {
-    match &settings.registry_directory {
-        None => (read_registry(settings), None),
-        Some(directory) => match DirectoryRegistry::open(directory) {
-            Ok((registry, snapshot)) => (Some(Ok(snapshot)), Some(Arc::new(registry))),
-            Err(error) => (Some(Err(error)), None),
-        },
-    }
+/// `failure` as the binding error a boot or a reload reports.
+fn directory_error(failure: DirectoryFailure) -> BindingError {
+    BindingError::Directory(Box::new(failure))
 }
 
 /// Reads the registry from the directory `settings` name, blocking the
 /// caller, for a command that only checks it.
 ///
 /// # Errors
-/// The [`FederationError`] [`DirectoryRegistry::open`] returns.
-pub fn read(settings: &DirectorySettings) -> Result<RegistrySnapshot, FederationError> {
+/// The [`BindingError`] [`DirectoryRegistry::open`] returns.
+pub fn read(settings: &DirectorySettings) -> Result<RegistrySnapshot, BindingError> {
     DirectoryRegistry::open(settings).map(|(_, snapshot)| snapshot)
 }
 
 /// The source `settings` name.
-fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationError> {
-    let tls = service::tls_of("registry.mcsd", &settings.tls).map_err(FederationError::Tls)?;
+fn source(settings: &DirectorySettings) -> Result<DirectorySource, BindingError> {
+    let tls = service::tls_of("registry.mcsd", &settings.tls).map_err(BindingError::Tls)?;
     let credentials = service::service_authentication(
         "registry.mcsd.credentials",
         settings.credentials.as_ref(),
@@ -349,7 +322,7 @@ fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationErr
     // NOTE: mCSD §2:3.90.5.1 and §2:3.91.5.1: each search and history is audited,
     // and one whose record is refused fails like a directory that did not answer.
     Ok(
-        match crate::audit::recorder(&settings.audit).map_err(FederationError::Audit)? {
+        match crate::audit::recorder(&settings.audit).map_err(BindingError::Audit)? {
             Some(recorder) => source.audited(recorder),
             None => source,
         },
@@ -358,7 +331,7 @@ fn source(settings: &DirectorySettings) -> Result<DirectorySource, FederationErr
 
 /// Reads `source` on a current-thread runtime of a thread of its own, so the
 /// read works whether or not the caller runs on a runtime.
-fn blocking(source: &DirectorySource) -> Result<Materialised, FederationError> {
+fn blocking(source: &DirectorySource) -> Result<Materialised, BindingError> {
     std::thread::scope(|scope| {
         let reading = scope.spawn(|| {
             let runtime = tokio::runtime::Builder::new_current_thread()

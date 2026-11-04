@@ -36,7 +36,8 @@ use ferrofed_identity::profile::Profile;
 
 use super::error::FederationError;
 use super::registry::read_registry;
-use super::{DemographicsStep, Federation, Observed, Reconciled, widened};
+use super::{Federation, Observed, Reconciled, widened};
+use crate::binding::seam::DemographicsStep;
 
 impl Federation {
     /// Builds the federation `settings` describe, or `None` when no registry
@@ -427,7 +428,7 @@ fn default_index_capacity() -> NonZeroU32 {
 ///
 /// Returns the binding's error for a demographics step with no
 /// cross-reference `resolving` the master identity it finds, such as
-/// [`FederationError::PdqmWithoutResolver`], and for a step that cannot be
+/// [`BindingError::PdqmWithoutResolver`](crate::binding::error::BindingError::PdqmWithoutResolver), and for a step that cannot be
 /// built.
 fn carry(
     settings: &Settings,
