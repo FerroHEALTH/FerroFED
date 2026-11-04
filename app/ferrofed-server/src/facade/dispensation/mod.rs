@@ -31,6 +31,7 @@
 mod answer;
 mod duplicate;
 mod lookup;
+mod mapped;
 pub(crate) mod withdrawal;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -147,14 +148,19 @@ pub(crate) async fn dispense(
     let chosen: Vec<Chosen> =
         native::chosen_for(snapshot, &located.targets, Category::Prescription.code())
             .into_iter()
-            .filter(|member| prescribing.contains(member.node.as_str()))
+            .filter(|member| {
+                prescribing.contains(member.node.as_str())
+                    && !fhir.mapped.contains_key(member.node.as_str())
+            })
             .collect();
-    if chosen.is_empty() {
-        return unowned(&logged);
-    }
-    let members = match prescriptions::asked(federation, arrived, chosen, Arc::clone(&withheld))
-        .await
-    {
+    let asked = prescribed(
+        (federation, fhir, arrived),
+        (&located, first),
+        chosen,
+        Arc::clone(&withheld),
+    );
+    let members = match asked.await {
+        Ok(members) if members.is_empty() => return unowned(&logged),
         Ok(members) => members,
         Err(prescriptions::Unprescribed::Failure(failure)) => {
             return failure.respond(arrived.request_id, arrived.outbound);
@@ -172,10 +178,33 @@ pub(crate) async fn dispense(
     owned(
         (federation, fhir, arrived),
         (received, body),
-        (&lookup, targeted),
+        (&lookup, targeted, &located),
         withheld,
     )
     .await
+}
+
+/// The patient's prescriptions at every member that may own the
+/// dispensation's: those of `chosen` at their own endpoints, and every
+/// map-mode member the plan of `located` reaches, the patient named by
+/// `patient`, in endpoint order.
+async fn prescribed(
+    (federation, fhir, arrived): (&Arc<Federation>, &FhirSettings, &Arrived<'_>),
+    (located, patient): (&Located, (&str, &str)),
+    chosen: Vec<Chosen>,
+    withheld: Arc<Withheld>,
+) -> Result<Vec<prescriptions::Member>, prescriptions::Unprescribed> {
+    let now = jiff::Timestamp::now()
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
+        .to_string();
+    let (natives, maps) = tokio::join!(
+        prescriptions::asked(federation, arrived, chosen, withheld),
+        crate::facade::mapped::asked(federation, arrived, located, (patient, &now), &fhir.mapped)
+    );
+    let mut members = natives?;
+    members.extend(maps?);
+    members.sort_by(|one, other| one.chosen.native.cmp(&other.chosen.native));
+    Ok(members)
 }
 
 /// Writes the dispensation `received`, whose text is `body`, at the owner
@@ -184,7 +213,7 @@ pub(crate) async fn dispense(
 async fn owned(
     (federation, fhir, arrived): (&Arc<Federation>, &FhirSettings, &Arrived<'_>),
     (received, body): (&Received, &[u8]),
-    (lookup, targeted): (&Lookup<'_>, &BTreeSet<EndpointId>),
+    (lookup, targeted, located): (&Lookup<'_>, &BTreeSet<EndpointId>, &Located),
     withheld: Arc<Withheld>,
 ) -> Response {
     let logged = arrived.outbound.to_string();
@@ -219,6 +248,18 @@ async fn owned(
     let Some(member) = members.get(owner) else {
         return crate::error::fixed(Code::Internal, arrived.request_id);
     };
+    if let Some(refusal) = held_to(federation, arrived, (lookup, targeted), &member.chosen) {
+        return refusal;
+    }
+    if member.composed.is_some() {
+        return mapped::written(
+            (federation, fhir, arrived),
+            (received, body),
+            (lookup, member, located),
+            withheld,
+        )
+        .await;
+    }
     let Some(writing) = writing(federation, fhir, &member.chosen) else {
         Outcome::Failed.record();
         return refused_after(
@@ -228,24 +269,6 @@ async fn owned(
             "the member that holds the prescription does not receive dispensations on this deployment",
         );
     };
-    if let Some(other) = targeted
-        .iter()
-        .find(|endpoint| !of_node(federation, endpoint, &writing.node))
-    {
-        Outcome::Failed.record();
-        return refused_after(
-            federation,
-            lookup,
-            (StatusCode::BAD_REQUEST, "business-rule"),
-            &format!(
-                "openEHR-federation-endpoint names {other}, which is no endpoint of the member that owns the prescription, so nothing was written (§8.4)"
-            ),
-        );
-    }
-    if !confined::admits(arrived.conveyance, &writing.via, &writing.ehr_id) {
-        Outcome::Failed.record();
-        return confined::refused("dispensation", arrived.request_id, &logged);
-    }
     let Some((per_node, until)) = duplicate::budgeted(federation, arrived) else {
         return crate::error::fixed(Code::Internal, arrived.request_id);
     };
@@ -284,6 +307,41 @@ async fn owned(
         fhir,
         &logged,
     )
+}
+
+/// The refusal of a write to the owner `owner` that the targeting headers
+/// `targeted` name another member than, or that the caller's grant does not
+/// admit, after the lookup `lookup`; `None` when the write may go on.
+fn held_to(
+    federation: &Federation,
+    arrived: &Arrived<'_>,
+    (lookup, targeted): (&Lookup<'_>, &BTreeSet<EndpointId>),
+    owner: &Chosen,
+) -> Option<Response> {
+    if let Some(other) = targeted
+        .iter()
+        .find(|endpoint| !of_node(federation, endpoint, &owner.node))
+    {
+        Outcome::Failed.record();
+        return Some(refused_after(
+            federation,
+            lookup,
+            (StatusCode::BAD_REQUEST, "business-rule"),
+            &format!(
+                "openEHR-federation-endpoint names {other}, which is no endpoint of the member that owns the prescription, so nothing was written (§8.4)"
+            ),
+        ));
+    }
+    if !confined::admits(arrived.conveyance, &owner.via, &owner.ehr_id) {
+        Outcome::Failed.record();
+        let logged = arrived.outbound.to_string();
+        return Some(confined::refused(
+            "dispensation",
+            arrived.request_id,
+            &logged,
+        ));
+    }
+    None
 }
 
 /// The patient the identifiers `named` name, located once by the first and

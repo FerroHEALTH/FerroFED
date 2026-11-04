@@ -313,8 +313,8 @@ async fn held(
             .await
             .map_err(|failure| Unfound::Failure(Failure::FanOut(failure)))?;
             match composed {
-                mapped::Composed::Held(answered) => Ok(answered),
-                mapped::Composed::Unnamed => Err(Unfound::Unnamed),
+                mapped::Fetched::Held(answered) => Ok(answered),
+                mapped::Fetched::Unnamed => Err(Unfound::Unnamed),
             }
         }
         (Some(_), None) => Err(Unfound::NoOwner(None)),

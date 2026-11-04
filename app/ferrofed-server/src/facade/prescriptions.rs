@@ -135,10 +135,20 @@ pub(crate) struct Member {
     pub(crate) chosen: Chosen,
     /// What it answered.
     pub(crate) held: Held,
-    /// For a map-mode member, the UUID of the versioned composition each page
-    /// was mapped from, when it is one; `None` for a member asked at its own
-    /// endpoint.
-    pub(crate) composed: Option<Vec<Option<uuid::Uuid>>>,
+    /// For a map-mode member, the composition each page was mapped from;
+    /// `None` for a member asked at its own endpoint.
+    pub(crate) composed: Option<Vec<Composed>>,
+}
+
+/// The composition a page of a map-mode member was mapped from.
+#[derive(Debug, Clone)]
+pub(crate) struct Composed {
+    /// The UUID of its versioned object, when it is one.
+    pub(crate) object: Option<uuid::Uuid>,
+    /// Its `OBJECT_VERSION_ID`, as the member wrote it.
+    pub(crate) version: String,
+    /// The composition, as canonical JSON.
+    pub(crate) composition: String,
 }
 
 /// What the search gathered.

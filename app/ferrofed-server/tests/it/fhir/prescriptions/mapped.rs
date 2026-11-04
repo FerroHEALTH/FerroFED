@@ -31,10 +31,10 @@ use crate::support::call;
 
 /// The versioned object node A's own medication order composition is held
 /// under.
-const OWN: &str = "5f0c2a9e-0000-4000-8000-0000000000a1";
+pub(super) const OWN: &str = "5f0c2a9e-0000-4000-8000-0000000000a1";
 
 /// The version id of node A's own order, which node A's system created.
-const OWN_UID: &str = "5f0c2a9e-0000-4000-8000-0000000000a1::cdr-a.example.org::1";
+pub(super) const OWN_UID: &str = "5f0c2a9e-0000-4000-8000-0000000000a1::cdr-a.example.org::1";
 
 /// The version id of an order node A holds that node B's system created.
 const FOREIGN_UID: &str = "5f0c2a9e-0000-4000-8000-0000000000b9::cdr-b.example.org::1";
@@ -44,7 +44,7 @@ const ORDER: &str = "openEHR-EHR-INSTRUCTION.medication_order.v3";
 
 /// The synthetic medication order composition of the version id `uid`,
 /// holding the prescription `prescription`.
-fn order(uid: &str, prescription: &str) -> Result<String, Box<dyn Error>> {
+pub(super) fn order(uid: &str, prescription: &str) -> Result<String, Box<dyn Error>> {
     let medication::Written {
         template,
         archetypes,
@@ -59,7 +59,7 @@ fn order(uid: &str, prescription: &str) -> Result<String, Box<dyn Error>> {
 
 /// A Query API answering the medication order query with the compositions
 /// `held`, each its composition and its version id.
-async fn query_api(held: &[(String, &str)]) -> Server {
+pub(super) async fn query_api(held: &[(String, &str)]) -> Server {
     let server = Server::start().await;
     let columns = r#"[{"name":"composition","path":"c"},{"name":"uid","path":"c/uid/value"},{"name":"template_id","path":"c/archetype_details/template_id/value"}]"#;
     let rows: Vec<String> = held
@@ -84,6 +84,12 @@ async fn query_api(held: &[(String, &str)]) -> Server {
 /// The `[[fhir.serve]]` table declaring node A in the map mode, with the
 /// vendored medication template, and node B on its own endpoint.
 fn served() -> String {
+    served_with("", "")
+}
+
+/// The `[[fhir.serve]]` table of [`served`], with the keys `keys` added to
+/// node A's table and the tables `tables` after it.
+pub(super) fn served_with(keys: &str, tables: &str) -> String {
     let quoted = |path: &Path| toml::Value::String(path.display().to_string()).to_string();
     let archetypes: Vec<String> = medication::archetype_paths()
         .iter()
@@ -91,7 +97,7 @@ fn served() -> String {
         .collect();
     format!(
         "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\n  \
-         {{ member = \"node-a\", mode = \"map\", template = {}, archetypes = [{}] }},\n  \"node-b\",\n]\n",
+         {{ member = \"node-a\", mode = \"map\", template = {}, archetypes = [{}]{keys} }},\n  \"node-b\",\n]\n{tables}",
         quoted(&medication::template_path()),
         archetypes.join(", ")
     )
@@ -100,22 +106,31 @@ fn served() -> String {
 /// The gateway over node A's Query API `a`, in the map mode, and node B,
 /// whose Query API is `b` and whose own endpoint is `own_b`, the patient
 /// known at both.
-fn gateway(
+pub(super) fn gateway(
     dir: &Path,
     (a, b, own_b): (&Server, &Server, &Server),
+) -> Result<Router, Box<dyn Error>> {
+    gateway_with(dir, (a, b, own_b), &served())
+}
+
+/// The gateway of [`gateway`] with the `[[fhir.serve]]` tables `served`.
+pub(super) fn gateway_with(
+    dir: &Path,
+    (a, b, own_b): (&Server, &Server, &Server),
+    served: &str,
 ) -> Result<Router, Box<dyn Error>> {
     built(
         dir,
         (&a.uri(), &b.uri()),
         &[("node-a", EHR_A), ("node-b", EHR_B)],
         &own_endpoint("node-b-mpd", ("node-b", "org-b"), &own_b.uri()),
-        ("", &served()),
+        ("", served),
     )
 }
 
 /// The match entries of the `searchset` `bundle` that claim the MPD
 /// `MedicationRequest` profile and come from the mapping.
-fn mapped(bundle: &Value) -> Vec<&Value> {
+pub(super) fn mapped(bundle: &Value) -> Vec<&Value> {
     entries(bundle, "match")
         .into_iter()
         .filter(|resource| resource.pointer("/subject/identifier").is_some())
