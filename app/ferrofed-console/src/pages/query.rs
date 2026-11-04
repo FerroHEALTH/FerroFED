@@ -15,12 +15,12 @@
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
-use ferrohealth_ui::table::view::{Body, Column, DataTable, Sorting, cell, data_table_wide};
+use ferrohealth_ui::table::view::{Body, Column, DataTable, Shape, cell, data_table};
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::button::{Variant, label};
 use ferrohealth_ui::view::code::{Code, CodeHead, code_section};
 use ferrohealth_ui::view::fanout::{Answer, Fanout, FanoutNode, fanout};
-use ferrohealth_ui::view::form::{Field, INPUT, SELECT, check, columns, fieldset, keyed_check};
+use ferrohealth_ui::view::form::{Field, INPUT, SELECT, check, columns, fieldset};
 use ferrohealth_ui::view::repeat::{Fields, ROW, Repeat, RepeatAdd, RepeatRow, RowEnd, repeat};
 use ferrohealth_ui::view::surface::{
     Header, SectionHead, disclosure, page_heading, panel_section, panel_sections_card,
@@ -114,7 +114,7 @@ fn console(form: &QueryForm, stored: bool, options: &QueryOptions, ran: Option<R
             subtitle: Some(tr(Msg::QuerySubtitle).into()),
             ..Header::default()
         },
-        ActionGroup::none(),
+        ActionGroup::default(),
     );
     let query = if stored {
         stored_fields(form)
@@ -305,7 +305,7 @@ fn checks(name: &'static str, values: &[String], chosen: &[String]) -> Html {
     Html::join(values.iter().map(|value| {
         let id = format!("query-{name}-{value}");
         let checked = chosen.contains(value);
-        keyed_check(&id, value.clone(), checkbox(&id, &field, value, checked))
+        check(&id, value.clone(), checkbox(&id, &field, value, checked))
     }))
 }
 
@@ -469,12 +469,9 @@ fn answered(answer: &QueryAnswer) -> Html {
             }))
         ))
     } else {
-        data_table_wide(DataTable {
-            caption: &tr(Msg::QueryRows),
-            columns: &columns,
-            sorting: Sorting::default(),
-            body: Body::Rows(rows),
-        })
+        data_table(
+            DataTable::new(&tr(Msg::QueryRows), &columns, Body::Rows(rows)).with_shape(Shape::Wide),
+        )
     };
     let locale = current();
     let raw = code_section(

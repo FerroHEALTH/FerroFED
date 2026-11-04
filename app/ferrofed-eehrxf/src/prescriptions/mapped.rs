@@ -21,7 +21,7 @@
 //! specification governs them.
 
 use eehrxf::mapping::{Mapping, MappingError};
-use eehrxf::mappings::MPD;
+use eehrxf::mappings::{MPD, UnknownContext};
 use eehrxf::receive::openehr::{InstructionError, ReceiveMappingError, ReceivedComposition};
 use eehrxf::receive::{ReceiveError, ReceivedResources};
 use fhir_types::codec::{Json, Value};
@@ -89,10 +89,10 @@ pub enum MapModeError {
     /// archetypes.
     #[error("the operational template cannot be built from the template and its archetypes")]
     Operational(#[source] OptError),
-    /// The project's files could not be written where they are compiled
-    /// from.
-    #[error("the MPD project's files could not be written to compile them")]
-    Files(#[source] std::io::Error),
+    /// The MPD project compiles no request context of the name the map
+    /// mode selects.
+    #[error("the MPD project has no request context to compile")]
+    Context(#[source] UnknownContext),
     /// The MPD project's request context does not compile against the
     /// template.
     #[error("the MPD project's request context does not compile against the template")]
@@ -168,12 +168,10 @@ impl MapMode {
         let source = template.source()?;
         // NOTE: no specification governs this: our own design; the project's two contexts map one
         // template, so only the request context is compiled and a run selects it alone.
-        let directory = tempfile::tempdir().map_err(MapModeError::Files)?;
-        let files = MPD
-            .write_to(directory.path())
-            .map_err(MapModeError::Files)?;
-        let mapping = Mapping::compile_template(&source, &files, &[REQUEST_CONTEXT])
-            .map_err(MapModeError::Compile)?;
+        let request = MPD
+            .with_context(REQUEST_CONTEXT)
+            .map_err(MapModeError::Context)?;
+        let mapping = Mapping::compile_project(&source, &request).map_err(MapModeError::Compile)?;
         let project = Mapping::compile_project(&source, &MPD).map_err(MapModeError::Compile)?;
         Ok(Self {
             mapping,

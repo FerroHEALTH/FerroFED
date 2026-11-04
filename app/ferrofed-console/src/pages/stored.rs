@@ -20,20 +20,19 @@ use ferrohealth_ui::highlight::Language;
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
-use ferrohealth_ui::table::view::{
-    Body, Column, DataTable, Role, Sorting, cell, data_table, title_cell,
-};
+use ferrohealth_ui::table::view::{Body, Column, DataTable, Role, cell, data_table, title_cell};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::action_menu::{Act, Action};
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::code::{Code, CodeHead, code_section};
 use ferrohealth_ui::view::form::{Field, INPUT};
+use ferrohealth_ui::view::layout::{Gap, stack_at};
 use ferrohealth_ui::view::load_report::{Arrival, LoadReport, Outcome, load_report};
 use ferrohealth_ui::view::notice::{Announce, notice};
 use ferrohealth_ui::view::popover::{PopoverForm, popover_form};
 use ferrohealth_ui::view::surface::{
-    Crumb, Header, SectionHead, page_heading, panel_section, panel_sections_card, stack,
+    Crumb, Header, SectionHead, page_heading, panel_section, panel_sections_card,
 };
 use ferrohealth_ui::view::tabs::{Tab, TabRow};
 use ferrohealth_ui::view::tag::Tag;
@@ -272,7 +271,7 @@ pub async fn list() -> Html {
                         .into_iter()
                         .map(|(namespace, names)| namespace_card(&namespace, &names)),
                 );
-                heading.then(stack(sections))
+                heading.then(stack_at(Gap::Loose, sections))
             }
         }
     };
@@ -289,7 +288,7 @@ fn new_version() -> ActionGroup {
             Act::Link(String::from(crate::pages::configuration::NEW_QUERY)),
         ))
     } else {
-        ActionGroup::none()
+        ActionGroup::default()
     }
 }
 
@@ -327,6 +326,7 @@ fn namespace_card(namespace: &str, names: &BTreeMap<String, Vec<&Held>>) -> Html
         Html::raw(format!(
             "<tr>{}{}</tr>",
             title_cell(
+                None,
                 Some(&href(name)),
                 Html::raw(format!("<code>{}</code>", Html::text(name))),
                 None
@@ -348,12 +348,7 @@ fn namespace_card(namespace: &str, names: &BTreeMap<String, Vec<&Held>>) -> Html
                 )),
                 actions: Some(provenance),
             }),
-            data_table(DataTable {
-                caption: namespace,
-                columns: &columns,
-                sorting: Sorting::default(),
-                body: Body::Rows(rows),
-            }),
+            data_table(DataTable::new(namespace, &columns, Body::Rows(rows))),
         ),
     )
 }
@@ -533,6 +528,7 @@ fn versions_table(name: &str, versions: &[Held]) -> Html {
         Html::raw(format!(
             "<tr>{}{}{}</tr>",
             title_cell(
+                None,
                 Some(&link),
                 Html::raw(format!("<code>{}</code>", Html::text(&number))),
                 None
@@ -544,12 +540,11 @@ fn versions_table(name: &str, versions: &[Held]) -> Html {
             cell(&columns[2], owner),
         ))
     }));
-    data_table(DataTable {
-        caption: &tr(Msg::StoredTabVersions),
-        columns: &columns,
-        sorting: Sorting::default(),
-        body: Body::Rows(rows),
-    })
+    data_table(DataTable::new(
+        &tr(Msg::StoredTabVersions),
+        &columns,
+        Body::Rows(rows),
+    ))
 }
 
 /// The drift repair's form in its dialog: the version and the members,

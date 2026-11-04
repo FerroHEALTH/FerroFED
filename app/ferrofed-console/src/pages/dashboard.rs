@@ -19,15 +19,13 @@ use ferrofed_operator_api::revision::Standing;
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
-use ferrohealth_ui::table::view::{
-    Body, Column, DataTable, Role, Sorting, cell, data_table, title_cell,
-};
+use ferrohealth_ui::table::view::{Body, Column, DataTable, Role, cell, data_table, title_cell};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::action::ActionGroup;
+use ferrohealth_ui::view::layout::{Arrangement, Gap, stack_at};
 use ferrohealth_ui::view::status::{badge, pill};
 use ferrohealth_ui::view::surface::{
-    Header, Stat, card_action, definitions, grid_start, page_heading, stack, stat_card_marked,
-    stat_grid, titled_panel,
+    Header, Stat, card_action, definitions, page_heading, stat_card_marked, titled_panel,
 };
 use ferrohealth_ui::view::tag::Tag;
 use openehr_its::rest::generated::definition::StoredQuery;
@@ -109,7 +107,7 @@ fn dashboard(reads: Reads) -> Html {
             subtitle: Some(subtitle.into()),
             ..Header::default()
         },
-        ActionGroup::none(),
+        ActionGroup::default(),
     );
     let federation = match reads.federation {
         Ok(federation) => federation,
@@ -127,11 +125,14 @@ fn dashboard(reads: Reads) -> Html {
     let topology = topology_card(&federation);
     let incidents = incidents_card(&reads.incidents);
     let configuration = configuration_card(reads.standings.as_deref(), reads.stored);
-    heading.then(stack(Html::join([
-        stats,
-        grid_start(attention.then(topology)),
-        grid_start(incidents.then(configuration)),
-    ])))
+    heading.then(stack_at(
+        Gap::Loose,
+        Html::join([
+            stats,
+            Arrangement::GridStart.wrap(attention.then(topology)),
+            Arrangement::GridStart.wrap(incidents.then(configuration)),
+        ]),
+    ))
 }
 
 /// A federation with no organisation: one quiet line with the way to
@@ -201,7 +202,7 @@ fn stats(
     let reach = reach_card(worst.map(|(_, node)| *node), reachable, taking_part.len());
     let incident_card = incident_card(incidents);
     let revision = revision_card(standings);
-    stat_grid(Html::join([organisations, reach, incident_card, revision]))
+    Arrangement::StatGrid.wrap(Html::join([organisations, reach, incident_card, revision]))
 }
 
 /// The card of the nodes reachable, of the `total` that take part, marked
@@ -340,11 +341,7 @@ fn attention(federation: &Federation) -> Html {
             };
             Html::raw(format!(
                 "<tr{class}>{}{}{}{}</tr>",
-                title_cell(
-                    href.as_deref(),
-                    Html::raw(format!("<code>{}</code>", Html::text(&node.id))),
-                    None
-                ),
+                super::node_title(href.as_deref(), &node.id),
                 cell(&columns[1], Html::text(organisation.shown())),
                 cell(
                     &columns[2],
@@ -360,12 +357,11 @@ fn attention(federation: &Federation) -> Html {
             Html::text(tr(Msg::AttentionNone))
         ))
     } else {
-        data_table(DataTable {
-            caption: &tr(Msg::AttentionTitle),
-            columns: &columns,
-            sorting: Sorting::default(),
-            body: Body::Rows(Html::join(rows)),
-        })
+        data_table(DataTable::new(
+            &tr(Msg::AttentionTitle),
+            &columns,
+            Body::Rows(Html::join(rows)),
+        ))
     };
     titled_panel(
         tr(Msg::AttentionTitle),
@@ -469,6 +465,7 @@ fn incidents_card(incidents: &Result<Incidents, Stop>) -> Html {
                     "<tr>{} {}{}</tr>",
                     title_cell(
                         None,
+                        None,
                         Html::text(crate::pages::integrity::what(&incident.kind)),
                         Some(sub),
                     ),
@@ -476,12 +473,11 @@ fn incidents_card(incidents: &Result<Incidents, Stop>) -> Html {
                     cell(&columns[2], relative(&incident.at)),
                 ))
             });
-            data_table(DataTable {
-                caption: &tr(Msg::IncidentsOpenTitle),
-                columns: &columns,
-                sorting: Sorting::default(),
-                body: Body::Rows(Html::join(rows)),
-            })
+            data_table(DataTable::new(
+                &tr(Msg::IncidentsOpenTitle),
+                &columns,
+                Body::Rows(Html::join(rows)),
+            ))
         }
     };
     titled_panel(

@@ -487,7 +487,7 @@ pub fn file_only(running: &RunningConfig, section: Section) -> ConfigView {
             subtitle: Some(tr(Msg::SettingsFileSubtitle).into()),
             ..ferrohealth_ui::view::surface::Header::default()
         },
-        ferrohealth_ui::view::action::ActionGroup::none(),
+        ferrohealth_ui::view::action::ActionGroup::default(),
     );
     ConfigView {
         header: Some(header),
