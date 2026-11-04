@@ -167,7 +167,8 @@ impl Federation {
         let transport = crate::onward::node_transport(reqwest::Client::builder(), settings)
             .map_err(|source| FederationError::Transport(Box::new(source)))?;
         let onward = crate::onward::onward(settings, transport, &snapshot)?;
-        let signer = Arc::new(crate::conveyed::signer(settings, &id)?);
+        let signer =
+            Arc::new(crate::conveyed::signer(settings, &id).ok_or(FederationError::Unsigned)?);
         let clients = NodeClients::from_snapshot_over(
             &snapshot,
             (&onward.transport, &onward.transports),

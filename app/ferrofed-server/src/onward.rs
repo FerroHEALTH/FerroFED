@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The onward credentials each node client sends: a configured bearer token
-//! or basic credentials, a provider that obtains a token with the OAuth 2.0
+//! The onward credentials each node client sends, and the transports it
+//! sends them over.
+//!
+//! The credentials are a configured bearer token or basic credentials, a provider that obtains a token with the OAuth 2.0
 //! client-credentials grant, or one that exchanges each verified caller's
 //! token (RFC 8693), each authenticated by a signed JWT client assertion
 //! (§13.1, N25), one that obtains it under the FAPI 2.0 Security Profile, as
@@ -31,11 +33,62 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_its::rest::client::Credentials;
 
+use crate::binding::seam::ProvideError;
+use crate::config::service::TlsRefused;
 use crate::config::settings::{Scheme, Settings};
 use crate::config::tls::TlsSettings;
-use crate::federation::error::FederationError;
 use crate::upstream::UpstreamToken;
 use openehr_its::rest::client::ReqwestTransport;
+
+/// Why the onward clients of the nodes cannot be built.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum OnwardError {
+    /// A node's grant with no `[signing]` key to sign its assertion (§13.1,
+    /// N25).
+    #[error(
+        "{section} names a grant it cannot use: a node takes one with [signing], an IHE FHIR service an oauth2 client-credentials grant"
+    )]
+    Grant {
+        /// The credentials section.
+        section: String,
+    },
+    /// The HTTP client a node's `oauth` grant sends its token requests
+    /// through could not be built.
+    #[error("the HTTP client of the token endpoint of {section} could not be built")]
+    TokenTransport {
+        /// The credentials section.
+        section: String,
+        /// Why it could not be built; it names no secret.
+        #[source]
+        source: Box<ferrohealth_smart::client::TokenError>,
+    },
+    /// The TLS material of a node does not read.
+    #[error("the TLS material of a service cannot be used")]
+    Tls(#[source] TlsRefused),
+    /// A node the gateway presents its TLS client certificate to is not
+    /// reached over `https` (RFC 8705).
+    #[error(
+        "endpoint {endpoint} is not an https URL, and credentials.{endpoint} presents a TLS client certificate to it, which needs TLS under every profile"
+    )]
+    ClientCertificateOverHttp {
+        /// The endpoint.
+        endpoint: EndpointId,
+    },
+    /// The grant a binding added cannot provide its node client.
+    #[error(transparent)]
+    Provide(#[from] ProvideError),
+    /// The HTTP client of a node reached with its own TLS material could
+    /// not be built.
+    #[error("the HTTP client of endpoint {endpoint} could not be built")]
+    NodeTransport {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// Why it could not be built; it carries no key.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+}
 
 /// The HTTP engine every request to a node and to its token endpoint is
 /// sent through: the `reqwest` engine, bounded in what it reads of an answer.
@@ -115,17 +168,17 @@ pub(crate) struct Onward {
 ///
 /// # Errors
 ///
-/// Returns [`FederationError::Grant`] for a grant with no `[signing]` key to
-/// sign its assertion, [`FederationError::ClientCertificateOverHttp`] for a
+/// Returns [`OnwardError::Grant`] for a grant with no `[signing]` key to
+/// sign its assertion, [`OnwardError::ClientCertificateOverHttp`] for a
 /// node `registry` declares at an `http` URL that would be presented a client
-/// certificate, and [`FederationError::Tls`] and
-/// [`FederationError::NodeTransport`] for TLS material no engine can be
+/// certificate, and [`OnwardError::Tls`] and
+/// [`OnwardError::NodeTransport`] for TLS material no engine can be
 /// built with.
 pub(crate) fn onward(
     settings: &Settings,
     engine: NodeTransport,
     registry: &RegistrySnapshot,
-) -> Result<Onward, FederationError> {
+) -> Result<Onward, OnwardError> {
     let mut credentials = BTreeMap::new();
     let mut on_behalf = BTreeMap::new();
     let mut dpop = BTreeMap::new();
@@ -137,7 +190,7 @@ pub(crate) fn onward(
                 let shared: SharedCredentials = UpstreamToken::provider(
                     ferrohealth_smart::client::ClientCredentials::clone(grant),
                 )
-                .map_err(|source| FederationError::TokenTransport {
+                .map_err(|source| OnwardError::TokenTransport {
                     section: format!("credentials.{endpoint}.oauth"),
                     source: Box::new(source),
                 })?;
@@ -177,7 +230,7 @@ pub(crate) fn onward(
             }
         };
         let Some(signing) = &settings.signing else {
-            return Err(FederationError::Grant {
+            return Err(OnwardError::Grant {
                 section: format!("credentials.{endpoint}.oauth2"),
             });
         };
@@ -225,7 +278,7 @@ pub(crate) fn onward(
 fn transports(
     settings: &Settings,
     registry: &RegistrySnapshot,
-) -> Result<BTreeMap<EndpointId, NodeTransport>, FederationError> {
+) -> Result<BTreeMap<EndpointId, NodeTransport>, OnwardError> {
     let mut transports = BTreeMap::new();
     for (endpoint, tls) in &settings.onward_tls {
         // NOTE: no specification governs this: our own design; an endpoint the
@@ -234,7 +287,7 @@ fn transports(
             && let Some(declared) = registry.endpoint(endpoint)
             && !crate::config::transport::client_certificate(declared.url().as_str())
         {
-            return Err(FederationError::ClientCertificateOverHttp {
+            return Err(OnwardError::ClientCertificateOverHttp {
                 endpoint: endpoint.clone(),
             });
         }
@@ -249,14 +302,13 @@ fn transport(
     settings: &Settings,
     endpoint: &EndpointId,
     tls: &TlsSettings,
-) -> Result<NodeTransport, FederationError> {
+) -> Result<NodeTransport, OnwardError> {
     let material = crate::config::service::tls_of(&format!("credentials.{endpoint}"), tls)
-        .map_err(FederationError::Tls)?;
-    let failed =
-        |source: Box<dyn std::error::Error + Send + Sync>| FederationError::NodeTransport {
-            endpoint: endpoint.clone(),
-            source,
-        };
+        .map_err(OnwardError::Tls)?;
+    let failed = |source: Box<dyn std::error::Error + Send + Sync>| OnwardError::NodeTransport {
+        endpoint: endpoint.clone(),
+        source,
+    };
     let builder = fhir::http_client_builder(&Authentication::None, &material)
         .map_err(|source| failed(Box::new(source)))?;
     node_transport(builder, settings).map_err(|source| failed(Box::new(source)))
@@ -276,15 +328,15 @@ enum Provided {
 ///
 /// # Errors
 ///
-/// Returns [`FederationError::Grant`] without `[signing]`.
+/// Returns [`OnwardError::Grant`] without `[signing]`.
 fn fapi2(
     settings: &Settings,
     endpoint: &EndpointId,
     grant: &Fapi2Grant,
     engine: &NodeTransport,
-) -> Result<Provided, FederationError> {
+) -> Result<Provided, OnwardError> {
     let Some(signing) = &settings.signing else {
-        return Err(FederationError::Grant {
+        return Err(OnwardError::Grant {
             section: format!("credentials.{endpoint}.fapi2"),
         });
     };

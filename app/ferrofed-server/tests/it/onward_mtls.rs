@@ -30,6 +30,7 @@ use ferrofed_server::config::settings::{Scheme, Settings};
 use ferrofed_server::config::tls::TlsFault;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::error::FederationError;
+use ferrofed_server::onward::OnwardError;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
@@ -445,7 +446,7 @@ fn a_client_certificate_is_never_presented_over_http() -> TestResult {
     assert!(
         matches!(
             &refused,
-            FederationError::ClientCertificateOverHttp { endpoint }
+            FederationError::Onward(OnwardError::ClientCertificateOverHttp { endpoint })
                 if endpoint.as_str() == "node-a-pub"
         ),
         "{refused:?}"

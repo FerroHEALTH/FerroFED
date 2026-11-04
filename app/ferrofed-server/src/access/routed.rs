@@ -35,6 +35,7 @@ use ehds_logging::record::{
     Action, CreatedEhr, DataSubject, EhrAt, PatientIdentifier, PatientLookup, WrittenVersion,
 };
 use ferrofed_registry::id::EhrId;
+use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, Method, header};
 use openehr_base::prelude::UidBasedId;
 use openehr_federation::headers;
@@ -46,7 +47,6 @@ use secrecy::SecretString;
 
 use super::{AccessLog, Accessed, Asked, ConsentSetAside, Reached, version};
 use crate::error::{self, Code};
-use crate::federation::Federation;
 
 /// The operations whose resource holds data of no category.
 const NO_CATEGORY: &[&str] = &[
@@ -121,21 +121,15 @@ pub(crate) struct Arriving<'a> {
 pub(crate) type Named = fn(&RouteMatch, Option<&str>) -> Option<(String, SecretString)>;
 
 impl Routed {
-    /// The access the request `arrived` would make, when it reaches patient
-    /// data and `federation` keeps an access log, the patient of a read by
-    /// subject read by `named`.
-    pub(crate) fn of(
-        federation: &Federation,
-        arrived: &Arriving<'_>,
-        named: Named,
-    ) -> Option<Self> {
+    /// The access the request `arrived` would make to `log`, when it reaches
+    /// patient data, the patient of a read by subject read by `named`.
+    pub(crate) fn of(log: &Arc<AccessLog>, arrived: &Arriving<'_>, named: Named) -> Option<Self> {
         let Lookup::Matched(matched) = routes::lookup(arrived.method, arrived.path) else {
             return None;
         };
         let (method, query) = (arrived.method, arrived.query);
         let (headers, body) = (arrived.headers, arrived.body);
         let matched = &matched;
-        let log = federation.access_log()?;
         let patient_data = crate::route_area::in_ehr_area(matched)
             || crate::route_area::creates_ehr(matched)
             || crate::route_area::in_demographic_area(matched)
@@ -177,11 +171,16 @@ impl Routed {
         })
     }
 
-    /// `response`, the answer to this request from `federation`, with the
+    /// `response`, the answer to this request from the members of
+    /// `snapshot`, with the
     /// facts of the access attached when an endpoint acted for it, or when
     /// the request set a consent pre-filter denial aside for an emergency
     /// purpose, which is recorded whatever the answer (Art 11(5)).
-    pub(crate) async fn attach(self, federation: &Federation, mut response: Response) -> Response {
+    pub(crate) async fn attach(
+        self,
+        snapshot: &RegistrySnapshot,
+        mut response: Response,
+    ) -> Response {
         // NOTE: no specification governs this: our own design; only the read of an EHR by
         // subject asks the pre-filter, so any other routed answer sets no denial aside.
         let consent_set_aside = response
@@ -234,8 +233,7 @@ impl Routed {
         let origins = endpoint
             .zip(status)
             .map(|(endpoint, status)| {
-                let node = federation
-                    .snapshot()
+                let node = snapshot
                     .endpoints()
                     .find(|registered| registered.id().as_str() == endpoint)
                     .map(|registered| registered.node().as_str().to_owned());

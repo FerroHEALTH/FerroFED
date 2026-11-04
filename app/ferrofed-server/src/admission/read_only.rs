@@ -79,7 +79,7 @@ pub async fn check(
     let deadline = Instant::now()
         .checked_add(federation.budget().per_node())
         .ok_or(AdmissionError::Clock)?;
-    let conveyance = conveyed::gateway(federation).map_err(AdmissionError::Unconveyed)?;
+    let conveyance = conveyed::gateway(federation.signer()).map_err(AdmissionError::Unconveyed)?;
     let options = DispatchOptions::new(deadline, conveyance).with_request_id(OutboundId::mint());
     let aql = parse_str(EXISTING_EHRS).map_err(AdmissionError::Template)?;
     let query = NodeQuery::new(to_aql(&aql, None))

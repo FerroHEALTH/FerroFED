@@ -125,7 +125,7 @@ impl Admitted<'_> {
     )]
     pub(super) async fn confine(&self) -> Result<Confined, Response> {
         let caller = Some(self.caller);
-        let conveyance = conveyed::of(&self.federation, caller)
+        let conveyance = conveyed::of(self.federation.signer(), caller)
             .map_err(|unconveyed| unconveyed.respond(self.request_id, &self.logged))?;
         let on_behalf = self.caller.on_behalf();
         let conveyance =

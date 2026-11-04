@@ -198,7 +198,7 @@ async fn federated(
     let Some(federation) = state.federation() else {
         return error::fixed(Code::NotImplemented, request_id);
     };
-    let conveyance = match conveyed::of(&federation, caller) {
+    let conveyance = match conveyed::of(federation.signer(), caller) {
         Ok(conveyance) => conveyance,
         Err(unconveyed) => return unconveyed.respond(request_id, &outbound.to_string()),
     };

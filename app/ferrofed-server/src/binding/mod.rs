@@ -43,7 +43,9 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::id::FederationId;
 
-use crate::binding::seam::{Indicator, LocalizerSeam, Provided, PublicDocument, ResolverSeam};
+use crate::binding::seam::{
+    Indicator, LocalizerSeam, ProvideError, Provided, PublicDocument, ResolverSeam,
+};
 use crate::config::settings::OnwardGrant;
 use crate::config::settings::Settings;
 use crate::federation::DemographicsStep;
@@ -303,13 +305,13 @@ pub trait Binding: fmt::Debug + Sync {
     ///
     /// # Errors
     ///
-    /// The [`FederationError`] of a provider that cannot be built.
+    /// The [`ProvideError`] of a provider that cannot be built.
     fn provide(
         &self,
         _grant: &dyn OnwardGrant,
         _endpoint: &EndpointId,
         _settings: &Settings,
-    ) -> Option<Result<Provided, FederationError>> {
+    ) -> Option<Result<Provided, ProvideError>> {
         None
     }
 
@@ -598,18 +600,18 @@ pub fn log_summary(settings: &Settings) {
 ///
 /// # Errors
 ///
-/// The [`FederationError`] of a provider that cannot be built, and
-/// [`FederationError::Grant`] for a grant no compiled binding added.
+/// The [`ProvideError`] of a provider that cannot be built, and
+/// [`ProvideError::Unclaimed`] for a grant no compiled binding added.
 pub fn provide(
     grant: &dyn OnwardGrant,
     endpoint: &EndpointId,
     settings: &Settings,
-) -> Result<Provided, FederationError> {
+) -> Result<Provided, ProvideError> {
     compiled()
         .iter()
         .find_map(|binding| binding.provide(grant, endpoint, settings))
         .unwrap_or_else(|| {
-            Err(FederationError::Grant {
+            Err(ProvideError::Unclaimed {
                 section: format!("credentials.{endpoint}.{}", grant.key()),
             })
         })

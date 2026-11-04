@@ -249,7 +249,7 @@ impl Interface {
             .clone();
         Ok(Self {
             client,
-            conveyance: conveyed::gateway(federation).map_err(CheckError::Unconveyed)?,
+            conveyance: conveyed::gateway(federation.signer()).map_err(CheckError::Unconveyed)?,
             budget: federation.budget().per_node(),
             withheld: Arc::new(Withheld::default()),
         })

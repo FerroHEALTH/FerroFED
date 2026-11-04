@@ -89,7 +89,7 @@ pub mod jwks;
 pub mod localization;
 pub mod metrics;
 mod node_status;
-mod onward;
+pub mod onward;
 pub mod operator;
 pub mod overload;
 pub mod reload;

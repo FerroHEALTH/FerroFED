@@ -112,7 +112,7 @@ pub async fn check(
     let withheld = Arc::new(Withheld::new(
         subjects.iter().map(|subject| subject.value().clone()),
     ));
-    let conveyance = conveyed::gateway(federation).map_err(AdmissionError::Unconveyed)?;
+    let conveyance = conveyed::gateway(federation.signer()).map_err(AdmissionError::Unconveyed)?;
     let options = |at: Instant| {
         DispatchOptions::new(at, conveyance.clone())
             .with_withheld(Arc::clone(&withheld))

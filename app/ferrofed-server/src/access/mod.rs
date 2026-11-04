@@ -643,8 +643,13 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
     };
     if let Some(federation) = gate.state.federation() {
         let namespaces = accessed.log.patient_namespaces.clone();
+        let members = patient::Members {
+            snapshot: federation.snapshot(),
+            resolver: federation.resolver(),
+            per_node: federation.budget().per_node(),
+        };
         patient::name(
-            &federation,
+            members,
             &namespaces,
             &caller.on_behalf(),
             &mut accessed.subject,
