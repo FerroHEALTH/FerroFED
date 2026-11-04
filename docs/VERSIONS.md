@@ -325,24 +325,24 @@ for `openEHR-EHR-INSTRUCTION.medication_order.v3`,
 
 The openEHR surface comes from the published `openehr-*` crates, consumed by
 version like any other dependency (`docs/architecture.md` §2). FerroEHR
-releases them as one lockstep family, so the five rows below are one group:
+releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is 0.0.109 since 2026-10-28, the line the published `eehrxf`,
+pin is 0.0.116 since 2026-11-03, the line the published `eehrxf`,
 `fhirconnect` and `openehr-mapping-core` require exactly, so the lock holds
 one copy of each member (#1181, #813).
-`openehr-sdt` (the SMART on openEHR scope grammar) joined the group at the
-family pin with its default features off, so only the grammar is compiled:
-the onward grant (#81) writes and checks the scope it requests with it, and client
-authentication (#80) reads every caller's scopes with it.
+`openehr-sdt` left the group with 0.0.116, which no longer carries the
+SMART on openEHR scope grammar: the onward grant (#81) writes and checks the
+scope it requests with `ferrohealth-smart`'s `openehr::smart_scopes`, the
+module client authentication (#80) already read every caller's scopes with
+(#1432).
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.109 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.109 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.109 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.109 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-sdt` | 0.0.109 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.116 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.116 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.116 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.116 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -413,7 +413,10 @@ nothing the gateway reads: they add the PARTY builder, the caller's
 `rm_version` and party validation to `openehr-sdt` (FerroEHR #3809, #3810,
 #3832). 0.0.109 is taken with the published interoperability component
 (#813): `eehrxf` 0.1.128 and `fhirconnect` 0.1.204 require it, and a 0.0.x
-caret requirement admits one version.
+caret requirement admits one version. 0.0.116 is taken with `eehrxf` 0.1.142
+(#1432): the ITS-REST decoders read a query's `+` as a literal plus
+(RFC 3986 §2.1, FerroEHR #4356), so the gateway no longer rewrites it, and
+`ErrorBody::problem` reads a node's RFC 9457 problem details (FerroEHR #4355).
 `ferrohealth-smart` 0.8.5 and later carry the SMART on openEHR scope grammar
 as their own module and no longer depend on `openehr-sdt`, so the lock holds
 one `openehr-sdt` (#1390).
@@ -458,11 +461,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | =0.1.128 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | =0.1.204 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | =0.1.135 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | =0.1.142 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | =0.1.212 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | =0.1.138 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `ferrobridge-term` | =0.1.141 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | =0.1.141 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | =0.1.143 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 

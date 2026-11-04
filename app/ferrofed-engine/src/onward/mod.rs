@@ -51,7 +51,7 @@ use std::time::Instant;
 
 use crate::onward::issuer::Issuer;
 use ferrohealth_secret::secret_url::SecretUrl;
-use openehr_sdt::smart_scopes::{Compartment, SmartScope};
+use ferrohealth_smart::openehr::smart_scopes::{Compartment, SmartScope};
 use secrecy::SecretString;
 use url::Url;
 
@@ -90,7 +90,7 @@ impl Clock for SystemClock {
 /// A node's scope is read with [`Scope::parse`] in the SMART on openEHR
 /// grammar (ITS-REST SMART App Launch, master08 §Resource Scopes): every
 /// scope a resource scope of the `system` compartment, the one a
-/// client-credentials grant to the gateway names, as `openehr-sdt` reads it.
+/// client-credentials grant to the gateway names, as `ferrohealth-smart` reads it.
 /// An identity service's scope is read with [`Scope::tokens`], held to RFC
 /// 6749 §3.3 alone, since its authorization server defines its own scopes
 /// (IHE IUA ITI-71 §3.71.4.1.3).
@@ -187,7 +187,7 @@ impl Scope {
         })
     }
 
-    /// The scopes, as `openehr-sdt` read them; none for a scope read with
+    /// The scopes, as `ferrohealth-smart` read them; none for a scope read with
     /// [`Scope::tokens`].
     #[must_use]
     pub fn scopes(&self) -> &[SmartScope] {
@@ -196,7 +196,7 @@ impl Scope {
 
     /// The `scope` parameter the token request carries, one space apart
     /// (RFC 6749 §3.3): each scope in the canonical form of the SMART on
-    /// openEHR grammar, as `openehr-sdt` prints it, or as written for a
+    /// openEHR grammar, as `ferrohealth-smart` prints it, or as written for a
     /// scope read with [`Scope::tokens`].
     #[must_use]
     pub fn as_str(&self) -> &str {

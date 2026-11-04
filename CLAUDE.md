@@ -184,11 +184,6 @@ conformance point (`CP-#`) cited here is cited against that text.
     generated client (`rest-client` feature), and the canonical JSON;
   - `openehr-query`: AQL, parsed and re-emitted by `printer::to_aql` for the
     subject and identifier rewrite;
-  - `openehr-sdt`: the SMART on openEHR scope grammar for the §13 security
-    handoff. It joined the workspace with onward OAuth 2.0 (#81), whose
-    `oauth2` scope it checks, and client authentication (#80) reads each
-    caller's scopes with it; its simplified formats and their validation are
-    used if ever needed;
   - `openehr-base` and `openehr-rm`: the typed identifiers (`HIER_OBJECT_ID`,
     `OBJECT_VERSION_ID`, the `ehr_id` and `system_id` forms) behind §12
     follow-up routing, and every RM fact.
@@ -271,7 +266,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
   `merge`). The interoperability component of Regulation (EU) 2025/327
   (decision A58) is `eehrxf`, published from FerroHEALTH/FerroBRIDGE since
-  #813 and pinned exactly (`eehrxf = "=0.1.128"`); FerroFED keeps no copy, and
+  #813 and pinned exactly (`eehrxf = "=0.1.142"`); FerroFED keeps no copy, and
   its own half is `app/ferrofed-eehrxf` below. The logging component,
   `ehds-logging` (the Annex II 3.2 access record, the
   Art 14(1) categories and their map, the sink, and `balp`; #623), and the
@@ -490,8 +485,7 @@ Discipline is unchanged for subagents: they obey the hard rules below.
   test that proves it holds.
 - **Never re-implement what an `openehr-*` crate provides.** The ITS-REST
   surface, the node client and canonical JSON (`openehr-its`), AQL parsing
-  and printing (`openehr-query`), the SMART on openEHR scopes
-  (`openehr-sdt`), and the typed ids and RM (`openehr-base`, `openehr-rm`)
+  and printing (`openehr-query`), and the typed ids and RM (`openehr-base`, `openehr-rm`)
   come from the published crates; a missing piece is a FerroEHR issue, never
   a local workaround.
 - **Never hand-edit a `// @generated` file.** Change the generator and
@@ -586,7 +580,7 @@ FerroPIX is the master patient index with the IHE profiles, which the
 gateway calls as a client for patient identity. FerroEHR (`../FerroEHR`) is
 the reference openEHR CDR and publishes the
 `openehr-*` crates this gateway builds on (`openehr-its`, `openehr-query`,
-`openehr-sdt`, `openehr-base`, `openehr-rm`); FerroTERM (`../FerroTERM`) and
+`openehr-base`, `openehr-rm`); FerroTERM (`../FerroTERM`) and
 FerroBRIDGE (`../FerroBRIDGE`) carry the working discipline this repository
 was set up from. All are read-only prior art from here
 (`.claude/memory/sibling-projects.md`). Public documents may name the family

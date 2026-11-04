@@ -507,14 +507,16 @@ mod tests {
             .unreceived()
             .map(eehrxf::category::Category::code)
             .collect();
-        assert_eq!(unreceived, ["Patient-Summaries"]);
+        assert_eq!(unreceived, ["Patient-Summaries", "Laboratory-Reports"]);
         let documentation = super::bundle(&receivers)
             .documentation
             .unwrap()
             .value
             .unwrap();
         assert!(
-            documentation.contains("Categories with no receiving member: Patient-Summaries;"),
+            documentation.contains(
+                "Categories with no receiving member: Patient-Summaries, Laboratory-Reports;"
+            ),
             "{documentation:?}"
         );
         for code in ["Electronic-Prescriptions", "Electronic-Dispensations"] {

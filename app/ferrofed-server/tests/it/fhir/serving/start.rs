@@ -261,7 +261,7 @@ fn config_check_names_the_categories_no_member_serves() -> TestResult {
     );
     assert!(
         stdout.contains(
-            "ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries: the FHIR face refuses a document of this Art 14(1) category\n"
+            "ferrofed: note: [[fhir.receive]] names no receiving member for Patient-Summaries, Laboratory-Reports: the FHIR face refuses a document of any of these Art 14(1) categories\n"
         ),
         "a category served resource by resource never arrives as a document: {stdout}"
     );

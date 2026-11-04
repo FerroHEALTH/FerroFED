@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! Every `https://ferrofed.eu/fhir/` URL the tree writes resolves to a FHIR
-//! definition the documentation site publishes, the archetype-local code
-//! systems alone excepted: FHIR R4 4.1.2 says an http: address "SHOULD
-//! resolve", and the book's page on the registry in FHIR form says why that
-//! family does not. The published set is read from the directories
-//! `scripts/site/assemble.sh` copies, and from the published `eehrxf` crate
-//! for the definition the site serves out of its archive, so a definition
-//! the site would not serve counts as missing. No specification governs
+//! definition the documentation site publishes: FHIR R4 4.1.2 says an http:
+//! address "SHOULD resolve". The archetype-local code systems the published
+//! `eehrxf` writes, and its remaining-dispensations extension, are
+//! FerroBRIDGE's, under its own base, and the site serves none of them. The
+//! published set is read from the directories `scripts/site/assemble.sh`
+//! copies, so a definition the site would not serve counts as missing. No specification governs
 //! where a URL is hosted: our own design.
 
 #![expect(
@@ -51,14 +50,9 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The entry of the site assembly's `DEFINITIONS` array that names the
-/// published `eehrxf` crate's archive, whose definitions this test reads from
-/// the crate it links.
-const COMPONENT_DEFINITIONS: &str = "\"$component/eehrxf-$component_version/src/medication\"";
-
 /// The definition directories of this repository the site assembly's
-/// `DEFINITIONS` array names, and whether it names the published crate's.
-fn definition_directories() -> Result<(Vec<String>, bool), Box<dyn Error>> {
+/// `DEFINITIONS` array names.
+fn definition_directories() -> Result<Vec<String>, Box<dyn Error>> {
     let script = std::fs::read_to_string(root().join("scripts/site/assemble.sh"))?;
     let directories: Vec<String> = script
         .lines()
@@ -70,12 +64,7 @@ fn definition_directories() -> Result<(Vec<String>, bool), Box<dyn Error>> {
     if directories.is_empty() {
         return Err("the site assembly has no DEFINITIONS array".into());
     }
-    let component = directories.iter().any(|line| line == COMPONENT_DEFINITIONS);
-    let local = directories
-        .into_iter()
-        .filter(|line| line != COMPONENT_DEFINITIONS)
-        .collect();
-    Ok((local, component))
+    Ok(directories)
 }
 
 /// The URL a definition file is served at, `None` for a file that is not a
@@ -113,10 +102,12 @@ fn named(json: &str) -> Result<Option<String>, Box<dyn Error>> {
 /// URL the definition names itself by.
 fn published() -> Result<BTreeSet<String>, Box<dyn Error>> {
     let mut urls = BTreeSet::new();
-    let (directories, component) = definition_directories()?;
+    let directories = definition_directories()?;
     assert!(
-        component,
-        "the site assembly no longer serves the published eehrxf crate's definitions"
+        directories
+            .iter()
+            .all(|directory| !directory.contains("eehrxf")),
+        "the site assembly serves a definition of the published eehrxf crate"
     );
     let named_by_crate = named(REMAINING_DISPENSATIONS_DEFINITION)?;
     assert_eq!(
@@ -124,7 +115,10 @@ fn published() -> Result<BTreeSet<String>, Box<dyn Error>> {
         Some(REMAINING_DISPENSATIONS),
         "the published crate's extension definition names its own URL"
     );
-    urls.insert(REMAINING_DISPENSATIONS.to_owned());
+    assert!(
+        !REMAINING_DISPENSATIONS.starts_with(BASE),
+        "the component's extension is under {BASE}, which the site does not serve it at"
+    );
     for directory in directories {
         for entry in std::fs::read_dir(root().join(&directory))? {
             let path = entry?.path();
@@ -194,7 +188,7 @@ fn the_vendored_r4_text_makes_resolution_a_recommendation() -> TestResult {
 }
 
 #[test]
-fn every_ferrofed_fhir_url_but_the_archetype_local_family_is_published() -> TestResult {
+fn every_ferrofed_fhir_url_is_published_and_no_archetype_local_one_is_written() -> TestResult {
     let published = published()?;
     assert!(
         published
@@ -211,12 +205,17 @@ fn every_ferrofed_fhir_url_but_the_archetype_local_family_is_published() -> Test
         written.extend(urls(&std::fs::read_to_string(file)?));
     }
     assert!(
-        written.iter().any(|url| url.starts_with(ARCHETYPE_LOCAL)),
-        "no archetype-local URL was read, so the tree was not read"
+        !ARCHETYPE_LOCAL.starts_with(BASE),
+        "the component's archetype-local code systems are under {BASE}"
+    );
+    assert!(
+        written
+            .iter()
+            .any(|url| url.starts_with(&format!("{BASE}sid/"))),
+        "no ferrofed.eu NamingSystem URL was read, so the tree was not read"
     );
     let unpublished: Vec<&String> = written
         .iter()
-        .filter(|url| !url.starts_with(ARCHETYPE_LOCAL))
         .filter(|url| {
             let bare = url.strip_suffix(".json").unwrap_or(url);
             !published.contains(bare)

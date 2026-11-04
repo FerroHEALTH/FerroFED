@@ -92,28 +92,11 @@ cp llms.txt "$OUT/llms.txt"
 # application/json (FHIR R4 2.5.1: the definition SHALL be available to every
 # party that exchanges the extension). A NamingSystem has no canonical URL in
 # R4, so it is served at the identifier system it names, fhir/sid/<id>.
-# The interoperability component, eehrxf, is published from
-# FerroHEALTH/FerroBRIDGE (#813), and its remaining-dispensations extension
-# keeps its ferrofed.eu canonical URL: its definitions are read from the crate
-# archive crates.io serves at the version Cargo.lock resolves, held to the
-# checksum the lock records.
-component="$(mktemp -d)"
-component_version="$(awk '$0 == "name = \"eehrxf\"" { f = 1; next } f && /^version = / { gsub(/^version = "|"$/, ""); print; exit }' Cargo.lock)"
-component_sum="$(awk '$0 == "name = \"eehrxf\"" { f = 1; next } f && /^checksum = / { gsub(/^checksum = "|"$/, ""); print; exit } /^\[\[package\]\]/ { f = 0 }' Cargo.lock)"
-[[ -n "$component_version" && -n "$component_sum" ]] || {
-  echo "assemble: Cargo.lock resolves no published eehrxf" >&2
-  exit 1
-}
-curl --proto '=https' --tlsv1.2 -fsSL --retry 3 \
-  -o "$component/eehrxf.crate" "https://static.crates.io/crates/eehrxf/eehrxf-$component_version.crate"
-if [[ "$(shasum -a 256 "$component/eehrxf.crate" | cut -d' ' -f1)" != "$component_sum" ]]; then
-  echo "assemble: eehrxf $component_version does not match the checksum Cargo.lock records" >&2
-  exit 1
-fi
-tar -xzf "$component/eehrxf.crate" -C "$component"
+# The interoperability component's remaining-dispensations extension is
+# FerroBRIDGE's, defined and served under ferrobridge.eu since eehrxf moved
+# there (#1432), so the site serves no definition of it.
 
 readonly DEFINITIONS=(
-  "$component/eehrxf-$component_version/src/medication"
   app/ferrofed-identity/src/ihe/mcsd/definition
   app/ferrofed-registry/src
   app/ferrofed-server/src/access
