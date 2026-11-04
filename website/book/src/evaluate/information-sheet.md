@@ -239,8 +239,8 @@ Beside them:
 
 The European electronic health record exchange format of Art 15 has no
 adopted implementing act. The gateway serves the patient summary in the
-FHIR R4 form of HL7 Europe's packages and receives patient summaries in the
-same form ([The categories received](#the-categories-received)). It serves
+FHIR R4 form of HL7 Europe's packages and receives patient summaries and
+laboratory reports in the same form ([The categories received](#the-categories-received)). It serves
 electronic prescriptions and receives electronic dispensations in the HL7
 Europe MPD profiles, through members that serve them
 ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).

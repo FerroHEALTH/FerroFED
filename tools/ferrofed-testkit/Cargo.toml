@@ -25,6 +25,10 @@ bytes.workspace = true
 # test device may compile and the shipped IHE binding does not need yet
 # (Annex A).
 fhir-types = { workspace = true, features = ["r4", "resources"] }
+# The laboratory report fixtures (#1404): the component's document builder
+# writes the synthetic report, and its shipped laboratory mapping is written
+# where a deployment keeps its files.
+eehrxf = { workspace = true, features = ["laboratory", "openehr"] }
 # The vendored HL7 Europe Patient Summary package the document check reads
 # its profiles from (#689).
 flate2.workspace = true
@@ -104,10 +108,6 @@ ferrofed-server.workspace = true
 # The gateway's own read-only stored queries, which the console's stored-query
 # view lists beside the deployment's (#776).
 ferrofed-eehrxf.workspace = true
-# The laboratory report fixtures (#1404): the component's document builder
-# writes the synthetic report, and its shipped laboratory mapping is written
-# where a deployment keeps its files.
-eehrxf = { workspace = true, features = ["laboratory", "openehr"] }
 # The ITS-REST query body the node profile's captured queries are read as
 # (#739).
 openehr-its = { workspace = true, features = ["rest"] }

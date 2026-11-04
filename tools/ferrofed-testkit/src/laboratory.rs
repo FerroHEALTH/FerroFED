@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The laboratory report fixtures (#1404): the vendored HL7 Europe
-//! Laboratory Report 2.0.0 package, the `KDS_Laborbericht` operational
-//! template the mapping `eehrxf` ships compiles against, that mapping
-//! written where a deployment keeps its files, and a synthetic laboratory
-//! report document as a sender writes it.
+//! The laboratory report fixtures (#1555).
+//!
+//! They are the vendored HL7 Europe Laboratory Report 2.0.0 package, the
+//! `KDS_Laborbericht` operational template the mapping `eehrxf` ships
+//! compiles against, that mapping written where a deployment keeps its
+//! files, and a synthetic laboratory report document as a sender writes it.
 //!
 //! The document is assembled with `eehrxf`'s own document builder in the
 //! `Bundle-eu-lab` form, so its composition, its report and the links
@@ -97,17 +98,17 @@ pub fn context() -> Result<&'static str, Box<dyn Error>> {
 
 /// Decodes the FHIR JSON `value` as the R4 resource of `kind`.
 fn resource(kind: &str, value: &Value) -> Result<Resource, Box<dyn Error>> {
-    let CodecValue::Object(object) = serde_json::from_str::<CodecValue>(&value.to_string())?
-    else {
+    let CodecValue::Object(object) = serde_json::from_str::<CodecValue>(&value.to_string())? else {
         return Err(format!("the synthetic {kind} is no JSON object").into());
     };
     Ok(Resource::from_json(&object, &mut CodecPath::root(kind))?)
 }
 
-/// A synthetic laboratory report of the patient `identifiers`, each a
-/// `(system, value)`, in the HL7 Europe Laboratory Report 2.0.0 document
-/// form: one serum cholesterol result of 182 mg/dL with its specimen and
-/// the report that names both.
+/// A synthetic laboratory report of the patient `identifiers`.
+///
+/// Each identifier is a `(system, value)`. The document is in the HL7
+/// Europe Laboratory Report 2.0.0 form: one serum cholesterol result of
+/// 182 mg/dL with its specimen and the report that names both.
 ///
 /// # Errors
 ///
@@ -169,7 +170,45 @@ pub fn received_document(identifiers: &[(&str, &str)]) -> Result<String, Box<dyn
         return Err("the synthetic report is no DiagnosticReport".into());
     };
     document.with_report(*report)?;
-    Ok(serde_json::to_string(&document.into_bundle()?)?)
+    let mut bundle = serde_json::to_value(document.into_bundle()?)?;
+    displayed(&mut bundle);
+    Ok(bundle.to_string())
+}
+
+/// The displays a sender that names its codes writes for the codes the
+/// component writes with none, each `(system, code, display)`.
+const DISPLAYS: [(&str, &str, &str); 3] = [
+    ("http://loinc.org", "11502-2", "Laboratory report"),
+    ("http://loinc.org", "18719-5", "Chemistry studies"),
+    (
+        "http://terminology.hl7.org/CodeSystem/observation-category",
+        "laboratory",
+        "Laboratory",
+    ),
+];
+
+/// Gives every coding in `value` that names no display the one
+/// [`DISPLAYS`] holds for it, as a sender that names its codes does: the
+/// component's builder writes some codings with no display, and the
+/// receive path refuses a coding with none when no terminology server can
+/// look one up.
+fn displayed(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            let named = |key: &str| object.get(key).and_then(Value::as_str).map(str::to_owned);
+            if let (Some(system), Some(code), None) =
+                (named("system"), named("code"), object.get("display"))
+                && let Some((_, _, display)) = DISPLAYS
+                    .iter()
+                    .find(|(known, held, _)| *known == system && *held == code)
+            {
+                object.insert(String::from("display"), Value::from(*display));
+            }
+            object.values_mut().for_each(displayed);
+        }
+        Value::Array(items) => items.iter_mut().for_each(displayed),
+        _ => {}
+    }
 }
 
 /// A synthetic serum specimen in the shape `Specimen-eu-lab` constrains.
@@ -212,6 +251,7 @@ fn result() -> Value {
         }] },
         "subject": { "reference": "Patient/synthetic-patient" },
         "effectiveDateTime": "2026-03-02T08:15:00+01:00",
+        "performer": [{ "reference": "Organization/laboratory" }],
         "valueQuantity": {
             "value": 182,
             "unit": "mg/dL",

@@ -11,15 +11,15 @@
 use std::error::Error;
 use std::path::Path;
 
+use ferrofed_testkit::fhir_packages;
 use ferrofed_testkit::laboratory;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::fhir_packages;
 use http::StatusCode;
 use serde_json::Value;
 
+use super::super::{UNREACHED_SUPPLIER, fhir_tables_with};
 use super::write::composed;
 use super::{VERSION_A, creating, gateway_with, issue, post, rows, untouched};
-use super::super::{UNREACHED_SUPPLIER, fhir_tables_with};
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room};
 use crate::fhir::TestResult;
 use crate::support::call;
@@ -138,6 +138,10 @@ async fn a_laboratory_report_that_breaks_its_profiles_reaches_no_member() -> Tes
     let broken = report()?.replacen("\"status\":\"final\"", "\"status\":\"synthetic\"", 1);
     let (status, text) = call(app, post(&broken)?).await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
+    assert!(
+        text.contains("Composition.status"),
+        "the broken element: {text}"
+    );
     assert!(untouched(&a, &b).await?, "nothing reaches a member");
     Ok(())
 }
@@ -149,9 +153,17 @@ async fn a_laboratory_report_of_a_patient_no_member_holds_is_refused() -> TestRe
     let app = gateway(dir.path(), &a, &b)?;
     let other = laboratory::received_document(&[(NAMESPACE, "SENTINEL-NOBODY-3k9q")])?;
     let (status, text) = call(app, post(&other)?).await?;
+    assert_eq!(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        status,
+        "§5.2: never written under a guess: {text}"
+    );
+    let (code, diagnostics) = issue(&text)?;
+    assert_eq!("not-found", code);
+    assert!(diagnostics.contains("node-a"), "{diagnostics}");
     assert!(
-        status.is_client_error(),
-        "§5.2: never written under a guess: {status} {text}"
+        !text.contains("SENTINEL-NOBODY-3k9q"),
+        "§5.4.3: never echoed: {text}"
     );
     assert!(untouched(&a, &b).await?, "nothing reaches a member");
     Ok(())
