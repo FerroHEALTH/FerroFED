@@ -12,12 +12,15 @@ use ferrofed_operator_api::revision::{Author, Current, Origin, Outcome, Revision
 use jiff::Timestamp;
 
 use super::{
-    APPLIED, Booted, FILE_ATTEMPTS, FileRevision, Loaded, REFUSED, Refused, RevisionError,
-    Revisions, SAVED, Stale, held_table, pending, shown,
+    APPLIED, Booted, FILE_ATTEMPTS, REFUSED, Refused, RevisionError, Revisions, SAVED, Stale,
+    held_table, pending, shown,
 };
+use ferrofed_operator_api::revision::RevisionId;
+
 use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::tree::{console_keys, split, with_console_of, without_console};
+use crate::reload::log::{FileLoaded, FileRevision, LogError, RevisionLog};
 use crate::revision::resources::{remove, set, value_at};
 use crate::revision::{Draft, Saved, Swapped};
 
@@ -30,7 +33,7 @@ impl Revisions {
     /// The revision is not marked running here: a start or a reload marks
     /// it once the gateway runs it ([`Revisions::file_applied`]), so one
     /// they refuse never becomes the revision every replica follows
-    /// ([`FileRevision::refused`]).
+    /// ([`RevisionLog::file_refused`]).
     ///
     /// A changed file's revision carries the resources the operator console
     /// owns over from the running revision ([`with_console_of`]), so a
@@ -48,7 +51,7 @@ impl Revisions {
     /// [`RevisionError::Refused`] when the file's configuration, or the
     /// running revision beside the file's core, is refused, and the store's
     /// errors.
-    pub fn file_loaded(&self, tree: &toml::Table) -> Result<Loaded, RevisionError> {
+    pub fn file_loaded(&self, tree: &toml::Table) -> Result<FileLoaded, RevisionError> {
         let (core, rest) = split(tree);
         *self.core.lock().unwrap_or_else(PoisonError::into_inner) = core;
         let text =
@@ -74,7 +77,7 @@ impl Revisions {
                     .store
                     .revision(current.revision)?
                     .ok_or(RevisionError::Unknown(current.revision))?;
-                return Ok(Loaded {
+                return Ok(FileLoaded {
                     config: self.validate(&running.toml)?.1,
                     file: FileRevision {
                         revision: running.id,
@@ -122,7 +125,7 @@ impl Revisions {
                 recorded: true,
                 previous: running,
             };
-            return Ok(Loaded { config, file });
+            return Ok(FileLoaded { config, file });
         }
         Err(Stale::Current {
             expected: None,
@@ -150,7 +153,7 @@ impl Revisions {
         let _serial = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
         match self
             .store
-            .swap_current(file.previous, &file.mark(needs_restart))?
+            .swap_current(file.previous, &mark(file, needs_restart))?
         {
             Swapped::Swapped => tracing::info!(
                 target: crate::security::TARGET,
@@ -232,44 +235,77 @@ impl Revisions {
     }
 }
 
-impl FileRevision {
-    /// The mark of this revision applied by the file, pending a restart for
-    /// `needs_restart` when any setting waits for one.
-    fn mark(&self, needs_restart: &[&'static str]) -> Current {
-        pending(
-            Current {
-                revision: self.revision,
-                previous: self.previous,
-                outcome: Outcome::Applied,
-                needs_restart: Vec::new(),
-                applied_by: Author::File,
-                applied_at: Timestamp::now(),
-                awaiting: None,
-                confirmed: None,
-            },
-            needs_restart,
-        )
+impl RevisionLog for Revisions {
+    fn running(&self) -> Option<RevisionId> {
+        self.replica().running
     }
 
-    /// Records that a start or a reload refused this revision, for the
-    /// failure of class `class` that `reason` states: the running mark stays
-    /// where the load read it, so no replica follows it. `reason` is a fixed
-    /// text that carries no value.
-    pub fn refused(&self, class: &str, reason: &str) {
-        if !self.recorded {
-            return;
-        }
-        tracing::warn!(
-            target: crate::security::TARGET,
-            event = REFUSED,
-            revision = %self.revision,
-            origin = "file",
-            class,
-            reason,
-            current = shown(self.previous),
-            "the configuration file's revision was refused, and the running revision stays"
-        );
+    fn file_loaded(&self, tree: &toml::Table) -> Result<FileLoaded, LogError> {
+        Self::file_loaded(self, tree).map_err(LogError::new)
     }
+
+    fn file_applied(
+        &self,
+        file: FileRevision,
+        needs_restart: &[&'static str],
+    ) -> Result<(), LogError> {
+        Self::file_applied(self, file, needs_restart).map_err(LogError::new)
+    }
+
+    fn file_refused(&self, file: FileRevision, class: &str, reason: &str) {
+        refused(file, class, reason);
+    }
+
+    fn ran(&self, id: RevisionId) {
+        Self::ran(self, id);
+    }
+
+    fn held(&self, id: RevisionId) -> Result<toml::Table, LogError> {
+        self.store
+            .revision(id)
+            .map_err(RevisionError::from)
+            .and_then(|revision| revision.ok_or(RevisionError::Unknown(id)))
+            .and_then(|revision| held_table(&revision))
+            .map_err(LogError::new)
+    }
+}
+
+/// The mark of `file` applied by the file, pending a restart for
+/// `needs_restart` when any setting waits for one.
+fn mark(file: FileRevision, needs_restart: &[&'static str]) -> Current {
+    pending(
+        Current {
+            revision: file.revision,
+            previous: file.previous,
+            outcome: Outcome::Applied,
+            needs_restart: Vec::new(),
+            applied_by: Author::File,
+            applied_at: Timestamp::now(),
+            awaiting: None,
+            confirmed: None,
+        },
+        needs_restart,
+    )
+}
+
+/// Records that a start or a reload refused `file`, for the failure of class
+/// `class` that `reason` states: the running mark stays where the load read
+/// it, so no replica follows it. `reason` is a fixed text that carries no
+/// value.
+fn refused(file: FileRevision, class: &str, reason: &str) {
+    if !file.recorded {
+        return;
+    }
+    tracing::warn!(
+        target: crate::security::TARGET,
+        event = REFUSED,
+        revision = %file.revision,
+        origin = "file",
+        class,
+        reason,
+        current = shown(file.previous),
+        "the configuration file's revision was refused, and the running revision stays"
+    );
 }
 
 impl Booted {
@@ -286,7 +322,7 @@ impl Booted {
     /// Records that the start refused the file's revision, for the failure
     /// of class `class` that `reason` states; the mark stays.
     pub fn refused(&self, class: &str, reason: &str) {
-        self.file.refused(class, reason);
+        refused(self.file, class, reason);
     }
 }
 

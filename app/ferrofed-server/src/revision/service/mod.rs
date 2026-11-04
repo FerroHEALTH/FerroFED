@@ -27,6 +27,7 @@ use crate::config::revision_policy::Policy;
 use crate::config::revisions::RevisionsFault;
 use crate::config::settings::Settings;
 use crate::config::tree::{core_keys, inline_secrets, join, split};
+use crate::reload::log::FileRevision;
 use crate::reload::{ReloadError, Reloader};
 use crate::revision::resources::present;
 use crate::revision::{Draft, RevisionStore, StoreError, Swapped};
@@ -644,30 +645,6 @@ fn pending(mark: Current, needs_restart: &[&'static str]) -> Current {
 pub fn held_table(revision: &Revision) -> Result<toml::Table, RevisionError> {
     toml::from_str(&revision.toml)
         .map_err(|error| RevisionError::Store(StoreError::configuration(&error, &revision.toml)))
-}
-
-/// The configuration a file load gives the gateway to run.
-#[derive(Debug)]
-#[non_exhaustive]
-pub struct Loaded {
-    /// The configuration, the revision beside the file's bootstrap core.
-    pub config: Config,
-    /// The revision it is, and whether the load recorded it.
-    pub file: FileRevision,
-}
-
-/// The revision a file load gives the gateway to run, and the mark the load
-/// read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct FileRevision {
-    /// The revision.
-    pub revision: RevisionId,
-    /// Whether the load recorded it as a new revision by the file.
-    pub recorded: bool,
-    /// The revision the store marked running when the load read it, from
-    /// which a reload that applies a recorded revision moves the mark.
-    pub previous: Option<RevisionId>,
 }
 
 /// The `event` of the record of a saved revision.
