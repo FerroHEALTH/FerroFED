@@ -336,7 +336,7 @@ fn concluded(
 }
 
 /// The patient query of `analysis`, which every section query is.
-fn patient_query(analysis: &Analysis) -> Result<&PatientQuery, Unsummarised> {
+pub(crate) fn patient_query(analysis: &Analysis) -> Result<&PatientQuery, Unsummarised> {
     match analysis {
         Analysis::Patient(query) => Ok(query),
         Analysis::Unscoped(_) => Err(Unsummarised::Internal("a section query names no patient")),
@@ -595,7 +595,7 @@ fn version_key(uid: &str) -> Option<(String, String)> {
 
 /// The compositions of `rows`, each read from the composition, uid and
 /// template id columns `sources` places in a node row.
-fn compositions(rows: &[ResultSetRow], sources: &[ColumnSource]) -> Vec<Held> {
+pub(crate) fn compositions(rows: &[ResultSetRow], sources: &[ColumnSource]) -> Vec<Held> {
     let node = |column: usize| match sources.get(column) {
         Some(ColumnSource::Node(index)) => Some(*index),
         _ => None,

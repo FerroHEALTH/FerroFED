@@ -33,7 +33,7 @@
 //! search, and the answers of a member that answers two, are our own design:
 //! no specification governs them.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -41,11 +41,13 @@ use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientLookup, WrittenVersion};
 use ferrofed_eehrxf::dispensations;
+use ferrofed_eehrxf::prescriptions::mapped::MapMode;
 use ferrofed_eehrxf::prescriptions::page::Kept;
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::FanOutError;
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::single_node::native_create::Created;
+use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::role::resolver::Identification;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use http::HeaderMap;
@@ -55,9 +57,22 @@ use crate::facade::answer::Failure;
 use crate::facade::native::Chosen;
 use crate::facade::prescriptions::{self, Held, Unread};
 use crate::facade::request::Arrived;
-use crate::facade::{confined, consent, owner};
+use crate::facade::{confined, consent, mapped, owner};
 use crate::federation::Federation;
 use crate::fhir::locator::{Locator, Unlocated};
+
+/// What the map mode of a prescription read needs: each map-mode member's
+/// mapping by its node id, the identifier systems its patient is named in,
+/// and the instant the mapping runs at, a FHIR `instant`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Mapped<'a> {
+    /// Each map-mode member's mapping, by its node id.
+    pub(crate) modes: &'a BTreeMap<String, MapMode>,
+    /// The identifier systems the patient is named in.
+    pub(crate) namespaces: &'a [IdentifierNamespace],
+    /// The instant the mapping runs at.
+    pub(crate) now: &'a str,
+}
 
 /// What a read by the face's id reads: a prescription or a dispensation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,10 +166,15 @@ pub(crate) enum Unfound {
     /// The member gave no answer the read can pass through (§11.1).
     #[error("the member gave no answer the read can pass through")]
     Unanswered(Box<Read>),
+    /// The identity binding names no patient for the `ehr_id` of a map-mode
+    /// member, so the prescription it maps could have no subject.
+    #[error("the patient of the mapped prescription cannot be named")]
+    Unnamed,
 }
 
 /// Reads the prescription `id` names, as `arrived` asks, at the member of
-/// `declared` it names.
+/// `declared` it names, a member of `mapped` read in the map mode
+/// ([`crate::facade::mapped::read`]).
 ///
 /// # Errors
 ///
@@ -163,28 +183,45 @@ pub(crate) async fn read(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
     (readable, id): (Readable, &str),
-    declared: &BTreeSet<String>,
+    (declared, mapped): (&BTreeSet<String>, Option<&Mapped<'_>>),
 ) -> Result<Read, Unfound> {
     let logged = arrived.outbound.to_string();
     let snapshot = federation.snapshot();
     let category = readable.category();
     let code = category.code();
+    let is_mapped =
+        |node: &NodeId| mapped.is_some_and(|held| held.modes.contains_key(node.as_str()));
     let serving: Vec<EndpointId> = snapshot
         .nodes()
         .filter(|node| declared.contains(node.id().as_str()))
-        .filter_map(|node| snapshot.native_for(node.id(), code))
-        .map(|native| native.id().clone())
+        .filter_map(|node| {
+            if is_mapped(node.id()) {
+                snapshot
+                    .asked_through(node.id())
+                    .map(|query| query.id().clone())
+            } else {
+                snapshot
+                    .native_for(node.id(), code)
+                    .map(|native| native.id().clone())
+            }
+        })
         .collect();
     let locator = Locator::read(id, &serving).map_err(|unlocated| match unlocated {
         Unlocated::Ambiguous(endpoints) => Unfound::Ambiguous(endpoints),
         Unlocated::Malformed | Unlocated::Unknown => Unfound::NoOwner(None),
     })?;
-    let native = snapshot
-        .native_endpoint(locator.endpoint())
-        .ok_or(Unfound::NoOwner(None))?;
-    let node = native.node().clone();
+    let (node, named) = match locator.entry() {
+        None => snapshot
+            .native_endpoint(locator.endpoint())
+            .map(|native| (native.node().clone(), native.id().clone())),
+        Some(_) => snapshot
+            .endpoint(locator.endpoint())
+            .map(|query| (query.node().clone(), query.id().clone()))
+            .filter(|(node, _)| is_mapped(node)),
+    }
+    .ok_or(Unfound::NoOwner(None))?;
     let Some(via) = snapshot.asked_through(&node) else {
-        return Err(Unfound::Offline(native.id().clone()));
+        return Err(Unfound::Offline(named));
     };
     let ehr_id = locator.ehr_id();
     // NOTE: §12.5.1: the face reads no targeting header, so the routing steps start at the
@@ -212,7 +249,7 @@ pub(crate) async fn read(
         }
         Ok(owner::Located::At { endpoint, step }) if endpoint.node() != &node => {
             tracing::info!(
-                endpoint = %native.id(),
+                endpoint = %named,
                 step = step.as_str(),
                 request_id = logged,
                 "a prescription id names a member the gateway places its ehr_id elsewhere from"
@@ -229,7 +266,7 @@ pub(crate) async fn read(
     let chosen = Chosen {
         via: via.id().clone(),
         node,
-        native: native.id().clone(),
+        native: named,
         ehr_id: ehr_id.clone(),
     };
     let consented = consented(federation, arrived, &chosen).await;
@@ -241,7 +278,7 @@ pub(crate) async fn read(
         );
         return Err(Unfound::NoOwner(None));
     }
-    let held = asked(federation, arrived, (&chosen, readable, locator.resource())).await?;
+    let held = held(federation, arrived, (&chosen, readable, &locator), mapped).await?;
     let read = Read {
         readable,
         chosen,
@@ -250,6 +287,39 @@ pub(crate) async fn read(
         set_aside: consented.set_aside,
     };
     settled(federation, read)
+}
+
+/// What the member `chosen` answered the read of `readable` that `locator`
+/// names: at its own endpoint, or in the map mode `mapped` gives when the id
+/// names a mapped prescription.
+async fn held(
+    federation: &Federation,
+    arrived: &Arrived<'_>,
+    (chosen, readable, locator): (&Chosen, Readable, &Locator),
+    mapped: Option<&Mapped<'_>>,
+) -> Result<Held, Unfound> {
+    match (locator.entry(), mapped) {
+        (Some(entry), Some(held)) => {
+            let mode = held
+                .modes
+                .get(chosen.node.as_str())
+                .ok_or(Unfound::NoOwner(None))?;
+            let composed = mapped::read(
+                federation,
+                arrived,
+                (chosen, mode, held.namespaces),
+                (locator.resource(), entry, held.now),
+            )
+            .await
+            .map_err(|failure| Unfound::Failure(Failure::FanOut(failure)))?;
+            match composed {
+                mapped::Composed::Held(answered) => Ok(answered),
+                mapped::Composed::Unnamed => Err(Unfound::Unnamed),
+            }
+        }
+        (Some(_), None) => Err(Unfound::NoOwner(None)),
+        (None, _) => asked(federation, arrived, (chosen, readable, locator.resource())).await,
+    }
 }
 
 /// What the consent pre-filter decides about the member `chosen` names for

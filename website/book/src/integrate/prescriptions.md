@@ -27,6 +27,7 @@ Who reads which part:
   point): the routes from [Searching a patient's prescriptions](#searching-a-patients-prescriptions)
   to [Every answer](#every-answer), and [The locator ids](#the-locator-ids).
 - **An operator**: [Declaring the serving members](#declaring-the-serving-members),
+  [The map mode](#the-map-mode),
   [Access records and the counter](#access-records-and-the-counter) and
   [The capability statement](#the-capability-statement).
 - **A member CDR's operator**: [The member contract](#the-member-contract)
@@ -102,6 +103,73 @@ prescriptions (`fhir/serving.rs`:
 | `GET {fhir-base}/MedicationDispense/{id}` | `Electronic-Dispensations` |
 | `GET {fhir-base}/MedicationRequest/{id}/_history/{vid}` | `Electronic-Prescriptions` |
 | `GET {fhir-base}/MedicationDispense/{id}/_history/{vid}` | `Electronic-Dispensations` |
+
+## The map mode
+
+A member that serves no FHIR endpoint of its own can serve its
+prescriptions from its openEHR data. You declare it as a table with
+`mode = "map"` and the operational template its medication orders are
+recorded in:
+
+```toml
+[fhir]
+receive_namespaces = ["urn:oid:2.999.1"]   # needed once a member is in the map mode
+
+[[fhir.serve]]
+category = "Electronic-Prescriptions"
+members = [
+  { member = "node-a", mode = "map", template = "/etc/ferrofed/ferrobridge_medication.adlt",
+    archetypes = ["/etc/ferrofed/openEHR-EHR-INSTRUCTION.medication_order.v3.adl"] },
+  "node-b",                                # on its own MPD endpoint, as above
+]
+```
+
+A member written by its node id alone, or with `mode = "native"`, is asked
+at its own endpoint. A `template` ending in `.opt` is read as an OPT 1.4
+operational template; any other is read as an ADL 2 template, built with
+the `archetypes` it specialises into its operational template. The face
+compiles the MPD project the
+[`eehrxf`](https://crates.io/crates/eehrxf) crate ships
+(`ferrobridge_eu_mpd_request.context`) against it when the configuration
+is read. The start and `config check` are refused, naming the entry and
+the member, when the project does not compile against the template, a
+file cannot be read, a map-mode member names no template, or a member of
+`Electronic-Dispensations` is in the map mode (`fhir/serving/start.rs`:
+`a_map_mode_member_whose_template_the_mpd_project_does_not_map_is_refused`,
+`a_map_mode_member_with_no_template_is_refused`,
+`a_map_mode_member_of_dispensations_is_refused`). A map-mode member needs
+no `hl7-fhir-rest` endpoint.
+
+The search asks each map-mode member the patient resolves at the reserved
+stored query `eu.ferrofed.eehrxf::medication-orders` over ITS-REST, by its
+own `ehr_id` alone, beside the native members and under the same budget.
+The query selects every composition holding
+`openEHR-EHR-INSTRUCTION.medication_order.v3` with no `feeder_audit`. Of
+what the member answers, only a composition whose uid's
+`creating_system_id` is the member's own `system_id` is its prescription,
+so an order another system created is never listed as this member's. Each
+is mapped into `MedicationRequest-eu-mpd` with the `Medication-eu-mpd` it
+references, and its patient is named by the identifier the search names
+(FHIR R4 `Reference.identifier`). The `searchset` lists it with one
+`Provenance` naming the member, as a native member's
+(`fhir/prescriptions/mapped.rs`:
+`a_map_mode_members_own_orders_are_mapped_beside_a_native_members`). A
+map-mode member that does not answer, or whose composition does not map,
+fails the search under all-or-nothing and is named under `partial`, as a
+native member is (`a_silent_map_mode_member_fails_the_search_under_all_or_nothing`).
+
+The id of a mapped prescription names the member's Query API endpoint, its
+`ehr_id`, the composition's versioned object and the prescription's
+position in it ([The locator ids](#the-locator-ids)). The read asks that
+member alone for that composition
+(`GET {base}/ehr/{ehr_id}/composition/{uid}`), maps it again, and names
+the patient as the identity binding names it behind the `ehr_id`, in the
+systems `receive_namespaces` lists. A composition another system created,
+or one with a `feeder_audit`, answers `404` as an id with no owner
+(`a_mapped_prescription_is_read_at_its_member_by_its_composition`,
+`a_mapped_id_whose_composition_another_system_created_has_no_owner`). A
+patient the binding cannot name answers `424`, since a mapped prescription
+names its patient (MPD `MedicationRequest.subject` 1..1).
 
 ## The member contract
 
@@ -412,6 +480,14 @@ between the search and the read, and the same prescription always gets the
 same id (`app/ferrofed-server/src/fhir/locator.rs`:
 `an_id_is_a_fhir_id_and_reads_back_to_its_parts`,
 `the_id_is_the_same_each_time`).
+
+A mapped prescription ([The map mode](#the-map-mode)) has its own form,
+which no member's own prescription shares: the member's Query API endpoint
+in place of its own endpoint, the UUID of the composition's versioned
+object in place of the resource `id`, and one byte more for the
+prescription's position among those the composition maps to
+(`a_mapped_prescription_reads_back_to_its_composition_and_position`,
+`a_mapped_prescription_and_a_native_one_never_share_an_id`).
 
 The id only locates a resource. It carries no patient identifier, and every
 read is still held to the caller's grant and asked of the member by its

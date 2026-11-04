@@ -10,7 +10,7 @@ use std::time::Instant;
 use axum::response::Response;
 use eehrxf::category::Category;
 use ferrofed_eehrxf::prescriptions::SearchRequest;
-use ferrofed_eehrxf::prescriptions::page::Page;
+use ferrofed_eehrxf::prescriptions::page::{Page, Prescription};
 use ferrofed_eehrxf::prescriptions::searchset::{Answered, Assembled, Silent, assemble};
 use ferrofed_eehrxf::summary::Organisation;
 use http::{StatusCode, Uri};
@@ -66,7 +66,16 @@ pub(in crate::fhir) async fn search(asked: Asked, uri: Uri) -> Response {
             .members_of(Category::Prescription)
             .unwrap_or(&none);
         let patient = (read.system(), read.value());
-        let searched = prescriptions::search(federation, &arrived, patient, declared).await;
+        let now = jiff::Timestamp::now()
+            .strftime("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
+        let searched = prescriptions::search(
+            federation,
+            &arrived,
+            (patient, &now),
+            (declared, &fhir.mapped),
+        )
+        .await;
         let (request_id, outbound) = (admitted.request_id, admitted.outbound);
         match searched {
             Ok(prescribed) => listed(federation, fhir, (&read, &prescribed)),
@@ -116,9 +125,9 @@ fn listed(
             Held::Found(pages) => Some((
                 member,
                 organisation(snapshot, &member.chosen.node),
-                named(fhir, &member.chosen, pages),
+                named(fhir, member, pages),
             )),
-            Held::Unusable { .. } | Held::Silent(_) => None,
+            Held::Unusable { .. } | Held::Silent(_) | Held::Unanswered { .. } => None,
         })
         .collect();
     let answered: Vec<Answered<'_>> = found
@@ -154,38 +163,88 @@ fn listed(
     response
 }
 
-/// The pages `pages` of the member `chosen`, each prescription named by the
+/// The pages `pages` of the member `member`, each prescription named by the
 /// id the face reads it by (`fhir::locator`), on the face `fhir`.
 ///
 /// A prescription named so has that id and a `fullUrl` of the face's read
-/// (FHIR R4 `http.html` §3.1.0.2), and is otherwise as the member sent it;
-/// one whose parts give no such id keeps the member's own id and `fullUrl`
-/// and is marked unreadable, which the searchset warns of.
-fn named(fhir: &FhirSettings, chosen: &Chosen, pages: &[Page]) -> Vec<Page> {
+/// (FHIR R4 `http.html` §3.1.0.2), and is otherwise as the member sent it
+/// or, in the map mode, as the face mapped it; one whose parts give no such
+/// id keeps its own id and `fullUrl` and is marked unreadable, which the
+/// searchset warns of. A resource a mapped prescription references is named
+/// under the face's base by its type and id, so the reference resolves in the
+/// searchset (FHIR R4 Bundle §Resolving references in Bundles).
+fn named(fhir: &FhirSettings, member: &prescriptions::Member, pages: &[Page]) -> Vec<Page> {
     let base = fhir.absolute.trim_end_matches('/');
+    let chosen = &member.chosen;
     let mut pages = pages.to_vec();
-    for prescription in pages
-        .iter_mut()
-        .flat_map(|page| page.prescriptions.iter_mut())
-    {
-        let kept = &mut prescription.kept;
-        let id = kept.id().and_then(|resource| {
-            Locator::new(chosen.native.clone(), chosen.ehr_id.clone(), resource).id()
+    for (index, page) in pages.iter_mut().enumerate() {
+        let origin = member.composed.as_ref().map_or(Origin::Native, |composed| {
+            Origin::Mapped(composed.get(index).copied().flatten())
         });
-        let Some(id) = id else {
-            // NOTE: no specification governs this: our own design; a prescription whose parts
-            // give no id is listed as its member states it, and the searchset warns it cannot be read.
-            tracing::warn!(
-                endpoint = chosen.native.as_str(),
-                "a member's prescription has no id the face can read it by"
-            );
-            prescription.unreadable = true;
-            continue;
-        };
-        kept.full_url = Some(format!("{base}{PRESCRIPTIONS}/{id}"));
-        kept.rename(&id);
+        if origin != Origin::Native {
+            for kept in &mut page.included {
+                if let Some(id) = kept.id() {
+                    kept.full_url = Some(format!("{base}/{}/{id}", kept.resource_type));
+                }
+            }
+        }
+        for (position, prescription) in page.prescriptions.iter_mut().enumerate() {
+            name(base, chosen, (origin, position), prescription);
+        }
     }
     pages
+}
+
+/// Where a page of a member's prescriptions comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Origin {
+    /// The member's own endpoint.
+    Native,
+    /// The mapping of one of its compositions, by the UUID of its versioned
+    /// object when it is one.
+    Mapped(Option<uuid::Uuid>),
+}
+
+/// Names `prescription`, at `position` on a page of the member `chosen`
+/// that comes from `origin`, by the id the face reads it by, under the face's
+/// base `base`.
+fn name(
+    base: &str,
+    chosen: &Chosen,
+    (origin, position): (Origin, usize),
+    prescription: &mut Prescription,
+) {
+    let kept = &mut prescription.kept;
+    let id = match origin {
+        Origin::Native => kept.id().and_then(|resource| {
+            Locator::new(chosen.native.clone(), chosen.ehr_id.clone(), resource).id()
+        }),
+        Origin::Mapped(composition) => {
+            composition
+                .zip(u8::try_from(position).ok())
+                .and_then(|(composition, entry)| {
+                    Locator::mapped(
+                        chosen.via.clone(),
+                        chosen.ehr_id.clone(),
+                        composition,
+                        entry,
+                    )
+                    .id()
+                })
+        }
+    };
+    let Some(id) = id else {
+        // NOTE: no specification governs this: our own design; a prescription whose parts
+        // give no id is listed as its member states it, and the searchset warns it cannot be read.
+        tracing::warn!(
+            endpoint = chosen.native.as_str(),
+            "a member's prescription has no id the face can read it by"
+        );
+        prescription.unreadable = true;
+        return;
+    };
+    kept.full_url = Some(format!("{base}{PRESCRIPTIONS}/{id}"));
+    kept.rename(&id);
 }
 
 /// The empty `searchset` `read` is answered with when no member serving

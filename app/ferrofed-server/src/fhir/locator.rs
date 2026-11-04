@@ -5,7 +5,11 @@
 //! again with no state at the gateway.
 //!
 //! The id names the member's own endpoint, the member's `ehr_id` for the
-//! patient and the member's own logical id of the resource. It is a FHIR R4
+//! patient and the member's own logical id of the resource. A prescription the
+//! face maps from a member's composition (the map mode) names the member's
+//! Query API endpoint, its `ehr_id`, the UUID of the composition's versioned
+//! object and the prescription's position among those the composition maps
+//! to. It is a FHIR R4
 //! `id`, 1 to 64 of `[A-Za-z0-9\-\.]` (FHIR R4 Datatypes `id`), and an
 //! `OBJECT_VERSION_ID` or a URL is none, so the three are packed into at most
 //! 48 bytes written in the 64 characters an `id` admits: the base64url
@@ -41,8 +45,13 @@ const EHR_UUID: u8 = 0x01;
 /// The bit of the first byte that says the resource id is a UUID.
 const RESOURCE_UUID: u8 = 0x02;
 
+/// The bit of the first byte that says the resource is one prescription of a
+/// member's composition, mapped by the face: the resource id is the
+/// composition's UUID and one byte after it names the prescription.
+const MAPPED: u8 = 0x04;
+
 /// The bits of the first byte the form defines.
-const FLAGS: u8 = EHR_UUID | RESOURCE_UUID;
+const FLAGS: u8 = EHR_UUID | RESOURCE_UUID | MAPPED;
 
 /// The bytes of the SHA-256 of an `endpoint_id` that name the endpoint.
 const TAG: usize = 6;
@@ -59,6 +68,7 @@ pub struct Locator {
     endpoint: EndpointId,
     ehr_id: EhrId,
     resource: String,
+    entry: Option<u8>,
 }
 
 impl std::fmt::Debug for Locator {
@@ -94,7 +104,29 @@ impl Locator {
             endpoint,
             ehr_id,
             resource: resource.into(),
+            entry: None,
         }
+    }
+
+    /// The prescription at position `entry` among those the face maps from the
+    /// composition of the versioned object `composition`, held under `ehr_id`
+    /// at the member whose Query API endpoint is `endpoint`.
+    #[must_use]
+    pub fn mapped(endpoint: EndpointId, ehr_id: EhrId, composition: Uuid, entry: u8) -> Self {
+        Self {
+            endpoint,
+            ehr_id,
+            resource: composition.hyphenated().to_string(),
+            entry: Some(entry),
+        }
+    }
+
+    /// Returns the position of the prescription among those the face maps
+    /// from the composition [`Locator::resource`] names, when the id names a
+    /// mapped prescription.
+    #[must_use]
+    pub fn entry(&self) -> Option<u8> {
+        self.entry
     }
 
     /// Returns the member's own endpoint.
@@ -129,6 +161,10 @@ impl Locator {
         if ehr_uuid.is_some() {
             form |= EHR_UUID;
         }
+        if self.entry.is_some() {
+            resource_uuid?;
+            form |= MAPPED;
+        }
         if resource_uuid.is_some() {
             form |= RESOURCE_UUID;
         }
@@ -144,6 +180,9 @@ impl Locator {
         match resource_uuid {
             Some(uuid) => packed.extend_from_slice(uuid.as_bytes()),
             None => packed.extend_from_slice(self.resource.as_bytes()),
+        }
+        if let Some(entry) = self.entry {
+            packed.push(entry);
         }
         if packed.len() > PACKED {
             return None;
@@ -187,6 +226,12 @@ impl Locator {
             let (bytes, rest) = rest.split_at_checked(UUID).ok_or(Unlocated::Malformed)?;
             (uuid_of(bytes)?, rest)
         };
+        let (rest, entry) = if form & MAPPED == 0 {
+            (rest, None)
+        } else {
+            let (&entry, rest) = rest.split_last().ok_or(Unlocated::Malformed)?;
+            (rest, Some(entry))
+        };
         let resource = if form & RESOURCE_UUID == 0 {
             text_of(rest)?.to_owned()
         } else {
@@ -212,6 +257,7 @@ impl Locator {
             endpoint,
             ehr_id,
             resource,
+            entry,
         };
         // NOTE: no specification governs this: our own design; a text that packs the same
         // parts another way would give one prescription two ids, so only the written one is read.
@@ -343,6 +389,45 @@ mod tests {
                 "{id}"
             );
         }
+    }
+
+    #[test]
+    fn a_mapped_prescription_reads_back_to_its_composition_and_position() {
+        let endpoints = [endpoint("node-a-query"), endpoint("node-b-query")];
+        let composition = uuid::Uuid::parse_str("5f0c2a9e-0000-4000-8000-000000000001").unwrap();
+        for (ehr_id, entry) in [(EHR, 0), (EHR, 3), ("12345", 255)] {
+            let located = Locator::mapped(
+                endpoint("node-a-query"),
+                EhrId::new(ehr_id).unwrap(),
+                composition,
+                entry,
+            );
+            let id = located.id().unwrap();
+            assert!(is_fhir_id(&id), "{id}");
+            let read = Locator::read(&id, &endpoints).unwrap();
+            assert_eq!(read, located);
+            assert_eq!(Some(entry), read.entry());
+            assert_eq!("5f0c2a9e-0000-4000-8000-000000000001", read.resource());
+        }
+    }
+
+    #[test]
+    fn a_mapped_prescription_and_a_native_one_never_share_an_id() {
+        let composition = uuid::Uuid::parse_str("5f0c2a9e-0000-4000-8000-000000000001").unwrap();
+        let ehr_id = EhrId::new(EHR).unwrap();
+        let mapped = Locator::mapped(endpoint("node-a-mpd"), ehr_id.clone(), composition, 0);
+        let native = Locator::new(
+            endpoint("node-a-mpd"),
+            ehr_id,
+            "5f0c2a9e-0000-4000-8000-000000000001",
+        );
+        assert_ne!(mapped.id(), native.id());
+        assert_eq!(
+            None,
+            Locator::read(&native.id().unwrap(), &[endpoint("node-a-mpd")])
+                .unwrap()
+                .entry()
+        );
     }
 
     #[test]

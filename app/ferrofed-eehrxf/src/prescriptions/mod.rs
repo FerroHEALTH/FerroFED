@@ -28,6 +28,7 @@
 //! vendored 4.0.1 copies, `docs/specs/fhir-r4/search.html` and
 //! `docs/specs/fhir-r4/http.html`.
 
+pub mod mapped;
 pub mod page;
 pub mod searchset;
 

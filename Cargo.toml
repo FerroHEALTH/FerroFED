@@ -49,6 +49,10 @@ openehr-base = "0.0.116"
 openehr-rm = "0.0.116"
 openehr-query = { version = "0.0.116", features = ["federation"] }
 openehr-its = { version = "0.0.116", default-features = false }
+# The ADL parser and the OPT2 builder of the family, at its version: a map-mode
+# member's ADL 2 template is built into its operational template with them
+# (#1560). Verified against crates.io on 2026-11-04.
+openehr-adl = "0.0.116"
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*

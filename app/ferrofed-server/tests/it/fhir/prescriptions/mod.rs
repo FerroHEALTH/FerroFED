@@ -15,6 +15,7 @@
 
 pub(super) mod dispense;
 mod dispensed;
+mod mapped;
 mod paging;
 mod read;
 mod resolution;

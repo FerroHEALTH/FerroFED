@@ -102,7 +102,17 @@ async fn read_of(
             let federation = &admitted.federation;
             let none = BTreeSet::new();
             let declared = admitted.fhir.serving.members_of(category).unwrap_or(&none);
-            let read = prescription::read(federation, &arrived, (readable, &id), declared).await;
+            let now = jiff::Timestamp::now()
+                .strftime("%Y-%m-%dT%H:%M:%SZ")
+                .to_string();
+            let mapped = prescription::Mapped {
+                modes: &admitted.fhir.mapped,
+                namespaces: &admitted.fhir.receive_namespaces,
+                now: &now,
+            };
+            let mapped = (readable == Readable::Prescription).then_some(&mapped);
+            let read =
+                prescription::read(federation, &arrived, (readable, &id), (declared, mapped)).await;
             answered(
                 federation,
                 (readable, read, version),
@@ -191,6 +201,14 @@ pub(super) fn unread(
             ),
         ),
         Unfound::Confined => crate::error::fixed(Code::PatientConfinement, request_id),
+        Unfound::Unnamed => refusal(
+            StatusCode::FAILED_DEPENDENCY,
+            "processing",
+            &format!(
+                "the {} could not be read: the identity binding names no patient in fhir.receive_namespaces for the member's EHR, and a mapped prescription names its patient (HL7 Europe MPD 1.0.0 MedicationRequest.subject 1..1)",
+                noun(readable)
+            ),
+        ),
         Unfound::Offline(endpoint) => refusal(
             StatusCode::GATEWAY_TIMEOUT,
             "timeout",

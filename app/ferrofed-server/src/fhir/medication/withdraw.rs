@@ -80,7 +80,7 @@ pub(in crate::fhir) async fn withdraw(
                 .members_of(Category::Dispensation)
                 .unwrap_or(&none);
             let dispensation = (Readable::Dispensation, id.as_str());
-            match prescription::read(federation, &arrived, dispensation, declared).await {
+            match prescription::read(federation, &arrived, dispensation, (declared, None)).await {
                 Ok(read) => {
                     withdrawal::withdraw(federation, &arrived, (&received, text), &read).await
                 }

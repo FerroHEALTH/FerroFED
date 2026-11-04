@@ -71,6 +71,10 @@ exceptions = [
   # The interoperability component, published from FerroHEALTH/FerroBRIDGE
   # (#813).
   { allow = ["BUSL-1.1"], crate = "eehrxf" },
+  # The ADL parser and OPT2 builder of the openEHR family, under the licence of
+  # the project's own code: a map-mode member's ADL 2 template is built with it
+  # (#1560).
+  { allow = ["BUSL-1.1"], crate = "openehr-adl" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-registry" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-operator-api" },
   { allow = ["BUSL-1.1"], crate = "ferrofed-identity" },

@@ -1,0 +1,245 @@
+-- SPDX-FileCopyrightText: Cadasto B.V.
+-- SPDX-License-Identifier: BUSL-1.1
+-- FerroBRIDGE's medication template over nine published CKM archetypes
+-- (fixtures/ckm/medication): an encounter COMPOSITION holding one
+-- INSTRUCTION.medication_order.v3 and one ACTION.medication.v1, with the
+-- medication, therapeutic direction, dosage, daily timing, authorisation
+-- and supply amount clusters filled by template overlays. No specification
+-- governs this template: our own design for the HL7 Europe MPD 1.0.0 round
+-- trip. Node identifiers are
+-- at-coded, the ADL 1.4 codes of the CKM sources.
+template (adl_version=2.4.0; rm_release=1.1.0)
+    openEHR-EHR-COMPOSITION.ferrobridge_medication.v1.0.0
+
+specialize
+    openEHR-EHR-COMPOSITION.encounter.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Medication Prescription and Dispense round trip of FerroBRIDGE.">
+        >
+    >
+
+definition
+    COMPOSITION[at0000.1] matches {
+        content matches {
+            use_archetype INSTRUCTION[at0000.2, openEHR-EHR-INSTRUCTION.medication_order-ferrobridge.v1]
+            use_archetype ACTION[at0000.3, openEHR-EHR-ACTION.medication-ferrobridge.v1]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Medication">
+                description = <"A medication order and its dispense.">
+            >
+            ["at0000.2"] = <
+                text = <"Medication order">
+                description = <"The order a MedicationRequest carries.">
+            >
+            ["at0000.3"] = <
+                text = <"Medication management">
+                description = <"The dispense a MedicationDispense carries, at the careflow step medication dispensed.">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-INSTRUCTION.medication_order-ferrobridge.v1.0.0
+
+specialize
+    openEHR-EHR-INSTRUCTION.medication_order.v3
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Medication Prescription and Dispense round trip of FerroBRIDGE.">
+        >
+    >
+
+definition
+    INSTRUCTION[at0000.1] matches {
+        /activities[at0001]/description[at0002]/items matches {
+            use_archetype CLUSTER[at0143.1, openEHR-EHR-CLUSTER.medication.v2]
+            use_archetype CLUSTER[at0177.1, openEHR-EHR-CLUSTER.therapeutic_direction-ferrobridge.v1]
+            use_archetype CLUSTER[at0069.1, openEHR-EHR-CLUSTER.medication_authorisation.v0]
+        }
+        /activities[at0001]/description[at0002]/items[at0129]/items matches {
+            use_archetype CLUSTER[at0065.1, openEHR-EHR-CLUSTER.medication_supply_amount.v0]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Medication order">
+                description = <"Medication order">
+            >
+            ["at0143.1"] = <
+                text = <"Medication details">
+                description = <"Medication details">
+            >
+            ["at0177.1"] = <
+                text = <"Therapeutic direction">
+                description = <"Therapeutic direction">
+            >
+            ["at0069.1"] = <
+                text = <"Authorisation directions">
+                description = <"Authorisation directions">
+            >
+            ["at0065.1"] = <
+                text = <"Dispense amount">
+                description = <"Dispense amount">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-CLUSTER.therapeutic_direction-ferrobridge.v1.0.0
+
+specialize
+    openEHR-EHR-CLUSTER.therapeutic_direction.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Medication Prescription and Dispense round trip of FerroBRIDGE.">
+        >
+    >
+
+definition
+    CLUSTER[at0000.1] matches {
+        /items matches {
+            use_archetype CLUSTER[at0176.1, openEHR-EHR-CLUSTER.dosage-ferrobridge.v1]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Therapeutic direction">
+                description = <"Therapeutic direction">
+            >
+            ["at0176.1"] = <
+                text = <"Dosage">
+                description = <"Dosage">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-CLUSTER.dosage-ferrobridge.v1.0.0
+
+specialize
+    openEHR-EHR-CLUSTER.dosage.v2
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Medication Prescription and Dispense round trip of FerroBRIDGE.">
+        >
+    >
+
+definition
+    CLUSTER[at0000.1] matches {
+        /items matches {
+            use_archetype CLUSTER[at0037.1, openEHR-EHR-CLUSTER.timing_daily.v1]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Dosage">
+                description = <"Dosage">
+            >
+            ["at0037.1"] = <
+                text = <"Daily timing">
+                description = <"Daily timing">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-ACTION.medication-ferrobridge.v1.0.0
+
+specialize
+    openEHR-EHR-ACTION.medication.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Medication Prescription and Dispense round trip of FerroBRIDGE.">
+        >
+    >
+
+definition
+    ACTION[at0000.1] matches {
+        /description[at0017]/items matches {
+            use_archetype CLUSTER[at0104.1, openEHR-EHR-CLUSTER.medication.v2]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Medication management">
+                description = <"Medication management">
+            >
+            ["at0104.1"] = <
+                text = <"Medication details">
+                description = <"Medication details">
+            >
+        >
+    >

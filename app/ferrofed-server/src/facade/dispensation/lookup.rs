@@ -130,7 +130,7 @@ fn every(
         .flat_map(|(at, member)| {
             let held: &[_] = match &member.held {
                 Held::Found(pages) => pages,
-                Held::Unusable { .. } | Held::Silent(_) => &[],
+                Held::Unusable { .. } | Held::Silent(_) | Held::Unanswered { .. } => &[],
             };
             held.iter()
                 .flat_map(|page| page.prescriptions.iter())
