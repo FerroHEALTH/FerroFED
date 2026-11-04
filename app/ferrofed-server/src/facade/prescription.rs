@@ -47,6 +47,7 @@ use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::FanOutError;
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::single_node::native_create::Created;
+use ferrofed_engine::single_node::native_search::By;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::role::resolver::Identification;
 use ferrofed_registry::id::{EndpointId, NodeId};
@@ -424,7 +425,11 @@ async fn asked(
     let until = tokio::time::Instant::from_std(overall);
     prescriptions::paged(
         federation,
-        (chosen, readable.resource(), Some(resource)),
+        (
+            chosen,
+            readable.resource(),
+            By::PatientIdentifier(Some(resource)),
+        ),
         &options,
         until,
     )

@@ -19,10 +19,10 @@ use serde_json::Value;
 
 use super::super::{UNREACHED_SUPPLIER, fhir_tables_with};
 use super::write::composed;
-use super::{VERSION_A, creating, gateway_with, issue, post, rows, untouched};
+use super::{VERSION_A, creating, gateway_listing, gateway_with, issue, post, rows, untouched};
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room};
 use crate::fhir::TestResult;
-use crate::fhir::list::{binary, entries, list};
+use crate::fhir::list::{EHR_SYSTEM, binary, entries, list};
 use crate::support::call;
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -311,5 +311,55 @@ async fn a_member_silent_at_the_laboratory_query_fails_the_list_and_is_named() -
     let (status, text) = call(app, list("&type=11502-2")?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
     assert!(text.contains("node-a-pub"), "§11.4: {text}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_member_serving_its_own_reports_is_left_out_of_the_laboratory_query() -> TestResult {
+    let (a, b) = (holding("", None).await, holding("", None).await);
+    let own = Server::start().await;
+    Mock::given(method("GET"))
+        .and(path("/fhir/Patient"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            br#"{"resourceType":"Bundle","type":"searchset"}"#.to_vec(),
+            "application/fhir+json",
+        ))
+        .mount(&own)
+        .await;
+    let members = format!(
+        "\n[[endpoint]]\nid = \"node-a-lab\"\nnode = \"node-a\"\nurl = \"{}/fhir\"\n\
+         connection_type = \"hl7-fhir-rest\"\nmanaging_organisation = \"org-a\"\n\
+         categories = [\"Laboratory-Reports\"]\nprofiles = [\"{}\"]\n\
+         ehr_id_system = \"{EHR_SYSTEM}\"\n",
+        own.uri(),
+        eehrxf::document::laboratory::LAB_BUNDLE
+    );
+    let crossref = rows(&[
+        (NAMESPACE, PATIENT, "node-a", EHR_A),
+        (NAMESPACE, PATIENT, "node-b", EHR_B),
+    ]);
+    let dir = tempfile::tempdir()?;
+    let app = gateway_listing(
+        dir.path(),
+        (&a, &b),
+        &members,
+        (&crossref, &receiving(dir.path())?),
+        &settings_with_room(),
+    )?;
+    let (status, text) = call(app, list("&type=11502-2")?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let queried = |bodies: Vec<String>| {
+        bodies
+            .iter()
+            .filter(|body| body.contains(LAB_ARCHETYPE))
+            .count()
+    };
+    assert_eq!(0, queried(received(&a).await?), "node A serves its own");
+    assert_eq!(1, queried(received(&b).await?), "node B is mapped");
+    assert_eq!(
+        1,
+        own.received_requests().await.unwrap_or_default().len(),
+        "node A is asked at its own endpoint"
+    );
     Ok(())
 }

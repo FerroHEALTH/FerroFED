@@ -19,7 +19,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::time::Instant;
 
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
@@ -31,7 +30,7 @@ use ferrofed_eehrxf::prescriptions::searchset::Assembled;
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::{Completion, FanOutError};
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::single_node::native_search::{Elsewhere, Next, SearchAsked, Searched};
+use ferrofed_engine::single_node::native_search::{By, Elsewhere, Next, SearchAsked, Searched};
 use ferrofed_registry::id::{EndpointId, NodeId};
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
@@ -71,6 +70,14 @@ pub(crate) enum Unread {
     /// A composition of a map-mode member does not map.
     #[error(transparent)]
     Mapped(ferrofed_eehrxf::prescriptions::mapped::MapModeError),
+    /// Asked for its `Patient` by the `ehr_id`, the member named more than
+    /// one, or one with no logical id.
+    #[error("the member names no one patient by a logical id for its ehr_id")]
+    Patient,
+    /// A document's attachment URL names no `Binary` under the member's own
+    /// endpoint.
+    #[error("a document's attachment URL names no Binary under the member's own endpoint")]
+    Attachment,
 }
 
 /// What one member answered the search with.
@@ -331,24 +338,20 @@ pub(crate) async fn asked(
     chosen: Vec<Chosen>,
     withheld: Arc<Withheld>,
 ) -> Result<Vec<Member>, Unprescribed> {
-    let budget = federation.budget();
-    let overall = arrived
-        .started
-        .checked_add(budget.overall())
-        .ok_or(Unprescribed::Failure(Failure::FanOut(FanOutError::Clock)))?;
-    let per_node = Instant::now()
-        .checked_add(budget.per_node())
-        .map_or(overall, |at| at.min(overall));
-    let options = DispatchOptions::new(per_node, arrived.conveyance.clone())
-        .with_request_id(arrived.outbound)
-        .with_withheld(withheld);
-    let until = tokio::time::Instant::from_std(overall);
+    let (options, until) = native::options(federation, arrived, withheld)
+        .map_err(|clock| Unprescribed::Failure(Failure::FanOut(clock)))?;
     let mut tasks = JoinSet::new();
     for (position, member) in chosen.into_iter().enumerate() {
         let federation = Arc::clone(federation);
         let options = options.clone();
         tasks.spawn(async move {
-            let held = paged(&federation, (&member, RESOURCE, None), &options, until).await;
+            let held = paged(
+                &federation,
+                (&member, RESOURCE, By::PatientIdentifier(None)),
+                &options,
+                until,
+            )
+            .await;
             held.map(|held| {
                 (
                     position,
@@ -372,9 +375,9 @@ pub(crate) async fn asked(
     Ok(answered.into_iter().map(|(_, member)| member).collect())
 }
 
-/// Every page of `member`'s search of the resource type `searched`, for the
-/// one resource of the logical id `id` when it is given, under `options`, abandoned when the overall
-/// budget `until` runs out.
+/// Every page of `member`'s search of the resource type `searched`, its
+/// first page asked as `by` names, under `options`, abandoned when the
+/// overall budget `until` runs out.
 ///
 /// # Errors
 ///
@@ -382,7 +385,7 @@ pub(crate) async fn asked(
 /// native endpoint.
 pub(crate) async fn paged(
     federation: &Federation,
-    (member, searched, id): (&Chosen, &str, Option<&str>),
+    (member, searched, by): (&Chosen, &str, By<'_>),
     options: &DispatchOptions,
     until: tokio::time::Instant,
 ) -> Result<Held, FanOutError> {
@@ -408,7 +411,7 @@ pub(crate) async fn paged(
             native: endpoint,
             ehr_id: &member.ehr_id,
             resource: searched,
-            id,
+            by,
             next: next.as_ref(),
         };
         let page = match client.native_search(asked, options, until).await {

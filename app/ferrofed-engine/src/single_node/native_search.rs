@@ -9,8 +9,12 @@
 //! naming the patient by the member's own `ehr_id` in the identifier system
 //! the registry declares for it, the one value about the patient the request
 //! carries (§5.4.1, N33); a search for one resource adds its logical id as
-//! `_id` (FHIR R4 search §3.1.1.4.1), so a read stays held to the patient. A
-//! later page is the `next` link the member's own
+//! `_id` (FHIR R4 search §3.1.1.4.1), so a read stays held to the patient.
+//! For a member that takes no chained parameter, the patient is found by
+//! `Patient?identifier=<system>|<ehr_id>` and its resources by `patient` and
+//! `type`, and a resource it names is read by its logical id, the
+//! interactions the HL7 Europe EU Health Data API 1.0.0-ballot Document
+//! Access Provider SHALL support ([`By`]). A later page is the `next` link the member's own
 //! `searchset` gave (FHIR R4 `http.html` §3.1.0.14 Paging), and only a link
 //! under the member's own base can be named ([`Next`]). Every page leaves as
 //! the patient summary does ([`super::native`]): through the member's Query
@@ -41,6 +45,18 @@ pub const PATIENT_IDENTIFIER: &str = "patient.identifier";
 /// The search parameter that names one resource by its logical id (FHIR R4
 /// search §3.1.1.4.1 Parameters for all resources).
 pub const ID: &str = "_id";
+
+/// The search parameter that names a `Patient` by its identifier (FHIR R4
+/// Patient `identifier`).
+pub const IDENTIFIER: &str = "identifier";
+
+/// The search parameter that names the patient by reference (FHIR R4
+/// `DocumentReference` `patient`).
+pub const PATIENT: &str = "patient";
+
+/// The search parameter that names the document type (FHIR R4
+/// `DocumentReference` `type`).
+pub const TYPE: &str = "type";
 
 /// A member's `next` link, held to the member's own base: the path below
 /// the base and the query it names.
@@ -105,6 +121,29 @@ impl Next {
     }
 }
 
+/// How the first page of a search names what it asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum By<'a> {
+    /// `{type}?patient.identifier=<system>|<ehr_id>`, with `_id` when the
+    /// logical id of one resource is given.
+    PatientIdentifier(Option<&'a str>),
+    /// `{type}?identifier=<system>|<ehr_id>`: the member's own `Patient`
+    /// for its `ehr_id` (FHIR R4 Patient `identifier`).
+    Identifier,
+    /// `{type}?patient=<patient>&type=<kind>`: the resources of the member's
+    /// `Patient` of the logical id `patient`, of the type token `kind`
+    /// (FHIR R4 `DocumentReference` `patient` and `type`).
+    Patient {
+        /// The logical id of the member's `Patient`.
+        patient: &'a str,
+        /// The type token, `system|code`.
+        kind: &'a str,
+    },
+    /// `{type}/<id>`: the read of the one resource of the logical id `id`
+    /// (FHIR R4 `http.html` §3.1.0.2), which a member answers with no page.
+    Read(&'a str),
+}
+
 /// What one page of a search of a member's own endpoint asks.
 #[derive(Debug, Clone, Copy)]
 pub struct SearchAsked<'a> {
@@ -115,9 +154,8 @@ pub struct SearchAsked<'a> {
     pub ehr_id: &'a EhrId,
     /// The resource type searched, such as `MedicationRequest`.
     pub resource: &'a str,
-    /// The logical id of the one resource searched for, or `None` for every
-    /// resource of the patient.
-    pub id: Option<&'a str>,
+    /// How the first page names what it asks for.
+    pub by: By<'a>,
     /// The `next` link of the member's previous page, or `None` for the
     /// first page.
     pub next: Option<&'a Next>,
@@ -213,13 +251,24 @@ impl<T: Transport + Clone> NodeClient<T> {
 fn search_outgoing(asked: SearchAsked<'_>) -> Request {
     match asked.next {
         None => {
-            let mut outgoing = Request::new(Method::GET, format!("/{}", asked.resource));
-            outgoing.query(
-                PATIENT_IDENTIFIER,
-                format!("{}|{}", asked.native.ehr_id_system(), asked.ehr_id),
-            );
-            if let Some(id) = asked.id {
-                outgoing.query(ID, id);
+            let own = format!("{}|{}", asked.native.ehr_id_system(), asked.ehr_id);
+            let mut outgoing = match asked.by {
+                By::Read(id) => Request::new(Method::GET, format!("/{}/{id}", asked.resource)),
+                _ => Request::new(Method::GET, format!("/{}", asked.resource)),
+            };
+            match asked.by {
+                By::PatientIdentifier(id) => {
+                    outgoing.query(PATIENT_IDENTIFIER, own);
+                    if let Some(id) = id {
+                        outgoing.query(ID, id);
+                    }
+                }
+                By::Identifier => outgoing.query(IDENTIFIER, own),
+                By::Patient { patient, kind } => {
+                    outgoing.query(PATIENT, patient);
+                    outgoing.query(TYPE, kind);
+                }
+                By::Read(_) => {}
             }
             outgoing
         }

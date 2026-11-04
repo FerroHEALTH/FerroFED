@@ -77,7 +77,7 @@ pub(crate) fn accessed(
             .constructed(Category::PatientSummary),
         // NOTE: Regulation (EU) 2025/327 Art 14(1)(e): a list that asked the laboratory report
         // query reaches that category too.
-        Scope::List if !gathered.laboratory.is_empty() => {
+        Scope::List if !gathered.laboratory.is_empty() || !gathered.own_laboratory.is_empty() => {
             Evidence::reached(Basis::Returned, objects)
                 .constructed(Category::PatientSummary)
                 .constructed(Category::MedicalTestResult)
@@ -120,6 +120,11 @@ pub(crate) fn accessed(
         natives_delivered,
     ));
     origins.extend(laboratory_origins(federation.snapshot(), gathered));
+    origins.extend(own_origins(
+        federation.snapshot(),
+        gathered,
+        natives_delivered,
+    ));
     if listed {
         origins.extend(resolved_origins(federation.snapshot(), gathered));
     }
@@ -128,17 +133,7 @@ pub(crate) fn accessed(
         Scope::List => (LIST, format!("patient.identifier={system}|{value}")),
         Scope::Lookup => (LOOKUP, format!("identifier={system}|{value}")),
     };
-    let documents = gathered
-        .natives
-        .iter()
-        .filter(|native| {
-            natives_delivered
-                && matches!(
-                    native.answer,
-                    ferrofed_engine::single_node::native::Answer::Document(_)
-                )
-        })
-        .count();
+    let documents = documents(gathered, natives_delivered);
     Some(Accessed {
         log: Arc::clone(log),
         action: Action::Query,
@@ -195,6 +190,61 @@ fn laboratory_origins(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<A
                         .constructed(Category::MedicalTestResult)
                 }),
             })
+        })
+        .collect()
+}
+
+/// The number of documents the members of `gathered` serve themselves that
+/// a list `delivered`: each member's own summary and each of its own
+/// laboratory reports, none when it delivered nothing.
+fn documents(gathered: &Gathered, delivered: bool) -> usize {
+    if !delivered {
+        return 0;
+    }
+    let summaries = gathered
+        .natives
+        .iter()
+        .filter(|native| {
+            matches!(
+                native.answer,
+                ferrofed_engine::single_node::native::Answer::Document(_)
+            )
+        })
+        .count();
+    gathered
+        .own_laboratory
+        .iter()
+        .map(|own| own.held.prescriptions())
+        .fold(summaries, usize::saturating_add)
+}
+
+/// Each member a list asked at its own endpoint for its laboratory reports
+/// whose request left the gateway, with what it answered: with `delivered`,
+/// an origin that contributed when the list carries one of its documents.
+fn own_origins(snapshot: &RegistrySnapshot, gathered: &Gathered, delivered: bool) -> Vec<Asked> {
+    gathered
+        .own_laboratory
+        .iter()
+        .filter(|own| own.held.left())
+        .map(|own| {
+            let documents = own.held.prescriptions();
+            let contributed = delivered && documents > 0;
+            Asked {
+                endpoint: own.chosen.native.as_str().to_owned(),
+                node: Some(own.chosen.node.as_str().to_owned()),
+                system_id: snapshot
+                    .node(&own.chosen.node)
+                    .map(|held| held.system_id().as_str().to_owned()),
+                status: own.held.status().as_str().to_owned(),
+                rows: Some(documents),
+                version: None,
+                created_ehr: None,
+                contributed,
+                evidence: contributed.then(|| {
+                    Evidence::reached(Basis::Returned, Vec::new())
+                        .constructed(Category::MedicalTestResult)
+                }),
+            }
         })
         .collect()
 }
@@ -303,6 +353,17 @@ pub(crate) fn subject(
                 })
             })
             .chain(native::ehrs(&gathered.natives))
+            .chain(
+                gathered
+                    .own_laboratory
+                    .iter()
+                    .filter(|own| own.held.left())
+                    .map(|own| EhrAt {
+                        endpoint: own.chosen.native.as_str().to_owned(),
+                        ehr_id: own.chosen.ehr_id.as_str().to_owned(),
+                        patient: PatientLookup::RequestNamed,
+                    }),
+            )
             .collect(),
         population: None,
     }

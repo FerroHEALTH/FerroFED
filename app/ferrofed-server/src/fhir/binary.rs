@@ -18,8 +18,11 @@
 //! list did; the bytes are answered as the member sent them and nothing is
 //! stored. An answer that is no FHIR document `Bundle` whose identifier has
 //! a system and a value (FHIR R4 `bdl-9`) is never served: the member is
-//! named in `node-error` with `424` (§11.1, §11.3). No specification
-//! governs the token: our own design.
+//! named in `node-error` with `424` (§11.1, §11.3). A token of a laboratory
+//! report a member serves itself names its `Binary` by its logical id, and
+//! the read asks that member alone for it, answering its bytes as it sent
+//! them ([`super::laboratory::read_own`]). No specification governs the
+//! token: our own design.
 
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -36,6 +39,7 @@ use ferrofed_eehrxf::face::EPS_COMPOSITION;
 use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::fanout::Completion;
 use ferrofed_engine::hygiene::Withheld;
+use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native::Answer;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::{HeaderValue, StatusCode, header};
@@ -98,6 +102,21 @@ struct Claims {
     /// writes the document from, for a laboratory report; none for a
     /// document the member serves itself.
     composition: Option<String>,
+    /// The logical id of the member's `Binary`, for a laboratory report the
+    /// member serves itself; none otherwise.
+    binary: Option<String>,
+}
+
+/// The document a token names, at the member it names.
+#[derive(Debug)]
+enum Named {
+    /// The member's own patient summary.
+    Summary,
+    /// The laboratory report the gateway writes from the composition of
+    /// this version.
+    Composition(String),
+    /// The member's own laboratory report, its `Binary` of this logical id.
+    Binary(String),
 }
 
 /// Why a token is not taken; every reason answers alike.
@@ -129,7 +148,8 @@ pub(super) fn mint(
     signed(
         (signer, fhir, caller),
         (&chosen.native, chosen),
-        (CATEGORY, EPS_COMPOSITION, None),
+        (CATEGORY, EPS_COMPOSITION),
+        (None, None),
     )
 }
 
@@ -149,18 +169,41 @@ pub(super) fn mint_laboratory(
     signed(
         (signer, fhir, caller),
         (&chosen.via, chosen),
-        (LABORATORY, LAB_BUNDLE, Some(composition)),
+        (LABORATORY, LAB_BUNDLE),
+        (Some(composition), None),
+    )
+}
+
+/// Returns the token naming, for `caller`, the laboratory report the member
+/// `chosen` serves itself as its `Binary` of the logical id `binary`, signed
+/// by `signer` for the face `fhir`.
+///
+/// # Errors
+///
+/// The [`jsonwebtoken::errors::Error`] of a key that cannot sign.
+pub(super) fn mint_own_laboratory(
+    signer: &Signer,
+    fhir: &FhirSettings,
+    caller: &Caller,
+    (chosen, binary): (&Chosen, &str),
+) -> Result<String, jsonwebtoken::errors::Error> {
+    signed(
+        (signer, fhir, caller),
+        (&chosen.native, chosen),
+        (LABORATORY, LAB_BUNDLE),
+        (None, Some(binary)),
     )
 }
 
 /// Returns the token, signed by `signer` for the face `fhir` and `caller`,
 /// naming the document at `endpoint` of the member `chosen`, of `category`
 /// in `profile`, written from the composition `composition` when it is one
-/// the gateway writes.
+/// the gateway writes, or the member's `Binary` of the id `binary`.
 fn signed(
     (signer, fhir, caller): (&Signer, &FhirSettings, &Caller),
     (endpoint, chosen): (&EndpointId, &Chosen),
-    (category, profile, composition): (&str, &str, Option<&str>),
+    (category, profile): (&str, &str),
+    (composition, binary): (Option<&str>, Option<&str>),
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let iat = jiff::Timestamp::now().as_second();
     let lifetime = i64::try_from(fhir.document_url_lifetime.as_secs()).unwrap_or(i64::MAX);
@@ -178,6 +221,7 @@ fn signed(
         category: category.to_owned(),
         profile: profile.to_owned(),
         composition: composition.map(str::to_owned),
+        binary: binary.map(str::to_owned),
     };
     signer.sign(TYPE, &claims)
 }
@@ -214,7 +258,8 @@ fn chosen(federation: &Federation, claims: &Claims) -> Result<Chosen, Untaken> {
     let via = EndpointId::new(claims.via.as_str()).map_err(|_bad| Untaken::Unheld)?;
     let ehr_id = EhrId::new(claims.ehr_id.as_str()).map_err(|_bad| Untaken::Unheld)?;
     if claims.composition.is_some() {
-        if claims.category != LABORATORY || claims.profile != LAB_BUNDLE || native != via {
+        let mapped = claims.category == LABORATORY && claims.profile == LAB_BUNDLE;
+        if !mapped || claims.binary.is_some() || native != via {
             return Err(Untaken::Unheld);
         }
         let node = snapshot
@@ -228,15 +273,20 @@ fn chosen(federation: &Federation, claims: &Claims) -> Result<Chosen, Untaken> {
             ehr_id,
         });
     }
+    let (category, profile) = if claims.binary.is_some() {
+        (LABORATORY, LAB_BUNDLE)
+    } else {
+        (CATEGORY, EPS_COMPOSITION)
+    };
     let node = snapshot
         .native_endpoint(&native)
-        .filter(|held| held.serves(CATEGORY))
+        .filter(|held| held.serves(category))
         .map(|held| held.node().clone())
         .ok_or(Untaken::Unheld)?;
     let same = snapshot
         .endpoint(&via)
         .is_some_and(|held| held.node() == &node);
-    if !same || claims.category != CATEGORY || claims.profile != EPS_COMPOSITION {
+    if !same || claims.category != category || claims.profile != profile {
         return Err(Untaken::Unheld);
     }
     Ok(Chosen {
@@ -274,11 +324,19 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
             Ok(member) => ControlFlow::Continue(member),
             Err(refused) => ControlFlow::Break(refused),
         },
-        async |admitted, arrived, (member, composition)| {
+        async |admitted, arrived, (member, named)| {
             let federation = &admitted.federation;
             let (request_id, outbound) = (admitted.request_id, admitted.outbound);
-            if let Some(composition) = composition {
-                return super::laboratory::read(admitted, &arrived, (&member, &composition)).await;
+            match named {
+                Named::Summary => {}
+                Named::Composition(composition) => {
+                    return super::laboratory::read(admitted, &arrived, (&member, &composition))
+                        .await;
+                }
+                Named::Binary(binary) => {
+                    return super::laboratory::read_own(admitted, &arrived, (&member, &binary))
+                        .await;
+                }
             }
             // NOTE: §5.4.1, N33; the read names no patient, so the gate withholds nothing beyond
             // what it reads of every request, and the member is located by its ehr_id alone.
@@ -312,10 +370,7 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
     clippy::result_large_err,
     reason = "the refusal is the handler's answer, returned at most once per request"
 )]
-fn taken(
-    admitted: &admission::Admitted<'_>,
-    token: &str,
-) -> Result<(Chosen, Option<String>), Response> {
+fn taken(admitted: &admission::Admitted<'_>, token: &str) -> Result<(Chosen, Named), Response> {
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
     let (request_id, logged) = (admitted.request_id, &admitted.logged);
     let Some(signer) = federation.signer() else {
@@ -326,27 +381,19 @@ fn taken(
         return Err(untaken(&Untaken::OtherCaller, logged));
     }
     let member = chosen(federation, &claims).map_err(|refused| untaken(&refused, logged))?;
-    Ok((member, claims.composition))
+    let named = match (claims.composition, claims.binary) {
+        (Some(composition), _) => Named::Composition(composition),
+        (None, Some(binary)) => Named::Binary(binary),
+        (None, None) => Named::Summary,
+    };
+    Ok((member, named))
 }
 
 /// The answer to a read that asked `native`: the member's bytes as it sent
 /// them, or the outcome that says why there are none (§11.3, §11.4).
 fn answered(native: &Native) -> Response {
     match &native.answer {
-        Answer::Document(document) => {
-            let forwarded = document.forwarded();
-            let media = forwarded
-                .headers()
-                .get(header::CONTENT_TYPE)
-                .cloned()
-                .unwrap_or(HeaderValue::from_static("application/octet-stream"));
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, media)],
-                Body::from(forwarded.body().to_vec()),
-            )
-                .into_response()
-        }
+        Answer::Document(document) => passed(document.forwarded()),
         Answer::Unusable { .. } => outcome(
             StatusCode::FAILED_DEPENDENCY,
             "incomplete",
@@ -382,6 +429,23 @@ fn answered(native: &Native) -> Response {
             )
         }
     }
+}
+
+/// The `200` that answers a member's bytes `forwarded` carries, as it sent
+/// them and of the media type it named, octets when it named none (RFC 9110
+/// §8.3).
+pub(super) fn passed(forwarded: &Forwarded) -> Response {
+    let media = forwarded
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .cloned()
+        .unwrap_or(HeaderValue::from_static("application/octet-stream"));
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, media)],
+        Body::from(forwarded.body().to_vec()),
+    )
+        .into_response()
 }
 
 /// The access record's facts of a read that asked `native`, or `None` when

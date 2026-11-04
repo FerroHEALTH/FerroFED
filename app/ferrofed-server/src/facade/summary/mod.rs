@@ -22,7 +22,7 @@
 //! them fails the whole summary, naming it (§11.3, §11.4).
 
 pub(crate) mod access;
-mod laboratory;
+pub(crate) mod laboratory;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -55,6 +55,7 @@ use crate::facade::mapped::Answered;
 use crate::facade::native::{self, Native};
 use crate::facade::request::Arrived;
 use crate::facade::summary::access::queried;
+use crate::facade::summary::laboratory::{Laboratory, Own};
 use crate::facade::{cells, follow_up, plan};
 use crate::federation::Federation;
 use crate::security::logged;
@@ -127,6 +128,10 @@ pub(crate) struct Gathered {
     /// What each member answered the laboratory report query, for a list
     /// that lists laboratory reports, in endpoint order.
     pub(crate) laboratory: Vec<(EndpointId, Answered)>,
+    /// The members that serve laboratory reports themselves, each with what
+    /// its own endpoint answered, for a list that lists laboratory reports,
+    /// in endpoint order.
+    pub(crate) own_laboratory: Vec<Own>,
 }
 
 /// Why the section queries give no summary.
@@ -195,7 +200,7 @@ pub(crate) enum Scope {
 /// Runs every section query over the members for the patient
 /// `system`|`value`, as `arrived` asks, or, for `scope` [`Scope::List`] or
 /// [`Scope::Lookup`], none of them; a lookup asks no member's own endpoint
-/// either.
+/// either, and a list gathers the laboratory reports `laboratory` names.
 ///
 /// # Errors
 ///
@@ -204,15 +209,17 @@ pub(crate) async fn gather(
     federation: Arc<Federation>,
     arrived: Arrived<'_>,
     (system, value): (&str, &str),
-    (scope, laboratory): (Scope, bool),
+    (scope, laboratory): (Scope, Laboratory),
 ) -> Result<Gathered, Unsummarised> {
     let logged = arrived.outbound.to_string();
     let held = located(&federation, &arrived, (system, value)).await?;
-    let laboratory = if laboratory && scope == Scope::List {
-        laboratory::laboratory_reports(&federation, &arrived, &held, (system, value)).await?
+    let laboratory = if scope == Scope::List {
+        laboratory
     } else {
-        Vec::new()
+        Laboratory::Unlisted
     };
+    let (own, laboratory) =
+        laboratory::queried(&federation, &arrived, (&held, laboratory), (system, value)).await?;
     let Located {
         completion,
         mut targets,
@@ -260,11 +267,12 @@ pub(crate) async fn gather(
         }));
         planned.push((*section, plan, sources, rows));
     }
-    let (answers, natives) = tokio::join!(
+    let (answers, natives, own) = tokio::join!(
         fanned_out(&federation, &arrived, planned),
-        native::asked(&federation, &arrived, chosen, withheld)
+        native::asked(&federation, &arrived, chosen, Arc::clone(&withheld)),
+        laboratory::own(&federation, &arrived, own, withheld)
     );
-    let (answers, natives) = (answers?, natives?);
+    let (answers, natives, own) = (answers?, natives?, own?);
     let mut status = StatusCode::OK;
     for (_, answer, _, _) in &answers {
         answer::fan_out::observed(&federation, answer);
@@ -279,7 +287,7 @@ pub(crate) async fn gather(
     // design; a list asks no section query, so its failed resolution is settled here.
     let status = answer::fan_out::settled(status, targets.resolution_failed, completion);
     let status = native::settled(&natives, status, completion);
-    let status = laboratory::laboratory_settled(&laboratory, status, completion);
+    let status = laboratory::laboratory_settled((&laboratory, &own), status, completion);
     let mut gathered = collected(
         &federation,
         (&targets.resolved, &targets.unresolved),
@@ -294,15 +302,7 @@ pub(crate) async fn gather(
         }
     }
     gathered.natives = natives;
-    for (endpoint, answered) in &laboratory {
-        if matches!(
-            answered,
-            Answered::Rows(_) | Answered::Silent { left: true, .. }
-        ) {
-            gathered.sent.insert(endpoint.clone());
-        }
-    }
-    gathered.laboratory = laboratory;
+    laboratory::kept(&mut gathered, laboratory, own);
     concluded(gathered, status, (scope, dispatched))
 }
 
@@ -325,8 +325,13 @@ fn concluded(
             .natives
             .iter()
             .map(|native| (&native.chosen.native, native.answer.status()));
+        let own = gathered
+            .own_laboratory
+            .iter()
+            .map(|own| (&own.chosen.native, own.held.status()));
         let mut silent: Vec<(String, String)> = queried
             .chain(asked)
+            .chain(own)
             .filter(|(_, status)| *status != EndpointStatus::Active)
             .map(|(endpoint, status)| (endpoint.as_str().to_owned(), status.as_str().to_owned()))
             .collect();
@@ -513,6 +518,7 @@ fn collected(
         natives: Vec::new(),
         unresolved: Vec::new(),
         laboratory: Vec::new(),
+        own_laboratory: Vec::new(),
     };
     for (section, answer, sources, rows) in answers {
         let held = rows.lock().unwrap_or_else(PoisonError::into_inner).clone();

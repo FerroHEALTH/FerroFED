@@ -13,8 +13,12 @@
 //! entry follows the `EehrxfMhdDocumentReference` profile: one for the
 //! patient summary the gateway writes on request, retrievable through
 //! `Patient/$summary`, and one for each document a member serves itself,
-//! read through the gateway at a URL it signs.
+//! read through the gateway at a URL it signs. A member that serves its
+//! laboratory reports as a Document Access Provider has its own
+//! `DocumentReference`s listed as it holds them ([`Match::Passed`]), each
+//! attachment URL readdressed to the gateway's ([`readdressed`]).
 
+use fhir_types::codec::Value;
 use fhir_types::r4::attachment::Attachment;
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
@@ -24,7 +28,7 @@ use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::meta::Meta;
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use fhir_types::r4::reference::Reference;
-use fhir_types::r4::resource::Resource;
+use fhir_types::r4::resource::{Resource, UnknownResource};
 
 use eehrxf::document::laboratory::LAB_BUNDLE;
 
@@ -477,23 +481,115 @@ pub fn unidentified(endpoint: &str) -> String {
     )
 }
 
+/// One match of the list.
+#[derive(Clone)]
+pub enum Match {
+    /// An entry the gateway writes.
+    Written(Box<DocumentReference>),
+    /// A member's own `DocumentReference`, its JSON value as the member
+    /// holds it but for its attachment URLs ([`readdressed`]).
+    Passed(Value),
+}
+
+impl std::fmt::Debug for Match {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Written(_) => f.write_str("Written"),
+            Self::Passed(_) => f.write_str("Passed"),
+        }
+    }
+}
+
 /// Returns the `searchset` of the `matches`, each under its full URL, and
 /// the `outcomes` that say what the list misses.
 #[must_use]
 pub fn searchset(
-    matches: Vec<(String, DocumentReference)>,
+    matches: Vec<(String, Match)>,
     outcomes: Vec<(String, OperationOutcome)>,
 ) -> Bundle {
     let matches = matches
         .into_iter()
-        .map(|(url, reference)| (url, Resource::DocumentReference(Box::new(reference))))
+        .map(|(url, listed)| {
+            let resource = match listed {
+                Match::Written(reference) => Resource::DocumentReference(reference),
+                Match::Passed(body) => Resource::Unknown(UnknownResource {
+                    resource_type: RESOURCE.to_owned(),
+                    body,
+                }),
+            };
+            (url, resource)
+        })
         .collect();
     crate::face::searchset(matches, outcomes)
 }
 
+/// The resource type the list names documents by.
+pub const RESOURCE: &str = "DocumentReference";
+
+/// Returns each `content.attachment.url` of the `DocumentReference`
+/// `document`, in its order.
+#[must_use]
+pub fn attachment_urls(document: &Value) -> Vec<&str> {
+    document
+        .get("content")
+        .and_then(Value::as_array)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|content| content.get("attachment")?.get("url")?.as_str())
+        .collect()
+}
+
+/// Returns `document`, a member's `DocumentReference`, with each
+/// `content.attachment.url` replaced by the URL `to` gives for it, the one
+/// change made to it, or `None` when `to` gives none for one of them.
+pub fn readdressed(document: &Value, mut to: impl FnMut(&str) -> Option<String>) -> Option<Value> {
+    let mut readdressed = document.clone();
+    let Value::Object(resource) = &mut readdressed else {
+        return Some(readdressed);
+    };
+    let Some(Value::Array(contents)) = resource.get_mut("content") else {
+        return Some(readdressed);
+    };
+    for content in contents {
+        let Value::Object(content) = content else {
+            continue;
+        };
+        let Some(Value::Object(attachment)) = content.get_mut("attachment") else {
+            continue;
+        };
+        if let Some(Value::String(url)) = attachment.get_mut("url") {
+            *url = to(url)?;
+        }
+    }
+    Some(readdressed)
+}
+
+/// Returns the `OperationOutcome` that names a member whose own endpoint,
+/// `endpoint`, answered with laboratory reports the list cannot pass
+/// through, for the reason `reason`, with the §11.1 status `node-error`.
+#[must_use]
+pub fn unread(endpoint: &str, reason: &str) -> OperationOutcome {
+    OperationOutcome {
+        issue: vec![OperationOutcomeIssue {
+            severity: "warning".into(),
+            code: "incomplete".into(),
+            diagnostics: Some(
+                format!(
+                    "the list is incomplete: {endpoint} (node-error) answered laboratory \
+                     reports the list cannot pass through: {reason} (§11.3)"
+                )
+                .into(),
+            ),
+            ..OperationOutcomeIssue::default()
+        }],
+        ..OperationOutcome::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ListRefusal, ListRequest};
+    use super::{ListRefusal, ListRequest, Match, attachment_urls, readdressed, searchset};
+    use fhir_types::codec::Value;
 
     #[test]
     fn the_patient_and_the_summary_type_are_read() {
@@ -562,5 +658,45 @@ mod tests {
     fn no_debug_shows_the_identifier() {
         let read = ListRequest::from_query(Some("patient.identifier=a%7Csynthetic-77q")).unwrap();
         assert!(!format!("{read:?}").contains("77q"));
+    }
+
+    /// A member's `DocumentReference`, its members in the order a serialiser
+    /// writes them, with two attachments and a decimal of two places.
+    const MEMBERS: &str = r#"{"content":[{"attachment":{"contentType":"application/fhir+json","size":2048,"url":"Binary/lab-1"}},{"attachment":{"title":"no url"},"format":{"code":"urn:x"}}],"extension":[{"url":"urn:oid:2.999.9","valueDecimal":1.50}],"id":"doc-1","resourceType":"DocumentReference","status":"current"}"#;
+
+    #[test]
+    fn each_attachment_url_is_read_in_order() {
+        let document: Value = serde_json::from_str(MEMBERS).unwrap();
+        assert_eq!(vec!["Binary/lab-1"], attachment_urls(&document));
+    }
+
+    #[test]
+    fn a_readdressed_document_changes_its_attachment_url_alone() {
+        let document: Value = serde_json::from_str(MEMBERS).unwrap();
+        let readdressed =
+            readdressed(&document, |url| Some(format!("Binary/token-of-{url}"))).unwrap();
+        assert_eq!(
+            serde_json::to_string(&readdressed).unwrap(),
+            MEMBERS.replace("\"Binary/lab-1\"", "\"Binary/token-of-Binary/lab-1\""),
+            "every other element byte for byte, the decimal's text kept"
+        );
+    }
+
+    #[test]
+    fn a_url_with_no_readdress_leaves_no_document() {
+        let document: Value = serde_json::from_str(MEMBERS).unwrap();
+        assert!(readdressed(&document, |_| None).is_none());
+    }
+
+    #[test]
+    fn a_passed_document_is_listed_as_the_member_holds_it() {
+        let document: Value = serde_json::from_str(MEMBERS).unwrap();
+        let bundle = searchset(
+            vec![("urn:uuid:1".to_owned(), Match::Passed(document))],
+            Vec::new(),
+        );
+        let text = serde_json::to_string(&bundle).unwrap();
+        assert!(text.contains(MEMBERS), "{text}");
+        assert!(!format!("{:?}", Match::Passed(Value::Null)).contains("doc-1"));
     }
 }
