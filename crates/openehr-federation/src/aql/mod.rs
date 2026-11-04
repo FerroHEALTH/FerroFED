@@ -569,6 +569,7 @@ pub fn analyse(
 fn first_fault(error: &ParseError) -> Option<Range<usize>> {
     match error {
         ParseError::Syntax { faults } => faults.iter().find_map(|fault| fault.bytes.clone()),
+        ParseError::TooDeep { at, .. } => at.bytes.clone(),
         ParseError::Lex(_) => None,
     }
 }

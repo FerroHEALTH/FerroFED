@@ -313,9 +313,13 @@ system in relation to its intended purpose". The full list is
 [Limitations](../evaluate/what-ferrofed-claims.md#limitations); the ones a
 deployment in the EU must plan for are:
 
-- **The European exchange format covers three of the six categories.** The
+- **The European exchange format covers four of the six categories.** The
   gateway serves the patient summary on its FHIR R4 face and receives
-  patient summaries there (Annex II, points 2.1 to 2.3). It serves
+  patient summaries there (Annex II, points 2.1 to 2.3). It receives
+  laboratory reports at the member you declare for them, and the record
+  that member keeps does not carry a result's reference range or the
+  order it answers in structured form, only in the original document the
+  composition keeps (hazard I-16). It serves
   prescriptions, and receives dispensations, only through members that
   serve both in the HL7 Europe MPD profiles themselves, and computes no
   dispensability, remaining dispensations or lock of its own
@@ -323,8 +327,8 @@ deployment in the EU must plan for are:
   A member that holds its prescriptions only as openEHR data, with no FHIR
   endpoint of its own in those profiles, is not served
   ([FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322)).
-  Imaging, test results and discharge reports are neither produced nor
-  received
+  Imaging and discharge reports are neither produced nor received, and
+  laboratory reports are not produced
   ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
   The open hazards of the interoperability component are in the
   [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).

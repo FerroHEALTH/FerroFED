@@ -500,14 +500,14 @@ either: the lookup needs every member that could own the prescription, and
 No EU element carries the number of dispensations a prescription has left:
 the MPD element `dispenseRequest.numberOfRepeatsAllowed` is the number
 authorised. A member states the remaining number in the extension
-`https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations` on
+`https://ferrobridge.eu/fhir/StructureDefinition/remaining-dispensations` on
 `MedicationRequest.dispenseRequest`, a `valueUnsignedInt`, at most once, and
 leaves it out when it states none:
 
 ```json
 "dispenseRequest": {
   "extension": [{
-    "url": "https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations",
+    "url": "https://ferrobridge.eu/fhir/StructureDefinition/remaining-dispensations",
     "valueUnsignedInt": 4
   }],
   "numberOfRepeatsAllowed": 5
@@ -516,11 +516,10 @@ leaves it out when it states none:
 
 The gateway passes the extension through as the member sent it, as it
 passes every element, and never computes or corrects the number. Its FHIR
-R4 `StructureDefinition` is published at that URL, and with a `.json`
-suffix beside it, from `src/medication/StructureDefinition-remaining-dispensations.json`
-of the published `eehrxf` crate
-([The definitions behind FerroFED's URLs](../operate/registry-fhir.md#the-definitions-behind-ferrofeds-urls);
-FerroBRIDGE's [`crates/eehrxf/tests/it/medication/extension.rs`](https://github.com/FerroHEALTH/FerroBRIDGE/blob/384882893fb8dba3fc1f0a43c0e8f04bbba1771d/crates/eehrxf/tests/it/medication/extension.rs):
+R4 `StructureDefinition` is the interoperability component's,
+`src/medication/StructureDefinition-remaining-dispensations.json` of the
+published `eehrxf` crate, and FerroBRIDGE publishes it at that URL (its
+[`crates/eehrxf/tests/it/medication/extension.rs`](https://github.com/FerroHEALTH/FerroBRIDGE/blob/384882893fb8dba3fc1f0a43c0e8f04bbba1771d/crates/eehrxf/tests/it/medication/extension.rs):
 `the_extension_is_simple_at_most_once_with_an_unsigned_int`,
 `the_context_is_the_dispense_request_of_a_medication_request`).
 

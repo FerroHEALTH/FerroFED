@@ -90,8 +90,8 @@ of the access log page.
 - **1.1:** the [risk file](clinical-safety.md#overall-residual-risk) leaves
   the repository's part of hazard L-07 of the logging component, keeping
   each record for its period and limiting who reads it, at S3, P2 with the
-  deployment, and I-03 of the interoperability component open until the
-  controls its row names are built, so that component is
+  deployment, and I-03 and I-16 of the interoperability component open
+  until the controls their rows name are built, so that component is
   not offered for its Annex II purpose.
 - **1.3:** [Rights of natural persons](natural-person-rights.md) holds
   each right of Chapter II to the components. Restriction (Art 8), the
@@ -102,8 +102,8 @@ of the access log page.
   members serve them (Art 3). Imaging, test results
   and discharge reports have no interface (Art 3); the cross-border route
   serves the requests a national contact point relays, for the same
-  categories (Art 7(2)); and only patient summaries and dispensations are
-  received (Art 7(4)).
+  categories (Art 7(2)); and only patient summaries, laboratory reports
+  and dispensations are received (Art 7(4)).
 - **1.4:** the patient summary is validated against the vendored HL7 Europe
   profiles, but the exchange format of Art 15(1) is not adopted and the
   European digital testing environment (Art 40) has not been run, so the
@@ -115,11 +115,11 @@ of the access log page.
   with hazard I-03 of the interoperability component open.
   Imaging, test results and
   discharge reports have no interface.
-- **2.2 and 2.3:** a release receives patient summaries, and dispensations,
+- **2.2 and 2.3:** a release receives patient summaries and laboratory
+  reports, with hazard I-16 open for the second, and dispensations,
   written to the member that owns their prescription. Prescriptions are
-  served,
-  never received, and imaging, test results and discharge reports cannot
-  be received.
+  served, never received, and imaging and discharge reports cannot be
+  received.
 - **3.4:** each record states its retention period by its origins and
   categories and carries a security label per category and per origin
   ([Labelling the access records](../operate/access-labels.md)); limiting

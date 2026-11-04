@@ -21,7 +21,6 @@ use ferrohealth_smart::client::TokenError as SmartTokenError;
 use http::StatusCode;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::client::{CredentialsError, ErrorBody};
-use serde::Deserialize;
 
 use crate::hygiene::Withheld;
 use crate::hygiene::mask::MASK;
@@ -58,10 +57,10 @@ pub fn answered(status: StatusCode, body: &ErrorBody, withheld: &Withheld) -> Er
 // HTTP status, so the node's message follows the status, bounded and masked.
 #[must_use]
 pub fn said(lead: String, body: &ErrorBody, withheld: &Withheld) -> ErrorDetail {
-    let problem = problem_message(body);
     match body
-        .message()
-        .or(problem.as_deref())
+        .error()
+        .map(|error| error.message.as_str())
+        .or_else(|| problem_message(body))
         .or_else(|| body.text())
     {
         Some(message) => followed_by(lead, message, withheld),
@@ -69,25 +68,15 @@ pub fn said(lead: String, body: &ErrorBody, withheld: &Withheld) -> ErrorDetail 
     }
 }
 
-/// The members of an RFC 9457 problem details object a node's message is
-/// read from (RFC 9457 §3.1.3, §3.1.4); every other member is ignored.
-#[derive(Debug, Deserialize)]
-struct ProblemBody {
-    /// The short summary of the problem type.
-    title: Option<String>,
-    /// The explanation of this occurrence.
-    detail: Option<String>,
-}
-
 /// The `detail` of the problem details object `body` holds, else its
-/// `title`, when the body is one and either is text that is not blank.
-// TODO(#1432): read `ErrorBody::problem` once the openehr-* crates are taken at 0.0.115.
-fn problem_message(body: &ErrorBody) -> Option<String> {
-    // NOTE: RFC 9457 §3: every member is optional, so a body that is no problem object is
-    // legitimately absent detail, and the body's text is read in its place.
-    let problem: ProblemBody = serde_json::from_slice(body.raw()).ok()?;
-    let given = |member: Option<String>| member.filter(|text| !text.trim().is_empty());
-    given(problem.detail).or_else(|| given(problem.title))
+/// `title`, when the body is one and either is text that is not blank
+/// (RFC 9457 §3.1.3, §3.1.4).
+fn problem_message(body: &ErrorBody) -> Option<&str> {
+    fn given(member: Option<&str>) -> Option<&str> {
+        member.filter(|text| !text.trim().is_empty())
+    }
+    let problem = body.problem()?;
+    given(problem.detail()).or_else(|| given(problem.title()))
 }
 
 /// The `error` that reads `lead`, then an excerpt of `reason`, text the

@@ -147,7 +147,7 @@ exchange format". A client sends such a document to
 `POST {fhir-base}/Bundle`, and FerroFED writes it to the one member the
 deployment declares for its category
 ([Receiving a document](receiving-documents.md)). This release can receive
-documents of one category:
+documents of two categories:
 
 | Art 14(1) | Code | Received in the exchange format |
 |---|---|---|
@@ -155,7 +155,7 @@ documents of one category:
 | (b) | `Electronic-Prescriptions` | no |
 | (c) | `Electronic-Dispensations` | no |
 | (d) | `Medical-Imaging` | no |
-| (e) | `Laboratory-Reports` | no |
+| (e) | `Laboratory-Reports` | yes |
 | (f) | `Discharge-Reports` | no |
 
 An electronic dispensation, Art 14(1)(c), is received as one resource,
@@ -215,7 +215,7 @@ Item names its row in the matrix exactly.
 | HL7 Europe Medication Prescription and Dispense | `hl7.fhir.eu.mpd` 1.0.0 | the `MedicationRequest` and `MedicationDispense` profiles the FHIR face serves prescriptions in and holds a received dispensation to, Art 14(1)(b) and (c) |
 | HL7 Europe Base and Core | `hl7.fhir.eu.base` 2.0.1 | the EU core profiles each mapped entry of the patient summary is written to |
 | HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, and the category codes of the access record |
-| `eehrxf` | =0.1.128 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
+| `eehrxf` | =0.1.142 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
 
 Beside them:
 
