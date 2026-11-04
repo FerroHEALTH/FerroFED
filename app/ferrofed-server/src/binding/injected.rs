@@ -17,10 +17,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use ferrofed_identity::role::consent::ConsentPrefilter;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+use crate::binding::error::BindingError;
 use crate::binding::seam::ResolverSeam;
 use crate::binding::{Binding, Offer, Role, Section};
 use crate::config::settings::Settings;
-use crate::federation::error::FederationError;
 
 /// Builds the injected resolver over a registry snapshot, or names why the
 /// snapshot refuses it.
@@ -110,9 +110,9 @@ impl Binding for Injected {
         &self,
         _settings: &Settings,
         snapshot: &RegistrySnapshot,
-    ) -> Result<Option<ResolverSeam>, FederationError> {
+    ) -> Result<Option<ResolverSeam>, BindingError> {
         injected()
-            .map(|injection| (injection.resolver)(snapshot).map_err(FederationError::Injected))
+            .map(|injection| (injection.resolver)(snapshot).map_err(BindingError::Injected))
             .transpose()
     }
 
@@ -120,14 +120,14 @@ impl Binding for Injected {
         &self,
         _settings: &Settings,
         snapshot: &RegistrySnapshot,
-    ) -> Result<Option<Arc<dyn ConsentPrefilter>>, FederationError> {
+    ) -> Result<Option<Arc<dyn ConsentPrefilter>>, BindingError> {
         injected()
             .and_then(|injection| injection.prefilter)
-            .map(|prefilter| prefilter(snapshot).map_err(FederationError::Injected))
+            .map(|prefilter| prefilter(snapshot).map_err(BindingError::Injected))
             .transpose()
     }
 
-    fn class(&self, error: &FederationError) -> Option<&'static str> {
-        matches!(error, FederationError::Injected(_)).then_some("injected-cross-reference")
+    fn class(&self, error: &BindingError) -> Option<&'static str> {
+        matches!(error, BindingError::Injected(_)).then_some("injected-cross-reference")
     }
 }

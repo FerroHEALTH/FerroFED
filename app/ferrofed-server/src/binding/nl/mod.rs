@@ -27,14 +27,14 @@ use ferrofed_identity::role::consent::ConsentPrefilter;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+use crate::binding::error::BindingError;
+use crate::binding::seam::LocalizationError;
 use crate::binding::seam::{LocalizerSeam, ProvideError, Provided, PublicDocument};
 use crate::binding::{Binding, Offer, Reload, Role, Section};
 use crate::config::nl::nuts::NutsOnward;
 use crate::config::settings::OnwardGrant;
 use crate::config::settings::Settings;
 use crate::config::{EmergencyConsent, Localization};
-use crate::federation::error::FederationError;
-use crate::localization::LocalizationError;
 
 /// The Dutch binding.
 #[derive(Debug, Clone, Copy)]
@@ -94,14 +94,14 @@ impl Binding for Nl {
         &self,
         settings: &Settings,
         snapshot: &RegistrySnapshot,
-    ) -> Result<Option<Arc<dyn ConsentPrefilter>>, FederationError> {
+    ) -> Result<Option<Arc<dyn ConsentPrefilter>>, BindingError> {
         match &settings.nl_gf {
             Some(nl_gf) => mitz::prefilter(settings, nl_gf, snapshot),
             None => Ok(None),
         }
     }
 
-    fn documents(&self, settings: &Settings) -> Result<Vec<PublicDocument>, FederationError> {
+    fn documents(&self, settings: &Settings) -> Result<Vec<PublicDocument>, BindingError> {
         nuts::documents(settings)
     }
 
@@ -117,11 +117,11 @@ impl Binding for Nl {
             .map(|nuts| nuts::provide(nuts, endpoint, settings))
     }
 
-    fn class(&self, error: &FederationError) -> Option<&'static str> {
+    fn class(&self, error: &BindingError) -> Option<&'static str> {
         match error {
-            FederationError::MitzMember { .. }
-            | FederationError::MitzNamespace(_)
-            | FederationError::Mitz(_) => Some("consent-prefilter"),
+            BindingError::MitzMember { .. }
+            | BindingError::MitzNamespace(_)
+            | BindingError::Mitz(_) => Some("consent-prefilter"),
             _ => None,
         }
     }

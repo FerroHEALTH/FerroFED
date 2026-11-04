@@ -25,11 +25,11 @@ use crate::config::public_url::PublicUrl;
 use crate::error::Code;
 use crate::facade::request;
 use crate::facade::route::Arrived;
-use crate::facade::security;
 use crate::facade::stored::distribution::{self, Registry};
 use crate::facade::stored::location::{self, Answered};
 use crate::facade::stored::{AQL, QUERY_STRING_INVALID, Refused, VERSION_PARAM, name, segment};
 use crate::federation::Federation;
+use crate::security::logged;
 use crate::stored::{self, Inadmissible};
 /// Checks the query string of a `PUT`: only the declared `query_type`, and
 /// only AQL (ITS-REST Definition API).
@@ -41,7 +41,7 @@ fn query_string(matched: &RouteMatch, arrived: &Arrived<'_>) -> Result<(), Refus
     let query = arrived.uri.query();
     if let Some(query) = query {
         query::every_declared(matched, query).map_err(|unlisted| {
-            security::query_parameter_refused(unlisted.position, &arrived.outbound.to_string());
+            logged::query_parameter_refused(unlisted.position, &arrived.outbound.to_string());
             Refused::with(Code::QueryParameterRefused, &unlisted)
         })?;
     }
@@ -121,11 +121,11 @@ pub(super) async fn store(
         std::str::from_utf8(&arrived.body).map_err(|_text| Refused::fixed(Code::BodyInvalid))?;
     let admitted = stored::admit(text, federation.context()).map_err(|refused| match refused {
         Inadmissible::Refused(refusal) => {
-            security::refused(&refusal, &logged);
+            logged::refused(&refusal, &logged);
             Refused::with(Code::Refused((&refusal).into()), &refusal)
         }
         Inadmissible::SubjectLiteral { at } => {
-            security::definition_refused(at.as_ref(), &logged);
+            logged::definition_refused(at.as_ref(), &logged);
             Refused::fixed(Code::SubjectLiteral)
         }
     })?;

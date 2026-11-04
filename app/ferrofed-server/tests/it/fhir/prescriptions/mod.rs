@@ -35,7 +35,7 @@ use axum::body::Body;
 use eehrxf::crosswalk::prescription::MPD_MEDICATION_REQUEST;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_server::config::Config;
-use ferrofed_server::fhir::locator::Locator;
+use ferrofed_server::fhir_wire::locator::Locator;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::proxy::{Bind, CapturingProxy, Fault};

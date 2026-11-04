@@ -38,7 +38,7 @@ pub(crate) fn refused(refusal: &Refusal, request_id: &str) {
 
 /// The rewrite consumed the patient predicates of `query`: one event per
 /// stripped predicate, by position (§5.4.3).
-pub(super) fn stripped(query: &PatientQuery, request_id: &str) {
+pub(crate) fn stripped(query: &PatientQuery, request_id: &str) {
     for at in query.stripped() {
         Event::PatientPredicateStripped.record();
         tracing::info!(
@@ -53,7 +53,7 @@ pub(super) fn stripped(query: &PatientQuery, request_id: &str) {
 
 /// The `subject_id` and `subject_namespace` of `GET {base}/v1/ehr` were
 /// consumed as resolution input, and no node request carries them (§5.4.3).
-pub(super) fn subject_consumed(request_id: &str) {
+pub(crate) fn subject_consumed(request_id: &str) {
     Event::SubjectParametersConsumed.record();
     tracing::info!(
         target: TARGET,
@@ -65,7 +65,7 @@ pub(super) fn subject_consumed(request_id: &str) {
 
 /// A fan-out failed; when the outbound gate stopped a request, that is a
 /// security event naming the endpoint and the part of the request.
-pub(super) fn fan_out(error: &FanOutError, request_id: &str) {
+pub(crate) fn fan_out(error: &FanOutError, request_id: &str) {
     if let FanOutError::Dispatch(DispatchError::Withheld { endpoint, part }) = error {
         Event::OutboundGateStopped.record();
         tracing::warn!(
@@ -81,7 +81,7 @@ pub(super) fn fan_out(error: &FanOutError, request_id: &str) {
 
 /// The outbound gate stopped a request the gateway composed for
 /// `endpoint`, because `part` would have carried a patient identifier.
-pub(super) fn gate_stopped(endpoint: &EndpointId, part: &Part, request_id: &str) {
+pub(crate) fn gate_stopped(endpoint: &EndpointId, part: &Part, request_id: &str) {
     Event::OutboundGateStopped.record();
     tracing::warn!(
         target: TARGET,
@@ -96,7 +96,7 @@ pub(super) fn gate_stopped(endpoint: &EndpointId, part: &Part, request_id: &str)
 /// The patient identifiers of a received document were consumed as
 /// resolution input, and no node request carries them in its path, query
 /// string or headers (§5.4.3).
-pub(super) fn document_subject_consumed(request_id: &str) {
+pub(crate) fn document_subject_consumed(request_id: &str) {
     Event::SubjectParametersConsumed.record();
     tracing::info!(
         target: TARGET,
@@ -113,7 +113,7 @@ pub(super) fn document_subject_consumed(request_id: &str) {
 /// A routed request admits only the parameters its operation declares and the
 /// route forwards, and a request the gateway answers itself, such as a
 /// stored-query definition `PUT`, only those its operation declares.
-pub(super) fn query_parameter_refused(position: usize, request_id: &str) {
+pub(crate) fn query_parameter_refused(position: usize, request_id: &str) {
     Event::QueryParameterRefused.record();
     tracing::warn!(
         target: TARGET,
@@ -127,7 +127,7 @@ pub(super) fn query_parameter_refused(position: usize, request_id: &str) {
 /// A routed request was refused for a declared value that does not match its
 /// declared kind, named by where it travelled and never by the value
 /// (§5.4.3).
-pub(super) fn value_refused(carrier: Carrier, request_id: &str) {
+pub(crate) fn value_refused(carrier: Carrier, request_id: &str) {
     Event::ParameterValueRefused.record();
     tracing::warn!(
         target: TARGET,
@@ -141,7 +141,7 @@ pub(super) fn value_refused(carrier: Carrier, request_id: &str) {
 /// A read, or a query scoped to one `ehr_id`, was refused the ask-all probe
 /// because its `ehr_id` is no bare UUID, and nothing was sent; the event
 /// never names the `ehr_id` (§5.4.3).
-pub(super) fn probe_refused(request_id: &str) {
+pub(crate) fn probe_refused(request_id: &str) {
     Event::EhrIdProbeRefused.record();
     tracing::warn!(
         target: TARGET,
@@ -153,7 +153,7 @@ pub(super) fn probe_refused(request_id: &str) {
 
 /// The outbound gate stopped a routed request, naming the endpoint and the
 /// part of the request.
-pub(super) fn forward_withheld(endpoint: &EndpointId, part: Part, request_id: &str) {
+pub(crate) fn forward_withheld(endpoint: &EndpointId, part: Part, request_id: &str) {
     Event::OutboundGateStopped.record();
     tracing::warn!(
         target: TARGET,

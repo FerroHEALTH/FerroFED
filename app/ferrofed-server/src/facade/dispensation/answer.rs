@@ -43,11 +43,11 @@ use crate::config::fhir::FhirSettings;
 use crate::facade::native::Chosen;
 use crate::facade::prescriptions::Member;
 use crate::facade::provenance::Provenance;
-use crate::facade::security;
 use crate::face_path::is_fhir_id;
 use crate::federation::Federation;
-use crate::fhir::locator::Locator;
+use crate::fhir_wire::locator::Locator;
 use crate::metrics::dispensations::Outcome;
+use crate::security::logged;
 
 /// What the lookup reached: the patient it was named by, each member asked
 /// and the members whose consent denial was set aside.
@@ -73,7 +73,7 @@ pub(super) enum Written {
 /// An `OperationOutcome` error with `status`, stating that no member was
 /// asked.
 pub(super) fn refused(status: StatusCode, code: &str, diagnostics: &str) -> Response {
-    let mut response = crate::fhir::fhir_json(status, &face::outcome(code, diagnostics));
+    let mut response = crate::fhir_wire::fhir_json(status, &face::outcome(code, diagnostics));
     response.extensions_mut().insert(NoAccess);
     response
 }
@@ -86,7 +86,7 @@ pub(super) fn refused_after(
     (status, code): (StatusCode, &str),
     diagnostics: &str,
 ) -> Response {
-    let mut response = crate::fhir::fhir_json(status, &face::outcome(code, diagnostics));
+    let mut response = crate::fhir_wire::fhir_json(status, &face::outcome(code, diagnostics));
     attach(&mut response, accessed(federation, lookup, None));
     response
 }
@@ -261,7 +261,7 @@ pub(super) fn ended<'a>(
             ),
         ),
         Written::Sent(Created::Failed(ForwardError::Withheld { endpoint, part })) => {
-            security::gate_stopped(endpoint, part, logged);
+            logged::gate_stopped(endpoint, part, logged);
             Unmade::Plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "security",
@@ -338,7 +338,7 @@ pub(super) fn written(
         Ended::Unmade(unmade) => unmade,
     };
     let (status, outcome) = unmade_outcome(writing, RECEIPT, &unmade);
-    let mut response = crate::fhir::fhir_json(status, &outcome);
+    let mut response = crate::fhir_wire::fhir_json(status, &outcome);
     attach(
         &mut response,
         accessed(federation, lookup, wrote(writing, created, None)),
@@ -418,7 +418,7 @@ fn made_answer(
         (writing.node.as_str(), writing.native.as_str()),
         unlocated,
     );
-    let mut response = crate::fhir::fhir_json(StatusCode::CREATED, &outcome);
+    let mut response = crate::fhir_wire::fhir_json(StatusCode::CREATED, &outcome);
     if let Some(id) = &located {
         let base = fhir.absolute.trim_end_matches('/');
         // NOTE: FHIR R4 `http.html` §3.1.0.3: a vid has the form of an `id`, and only that form

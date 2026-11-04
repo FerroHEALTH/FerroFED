@@ -589,7 +589,7 @@ pub(super) async fn store_query(
     let admitted = match stored::admit(&request.aql, federation.context()) {
         Ok(admitted) => admitted,
         Err(Inadmissible::Refused(refusal)) => {
-            crate::facade::security::refused(&refusal, &request_id);
+            crate::security::logged::refused(&refusal, &request_id);
             return error::response(
                 Code::Refused((&refusal).into()),
                 refusal.to_string(),
@@ -597,7 +597,7 @@ pub(super) async fn store_query(
             );
         }
         Err(Inadmissible::SubjectLiteral { at }) => {
-            crate::facade::security::definition_refused(at.as_ref(), &request_id);
+            crate::security::logged::definition_refused(at.as_ref(), &request_id);
             return error::fixed(Code::SubjectLiteral, &request_id);
         }
     };

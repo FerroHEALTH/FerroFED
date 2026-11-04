@@ -19,7 +19,7 @@ use ferrohealth_ui::table::filter::{Find, find_form};
 use ferrohealth_ui::table::model::{Noun, Paging, StateSource, Window};
 use ferrohealth_ui::table::pager::{Listing, link_pager};
 use ferrohealth_ui::table::view::{
-    Body, Column, DataTable, Role, Sorting, cell, count_cell, data_table, title_cell,
+    Body, Column, DataTable, Role, cell, count_cell, data_table, title_cell,
 };
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::action_menu::{Act, Action};
@@ -98,7 +98,7 @@ fn actions(managed: bool) -> ActionGroup {
             Act::Link(String::from(crate::pages::configuration::NEW_MEMBER)),
         ))
     } else {
-        ActionGroup::none()
+        ActionGroup::default()
     }
 }
 
@@ -314,7 +314,12 @@ fn organisation_table(organisations: &[&Organisation]) -> Html {
         Html::raw(format!(
             "<tr{}>{}{}{}{} {}</tr>",
             excluded(health),
-            title_cell(href.as_deref(), Html::text(organisation.shown()), None),
+            title_cell(
+                None,
+                href.as_deref(),
+                Html::text(organisation.shown()),
+                None
+            ),
             cell(
                 &columns[1],
                 Html::raw(format!("<code>{}</code>", Html::text(&organisation.id)))
@@ -334,12 +339,11 @@ fn organisation_table(organisations: &[&Organisation]) -> Html {
             cell(&columns[4], state(health.mark(), health.word(), None)),
         ))
     });
-    data_table(DataTable {
-        caption: &tr(Msg::OrganisationsTitle),
-        columns: &columns,
-        sorting: Sorting::default(),
-        body: Body::Rows(Html::join(rows)),
-    })
+    data_table(DataTable::new(
+        &tr(Msg::OrganisationsTitle),
+        &columns,
+        Body::Rows(Html::join(rows)),
+    ))
 }
 
 /// The class attribute of a row in `health`: muted when it is excluded.
@@ -382,11 +386,7 @@ fn node_table(nodes: &[(&Organisation, &Node)]) -> Html {
         Html::raw(format!(
             "<tr{}>{}{}{} {}{}{}</tr>",
             excluded(health),
-            title_cell(
-                href.as_deref(),
-                Html::raw(format!("<code>{}</code>", Html::text(&node.id))),
-                None
-            ),
+            super::node_title(href.as_deref(), &node.id),
             cell(&columns[1], Html::text(organisation.shown())),
             cell(
                 &columns[2],
@@ -400,10 +400,9 @@ fn node_table(nodes: &[(&Organisation, &Node)]) -> Html {
             cell(&columns[5], crate::pages::latency(node.latency_ms_p95())),
         ))
     });
-    data_table(DataTable {
-        caption: &tr(Msg::AllNodes),
-        columns: &columns,
-        sorting: Sorting::default(),
-        body: Body::Rows(Html::join(rows)),
-    })
+    data_table(DataTable::new(
+        &tr(Msg::AllNodes),
+        &columns,
+        Body::Rows(Html::join(rows)),
+    ))
 }

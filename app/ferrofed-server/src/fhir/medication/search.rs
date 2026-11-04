@@ -22,10 +22,11 @@ use crate::facade::native::Chosen;
 use crate::facade::prescriptions::{self, Held, Prescribed, Unprescribed};
 use crate::facade::summary::organisation;
 use crate::federation::Federation;
+use crate::fhir_wire::fhir_json;
 
 use crate::fhir::admission::Asked;
-use crate::fhir::locator::Locator;
-use crate::fhir::{admission, attach, fhir_json, refusal};
+use crate::fhir::{admission, attach, refusal};
+use crate::fhir_wire::locator::Locator;
 
 use super::{not_served, serves};
 use crate::face_path::PRESCRIPTIONS;

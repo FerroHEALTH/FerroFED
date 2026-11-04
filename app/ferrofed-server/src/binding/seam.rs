@@ -9,12 +9,17 @@
 
 use std::fmt;
 use std::sync::Arc;
+use std::time::Duration;
 
+#[cfg(feature = "binding-ihe")]
+use crate::audit::AuditTrailError;
+use crate::config::service::{GrantRefused, TlsRefused};
+use crate::health::dependencies::Indicator;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::dpop::Prover;
+use ferrofed_identity::role::demographics::Demographics;
 use ferrofed_identity::role::localizer::Localizer;
 use ferrofed_identity::role::resolver::Resolver;
-use ferrofed_operator_api::health::Indication;
 
 /// The resolver a binding builds, with the localizer it doubles as.
 #[derive(Clone)]
@@ -55,12 +60,6 @@ impl fmt::Debug for LocalizerSeam {
             .field("indicators", &self.indicators)
             .finish_non_exhaustive()
     }
-}
-
-/// A source of indications a binding adds to `GET {base}/operator/dependencies`.
-pub trait Indicator: fmt::Debug + Send + Sync {
-    /// Returns its indications, each under the key the report names it by.
-    fn indicate(&self) -> Vec<(&'static str, Indication)>;
 }
 
 /// A public document a binding has the gateway serve.
@@ -121,4 +120,134 @@ pub struct Provided {
     /// The key the node requests are proven with, when the grant binds its
     /// tokens with `DPoP` (RFC 9449).
     pub dpop: Option<Arc<Prover>>,
+}
+
+/// A localization configuration that cannot be set up.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum LocalizationError {
+    /// `node_selection = "localized"` is declared and no localizer is
+    /// configured, so no undirected patient query could find its node set
+    /// (N4).
+    #[error(
+        "federation.node_selection = \"localized\" needs a localizer: {} (N4, §14.1)",
+        crate::binding::localizer_list()
+    )]
+    NoLocalizer,
+    /// `[federation.localization]` is set under a node selection that uses
+    /// no localizer.
+    #[error(
+        "[federation.localization] applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
+    )]
+    NotLocalized,
+    /// A binding's own localizer is configured under a node selection that
+    /// uses no localizer.
+    #[error(
+        "{section} is a localizer and applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
+    )]
+    Unused {
+        /// The localizer's section, such as `[xcpd]`.
+        section: &'static str,
+    },
+    /// An `[nl_gf.nvi.custodians]` value is not a node id.
+    #[error("nl_gf.nvi.custodians.{ura:?} is not a node id")]
+    #[cfg(feature = "binding-nl")]
+    NviMember {
+        /// The custodian key, a URA and never a patient value.
+        ura: String,
+        /// What the id rules reported.
+        #[source]
+        source: ferrofed_registry::error::IdError,
+    },
+    /// An `nl_gf.nvi.namespaces` entry is empty.
+    #[error("nl_gf.nvi.namespaces has an empty namespace")]
+    #[cfg(feature = "binding-nl")]
+    NviNamespace(#[source] ferrofed_identity::role::patient::PatientRefError),
+    /// A credentials section names a grant, which only a node takes.
+    #[error("the localizer's credentials cannot be used")]
+    Grant(#[source] GrantRefused),
+    /// The localizer's TLS material does not read.
+    #[error("the localizer's TLS material cannot be used")]
+    Tls(#[source] TlsRefused),
+    /// The NVI localizer refuses its configuration.
+    #[error("the [nl_gf.nvi] localizer cannot be enabled")]
+    #[cfg(feature = "binding-nl")]
+    Nvi(#[source] ferrofed_identity::nl::nvi::NviConfigError),
+    /// The HTTP client the Nuts grant of `[nl_gf.nvi.credentials]` sends its
+    /// token requests through could not be built.
+    #[error("the HTTP client of nl_gf.nvi.credentials.nuts could not be built")]
+    #[cfg(feature = "binding-nl")]
+    NviNutsClient(#[source] reqwest::Error),
+    /// The XUA assertion is not one SAML 2.0 `Assertion` element.
+    #[error("{key} is not one SAML 2.0 Assertion element")]
+    #[cfg(feature = "binding-ihe")]
+    XcpdAssertion {
+        /// The key the assertion was read from.
+        key: &'static str,
+    },
+    /// An `[xcpd.communities]` value is not a node id.
+    #[error("xcpd.communities.{community:?} is not a node id")]
+    #[cfg(feature = "binding-ihe")]
+    XcpdMember {
+        /// The community key, an OID.
+        community: String,
+        /// What the id rules reported.
+        #[source]
+        source: ferrofed_registry::error::IdError,
+    },
+    /// An `[xcpd.namespaces]` key is empty.
+    #[error("xcpd.namespaces has an empty namespace")]
+    #[cfg(feature = "binding-ihe")]
+    XcpdNamespace(#[source] ferrofed_identity::role::patient::PatientRefError),
+    /// The XCPD localizer refuses its configuration.
+    #[error("the [xcpd] localizer cannot be enabled")]
+    #[cfg(feature = "binding-ihe")]
+    Xcpd(#[source] ferrofed_identity::ihe::xcpd::XcpdConfigError),
+    /// The audit trail to the ATNA Audit Record Repository cannot start.
+    #[error("the ITI-20 audit trail of the [xcpd] localizer cannot start")]
+    #[cfg(feature = "binding-ihe")]
+    AuditTrail(#[source] AuditTrailError),
+    /// `audit = "repository"` names no `[xcpd.audit_repository]`.
+    #[error("xcpd.audit = \"repository\" needs [xcpd.audit_repository]")]
+    #[cfg(feature = "binding-ihe")]
+    NoAuditRepository,
+}
+
+/// The demographics step a patient identifier the cross-reference does not
+/// map is taken to before localization and resolution, with its budget
+/// (Annex A §A.2).
+///
+/// A registry reload builds it again from `[pdqm]`, as it builds the resolver.
+#[derive(Clone)]
+pub struct DemographicsStep {
+    step: Arc<dyn Demographics>,
+    timeout: Duration,
+}
+
+impl DemographicsStep {
+    /// The step `step`, each exchange of which may take `timeout`.
+    #[must_use]
+    pub fn new(step: Arc<dyn Demographics>, timeout: Duration) -> Self {
+        Self { step, timeout }
+    }
+
+    /// The demographics service.
+    #[must_use]
+    pub fn step(&self) -> &dyn Demographics {
+        self.step.as_ref()
+    }
+
+    /// How long one exchange may take.
+    #[must_use]
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+}
+
+impl fmt::Debug for DemographicsStep {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DemographicsStep")
+            .field("timeout", &self.timeout)
+            .finish_non_exhaustive()
+    }
 }

@@ -12,7 +12,7 @@ use ferrofed_operator_api::revision::RevisionId;
 use ferrohealth_config::provenance::Provenance;
 
 use super::Reloader;
-use crate::revision::service::Revisions;
+use super::log::RevisionLog;
 
 impl Reloader {
     /// Returns this reloader with `tree`, the configuration tree the process
@@ -71,7 +71,7 @@ impl Reloader {
 
     /// The configuration revisions, under `config.ui = "managed"`.
     #[must_use]
-    pub fn revisions(&self) -> Option<&Arc<Revisions>> {
+    pub fn revisions(&self) -> Option<&Arc<dyn RevisionLog>> {
         self.revisions.as_ref()
     }
 }

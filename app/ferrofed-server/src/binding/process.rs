@@ -14,13 +14,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
-use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::auth::trust::Trust;
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe;
 use crate::config::settings::Settings;
-use crate::federation::error::FederationError;
 use crate::reload::Reloader;
 use crate::state::{AppState, StateError};
 use ferrofed_operator_api::health::Indication;
@@ -182,31 +180,7 @@ async fn within(budget: Duration, drain: impl Future<Output = ()>) -> Drained {
 pub struct Sources {
     /// The IHE binding's care services directory.
     #[cfg(feature = "binding-ihe")]
-    ihe: Option<Arc<ihe::mcsd::registry::DirectoryRegistry>>,
-}
-
-/// Returns the registry's first read and, when a binding is its source, the
-/// source the gateway then keeps it in step with.
-///
-/// A document is read as [`read_registry`](crate::federation::registry::read_registry)
-/// reads it; a source is read once here, so the banner, the build and the
-/// refreshes share one read.
-#[must_use]
-pub fn read_source(
-    settings: &Settings,
-) -> (Option<Result<RegistrySnapshot, FederationError>>, Sources) {
-    #[cfg(feature = "binding-ihe")]
-    {
-        let (read, directory) = ihe::mcsd::registry::read_source(settings);
-        (read, Sources { ihe: directory })
-    }
-    #[cfg(not(feature = "binding-ihe"))]
-    {
-        (
-            crate::federation::registry::read_registry(settings),
-            Sources::default(),
-        )
-    }
+    pub(crate) ihe: Option<Arc<ihe::mcsd::registry::DirectoryRegistry>>,
 }
 
 #[cfg(test)]

@@ -18,6 +18,7 @@ use std::error::Error;
 use std::path::Path;
 
 use ferrofed_identity::ihe::pdqm::PdqmConfigError;
+use ferrofed_server::binding::error::BindingError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error;
 use ferrofed_server::config::settings::Settings;
@@ -269,7 +270,10 @@ fn a_reload_that_unsets_the_table_drops_the_step() -> TestResult {
 fn a_step_without_a_cross_reference_is_refused() -> TestResult {
     let built = federation(&pdqm(BASE, "iti-78"))?;
     assert!(
-        matches!(built, Err(FederationError::PdqmWithoutResolver)),
+        matches!(
+            built,
+            Err(FederationError::Binding(BindingError::PdqmWithoutResolver))
+        ),
         "Annex A §A.2: the master identity needs a resolver: {built:?}"
     );
     Ok(())
@@ -280,7 +284,12 @@ fn a_master_domain_that_is_no_uri_is_refused() -> TestResult {
     let tables = format!("{}\n{}", unreached_pixm(), with("master", "\"not a uri\""));
     let built = federation(&tables)?;
     assert!(
-        matches!(built, Err(FederationError::Pdqm(PdqmConfigError::Master))),
+        matches!(
+            built,
+            Err(FederationError::Binding(BindingError::Pdqm(
+                PdqmConfigError::Master
+            )))
+        ),
         "{built:?}"
     );
     Ok(())

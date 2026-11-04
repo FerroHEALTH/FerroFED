@@ -15,7 +15,8 @@
 //! says how to add one.
 
 use ferrohealth_ui::html::Html;
-use ferrohealth_ui::view::surface::{Header, page_heading, stack};
+use ferrohealth_ui::view::layout::{Gap, stack_at};
+use ferrohealth_ui::view::surface::{Header, page_heading};
 use ferrohealth_ui::view::tabs::{Tab as BinderTab, binder};
 
 use crate::act::configure::ConfigAnswer;
@@ -104,7 +105,7 @@ fn heading() -> Html {
             title: tr(Msg::Configuration).into(),
             ..Header::default()
         },
-        ferrohealth_ui::view::action::ActionGroup::none(),
+        ferrohealth_ui::view::action::ActionGroup::default(),
     )
 }
 
@@ -141,7 +142,10 @@ fn drawn(view: ConfigView, answer: Option<Html>) -> Html {
     };
     let answer =
         answer.map(|answer| Html::raw(format!("<div id=\"config-outcome\">{answer}</div>")));
-    opt(header).then(stack(Html::join([opt(answer), opt(pending), section])))
+    opt(header).then(stack_at(
+        Gap::Loose,
+        Html::join([opt(answer), opt(pending), section]),
+    ))
 }
 
 /// The page of a console configured with no admin listener: it reads the

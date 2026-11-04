@@ -17,8 +17,9 @@ use tracing::Instrument as _;
 use tracing::field::Empty;
 
 use super::Failure;
-use crate::facade::{follow_up, security};
+use crate::facade::follow_up;
 use crate::federation::Federation;
+use crate::security::logged;
 
 /// Runs the fan-out of `plan` ([`fanned_out`]), then records what it showed
 /// of each member ([`observed`]) and feeds the versions it saw to the
@@ -38,7 +39,7 @@ pub(super) async fn dispatched(
     let answer = fanned_out(federation, plan, budget, (started, conveyance, outbound))
         .await
         .map_err(|error| {
-            security::fan_out(&error, request_id);
+            logged::fan_out(&error, request_id);
             Failure::FanOut(error)
         })?;
     observed(federation, &answer);

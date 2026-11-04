@@ -23,9 +23,10 @@ use crate::error::Code;
 use crate::facade::prescription::{self, Readable, Unfound};
 use crate::facade::provenance::Provenance;
 use crate::federation::Federation;
+use crate::fhir_wire::fhir_json;
 
 use crate::fhir::admission::Asked;
-use crate::fhir::{admission, attach, fhir_json, outcome, refusal};
+use crate::fhir::{admission, attach, outcome, refusal};
 
 use super::{not_served, serves};
 

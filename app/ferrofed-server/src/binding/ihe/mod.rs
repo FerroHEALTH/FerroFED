@@ -24,19 +24,18 @@ pub mod xcpd;
 
 use std::sync::Arc;
 
-use ferrofed_identity::ihe::mcsd::error::FhirFormError;
 use ferrofed_identity::ihe::mcsd::source::DirectoryReadError;
 use ferrofed_identity::role::localizer::Localizer;
 use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+use crate::binding::error::BindingError;
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
+use crate::binding::seam::DemographicsStep;
+use crate::binding::seam::LocalizationError;
 use crate::binding::seam::{LocalizerSeam, ResolverSeam};
 use crate::binding::{Binding, Offer, Reload, Role, Section};
 use crate::config::settings::Settings;
-use crate::federation::DemographicsStep;
-use crate::federation::error::FederationError;
-use crate::localization::LocalizationError;
 
 /// The `localization.mode` of the XCPD localizer (Annex A.3).
 pub const XCPD: &str = "xcpd";
@@ -111,12 +110,12 @@ impl Binding for Ihe {
         &["[pixm]"]
     }
 
-    fn unregistered(&self, settings: &Settings) -> Result<(), FederationError> {
+    fn unregistered(&self, settings: &Settings) -> Result<(), BindingError> {
         if settings.pixm.is_some() {
-            return Err(FederationError::PixmWithoutRegistry);
+            return Err(BindingError::PixmWithoutRegistry);
         }
         if settings.pdqm.is_some() {
-            return Err(FederationError::PdqmWithoutResolver);
+            return Err(BindingError::PdqmWithoutResolver);
         }
         Ok(())
     }
@@ -125,7 +124,7 @@ impl Binding for Ihe {
         &self,
         settings: &Settings,
         snapshot: &RegistrySnapshot,
-    ) -> Result<Option<ResolverSeam>, FederationError> {
+    ) -> Result<Option<ResolverSeam>, BindingError> {
         let Some(section) = &settings.pixm else {
             return Ok(None);
         };
@@ -142,13 +141,13 @@ impl Binding for Ihe {
         &self,
         settings: &Settings,
         resolving: bool,
-    ) -> Result<Option<DemographicsStep>, FederationError> {
+    ) -> Result<Option<DemographicsStep>, BindingError> {
         let Some(pdqm) = &settings.pdqm else {
             return Ok(None);
         };
         let step = pdqm::step(pdqm, &settings.audit)?;
         if !resolving {
-            return Err(FederationError::PdqmWithoutResolver);
+            return Err(BindingError::PdqmWithoutResolver);
         }
         Ok(Some(step))
     }
@@ -165,10 +164,7 @@ impl Binding for Ihe {
             .transpose()
     }
 
-    fn read_registry(
-        &self,
-        settings: &Settings,
-    ) -> Option<Result<RegistrySnapshot, FederationError>> {
+    fn read_registry(&self, settings: &Settings) -> Option<Result<RegistrySnapshot, BindingError>> {
         settings
             .registry_directory
             .as_ref()
@@ -214,20 +210,16 @@ impl Binding for Ihe {
         .collect()
     }
 
-    fn class(&self, error: &FederationError) -> Option<&'static str> {
+    fn class(&self, error: &BindingError) -> Option<&'static str> {
         match error {
-            FederationError::PixmWithoutRegistry
-            | FederationError::PixmMember { .. }
-            | FederationError::PixmNamespace(_)
-            | FederationError::Pixm(_) => Some("pixm"),
-            FederationError::PdqmWithoutResolver
-            | FederationError::PdqmNamespace(_)
-            | FederationError::Pdqm(_) => Some("pdqm"),
-            FederationError::FhirRegistry { source, .. } => Some(match **source {
-                FhirFormError::Read { .. } => "registry-unreadable",
-                _ => "registry-invalid",
-            }),
-            FederationError::Directory(failure) => Some(match &**failure {
+            BindingError::PixmWithoutRegistry
+            | BindingError::PixmMember { .. }
+            | BindingError::PixmNamespace(_)
+            | BindingError::Pixm(_) => Some("pixm"),
+            BindingError::PdqmWithoutResolver
+            | BindingError::PdqmNamespace(_)
+            | BindingError::Pdqm(_) => Some("pdqm"),
+            BindingError::Directory(failure) => Some(match &**failure {
                 DirectoryFailure::Read(DirectoryReadError::Exchange(error)) if error.exceeded() => {
                     "registry-budget"
                 }

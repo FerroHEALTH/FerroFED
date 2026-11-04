@@ -37,7 +37,7 @@
 //!
 //! Under `config.ui = "managed"` the file read is first recorded as a
 //! configuration revision when it changed, and the reload applies the
-//! revision the store marks running ([`Revisions::file_loaded`]), marking
+//! revision the store marks running ([`RevisionLog::file_loaded`]), marking
 //! a recorded revision running once it applied and never one it refused; an
 //! operator's apply of a revision takes the same path
 //! ([`Reloader::reload_config`]). No specification governs this: our own
@@ -47,21 +47,16 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use ferrofed_engine::dispatch::SetupError;
-use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::auth::trust::Trust;
-use crate::binding::seam::ProvideError;
-use crate::binding::{self, Role, RoleConflict};
+use crate::binding;
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::config::{Config, PREFIX};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
 use crate::metrics::ReloadResult;
-use crate::onward::OnwardError;
-use crate::revision::service::{FileRevision, RevisionError, Revisions};
 use crate::state::{AppState, StateError};
 use ferrofed_operator_api::revision::RevisionId;
 use ferrohealth_config::provenance::Provenance;
@@ -69,8 +64,12 @@ use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::tls::{ReloadableTls, TlsError};
 
 pub mod action;
+mod class;
+pub mod log;
 pub mod restart;
 mod trees;
+
+use log::{FileRevision, RevisionLog};
 
 /// What a fresh read of the configuration gives: the settings, the revision
 /// it is under `config.ui = "managed"`, and the tree under `off`.
@@ -92,7 +91,7 @@ pub struct Reloader {
     state: Arc<AppState>,
     serial: Mutex<Option<Settings>>,
     certificates: Vec<Arc<ReloadableTls>>,
-    revisions: Option<Arc<Revisions>>,
+    revisions: Option<Arc<dyn RevisionLog>>,
     trust: Option<Arc<Trust>>,
     sets: Vec<(String, String)>,
     tree: toml::Table,
@@ -167,7 +166,7 @@ pub enum ReloadError {
     /// Under `config.ui = "managed"`, the file's configuration could not be
     /// recorded as a revision, or the running revision is refused beside it.
     #[error("the configuration revisions refused the reload")]
-    Revisions(#[source] Box<RevisionError>),
+    Revisions(#[source] log::LogError),
     /// The new `[auth]` would admit no caller of a gateway that federates.
     #[error("[auth] trusts no issuer, so no caller would be admitted")]
     Auth(#[source] Box<StateError>),
@@ -189,7 +188,7 @@ impl ReloadError {
     pub fn class(&self) -> &'static str {
         match self {
             Self::Config(_) => "configuration",
-            Self::Federation { source, .. } => federation_class(source),
+            Self::Federation { source, .. } => class::federation(source),
             Self::RegistryPresence => "registry-presence",
             Self::Profile => "profile",
             Self::Cleartext(_) => "cleartext",
@@ -206,6 +205,29 @@ impl ReloadError {
         match self {
             Self::Certificate { table, .. } => Some(table),
             _ => None,
+        }
+    }
+
+    /// Whether the refusal is of a registry that breaks a rule of its own:
+    /// a document or a directory that does not read or holds no registry the
+    /// gateway admits, apart from a sound one the configuration does not fit.
+    #[must_use]
+    pub fn registry_invalid(&self) -> bool {
+        match self {
+            Self::Federation { source, .. } => match **source {
+                FederationError::Registry { .. } => true,
+                #[cfg(feature = "binding-ihe")]
+                FederationError::FhirRegistry { .. }
+                | FederationError::Binding(binding::error::BindingError::Directory(_)) => true,
+                _ => false,
+            },
+            Self::Config(_)
+            | Self::RegistryPresence
+            | Self::Profile
+            | Self::Cleartext(_)
+            | Self::Revisions(_)
+            | Self::Auth(_)
+            | Self::Certificate { .. } => false,
         }
     }
 
@@ -259,13 +281,11 @@ impl Reloader {
     /// Returns this reloader with `revisions`, so a reload under
     /// `config.ui = "managed"` records the file's configuration as a
     /// revision and runs the revision the store marks current
-    /// ([`Revisions::file_loaded`]).
+    /// ([`RevisionLog::file_loaded`]).
     #[must_use]
-    pub fn with_revisions(mut self, revisions: Option<Arc<Revisions>>) -> Self {
-        self.boot_revision = revisions
-            .as_ref()
-            .and_then(|revisions| revisions.replica().running);
-        self.revisions = revisions;
+    pub fn with_revisions<R: RevisionLog + 'static>(mut self, revisions: Option<Arc<R>>) -> Self {
+        self.boot_revision = revisions.as_ref().and_then(|revisions| revisions.running());
+        self.revisions = revisions.map(|revisions| -> Arc<dyn RevisionLog> { revisions });
         self
     }
 
@@ -395,7 +415,7 @@ impl Reloader {
                         );
                     }
                 }
-                Err(error) => file.refused(error.class(), &error.to_string()),
+                Err(error) => revisions.file_refused(file, error.class(), &error.to_string()),
             }
         }
         outcome
@@ -484,11 +504,11 @@ impl Reloader {
             .map_err(ReloadError::Config)?;
         let loaded = revisions
             .file_loaded(tree)
-            .map_err(|error| ReloadError::Revisions(Box::new(error)))?;
+            .map_err(ReloadError::Revisions)?;
         let file = loaded.file;
         let settings = loaded.config.resolve().map_err(|error| {
             let error = ReloadError::Config(error);
-            file.refused(error.class(), &error.to_string());
+            revisions.file_refused(file, error.class(), &error.to_string());
             error
         })?;
         Ok((settings, Some(file), None))
@@ -683,47 +703,6 @@ pub async fn on_hangup(reloader: Arc<Reloader>) {
                 "the registry reload did not finish; the running registry stays"
             );
         }
-    }
-}
-
-/// The class a refused federation is logged under: the core's own, or the
-/// class the binding whose error it is names.
-fn federation_class(error: &FederationError) -> &'static str {
-    match error {
-        FederationError::Registry { source, .. } => match **source {
-            LoadError::Read { .. } => "registry-unreadable",
-            _ => "registry-invalid",
-        },
-        FederationError::Conflict(RoleConflict { role, .. }) => match role {
-            Role::Resolver => "resolvers",
-            Role::ConsentPrefilter => "consent-prefilter",
-            Role::Localizer => "localization",
-            _ => "bindings",
-        },
-        FederationError::Localization(_) => "localization",
-        FederationError::NodeSelectionUndeclared | FederationError::IdUndeclared => "federation",
-        FederationError::DemographicWithoutRegistry
-        | FederationError::DemographicEndpointUnknown { .. } => "demographic-endpoint",
-        FederationError::PatientWithoutRegistry { .. }
-        | FederationError::PatientEndpointUnknown { .. }
-        | FederationError::PatientWithoutResolver { .. } => "patient-binding",
-        FederationError::Describe(_) => "self-description",
-        FederationError::Clients(SetupError::UnknownEndpoint { .. })
-        | FederationError::Grant { .. }
-        | FederationError::Onward(
-            OnwardError::Grant { .. } | OnwardError::Provide(ProvideError::Unclaimed { .. }),
-        ) => "credentials",
-        #[cfg(feature = "binding-nl")]
-        FederationError::Onward(OnwardError::Provide(ProvideError::NutsClient { .. })) => {
-            "http-client"
-        }
-        FederationError::Tls(_) | FederationError::Onward(OnwardError::Tls(_)) => "tls",
-        FederationError::Clients(_) => "node-clients",
-        FederationError::Transport(_) => "http-client",
-        FederationError::Unsigned => "signing",
-        FederationError::RetentionEndpointUnknown { .. } => "access-log",
-        FederationError::Audit(_) => "audit",
-        _ => binding::class(error).unwrap_or("binding"),
     }
 }
 

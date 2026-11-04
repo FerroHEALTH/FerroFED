@@ -41,7 +41,7 @@ use openehr_base::v1_3::base_types::identification::lexical::{
 };
 
 use super::admission::Admitted;
-use super::{attach, fhir_json, outcome};
+use super::{attach, outcome};
 use crate::access::{Accessed, Asked};
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
@@ -51,6 +51,7 @@ use crate::facade::provenance::Provenance;
 use crate::facade::request::Arrived;
 use crate::facade::summary::{Gathered, organisation};
 use crate::federation::Federation;
+use crate::fhir_wire::fhir_json;
 
 /// The entries of a list: its matches and its outcomes, each by its
 /// `fullUrl`.

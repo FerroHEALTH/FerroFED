@@ -65,7 +65,7 @@ pub(super) fn serve_job(
         }
     };
     let format = settings.telemetry.format;
-    let (document, sources) = binding::process::read_source(&settings);
+    let (document, sources) = crate::federation::registry::read_source(&settings);
     if banner::prints(format, stdout_is_terminal) {
         let described = document.as_ref().map(Result::as_ref);
         // NOTE: no specification governs this: our own design; a document that

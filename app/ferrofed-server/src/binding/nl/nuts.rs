@@ -5,10 +5,10 @@
 //! resolves: the credentials each grant provides its node client, and the
 //! DID documents its holders are resolved by.
 
+use crate::binding::error::BindingError;
 use crate::binding::seam::{ProvideError, Provided, PublicDocument};
 use crate::config::nl::nuts::{KEY, NutsOnward};
 use crate::config::settings::{Scheme, Settings};
-use crate::federation::error::FederationError;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::SystemClock;
 use ferrofed_engine::onward::grant::nl::nuts::{NutsCredentials, NutsGrant};
@@ -54,10 +54,10 @@ pub(super) fn provide(
 ///
 /// # Errors
 ///
-/// [`FederationError::DidDocument`] for two different keys a DID's grants
-/// name by one DID URL, and [`FederationError::DidDocumentJson`] for a
+/// [`BindingError::DidDocument`] for two different keys a DID's grants
+/// name by one DID URL, and [`BindingError::DidDocumentJson`] for a
 /// document that cannot be written.
-pub(super) fn documents(settings: &Settings) -> Result<Vec<PublicDocument>, FederationError> {
+pub(super) fn documents(settings: &Settings) -> Result<Vec<PublicDocument>, BindingError> {
     let mut holders: BTreeMap<&str, (&Did, Vec<&HolderKey>)> = BTreeMap::new();
     for scheme in settings.credentials.values() {
         let Scheme::Binding(grant) = scheme else {
@@ -78,16 +78,15 @@ pub(super) fn documents(settings: &Settings) -> Result<Vec<PublicDocument>, Fede
         .into_values()
         .map(|(did, keys)| {
             let document =
-                DidDocument::new(did, keys).map_err(|source| FederationError::DidDocument {
+                DidDocument::new(did, keys).map_err(|source| BindingError::DidDocument {
                     did: did.to_string(),
                     source,
                 })?;
-            let body = serde_json::to_vec(&document).map_err(|source| {
-                FederationError::DidDocumentJson {
+            let body =
+                serde_json::to_vec(&document).map_err(|source| BindingError::DidDocumentJson {
                     did: did.to_string(),
                     source,
-                }
-            })?;
+                })?;
             Ok(PublicDocument {
                 path: did.document_path(),
                 media_type: MEDIA_TYPE,

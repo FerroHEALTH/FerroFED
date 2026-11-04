@@ -520,14 +520,14 @@ mod tests {
         assert_eq!("SELECT c FROM COMPOSITION c\nWHERE c/x = $x", form.aql);
         assert_eq!(1, form.parameters.len());
         assert_eq!(vec!["node-a-pub", "node-b-pub"], form.endpoints);
-        let call = call(&Locale::english(), &form).expect("a call");
+        let call = call(&Locale::default(), &form).expect("a call");
         assert_eq!(1, call.parameters.len());
         assert_eq!(1, call.headers.len());
     }
 
     #[test]
     fn a_form_that_names_no_query_or_a_bad_number_is_refused_without_quoting_it() {
-        let english = Locale::english();
+        let english = Locale::default();
         assert!(call(&english, &QueryForm::of(&fields(&[("kind", "aql")]))).is_err());
         let bad = QueryForm::of(&fields(&[
             ("kind", "aql"),

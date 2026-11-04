@@ -400,7 +400,7 @@ impl AppState {
     }
 
     /// Returns this state keeping its registry in step with the `sources`
-    /// the boot opened ([`read_source`](crate::binding::process::read_source)).
+    /// the boot opened ([`read_source`](crate::federation::registry::read_source)).
     #[must_use]
     pub fn with_sources(mut self, sources: Sources) -> Self {
         self.processes.watch(sources);

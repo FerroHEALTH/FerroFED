@@ -15,9 +15,7 @@ use ferrofed_operator_api::operator::{CreatingSystemEntry, RouteSource};
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
-use ferrohealth_ui::table::view::{
-    Body, Column, DataTable, Role, Sorting, cell, data_table, title_cell,
-};
+use ferrohealth_ui::table::view::{Body, Column, DataTable, Role, cell, data_table, title_cell};
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::action_menu::{Act, Action};
 use ferrohealth_ui::view::state::state;
@@ -160,7 +158,7 @@ fn node_page(
             Act::Link(crate::pages::configuration::edit_member(&node.id)),
         ))
     } else {
-        ActionGroup::none()
+        ActionGroup::default()
     };
     let body = match tab {
         NodeTab::Overview => overview(organisation, node),
@@ -282,6 +280,7 @@ fn endpoints(node: &Node) -> Html {
             muted(endpoint.health == Health::Excluded),
             title_cell(
                 None,
+                None,
                 Html::raw(format!("<code>{}</code>", Html::text(&endpoint.id))),
                 None
             ),
@@ -301,12 +300,11 @@ fn endpoints(node: &Node) -> Html {
             cell(&columns[5], latency(endpoint.latency_ms_p95)),
         ))
     });
-    data_table(DataTable {
-        caption: &tr(Msg::TabEndpoints),
-        columns: &columns,
-        sorting: Sorting::default(),
-        body: Body::Rows(Html::join(rows)),
-    })
+    data_table(DataTable::new(
+        &tr(Msg::TabEndpoints),
+        &columns,
+        Body::Rows(Html::join(rows)),
+    ))
 }
 
 /// The words of a route's ground.
@@ -346,6 +344,7 @@ fn routes_tab(node: &Node, routes: Option<Result<Vec<CreatingSystemEntry>, Stop>
             muted(route.source == RouteSource::Withdrawn),
             title_cell(
                 None,
+                None,
                 Html::raw(format!(
                     "<code>{}</code>",
                     Html::text(&route.creating_system_id)
@@ -366,10 +365,9 @@ fn routes_tab(node: &Node, routes: Option<Result<Vec<CreatingSystemEntry>, Stop>
         "<p class=\"fui-small fui-muted\">{}</p>",
         Html::text(tr(Msg::RoutesLine))
     ))
-    .then(data_table(DataTable {
-        caption: &tr(Msg::TabRoutes),
-        columns: &columns,
-        sorting: Sorting::default(),
-        body: Body::Rows(Html::join(rows)),
-    }))
+    .then(data_table(DataTable::new(
+        &tr(Msg::TabRoutes),
+        &columns,
+        Body::Rows(Html::join(rows)),
+    )))
 }

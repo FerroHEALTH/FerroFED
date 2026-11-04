@@ -11,6 +11,7 @@ use std::error::Error;
 use std::path::Path;
 
 use ferrofed_identity::nl::mitz::MitzConfigError;
+use ferrofed_server::binding::error::BindingError;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::config::{Config, error, transport};
 use ferrofed_server::federation::Federation;
@@ -170,7 +171,7 @@ fn a_member_without_a_holder_refuses_to_boot() -> TestResult {
         table.replace(&cut, "")
     })?;
     match Federation::load(&resolved(&text)?) {
-        Err(FederationError::Mitz(MitzConfigError::NoHolder(member))) => {
+        Err(FederationError::Binding(BindingError::Mitz(MitzConfigError::NoHolder(member)))) => {
             assert_eq!("node-b", member.as_str());
             Ok(())
         }
@@ -182,7 +183,7 @@ fn a_member_without_a_holder_refuses_to_boot() -> TestResult {
 fn a_holder_with_no_ura_anywhere_refuses_to_boot() -> TestResult {
     let (_dir, text) = edited(|table| table.replace(&format!(", ura = \"{URA_B}\""), ""))?;
     match Federation::load(&resolved(&text)?) {
-        Err(FederationError::Mitz(MitzConfigError::NoUra(member))) => {
+        Err(FederationError::Binding(BindingError::Mitz(MitzConfigError::NoUra(member)))) => {
             assert_eq!("node-b", member.as_str());
             Ok(())
         }
@@ -196,7 +197,9 @@ fn a_holder_naming_no_member_refuses_to_boot() -> TestResult {
         format!("{table}\"node-z\" = {{ type = \"V6\", ura = \"ura-test-0009\" }}\n")
     })?;
     match Federation::load(&resolved(&text)?) {
-        Err(FederationError::Mitz(MitzConfigError::UnknownMember(member))) => {
+        Err(FederationError::Binding(BindingError::Mitz(MitzConfigError::UnknownMember(
+            member,
+        )))) => {
             assert_eq!("node-z", member.as_str());
             Ok(())
         }

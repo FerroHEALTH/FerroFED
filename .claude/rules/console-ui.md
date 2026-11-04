@@ -8,25 +8,25 @@ paths: ["app/ferrofed-console/**"]
 # Operator console rules (`app/ferrofed-console`)
 
 **FerroUI leads the UI.** The console draws with `ferrohealth-ui`, pinned
-exactly in the root `[workspace.dependencies]` (today `=0.6.2`), and the
+exactly in the root `[workspace.dependencies]` (today `=0.6.6`), and the
 FerroUI repository (FerroHEALTH/FerroUI) is the source for its components,
 design, tokens, icons, script modules, accessibility bar, interaction
 contract, words and quality control. Read these first, at the git tag that
-matches the pin (today `v0.6.2`):
+matches the pin (today `v0.6.6`):
 
-- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.2/docs/consoles.md):
+- [`docs/consoles.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.6/docs/consoles.md):
   the consumer guide, how a console uses the library.
-- [`docs/migration-0.6.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.2/docs/migration-0.6.md):
+- [`docs/migration-0.6.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.6/docs/migration-0.6.md):
   what replaced each 0.5 part, and why (FerroUI#510).
-- [`.claude/rules/console-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.2/.claude/rules/console-ui.md):
+- [`.claude/rules/console-ui.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.6/.claude/rules/console-ui.md):
   the component rules of every FerroHEALTH console. The section numbers this
-  file cites (FerroUI §N) are those of the `v0.6.2` copy.
-- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.2/crates/ferrohealth-ui/CLAUDE.md):
+  file cites (FerroUI §N) are those of the `v0.6.6` copy.
+- [`crates/ferrohealth-ui/CLAUDE.md`](https://github.com/FerroHEALTH/FerroUI/blob/v0.6.6/crates/ferrohealth-ui/CLAUDE.md):
   the crate's own discipline.
-- [`app/ferrohealth-ui-gallery`](https://github.com/FerroHEALTH/FerroUI/tree/v0.6.2/app/ferrohealth-ui-gallery):
+- [`app/ferrohealth-ui-gallery`](https://github.com/FerroHEALTH/FerroUI/tree/v0.6.6/app/ferrohealth-ui-gallery):
   the worked example of a console on 0.6, its no-script and navigation
   journeys among them.
-- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.6.2/design/consoles/ferrofed):
+- [`design/consoles/ferrofed/`](https://github.com/FerroHEALTH/FerroUI/tree/v0.6.6/design/consoles/ferrofed):
   the reviewed design of this console. Every page matches its mockup at
   1440 and 390 px, light and dark. FerroUI's `design/` is the only design
   source; a design folder anywhere else is stale.

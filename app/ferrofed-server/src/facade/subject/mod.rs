@@ -82,11 +82,11 @@ use crate::facade::localize::{Localized, localize};
 use crate::facade::owner;
 use crate::facade::provenance::Provenance;
 use crate::facade::route::{self, Arrived, Deadlines, Failure};
-use crate::facade::security;
 use crate::facade::subject::resolved::resolve;
 use crate::facade::subject::unserved::Unserved;
 use crate::facade::{confined, consent};
 use crate::federation::Federation;
+use crate::security::logged;
 
 /// The namespace and the identifier of the patient the read of an EHR by
 /// subject `matched` names in `query`, read by the decoder [`serve`]
@@ -125,7 +125,7 @@ pub(crate) async fn serve(
     if let Err(refusal) = declared::held(matched, None, arrived.headers, &arrived.body) {
         return route::declared_refused(&refusal, request_id, &logged);
     }
-    security::subject_consumed(&logged);
+    logged::subject_consumed(&logged);
     let Some(budget) = Deadlines::from(federation, started) else {
         return Unserved::Clock.respond(request_id, &logged);
     };

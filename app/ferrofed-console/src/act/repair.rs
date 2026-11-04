@@ -67,7 +67,7 @@ fn line(distribution: Distribution) -> RepairLine {
                 latency_ms: endpoint.outcome().latency_ms(),
                 row_count: endpoint.row_count(),
                 error: endpoint.outcome().error().map(|error| {
-                    crate::act::query::error_text(&ferrohealth_ui::i18n::Locale::english(), error)
+                    crate::act::query::error_text(&ferrohealth_ui::i18n::Locale::default(), error)
                 }),
             })
             .collect(),

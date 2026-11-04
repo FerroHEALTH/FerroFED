@@ -100,7 +100,7 @@ fn answered(
                 received,
                 (writing.node.as_str(), writing.native.as_str()),
             );
-            let response = crate::fhir::fhir_json(StatusCode::OK, &outcome);
+            let response = crate::fhir_wire::fhir_json(StatusCode::OK, &outcome);
             let mut response = from_member(federation, writing, made, response);
             attach(&mut response, accessed);
             return response;
@@ -108,7 +108,7 @@ fn answered(
         Ended::Unmade(unmade) => unmade,
     };
     let (status, outcome) = unmade_outcome(writing, WITHDRAWAL, &unmade);
-    let mut response = crate::fhir::fhir_json(status, &outcome);
+    let mut response = crate::fhir_wire::fhir_json(status, &outcome);
     attach(&mut response, accessed);
     response
 }

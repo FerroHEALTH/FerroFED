@@ -18,6 +18,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use ferrofed_operator_api::health::Observed;
+use ferrofed_server::binding::error::BindingError;
 use ferrofed_server::config::{self, Config};
 use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::error::FederationError;
@@ -284,7 +285,10 @@ async fn a_client_identity_that_is_no_pem_is_refused_without_its_content() -> Te
     let Err(error) = built else {
         return Err("a client identity that is no PEM is refused".into());
     };
-    assert!(matches!(error, FederationError::Tls(_)), "{error:?}");
+    assert!(
+        matches!(error, FederationError::Binding(BindingError::Tls(_))),
+        "{error:?}"
+    );
     assert!(!ferrofed_chain(&error).contains("Qz7notpem"));
     Ok(())
 }

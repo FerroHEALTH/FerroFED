@@ -13,9 +13,7 @@ use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
 use ferrohealth_ui::table::model::Noun;
-use ferrohealth_ui::table::view::{
-    Body, Column, DataTable, Role, Sorting, cell, count_cell, data_table, title_cell,
-};
+use ferrohealth_ui::table::view::{Body, Column, DataTable, Role, cell, count_cell, data_table};
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::action_menu::{Act, Action};
 use ferrohealth_ui::view::state::state;
@@ -41,7 +39,7 @@ pub async fn page() -> Html {
                 crumbs: crumbs(),
                 ..Header::default()
             },
-            ActionGroup::none(),
+            ActionGroup::default(),
         )
         .then(stopped(&stop)),
         Ok(federation) => match federation.organisation(&id) {
@@ -80,7 +78,7 @@ fn organisation_page(organisation: &Organisation, tab: &str) -> Html {
             Act::Link(crate::pages::configuration::new_node(&organisation.id)),
         ))
     } else {
-        ActionGroup::none()
+        ActionGroup::default()
     };
     let body = if nodes_tab {
         nodes(organisation)
@@ -180,11 +178,7 @@ fn nodes(organisation: &Organisation) -> Html {
         };
         Html::raw(format!(
             "<tr{class}>{}{} {}{} {}</tr>",
-            title_cell(
-                href.as_deref(),
-                Html::raw(format!("<code>{}</code>", Html::text(&node.id))),
-                None
-            ),
+            super::node_title(href.as_deref(), &node.id),
             cell(
                 &columns[1],
                 Html::raw(format!(
@@ -208,10 +202,9 @@ fn nodes(organisation: &Organisation) -> Html {
             ),
         ))
     });
-    data_table(DataTable {
-        caption: &tr(Msg::TabNodes),
-        columns: &columns,
-        sorting: Sorting::default(),
-        body: Body::Rows(Html::join(rows)),
-    })
+    data_table(DataTable::new(
+        &tr(Msg::TabNodes),
+        &columns,
+        Body::Rows(Html::join(rows)),
+    ))
 }
