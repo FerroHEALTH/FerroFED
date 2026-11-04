@@ -34,9 +34,8 @@ use crate::request_id;
 use crate::revision::service::{RevisionError, Revisions, held_table};
 
 mod authentication;
-pub mod catalog;
 
-use catalog::{ENTRIES, Entry, Kind};
+use crate::config::catalog::{self, ENTRIES, Entry, Kind};
 
 /// The running configuration.
 pub const RUNNING: &str = "/admin/config/running";

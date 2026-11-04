@@ -29,7 +29,7 @@ use ferrofed_registry::error::document::DocumentFault;
 use jiff::Timestamp;
 use serde_json::error::Category;
 
-use crate::admin::Operator;
+use crate::auth::operator::Operator;
 use crate::config::revisions::Store;
 
 pub mod embedded;

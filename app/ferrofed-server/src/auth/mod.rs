@@ -50,6 +50,7 @@ pub mod contact_point;
 pub mod face;
 pub mod guard;
 mod introspection;
+pub mod operator;
 pub mod permission;
 mod reference;
 pub mod refusal;

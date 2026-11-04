@@ -26,7 +26,7 @@ use http::HeaderMap;
 
 use super::console::{ConsoleError, RemoveRequest, base_table, created, saved_as};
 use super::{ActionBody, Managed, Shaped, answered, held};
-use crate::admin::Operator;
+use crate::auth::operator::Operator;
 use crate::error::{self, Code};
 use crate::request_id;
 use crate::revision::resources::{
