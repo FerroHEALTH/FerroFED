@@ -11,9 +11,7 @@
 
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
-use ferrohealth_ui::table::view::{
-    Body, Column, DataTable, Role, Sorting, cell, data_table, title_cell,
-};
+use ferrohealth_ui::table::view::{Body, Column, DataTable, Role, cell, data_table, title_cell};
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::surface::{Header, page_heading};
 use ferrohealth_ui::view::tabs::{Tab, binder};
@@ -76,7 +74,7 @@ pub async fn page() -> Html {
                 )),
                 ..Header::default()
             },
-            ActionGroup::none(),
+            ActionGroup::default(),
         );
         let panel = match read {
             Err(stop) => {
@@ -453,7 +451,7 @@ fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> Html {
         Html::raw(format!(
             "<tr{}>{}{}{}{}{}{}</tr>",
             if active { "" } else { " class=\"is-excluded\"" },
-            title_cell(None, code(endpoint.id.to_string()), None),
+            title_cell(None, None, code(endpoint.id.to_string()), None),
             cell(&columns[1], code(endpoint.organisation.clone())),
             cell(
                 &columns[2],
@@ -470,10 +468,9 @@ fn endpoints_panel(intro: Msg, description: &OptionsRoot) -> Html {
             ),
         ))
     });
-    settings_panel(Html::text(tr(intro)), None, Vec::new()).then(data_table(DataTable {
-        caption: &tr(Msg::DescribeEndpoints),
-        columns: &columns,
-        sorting: Sorting::default(),
-        body: Body::Rows(Html::join(rows)),
-    }))
+    settings_panel(Html::text(tr(intro)), None, Vec::new()).then(data_table(DataTable::new(
+        &tr(Msg::DescribeEndpoints),
+        &columns,
+        Body::Rows(Html::join(rows)),
+    )))
 }

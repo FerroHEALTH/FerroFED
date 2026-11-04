@@ -99,19 +99,15 @@ async fn a_sign_out_redirects_to_the_end_session_endpoint_with_the_id_token_hint
     Ok(())
 }
 
+// NOTE: OpenID Connect RP-Initiated Logout 1.0 §2; a sign-out that ends no session holding
+// an ID Token has no session at the provider to end, so it goes back to the start.
 #[tokio::test]
-async fn a_sign_out_without_a_session_still_reaches_the_provider_without_a_hint()
+async fn a_sign_out_without_a_session_goes_back_to_the_start_and_not_to_the_provider()
 -> Result<(), Box<dyn Error>> {
     let (_state, service) = console(&with_end_session()).await?;
     let (response, _body) = send(&service, sign_out(None, Some(SAME_ORIGIN))?).await?;
     assert_eq!(StatusCode::SEE_OTHER, response.status());
-    let location = Url::parse(header(&response, "location"))?;
-    let query: BTreeMap<String, String> = location.query_pairs().into_owned().collect();
-    assert!(!query.contains_key("id_token_hint"), "{query:?}");
-    assert_eq!(
-        Some("ferrofed-console"),
-        query.get("client_id").map(String::as_str)
-    );
+    assert_eq!("/", header(&response, "location"));
     Ok(())
 }
 

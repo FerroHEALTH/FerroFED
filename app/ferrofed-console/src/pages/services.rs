@@ -12,7 +12,7 @@
 
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::table::view::{
-    Body, Column, DataTable, Role, Sorting, cell, data_table, group_row, title_cell,
+    Body, Column, DataTable, Role, cell, data_table, group_row, title_cell,
 };
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::state::state;
@@ -30,7 +30,9 @@ use crate::read::federation::{Federation, Service};
 pub async fn list() -> Html {
     let body = match crate::read::federation::read().await {
         Ok(federation) => services(&federation),
-        Err(stop) => page_heading(&current(), header(), ActionGroup::none()).then(stopped(&stop)),
+        Err(stop) => {
+            page_heading(&current(), header(), ActionGroup::default()).then(stopped(&stop))
+        }
     };
     crate::app::title(tr(Msg::ServicesTitle)).then(body)
 }
@@ -67,6 +69,7 @@ fn services(federation: &Federation) -> Html {
         rows.push(Html::raw(format!(
             "<tr>{}{}{}</tr>",
             title_cell(
+                None,
                 Some(&service.href()),
                 Html::text(service.name()),
                 Some(Html::text(service.role())),
@@ -88,18 +91,17 @@ fn services(federation: &Federation) -> Html {
     let body = if rows.is_empty() {
         list_empty(tr(Msg::ServicesNone), None)
     } else {
-        data_table(DataTable {
-            caption: &tr(Msg::ServicesTitle),
-            columns: &columns,
-            sorting: Sorting::default(),
-            body: Body::Rows(Html::join(rows)),
-        })
+        data_table(DataTable::new(
+            &tr(Msg::ServicesTitle),
+            &columns,
+            Body::Rows(Html::join(rows)),
+        ))
     };
     list_page(
         &current(),
         ListPage {
             header: header(),
-            actions: ActionGroup::none(),
+            actions: ActionGroup::default(),
             total: Some(count),
             summary: None,
             toolbar: None,
@@ -141,7 +143,7 @@ fn service_page(service: &Service, replica: Option<&str>) -> Html {
             subtitle_view: None,
             badge: Some(state(service.health.mark(), service.health.word(), None)),
         },
-        ActionGroup::none(),
+        ActionGroup::default(),
     );
     let code = |text: &str| Html::raw(format!("<code>{}</code>", Html::text(text)));
     let facts = facts_row(vec![

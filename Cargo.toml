@@ -236,13 +236,13 @@ openehr-mapping-core = "=0.1.141"
 # `DirectoryEntry<Endpoint>` and carries the request `authorizer` the NVI
 # client and the Nuts grant share (#1516). Verified against crates.io on
 # 2026-11-03.
-ihe-iti = "=0.0.73"
+ihe-iti = "=0.0.74"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
 # published by FerroHEALTH/FerroPIX since #367 and pinned exactly, because its
 # crate line moves by patch. 0.0.33 is the release on ferrohealth-smart
 # 0.8 (#1390); 0.0.40 is the release on ihe-iti 0.0.73, whose `authorizer`
 # it takes (#1516). Verified against crates.io on 2026-11-03.
-nl-generic-functions = "=0.0.40"
+nl-generic-functions = "=0.0.41"
 # The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
 # the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -309,7 +309,7 @@ rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs"
 # exactly, so the console moves to a new version deliberately. From 0.6 every
 # page is one document the server draws, with no Leptos and no WebAssembly
 # (#1457, FerroUI#510). Verified against crates.io on 2026-10-31 (0.6.2).
-ferrohealth-ui = "=0.6.2"
+ferrohealth-ui = "=0.6.6"
 # The FerroHEALTH SMART and OAuth 2.0 resource-server crate (#1174):
 # every caller's token checked against its issuer's metadata and key set,
 # the SMART on openEHR grant rules over the grammar it re-exports, the Basic
@@ -322,7 +322,7 @@ ferrohealth-ui = "=0.6.2"
 # (GHSA-vphj-3f8c-5hpx); 0.8.6 carries the SMART on openEHR scope grammar
 # itself, so the lock holds one openehr-sdt, and caches a verified Basic
 # credential for 300 s (#1390). Verified against crates.io on 2026-10-28.
-ferrohealth-smart = { version = "=0.8.6", default-features = false, features = ["fetch", "axum", "openehr"] }
+ferrohealth-smart = { version = "=0.8.8", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
@@ -334,7 +334,7 @@ ferrohealth-secret = "=0.2.0"
 # session store, the four sign-in routes and the middleware every page sits
 # behind, over ferrohealth-smart's relying party. Pinned exactly, as a
 # product pins every family crate. Verified against crates.io on 2026-11-03.
-ferrohealth-session = { version = "=0.1.1", default-features = false }
+ferrohealth-session = { version = "=0.2.2", default-features = false }
 # The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
 # defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
 # into one typed tree, with where each key came from and the merged table the
@@ -358,7 +358,7 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # 0.4.1 keeps a product's own fallback and its layers through the stack, and
 # 0.4.2 writes the server-rendered console's policy. Verified against
 # crates.io on 2026-10-31.
-ferrohealth-server = { version = "=0.4.2", default-features = false }
+ferrohealth-server = { version = "=0.4.3", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.

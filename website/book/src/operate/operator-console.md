@@ -90,11 +90,12 @@ service worker or a URL.
   which the operator's name in the top bar opens, posts to
   `POST /logout`, which ends the signed-in session on the console's server
   and removes the session cookie. Where `[oidc]` names the provider's
-  `end_session_endpoint`, the console then redirects the browser there with
-  the session's ID Token as `id_token_hint`, its `client_id`, and the
-  `post_logout_redirect_uri` you registered with the provider (OpenID
-  Connect RP-Initiated Logout 1.0 §2); without one, or with no `[oidc]` at
-  all, the browser goes back to `/`. A sign-out never answers `503`. A
+  `end_session_endpoint` and the session held an ID Token, the console then
+  redirects the browser there with that ID Token as `id_token_hint`, its
+  `client_id`, and the `post_logout_redirect_uri` you registered with the
+  provider (OpenID Connect RP-Initiated Logout 1.0 §2). Otherwise (no
+  endpoint, no `[oidc]` at all, a Basic sign-in, or no session left to end)
+  the browser goes back to `/`. A sign-out never answers `503`. A
   `GET /logout` is `405`.
 - **The session watch.** `GET /session` answers what the session has left,
   `{"idle": s, "absolute": s}` in seconds, and `POST /session` extends it
