@@ -24,7 +24,7 @@ use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_identity::profile::Profile;
 use ferrofed_server::admin::{self, Access, DISTRIBUTE, FINISHED};
-use ferrofed_server::metrics::security::Event;
+use ferrofed_server::security::Event;
 use ferrofed_server::state::AppState;
 use ferrohealth_telemetry::section::{DEFAULT_FILTER, Rendering};
 use http::{Request, StatusCode, header};

@@ -13,6 +13,8 @@
 //! context, the natural person, the assurance, the national contact point)
 //! keep their own codes.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use axum::response::{IntoResponse, Response};
 use ferrohealth_smart::refusal::{Denied, Reason, Refusal as SmartRefusal, Schemes, StepUp};
 use http::{HeaderValue, StatusCode, header};
@@ -69,7 +71,34 @@ pub enum Refusal {
     Correlation,
 }
 
+/// The process-wide count of each refusal, in [`Refusal::ALL`] order, which
+/// the metrics surface reads ([`crate::metrics::security`]).
+static REFUSALS: [AtomicU64; Refusal::ALL.len()] =
+    [const { AtomicU64::new(0) }; Refusal::ALL.len()];
+
 impl Refusal {
+    /// Counts one request refused at client authentication for this reason.
+    pub fn count(self) {
+        if let Some(counter) = self.counter() {
+            counter.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Returns how many requests the process refused for this reason.
+    #[must_use]
+    pub fn counted(self) -> u64 {
+        self.counter()
+            .map_or(0, |counter| counter.load(Ordering::Relaxed))
+    }
+
+    /// The counter of this reason in [`REFUSALS`].
+    fn counter(self) -> Option<&'static AtomicU64> {
+        Self::ALL
+            .iter()
+            .position(|refusal| *refusal == self)
+            .and_then(|at| REFUSALS.get(at))
+    }
+
     /// Every refusal, in declaration order.
     pub const ALL: [Self; 14] = [
         Self::Missing,

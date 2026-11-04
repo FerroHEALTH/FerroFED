@@ -16,7 +16,6 @@
 
 pub mod audit;
 pub mod mcsd;
-pub mod metrics;
 pub mod pdqm;
 pub mod pixm;
 pub mod pmir;

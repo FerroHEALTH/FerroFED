@@ -70,11 +70,11 @@ The start and `ferrofed config check` are refused, naming the entry, for:
 - a member of `Electronic-Dispensations` that is not also declared for
   `Electronic-Prescriptions`, because a dispensation is written only at the
   member that owns its prescription
-  (`fhir/serving.rs`:
+  (`fhir/serving/start.rs`:
   `a_dispensation_member_that_serves_no_prescription_is_refused`);
 - a member the registry does not hold, one with no endpoint of its own
   serving the category, an endpoint whose profiles leave out the MPD
-  profile, and a face with no resolver (`fhir/serving.rs`:
+  profile, and a face with no resolver (`fhir/serving/start.rs`:
   `a_member_the_registry_does_not_hold_refuses_the_start`,
   `a_member_with_no_endpoint_of_its_own_refuses_the_start`,
   `a_member_whose_endpoint_serves_another_category_refuses_the_start`,
@@ -91,7 +91,7 @@ A category no member is declared for is not served. Every route of it
 answers `404` with an `OperationOutcome` of the issue type `not-supported`
 that names the category, and no member is asked. The answer is never an
 empty search result, which a client could read as a patient with no
-prescriptions (`fhir/serving.rs`:
+prescriptions (`fhir/serving/mod.rs`:
 `with_no_member_declared_every_route_answers_not_served_and_asks_no_member`,
 `a_served_category_is_never_answered_as_not_served`):
 
@@ -539,7 +539,7 @@ Every answer other than a success is an `OperationOutcome`. The gate's
 authentication answers (`401` and the `403`s of a token) are those of every
 route ([Failure statuses](../operate/authentication.md#failure-statuses)),
 and another method on any of these paths is refused `403`
-`operation-refused` before the token is read (`fhir/serving.rs`:
+`operation-refused` before the token is read (`fhir/serving/mod.rs`:
 `another_method_on_a_prescription_path_is_refused_at_the_gate`).
 
 | Route | Status | When |
@@ -671,7 +671,7 @@ interactions and the `patient.identifier` search parameter. It lists
 `Electronic-Dispensations`, with the profile `MedicationDispense-eu-mpd` and
 the `create`, `read`, `vread` and `update` interactions, the last only as
 a withdrawal. Each interaction it declares is one its route serves
-(`fhir/serving.rs`:
+(`fhir/serving/mod.rs`:
 `with_no_member_declared_the_capability_statement_lists_neither_resource`,
 `a_declared_member_lists_both_resources_in_their_mpd_profiles`,
 `every_interaction_declared_for_a_prescription_or_dispensation_is_one_the_route_serves`).

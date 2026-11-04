@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The IHE binding's instruments on the metrics surface.
+//! The IHE binding's instruments on the metrics surface, which the binding
+//! records into.
 //!
 //! They count the ITI-93 messages of the PMIR identity feed, by `result`; the
 //! audit spools are read by the instruments every build carries
@@ -13,7 +14,7 @@ use std::fmt;
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Meter};
 
-use crate::metrics::Metrics;
+use super::Metrics;
 
 /// The ITI-93 messages the identity feed received, by `result` (`applied`,
 /// `refused` or `unauthenticated`); Prometheus
@@ -87,8 +88,7 @@ impl Instruments {
 impl Metrics {
     /// Counts an ITI-93 message that ended as `result`.
     pub fn identity_feed(&self, result: FeedResult) {
-        self.bindings()
-            .ihe
+        self.identity_feed
             .identity_feed
             .add(1, &[KeyValue::new("result", result.as_str())]);
     }

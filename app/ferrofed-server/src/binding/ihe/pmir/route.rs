@@ -19,7 +19,7 @@ use ihe_iti::pmir::error::FeedError;
 use ihe_iti::pmir::feed::{EventKind, Feed, ResponseId, refusal};
 
 use crate::auth::trust::Trust;
-use crate::binding::ihe::metrics::FeedResult;
+use crate::metrics::identity_feed::FeedResult;
 use crate::security::TARGET;
 use crate::state::AppState;
 

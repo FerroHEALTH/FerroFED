@@ -20,7 +20,7 @@ use ferrofed_registry::id::EndpointId;
 use openehr_federation::aql::PatientQuery;
 use openehr_federation::aql::refusal::Refusal;
 
-use crate::metrics::security::Event;
+use crate::security::Event;
 use crate::security::TARGET;
 
 /// A query was refused before anything was dispatched (§5.4.3).

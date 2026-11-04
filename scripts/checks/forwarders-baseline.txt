@@ -3,22 +3,3 @@
 # The key of every forwarder scripts/checks/forwarders.sh counts, written
 # by --update: the path, the owner and the call it makes. A tab and a
 # reason after a key record why that forwarder stays.
-app/ferrofed-console/src/app.rs: product -> tr(Msg::Product)
-app/ferrofed-console/src/configure/act.rs: acted -> crate::act::acted(crate::read::ActionKind::Configuration, at, answered, read)
-app/ferrofed-console/src/configure/render/answers.rs: said -> notice(Tone::Ok, Announce::Status, None, body)
-app/ferrofed-console/src/configure/render/parts.rs: action -> crate::pages::here_with_query()
-app/ferrofed-console/src/configure/said.rs: refused_by -> notice(Tone::Bad, Announce::Alert, None, body)
-app/ferrofed-console/src/gateway/mod.rs: Gateway::creating_systems -> self.read_page("/operator/creating-systems", token, page)
-app/ferrofed-console/src/gateway/mod.rs: Gateway::dependencies -> self.read(Method::GET, "/operator/dependencies", token)
-app/ferrofed-console/src/gateway/mod.rs: Gateway::deployment -> self.read(Method::GET, "/operator/deployment", token)
-app/ferrofed-console/src/gateway/mod.rs: Gateway::incidents -> self.read(Method::GET, "/operator/incidents", token)
-app/ferrofed-console/src/gateway/mod.rs: Gateway::self_description -> self.read(Method::OPTIONS, "/", token)
-app/ferrofed-console/src/gateway/mod.rs: Gateway::stored_queries -> self.read_page("/operator/stored-queries", token, page)
-app/ferrofed-console/src/gateway/mod.rs: json -> String::from("application/json")
-app/ferrofed-console/src/pages/mod.rs: h -> Html::raw(markup)
-app/ferrofed-console/src/pages/mod.rs: t -> Html::text(text)
-app/ferrofed-console/src/pages/organisations.rs: all_nodes -> page(View::Nodes)
-app/ferrofed-console/src/pages/organisations.rs: list -> page(View::Organisations)
-app/ferrofed-console/src/server.rs: mark_dark -> svg(MARK_DARK_SVG)
-app/ferrofed-console/src/server.rs: mark_light -> svg(MARK_LIGHT_SVG)
-app/ferrofed-console/src/session/cookies.rs: Sessions::preference_prefix -> self.cookie_name(PREFERENCE_PREFIX)

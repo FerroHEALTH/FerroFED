@@ -25,7 +25,7 @@ use tokio::sync::OnceCell;
 
 use crate::auth::claims::Introspected;
 use crate::config::auth::{Introspection, IssuerSettings};
-use crate::metrics::security::Event;
+use crate::security::Event;
 use crate::security::TARGET;
 
 /// The largest introspection answer the gateway reads.

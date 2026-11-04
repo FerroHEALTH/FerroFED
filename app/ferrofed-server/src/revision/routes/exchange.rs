@@ -32,7 +32,7 @@ use serde::Deserialize;
 
 use super::console::{ConsoleError, created, guarded};
 use super::{Managed, answered, held, number, record, refused};
-use crate::admin::Operator;
+use crate::auth::operator::Operator;
 use crate::config::tree::{CORE, diff};
 use crate::error::{self, Code};
 use crate::request_id;

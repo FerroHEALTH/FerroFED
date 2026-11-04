@@ -140,7 +140,7 @@ pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: 
         }
         Err(refused) => {
             let refusal = refused.refusal;
-            crate::metrics::security::refused(refusal);
+            refusal.count();
             tracing::warn!(
                 target: TARGET,
                 event = "caller-refused",
