@@ -95,6 +95,32 @@ pub(crate) fn chosen_for(
         .collect()
 }
 
+/// The options a request to a member's own endpoint leaves under, for the
+/// request `arrived`, refusing to send anything carrying one of `withheld`,
+/// and the instant its overall budget runs out (§11.5).
+///
+/// # Errors
+///
+/// [`FanOutError::Clock`] when the clock cannot hold the budget.
+pub(crate) fn options(
+    federation: &Federation,
+    arrived: &Arrived<'_>,
+    withheld: Arc<Withheld>,
+) -> Result<(DispatchOptions, tokio::time::Instant), FanOutError> {
+    let budget = federation.budget();
+    let overall = arrived
+        .started
+        .checked_add(budget.overall())
+        .ok_or(FanOutError::Clock)?;
+    let per_node = Instant::now()
+        .checked_add(budget.per_node())
+        .map_or(overall, |at| at.min(overall));
+    let options = DispatchOptions::new(per_node, arrived.conveyance.clone())
+        .with_request_id(arrived.outbound)
+        .with_withheld(withheld);
+    Ok((options, tokio::time::Instant::from_std(overall)))
+}
+
 /// Asks every member `chosen` names at its own endpoint, at once, under
 /// the budget of the request `arrived`, refusing to send anything carrying
 /// one of `withheld`, and returns each answer in the order of `chosen`.
@@ -109,18 +135,7 @@ pub(crate) async fn asked(
     chosen: Vec<Chosen>,
     withheld: Arc<Withheld>,
 ) -> Result<Vec<Native>, Failure> {
-    let budget = federation.budget();
-    let overall = arrived
-        .started
-        .checked_add(budget.overall())
-        .ok_or(Failure::FanOut(FanOutError::Clock))?;
-    let per_node = Instant::now()
-        .checked_add(budget.per_node())
-        .map_or(overall, |at| at.min(overall));
-    let options = DispatchOptions::new(per_node, arrived.conveyance.clone())
-        .with_request_id(arrived.outbound)
-        .with_withheld(withheld);
-    let until = tokio::time::Instant::from_std(overall);
+    let (options, until) = options(federation, arrived, withheld).map_err(Failure::FanOut)?;
     let mut tasks = JoinSet::new();
     for (position, member) in chosen.into_iter().enumerate() {
         let federation = Arc::clone(federation);

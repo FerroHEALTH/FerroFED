@@ -25,6 +25,7 @@ use crate::access::NoAccess;
 use crate::config::fhir::FhirSettings;
 use crate::error::Code;
 use crate::facade::demographics::{self, Unheaded};
+use crate::facade::summary::laboratory::Laboratory;
 use crate::facade::summary::{self as gathered, Scope, Unsummarised};
 use crate::fhir::admission::Asked;
 use crate::fhir_wire::fhir_json;
@@ -78,7 +79,7 @@ pub(super) async fn summary_of(
         Arc::clone(federation),
         arrived,
         patient,
-        (Scope::Summary, false),
+        (Scope::Summary, Laboratory::Unlisted),
     )
     .await
     {

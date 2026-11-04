@@ -15,7 +15,9 @@
 //! member that does not answer, or answers with no FHIR document `Bundle`
 //! whose identifier has a system and a value (FHIR R4 `bdl-9`), is a member
 //! in `node-error` (§11.1): it fails the list under all-or-nothing, and
-//! under `partial` is named in an `outcome` entry (§11.3, §11.4).
+//! under `partial` is named in an `outcome` entry (§11.3, §11.4). Laboratory
+//! reports are listed when the gateway maps them or a member serves them
+//! itself ([`super::laboratory`]).
 
 use std::collections::BTreeSet;
 use std::ops::ControlFlow;
@@ -26,7 +28,8 @@ use aws_lc_rs::digest::{SHA1_FOR_LEGACY_USE_ONLY, digest};
 use axum::response::Response;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use ferrofed_eehrxf::list::{self, Fetched, ListRequest, Listing};
+use ehds_logging::category::Category;
+use ferrofed_eehrxf::list::{self, Fetched, ListRequest, Listing, Match};
 use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native::Answer;
 use http::{StatusCode, Uri, header};
@@ -39,6 +42,7 @@ use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::facade::native::Native;
+use crate::facade::summary::laboratory::Laboratory;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
 use crate::fhir_wire::fhir_json;
@@ -49,10 +53,19 @@ const OCTET_STREAM: &str = "application/octet-stream";
 /// `GET {fhir-base}/DocumentReference?patient.identifier=system|value`.
 pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
     let read = ListRequest::from_query(uri.query());
-    let lists_laboratory = asked
+    let mapped = asked
         .state
         .fhir()
         .is_some_and(|fhir| fhir.laboratory.is_some());
+    // NOTE: no specification governs this: our own design; a member declared native for the
+    // category serves its laboratory reports itself, with or without the gateway's own mapping.
+    let own = asked.state.federation().is_some_and(|federation| {
+        federation
+            .snapshot()
+            .native_endpoints()
+            .any(|native| native.serves(Category::MedicalTestResult.code()))
+    });
+    let lists_laboratory = mapped || own;
     super::searched(
         (&asked, Instant::now()),
         read,
@@ -72,7 +85,11 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
         async |read, admitted, arrived| {
             let federation = &admitted.federation;
             let patient = (read.system(), read.value());
-            let laboratory = read.admits_laboratory() && admitted.fhir.laboratory.is_some();
+            let laboratory = match (read.admits_laboratory(), mapped) {
+                (false, _) => Laboratory::Unlisted,
+                (true, true) => Laboratory::Mapped,
+                (true, false) => Laboratory::Own,
+            };
             match gathered::gather(
                 Arc::clone(federation),
                 arrived,
@@ -150,7 +167,11 @@ fn listed(
     if read.admits_summaries() && !gathered.resolved.is_empty() {
         matches.push((
             format!("urn:uuid:{id}"),
-            list::on_demand((&id, &unique), listing, &fhir.operator),
+            Match::Written(Box::new(list::on_demand(
+                (&id, &unique),
+                listing,
+                &fhir.operator,
+            ))),
         ));
     }
     let mut outcomes = Vec::new();
@@ -171,7 +192,12 @@ fn listed(
                 let id = minted();
                 matches.push((
                     format!("urn:uuid:{id}"),
-                    list::native((&id, document.identifier()), listing, &custodian, fetched),
+                    Match::Written(Box::new(list::native(
+                        (&id, document.identifier()),
+                        listing,
+                        &custodian,
+                        fetched,
+                    ))),
                 ));
             }
             Answer::Absent => {}
@@ -185,19 +211,17 @@ fn listed(
             )),
         }
     }
-    if !gathered.laboratory.is_empty() {
-        let Some((reports, silent)) =
-            super::laboratory::listed(federation, (fhir, caller), gathered, listing)
-        else {
-            tracing::error!(
-                request_id = logged,
-                "a laboratory report could not be named by a signed URL"
-            );
-            return unlisted(federation, gathered, (system, value), "laboratory report");
-        };
-        matches.extend(reports);
-        outcomes.extend(silent);
-    }
+    let Some((reports, silent)) =
+        super::laboratory::every(federation, (fhir, caller), gathered, listing)
+    else {
+        tracing::error!(
+            request_id = logged,
+            "a laboratory report could not be named by a signed URL"
+        );
+        return unlisted(federation, gathered, (system, value), "laboratory report");
+    };
+    matches.extend(reports);
+    outcomes.extend(silent);
     // NOTE: Federation Tier §11.3, §11.4: under best-effort, a member the resolver could not
     // answer for is named as a silent one, so the list never reads as complete.
     for endpoint in &gathered.unresolved {

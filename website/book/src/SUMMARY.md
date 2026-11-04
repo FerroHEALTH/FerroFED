@@ -89,6 +89,7 @@
   - [Templates, definitions and demographics](integrate/templates-and-demographics.md)
   - [Stored queries](integrate/stored-queries.md)
 - [The patient summary over FHIR](integrate/patient-summary.md)
+  - [Laboratory reports over FHIR](integrate/laboratory-reports.md)
   - [Terminology on the FHIR face](integrate/terminology.md)
 - [Prescriptions and dispensations over FHIR](integrate/prescriptions.md)
 - [A national contact point](integrate/national-contact-point.md)

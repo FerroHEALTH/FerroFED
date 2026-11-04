@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use ferrofed_eehrxf::dispensations::RESOURCE;
 use ferrofed_engine::dispatch::DispatchOptions;
+use ferrofed_engine::single_node::native_search::By;
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
 
@@ -51,7 +52,14 @@ pub(super) async fn check(
     (system, value): (&str, &str),
     (options, until): (&DispatchOptions, tokio::time::Instant),
 ) -> Checked {
-    let held = match paged(federation, (writing, RESOURCE, None), options, until).await {
+    let held = match paged(
+        federation,
+        (writing, RESOURCE, By::PatientIdentifier(None)),
+        options,
+        until,
+    )
+    .await
+    {
         Ok(held) => held,
         Err(_unknown) => {
             return Checked::Untold(
