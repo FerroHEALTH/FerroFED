@@ -251,3 +251,53 @@ impl fmt::Debug for DemographicsStep {
             .finish_non_exhaustive()
     }
 }
+
+/// The gateway a binding's identity feed route serves in: its feed, its
+/// counter and the federation a message changes.
+pub trait FeedHost: Send + Sync + 'static {
+    /// The PMIR identity feed, when `[pmir]` is set.
+    #[cfg(feature = "binding-ihe")]
+    fn identity_feed(&self) -> Option<&Arc<crate::binding::ihe::pmir::IdentityFeed>>;
+
+    /// Counts an ITI-93 message that ended as `result`.
+    #[cfg(feature = "binding-ihe")]
+    fn feed_counted(&self, result: crate::metrics::identity_feed::FeedResult);
+
+    /// Applies `change` to the resolution bindings of the running federation
+    /// and returns how many bindings it dropped, or `None` while no
+    /// federation runs.
+    #[cfg(feature = "binding-ihe")]
+    fn identity_changed(
+        &self,
+        change: Option<&ferrofed_identity::session::IdentityChange>,
+    ) -> Option<usize>;
+}
+
+/// What a binding that keeps the registry in step with a source of its own
+/// reports a change of that source to: the gateway's reload.
+pub trait RegistrySink: Send + Sync + 'static {
+    /// What a change the gateway applied reports.
+    type Applied: fmt::Debug + Send;
+    /// Why the gateway refused a change; the running registry stays.
+    type Refused: fmt::Debug + Send;
+
+    /// Puts the registry `snapshot` the source changed to in place of the
+    /// running one, checked as a reload is.
+    ///
+    /// # Errors
+    ///
+    /// The [`RegistrySink::Refused`] of a federation that cannot be built
+    /// over `snapshot`.
+    fn directory_changed(
+        &self,
+        snapshot: ferrofed_registry::snapshot::RegistrySnapshot,
+    ) -> Result<Self::Applied, Self::Refused>;
+
+    /// The refusal of a change the source answered with that `refusal`
+    /// stopped before the gateway saw a registry.
+    fn directory_refused(&self, refusal: crate::binding::error::BindingError) -> Self::Refused;
+
+    /// Whether `refused` is of a registry that breaks a rule of its own,
+    /// apart from a sound one the rest of the configuration does not fit.
+    fn registry_invalid(refused: &Self::Refused) -> bool;
+}

@@ -15,12 +15,12 @@ use axum::routing::post;
 use axum::{Extension, Router};
 
 use crate::auth::trust::Trust;
+use crate::binding::error::BindingError;
 use crate::binding::ihe::mcsd::registry::DirectoryRegistry;
 use crate::binding::ihe::pmir::IdentityFeed;
 use crate::binding::ihe::pmir::subscription;
+use crate::binding::seam::{FeedHost, RegistrySink};
 use crate::config::settings::Settings;
-use crate::reload::Reloader;
-use crate::state::{AppState, StateError};
 use ferrofed_operator_api::health::Indication;
 
 /// The directory and the identity feed of a running gateway.
@@ -41,9 +41,9 @@ impl Processes {
     ///
     /// # Errors
     ///
-    /// [`StateError::IdentityFeed`] and [`StateError::Audit`] for a feed that
+    /// [`BindingError::IdentityFeed`] and [`BindingError::Audit`] for a feed that
     /// cannot be built.
-    pub(crate) fn build(settings: &Settings) -> Result<Self, StateError> {
+    pub(crate) fn build(settings: &Settings) -> Result<Self, BindingError> {
         Ok(Self {
             directory: None,
             identity_feed: identity_feed(settings)?,
@@ -77,17 +77,17 @@ impl Processes {
 
     /// Returns `surface` with the identity feed's route, when `[pmir]` is set,
     /// its Basic users verified by the gate `trust` holds.
-    pub(crate) fn routes(
+    pub(crate) fn routes<H: FeedHost>(
         &self,
-        surface: Router<Arc<AppState>>,
+        surface: Router<Arc<H>>,
         trust: &Arc<Trust>,
-    ) -> Router<Arc<AppState>> {
+    ) -> Router<Arc<H>> {
         // NOTE: PMIR §2:3.93.5: the feed authenticates its Supplier as one of its own
         // Basic users, so its route sits outside the ITS-REST surface's admission.
         match &self.identity_feed {
             Some(feed) => surface.route(
                 feed.path(),
-                post(super::pmir::route::feed).layer(Extension(Arc::clone(trust))),
+                post(super::pmir::route::feed::<H>).layer(Extension(Arc::clone(trust))),
             ),
             None => surface,
         }
@@ -95,9 +95,9 @@ impl Processes {
 
     /// Starts keeping the registry in step with the directory, through
     /// `reloader`, and the identity feed's subscription.
-    pub(crate) fn start(&self, reloader: &Arc<Reloader>) -> Running {
+    pub(crate) fn start<S: RegistrySink>(&self, sink: &Arc<S>) -> Running {
         if let Some(directory) = &self.directory {
-            tokio::spawn(Arc::clone(directory).keep_in_step(Arc::clone(reloader)));
+            tokio::spawn(Arc::clone(directory).keep_in_step(Arc::clone(sink)));
         }
         Running(self.identity_feed.as_ref().map(IdentityFeed::start))
     }
@@ -118,7 +118,7 @@ impl Running {
 
 /// The PMIR identity feed `settings` describe, scoped by the `ehr_id`
 /// domain of every member `[pixm]` maps (Annex A.1).
-fn identity_feed(settings: &Settings) -> Result<Option<Arc<IdentityFeed>>, StateError> {
+fn identity_feed(settings: &Settings) -> Result<Option<Arc<IdentityFeed>>, BindingError> {
     let Some(pmir) = &settings.pmir else {
         return Ok(None);
     };
@@ -128,29 +128,6 @@ fn identity_feed(settings: &Settings) -> Result<Option<Arc<IdentityFeed>>, State
         .flat_map(|pixm| pixm.managers.iter())
         .flat_map(|manager| manager.members.values().cloned())
         .collect();
-    let audit = crate::audit::recorder(&settings.audit).map_err(StateError::Audit)?;
+    let audit = crate::audit::recorder(&settings.audit).map_err(BindingError::Audit)?;
     Ok(Some(Arc::new(IdentityFeed::new(pmir, domains, audit)?)))
-}
-
-impl AppState {
-    /// Returns this state keeping its registry in step with `directory`,
-    /// whose last observed state `{base}/operator/dependencies` reports.
-    #[must_use]
-    pub fn watching(mut self, directory: Arc<DirectoryRegistry>) -> Self {
-        self.processes_mut().ihe.directory = Some(directory);
-        self
-    }
-
-    /// Returns the PMIR identity feed, when `[pmir]` is set.
-    #[must_use]
-    pub fn identity_feed(&self) -> Option<&Arc<IdentityFeed>> {
-        self.processes().ihe.identity_feed.as_ref()
-    }
-
-    /// Returns the care services directory the registry is kept in step
-    /// with, when it is read from one.
-    #[must_use]
-    pub fn directory(&self) -> Option<&Arc<DirectoryRegistry>> {
-        self.processes().ihe.directory.as_ref()
-    }
 }

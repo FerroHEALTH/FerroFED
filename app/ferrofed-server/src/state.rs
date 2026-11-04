@@ -15,9 +15,9 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_health::lifecycle::Lifecycle;
 use ferrohealth_health::registry::{HealthIndicator, Registry};
 
-#[cfg(feature = "binding-ihe")]
-use crate::binding::ihe::pmir::IdentityFeedError;
+use crate::binding::error::BindingError;
 use crate::binding::process::{Processes, Sources};
+use crate::binding::seam::FeedHost;
 use crate::config::fhir::FhirSettings;
 use crate::config::public_url::PublicUrl;
 use crate::config::settings::Settings;
@@ -104,14 +104,9 @@ pub enum StateError {
     /// development profile.
     #[error(transparent)]
     Cleartext(#[from] CleartextError),
-    /// The PMIR identity feed cannot be built.
+    /// A binding's process cannot be built.
     #[error(transparent)]
-    #[cfg(feature = "binding-ihe")]
-    IdentityFeed(#[from] IdentityFeedError),
-    /// The audit trail of the PMIR transactions cannot start (`[audit]`).
-    #[error("the [audit] trail cannot start")]
-    #[cfg(feature = "binding-ihe")]
-    Audit(#[source] crate::audit::AuditTrailError),
+    Binding(#[from] BindingError),
 }
 
 impl AppState {
@@ -453,5 +448,55 @@ fn refused(store: &Store, source: StoreError) -> StateError {
         backend: store.backend(),
         path,
         source,
+    }
+}
+
+#[cfg(feature = "binding-ihe")]
+impl AppState {
+    /// Returns this state keeping its registry in step with `directory`,
+    /// whose last observed state `{base}/operator/dependencies` reports.
+    #[must_use]
+    pub fn watching(
+        mut self,
+        directory: Arc<crate::binding::ihe::mcsd::registry::DirectoryRegistry>,
+    ) -> Self {
+        self.processes_mut().ihe.directory = Some(directory);
+        self
+    }
+
+    /// Returns the PMIR identity feed, when `[pmir]` is set.
+    #[must_use]
+    pub fn identity_feed(&self) -> Option<&Arc<crate::binding::ihe::pmir::IdentityFeed>> {
+        self.processes().ihe.identity_feed.as_ref()
+    }
+
+    /// Returns the care services directory the registry is kept in step
+    /// with, when it is read from one.
+    #[must_use]
+    pub fn directory(
+        &self,
+    ) -> Option<&Arc<crate::binding::ihe::mcsd::registry::DirectoryRegistry>> {
+        self.processes().ihe.directory.as_ref()
+    }
+}
+
+impl FeedHost for AppState {
+    #[cfg(feature = "binding-ihe")]
+    fn identity_feed(&self) -> Option<&Arc<crate::binding::ihe::pmir::IdentityFeed>> {
+        Self::identity_feed(self)
+    }
+
+    #[cfg(feature = "binding-ihe")]
+    fn feed_counted(&self, result: crate::metrics::identity_feed::FeedResult) {
+        self.metrics().identity_feed(result);
+    }
+
+    #[cfg(feature = "binding-ihe")]
+    fn identity_changed(
+        &self,
+        change: Option<&ferrofed_identity::session::IdentityChange>,
+    ) -> Option<usize> {
+        let federation = self.federation()?;
+        Some(change.map_or(0, |change| federation.identity_changed(change)))
     }
 }
