@@ -30,7 +30,7 @@ use eehrxf::document::laboratory::{LAB_SLOTS, LABORATORY_REPORT_FORM};
 use eehrxf::document::section::Section;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
-use eehrxf::mappings::LABORATORY;
+use eehrxf::mappings::{LABORATORY, UnknownContext};
 use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
@@ -119,11 +119,18 @@ pub struct Served {
     mapping: Mapping,
 }
 
+/// The context of the shipped laboratory project a laboratory composition
+/// is mapped by, in both directions.
+pub const RESULT_CONTEXT: &str = "ferrobridge_eu_laboratory.context";
+
 /// Why a laboratory report is not served; no variant's text names a value
 /// a composition carries.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ServedError {
+    /// The shipped laboratory project names no [`RESULT_CONTEXT`].
+    #[error("the shipped laboratory project names no result context")]
+    Context(#[source] UnknownContext),
     /// The OPT 1.4 template does not read.
     #[error("the laboratory report template does not read as an OPT 1.4")]
     Template(#[source] PathError),
@@ -163,17 +170,24 @@ pub struct Report<'a> {
 }
 
 impl Served {
-    /// Compiles the shipped laboratory mapping (`eehrxf::mappings::LABORATORY`)
-    /// against the OPT 1.4 template `opt`.
+    /// Compiles the result context ([`RESULT_CONTEXT`]) of the shipped
+    /// laboratory mapping (`eehrxf::mappings::LABORATORY`) against the OPT
+    /// 1.4 template `opt`.
     ///
     /// # Errors
     ///
-    /// [`ServedError::Template`] when `opt` does not read, and
+    /// [`ServedError::Template`] when `opt` does not read,
+    /// [`ServedError::Context`] when the project names no result context, and
     /// [`ServedError::Compile`] when the mapping does not compile against it.
     pub fn compile(opt: &str) -> Result<Self, ServedError> {
         let source = TemplateSource::opt14(opt).map_err(ServedError::Template)?;
-        let mapping = deep(|| Mapping::compile_project(&source, &LABORATORY))?
-            .map_err(ServedError::Compile)?;
+        // NOTE: no specification governs this: our own design; the project may list more than one
+        // context over one template, so only the result context is compiled and run.
+        let result = LABORATORY
+            .with_context(RESULT_CONTEXT)
+            .map_err(ServedError::Context)?;
+        let mapping =
+            deep(|| Mapping::compile_project(&source, &result))?.map_err(ServedError::Compile)?;
         Ok(Self { mapping })
     }
 

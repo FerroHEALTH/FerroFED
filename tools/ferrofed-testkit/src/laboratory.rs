@@ -84,17 +84,23 @@ pub fn mapping_files(directory: &Path) -> std::io::Result<Vec<PathBuf>> {
     LABORATORY.write_to(directory)
 }
 
-/// Returns the context mapping a received laboratory report is mapped by.
+/// The context of the shipped laboratory project a laboratory report is
+/// mapped by, as the gateway names it (`ferrofed_eehrxf::laboratory`).
+pub const RESULT_CONTEXT: &str = "ferrobridge_eu_laboratory.context";
+
+/// Returns the context mapping a received laboratory report is mapped by,
+/// the project narrowed to [`RESULT_CONTEXT`].
 ///
 /// # Errors
 ///
-/// When the shipped project names no context.
+/// When the shipped project names no such context.
 pub fn context() -> Result<&'static str, Box<dyn Error>> {
-    LABORATORY
+    let result = LABORATORY.with_context(RESULT_CONTEXT)?;
+    result
         .contexts()
         .first()
         .copied()
-        .ok_or_else(|| "the laboratory project names no context".into())
+        .ok_or_else(|| "the laboratory project names no result context".into())
 }
 
 /// Decodes the FHIR JSON `value` as the R4 resource of `kind`.
