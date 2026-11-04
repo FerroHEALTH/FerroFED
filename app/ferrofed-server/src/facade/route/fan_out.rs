@@ -66,10 +66,10 @@ use super::chosen::{Chooser, named, to_named};
 use super::{Arrived, DEFINITION_GROUP, Deadlines, held, unheld};
 use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
-use crate::facade::security;
 use crate::facade::target::{self, Mechanism, Selected, TargetError};
 use crate::federation::Federation;
 use crate::onward::NodeTransport;
+use crate::security::logged;
 
 /// The ITS-REST operations that upload a template, ADL 1.4 and ADL 2
 /// (§12.6).
@@ -477,7 +477,7 @@ fn outcome(
                 part,
             } = &failure
             {
-                security::forward_withheld(withheld, *part, logged);
+                logged::forward_withheld(withheld, *part, logged);
             }
             tracing::error!(
                 endpoint = %endpoint.id(),

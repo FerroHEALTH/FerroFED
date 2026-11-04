@@ -8,6 +8,8 @@
 //! the metrics surface reads ([`crate::metrics::security`]). No specification
 //! governs this: our own design.
 
+pub mod logged;
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The tracing target of every security event, so an operator can route them

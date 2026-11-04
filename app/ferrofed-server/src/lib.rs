@@ -84,6 +84,7 @@ pub mod facade;
 pub mod face_path;
 pub mod federation;
 pub mod fhir;
+pub mod fhir_wire;
 pub mod health;
 pub mod jwks;
 pub mod localization;

@@ -18,10 +18,11 @@ use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
 
 use crate::federation::Federation;
+use crate::fhir_wire::fhir_json;
 use crate::state::AppState;
 
 use crate::fhir::admission::Asked;
-use crate::fhir::{admission, fhir_json, refusal};
+use crate::fhir::{admission, refusal};
 
 use super::{not_served, serves};
 

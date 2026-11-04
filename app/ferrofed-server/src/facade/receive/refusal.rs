@@ -19,8 +19,9 @@ use openehr_federation::status::EndpointStatus;
 
 use super::{Origin, accessed};
 use crate::access::{Accessed, NoAccess};
-use crate::facade::{confined, security};
+use crate::facade::confined;
 use crate::federation::Federation;
+use crate::security::logged;
 
 /// Why the patient of a prepared document names no one `ehr_id` at its
 /// member, with nothing sent to any member.
@@ -98,7 +99,7 @@ pub(super) fn failed(
     let member = &prepared.member;
     let (status, code, diagnostics) = match error {
         EhrCallError::Withheld { endpoint, part } => {
-            security::gate_stopped(endpoint, part, logged);
+            logged::gate_stopped(endpoint, part, logged);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "security",
@@ -184,7 +185,7 @@ pub(super) fn unprepared(unreceived: &Unreceived, logged: &str) -> Response {
             &unreceived.to_string(),
         ),
         Unreceived::NonConformant { findings } => {
-            let mut response = crate::fhir::fhir_json(
+            let mut response = crate::fhir_wire::fhir_json(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 &receive::nonconformant(findings),
             );
@@ -250,7 +251,7 @@ pub(super) fn unmarked(unmarked: &SubjectInsertionError, logged: &str) -> Respon
 /// An `OperationOutcome` of one error, answered with `status`, stating that
 /// no member was sent anything.
 pub(super) fn refused(status: StatusCode, code: &str, diagnostics: &str) -> Response {
-    let mut response = crate::fhir::fhir_json(status, &face::outcome(code, diagnostics));
+    let mut response = crate::fhir_wire::fhir_json(status, &face::outcome(code, diagnostics));
     response.extensions_mut().insert(NoAccess);
     response
 }

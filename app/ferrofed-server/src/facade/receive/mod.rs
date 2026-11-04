@@ -50,12 +50,13 @@ use secrecy::{ExposeSecret, SecretString};
 use crate::access::{self, Accessed, Asked};
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
+use crate::facade::confined;
 use crate::facade::demographics::{self, Identified};
 use crate::facade::receive::refusal::{Unresolved, attach, failed, refused, unprepared};
 use crate::facade::request::Arrived;
 use crate::facade::route::Deadlines;
-use crate::facade::{confined, security};
 use crate::federation::Federation;
+use crate::security::logged;
 
 mod inserted;
 mod refusal;
@@ -115,7 +116,7 @@ pub(crate) async fn receive(
             ),
         );
     };
-    security::document_subject_consumed(&logged);
+    logged::document_subject_consumed(&logged);
     let resolved = match resolve(
         (federation, fhir),
         &arrived,
@@ -336,7 +337,7 @@ async fn write(
                 version: &version,
             };
             let mut response =
-                crate::fhir::fhir_json(StatusCode::OK, &receive::written(prepared, written));
+                crate::fhir_wire::fhir_json(StatusCode::OK, &receive::written(prepared, written));
             attach(
                 &mut response,
                 accessed(

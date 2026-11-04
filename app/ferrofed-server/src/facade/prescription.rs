@@ -5,7 +5,7 @@
 //! (Regulation (EU) 2025/327 Art 14(1)(b)).
 //!
 //! The id names the member's own endpoint, its `ehr_id` for the patient and
-//! its own id of the resource ([`crate::fhir::locator`]), so the read needs
+//! its own id of the resource ([`crate::fhir_wire::locator`]), so the read needs
 //! no state at the gateway. It is a locator alone: a caller confined to one
 //! patient reaches that patient's own `{node, ehr_id}` pairs alone, a
 //! resolution binding or the `ehr_id` index that places the `ehr_id` at two
@@ -59,7 +59,7 @@ use crate::facade::prescriptions::{self, Held, Unread};
 use crate::facade::request::Arrived;
 use crate::facade::{confined, consent, mapped, owner};
 use crate::federation::Federation;
-use crate::fhir::locator::{Locator, Unlocated};
+use crate::fhir_wire::locator::{Locator, Unlocated};
 
 /// What the map mode of a prescription read needs: each map-mode member's
 /// mapping by its node id, the identifier systems its patient is named in,

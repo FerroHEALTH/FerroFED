@@ -26,7 +26,7 @@
 //! A refused query is a `400` whose message locates the fault by byte range
 //! and never quotes it (§5.4.3), and whose body names the refusal's stable
 //! code ([`crate::error`]). Every strip, refusal and outbound-gate stop is
-//! a [`security`] event, by position and never by value.
+//! a [`crate::security::logged`] event, by position and never by value.
 //!
 //! A request to an EHR resource under a path `ehr_id` is routed to one node
 //! instead, and passed through byte-identical ([`route`]; §7a.1, §7a.3);
@@ -77,7 +77,6 @@ pub(crate) mod receive;
 pub(crate) mod request;
 pub mod route;
 mod scoped;
-pub mod security;
 pub mod stored;
 pub mod subject;
 pub(crate) mod summary;

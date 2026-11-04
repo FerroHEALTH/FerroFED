@@ -32,7 +32,7 @@ use openehr_federation::aql::definition::{Definition, SubjectOrigin};
 use openehr_federation::aql::refusal::Refusal;
 
 use crate::config::stored_queries::Store;
-use crate::facade::security;
+use crate::security::logged;
 
 pub mod embedded;
 pub mod files;
@@ -112,7 +112,7 @@ impl Admitted {
     ) -> Result<Vec<StoredDefinition>, StoreError> {
         for definition in &definitions {
             if let Err(reason) = admit(definition.aql(), &self.context) {
-                security::held_definition_refused(definition.name(), definition.version());
+                logged::held_definition_refused(definition.name(), definition.version());
                 return Err(StoreError::Corrupt(Box::new(HeldRefused {
                     name: definition.name().clone(),
                     version: definition.version(),

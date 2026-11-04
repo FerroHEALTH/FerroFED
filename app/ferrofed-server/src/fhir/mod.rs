@@ -37,19 +37,19 @@ use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
 use axum::Router;
-use axum::body::{Body, Bytes};
+use axum::body::Bytes;
 use axum::extract::State;
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use ferrofed_eehrxf::face::{self, FHIR_JSON, SummaryRequest};
 use ferrofed_eehrxf::receive::Receivers;
 use ferrofed_eehrxf::serving::Serving;
-use http::{HeaderValue, StatusCode, Uri, header};
-use serde::Serialize;
+use http::{StatusCode, Uri, header};
 
 use crate::access::NoAccess;
 use crate::face_path::{BUNDLE, DOCUMENTS, METADATA, PATIENTS, SUMMARY};
 use crate::fhir::admission::Asked;
+use crate::fhir_wire::fhir_json;
 use crate::state::AppState;
 
 mod admission;
@@ -57,7 +57,6 @@ mod binary;
 pub mod errors;
 mod laboratory;
 mod list;
-pub mod locator;
 mod lookup;
 pub mod medication;
 mod patient_summary;
@@ -272,19 +271,6 @@ fn attach(response: &mut Response, accessed: Option<crate::access::Accessed>) {
         response.extensions_mut().insert(accessed);
     } else {
         response.extensions_mut().insert(NoAccess);
-    }
-}
-
-/// `resource` as FHIR JSON with `status`.
-pub(crate) fn fhir_json(status: StatusCode, resource: &impl Serialize) -> Response {
-    match serde_json::to_vec(resource) {
-        Ok(body) => (
-            status,
-            [(header::CONTENT_TYPE, HeaderValue::from_static(FHIR_JSON))],
-            body,
-        )
-            .into_response(),
-        Err(_unencoded) => (StatusCode::INTERNAL_SERVER_ERROR, Body::empty()).into_response(),
     }
 }
 

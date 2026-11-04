@@ -31,8 +31,9 @@ use openehr_its::rest::generated::query::{AdhocQueryExecute, QueryExecuteAdhocQu
 use openehr_its::rest::routes::RouteMatch;
 
 use crate::facade::answer::Failure;
-use crate::facade::{intake, route, security, target};
+use crate::facade::{intake, route, target};
 use crate::federation::Federation;
+use crate::security::logged;
 
 /// One federated query request, as it arrived.
 #[derive(Debug, Clone, Copy)]
@@ -126,9 +127,9 @@ fn analysed(
             }
             Ok(analysis)
         })
-        .inspect_err(|refusal| security::refused(refusal, request_id))?;
+        .inspect_err(|refusal| logged::refused(refusal, request_id))?;
     if let Analysis::Patient(query) = &analysis {
-        security::stripped(query, request_id);
+        logged::stripped(query, request_id);
     }
     Ok(analysis)
 }
@@ -214,7 +215,7 @@ fn directed(
     request_id: &str,
 ) -> Result<(FacadeQuery, Option<BTreeSet<EndpointId>>), Failure> {
     let facade =
-        FacadeQuery::parse(q).inspect_err(|refusal| security::refused(refusal, request_id))?;
+        FacadeQuery::parse(q).inspect_err(|refusal| logged::refused(refusal, request_id))?;
     let named = target::requested(federation.snapshot(), facade.directive(), headers)?;
     if named.as_ref().is_some_and(BTreeSet::is_empty) {
         return Err(Failure::NoDestination);
