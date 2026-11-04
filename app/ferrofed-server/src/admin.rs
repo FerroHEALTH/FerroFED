@@ -57,11 +57,11 @@ use crate::config::settings::Settings;
 use crate::error::{self, Code};
 use crate::facade::stored;
 use crate::metrics;
-use crate::metrics::security::Event;
 use crate::reload::{self, Reloader};
 use crate::request_id;
 use crate::revision;
 use crate::revision::routes::Managed;
+use crate::security::Event;
 use crate::state::AppState;
 
 /// The path of the operator's distribution of a held stored-query version:

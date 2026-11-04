@@ -17,8 +17,8 @@
 //! the overload limits ([`nodes::Limit`]). Nothing a request carries becomes
 //! a label, so no patient identifier and no client text can reach the
 //! surface (§5.4.1, N33). The audit spools are read with no label at all
-//! ([`crate::audit::metrics`]), and each binding adds its own instruments
-//! under the same rule ([`crate::binding::process::Instruments`]). The instruments
+//! ([`crate::audit::metrics`]), and the IHE binding's identity feed under the
+//! same rule (`identity_feed`, behind `binding-ihe`). The instruments
 //! fill from what the gateway already observes: each request it answers, an
 //! incident's event, the per-endpoint report of each node request, each
 //! resolver call, each security event, each refusal of a limit, and a
@@ -31,6 +31,9 @@
 //! (<https://opentelemetry.io/docs/specs/otel/compatibility/prometheus_and_openmetrics/>).
 
 pub mod dispensations;
+pub mod group;
+#[cfg(feature = "binding-ihe")]
+pub mod identity_feed;
 pub mod inbound;
 pub mod latency;
 pub mod nodes;
@@ -194,16 +197,10 @@ pub struct Metrics {
     /// Kept for the life of the provider: their callbacks read the audit
     /// spools at each collection.
     _audit: crate::audit::metrics::Instruments,
-    /// The instruments each binding records through, kept for the life of
-    /// the provider.
-    #[cfg_attr(
-        not(feature = "binding-ihe"),
-        expect(
-            dead_code,
-            reason = "no compiled binding records through instruments of its own"
-        )
-    )]
-    bindings: crate::binding::process::Instruments,
+    /// The IHE binding's identity feed counter, kept for the life of the
+    /// provider.
+    #[cfg(feature = "binding-ihe")]
+    identity_feed: identity_feed::Instruments,
     /// The window of the installation report, which the request log and the
     /// node requests record into beside the instruments.
     usage: Arc<Window>,
@@ -252,7 +249,6 @@ impl Metrics {
         let requests = inbound::Requests::new(&meter);
         let security = security::observe(&meter);
         let dispensations = dispensations::observe(&meter);
-        let bindings = crate::binding::process::Instruments::new(&meter);
         Self {
             telemetry,
             nodes,
@@ -264,7 +260,8 @@ impl Metrics {
             _dispensations: dispensations,
             _incidents: incidents,
             _audit: crate::audit::metrics::Instruments::new(&meter),
-            bindings,
+            #[cfg(feature = "binding-ihe")]
+            identity_feed: identity_feed::Instruments::new(&meter),
             usage,
         }
     }
@@ -318,12 +315,6 @@ impl Metrics {
         self.in_step.record(u64::from(in_step), &[]);
     }
 
-    /// Returns the instruments the bindings record through.
-    #[cfg(feature = "binding-ihe")]
-    pub(crate) fn bindings(&self) -> &crate::binding::process::Instruments {
-        &self.bindings
-    }
-
     /// Returns the Prometheus text exposition of every instrument.
     ///
     /// # Errors
@@ -348,7 +339,7 @@ impl Default for Metrics {
         .expect("the Prometheus reader should register in its own empty registry");
         Self::new(
             Arc::new(telemetry),
-            crate::usage_report::group::window(crate::config::base_path::BasePath::default(), None),
+            group::window(crate::config::base_path::BasePath::default(), None),
         )
     }
 }

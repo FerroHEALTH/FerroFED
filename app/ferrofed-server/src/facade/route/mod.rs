@@ -71,6 +71,8 @@ use http::{HeaderMap, Method, StatusCode, Uri};
 use openehr_base::prelude::ObjectVersionId;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
+
+use crate::node_status;
 use openehr_its::rest::routes::{self, Lookup, RouteMatch};
 
 use crate::ITS_REST_PREFIX;
@@ -88,7 +90,6 @@ use crate::state::AppState;
 mod chosen;
 pub(crate) mod ehr;
 pub(crate) mod fan_out;
-pub(crate) mod status;
 
 /// The API group of the definition area (§7a.1).
 const DEFINITION_GROUP: &str = "definition";
@@ -506,9 +507,9 @@ pub(crate) fn answered_by(endpoint: &Endpoint, forwarded: Forwarded) -> Response
 }
 
 /// The §11.1 status of the node at `endpoint` that answered `forwarded`
-/// ([`status::answered`]).
+/// ([`node_status::answered`]).
 fn reached(endpoint: &Endpoint, forwarded: &Forwarded) -> EndpointStatus {
-    status::answered(
+    node_status::answered(
         forwarded.status(),
         is_consent_refusal(forwarded, endpoint.consent_refusal_codes()),
     )
@@ -609,7 +610,7 @@ pub(crate) fn failed(
     let mut response = provenance.stamp(error::response(code, message, request_id));
     response
         .extensions_mut()
-        .insert(Reached(status::unanswered(failure)));
+        .insert(Reached(node_status::unanswered(failure)));
     response
 }
 

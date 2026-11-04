@@ -16,10 +16,11 @@ use std::error::Error;
 use axum::body::Body;
 use ferrofed_registry::incident::Kind;
 use ferrofed_server::auth::refusal::Refusal;
-use ferrofed_server::binding::ihe::metrics::FeedResult;
 use ferrofed_server::metrics::ReloadResult;
+use ferrofed_server::metrics::identity_feed::FeedResult;
 use ferrofed_server::metrics::nodes::Limit;
-use ferrofed_server::metrics::security::{CALLER_REFUSED, Event};
+use ferrofed_server::metrics::security::CALLER_REFUSED;
+use ferrofed_server::security::Event;
 use http::{Request, header};
 use openehr_federation::status::EndpointStatus;
 

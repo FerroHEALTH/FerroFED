@@ -176,7 +176,7 @@ impl AppState {
         let federation = Federation::build(settings, document, None)?;
         let cleartext = transport::check(settings, federation.as_ref().map(Federation::snapshot))?;
         transport::warn(&cleartext);
-        let usage = crate::usage_report::group::window(
+        let usage = crate::metrics::group::window(
             settings.server.base_path.clone(),
             settings
                 .fhir

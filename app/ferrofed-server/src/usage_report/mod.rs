@@ -11,14 +11,14 @@
 //! range, the configured identity and consent services, and whether the
 //! stored-query registry and the FHIR face are offered), its request groups
 //! by matched route template, and the node request counts
-//! ([`group`]). A report carries no patient data, no AQL text, no request
-//! path, no node URL or name, and no identifier other than the instance id.
+//! ([`crate::metrics::group`]). A report carries no patient data, no AQL
+//! text, no request path, no node URL or name, and no identifier other than
+//! the instance id.
 //! It is on by default; `[usage_report] enabled = false` stops it, a CI
 //! environment stops it, and so does the lack of a writable state
 //! directory, which one boot line says. No specification governs any of
 //! this: our own design.
 
-pub mod group;
 pub mod status;
 
 use std::sync::Arc;

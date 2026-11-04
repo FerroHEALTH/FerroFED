@@ -86,7 +86,7 @@ impl Unconfined {
     /// The answer to the request: `424`, logged under the gateway's `logged`
     /// id with the cause.
     pub(crate) fn respond(&self, request_id: &str, logged: &str) -> Response {
-        crate::metrics::security::Event::PatientContextUnavailable.record();
+        crate::security::Event::PatientContextUnavailable.record();
         tracing::error!(
             target: TARGET,
             event = "patient-context-unavailable",
@@ -274,7 +274,7 @@ pub(crate) fn refused(why: &'static str, request_id: &str, logged: &str) -> Resp
 /// for `why`, under the gateway's `logged` id; it names no `ehr_id` and no
 /// endpoint.
 pub(crate) fn stopped(why: &'static str, logged: &str) {
-    crate::metrics::security::Event::PatientConfinement.record();
+    crate::security::Event::PatientConfinement.record();
     tracing::warn!(
         target: TARGET,
         event = "patient-confinement",

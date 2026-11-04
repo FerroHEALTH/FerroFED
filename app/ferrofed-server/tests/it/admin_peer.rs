@@ -23,7 +23,7 @@ use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use ferrofed_identity::profile::Profile;
 use ferrofed_server::admin::{self, Access};
-use ferrofed_server::metrics::security::Event;
+use ferrofed_server::security::Event;
 use ferrofed_server::state::AppState;
 use http::{HeaderMap, Request, StatusCode, header};
 use tokio::net::TcpListener;
