@@ -19,9 +19,9 @@ use ihe_iti::pmir::error::FeedError;
 use ihe_iti::pmir::feed::{EventKind, Feed, ResponseId, refusal};
 
 use crate::auth::trust::Trust;
+use crate::binding::seam::FeedHost;
 use crate::metrics::identity_feed::FeedResult;
 use crate::security::TARGET;
-use crate::state::AppState;
 
 /// The media type of every FHIR answer the route gives (ITI TF-2 Appendix
 /// Z.6).
@@ -32,8 +32,8 @@ const REALM: &str = "ferrofed-pmir";
 
 /// `POST {base}{pmir.path}`: one ITI-93 message, applied to the resolution
 /// bindings when it is authenticated and holds to the PMIR profiles.
-pub async fn feed(
-    State(state): State<Arc<AppState>>,
+pub async fn feed<H: FeedHost>(
+    State(state): State<Arc<H>>,
     Extension(trust): Extension<Arc<Trust>>,
     headers: HeaderMap,
     body: Bytes,
@@ -48,7 +48,7 @@ pub async fn feed(
             reason = refusal.reason(),
             "an ITI-93 message without the credentials of a feed user was refused, and nothing was applied"
         );
-        state.metrics().identity_feed(FeedResult::Unauthenticated);
+        state.feed_counted(FeedResult::Unauthenticated);
         let mut response = refusal.status().into_response();
         if let Some(challenge) = refusal.challenge(REALM) {
             response.headers_mut().insert(WWW_AUTHENTICATE, challenge);
@@ -64,21 +64,18 @@ pub async fn feed(
         Ok(message) => message,
         Err(error) => {
             if let Err(failure) = identity_feed.record(None).await {
-                return unrecorded(&state, &failure);
+                return unrecorded(&*state, &failure);
             }
-            return refused(&state, &error);
+            return refused(&*state, &error);
         }
     };
     if let Err(failure) = identity_feed.record(Some(&message)).await {
-        return unrecorded(&state, &failure);
+        return unrecorded(&*state, &failure);
     }
-    let Some(federation) = state.federation() else {
+    let change = pmir::change_of(&message, identity_feed.domains());
+    let Some(dropped) = state.identity_changed(change.as_ref()) else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
-    let change = pmir::change_of(&message, identity_feed.domains());
-    let dropped = change
-        .as_ref()
-        .map_or(0, |change| federation.identity_changed(change));
     tracing::info!(
         creates = message.count(EventKind::Create),
         updates = message.count(EventKind::Update),
@@ -88,7 +85,7 @@ pub async fn feed(
         dropped,
         "an ITI-93 message was applied to the resolution bindings"
     );
-    state.metrics().identity_feed(FeedResult::Applied);
+    state.feed_counted(FeedResult::Applied);
     let id = uuid::Uuid::new_v4().hyphenated().to_string();
     let written = ResponseId::new(&id)
         .ok()
@@ -104,7 +101,7 @@ pub async fn feed(
 /// The answer to a message that does not hold to the PMIR profiles: `415`
 /// for another media type, `400` otherwise, with the refusal's
 /// `OperationOutcome` (§2:3.93.4.2.2).
-fn refused(state: &AppState, error: &FeedError) -> Response {
+fn refused(state: &impl FeedHost, error: &FeedError) -> Response {
     tracing::warn!(
         target: TARGET,
         event = "identity-feed-refused",
@@ -112,7 +109,7 @@ fn refused(state: &AppState, error: &FeedError) -> Response {
         error = %error,
         "an ITI-93 message that does not hold to PMIR was refused, and nothing was applied"
     );
-    state.metrics().identity_feed(FeedResult::Refused);
+    state.feed_counted(FeedResult::Refused);
     let status = match error {
         FeedError::NotFhirJson => StatusCode::UNSUPPORTED_MEDIA_TYPE,
         _ => StatusCode::BAD_REQUEST,
@@ -125,7 +122,7 @@ fn refused(state: &AppState, error: &FeedError) -> Response {
 
 /// The answer to a message whose audit record could not be stored: `503`,
 /// with nothing applied, so the Supplier sends it again.
-fn unrecorded(state: &AppState, failure: &AuditError) -> Response {
+fn unrecorded(state: &impl FeedHost, failure: &AuditError) -> Response {
     tracing::error!(
         target: TARGET,
         event = "identity-feed-refused",
@@ -133,7 +130,7 @@ fn unrecorded(state: &AppState, failure: &AuditError) -> Response {
         error = crate::chain(failure),
         "the audit record of an ITI-93 message could not be stored, and nothing was applied"
     );
-    state.metrics().identity_feed(FeedResult::AuditFailed);
+    state.feed_counted(FeedResult::AuditFailed);
     StatusCode::SERVICE_UNAVAILABLE.into_response()
 }
 

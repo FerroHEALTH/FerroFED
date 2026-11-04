@@ -26,6 +26,10 @@ use crate::config::service::{GrantRefused, TlsRefused};
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum BindingError {
+    /// The PMIR identity feed cannot be built.
+    #[error(transparent)]
+    #[cfg(feature = "binding-ihe")]
+    IdentityFeed(#[from] crate::binding::ihe::pmir::IdentityFeedError),
     /// The registry could not be read from the directory of `[registry.mcsd]`
     /// (§15.1, §15.2, N19, N20).
     #[error("the registry could not be read from the care services directory")]
