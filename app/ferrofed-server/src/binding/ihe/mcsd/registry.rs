@@ -9,7 +9,7 @@
 //! no valid registry, stops the boot. Every `refresh_interval_s` the changes
 //! since the last read are asked for with ITI-91 off the clinical path, and
 //! a changed registry goes through the same checks a reload does
-//! ([`Reloader::directory_changed`]): the connection-type rule of §15.2
+//! ([`RegistrySink::directory_changed`]): the connection-type rule of §15.2
 //! (N19, CP-20), one managing organisation per endpoint (N20), unique node,
 //! endpoint and `system_id`s, the resolver's members and every other boot
 //! check. A refresh that breaks one is refused: the running registry stays,
@@ -36,9 +36,9 @@ use http::StatusCode;
 use serde::Serialize;
 
 use crate::binding::error::BindingError;
+use crate::binding::seam::RegistrySink;
 use crate::config::ihe::mcsd::DirectorySettings;
 use crate::config::service;
-use crate::reload::{Applied, ReloadError, Reloader};
 use ferrofed_operator_api::health::Observed;
 
 /// The directory a running gateway keeps its registry in step with.
@@ -97,15 +97,15 @@ impl DirectoryFault {
 /// What one refresh of the directory did.
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum RefreshOutcome {
+pub enum RefreshOutcome<A, R> {
     /// No member changed.
     Unchanged,
-    /// The changed registry replaced the running one.
-    Applied(Applied),
+    /// The changed registry replaced the running one, as the sink reports it.
+    Applied(A),
     /// The refresh was refused, and the running registry stays: the changed
     /// registry breaks a rule, or the directory's answer ran past the deadline
     /// or a cap, or does not hold to ITI-91.
-    Refused(ReloadError),
+    Refused(R),
     /// The directory could not be reached or refused the request, and the
     /// running registry stays.
     Unreachable(ExchangeError),
@@ -160,7 +160,10 @@ impl DirectoryRegistry {
     /// so a refused or failed refresh asks again from the same instant. The
     /// directory shows `up` only once its answer is accepted, and `degraded`
     /// while the change it answered with is refused.
-    pub async fn refresh(&self, reloader: &Reloader) -> RefreshOutcome {
+    pub async fn refresh<S: RegistrySink>(
+        &self,
+        sink: &S,
+    ) -> RefreshOutcome<S::Applied, S::Refused> {
         let held = self.held().clone();
         let refreshed = match self.source.refresh(&held).await {
             Ok(refreshed) => refreshed,
@@ -175,14 +178,9 @@ impl DirectoryRegistry {
                 // NOTE: no specification governs this: our own design; an answer past
                 // the budget, or one that breaks ITI-91, is refused as a broken registry is.
                 if error.exceeded() || (error.answered() && error.status().is_none()) {
-                    return RefreshOutcome::Refused(
-                        reloader.directory_refused(
-                            directory_error(DirectoryFailure::Read(DirectoryReadError::Exchange(
-                                error,
-                            )))
-                            .into(),
-                        ),
-                    );
+                    return RefreshOutcome::Refused(sink.directory_refused(directory_error(
+                        DirectoryFailure::Read(DirectoryReadError::Exchange(error)),
+                    )));
                 }
                 return RefreshOutcome::Unreachable(error);
             }
@@ -195,40 +193,35 @@ impl DirectoryRegistry {
             }
             Refreshed::Changed(materialised) => {
                 let (replica, snapshot) = materialised.into_parts();
-                match reloader.directory_changed(snapshot) {
+                match sink.directory_changed(snapshot) {
                     Ok(applied) => {
                         *self.held() = replica;
                         self.observe(Observed::Up);
                         RefreshOutcome::Applied(applied)
                     }
                     Err(error) => {
-                        self.refuse(fault_of(&error));
+                        self.refuse(fault_of::<S>(&error));
                         RefreshOutcome::Refused(error)
                     }
                 }
             }
             Refreshed::Refused(error) => {
                 self.refuse(DirectoryFault::RegistryInvalid);
-                RefreshOutcome::Refused(
-                    reloader.directory_refused(
-                        directory_error(DirectoryFailure::Read(DirectoryReadError::Registry(
-                            error,
-                        )))
-                        .into(),
-                    ),
-                )
+                RefreshOutcome::Refused(sink.directory_refused(directory_error(
+                    DirectoryFailure::Read(DirectoryReadError::Registry(error)),
+                )))
             }
         }
     }
 
     /// Refreshes the registry every interval until the process ends.
-    pub async fn keep_in_step(self: Arc<Self>, reloader: Arc<Reloader>) {
+    pub async fn keep_in_step<S: RegistrySink>(self: Arc<Self>, sink: Arc<S>) {
         let start = tokio::time::Instant::now() + self.interval;
         let mut ticks = tokio::time::interval_at(start, self.interval);
         ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             ticks.tick().await;
-            let outcome = self.refresh(&reloader).await;
+            let outcome = self.refresh(sink.as_ref()).await;
             tracing::debug!(outcome = ?outcome, "care services directory refreshed");
         }
     }
@@ -264,8 +257,8 @@ impl DirectoryRegistry {
 
 /// The fault a refused change shows: a registry that breaks a rule of its
 /// own, or a sound one the rest of the configuration does not fit.
-fn fault_of(error: &ReloadError) -> DirectoryFault {
-    if error.registry_invalid() {
+fn fault_of<S: RegistrySink>(error: &S::Refused) -> DirectoryFault {
+    if S::registry_invalid(error) {
         DirectoryFault::RegistryInvalid
     } else {
         DirectoryFault::ConfigurationMismatch

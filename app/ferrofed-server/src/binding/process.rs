@@ -16,11 +16,11 @@ use std::time::Duration;
 use axum::Router;
 
 use crate::auth::trust::Trust;
+use crate::binding::error::BindingError;
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe;
+use crate::binding::seam::{FeedHost, RegistrySink};
 use crate::config::settings::Settings;
-use crate::reload::Reloader;
-use crate::state::{AppState, StateError};
 use ferrofed_operator_api::health::Indication;
 
 /// What the bindings run for the life of the process, beside every
@@ -46,14 +46,14 @@ impl Processes {
     ///
     /// # Errors
     ///
-    /// The [`StateError`] of a process that cannot be built.
+    /// The [`BindingError`] of a process that cannot be built.
     pub(crate) fn build(
         #[cfg_attr(
             not(feature = "binding-ihe"),
             expect(unused_variables, reason = "no compiled binding runs a process")
         )]
         settings: &Settings,
-    ) -> Result<Self, StateError> {
+    ) -> Result<Self, BindingError> {
         Ok(Self {
             #[cfg(feature = "binding-ihe")]
             ihe: ihe::process::Processes::build(settings)?,
@@ -96,11 +96,11 @@ impl Processes {
             reason = "without the IHE binding no process serves a route of its own"
         )
     )]
-    pub(crate) fn routes(
+    pub(crate) fn routes<H: FeedHost>(
         &self,
-        surface: Router<Arc<AppState>>,
+        surface: Router<Arc<H>>,
         trust: &Arc<Trust>,
-    ) -> Router<Arc<AppState>> {
+    ) -> Router<Arc<H>> {
         #[cfg(feature = "binding-ihe")]
         {
             self.ihe.routes(surface, trust)
@@ -113,17 +113,17 @@ impl Processes {
 
     /// Starts every process, `reloader` replacing the registry a source
     /// changes.
-    pub(crate) fn start(
+    pub(crate) fn start<S: RegistrySink>(
         &self,
         #[cfg_attr(
             not(feature = "binding-ihe"),
             expect(unused_variables, reason = "no compiled binding runs a process")
         )]
-        reloader: &Arc<Reloader>,
+        sink: &Arc<S>,
     ) -> Running {
         Running {
             #[cfg(feature = "binding-ihe")]
-            ihe: self.ihe.start(reloader),
+            ihe: self.ihe.start(sink),
         }
     }
 }

@@ -454,37 +454,6 @@ impl Reloader {
         }
     }
 
-    /// Puts the registry a refresh of the care services directory read in
-    /// place of the running one, checked as a reload is, with the settings
-    /// the last reload applied; logs the outcome and counts it.
-    ///
-    /// # Errors
-    /// Returns [`ReloadError::Federation`] when the federation cannot be built
-    /// over `snapshot`; the running registry then stays in place.
-    pub fn directory_changed(&self, snapshot: RegistrySnapshot) -> Result<Applied, ReloadError> {
-        let applied = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
-        let settings = applied.as_ref().unwrap_or(&self.boot);
-        let outcome = match self.state.federation() {
-            None => Err(ReloadError::RegistryPresence),
-            Some(running) => self.swap(&running, settings, Some(Ok(snapshot)), Vec::new()),
-        };
-        drop(applied);
-        self.log(&outcome);
-        outcome
-    }
-
-    /// Logs and counts a refresh of the care services directory whose
-    /// registry was refused before a federation could be built over it, and
-    /// returns the refusal; the running registry stays in place.
-    pub fn directory_refused(&self, refusal: FederationError) -> ReloadError {
-        let error = ReloadError::Federation {
-            document: None,
-            source: Box::new(refusal),
-        };
-        self.log_refusal(&error);
-        error
-    }
-
     /// Reads the configuration again: the file's, or under
     /// `config.ui = "managed"` the revision the store marks current once
     /// the file's has been recorded, with the revision that is and whether
@@ -715,4 +684,36 @@ fn joined<T>(ids: &[T], name: impl Fn(&T) -> &str) -> String {
 fn table(tls: &ReloadableTls) -> &'static str {
     let key = tls.keys().certificate_file();
     key.strip_suffix(".certificate_file").unwrap_or(key)
+}
+
+impl binding::seam::RegistrySink for Reloader {
+    type Applied = Applied;
+    type Refused = ReloadError;
+
+    // NOTE: no specification governs this: our own design; a directory refresh is
+    // checked as a reload is, with the settings the last reload applied.
+    fn directory_changed(&self, snapshot: RegistrySnapshot) -> Result<Applied, ReloadError> {
+        let applied = self.serial.lock().unwrap_or_else(PoisonError::into_inner);
+        let settings = applied.as_ref().unwrap_or(&self.boot);
+        let outcome = match self.state.federation() {
+            None => Err(ReloadError::RegistryPresence),
+            Some(running) => self.swap(&running, settings, Some(Ok(snapshot)), Vec::new()),
+        };
+        drop(applied);
+        self.log(&outcome);
+        outcome
+    }
+
+    fn directory_refused(&self, refusal: binding::error::BindingError) -> ReloadError {
+        let error = ReloadError::Federation {
+            document: None,
+            source: Box::new(refusal.into()),
+        };
+        self.log_refusal(&error);
+        error
+    }
+
+    fn registry_invalid(refused: &ReloadError) -> bool {
+        refused.registry_invalid()
+    }
 }
