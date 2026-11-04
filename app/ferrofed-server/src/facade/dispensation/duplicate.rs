@@ -26,7 +26,7 @@ use crate::facade::native::Chosen;
 use crate::facade::prescriptions::{Held, paged};
 use crate::facade::request::Arrived;
 use crate::federation::Federation;
-use crate::fhir::locator::Locator;
+use crate::fhir_wire::locator::Locator;
 
 /// What the owner's dispensations of one business identifier showed.
 #[derive(Debug)]

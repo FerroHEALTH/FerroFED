@@ -72,8 +72,8 @@ use crate::facade::route::fan_out::{
     self, Asked, Unfinished, answer_status, contact, each, not_sent, observed, record_meta, settled,
 };
 use crate::facade::route::{Arrived, Deadlines};
-use crate::facade::security;
 use crate::federation::Federation;
+use crate::security::logged;
 use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::outbound_id::OutboundId;
 
@@ -125,7 +125,7 @@ pub(super) fn requested(
 // directive, so the reason §12.7 gives for FROM ENDPOINT holds for it too.
 pub(super) fn distributable(aql: &str, logged: &str) -> Result<(), Refused> {
     let parsed = FacadeQuery::parse(aql).map_err(|refusal| {
-        security::refused(&refusal, logged);
+        logged::refused(&refusal, logged);
         Refused::with(Code::Refused((&refusal).into()), &refusal)
     })?;
     match parsed.directive() {
@@ -410,7 +410,7 @@ fn unsent(endpoint: &Endpoint, failure: &DispatchError, latency_ms: u64, logged:
         part,
     } = failure
     {
-        security::forward_withheld(withheld, *part, logged);
+        logged::forward_withheld(withheld, *part, logged);
     }
     tracing::error!(
         endpoint = %endpoint.id(),

@@ -11,7 +11,7 @@ use openehr_its::rest::runtime::ApiError;
 
 use crate::error::{self, Code};
 use crate::facade::owner::{self, Listed};
-use crate::facade::security;
+use crate::security::logged;
 
 /// Why the read of an EHR by subject is answered by the gateway, with no
 /// node's answer to pass on.
@@ -140,7 +140,7 @@ impl Unserved {
     pub(super) fn respond(self, request_id: &str, logged: &str) -> Response {
         let code = self.code();
         match &self {
-            Self::Undeclared { position } => security::query_parameter_refused(*position, logged),
+            Self::Undeclared { position } => logged::query_parameter_refused(*position, logged),
             Self::Unresolved(_) | Self::Unlocalized | Self::Unidentified { .. } | Self::Clock => {
                 tracing::error!(
                     code = code.as_str(),

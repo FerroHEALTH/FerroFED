@@ -19,7 +19,7 @@
 //! type are our own design: no specification governs them.
 //!
 //! The search names each prescription by the id the read takes
-//! ([`super::locator`]), which names the member that holds it, so a read
+//! ([`crate::fhir_wire::locator`]), which names the member that holds it, so a read
 //! goes to that member alone; a received dispensation is named the same way.
 
 pub(super) mod dispense;

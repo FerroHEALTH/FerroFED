@@ -37,8 +37,9 @@ use super::{Arrived, Deadlines, Failure, failed, forward, held, learn, passed, u
 use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
 use crate::facade::write::{self, Write};
-use crate::facade::{confined, follow_up, owner, security};
+use crate::facade::{confined, follow_up, owner};
 use crate::federation::Federation;
+use crate::security::logged;
 
 /// Routes one request in the EHR area to the owner of its path `ehr_id` and
 /// answers as the owner did.
@@ -106,7 +107,7 @@ pub(super) async fn route(
             // NOTE: §5.4.1, N33: the probe reaches members the client never named,
             // so an ehr_id that may be a patient identifier is never probed.
             let Ok(asked) = ProbedEhrId::try_from(&ehr_id) else {
-                security::probe_refused(&logged);
+                logged::probe_refused(&logged);
                 return error::fixed(Code::ProbeRequiresUuid, request_id);
             };
             let probe = Probe {
@@ -348,7 +349,7 @@ pub(crate) async fn ask_all<'a>(
         })?;
     for (endpoint, probed) in &answers {
         if let Answer::Failed(ForwardError::Withheld { part, .. }) = &probed.answer {
-            security::forward_withheld(endpoint, *part, logged);
+            logged::forward_withheld(endpoint, *part, logged);
         }
         federation
             .dependencies()

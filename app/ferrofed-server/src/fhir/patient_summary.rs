@@ -20,13 +20,14 @@ use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use http::StatusCode;
 use secrecy::SecretString;
 
-use super::{PRODUCT, UNADMITTED, admission, attach, fhir_json, outcome};
+use super::{PRODUCT, UNADMITTED, admission, attach, outcome};
 use crate::access::NoAccess;
 use crate::config::fhir::FhirSettings;
 use crate::error::Code;
 use crate::facade::demographics::{self, Unheaded};
 use crate::facade::summary::{self as gathered, Scope, Unsummarised};
 use crate::fhir::admission::Asked;
+use crate::fhir_wire::fhir_json;
 
 /// The answer to a summary request `read` from the request's caller and
 /// headers.

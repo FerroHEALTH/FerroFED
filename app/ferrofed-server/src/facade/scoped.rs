@@ -32,8 +32,9 @@ use openehr_federation::aql::Analysis;
 
 use crate::error::Code;
 use crate::facade::route::ehr;
-use crate::facade::{confined, owner, security};
+use crate::facade::{confined, owner};
 use crate::federation::Federation;
+use crate::security::logged;
 
 /// The member an `ehr_id`-scoped query is sent to, and the step of §12.5.1
 /// that named it.
@@ -198,7 +199,7 @@ async fn owner<'a>(
         }
         owner::Located::Unknown => {
             let Ok(asked) = ProbedEhrId::try_from(&ehr_id) else {
-                security::probe_refused(&logged);
+                logged::probe_refused(&logged);
                 return Err(Unrouted::NotProbed);
             };
             let overall = scoped

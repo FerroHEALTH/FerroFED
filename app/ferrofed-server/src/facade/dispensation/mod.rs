@@ -51,14 +51,15 @@ use openehr_federation::status::EndpointStatus;
 use crate::config::fhir::FhirSettings;
 use crate::error::Code;
 use crate::facade::answer::Failure;
+use crate::facade::confined;
 use crate::facade::located::{Located, located};
 use crate::facade::native::{self, Chosen};
 use crate::facade::prescriptions;
 use crate::facade::request::Arrived;
 use crate::facade::summary::Unsummarised;
-use crate::facade::{confined, security};
 use crate::federation::Federation;
 use crate::metrics::dispensations::Outcome;
+use crate::security::logged;
 
 use answer::{Lookup, refused, refused_after};
 use lookup::Owned;
@@ -106,7 +107,7 @@ pub(crate) async fn dispense(
             "the dispensation's subject carries no identifier in a namespace the gateway resolves",
         );
     };
-    security::document_subject_consumed(&logged);
+    logged::document_subject_consumed(&logged);
     let none = BTreeSet::new();
     let prescribing = fhir
         .serving

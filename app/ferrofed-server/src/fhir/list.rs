@@ -34,13 +34,14 @@ use openehr_federation::status::EndpointStatus;
 
 use super::admission::Asked;
 use super::patient_summary::refused;
-use super::{UNADMITTED, attach, fhir_json, outcome};
+use super::{UNADMITTED, attach, outcome};
 use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::facade::native::Native;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
+use crate::fhir_wire::fhir_json;
 
 /// The media type of a member's document that names none (RFC 9110 §8.3).
 const OCTET_STREAM: &str = "application/octet-stream";

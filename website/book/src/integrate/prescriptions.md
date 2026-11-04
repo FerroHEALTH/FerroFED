@@ -505,7 +505,7 @@ allows: a form byte, the first 6 bytes of the SHA-256 of the endpoint's
 when it is a UUID and as its text otherwise, written in the base64url
 alphabet (RFC 4648 §5) with `.` in place of `_`. The gateway holds no state
 between the search and the read, and the same prescription always gets the
-same id (`app/ferrofed-server/src/fhir/locator.rs`:
+same id (`app/ferrofed-server/src/fhir_wire/locator.rs`:
 `an_id_is_a_fhir_id_and_reads_back_to_its_parts`,
 `the_id_is_the_same_each_time`).
 

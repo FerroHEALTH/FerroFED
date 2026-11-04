@@ -17,7 +17,7 @@
 use std::error::Error;
 
 use ferrofed_registry::id::{EhrId, EndpointId};
-use ferrofed_server::fhir::locator::Locator;
+use ferrofed_server::fhir_wire::locator::Locator;
 use ferrofed_testkit::containers;
 use ferrofed_testkit::national_connector::{Answer, NationalConnector};
 use http::StatusCode;

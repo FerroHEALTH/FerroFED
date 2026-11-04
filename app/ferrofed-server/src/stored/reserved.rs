@@ -20,7 +20,7 @@ use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertio
 use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use jiff::Timestamp;
 
-use crate::facade::security;
+use crate::security::logged;
 
 /// A definition a store holds in the reserved namespace, named by its
 /// qualified name and version, its text never quoted.
@@ -64,7 +64,7 @@ impl Reserved {
             .find(|definition| reserved::reserves(definition.name()))
         {
             Some(shadowing) => {
-                security::held_definition_refused(shadowing.name(), shadowing.version());
+                logged::held_definition_refused(shadowing.name(), shadowing.version());
                 Err(StoreError::Corrupt(Box::new(Shadowing {
                     name: shadowing.name().clone(),
                     version: shadowing.version(),

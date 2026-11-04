@@ -82,9 +82,10 @@ use crate::conveyed;
 use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
 use crate::facade::route::chosen::{Chooser, named};
-use crate::facade::{confined, follow_up, owner, security, subject};
+use crate::facade::{confined, follow_up, owner, subject};
 use crate::federation::Federation;
 use crate::request_id;
+use crate::security::logged;
 use crate::state::AppState;
 
 mod chosen;
@@ -367,7 +368,7 @@ fn unheld(failure: &ForwardError, request_id: &str, logged: &str) -> Response {
 fn refused(failure: &ForwardError, request_id: &str, logged: &str) -> Option<Response> {
     match failure {
         ForwardError::QueryParameter(unlisted) => {
-            security::query_parameter_refused(unlisted.position, logged);
+            logged::query_parameter_refused(unlisted.position, logged);
             Some(error::response(
                 Code::QueryParameterRefused,
                 failure.to_string(),
@@ -386,7 +387,7 @@ fn refused(failure: &ForwardError, request_id: &str, logged: &str) -> Option<Res
 pub(crate) fn declared_refused(refusal: &Refusal, request_id: &str, logged: &str) -> Response {
     let code = match refusal {
         Refusal::Malformed(malformed) => {
-            security::value_refused(malformed.carrier(), logged);
+            logged::value_refused(malformed.carrier(), logged);
             Code::ParameterValueInvalid
         }
         Refusal::NotAcceptable { .. } => Code::MediaTypeNotAcceptable,
@@ -582,7 +583,7 @@ pub(crate) fn failed(
     }
     let code = match failure {
         ForwardError::Withheld { endpoint, part } => {
-            security::forward_withheld(endpoint, *part, logged);
+            logged::forward_withheld(endpoint, *part, logged);
             Code::Internal
         }
         ForwardError::TimeOut { .. } | ForwardError::Expired(_) | ForwardError::Capped(_) => {

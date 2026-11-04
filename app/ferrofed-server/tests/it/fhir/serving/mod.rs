@@ -16,7 +16,7 @@ use axum::body::Body;
 use eehrxf::crosswalk::dispensation::MPD_MEDICATION_DISPENSE;
 use eehrxf::crosswalk::prescription::MPD_MEDICATION_REQUEST;
 use ferrofed_registry::id::{EhrId, EndpointId};
-use ferrofed_server::fhir::locator::Locator;
+use ferrofed_server::fhir_wire::locator::Locator;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use serde_json::Value;

@@ -55,8 +55,9 @@ use crate::facade::mapped::Answered;
 use crate::facade::native::{self, Native};
 use crate::facade::request::Arrived;
 use crate::facade::summary::access::queried;
-use crate::facade::{cells, follow_up, plan, security};
+use crate::facade::{cells, follow_up, plan};
 use crate::federation::Federation;
+use crate::security::logged;
 
 /// The operation an access record names for a patient summary.
 pub(crate) const OPERATION: &str = "Patient/$summary";
@@ -403,7 +404,7 @@ async fn fanned_out(
         let (position, answer) =
             joined.map_err(|joined| Failure::FanOut(FanOutError::Task(joined)))?;
         let answer = answer.map_err(|error| {
-            security::fan_out(&error, &logged);
+            logged::fan_out(&error, &logged);
             Failure::FanOut(error)
         })?;
         answered.insert(position, answer);

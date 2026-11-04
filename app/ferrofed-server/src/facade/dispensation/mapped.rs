@@ -346,7 +346,7 @@ fn composed(
             (status, endpoint_status, face::outcome(code, &diagnostics))
         }
     };
-    let mut response = crate::fhir::fhir_json(status, &outcome);
+    let mut response = crate::fhir_wire::fhir_json(status, &outcome);
     let wrote = Wrote {
         writing,
         status: endpoint_status,

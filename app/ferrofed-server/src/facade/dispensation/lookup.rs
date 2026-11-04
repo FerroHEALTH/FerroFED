@@ -8,7 +8,7 @@
 //! a member: by its business identifier, a system and a value, or a value
 //! alone when the dispensation names no system (FHIR R4 `Identifier.system`
 //! 0..1), and by the id the face names a prescription by
-//! ([`crate::fhir::locator`]), which matches only the member, the `ehr_id`
+//! ([`crate::fhir_wire::locator`]), which matches only the member, the `ehr_id`
 //! and the member's own id it names. A reference and an identifier in one
 //! `authorizingPrescription` must name the same prescription. The matching
 //! and its outcomes are our own design: no specification governs them.
@@ -19,7 +19,7 @@ use ferrofed_eehrxf::prescriptions::page::Prescription;
 use ferrofed_registry::id::EndpointId;
 
 use crate::facade::prescriptions::{Held, Member};
-use crate::fhir::locator::Locator;
+use crate::fhir_wire::locator::Locator;
 
 /// Where the prescriptions a dispensation names are held.
 #[derive(Debug, Clone, PartialEq, Eq)]
