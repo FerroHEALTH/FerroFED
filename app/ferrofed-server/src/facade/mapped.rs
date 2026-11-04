@@ -51,7 +51,7 @@ use uuid::Uuid;
 use crate::facade::answer::{self, Failure};
 use crate::facade::located::{self, Located};
 use crate::facade::native::Chosen;
-use crate::facade::prescriptions::{Held, Member, Unprescribed, Unread};
+use crate::facade::prescriptions::{Composed, Held, Member, Unprescribed, Unread};
 use crate::facade::request::Arrived;
 use crate::facade::summary::{compositions, patient_query};
 use crate::facade::{follow_up, plan};
@@ -86,17 +86,78 @@ pub(crate) async fn asked(
     if members.is_empty() {
         return Ok(Vec::new());
     }
+    let queried = queried(
+        federation,
+        arrived,
+        located,
+        (patient, Medication::Orders),
+        &members,
+    )
+    .await?;
+    let mut asked = Vec::with_capacity(members.len());
+    for (endpoint, answered) in &queried {
+        let (chosen, mode, system_id) = member_of(snapshot, targets, mapped, endpoint)?;
+        let (held, composed) = match answered {
+            Answered::Rows(held) => paged(held, (mode, &system_id), (patient, now)),
+            Answered::Silent { status, left } => (
+                Held::Unanswered {
+                    status: *status,
+                    left: *left,
+                },
+                Vec::new(),
+            ),
+        };
+        asked.push(Member {
+            chosen,
+            held,
+            composed: Some(composed),
+        });
+    }
+    Ok(asked)
+}
+
+/// What one map-mode member answered a reserved medication query.
+#[derive(Debug)]
+pub(crate) enum Answered {
+    /// The compositions it answered with, each with its uid and template id.
+    Rows(Vec<ferrofed_eehrxf::summary::Held>),
+    /// No answer, with its §11.1 status and whether a request left the
+    /// gateway for it.
+    Silent {
+        /// Its §11.1 status.
+        status: EndpointStatus,
+        /// Whether a request left the gateway for it.
+        left: bool,
+    },
+}
+
+/// Runs the reserved medication query `query` for the patient `patient`
+/// over the members `members`, Query API endpoints the plan of `located`
+/// dispatches to, as `arrived` asks, and returns what each answered, in
+/// endpoint order.
+///
+/// # Errors
+///
+/// The [`Unprescribed`] of a query the gateway could not run.
+pub(crate) async fn queried(
+    federation: &Arc<Federation>,
+    arrived: &Arrived<'_>,
+    located: &Located,
+    (patient, query): ((&str, &str), Medication),
+    members: &BTreeSet<EndpointId>,
+) -> Result<Vec<(EndpointId, Answered)>, Unprescribed> {
+    let snapshot = federation.snapshot();
     let logged = arrived.outbound.to_string();
-    let name = Medication::Orders
+    let name = query
         .name()
-        .map_err(|_unnamed| Unprescribed::Internal("the order query has no qualified name"))?;
+        .map_err(|_unnamed| Unprescribed::Internal("a medication query has no qualified name"))?;
     let analysis = located::stored(
         federation,
         located.completion,
         patient,
-        (name.as_str(), Medication::Orders.aql(), &logged),
+        (name.as_str(), query.aql(), &logged),
     )?;
-    let (plan, sources) = plan::retarget(snapshot, targets, patient_query(&analysis)?)
+    let (plan, sources) = plan::retarget(snapshot, &located.targets, patient_query(&analysis)?)
         .map_err(|failure| Unprescribed::Failure(Failure::Plan(failure)))?;
     let mut plan = answer::planning::planned(
         located.disclosed,
@@ -135,34 +196,27 @@ pub(crate) async fn asked(
         .filter(|(_, contact)| contact.left())
         .map(|(endpoint, _)| endpoint)
         .collect();
-    let mut asked = Vec::with_capacity(members.len());
-    for endpoint in &members {
-        let (chosen, mode, system_id) = member_of(snapshot, targets, mapped, endpoint)?;
-        let status = answer
-            .federation()
-            .endpoints()
-            .iter()
-            .find(|record| record.id().as_str() == endpoint.as_str())
-            .map_or(EndpointStatus::Excluded, EndpointOutcome::status);
-        let (held, composed) = if status == EndpointStatus::Active {
-            let rows = held.get(endpoint).map_or(&[][..], Vec::as_slice);
-            paged(rows, &sources, (mode, &system_id), (patient, now))
-        } else {
-            (
-                Held::Unanswered {
+    Ok(members
+        .iter()
+        .map(|endpoint| {
+            let status = answer
+                .federation()
+                .endpoints()
+                .iter()
+                .find(|record| record.id().as_str() == endpoint.as_str())
+                .map_or(EndpointStatus::Excluded, EndpointOutcome::status);
+            let answered = if status == EndpointStatus::Active {
+                let rows = held.get(endpoint).map_or(&[][..], Vec::as_slice);
+                Answered::Rows(compositions(rows, &sources))
+            } else {
+                Answered::Silent {
                     status,
                     left: left.contains(endpoint),
-                },
-                Vec::new(),
-            )
-        };
-        asked.push(Member {
-            chosen,
-            held,
-            composed: Some(composed),
-        });
-    }
-    Ok(asked)
+                }
+            };
+            (endpoint.clone(), answered)
+        })
+        .collect())
 }
 
 /// The map-mode member behind `endpoint` as the search reaches it, with its
@@ -209,14 +263,13 @@ fn member_of<'m>(
 /// for the patient `patient` at `now`, with the UUID of each page's
 /// versioned composition.
 fn paged(
-    rows: &[ResultSetRow],
-    sources: &[openehr_federation::aql::ColumnSource],
+    held: &[ferrofed_eehrxf::summary::Held],
     (mode, system_id): (&MapMode, &SystemId),
     (patient, now): ((&str, &str), &str),
-) -> (Held, Vec<Option<Uuid>>) {
+) -> (Held, Vec<Composed>) {
     let mut pages: Vec<Page> = Vec::new();
     let mut composed = Vec::new();
-    for held in compositions(rows, sources) {
+    for held in held {
         // NOTE: A102 point 1, BASE OBJECT_VERSION_ID: a uid that names no version, or a version
         // another system created, is no order the member owns, so it is legitimately not listed.
         let Ok(version) = ObjectVersionId::new(&held.uid) else {
@@ -229,7 +282,11 @@ fn paged(
         }
         match mode.page(&held.composition, patient, now) {
             Ok(page) => {
-                composed.push(Uuid::parse_str(&version.object_id().value()).ok());
+                composed.push(Composed {
+                    object: Uuid::parse_str(&version.object_id().value()).ok(),
+                    version: held.uid.clone(),
+                    composition: held.composition.clone(),
+                });
                 pages.push(page);
             }
             Err(reason) => {
@@ -248,7 +305,7 @@ fn paged(
 
 /// What a map-mode member answered the read of one of its prescriptions.
 #[derive(Debug)]
-pub(crate) enum Composed {
+pub(crate) enum Fetched {
     /// The page of the one prescription the id names, renamed by the
     /// composition's UUID `resource` the read compares.
     Held(Held),
@@ -272,7 +329,7 @@ pub(crate) async fn read(
     arrived: &Arrived<'_>,
     (chosen, mode, namespaces): (&Chosen, &MapMode, &[IdentifierNamespace]),
     (composition, entry, now): (&str, u8, &str),
-) -> Result<Composed, FanOutError> {
+) -> Result<Fetched, FanOutError> {
     let budget = federation.budget();
     let overall = arrived
         .started
@@ -282,7 +339,7 @@ pub(crate) async fn read(
         .checked_add(budget.per_node())
         .map_or(overall, |at| at.min(overall));
     let Some(patient) = named(federation, arrived, chosen, (namespaces, per_node)).await else {
-        return Ok(Composed::Unnamed);
+        return Ok(Fetched::Unnamed);
     };
     let Some(client) = federation.clients().get(&chosen.via) else {
         return Err(FanOutError::UnknownEndpoint {
@@ -311,26 +368,26 @@ pub(crate) async fn read(
         Ok(answer) => answer,
         Err(failure) => {
             let left = Contact::of_forward_error(&failure).left();
-            return Ok(Composed::Held(Held::Unanswered {
+            return Ok(Fetched::Held(Held::Unanswered {
                 status: unanswered(&failure),
                 left,
             }));
         }
     };
     if answer.status() == StatusCode::NOT_FOUND {
-        return Ok(Composed::Held(Held::Found(Vec::new())));
+        return Ok(Fetched::Held(Held::Found(Vec::new())));
     }
     if answer.status() != StatusCode::OK {
-        return Ok(Composed::Held(Held::Unanswered {
+        return Ok(Fetched::Held(Held::Unanswered {
             status: EndpointStatus::NodeError,
             left: true,
         }));
     }
     let snapshot = federation.snapshot();
     let Some(system_id) = snapshot.node(&chosen.node).map(Node::system_id) else {
-        return Ok(Composed::Held(Held::Found(Vec::new())));
+        return Ok(Fetched::Held(Held::Found(Vec::new())));
     };
-    Ok(Composed::Held(picked(
+    Ok(Fetched::Held(picked(
         answer.body(),
         (mode, system_id),
         (&patient, composition, entry, now),

@@ -526,7 +526,7 @@ fn faced(
 /// Holds every `[[fhir.serve]]` member of `settings` to the registry
 /// `snapshot`, to an endpoint of its own there that serves the category,
 /// and to a configured resolver when `resolving`; a member in the map mode needs no
-/// such endpoint for prescriptions.
+/// such endpoint.
 ///
 /// # Errors
 ///
@@ -558,11 +558,9 @@ fn served(
                     member: member.clone(),
                 });
             };
-            // NOTE: no specification governs this: our own design; a map-mode member is read over
-            // ITS-REST, so it needs no endpoint of its own for prescriptions.
-            if category == eehrxf::category::Category::Prescription
-                && fhir.mapped.contains_key(member)
-            {
+            // NOTE: no specification governs this: our own design; a map-mode member is read and
+            // written over ITS-REST, so it needs no endpoint of its own for either category.
+            if fhir.mapped.contains_key(member) {
                 continue;
             }
             // NOTE: no specification governs this: our own design; a member serves the

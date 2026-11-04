@@ -33,6 +33,7 @@ use ferrofed_registry::incident::Incident;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use http::{HeaderValue, StatusCode, header};
+use openehr_federation::status::EndpointStatus;
 use secrecy::SecretString;
 
 use super::lookup::Owned;
@@ -340,7 +341,7 @@ pub(super) fn written(
     let mut response = crate::fhir::fhir_json(status, &outcome);
     attach(
         &mut response,
-        accessed(federation, lookup, Some((writing, created, None))),
+        accessed(federation, lookup, wrote(writing, created, None)),
     );
     response
 }
@@ -433,7 +434,7 @@ fn made_answer(
     let mut response = from_member(federation, writing, made, response);
     attach(
         &mut response,
-        accessed(federation, lookup, Some((writing, created, own.as_deref()))),
+        accessed(federation, lookup, wrote(writing, created, own.as_deref())),
     );
     response
 }
@@ -512,10 +513,10 @@ pub(super) fn attach(response: &mut Response, accessed: Option<Accessed>) {
 /// `write` and ended as its [`Written`] says, the member's own id of the
 /// created resource with it; `None` when no request left the gateway or the
 /// federation keeps no access log (Annex II 3.2).
-fn accessed(
+pub(super) fn accessed(
     federation: &Federation,
     lookup: &Lookup<'_>,
-    write: Option<(&Chosen, &Written, Option<&str>)>,
+    write: Option<Wrote<'_>>,
 ) -> Option<Accessed> {
     let log = federation.access_log()?;
     let snapshot = federation.snapshot();
@@ -524,7 +525,7 @@ fn accessed(
             .node(node)
             .map(|node| node.system_id().as_str().to_owned())
     };
-    let made = matches!(write, Some((_, Written::Sent(Created::Made(_)), _)));
+    let made = write.as_ref().is_some_and(|wrote| wrote.made);
     let evidence = |basis| {
         Evidence::reached(basis, Vec::new())
             .constructed(Category::ElectronicDispensation)
@@ -532,14 +533,19 @@ fn accessed(
     };
     let (mut origins, mut ehrs) = reached(snapshot, lookup);
     let mut resource = None;
-    if let Some((writing, Written::Sent(created), own)) = write
-        && created.contact().left()
+    if let Some(Wrote {
+        writing,
+        status,
+        left: true,
+        own,
+        ..
+    }) = write
     {
         let origin = Asked {
             endpoint: writing.native.as_str().to_owned(),
             node: Some(writing.node.as_str().to_owned()),
             system_id: system_id(&writing.node),
-            status: created.status().as_str().to_owned(),
+            status: status.as_str().to_owned(),
             rows: Some(usize::from(made)),
             version: made.then_some(WrittenVersion::Unnamed),
             created_ehr: None,
@@ -590,6 +596,38 @@ fn accessed(
             .collect(),
         inserted: None,
         transformations: Vec::new(),
+    })
+}
+
+/// A write the access record names: the member it reached, its §11.1
+/// status, whether a request left the gateway for it, whether the member
+/// made it, and the member's own id of what it made.
+#[derive(Clone, Copy)]
+pub(super) struct Wrote<'a> {
+    /// The member written to.
+    pub(super) writing: &'a Chosen,
+    /// Its §11.1 status.
+    pub(super) status: EndpointStatus,
+    /// Whether a request left the gateway for it.
+    pub(super) left: bool,
+    /// Whether the member made the write.
+    pub(super) made: bool,
+    /// The member's own id of what it made.
+    pub(super) own: Option<&'a str>,
+}
+
+/// The write `created` at `writing` as the access record names it, or `None`
+/// when it was never composed.
+fn wrote<'a>(writing: &'a Chosen, created: &Written, own: Option<&'a str>) -> Option<Wrote<'a>> {
+    let Written::Sent(created) = created else {
+        return None;
+    };
+    Some(Wrote {
+        writing,
+        status: created.status(),
+        left: created.contact().left(),
+        made: matches!(created, Created::Made(_)),
+        own,
     })
 }
 

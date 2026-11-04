@@ -22,15 +22,21 @@
 
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::MPD;
+use eehrxf::receive::openehr::{InstructionError, ReceiveMappingError, ReceivedComposition};
+use eehrxf::receive::{ReceiveError, ReceivedResources};
 use fhir_types::codec::{Json, Value};
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::reference::Reference;
 use fhirconnect::engine::context::CallContext;
+use fhirconnect::engine::traverse::Defaults;
 use fhirconnect::operations::run::Settings;
 use openehr_adl::artefact::ArchetypeRepository;
 use openehr_adl::error::SyntaxError;
 use openehr_adl::opt::OptError;
 use openehr_adl::parse::Dialect;
+use openehr_base::v1_3::base_types::identification::locatable_ref::LocatableRef;
+use openehr_base::v1_3::base_types::identification::object_version_id::ObjectVersionId;
+use openehr_base::v1_3::base_types::identification::uid_based_id::UidBasedId;
 use openehr_mapping_core::template::{PathError, TemplateSource};
 
 use super::RESOURCE;
@@ -97,6 +103,19 @@ pub enum MapModeError {
     /// A composition is not mapped.
     #[error("a composition is not mapped")]
     Run(#[source] MappingError),
+    /// No language and territory are named for the compositions of received
+    /// dispensations.
+    #[error("the map mode names no language and territory for a received dispensation")]
+    Undefaulted,
+    /// A received dispensation is no resource a collection reads.
+    #[error("the received dispensation is no resource a collection reads")]
+    Received(#[source] ReceiveError),
+    /// A received dispensation does not map into a composition.
+    #[error("the received dispensation does not map into a composition")]
+    Composed(#[source] ReceiveMappingError),
+    /// The composition holds no `ACTION` to name the order on.
+    #[error("the composition of the received dispensation names no order")]
+    Instructed(#[source] InstructionError),
     /// The thread the work runs on could not be started.
     #[error("the thread a mapping runs on could not be started")]
     Thread(#[source] std::io::Error),
@@ -134,6 +153,8 @@ impl Template<'_> {
 #[derive(Debug)]
 pub struct MapMode {
     mapping: Mapping,
+    project: Mapping,
+    defaults: Option<(String, String)>,
 }
 
 impl MapMode {
@@ -159,7 +180,69 @@ impl MapMode {
             .map_err(MapModeError::Files)?;
         let mapping = Mapping::compile_template(&source, &files, &[REQUEST_CONTEXT])
             .map_err(MapModeError::Compile)?;
-        Ok(Self { mapping })
+        let project = Mapping::compile_project(&source, &MPD).map_err(MapModeError::Compile)?;
+        Ok(Self {
+            mapping,
+            project,
+            defaults: None,
+        })
+    }
+
+    /// Returns this mapping with the language and the territory, an ISO 639-1
+    /// and an ISO 3166-1 code, each composition of a received dispensation is
+    /// written in.
+    #[must_use]
+    pub fn with_defaults(mut self, language: &str, territory: &str) -> Self {
+        self.defaults = Some((language.to_owned(), territory.to_owned()));
+        self
+    }
+
+    /// Returns whether a language and a territory are named, so a received
+    /// dispensation can be composed.
+    #[must_use]
+    pub fn composes(&self) -> bool {
+        self.defaults.is_some()
+    }
+
+    /// Maps the received dispensation `body`, one `MedicationDispense-eu-mpd`
+    /// with its contained `Medication-eu-mpd`, into one composition of the
+    /// member's template at `now`, a FHIR `instant`, its `ACTION` naming the
+    /// medication order `order` and its activity `activity` carries out.
+    ///
+    /// The dispensation is kept, in a `collection` of it alone, in the
+    /// composition's `FEEDER_AUDIT.original_content`
+    /// (`eehrxf::receive::openehr`), and the composition is written in the
+    /// language and the territory [`MapMode::with_defaults`] names (RM 1.1.0
+    /// `COMPOSITION.language`, `territory` 1..1).
+    ///
+    /// # Errors
+    ///
+    /// [`MapModeError::Undefaulted`] when no language and territory are named,
+    /// [`MapModeError::Received`] when the body is no resource the collection
+    /// reads, [`MapModeError::Composed`] when it does not map, and
+    /// [`MapModeError::Instructed`] when the composition holds no `ACTION`
+    /// to name the order on.
+    pub fn dispensation(
+        &self,
+        body: &str,
+        (order, activity): (&LocatableRef, &str),
+        now: &str,
+    ) -> Result<ReceivedComposition, MapModeError> {
+        let (language, territory) = self.defaults.as_ref().ok_or(MapModeError::Undefaulted)?;
+        let collection = format!(
+            r#"{{"resourceType":"Bundle","type":"collection","entry":[{{"resource":{body}}}]}}"#
+        );
+        let received = ReceivedResources::read(&collection).map_err(MapModeError::Received)?;
+        let settings = Settings::new(DEVICE, now).with_defaults(
+            Defaults::at(now)
+                .with_language(language.as_str())
+                .with_territory(territory.as_str()),
+        );
+        let composed = deep(|| self.project.resources_to_openehr(&received, &settings))?
+            .map_err(MapModeError::Composed)?;
+        composed
+            .instructed_by(order, activity)
+            .map_err(MapModeError::Instructed)
     }
 
     /// Maps `composition`, a medication order composition in canonical
@@ -308,4 +391,63 @@ fn deep<T: Send>(work: impl FnOnce() -> T + Send) -> Result<T, MapModeError> {
             .join()
             .map_err(|_panicked| MapModeError::Panicked)
     })
+}
+
+/// The activity of a medication order a dispensation carries out, the one
+/// activity `openEHR-EHR-INSTRUCTION.medication_order.v3` defines, "Order".
+pub const ORDER_ACTIVITY: &str = "activities[at0001]";
+
+/// Returns the reference to one medication order of a composition.
+///
+/// The order is the one at position `entry` among the `INSTRUCTION`s
+/// directly under `content` of `composition`, a composition in canonical
+/// JSON whose version is `version`; `None` when it holds no such order, its
+/// archetype node id names another too, or `version` is no
+/// `OBJECT_VERSION_ID`.
+///
+/// The reference is a `LOCATABLE_REF` to the versioned composition by its
+/// `OBJECT_VERSION_ID`, in the `local` namespace, with the archetype path of
+/// the instruction (RM 1.1.0 EHR IM `INSTRUCTION_DETAILS.instruction_id`;
+/// BASE `LOCATABLE_REF`). An order two `INSTRUCTION`s of one archetype node
+/// id share has no path of its own, so it names none: our own design.
+#[must_use]
+pub fn order_in(composition: &str, version: &str, entry: usize) -> Option<LocatableRef> {
+    // NOTE: RM 1.1.0 canonical JSON: a composition that does not read holds no order to name,
+    // so it legitimately names none.
+    let read: Contents = serde_json::from_str(composition).ok()?;
+    let orders: Vec<&str> = read
+        .content
+        .iter()
+        .filter(|item| item.kind.as_deref() == Some("INSTRUCTION"))
+        .filter_map(|item| item.archetype_node_id.as_deref())
+        .collect();
+    let node = *orders.get(entry)?;
+    if orders.iter().filter(|other| **other == node).count() != 1 {
+        return None;
+    }
+    let version = ObjectVersionId::new(version).ok()?;
+    Some(LocatableRef {
+        namespace: String::from("local"),
+        r#type: String::from("INSTRUCTION"),
+        id: UidBasedId::ObjectVersionId(version),
+        path: Some(format!("/content[{node}]")),
+    })
+}
+
+/// What a composition is read for to name an order: its content items.
+#[derive(serde::Deserialize)]
+struct Contents {
+    /// The `content`.
+    #[serde(default)]
+    content: Vec<Item>,
+}
+
+/// One content item, by its RM type and its archetype node id.
+#[derive(serde::Deserialize)]
+struct Item {
+    /// The `_type`.
+    #[serde(rename = "_type")]
+    kind: Option<String>,
+    /// The `archetype_node_id`.
+    archetype_node_id: Option<String>,
 }

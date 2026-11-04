@@ -8,7 +8,7 @@
 use std::error::Error;
 
 use eehrxf::crosswalk::prescription::MPD_MEDICATION_REQUEST;
-use ferrofed_eehrxf::prescriptions::mapped::{MapMode, MapModeError, Template};
+use ferrofed_eehrxf::prescriptions::mapped::{self, MapMode, MapModeError, Template};
 use ferrofed_testkit::medication;
 use fhir_types::codec::Value;
 
@@ -123,4 +123,75 @@ fn a_template_that_does_not_parse_is_refused() {
         matches!(refused, Err(MapModeError::Syntax { .. })),
         "{refused:?}"
     );
+}
+
+/// A received dispensation with its product contained.
+const DISPENSE: &str = r##"{"resourceType":"MedicationDispense","meta":{"profile":["http://hl7.eu/fhir/mpd/StructureDefinition/MedicationDispense-eu-mpd"]},
+  "extension":[{"url":"http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationDispense.recorded","valueDateTime":"2026-03-03T10:00:00+01:00"}],
+  "contained":[{"resourceType":"Medication","id":"med","meta":{"profile":["http://hl7.eu/fhir/mpd/StructureDefinition/Medication-eu-mpd"]},
+    "code":{"coding":[{"system":"http://example.org/fhir/CodeSystem/ferrofed-products","code":"SYN-PRODUCT-0001","display":"Synthetic tablet 500 mg"}]}}],
+  "identifier":[{"system":"urn:oid:2.999.6.1","value":"SYNTHETIC-MD-1"}],
+  "status":"completed","medicationReference":{"reference":"#med"},
+  "subject":{"identifier":{"system":"urn:oid:2.999.1","value":"synthetic-patient-1"}},
+  "performer":[{"actor":{"display":"Synthetic Pharmacist"}}],
+  "quantity":{"value":20,"unit":"tablet","system":"http://unitsofmeasure.org","code":"{tbl}"},
+  "whenHandedOver":"2026-03-03T10:05:00+01:00"}"##;
+
+#[test]
+fn a_dispensation_maps_into_one_composition_naming_the_order() -> TestResult {
+    let (mode, composition) = compiled()?;
+    let order = mapped::order_in(&composition, UID, 0).ok_or("the composition names its order")?;
+    let mode = mode.with_defaults("en", "NL");
+    let composed = mode.dispensation(
+        DISPENSE,
+        (&order, mapped::ORDER_ACTIVITY),
+        "2026-11-04T10:00:00Z",
+    )?;
+    let canonical: serde_json::Value = serde_json::from_str(composed.composition())?;
+    let actions: Vec<&serde_json::Value> = canonical["content"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|item| item["_type"] == "ACTION")
+        .collect();
+    let [action] = actions.as_slice() else {
+        return Err(format!("{} actions, not one", actions.len()).into());
+    };
+    assert_eq!(
+        action.pointer("/instruction_details/instruction_id/id/value"),
+        Some(&serde_json::Value::from(UID)),
+        "RM INSTRUCTION_DETAILS.instruction_id"
+    );
+    assert_eq!(
+        action.pointer("/instruction_details/activity_id"),
+        Some(&serde_json::Value::from("activities[at0001]"))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_dispensation_with_no_language_and_territory_is_refused() -> TestResult {
+    let (mode, composition) = compiled()?;
+    let order = mapped::order_in(&composition, UID, 0).ok_or("the composition names its order")?;
+    let refused = mode.dispensation(
+        DISPENSE,
+        (&order, mapped::ORDER_ACTIVITY),
+        "2026-11-04T10:00:00Z",
+    );
+    assert!(
+        matches!(refused, Err(MapModeError::Undefaulted)),
+        "{refused:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_order_the_composition_does_not_hold_names_nothing() -> TestResult {
+    let (_, composition) = compiled()?;
+    assert!(
+        mapped::order_in(&composition, UID, 1).is_none(),
+        "one order only"
+    );
+    assert!(mapped::order_in(&composition, "no version", 0).is_none());
+    Ok(())
 }

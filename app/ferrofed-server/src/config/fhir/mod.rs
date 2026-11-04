@@ -366,6 +366,25 @@ pub enum FhirError {
         #[source]
         source: std::io::Error,
     },
+    /// A map-mode member receives dispensations and names no language and
+    /// territory to write their compositions in.
+    #[error(
+        "fhir.serve[{position}] {member}: a member in the map mode that receives dispensations names its language and territory"
+    )]
+    MapUndefaulted {
+        /// The position of the entry.
+        position: usize,
+        /// The member.
+        member: String,
+    },
+    /// A map-mode member names a language or a territory without the other.
+    #[error("fhir.serve[{position}] {member}: language and territory are set together")]
+    MapDefaults {
+        /// The position of the entry.
+        position: usize,
+        /// The member.
+        member: String,
+    },
     /// The MPD project does not compile against a map-mode member's template.
     #[error("fhir.serve[{position}] {member}: the map mode is refused")]
     Mapped {

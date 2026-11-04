@@ -68,6 +68,12 @@ pub struct DeclaredMember {
     /// The archetypes an ADL 2 `template` specialises or fills a slot with,
     /// each an ADL file.
     pub archetypes: Vec<PathBuf>,
+    /// The language each composition of a received dispensation is written
+    /// in at the member in the map mode, an ISO 639-1 code, with `territory`.
+    pub language: Option<String>,
+    /// The territory each such composition is written in, an ISO 3166-1
+    /// code, with `language`.
+    pub territory: Option<String>,
 }
 
 /// How a member serves a category on the FHIR face.
@@ -168,12 +174,42 @@ impl Fhir {
                         archetypes: &archetypes,
                     }
                 };
-                let mode = MapMode::compile(written).map_err(|source| FhirError::Mapped {
+                let mut mode = MapMode::compile(written).map_err(|source| FhirError::Mapped {
                     position,
                     member: named(),
                     source: Box::new(source),
                 })?;
+                match (&declared.language, &declared.territory) {
+                    (Some(language), Some(territory)) => {
+                        mode = mode.with_defaults(language, territory);
+                    }
+                    (None, None) => {}
+                    _ => {
+                        return Err(FhirError::MapDefaults {
+                            position,
+                            member: named(),
+                        });
+                    }
+                }
                 mapped.insert(declared.member.clone(), mode);
+            }
+        }
+        // NOTE: RM 1.1.0 COMPOSITION.language and territory are 1..1, so a composition a received
+        // dispensation is written as needs both.
+        for (position, entry) in self.serve.iter().enumerate() {
+            if entry.category != Category::Dispensation.code() {
+                continue;
+            }
+            for member in &entry.members {
+                if mapped
+                    .get(member.node())
+                    .is_some_and(|mode| !mode.composes())
+                {
+                    return Err(FhirError::MapUndefaulted {
+                        position,
+                        member: member.node().to_owned(),
+                    });
+                }
             }
         }
         Ok(mapped)

@@ -441,3 +441,29 @@ fn a_map_mode_member_of_dispensations_is_refused() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn a_map_mode_member_receiving_dispensations_with_no_language_is_refused() -> TestResult {
+    let template = ferrofed_testkit::medication::template_path();
+    let archetypes: Vec<String> = ferrofed_testkit::medication::archetype_paths()
+        .iter()
+        .map(|path| quoted(path))
+        .collect();
+    let resolved = resolved(&format!(
+        "{}\n[[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [\"node-a\"]\n",
+        mapped_table(&format!(
+            "{{ member = \"node-a\", mode = \"map\", template = {}, archetypes = [{}] }}",
+            quoted(&template),
+            archetypes.join(", ")
+        ))
+    ))?;
+    assert!(
+        matches!(
+            resolved,
+            Err(ferrofed_server::config::error::Error::Fhir(FhirError::MapUndefaulted { ref member, .. }))
+                if member == "node-a"
+        ),
+        "{resolved:?}"
+    );
+    Ok(())
+}

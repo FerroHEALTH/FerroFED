@@ -100,6 +100,7 @@ fn matched(
         Some(reference) => {
             let id = face_id(reference, base).ok_or(Owned::Foreign)?;
             Some(match Locator::read(id, serving) {
+                Ok(located) if located.entry().is_some() => mapped(members, &located),
                 Ok(located) => every(members, |member, prescription| {
                     member.chosen.native == *located.endpoint()
                         && member.chosen.ehr_id == *located.ehr_id()
@@ -140,6 +141,62 @@ fn every(
                 .collect::<Vec<_>>()
         })
         .collect()
+}
+
+/// Every `(member, prescription)` position of `members` the mapped
+/// prescription `located` names: at the member and `ehr_id` it names, the
+/// prescription at its position on the page of the composition it names.
+fn mapped(members: &[Member], located: &Locator) -> Vec<(usize, usize)> {
+    let composition = uuid::Uuid::parse_str(located.resource()).ok();
+    let mut found = Vec::new();
+    for (at, member) in members.iter().enumerate() {
+        let (Held::Found(pages), Some(composed)) = (&member.held, &member.composed) else {
+            continue;
+        };
+        if member.chosen.native != *located.endpoint() || member.chosen.ehr_id != *located.ehr_id()
+        {
+            continue;
+        }
+        let mut flat = 0_usize;
+        for (index, page) in pages.iter().enumerate() {
+            let named = composed.get(index).and_then(|held| held.object);
+            for entry in 0..page.prescriptions.len() {
+                if named.is_some()
+                    && named == composition
+                    && Some(entry) == located.entry().map(usize::from)
+                {
+                    found.push((at, flat));
+                }
+                flat = flat.saturating_add(1);
+            }
+        }
+    }
+    found
+}
+
+/// The page and the position on it of the prescription `member` holds that
+/// `named` names, its only one, or `None` when it names several or none.
+pub(crate) fn named_at(named: &[Named], member: &Member, base: &str) -> Option<(usize, usize)> {
+    let [one] = named else {
+        return None;
+    };
+    let members = std::slice::from_ref(member);
+    let serving = [member.chosen.native.clone()];
+    let matched = matched(one, members, (&serving, base)).ok()?;
+    let [(_, flat)] = matched.as_slice() else {
+        return None;
+    };
+    let Held::Found(pages) = &member.held else {
+        return None;
+    };
+    let mut left = *flat;
+    for (index, page) in pages.iter().enumerate() {
+        if left < page.prescriptions.len() {
+            return Some((index, left));
+        }
+        left = left.saturating_sub(page.prescriptions.len());
+    }
+    None
 }
 
 /// Whether `prescription` carries `identifier`, by its system and value,

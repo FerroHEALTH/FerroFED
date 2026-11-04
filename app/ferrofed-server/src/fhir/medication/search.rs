@@ -179,7 +179,7 @@ fn named(fhir: &FhirSettings, member: &prescriptions::Member, pages: &[Page]) ->
     let mut pages = pages.to_vec();
     for (index, page) in pages.iter_mut().enumerate() {
         let origin = member.composed.as_ref().map_or(Origin::Native, |composed| {
-            Origin::Mapped(composed.get(index).copied().flatten())
+            Origin::Mapped(composed.get(index).and_then(|held| held.object))
         });
         if origin != Origin::Native {
             for kept in &mut page.included {

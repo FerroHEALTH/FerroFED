@@ -171,6 +171,34 @@ or one with a `feeder_audit`, answers `404` as an id with no owner
 patient the binding cannot name answers `424`, since a mapped prescription
 names its patient (MPD `MedicationRequest.subject` 1..1).
 
+A map-mode member that also receives dispensations is named, by its node
+id, in the `Electronic-Dispensations` entry, and its table names the
+`language` and `territory` each composition is written in (RM
+`COMPOSITION.language` and `territory` are 1..1); `config check` refuses
+such a member without them (`fhir/serving/start.rs`:
+`a_map_mode_member_receiving_dispensations_with_no_language_is_refused`).
+The owner of a dispensation is found as for a native member, among the
+map-mode member's mapped prescriptions too, and in the map mode the
+dispensation names one prescription. The face reads the owner's
+medication actions with `eu.ferrofed.eehrxf::medication-actions`, and a
+dispensation one of them keeps under the received one's business
+identifier refuses the write `409` with nothing written. Otherwise the
+dispensation is mapped into one composition of the owner's template: its
+`ACTION` names the order it carries out by the `OBJECT_VERSION_ID` of the
+order's composition and the order's path
+(`INSTRUCTION_DETAILS.instruction_id`, activity `activities[at0001]`),
+and the received dispensation is kept in its
+`FEEDER_AUDIT.original_content`. The face creates it once with
+`composition_create` at the owner by its `ehr_id`. A created composition
+answers `201` naming the member and the version it created, with no
+`Location`, since the face names no id to read it by; the owner's refusal
+is `409`, its silence `504` saying the outcome is unknown
+(`fhir/prescriptions/mapped_dispense.rs`:
+`a_dispensation_of_a_mapped_prescription_is_one_composition_at_its_owner_naming_the_order`,
+`a_dispensation_the_owner_already_keeps_is_refused_with_nothing_written`,
+`the_owners_refusal_is_a_conflict_naming_it`,
+`an_owner_that_does_not_answer_is_asked_once_and_the_outcome_is_unknown`).
+
 ## The member contract
 
 FerroFED relies on each declared member for what the gateway does not
