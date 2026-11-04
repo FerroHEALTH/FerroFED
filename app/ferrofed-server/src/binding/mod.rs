@@ -17,7 +17,7 @@
 //!
 //! A binding also declares the configuration sections it reads and what a
 //! reload does with each ([`Binding::sections`]), the health indicators of
-//! what it runs ([`seam::Indicator`]), and what each onward credential kind
+//! what it runs ([`crate::health::dependencies::Indicator`]), and what each onward credential kind
 //! its sections add provides a node client ([`Binding::provide`]). Its
 //! sections, their resolution and their transport sites are `config`'s
 //! (`config::ihe`, `config::nl`). Its self-description is the
@@ -44,13 +44,13 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_federation::id::FederationId;
 
 use crate::binding::seam::{
-    Indicator, LocalizerSeam, ProvideError, Provided, PublicDocument, ResolverSeam,
+    LocalizationError, LocalizerSeam, ProvideError, Provided, PublicDocument, ResolverSeam,
 };
 use crate::config::settings::OnwardGrant;
 use crate::config::settings::Settings;
 use crate::federation::DemographicsStep;
 use crate::federation::error::FederationError;
-use crate::localization::LocalizationError;
+use crate::health::dependencies::Indicator;
 
 /// Every binding this build compiles, in the order the gateway wires them.
 ///

@@ -22,24 +22,14 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[cfg(feature = "binding-ihe")]
-use ferrofed_identity::ihe::xcpd::XcpdConfigError;
-#[cfg(feature = "binding-nl")]
-use ferrofed_identity::nl::nvi::NviConfigError;
 use ferrofed_identity::role::localizer::{Localizer, OnFailure};
-#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
-use ferrofed_identity::role::patient::PatientRefError;
-#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
-use ferrofed_registry::error::IdError;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
-#[cfg(feature = "binding-ihe")]
-use crate::audit::AuditTrailError;
-use crate::binding::seam::{Indicator, LocalizerSeam, ResolverSeam};
+use crate::binding::seam::{LocalizationError, LocalizerSeam, ResolverSeam};
 use crate::binding::{self, Offer, Role};
-use crate::config::service::{GrantRefused, TlsRefused};
 use crate::config::settings::{LocalizationSettings, Settings};
 use crate::config::{self, NodeSelection};
+use crate::health::dependencies::Indicator;
 
 /// The localizer of a federation, with its failure policy and budget.
 #[derive(Clone)]
@@ -142,97 +132,6 @@ impl fmt::Debug for LocalizationPolicy {
             .field("timeout", &self.timeout)
             .finish_non_exhaustive()
     }
-}
-
-/// A localization configuration that cannot be set up.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum LocalizationError {
-    /// `node_selection = "localized"` is declared and no localizer is
-    /// configured, so no undirected patient query could find its node set
-    /// (N4).
-    #[error(
-        "federation.node_selection = \"localized\" needs a localizer: {} (N4, §14.1)",
-        binding::localizer_list()
-    )]
-    NoLocalizer,
-    /// `[federation.localization]` is set under a node selection that uses
-    /// no localizer.
-    #[error(
-        "[federation.localization] applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
-    )]
-    NotLocalized,
-    /// A binding's own localizer is configured under a node selection that
-    /// uses no localizer.
-    #[error(
-        "{section} is a localizer and applies only under federation.node_selection = \"localized\"; remove it, or declare the localized selection"
-    )]
-    Unused {
-        /// The localizer's section, such as `[xcpd]`.
-        section: &'static str,
-    },
-    /// An `[nl_gf.nvi.custodians]` value is not a node id.
-    #[error("nl_gf.nvi.custodians.{ura:?} is not a node id")]
-    #[cfg(feature = "binding-nl")]
-    NviMember {
-        /// The custodian key, a URA and never a patient value.
-        ura: String,
-        /// What the id rules reported.
-        #[source]
-        source: IdError,
-    },
-    /// An `nl_gf.nvi.namespaces` entry is empty.
-    #[error("nl_gf.nvi.namespaces has an empty namespace")]
-    #[cfg(feature = "binding-nl")]
-    NviNamespace(#[source] PatientRefError),
-    /// A credentials section names a grant, which only a node takes.
-    #[error("the localizer's credentials cannot be used")]
-    Grant(#[source] GrantRefused),
-    /// The localizer's TLS material does not read.
-    #[error("the localizer's TLS material cannot be used")]
-    Tls(#[source] TlsRefused),
-    /// The NVI localizer refuses its configuration.
-    #[error("the [nl_gf.nvi] localizer cannot be enabled")]
-    #[cfg(feature = "binding-nl")]
-    Nvi(#[source] NviConfigError),
-    /// The HTTP client the Nuts grant of `[nl_gf.nvi.credentials]` sends its
-    /// token requests through could not be built.
-    #[error("the HTTP client of nl_gf.nvi.credentials.nuts could not be built")]
-    #[cfg(feature = "binding-nl")]
-    NviNutsClient(#[source] reqwest::Error),
-    /// The XUA assertion is not one SAML 2.0 `Assertion` element.
-    #[error("{key} is not one SAML 2.0 Assertion element")]
-    #[cfg(feature = "binding-ihe")]
-    XcpdAssertion {
-        /// The key the assertion was read from.
-        key: &'static str,
-    },
-    /// An `[xcpd.communities]` value is not a node id.
-    #[error("xcpd.communities.{community:?} is not a node id")]
-    #[cfg(feature = "binding-ihe")]
-    XcpdMember {
-        /// The community key, an OID.
-        community: String,
-        /// What the id rules reported.
-        #[source]
-        source: IdError,
-    },
-    /// An `[xcpd.namespaces]` key is empty.
-    #[error("xcpd.namespaces has an empty namespace")]
-    #[cfg(feature = "binding-ihe")]
-    XcpdNamespace(#[source] PatientRefError),
-    /// The XCPD localizer refuses its configuration.
-    #[error("the [xcpd] localizer cannot be enabled")]
-    #[cfg(feature = "binding-ihe")]
-    Xcpd(#[source] XcpdConfigError),
-    /// The audit trail to the ATNA Audit Record Repository cannot start.
-    #[error("the ITI-20 audit trail of the [xcpd] localizer cannot start")]
-    #[cfg(feature = "binding-ihe")]
-    AuditTrail(#[source] AuditTrailError),
-    /// `audit = "repository"` names no `[xcpd.audit_repository]`.
-    #[error("xcpd.audit = \"repository\" needs [xcpd.audit_repository]")]
-    #[cfg(feature = "binding-ihe")]
-    NoAuditRepository,
 }
 
 /// The localization policy `settings` declare under `selection` over the

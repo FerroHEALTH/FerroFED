@@ -5,10 +5,10 @@
 //! from the `[nl_gf.nvi]` settings `crate::config::nl::nvi` resolves.
 
 use super::nuts;
+use crate::binding::seam::LocalizationError;
 use crate::binding::seam::LocalizerSeam;
 use crate::config::nl::nvi::{CREDENTIALS_KEY, NVI_KEY, NviCredentials, NviSettings};
 use crate::config::service;
-use crate::localization::LocalizationError;
 use ferrofed_engine::onward::SystemClock;
 use ferrofed_engine::onward::grant::nl::nuts::NutsAuthorizer;
 use ferrofed_identity::fhir::Authentication;

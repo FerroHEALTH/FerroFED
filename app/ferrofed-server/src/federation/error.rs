@@ -26,7 +26,6 @@ use crate::binding::RoleConflict;
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
 use crate::config::service::{GrantRefused, TlsRefused};
 use crate::federation::describe::DescribeError;
-use crate::localization;
 
 /// A federation that cannot be built from the settings.
 #[derive(Debug, thiserror::Error)]
@@ -292,7 +291,7 @@ pub enum FederationError {
     /// The localizer of `node_selection = "localized"` cannot be set up
     /// (§14.1, N4).
     #[error("the localizer cannot be set up")]
-    Localization(#[source] localization::LocalizationError),
+    Localization(#[source] crate::binding::seam::LocalizationError),
     /// A grant that cannot be used: one in the credentials of a service that
     /// takes none, or a node's with no `[signing]` key (§13.1, N25).
     #[error(

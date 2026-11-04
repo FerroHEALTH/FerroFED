@@ -34,7 +34,12 @@ use ferrofed_identity::role::resolver::Resolution;
 use ferrofed_operator_api::health::{DependencyReport, Observed};
 use ferrofed_registry::id::{EndpointId, NodeId};
 
-use crate::binding::seam::Indicator;
+/// A source of indications a binding or a lane adds to
+/// `GET {base}/operator/dependencies`.
+pub trait Indicator: std::fmt::Debug + Send + Sync {
+    /// Returns its indications, each under the key the report names it by.
+    fn indicate(&self) -> Vec<(&'static str, ferrofed_operator_api::health::Indication)>;
+}
 
 /// Returns the byte `observed` is stored as.
 const fn code(observed: Observed) -> u8 {

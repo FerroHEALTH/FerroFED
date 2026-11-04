@@ -18,8 +18,8 @@
 use std::error::Error;
 
 use ferrofed_server::binding::ihe::mcsd::registry::RefreshOutcome;
+use ferrofed_server::binding::seam::LocalizationError;
 use ferrofed_server::federation::error::FederationError;
-use ferrofed_server::localization::LocalizationError;
 use ferrofed_server::reload::ReloadError;
 use ferrofed_testkit::mcsd::{HarnessDirectory, Member};
 use ferrofed_testkit::nvi::LocalizationService;

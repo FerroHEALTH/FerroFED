@@ -17,11 +17,12 @@ use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::binding::ihe::audit::{RepositoryTrail, trail};
-use crate::binding::seam::{Indicator, LocalizerSeam};
+use crate::binding::seam::LocalizationError;
+use crate::binding::seam::LocalizerSeam;
 use crate::config::audit::AuditDestination;
 use crate::config::ihe::xcpd::XcpdSettings;
 use crate::config::service;
-use crate::localization::LocalizationError;
+use crate::health::dependencies::Indicator;
 
 /// The XCPD localizer `xcpd` describes over the members of `snapshot`, which
 /// admits an `http` gateway only when `profile` is development, audited

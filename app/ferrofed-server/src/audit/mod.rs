@@ -42,10 +42,10 @@ use ihe_atna::atna::repository::RepositoryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
 use ihe_atna::balp::{AuditRecorder, NetworkAddress};
 
-use crate::binding::seam::Indicator;
 use crate::config::audit::{AuditDestination, AuditSettings, FeedRepositorySettings};
 use crate::config::service::{self, TlsRefused};
 use crate::config::settings::Settings;
+use crate::health::dependencies::Indicator;
 
 /// Returns what an audit forwarder's `status` says of its repository.
 ///
