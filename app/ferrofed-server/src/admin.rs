@@ -48,7 +48,7 @@ use ferrofed_registry::export::IdentityStateExport;
 use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 
-use crate::auth::caller::Caller;
+use crate::auth::operator::Operator;
 use crate::auth::permission::Requirement;
 use crate::auth::refusal::{BasicRefusal, Refused};
 use crate::auth::trust::Trust;
@@ -123,37 +123,6 @@ impl AdminRefusal {
         match self {
             Self::Caller(refused) => refused.refusal.response(realm, request_id),
             Self::Scrape(refusal) => refusal.response(realm, request_id),
-        }
-    }
-}
-
-/// The operator a write action was admitted for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Operator {
-    /// A caller the gate verified, with the operator scope.
-    Verified(Box<Caller>),
-    /// A loopback peer that sent no credential, admitted under
-    /// `profile = "development"` alone.
-    DevelopmentLoopback,
-}
-
-impl Operator {
-    /// The issuer that vouched for the operator, when one did.
-    #[must_use]
-    pub fn issuer(&self) -> Option<&str> {
-        match self {
-            Self::Verified(caller) => Some(caller.issuer()),
-            Self::DevelopmentLoopback => None,
-        }
-    }
-
-    /// The operator's subject at that issuer, when one vouched for it.
-    #[must_use]
-    pub fn subject(&self) -> Option<&str> {
-        match self {
-            Self::Verified(caller) => Some(caller.subject()),
-            Self::DevelopmentLoopback => None,
         }
     }
 }

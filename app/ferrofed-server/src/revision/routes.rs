@@ -53,7 +53,7 @@ use ferrofed_operator_api::operator::{MAX_PAGE, Page, PageRequest};
 use http::{HeaderMap, StatusCode};
 use serde::{Deserialize, Serialize};
 
-use crate::admin::Operator;
+use crate::auth::operator::Operator;
 use crate::config::tree::diff;
 use crate::error::{self, Code};
 use crate::reload::Reloader;

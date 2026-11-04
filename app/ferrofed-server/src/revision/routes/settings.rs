@@ -6,7 +6,7 @@
 //! setting the body names changed, which is applied as any revision.
 //!
 //! Only a setting the running configuration lists as editable is taken
-//! ([`crate::running::catalog`]): one value, never a secret, a list or a
+//! ([`crate::config::catalog`]): one value, never a secret, a list or a
 //! table, which an import of the whole configuration changes. Each value is
 //! read as an environment override is, TOML syntax or the string it is, and
 //! the revision is checked as `config check` checks the file before it is
@@ -21,12 +21,12 @@ use http::HeaderMap;
 
 use super::console::{base_table, created, saved_as};
 use super::{ActionBody, Managed, Shaped, answered};
-use crate::admin::Operator;
+use crate::auth::operator::Operator;
+use crate::config::catalog;
 use crate::config::load::with_pairs;
 use crate::error::{self, Code};
 use crate::request_id;
 use crate::revision::service::Refused;
-use crate::running::catalog;
 
 /// The save of settings.
 pub const SETTINGS: &str = "/admin/config/settings";

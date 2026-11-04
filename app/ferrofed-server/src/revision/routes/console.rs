@@ -37,7 +37,7 @@ use jiff::Timestamp;
 use serde::Deserialize;
 
 use super::{ActionBody, Answer, Managed, Shaped, answered, held, record, refused};
-use crate::admin::Operator;
+use crate::auth::operator::Operator;
 use crate::config::error::Error;
 use crate::error::{self, Code};
 use crate::request_id;
