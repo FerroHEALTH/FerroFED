@@ -5,7 +5,7 @@
 //! resolves: the credentials each grant provides its node client, and the
 //! DID documents its holders are resolved by.
 
-use crate::binding::seam::{Provided, PublicDocument};
+use crate::binding::seam::{ProvideError, Provided, PublicDocument};
 use crate::config::nl::nuts::{KEY, NutsOnward};
 use crate::config::settings::{Scheme, Settings};
 use crate::federation::error::FederationError;
@@ -25,12 +25,12 @@ use std::sync::Arc;
 ///
 /// # Errors
 ///
-/// [`FederationError::NutsClient`] for a client that cannot be built.
+/// [`ProvideError::NutsClient`] for a client that cannot be built.
 pub(super) fn provide(
     grant: &NutsOnward,
     endpoint: &EndpointId,
     settings: &Settings,
-) -> Result<Provided, FederationError> {
+) -> Result<Provided, ProvideError> {
     let credentials: SharedCredentials = Arc::new(NutsCredentials::new(
         endpoint.clone(),
         NutsGrant::clone(grant.grant()),
@@ -98,8 +98,8 @@ pub(super) fn documents(settings: &Settings) -> Result<Vec<PublicDocument>, Fede
 }
 
 /// The client the Nuts grant of `endpoint` sends its requests through.
-fn client(endpoint: &EndpointId) -> Result<NutsClient, FederationError> {
-    http_client().map_err(|source| FederationError::NutsClient {
+fn client(endpoint: &EndpointId) -> Result<NutsClient, ProvideError> {
+    http_client().map_err(|source| ProvideError::NutsClient {
         section: format!("credentials.{endpoint}.{KEY}"),
         source,
     })

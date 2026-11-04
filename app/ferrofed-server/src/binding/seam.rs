@@ -89,6 +89,30 @@ impl fmt::Debug for PublicDocument {
     }
 }
 
+/// Why an onward grant cannot provide its node client.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum ProvideError {
+    /// A grant no compiled binding added (§13.1, N25).
+    #[error(
+        "{section} names a grant it cannot use: a node takes one with [signing], an IHE FHIR service an oauth2 client-credentials grant"
+    )]
+    Unclaimed {
+        /// The credentials section.
+        section: String,
+    },
+    /// The HTTP client of an endpoint's Nuts grant could not be built.
+    #[error("the HTTP client of the Nuts grant of {section} could not be built")]
+    #[cfg(feature = "binding-nl")]
+    NutsClient {
+        /// The credentials section.
+        section: String,
+        /// Why the client could not be built.
+        #[source]
+        source: reqwest::Error,
+    },
+}
+
 /// What one endpoint's binding grant provides its node client.
 #[derive(Debug)]
 pub struct Provided {

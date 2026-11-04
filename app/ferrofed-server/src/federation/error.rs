@@ -316,16 +316,6 @@ pub enum FederationError {
     /// service does not read.
     #[error("the TLS material of a service cannot be used")]
     Tls(#[source] TlsRefused),
-    /// The HTTP client of an endpoint's Nuts grant could not be built.
-    #[error("the HTTP client of the Nuts grant of {section} could not be built")]
-    #[cfg(feature = "binding-nl")]
-    NutsClient {
-        /// The credentials section.
-        section: String,
-        /// Why the client could not be built.
-        #[source]
-        source: reqwest::Error,
-    },
     /// A registry is configured, from `registry.document` or from
     /// `[registry.mcsd]`, but `[signing]` is not: every request to a node
     /// conveys the caller's identity, signed with that key (§13.1, N24, N25).
@@ -339,25 +329,9 @@ pub enum FederationError {
     /// The HTTP client every node client shares could not be built.
     #[error("the HTTP client for the nodes could not be built")]
     Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
-    /// A node the gateway presents its TLS client certificate to is not
-    /// reached over `https` (RFC 8705).
-    #[error(
-        "endpoint {endpoint} is not an https URL, and credentials.{endpoint} presents a TLS client certificate to it, which needs TLS under every profile"
-    )]
-    ClientCertificateOverHttp {
-        /// The endpoint.
-        endpoint: EndpointId,
-    },
-    /// The HTTP client of a node reached with its own TLS material could
-    /// not be built.
-    #[error("the HTTP client of endpoint {endpoint} could not be built")]
-    NodeTransport {
-        /// The endpoint.
-        endpoint: EndpointId,
-        /// Why it could not be built; it carries no key.
-        #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
-    },
+    /// The onward clients of the nodes cannot be built.
+    #[error(transparent)]
+    Onward(#[from] crate::onward::OnwardError),
     /// A public document a binding serves would sit inside the ITS-REST
     /// surface, `{base}/v1/`, where the client authentication gate reads
     /// every request.

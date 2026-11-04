@@ -171,7 +171,7 @@ pub(crate) async fn unrouted(
     let Some(serving) = federation.as_deref() else {
         return error::fixed(Code::NotImplemented, request_id);
     };
-    let conveyance = match conveyed::of(serving, caller.as_deref()) {
+    let conveyance = match conveyed::of(serving.signer(), caller.as_deref()) {
         Ok(conveyance) => conveyance,
         Err(unconveyed) => return unconveyed.respond(request_id, &outbound.to_string()),
     };
@@ -220,10 +220,12 @@ pub(crate) async fn unrouted(
         body: arrived.body.as_ref(),
         request_id: arrived.request_id,
     };
-    let routed = crate::access::routed::Routed::of(serving, &arriving, subject::named);
+    let routed = serving
+        .access_log()
+        .and_then(|log| crate::access::routed::Routed::of(log, &arriving, subject::named));
     let response = serve(Some(serving), arrived).await;
     match routed {
-        Some(routed) => routed.attach(serving, response).await,
+        Some(routed) => routed.attach(serving.snapshot(), response).await,
         None => response,
     }
 }

@@ -26,7 +26,6 @@ use openehr_federation::id::FederationId;
 use crate::auth::caller::{Caller, VerifiedBy};
 use crate::config::settings::{Scheme, Settings};
 use crate::error::{self, Code};
-use crate::federation::{Federation, error::FederationError};
 
 /// A request that cannot convey whom it is on behalf of, so nothing is sent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -57,13 +56,9 @@ impl Unconveyed {
 /// The signer of `settings`'s `[signing]` key, naming the gateway `id` to
 /// every node and the `client_id` of its grant to a node it holds one at.
 ///
-/// # Errors
-///
-/// Returns [`FederationError::Unsigned`] when `[signing]` is not set.
-pub(crate) fn signer(settings: &Settings, id: &FederationId) -> Result<Signer, FederationError> {
-    let Some(signing) = &settings.signing else {
-        return Err(FederationError::Unsigned);
-    };
+/// Returns `None` when `[signing]` is not set.
+pub(crate) fn signer(settings: &Settings, id: &FederationId) -> Option<Signer> {
+    let signing = settings.signing.as_ref()?;
     let mut signer = Signer::new(Arc::clone(&signing.keys), id.as_str());
     for (endpoint, scheme) in &settings.credentials {
         match scheme {
@@ -79,17 +74,18 @@ pub(crate) fn signer(settings: &Settings, id: &FederationId) -> Result<Signer, F
             _ => {}
         }
     }
-    Ok(signer)
+    Some(signer)
 }
 
-/// The conveyance of `caller` to the nodes of `federation`.
+/// The conveyance of `caller` to the nodes, signed by the federation's
+/// `signer`.
 ///
 /// # Errors
 ///
 /// Returns [`Unconveyed::NoCaller`] when there is no verified caller, and
 /// [`Unconveyed::Unsigned`] when the federation holds no signer.
-pub fn of(federation: &Federation, caller: Option<&Caller>) -> Result<Conveyance, Unconveyed> {
-    let signer = federation.signer().ok_or(Unconveyed::Unsigned)?;
+pub fn of(signer: Option<&Arc<Signer>>, caller: Option<&Caller>) -> Result<Conveyance, Unconveyed> {
+    let signer = signer.ok_or(Unconveyed::Unsigned)?;
     let caller = caller.ok_or(Unconveyed::NoCaller)?;
     let conveyance = Conveyance::new(Arc::clone(signer), Principal::Caller(conveyed(caller)));
     // NOTE: RFC 8693 §2.1, the caller's verified token is the subject a node's
@@ -102,14 +98,14 @@ pub fn of(federation: &Federation, caller: Option<&Caller>) -> Result<Conveyance
     })
 }
 
-/// The conveyance of the gateway itself, for its operator, to the nodes of
-/// `federation`.
+/// The conveyance of the gateway itself, for its operator, to the nodes,
+/// signed by the federation's `signer`.
 ///
 /// # Errors
 ///
 /// Returns [`Unconveyed::Unsigned`] when the federation holds no signer.
-pub fn gateway(federation: &Federation) -> Result<Conveyance, Unconveyed> {
-    let signer = federation.signer().ok_or(Unconveyed::Unsigned)?;
+pub fn gateway(signer: Option<&Arc<Signer>>) -> Result<Conveyance, Unconveyed> {
+    let signer = signer.ok_or(Unconveyed::Unsigned)?;
     Ok(Conveyance::new(Arc::clone(signer), Principal::Gateway))
 }
 

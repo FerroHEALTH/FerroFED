@@ -15,20 +15,39 @@
 //! (§5.4, N33), and no identifier reaches a log line. No specification
 //! governs where the record looks the patient up: our own design.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ehds_logging::record::{DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::patient::IdentifierNamespace;
-use ferrofed_identity::role::resolver::Identification;
+use ferrofed_identity::role::resolver::{Identification, Resolver};
 use ferrofed_registry::id::{EhrId, EndpointId};
+use ferrofed_registry::snapshot::RegistrySnapshot;
 
-use crate::federation::Federation;
+/// What the federation holds to name the patient behind an `ehr_id`: its
+/// registry, its identity binding and the budget of one ask of a node.
+#[derive(Clone, Copy)]
+pub(crate) struct Members<'a> {
+    /// The registry the endpoint of an access is read in.
+    pub(crate) snapshot: &'a RegistrySnapshot,
+    /// The cross-reference resolver, when one is configured.
+    pub(crate) resolver: Option<&'a dyn Resolver>,
+    /// The budget of one ask of a node (§11.5).
+    pub(crate) per_node: Duration,
+}
+
+impl std::fmt::Debug for Members<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Members")
+            .field("per_node", &self.per_node)
+            .finish_non_exhaustive()
+    }
+}
 
 /// Names the patient behind each `ehr_id` of `subject`, asked in
 /// `namespaces` on behalf of `on_behalf`, when the request named none.
 pub(crate) async fn name(
-    federation: &Federation,
+    members: Members<'_>,
     namespaces: &[IdentifierNamespace],
     on_behalf: &OnBehalfOf,
     subject: &mut DataSubject,
@@ -37,21 +56,20 @@ pub(crate) async fn name(
     // NOTE: §11.5: the asks of one record share one per-node budget, so naming the patients
     // of a population query never holds an answer longer than reaching a node may.
     let deadline = Instant::now()
-        .checked_add(federation.budget().per_node())
+        .checked_add(members.per_node)
         .unwrap_or_else(Instant::now);
     for ehr in &mut subject.ehrs {
         ehr.patient = if named {
             PatientLookup::RequestNamed
         } else {
-            lookup(federation, namespaces, on_behalf, ehr, deadline).await
+            lookup(members, namespaces, on_behalf, ehr, deadline).await
         };
     }
 }
 
-/// What the identity binding of `federation` says of the patient behind
-/// `ehr`.
+/// What the identity binding of `members` says of the patient behind `ehr`.
 async fn lookup(
-    federation: &Federation,
+    members: Members<'_>,
     namespaces: &[IdentifierNamespace],
     on_behalf: &OnBehalfOf,
     ehr: &EhrAt,
@@ -60,12 +78,12 @@ async fn lookup(
     if namespaces.is_empty() {
         return PatientLookup::NotConfigured;
     }
-    let Some(resolver) = federation.resolver() else {
+    let Some(resolver) = members.resolver else {
         return PatientLookup::Unsupported;
     };
     let member = EndpointId::new(ehr.endpoint.as_str())
         .ok()
-        .and_then(|endpoint| federation.snapshot().endpoint(&endpoint))
+        .and_then(|endpoint| members.snapshot.endpoint(&endpoint))
         .map(|endpoint| endpoint.node().clone());
     let (Some(member), Ok(ehr_id)) = (member, EhrId::new(ehr.ehr_id.as_str())) else {
         tracing::warn!(

@@ -27,7 +27,7 @@ use ferrofed_identity::role::consent::ConsentPrefilter;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
-use crate::binding::seam::{LocalizerSeam, Provided, PublicDocument};
+use crate::binding::seam::{LocalizerSeam, ProvideError, Provided, PublicDocument};
 use crate::binding::{Binding, Offer, Reload, Role, Section};
 use crate::config::nl::nuts::NutsOnward;
 use crate::config::settings::OnwardGrant;
@@ -110,7 +110,7 @@ impl Binding for Nl {
         grant: &dyn OnwardGrant,
         endpoint: &EndpointId,
         settings: &Settings,
-    ) -> Option<Result<Provided, FederationError>> {
+    ) -> Option<Result<Provided, ProvideError>> {
         let grant: &dyn Any = grant;
         grant
             .downcast_ref::<NutsOnward>()
@@ -122,7 +122,6 @@ impl Binding for Nl {
             FederationError::MitzMember { .. }
             | FederationError::MitzNamespace(_)
             | FederationError::Mitz(_) => Some("consent-prefilter"),
-            FederationError::NutsClient { .. } => Some("http-client"),
             _ => None,
         }
     }

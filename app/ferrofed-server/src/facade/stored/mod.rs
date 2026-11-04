@@ -411,7 +411,7 @@ async fn redistributed(
         .ok_or_else(|| Refused::fixed(Code::StoredQueryUnknown))?;
     distribution::distributable(held.aql(), &logged)?;
     let sent = (Registry::Held, &selected);
-    let conveyance = crate::conveyed::gateway(federation).map_err(|unconveyed| {
+    let conveyance = crate::conveyed::gateway(federation.signer()).map_err(|unconveyed| {
         tracing::error!(
             error = %unconveyed,
             request_id = logged,

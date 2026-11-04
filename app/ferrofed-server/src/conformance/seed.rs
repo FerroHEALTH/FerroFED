@@ -294,7 +294,7 @@ pub async fn seed(
         .collect();
     let mut writer = Writer {
         federation,
-        conveyance: conveyed::gateway(federation).map_err(SeedError::Unconveyed)?,
+        conveyance: conveyed::gateway(federation.signer()).map_err(SeedError::Unconveyed)?,
         withheld: Arc::new(Withheld::new([patient.value().clone()])),
         written: Vec::new(),
     };
