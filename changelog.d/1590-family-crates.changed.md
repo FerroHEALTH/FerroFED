@@ -1,6 +1,9 @@
 - Moved to `ferrohealth-server` 0.4.3, `ferrohealth-session` 0.2.2,
-  `ferrohealth-smart` 0.8.8, `ferrohealth-ui` 0.6.6, `ihe-iti` 0.0.74 and
-  `nl-generic-functions` 0.0.41. The operator console draws its pages with
+  `ferrohealth-smart` 0.8.8, `ferrohealth-ui` 0.6.6, `ihe-iti` 0.0.74,
+  `nl-generic-functions` 0.0.41, and FerroBRIDGE's `eehrxf` 0.1.152 with
+  `fhirconnect` 0.1.219. A received document's element that a status table
+  of the mapping carries is no longer reported as lost, and the imaging and
+  discharge codings carry the HL7 Europe EU Health Data API displays. The operator console draws its pages with
   FerroUI 0.6.6, and the book's console screenshots are taken again.
 - The operator console's sign-out goes to the provider's
   `end_session_endpoint` only when the session it ends holds an ID Token

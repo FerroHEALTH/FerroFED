@@ -71,11 +71,10 @@ ehds-logging = { version = "=0.3.2", default-features = false }
 # The European interoperability software component of Regulation (EU)
 # 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
 # owner decision of 2026-10-28 (#813) and pinned exactly, because FerroBRIDGE's
-# crate line moves by patch; 0.1.149 is the release on openehr-* 0.0.128
-# that places a medication action by its template section
-# (`crosswalk::patient_summary::SOURCES`, #1551). Verified against crates.io
-# on 2026-11-04.
-eehrxf = { version = "=0.1.149", default-features = false }
+# crate line moves by patch; 0.1.152 is the release on openehr-* 0.0.128
+# with `Project::with_context`, which the map mode compiles the MPD project's
+# request context through (#1590). Verified against crates.io on 2026-11-04.
+eehrxf = { version = "=0.1.152", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -208,23 +207,23 @@ fhir-types = { version = "0.1.128", default-features = false }
 # runs in process (#684), and the template index and mapping-file loader it
 # takes, both from FerroBRIDGE on the workspace openehr-* line, so the build
 # carries one copy of that family (#1028).
-# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.218 is
-# the release eehrxf 0.1.149 requires (#1551). Verified against crates.io on
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.219 is
+# the release eehrxf 0.1.152 requires (#1590). Verified against crates.io on
 # 2026-11-04.
-fhirconnect = "=0.1.218"
+fhirconnect = "=0.1.219"
 # The FHIR terminology client the European interoperability component asks
 # its terminology server through (#925), from FerroBRIDGE, with the caller's
 # HTTP client for mutual TLS and the `context` form of `$validate-code`.
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.141 is
-# the release eehrxf 0.1.149 builds on (#1551). Verified against crates.io on
+# the release eehrxf 0.1.152 builds on (#1590). Verified against crates.io on
 # 2026-11-04.
 ferrobridge-term = "=0.1.141"
 # The FHIR R4 profile validator a document received in the exchange format is
 # held to in full: every invariant, binding and entry profile (#808), from
 # FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.144
-# and openehr-mapping-core 0.1.141 are the releases eehrxf 0.1.149 requires
-# (#1551). Verified against crates.io on 2026-11-04.
+# and openehr-mapping-core 0.1.141 are the releases eehrxf 0.1.152 requires
+# (#1590). Verified against crates.io on 2026-11-04.
 ferrobridge-validator = "=0.1.144"
 openehr-mapping-core = "=0.1.141"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
