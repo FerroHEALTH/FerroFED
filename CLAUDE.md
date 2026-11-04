@@ -20,9 +20,9 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.16
+## Status: building v0.0.17
 
-v0.0.15 is released (2026-10-30), v0.0.14 (2026-10-28), v0.0.13 (2026-10-25), v0.0.12 (2026-10-24), v0.0.11 (2026-10-16), v0.0.10 (2026-10-15), v0.0.9 (2026-10-05) and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
+v0.0.16 is released (2026-11-05), v0.0.15 (2026-10-30), v0.0.14 (2026-10-28), v0.0.13 (2026-10-25), v0.0.12 (2026-10-24), v0.0.11 (2026-10-16), v0.0.10 (2026-10-15), v0.0.9 (2026-10-05) and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
 membership (§12.6, §12.7, §12b): definition requests routed to one chosen node, the
 template fan-out, the stored-query registry with its storage backends and
 drift repair, the admission check, the metrics surface, every credential held
@@ -135,7 +135,12 @@ laboratory, discharge and imaging reports in their HL7 Europe forms (#1355,
 (#1346) and resolves every patient through FerroPIX (#1377). v0.0.15 runs on
 the shared FerroSYS crates with no local copy left (#1397, #1448), takes
 `ferrohealth-server` 0.4.1 (#1455) and prints the family's healthcheck lines
-(#1453). v0.0.16, being built, carries the rest of EHDS readiness (#519): the conformity work (#525,
+(#1453). v0.0.16 serves laboratory reports on the FHIR face, written from a
+member's composition or passed through from its own endpoint (#1404, #1555,
+#1556), prescriptions and dispensations in the map mode (#1403, #1560,
+#1561), and the Federation Tier 1.0.1 routing (#1478). v0.0.17, being built,
+carries discharge reports and imaging (#1405, #1406) and the rest of EHDS
+readiness (#519): the conformity work (#525,
 #940, #1144), the re-checks against the implementing acts once adopted
 (#1267, #799) and the European digital testing environment (#675). The
 component work (the openEHR mapping of medication data, the further
