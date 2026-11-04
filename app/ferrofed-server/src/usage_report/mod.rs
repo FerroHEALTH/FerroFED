@@ -18,7 +18,6 @@
 //! directory, which one boot line says. No specification governs any of
 //! this: our own design.
 
-pub mod group;
 pub mod status;
 
 use std::sync::Arc;

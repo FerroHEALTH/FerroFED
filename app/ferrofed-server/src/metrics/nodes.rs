@@ -39,13 +39,13 @@ use openehr_federation::status::EndpointStatus;
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 
-use crate::facade::route::status::{answered, unanswered};
 use crate::metrics::latency::Latencies;
 use crate::metrics::{
     CONSENT_PREFILTER_REQUESTS, DEMOGRAPHICS_REQUEST_DURATION, DEMOGRAPHICS_REQUESTS,
     LOCALIZER_REQUEST_DURATION, LOCALIZER_REQUESTS, NODE_DURATION_BUCKETS, NODE_REQUEST_DURATION,
     NODE_REQUESTS, OVERLOAD_REFUSALS, RESOLVER_REQUEST_DURATION, RESOLVER_REQUESTS,
 };
+use crate::node_status::{answered, unanswered};
 use ferrohealth_usage_report::window::Window;
 
 /// The node request instruments of one meter provider, shared by every
@@ -112,7 +112,7 @@ impl Instruments {
                 "The time the cross-reference resolver took to answer a call",
             ),
             overload: overload(meter),
-            usage: Arc::new(crate::usage_report::group::window(
+            usage: Arc::new(crate::metrics::group::window(
                 crate::config::base_path::BasePath::default(),
                 None,
             )),
@@ -436,7 +436,7 @@ impl NodeRequests {
         let Some(instruments) = &self.instruments else {
             return;
         };
-        crate::usage_report::group::node(&instruments.usage, status);
+        crate::metrics::group::node(&instruments.usage, status);
         let label = KeyValue::new("endpoint", endpoint.as_str().to_owned());
         instruments.requests.add(
             1,

@@ -15,7 +15,6 @@ use std::time::Duration;
 
 use axum::Router;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use opentelemetry::metrics::Meter;
 
 use crate::auth::trust::Trust;
 #[cfg(feature = "binding-ihe")]
@@ -25,31 +24,6 @@ use crate::federation::error::FederationError;
 use crate::reload::Reloader;
 use crate::state::{AppState, StateError};
 use ferrofed_operator_api::health::Indication;
-
-/// The instruments the bindings record through on the metrics surface, one
-/// field per binding that has any, created once over the surface's meter.
-#[derive(Debug)]
-pub struct Instruments {
-    /// The IHE binding's identity feed and audit spool instruments.
-    #[cfg(feature = "binding-ihe")]
-    pub(crate) ihe: ihe::metrics::Instruments,
-}
-
-impl Instruments {
-    /// Returns every binding's instruments over `meter`.
-    pub(crate) fn new(
-        #[cfg_attr(
-            not(feature = "binding-ihe"),
-            expect(unused_variables, reason = "no compiled binding has instruments")
-        )]
-        meter: &Meter,
-    ) -> Self {
-        Self {
-            #[cfg(feature = "binding-ihe")]
-            ihe: ihe::metrics::Instruments::new(meter),
-        }
-    }
-}
 
 /// What the bindings run for the life of the process, beside every
 /// federation a reload builds: one field per binding that runs anything.

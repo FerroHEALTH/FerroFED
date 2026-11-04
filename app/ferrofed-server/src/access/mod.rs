@@ -72,8 +72,8 @@ use secrecy::SecretString;
 use crate::auth::caller::Caller;
 use crate::config::base_path::BasePath;
 use crate::error::{self, Code};
-use crate::metrics::security::Event;
 use crate::request_id;
+use crate::security::Event;
 use crate::state::AppState;
 use ferrohealth_server::client_address::ClientAddress;
 
