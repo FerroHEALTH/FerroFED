@@ -39,7 +39,7 @@ This page is not legal advice.
 | Art 7(1), transmission to another provider | the healthcare provider | adds no fee, limit or format | met |
 | Art 7(2), cross-border transmission | the national contact point | serves the requests a national connector relays: patient summaries, and prescriptions and dispensations where members serve them | partial |
 | Art 7(3), transmission to social security | the healthcare provider | outside the intended purpose | not the gateway's |
-| Art 7(4), sending a downloaded copy | the receiving provider | receives patient summaries, and dispensations where members serve them | partial |
+| Art 7(4), sending a downloaded copy | the receiving provider | receives patient summaries and laboratory reports, and dispensations where members serve them | partial |
 | Art 8, restricting access | the person, the consent service and the member | carries the restriction out and hides its fact | met |
 | Art 9, information on access | the access service | records every access for at least three years and serves the search | met |
 | Art 10, opting out | the Member State | an opt-out is carried out as a restriction is | not the gateway's |
@@ -270,8 +270,10 @@ accept such data and be able to read them, as applicable."
 **Who acts.** The receiving provider, whose EHR system must receive the
 format (Annex II, point 2.2).
 
-**What FerroFED does.** It receives patient summaries, from a person's own
-grant too (`fhir/receive/write.rs`:
+**What FerroFED does.** It receives patient summaries and laboratory
+reports (`fhir/receive/laboratory.rs`:
+`a_laboratory_report_is_written_to_its_member_by_its_ehr_id_alone`), from
+a person's own grant too (`fhir/receive/write.rs`:
 `a_caller_confined_to_one_patient_writes_only_into_its_ehr`). A category it
 cannot receive is refused, naming it (`fhir/receive/refused.rs`:
 `a_category_no_member_receives_is_refused_naming_it`). It receives a

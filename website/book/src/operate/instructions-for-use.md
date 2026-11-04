@@ -171,7 +171,8 @@ years = 3                      # Art 9(2): at least three years from each access
   Declare in `[[fhir.receive]]` the member that stores each category you
   receive; a document of a category with no member declared is refused
   ([Configuring the face](../integrate/patient-summary.md#configuring-the-face)).
-  This release receives patient summaries as documents, and a
+  This release receives patient summaries and laboratory reports as
+  documents ([A laboratory report](../evaluate/receiving-documents.md#a-laboratory-report)), and a
   dispensation is written to the member that owns its prescription
   ([Receiving a dispensation](../integrate/prescriptions.md#receiving-a-dispensation)).
   `GET {fhir-base}/metadata`

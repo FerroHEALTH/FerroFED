@@ -1607,6 +1607,7 @@ dependencies = [
  "aws-lc-rs",
  "base64 0.23.1",
  "bytes",
+ "eehrxf",
  "ferrofed-console",
  "ferrofed-eehrxf",
  "ferrofed-identity",

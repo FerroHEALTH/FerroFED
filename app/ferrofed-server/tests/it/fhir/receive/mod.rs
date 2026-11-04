@@ -13,6 +13,7 @@ mod audit;
 mod check;
 mod display;
 mod inserted;
+mod laboratory;
 mod refused;
 mod representative;
 mod start;

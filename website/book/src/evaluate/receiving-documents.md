@@ -71,6 +71,51 @@ document, which is the clinical content the client sent. A member that
 refuses the composition or does not answer is an error that names it, never
 a success.
 
+## A laboratory report
+
+A release receives two categories as documents: patient summaries and
+laboratory reports, Art 14(1)(e). A laboratory report is held to the HL7
+Europe Laboratory Report 2.0.0 `Bundle-eu-lab` and `Composition-eu-lab`
+profiles, which a document whose `Composition.type` is LOINC `11502-2`
+names, and mapped by the laboratory mapping the component ships over the
+`KDS_Laborbericht` template into one composition. Declare the member that
+stores laboratory reports with its own `[[fhir.receive]]`, naming the
+package `hl7.fhir.eu.laboratory` 2.0.0 and its dependency closure, the
+template and the mapping files, which `eehrxf` writes out of its
+`mappings::LABORATORY` project:
+
+```toml
+[[fhir.receive]]
+category = "Laboratory-Reports"
+member = "node-a"
+package = "/etc/ferrofed/packages/hl7.fhir.eu.laboratory-2.0.0.tgz"
+dependencies = [                             # the package's dependency closure
+  "/etc/ferrofed/packages/hl7.fhir.r4.core-4.0.1.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-7.1.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.extensions.r4-5.2.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.xver-r5.r4-0.1.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.eu.extensions.r4-1.3.0.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.eu.base-2.0.0.tgz",
+]
+template = "/etc/ferrofed/mappings/laboratory/KDS_Laborbericht.opt"
+files = [                                    # the files of eehrxf's laboratory project, in its order
+  "/etc/ferrofed/mappings/laboratory/ferrobridge_eu_laboratory.context.yml",
+]
+context = "ferrobridge_eu_laboratory.context"
+language = "en"
+territory = "NL"
+```
+
+List every file of the project in `files`, in the order the project names
+them; the example shows the first. The composition carries each result's
+value with its unit, the report's code, status, time and conclusion and
+each specimen. A result's reference range and the order the report
+answers are read by no mapping and declared lost by none, so the member's
+record holds them only in the original document the composition keeps;
+hazard I-16 of the [clinical safety risk file](clinical-safety.md) is open
+on it until the mapping carries both
+([FerroHEALTH/FerroBRIDGE#1481](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1481)).
+
 ## Inserted by the person
 
 Regulation (EU) 2025/327 Art 5 asks that information a person, or their
@@ -128,4 +173,5 @@ controls are built, and I-11 (a document stored with content lost), whose
 controls include the full validation above
 ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The safety
 review of 2026-10-25 closed both at S4, P1
-([#1327](https://github.com/FerroHEALTH/FerroFED/issues/1327)).
+([#1327](https://github.com/FerroHEALTH/FerroFED/issues/1327)). A received laboratory report adds I-16 (a result the
+record does not hold whole), open at S4, P3.
