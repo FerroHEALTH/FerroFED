@@ -106,7 +106,7 @@ fn leaf(archetype: &Archetype, index: usize) -> ContainsExpr {
 }
 
 /// The path `root/part/…`, with no predicate.
-fn identified(root: &str, parts: &[&str]) -> IdentifiedPath {
+pub(crate) fn identified(root: &str, parts: &[&str]) -> IdentifiedPath {
     let path = (!parts.is_empty()).then(|| ObjectPath {
         parts: parts
             .iter()

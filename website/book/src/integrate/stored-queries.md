@@ -144,7 +144,11 @@ queries, read-only, under the namespace `eu.ferrofed.eehrxf` at the one
 version `1.0.0`. ITS-REST names a stored query `[{namespace}::]{query-name}`,
 the namespace "in a form of a reverse domain name", so the gateway's sits
 under the reverse of `ferrofed.eu`. They are the laboratory report's query,
-`eu.ferrofed.eehrxf::laboratory-report`, and the patient summary's section
+`eu.ferrofed.eehrxf::laboratory-report`; the medication queries,
+`eu.ferrofed.eehrxf::medication-orders`, every composition that holds a
+medication order and no `feeder_audit`, so an imported copy is left out,
+and `eu.ferrofed.eehrxf::medication-actions`, every composition that holds a
+medication action; and the patient summary's section
 queries, one per section openEHR content feeds:
 `eu.ferrofed.eehrxf::patient-summary-{section}`, where `{section}` is
 `allergies-and-intolerances`, `problems`, `medication-summary`,

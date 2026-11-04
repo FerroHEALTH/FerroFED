@@ -15,6 +15,8 @@
 //!   its template id, from every member (Federation Tier §12.7, N44);
 //! - [`patient_summary`]: one stored query per patient summary section;
 //! - [`laboratory`]: the stored query of the laboratory report;
+//! - [`medication`]: the stored queries of the medication orders and
+//!   actions a member serves prescriptions and dispensations from;
 //! - [`summary`]: the patient summary document assembled from what the
 //!   members answer to the section queries, each composition mapped by the
 //!   FHIRconnect mappings the deployment supplies;
@@ -63,6 +65,7 @@ pub mod face;
 pub mod laboratory;
 pub mod list;
 pub mod lookup;
+pub mod medication;
 pub mod patient_summary;
 pub mod prescriptions;
 pub mod receive;
