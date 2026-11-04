@@ -22,13 +22,13 @@ use super::error::FederationError;
 /// [`FederationError::FhirRegistry`] for a document that cannot be read or
 /// refuses to load, [`FederationError::ConsoleMembers`] when the members the
 /// operator console manages cannot be joined to it, and with the binding's error, such as
-/// [`FederationError::Directory`] for a care services directory, for a source
+/// [`BindingError::Directory`](crate::binding::error::BindingError::Directory) for a care services directory, for a source
 /// that cannot be read or holds no valid registry; [`Federation::build`](super::Federation::build)
 /// stops on that error.
 #[must_use]
 pub fn read_registry(settings: &Settings) -> Option<Result<RegistrySnapshot, FederationError>> {
     if let Some(read) = crate::binding::read_registry(settings) {
-        return Some(read);
+        return Some(read.map_err(FederationError::from));
     }
     let path = settings.registry_document.as_deref()?;
     Some(
@@ -77,4 +77,38 @@ fn read_document(path: &Path, format: RegistryFormat) -> Result<RegistrySnapshot
             }
         }),
     }
+}
+
+/// Returns the registry's first read and, when a binding is its source, the
+/// source the gateway then keeps it in step with.
+///
+/// A document is read as [`read_registry`] reads it; a care services
+/// directory is read once here, so the banner, the build and the refreshes
+/// share one read.
+#[must_use]
+pub fn read_source(
+    settings: &Settings,
+) -> (
+    Option<Result<RegistrySnapshot, FederationError>>,
+    crate::binding::process::Sources,
+) {
+    #[cfg(feature = "binding-ihe")]
+    if let Some(directory) = &settings.registry_directory {
+        return match crate::binding::ihe::mcsd::registry::DirectoryRegistry::open(directory) {
+            Ok((registry, snapshot)) => (
+                Some(Ok(snapshot)),
+                crate::binding::process::Sources {
+                    ihe: Some(std::sync::Arc::new(registry)),
+                },
+            ),
+            Err(error) => (
+                Some(Err(error.into())),
+                crate::binding::process::Sources::default(),
+            ),
+        };
+    }
+    (
+        read_registry(settings),
+        crate::binding::process::Sources::default(),
+    )
 }

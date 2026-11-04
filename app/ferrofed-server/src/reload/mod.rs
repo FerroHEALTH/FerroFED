@@ -47,20 +47,16 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use ferrofed_engine::dispatch::SetupError;
-use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::auth::trust::Trust;
-use crate::binding::seam::ProvideError;
-use crate::binding::{self, Role, RoleConflict};
+use crate::binding;
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::config::{Config, PREFIX};
 use crate::federation::{Federation, Reconciled, error::FederationError, registry::read_registry};
 use crate::metrics::ReloadResult;
-use crate::onward::OnwardError;
 use crate::state::{AppState, StateError};
 use ferrofed_operator_api::revision::RevisionId;
 use ferrohealth_config::provenance::Provenance;
@@ -68,6 +64,7 @@ use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::tls::{ReloadableTls, TlsError};
 
 pub mod action;
+mod class;
 pub mod log;
 pub mod restart;
 mod trees;
@@ -191,7 +188,7 @@ impl ReloadError {
     pub fn class(&self) -> &'static str {
         match self {
             Self::Config(_) => "configuration",
-            Self::Federation { source, .. } => federation_class(source),
+            Self::Federation { source, .. } => class::federation(source),
             Self::RegistryPresence => "registry-presence",
             Self::Profile => "profile",
             Self::Cleartext(_) => "cleartext",
@@ -208,6 +205,29 @@ impl ReloadError {
         match self {
             Self::Certificate { table, .. } => Some(table),
             _ => None,
+        }
+    }
+
+    /// Whether the refusal is of a registry that breaks a rule of its own:
+    /// a document or a directory that does not read or holds no registry the
+    /// gateway admits, apart from a sound one the configuration does not fit.
+    #[must_use]
+    pub fn registry_invalid(&self) -> bool {
+        match self {
+            Self::Federation { source, .. } => match **source {
+                FederationError::Registry { .. } => true,
+                #[cfg(feature = "binding-ihe")]
+                FederationError::FhirRegistry { .. }
+                | FederationError::Binding(binding::error::BindingError::Directory(_)) => true,
+                _ => false,
+            },
+            Self::Config(_)
+            | Self::RegistryPresence
+            | Self::Profile
+            | Self::Cleartext(_)
+            | Self::Revisions(_)
+            | Self::Auth(_)
+            | Self::Certificate { .. } => false,
         }
     }
 
@@ -683,47 +703,6 @@ pub async fn on_hangup(reloader: Arc<Reloader>) {
                 "the registry reload did not finish; the running registry stays"
             );
         }
-    }
-}
-
-/// The class a refused federation is logged under: the core's own, or the
-/// class the binding whose error it is names.
-fn federation_class(error: &FederationError) -> &'static str {
-    match error {
-        FederationError::Registry { source, .. } => match **source {
-            LoadError::Read { .. } => "registry-unreadable",
-            _ => "registry-invalid",
-        },
-        FederationError::Conflict(RoleConflict { role, .. }) => match role {
-            Role::Resolver => "resolvers",
-            Role::ConsentPrefilter => "consent-prefilter",
-            Role::Localizer => "localization",
-            _ => "bindings",
-        },
-        FederationError::Localization(_) => "localization",
-        FederationError::NodeSelectionUndeclared | FederationError::IdUndeclared => "federation",
-        FederationError::DemographicWithoutRegistry
-        | FederationError::DemographicEndpointUnknown { .. } => "demographic-endpoint",
-        FederationError::PatientWithoutRegistry { .. }
-        | FederationError::PatientEndpointUnknown { .. }
-        | FederationError::PatientWithoutResolver { .. } => "patient-binding",
-        FederationError::Describe(_) => "self-description",
-        FederationError::Clients(SetupError::UnknownEndpoint { .. })
-        | FederationError::Grant { .. }
-        | FederationError::Onward(
-            OnwardError::Grant { .. } | OnwardError::Provide(ProvideError::Unclaimed { .. }),
-        ) => "credentials",
-        #[cfg(feature = "binding-nl")]
-        FederationError::Onward(OnwardError::Provide(ProvideError::NutsClient { .. })) => {
-            "http-client"
-        }
-        FederationError::Tls(_) | FederationError::Onward(OnwardError::Tls(_)) => "tls",
-        FederationError::Clients(_) => "node-clients",
-        FederationError::Transport(_) => "http-client",
-        FederationError::Unsigned => "signing",
-        FederationError::RetentionEndpointUnknown { .. } => "access-log",
-        FederationError::Audit(_) => "audit",
-        _ => binding::class(error).unwrap_or("binding"),
     }
 }
 

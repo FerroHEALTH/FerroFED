@@ -9,6 +9,7 @@
 
 use std::fmt;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[cfg(feature = "binding-ihe")]
 use crate::audit::AuditTrailError;
@@ -16,6 +17,7 @@ use crate::config::service::{GrantRefused, TlsRefused};
 use crate::health::dependencies::Indicator;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::dpop::Prover;
+use ferrofed_identity::role::demographics::Demographics;
 use ferrofed_identity::role::localizer::Localizer;
 use ferrofed_identity::role::resolver::Resolver;
 
@@ -209,4 +211,43 @@ pub enum LocalizationError {
     #[error("xcpd.audit = \"repository\" needs [xcpd.audit_repository]")]
     #[cfg(feature = "binding-ihe")]
     NoAuditRepository,
+}
+
+/// The demographics step a patient identifier the cross-reference does not
+/// map is taken to before localization and resolution, with its budget
+/// (Annex A §A.2).
+///
+/// A registry reload builds it again from `[pdqm]`, as it builds the resolver.
+#[derive(Clone)]
+pub struct DemographicsStep {
+    step: Arc<dyn Demographics>,
+    timeout: Duration,
+}
+
+impl DemographicsStep {
+    /// The step `step`, each exchange of which may take `timeout`.
+    #[must_use]
+    pub fn new(step: Arc<dyn Demographics>, timeout: Duration) -> Self {
+        Self { step, timeout }
+    }
+
+    /// The demographics service.
+    #[must_use]
+    pub fn step(&self) -> &dyn Demographics {
+        self.step.as_ref()
+    }
+
+    /// How long one exchange may take.
+    #[must_use]
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+}
+
+impl fmt::Debug for DemographicsStep {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DemographicsStep")
+            .field("timeout", &self.timeout)
+            .finish_non_exhaustive()
+    }
 }
