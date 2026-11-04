@@ -1,9 +1,16 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The FHIR package set a received patient summary is validated against in
-//! full (#808): the committed HL7 Europe Patient Summary package, and the
-//! packages of its dependency closure.
+//! The FHIR package set a received document is validated against in full.
+//!
+//! It is the committed HL7 Europe Patient Summary package with the packages
+//! of its dependency closure (#808), which a received patient summary is
+//! held to. The same set holds the closure of the HL7 Europe Laboratory
+//! Report 2.0.0 package a received laboratory report is held to (#1555):
+//! the committed `hl7.fhir.eu.extensions.r4` 1.3.0 and the cached
+//! `hl7.fhir.r4.core` 4.0.1, `hl7.terminology.r4` 7.1.0,
+//! `hl7.fhir.uv.extensions.r4` 5.2.0, `hl7.fhir.uv.xver-r5.r4` 0.1.0 and
+//! `hl7.fhir.eu.base` 2.0.0, the versions its manifest names, with theirs.
 //!
 //! FerroBRIDGE's validator refuses a package set that lacks a package a
 //! manifest names. The closure's committed packages sit under `docs/specs/`;
@@ -127,7 +134,8 @@ pub fn patient_summary() -> PathBuf {
     Path::new(ROOT).join("docs/specs/eu-hl7-eps/hl7.fhir.eu.eps-1.0.0-ballot.tgz")
 }
 
-/// Returns every package of the Patient Summary's dependency closure.
+/// Returns every package of the Patient Summary's dependency closure, which
+/// holds the Laboratory Report's too.
 ///
 /// The closure holds the MyHealth@EU value sets its profiles bind, the
 /// committed packages, and the cached ones, each fetched first when the

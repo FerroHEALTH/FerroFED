@@ -29,9 +29,9 @@
 //! - [`laboratory`]: the laboratory report fixtures, the package, the
 //!   template and the mapping a receiving member is declared with, and a
 //!   synthetic report;
-//! - [`fhir_packages`]: the FHIR package set a received patient summary is
-//!   validated against in full, its cached part fetched from its pins
-//!   (#808);
+//! - [`fhir_packages`]: the FHIR package set a received patient summary or
+//!   laboratory report is validated against in full, its cached part
+//!   fetched from its pins (#808, #1555);
 //! - [`health_data_api`]: the structural check of a `DocumentReference`
 //!   against the vendored HL7 Europe EU Health Data API profile (#810);
 //! - [`dpop`]: the check a test device makes of a `DPoP` proof, and the
