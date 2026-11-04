@@ -24,6 +24,233 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.16] - 2026-11-05
+
+Security fixes until 2031-11-05, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- Write `server.public_url`, `server.replica` and
+  `server.bindings_drain_timeout_ms` as `gateway.public_url`,
+  `gateway.replica` and `gateway.bindings_drain_timeout_ms`, and
+  `server.overload_retry_after_s` as `server.retry_after_s`, with the
+  `FERROFED__` overrides to match (`FERROFED__GATEWAY__PUBLIC_URL`). This
+  release refuses each old key at start-up and in `config check` (#1490).
+- Nothing in an operator console's configuration has to change (#1504). The
+  `[oidc]` endpoints are now optional: remove `authorization_endpoint`,
+  `token_endpoint` and `jwks_uri` to have the console discover them from
+  `issuer` when it starts, which then needs the provider reachable at start.
+  A reverse proxy in front of the console passes `/session` through to it.
+- Remove `[server] site_root` and `FERROFED_CONSOLE__SERVER__SITE_ROOT`
+  from the operator console's configuration: the console serves no site
+  bundle, and this release refuses the key at start-up and in
+  `config check`, naming it (#1512).
+
+### Added
+
+- The document list names the laboratory reports of a member that serves
+  them itself as an HL7 Europe EU Health Data API Document Access Provider
+  (an `hl7-fhir-rest` endpoint declared for `Laboratory-Reports`): the
+  member is asked by its own `ehr_id` alone with `Patient?identifier=` and
+  `DocumentReference?patient=&type=`, and is left out of the laboratory
+  report query. Each of its `DocumentReference`s is listed as it holds it,
+  with each attachment URL readdressed to a `Binary/{token}` URL the gateway
+  signs, and the read answers the member's `Binary` unchanged. A member that
+  does not answer fails the list under all-or-nothing, and each list and
+  read is recorded under `Laboratory-Reports`.
+- The FHIR face withdraws a dispensation it received: `PUT
+  {fhir-base}/MedicationDispense/{id}` with `status` `entered-in-error`, by
+  the id the receipt's `Location` named, is held to
+  `MedicationDispense-eu-mpd`, read at the member that id names, and sent
+  there once as an update by the member's own id, its body unchanged but for
+  its top-level `id` (FHIR R4 `http.html` §3.1.0.4). A body whose `id` is
+  not the request's is `400`, any other `status` `422`, the member's refusal
+  `409` and its silence `504`; the withdrawal is recorded as an update under
+  `Electronic-Dispensations`, and `metadata` declares `update` for
+  `MedicationDispense`. MyHealth@EU 07.04 is met (#1468).
+- The operator console serves the session watch, `GET /session` and
+  `POST /session`, which answer the idle and absolute lifetime the session
+  has left and `401` once it is gone, so a page warns before the idle
+  timeout and every tab ends together (#1505).
+- The book shows how to receive a laboratory report on the FHIR face: the
+  `[[fhir.receive]]` member for `Laboratory-Reports` with the HL7 Europe
+  Laboratory Report 2.0.0 package, the `KDS_Laborbericht` template and the
+  laboratory mapping `eehrxf` ships, and what the composition keeps of a
+  result. A server test now receives a synthetic report end to end.
+- The document list (`GET {fhir-base}/DocumentReference`) names each
+  member's laboratory reports when a `[[fhir.receive]]` entry receives
+  `Laboratory-Reports`: one `EehrxfMhdDocumentReference` of the type
+  `11502-2` per laboratory composition, read at a `Binary/{token}` URL the
+  gateway signs, which writes the composition as an HL7 Europe Laboratory
+  Report 2.0.0 `Bundle-eu-lab` through the laboratory mapping of `eehrxf`.
+  A member that does not answer the laboratory query fails the list under
+  all-or-nothing, and each list and read is recorded under
+  `Laboratory-Reports`.
+- Two read-only stored queries in the reserved namespace,
+  `eu.ferrofed.eehrxf::medication-orders` and
+  `eu.ferrofed.eehrxf::medication-actions`: each patient's compositions that
+  hold a medication order (imported copies left out) or a medication action,
+  with each composition's uid and template, which the prescription face's
+  map mode reads a member through.
+- A `[[fhir.serve]]` member of `Electronic-Prescriptions` can be declared
+  in the map mode, `{ member = "node-a", mode = "map", template = "…" }`,
+  with its operational template: an OPT 1.4, or an ADL 2 template with the
+  archetypes it specialises. The face then reads the member's medication
+  orders over ITS-REST with `eu.ferrofed.eehrxf::medication-orders`, keeps
+  the compositions the member's own system created, and maps each into an
+  HL7 Europe MPD 1.0.0 `MedicationRequest-eu-mpd` through the MPD project
+  of `eehrxf`, listed beside the native members' prescriptions and read by
+  the id the search names. The start and `config check` refuse a template
+  the project does not compile against.
+- A dispensation of a prescription a map-mode member owns is written at
+  that member as one openEHR composition: the received
+  `MedicationDispense-eu-mpd` is mapped by the MPD project of `eehrxf`, its
+  `ACTION` names the order it carries out by the order's
+  `OBJECT_VERSION_ID`, and the face creates it once with
+  `composition_create`. A map-mode member named in
+  `Electronic-Dispensations` names the `language` and `territory` its
+  compositions are written in, and `config check` refuses it without them.
+  A dispensation the owner already keeps under the same business
+  identifier is refused `409` with nothing written.
+
+### Changed
+
+- Moved to the `openehr-*` crates 0.0.116 with FerroBRIDGE's `eehrxf`
+  0.1.142, `fhirconnect` 0.1.212, `openehr-mapping-core` 0.1.138,
+  `ferrobridge-term` 0.1.141 and `ferrobridge-validator` 0.1.143, the
+  versions those crates require of one another. The ITS-REST decoders now
+  read a `+` in a query value as a literal plus (RFC 3986 §2.1), so the
+  gateway no longer rewrites a client's `+` before decoding, and a node's
+  RFC 9457 problem details refusal is read through the crate. A `+` in a
+  query value and a node's refusal behave as before.
+- A FHIR document the gateway maps from openEHR writes an archetype-local
+  code under `https://ferrobridge.eu/fhir/CodeSystem/archetype-local/`, the
+  base `eehrxf` 0.1.142 writes, in place of
+  `https://ferrofed.eu/fhir/CodeSystem/archetype-local/`. A consumer that
+  matches the old system URI matches the new one.
+- `[[fhir.receive]]` can name a receiving member for `Laboratory-Reports`,
+  which `eehrxf` 0.1.142 receives as an HL7 Europe Laboratory Report 2.0.0
+  document; `config check` names it among the categories with no receiving
+  member until one does.
+- The remaining-dispensations extension is named
+  `https://ferrobridge.eu/fhir/StructureDefinition/remaining-dispensations`,
+  as `eehrxf` 0.1.142 defines it and FerroBRIDGE publishes it, and the
+  documentation site no longer serves a copy at
+  `https://ferrofed.eu/fhir/StructureDefinition/remaining-dispensations`. The
+  gateway still carries the extension as the member wrote it.
+- The operator console draws every page whole on its server with FerroUI
+  0.6.0 and runs no WebAssembly (#1457). A link loads its page as one
+  document, a form posts to the page it sits on and answers there, and
+  FerroUI's small script modules add the menus, the dialogs, the row
+  editing, the find's suggestions and the commit-confirm countdown on top;
+  every page reads and every action posts with scripts turned off. The page
+  no longer flickers or loses what was open when you act on it, and the
+  404 page no longer panics in the browser (#1458). The console's
+  Content-Security-Policy admits scripts and stylesheets from its own
+  origin alone (`script-src 'self'; style-src 'self'`, no nonce and no
+  `'wasm-unsafe-eval'`), and FerroUI's stylesheet, theme and modules are
+  served under `/ferrohealth-ui/0.6.0/`, cached for a year, in place of
+  `/ferrohealth-ui.css`, `/ferrofed.css` and the site bundle under `/pkg/`.
+  The console image carries the binary alone.
+- The operator console moves to FerroUI 0.6.2 and `ferrohealth-server`
+  0.4.2. A select in a dense options row and a long identifier or link in
+  a stacked table no longer scroll the page sideways at 320 px, and the
+  code editor keeps its typing speed as a JSON or XML document grows. The
+  console's Content-Security-Policy is unchanged (`script-src 'self';
+  style-src 'self'`, no nonce) and now comes from the family's
+  server-rendered console headers, FerroUI's script modules are served
+  under `/ferrohealth-ui/0.6.2/`, and About names FerroUI 0.6.2.
+- The gateway implements the Federation Tier with AQL 1.0.1, the erratum
+  to the routing of EHR-scoped version requests (§12.3, §12.4, §12.5.1,
+  N22, N23, N36, N41). A request under `{base}/v1/ehr/{ehr_id}/…`, a
+  version read or a versioned write, is located by the targeting header,
+  the caller's binding and the `ehr_id` index as before, and now, when
+  none of them names a node and the path carries a version uid, by the
+  member whose `system_id` is that uid's `creating_system_id`; an
+  untargeted read of such a version reaches its creator without an
+  ask-all probe, and a composition `DELETE` whose version a member
+  created reaches that member where it was a `400 target-required`. A
+  read that reaches a node holding an imported copy returns the copy with
+  `openEHR-federation-system-id` naming that node, and a write that
+  reaches it is refused `409` naming the controlling system and is never
+  redirected. `OPTIONS {base}/` still reports `spec_version` `"1.0"`.
+- The operator console signs in and keeps its sessions through
+  `ferrohealth-session` 0.1.1, the family's console sign-in, over
+  `ferrohealth-smart`'s relying party; its own sign-in, session store and
+  code exchange are gone (#1504, #1506). The routes stay `GET /login`,
+  `GET /auth/callback` and `POST /logout`, and the cookies keep their names.
+- With `[oidc] issuer` alone, the console reads the provider's endpoints from
+  its discovery document at start (OpenID Connect Discovery 1.0 §4); a
+  missing or unreachable document refuses the start, and `config check`
+  never asks the provider. `[oidc]` gains `revocation_endpoint`, `ca_file`
+  and `timeout_s`, and `[session]` gains `store`, `key` and `key_file` for a
+  console that runs as several instances.
+- A sign-out with no `[oidc]` ends the session and lands on `/` in place of
+  answering `503`, and a refresh the provider cannot be reached for keeps
+  the session for the next request in place of ending it.
+- Moved to FerroPIX's `ihe-iti` 0.0.73 and `nl-generic-functions` 0.0.40
+  (#1516). The mCSD directory is read through `ihe-iti`'s
+  `DirectoryEntry<Endpoint>`, and the NVI client and the Nuts grant take the
+  request authorizer `ihe-iti` now carries. The gateway's behaviour does not
+  change.
+- Moved to FerroBRIDGE's `eehrxf` 0.1.149 with `fhirconnect` 0.1.218,
+  `openehr-mapping-core` 0.1.141 and `ferrobridge-validator` 0.1.144, on
+  the `openehr-*` crates 0.0.128.
+- The patient summary selects its medication entries by the template
+  section that holds them, as `eehrxf`'s
+  `crosswalk::patient_summary::SOURCES` places them: the medication summary
+  takes a medication order under an ad hoc section, and the immunisations a
+  medication action under the vaccination list section. A vaccine recorded
+  as a medication action no longer reaches the medication summary, and a
+  medication action under any other section reaches no section; record
+  current medication as orders.
+- A `[[fhir.mapping]]` takes an ADL 2 `template` with the `archetypes` it
+  specialises, beside an OPT 1.4 `.opt`.
+- Moved to `ferrohealth-server` 0.4.3, `ferrohealth-session` 0.2.2,
+  `ferrohealth-smart` 0.8.8, `ferrohealth-ui` 0.6.6, `ihe-iti` 0.0.74,
+  `nl-generic-functions` 0.0.41, and FerroBRIDGE's `eehrxf` 0.1.152 with
+  `fhirconnect` 0.1.219. A received document's element that a status table
+  of the mapping carries is no longer reported as lost, and the imaging and
+  discharge codings carry the HL7 Europe EU Health Data API displays. The operator console draws its pages with
+  FerroUI 0.6.6, and the book's console screenshots are taken again.
+- The operator console's sign-out goes to the provider's
+  `end_session_endpoint` only when the session it ends holds an ID Token
+  (OpenID Connect RP-Initiated Logout 1.0 §2). A sign-out with no session
+  left, or one after a Basic sign-in, goes back to `/`.
+
+### Removed
+
+- The operator console's site bundle (its WebAssembly, the `/pkg/` route
+  that served it compressed, and the bundle budget), the
+  `scripts/release/console-site.sh`, `console-tools.sh`,
+  `scripts/checks/console-bundle.sh` and `console-paths.sh` scripts, and the
+  Leptos, cargo-leptos, wasm-bindgen, wasm-opt and leptosfmt pins (#1457).
+  A deployment that built the console itself runs `cargo build --release
+  -p ferrofed-console` alone.
+- `openehr-federation` 0.0.57 drops `object::Extra::new` and
+  `order::ResultOrder::unordered`, each the same as the type's `Default`.
+  A caller writes `Extra::default()` and `ResultOrder::default()` (#1485).
+- The four `[server]` keys that 0.0.15 still read under their old names:
+  `server.public_url`, `server.replica` and
+  `server.bindings_drain_timeout_ms`, now only `gateway.public_url`,
+  `gateway.replica` and `gateway.bindings_drain_timeout_ms`, and
+  `server.overload_retry_after_s`, now only `server.retry_after_s`. An old
+  key is an unknown key, which `serve` and `config check` refuse by its
+  name, and `config check` and the start-up log no longer name deprecated
+  keys (#1490).
+- `[server] site_root` of the operator console, and its
+  `FERROFED_CONSOLE__SERVER__SITE_ROOT` override: the console serves no
+  site bundle, so the key is an unknown key, which `serve` and
+  `config check` refuse by its name (#1512).
+
+### Fixed
+
+- The prescriptions page no longer describes a withdrawal of a dispensation
+  as routed: the FHIR face offers none, and a dispensation sent again under
+  the same identifier with `status` `entered-in-error` is refused `409`
+  `duplicate` like any other, which a test now holds. The MyHealth@EU
+  self-assessment row 07.04 says the same (#1450).
+
 ## [0.0.15] - 2026-10-30
 
 Security fixes until 2031-10-30, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -6168,7 +6395,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.15...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.16...HEAD
+[0.0.16]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.12...v0.0.13

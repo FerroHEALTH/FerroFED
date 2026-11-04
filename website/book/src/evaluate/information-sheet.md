@@ -42,8 +42,8 @@ The running gateway names the same details in `GET {base}/`,
 Art 38(2)(b): "the name and version of the EHR system and date of its
 release".
 
-The EHR system is **FerroFED**. This sheet describes FerroFED 0.0.15,
-released on 2026-10-30. It ships as these forms:
+The EHR system is **FerroFED**. This sheet describes FerroFED 0.0.16,
+released on 2026-11-05. It ships as these forms:
 
 - the gateway image `ghcr.io/ferrohealth/ferrofed`, for Linux on `x86_64`
   and `aarch64`;
@@ -82,6 +82,7 @@ says what it holds and what it waits on.
 
 | Release | Date |
 |---|---|
+| 0.0.16 | 2026-11-05 |
 | 0.0.15 | 2026-10-30 |
 | 0.0.14 | 2026-10-28 |
 | 0.0.13 | 2026-10-25 |
@@ -196,7 +197,7 @@ Item names its row in the matrix exactly.
 
 | Item | Pin | What FerroFED does with it |
 |---|---|---|
-| Product version | 0.0.15 | the FerroFED version this sheet describes |
+| Product version | 0.0.16 | the FerroFED version this sheet describes |
 | Federation Tier with AQL | 1.0.1 | the federation it implements: the façade, the rewrite per node, the merged answer with `meta.federation`, follow-up routing; the release the openEHR SEC approved, with its 1.0.1 erratum to the routing of EHR-scoped version requests |
 | openEHR ITS-REST | 1.1.0 | the API a client calls and the API it calls at each member |
 | openEHR AQL | 1.1.0 | the query language a client sends and each member answers |
@@ -213,9 +214,10 @@ Item names its row in the matrix exactly.
 | Nuts specifications | commit 7c0de53 | the Nuts grant of the Dutch binding, RFC003 and RFC021 |
 | HL7 Europe Patient Summary | `hl7.fhir.eu.eps` 1.0.0-ballot | the patient summary document the FHIR face writes and receives, Annex II, points 2.1 to 2.3 |
 | HL7 Europe Medication Prescription and Dispense | `hl7.fhir.eu.mpd` 1.0.0 | the `MedicationRequest` and `MedicationDispense` profiles the FHIR face serves prescriptions in and holds a received dispensation to, Art 14(1)(b) and (c) |
+| HL7 Europe Laboratory Report | `hl7.fhir.eu.laboratory` 2.1.0 | with 2.0.0 beside it, the version the interoperability component reads: the laboratory report document the FHIR face receives, writes from a member's composition and lists, Art 14(1)(e) |
 | HL7 Europe Base and Core | `hl7.fhir.eu.base` 2.0.1 | the EU core profiles each mapped entry of the patient summary is written to |
-| HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, and the category codes of the access record |
-| `eehrxf` | =0.1.142 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
+| HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, the Document Access Provider interactions it asks a member that serves its own laboratory reports, and the category codes of the access record |
+| `eehrxf` | =0.1.152 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
 
 Beside them:
 
@@ -238,11 +240,14 @@ Beside them:
   RFC 9325 recommends (BCP 195).
 
 The European electronic health record exchange format of Art 15 has no
-adopted implementing act. The gateway serves the patient summary in the
-FHIR R4 form of HL7 Europe's packages and receives patient summaries and
-laboratory reports in the same form ([The categories received](#the-categories-received)). It serves
-electronic prescriptions and receives electronic dispensations in the HL7
-Europe MPD profiles, through members that serve them
+adopted implementing act. The gateway serves the patient summary and
+laboratory reports in the FHIR R4 form of HL7 Europe's packages and
+receives both in the same form
+([The categories received](#the-categories-received),
+[Laboratory reports over FHIR](../integrate/laboratory-reports.md)). It
+serves electronic prescriptions and receives electronic dispensations in the
+HL7 Europe MPD profiles, through members that serve them or, in the map
+mode, from their openEHR medication orders
 ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
 No other category is produced or received
 ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).
@@ -268,8 +273,8 @@ the minimum of Art 13(8), and ships them only in the newest release
 (Art 13(10)), with the end date published.
 [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
 lists every release with the date until which fixes are published, five
-years from its release date. For FerroFED 0.0.15 that date is 2031-10-30;
-0.0.15 itself is supported while it is the newest release.
+years from its release date. For FerroFED 0.0.16 that date is 2031-11-05;
+0.0.16 itself is supported while it is the newest release.
 The rest of the information the Cyber Resilience Act's Annex II asks for is
 on [CRA information to the user](cra-user-information.md).
 

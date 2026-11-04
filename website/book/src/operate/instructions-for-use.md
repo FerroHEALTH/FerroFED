@@ -300,6 +300,7 @@ event, and its frequency is the event's:
 | Keep each receiving category's packages complete | when you move a `[[fhir.receive]]` `package` or one of its dependencies to a new version: name every package of its dependency closure in `dependencies`, which `config check` holds to the manifests | [Receiving a document](../evaluate/receiving-documents.md) |
 | Keep the PIX Manager fed | continuously: the gateway keeps no patient index of its own, so a patient whose records a member has not fed to the PIX Manager over ITI-104, or whose binding the PIX Manager has dropped, resolves at no member and answers as not found | [Identity resolution](identity.md) |
 | Move the gateway's keys out of `[server]` | before you upgrade to 0.0.16: this release refuses `server.public_url`, `server.replica`, `server.bindings_drain_timeout_ms` and `server.overload_retry_after_s` as unknown keys, so write them as `gateway.public_url`, `gateway.replica`, `gateway.bindings_drain_timeout_ms` and `server.retry_after_s` | [Upgrading](upgrading.md#to-v0016-from-v0015) |
+| Keep the console's identity provider reachable at its start | when the console's `[oidc]` names `issuer` alone: the console reads the provider's endpoints from its discovery document when it starts and refuses to start without it; name `authorization_endpoint`, `token_endpoint` and `jwks_uri` to start without asking the provider | [Upgrading](upgrading.md#to-v0016-from-v0015) |
 | Re-read this page and the information sheet | at each release | the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md) |
 
 When a release makes maintenance mandatory, the manufacturer says so in its
@@ -318,8 +319,11 @@ deployment in the EU must plan for are:
   gateway serves the patient summary on its FHIR R4 face and receives
   patient summaries there (Annex II, points 2.1 to 2.3). It receives
   laboratory reports at the member you declare for them and lists each
-  member's, and neither the record that member keeps nor the report the
-  gateway writes carries a result's reference range or the order it
+  member's, with a member that serves its own reports listed as it holds
+  them and read through the gateway
+  ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)), and
+  neither the record that member keeps nor the report the gateway writes
+  carries a result's reference range or the order it
   answers in structured form (hazards I-16 and I-18). It serves
   prescriptions, and receives dispensations, through members that serve
   both in the HL7 Europe MPD profiles themselves or, in the map mode, from

@@ -1367,7 +1367,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-console"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "aws-lc-rs",
  "axum",
@@ -1537,7 +1537,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-server"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-testkit"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
@@ -2017,7 +2017,7 @@ dependencies = [
 
 [[package]]
 name = "forwarders"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "anyhow",
  "proc-macro2",
@@ -3080,7 +3080,7 @@ dependencies = [
 
 [[package]]
 name = "module-cycles"
-version = "0.0.15"
+version = "0.0.16"
 dependencies = [
  "anyhow",
  "proc-macro2",

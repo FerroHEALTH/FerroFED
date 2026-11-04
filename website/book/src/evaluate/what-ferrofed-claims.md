@@ -517,6 +517,33 @@ Released on 2026-10-30.
   FerroBRIDGE, and the access record of a routed openEHR read or write
   naming its object as `what.identifier` ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813), [#1416](https://github.com/FerroHEALTH/FerroFED/issues/1416)).
 
+### v0.0.16: laboratory reports, prescriptions from openEHR, and Federation Tier 1.0.1
+
+Released on 2026-11-05.
+
+- The laboratory report, Art 14(1)(e), on the FHIR face: received at a
+  `[[fhir.receive]]` member as an HL7 Europe Laboratory Report 2.0.0
+  document, written from a member's laboratory composition as a
+  `Bundle-eu-lab` and listed, and a member's own reports, served as an EU
+  Health Data API Document Access Provider, passed through the document list
+  with only their attachment URL readdressed to the gateway's
+  ([#1432](https://github.com/FerroHEALTH/FerroFED/issues/1432), [#1555](https://github.com/FerroHEALTH/FerroFED/issues/1555), [#1556](https://github.com/FerroHEALTH/FerroFED/issues/1556), [#1404](https://github.com/FerroHEALTH/FerroFED/issues/1404)).
+- Prescriptions served and dispensations written in the map mode, from a
+  member's openEHR medication orders through FerroBRIDGE's MPD project, and
+  a received dispensation withdrawn as `entered-in-error`
+  ([#1559](https://github.com/FerroHEALTH/FerroFED/issues/1559), [#1560](https://github.com/FerroHEALTH/FerroFED/issues/1560), [#1561](https://github.com/FerroHEALTH/FerroFED/issues/1561), [#1468](https://github.com/FerroHEALTH/FerroFED/issues/1468), [#1450](https://github.com/FerroHEALTH/FerroFED/issues/1450)).
+- The Federation Tier with AQL 1.0.1: an EHR-scoped version request that
+  names no node reaches the member that created the version
+  ([#1478](https://github.com/FerroHEALTH/FerroFED/issues/1478)).
+- The patient summary's medication entries selected by the template section
+  that holds them ([#1551](https://github.com/FerroHEALTH/FerroFED/issues/1551)).
+- The operator console drawn whole on its server with FerroUI 0.6, with no
+  WebAssembly and a Content-Security-Policy of its own origin alone, signing
+  in through the family's `ferrohealth-session`, with a session watch
+  ([#1457](https://github.com/FerroHEALTH/FerroFED/issues/1457), [#1465](https://github.com/FerroHEALTH/FerroFED/issues/1465), [#1504](https://github.com/FerroHEALTH/FerroFED/issues/1504), [#1505](https://github.com/FerroHEALTH/FerroFED/issues/1505), [#1512](https://github.com/FerroHEALTH/FerroFED/issues/1512)).
+- The `[server]` keys 0.0.15 still read under their old names refused, as
+  any unknown key ([#1490](https://github.com/FerroHEALTH/FerroFED/issues/1490)).
+
 ## Planned
 
 Each milestone on the
@@ -531,8 +558,8 @@ a FHIRconnect mapping are built there
 ([FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321), [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322), [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325), [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
 FerroFED keeps the gateway half: the federation queries, the FHIR face
 routes and the access record, which v0.0.16 carries for prescriptions from
-openEHR medication data, test results, discharge reports and imaging
-([#1403](https://github.com/FerroHEALTH/FerroFED/issues/1403), [#1404](https://github.com/FerroHEALTH/FerroFED/issues/1404), [#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405), [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406)), with the rest of the
+openEHR medication data and test results ([#1403](https://github.com/FerroHEALTH/FerroFED/issues/1403), [#1404](https://github.com/FerroHEALTH/FerroFED/issues/1404)) and v0.0.17 for
+discharge reports and imaging ([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405), [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406)), with the rest of the
 manufacturer's conformity work
 ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [#940](https://github.com/FerroHEALTH/FerroFED/issues/940), [Regulatory status](regulatory-status.md)). The
 changelog fragments in

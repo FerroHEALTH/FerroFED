@@ -68,6 +68,7 @@ as a broken command, is fixed in the same change.
 | v0.0.13 | 2026-10-25 | see below | 56 to 63, below | the v0.0.13 version bump |
 | v0.0.14 | 2026-10-28 | see below | 64 to 69, below | the v0.0.14 version bump |
 | v0.0.15 | 2026-10-30 | see below | 70 to 74, below | the v0.0.15 version bump |
+| v0.0.16 | 2026-11-05 | see below | 75 to 81, below | the v0.0.16 version bump |
 
 ### Findings of 2026-10-06
 
@@ -489,6 +490,50 @@ Against Art 28(b), a limitation left out:
     maintenance table now says FerroFED 0.0.16 refuses them, and the
     Upgrading page has notes for v0.0.15
     ([#1408](https://github.com/FerroHEALTH/FerroFED/issues/1408)).
+
+No text suggested a use outside the intended purpose, (c).
+
+### Findings of 2026-11-05
+
+The review at the v0.0.16 cut. Read in full: `README.md`, `llms.txt`,
+`CITATION.cff`, the landing page, the Evaluate pages written by hand, the
+instructions for use, the Upgrading page, the new Laboratory reports over
+FHIR page and the assembled release notes. Every other page of the book,
+`SUPPORT.md`, `SECURITY.md` and the README of each crate was searched for
+"planned", "v0.0.16", "v0.0.17", the laboratory report, the map mode, the
+configuration keys the release refuses, and the issues the v0.0.16
+milestone closed next to a statement that the work is still to come.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+75. `README.md` named v0.0.15 as current. It now names v0.0.16.
+76. The landing page named v0.0.15 as current. It now names v0.0.16 and has
+    a card for what it ships.
+77. The claims page planned discharge reports and imaging for v0.0.16,
+    which the v0.0.17 milestone holds
+    ([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405), [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406)). It now has a v0.0.16 section and
+    plans them for v0.0.17.
+78. The information sheet named `eehrxf` `=0.1.142`, and the pin matrix
+    named `eehrxf`, `fhirconnect`, `openehr-mapping-core` and
+    `ferrobridge-validator` at the versions before #1551 and #1590, behind
+    the root `Cargo.toml`. Both now name the pins the release builds with.
+79. The information sheet had no row for the HL7 Europe Laboratory Report
+    package and said the gateway serves only the patient summary and
+    serves prescriptions only through members that serve them. It now lists
+    the package, says the gateway serves laboratory reports, and names the
+    map mode.
+
+Against Art 28(b), a limitation left out:
+
+80. The instructions for use did not say that a console whose `[oidc]`
+    names `issuer` alone needs the identity provider reachable at its
+    start. Their maintenance table now says so, and the Upgrading page has
+    the note for v0.0.16 ([#1504](https://github.com/FerroHEALTH/FerroFED/issues/1504)).
+81. The instructions for use described the laboratory reports the gateway
+    writes and not the reports a member serves itself, which are listed as
+    the member holds them. Their limitations now link the new page
+    ([#1404](https://github.com/FerroHEALTH/FerroFED/issues/1404)).
 
 No text suggested a use outside the intended purpose, (c).
 
