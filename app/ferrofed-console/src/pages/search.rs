@@ -229,7 +229,7 @@ pub async fn page() -> Html {
                 ),
                 ..Header::default()
             },
-            ActionGroup::none(),
+            ActionGroup::default(),
         );
         let found = match found {
             Some(answer) => find_results(&current(), &answer),

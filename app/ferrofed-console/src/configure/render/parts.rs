@@ -24,7 +24,7 @@ use ferrohealth_ui::table::view::Column;
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::action_menu::{Act, Action, Item, Menu, row_menu};
 use ferrohealth_ui::view::button::Variant;
-use ferrohealth_ui::view::dialog::{ConfirmForm, Confirmation, danger_form_dialog};
+use ferrohealth_ui::view::dialog::{ConfirmForm, Confirmation, Stakes, confirm_dialog};
 use ferrohealth_ui::view::form::{ERROR, Field, INPUT, described_by, error_id};
 use ferrohealth_ui::view::repeat::{RepeatAdd, RowEnd};
 use ferrohealth_ui::view::status::badge;
@@ -235,7 +235,7 @@ pub(crate) struct Removal {
 /// The actions of a configuration table's row named `named`, whose
 /// removal confirms in the dialog `dialog`: its row menu (F13) with Edit to
 /// `edit` and, when the row can be removed, Remove… after a separator,
-/// opening that dialog (FerroUI `danger_form_dialog`) with its Reason,
+/// opening that dialog (FerroUI `confirm_dialog` with `Stakes::Danger`) with its Reason,
 /// drawn beside the menu in the row's actions cell. The dialog's form posts
 /// to the page it sits on.
 pub(crate) fn row_actions(
@@ -268,17 +268,18 @@ pub(crate) fn row_actions(
         ferrohealth_ui::view::button::label(Some(Glyph::TRASH), tr(Msg::SaveTheRemoval))
     ));
     let fields = removal.fields.then(hidden("confirm", String::from("yes")));
-    let asks = danger_form_dialog(
+    let asks = confirm_dialog(
         &locale,
         Confirmation {
             id: dialog.to_owned().into(),
             title: removal.title.into(),
             message: removal.message.into(),
         },
-        ConfirmForm {
+        Stakes::Danger,
+        Some(ConfirmForm {
             action: crate::pages::here_with_query(),
             fields,
-        },
+        }),
         confirm,
     );
     row_menu(&locale, &menu).then(asks)

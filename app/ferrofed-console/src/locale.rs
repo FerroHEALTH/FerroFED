@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn a_throwaway_catalog_changes_the_words_with_no_code_change() {
-        let english = Locale::english();
+        let english = Locale::default();
         assert_eq!(
             "Not found",
             english.lookup(catalog(), Msg::NotFoundTitle.id())
@@ -479,7 +479,7 @@ mod tests {
 
     #[test]
     fn a_number_a_message_takes_is_grouped_in_the_pages_language() {
-        let english = Locale::english();
+        let english = Locale::default();
         let words = english.lookup_with(
             catalog(),
             Msg::DashboardRows.id(),

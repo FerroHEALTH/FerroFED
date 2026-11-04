@@ -16,17 +16,15 @@ use ferrofed_operator_api::operator::IncidentReport;
 use ferrohealth_ui::html::Html;
 use ferrohealth_ui::i18n::Arg;
 use ferrohealth_ui::icon::Glyph;
-use ferrohealth_ui::table::view::{
-    Body, Column, DataTable, Role, Sorting, cell, data_table, title_cell,
-};
+use ferrohealth_ui::table::view::{Body, Column, DataTable, Role, cell, data_table, title_cell};
 use ferrohealth_ui::view::action::ActionGroup;
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::form::{Field, INPUT, SELECT};
+use ferrohealth_ui::view::layout::{Gap, stack_at};
 use ferrohealth_ui::view::load_report::{Arrival, LoadReport, Outcome, load_report};
 use ferrohealth_ui::view::popover::{PopoverForm, popover_form};
-use ferrohealth_ui::view::surface::{
-    Header, SectionHead, page_heading, panel_section, panel_sections, stack,
-};
+use ferrohealth_ui::view::surface::Container;
+use ferrohealth_ui::view::surface::{Header, SectionHead, page_heading, panel_section};
 use ferrohealth_ui::view::tabs::{Tab, binder};
 
 use crate::act::clear::{ClearLine, ClearOutcome, EVERY_REPLICA};
@@ -103,14 +101,18 @@ fn integrity(
             subtitle: Some(tr(Msg::IntegritySubtitle).into()),
             ..Header::default()
         },
-        ActionGroup::none(),
+        ActionGroup::default(),
     );
     let answer = outcome.map(answer);
     let body = match read {
         Err(stop) => stopped(&stop),
         Ok(incidents) => tabs(&incidents, resolved),
     };
-    Html::join([heading, opt(clear), stack(opt(answer).then(body))])
+    Html::join([
+        heading,
+        opt(clear),
+        stack_at(Gap::Loose, opt(answer).then(body)),
+    ])
 }
 
 /// The clear's form in its dialog: the `ehr_id`, offered from the open
@@ -278,6 +280,7 @@ fn tabs(incidents: &Incidents, resolved: bool) -> Html {
                 "<tr>{} <td class=\"fui-num\">{}</td></tr>",
                 title_cell(
                     None,
+                    None,
                     Html::text(what(kind)),
                     Some(Html::raw(format!("<code>{}</code>", Html::text(kind)))),
                 ),
@@ -297,15 +300,14 @@ fn tabs(incidents: &Incidents, resolved: bool) -> Html {
     ];
     let locale = current();
     let counts_table = (!counts.is_empty()).then(|| {
-        data_table(DataTable {
-            caption: &tr(Msg::IntegrityCountsTitle),
-            columns: &counts_columns,
-            sorting: Sorting::default(),
-            body: Body::Rows(Html::join(counts)),
-        })
+        data_table(DataTable::new(
+            &tr(Msg::IntegrityCountsTitle),
+            &counts_columns,
+            Body::Rows(Html::join(counts)),
+        ))
     });
-    let panel = panel_sections(
-        panel_section(&locale, None, list).then(opt(counts_table.map(|table| {
+    let panel = Container::PanelSections.wrap(panel_section(&locale, None, list).then(opt(
+        counts_table.map(|table| {
             panel_section(
                 &locale,
                 Some(SectionHead {
@@ -315,8 +317,8 @@ fn tabs(incidents: &Incidents, resolved: bool) -> Html {
                 }),
                 table,
             )
-        }))),
-    );
+        }),
+    )));
     binder(
         &locale,
         tr(Msg::IntegrityTitle),
@@ -363,20 +365,19 @@ fn incident_table(incidents: &[Incident], resolved: bool) -> Html {
         };
         Html::raw(format!(
             "<tr>{} {}{} {}</tr>",
-            title_cell(None, Html::text(what(&incident.kind)), Some(sub)),
+            title_cell(None, None, Html::text(what(&incident.kind)), Some(sub)),
             cell(&columns[1], ehr_id),
             cell(&columns[2], Html::text(incident.nodes.join(", "))),
             cell(&columns[3], when),
         ))
     });
-    data_table(DataTable {
-        caption: &tr(if resolved {
+    data_table(DataTable::new(
+        &tr(if resolved {
             Msg::IntegrityResolved
         } else {
             Msg::IntegrityOpen
         }),
-        columns: &columns,
-        sorting: Sorting::default(),
-        body: Body::Rows(Html::join(rows)),
-    })
+        &columns,
+        Body::Rows(Html::join(rows)),
+    ))
 }

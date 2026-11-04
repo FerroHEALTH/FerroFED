@@ -145,7 +145,7 @@ pub async fn page() -> Html {
             subtitle: Some(tr(Msg::TopologySubtitle).into()),
             ..Header::default()
         },
-        ActionGroup::none(),
+        ActionGroup::default(),
     );
     let body = match federation {
         Err(stop) => Html::join([

@@ -339,16 +339,22 @@ pub fn owner_tag(owner: ferrofed_operator_api::console::Owner) -> Html {
     }
 }
 
+/// The title cell of a member node's row: its id as code, linked to its
+/// page at `href` when the node is routable.
+pub(crate) fn node_title(href: Option<&str>, id: &str) -> Html {
+    let name = Html::raw(format!("<code>{}</code>", Html::text(id)));
+    ferrohealth_ui::table::view::title_cell(None, href, name, None)
+}
+
 /// A data table captioned `caption` over `columns` holding `rows`, with no
 /// sortable column.
 #[must_use]
 pub fn table(caption: &str, columns: &[ferrohealth_ui::table::view::Column], rows: Html) -> Html {
-    ferrohealth_ui::table::view::data_table(ferrohealth_ui::table::view::DataTable {
+    ferrohealth_ui::table::view::data_table(ferrohealth_ui::table::view::DataTable::new(
         caption,
         columns,
-        sorting: ferrohealth_ui::table::view::Sorting::default(),
-        body: ferrohealth_ui::table::view::Body::Rows(rows),
-    })
+        ferrohealth_ui::table::view::Body::Rows(rows),
+    ))
 }
 
 #[cfg(test)]

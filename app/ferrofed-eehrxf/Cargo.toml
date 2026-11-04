@@ -40,14 +40,12 @@ ferrofed-identity.workspace = true
 # The `saved` instant of a reserved definition.
 jiff.workspace = true
 # The operational template of a map-mode member, built from its ADL 2 template
-# (openehr-adl) or read as OPT 1.4 (openehr-mapping-core), and the scratch
-# directory the shipped MPD project is compiled from (#1560).
+# (openehr-adl) or read as OPT 1.4 (openehr-mapping-core) (#1560).
 openehr-adl.workspace = true
 # The reference to the medication order a received dispensation's ACTION names
 # (#1561).
 openehr-base.workspace = true
 openehr-mapping-core.workspace = true
-tempfile.workspace = true
 # Every query is built as an AQL syntax tree and printed with
 # printer::to_aql, never spliced.
 openehr-query.workspace = true
@@ -80,6 +78,8 @@ secrecy.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "time"] }
 # The status a terminology refusal carries, matched in the tests.
 http.workspace = true
+# The directory a test writes a fixture tree into.
+tempfile.workspace = true
 wiremock.workspace = true
 
 [lints]

@@ -12,7 +12,7 @@ use ferrohealth_ui::icon::{Glyph, icon};
 use ferrohealth_ui::tone::Tone;
 use ferrohealth_ui::view::button::Variant;
 use ferrohealth_ui::view::countdown::{Countdown, countdown};
-use ferrohealth_ui::view::dialog::{Explanation, info_dialog};
+use ferrohealth_ui::view::dialog::{Explanation, Width, info_dialog};
 use ferrohealth_ui::view::notice::{Announce, notice};
 use ferrohealth_ui::view::status::pill;
 use ferrohealth_ui::view::time::{reading, timestamp};
@@ -38,7 +38,7 @@ pub(super) fn title(pills: Html) -> Html {
                 badge: Some(badge),
                 ..ferrohealth_ui::view::surface::Header::default()
             },
-            ferrohealth_ui::view::action::ActionGroup::none(),
+            ferrohealth_ui::view::action::ActionGroup::default(),
         ),
         ferrohealth_ui::view::template::settings::revision_line(Html::raw(format!(
             "{pills}<button type=\"button\" class=\"{}\" command=\"show-modal\" \
@@ -75,6 +75,7 @@ fn how() -> Html {
             Html::text(tr(Msg::ConfigHowOwners)),
             Html::text(tr(Msg::ConfigHowOff)),
         )),
+        Width::Wide,
     )
 }
 

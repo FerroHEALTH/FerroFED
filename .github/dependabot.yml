@@ -13,7 +13,8 @@
 # before it reaches a pull request (the OWASP CI/CD Security Cheat Sheet's
 # third-party-code control). Every entry sits at 7 days or more, the floor
 # zizmor's `dependabot-cooldown` audit enforces, and the audit runs over this
-# file in CI.
+# file in CI. The one exclusion is the FerroHEALTH family's own crates in the
+# cargo entry, which arrive the day they ship.
 #
 # SECURITY updates are exempt by design: Dependabot applies no cooldown to
 # advisory-driven bumps, so an advisory still arrives immediately. That is what
@@ -52,26 +53,34 @@ updates:
     directory: "/"
     labels:
       - "dependencies"
+    # Daily, so a release of a FerroHEALTH family crate reaches its pull
+    # request the day it ships (#1590). Every other crate still waits out the
+    # cooldown below, so the daily run changes nothing for it but the day its
+    # grouped pull request is refreshed.
     schedule:
-      interval: "weekly"
+      interval: "daily"
     # Longer for a major than for an action: a compromised crate executes in
     # the build and ships in the binary, which is the higher-consequence case.
+    # The family crates are excluded: our own crates, published through
+    # crates.io Trusted Publishing, so waiting on them gains nothing.
     cooldown:
       default-days: 7
       semver-major-days: 14
+      exclude: ["ferrohealth-*", "openehr-*", "eehrxf", "fhirconnect", "ferrobridge-*", "ihe-*", "nl-generic-functions", "ehds-logging", "fhir-types"]
     open-pull-requests-limit: 10
     groups:
-      # ONE weekly PR for every minor and patch bump; lockstep families (serde,
+      # ONE PR moves every FerroHEALTH family crate, majors included: most sit
+      # on 0.x lines where each bump counts as a major, several (openehr-*)
+      # move in lockstep, and none builds alone. A dependency lands in the
+      # first group it matches, so this group comes first.
+      ferrohealth-family:
+        patterns: ["ferrohealth-*", "openehr-*", "eehrxf", "fhirconnect", "ferrobridge-*", "ihe-*", "nl-generic-functions", "ehds-logging", "fhir-types"]
+      # ONE PR for every other minor and patch bump; lockstep families (serde,
       # axum and tower) bump together inside it by construction. MAJORS stay
       # individual: a semver major in shipped code is a real review.
       cargo-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
-      # The openehr-* crates are one lockstep line on 0.0.x, where every bump
-      # counts as a major and would otherwise open one PR per crate, none of
-      # which builds alone. One PR moves the family.
-      openehr:
-        patterns: ["openehr-*"]
     commit-message:
       prefix: "deps"
 
