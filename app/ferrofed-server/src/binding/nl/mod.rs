@@ -27,6 +27,7 @@ use ferrofed_identity::role::consent::ConsentPrefilter;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
+use crate::binding::seam::LocalizationError;
 use crate::binding::seam::{LocalizerSeam, ProvideError, Provided, PublicDocument};
 use crate::binding::{Binding, Offer, Reload, Role, Section};
 use crate::config::nl::nuts::NutsOnward;
@@ -34,7 +35,6 @@ use crate::config::settings::OnwardGrant;
 use crate::config::settings::Settings;
 use crate::config::{EmergencyConsent, Localization};
 use crate::federation::error::FederationError;
-use crate::localization::LocalizationError;
 
 /// The Dutch binding.
 #[derive(Debug, Clone, Copy)]

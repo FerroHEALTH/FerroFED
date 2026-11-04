@@ -31,12 +31,12 @@ use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
+use crate::binding::seam::LocalizationError;
 use crate::binding::seam::{LocalizerSeam, ResolverSeam};
 use crate::binding::{Binding, Offer, Reload, Role, Section};
 use crate::config::settings::Settings;
 use crate::federation::DemographicsStep;
 use crate::federation::error::FederationError;
-use crate::localization::LocalizationError;
 
 /// The `localization.mode` of the XCPD localizer (Annex A.3).
 pub const XCPD: &str = "xcpd";

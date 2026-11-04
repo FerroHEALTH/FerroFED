@@ -19,8 +19,8 @@ use ihe_atna::atna::repository::{Repository, TlsSettings};
 use ihe_atna::atna::spool::Content;
 
 use crate::audit::{AuditTrailError, Forwarding, Stopping, observed, spool, started};
-use crate::binding::seam::Indicator;
 use crate::config::ihe::audit_repository::AuditRepositorySettings;
+use crate::health::dependencies::Indicator;
 use ferrofed_operator_api::health::Indication;
 
 impl Forwarding for RepositoryAudit {
