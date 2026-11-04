@@ -237,6 +237,9 @@ Today:
   forward to another call, which `tools/forwarders` finds, to
   `forwarders.count` (#1484); a fall passes with a note and
   `ratchet-tighten.yml` lowers the counts on `main` (#1467).
+  `module-cycles.sh` fails when two top-level modules of `ferrofed-server`
+  import each other outside tests, which `tools/module-cycles` finds
+  (#1580).
 - `scripts/conformance/`: the matrix, obligations and per-run report
   (`report.sh`) scripts.
 - `scripts/release/`: the changelog assembly, the crates.io lane, the
@@ -393,6 +396,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
 - `tools/forwarders`: the forwarder ratchet's detector; never published.
   It parses the hand-written Rust with `syn` and lists every function whose
   whole body forwards to one other call, for `scripts/checks/forwarders.sh`.
+- `tools/module-cycles`: the module-cycle guard's detector; never published.
+  It parses a crate with `syn` and lists the pairs of top-level modules that
+  import each other outside tests, for `scripts/checks/module-cycles.sh`.
 - The root `Cargo.toml` carries the lint set, the release profile, the
   `openehr-*` family as one pin group and the `publish` switch; `deny.toml`,
   `clippy.toml`, `rustfmt.toml` and `rust-toolchain.toml` sit beside it.

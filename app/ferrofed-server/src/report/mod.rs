@@ -41,8 +41,8 @@ use jiff::Timestamp;
 use secrecy::SecretString;
 use serde::Serialize;
 
-use crate::command::healthcheck::TIMEOUT;
 use crate::config::settings::Settings;
+use crate::health::PROBE_TIMEOUT;
 use crate::report::provenance::{Build, Release};
 use crate::report::source::{Listener, SourceError};
 use ferrohealth_server::health::READINESS;
@@ -273,7 +273,7 @@ impl Report {
         match Listener::new(
             settings.server.listen,
             settings.server.tls.as_ref(),
-            TIMEOUT,
+            PROBE_TIMEOUT,
         ) {
             Err(error) => {
                 for path in [
@@ -336,22 +336,24 @@ impl Report {
             Some(_) if !settings.metrics.scrape_users.is_empty() => Err(SourceError::NotServed(
                 "metrics.scrape_users asks a scrape for a Basic password the configuration does not hold",
             )),
-            Some(listen) => match Listener::new(listen, settings.metrics.tls.as_ref(), TIMEOUT) {
-                Err(error) => Err(error),
-                Ok(admin) => {
-                    admin
-                        .get(crate::metrics::PATH, None)
-                        .await
-                        .and_then(|(status, body)| {
-                            if status == StatusCode::OK {
-                                source::text(crate::metrics::PATH, body)
-                                    .map(|text| (status, answers::metrics(&text).into_bytes()))
-                            } else {
-                                Err(refused(crate::metrics::PATH, status))
-                            }
-                        })
+            Some(listen) => {
+                match Listener::new(listen, settings.metrics.tls.as_ref(), PROBE_TIMEOUT) {
+                    Err(error) => Err(error),
+                    Ok(admin) => {
+                        admin
+                            .get(crate::metrics::PATH, None)
+                            .await
+                            .and_then(|(status, body)| {
+                                if status == StatusCode::OK {
+                                    source::text(crate::metrics::PATH, body)
+                                        .map(|text| (status, answers::metrics(&text).into_bytes()))
+                                } else {
+                                    Err(refused(crate::metrics::PATH, status))
+                                }
+                            })
+                    }
                 }
-            },
+            }
         };
         self.add(
             "metrics.txt",

@@ -19,6 +19,13 @@ pub mod dependencies;
 
 use ferrohealth_health::registry::{Check, HealthIndicator, Outcome};
 
+/// How long a probe of the gateway's own listeners waits for the whole
+/// exchange, the `healthcheck` job's and the support report's.
+///
+/// Shorter than the five seconds the image's `HEALTHCHECK` allows, so the
+/// job reports its own line before the runtime gives up on it.
+pub const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
 /// A subsystem that is up once it is built: the configuration read, the
 /// registry loaded, the outbound clients and the stored-query store made.
 ///
