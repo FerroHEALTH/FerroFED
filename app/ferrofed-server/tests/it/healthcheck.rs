@@ -160,7 +160,7 @@ async fn a_gateway_that_never_answers_is_exit_one_within_the_timeout() -> TestRe
         written(&output)
     );
     assert!(
-        elapsed < ferrofed_server::command::healthcheck::TIMEOUT * 3,
+        elapsed < ferrofed_server::health::PROBE_TIMEOUT * 3,
         "the job gives up at its timeout: {elapsed:?}"
     );
     drop(silent);

@@ -341,6 +341,23 @@ adopted in FerroHEALTH/FerroEHR#4663).
   forwarders on `main` when the guard landed stand in the baseline; folding
   them is the refactor work that follows.
 
+## Top-level modules point down
+
+No specification governs this: our own design (#1482, #1580).
+
+- **No two top-level modules of `ferrofed-server` import each other**
+  outside tests. When two would, give the pair one direction: move what
+  both read below both (a type or a constant into the module that owns the
+  concept, or a module of its own), or let the lower module own a seam, a
+  trait the upper one implements, as `reload::log::RevisionLog` is.
+- **The guard measures it.** `tools/module-cycles` reads the crate with
+  `syn`: a path, a `use` tree with its groups, and the tokens of a macro or
+  an attribute that name `crate::<module>`, and `super::<module>` in a file
+  directly under `src/`. An item under a `#[cfg(...)]` that names `test`, a
+  module only such an item declares, and a file under `tests/` are left
+  out. `scripts/checks/module-cycles.sh` runs it in the `module-cycles` CI
+  job and fails on any pair.
+
 ## No Python, anywhere
 
 The tooling languages are **bash and Rust**. Python is banned across the

@@ -380,6 +380,29 @@ jobs:
       - name: The forwarders have not risen
         run: bash scripts/checks/forwarders.sh
 
+  # No two top-level modules of ferrofed-server import each other outside
+  # tests (#1580; no specification governs this: our own design).
+  # tools/module-cycles reads the crate with syn, so a grouped `use` and the
+  # tokens of a macro count. No build cache: the tool builds proc-macro2 and
+  # syn alone.
+  module-cycles:
+    name: module-cycles
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: "false"
+      - name: Module-cycle guard self-test
+        run: bash scripts/checks/module-cycles.sh --self-test
+      - name: No two top-level modules import each other
+        run: bash scripts/checks/module-cycles.sh
+
   # The version-drift guard. It compares every present config file against
   # docs/VERSIONS.md and skips loudly for the files that have not landed yet,
   # so it is useful now and grows teeth as files appear. The self-tests of
@@ -1674,6 +1697,7 @@ jobs:
       - file-length
       - duplication
       - forwarders
+      - module-cycles
       - versions
       - favicon-sync
       - copyright-holder

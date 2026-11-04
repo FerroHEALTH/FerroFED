@@ -3078,6 +3078,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "module-cycles"
+version = "0.0.15"
+dependencies = [
+ "anyhow",
+ "proc-macro2",
+ "syn 3.0.6",
+]
+
+[[package]]
 name = "multiversion_no_op"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

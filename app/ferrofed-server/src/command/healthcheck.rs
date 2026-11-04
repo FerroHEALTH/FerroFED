@@ -16,7 +16,6 @@
 
 use std::fmt;
 use std::process::ExitCode;
-use std::time::Duration;
 
 use ferrohealth_server::health::READINESS;
 use ferrohealth_server::healthcheck::{self, Get, GetError, Outcome};
@@ -25,12 +24,6 @@ use http::StatusCode;
 
 use crate::chain;
 use crate::config::settings::Settings;
-
-/// How long the job waits for the whole exchange.
-///
-/// Shorter than the five seconds the image's `HEALTHCHECK` allows, so the
-/// job reports its own line before the runtime gives up on it.
-pub const TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Asks the gateway this configuration describes for its readiness and
 /// prints one line.
@@ -61,7 +54,7 @@ pub(super) fn healthcheck_command(settings: &Settings) -> ExitCode {
     let mut get = Get::new(
         address,
         settings.server.base_path.join(READINESS),
-        TIMEOUT,
+        crate::health::PROBE_TIMEOUT,
         0,
     );
     if let Some(tls) = &settings.server.tls {
