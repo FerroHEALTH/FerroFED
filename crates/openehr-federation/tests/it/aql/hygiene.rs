@@ -121,7 +121,7 @@ fn facade() -> impl Strategy<Value = (String, String, bool, bool)> {
 proptest! {
     #[test]
     fn no_node_query_carries_the_patient_identifier((aql, id, bound, rebuilds) in facade()) {
-        let mut parameters = Parameters::new();
+        let mut parameters = Parameters::default();
         if bound {
             parameters.insert("patient", Primitive::String(id.clone()));
         }
@@ -150,7 +150,7 @@ fn a_query_whose_other_literals_avoid_the_identifier_is_dispatched() {
                WHERE e/ehr_status/subject/external_ref/id/value = '4711' AND c/name/value = 'Visit'";
     assert!(
         matches!(
-            analyse(aql, &Parameters::new(), Paging::default(), &ask_all()),
+            analyse(aql, &Parameters::default(), Paging::default(), &ask_all()),
             Ok(Analysis::Patient(_))
         ),
         "dispatched"
@@ -232,7 +232,7 @@ const SEATS: [Seat; 4] = [
 /// and the parameters it needs.
 fn seated(id: &str, seat: Seat, seeded: &str) -> (String, Parameters) {
     let subject = format!("e/ehr_status/subject/external_ref/id/value = '{id}'");
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     let aql = match seat {
         Seat::Projection => format!(
             "SELECT '{seeded}' AS marker, c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE {subject}"
@@ -306,7 +306,7 @@ fn every_seat_with_a_different_value_is_dispatched() {
 
 #[test]
 fn a_parameter_fault_names_the_parameter_never_its_value() {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert("patient", Primitive::String("sentinel4711".into()));
     parameters.insert("unused", Primitive::String("sentinel4711".into()));
     let aql = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = $patient";
@@ -372,7 +372,7 @@ proptest! {
     fn no_recombined_aggregate_query_carries_the_patient_identifier(
         (aql, id, bound, rebuilds, seated) in aggregate_facade(),
     ) {
-        let mut parameters = Parameters::new();
+        let mut parameters = Parameters::default();
         if bound {
             parameters.insert("patient", Primitive::String(id.clone()));
         }
@@ -402,7 +402,7 @@ fn the_avg_rewrite_reaches_the_node_without_the_patient() {
                CONTAINS OBSERVATION o WHERE e/ehr_status/subject/external_ref/id/value = '4711'";
     let declared = ask_all().with_decomposable_aggregates(AggregateFunction::ALL);
     let Ok(Analysis::Patient(query)) =
-        analyse(aql, &Parameters::new(), Paging::default(), &declared)
+        analyse(aql, &Parameters::default(), Paging::default(), &declared)
     else {
         panic!("a recombined patient aggregate");
     };
@@ -492,7 +492,7 @@ fn no_pushed_row_key_carries_the_patient() {
                     "SELECT {select} FROM {from} WHERE {predicate} ORDER BY {key} {paging}"
                 );
                 let Ok(Analysis::Patient(query)) =
-                    analyse(&aql, &Parameters::new(), Paging::default(), &bounded)
+                    analyse(&aql, &Parameters::default(), Paging::default(), &bounded)
                 else {
                     panic!("an ordered patient query is dispatched: {aql}");
                 };

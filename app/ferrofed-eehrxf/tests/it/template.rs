@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::path::Path;
 
+use eehrxf::crosswalk::patient_summary::SOURCES;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::section_query::Archetype;
 
@@ -81,23 +82,23 @@ fn the_vendored_template_reads_as_fourteen_sections() -> TestResult {
 }
 
 #[test]
-fn each_section_selects_exactly_the_entry_archetypes_its_template_sections_name_and_its_additions()
+fn each_section_selects_exactly_the_entry_archetypes_its_template_sections_name_but_those_placed()
 -> TestResult {
     let template = template_sections()?;
+    // NOTE: eehrxf crosswalk::patient_summary::SOURCES: an archetype a source names is placed by
+    // the section of FerroBRIDGE's template that holds it, never by this template's.
+    let placed: BTreeSet<String> = SOURCES
+        .iter()
+        .map(|source| source.archetype.to_owned())
+        .collect();
     for section in Section::ALL {
         let mut named = BTreeSet::new();
         for name in section.template_sections() {
             let entries = template
                 .get(*name)
                 .ok_or_else(|| format!("{section:?}: the template has no section {name}"))?;
-            named.extend(entries.iter().cloned());
+            named.extend(entries.iter().filter(|id| !placed.contains(*id)).cloned());
         }
-        named.extend(
-            section
-                .beyond_template()
-                .iter()
-                .map(|archetype| archetype.id.to_owned()),
-        );
         let selected: BTreeSet<String> = section
             .archetypes()
             .iter()
@@ -145,23 +146,66 @@ fn every_template_section_with_entries_feeds_a_query_or_is_a_gap() -> TestResult
 }
 
 #[test]
-fn each_archetype_beyond_the_template_is_a_vendored_ckm_archetype() {
-    let vendored = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../docs/specs/openehr-ckm-medication");
+fn each_placed_archetype_is_selected_under_the_section_the_component_places_it_in() {
+    let placed = |section: Section| {
+        section
+            .placed()
+            .into_iter()
+            .map(|placed| (placed.section, placed.archetype.id))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        placed(Section::MedicationSummary),
+        [(
+            "openEHR-EHR-SECTION.adhoc.v1",
+            "openEHR-EHR-INSTRUCTION.medication_order.v3"
+        )]
+    );
+    assert_eq!(
+        placed(Section::Immunisations),
+        [(
+            "openEHR-EHR-SECTION.immunisation_list.v0",
+            "openEHR-EHR-ACTION.medication.v1"
+        )]
+    );
     for section in Section::ALL {
-        for Archetype { id, .. } in section.beyond_template() {
+        if !matches!(section, Section::MedicationSummary | Section::Immunisations) {
+            assert!(section.placed().is_empty(), "{section:?}");
+        }
+        for placed in section.placed() {
             assert!(
-                vendored.join(format!("{id}.adl")).is_file(),
-                "{section:?}: {id} is no vendored CKM archetype"
+                placed
+                    .archetype
+                    .id
+                    .starts_with(&format!("openEHR-EHR-{}.", placed.archetype.class)),
+                "{section:?}: {placed:?}"
             );
+            let held = SOURCES.iter().any(|source| {
+                source.section == placed.section && source.archetype == placed.archetype.id
+            });
+            assert!(held, "{section:?}: {placed:?} is a source of the component");
         }
     }
-    assert_eq!(
-        Section::MedicationSummary
-            .beyond_template()
-            .iter()
-            .map(|archetype| archetype.id)
-            .collect::<Vec<_>>(),
-        ["openEHR-EHR-INSTRUCTION.medication_order.v3"]
+}
+
+#[test]
+fn a_medication_action_is_selected_for_the_immunisations_alone_and_only_under_its_section() {
+    let medication = Section::MedicationSummary.aql();
+    assert!(
+        !medication.contains("openEHR-EHR-ACTION.medication.v1"),
+        "the medication summary never selects a vaccine by its archetype: {medication}"
+    );
+    assert!(
+        medication.contains("SECTION s2[openEHR-EHR-SECTION.adhoc.v1] CONTAINS INSTRUCTION a2[openEHR-EHR-INSTRUCTION.medication_order.v3]"),
+        "{medication}"
+    );
+    let immunisations = Section::Immunisations.aql();
+    assert!(
+        immunisations.contains("SECTION s1[openEHR-EHR-SECTION.immunisation_list.v0] CONTAINS ACTION a1[openEHR-EHR-ACTION.medication.v1]"),
+        "{immunisations}"
+    );
+    assert!(
+        openehr_query::parser::parse_str(&immunisations).is_ok(),
+        "the query parses: {immunisations}"
     );
 }

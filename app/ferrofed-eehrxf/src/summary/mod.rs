@@ -65,7 +65,8 @@ pub mod resources;
 use std::collections::{BTreeMap, BTreeSet};
 
 use eehrxf::category::Category;
-use eehrxf::document::{Document, EmptyReason};
+use eehrxf::document::Document;
+use eehrxf::document::section::EmptyReason;
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::terminology::Terminology;
 use eehrxf::terminology::ehn;
@@ -294,7 +295,7 @@ pub async fn assemble(
     }
     for slot in not_supplied()? {
         assembly.document.with_section(
-            eehrxf::document::Section::new(slot, vec![String::from(NOT_SUPPLIED)])
+            eehrxf::document::section::Section::new(slot, vec![String::from(NOT_SUPPLIED)])
                 .empty_because(EmptyReason::Unavailable),
         )?;
     }
@@ -362,7 +363,7 @@ fn not_applicable(refused: &MappingError) -> bool {
 
 /// The slots of the sections no openEHR content is named to feed, the gaps
 /// of [`UNSELECTED`], which every summary writes as not supplied.
-fn not_supplied() -> Result<Vec<&'static eehrxf::document::Slot>, AssemblyError> {
+fn not_supplied() -> Result<Vec<&'static eehrxf::document::form::Slot>, AssemblyError> {
     UNSELECTED
         .iter()
         .filter(|unselected| matches!(unselected.reason, Reason::Gap { .. }))
@@ -370,7 +371,7 @@ fn not_supplied() -> Result<Vec<&'static eehrxf::document::Slot>, AssemblyError>
             eehrxf::crosswalk::patient_summary::PATIENT_SUMMARY
                 .row(unselected.element)
                 .and_then(|row| row.eps.strip_prefix("Composition.section:"))
-                .and_then(eehrxf::document::slot)
+                .and_then(eehrxf::document::form::slot)
                 .ok_or(AssemblyError::Gap {
                     element: unselected.element,
                 })
@@ -399,7 +400,7 @@ impl Assembly {
         answers: &SectionAnswers,
         (origins, elsewhere): (&[Origin], &[Elsewhere]),
         (mappings, translator): (&Mappings, &mut Translator<'_>),
-    ) -> Result<eehrxf::document::Section, AssemblyError> {
+    ) -> Result<eehrxf::document::section::Section, AssemblyError> {
         let slot = slot_of(answers.section)?;
         let mut entries = Vec::new();
         let mut authors = BTreeSet::new();
@@ -482,7 +483,7 @@ impl Assembly {
         paragraphs.extend(duplicates::lines(&keys));
         paragraphs.extend(once::lines(&answers.listed_once, origins));
         paragraphs.extend(covered_elsewhere(elsewhere));
-        let mut section = eehrxf::document::Section::new(slot, paragraphs);
+        let mut section = eehrxf::document::section::Section::new(slot, paragraphs);
         for author in authors {
             section = section.with_author(author);
         }

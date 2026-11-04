@@ -138,8 +138,11 @@ pub struct MappingEntry {
     /// The section it feeds, by the slug of its section query, such as
     /// `allergies-and-intolerances`.
     pub section: String,
-    /// The OPT 1.4 operational template it compiles against.
+    /// The operational template it compiles against: an OPT 1.4 `.opt`, or an
+    /// ADL 2 template beside `archetypes`.
     pub template: PathBuf,
+    /// The archetypes an ADL 2 `template` specialises, each an ADL file.
+    pub archetypes: Vec<PathBuf>,
     /// The model and context mapping files.
     pub files: Vec<PathBuf>,
     /// The `metadata.name` of the context mapping.
@@ -509,9 +512,23 @@ impl Fhir {
                     path: entry.template.clone(),
                     source,
                 })?;
+            let mut archetypes = Vec::with_capacity(entry.archetypes.len());
+            for path in &entry.archetypes {
+                let text = std::fs::read_to_string(path).map_err(|source| FhirError::Template {
+                    position,
+                    path: path.clone(),
+                    source,
+                })?;
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                archetypes.push((name, text));
+            }
             sources.push(Source {
                 section,
                 opt,
+                archetypes,
                 files: entry.files.clone(),
                 context: entry.context.clone(),
             });

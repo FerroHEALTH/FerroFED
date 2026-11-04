@@ -97,7 +97,7 @@ fn an_integer_written_on_the_identifier_path_is_refused_never_coerced() {
 
 #[test]
 fn an_integer_bound_to_the_identifier_path_is_refused_never_coerced() {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert("patient", Primitive::Integer(4711));
     let refusal = analyse(
         &query("c/uid/value", &format!("{SUBJECT} = $patient")),
@@ -114,7 +114,7 @@ fn an_integer_bound_to_the_identifier_path_is_refused_never_coerced() {
 
 #[test]
 fn a_string_bound_to_the_identifier_path_is_resolution_input() {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert("patient", Primitive::String("4711".into()));
     let analysis = analyse(
         &query("c/uid/value", &format!("{SUBJECT} = $patient")),
@@ -248,7 +248,7 @@ fn a_namespace_predicate_without_an_identifier_is_ordinary_query_material() {
 fn with_paging(aql: &str, offset: Option<i64>, fetch: Option<i64>) -> Result<Analysis, Refusal> {
     analyse(
         aql,
-        &Parameters::new(),
+        &Parameters::default(),
         Paging { offset, fetch },
         &ask_all(),
     )
@@ -491,7 +491,7 @@ fn ordering_on_the_subject_is_refused() {
 
 #[test]
 fn the_identifier_bound_in_another_position_is_refused() {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert("p", Primitive::String("4711".into()));
     let aql = query(
         "c/uid/value",
@@ -518,7 +518,7 @@ fn a_clinician_identifier_with_another_value_is_dispatched() {
 
 #[test]
 fn a_query_with_the_parser_fix_of_ferroehr_3513_binds_and_analyses() {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert(
         "t",
         Primitive::String("openEHR-EHR-COMPOSITION.encounter.v1".into()),

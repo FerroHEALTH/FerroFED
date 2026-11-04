@@ -317,19 +317,20 @@ deployment in the EU must plan for are:
 - **The European exchange format covers four of the six categories.** The
   gateway serves the patient summary on its FHIR R4 face and receives
   patient summaries there (Annex II, points 2.1 to 2.3). It receives
-  laboratory reports at the member you declare for them, and the record
-  that member keeps does not carry a result's reference range or the
-  order it answers in structured form, only in the original document the
-  composition keeps (hazard I-16). It serves
-  prescriptions, and receives dispensations, only through members that
-  serve both in the HL7 Europe MPD profiles themselves, and computes no
-  dispensability, remaining dispensations or lock of its own
-  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
-  A member that holds its prescriptions only as openEHR data, with no FHIR
-  endpoint of its own in those profiles, is not served
-  ([FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322)).
-  Imaging and discharge reports are neither produced nor received, and
-  laboratory reports are not produced
+  laboratory reports at the member you declare for them and lists each
+  member's, and neither the record that member keeps nor the report the
+  gateway writes carries a result's reference range or the order it
+  answers in structured form (hazards I-16 and I-18). It serves
+  prescriptions, and receives dispensations, through members that serve
+  both in the HL7 Europe MPD profiles themselves or, in the map mode, from
+  their openEHR medication orders, and computes no dispensability,
+  remaining dispensations or lock of its own
+  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md);
+  hazard I-17). The patient summary takes a member's current medication from
+  its medication orders and its vaccinations from medication actions under
+  a vaccination list section; record current medication as orders, since a
+  medication action under another section reaches no section (hazard I-03).
+  Imaging and discharge reports are neither produced nor received
   ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
   The open hazards of the interoperability component are in the
   [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).

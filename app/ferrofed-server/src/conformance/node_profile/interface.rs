@@ -189,11 +189,11 @@ impl NodeQuery {
     pub(super) fn scoped(template: &str, ehr_id: Uuid) -> Result<Self, CheckError> {
         let query = parse_str(template).map_err(CheckError::Template)?;
         let value = ehr_id.to_string();
-        let mut parameters = Parameters::new();
+        let mut parameters = Parameters::default();
         parameters.insert(EHR_ID, Primitive::String(value.clone()));
         bind(&mut query.clone(), &parameters).map_err(CheckError::Parameter)?;
         Ok(Self {
-            aql: to_aql(&query),
+            aql: to_aql(&query, None),
             parameters: Some(QueryParameters::from([(EHR_ID.to_owned(), value.into())])),
         })
     }

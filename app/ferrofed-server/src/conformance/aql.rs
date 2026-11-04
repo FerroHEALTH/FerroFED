@@ -18,7 +18,7 @@
 //! use openehr_query::bind::Parameters;
 //! use openehr_query::federation::DirectiveKind;
 //!
-//! let mut uid = Parameters::new();
+//! let mut uid = Parameters::default();
 //! uid.insert("uid", Primitive::String("it's".to_owned()));
 //! let aql = ClientQuery::parse("SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c")?
 //!     .and_where("SELECT c FROM COMPOSITION c WHERE c/uid/value = $uid", &uid)?
@@ -123,7 +123,7 @@ impl ClientQuery {
     /// Returns [`AqlError`] when the condition cannot be built, which its
     /// fixed template never gives cause for.
     pub fn of_patient(self, patient: &SyntheticPatient) -> Result<Self, AqlError> {
-        let mut parameters = Parameters::new();
+        let mut parameters = Parameters::default();
         parameters.insert(
             "patient_id",
             Primitive::String(patient.value().expose_secret().to_owned()),
@@ -209,7 +209,7 @@ mod tests {
         reason = "a test asserts, and returns its setup errors"
     )]
     fn a_quote_in_a_value_stays_inside_its_literal() -> Result<(), Box<dyn std::error::Error>> {
-        let mut parameters = Parameters::new();
+        let mut parameters = Parameters::default();
         parameters.insert("uid", Primitive::String("x' OR '1' = '1".to_owned()));
         let aql = ClientQuery::parse(COMPOSITIONS)?
             .and_where(
@@ -288,12 +288,12 @@ mod tests {
     fn an_unbound_or_unknown_parameter_is_an_error_and_never_a_query() -> Result<(), AqlError> {
         let query = ClientQuery::parse("SELECT c FROM COMPOSITION c WHERE c/uid/value = $uid")?;
         assert!(matches!(
-            query.bound(&Parameters::new()),
+            query.bound(&Parameters::default()),
             Err(AqlError::Parameters(_))
         ));
         let empty = ClientQuery::parse(COMPOSITIONS)?;
         assert!(matches!(
-            empty.and_where(COMPOSITIONS, &Parameters::new()),
+            empty.and_where(COMPOSITIONS, &Parameters::default()),
             Err(AqlError::NoCondition)
         ));
         assert!(matches!(

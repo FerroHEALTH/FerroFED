@@ -208,11 +208,11 @@ mod tests {
     fn canonical_of(aql: &str) -> String {
         let mut query = parse_str(aql).unwrap();
         canonical(&mut query);
-        to_aql(&query)
+        to_aql(&query, None)
     }
 
     fn printed(aql: &str) -> String {
-        to_aql(&parse_str(aql).unwrap())
+        to_aql(&parse_str(aql).unwrap(), None)
     }
 
     #[test]

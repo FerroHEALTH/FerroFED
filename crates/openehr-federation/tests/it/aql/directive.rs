@@ -30,7 +30,7 @@ fn directed(endpoints: usize) -> Context {
 
 /// The analysis of `aql` under `context`.
 fn analysed(aql: &str, context: &Context) -> Result<Analysis, Refusal> {
-    FacadeQuery::parse(aql)?.analyse(&Parameters::new(), Paging::default(), context)
+    FacadeQuery::parse(aql)?.analyse(&Parameters::default(), Paging::default(), context)
 }
 
 /// The node query of a patient analysis for the fixture `ehr_id`.

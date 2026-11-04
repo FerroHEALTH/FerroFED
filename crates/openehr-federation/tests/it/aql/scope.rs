@@ -77,7 +77,7 @@ fn an_unnamed_ehr_in_the_from_form_is_scoped_through_a_fresh_variable() {
 // conformance: CP-22
 #[test]
 fn a_bound_parameter_scopes_the_query_in_either_form() {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert("ehr_id", Primitive::String(EHR_ID.to_owned()));
     for aql in [
         "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = $ehr_id",

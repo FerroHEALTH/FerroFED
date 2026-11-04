@@ -216,7 +216,7 @@ fn unscoped(
     let sources = (0..columns.len()).map(ColumnSource::Node).collect();
     Ok(Analysis::Unscoped(UnscopedQuery {
         node: NodeQuery {
-            aql: to_aql(&query),
+            aql: to_aql(&query, None),
             columns: sources,
             limit: order.limit(),
         },

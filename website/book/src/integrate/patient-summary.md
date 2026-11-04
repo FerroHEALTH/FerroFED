@@ -190,7 +190,19 @@ every entry is named under the absolute URL of `{fhir-base}`.
 - A composition goes to every section whose query selects it, and each
   mapping places it by its own explicit criterion: a medication use is a
   medicine or a vaccination by what its mapping reads, never by inference.
-  The medication summary also takes the medication orders a member records.
+- The medication entries are selected by the template section that holds
+  them, as the interoperability component places them
+  (`eehrxf` `crosswalk::patient_summary::SOURCES`): the medication summary
+  takes a medication order under an ad hoc section
+  (`openEHR-EHR-SECTION.adhoc.v1`), and the immunisations take a medication
+  action under the vaccination list section
+  (`openEHR-EHR-SECTION.immunisation_list.v0`), never by the archetype
+  alone, so a vaccine recorded as a medication action never reaches the
+  medication summary. FerroBRIDGE's patient summary template, vendored
+  under `docs/specs/ferrobridge-medication/`, records them so, and a
+  `[[fhir.mapping]]` may name it as an ADL 2 `template` with the
+  `archetypes` it specialises (`app/ferrofed-eehrxf/tests/it/summary/placement.rs`:
+  `one_composition_holding_a_medicine_and_a_vaccine_lists_each_in_its_own_section_only`).
 - A section with no entry carries the empty reason `nilknown` only when
   every member answered and none holds content for it, and `unavailable`
   otherwise.
@@ -684,7 +696,9 @@ load refuses either without it.
   when the configuration is read. It must map to a profile the crosswalk
   admits for an entry of its section, for example `allergyIntolerance-eu-core`
   for the allergies. A mapping that does not compile, or maps elsewhere,
-  refuses the start and `ferrofed config check`.
+  refuses the start and `ferrofed config check`. Its `template` is an OPT 1.4
+  `.opt`, or an ADL 2 template beside `archetypes`, the ADL files it
+  specialises, whose operational template the gateway builds at start.
 - A section a template feeds through several profiles takes one entry per
   profile.
 - The section slugs are those of the section queries: `allergies-and-intolerances`,

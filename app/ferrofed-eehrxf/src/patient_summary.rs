@@ -12,7 +12,13 @@
 //! The archetypes of a section are the ones the openEHR International
 //! Patient Summary template of the openEHR international Clinical Knowledge
 //! Manager names in the template section, or sections, that carry it (CKM cid
-//! `1013.26.376`, asset version 1).
+//! `1013.26.376`, asset version 1), but for the medication entries: the
+//! medication order and the medication action are selected only under the
+//! section of FerroBRIDGE's patient summary template that holds each, as the
+//! interoperability component places them (`eehrxf`
+//! `crosswalk::patient_summary::SOURCES`, [`Section::placed`]), since the
+//! CKM template holds the action in both its medication summary and its
+//! immunisations section and the section is all that tells the two apart.
 //!
 //! The crosswalk sections no query feeds are listed in [`UNSELECTED`], each
 //! with the reason, for the clinical safety review.
@@ -22,7 +28,9 @@ use openehr_query::ast::SelectQuery;
 use openehr_query::printer;
 
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
-use crate::section_query::{self, Archetype};
+use eehrxf::crosswalk::patient_summary::SOURCES;
+
+use crate::section_query::{self, Archetype, Placed};
 
 /// The stem of every section query's name, before the section.
 pub const STEM: &str = "patient-summary-";
@@ -122,16 +130,6 @@ const EXCLUSION: Archetype = archetype!("EVALUATION", "openEHR-EHR-EVALUATION.ex
 /// several sections.
 const ABSENCE: Archetype = archetype!("EVALUATION", "openEHR-EHR-EVALUATION.absence.v2");
 
-/// The medication management action, which the template uses for both the
-/// medication statement and the immunisation statement.
-const MEDICATION: Archetype = archetype!("ACTION", "openEHR-EHR-ACTION.medication.v1");
-
-/// The medication order, in which a CDR commonly keeps the current
-/// medication list (openEHR international CKM, cid 1013.1.5946, vendored
-/// under `docs/specs/openehr-ckm-medication/`).
-const MEDICATION_ORDER: Archetype =
-    archetype!("INSTRUCTION", "openEHR-EHR-INSTRUCTION.medication_order.v3");
-
 /// The problem or diagnosis evaluation.
 const PROBLEM: Archetype = archetype!("EVALUATION", "openEHR-EHR-EVALUATION.problem_diagnosis.v1");
 
@@ -220,25 +218,47 @@ impl Section {
         }
     }
 
-    /// Returns the archetypes this section selects by beyond those its
-    /// template sections name, each a published CKM archetype.
+    /// Returns the archetypes this section selects only where a template
+    /// section holds them, as the interoperability component places them
+    /// (`eehrxf` `crosswalk::patient_summary::SOURCES`): the medication order
+    /// under the medication summary section, and the medication action under
+    /// the vaccination list section.
     ///
-    /// The medication summary also selects the medication order: a patient
-    /// whose medicines a CDR records only as orders would otherwise get an
-    /// empty medication summary, the harm of hazard I-03 of the clinical
-    /// safety risk file, which the safety review of 2026-10-25 found
-    /// (no specification governs the selection: our own design).
+    /// The section is the placement criterion: an archetype two rows could
+    /// take is selected for the row whose source names it under the section
+    /// that holds it, never by the archetype alone, so a vaccine recorded as
+    /// a medication action is never selected for the medication summary.
     #[must_use]
-    pub const fn beyond_template(self) -> &'static [Archetype] {
-        match self {
-            Self::MedicationSummary => &[MEDICATION_ORDER],
-            _ => &[],
-        }
+    pub fn placed(self) -> Vec<Placed> {
+        let element = self.element();
+        SOURCES
+            .iter()
+            .filter(|source| {
+                source
+                    .path
+                    .strip_prefix(element)
+                    .is_some_and(|rest| rest.starts_with('.'))
+            })
+            .filter_map(|source| {
+                let class = source
+                    .archetype
+                    .strip_prefix("openEHR-EHR-")?
+                    .split('.')
+                    .next()?;
+                Some(Placed {
+                    section: source.section,
+                    archetype: Archetype {
+                        class: rm_class(class)?,
+                        id: source.archetype,
+                    },
+                })
+            })
+            .collect()
     }
 
     /// Returns the archetypes a composition of this section contains, at
-    /// least one of them, in the template's order, then those of
-    /// [`Section::beyond_template`].
+    /// least one of them, in the template's order, beside those it holds
+    /// under a template section ([`Section::placed`]).
     #[must_use]
     pub const fn archetypes(self) -> &'static [Archetype] {
         match self {
@@ -251,7 +271,7 @@ impl Section {
                 ABSENCE,
             ],
             Self::Problems => &[PROBLEM, EXCLUSION, ABSENCE],
-            Self::MedicationSummary => &[MEDICATION, EXCLUSION, ABSENCE, MEDICATION_ORDER],
+            Self::MedicationSummary => &[EXCLUSION, ABSENCE],
             Self::MedicalDevicesAndImplants => &[archetype!(
                 "EVALUATION",
                 "openEHR-EHR-EVALUATION.device_summary.v0"
@@ -261,7 +281,7 @@ impl Section {
                 ABSENCE,
                 EXCLUSION,
             ],
-            Self::Immunisations => &[MEDICATION, ABSENCE],
+            Self::Immunisations => &[ABSENCE],
             Self::SocialHistory => &[
                 archetype!(
                     "EVALUATION",
@@ -344,14 +364,14 @@ impl Section {
         reason = "every arm of Section::archetypes names at least one archetype, which a test holds"
     )]
     pub fn query(self) -> SelectQuery {
-        section_query::query(self.archetypes())
+        section_query::query(self.archetypes(), &self.placed())
             .expect("a section should name at least one archetype")
     }
 
     /// Returns the section query as AQL text, printed from its syntax tree.
     #[must_use]
     pub fn aql(self) -> String {
-        printer::to_aql(&self.query())
+        printer::to_aql(&self.query(), None)
     }
 
     /// Returns the section query as the registry holds it: under its
@@ -377,4 +397,18 @@ impl Section {
 /// The [`QueryNameError`] of [`Section::name`].
 pub fn definitions() -> Result<Vec<StoredDefinition>, QueryNameError> {
     Section::ALL.into_iter().map(Section::definition).collect()
+}
+
+/// The RM entry class `class` names, as a static string, or `None` for a
+/// class no section selects by.
+fn rm_class(class: &str) -> Option<&'static str> {
+    [
+        "OBSERVATION",
+        "EVALUATION",
+        "INSTRUCTION",
+        "ACTION",
+        "ADMIN_ENTRY",
+    ]
+    .into_iter()
+    .find(|known| *known == class)
 }

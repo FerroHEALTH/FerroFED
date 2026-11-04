@@ -53,7 +53,7 @@ pub fn via_external_ref(fixture: &Fixture) -> Result<String, Failure> {
 /// Returns [`Failure::Query`] when the query cannot be built from its
 /// template, which a fixed template never gives cause for.
 pub fn via_entry(fixture: &Fixture) -> Result<String, Failure> {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert(
         "patient_id",
         Primitive::String(fixture.patient.value().expose_secret().to_owned()),

@@ -320,7 +320,7 @@ for `openEHR-EHR-INSTRUCTION.medication_order.v3`,
 | openEHR CKM laboratory test result template | template `0ce44071-d6e5-4fa2-9a41-046f9b4aea66`, CKM cid `1013.26.408` asset version 3 (DRAFT), pin-set digest `7ae45e1e0bbc1d7e9c3f6c76c5667519229207d694bcb0c28039f6ea9a761f94`, OET sha256 `3811e80486c9fa526881e1ec891ba320b92547794ffec5447618ee9cb0216ec3` | `scripts/vendor/openehr-ckm.sh`, `docs/specs/openehr-ckm-laboratory/PROVENANCE.md` |
 | openEHR CKM medication archetypes | `openEHR-EHR-INSTRUCTION.medication_order.v3` CKM cid `1013.1.5946` revision 3.2.1 asset version 7 and `openEHR-EHR-ACTION.medication.v1` CKM cid `1013.1.123` revision 1.6.0 asset version 44 (both PUBLISHED), `openEHR-EHR-CLUSTER.medication_authorisation.v0` CKM cid `1013.1.2300` asset version 3, `openEHR-EHR-CLUSTER.medication_order_summary.v0` CKM cid `1013.1.2306` asset version 6 and `openEHR-EHR-CLUSTER.medication_supply_amount.v0` CKM cid `1013.1.2453` asset version 5 (all three DRAFT, revision 0.0.1-alpha), pin-set digest `d6435a63b0d59b1557a939c30080ea0c212c2e058480c74cead2b5855528a655`, ADL sha256 `206c2a07fa1a7197ebc9ed7a29a418ecfc9cb6b63fa2aaf811e780ee69df9e9b` and `7e2484d4aec5ad8c5ceb5edb466a82b43b45396fbe3abaa4ee4a298b8e6437bc` | `scripts/vendor/openehr-ckm.sh`, `docs/specs/openehr-ckm-medication/PROVENANCE.md` |
 | KDS Laborbericht operational template | `openFHIR/openfhir` commit `5e4d68007518fcddae1907b333a86f495791aa53` path `core/src/test/resources/kds/laborbericht/KDS_Laborbericht.opt` with the repository's `LICENSE`, pin-set digest `f912510948c8f407557ebb4ed1bdc3189cb386c3d63792a8429560222e53b424`, OPT sha256 `6c00892f282d192c79010e9e6f0ee7bf07cc2c2923ca78a93f3ef05fd301ca97` | `scripts/vendor/kds-laborbericht.sh`, `docs/specs/kds-laborbericht/PROVENANCE.md` |
-| FerroBRIDGE medication template | `FerroHEALTH/FerroBRIDGE` commit `94f2f95381e96790a7f55ca44a1ca7c150e4638d` path `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_medication.adlt` with `openEHR-EHR-COMPOSITION.encounter.v1`, `openEHR-EHR-CLUSTER.medication.v2`, `openEHR-EHR-CLUSTER.therapeutic_direction.v1`, `openEHR-EHR-CLUSTER.dosage.v2` and `openEHR-EHR-CLUSTER.timing_daily.v1` from `openEHR/CKM-mirror` commit `c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094`, pin-set digest `ec1c18898a60ea2d9082c509933a45c6a9d37558fb409f317efd2d1d18d511b5`, template sha256 `7d2224c9cf5b92093096c15286ff56594e88270fc23705caefceeb71a7929f75` | `scripts/vendor/ferrobridge-medication.sh`, `docs/specs/ferrobridge-medication/PROVENANCE.md` |
+| FerroBRIDGE medication template | `FerroHEALTH/FerroBRIDGE` commit `94f2f95381e96790a7f55ca44a1ca7c150e4638d` path `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_medication.adlt` and `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt` at tag `v0.0.17` (commit `ea09df2cc37910437748c00615392df52b3c28d1`), with `openEHR-EHR-COMPOSITION.encounter.v1`, `openEHR-EHR-COMPOSITION.health_summary.v1`, `openEHR-EHR-SECTION.adhoc.v1`, `openEHR-EHR-SECTION.immunisation_list.v0`, `openEHR-EHR-CLUSTER.medication.v2`, `openEHR-EHR-CLUSTER.therapeutic_direction.v1`, `openEHR-EHR-CLUSTER.dosage.v2` and `openEHR-EHR-CLUSTER.timing_daily.v1` from `openEHR/CKM-mirror` commit `c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094`, pin-set digest `0df792aa8d25e4045fa48f30da026932ee81492b6c520450ba5de02c0e6a00fe`, template sha256 `7d2224c9cf5b92093096c15286ff56594e88270fc23705caefceeb71a7929f75` | `scripts/vendor/ferrobridge-medication.sh`, `docs/specs/ferrobridge-medication/PROVENANCE.md` |
 
 ## openEHR model crates (crates.io)
 
@@ -329,7 +329,7 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is 0.0.116 since 2026-11-03, the line the published `eehrxf`,
+pin is 0.0.128 since 2026-11-04, the line the published `eehrxf`,
 `fhirconnect` and `openehr-mapping-core` require exactly, so the lock holds
 one copy of each member (#1181, #813).
 `openehr-sdt` left the group with 0.0.116, which no longer carries the
@@ -340,10 +340,10 @@ module client authentication (#80) already read every caller's scopes with
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.116 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.116 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.116 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.116 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.128 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.128 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.128 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.128 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -418,6 +418,11 @@ caret requirement admits one version. 0.0.116 is taken with `eehrxf` 0.1.142
 (#1432): the ITS-REST decoders read a query's `+` as a literal plus
 (RFC 3986 §2.1, FerroEHR #4356), so the gateway no longer rewrites it, and
 `ErrorBody::problem` reads a node's RFC 9457 problem details (FerroEHR #4355).
+0.0.128 is taken with `eehrxf` 0.1.149 (#1551), which places the patient
+summary's medication entries by template section: `printer::to_aql` takes
+an optional `FROM` prefix, `bind::Parameters` is built by `Default`, and the
+ITS-REST client's `forward` borrows its request and says whether an earlier
+attempt went out, none of which changes what a node receives.
 `ferrohealth-smart` 0.8.5 and later carry the SMART on openEHR scope grammar
 as their own module and no longer depend on `openehr-sdt`, so the lock holds
 one `openehr-sdt` (#1390).

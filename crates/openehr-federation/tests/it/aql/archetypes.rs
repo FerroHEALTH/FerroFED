@@ -91,7 +91,7 @@ fn a_query_naming_no_archetype_names_nothing() {
 #[test]
 #[expect(clippy::panic_in_result_fn, reason = "test assertions")]
 fn a_bound_parameter_is_read_as_its_value() -> Result<(), Box<dyn std::error::Error>> {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert("template", Primitive::String("Bound Report.v1".to_owned()));
     let analysis = analyse(
         "SELECT c FROM EHR e CONTAINS COMPOSITION c \

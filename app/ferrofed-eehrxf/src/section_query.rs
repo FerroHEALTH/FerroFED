@@ -48,15 +48,30 @@ pub struct Archetype {
     pub id: &'static str,
 }
 
+/// One archetype a section selects compositions by only where a template
+/// section holds it: the `SECTION` archetype that holds it and the archetype.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Placed {
+    /// The id of the `SECTION` archetype that holds the archetype.
+    pub section: &'static str,
+    /// The archetype.
+    pub archetype: Archetype,
+}
+
 /// Returns the section query that selects the compositions containing at
-/// least one of `archetypes`, or `None` when `archetypes` is empty.
+/// least one of `archetypes`, or one of `held` under the `SECTION` that
+/// holds it, or `None` when both are empty.
+///
+/// A placed archetype is selected as `SECTION s{i}[section] CONTAINS
+/// CLASS a{i}[archetype]`, so a composition that records it under another
+/// section is not selected (AQL §CONTAINS).
 #[must_use]
-pub fn query(archetypes: &[Archetype]) -> Option<SelectQuery> {
+pub fn query(archetypes: &[Archetype], held: &[Placed]) -> Option<SelectQuery> {
     let column = |path: IdentifiedPath, alias: &str| SelectExpr {
         column: ColumnExpr::Path(path),
         alias: Some(alias.to_owned()),
     };
-    let entries = entries(archetypes)?;
+    let entries = entries(archetypes, held)?;
     Some(SelectQuery {
         select: SelectClause {
             distinct: true,
@@ -84,16 +99,23 @@ pub fn query(archetypes: &[Archetype]) -> Option<SelectQuery> {
 }
 
 /// The `CONTAINS` expression under the composition: one class expression
-/// per archetype, joined by `OR`, or `None` for no archetype.
-fn entries(archetypes: &[Archetype]) -> Option<ContainsExpr> {
-    let (first, rest) = archetypes.split_first()?;
-    Some(
-        rest.iter()
-            .zip(1_usize..)
-            .fold(leaf(first, 0), |joined, (archetype, index)| {
-                ContainsExpr::Or(Box::new(joined), Box::new(leaf(archetype, index)))
-            }),
-    )
+/// per archetype, then one section expression per placed archetype, joined
+/// by `OR`, or `None` for none.
+fn entries(archetypes: &[Archetype], held: &[Placed]) -> Option<ContainsExpr> {
+    let leaves = archetypes
+        .iter()
+        .enumerate()
+        .map(|(index, archetype)| leaf(archetype, index))
+        .chain(held.iter().enumerate().map(|(index, placed)| {
+            let index = archetypes.len().saturating_add(index);
+            let predicate =
+                PathPredicate::Archetype(ArchetypePredicate::Hrid(placed.section.to_owned()));
+            contained(
+                class("SECTION", &format!("s{index}"), Some(predicate)),
+                Some(leaf(&placed.archetype, index)),
+            )
+        }));
+    leaves.reduce(|joined, leaf| ContainsExpr::Or(Box::new(joined), Box::new(leaf)))
 }
 
 /// The class expression of `archetype`, bound to the variable `a{index}`.

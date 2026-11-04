@@ -20,8 +20,9 @@
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use eehrxf::document::Document;
 use eehrxf::document::laboratory::{LAB_SLOTS, LABORATORY_REPORT_FORM};
-use eehrxf::document::{Document, Section};
+use eehrxf::document::section::Section;
 use eehrxf::mappings::LABORATORY;
 use fhir_types::codec::{Json, Path as CodecPath, Value as CodecValue};
 use fhir_types::r4::device::{Device, DeviceDeviceName};

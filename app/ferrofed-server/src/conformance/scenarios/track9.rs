@@ -46,7 +46,7 @@ const FROM_FORM: &str =
 /// The query `template` with `ehr_id` bound to its `$ehr_id`, as the
 /// literal a client writes.
 fn of_ehr(template: &str, ehr_id: &str) -> Result<String, Failure> {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert("ehr_id", Primitive::String(ehr_id.to_owned()));
     Ok(ClientQuery::parse(template)?.bound(&parameters)?.to_aql())
 }
@@ -283,7 +283,7 @@ pub async fn definition_unnamed<G: Gateway>(
 /// Returns [`Failure::Query`] when the query cannot be built from its
 /// template, which a fixed template never gives cause for.
 pub fn parameterised(fixture: &Fixture, endpoint: Option<&str>) -> Result<String, Failure> {
-    let mut namespace = Parameters::new();
+    let mut namespace = Parameters::default();
     namespace.insert(
         "patient_namespace",
         Primitive::String(fixture.patient.namespace().to_owned()),

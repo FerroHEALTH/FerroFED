@@ -186,3 +186,168 @@ pub fn order_composition(
     );
     Ok(canonical.to_string())
 }
+
+/// The patient summary template the shipped EPS project maps over.
+pub const PATIENT_SUMMARY_TEMPLATE: &str =
+    "openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0";
+
+/// The archetypes FerroBRIDGE's patient summary template specialises beyond
+/// the medication template's.
+const SUMMARY_BESIDE: [&str; 3] = [
+    "openEHR-EHR-COMPOSITION.health_summary.v1.adl",
+    "openEHR-EHR-SECTION.adhoc.v1.adl",
+    "openEHR-EHR-SECTION.immunisation_list.v0.adl",
+];
+
+/// Returns FerroBRIDGE's ADL 2 patient summary template and every archetype
+/// it specialises, each as its file name and text.
+///
+/// # Errors
+///
+/// When a vendored file cannot be read.
+pub fn patient_summary_template() -> Result<Written, Box<dyn Error>> {
+    let root = PathBuf::from(ROOT).join("docs/specs/ferrobridge-medication");
+    let mut written = template()?;
+    written.template = std::fs::read_to_string(root.join("ferrobridge_patient_summary.adlt"))?;
+    for file in SUMMARY_BESIDE {
+        written
+            .archetypes
+            .push((file.to_owned(), std::fs::read_to_string(root.join(file))?));
+    }
+    Ok(written)
+}
+
+/// The language, encoding and subject of a synthetic entry.
+const ENTRY: &str = r#""language": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }, "code_string": "en" },
+  "encoding": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "IANA_character-sets" }, "code_string": "UTF-8" },
+  "subject": { "_type": "PARTY_SELF" }"#;
+
+/// The archetype details of `id`.
+fn details(id: &str) -> String {
+    format!(
+        r#""archetype_node_id": "{id}", "archetype_details": {{ "_type": "ARCHETYPED", "archetype_id": {{ "_type": "ARCHETYPE_ID", "value": "{id}" }}, "rm_version": "1.1.0" }}"#
+    )
+}
+
+/// A synthetic coded text of the local synthetic code system.
+fn coded(value: &str, code: &str) -> String {
+    format!(
+        r#"{{ "_type": "DV_CODED_TEXT", "value": "{value}", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "http://example.org/fhir/CodeSystem/ferrofed-products" }}, "code_string": "{code}" }} }}"#
+    )
+}
+
+/// A synthetic medication order of the medicine `code`.
+fn summary_order(code: &str) -> String {
+    format!(
+        r#"{{
+  "_type": "INSTRUCTION",
+  "name": {{ "_type": "DV_TEXT", "value": "Medication order" }},
+  {details},
+  {ENTRY},
+  "narrative": {{ "_type": "DV_TEXT", "value": "Synthetic medication order" }},
+  "activities": [{{
+    "_type": "ACTIVITY",
+    "name": {{ "_type": "DV_TEXT", "value": "Order" }},
+    "archetype_node_id": "at0001",
+    "description": {{
+      "_type": "ITEM_TREE",
+      "name": {{ "_type": "DV_TEXT", "value": "Tree" }},
+      "archetype_node_id": "at0002",
+      "items": [
+        {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Medication item" }}, "archetype_node_id": "at0070", "value": {medicine} }},
+        {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Overall directions description" }}, "archetype_node_id": "at0009", "value": {{ "_type": "DV_TEXT", "value": "One synthetic tablet each morning" }} }},
+        {{ "_type": "CLUSTER", "name": {{ "_type": "DV_TEXT", "value": "Order details" }}, "archetype_node_id": "at0113", "items": [
+          {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Order start date/time" }}, "archetype_node_id": "at0012", "value": {{ "_type": "DV_DATE_TIME", "value": "2026-10-01T08:00:00Z" }} }}
+        ] }}
+      ]
+    }},
+    "timing": {{ "_type": "DV_PARSABLE", "value": "R/2026-10-01T08:00:00Z/P1D", "formalism": "ISO8601" }},
+    "action_archetype_id": "openEHR-EHR-ACTION\\.medication\\.v1"
+  }}],
+  "protocol": {{ "_type": "ITEM_TREE", "name": {{ "_type": "DV_TEXT", "value": "Tree" }}, "archetype_node_id": "at0005", "items": [] }}
+}}"#,
+        details = details("openEHR-EHR-INSTRUCTION.medication_order.v3"),
+        medicine = coded("Synthetic tablet 500 mg", code),
+    )
+}
+
+/// A synthetic medication action recording a dose of the vaccine `code`
+/// administered.
+fn administered(code: &str) -> String {
+    format!(
+        r#"{{
+  "_type": "ACTION",
+  "name": {{ "_type": "DV_TEXT", "value": "Vaccination administered" }},
+  {details},
+  {ENTRY},
+  "time": {{ "_type": "DV_DATE_TIME", "value": "2026-09-15T09:30:00Z" }},
+  "ism_transition": {{
+    "_type": "ISM_TRANSITION",
+    "current_state": {{ "_type": "DV_CODED_TEXT", "value": "active", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "245" }} }},
+    "careflow_step": {{ "_type": "DV_CODED_TEXT", "value": "Dose administered", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "local" }}, "code_string": "at0006" }} }}
+  }},
+  "description": {{
+    "_type": "ITEM_TREE",
+    "name": {{ "_type": "DV_TEXT", "value": "Tree" }},
+    "archetype_node_id": "at0017",
+    "items": [
+      {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Medication item" }}, "archetype_node_id": "at0020", "value": {vaccine} }}
+    ]
+  }}
+}}"#,
+        details = details("openEHR-EHR-ACTION.medication.v1"),
+        vaccine = coded("Synthetic vaccine", code),
+    )
+}
+
+/// Returns a synthetic composition of [`PATIENT_SUMMARY_TEMPLATE`].
+///
+/// It is under the version id `uid`, the medicine `medicine` ordered in its
+/// medication summary section and the vaccine `vaccine` administered as a
+/// medication action in its vaccination list section.
+#[must_use]
+pub fn summary_composition(uid: &str, (medicine, vaccine): (&str, &str)) -> String {
+    let section = |name: &str, archetype: &str, item: String| {
+        format!(
+            r#"{{ "_type": "SECTION", "name": {{ "_type": "DV_TEXT", "value": "{name}" }}, {}, "items": [{item}] }}"#,
+            details(archetype)
+        )
+    };
+    let content = [
+        section(
+            "Medication summary",
+            "openEHR-EHR-SECTION.adhoc.v1",
+            summary_order(medicine),
+        ),
+        section(
+            "Immunisations",
+            "openEHR-EHR-SECTION.immunisation_list.v0",
+            administered(vaccine),
+        ),
+    ]
+    .join(",");
+    format!(
+        r#"{{
+  "_type": "COMPOSITION",
+  "name": {{ "_type": "DV_TEXT", "value": "Patient summary" }},
+  "archetype_node_id": "openEHR-EHR-COMPOSITION.health_summary.v1",
+  "archetype_details": {{
+    "_type": "ARCHETYPED",
+    "archetype_id": {{ "_type": "ARCHETYPE_ID", "value": "openEHR-EHR-COMPOSITION.health_summary.v1" }},
+    "template_id": {{ "_type": "TEMPLATE_ID", "value": "{PATIENT_SUMMARY_TEMPLATE}" }},
+    "rm_version": "1.1.0"
+  }},
+  "uid": {{ "_type": "OBJECT_VERSION_ID", "value": "{uid}" }},
+  "language": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }}, "code_string": "en" }},
+  "territory": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_3166-1" }}, "code_string": "NL" }},
+  "category": {{ "_type": "DV_CODED_TEXT", "value": "event", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "433" }} }},
+  "composer": {{ "_type": "PARTY_IDENTIFIED", "name": "Synthetic composer" }},
+  "context": {{
+    "_type": "EVENT_CONTEXT",
+    "start_time": {{ "_type": "DV_DATE_TIME", "value": "2026-10-01T08:00:00Z" }},
+    "setting": {{ "_type": "DV_CODED_TEXT", "value": "other care", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "238" }} }}
+  }},
+  "content": [{content}]
+}}"#
+    )
+}

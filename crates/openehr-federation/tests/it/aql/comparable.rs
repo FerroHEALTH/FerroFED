@@ -182,7 +182,7 @@ fn under_distinct_a_limit_with_ordered_data_values_and_primitives_is_pinned() {
 fn refused_with(aql: &str, paging: Paging, strategy: OffsetStrategy) -> Refusal {
     analyse(
         aql,
-        &Parameters::new(),
+        &Parameters::default(),
         paging,
         &ask_all().with_offset_strategy(strategy),
     )
@@ -381,7 +381,7 @@ fn a_limit_on_primitives_and_ordered_data_values_is_answered() {
 fn a_bounded_page_on_a_comparable_key_is_answered() {
     let analysis = analyse(
         &patient_query("c/uid/value", "ORDER BY c/name/value LIMIT 10 OFFSET 10"),
-        &Parameters::new(),
+        &Parameters::default(),
         Paging::default(),
         &ask_all().with_offset_strategy(bounded()),
     )

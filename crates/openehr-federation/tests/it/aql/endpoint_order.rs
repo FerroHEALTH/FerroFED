@@ -245,7 +245,7 @@ fn a_bounded_page_ordered_on_an_attribute_alone_is_ordered() {
     let context = directed().with_offset_strategy(OffsetStrategy::Bounded { max_window: window });
     let analysis = analyse(
         &patient_query("c/uid/value", " ORDER BY p/id LIMIT 2 OFFSET 2"),
-        &Parameters::new(),
+        &Parameters::default(),
         Paging::default(),
         &context,
     )

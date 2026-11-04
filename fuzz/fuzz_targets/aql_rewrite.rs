@@ -138,8 +138,8 @@ fuzz_target!(|data: &[u8]| {
         None => subject,
     });
     let again = analyse(
-        &to_aql(&probe),
-        &Parameters::new(),
+        &to_aql(&probe, None),
+        &Parameters::default(),
         Paging::default(),
         &context
             .clone()
@@ -156,7 +156,7 @@ fuzz_target!(|data: &[u8]| {
 
 /// One value for every `$name` the text uses, chosen by the input.
 fn parameters(aql: &str, choices: &mut Unstructured<'_>) -> Parameters {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     for name in parameter_names(aql) {
         if choices.is_empty() {
             parameters.insert(&name, Primitive::String(SENTINEL.to_owned()));

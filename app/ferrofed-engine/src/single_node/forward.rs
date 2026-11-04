@@ -532,7 +532,7 @@ impl<T: Transport + Clone> NodeClient<T> {
         options: &DispatchOptions,
     ) -> Result<Forwarded, ForwardError> {
         let client = self.client_for(options);
-        match client.forward(outgoing).await {
+        match client.forward(&outgoing, false).await {
             Ok(answer) if answer.status() == StatusCode::UNAUTHORIZED => {
                 Err(ForwardError::Refused {
                     endpoint: self.endpoint().clone(),
