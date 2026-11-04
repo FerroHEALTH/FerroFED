@@ -174,11 +174,19 @@ async fn duplicated(
             "the dispensation was not written: the owner did not answer the search for its dispensations of the patient ({status}), so a dispensation already written under the same identifier cannot be ruled out"
         )
     };
+    let refused = |_failed| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "transient",
+            unread(EndpointStatus::NodeError.as_str()),
+        )
+    };
+    let name = Medication::Actions.name().map_err(refused)?;
     let answered = queried(
         federation,
         arrived,
         located,
-        (patient, Medication::Actions),
+        (patient, (name.as_str(), Medication::Actions.aql())),
         &members,
     )
     .await

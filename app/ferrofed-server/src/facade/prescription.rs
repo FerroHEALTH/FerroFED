@@ -311,7 +311,7 @@ async fn held(
                 (locator.resource(), entry, held.now),
             )
             .await
-            .map_err(|failure| Unfound::Failure(Failure::FanOut(failure)))?;
+            .map_err(Unfound::Failure)?;
             match composed {
                 mapped::Fetched::Held(answered) => Ok(answered),
                 mapped::Fetched::Unnamed => Err(Unfound::Unnamed),

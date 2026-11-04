@@ -26,6 +26,8 @@ use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue}
 use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
 
+use eehrxf::document::laboratory::LAB_BUNDLE;
+
 use crate::face::FHIR_JSON;
 use crate::summary::Organisation;
 
@@ -44,6 +46,10 @@ pub const LOINC: &str = "http://loinc.org";
 /// `eehrxf-document-type-patient-summary-vs` value set.
 pub const PATIENT_SUMMARY: &str = "60591-5";
 
+/// The LOINC code of a laboratory report, the one code of the
+/// `eehrxf-document-type-laboratory-report-vs` value set.
+pub const LABORATORY_REPORT: &str = "11502-2";
+
 /// The canonical URL of the document `Bundle` profile the gateway's own
 /// summary follows.
 pub const EPS_BUNDLE: &str = "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps";
@@ -61,12 +67,14 @@ pub struct ListRequest {
     system: String,
     value: String,
     summaries: bool,
+    laboratory: bool,
 }
 
 impl std::fmt::Debug for ListRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ListRequest")
             .field("summaries", &self.summaries)
+            .field("laboratory", &self.laboratory)
             .finish_non_exhaustive()
     }
 }
@@ -113,6 +121,13 @@ impl ListRequest {
         self.summaries
     }
 
+    /// Returns whether every `type` the search gives admits a laboratory
+    /// report.
+    #[must_use]
+    pub fn admits_laboratory(&self) -> bool {
+        self.laboratory
+    }
+
     /// Reads the search from the query string `query` of a `GET`.
     ///
     /// # Errors
@@ -122,6 +137,7 @@ impl ListRequest {
         let pairs = url::form_urlencoded::parse(query.unwrap_or_default().as_bytes());
         let mut identifier = None;
         let mut summaries = true;
+        let mut laboratory = true;
         for (name, value) in pairs {
             match &*name {
                 "patient.identifier" => {
@@ -133,7 +149,12 @@ impl ListRequest {
                 }
                 // NOTE: FHIR R4 search, several values; repeated parameters are ANDed and the
                 // values of one ORed, so every repetition must admit the summary type.
-                "type" => summaries &= value.split(',').any(admits_summary),
+                "type" => {
+                    summaries &= value.split(',').any(|token| admits(token, PATIENT_SUMMARY));
+                    laboratory &= value
+                        .split(',')
+                        .any(|token| admits(token, LABORATORY_REPORT));
+                }
                 "_format" => {
                     if !JSON_FORMATS.contains(&&*value) {
                         return Err(ListRefusal::Format);
@@ -151,17 +172,18 @@ impl ListRequest {
             system: system.to_owned(),
             value: value.to_owned(),
             summaries,
+            laboratory,
         })
     }
 }
 
-/// Whether the token `token` matches the patient summary type: its code
-/// alone, the code in the LOINC system, or any code of the LOINC system
-/// (FHIR R4 search, the token type).
-fn admits_summary(token: &str) -> bool {
+/// Whether the token `token` matches the document type `kind`, a LOINC
+/// code: the code alone, the code in the LOINC system, or any code of the
+/// LOINC system (FHIR R4 search, the token type).
+fn admits(token: &str, kind: &str) -> bool {
     match token.split_once('|') {
-        None => token == PATIENT_SUMMARY,
-        Some((system, code)) => system == LOINC && (code.is_empty() || code == PATIENT_SUMMARY),
+        None => token == kind,
+        Some((system, code)) => system == LOINC && (code.is_empty() || code == kind),
     }
 }
 
@@ -221,7 +243,7 @@ pub fn on_demand(
     };
     entry(
         (id, (URI_SYSTEM, unique)),
-        listing,
+        (SUMMARY, listing),
         custodian,
         (attachment, Some(format)),
     )
@@ -249,14 +271,83 @@ pub fn native(
         title: Some("Patient summary served by the member".into()),
         ..Attachment::default()
     };
-    entry((id, identifier), listing, custodian, (attachment, None))
+    entry(
+        (id, identifier),
+        (SUMMARY, listing),
+        custodian,
+        (attachment, None),
+    )
 }
+
+/// Returns the entry of a laboratory report the gateway writes on read.
+///
+/// The entry has the logical id `id` and the unique id `unique`, a
+/// `urn:uuid:` URN, and names the report of a composition of the member
+/// `custodian` at `url`, a URL the gateway signs relative to the FHIR base.
+///
+/// The document is an HL7 Europe Laboratory Report 2.0.0 `Bundle-eu-lab`,
+/// of the `eehrxf-document-type-laboratory-report-vs` type, named by the
+/// identifier its `Bundle.identifier` carries when it is read.
+#[must_use]
+pub fn laboratory(
+    (id, unique): (&str, &str),
+    listing: Listing<'_>,
+    custodian: &Organisation,
+    url: &str,
+) -> DocumentReference {
+    let attachment = Attachment {
+        content_type: Some(FHIR_JSON.into()),
+        url: Some(url.into()),
+        title: Some("Laboratory report written by the gateway from the member's record".into()),
+        ..Attachment::default()
+    };
+    let format = Coding {
+        system: Some(URI_SYSTEM.into()),
+        code: Some(LAB_BUNDLE.into()),
+        ..Coding::default()
+    };
+    entry(
+        (id, (URI_SYSTEM, unique)),
+        (LABORATORY, listing),
+        custodian,
+        (attachment, Some(format)),
+    )
+}
+
+/// The document type and the priority category an entry names.
+#[derive(Debug, Clone, Copy)]
+struct Kind {
+    /// The LOINC code of the type.
+    code: &'static str,
+    /// Its display.
+    display: &'static str,
+    /// The priority category's code.
+    category: &'static str,
+    /// Its display.
+    category_display: &'static str,
+}
+
+/// A patient summary.
+const SUMMARY: Kind = Kind {
+    code: PATIENT_SUMMARY,
+    display: "Patient summary Document",
+    category: "Patient-Summaries",
+    category_display: "patient summaries",
+};
+
+/// A laboratory report.
+const LABORATORY: Kind = Kind {
+    code: LABORATORY_REPORT,
+    display: "Laboratory report",
+    category: "Laboratory-Reports",
+    category_display: "medical test results, including laboratory and other diagnostic results and related reports",
+};
 
 /// The entry with the logical id `id` and the master identifier
 /// `system`|`value`, of the content `attachment` in the format `format`.
 fn entry(
     (id, (system, value)): (&str, (&str, &str)),
-    listing: Listing<'_>,
+    (kind, listing): (Kind, Listing<'_>),
     custodian: &Organisation,
     (attachment, format): (Attachment, Option<Coding>),
 ) -> DocumentReference {
@@ -275,8 +366,8 @@ fn entry(
         r#type: Some(CodeableConcept {
             coding: vec![Coding {
                 system: Some(LOINC.into()),
-                code: Some(PATIENT_SUMMARY.into()),
-                display: Some("Patient summary Document".into()),
+                code: Some(kind.code.into()),
+                display: Some(kind.display.into()),
                 ..Coding::default()
             }],
             ..CodeableConcept::default()
@@ -284,8 +375,8 @@ fn entry(
         category: vec![CodeableConcept {
             coding: vec![Coding {
                 system: Some(CATEGORY_SYSTEM.into()),
-                code: Some("Patient-Summaries".into()),
-                display: Some("patient summaries".into()),
+                code: Some(kind.category.into()),
+                display: Some(kind.category_display.into()),
                 ..Coding::default()
             }],
             ..CodeableConcept::default()

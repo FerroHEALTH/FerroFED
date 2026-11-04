@@ -22,7 +22,10 @@ use super::write::composed;
 use super::{VERSION_A, creating, gateway_with, issue, post, rows, untouched};
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room};
 use crate::fhir::TestResult;
+use crate::fhir::list::{binary, entries, list};
 use crate::support::call;
+use wiremock::matchers::{body_string_contains, method, path};
+use wiremock::{Mock, ResponseTemplate};
 
 /// The `[fhir]` tables of a face that receives laboratory reports at node
 /// A, the mapping written into `dir`.
@@ -166,5 +169,147 @@ async fn a_laboratory_report_of_a_patient_no_member_holds_is_refused() -> TestRe
         "§5.4.3: never echoed: {text}"
     );
     assert!(untouched(&a, &b).await?, "nothing reaches a member");
+    Ok(())
+}
+
+/// The versioned object node A's laboratory composition is held under.
+const LAB_OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000c0a1";
+
+/// The version of node A's laboratory composition, created at node A.
+const LAB_VERSION: &str = "5b0c3f7e-0000-4000-8000-00000000c0a1::cdr-a.example.org::1";
+
+/// The archetype the laboratory report query selects compositions by.
+const LAB_ARCHETYPE: &str = "openEHR-EHR-OBSERVATION.laboratory_test_result.v1";
+
+/// The synthetic report as node A serves it, under [`LAB_VERSION`].
+fn lab_composition(dir: &Path) -> Result<String, Box<dyn Error>> {
+    laboratory::composition(dir, &[(NAMESPACE, PATIENT)], LAB_VERSION)
+}
+
+/// A node answering the laboratory report query with `rows` and every other
+/// query with none, and the read of its composition with `composition`.
+async fn holding(rows: &str, composition: Option<&str>) -> Server {
+    let server = Server::start().await;
+    let columns = r#"[{"name":"composition","path":"c"},{"name":"uid","path":"c/uid/value"},{"name":"template_id","path":"c/archetype_details/template_id/value"}]"#;
+    let answer = |rows: &str| {
+        ResponseTemplate::new(200).set_body_raw(
+            format!(r#"{{"q":"node","columns":{columns},"rows":[{rows}]}}"#).into_bytes(),
+            "application/json",
+        )
+    };
+    Mock::given(method("POST"))
+        .and(path("/v1/query/aql"))
+        .and(body_string_contains(LAB_ARCHETYPE))
+        .respond_with(answer(rows))
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/query/aql"))
+        .respond_with(answer(""))
+        .mount(&server)
+        .await;
+    if let Some(composition) = composition {
+        Mock::given(method("GET"))
+            .and(path(format!("/v1/ehr/{EHR_A}/composition/{LAB_VERSION}")))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(composition.as_bytes().to_vec(), "application/json"),
+            )
+            .mount(&server)
+            .await;
+    }
+    server
+}
+
+#[tokio::test]
+async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_report() -> TestResult
+{
+    let dir = tempfile::tempdir()?;
+    let composition = lab_composition(dir.path())?;
+    let row = format!(
+        r#"[{composition},"{LAB_VERSION}","{}"]"#,
+        laboratory::TEMPLATE
+    );
+    let (a, b) = (
+        holding(&row, Some(&composition)).await,
+        holding("", None).await,
+    );
+    let app = gateway(dir.path(), &a, &b)?;
+    let (status, text) = call(app.clone(), list("&type=11502-2")?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let bundle: Value = serde_json::from_str(&text)?;
+    let matches = entries(&bundle, "match");
+    let [reference] = matches.as_slice() else {
+        return Err(format!("one laboratory report listed: {bundle}").into());
+    };
+    assert_eq!(
+        reference.pointer("/type/coding/0/code"),
+        Some(&Value::from("11502-2"))
+    );
+    assert_eq!(
+        reference.pointer("/category/0/coding/0/code"),
+        Some(&Value::from("Laboratory-Reports"))
+    );
+    assert_eq!(
+        reference.pointer("/masterIdentifier/value"),
+        Some(&Value::from(format!("urn:uuid:{LAB_OBJECT}")))
+    );
+    let url = reference
+        .pointer("/content/0/attachment/url")
+        .and_then(Value::as_str)
+        .ok_or("an attachment url")?;
+    assert!(url.starts_with("Binary/"), "{url}");
+    let (status, text) = call(app, binary(url)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let read = eehrxf::receive::ReceivedDocument::read(&text)?;
+    assert_eq!(eehrxf::category::Category::Laboratory, read.category()?);
+    let document: Value = serde_json::from_str(&text)?;
+    assert_eq!(
+        document.pointer("/identifier/value"),
+        Some(&Value::from(format!("urn:uuid:{LAB_OBJECT}"))),
+        "the report is named as the list names it"
+    );
+    let kinds: Vec<&str> = document["entry"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.pointer("/resource/resourceType")?.as_str())
+        .collect();
+    for kind in [
+        "Composition",
+        "Patient",
+        "DiagnosticReport",
+        "Observation",
+        "Provenance",
+    ] {
+        assert!(kinds.contains(&kind), "{kind}: {kinds:?}");
+    }
+    for request in a.received_requests().await.unwrap_or_default() {
+        let carried = format!("{} {}", request.url, String::from_utf8_lossy(&request.body));
+        for withheld in [PATIENT, PATIENT_TAIL] {
+            assert!(
+                !carried.contains(withheld),
+                "N33: no patient identifier reaches node A"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_member_silent_at_the_laboratory_query_fails_the_list_and_is_named() -> TestResult {
+    let a = Server::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/query/aql"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&a)
+        .await;
+    let b = holding("", None).await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &a, &b)?;
+    let (status, text) = call(app, list("&type=11502-2")?).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
+    assert!(text.contains("node-a-pub"), "§11.4: {text}");
     Ok(())
 }

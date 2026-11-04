@@ -285,3 +285,45 @@ fn report() -> Value {
         "conclusion": CONCLUSION
     })
 }
+
+/// Returns the synthetic report of the patient `identifiers` as a member
+/// serves it.
+///
+/// The report is written into one `KDS_Laborbericht` composition by the
+/// shipped mapping, its files written under `directory`, which must exist,
+/// and committed under the version id `uid`.
+///
+/// # Errors
+///
+/// When the mapping does not compile or refuses the synthetic report.
+pub fn composition(
+    directory: &Path,
+    identifiers: &[(&str, &str)],
+    uid: &str,
+) -> Result<String, Box<dyn Error>> {
+    let files = directory.join("composition-mapping");
+    std::fs::create_dir_all(&files)?;
+    let mapping = eehrxf::mapping::Mapping::compile(
+        &std::fs::read_to_string(opt())?,
+        &mapping_files(&files)?,
+        &[context()?],
+    )?;
+    let document = eehrxf::receive::ReceivedDocument::read(&received_document(identifiers)?)?;
+    let now = "2026-03-02T10:00:00Z";
+    let settings = fhirconnect::operations::run::Settings::new("Device/ferrofed-testkit", now)
+        .with_defaults(
+            fhirconnect::engine::traverse::Defaults::at(now)
+                .with_language("en")
+                .with_territory("NL"),
+        );
+    let composed = mapping.to_openehr(&document, &settings)?;
+    let mut canonical: Value = serde_json::from_str(composed.composition())?;
+    canonical
+        .as_object_mut()
+        .ok_or("the composition is no object")?
+        .insert(
+            String::from("uid"),
+            serde_json::json!({"_type": "OBJECT_VERSION_ID", "value": uid}),
+        );
+    Ok(canonical.to_string())
+}

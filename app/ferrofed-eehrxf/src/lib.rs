@@ -38,6 +38,8 @@
 //! - [`prescriptions`]: the search of a patient's prescriptions on that
 //!   face, each member's page read and every prescription passed through
 //!   with the `Provenance` that names its member;
+//! - [`stack`]: the thread every mapping runs on, with the stack the engine
+//!   needs;
 //! - [`terminology`]: the FHIR terminology server the component asks, over
 //!   HTTP;
 //! - [`transformation`]: the code systems a coded element is transcoded
@@ -72,6 +74,7 @@ pub mod receive;
 pub mod reserved;
 pub mod section_query;
 pub mod serving;
+pub mod stack;
 pub mod summary;
 pub mod terminology;
 pub mod transformation;

@@ -169,7 +169,7 @@ pub(super) fn device(author: &Author, operator: &str) -> Device {
 }
 
 /// The `Organization` of `organisation`, under the document id `id`.
-pub(super) fn organization(id: &str, organisation: &Organisation) -> Organization {
+pub(crate) fn organization(id: &str, organisation: &Organisation) -> Organization {
     Organization {
         id: Some(id.to_owned()),
         name: Some(organisation.shown().into()),
@@ -187,7 +187,7 @@ pub(super) fn organization(id: &str, organisation: &Organisation) -> Organizatio
 }
 
 /// The literal reference `url`.
-pub(super) fn reference(url: &str) -> Reference {
+pub(crate) fn reference(url: &str) -> Reference {
     Reference {
         reference: Some(url.into()),
         ..Reference::default()

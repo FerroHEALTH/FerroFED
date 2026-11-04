@@ -30,6 +30,7 @@ use std::sync::Arc;
 
 use eehrxf::category::Category;
 use eehrxf::terminology::Terminology;
+use ferrofed_eehrxf::laboratory::{Served, ServedError};
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::prescriptions::mapped::{MapMode, MapModeError};
 use ferrofed_eehrxf::receive::{Receivers, ReceiversError};
@@ -162,6 +163,11 @@ pub struct FhirSettings {
     pub receive_namespaces: Vec<IdentifierNamespace>,
     /// The members that serve electronic prescriptions and dispensations.
     pub serving: Arc<Serving>,
+    /// The laboratory mapping the document list writes a member's laboratory
+    /// composition with, compiled against the template of the
+    /// `Laboratory-Reports` `[[fhir.receive]]` entry, or none when no entry
+    /// receives laboratory reports.
+    pub laboratory: Option<Arc<Served>>,
     /// The members that serve prescriptions in the map mode, each by its node
     /// id with its mapping.
     pub mapped: Arc<BTreeMap<String, MapMode>>,
@@ -330,6 +336,14 @@ pub enum FhirError {
     /// A received category cannot be checked or mapped.
     #[error("a [[fhir.receive]] is refused")]
     Receivers(#[from] ReceiversError),
+    /// The shipped laboratory mapping does not compile against the template of
+    /// the `Laboratory-Reports` `[[fhir.receive]]` entry.
+    #[error("the laboratory mapping the document list writes reports with is refused")]
+    Laboratory {
+        /// Why.
+        #[source]
+        source: Box<ServedError>,
+    },
     /// A served category cannot be declared as written.
     #[error("a [[fhir.serve]] is refused")]
     Serving(#[from] ServingError),
@@ -524,12 +538,45 @@ impl Fhir {
             receive_namespaces: self.namespaces()?,
             serving: Arc::new(self.serving()?),
             mapped: Arc::new(self.mapped()?),
+            laboratory: self.laboratory()?.map(Arc::new),
             document_url_lifetime: std::time::Duration::from_secs(self.document_url_lifetime_secs),
             terminology: Terminology::none(),
             validating: None,
             terminology_written: None,
             written: self.clone(),
         })
+    }
+
+    /// Compiles the shipped laboratory mapping against the template of the
+    /// `Laboratory-Reports` `[[fhir.receive]]` entry, when there is one.
+    ///
+    /// # Errors
+    ///
+    /// [`FhirError::ReceiveTemplate`] when the template cannot be read, and
+    /// [`FhirError::Laboratory`] when the mapping does not compile against it.
+    fn laboratory(&self) -> Result<Option<Served>, FhirError> {
+        // NOTE: no specification governs this: our own design; the template a member's received
+        // reports are written in is the one its laboratory compositions are of.
+        let Some((position, entry)) = self
+            .receive
+            .iter()
+            .enumerate()
+            .find(|(_, entry)| entry.category == Category::Laboratory.code())
+        else {
+            return Ok(None);
+        };
+        let opt = std::fs::read_to_string(&entry.template).map_err(|source| {
+            FhirError::ReceiveTemplate {
+                position,
+                path: entry.template.clone(),
+                source,
+            }
+        })?;
+        Served::compile(&opt)
+            .map(Some)
+            .map_err(|source| FhirError::Laboratory {
+                source: Box::new(source),
+            })
     }
 
     /// Compiles the `[[fhir.receive]]` entries.
