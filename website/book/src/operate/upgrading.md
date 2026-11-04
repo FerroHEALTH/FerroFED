@@ -110,6 +110,12 @@ to get the fix; upgrading is free
   override from the operator console's configuration: the console serves no
   site bundle, and this release refuses the key at start-up and in
   `config check`, naming it (#1512).
+- Nothing in the operator console's sign-in configuration has to change
+  (#1504). The `[oidc]` endpoints are now optional: remove
+  `authorization_endpoint`, `token_endpoint` and `jwks_uri` to have the
+  console read them from `issuer`'s discovery document when it starts,
+  which then needs the provider reachable at start. A reverse proxy in front
+  of the console passes `/session` through to it.
 
 ### To v0.0.15, from v0.0.14
 

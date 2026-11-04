@@ -467,11 +467,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | =0.1.142 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | =0.1.212 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | =0.1.138 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | =0.1.152 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | =0.1.219 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | =0.1.141 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `ferrobridge-term` | =0.1.141 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | =0.1.143 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | =0.1.144 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -688,7 +688,7 @@ each cut moves this row and every file that repeats it in one pull request.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Product version | 0.0.15 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
+| Product version | 0.0.16 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
 
 `CITATION.cff` tracks this row exactly, and the guard compares the two, and
 the root `Cargo.toml` `[workspace.package]` `version` with both.
