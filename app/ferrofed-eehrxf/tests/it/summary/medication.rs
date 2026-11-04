@@ -22,6 +22,7 @@ fn medications() -> Result<Mappings, Box<dyn Error>> {
     let source = |section, context: &str| Source {
         section,
         opt: opt.clone(),
+        archetypes: Vec::new(),
         files: eps::medication_mapping_files(),
         context: context.to_owned(),
     };

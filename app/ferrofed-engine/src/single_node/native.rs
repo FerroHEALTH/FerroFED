@@ -303,7 +303,7 @@ impl<T: Transport + Clone> NodeClient<T> {
                 Err(capped) => return Some(Err(capped.into())),
             };
             let sent = async {
-                let answered = client.forward(outgoing).await;
+                let answered = client.forward(&outgoing, false).await;
                 drop(slot);
                 answered
             };

@@ -88,8 +88,12 @@ async fn directed(
 ) -> Result<FederatedAnswer, Box<dyn Error>> {
     let endpoints = std::num::NonZeroUsize::new(named.len()).ok_or("name an endpoint")?;
     let context = Context::new(Targeting::Directed { endpoints });
-    let Analysis::Unscoped(query) =
-        analyse(FACADE_AQL, &Parameters::new(), Paging::default(), &context)?
+    let Analysis::Unscoped(query) = analyse(
+        FACADE_AQL,
+        &Parameters::default(),
+        Paging::default(),
+        &context,
+    )?
     else {
         return Err("the façade query names no patient".into());
     };
@@ -266,7 +270,7 @@ async fn an_undirected_query_asks_every_member_and_excludes_none() -> TestResult
     let snapshot = registry([&a.uri(), &b.uri(), &c.uri()])?;
     let Analysis::Unscoped(query) = analyse(
         FACADE_AQL,
-        &Parameters::new(),
+        &Parameters::default(),
         Paging::default(),
         &Context::new(Targeting::AskAll),
     )?

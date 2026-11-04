@@ -253,7 +253,7 @@ fn the_carrier_reached_through_the_composition_content_is_consumed() {
 
 #[test]
 fn a_bound_parameter_on_the_carrier_is_consumed_as_its_literal() {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     parameters.insert("patient", Primitive::String("4711".into()));
     let aql = query("c/uid/value", &format!("{ENTRY_ID} = $patient"));
     match analyse(&aql, &parameters, Paging::default(), &ask_all()) {

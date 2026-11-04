@@ -34,7 +34,7 @@
 //! let facade = "SELECT e/ehr_status/subject/external_ref/id/value AS patient, c/uid/value \
 //!               FROM EHR e CONTAINS COMPOSITION c \
 //!               WHERE e/ehr_status/subject/external_ref/id/value = '4711'";
-//! let analysis = analyse(facade, &Parameters::new(), Paging::default(), &context)?;
+//! let analysis = analyse(facade, &Parameters::default(), Paging::default(), &context)?;
 //! let Analysis::Patient(patient) = analysis else { unreachable!("the query names a patient") };
 //! assert_eq!(patient.subject().value(), "4711");
 //!
@@ -460,7 +460,7 @@ impl PatientQuery {
     #[must_use]
     pub fn for_node(&self, ehr_id: &HierObjectId) -> NodeQuery {
         NodeQuery {
-            aql: to_aql(&rewrite::scope_to(&self.template, ehr_id.value())),
+            aql: to_aql(&rewrite::scope_to(&self.template, ehr_id.value()), None),
             columns: self.sources.clone(),
             limit: self.order.limit(),
         }

@@ -208,7 +208,7 @@ fn deployment(case: &Case, facade: &FacadeQuery) -> Context {
 fn outcome(case: &Case) -> Result<Analysis, Refusal> {
     let facade = FacadeQuery::parse(&case.facade)?;
     let context = deployment(case, &facade);
-    facade.analyse(&Parameters::new(), Paging::default(), &context)
+    facade.analyse(&Parameters::default(), Paging::default(), &context)
 }
 
 #[test]

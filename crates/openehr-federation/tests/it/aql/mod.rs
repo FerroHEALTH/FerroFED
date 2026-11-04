@@ -47,7 +47,7 @@ pub(crate) fn ask_all() -> Context {
 
 /// Analyses `aql` with no parameters and no paging members.
 pub(crate) fn analysed(aql: &str, context: &Context) -> Result<Analysis, Refusal> {
-    analyse(aql, &Parameters::new(), Paging::default(), context)
+    analyse(aql, &Parameters::default(), Paging::default(), context)
 }
 
 /// The patient analysis of `aql`, which must name a patient.

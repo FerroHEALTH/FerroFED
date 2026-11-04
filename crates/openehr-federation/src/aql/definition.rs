@@ -133,7 +133,7 @@ impl Definition {
 /// use.
 fn parameters(query: &SelectQuery) -> Vec<String> {
     let mut probe = query.clone();
-    match bind(&mut probe, &Parameters::new()) {
+    match bind(&mut probe, &Parameters::default()) {
         Ok(()) => Vec::new(),
         Err(error) => error
             .faults
@@ -160,7 +160,7 @@ fn unwritten(aql: &str) -> impl Iterator<Item = u64> + use<'_> {
 /// Each value is one archetype identifier, a string that binds at every
 /// position the grammar admits a parameter (`openehr_query::bind::Position`).
 fn placeholders(names: &[String], set: u64) -> (Parameters, BTreeSet<String>) {
-    let mut bound = Parameters::new();
+    let mut bound = Parameters::default();
     let mut values = BTreeSet::new();
     for (index, name) in names.iter().enumerate() {
         let value = format!("openEHR-EHR-CLUSTER.{PLACEHOLDER}{set}_{index}.v1");

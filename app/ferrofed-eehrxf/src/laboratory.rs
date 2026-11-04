@@ -27,7 +27,8 @@
 //! 2025/327 Art 14(1)(e), Annex II 2.1).
 
 use eehrxf::document::laboratory::{LAB_SLOTS, LABORATORY_REPORT_FORM};
-use eehrxf::document::{Document, DocumentError, Section};
+use eehrxf::document::section::Section;
+use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::LABORATORY;
 use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
@@ -86,13 +87,13 @@ pub fn name() -> Result<QueryName, QueryNameError> {
     reason = "ARCHETYPES names one archetype, which a test holds"
 )]
 pub fn query() -> SelectQuery {
-    section_query::query(ARCHETYPES).expect("the laboratory report should name an archetype")
+    section_query::query(ARCHETYPES, &[]).expect("the laboratory report should name an archetype")
 }
 
 /// Returns the query as AQL text, printed from its syntax tree.
 #[must_use]
 pub fn aql() -> String {
-    printer::to_aql(&query())
+    printer::to_aql(&query(), None)
 }
 
 /// Returns the query as the registry holds it: under its reserved name, at

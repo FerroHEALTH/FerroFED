@@ -96,7 +96,7 @@ impl Medication {
         reason = "archetype() names one archetype, which a test holds"
     )]
     pub fn query(self) -> SelectQuery {
-        let mut query = section_query::query(&[self.archetype()])
+        let mut query = section_query::query(&[self.archetype()], &[])
             .expect("a medication query should name an archetype");
         if self == Self::Orders {
             // NOTE: AQL 1.1.0 §EXISTS; A102 point 1: a composition with a feeder_audit is an
@@ -115,7 +115,7 @@ impl Medication {
     /// Returns the query as AQL text, printed from its syntax tree.
     #[must_use]
     pub fn aql(self) -> String {
-        printer::to_aql(&self.query())
+        printer::to_aql(&self.query(), None)
     }
 
     /// Returns the query as the registry holds it: under its reserved name,

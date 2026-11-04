@@ -311,7 +311,7 @@ fn operational(
     template: &str,
     archetypes: &[(String, String)],
 ) -> Result<TemplateSource, MapModeError> {
-    let mut repository = ArchetypeRepository::new();
+    let mut repository = ArchetypeRepository::default();
     for (file, text) in archetypes {
         let extension = std::path::Path::new(file).extension();
         let dialect = if extension.is_some_and(|extension| {

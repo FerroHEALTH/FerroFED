@@ -17,8 +17,10 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::prescriptions::mapped::{MapModeError, Template};
+use crate::stack::deep;
 use eehrxf::crosswalk::patient_summary::PATIENT_SUMMARY;
-use eehrxf::document::{self, Slot};
+use eehrxf::document::form::{self, Slot};
 use eehrxf::mapping::{Mapping, MappingError};
 
 use crate::patient_summary::Section;
@@ -28,8 +30,12 @@ use crate::patient_summary::Section;
 pub struct Source {
     /// The section the mapping feeds.
     pub section: Section,
-    /// The OPT 1.4 operational template, as text.
+    /// The operational template, as text: an OPT 1.4, or an ADL 2 template
+    /// when `archetypes` holds the archetypes it specialises.
     pub opt: String,
+    /// The archetypes an ADL 2 template specialises, each a file name and
+    /// its text; none for an OPT 1.4.
+    pub archetypes: Vec<(String, String)>,
     /// The model and context mapping files.
     pub files: Vec<PathBuf>,
     /// The `metadata.name` of the context mapping to compile.
@@ -50,6 +56,16 @@ pub enum MappingsError {
         /// Why.
         #[source]
         source: MappingError,
+    },
+    /// The template does not read, or its operational template cannot be
+    /// built.
+    #[error("the template of the section {section} is refused")]
+    Template {
+        /// The section slug.
+        section: &'static str,
+        /// Why.
+        #[source]
+        source: Box<MapModeError>,
     },
     /// A context maps to a profile the crosswalk does not admit for any
     /// entry of the section.
@@ -91,12 +107,28 @@ impl Mappings {
         let mut by: BTreeMap<(Section, String), Vec<Mapping>> = BTreeMap::new();
         for source in sources {
             let section = source.section;
-            let mapping = Mapping::compile(&source.opt, &source.files, &[source.context.as_str()])
-                .map_err(|error| MappingsError::Compile {
-                    section: section.slug(),
-                    context: source.context.clone(),
-                    source: error,
-                })?;
+            let written = if source.archetypes.is_empty() {
+                Template::Opt14(&source.opt)
+            } else {
+                Template::Adl2 {
+                    template: &source.opt,
+                    archetypes: &source.archetypes,
+                }
+            };
+            let refused = |error| MappingsError::Template {
+                section: section.slug(),
+                source: Box::new(error),
+            };
+            let template = written.source().map_err(refused)?;
+            let compiled = deep(|| {
+                Mapping::compile_template(&template, &source.files, &[source.context.as_str()])
+            })
+            .map_err(|error| refused(MapModeError::Deep(error)))?;
+            let mapping = compiled.map_err(|error| MappingsError::Compile {
+                section: section.slug(),
+                context: source.context.clone(),
+                source: error,
+            })?;
             let admitted = admitted(section)?;
             let mut templates = Vec::new();
             for context in mapping.contexts() {
@@ -148,7 +180,7 @@ pub fn slot_of(section: Section) -> Result<&'static Slot, MappingsError> {
     PATIENT_SUMMARY
         .row(section.element())
         .and_then(|row| row.eps.strip_prefix("Composition.section:"))
-        .and_then(document::slot)
+        .and_then(form::slot)
         .ok_or(MappingsError::Slot {
             section: section.slug(),
         })

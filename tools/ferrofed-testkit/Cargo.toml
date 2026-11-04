@@ -31,6 +31,7 @@ fhir-types = { workspace = true, features = ["r4", "resources"] }
 # medication order of the map mode (#1560).
 eehrxf = { workspace = true, features = [
   "laboratory",
+  "patient-summary",
   "prescription",
   "dispensation",
   "openehr",

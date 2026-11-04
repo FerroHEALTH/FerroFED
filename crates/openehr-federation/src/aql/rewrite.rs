@@ -652,7 +652,10 @@ mod tests {
         scoped.where_ = Some(openehr_query::ast::WhereExpr::identified(
             super::ehr_id_predicate(&variable),
         ));
-        let node = to_aql(&scope_to(&scoped, "7d44b88c-4199-4bad-97dc-d78268e01398"));
+        let node = to_aql(
+            &scope_to(&scoped, "7d44b88c-4199-4bad-97dc-d78268e01398"),
+            None,
+        );
         let expected = parse_str(
             "SELECT c/uid/value FROM EHR e1 CONTAINS COMPOSITION c CONTAINS OBSERVATION e \
              WHERE e1/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'",

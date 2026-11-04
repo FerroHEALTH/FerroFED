@@ -1,0 +1,142 @@
+-- SPDX-FileCopyrightText: Cadasto B.V.
+-- SPDX-License-Identifier: BUSL-1.1
+-- FerroBRIDGE's patient summary template over five published CKM archetypes
+-- (fixtures/ckm/medication): a health summary COMPOSITION with a medication
+-- summary section, an ad hoc SECTION holding INSTRUCTION.medication_order.v3,
+-- and an immunisations section, the vaccination list SECTION whose
+-- "Vaccinations administered" slot holds ACTION.medication.v1. No specification
+-- governs this template: our own design for the HL7 Europe Patient Summary
+-- medication summary and immunisations. Node identifiers are at-coded, the
+-- ADL 1.4 codes of the CKM sources.
+template (adl_version=2.4.0; rm_release=1.1.0)
+    openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0
+
+specialize
+    openEHR-EHR-COMPOSITION.health_summary.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Patient Summary medication summary and immunisations of FerroBRIDGE.">
+        >
+    >
+
+definition
+    COMPOSITION[at0000.1] matches {
+        content matches {
+            use_archetype SECTION[at0000.2, openEHR-EHR-SECTION.adhoc-ferrobridge_medication_summary.v1]
+            use_archetype SECTION[at0000.3, openEHR-EHR-SECTION.immunisation_list-ferrobridge.v0]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Patient summary">
+                description = <"The medication summary and the immunisations of a patient summary.">
+            >
+            ["at0000.2"] = <
+                text = <"Medication summary">
+                description = <"The medicines the patient takes, recorded as medication orders.">
+            >
+            ["at0000.3"] = <
+                text = <"Immunisations">
+                description = <"The vaccines the patient received, recorded as medication actions.">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-SECTION.adhoc-ferrobridge_medication_summary.v1.0.0
+
+specialize
+    openEHR-EHR-SECTION.adhoc.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Patient Summary medication summary and immunisations of FerroBRIDGE.">
+        >
+    >
+
+definition
+    SECTION[at0000.1] matches {
+        items matches {
+            use_archetype INSTRUCTION[at0000.2, openEHR-EHR-INSTRUCTION.medication_order.v3]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Medication summary">
+                description = <"Medication summary">
+            >
+            ["at0000.2"] = <
+                text = <"Medication order">
+                description = <"Medication order">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-SECTION.immunisation_list-ferrobridge.v0.0.0
+
+specialize
+    openEHR-EHR-SECTION.immunisation_list.v0
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Patient Summary medication summary and immunisations of FerroBRIDGE.">
+        >
+    >
+
+definition
+    SECTION[at0000.1] matches {
+        items matches {
+            use_archetype ACTION[at0001.1, openEHR-EHR-ACTION.medication.v1]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Immunisations">
+                description = <"Immunisations">
+            >
+            ["at0001.1"] = <
+                text = <"Vaccination administered">
+                description = <"Vaccination administered">
+            >
+        >
+    >

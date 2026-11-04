@@ -243,7 +243,7 @@ fn top_and_the_fetch_member_are_refused() {
     for fetch in [4, 10] {
         let refusal = analyse(
             &aql,
-            &Parameters::new(),
+            &Parameters::default(),
             Paging {
                 offset: None,
                 fetch: Some(fetch),
@@ -264,7 +264,7 @@ fn top_with_a_zero_offset_member_is_read_as_limit() {
         format!("SELECT TOP 4 c/name/value {FROM} WHERE {SUBJECT} = '4711' ORDER BY c/name/value");
     let analysis = analyse(
         &aql,
-        &Parameters::new(),
+        &Parameters::default(),
         Paging {
             offset: Some(0),
             fetch: None,

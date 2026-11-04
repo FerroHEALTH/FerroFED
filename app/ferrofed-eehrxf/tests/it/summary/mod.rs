@@ -21,6 +21,7 @@ use ferrofed_testkit::eps;
 
 mod header;
 mod medication;
+mod placement;
 mod terminology;
 
 /// The FHIR base the test documents name their entries under.
@@ -31,6 +32,7 @@ fn allergies() -> Result<Source, Box<dyn Error>> {
     Ok(Source {
         section: Section::AllergiesAndIntolerances,
         opt: std::fs::read_to_string(eps::opt())?,
+        archetypes: Vec::new(),
         files: eps::mapping_files().to_vec(),
         context: eps::CONTEXT.to_owned(),
     })

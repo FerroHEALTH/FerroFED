@@ -40,7 +40,7 @@ fn patient_query(tail: &str) -> String {
 }
 
 fn analysed(aql: &str, paging: Paging, context: &Context) -> Result<Analysis, Refusal> {
-    analyse(aql, &Parameters::new(), paging, context)
+    analyse(aql, &Parameters::default(), paging, context)
 }
 
 fn node_aql(analysis: &Analysis) -> String {

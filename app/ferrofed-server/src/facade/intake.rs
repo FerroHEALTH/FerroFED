@@ -46,7 +46,7 @@ pub enum IntakeError {
 /// Returns an [`IntakeError`] naming the first parameter, in name order, that
 /// is not a literal.
 pub fn parameters(supplied: Option<&QueryParameters>) -> Result<Parameters, IntakeError> {
-    let mut parameters = Parameters::new();
+    let mut parameters = Parameters::default();
     let Some(supplied) = supplied else {
         return Ok(parameters);
     };
