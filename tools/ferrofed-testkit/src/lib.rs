@@ -26,6 +26,9 @@
 //!   (#689);
 //! - [`emit`]: where a test writes an exchange-format document it has held
 //!   to the vendored profiles, for HL7's FHIR Validator lane (#688);
+//! - [`laboratory`]: the laboratory report fixtures, the package, the
+//!   template and the mapping a receiving member is declared with, and a
+//!   synthetic report;
 //! - [`fhir_packages`]: the FHIR package set a received patient summary is
 //!   validated against in full, its cached part fetched from its pins
 //!   (#808);
@@ -97,6 +100,7 @@ pub mod fhir_packages;
 pub mod health_data_api;
 pub mod issuance;
 pub mod issuer;
+pub mod laboratory;
 pub mod leak;
 pub mod listener;
 pub mod mcsd;
