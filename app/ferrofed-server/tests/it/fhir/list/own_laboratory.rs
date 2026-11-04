@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! A member that serves its laboratory reports itself, as an HL7 Europe EU
-//! Health Data API Document Access Provider (A64): asked by its own
+//! Health Data API Document Access Provider: asked by its own
 //! `ehr_id` alone, `Patient?identifier=` then
 //! `DocumentReference?patient=&type=` (§5.4.1, N33); each of its
 //! `DocumentReference`s listed as it holds it but for the attachment URL,

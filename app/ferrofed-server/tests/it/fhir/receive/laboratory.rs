@@ -354,11 +354,7 @@ async fn a_member_serving_its_own_reports_is_left_out_of_the_laboratory_query() 
             .filter(|body| body.contains(LAB_ARCHETYPE))
             .count()
     };
-    assert_eq!(
-        0,
-        queried(received(&a).await?),
-        "A64: node A serves its own"
-    );
+    assert_eq!(0, queried(received(&a).await?), "node A serves its own");
     assert_eq!(1, queried(received(&b).await?), "node B is mapped");
     assert_eq!(
         1,
