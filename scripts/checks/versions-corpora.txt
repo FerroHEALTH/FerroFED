@@ -52,6 +52,7 @@ docs/specs/openehr-ckm-ips|openEHR CKM International Patient Summary template
 docs/specs/openehr-ckm-laboratory|openEHR CKM laboratory test result template
 docs/specs/openehr-ckm-medication|openEHR CKM medication archetypes
 docs/specs/kds-laborbericht|KDS Laborbericht operational template
+docs/specs/ferrobridge-medication|FerroBRIDGE medication template
 docs/specs/ihe-atna|IHE ITI-20 Record Audit Event
 docs/specs/ihe-atna|IHE RESTful ATNA supplement
 docs/specs/nl-gf|Netherlands Generic Functions IG source

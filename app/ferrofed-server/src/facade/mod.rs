@@ -64,6 +64,7 @@ pub mod follow_up;
 pub mod intake;
 mod localize;
 pub(crate) mod located;
+pub(crate) mod mapped;
 pub(crate) mod native;
 pub mod options;
 pub mod owner;

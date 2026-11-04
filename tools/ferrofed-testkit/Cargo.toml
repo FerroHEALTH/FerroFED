@@ -27,8 +27,18 @@ bytes.workspace = true
 fhir-types = { workspace = true, features = ["r4", "resources"] }
 # The laboratory report fixtures (#1404): the component's document builder
 # writes the synthetic report, and its shipped laboratory mapping is written
-# where a deployment keeps its files.
-eehrxf = { workspace = true, features = ["laboratory", "openehr"] }
+# where a deployment keeps its files; its MPD project writes the synthetic
+# medication order of the map mode (#1560).
+eehrxf = { workspace = true, features = [
+  "laboratory",
+  "prescription",
+  "dispensation",
+  "openehr",
+] }
+# The medication order composition of the map mode (#1560): the operational
+# template its synthetic order is written against, and the run settings.
+openehr-mapping-core.workspace = true
+fhirconnect.workspace = true
 # The vendored HL7 Europe Patient Summary package the document check reads
 # its profiles from (#689).
 flate2.workspace = true

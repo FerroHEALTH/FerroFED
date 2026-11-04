@@ -17,7 +17,7 @@
 //! answer (§11.3, §11.4). The page limit is our own design: no specification
 //! governs it.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -25,6 +25,7 @@ use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
 use ferrofed_eehrxf::prescriptions::RESOURCE;
+use ferrofed_eehrxf::prescriptions::mapped::MapMode;
 use ferrofed_eehrxf::prescriptions::page::{self, Page};
 use ferrofed_eehrxf::prescriptions::searchset::Assembled;
 use ferrofed_engine::dispatch::DispatchOptions;
@@ -39,7 +40,8 @@ use tokio::task::JoinSet;
 
 use crate::access::{Accessed, Asked};
 use crate::facade::answer::{self, Failure};
-use crate::facade::located::{Located, located};
+use crate::facade::located::located;
+use crate::facade::mapped;
 use crate::facade::native::{self, Chosen};
 use crate::facade::request::Arrived;
 use crate::facade::summary::Unsummarised;
@@ -66,6 +68,9 @@ pub(crate) enum Unread {
     /// Asked for one prescription by its id, the member answered another.
     #[error("the member answered a prescription other than the one asked for")]
     Other,
+    /// A composition of a map-mode member does not map.
+    #[error(transparent)]
+    Mapped(ferrofed_eehrxf::prescriptions::mapped::MapModeError),
 }
 
 /// What one member answered the search with.
@@ -83,6 +88,14 @@ pub(crate) enum Held {
     },
     /// No page: the member's answer to the page it did not give.
     Silent(Searched),
+    /// No answer from a map-mode member to the order query, with its §11.1
+    /// status and whether a request left the gateway for it.
+    Unanswered {
+        /// Its §11.1 status.
+        status: EndpointStatus,
+        /// Whether a request left the gateway for it.
+        left: bool,
+    },
 }
 
 impl Held {
@@ -93,6 +106,7 @@ impl Held {
             Self::Found(_) => EndpointStatus::Active,
             Self::Unusable { .. } => EndpointStatus::NodeError,
             Self::Silent(searched) => searched.status(),
+            Self::Unanswered { status, .. } => *status,
         }
     }
 
@@ -101,6 +115,7 @@ impl Held {
         match self {
             Self::Found(_) | Self::Unusable { .. } => true,
             Self::Silent(searched) => searched.contact().left(),
+            Self::Unanswered { left, .. } => *left,
         }
     }
 
@@ -108,7 +123,7 @@ impl Held {
     pub(crate) fn prescriptions(&self) -> usize {
         match self {
             Self::Found(pages) => pages.iter().map(|page| page.prescriptions.len()).sum(),
-            Self::Unusable { .. } | Self::Silent(_) => 0,
+            Self::Unusable { .. } | Self::Silent(_) | Self::Unanswered { .. } => 0,
         }
     }
 }
@@ -120,6 +135,10 @@ pub(crate) struct Member {
     pub(crate) chosen: Chosen,
     /// What it answered.
     pub(crate) held: Held,
+    /// For a map-mode member, the UUID of the versioned composition each page
+    /// was mapped from, when it is one; `None` for a member asked at its own
+    /// endpoint.
+    pub(crate) composed: Option<Vec<Option<uuid::Uuid>>>,
 }
 
 /// What the search gathered.
@@ -189,21 +208,20 @@ impl From<Unsummarised> for Unprescribed {
 pub(crate) async fn search(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
-    patient: (&str, &str),
-    declared: &BTreeSet<String>,
+    (patient, now): ((&str, &str), &str),
+    (declared, mapped): (&BTreeSet<String>, &BTreeMap<String, MapMode>),
 ) -> Result<Prescribed, Unprescribed> {
-    let Located {
-        completion,
-        targets,
-        ..
-    } = located(federation, arrived, patient).await?;
+    let located = located(federation, arrived, patient).await?;
+    let (completion, targets) = (located.completion, &located.targets);
     let chosen: Vec<Chosen> = native::chosen_for(
         federation.snapshot(),
-        &targets,
+        targets,
         Category::ElectronicPrescription.code(),
     )
     .into_iter()
-    .filter(|member| declared.contains(member.node.as_str()))
+    .filter(|member| {
+        declared.contains(member.node.as_str()) && !mapped.contains_key(member.node.as_str())
+    })
     .collect();
     // NOTE: no specification governs this (§11.3 covers only an answered lookup): our own design;
     // only a member serving prescriptions whose resolution failed could hide one.
@@ -223,13 +241,21 @@ pub(crate) async fn search(
         set_aside: targets.set_aside.clone(),
         unresolved,
     };
+    let (natives, maps) = tokio::join!(
+        asked(federation, arrived, chosen, targets.plan.withheld()),
+        mapped::asked(federation, arrived, &located, (patient, now), mapped)
+    );
+    prescribed.members = natives?;
+    prescribed.members.extend(maps?);
+    prescribed
+        .members
+        .sort_by(|one, other| one.chosen.native.cmp(&other.chosen.native));
     // NOTE: Federation Tier §11.3, Regulation (EU) 2025/327 Art 8: a patient no member serving
     // prescriptions holds answers as one none may disclose does, so neither is told apart.
-    if chosen.is_empty() && prescribed.unresolved.is_empty() {
+    if prescribed.members.is_empty() && prescribed.unresolved.is_empty() {
         let set_aside = (!prescribed.set_aside.is_empty()).then(|| Box::new(prescribed));
         return Err(Unprescribed::NotFound(set_aside));
     }
-    prescribed.members = asked(federation, arrived, chosen, targets.plan.withheld()).await?;
     for member in &prescribed.members {
         if let Held::Unusable { status, reason } = &member.held {
             tracing::warn!(
@@ -319,6 +345,7 @@ pub(crate) async fn asked(
                     Member {
                         chosen: member,
                         held,
+                        composed: None,
                     },
                 )
             })

@@ -115,31 +115,45 @@ fn analysed(
     (system, value): (&str, &str),
     logged: &str,
 ) -> Result<Vec<(Section, Analysis)>, Unsummarised> {
-    // NOTE: §8.4; the FHIR face names no endpoint, so no targeting header is read.
-    let undirected = HeaderMap::new();
     let mut analyses = Vec::with_capacity(Section::ALL.len());
     for section in Section::ALL {
         let name = section
             .name()
             .map_err(|_unnamed| Unsummarised::Internal("a section query has no qualified name"))?;
-        let request = AdhocQueryExecute {
-            q: section.aql(),
-            offset: None,
-            fetch: None,
-            query_parameters: Some(intake::strings([(PATIENT, value), (ISSUER, system)])),
-            additional_properties: BTreeMap::new(),
-        };
-        let submitted = Submitted::Stored {
-            request,
-            name: name.as_str(),
-        };
-        let (_, _, parsed) = request::read(
+        let parsed = stored(
             federation,
-            (submitted, &undirected),
-            (completion, DedupMode::None),
-            logged,
+            completion,
+            (system, value),
+            (name.as_str(), section.aql(), logged),
         )?;
         analyses.push((section, parsed));
     }
     Ok(analyses)
+}
+
+/// The reserved query `name` of the text `aql`, read and analysed as a
+/// stored query bound to the patient `system`|`value`, under `completion`.
+pub(crate) fn stored(
+    federation: &Federation,
+    completion: Completion,
+    (system, value): (&str, &str),
+    (name, aql, logged): (&str, String, &str),
+) -> Result<Analysis, Unsummarised> {
+    // NOTE: §8.4; the FHIR face names no endpoint, so no targeting header is read.
+    let undirected = HeaderMap::new();
+    let request = AdhocQueryExecute {
+        q: aql,
+        offset: None,
+        fetch: None,
+        query_parameters: Some(intake::strings([(PATIENT, value), (ISSUER, system)])),
+        additional_properties: BTreeMap::new(),
+    };
+    let submitted = Submitted::Stored { request, name };
+    let (_, _, parsed) = request::read(
+        federation,
+        (submitted, &undirected),
+        (completion, DedupMode::None),
+        logged,
+    )?;
+    Ok(parsed)
 }

@@ -219,7 +219,7 @@ fn prescriptions() -> CapabilityStatementRestResource {
         r#type: "MedicationRequest".into(),
         supported_profile: vec![MPD_MEDICATION_REQUEST.into()],
         documentation: Some(
-            "A patient's prescriptions as the members that hold them state them, each passed through as the member states it; the members decide dispensability and the remaining dispensations.".into(),
+            "A patient's prescriptions as the members that hold them state them, each passed through as the member states it or, for a member in the map mode, mapped from its own openEHR medication orders; the members decide dispensability and the remaining dispensations.".into(),
         ),
         interaction: vec![
             interaction("search-type"),

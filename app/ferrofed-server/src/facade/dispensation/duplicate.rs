@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use ferrofed_eehrxf::dispensations::RESOURCE;
 use ferrofed_engine::dispatch::DispatchOptions;
-use ferrofed_engine::single_node::native_search::Searched;
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
 
@@ -86,8 +85,9 @@ pub(super) async fn check(
                 "the dispensation was not written: the owner's answer ({status}) to the search for its dispensations of the patient cannot be read, so a dispensation already written under the same identifier cannot be ruled out"
             ),
         ),
-        Held::Silent(searched) => {
-            let (answer, code) = match searched.status() {
+        silent @ (Held::Silent(_) | Held::Unanswered { .. }) => {
+            let status = silent.status();
+            let (answer, code) = match status {
                 EndpointStatus::TimeOut | EndpointStatus::Offline => {
                     (StatusCode::GATEWAY_TIMEOUT, "timeout")
                 }
@@ -98,16 +98,11 @@ pub(super) async fn check(
                 code,
                 format!(
                     "the dispensation was not written: the owner did not answer the search for its dispensations of the patient ({}), so a dispensation already written under the same identifier cannot be ruled out",
-                    status_of(&searched)
+                    status.as_str()
                 ),
             )
         }
     }
-}
-
-/// The §11.1 status a member's unanswered search shows.
-fn status_of(searched: &Searched) -> &'static str {
-    searched.status().as_str()
 }
 
 /// The deadline of one request to the owner within the request `arrived`'s

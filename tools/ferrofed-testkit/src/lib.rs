@@ -29,6 +29,9 @@
 //! - [`laboratory`]: the laboratory report fixtures, the package, the
 //!   template and the mapping a receiving member is declared with, and a
 //!   synthetic report;
+//! - [`medication`]: the medication template and archetypes a map-mode member
+//!   of the prescription face is declared with, and a synthetic medication
+//!   order composition (#1560);
 //! - [`fhir_packages`]: the FHIR package set a received patient summary or
 //!   laboratory report is validated against in full, its cached part
 //!   fetched from its pins (#808, #1555);
@@ -104,6 +107,7 @@ pub mod laboratory;
 pub mod leak;
 pub mod listener;
 pub mod mcsd;
+pub mod medication;
 pub mod mitz;
 pub mod mock;
 pub mod national_connector;

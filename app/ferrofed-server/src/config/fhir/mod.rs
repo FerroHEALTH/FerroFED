@@ -24,12 +24,14 @@
 //! face does not need `[stored_queries]`. No specification governs the
 //! configuration: our own design.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use eehrxf::category::Category;
 use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::patient_summary::Section;
+use ferrofed_eehrxf::prescriptions::mapped::{MapMode, MapModeError};
 use ferrofed_eehrxf::receive::{Receivers, ReceiversError};
 use ferrofed_eehrxf::serving::{Serving, ServingError};
 use ferrofed_eehrxf::summary::Organisation;
@@ -38,8 +40,11 @@ use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRefError};
 use serde::Deserialize;
 
+pub mod serve;
+
 use crate::config::Config;
 use crate::config::base_path::{BasePath, BasePathError};
+use crate::config::fhir::serve::{ServeEntry, ServeMember, ServeMode};
 use crate::config::public_url::PublicUrl;
 
 /// The path segments directly under `{base}` the gateway serves itself,
@@ -113,18 +118,6 @@ pub struct ReceiveEntry {
     pub territory: String,
 }
 
-/// One `[[fhir.serve]]` entry: the members that serve one Art 14(1)
-/// category resource by resource, each on its own endpoint.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct ServeEntry {
-    /// The category, by its HL7 Europe priority category code:
-    /// `Electronic-Prescriptions` or `Electronic-Dispensations`.
-    pub category: String,
-    /// The node ids of the members that serve it.
-    pub members: Vec<String>,
-}
-
 /// The `[fhir.operator]` table.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -169,6 +162,9 @@ pub struct FhirSettings {
     pub receive_namespaces: Vec<IdentifierNamespace>,
     /// The members that serve electronic prescriptions and dispensations.
     pub serving: Arc<Serving>,
+    /// The members that serve prescriptions in the map mode, each by its node
+    /// id with its mapping.
+    pub mapped: Arc<BTreeMap<String, MapMode>>,
     /// How long the URL of a member's document in the document list stays
     /// valid.
     pub document_url_lifetime: std::time::Duration,
@@ -337,6 +333,50 @@ pub enum FhirError {
     /// A served category cannot be declared as written.
     #[error("a [[fhir.serve]] is refused")]
     Serving(#[from] ServingError),
+    /// A member is in the map mode for a category other than prescriptions.
+    #[error(
+        "fhir.serve[{position}] names {member} in the map mode; a member is mapped for Electronic-Prescriptions alone"
+    )]
+    MapCategory {
+        /// The position of the entry.
+        position: usize,
+        /// The member.
+        member: String,
+    },
+    /// A map-mode member names no template, or a native one names one.
+    #[error(
+        "fhir.serve[{position}] {member}: a member in the map mode names its template, and a native one names none"
+    )]
+    MapTemplate {
+        /// The position of the entry.
+        position: usize,
+        /// The member.
+        member: String,
+    },
+    /// A map-mode member's template or one of its archetypes cannot be read.
+    #[error("fhir.serve[{position}] {member}: {} cannot be read", path.display())]
+    MapFile {
+        /// The position of the entry.
+        position: usize,
+        /// The member.
+        member: String,
+        /// The path.
+        path: PathBuf,
+        /// Why.
+        #[source]
+        source: std::io::Error,
+    },
+    /// The MPD project does not compile against a map-mode member's template.
+    #[error("fhir.serve[{position}] {member}: the map mode is refused")]
+    Mapped {
+        /// The position of the entry.
+        position: usize,
+        /// The member.
+        member: String,
+        /// Why.
+        #[source]
+        source: Box<MapModeError>,
+    },
     /// `fhir.document_url_lifetime_secs` is zero.
     #[error("fhir.document_url_lifetime_secs is at least one second")]
     DocumentUrlLifetime,
@@ -464,6 +504,7 @@ impl Fhir {
             receivers: Arc::new(self.receivers()?),
             receive_namespaces: self.namespaces()?,
             serving: Arc::new(self.serving()?),
+            mapped: Arc::new(self.mapped()?),
             document_url_lifetime: std::time::Duration::from_secs(self.document_url_lifetime_secs),
             terminology: Terminology::none(),
             validating: None,
@@ -510,23 +551,6 @@ impl Fhir {
         Ok(Receivers::compile(&sources)?)
     }
 
-    /// Reads the `[[fhir.serve]]` entries.
-    ///
-    /// # Errors
-    ///
-    /// [`FhirError::Serving`] for the first entry that is refused.
-    fn serving(&self) -> Result<Serving, FhirError> {
-        let sources: Vec<ferrofed_eehrxf::serving::Source> = self
-            .serve
-            .iter()
-            .map(|entry| ferrofed_eehrxf::serving::Source {
-                category: entry.category.clone(),
-                members: entry.members.clone(),
-            })
-            .collect();
-        Ok(Serving::compile(&sources)?)
-    }
-
     /// The identifier systems a received document's patient is resolved in,
     /// which a face that receives any category or serves dispensations
     /// names.
@@ -534,15 +558,17 @@ impl Fhir {
     /// # Errors
     ///
     /// [`FhirError::Missing`] when a category is received, or dispensations
-    /// are served, and no system is named, and
+    /// are served or a member is in the map mode, and no system is named, and
     /// [`FhirError::ReceiveNamespace`] for an empty one.
     fn namespaces(&self) -> Result<Vec<IdentifierNamespace>, FhirError> {
         // NOTE: no specification governs this: our own design; a dispensation's patient is
-        // resolved as a received document's is, so serving dispensations needs the systems too.
-        let dispensing = self
-            .serve
-            .iter()
-            .any(|serve| serve.category == Category::Dispensation.code());
+        // resolved as a received document's is, and a mapped prescription's named in them.
+        let dispensing = self.serve.iter().any(|serve| {
+            serve.category == Category::Dispensation.code()
+                || serve.members.iter().any(|member| {
+                    matches!(member, ServeMember::Declared(declared) if declared.mode == ServeMode::Map)
+                })
+        });
         if (!self.receive.is_empty() || dispensing) && self.receive_namespaces.is_empty() {
             return Err(FhirError::Missing {
                 key: "fhir.receive_namespaces",

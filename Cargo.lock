@@ -1423,10 +1423,13 @@ dependencies = [
  "fhirconnect",
  "http",
  "jiff",
+ "openehr-adl",
+ "openehr-mapping-core",
  "openehr-query",
  "secrecy",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
  "url",
@@ -1620,6 +1623,7 @@ dependencies = [
  "ferrohealth-smart",
  "ferrohealth-ui",
  "fhir-types",
+ "fhirconnect",
  "flate2",
  "http",
  "http-body-util",
@@ -1631,6 +1635,7 @@ dependencies = [
  "jsonwebtoken",
  "openehr-base",
  "openehr-its",
+ "openehr-mapping-core",
  "openehr-rm",
  "opentelemetry-proto",
  "pem 3.0.6",
@@ -3266,6 +3271,24 @@ name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
+
+[[package]]
+name = "openehr-adl"
+version = "0.0.116"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d082a4953fe948a5f2d644192e19ac3be732da388f04e51ac3565f07d97ac4f7"
+dependencies = [
+ "indexmap 2.14.2",
+ "openehr-am",
+ "openehr-base",
+ "openehr-lang",
+ "openehr-rm",
+ "openehr-term",
+ "regex",
+ "serde_json",
+ "thiserror",
+ "uuid",
+]
 
 [[package]]
 name = "openehr-am"

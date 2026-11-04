@@ -380,3 +380,64 @@ async fn a_receiving_gateway_declares_and_serves_the_bundle_create() -> TestResu
     );
     Ok(())
 }
+
+/// A `[[fhir.serve]]` of prescriptions with node A as the table `member`.
+fn mapped_table(member: &str) -> String {
+    format!("\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [{member}]\n")
+}
+
+/// `path` as a TOML string.
+fn quoted(path: &std::path::Path) -> String {
+    toml::Value::String(path.display().to_string()).to_string()
+}
+
+#[test]
+fn a_map_mode_member_whose_template_the_mpd_project_does_not_map_is_refused() -> TestResult {
+    let opt = ferrofed_testkit::eps::opt();
+    let resolved = resolved(&mapped_table(&format!(
+        "{{ member = \"node-a\", mode = \"map\", template = {} }}",
+        quoted(&opt)
+    )))?;
+    assert!(
+        matches!(
+            resolved,
+            Err(ferrofed_server::config::error::Error::Fhir(FhirError::Mapped { ref member, .. }))
+                if member == "node-a"
+        ),
+        "{resolved:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_map_mode_member_with_no_template_is_refused() -> TestResult {
+    let resolved = resolved(&mapped_table("{ member = \"node-a\", mode = \"map\" }"))?;
+    assert!(
+        matches!(
+            resolved,
+            Err(ferrofed_server::config::error::Error::Fhir(FhirError::MapTemplate { ref member, .. }))
+                if member == "node-a"
+        ),
+        "{resolved:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_map_mode_member_of_dispensations_is_refused() -> TestResult {
+    let template = ferrofed_testkit::medication::template_path();
+    let resolved = resolved(&format!(
+        "{}\n[[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [{{ member = \"node-a\", mode = \"map\", template = {} }}]\n",
+        mapped_table("\"node-a\""),
+        quoted(&template)
+    ))?;
+    assert!(
+        matches!(
+            resolved,
+            Err(ferrofed_server::config::error::Error::Fhir(FhirError::MapCategory { ref member, .. }))
+                if member == "node-a"
+        ),
+        "{resolved:?}"
+    );
+    Ok(())
+}
