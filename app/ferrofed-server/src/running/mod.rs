@@ -30,8 +30,8 @@ use http::HeaderMap;
 use crate::config::revisions::Ui;
 use crate::error::{self, Code};
 use crate::reload::Reloader;
+use crate::reload::log::{LogError, RevisionLog};
 use crate::request_id;
-use crate::revision::service::{RevisionError, Revisions, held_table};
 
 mod authentication;
 
@@ -95,9 +95,9 @@ pub struct Layers {
 /// The running configuration of the replica `reloader` reloads.
 ///
 /// # Errors
-/// Returns the [`RevisionError`] of a revision store that cannot be read,
-/// under `config.ui = "managed"`.
-pub fn document(reloader: &Reloader) -> Result<RunningConfig, RevisionError> {
+/// Returns the [`LogError`] of a revision store that cannot be read, under
+/// `config.ui = "managed"`.
+pub fn document(reloader: &Reloader) -> Result<RunningConfig, LogError> {
     let provenance = reloader.provenance().clone();
     let file_boot = reloader.boot_tree().clone();
     let file_now = reloader
@@ -114,10 +114,10 @@ pub fn document(reloader: &Reloader) -> Result<RunningConfig, RevisionError> {
             managed: false,
         },
         Some(revisions) => {
-            let running = revisions.replica().running;
+            let running = revisions.running();
             Layers {
-                boot: table_of(revisions, reloader.boot_revision())?,
-                now: table_of(revisions, running)?,
+                boot: table_of(revisions.as_ref(), reloader.boot_revision())?,
+                now: table_of(revisions.as_ref(), running)?,
                 provenance,
                 file_boot,
                 file_now,
@@ -130,15 +130,8 @@ pub fn document(reloader: &Reloader) -> Result<RunningConfig, RevisionError> {
 }
 
 /// The configuration revision `id` holds, an empty table for none.
-fn table_of(revisions: &Revisions, id: Option<RevisionId>) -> Result<toml::Table, RevisionError> {
-    let Some(id) = id else {
-        return Ok(toml::Table::new());
-    };
-    let revision = revisions
-        .store()
-        .revision(id)?
-        .ok_or(RevisionError::Unknown(id))?;
-    held_table(&revision)
+fn table_of(revisions: &dyn RevisionLog, id: Option<RevisionId>) -> Result<toml::Table, LogError> {
+    id.map_or_else(|| Ok(toml::Table::new()), |id| revisions.held(id))
 }
 
 /// The running configuration `layers` describe.
