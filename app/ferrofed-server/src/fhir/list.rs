@@ -48,14 +48,18 @@ const OCTET_STREAM: &str = "application/octet-stream";
 /// `GET {fhir-base}/DocumentReference?patient.identifier=system|value`.
 pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
     let read = ListRequest::from_query(uri.query());
+    let lists_laboratory = asked
+        .state
+        .fhir()
+        .is_some_and(|fhir| fhir.laboratory.is_some());
     super::searched(
         (&asked, Instant::now()),
         read,
         UNADMITTED,
         |read| {
-            // NOTE: FHIR R4 search; a `type` that admits no patient summary matches nothing the
-            // face lists, so the empty set is answered and nothing is resolved or sent.
-            if read.admits_summaries() {
+            // NOTE: FHIR R4 search; a `type` that admits no document type the face lists matches
+            // nothing, so the empty set is answered and nothing is resolved or sent.
+            if read.admits_summaries() || (lists_laboratory && read.admits_laboratory()) {
                 ControlFlow::Continue(())
             } else {
                 let mut response =
@@ -67,11 +71,19 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
         async |read, admitted, arrived| {
             let federation = &admitted.federation;
             let patient = (read.system(), read.value());
-            match gathered::gather(Arc::clone(federation), arrived, patient, Scope::List).await {
+            let laboratory = read.admits_laboratory() && admitted.fhir.laboratory.is_some();
+            match gathered::gather(
+                Arc::clone(federation),
+                arrived,
+                patient,
+                (Scope::List, laboratory),
+            )
+            .await
+            {
                 Ok(gathered) => listed(
                     federation,
                     (admitted.fhir, admitted.caller),
-                    &gathered,
+                    (&gathered, read),
                     patient,
                     &admitted.logged,
                 ),
@@ -117,7 +129,7 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
 fn listed(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
-    gathered: &Gathered,
+    (gathered, read): (&Gathered, &ListRequest),
     (system, value): (&str, &str),
     logged: &str,
 ) -> Response {
@@ -134,14 +146,15 @@ fn listed(
     // NOTE: §7.1, §11.3: the gateway writes a summary only from a member the patient resolved
     // at, so a list naming every member unresolved lists none.
     let mut matches = Vec::new();
-    if !gathered.resolved.is_empty() {
+    if read.admits_summaries() && !gathered.resolved.is_empty() {
         matches.push((
             format!("urn:uuid:{id}"),
             list::on_demand((&id, &unique), listing, &fhir.operator),
         ));
     }
     let mut outcomes = Vec::new();
-    for native in &gathered.natives {
+    let natives = gathered.natives.iter().filter(|_| read.admits_summaries());
+    for native in natives {
         match &native.answer {
             Answer::Document(document) => {
                 let forwarded = document.forwarded();
@@ -151,19 +164,7 @@ fn listed(
                         endpoint = native.chosen.native.as_str(),
                         "a member's document could not be named by a signed URL"
                     );
-                    let mut response = outcome(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "exception",
-                        "a member's document could not be listed",
-                    );
-                    let accessed = gathered::access::accessed(
-                        federation,
-                        gathered,
-                        (system, value),
-                        (Scope::List, None),
-                    );
-                    attach(&mut response, accessed);
-                    return response;
+                    return unlisted(federation, gathered, (system, value), "document");
                 };
                 let custodian = gathered::organisation(federation.snapshot(), &native.chosen.node);
                 let id = minted();
@@ -183,6 +184,19 @@ fn listed(
             )),
         }
     }
+    if !gathered.laboratory.is_empty() {
+        let Some((reports, silent)) =
+            super::laboratory::listed(federation, (fhir, caller), gathered, listing)
+        else {
+            tracing::error!(
+                request_id = logged,
+                "a laboratory report could not be named by a signed URL"
+            );
+            return unlisted(federation, gathered, (system, value), "laboratory report");
+        };
+        matches.extend(reports);
+        outcomes.extend(silent);
+    }
     // NOTE: Federation Tier §11.3, §11.4: under best-effort, a member the resolver could not
     // answer for is named as a silent one, so the list never reads as complete.
     for endpoint in &gathered.unresolved {
@@ -201,6 +215,25 @@ fn listed(
             (Scope::List, Some(&BTreeSet::new())),
         ),
     );
+    response
+}
+
+/// The `500` of a list that could not name a member's `what` by a signed URL,
+/// with the access it records for the patient `system`|`value`.
+fn unlisted(
+    federation: &Federation,
+    gathered: &Gathered,
+    (system, value): (&str, &str),
+    what: &str,
+) -> Response {
+    let mut response = outcome(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "exception",
+        &format!("a member's {what} could not be listed"),
+    );
+    let accessed =
+        gathered::access::accessed(federation, gathered, (system, value), (Scope::List, None));
+    attach(&mut response, accessed);
     response
 }
 

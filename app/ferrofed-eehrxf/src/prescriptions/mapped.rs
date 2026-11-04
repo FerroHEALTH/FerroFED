@@ -39,17 +39,14 @@ use openehr_base::v1_3::base_types::identification::object_version_id::ObjectVer
 use openehr_base::v1_3::base_types::identification::uid_based_id::UidBasedId;
 use openehr_mapping_core::template::{PathError, TemplateSource};
 
+use crate::stack::{Deep, deep};
+
 use super::RESOURCE;
 use super::page::{Kept, Page, Prescription};
 
 /// The context of the MPD project that maps a medication order to a
 /// `MedicationRequest-eu-mpd`.
 pub const REQUEST_CONTEXT: &str = "ferrobridge_eu_mpd_request.context";
-
-/// The stack a template is built and a composition mapped on: the engine
-/// walks the template and the composition recursively, deeper than the 2 MiB
-/// a runtime worker thread has.
-const STACK: usize = 16 * 1024 * 1024;
 
 /// The device a mapping run names as its engine, which no answer carries
 /// since the run's `Provenance` is left out.
@@ -116,12 +113,9 @@ pub enum MapModeError {
     /// The composition holds no `ACTION` to name the order on.
     #[error("the composition of the received dispensation names no order")]
     Instructed(#[source] InstructionError),
-    /// The thread the work runs on could not be started.
-    #[error("the thread a mapping runs on could not be started")]
-    Thread(#[source] std::io::Error),
-    /// The work panicked on its thread, a defect of the mapping engine.
-    #[error("a mapping panicked on its thread")]
-    Panicked,
+    /// The mapping did not run on its thread.
+    #[error(transparent)]
+    Deep(#[from] Deep),
     /// A mapped resource cannot be read back as JSON.
     #[error("a mapped resource cannot be read as JSON")]
     Resource(#[source] fhir_types::codec::EncodeError),
@@ -369,28 +363,6 @@ fn syntax(file: &str) -> impl FnOnce(Vec<SyntaxError>) -> MapModeError + use<'_>
         file: file.to_owned(),
         source: errors.into_iter().next(),
     }
-}
-
-/// Runs `work` on a thread of its own with [`STACK`] of stack, and waits for
-/// its answer.
-///
-/// No specification governs this: our own design. The caller's thread,
-/// a runtime worker among them, keeps its own stack size.
-///
-/// # Errors
-///
-/// [`MapModeError::Thread`] when the thread cannot be started, and
-/// [`MapModeError::Panicked`] when `work` panicked.
-fn deep<T: Send>(work: impl FnOnce() -> T + Send) -> Result<T, MapModeError> {
-    std::thread::scope(|scope| {
-        std::thread::Builder::new()
-            .name(String::from("ferrofed-map-mode"))
-            .stack_size(STACK)
-            .spawn_scoped(scope, work)
-            .map_err(MapModeError::Thread)?
-            .join()
-            .map_err(|_panicked| MapModeError::Panicked)
-    })
 }
 
 /// The activity of a medication order a dispensation carries out, the one

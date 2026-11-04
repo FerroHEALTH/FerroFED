@@ -57,7 +57,14 @@ pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {
                 Err(Headless::Unheaded(Unheaded::Unnamed(header))) => *header,
                 Err(headless) => return unfound(headless),
             };
-            match gathered::gather(Arc::clone(federation), arrived, patient, Scope::Lookup).await {
+            match gathered::gather(
+                Arc::clone(federation),
+                arrived,
+                patient,
+                (Scope::Lookup, false),
+            )
+            .await
+            {
                 Ok(gathered) => found(federation, &gathered, (patient, &header)),
                 // NOTE: FHIR R4 search, Federation Tier §11.3, Regulation (EU) 2025/327 Art 8: a patient
                 // no member holds matches nothing, and one no member may disclose answers alike.

@@ -73,7 +73,14 @@ pub(super) async fn summary_of(
             return response;
         }
     };
-    match gathered::gather(Arc::clone(federation), arrived, patient, Scope::Summary).await {
+    match gathered::gather(
+        Arc::clone(federation),
+        arrived,
+        patient,
+        (Scope::Summary, false),
+    )
+    .await
+    {
         Ok(gathered) => document(federation, fhir, &gathered, (patient, header), logged).await,
         Err(unsummarised) => refused(
             federation,

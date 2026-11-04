@@ -28,6 +28,7 @@ use std::time::Instant;
 use axum::body::Body;
 use axum::extract::Path;
 use axum::response::{IntoResponse, Response};
+use eehrxf::document::laboratory::LAB_BUNDLE;
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{Action, DataSubject};
@@ -63,6 +64,9 @@ const OPERATION: &str = "Binary";
 /// The category the list names documents of.
 const CATEGORY: &str = "Patient-Summaries";
 
+/// The category of a laboratory report the gateway writes.
+const LABORATORY: &str = "Laboratory-Reports";
+
 /// The claims of a token.
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -90,6 +94,10 @@ struct Claims {
     category: String,
     /// The profile it was asked in.
     profile: String,
+    /// The version of the member's laboratory composition the gateway
+    /// writes the document from, for a laboratory report; none for a
+    /// document the member serves itself.
+    composition: Option<String>,
 }
 
 /// Why a token is not taken; every reason answers alike.
@@ -118,6 +126,42 @@ pub(super) fn mint(
     caller: &Caller,
     chosen: &Chosen,
 ) -> Result<String, jsonwebtoken::errors::Error> {
+    signed(
+        (signer, fhir, caller),
+        (&chosen.native, chosen),
+        (CATEGORY, EPS_COMPOSITION, None),
+    )
+}
+
+/// Returns the token naming, for `caller`, the laboratory report the gateway
+/// writes from the composition of the version `composition` at the member
+/// `chosen`, signed by `signer` for the face `fhir`.
+///
+/// # Errors
+///
+/// The [`jsonwebtoken::errors::Error`] of a key that cannot sign.
+pub(super) fn mint_laboratory(
+    signer: &Signer,
+    fhir: &FhirSettings,
+    caller: &Caller,
+    (chosen, composition): (&Chosen, &str),
+) -> Result<String, jsonwebtoken::errors::Error> {
+    signed(
+        (signer, fhir, caller),
+        (&chosen.via, chosen),
+        (LABORATORY, LAB_BUNDLE, Some(composition)),
+    )
+}
+
+/// Returns the token, signed by `signer` for the face `fhir` and `caller`,
+/// naming the document at `endpoint` of the member `chosen`, of `category`
+/// in `profile`, written from the composition `composition` when it is one
+/// the gateway writes.
+fn signed(
+    (signer, fhir, caller): (&Signer, &FhirSettings, &Caller),
+    (endpoint, chosen): (&EndpointId, &Chosen),
+    (category, profile, composition): (&str, &str, Option<&str>),
+) -> Result<String, jsonwebtoken::errors::Error> {
     let iat = jiff::Timestamp::now().as_second();
     let lifetime = i64::try_from(fhir.document_url_lifetime.as_secs()).unwrap_or(i64::MAX);
     let claims = Claims {
@@ -128,11 +172,12 @@ pub(super) fn mint(
         jti: uuid::Uuid::new_v4().to_string(),
         sub: caller.subject().to_owned(),
         caller_iss: caller.issuer().to_owned(),
-        endpoint: chosen.native.as_str().to_owned(),
+        endpoint: endpoint.as_str().to_owned(),
         via: chosen.via.as_str().to_owned(),
         ehr_id: chosen.ehr_id.as_str().to_owned(),
-        category: CATEGORY.to_owned(),
-        profile: EPS_COMPOSITION.to_owned(),
+        category: category.to_owned(),
+        profile: profile.to_owned(),
+        composition: composition.map(str::to_owned),
     };
     signer.sign(TYPE, &claims)
 }
@@ -168,6 +213,21 @@ fn chosen(federation: &Federation, claims: &Claims) -> Result<Chosen, Untaken> {
     let native = EndpointId::new(claims.endpoint.as_str()).map_err(|_bad| Untaken::Unheld)?;
     let via = EndpointId::new(claims.via.as_str()).map_err(|_bad| Untaken::Unheld)?;
     let ehr_id = EhrId::new(claims.ehr_id.as_str()).map_err(|_bad| Untaken::Unheld)?;
+    if claims.composition.is_some() {
+        if claims.category != LABORATORY || claims.profile != LAB_BUNDLE || native != via {
+            return Err(Untaken::Unheld);
+        }
+        let node = snapshot
+            .endpoint(&via)
+            .map(|held| held.node().clone())
+            .ok_or(Untaken::Unheld)?;
+        return Ok(Chosen {
+            via,
+            node,
+            native,
+            ehr_id,
+        });
+    }
     let node = snapshot
         .native_endpoint(&native)
         .filter(|held| held.serves(CATEGORY))
@@ -214,9 +274,12 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
             Ok(member) => ControlFlow::Continue(member),
             Err(refused) => ControlFlow::Break(refused),
         },
-        async |admitted, arrived, member| {
+        async |admitted, arrived, (member, composition)| {
             let federation = &admitted.federation;
             let (request_id, outbound) = (admitted.request_id, admitted.outbound);
+            if let Some(composition) = composition {
+                return super::laboratory::read(admitted, &arrived, (&member, &composition)).await;
+            }
             // NOTE: §5.4.1, N33; the read names no patient, so the gate withholds nothing beyond
             // what it reads of every request, and the member is located by its ehr_id alone.
             let asked = native::asked(
@@ -249,7 +312,10 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
     clippy::result_large_err,
     reason = "the refusal is the handler's answer, returned at most once per request"
 )]
-fn taken(admitted: &admission::Admitted<'_>, token: &str) -> Result<Chosen, Response> {
+fn taken(
+    admitted: &admission::Admitted<'_>,
+    token: &str,
+) -> Result<(Chosen, Option<String>), Response> {
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
     let (request_id, logged) = (admitted.request_id, &admitted.logged);
     let Some(signer) = federation.signer() else {
@@ -259,7 +325,8 @@ fn taken(admitted: &admission::Admitted<'_>, token: &str) -> Result<Chosen, Resp
     if claims.sub != admitted.caller.subject() || claims.caller_iss != admitted.caller.issuer() {
         return Err(untaken(&Untaken::OtherCaller, logged));
     }
-    chosen(federation, &claims).map_err(|refused| untaken(&refused, logged))
+    let member = chosen(federation, &claims).map_err(|refused| untaken(&refused, logged))?;
+    Ok((member, claims.composition))
 }
 
 /// The answer to a read that asked `native`: the member's bytes as it sent

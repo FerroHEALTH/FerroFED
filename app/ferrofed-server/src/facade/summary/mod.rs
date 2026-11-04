@@ -22,6 +22,7 @@
 //! them fails the whole summary, naming it (§11.3, §11.4).
 
 pub(crate) mod access;
+mod laboratory;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -50,6 +51,7 @@ use tokio::task::JoinSet;
 
 use crate::facade::answer::{self, Failure};
 use crate::facade::located::{Located, located};
+use crate::facade::mapped::Answered;
 use crate::facade::native::{self, Native};
 use crate::facade::request::Arrived;
 use crate::facade::summary::access::queried;
@@ -74,7 +76,7 @@ type Rows = Arc<Mutex<BTreeMap<EndpointId, Vec<ResultSetRow>>>>;
 type Planned = (Section, Plan, Vec<ColumnSource>, Rows);
 
 /// One answered section query.
-type Answered = (Section, FederatedAnswer, Vec<ColumnSource>, Rows);
+type Ran = (Section, FederatedAnswer, Vec<ColumnSource>, Rows);
 
 /// One member endpoint the section queries were dispatched to, or that the
 /// resolver could not answer for, and what it showed.
@@ -121,6 +123,9 @@ pub(crate) struct Gathered {
     /// The Query API endpoint of each member the resolver could not answer
     /// for, in endpoint order.
     pub(crate) unresolved: Vec<EndpointId>,
+    /// What each member answered the laboratory report query, for a list
+    /// that lists laboratory reports, in endpoint order.
+    pub(crate) laboratory: Vec<(EndpointId, Answered)>,
 }
 
 /// Why the section queries give no summary.
@@ -198,15 +203,21 @@ pub(crate) async fn gather(
     federation: Arc<Federation>,
     arrived: Arrived<'_>,
     (system, value): (&str, &str),
-    scope: Scope,
+    (scope, laboratory): (Scope, bool),
 ) -> Result<Gathered, Unsummarised> {
     let logged = arrived.outbound.to_string();
+    let held = located(&federation, &arrived, (system, value)).await?;
+    let laboratory = if laboratory && scope == Scope::List {
+        laboratory::laboratory_reports(&federation, &arrived, &held, (system, value)).await?
+    } else {
+        Vec::new()
+    };
     let Located {
         completion,
         mut targets,
         analyses,
         disclosed,
-    } = located(&federation, &arrived, (system, value)).await?;
+    } = held;
     let dispatched = targets.plan.dispatched().next().is_some();
     // NOTE: § The four identifiers, N33: a member asked at its own exchange-format endpoint by
     // its ehr_id is asked no section query, so its data are never in the mapped document too.
@@ -267,6 +278,7 @@ pub(crate) async fn gather(
     // design; a list asks no section query, so its failed resolution is settled here.
     let status = answer::fan_out::settled(status, targets.resolution_failed, completion);
     let status = native::settled(&natives, status, completion);
+    let status = laboratory::laboratory_settled(&laboratory, status, completion);
     let mut gathered = collected(
         &federation,
         (&targets.resolved, &targets.unresolved),
@@ -281,6 +293,15 @@ pub(crate) async fn gather(
         }
     }
     gathered.natives = natives;
+    for (endpoint, answered) in &laboratory {
+        if matches!(
+            answered,
+            Answered::Rows(_) | Answered::Silent { left: true, .. }
+        ) {
+            gathered.sent.insert(endpoint.clone());
+        }
+    }
+    gathered.laboratory = laboratory;
     concluded(gathered, status, (scope, dispatched))
 }
 
@@ -308,6 +329,13 @@ fn concluded(
             .filter(|(_, status)| *status != EndpointStatus::Active)
             .map(|(endpoint, status)| (endpoint.as_str().to_owned(), status.as_str().to_owned()))
             .collect();
+        for (endpoint, answered) in &gathered.laboratory {
+            if let Answered::Silent { status, .. } = answered
+                && !silent.iter().any(|(named, _)| named == endpoint.as_str())
+            {
+                silent.push((endpoint.as_str().to_owned(), status.as_str().to_owned()));
+            }
+        }
         for endpoint in &gathered.unresolved {
             if !silent.iter().any(|(named, _)| named == endpoint.as_str()) {
                 silent.push((
@@ -349,7 +377,7 @@ async fn fanned_out(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
     planned: Vec<Planned>,
-) -> Result<Vec<Answered>, Failure> {
+) -> Result<Vec<Ran>, Failure> {
     let budget = federation.budget();
     let mut tasks = JoinSet::new();
     let mut kept = BTreeMap::new();
@@ -423,7 +451,7 @@ fn unresolved_into(
 fn collected(
     federation: &Federation,
     (resolved, unresolved): (&[(NodeId, EhrId)], &[EndpointId]),
-    answers: &[Answered],
+    answers: &[Ran],
     analyses: &[(Section, Analysis)],
 ) -> Result<Gathered, Unsummarised> {
     let snapshot = federation.snapshot();
@@ -483,6 +511,7 @@ fn collected(
         set_aside: BTreeSet::new(),
         natives: Vec::new(),
         unresolved: Vec::new(),
+        laboratory: Vec::new(),
     };
     for (section, answer, sources, rows) in answers {
         let held = rows.lock().unwrap_or_else(PoisonError::into_inner).clone();

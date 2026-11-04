@@ -86,11 +86,14 @@ pub(crate) async fn asked(
     if members.is_empty() {
         return Ok(Vec::new());
     }
+    let name = Medication::Orders
+        .name()
+        .map_err(|_unnamed| Unprescribed::Internal("a medication query has no qualified name"))?;
     let queried = queried(
         federation,
         arrived,
         located,
-        (patient, Medication::Orders),
+        (patient, (name.as_str(), Medication::Orders.aql())),
         &members,
     )
     .await?;
@@ -131,7 +134,7 @@ pub(crate) enum Answered {
     },
 }
 
-/// Runs the reserved medication query `query` for the patient `patient`
+/// Runs the reserved query `name`, of the text `aql`, for the patient `patient`
 /// over the members `members`, Query API endpoints the plan of `located`
 /// dispatches to, as `arrived` asks, and returns what each answered, in
 /// endpoint order.
@@ -143,19 +146,16 @@ pub(crate) async fn queried(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
     located: &Located,
-    (patient, query): ((&str, &str), Medication),
+    (patient, (name, aql)): ((&str, &str), (&str, String)),
     members: &BTreeSet<EndpointId>,
 ) -> Result<Vec<(EndpointId, Answered)>, Unprescribed> {
     let snapshot = federation.snapshot();
     let logged = arrived.outbound.to_string();
-    let name = query
-        .name()
-        .map_err(|_unnamed| Unprescribed::Internal("a medication query has no qualified name"))?;
     let analysis = located::stored(
         federation,
         located.completion,
         patient,
-        (name.as_str(), query.aql(), &logged),
+        (name, aql, &logged),
     )?;
     let (plan, sources) = plan::retarget(snapshot, &located.targets, patient_query(&analysis)?)
         .map_err(|failure| Unprescribed::Failure(Failure::Plan(failure)))?;
@@ -329,26 +329,74 @@ pub(crate) async fn read(
     arrived: &Arrived<'_>,
     (chosen, mode, namespaces): (&Chosen, &MapMode, &[IdentifierNamespace]),
     (composition, entry, now): (&str, u8, &str),
-) -> Result<Fetched, FanOutError> {
+) -> Result<Fetched, Failure> {
     let budget = federation.budget();
     let overall = arrived
         .started
         .checked_add(budget.overall())
-        .ok_or(FanOutError::Clock)?;
+        .ok_or(Failure::FanOut(FanOutError::Clock))?;
     let per_node = Instant::now()
         .checked_add(budget.per_node())
         .map_or(overall, |at| at.min(overall));
     let Some(patient) = named(federation, arrived, chosen, (namespaces, per_node)).await else {
         return Ok(Fetched::Unnamed);
     };
+    let body = match composition_at(federation, arrived, chosen, (composition, per_node)).await? {
+        Composition::Body(body) => body,
+        Composition::Absent => return Ok(Fetched::Held(Held::Found(Vec::new()))),
+        Composition::Silent { status, left } => {
+            return Ok(Fetched::Held(Held::Unanswered { status, left }));
+        }
+    };
+    let snapshot = federation.snapshot();
+    let Some(system_id) = snapshot.node(&chosen.node).map(Node::system_id) else {
+        return Ok(Fetched::Held(Held::Found(Vec::new())));
+    };
+    Ok(Fetched::Held(picked(
+        &body,
+        (mode, system_id),
+        (&patient, composition, entry, now),
+    )))
+}
+
+/// What a member answered the read of one composition.
+#[derive(Debug)]
+pub(crate) enum Composition {
+    /// The composition, as the member sent it.
+    Body(Vec<u8>),
+    /// The member holds no such composition for the `ehr_id`.
+    Absent,
+    /// No answer the read can take, with the member's §11.1 status and
+    /// whether a request left the gateway for it.
+    Silent {
+        /// Its §11.1 status.
+        status: EndpointStatus,
+        /// Whether a request left the gateway for it.
+        left: bool,
+    },
+}
+
+/// Reads the composition of the versioned object or version `uid` at the
+/// member `chosen`, by its own `ehr_id` alone, by the deadline `deadline`
+/// (ITS-REST 1.1.0 EHR API, `GET /ehr/{ehr_id}/composition/{uid_based_id}`).
+///
+/// # Errors
+///
+/// [`Failure::FanOut`] when the member has no client.
+pub(crate) async fn composition_at(
+    federation: &Federation,
+    arrived: &Arrived<'_>,
+    chosen: &Chosen,
+    (uid, deadline): (&str, Instant),
+) -> Result<Composition, Failure> {
     let Some(client) = federation.clients().get(&chosen.via) else {
-        return Err(FanOutError::UnknownEndpoint {
+        return Err(Failure::FanOut(FanOutError::UnknownEndpoint {
             endpoint: chosen.via.clone(),
-        });
+        }));
     };
     // NOTE: §5.4.1, N33; the read names no patient, so the gate withholds nothing beyond what
     // it reads of every request, and the member is located by its ehr_id alone.
-    let options = DispatchOptions::new(per_node, arrived.conveyance.clone())
+    let options = DispatchOptions::new(deadline, arrived.conveyance.clone())
         .with_request_id(arrived.outbound)
         .with_withheld(Arc::new(Withheld::default()));
     let mut headers = HeaderMap::new();
@@ -358,7 +406,7 @@ pub(crate) async fn read(
         path: format!(
             "/ehr/{}/composition/{}",
             path_segment(&chosen.ehr_id.as_str()),
-            path_segment(&composition)
+            path_segment(&uid)
         ),
         query: None,
         headers,
@@ -367,31 +415,20 @@ pub(crate) async fn read(
     let answer = match client.forward(request, &options).await {
         Ok(answer) => answer,
         Err(failure) => {
-            let left = Contact::of_forward_error(&failure).left();
-            return Ok(Fetched::Held(Held::Unanswered {
+            return Ok(Composition::Silent {
                 status: unanswered(&failure),
-                left,
-            }));
+                left: Contact::of_forward_error(&failure).left(),
+            });
         }
     };
-    if answer.status() == StatusCode::NOT_FOUND {
-        return Ok(Fetched::Held(Held::Found(Vec::new())));
-    }
-    if answer.status() != StatusCode::OK {
-        return Ok(Fetched::Held(Held::Unanswered {
+    Ok(match answer.status() {
+        StatusCode::OK => Composition::Body(answer.body().to_vec()),
+        StatusCode::NOT_FOUND => Composition::Absent,
+        _ => Composition::Silent {
             status: EndpointStatus::NodeError,
             left: true,
-        }));
-    }
-    let snapshot = federation.snapshot();
-    let Some(system_id) = snapshot.node(&chosen.node).map(Node::system_id) else {
-        return Ok(Fetched::Held(Held::Found(Vec::new())));
-    };
-    Ok(Fetched::Held(picked(
-        answer.body(),
-        (mode, system_id),
-        (&patient, composition, entry, now),
-    )))
+        },
+    })
 }
 
 /// The page of the one prescription at `entry` the composition `body`
@@ -461,7 +498,7 @@ fn unanswered(failure: &ForwardError) -> EndpointStatus {
 /// The patient behind `chosen`'s `ehr_id`, as the identity binding names
 /// it in the first of `namespaces` it holds an identifier in, by the
 /// deadline `deadline`.
-async fn named(
+pub(crate) async fn named(
     federation: &Federation,
     arrived: &Arrived<'_>,
     chosen: &Chosen,

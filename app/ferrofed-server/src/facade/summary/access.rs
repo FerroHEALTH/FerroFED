@@ -20,6 +20,7 @@ use secrecy::SecretString;
 
 use super::{Gathered, LIST, LOOKUP, OPERATION, Scope};
 use crate::access::{Accessed, Asked};
+use crate::facade::mapped::Answered;
 use crate::facade::native::{self};
 use crate::federation::Federation;
 
@@ -74,6 +75,13 @@ pub(crate) fn accessed(
         Scope::Summary => Evidence::reached(Basis::Returned, objects)
             .queried(gathered.queried.clone())
             .constructed(Category::PatientSummary),
+        // NOTE: Regulation (EU) 2025/327 Art 14(1)(e): a list that asked the laboratory report
+        // query reaches that category too.
+        Scope::List if !gathered.laboratory.is_empty() => {
+            Evidence::reached(Basis::Returned, objects)
+                .constructed(Category::PatientSummary)
+                .constructed(Category::MedicalTestResult)
+        }
         Scope::List => {
             Evidence::reached(Basis::Returned, objects).constructed(Category::PatientSummary)
         }
@@ -111,6 +119,7 @@ pub(crate) fn accessed(
         &gathered.natives,
         natives_delivered,
     ));
+    origins.extend(laboratory_origins(federation.snapshot(), gathered));
     if listed {
         origins.extend(resolved_origins(federation.snapshot(), gathered));
     }
@@ -155,6 +164,39 @@ pub(crate) fn accessed(
         inserted: None,
         transformations: Vec::new(),
     })
+}
+
+/// Each member a list asked the laboratory report query of, with what it
+/// answered: an origin that contributed when it holds a laboratory report.
+fn laboratory_origins(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<Asked> {
+    gathered
+        .laboratory
+        .iter()
+        .filter_map(|(endpoint, answered)| {
+            let (status, rows) = match answered {
+                Answered::Rows(held) => (EndpointStatus::Active, held.len()),
+                Answered::Silent { status, left: true } => (*status, 0),
+                Answered::Silent { .. } => return None,
+            };
+            let node = node_of(snapshot, endpoint)?;
+            Some(Asked {
+                endpoint: endpoint.as_str().to_owned(),
+                node: Some(node.as_str().to_owned()),
+                system_id: snapshot
+                    .node(&node)
+                    .map(|held| held.system_id().as_str().to_owned()),
+                status: status.as_str().to_owned(),
+                rows: Some(rows),
+                version: None,
+                created_ehr: None,
+                contributed: rows > 0,
+                evidence: (rows > 0).then(|| {
+                    Evidence::reached(Basis::Returned, Vec::new())
+                        .constructed(Category::MedicalTestResult)
+                }),
+            })
+        })
+        .collect()
 }
 
 /// The members a list's patient resolved at that no request of the list left
