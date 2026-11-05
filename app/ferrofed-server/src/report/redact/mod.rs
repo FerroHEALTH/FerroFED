@@ -249,7 +249,7 @@ endpoint = "https://collector-user:collector-pass@otel.example.org:4317/CANARY-P
 
 [stored_queries]
 backend = "postgres"
-url = "postgres://db-user:db-pass_example@db.example.org:5432/ferrofed?sslpassword=QUERY-SECRET-2"
+url = "{DATABASE_URL}"
 
 [auth]
 audience = ["CANARY-AUDIENCE"]
@@ -296,6 +296,20 @@ member = "node-a"
 count = 7
 "#;
 
+    /// The synthetic database password the fixture's connection string
+    /// carries, written into it at run time so no source line holds a
+    /// password inside a URL.
+    const DATABASE_PASSWORD: &str = "synthetic-db-pw-3m7";
+
+    /// [`CONFIGURATION`] with its connection string, which carries
+    /// [`DATABASE_PASSWORD`].
+    fn configuration() -> toml::Table {
+        let url = format!(
+            "postgres://db-user:{DATABASE_PASSWORD}@db.example.org:5432/ferrofed?sslpassword=QUERY-SECRET-2"
+        );
+        toml::from_str(&CONFIGURATION.replace("{DATABASE_URL}", &url)).expect("the fixture parses")
+    }
+
     /// Every canary [`CONFIGURATION`] holds.
     const CANARIES: &[&str] = &[
         "collector-user",
@@ -303,7 +317,7 @@ count = 7
         "CANARY",
         "QUERY-SECRET",
         "db-user",
-        "db-pass",
+        DATABASE_PASSWORD,
         "pix-user",
         "pix-pass",
         "2.999.4242",
@@ -325,7 +339,7 @@ count = 7
 
     #[test]
     fn every_canary_value_and_key_is_redacted() {
-        let tree: toml::Table = toml::from_str(CONFIGURATION).expect("the fixture parses");
+        let tree = configuration();
         let written =
             toml::to_string(&redact(&tree, Keys::Settings)).expect("the redacted tree writes");
         for canary in CANARIES {
@@ -345,8 +359,25 @@ count = 7
     }
 
     #[test]
+    fn the_database_password_is_in_the_fixture_and_never_in_the_output() {
+        let tree = configuration();
+        let url = tree["stored_queries"]["url"].as_str().expect("a string");
+        assert!(
+            url.contains(DATABASE_PASSWORD),
+            "the fixture carries it: {url}"
+        );
+        let written =
+            toml::to_string(&redact(&tree, Keys::Settings)).expect("the redacted tree writes");
+        assert!(!written.contains(DATABASE_PASSWORD), "{written}");
+        assert!(
+            written.contains("postgres://***@db.example.org:5432/***?***"),
+            "{written}"
+        );
+    }
+
+    #[test]
     fn the_shape_and_the_safe_values_stay() {
-        let tree: toml::Table = toml::from_str(CONFIGURATION).expect("the fixture parses");
+        let tree = configuration();
         let redacted = redact(&tree, Keys::Settings);
         assert_eq!("development", redacted["profile"].as_str().expect("kept"));
         assert_eq!(
