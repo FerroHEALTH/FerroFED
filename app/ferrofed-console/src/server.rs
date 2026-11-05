@@ -407,10 +407,10 @@ fn same_origin_check(settings: &Settings) -> SameOrigin {
     match origin {
         // NOTE: no specification governs this: our own design; an origin that is
         // opaque names none, which refuses every unsafe request lacking fetch metadata.
-        Some(origin) => SameOrigin::new()
+        Some(origin) => SameOrigin::default()
             .with_origin(&origin)
-            .unwrap_or_else(|_opaque| SameOrigin::new()),
-        None => SameOrigin::new(),
+            .unwrap_or_else(|_opaque| SameOrigin::default()),
+        None => SameOrigin::default(),
     }
 }
 
