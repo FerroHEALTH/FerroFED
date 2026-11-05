@@ -12,15 +12,18 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - RFC 6749: <https://www.rfc-editor.org/rfc/rfc6749.txt>, sha256 `f204fc8661d6c92d2ec6e0b54808f961a9ad26e792f57f312d9528335519bd71`
 - RFC 7519: <https://www.rfc-editor.org/rfc/rfc7519.txt>, sha256 `fecd930e9ccf2276b95c0017c6c4ff5d09352e4bc3c7629946447894e0f97248`
 - RFC 7521: <https://www.rfc-editor.org/rfc/rfc7521.txt>, sha256 `d5d97b3e691c9bbc495c277cc2cd79316b82486991468fc346a96ab59ba4b3c8`
+- RFC 7522: <https://www.rfc-editor.org/rfc/rfc7522.txt>, sha256 `87656a015c74b2cce4ed74fdf785ea2cf824e8d13cc53860d40fac3e57569afd`
 - RFC 7523: <https://www.rfc-editor.org/rfc/rfc7523.txt>, sha256 `ae24f77a8fc4338903c805c6ace38def1f23d40194aea87b123b13c5b3d2d915`
 - RFC 7662: <https://www.rfc-editor.org/rfc/rfc7662.txt>, sha256 `2b7d688cb849f093e860557ac97e6cddac2556d69a4386561b22cdf97bf13657`
 - RFC 8414: <https://www.rfc-editor.org/rfc/rfc8414.txt>, sha256 `16c816e4e0fdbffb7e910ff3017867bf39debe9cb7f52f5cbc508a052ed660e8`
 - RFC 8693: <https://www.rfc-editor.org/rfc/rfc8693.txt>, sha256 `358d658014738bf4dc56c8aae2094ce716ede23b6d5a80488a7dc8e8d72da609`
 - RFC 8705: <https://www.rfc-editor.org/rfc/rfc8705.txt>, sha256 `6e45a1ee94c6a6a177a4cb077fe67d74bd70c1218c9362f2db2f153239612414`
+- RFC 8707: <https://www.rfc-editor.org/rfc/rfc8707.txt>, sha256 `3b89844a938b9219571931b664ed4a7b380555a4dda1df4e9445a2f72188e76b`
+- RFC 9068: <https://www.rfc-editor.org/rfc/rfc9068.txt>, sha256 `68d3ff3910c0f2340fd7b93b430e00053da845b6eebe095ebef0c8bfda5e14c5`
 - RFC 9126: <https://www.rfc-editor.org/rfc/rfc9126.txt>, sha256 `a79d0e30fcc24a22b79c8e18aa82362f6e63a7b8a5d58b480e746360e97388db`
 - RFC 9396: <https://www.rfc-editor.org/rfc/rfc9396.txt>, sha256 `d6a8f032d8a585daae1c33a8c7b6e539d199f886ec8cc1c7898436f7f2eed29c`
 - RFC 9449: <https://www.rfc-editor.org/rfc/rfc9449.txt>, sha256 `3842c58e1f6043389416023b9bb8d765048266024982fbbd90640e05943f4e13`
-- Fetched: 2026-10-20
+- Fetched: 2026-11-05
 - Upstream licence: each RFC carries the notice "This document is subject to BCP 78 and the IETF Trust's Legal
   Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info)
   in effect on the date of publication of this document". The IETF Trust
@@ -30,10 +33,10 @@ change the pins in docs/VERSIONS.md and re-run the script.
   and IETF Documents in full and without modification". The files are those
   documents, in full and unmodified.
 - Layout: `rfc<number>.txt`, the RFC Editor's file name
-- Files: 11
+- Files: 14
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `36413b343e1f4e81e08bfea0ff643480c8503ad646f6a3c9fad50b93f32220d6`
-- Read by: the onward grants, the DPoP checks and the caller conveyance of `app/ferrofed-engine`, and the client authentication of `app/ferrofed-server`, which cite these RFCs. Earlier, #551 (the authorization server metadata of RFC 8414 in
+  `PROVENANCE.md` excluded): `a97dc671eced5643fa53be34e2dcc24a8d5e277d95fef2706bee337bd2c8a6dd`
+- Read by: #1615 (RFC 8707 and 9068 in the onward exchange) and #1620 (RFC 7522, ruled out for the cross-border route), the onward grants, the DPoP checks and the caller conveyance of `app/ferrofed-engine`, and the client authentication of `app/ferrofed-server`, which cite these RFCs. Earlier, #551 (the authorization server metadata of RFC 8414 in
   `crates/oauth-server-metadata`, which the Nuts grant of #88 and the
   FAPI 2.0 grant of #497 hold their metadata to), #88 (the access token
   request of `nl-generic-functions` feature `nuts-auth`: the DPoP
@@ -49,7 +52,10 @@ cite (6749, 7523, 7662, 9449), the ones Nuts RFC021 builds its grant on
 (7519, 7521, 8414), and the two the BgZ/eOverdracht track of Annex B §B.4a
 adds (9126, 9396), and RFC 8705, which the onward grants authenticate and
 bind their tokens with when a deployment uses mutual TLS, and RFC 8693,
-whose `act` claim names the party a token's subject delegated to. The other RFCs
+whose `act` claim names the party a token's subject delegated to, and,
+for the onward and cross-border designs of #1615 and #1620, RFC 8707
+(the `resource` parameter), RFC 9068 (the JWT access token claims) and
+RFC 7522 (the SAML 2.0 bearer grant, cited as not applying). The other RFCs
 the OAuth family references are cited, not taken.
 
 | File | sha256 |
@@ -57,11 +63,14 @@ the OAuth family references are cited, not taken.
 | `rfc6749.txt` | `f204fc8661d6c92d2ec6e0b54808f961a9ad26e792f57f312d9528335519bd71` |
 | `rfc7519.txt` | `fecd930e9ccf2276b95c0017c6c4ff5d09352e4bc3c7629946447894e0f97248` |
 | `rfc7521.txt` | `d5d97b3e691c9bbc495c277cc2cd79316b82486991468fc346a96ab59ba4b3c8` |
+| `rfc7522.txt` | `87656a015c74b2cce4ed74fdf785ea2cf824e8d13cc53860d40fac3e57569afd` |
 | `rfc7523.txt` | `ae24f77a8fc4338903c805c6ace38def1f23d40194aea87b123b13c5b3d2d915` |
 | `rfc7662.txt` | `2b7d688cb849f093e860557ac97e6cddac2556d69a4386561b22cdf97bf13657` |
 | `rfc8414.txt` | `16c816e4e0fdbffb7e910ff3017867bf39debe9cb7f52f5cbc508a052ed660e8` |
 | `rfc8693.txt` | `358d658014738bf4dc56c8aae2094ce716ede23b6d5a80488a7dc8e8d72da609` |
 | `rfc8705.txt` | `6e45a1ee94c6a6a177a4cb077fe67d74bd70c1218c9362f2db2f153239612414` |
+| `rfc8707.txt` | `3b89844a938b9219571931b664ed4a7b380555a4dda1df4e9445a2f72188e76b` |
+| `rfc9068.txt` | `68d3ff3910c0f2340fd7b93b430e00053da845b6eebe095ebef0c8bfda5e14c5` |
 | `rfc9126.txt` | `a79d0e30fcc24a22b79c8e18aa82362f6e63a7b8a5d58b480e746360e97388db` |
 | `rfc9396.txt` | `d6a8f032d8a585daae1c33a8c7b6e539d199f886ec8cc1c7898436f7f2eed29c` |
 | `rfc9449.txt` | `3842c58e1f6043389416023b9bb8d765048266024982fbbd90640e05943f4e13` |

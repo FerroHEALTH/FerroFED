@@ -286,9 +286,15 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
 - `docs/specs/nuts-rfc/`: Nuts RFC003, RFC021 and RFC022 (CC BY-SA 4.0,
   stated in each document), pinned by commit: the authorization server, the
   VP Token Grant Type and the Discovery Service of the Annex B §B.4 track.
-- `docs/specs/ietf-oauth/`: RFC 6749, 7519, 7521, 7523, 7662, 8414, 8693, 8705,
-  9126, 9396 and 9449 as the RFC Editor publishes them (IETF Trust Legal Provisions
-  §3.c, in full and unmodified), each pinned by URL and sha256.
+- `docs/specs/ietf-oauth/`: RFC 6749, 7519, 7521, 7522, 7523, 7662, 8414,
+  8693, 8705, 8707, 9068, 9126, 9396 and 9449 as the RFC Editor publishes
+  them (IETF Trust Legal Provisions §3.c, in full and unmodified), each
+  pinned by URL and sha256.
+- `docs/specs/keycloak/`: the Keycloak token exchange guide at tag
+  `26.8.2`, its source `token-exchange.adoc` with the `features.adoc`
+  template that renders its preview notes, and the repository's
+  `LICENSE.txt` (Apache-2.0), each pinned by URL and sha256
+  (`scripts/vendor/keycloak.sh`), read by the onward exchange of #1615.
 - `docs/specs/w3c-did-vc/`: VC Data Model 1.1, DID 1.0, DID Resolution and
   Bitstring Status List 1.0 (W3C Software and Document License), each pinned
   by its dated URL and sha256, and the did:web method report, pinned by
