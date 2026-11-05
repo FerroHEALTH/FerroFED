@@ -79,6 +79,9 @@
 //!   takes ITI-94 subscriptions and sends ITI-93 messages to them (#147);
 //! - [`tls`]: a mutual-TLS front that puts any harness server behind
 //!   `https` with client authentication (#507);
+//! - [`revocation`]: that front over a CA chain whose server certificate
+//!   names a CRL or an OCSP responder the harness serves, good or revoked
+//!   (#1623);
 //! - [`unreachable`](mod@unreachable): a base URL no connection can
 //!   reach, the unreachable node of a test;
 //! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone,
@@ -122,6 +125,7 @@ pub mod pki;
 pub mod pmir;
 pub mod proxy;
 pub mod reference;
+pub mod revocation;
 pub mod seed;
 pub mod tls;
 pub mod unreachable;

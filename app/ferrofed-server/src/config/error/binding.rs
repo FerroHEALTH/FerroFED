@@ -24,6 +24,26 @@ pub enum BindingFault {
     )]
     #[cfg(feature = "binding-ihe")]
     AuditRepositoryUnused,
+    /// A fixed XUA assertion is configured beside a gateway marked as a
+    /// MyHealth@EU route.
+    #[error(
+        "{gateway} is a MyHealth@EU route, which a fixed assertion never serves: remove xcpd.assertion and xcpd.assertion_file (eHDSI Messaging Profile 10.0.0 §1.5 admits no alternative binding, and SAML Profile 10.0.0 §2.1 bounds the identity assertion to 4 hours)"
+    )]
+    #[cfg(feature = "binding-ihe")]
+    FixedAssertionOnMyHealthEu {
+        /// The marked gateway's key, `xcpd.gateway[<index>]`.
+        gateway: String,
+    },
+    /// A gateway marked as a MyHealth@EU route lacks what an eHDSI link
+    /// needs.
+    #[error("{gateway} is a MyHealth@EU route, an eHDSI link, and {needs}")]
+    #[cfg(feature = "binding-ihe")]
+    MyHealthEuLink {
+        /// The marked gateway's key, `xcpd.gateway[<index>]`.
+        gateway: String,
+        /// What it lacks.
+        needs: MyHealthEuNeed,
+    },
     /// `nl_gf.nvi.namespaces` lists a BSN system as standing for the
     /// pseudonymised BSN, which would send a BSN to the NVI.
     #[error(
@@ -130,4 +150,27 @@ pub enum BindingFault {
         /// The overall fan-out budget.
         overall_ms: u64,
     },
+}
+
+/// What an eHDSI link needs that a gateway marked as a MyHealth@EU route
+/// lacks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+#[cfg(feature = "binding-ihe")]
+pub enum MyHealthEuNeed {
+    /// An `https` URL, whatever the profile.
+    #[error(
+        "needs an https url in every profile (eHDSI Section II Security Services 10.0.0 §5.9.1)"
+    )]
+    Https,
+    /// A client certificate for mutual TLS.
+    #[error(
+        "needs xcpd.client_identity_file for mutual TLS (eHDSI Section II Security Services 10.0.0 §5.9.2)"
+    )]
+    ClientIdentity,
+    /// The trust roots of the eHDSI PKI.
+    #[error(
+        "needs xcpd.trust_roots_file, the eHDSI PKI or national CA the link alone trusts (eHDSI Section II Security Services 10.0.0 §5.9.2)"
+    )]
+    TrustRoots,
 }

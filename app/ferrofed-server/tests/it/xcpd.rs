@@ -55,12 +55,12 @@ const EHR_IDS: [&str; 3] = [
 ];
 
 /// The community each member serves, in [`MEMBERS`] order.
-const COMMUNITIES: [&str; 3] = ["2.999.50", "2.999.60", "2.999.70"];
+pub(crate) const COMMUNITIES: [&str; 3] = ["2.999.50", "2.999.60", "2.999.70"];
 
 /// The registry document and the configuration text of a gateway over the
 /// members at `urls`, localized by `[xcpd]` over `gateways`, under
 /// `profile`.
-fn config(
+pub(crate) fn config(
     dir: &Path,
     urls: [&str; 3],
     gateways: &[String],
@@ -106,7 +106,7 @@ fn config(
 }
 
 /// The router over the federation `text` loads.
-fn gateway(text: &str) -> Result<Router, Box<dyn Error>> {
+pub(crate) fn gateway(text: &str) -> Result<Router, Box<dyn Error>> {
     let settings =
         Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
@@ -117,13 +117,15 @@ fn gateway(text: &str) -> Result<Router, Box<dyn Error>> {
 }
 
 /// The federation `text` loads, or why it does not.
-fn load(text: &str) -> Result<Result<Option<Federation>, FederationError>, Box<dyn Error>> {
+pub(crate) fn load(
+    text: &str,
+) -> Result<Result<Option<Federation>, FederationError>, Box<dyn Error>> {
     let settings =
         Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve()?;
     Ok(Federation::load(&settings))
 }
 
-async fn members() -> [Server; 3] {
+pub(crate) async fn members() -> [Server; 3] {
     [
         node_answering("a-uid::node-a.example.org::1").await,
         node_answering("b-uid::node-b.example.org::1").await,
@@ -131,11 +133,11 @@ async fn members() -> [Server; 3] {
     ]
 }
 
-fn urls(servers: &[Server; 3]) -> [String; 3] {
+pub(crate) fn urls(servers: &[Server; 3]) -> [String; 3] {
     [servers[0].uri(), servers[1].uri(), servers[2].uri()]
 }
 
-async fn asked_counts(servers: &[Server; 3]) -> Result<[usize; 3], Box<dyn Error>> {
+pub(crate) async fn asked_counts(servers: &[Server; 3]) -> Result<[usize; 3], Box<dyn Error>> {
     Ok([
         received(&servers[0]).await?.len(),
         received(&servers[1]).await?.len(),

@@ -137,3 +137,5 @@ mod usage_report;
 mod versioned_write;
 #[cfg(feature = "binding-ihe")]
 mod xcpd;
+#[cfg(feature = "binding-ihe")]
+mod xcpd_ehdsi;

@@ -26,6 +26,15 @@
 //! the XUA assertion (ITI TF-1 §27.4.1), so it is held to the
 //! protected-payload policy of [`transport`]. No specification governs the
 //! shape of the table: our own design.
+//!
+//! A gateway marked `myhealth_eu = true` is a MyHealth@EU route, an eHDSI
+//! link. It is `https` in every profile, needs `client_identity_file` and
+//! `trust_roots_file` (Section II Security Services 10.0.0 §5.9.1 and
+//! §5.9.2), and has its certificate chain checked for revocation before each
+//! discovery (X.509 Certificates Profile 7.0.0 §3.2). A fixed `assertion`
+//! never serves it: Messaging Profile 10.0.0 §1.5 admits no alternative
+//! binding, and SAML Profile 10.0.0 §2.1 bounds the identity assertion to 4
+//! hours, `sender-vouches`.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -38,7 +47,7 @@ use serde::Deserialize;
 
 use crate::config::audit::AuditDestination;
 use crate::config::error::Error;
-use crate::config::error::binding::BindingFault;
+use crate::config::error::binding::{BindingFault, MyHealthEuNeed};
 use crate::config::ihe::audit_repository::{AuditRepository, AuditRepositorySettings};
 use crate::config::{Config, transport};
 use ferrohealth_secret::file::read_secret;
@@ -93,6 +102,11 @@ pub struct XcpdGateway {
     pub device: String,
     /// The one community to ask for, when the gateway serves several.
     pub community: Option<String>,
+    /// Whether the gateway is a MyHealth@EU route: an eHDSI link that
+    /// checks the gateway's certificate chain for revocation before each
+    /// discovery (eHDSI X.509 Certificates Profile 7.0.0 §3.2), and that no
+    /// fixed assertion serves. Off by default.
+    pub myhealth_eu: bool,
 }
 
 /// The XCPD localizer, with every secret and file read.
@@ -145,8 +159,11 @@ impl fmt::Debug for XcpdSettings {
 /// [`Error::Url`]
 /// for a gateway URL that does not parse, [`Error::Cleartext`] for a gateway
 /// URL that is not `https` outside the development profile,
-/// [`BindingFault::AuditOff`] for `audit = "off"` outside it, and the errors of a
-/// secret or a file that cannot be read.
+/// [`BindingFault::AuditOff`] for `audit = "off"` outside it,
+/// [`BindingFault::FixedAssertionOnMyHealthEu`] and
+/// [`BindingFault::MyHealthEuLink`] for a MyHealth@EU gateway a fixed
+/// assertion would serve or that lacks what an eHDSI link needs, and the
+/// errors of a secret or a file that cannot be read.
 pub(crate) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
     let Some(xcpd) = &config.xcpd else {
         return Ok(None);
@@ -189,6 +206,9 @@ pub(crate) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
             gateway.url.expose(),
             transport::identity_site(&key, carried),
         )?;
+        if gateway.myhealth_eu {
+            myhealth_eu(xcpd, gateway, &key)?;
+        }
     }
     let assertion = read_secret(
         "xcpd.assertion",
@@ -224,6 +244,34 @@ pub(crate) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         audit,
         audit_repository,
     }))
+}
+
+/// Refuses `gateway`, the MyHealth@EU gateway at `key` of `xcpd`, when a
+/// fixed assertion would serve it or it lacks what an eHDSI link needs.
+fn myhealth_eu(xcpd: &Xcpd, gateway: &XcpdGateway, key: &str) -> Result<(), Error> {
+    let refused = |needs| {
+        Err(Error::Binding(BindingFault::MyHealthEuLink {
+            gateway: key.to_owned(),
+            needs,
+        }))
+    };
+    if xcpd.assertion.is_some() || xcpd.assertion_file.is_some() {
+        return Err(Error::Binding(BindingFault::FixedAssertionOnMyHealthEu {
+            gateway: key.to_owned(),
+        }));
+    }
+    // NOTE: Section II Security Services 10.0.0 §5.9.1 and §5.9.2: an NCP link is TLS
+    // with mutual authentication under the eHDSI PKI, in development as anywhere.
+    if !url::Url::parse(gateway.url.expose()).is_ok_and(|url| url.scheme() == "https") {
+        return refused(MyHealthEuNeed::Https);
+    }
+    if xcpd.client_identity.is_none() && xcpd.client_identity_file.is_none() {
+        return refused(MyHealthEuNeed::ClientIdentity);
+    }
+    if xcpd.trust_roots_file.is_none() {
+        return refused(MyHealthEuNeed::TrustRoots);
+    }
+    Ok(())
 }
 
 /// Where `xcpd`'s audit messages go under `profile`, with the repository

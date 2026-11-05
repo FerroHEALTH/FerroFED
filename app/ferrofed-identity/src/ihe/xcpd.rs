@@ -23,6 +23,12 @@
 //! The patient identifier reaches the responding gateways only, which is the
 //! transaction's purpose, inside `ihe_iti`'s redacting types; nothing here
 //! logs it, and no error carries it.
+//!
+//! A gateway marked as a MyHealth@EU route is an eHDSI link: it is reached
+//! through its [`RevocationCheck`], which checks the chain the gateway
+//! presents for revocation before the discovery is sent, and a chain that
+//! is revoked or whose status no source gives fails the discovery closed
+//! with nothing sent (eHDSI X.509 Certificates Profile 7.0.0 §3.2).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -48,6 +54,7 @@ use url::Url;
 use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::ihe::audit::AUDIT_TARGET;
 use crate::ihe::audit::balp::{audited_as, logged_as};
+use crate::revocation::{RevocationCheck, RevocationError, RevocationSetupError};
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
@@ -170,6 +177,9 @@ pub struct GatewayConfig {
     /// The one community to ask for, when the gateway serves several
     /// (§3.55.4.1.2.5).
     pub community: Option<String>,
+    /// Whether the gateway is a MyHealth@EU route, an eHDSI link reached
+    /// through [`XcpdConfig::revocation`].
+    pub myhealth_eu: bool,
 }
 
 /// The XCPD localizer as the configuration names it.
@@ -193,6 +203,10 @@ pub struct XcpdConfig {
     /// The TLS material of the ATNA secure channel (ITI TF-1 Table
     /// 27.1.3-1).
     pub tls: Tls,
+    /// The TLS of the gateways marked as MyHealth@EU routes, which checks
+    /// each one's chain for revocation before a discovery is sent; required
+    /// when one is marked.
+    pub revocation: Option<RevocationCheck>,
 }
 
 /// An XCPD localizer that cannot be built.
@@ -267,6 +281,15 @@ pub enum XcpdConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for the responding gateways could not be built")]
     Client(#[source] ClientError),
+    /// A gateway is a MyHealth@EU route and no revocation check is given.
+    #[error("responding gateway {index} is a MyHealth@EU route and has no revocation check")]
+    Unchecked {
+        /// The gateway's position, counted from 0.
+        index: usize,
+    },
+    /// The HTTP client of the MyHealth@EU routes could not be built.
+    #[error("the HTTP client for the MyHealth@EU responding gateways could not be built")]
+    RevocationClient(#[source] RevocationSetupError),
 }
 
 /// Why the XCPD localizer could not answer.
@@ -304,14 +327,50 @@ pub enum XcpdLocalizeError {
         /// The gateway's position, counted from 0.
         index: usize,
     },
+    /// A MyHealth@EU gateway's chain did not clear its revocation check, so
+    /// nothing was sent to it.
+    #[error("responding gateway {index} did not clear its revocation check")]
+    Revocation {
+        /// The gateway's position, counted from 0.
+        index: usize,
+        /// Why the check did not clear it.
+        #[source]
+        source: RevocationError,
+    },
+}
+
+/// Why one gateway gave no discovery.
+#[derive(Debug)]
+enum GatewayFailure {
+    /// The exchange failed.
+    Xcpd(XcpdError),
+    /// The chain did not clear its revocation check.
+    Revocation(RevocationError),
+}
+
+/// One responding gateway, the client it is asked through, and, for a
+/// MyHealth@EU route, the check its chain clears first.
+#[derive(Clone)]
+struct Gateway {
+    target: RespondingGateway,
+    client: XcpdClient,
+    check: Option<(RevocationCheck, Url)>,
+}
+
+impl fmt::Debug for Gateway {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Gateway")
+            .field("target", &self.target)
+            .field("myhealth_eu", &self.check.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 /// The [`Localizer`] over ITI-55.
 pub struct XcpdLocalizer {
-    client: XcpdClient,
     sender: Oid,
     home: Option<HomeCommunityId>,
-    gateways: Vec<RespondingGateway>,
+    gateways: Vec<Gateway>,
     communities: BTreeMap<HomeCommunityId, NodeId>,
     namespaces: BTreeMap<IdentifierNamespace, Oid>,
     assertion: Option<Arc<dyn AssertionSource>>,
@@ -326,8 +385,8 @@ impl XcpdLocalizer {
     /// An [`XcpdConfigError`] for no gateway, an identifier that is not an
     /// OID, an endpoint refused under `config.transport`, a community mapped
     /// twice or to an unknown member, a member no community serves, TLS
-    /// material that does not read as PEM, or an HTTP client that cannot be
-    /// built.
+    /// material that does not read as PEM, a MyHealth@EU gateway with no
+    /// revocation check, or an HTTP client that cannot be built.
     pub fn from_config(
         config: XcpdConfig,
         assertion: Option<Arc<dyn AssertionSource>>,
@@ -344,12 +403,38 @@ impl XcpdLocalizer {
             .transpose()
             .map_err(XcpdConfigError::HomeCommunity)?
             .map(HomeCommunityId::new);
-        let gateways = config
-            .gateways
-            .iter()
-            .enumerate()
-            .map(|(index, gateway)| responding(index, gateway, config.transport))
-            .collect::<Result<Vec<_>, _>>()?;
+        // NOTE: no specification governs this: our own design; the gateways are asked
+        // with no `Authorization` header and no redirect, since the body names the patient.
+        let http = fhir::http_client(&Authentication::None, &config.tls)
+            .map_err(XcpdConfigError::Client)?;
+        let checked = config
+            .revocation
+            .as_ref()
+            .map(RevocationCheck::http_client)
+            .transpose()
+            .map_err(XcpdConfigError::RevocationClient)?;
+        let mut gateways = Vec::with_capacity(config.gateways.len());
+        for (index, gateway) in config.gateways.iter().enumerate() {
+            let target = responding(index, gateway, config.transport)?;
+            let (client, check) = if gateway.myhealth_eu {
+                let (Some(revocation), Some(http)) = (&config.revocation, &checked) else {
+                    return Err(XcpdConfigError::Unchecked { index });
+                };
+                let endpoint = Url::parse(gateway.endpoint.expose())
+                    .map_err(|source| XcpdConfigError::EndpointUrl { index, source })?;
+                (
+                    XcpdClient::new(http.clone()),
+                    Some((revocation.clone(), endpoint)),
+                )
+            } else {
+                (XcpdClient::new(http.clone()), None)
+            };
+            gateways.push(Gateway {
+                target,
+                client,
+                check,
+            });
+        }
         let communities = communities(config.communities, registry)?;
         let mut namespaces = BTreeMap::new();
         for (namespace, authority) in config.namespaces {
@@ -358,12 +443,7 @@ impl XcpdLocalizer {
             };
             namespaces.insert(namespace, oid);
         }
-        // NOTE: no specification governs this: our own design; the gateways are asked
-        // with no `Authorization` header and no redirect, since the body names the patient.
-        let http = fhir::http_client(&Authentication::None, &config.tls)
-            .map_err(XcpdConfigError::Client)?;
         Ok(Self {
-            client: XcpdClient::new(http),
             sender,
             home,
             gateways,
@@ -377,7 +457,14 @@ impl XcpdLocalizer {
     /// through `recorder` (ITI TF-2 §3.55.5.1.1).
     #[must_use]
     pub fn audited(mut self, recorder: Arc<dyn AuditRecorder>) -> Self {
-        self.client = self.client.audited(recorder);
+        self.gateways = self
+            .gateways
+            .into_iter()
+            .map(move |mut gateway| {
+                gateway.client = gateway.client.audited(Arc::clone(&recorder));
+                gateway
+            })
+            .collect();
         self
     }
 
@@ -434,11 +521,12 @@ impl XcpdLocalizer {
             .await;
         // NOTE: ITI TF-2 §3.55.5.1, §14.1: an exchange whose audit was not recorded is
         // reported as that before any other failure, since no failure policy may widen it.
-        let unaudited = answers
-            .iter()
-            .position(|answer| matches!(answer, Some(Err(XcpdError::Audit(_)))));
+        let unaudited = answers.iter().position(|answer| {
+            matches!(answer, Some(Err(GatewayFailure::Xcpd(XcpdError::Audit(_)))))
+        });
         if let Some(index) = unaudited
-            && let Some(Some(Err(source))) = answers.get_mut(index).map(Option::take)
+            && let Some(Some(Err(GatewayFailure::Xcpd(source)))) =
+                answers.get_mut(index).map(Option::take)
         {
             let error = XcpdLocalizeError::Gateway { index, source };
             return Err(LocalizerError::AuditFailed(Box::new(error)));
@@ -464,8 +552,14 @@ impl XcpdLocalizer {
                         source: Box::new(XcpdLocalizeError::DemographicsRequested { index }),
                     });
                 }
-                Some(Err(XcpdError::Timeout)) => return Err(LocalizerError::DeadlineExceeded),
-                Some(Err(source)) => {
+                Some(Err(
+                    GatewayFailure::Xcpd(XcpdError::Timeout)
+                    | GatewayFailure::Revocation(RevocationError::Timeout),
+                )) => return Err(LocalizerError::DeadlineExceeded),
+                Some(Err(GatewayFailure::Revocation(source))) => {
+                    return Err(backend(XcpdLocalizeError::Revocation { index, source }));
+                }
+                Some(Err(GatewayFailure::Xcpd(source))) => {
                     let status = source.status();
                     let error = XcpdLocalizeError::Gateway { index, source };
                     return Err(match status {
@@ -494,22 +588,36 @@ impl XcpdLocalizer {
         (query, assertion): (&DiscoveryQuery, Option<XuaAssertion>),
         on_behalf: &ihe_atna::user::OnBehalfOf,
         timeout: Duration,
-    ) -> Vec<Option<Result<Discovery, XcpdError>>> {
+    ) -> Vec<Option<Result<Discovery, GatewayFailure>>> {
         let mut tasks = JoinSet::new();
         for (index, gateway) in self.gateways.iter().enumerate() {
-            let client = self.client.clone();
             let gateway = gateway.clone();
             let query = query.clone();
             let assertion = assertion.clone();
             let on_behalf = on_behalf.clone();
             tasks.spawn(async move {
-                let answer = client
-                    .discover(&gateway, &query, assertion.as_ref(), &on_behalf, timeout)
-                    .await;
+                let started = Instant::now();
+                if let Some((revocation, endpoint)) = &gateway.check
+                    && let Err(refused) = revocation.clear(endpoint, timeout).await
+                {
+                    return (index, Err(GatewayFailure::Revocation(refused)));
+                }
+                let remaining = timeout.saturating_sub(started.elapsed());
+                let answer = gateway
+                    .client
+                    .discover(
+                        &gateway.target,
+                        &query,
+                        assertion.as_ref(),
+                        &on_behalf,
+                        remaining,
+                    )
+                    .await
+                    .map_err(GatewayFailure::Xcpd);
                 (index, answer)
             });
         }
-        let mut answers: Vec<Option<Result<Discovery, XcpdError>>> =
+        let mut answers: Vec<Option<Result<Discovery, GatewayFailure>>> =
             std::iter::repeat_with(|| None)
                 .take(self.gateways.len())
                 .collect();

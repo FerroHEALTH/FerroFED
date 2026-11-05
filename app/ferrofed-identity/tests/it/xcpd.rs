@@ -60,6 +60,7 @@ fn config(gateways: &[String], transport: Transport) -> Result<XcpdConfig, Box<d
                     endpoint: SecretUrl::new(endpoint.as_str()),
                     device: "2.999.50.1".to_owned(),
                     community: None,
+                    myhealth_eu: false,
                 })
             })
             .collect::<Result<_, Box<dyn Error>>>()?,
@@ -70,6 +71,7 @@ fn config(gateways: &[String], transport: Transport) -> Result<XcpdConfig, Box<d
         namespaces: BTreeMap::new(),
         transport,
         tls: Tls::default(),
+        revocation: None,
     })
 }
 

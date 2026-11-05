@@ -178,6 +178,11 @@ pub enum LocalizationError {
     #[error("the HTTP client of nl_gf.nvi.credentials.nuts could not be built")]
     #[cfg(feature = "binding-nl")]
     NviNutsClient(#[source] reqwest::Error),
+    /// The TLS material of the MyHealth@EU gateways cannot build their
+    /// revocation check.
+    #[error("the TLS material of the MyHealth@EU responding gateways cannot be used")]
+    #[cfg(feature = "binding-ihe")]
+    XcpdRevocation(#[source] ferrofed_identity::revocation::RevocationSetupError),
     /// The XUA assertion is not one SAML 2.0 `Assertion` element.
     #[error("{key} is not one SAML 2.0 Assertion element")]
     #[cfg(feature = "binding-ihe")]

@@ -43,6 +43,7 @@ trust_roots_file = "/etc/ferrofed/xcpd-roots.pem"  # optional
 url = "https://xcpd.region.example.org/RespondingGateway"
 device = "2.999.50.1"                  # the receiver device OID
 # community = "2.999.50"               # optional: ask for this community only
+# myhealth_eu = true                   # optional: a MyHealth@EU route, an eHDSI link
 
 [xcpd.communities]                     # every member needs one
 "2.999.50" = "node-a"
@@ -109,6 +110,39 @@ answers outside ITI-55, or stays silent past `timeout_ms` leaves every member
 behind that gateway might hold the patient. `on_failure = "ask-all"` asks
 every member instead ([Node selection](registry.md#node-selection)).
 `OPTIONS {base}/` declares `localization.mode` as `"xcpd"`.
+
+### A MyHealth@EU route
+
+`myhealth_eu = true` on a `[[xcpd.gateway]]` marks it as a MyHealth@EU
+route, an eHDSI link. Such a gateway is held to the eHDSI rules, and boot
+refuses a configuration that breaks one, naming the gateway as
+`xcpd.gateway[<index>]`:
+
+- **No fixed assertion.** `assertion` and `assertion_file` hold one
+  long-lived assertion, which never serves an eHDSI path. The eHDSI
+  Messaging Profile 10.0.0 §1.5 admits no alternative binding, and the
+  identity assertion lives at most 4 hours and is `sender-vouches` (SAML
+  Profile 10.0.0 §2.1). A marked gateway beside either key is refused.
+- **Mutual TLS under the eHDSI PKI.** The URL is `https` in every profile,
+  development included, and `client_identity_file` and `trust_roots_file`
+  are required (Section II Security Services 10.0.0 §5.9.1 and §5.9.2). The
+  link trusts those roots alone, never the platform's.
+- **Revocation checked before any data is sent.** Before each discovery,
+  the gateway opens a TLS connection to the responding gateway and sends
+  nothing over it. It checks every certificate the peer presents, up to the
+  root, against the CRL of its CRL distribution point or, failing that, the
+  OCSP responder of its Authority Information Access extension (X.509
+  Certificates Profile 7.0.0 §3.1, §3.2). The discovery request then goes
+  over a connection that admits only the chain the check cleared. A revoked
+  certificate fails the discovery closed, with nothing sent to that
+  gateway. So does a certificate whose status no source gives: a source
+  that cannot be reached, a stale CRL, or an OCSP status of `unknown`.
+  Failing closed on an unreachable source is FerroFED's own design, deny-biased as
+  Section II §2.2 asks of the decision point. A good status is kept for at
+  most an hour, and never past the CRL's or the OCSP response's own next
+  update.
+
+A gateway without the mark is reached as before, with no revocation check.
 
 FerroFED sends the synchronous exchange only, with an immediate response: it
 claims neither the Asynchronous Web Services Exchange nor the Deferred
