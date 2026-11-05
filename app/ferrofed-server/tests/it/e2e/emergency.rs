@@ -21,7 +21,6 @@
 )]
 
 use std::error::Error;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -31,7 +30,6 @@ use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::containers::database::PostgresTls;
 use ferrofed_testkit::containers::{self, database};
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::pdqm_stub;
 use http::StatusCode;
 use serde_json::Value;
 
@@ -40,12 +38,9 @@ use super::store::store_toml;
 use crate::access::node_with_rows;
 use crate::auth::{bearing, minted, sent};
 use crate::contact_point::emergency::{
-    ANOMALY, asked, contact_point_router, emergency_purpose, emergency_settings, marked, records,
-    relayed_for,
+    ANOMALY, asked, contact_point_router, emergency_settings, marked, records, relayed_for,
 };
-use crate::facade::{EHR_A, EHR_B, received};
-use crate::feed_audit::audit_tables;
-use crate::fhir::{UID_A, UID_B, node_holding, summary, supplier, text_registered};
+use crate::facade::received;
 use crate::support::error_body;
 
 /// The professional most tests count.
@@ -353,85 +348,112 @@ async fn with_the_store_down_an_emergency_access_is_refused_and_no_member_is_ask
     Ok(())
 }
 
-/// On the FHIR face the denial is `403 forbidden` naming the refusal and
-/// `ERROR_SEC_GENERIC` (eHDSI XCA Profile 8.0.1 §2.2.3), with no member
-/// asked.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn the_fhir_face_denies_naming_error_sec_generic() -> TestResult {
-    if !containers::e2e_enabled() {
-        return Ok(());
+/// The denial on the FHIR face, which the IHE binding's build serves.
+#[cfg(feature = "binding-ihe")]
+mod fhir_face {
+    use std::error::Error;
+    use std::path::Path;
+    use std::sync::Arc;
+
+    use axum::Router;
+    use ferrofed_server::state::AppState;
+    use ferrofed_testkit::atna_feed::FeedRepository;
+    use ferrofed_testkit::containers::database::PostgresTls;
+    use ferrofed_testkit::containers::{self, database};
+    use ferrofed_testkit::mock::Server;
+    use ferrofed_testkit::pdqm_stub;
+    use http::StatusCode;
+    use serde_json::Value;
+
+    use super::super::TestResult;
+    use super::super::store::store_toml;
+    use super::HP;
+    use crate::auth::{bearing, minted, sent};
+    use crate::contact_point::emergency::{contact_point_router, emergency_purpose, relayed_for};
+    use crate::facade::{EHR_A, EHR_B, received};
+    use crate::feed_audit::audit_tables;
+    use crate::fhir::{UID_A, UID_B, node_holding, summary, supplier, text_registered};
+
+    /// On the FHIR face the denial is `403 forbidden` naming the refusal and
+    /// `ERROR_SEC_GENERIC` (eHDSI XCA Profile 8.0.1 §2.2.3), with no member
+    /// asked.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_fhir_face_denies_naming_error_sec_generic() -> TestResult {
+        if !containers::e2e_enabled() {
+            return Ok(());
+        }
+        let server = database::postgres_tls("emergency_fhir", &[]).await?;
+        let (a, b, pdq) = (
+            node_holding(UID_A).await,
+            node_holding(UID_B).await,
+            supplier().await,
+        );
+        let repository = FeedRepository::start().await;
+        let dir = tempfile::tempdir()?;
+        let app = fhir_gateway(dir.path(), (&a, &b, &pdq), &repository, &server)?;
+        let token = minted(&relayed_for(HP, "EMERGENCY"))?;
+        let (status, _, text) = sent(&app, bearing(summary("")?, &token)?).await?;
+        assert_eq!(
+            StatusCode::OK,
+            status,
+            "the first access is granted: {text}"
+        );
+        let asked = received(&a).await?.len();
+
+        let (status, _, text) = sent(&app, bearing(summary("")?, &token)?).await?;
+        assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
+        let outcome: Value = serde_json::from_str(&text)?;
+        assert_eq!(
+            Some("forbidden"),
+            outcome.pointer("/issue/0/code").and_then(Value::as_str)
+        );
+        let codes: Vec<&str> = outcome
+            .pointer("/issue/0/details/coding")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|coding| coding.get("code").and_then(Value::as_str))
+            .collect();
+        assert_eq!(
+            vec!["emergency-limit-reached", "ERROR_SEC_GENERIC"],
+            codes,
+            "{text}"
+        );
+        assert_eq!(asked, received(&a).await?.len(), "no member was asked");
+        Ok(())
     }
-    let server = database::postgres_tls("emergency_fhir", &[]).await?;
-    let (a, b, pdq) = (
-        node_holding(UID_A).await,
-        node_holding(UID_B).await,
-        supplier().await,
-    );
-    let repository = FeedRepository::start().await;
-    let dir = tempfile::tempdir()?;
-    let app = fhir_gateway(dir.path(), (&a, &b, &pdq), &repository, &server)?;
-    let token = minted(&relayed_for(HP, "EMERGENCY"))?;
-    let (status, _, text) = sent(&app, bearing(summary("")?, &token)?).await?;
-    assert_eq!(
-        StatusCode::OK,
-        status,
-        "the first access is granted: {text}"
-    );
-    let asked = received(&a).await?.len();
 
-    let (status, _, text) = sent(&app, bearing(summary("")?, &token)?).await?;
-    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
-    let outcome: Value = serde_json::from_str(&text)?;
-    assert_eq!(
-        Some("forbidden"),
-        outcome.pointer("/issue/0/code").and_then(Value::as_str)
-    );
-    let codes: Vec<&str> = outcome
-        .pointer("/issue/0/details/coding")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|coding| coding.get("code").and_then(Value::as_str))
-        .collect();
-    assert_eq!(
-        vec!["emergency-limit-reached", "ERROR_SEC_GENERIC"],
-        codes,
-        "{text}"
-    );
-    assert_eq!(asked, received(&a).await?.len(), "no member was asked");
-    Ok(())
-}
-
-/// The FHIR face over `a` and `b`, the summary header asked of `pdq`,
-/// recording to `repository`, its emergency accesses counted in the store
-/// database `emergency_fhir` on `server` at a threshold of one, its test
-/// issuer declared a national contact point.
-fn fhir_gateway(
-    dir: &Path,
-    (a, b, pdq): (&Server, &Server, &Server),
-    repository: &FeedRepository,
-    server: &PostgresTls,
-) -> Result<Router, Box<dyn Error>> {
-    let tables = format!(
-        "{}{}{}\n[emergency]\nthreshold = 1\n",
-        audit_tables(repository, ""),
-        emergency_purpose(),
-        store_toml(server, "emergency_fhir", dir)?
-    );
-    let text = text_registered(
-        dir,
-        (&a.uri(), &b.uri(), &pdqm_stub::base_url(pdq)),
-        &[("node-a", EHR_A), ("node-b", EHR_B)],
-        "",
-        ("", &tables),
-    )?;
-    let settings = ferrofed_server::config::Config::from_sources(
-        Some(&crate::support::signed(&text)),
-        &std::collections::BTreeMap::new(),
-    )?
-    .resolve()?;
-    let state = Arc::new(tokio::task::block_in_place(|| AppState::build(&settings))?);
-    contact_point_router(state)
+    /// The FHIR face over `a` and `b`, the summary header asked of `pdq`,
+    /// recording to `repository`, its emergency accesses counted in the store
+    /// database `emergency_fhir` on `server` at a threshold of one, its test
+    /// issuer declared a national contact point.
+    fn fhir_gateway(
+        dir: &Path,
+        (a, b, pdq): (&Server, &Server, &Server),
+        repository: &FeedRepository,
+        server: &PostgresTls,
+    ) -> Result<Router, Box<dyn Error>> {
+        let tables = format!(
+            "{}{}{}\n[emergency]\nthreshold = 1\n",
+            audit_tables(repository, ""),
+            emergency_purpose(),
+            store_toml(server, "emergency_fhir", dir)?
+        );
+        let text = text_registered(
+            dir,
+            (&a.uri(), &b.uri(), &pdqm_stub::base_url(pdq)),
+            &[("node-a", EHR_A), ("node-b", EHR_B)],
+            "",
+            ("", &tables),
+        )?;
+        let settings = ferrofed_server::config::Config::from_sources(
+            Some(&crate::support::signed(&text)),
+            &std::collections::BTreeMap::new(),
+        )?
+        .resolve()?;
+        let state = Arc::new(tokio::task::block_in_place(|| AppState::build(&settings))?);
+        contact_point_router(state)
+    }
 }
 
 /// The first column of every row `query` answers at `url`, as text.
