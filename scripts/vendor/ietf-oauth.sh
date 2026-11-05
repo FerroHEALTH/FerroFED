@@ -9,8 +9,11 @@
 # and its JWT profile (RFC 7521, RFC 7523), token introspection (RFC 7662),
 # authorization server metadata (RFC 8414), Pushed Authorization Requests
 # (RFC 9126), Rich Authorization Requests (RFC 9396), DPoP (RFC 9449),
-# mutual-TLS client authentication with certificate-bound tokens (RFC 8705)
-# and token exchange (RFC 8693).
+# mutual-TLS client authentication with certificate-bound tokens (RFC 8705),
+# token exchange (RFC 8693), the SAML 2.0 bearer profile (RFC 7522),
+# resource indicators (RFC 8707) and the JWT access token profile (RFC 9068).
+# The onward exchange of #1615 reads RFC 8707 and 9068, and the
+# cross-border design of #1620 reads RFC 7522 to rule its grant out.
 #
 # The GF-Authentication pages of the Netherlands Generic Functions IG cite
 # RFC 6749, 7523, 7662 and 9449; Nuts RFC021 builds on RFC 7521, 7519 and
@@ -49,7 +52,7 @@ cd "$root"
 corpus_require curl shasum
 
 dest="docs/specs/ietf-oauth"
-numbers=(6749 7519 7521 7523 7662 8414 8693 8705 9126 9396 9449)
+numbers=(6749 7519 7521 7522 7523 7662 8414 8693 8705 8707 9068 9126 9396 9449)
 notice="This document is subject to BCP 78 and the IETF Trust's Legal"
 
 tmp="$(mktemp -d)"
@@ -109,7 +112,7 @@ change the pins in docs/VERSIONS.md and re-run the script.
 - Files: $files
 - Tree digest (sha256 over the sorted per-file \`sha256  path\` listing,
   \`PROVENANCE.md\` excluded): \`$digest\`
-- Read by: the onward grants, the DPoP checks and the caller conveyance of \`app/ferrofed-engine\`, and the client authentication of \`app/ferrofed-server\`, which cite these RFCs. Earlier, #551 (the authorization server metadata of RFC 8414 in
+- Read by: #1615 (RFC 8707 and 9068 in the onward exchange) and #1620 (RFC 7522, ruled out for the cross-border route), the onward grants, the DPoP checks and the caller conveyance of \`app/ferrofed-engine\`, and the client authentication of \`app/ferrofed-server\`, which cite these RFCs. Earlier, #551 (the authorization server metadata of RFC 8414 in
   \`crates/oauth-server-metadata\`, which the Nuts grant of #88 and the
   FAPI 2.0 grant of #497 hold their metadata to), #88 (the access token
   request of \`nl-generic-functions\` feature \`nuts-auth\`: the DPoP
@@ -125,7 +128,10 @@ cite (6749, 7523, 7662, 9449), the ones Nuts RFC021 builds its grant on
 (7519, 7521, 8414), and the two the BgZ/eOverdracht track of Annex B §B.4a
 adds (9126, 9396), and RFC 8705, which the onward grants authenticate and
 bind their tokens with when a deployment uses mutual TLS, and RFC 8693,
-whose \`act\` claim names the party a token's subject delegated to. The other RFCs
+whose \`act\` claim names the party a token's subject delegated to, and,
+for the onward and cross-border designs of #1615 and #1620, RFC 8707
+(the \`resource\` parameter), RFC 9068 (the JWT access token claims) and
+RFC 7522 (the SAML 2.0 bearer grant, cited as not applying). The other RFCs
 the OAuth family references are cited, not taken.
 
 | File | sha256 |

@@ -81,7 +81,8 @@ openEHR Reference Model specification source	openEHR/specifications-RM	Release-	
 openEHR BASE specification source	openEHR/specifications-BASE	Release-	the release paired with the pinned Reference Model release
 IHE IUA supplement	IHE/ITI.IUA	-	-
 Federation Tier with AQL specification	syntaric/openehr-federation-spec	-	-
-Netherlands Generic Functions IG source	nuts-foundation/nl-generic-functions-ig	v	-"
+Netherlands Generic Functions IG source	nuts-foundation/nl-generic-functions-ig	v	-
+Keycloak token exchange guide	keycloak/keycloak	-	-"
 
 # One "matrix label<TAB>package<TAB>hold" record per line: a FHIR package, or
 # the pages of the implementation guide it publishes, pinned by version and

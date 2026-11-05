@@ -88,11 +88,15 @@ docs/specs/nuts-rfc|Nuts specifications
 docs/specs/ietf-oauth|IETF RFC 6749
 docs/specs/ietf-oauth|IETF RFC 7519
 docs/specs/ietf-oauth|IETF RFC 7521
+docs/specs/ietf-oauth|IETF RFC 7522
 docs/specs/ietf-oauth|IETF RFC 7523
 docs/specs/ietf-oauth|IETF RFC 7662
 docs/specs/ietf-oauth|IETF RFC 8414
 docs/specs/ietf-oauth|IETF RFC 8693
 docs/specs/ietf-oauth|IETF RFC 8705
+docs/specs/ietf-oauth|IETF RFC 8707
+docs/specs/ietf-oauth|IETF RFC 9068
+docs/specs/keycloak|Keycloak token exchange guide
 docs/specs/ietf-oauth|IETF RFC 9126
 docs/specs/ietf-oauth|IETF RFC 9396
 docs/specs/ietf-oauth|IETF RFC 9449
