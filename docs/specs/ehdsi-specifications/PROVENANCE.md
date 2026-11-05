@@ -8,14 +8,14 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `9f19ddc4467934934970681dd2c3708d6698fee634185e194dd59889d86f1516`
+  the pins): `2d60574c0fa0c3f3db259deed63e97ae52057a58f503e7f33cebacb5a14c85cc`
 - Fetched: 2026-11-05, from the owner's local copies; nothing is downloaded
-- Artefacts: 13 committed, 0 cache only, 0 needing
+- Artefacts: 16 committed, 0 cache only, 0 needing
   manual retrieval, 1 read and not redistributed
-- Files in this directory: 13 besides this one, each verbatim as the
+- Files in this directory: 16 besides this one, each verbatim as the
   owner supplied it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `68c22bc7d075345913c7ead3cafad215a1ecf3a610f33c059aa1bf85ba98f099`
+  `PROVENANCE.md` excluded): `f2a59dcb8682b6de472b572ac14a13dd358245b7db48454693ec9b87a2fe6228`
 - Read by: #1621 (the eHDSI interoperability specifications), read beside the
   MyHealth@EU NCPeH API of docs/specs/ehdsi/ by the cross-border
   transport and audit decisions
@@ -24,8 +24,10 @@ The eHDSI Interoperability Specifications 8.0.1 and the twelve profiles
 under them that the transport, security and audit work reads (SAML, Audit
 Trail, the two Sections and the Security Services Specification, XCA, XCPD,
 XDR, Messaging, X.509 Certificates, Cryptographic Algorithms and Service
-Location and Capability Lookup), retrieved by the owner from the eHDSI wiki,
-which sits behind EU Login. Each cover states distribution level PU (Public)
+Location and Capability Lookup), with the NCPeH Architecture
+Specifications, the NCPeH Components Specifications and the OpenNCP
+Implementation 10.0.0, retrieved by the owner from the eHDSI wiki, which
+sits behind EU Login. Each cover states distribution level PU (Public)
 and "Reuse is authorised, provided the source is acknowledged.", read on
 2026-11-05, so by the owner's decision of that day each is committed
 verbatim, as the owner supplied it, with the source line of its cover as
@@ -180,6 +182,39 @@ no copy of it enters the repository.
   login, so the owner places the file in a local directory and the script
   copies it verbatim after finding it by its sha256; it downloads nothing.
 - Note: Acknowledgement: "Source: DG SANTE, CEF eHealth DSI, 2026", the source line of the cover. The owner supplied eHDSI_Service_Location_and_Capability_Lookup_Profile_v10.0.0.pdf. The PDF document information carries a stale title ("D3.7.2 Section I - Security Policies_v0.8"), so the sha256 identifies the file, not the metadata.
+
+### `ehdsi-ncpeh-architecture-specifications-10.0.0.pdf` (committed, supplied by the owner)
+
+- Source: <https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks>
+- Version: NCPeH Architecture Specifications (document name NCPeH Architecture Specification), document version 10.0.0, 01/06/2026, status Wave 10 Operation Ready
+- sha256: `9b53ee18c1c89be3fa97e4735da42c78455d95da7c3bd4eaeee56c0a3f578627`
+- Licence: "Reuse is authorised, provided the source is acknowledged." and "Distribution level*: PU", where "PU = Public" (the cover and control page, read 2026-11-05)
+- Supplied by the owner: the source answers an automated client with a
+  login, so the owner places the file in a local directory and the script
+  copies it verbatim after finding it by its sha256; it downloads nothing.
+- Note: Acknowledgement: "Source: DG SANTE, CEF eHealth DSI, 2026", the source line of the cover. The owner supplied eHDSI_NCPeH_Architecture_Specifications_v10.0.0.pdf. The PDF document information carries a stale title ("D3.7.2 Section I - Security Policies_v0.8"), so the sha256 identifies the file, not the metadata.
+
+### `ehdsi-ncpeh-components-specifications-10.0.0.pdf` (committed, supplied by the owner)
+
+- Source: <https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks>
+- Version: NCPeH Components Specifications, document version 10.0.0, 01/06/2026, status Wave 10 Operation Ready
+- sha256: `5da44873fefdf3f9bb2a855d3d6c053990f8730a25a0b5ffe1ccfe75e0e73ba2`
+- Licence: "Reuse is authorised, provided the source is acknowledged." and "Distribution level*: PU", where "PU = Public" (the cover and control page, read 2026-11-05)
+- Supplied by the owner: the source answers an automated client with a
+  login, so the owner places the file in a local directory and the script
+  copies it verbatim after finding it by its sha256; it downloads nothing.
+- Note: Acknowledgement: "Source: DG SANTE, CEF MyHealth@EU, 2026", the source line of the cover. The owner supplied eHDSI_NCPeH_Components_Specifications_v10.0.0.pdf. The PDF document information carries a stale title ("D3.7.2 Section I - Security Policies_v0.8"), so the sha256 identifies the file, not the metadata.
+
+### `ehdsi-openncp-implementation-10.0.0.pdf` (committed, supplied by the owner)
+
+- Source: <https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks>
+- Version: OpenNCP Implementation, document version 10.0.0, 01/06/2026, status Wave 10 Operation Ready
+- sha256: `1dcb77cfa1c7eac20bd922db66fc9a8a20c1f1d7c5d86ac415134aa30b546e04`
+- Licence: "Reuse is authorised, provided the source is acknowledged." and "Distribution level*: PU", where "PU = Public" (the cover and control page, read 2026-11-05)
+- Supplied by the owner: the source answers an automated client with a
+  login, so the owner places the file in a local directory and the script
+  copies it verbatim after finding it by its sha256; it downloads nothing.
+- Note: Acknowledgement: "Source: DG SANTE, CEF eHealth DSI, 2026", the source line of the cover. The owner supplied eHDSI_OpenNCP_Implementation_v10.0.0.pdf. The PDF document information carries a stale title ("D3.7.2 Section I - Security Policies_v0.8"), so the sha256 identifies the file, not the metadata.
 
 ### `myhealth-eu-requirements-catalogue-10.0.0.pdf` (read, not redistributed)
 

@@ -5,7 +5,8 @@
 #
 # Vendors the eHDSI interoperability specifications the owner retrieved from
 # the eHDSI wiki (docs/specs/ehdsi-specifications/): the Interoperability
-# Specifications and the transport, security and audit profiles under them.
+# Specifications, the transport, security and audit profiles under them, and
+# the NCPeH architecture, components and OpenNCP implementation documents.
 # The wiki sits behind EU Login, so this script downloads nothing. The owner
 # places the files in a local directory, and the script finds each one by
 # the sha256 it pins (scripts/vendor/lib/pinned.sh, mode `supplied`) and
@@ -120,6 +121,18 @@ pin supplied ehdsi-service-location-and-capability-lookup-profile-10.0.0.pdf \
   'Service Location and Capability Lookup Profile, document version 10.0.0, 01/06/2026, status Wave 10 Operation Ready' \
   "$wiki" 0b238368a81c5710a2578e3b4154aa34fec32ecd035b051af72d617b5ae5221a "$reuse" \
   "$(ack 'DG SANTE, CEF eHealth DSI, 2026') The owner supplied eHDSI_Service_Location_and_Capability_Lookup_Profile_v10.0.0.pdf. $pdf_title"
+pin supplied ehdsi-ncpeh-architecture-specifications-10.0.0.pdf \
+  'NCPeH Architecture Specifications (document name NCPeH Architecture Specification), document version 10.0.0, 01/06/2026, status Wave 10 Operation Ready' \
+  "$wiki" 9b53ee18c1c89be3fa97e4735da42c78455d95da7c3bd4eaeee56c0a3f578627 "$reuse" \
+  "$(ack 'DG SANTE, CEF eHealth DSI, 2026') The owner supplied eHDSI_NCPeH_Architecture_Specifications_v10.0.0.pdf. $pdf_title"
+pin supplied ehdsi-ncpeh-components-specifications-10.0.0.pdf \
+  'NCPeH Components Specifications, document version 10.0.0, 01/06/2026, status Wave 10 Operation Ready' \
+  "$wiki" 5da44873fefdf3f9bb2a855d3d6c053990f8730a25a0b5ffe1ccfe75e0e73ba2 "$reuse" \
+  "$(ack 'DG SANTE, CEF MyHealth@EU, 2026') The owner supplied eHDSI_NCPeH_Components_Specifications_v10.0.0.pdf. $pdf_title"
+pin supplied ehdsi-openncp-implementation-10.0.0.pdf \
+  'OpenNCP Implementation, document version 10.0.0, 01/06/2026, status Wave 10 Operation Ready' \
+  "$wiki" 1dcb77cfa1c7eac20bd922db66fc9a8a20c1f1d7c5d86ac415134aa30b546e04 "$reuse" \
+  "$(ack 'DG SANTE, CEF eHealth DSI, 2026') The owner supplied eHDSI_OpenNCP_Implementation_v10.0.0.pdf. $pdf_title"
 pin withheld myhealth-eu-requirements-catalogue-10.0.0.pdf \
   'MyHealth@EU Requirements Catalogue, version 10.0.0 OR, target release W10-Operation Ready, document status DONE, status date 06 Mar 2026' \
   'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue' \
@@ -132,8 +145,10 @@ pinned_corpus ehdsi-specifications "eHDSI interoperability specifications" \
 under them that the transport, security and audit work reads (SAML, Audit
 Trail, the two Sections and the Security Services Specification, XCA, XCPD,
 XDR, Messaging, X.509 Certificates, Cryptographic Algorithms and Service
-Location and Capability Lookup), retrieved by the owner from the eHDSI wiki,
-which sits behind EU Login. Each cover states distribution level PU (Public)
+Location and Capability Lookup), with the NCPeH Architecture
+Specifications, the NCPeH Components Specifications and the OpenNCP
+Implementation 10.0.0, retrieved by the owner from the eHDSI wiki, which
+sits behind EU Login. Each cover states distribution level PU (Public)
 and \"Reuse is authorised, provided the source is acknowledged.\", read on
 2026-11-05, so by the owner's decision of that day each is committed
 verbatim, as the owner supplied it, with the source line of its cover as
