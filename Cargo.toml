@@ -184,8 +184,8 @@ jiff = { version = "0.2.37", default-features = false, features = ["std"] }
 # The embedded store behind the stored-query registry (#77), reached only from
 # the server (app/ferrofed-engine/tests/it/architecture.rs).
 redb = { version = "4.3.0", default-features = false, features = ["std"] }
-# The shared store behind the stored-query registry where several replicas run
-# (#268), behind the server's `postgres` feature: the PostgreSQL client with
+# FerroFED's own PostgreSQL store (#268, #1636), in every build of the server:
+# the PostgreSQL client with
 # rustls for TLS, its crypto and roots the ones the node client already uses
 # (aws-lc-rs, the platform verifier). Verified against crates.io on 2026-10-03.
 tokio-postgres = { version = "0.7.18", default-features = false, features = ["runtime"] }

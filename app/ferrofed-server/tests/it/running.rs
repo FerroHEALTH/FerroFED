@@ -35,12 +35,12 @@ type TestResult = Result<(), Box<dyn Error>>;
 /// The synthetic secret the file sets inline.
 const SECRET: &str = "synthetic-stored-secret-58";
 
-/// The file of an unmanaged gateway, with a stored-query connection string
+/// The file of an unmanaged gateway, with the store's connection string
 /// set inline.
 fn file() -> String {
     format!(
-        "[federation]\nper_node_timeout_ms = 2500\n\n[stored_queries]\nbackend = \"postgres\"\n\
-         url = \"postgres://ferrofed:{SECRET}@db.example.org/stored\"\n"
+        "[federation]\nper_node_timeout_ms = 2500\n\n[stored_queries]\nbackend = \"postgres\"\n\n\
+         [store]\nurl = \"postgres://ferrofed:{SECRET}@db.example.org/stored?sslmode=require\"\n"
     )
 }
 
@@ -98,7 +98,7 @@ async fn the_running_configuration_names_the_file_and_never_a_secret() -> TestRe
     assert_eq!(Some(toml::Value::Integer(2500)), per_node.value);
     assert_eq!(Source::File, per_node.source);
     assert!(document.settings.iter().all(|setting| !setting.editable));
-    let url = document.setting("stored_queries.url").ok_or("listed")?;
+    let url = document.setting("store.url").ok_or("listed")?;
     assert_eq!(
         Some(true),
         url.secret.as_ref().map(|secret| secret.set),

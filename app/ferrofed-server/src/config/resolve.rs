@@ -53,7 +53,8 @@ impl Config {
     /// [`CredentialsFault::Scheme`], [`CredentialsFault::NoScheme`], [`ServerFault::Budget`],
     /// [`FederationFault::LocalizationBudget`], [`Error::Url`]),
     /// each naming the key that carries the fault, the stored-query store
-    /// errors of [`stored_queries::resolve`], and
+    /// errors of [`stored_queries::resolve`] and of
+    /// [`crate::config::store::resolve`], and
     /// [`FederationFault::StoredQueryFanOutWithoutRegistry`] and
     /// [`FederationFault::StoredQueryFanOutReadOnly`] when definitions would be
     /// distributed with no registry, or no `PUT`, to distribute from. The
@@ -105,6 +106,7 @@ impl Config {
         let signing = self.resolve_signing_keys(public_url.as_ref(), &credentials)?;
         let federation = self.resolve_federation(request_timeout)?;
         let stored_queries = stored_queries::resolve(self)?;
+        let store = crate::config::store::resolve(self)?;
         let metrics = resolve_metrics(&self.metrics, listen, self.profile)?;
         let auth = scrape_users(
             &metrics,
@@ -161,6 +163,7 @@ impl Config {
             #[cfg(feature = "binding-ihe")]
             pdqm: None,
             stored_queries,
+            store,
             metrics,
             signing,
             access_log: crate::config::access_log::resolve(&self.access_log)?,

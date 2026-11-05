@@ -259,6 +259,20 @@ scope = "system/aql-*.s"
 user = "ferrofed"
 password_file = "/run/secrets/ferrofed/node-b-password"
 
+# FerroFED's own PostgreSQL store, off unless the table is set. A
+# contact-point issuer ([trust.issuer.national_contact_point]) and the
+# postgres backend of [stored_queries] need it, and the gateway refuses to
+# start without it then. Give it a database and a role of its own, never a
+# CDR's. The connection string is a secret and must set sslmode=require: the
+# store is reached over TLS under every profile.
+# https://ferrofed.eu/docs/operate/store.html
+# [store]
+# url_file = "/run/secrets/ferrofed/store-url"   # postgres://ferrofed@db.example.org:5432/ferrofed?sslmode=require
+# ca_file = "/run/secrets/ferrofed/store-ca.pem"  # optional; the platform's roots otherwise
+# max_connections = 4
+# timeout_ms = 10000
+# sweep_interval_s = 60
+
 # The gateway's signing key, a P-384 (ES384) or P-256 (ES256) key in PKCS#8
 # PEM, required: it signs the caller's identity onto every request to a
 # node, in the openEHR-federation-client token (§13.1, N24), and every

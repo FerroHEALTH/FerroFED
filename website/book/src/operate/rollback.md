@@ -35,9 +35,11 @@ release.
 ## The stored-query store
 
 A writable store records its schema version: the `redb` file in its
-`ferrofed_schema` table, PostgreSQL in `ferrofed.schema_version`. A release
-migrates the store forward when it starts, and refuses to start over a store
-at a version newer than it knows, with a message that names both versions:
+`ferrofed_schema` table, FerroFED's own PostgreSQL store each migration in
+`ferrofed.store_migration` ([FerroFED's own store](store.md#migrations)). A
+release migrates the store forward when it starts, and refuses to start over
+a store at a version newer than it knows, with a message that names both
+versions:
 
 ```text
 the redb stored-query store is at schema version 2, and this FerroFED knows
@@ -52,10 +54,15 @@ release. A definition stored after the upgrade is lost with the restore;
 store it again. To keep the newer definitions instead, stay on the newer
 release.
 
-Schema version 1 is the layout every release so far has written. Releases
-before the version was recorded open the `redb` file and the PostgreSQL
-table as before and leave the version table alone, so a rollback to one of
-them needs no restore while the store is at version 1.
+Schema version 1 is the layout every release so far has written, and
+migration 1 of FerroFED's own store is the stored-query table as the
+earlier releases wrote it. Releases before the version was recorded open
+the `redb` file and the PostgreSQL table as before and leave the version
+table alone, so a rollback to one of them needs no restore while the store
+is at version 1. A release before `[store]` reads the PostgreSQL connection
+string from `[stored_queries] url` or `url_file` and refuses `[store]`, so
+move the string back before you start it
+([Moving from `[stored_queries] url`](store.md#moving-from-stored_queries-url)).
 
 With several replicas on one PostgreSQL store, a replica of the earlier
 release refuses its next connection once a newer one has migrated the

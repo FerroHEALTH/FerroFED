@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The PostgreSQL store of the stored-query registry against a real
-//! PostgreSQL 18, one database per use on one server (§12.7, N44, CP-40):
+//! The PostgreSQL store of the stored-query registry, over FerroFED's own
+//! store, against a real PostgreSQL 18 serving TLS, one database per use on
+//! one server (§12.7, N44, CP-40):
 //! the store suite every writable store passes, two gateway instances in
 //! one process racing the same new version with exactly one stored, and
 //! racing `PUT`s with no version each storing a version of its own, a
@@ -20,14 +21,16 @@ use axum::body::Body;
 use ferrofed_registry::definition::store::{DefinitionStore, StoreError};
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
-use ferrofed_server::stored::postgres::{LAYOUT, PostgresStore, TABLE, VERSIONS};
-use ferrofed_server::stored::schema::{self, SchemaError};
+use ferrofed_server::store::Store;
+use ferrofed_server::store::migrations::{KNOWN, LEDGER};
+use ferrofed_server::stored::postgres::{PostgresStore, TABLE};
+use ferrofed_testkit::containers::database::PostgresTls;
 use ferrofed_testkit::containers::{self, database};
-use ferrohealth_secret::secret_url::SecretUrl;
 use http::{Request, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 
 use crate::e2e::TestResult;
+use crate::e2e::store::{executed, store_settings, store_toml};
 use crate::facade::{
     Answer, EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, crossref, node_answering, received,
     registry, settings_with_room, statuses,
@@ -43,19 +46,23 @@ const NAME: &str = "org.example::raced";
 /// How many new versions the two instances race for.
 const ROUNDS: u32 = 24;
 
-/// A gateway over `members` whose registry is the PostgreSQL database at
-/// `url`, built where a blocking open may wait.
-fn gateway(dir: &Path, members: (&str, &str), url: &str) -> Result<Router, Box<dyn Error>> {
+/// A gateway over `members` whose registry is the database `name` of
+/// `server`, FerroFED's own store, built where a blocking open may wait.
+fn gateway(
+    dir: &Path,
+    members: (&str, &str),
+    (server, name): (&PostgresTls, &str),
+) -> Result<Router, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry(members.0, members.1, ""))?;
     let document = toml::Value::String(document.display().to_string());
-    let url = toml::Value::String(url.to_owned());
+    let store = store_toml(server, name, dir)?;
     let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
     let text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
          per_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\n\
-         [stored_queries]\nbackend = \"postgres\"\nurl = {url}\n{rows}"
+         [stored_queries]\nbackend = \"postgres\"\n{store}{rows}"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
@@ -94,17 +101,22 @@ async fn the_postgresql_store_passes_the_store_suite() -> TestResult {
         .collect();
     let (first, others) = databases.split_first().ok_or("one database or more")?;
     let others: Vec<&str> = others.iter().map(String::as_str).collect();
-    let server = database::postgres(first, &others).await?;
+    let server = database::postgres_tls(first, &others).await?;
+    let dir = tempfile::tempdir()?;
     for ((scenario, run), database) in SCENARIOS.into_iter().zip(&databases) {
-        let url = SecretUrl::new(server.url(database));
+        let settings = store_settings(&server, database, dir.path())?;
         let open = || -> Result<Box<dyn DefinitionStore>, StoreError> {
-            Ok(Box::new(PostgresStore::open(&url)?))
+            Ok(Box::new(PostgresStore::new(Arc::new(Store::open(
+                &settings,
+            )?))))
         };
         tokio::task::block_in_place(|| run(&open))
             .map_err(|failed| format!("{scenario}: {failed}"))?;
     }
-    let url = SecretUrl::new(server.url(first));
-    let store = tokio::task::block_in_place(|| PostgresStore::open(&url))?;
+    let settings = store_settings(&server, first, dir.path())?;
+    let store = PostgresStore::new(Arc::new(tokio::task::block_in_place(|| {
+        Store::open(&settings)
+    })?));
     assert!(store.is_shared(), "every replica inserts into it");
     assert!(!store.is_read_only());
     Ok(())
@@ -116,12 +128,12 @@ async fn two_gateways_racing_one_new_version_store_exactly_one() -> TestResult {
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = database::postgres("stored_race", &[]).await?;
-    let url = server.url("stored_race");
+    let server = database::postgres_tls("stored_race", &[]).await?;
+    let at = (&server, "stored_race");
     let dir = tempfile::tempdir()?;
     let members = ("http://a.invalid", "http://b.invalid");
-    let one = gateway(dir.path(), members, &url)?;
-    let two = gateway(dir.path(), members, &url)?;
+    let one = gateway(dir.path(), members, at)?;
+    let two = gateway(dir.path(), members, at)?;
     for round in 0..ROUNDS {
         let version = format!("1.{round}.0");
         let (first, second) = tokio::join!(
@@ -170,12 +182,12 @@ async fn two_gateways_racing_unversioned_puts_store_two_versions_or_refuse_one()
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = database::postgres("stored_assigned_race", &[]).await?;
-    let url = server.url("stored_assigned_race");
+    let server = database::postgres_tls("stored_assigned_race", &[]).await?;
+    let at = (&server, "stored_assigned_race");
     let dir = tempfile::tempdir()?;
     let members = ("http://a.invalid", "http://b.invalid");
-    let one = gateway(dir.path(), members, &url)?;
-    let two = gateway(dir.path(), members, &url)?;
+    let one = gateway(dir.path(), members, at)?;
+    let two = gateway(dir.path(), members, at)?;
     let unversioned = |who: &str| {
         Request::put(format!("/v1/definition/query/{NAME}"))
             .header(header::CONTENT_TYPE, "text/plain")
@@ -215,14 +227,14 @@ async fn a_version_one_instance_stored_is_run_by_name_at_the_other() -> TestResu
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = database::postgres("stored_shared", &[]).await?;
-    let url = server.url("stored_shared");
+    let server = database::postgres_tls("stored_shared", &[]).await?;
+    let at = (&server, "stored_shared");
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let dir = tempfile::tempdir()?;
     let members = (a.uri(), b.uri());
-    let one = gateway(dir.path(), (&members.0, &members.1), &url)?;
-    let two = gateway(dir.path(), (&members.0, &members.1), &url)?;
+    let one = gateway(dir.path(), (&members.0, &members.1), at)?;
+    let two = gateway(dir.path(), (&members.0, &members.1), at)?;
     let aql = format!(
         "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
          WHERE e/ehr_status/subject/external_ref/id/value = $patient \
@@ -275,13 +287,14 @@ async fn a_row_naming_its_patient_by_a_literal_is_never_served_or_run() -> TestR
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = database::postgres("stored_literal", &[]).await?;
-    let url = server.url("stored_literal");
+    let server = database::postgres_tls("stored_literal", &[]).await?;
+    let url = server.plain_url("stored_literal");
+    let at = (&server, "stored_literal");
     let a = node_answering("uid-at-a::cdr-a.example.org::1").await;
     let b = node_answering("uid-at-b::cdr-b.example.org::1").await;
     let dir = tempfile::tempdir()?;
     let members = (a.uri(), b.uri());
-    let app = gateway(dir.path(), (&members.0, &members.1), &url)?;
+    let app = gateway(dir.path(), (&members.0, &members.1), at)?;
     let subject = "e/ehr_status/subject/external_ref";
     let literal = format!(
         "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
@@ -323,7 +336,7 @@ async fn a_row_naming_its_patient_by_a_literal_is_never_served_or_run() -> TestR
         "another name is still served: {text}"
     );
 
-    let refused = gateway(dir.path(), (&members.0, &members.1), &url)
+    let refused = gateway(dir.path(), (&members.0, &members.1), at)
         .err()
         .ok_or("N33: a database holding a literal refuses the start")?;
     let line = chain(refused.as_ref());
@@ -342,10 +355,11 @@ async fn a_row_that_does_not_read_is_logged_by_field_and_kind_never_by_its_text(
         return Ok(());
     }
     let planted = "synthetic-planted-6613";
-    let server = database::postgres("stored_unreadable", &[]).await?;
-    let url = server.url("stored_unreadable");
+    let server = database::postgres_tls("stored_unreadable", &[]).await?;
+    let url = server.plain_url("stored_unreadable");
+    let at = (&server, "stored_unreadable");
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), ("http://a.invalid", "http://b.invalid"), &url)?;
+    let app = gateway(dir.path(), ("http://a.invalid", "http://b.invalid"), at)?;
     executed(
         &url,
         &format!(
@@ -377,39 +391,28 @@ async fn a_row_that_does_not_read_is_logged_by_field_and_kind_never_by_its_text(
     Ok(())
 }
 
-/// Runs `statement` against the database at `url`, past the store.
-async fn executed(url: &str, statement: &str) -> TestResult {
+/// The migrations the store's ledger at `url` records.
+async fn recorded(url: &str) -> Result<Vec<i32>, Box<dyn Error>> {
     let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
     let driven = tokio::spawn(connection);
-    client.batch_execute(statement).await?;
-    drop(client);
-    driven.await??;
-    Ok(())
-}
-
-/// The schema version the database at `url` records for the definitions.
-async fn recorded(url: &str) -> Result<Option<i32>, Box<dyn Error>> {
-    let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
-    let driven = tokio::spawn(connection);
-    let row = client
-        .query_opt(
-            &format!("SELECT version FROM {VERSIONS} WHERE layout = $1"),
-            &[&LAYOUT],
+    let rows = client
+        .query(
+            &format!("SELECT version FROM {LEDGER} ORDER BY version"),
+            &[],
         )
         .await?;
     drop(client);
     driven.await??;
-    Ok(row.map(|row| row.get(0)))
+    Ok(rows.iter().map(|row| row.get(0)).collect())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_database_written_before_versions_were_recorded_is_migrated_and_keeps_its_rows()
--> TestResult {
+async fn a_table_written_before_the_store_is_taken_over_and_keeps_its_rows() -> TestResult {
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let server = database::postgres("stored_legacy", &[]).await?;
-    let url = server.url("stored_legacy");
+    let server = database::postgres_tls("stored_legacy", &[]).await?;
+    let url = server.plain_url("stored_legacy");
     executed(
         &url,
         &format!(
@@ -420,50 +423,14 @@ async fn a_database_written_before_versions_were_recorded_is_migrated_and_keeps_
     )
     .await?;
     inserted(&url, (NAME, "1.0.0"), &marked("legacy")).await?;
-    let secret = SecretUrl::new(url.clone());
-    let store = tokio::task::block_in_place(|| PostgresStore::open(&secret))?;
+    let dir = tempfile::tempdir()?;
+    let settings = store_settings(&server, "stored_legacy", dir.path())?;
+    let store = PostgresStore::new(Arc::new(tokio::task::block_in_place(|| {
+        Store::open(&settings)
+    })?));
     let held = tokio::task::block_in_place(|| store.load())?;
-    assert_eq!(1, held.len(), "the row written before the migration stays");
-    assert_eq!(Some(i32::try_from(schema::CURRENT)?), recorded(&url).await?);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_database_a_newer_ferrofed_migrated_is_refused_and_left_as_it_was() -> TestResult {
-    if !containers::e2e_enabled() {
-        return Ok(());
-    }
-    let server = database::postgres("stored_newer", &[]).await?;
-    let url = server.url("stored_newer");
-    let secret = SecretUrl::new(url.clone());
-    drop(tokio::task::block_in_place(|| {
-        PostgresStore::open(&secret)
-    })?);
-    let newer = i32::try_from(schema::CURRENT + 1)?;
-    executed(
-        &url,
-        &format!("UPDATE {VERSIONS} SET version = {newer} WHERE layout = '{LAYOUT}'"),
-    )
-    .await?;
-    let refused = tokio::task::block_in_place(|| PostgresStore::open(&secret))
-        .err()
-        .ok_or("a newer schema refuses the start")?;
-    let StoreError::Backend(error) = &refused else {
-        return Err(format!("a backend refusal: {refused:?}").into());
-    };
-    assert!(
-        matches!(
-            error.downcast_ref::<SchemaError>(),
-            Some(SchemaError::Newer { .. })
-        ),
-        "{error}"
-    );
-    let line = chain(&refused);
-    assert!(line.contains("newer FerroFED"), "{line}");
-    assert_eq!(
-        Some(newer),
-        recorded(&url).await?,
-        "the database is not rewritten"
-    );
+    assert_eq!(1, held.len(), "the row written before the store stays");
+    let known = i32::try_from(KNOWN)?;
+    assert_eq!((1..=known).collect::<Vec<_>>(), recorded(&url).await?);
     Ok(())
 }

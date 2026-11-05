@@ -440,7 +440,7 @@ Nine sections take effect on a reload:
 |---|---|
 | `[registry]`: the document's contents, its path and its `format` | `[registry.mcsd]`, the directory the registry is read from |
 | `[credentials]`, each endpoint's onward TLS included | `[server]`, `trusted_proxies` and `forwarded_header` included, `[gateway]`, and `[signing]`, `rotation_overlap_s` included |
-| `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, and `[stored_queries]` |
+| `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, `[stored_queries]` and `[store]` |
 | `[pdqm]` | `[pmir]`, `[telemetry]` and `[metrics]` |
 | `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
 | `[nl_gf]` | `[audit]` and `[config]` |

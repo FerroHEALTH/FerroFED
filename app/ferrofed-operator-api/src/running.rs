@@ -214,7 +214,7 @@ mod tests {
                     editable: true,
                 },
                 Setting {
-                    key: String::from("stored_queries.url"),
+                    key: String::from("store.url"),
                     section: Section::StoredQueries,
                     value: None,
                     source: Source::File,
@@ -223,7 +223,7 @@ mod tests {
                     next: None,
                     secret: Some(SecretSetting {
                         set: true,
-                        reference: Some(String::from("/run/secrets/stored-queries-url")),
+                        reference: Some(String::from("/run/secrets/store-url")),
                     }),
                     editable: false,
                 },

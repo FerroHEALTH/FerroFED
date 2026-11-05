@@ -135,6 +135,17 @@ data:
     # substantial = ["urn:example:loa:substantial"]
     # high = ["urn:example:loa:high"]
 
+    # FerroFED's own PostgreSQL store, off unless the table is set. A
+    # contact-point issuer and the postgres backend of [stored_queries] need
+    # it. Give it a database and a role of its own, never a CDR's; the
+    # connection string is the store-url key of the ferrofed-secrets Secret
+    # and must set sslmode=require, and the egress component must admit the
+    # database.
+    # https://ferrofed.eu/docs/operate/store.html
+    # [store]
+    # url_file = "/run/secrets/ferrofed/store-url"
+    # ca_file = "/run/secrets/ferrofed/store-ca.pem"
+
     # The gateway's ES384 signing key, required with a registry: every
     # request to a node carries the caller's identity signed with it
     # (§13.1, N24). It is the signing-key.pem key of the ferrofed-secrets

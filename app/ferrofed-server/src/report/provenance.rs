@@ -85,7 +85,6 @@ impl Build {
         let features = [
             ("binding-ihe", cfg!(feature = "binding-ihe")),
             ("binding-nl", cfg!(feature = "binding-nl")),
-            ("postgres", cfg!(feature = "postgres")),
         ]
         .into_iter()
         .filter_map(|(name, on)| on.then_some(name))

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 use ferrofed_operator_api::revision::RevisionId;
-use ferrofed_operator_api::running::{Section, Source};
+use ferrofed_operator_api::running::{RunningConfig, Section, Setting, Source};
 
 use std::collections::BTreeMap;
 
@@ -12,6 +12,17 @@ use crate::config::Config;
 /// The tree `text` writes.
 fn tree(text: &str) -> toml::Table {
     toml::from_str(text).expect("the test tree reads")
+}
+
+/// The document `layers` give, and its `store.url`, a secret that is set.
+fn store_url(layers: &Layers) -> (RunningConfig, Setting) {
+    let document = of(layers);
+    let url = document.setting("store.url").expect("listed").clone();
+    assert!(
+        url.secret.as_ref().is_some_and(|secret| secret.set),
+        "a secret that is set"
+    );
+    (document, url)
 }
 
 #[test]
@@ -123,17 +134,15 @@ fn under_managed_a_value_comes_from_the_revision_and_a_scalar_is_editable() {
 #[test]
 fn a_secret_is_named_by_its_file_and_its_value_never_reaches_the_document() {
     let inline = tree(
-        "[stored_queries]\nbackend = \"postgres\"\nurl = \"postgres://ferrofed:synthetic-secret-71@db.example.org/stored\"\n",
+        "[store]\nurl = \"postgres://ferrofed:synthetic-secret-71@db.example.org/stored?sslmode=require\"\n",
     );
     let layers = Layers {
         now: inline.clone(),
         boot: inline,
         ..Layers::default()
     };
-    let document = of(&layers);
-    let url = document.setting("stored_queries.url").expect("listed");
+    let (document, url) = store_url(&layers);
     let secret = url.secret.as_ref().expect("a secret");
-    assert!(secret.set);
     assert_eq!(None, secret.reference);
     assert_eq!(None, url.value);
     assert!(!url.editable);
@@ -141,28 +150,21 @@ fn a_secret_is_named_by_its_file_and_its_value_never_reaches_the_document() {
     assert!(!written.contains("synthetic-secret-71"), "{written}");
     assert!(!written.contains("ferrofed:"), "{written}");
 
-    let by_file = tree(
-        "[stored_queries]\nbackend = \"postgres\"\nurl_file = \"/run/secrets/stored-queries-url\"\n",
-    );
+    let by_file = tree("[store]\nurl_file = \"/run/secrets/store-url\"\n");
     let layers = Layers {
         now: by_file.clone(),
         boot: by_file,
         managed: true,
         ..Layers::default()
     };
-    let document = of(&layers);
-    let url = document.setting("stored_queries.url").expect("listed");
+    let (_, url) = store_url(&layers);
     let secret = url.secret.as_ref().expect("a secret");
-    assert!(secret.set);
-    assert_eq!(
-        Some("/run/secrets/stored-queries-url"),
-        secret.reference.as_deref()
-    );
+    assert_eq!(Some("/run/secrets/store-url"), secret.reference.as_deref());
     assert_eq!(Source::Revision, url.source);
     assert!(!url.editable, "a secret is never edited as a setting");
 
     let unset = of(&Layers::default());
-    let url = unset.setting("stored_queries.url").expect("listed");
+    let url = unset.setting("store.url").expect("listed");
     assert_eq!(
         Some(false),
         url.secret.as_ref().map(|secret| secret.set),

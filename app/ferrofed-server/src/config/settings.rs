@@ -86,6 +86,8 @@ pub struct Settings {
     pub pdqm: Option<crate::config::ihe::pdqm::PdqmSettings>,
     /// The store of the stored-query registry, when it is offered (§12.7).
     pub stored_queries: Option<Store>,
+    /// FerroFED's own PostgreSQL store (`[store]`), when the table is set.
+    pub store: Option<crate::config::store::StoreSettings>,
     /// The FHIR R4 face of the exchange format, when it is served (Regulation
     /// (EU) 2025/327 Annex II 2.1).
     pub fhir: Option<crate::config::fhir::FhirSettings>,

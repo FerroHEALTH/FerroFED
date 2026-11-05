@@ -85,7 +85,7 @@ pub fn with_console_of(tree: &toml::Table, from: &toml::Table) -> toml::Table {
 
 /// The dotted keys whose value is a secret connection string with a `_file`
 /// sibling.
-const SECRET_URLS: [&str; 1] = ["stored_queries.url"];
+const SECRET_URLS: [&str; 1] = ["store.url"];
 
 /// Splits `tree` into its bootstrap core ([`CORE`]) and the rest, which a
 /// revision holds.
@@ -278,13 +278,13 @@ mod tests {
         let tree = table(
             "[credentials.\"node-a\"]\npassword = \"synthetic-secret-1\"\n\
              [credentials.\"node-b\"]\npassword_file = \"/run/secrets/b\"\n\
-             [stored_queries]\nbackend = \"postgres\"\nurl = \"host=db\"\n\
+             [store]\nurl = \"host=db\"\n\
              [telemetry.otlp]\nendpoint = \"http://u:synthetic-pw@collector:4317\"\n",
         );
         assert_eq!(
             vec![
                 "credentials.node-a.password",
-                "stored_queries.url",
+                "store.url",
                 "telemetry.otlp.endpoint"
             ],
             inline_secrets(&tree)
@@ -361,8 +361,8 @@ mod tests {
             for name in read_through_file(text, "SecretUrl") {
                 let relative = path.strip_prefix(&root).unwrap().to_string_lossy();
                 let listed = match relative.as_ref() {
-                    "config/stored_queries.rs" => {
-                        super::SECRET_URLS.contains(&format!("stored_queries.{name}").as_str())
+                    "config/store.rs" => {
+                        super::SECRET_URLS.contains(&format!("store.{name}").as_str())
                     }
                     "config/revisions.rs" => super::CORE.contains(&"config"),
                     _ => false,

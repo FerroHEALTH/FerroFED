@@ -68,6 +68,13 @@ kubectl -n ferrofed create secret generic ferrofed-console-secrets \
 kubectl apply -k my-overlay/
 ```
 
+A deployment with a contact-point issuer, or with the stored-query
+registry on `backend = "postgres"`, also sets `[store]` in
+`configmap.yaml` and adds its connection string to `ferrofed-secrets` as
+`store-url` (`--from-file=store-url`), with `store-ca.pem` when its CA is
+not one of the platform's roots ([FerroFED's own store](store.md)). Every
+replica shares that one database.
+
 The tree in the repository names the images by tag alone; only the release
 tarball pins the digests. To pin them yourself, add an `images` entry with
 the `digest` of the image you verified
@@ -107,7 +114,7 @@ closes it to DNS and the destinations you list, each one the configuration
 names: every member endpoint of `registry.toml`, the issuers of `[auth]` and
 `[[trust.issuer]]`, the Audit Record Repository, each identity service a
 binding names, the token endpoint of each onward grant, the OTLP collector,
-a stored-query or revision PostgreSQL, and the usage report's collector
+FerroFED's own store (`[store]`) or a revision PostgreSQL, and the usage report's collector
 unless the report is off. A NetworkPolicy matches addresses, so a
 destination behind changing addresses needs a CIDR wide enough to hold
 them. A destination you leave out is refused: a member shows `offline` and
