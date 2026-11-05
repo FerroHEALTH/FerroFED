@@ -3022,6 +3022,10 @@ MyHealth@EU (OJ L, 21.9.2026, adopted under Art 23(4) and (8)) applies from
 26 March 2027 (its Art 19); its Art 4(1) has national contact points
 exchange "in accordance with the requirements catalogue" and "the technical
 specifications" the steering group approves, which sit behind EU Login.
+The technical specifications the owner retrieved state on their covers
+that reuse is authorised with the source acknowledged, and are vendored in
+`docs/specs/ehdsi-specifications/` (#1621); the catalogue states no reuse
+terms and is cited by version, section and requirement id only.
 Commission Implementing Regulation (EU) 2026/2099 of 21 September 2026 on
 the cross-border identification and authentication mechanism (OJ L,
 22.9.2026, adopted under Art 16(2)) applies from 26 March 2027, and its Art

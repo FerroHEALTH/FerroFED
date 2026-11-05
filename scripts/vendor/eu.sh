@@ -18,7 +18,8 @@
 # OpenNCP is evidence only and is fetched into the git-ignored
 # .vendor-cache/; no line of its code enters this repository. The eHDSI
 # wiki (the requirements catalogue and the interoperability specifications)
-# sits behind EU Login and is recorded for manual retrieval.
+# sits behind EU Login; scripts/vendor/ehdsi-specifications.sh vendors what
+# the owner retrieved from it.
 #
 # Usage:
 #   scripts/vendor/eu.sh
@@ -86,14 +87,6 @@ pin commit dec-eu-2011-833-en.xhtml "OJ L 330, 14.12.2011, p. 39 (CELEX 32011D08
   https://publications.europa.eu/resource/cellar/cb76d4a0-c886-40bd-99d7-8db018a723d0.0010.03/DOC_1 \
   2d5bc877b9a5aad948af21c680aca1d3409f41df5dd0dcc57ef9b1b225f60982 "$eu_act" \
   'Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents, the reuse terms of the acts and the guidelines here (its Articles 3 and 6), kept as their licence evidence. It replaces the Commission legal notice page, whose bytes changed with every render. Pinned at the Cellar manifestation the CELEX resource resolves to.'
-pin manual ehdsi-interoperability-specifications "not retrieved" \
-  'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks' \
-  - 'None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant' \
-  'Behind EU Login (the URL answered 302 to login.action on 2026-10-15, and again on 2026-10-24). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The normative eHDSI XCPD, XCA and XUA profiles and the eHDSI CDA implementation guides live here.'
-pin manual myhealth-eu-requirements-catalogue "9.0.0 (2025-03-24), not retrieved" \
-  'https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue' \
-  - 'None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant' \
-  'Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The NCPeH API implementation guide names it the main reference for the national side, and Implementing Regulation (EU) 2026/2083 Art 4(2) to (4) has the Commission draw it up. Xt-EHR D6.1 section 5 names release 9.0.0 of 2025-03-24 and says it is available only with authorisation, requested from DG SANTE; the URL answered 302 to login.action again on 2026-10-24.'
 pinned_corpus eu-ehds "EU EHDS Regulation and eHealth Network guidelines" \
   "the European Health Data Space Regulation, its adopted implementing acts and eHealth Network guidelines" \
   "Regulation (EU) 2025/327 on the European Health Data Space (the research
@@ -112,10 +105,13 @@ The Regulation, the implementing acts, the Recommendation and the Decision
 are official EU legal acts published in the Official Journal. The
 Commission legal notice (https://commission.europa.eu/legal-notice_en)
 licenses the guidelines under CC BY 4.0; it is cited and not pinned, because
-the page's bytes change with every render. The MyHealth@EU requirements
-catalogue and the eHDSI interoperability specifications are on a wiki behind
-EU Login and are recorded for manual retrieval only: Decision 2011/833/EU
-Art 2(2)(c) leaves privileged-access documents out of its reuse grant." "" \
+the page's bytes change with every render. The eHDSI interoperability
+specifications and the MyHealth@EU requirements catalogue are on a wiki
+behind EU Login and are recorded in docs/specs/ehdsi-specifications/: the
+cover of each specification states distribution level PU and \"Reuse is
+authorised, provided the source is acknowledged.\" (read 2026-11-05), so
+they are vendored there, and the catalogue states no reuse terms and is
+not." "" \
   $'#488 (the country research into identity resolution,\n  localization, consent, addressing and authentication to nodes) and\n  #519 (EHDS readiness)'
 
 pin commit reg-eu-2024-2847-en.xhtml "OJ L, 2024/2847, 20.11.2024 (CELEX 32024R2847), English" \
