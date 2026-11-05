@@ -357,7 +357,7 @@ async fn a_token_bound_to_another_certificate_never_reaches_the_node() -> TestRe
         .await
         .expect_err("a mismatched token is refused again");
     let mismatch = Error::source(&refused)
-        .and_then(|source| source.downcast_ref::<TokenError>())
+        .and_then(<dyn Error>::downcast_ref::<TokenError>)
         .ok_or("the cause is the token error")?;
     assert!(matches!(mismatch, TokenError::CertificateMismatch));
     let shown = format!("{refused} {mismatch} {mismatch:?}");
@@ -398,7 +398,7 @@ async fn an_assertion_grant_without_a_key_sends_nothing() -> TestResult {
         .await
         .expect_err("no key signs the assertion");
     let unsigned = Error::source(&refused)
-        .and_then(|source| source.downcast_ref::<TokenError>())
+        .and_then(<dyn Error>::downcast_ref::<TokenError>)
         .ok_or("the cause is the token error")?;
     assert!(matches!(unsigned, TokenError::Unsigned));
     assert_eq!(

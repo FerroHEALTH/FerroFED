@@ -46,8 +46,6 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
-
 body {
   margin: 0;
   font-family: var(--fb-sans);
@@ -125,7 +123,6 @@ code {
   font-weight: 700;
   font-size: 1rem;
   border: 1.5px solid transparent;
-  transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease;
 }
 .btn:hover { text-decoration: none; transform: translateY(-1px); }
 .btn-primary { background: var(--fb-accent); color: var(--fb-on-accent); }
@@ -227,7 +224,6 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
   border: 1px solid var(--fb-border);
   border-radius: var(--fb-radius);
   padding: 1.5rem;
-  transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 .card:hover {
   transform: translateY(-3px);
@@ -336,6 +332,9 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
   .nav-links .hide-sm { display: none; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * { scroll-behavior: auto; transition: none !important; }
+/* Motion only for a reader who has not asked the system to reduce it */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+  .btn { transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease; }
+  .card { transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
 }

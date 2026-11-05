@@ -187,19 +187,18 @@ struct SaveRequest {
 }
 
 impl Shaped for SaveRequest {
-    const SHAPE: &'static str =
-        r#"{"base": <revision or null>, "reason": "<text>", "toml": "<text>"}"#;
+    const SHAPE: &str = r#"{"base": <revision or null>, "reason": "<text>", "toml": "<text>"}"#;
 }
 
 impl Shaped for RollbackRequest {
-    const SHAPE: &'static str = r#"{"current": <revision>, "reason": "<text>"}"#;
+    const SHAPE: &str = r#"{"current": <revision>, "reason": "<text>"}"#;
 }
 
 /// The JSON object an action takes as its body, and the members it names
 /// when it refuses another.
 trait Shaped: serde::de::DeserializeOwned {
     /// The members of the body, as the refusal of another names them.
-    const SHAPE: &'static str;
+    const SHAPE: &str;
 }
 
 /// The body of an action, read as `T`; any other body is refused `400`

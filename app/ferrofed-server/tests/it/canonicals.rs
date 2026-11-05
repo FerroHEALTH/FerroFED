@@ -17,6 +17,7 @@
 
 use std::collections::BTreeSet;
 use std::error::Error;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use eehrxf::medication::prescription::REMAINING_DISPENSATIONS;
@@ -122,10 +123,7 @@ fn published() -> Result<BTreeSet<String>, Box<dyn Error>> {
     for directory in directories {
         for entry in std::fs::read_dir(root().join(&directory))? {
             let path = entry?.path();
-            let name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default();
+            let name = path.file_name().and_then(OsStr::to_str).unwrap_or_default();
             let Some(url) = served_at(name) else {
                 continue;
             };
@@ -152,7 +150,7 @@ fn files(path: &Path, found: &mut Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
         let path = entry?.path();
         let skipped = path
             .file_name()
-            .and_then(|name| name.to_str())
+            .and_then(OsStr::to_str)
             .is_some_and(|name| SKIPPED.contains(&name) || name.starts_with('.'));
         if !skipped {
             files(&path, found)?;

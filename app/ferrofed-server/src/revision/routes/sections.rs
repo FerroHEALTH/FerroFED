@@ -48,7 +48,7 @@ pub const BINDING: &str = "/admin/config/bindings/{section}";
 pub const BINDING_REMOVE: &str = "/admin/config/bindings/{section}/remove";
 
 impl Shaped for SectionRequest {
-    const SHAPE: &'static str = r#"{"base": <revision>, "reason": "<text>", "settings": "<TOML>", "secrets": [{"key": "<key>", "value" | "file": "<text>" | "clear": true}]}"#;
+    const SHAPE: &str = r#"{"base": <revision>, "reason": "<text>", "settings": "<TOML>", "secrets": [{"key": "<key>", "value" | "file": "<text>" | "clear": true}]}"#;
 }
 
 /// The binding sections this gateway is built with.

@@ -409,15 +409,21 @@ async fn exists(tag: &str) -> Result<bool, ReferenceError> {
 /// `wait` has passed; the lock is released when the returned file drops.
 async fn lock(path: &Path, wait: Duration) -> Result<File, ReferenceError> {
     let shown = || path.to_string_lossy().into_owned();
-    let file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(path)
-        .map_err(|source| ReferenceError::Lock {
-            path: shown(),
-            source,
-        })?;
+    let owned = path.to_path_buf();
+    let file = tokio::task::spawn_blocking(move || {
+        OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(owned)
+    })
+    .await
+    .map_err(std::io::Error::other)
+    .and_then(|opened| opened)
+    .map_err(|source| ReferenceError::Lock {
+        path: shown(),
+        source,
+    })?;
     let started = tokio::time::Instant::now();
     loop {
         match file.try_lock() {

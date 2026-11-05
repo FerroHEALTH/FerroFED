@@ -132,7 +132,7 @@ async fn a_wrong_secret_is_a_typed_refusal_and_never_a_credential() -> TestResul
         .err()
         .ok_or("a wrong secret obtains no token")?;
     let token = Error::source(&refused)
-        .and_then(|source| source.downcast_ref::<TokenError>())
+        .and_then(<dyn Error>::downcast_ref::<TokenError>)
         .ok_or("the cause is the token request's refusal")?;
     assert_eq!(Some(ErrorCode::InvalidClient), token.code(), "{token}");
     assert!(!format!("{refused:?} {token}").contains(SECRET));

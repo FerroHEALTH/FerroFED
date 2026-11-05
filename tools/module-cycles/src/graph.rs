@@ -11,6 +11,7 @@
 //! an item declares, and a file under a `tests` directory.
 
 use std::collections::BTreeSet;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -111,7 +112,7 @@ fn module_file(dir: &Path, name: &str) -> Option<PathBuf> {
 /// directory for a `lib.rs` or a `mod.rs`, else the directory named after it.
 fn module_dir(file: &Path) -> PathBuf {
     let parent = file.parent().unwrap_or(Path::new(""));
-    match file.file_name().and_then(|name| name.to_str()) {
+    match file.file_name().and_then(OsStr::to_str) {
         Some("lib.rs" | "mod.rs") => parent.to_path_buf(),
         _ => file.with_extension(""),
     }
