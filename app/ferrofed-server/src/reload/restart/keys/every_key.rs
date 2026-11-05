@@ -179,7 +179,7 @@ backend = "redb"
 path = "@DIR@/stored.redb"
 
 [store]
-url = "postgres://ferrofed:synthetic-store-pw@db.example.org:5432/ferrofed?sslmode=require"
+url_file = "@DIR@/store-url"
 ca_file = "@DIR@/collector-ca.pem"
 max_connections = 4
 timeout_ms = 10000
@@ -264,6 +264,10 @@ fn files(dir: &Path, tag: &str, listener: &ListenerCertificates) -> TestResult {
     for secret in ["token", "password"] {
         std::fs::write(dir.join(secret), format!("synthetic-{secret}-{tag}"))?;
     }
+    std::fs::write(
+        dir.join("store-url"),
+        format!("postgres://ferrofed@db.example.org:5432/ferrofed-{tag}?sslmode=require\n"),
+    )?;
     std::fs::create_dir_all(dir.join("secrets"))?;
     Ok(())
 }

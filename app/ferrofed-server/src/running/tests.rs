@@ -9,6 +9,10 @@ use std::collections::BTreeMap;
 use super::{Layers, of};
 use crate::config::Config;
 
+/// The synthetic password of a test's inline connection string, which no
+/// document may carry.
+const SECRET: &str = "synthetic-secret-71";
+
 /// The tree `text` writes.
 fn tree(text: &str) -> toml::Table {
     toml::from_str(text).expect("the test tree reads")
@@ -133,9 +137,9 @@ fn under_managed_a_value_comes_from_the_revision_and_a_scalar_is_editable() {
 
 #[test]
 fn a_secret_is_named_by_its_file_and_its_value_never_reaches_the_document() {
-    let inline = tree(
-        "[store]\nurl = \"postgres://ferrofed:synthetic-secret-71@db.example.org/stored?sslmode=require\"\n",
-    );
+    let inline = tree(&format!(
+        "[store]\nurl = \"postgres://ferrofed:{SECRET}@db.example.org/stored?sslmode=require\"\n"
+    ));
     let layers = Layers {
         now: inline.clone(),
         boot: inline,
@@ -147,7 +151,7 @@ fn a_secret_is_named_by_its_file_and_its_value_never_reaches_the_document() {
     assert_eq!(None, url.value);
     assert!(!url.editable);
     let written = serde_json::to_string(&document).expect("the document writes");
-    assert!(!written.contains("synthetic-secret-71"), "{written}");
+    assert!(!written.contains(SECRET), "{written}");
     assert!(!written.contains("ferrofed:"), "{written}");
 
     let by_file = tree("[store]\nurl_file = \"/run/secrets/store-url\"\n");
