@@ -94,7 +94,7 @@ fn map_toml(retention: &str) -> String {
 
 /// The retention of the test gateway: four years for every record, twenty
 /// for a discharge report, twelve for what node B sent.
-const RETENTION: &str = "\n[access_log.retention]\nyears = 4\n\n\
+pub(crate) const RETENTION: &str = "\n[access_log.retention]\nyears = 4\n\n\
      [access_log.retention.categories]\n\"Discharge-Reports\" = 20\n\n\
      [access_log.retention.origins]\n\"node-b-pub\" = 12\n";
 
@@ -151,7 +151,7 @@ fn gateway_and_state(
 
 /// The settings of the gateway of [`gateway_and_state`], its records kept as
 /// the `[access_log.retention]` tables `retention` say.
-fn settings(
+pub(crate) fn settings(
     dir: &Path,
     (a, b): (&str, &str),
     repository: &FeedRepository,
@@ -211,7 +211,7 @@ fn composition(template: &str, uid: &str) -> String {
 }
 
 /// A node answering the federated query with one row per cell of `cells`.
-async fn node_with_rows(cells: &[String]) -> Server {
+pub(crate) async fn node_with_rows(cells: &[String]) -> Server {
     let server = Server::start().await;
     let rows: Vec<String> = cells.iter().map(|cell| format!("[{cell}]")).collect();
     let answer = format!(

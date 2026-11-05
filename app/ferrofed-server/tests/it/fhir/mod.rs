@@ -66,10 +66,10 @@ const FHIR: &str = "/fhir";
 const PUBLIC: &str = "https://gw.example.org";
 
 /// The uid of the composition node A holds.
-const UID_A: &str = "7c4e1d20-0000-4000-8000-0000000000a1::cdr-a.example.org::1";
+pub(crate) const UID_A: &str = "7c4e1d20-0000-4000-8000-0000000000a1::cdr-a.example.org::1";
 
 /// The uid of the composition node B holds.
-const UID_B: &str = "7c4e1d20-0000-4000-8000-0000000000b1::cdr-b.example.org::1";
+pub(crate) const UID_B: &str = "7c4e1d20-0000-4000-8000-0000000000b1::cdr-b.example.org::1";
 
 /// The archetype only the allergies section query names.
 const ALLERGIES: &str = "openEHR-EHR-EVALUATION.adverse_reaction_risk.v1";
@@ -94,7 +94,7 @@ fn known() -> Entry {
 }
 
 /// A stub PDQm Supplier answering every search with the test patient.
-async fn supplier() -> Server {
+pub(crate) async fn supplier() -> Server {
     pdqm_stub::answering(&[known()], &[known()]).await
 }
 
@@ -140,7 +140,7 @@ fn gateway_over(
 
 /// The configuration text of [`gateway_over`], with `members` appended to
 /// the registry document.
-fn text_registered(
+pub(crate) fn text_registered(
     dir: &Path,
     (a, b, pdq): (&str, &str, &str),
     rows: &[(&str, &str)],
@@ -195,7 +195,7 @@ fn gateway(dir: &Path, (a, b): (&Server, &Server), pdq: &Server) -> Result<Route
 /// A node answering the allergies section query with one composition of
 /// the fixture template, the uid `uid`, and every other section query with
 /// no row.
-async fn node_holding(uid: &str) -> Server {
+pub(crate) async fn node_holding(uid: &str) -> Server {
     let server = Server::start().await;
     let composition = eps::allergy_composition(uid, eps::TEMPLATE, "Synthetic substance");
     let columns = r#"[{"name":"composition","path":"c"},{"name":"uid","path":"c/uid/value"},{"name":"template_id","path":"c/archetype_details/template_id/value"}]"#;
@@ -225,7 +225,7 @@ async fn node_holding(uid: &str) -> Server {
 
 /// `GET {fhir-base}/Patient/$summary` for the test patient, with the query
 /// `extra` added.
-fn summary(extra: &str) -> Result<Request<Body>, http::Error> {
+pub(crate) fn summary(extra: &str) -> Result<Request<Body>, http::Error> {
     Request::get(format!(
         "{FHIR}/Patient/$summary?identifier={}%7C{PATIENT}{extra}",
         NAMESPACE.replace(':', "%3A")

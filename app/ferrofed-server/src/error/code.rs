@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 74] = [
+    pub const GATEWAY: [Self; 76] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -86,6 +86,8 @@ impl Code {
         Self::ConfirmationPending,
         Self::SecretStoreUnavailable,
         Self::CredentialMalformed,
+        Self::EmergencyLimitReached,
+        Self::EmergencyUncounted,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -193,6 +195,8 @@ impl Code {
             Self::ConfirmationPending => "confirmation-pending",
             Self::SecretStoreUnavailable => "secret-store-unavailable",
             Self::CredentialMalformed => "credential-malformed",
+            Self::EmergencyLimitReached => "emergency-limit-reached",
+            Self::EmergencyUncounted => "emergency-uncounted",
         }
     }
 
@@ -269,10 +273,12 @@ impl Code {
             | Self::PatientConfinement
             | Self::ContactPointAttributesRequired
             | Self::ApprovalOwn
-            | Self::OperatorUnverified => StatusCode::FORBIDDEN,
-            Self::AuthenticationUnavailable | Self::Overloaded | Self::AccessUnrecorded => {
-                StatusCode::SERVICE_UNAVAILABLE
-            }
+            | Self::OperatorUnverified
+            | Self::EmergencyLimitReached => StatusCode::FORBIDDEN,
+            Self::AuthenticationUnavailable
+            | Self::Overloaded
+            | Self::AccessUnrecorded
+            | Self::EmergencyUncounted => StatusCode::SERVICE_UNAVAILABLE,
             Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         }
     }
@@ -467,6 +473,12 @@ impl Code {
             Self::CredentialMalformed => {
                 "the request carries two credentials, or a credential field that is no credential (RFC 6750 §3.1)"
             }
+            Self::EmergencyLimitReached => {
+                "too many attempts for an emergency access have been made by this health professional in the window, so the access is denied (eHDSI Section II Security Services 10.0.0 §2.5)"
+            }
+            Self::EmergencyUncounted => {
+                "the emergency access could not be counted against the health professional's limit, so it is refused; no member was asked"
+            }
         }
     }
 }
@@ -559,6 +571,8 @@ mod tests {
             Code::ConfirmationPending => Some(71),
             Code::SecretStoreUnavailable => Some(72),
             Code::CredentialMalformed => Some(73),
+            Code::EmergencyLimitReached => Some(74),
+            Code::EmergencyUncounted => Some(75),
         }
     }
 
@@ -618,6 +632,10 @@ mod tests {
 
     // NOTE: §11.2, the status of each condition the gateway itself reports.
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one row per code: the table of every code's status"
+    )]
     fn each_code_answers_its_section_11_2_status() {
         let table = [
             (Code::BodyInvalid, StatusCode::BAD_REQUEST),
@@ -706,6 +724,8 @@ mod tests {
             (Code::ConfirmationPending, StatusCode::CONFLICT),
             (Code::SecretStoreUnavailable, StatusCode::CONFLICT),
             (Code::CredentialMalformed, StatusCode::BAD_REQUEST),
+            (Code::EmergencyLimitReached, StatusCode::FORBIDDEN),
+            (Code::EmergencyUncounted, StatusCode::SERVICE_UNAVAILABLE),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

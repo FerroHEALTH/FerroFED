@@ -296,6 +296,14 @@ pub enum Code {
     /// The request carries two credentials, or a credential field that is no
     /// credential (RFC 6750 §3.1, `invalid_request`).
     CredentialMalformed,
+    /// A health professional a national contact point relays reached the
+    /// limit of emergency accesses in the window (eHDSI Section II Security
+    /// Services 10.0.0 §2.5; `NCPeH` Architecture Specifications 10.0.0
+    /// §5.1.9).
+    EmergencyLimitReached,
+    /// The emergency access of a relayed professional could not be counted,
+    /// because FerroFED's own store did not answer, so it is refused.
+    EmergencyUncounted,
 }
 
 /// The code of a refused query: the refusal's stable kind

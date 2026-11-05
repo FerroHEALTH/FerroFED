@@ -135,6 +135,18 @@ impl TrcPatient {
         self.namespace.as_str() == system && self.value.expose_secret() == value
     }
 
+    /// The namespace of the identifier, the TRC `subject-id`'s system.
+    #[must_use]
+    pub fn namespace(&self) -> &str {
+        self.namespace.as_str()
+    }
+
+    /// The value of the identifier.
+    #[must_use]
+    pub fn value(&self) -> &SecretString {
+        &self.value
+    }
+
     /// The identifier as `system|value`, for the pseudonym a security record
     /// names it by and never for a log line.
     #[must_use]

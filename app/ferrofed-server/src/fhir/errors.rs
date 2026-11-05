@@ -13,6 +13,7 @@ use ferrofed_eehrxf::face::FHIR_JSON;
 use http::{Method, StatusCode, header};
 
 use crate::auth::caller::Caller;
+use crate::error::Code;
 use crate::face_path::{FacePath, classify};
 use crate::state::AppState;
 
@@ -95,6 +96,9 @@ fn service(face: FacePath, query: Option<&str>) -> Option<Service> {
 /// `{fhir-base}` with its own error body as an `OperationOutcome`, keeping
 /// its status and its headers.
 ///
+/// The denial of an emergency access past the limit names its refusal and
+/// `ERROR_SEC_GENERIC` in its `details` (eHDSI XCA Profile 8.0.1 §2.2.3).
+///
 /// An answer that is already FHIR JSON, a success, or an answer outside the
 /// face passes unchanged, but for one case. To a national contact point,
 /// every `404` `not-found` on a path that carries patient data is the one
@@ -144,17 +148,24 @@ pub async fn outcomes(
     }
     let (mut parts, body) = response.into_parts();
     let read = axum::body::to_bytes(body, ERROR_BODY_LIMIT).await;
-    let message = read
+    let error = read
         .ok()
-        .and_then(|bytes| serde_json::from_slice::<GatewayError>(&bytes).ok())
-        .map_or_else(
-            || String::from("the request was refused"),
-            |error| match error.code {
-                Some(code) => format!("{code}: {}", error.message),
-                None => error.message,
-            },
-        );
-    let rewritten = outcome(parts.status, issue_type(parts.status), &message);
+        .and_then(|bytes| serde_json::from_slice::<GatewayError>(&bytes).ok());
+    let limit_reached = error
+        .as_ref()
+        .is_some_and(|error| error.code.as_deref() == Some(Code::EmergencyLimitReached.as_str()));
+    let message = error.map_or_else(
+        || String::from("the request was refused"),
+        |error| match error.code {
+            Some(code) => format!("{code}: {}", error.message),
+            None => error.message,
+        },
+    );
+    let rewritten = if limit_reached {
+        trc::emergency_denied(parts.status, &message)
+    } else {
+        outcome(parts.status, issue_type(parts.status), &message)
+    };
     let (rewritten_parts, rewritten_body) = rewritten.into_parts();
     parts.headers.remove(header::CONTENT_LENGTH);
     for (name, value) in &rewritten_parts.headers {

@@ -49,6 +49,7 @@ use crate::access::AccessLog;
 use crate::binding::seam::DemographicsStep;
 use crate::binding::seam::PublicDocument;
 use crate::config::EmergencyConsent;
+use crate::config::emergency::EmergencyLimit;
 use crate::config::settings::{ConsentDisclosure, SigningSettings};
 use crate::health::dependencies::Dependencies;
 use crate::localization::LocalizationPolicy;
@@ -83,6 +84,7 @@ pub struct Federation {
     client_keys: Vec<Jwk>,
     documents: Vec<PublicDocument>,
     access: Option<Arc<AccessLog>>,
+    emergency_limit: EmergencyLimit,
 }
 
 /// What the process learns while it serves, which a registry reload carries
@@ -229,6 +231,22 @@ impl Federation {
     #[must_use]
     pub fn signer(&self) -> Option<&Arc<Signer>> {
         self.signer.as_ref()
+    }
+
+    /// The limit each health professional a national contact point relays
+    /// is held to in emergency accesses (eHDSI Section II Security Services
+    /// 10.0.0 §2.5).
+    #[must_use]
+    pub fn emergency_limit(&self) -> EmergencyLimit {
+        self.emergency_limit
+    }
+
+    /// This federation, holding each relayed professional's emergency
+    /// accesses to `limit`.
+    #[must_use]
+    pub fn with_emergency_limit(mut self, limit: EmergencyLimit) -> Self {
+        self.emergency_limit = limit;
+        self
     }
 
     /// The access log every access to patient data is recorded in, when

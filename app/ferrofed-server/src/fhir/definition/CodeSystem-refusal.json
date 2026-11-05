@@ -12,7 +12,7 @@
   "copyright": "Cadasto B.V., under the Business Source License 1.1.",
   "caseSensitive": true,
   "content": "complete",
-  "count": 2,
+  "count": 3,
   "concept": [
     {
       "code": "trc-patient-mismatch",
@@ -23,6 +23,11 @@
       "code": "trc-missing",
       "display": "No treatment relationship patient",
       "definition": "A national contact point's patient-data request carried no patient of a treatment relationship confirmation (eHDSI SAML Profile 10.0.0 §4.3)."
+    },
+    {
+      "code": "emergency-limit-reached",
+      "display": "Too many emergency access attempts",
+      "definition": "A national contact point relayed an emergency access for a health professional who reached the limit of emergency accesses in the window, so the access was denied (eHDSI Section II Security Services 10.0.0 §2.5; NCPeH Architecture Specifications 10.0.0 §5.1.9)."
     }
   ]
 }
