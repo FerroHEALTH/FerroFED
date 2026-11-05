@@ -1494,11 +1494,10 @@ name = "ferrofed-identity"
 version = "0.0.2"
 dependencies = [
  "async-trait",
- "aws-lc-rs",
- "der",
  "ferrofed-registry",
  "ferrofed-testkit",
  "ferrohealth-secret",
+ "ferrohealth-server",
  "ferrohealth-smart",
  "fhir-types",
  "http",
@@ -1520,8 +1519,6 @@ dependencies = [
  "tracing",
  "url",
  "wiremock",
- "x509-cert",
- "x509-ocsp",
 ]
 
 [[package]]
@@ -1719,12 +1716,14 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-server"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6885df5f86820bd8d78ab1c75479ba0015a68d479a8256170e9a83dc21638af"
+checksum = "86bd2ac04c00ff5697e78615cc674222f393707d4c63839a292c920d2c3b63a8"
 dependencies = [
+ "aws-lc-rs",
  "axum",
  "clap",
+ "der",
  "ferrohealth-health",
  "ferrohealth-secret",
  "ferrohealth-telemetry",
@@ -1732,7 +1731,9 @@ dependencies = [
  "hyper",
  "hyper-util",
  "ipnet",
+ "jiff",
  "pin-project-lite",
+ "reqwest",
  "rustls",
  "secrecy",
  "serde",
@@ -1745,6 +1746,8 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "x509-cert",
+ "x509-ocsp",
 ]
 
 [[package]]
