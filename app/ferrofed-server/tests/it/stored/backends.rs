@@ -3,10 +3,10 @@
 
 //! The `[stored_queries]` configuration (§12.7): the backend, `redb` unless
 //! the table names another, each backend refusing a key it does not read,
-//! the PostgreSQL connection string read inline or from its `_file` sibling
-//! and never shown, and `config check` refusing a definition directory that
-//! does not load. No specification governs the configuration: our own
-//! design.
+//! the removed connection string refused naming `[store]`, the `postgres`
+//! backend over FerroFED's own store, and `config check` refusing a
+//! definition directory that does not load. No specification governs the
+//! configuration: our own design.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -21,9 +21,8 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::config::settings::Settings;
+use ferrofed_server::config::store::StoreFault;
 use ferrofed_server::config::stored_queries::{Backend, Store};
-#[cfg(feature = "postgres")]
-use ferrohealth_secret::file::SecretError;
 use ferrohealth_telemetry::section::{DEFAULT_FILTER, Rendering};
 
 use crate::run::binary;
@@ -116,29 +115,17 @@ fn each_backend_refuses_a_key_it_does_not_read_and_needs_its_own() -> TestResult
             "{table}: {refused:?}"
         );
     }
-    for (table, key, backend) in [
-        (
-            "path = \"/q.redb\"\nurl = \"postgres://h/d\"",
-            "stored_queries.url",
-            Backend::Redb,
-        ),
-        (
-            "backend = \"files\"\npath = \"/q\"\nurl_file = \"/run/secrets/url\"",
-            "stored_queries.url_file",
-            Backend::Files,
-        ),
-        (
-            "backend = \"postgres\"\npath = \"/q\"",
-            "stored_queries.path",
-            Backend::Postgres,
-        ),
-    ] {
-        let refused = resolved(dir.path(), table)?.err().ok_or("refused")?;
-        assert!(
-            matches!(&refused, ConfigError::Federation(FederationFault::StoreKey { key: set, backend: named }) if set == key && *named == backend),
-            "{table}: {refused:?}"
-        );
-    }
+    let table = "backend = \"postgres\"\npath = \"/q\"";
+    let refused = resolved(
+        dir.path(),
+        &format!("{table}\n{}", crate::support::store_table()),
+    )?
+    .err()
+    .ok_or("refused")?;
+    assert!(
+        matches!(&refused, ConfigError::Federation(FederationFault::StoreKey { key, backend: Backend::Postgres }) if key == "stored_queries.path"),
+        "{table}: {refused:?}"
+    );
     let unknown = Config::from_sources(
         Some(&text(dir.path(), "backend = \"sqlite\"")?),
         &BTreeMap::new(),
@@ -151,86 +138,67 @@ fn each_backend_refuses_a_key_it_does_not_read_and_needs_its_own() -> TestResult
     Ok(())
 }
 
-#[cfg(not(feature = "postgres"))]
+// NOTE: no specification governs this: our own design; the connection string moved
+// to `[store]`, so the removed keys are refused by name, never ignored.
 #[test]
-fn a_build_without_the_postgres_feature_refuses_the_postgres_backend() -> TestResult {
-    let dir = tempfile::tempdir()?;
-    let table = format!("backend = \"postgres\"\nurl = \"postgres://u:{PASSWORD}@h/d\"");
-    let refused = resolved(dir.path(), &table)?.err().ok_or("refused")?;
-    assert!(
-        matches!(
-            &refused,
-            ConfigError::Federation(FederationFault::StoreBackendUnavailable {
-                backend: Backend::Postgres
-            })
-        ),
-        "{refused:?}"
-    );
-    assert!(!refused.to_string().contains(PASSWORD), "{refused}");
-    Ok(())
-}
-
-#[cfg(feature = "postgres")]
-#[test]
-fn a_postgres_url_resolves_inline_or_from_its_file_and_is_never_shown() -> TestResult {
+fn the_removed_connection_string_is_refused_naming_the_store_and_never_shown() -> TestResult {
     let dir = tempfile::tempdir()?;
     let url = format!("postgres://ferrofed:{PASSWORD}@db.example.org/ferrofed?sslmode=require");
-    let secret = dir.path().join("url");
-    std::fs::write(&secret, format!("{url}\n"))?;
-    let secret = toml::Value::String(secret.display().to_string());
-    for table in [
-        format!("backend = \"postgres\"\nurl = \"{url}\""),
-        format!("backend = \"postgres\"\nurl_file = {secret}"),
+    for (table, key) in [
+        (
+            format!("backend = \"postgres\"\nurl = \"{url}\""),
+            "stored_queries.url",
+        ),
+        (
+            String::from("backend = \"postgres\"\nurl_file = \"/run/secrets/url\""),
+            "stored_queries.url_file",
+        ),
+        (
+            format!("path = \"/q.redb\"\nurl = \"{url}\""),
+            "stored_queries.url",
+        ),
     ] {
-        let config = Config::from_sources(Some(&text(dir.path(), &table)?), &BTreeMap::new())?;
-        assert!(!format!("{config:?}").contains(PASSWORD), "{table}");
-        let settings = config.resolve()?;
-        let store = settings.stored_queries.as_ref().ok_or("offered")?;
-        let Store::Postgres(held) = store else {
-            panic!("a postgres store: {store:?}");
-        };
-        assert_eq!(url, held.expose(), "trimmed");
-        assert!(!format!("{settings:?}").contains(PASSWORD), "Debug redacts");
-        let logged = logged(&settings)?;
-        assert!(
-            logged.contains(r#""stored_query_backend":"postgres""#),
-            "{logged}"
-        );
-        for hidden in [PASSWORD, "db.example.org"] {
-            assert!(
-                !logged.contains(hidden),
-                "the log names the kind only: {logged}"
-            );
-        }
-    }
-    let both = format!("backend = \"postgres\"\nurl = \"{url}\"\nurl_file = {secret}");
-    let refused = resolved(dir.path(), &both)?.err().ok_or("refused")?;
-    assert!(
-        matches!(&refused, ConfigError::SecretFile(SecretError::Both { key }) if key == "stored_queries.url"),
-        "{refused:?}"
-    );
-    let refused = resolved(dir.path(), "backend = \"postgres\"")?
+        let refused = resolved(
+            dir.path(),
+            &format!("{table}\n{}", crate::support::store_table()),
+        )?
         .err()
         .ok_or("refused")?;
-    assert!(
-        matches!(&refused, ConfigError::Missing { key } if key == "stored_queries.url"),
-        "{refused:?}"
-    );
+        assert!(
+            matches!(&refused, ConfigError::Store(StoreFault::UrlMoved { key: named }) if named == key),
+            "{table}: {refused:?}"
+        );
+        let text = refused.to_string();
+        assert!(text.contains(key) && text.contains("[store]"), "{text}");
+        assert!(!text.contains(PASSWORD), "{text}");
+        assert!(!format!("{refused:?}").contains(PASSWORD), "{refused:?}");
+    }
     Ok(())
 }
 
-#[cfg(feature = "postgres")]
 #[test]
-fn an_unparsable_postgres_url_is_refused_without_quoting_it() -> TestResult {
+fn the_postgres_backend_resolves_over_the_store_and_logs_its_kind_alone() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let table = format!("backend = \"postgres\"\nurl = \"postgres://u:{PASSWORD}@h:port/d\"");
-    let refused = resolved(dir.path(), &table)?.err().ok_or("refused")?;
+    let table = format!("backend = \"postgres\"\n{}", crate::support::store_table());
+    let config = Config::from_sources(Some(&text(dir.path(), &table)?), &BTreeMap::new())?;
+    let settings = config.resolve()?;
     assert!(
-        matches!(&refused, ConfigError::Federation(FederationFault::StoreUrl { key }) if key == "stored_queries.url"),
-        "{refused:?}"
+        matches!(settings.stored_queries, Some(Store::Postgres)),
+        "{:?}",
+        settings.stored_queries
     );
-    assert!(!refused.to_string().contains(PASSWORD), "{refused}");
-    assert!(!format!("{refused:?}").contains(PASSWORD), "{refused:?}");
+    assert!(settings.store.is_some(), "over [store]");
+    let logged = logged(&settings)?;
+    assert!(
+        logged.contains(r#""stored_query_backend":"postgres""#),
+        "{logged}"
+    );
+    for hidden in [crate::support::STORE_PASSWORD, "db.example.org"] {
+        assert!(
+            !logged.contains(hidden),
+            "the log names the kind only: {logged}"
+        );
+    }
     Ok(())
 }
 

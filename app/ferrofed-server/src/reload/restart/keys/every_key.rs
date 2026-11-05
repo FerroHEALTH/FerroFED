@@ -178,6 +178,13 @@ timeout_ms = 1000
 backend = "redb"
 path = "@DIR@/stored.redb"
 
+[store]
+url = "postgres://ferrofed:synthetic-store-pw@db.example.org:5432/ferrofed?sslmode=require"
+ca_file = "@DIR@/collector-ca.pem"
+max_connections = 4
+timeout_ms = 10000
+sweep_interval_s = 60
+
 [metrics]
 listen = "127.0.0.1:9090"
 scrape_users = ["synthetic-scraper"]

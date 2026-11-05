@@ -335,7 +335,10 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   (`auth`, #80) authenticates every caller before the façade reads the
   request, and the gateway's JWK Set is served at
   `{base}/.well-known/jwks.json` (#81). The façade (#38) serves the federated AQL query, the stored queries the gateway holds
-  (`stored`: an embedded, a PostgreSQL and a read-only files backend), the
+  (`stored`: an embedded, a PostgreSQL and a read-only files backend), with
+  FerroFED's own PostgreSQL store under `[store]` (`store`: its migrations,
+  readiness indicator and sweep, #1636), which a contact-point issuer and the
+  `postgres` backend need, the
   follow-up routes to the owning node, the definition routes to a chosen
   node, and `OPTIONS {base}/`, with its two `serde_json::Value` seams
   (`facade::intake`, `facade::cells`); an ITS-REST path it does not serve

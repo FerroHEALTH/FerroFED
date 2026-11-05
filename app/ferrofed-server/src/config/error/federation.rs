@@ -35,24 +35,6 @@ pub enum FederationFault {
         /// The backend chosen.
         backend: Backend,
     },
-    /// The chosen stored-query backend is not built into this binary.
-    #[error(
-        "stored_queries.backend = \"{backend}\" is not built into this binary; build ferrofed-server with its {backend} feature"
-    )]
-    StoreBackendUnavailable {
-        /// The backend chosen.
-        backend: Backend,
-    },
-    /// The PostgreSQL connection string does not parse.
-    ///
-    /// The parser's message is not kept: it may quote a character of the
-    /// string, which holds a password.
-    #[error("{key} is not a PostgreSQL connection string, a URL or libpq key/value pairs")]
-    StoreUrl {
-        /// The key the string was read from: the inline key or its `_file`
-        /// sibling.
-        key: String,
-    },
     /// `federation.demographic_endpoint` is not an endpoint id.
     #[error("federation.demographic_endpoint is not an endpoint id")]
     DemographicEndpoint {

@@ -18,11 +18,11 @@ No specification governs this page: our own design.
 2. Keep a copy of the configuration you run now, `ferrofed.toml` and the
    registry document, and note the image digest or binary version. A
    rollback needs both.
-3. Back up the stored-query store when `[stored_queries]` is set: copy the
-   `redb` file while no gateway has it open, or dump the `ferrofed` schema
-   of the PostgreSQL database (`pg_dump --schema=ferrofed`). The new release
-   may migrate the store, and an older release refuses a store a newer one
-   migrated.
+3. Back up the stored-query store when `[stored_queries]` is set, and
+   FerroFED's own store when `[store]` is set: copy the `redb` file while no
+   gateway has it open, or dump the `ferrofed` schema of the PostgreSQL
+   database (`pg_dump --schema=ferrofed`). The new release may migrate a
+   store, and an older release refuses a store a newer one migrated.
 4. Run the new binary's `config check` over the configuration, with the
    upgrade notes applied. It reads every file and secret as `serve` does,
    binds no socket, and exits `78` naming each key it refuses. With the
@@ -43,14 +43,15 @@ Then roll the new release out: `docker compose up --wait` with the new
 
 ## Several replicas on one PostgreSQL store
 
-A replica migrates the shared stored-query store when it starts. Once one
-replica of a release that brings a new schema version has started, a
-replica of the older release refuses its next connection to the store
-([Rollback](rollback.md#the-stored-query-store)). When the upgrade notes
-name a new schema version, upgrade every replica in one rollout and expect
-the stored-query routes of the old replicas to answer `500` until they are
-replaced. A release whose notes name none can be rolled out replica by
-replica.
+A replica migrates FerroFED's own store ([`[store]`](store.md#migrations))
+when it starts, under an advisory lock, so replicas starting together apply
+each migration once. Once one replica of a release that brings a new
+migration has started, a replica of the older release refuses its next
+connection to the store ([Rollback](rollback.md#the-stored-query-store)).
+When the upgrade notes name a new migration, upgrade every replica in one
+rollout and expect the routes of the old replicas that need the store to
+answer `500` until they are replaced. A release whose notes name none can be
+rolled out replica by replica.
 
 ## The compatibility policy
 

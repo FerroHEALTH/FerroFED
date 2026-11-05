@@ -176,6 +176,9 @@ pub enum HarnessError {
     /// The proxy in front of a node could not be started.
     #[error("the proxy in front of a node could not be started")]
     Proxy(#[source] ProxyError),
+    /// The certificates of a harness TLS server could not be generated.
+    #[error("the harness certificates could not be generated")]
+    Certificate(#[source] rcgen::Error),
 }
 
 /// A started PostgreSQL server holding one database per node, on a network

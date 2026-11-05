@@ -70,6 +70,7 @@
   - [Onward credentials](operate/onward-credentials.md)
   - [Queries and API areas](operate/queries-and-areas.md)
   - [Configuration revisions](operate/configuration-revisions.md)
+  - [FerroFED's own store](operate/store.md)
 - [Admitting a node](operate/admission.md)
 - [Exporting the identity state](operate/identity-state-export.md)
 - [Scoring a deployment](operate/conformance-run.md)

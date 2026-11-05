@@ -78,7 +78,7 @@ fn words(key: &str) -> (Msg, Msg) {
         "federation.consent.emergency" => (Msg::SettingEmergency, Msg::SettingEmergencyDesc),
         "stored_queries.backend" => (Msg::SettingBackend, Msg::SettingBackendDesc),
         "stored_queries.path" => (Msg::SettingStorePath, Msg::SettingStorePathDesc),
-        "stored_queries.url" => (Msg::SettingConnection, Msg::SettingConnectionDesc),
+        "store.url" => (Msg::SettingConnection, Msg::SettingConnectionDesc),
         "access_log.retention.years" => (Msg::SettingRetention, Msg::SettingRetentionDesc),
         "access_log.emergency_purpose" => (
             Msg::SettingEmergencyPurposes,

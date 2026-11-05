@@ -14,7 +14,6 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
-#[cfg(feature = "postgres")]
 mod postgres;
 
 use std::collections::BTreeMap;

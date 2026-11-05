@@ -71,6 +71,7 @@ pub(super) fn effective(boot: &Settings, fresh: Settings) -> Settings {
         telemetry: boot.telemetry.clone(),
         federation,
         stored_queries: boot.stored_queries.clone(),
+        store: boot.store.clone(),
         fhir: boot.fhir.clone(),
         metrics: boot.metrics.clone(),
         signing: boot.signing.clone(),

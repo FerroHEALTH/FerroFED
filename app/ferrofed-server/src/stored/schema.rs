@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The schema version a writable stored-query store records.
+//! The schema version the embedded stored-query store records.
 //!
-//! The embedded `redb` file and the PostgreSQL database each record the
-//! version of the layout they hold. At start, a store at an older version is
+//! The embedded `redb` file records the version of the layout it holds; the
+//! PostgreSQL backend's table is migrated by FerroFED's own store
+//! ([`crate::store::migrations`]). At start, a store at an older version is
 //! migrated forward one step at a time, in order, and records the version it
 //! reached; a store at a newer version than this binary knows was written by
 //! a newer FerroFED, and the start is refused with [`SchemaError::Newer`]

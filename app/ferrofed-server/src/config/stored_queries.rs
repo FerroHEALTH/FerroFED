@@ -9,9 +9,9 @@
 //!
 //! - `redb`, the default: the embedded store file `path` names, which one
 //!   gateway process opens at a time;
-//! - `postgres`: one PostgreSQL database every replica shares, reached at the
-//!   connection string `url` or `url_file` holds, which is a secret and never
-//!   logged; only a build with the `postgres` feature offers it;
+//! - `postgres`: FerroFED's own PostgreSQL database, which every replica
+//!   shares, configured by `[store]` ([`crate::config::store`]); the table's
+//!   former `url` and `url_file` are refused, naming `[store]`;
 //! - `files`: read-only, one file per definition under the directory `path`
 //!   names, loaded at start, so a `PUT` is refused.
 //!
@@ -20,13 +20,13 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
+use serde::de::IgnoredAny;
 
 use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::error::federation::FederationFault;
-use ferrohealth_secret::file::read_secret;
+use crate::config::store::StoreFault;
 
 /// The backend of the stored-query registry.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
@@ -60,9 +60,7 @@ impl fmt::Display for Backend {
 }
 
 /// The federated stored-query registry, as written.
-///
-/// `Debug` shows the connection string as [`SecretUrl`] redacts it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct StoredQueries {
     /// The backend; `redb` when the table sets none.
@@ -70,23 +68,23 @@ pub struct StoredQueries {
     /// The `redb` store file, created when it does not exist, or the
     /// directory the `files` backend reads.
     pub path: Option<PathBuf>,
-    /// The PostgreSQL connection string of the `postgres` backend, a URL or
-    /// libpq key/value pairs; a secret.
-    pub url: Option<SecretUrl>,
-    /// A file holding [`StoredQueries::url`], read at boot.
-    pub url_file: Option<PathBuf>,
+    /// The removed connection string of the `postgres` backend, read only
+    /// so that a configuration still setting it is refused naming `[store]`
+    /// ([`StoreFault::UrlMoved`]); its value is never kept.
+    pub url: Option<IgnoredAny>,
+    /// The removed file of the connection string, refused as
+    /// [`StoredQueries::url`] is.
+    pub url_file: Option<IgnoredAny>,
 }
 
 /// The store the stored-query registry is opened over, resolved.
-///
-/// `Debug` redacts the connection string, because [`SecretUrl`] does.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum Store {
     /// The `redb` store file.
     Redb(PathBuf),
-    /// The PostgreSQL connection string.
-    Postgres(SecretUrl),
+    /// FerroFED's own PostgreSQL store, which `[store]` configures.
+    Postgres,
     /// The directory of read-only definition files.
     Files(PathBuf),
 }
@@ -97,18 +95,18 @@ impl Store {
     pub fn backend(&self) -> Backend {
         match self {
             Self::Redb(_) => Backend::Redb,
-            Self::Postgres(_) => Backend::Postgres,
+            Self::Postgres => Backend::Postgres,
             Self::Files(_) => Backend::Files,
         }
     }
 
     /// Whether `other` opens the same store, so a reload that reads it
-    /// needs no restart.
+    /// needs no restart; a change of `[store]` is a restart key of its own.
     #[must_use]
     pub fn same_as(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Redb(a), Self::Redb(b)) | (Self::Files(a), Self::Files(b)) => a == b,
-            (Self::Postgres(a), Self::Postgres(b)) => a == b,
+            (Self::Postgres, Self::Postgres) => true,
             _ => false,
         }
     }
@@ -119,28 +117,43 @@ impl Store {
 ///
 /// # Errors
 ///
-/// [`Error::Missing`] naming `stored_queries.path` or `stored_queries.url`
+/// [`StoreFault::UrlMoved`] for the removed `stored_queries.url` or
+/// `stored_queries.url_file`; [`Error::Missing`] naming `stored_queries.path`
 /// when the backend needs it and it is unset or empty, and naming
 /// `registry.document` when the registry is offered with neither a registry
 /// document nor a directory, and so without the federation that executes
-/// its queries; [`FederationFault::StoreKey`] for a key the backend does
-/// not read; [`FederationFault::StoreBackendUnavailable`] for `postgres` in a build
-/// without it; [`FederationFault::StoreUrl`] for a connection string that does not
-/// parse; and the secret errors of a `url_file`.
+/// its queries; and [`FederationFault::StoreKey`] for a key the backend does
+/// not read. The `postgres` backend without `[store]` is refused by
+/// [`crate::config::store::resolve`].
 pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
     let section = &config.stored_queries;
-    let offered = section.backend.is_some()
-        || section.path.is_some()
-        || section.url.is_some()
-        || section.url_file.is_some();
-    if !offered {
+    for (key, set) in [
+        ("stored_queries.url", section.url.is_some()),
+        ("stored_queries.url_file", section.url_file.is_some()),
+    ] {
+        if set {
+            return Err(StoreFault::UrlMoved {
+                key: String::from(key),
+            }
+            .into());
+        }
+    }
+    if section.backend.is_none() && section.path.is_none() {
         return Ok(None);
     }
     let backend = section.backend.unwrap_or_default();
     let store = match backend {
-        Backend::Redb => Store::Redb(path(section, backend)?),
-        Backend::Files => Store::Files(path(section, backend)?),
-        Backend::Postgres => Store::Postgres(url(section)?),
+        Backend::Redb => Store::Redb(path(section)?),
+        Backend::Files => Store::Files(path(section)?),
+        Backend::Postgres => {
+            if section.path.is_some() {
+                return Err(Error::Federation(FederationFault::StoreKey {
+                    key: String::from("stored_queries.path"),
+                    backend,
+                }));
+            }
+            Store::Postgres
+        }
     };
     if !config.registry.configured() {
         return Err(Error::Missing {
@@ -150,58 +163,12 @@ pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
     Ok(Some(store))
 }
 
-/// The `path` a path backend reads, refusing a connection string beside it.
-fn path(section: &StoredQueries, backend: Backend) -> Result<PathBuf, Error> {
-    for (key, set) in [
-        ("stored_queries.url", section.url.is_some()),
-        ("stored_queries.url_file", section.url_file.is_some()),
-    ] {
-        if set {
-            return Err(Error::Federation(FederationFault::StoreKey {
-                key: String::from(key),
-                backend,
-            }));
-        }
-    }
+/// The `path` a path backend reads.
+fn path(section: &StoredQueries) -> Result<PathBuf, Error> {
     match &section.path {
         Some(path) if !path.as_os_str().is_empty() => Ok(path.clone()),
         Some(_) | None => Err(Error::Missing {
             key: String::from("stored_queries.path"),
         }),
     }
-}
-
-/// The connection string of the `postgres` backend, checked to parse.
-fn url(section: &StoredQueries) -> Result<SecretUrl, Error> {
-    if section.path.is_some() {
-        return Err(Error::Federation(FederationFault::StoreKey {
-            key: String::from("stored_queries.path"),
-            backend: Backend::Postgres,
-        }));
-    }
-    if !cfg!(feature = "postgres") {
-        return Err(Error::Federation(
-            FederationFault::StoreBackendUnavailable {
-                backend: Backend::Postgres,
-            },
-        ));
-    }
-    let key = "stored_queries.url";
-    let url = read_secret(key, section.url.clone(), section.url_file.as_deref())?
-        .filter(|url: &SecretUrl| !url.expose().trim().is_empty())
-        .ok_or_else(|| Error::Missing {
-            key: String::from(key),
-        })?;
-    #[cfg(feature = "postgres")]
-    if !crate::config::postgres::parses(&url) {
-        let key = if section.url_file.is_some() {
-            "stored_queries.url_file"
-        } else {
-            key
-        };
-        return Err(Error::Federation(FederationFault::StoreUrl {
-            key: String::from(key),
-        }));
-    }
-    Ok(url)
 }

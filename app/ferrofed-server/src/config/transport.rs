@@ -56,8 +56,6 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use url::Url;
 
 use crate::config::settings::{Scheme, Settings};
-#[cfg(feature = "postgres")]
-use crate::config::stored_queries::Store;
 
 /// Where a protected payload is sent: the key of the URL and what travels to
 /// it, by key, never a value, with the encryption it needs.
@@ -348,17 +346,8 @@ pub fn check(
             cleartext.extend(protected_payload(profile, endpoint.expose(), site)?);
         }
     }
-    #[cfg(feature = "postgres")]
-    if let Some(Store::Postgres(url)) = &settings.stored_queries {
-        let site = ProtectedSite {
-            url_key: String::from("stored_queries.url"),
-            payload: String::from("the password in stored_queries.url"),
-            requires: Encryption::Tls,
-        };
-        let requires_tls = !crate::config::postgres::exposes_password(url);
-        cleartext.extend(encrypted_connection(profile, requires_tls, site)?);
-    }
-    #[cfg(feature = "postgres")]
+    // NOTE: no specification governs this: our own design; `[store]` requires TLS under
+    // every profile at load, so only the revision store's connection is held here.
     if let Some(crate::config::revisions::Store::Postgres(url)) = &settings.revisions {
         let site = ProtectedSite {
             url_key: String::from("config.url"),
@@ -487,8 +476,8 @@ mod tests {
     #[test]
     fn a_connection_without_tls_is_refused_outside_development_and_named_by_its_need() {
         let site = ProtectedSite {
-            url_key: String::from("stored_queries.url"),
-            payload: String::from("the password in stored_queries.url"),
+            url_key: String::from("config.url"),
+            payload: String::from("the password in config.url"),
             requires: Encryption::Tls,
         };
         assert_eq!(
@@ -503,9 +492,7 @@ mod tests {
             .expect_err("a password without TLS is refused");
         let text = refused.to_string();
         assert!(
-            text.contains(
-                "stored_queries.url is not a connection that requires TLS (sslmode=require)"
-            ),
+            text.contains("config.url is not a connection that requires TLS (sslmode=require)"),
             "{text}"
         );
     }

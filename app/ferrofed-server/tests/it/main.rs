@@ -120,6 +120,7 @@ mod run;
 mod running;
 mod seed_data;
 mod shutdown;
+mod store;
 mod stored;
 mod stored_fan_out;
 mod stored_location;

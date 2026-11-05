@@ -186,7 +186,7 @@ one of three backends that `backend` names:
 | `backend` | Where the definitions live | For |
 |---|---|---|
 | `redb`, the default | the embedded store file `path` names | one gateway process |
-| `postgres` | one PostgreSQL database, at the connection string `url` or `url_file` holds | several replicas behind one address |
+| `postgres` | FerroFED's own PostgreSQL database, which [`[store]`](store.md) configures | several replicas behind one address |
 | `files` | read-only, one file per definition under the directory `path` names | instances that share definitions with no database |
 
 What holds for every backend:
@@ -202,7 +202,7 @@ What holds for every backend:
 - The registry needs the federation that runs its queries, so
   `[stored_queries]` without `registry.document` refuses the configuration,
   naming `registry.document`. A key the chosen backend does not read, such
-  as `url` beside `backend = "redb"`, refuses it too, naming the key.
+  as `path` beside `backend = "postgres"`, refuses it too, naming the key.
 - `OPTIONS {base}/` declares `definition.stored_query_registry: true` while
   the registry is offered, whatever the backend, and `false` without it;
   without it a stored-query definition request goes to the one node the
@@ -234,38 +234,22 @@ path = "/var/lib/ferrofed/stored-queries.redb"
 ```toml
 [stored_queries]
 backend = "postgres"
-url_file = "/run/secrets/ferrofed-stored-queries-url"
+
+[store]
+url_file = "/run/secrets/ferrofed/store-url"
 ```
 
-- The backend is built into the binary only with the `postgres` feature of
-  `ferrofed-server` (`cargo build --release --features postgres`), so a
-  single gateway carries no PostgreSQL client. A binary built without it
-  refuses `backend = "postgres"` at `config check` and at start.
-- The connection string is a secret, a URL
-  (`postgres://ferrofed:…@db.example.org:5432/ferrofed?sslmode=require`) or
-  libpq key/value pairs. Give it as `url_file`, a file read at boot and
-  trimmed, or as `url`, never both. A string that does not parse is refused
-  naming the key, never quoting the string. The backend is tested against
-  PostgreSQL 18.6.
-- TLS uses rustls with the platform's trusted roots, as the gateway's calls
-  to the members do, and always verifies the server's certificate.
-  `sslmode=require` refuses a server without TLS; the default, `prefer`,
-  falls back to a connection without it. Outside the development profile, a
-  connection string that carries a password to a networked host must set
-  `sslmode=require`, or `config check`, the start and a reload refuse it
-  naming `stored_queries.url`; under the development profile it starts and
-  is named in the banner and the log
-  ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
-- At start, and each time it reconnects, the gateway creates the schema
-  `ferrofed` when it is absent, reads the schema version
-  `ferrofed.schema_version` records, and runs every migration past it in
-  order, which creates `ferrofed.stored_query_definition` on an empty
-  database, one replica at a time in one transaction. A database a newer
-  FerroFED migrated refuses the start, and a reconnect, naming both
-  versions, and is left as it was ([Rollback](rollback.md)). The role needs `CREATE` on the database to
-  make the schema, or a `ferrofed` schema made for it on which it holds
-  `CREATE` and `USAGE`. A database that cannot be reached within ten seconds
-  refuses the start.
+- The definitions live in FerroFED's own store, the one PostgreSQL database
+  [`[store]`](store.md) configures. `backend = "postgres"` without `[store]`
+  refuses the configuration, naming `stored_queries.backend` and `[store]`.
+  The connection string, its TLS, the migrations and the readiness
+  indicator are the store's ([FerroFED's own store](store.md)).
+- `[stored_queries]` takes no connection string. `url` and `url_file` there
+  refuse the configuration, naming the key and `[store]`
+  ([Moving from `[stored_queries] url`](store.md#moving-from-stored_queries-url)).
+- The table is `ferrofed.stored_query_definition`, the store's first
+  migration, so a database an earlier release's `postgres` backend wrote is
+  taken over with every definition it holds.
 - Every replica shares the table, whose primary key is the name and the
   version. Two replicas that store the same new version at once store exactly
   one: one `PUT` answers `200` and the other `409` (`stored-query-held`), and
@@ -273,7 +257,7 @@ url_file = "/run/secrets/ferrofed-stored-queries-url"
   table again before it answers, so a version one replica stored is served by
   every other. A database that fails a request answers it `500` and names
   nothing in the body; the log names the failure.
-- `config check` checks that the connection string parses, and does not
+- `config check` checks the store's connection string, and does not
   connect.
 
 ### Read-only: `files`

@@ -12,8 +12,8 @@
 //! - `redb`, the default: the embedded store file `path` names, which one
 //!   gateway process opens at a time;
 //! - `postgres`: one PostgreSQL database every replica shares, reached at the
-//!   connection string `url` or `url_file` holds, a secret; only a build with
-//!   the `postgres` feature offers it.
+//!   connection string `url` or `url_file` holds, a secret. It is never
+//!   FerroFED's own store of `[store]`, which holds no configuration.
 //!
 //! Under `managed`, `poll_ms` sets how often each gateway reads the running
 //! mark, to apply a revision another replica marked running ([`poll`]), and
@@ -178,14 +178,6 @@ pub enum RevisionsFault {
         /// The backend chosen.
         backend: Backend,
     },
-    /// The chosen backend is not built into this binary.
-    #[error(
-        "config.backend = \"{backend}\" is not built into this binary; build ferrofed-server with its {backend} feature"
-    )]
-    Unavailable {
-        /// The backend chosen.
-        backend: Backend,
-    },
     /// `config.poll_ms` is outside the bounds it is read within.
     #[error(
         "config.poll_ms is {value}; it must be from {POLL_MIN_MS} to {POLL_MAX_MS} milliseconds"
@@ -257,8 +249,7 @@ pub enum RevisionsFault {
 /// [`RevisionsFault::NoAdminListener`] for `managed` without
 /// `metrics.listen`, [`RevisionsFault::Key`] for a key the backend does not
 /// read, [`Error::Missing`] naming `config.path` or `config.url` when the
-/// backend needs it, [`RevisionsFault::Unavailable`] for `postgres` in a
-/// build without it, [`RevisionsFault::Url`] for a connection string that
+/// backend needs it, [`RevisionsFault::Url`] for a connection string that
 /// does not parse, and the secret errors of a `url_file`.
 pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
     let section = &config.revisions;
@@ -344,19 +335,12 @@ fn refuse_keys(keys: &[(&'static str, bool)], backend: Backend) -> Result<(), Er
 
 /// The connection string of the `postgres` backend, checked to parse.
 fn url(section: &Revisions) -> Result<SecretUrl, Error> {
-    if !cfg!(feature = "postgres") {
-        return Err(RevisionsFault::Unavailable {
-            backend: Backend::Postgres,
-        }
-        .into());
-    }
     let key = "config.url";
     let url = read_secret(key, section.url.clone(), section.url_file.as_deref())?
         .filter(|url: &SecretUrl| !url.expose().trim().is_empty())
         .ok_or_else(|| Error::Missing {
             key: String::from(key),
         })?;
-    #[cfg(feature = "postgres")]
     if !crate::config::postgres::parses(&url) {
         let key = if section.url_file.is_some() {
             "config.url_file"

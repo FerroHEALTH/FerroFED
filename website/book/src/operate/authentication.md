@@ -596,6 +596,11 @@ trc_patient = "trc_patient"
 correlation_header = "ncp-correlation-id"
 ```
 
+An issuer declared a national contact point needs FerroFED's own store,
+[`[store]`](store.md): a configuration that declares one and sets no
+`[store]` refuses to start, naming `trust.issuer[0].national_contact_point`
+and `[store]`.
+
 **Who authenticates the professional.** The contact point's side does. The
 gateway verifies the contact point's token, as it verifies every caller's,
 and reads the professional and the provider from it as the contact point

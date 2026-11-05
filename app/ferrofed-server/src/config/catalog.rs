@@ -195,12 +195,12 @@ pub(crate) const ENTRIES: &[Entry] = &[
     ),
     scalar("stored_queries.path", Section::StoredQueries, None, STORED),
     Entry {
-        key: "stored_queries.url",
+        key: "store.url",
         section: Section::StoredQueries,
         default: None,
-        restart: STORED,
+        restart: Some("store"),
         kind: Kind::Secret {
-            file: "stored_queries.url_file",
+            file: "store.url_file",
         },
     },
     scalar(

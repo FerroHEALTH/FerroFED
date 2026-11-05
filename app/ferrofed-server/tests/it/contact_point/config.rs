@@ -16,10 +16,11 @@ use ferrofed_server::config::auth::AuthFault;
 use ferrofed_server::config::error::Error as ConfigError;
 
 /// One trusted issuer declared a national contact point, its table
-/// `table`.
+/// `table`, beside the FerroFED store a contact point needs.
 fn declaring(table: &str) -> String {
     format!(
-        "[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\n\n[[trust.issuer]]\nissuer = \"https://ncp.example.test\"\n\n[trust.issuer.national_contact_point]\n{table}"
+        "{}\n[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\n\n[[trust.issuer]]\nissuer = \"https://ncp.example.test\"\n\n[trust.issuer.national_contact_point]\n{table}",
+        crate::support::store_table()
     )
 }
 

@@ -3,10 +3,10 @@
 
 //! The stored-query registry's stores (§12.7, N44).
 //!
-//! The embedded `redb` file serves one gateway process ([`embedded`]), a
-//! PostgreSQL database serves several replicas that share it (`postgres`,
-//! behind the `postgres` feature), and read-only definition files serve
-//! instances that share no database ([`files`]).
+//! The embedded `redb` file serves one gateway process ([`embedded`]),
+//! FerroFED's own PostgreSQL store serves several replicas that share it
+//! ([`postgres`]), and read-only definition files serve instances that share
+//! no database ([`files`]).
 //!
 //! Each holds names, versions, instants and parameterised AQL, and never a
 //! patient identifier: a definition names its patient through a
@@ -22,6 +22,7 @@
 
 use std::fmt;
 use std::ops::Range;
+use std::sync::Arc;
 
 use ferrofed_operator_api::console::Owner;
 use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertion, StoreError};
@@ -36,7 +37,6 @@ use crate::security::logged;
 
 pub mod embedded;
 pub mod files;
-#[cfg(feature = "postgres")]
 pub mod postgres;
 pub mod reserved;
 pub mod schema;
@@ -188,7 +188,14 @@ pub fn is_read_only(name: &QueryName, store_read_only: bool) -> bool {
     owner(name, store_read_only) != Owner::Store
 }
 
-/// Opens the store `store` names, admitting what it reads under `context`.
+/// No `[store]` is open for the `postgres` backend, which configuration
+/// refuses first.
+#[derive(Debug, thiserror::Error)]
+#[error("the postgres stored-query backend needs FerroFED's own store, and none is open")]
+pub struct NoStore;
+
+/// Opens the store `store` names, admitting what it reads under `context`;
+/// the `postgres` backend uses `shared`, FerroFED's own store.
 ///
 /// The gateway's own read-only definitions sit beside it
 /// ([`reserved::Reserved`]), and every definition it reads is admitted as a
@@ -197,23 +204,19 @@ pub fn is_read_only(name: &QueryName, store_read_only: bool) -> bool {
 /// # Errors
 ///
 /// The [`StoreError`] of the backend's own `open`, and
-/// [`StoreError::Backend`] for a PostgreSQL store in a build without the
-/// `postgres` feature, which configuration refuses first.
-pub fn open(store: &Store, context: &Context) -> Result<Box<dyn DefinitionStore>, StoreError> {
+/// [`StoreError::Backend`] with [`NoStore`] for the `postgres` backend when
+/// `shared` is `None`.
+pub fn open(
+    store: &Store,
+    context: &Context,
+    shared: Option<&Arc<crate::store::Store>>,
+) -> Result<Box<dyn DefinitionStore>, StoreError> {
     let opened: Box<dyn DefinitionStore> = match store {
         Store::Redb(path) => Box::new(embedded::RedbStore::open(path)?),
         Store::Files(path) => Box::new(files::FilesStore::open(path, context)?),
-        #[cfg(feature = "postgres")]
-        Store::Postgres(url) => Box::new(postgres::PostgresStore::open(url)?),
-        #[cfg(not(feature = "postgres"))]
-        Store::Postgres(_) => {
-            return Err(StoreError::Backend(Box::new(
-                crate::config::error::Error::Federation(
-                    crate::config::error::federation::FederationFault::StoreBackendUnavailable {
-                        backend: store.backend(),
-                    },
-                ),
-            )));
+        Store::Postgres => {
+            let shared = shared.ok_or_else(|| StoreError::Backend(Box::new(NoStore)))?;
+            Box::new(postgres::PostgresStore::new(Arc::clone(shared)))
         }
     };
     let reserved = reserved::Reserved::new(opened)?;

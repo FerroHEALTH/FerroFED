@@ -13,12 +13,14 @@
 //! in one statement; a move of the mark is one `UPDATE … WHERE` the mark is
 //! the revision the writer read
 //! (<https://www.postgresql.org/docs/18/sql-insert.html#SQL-ON-CONFLICT>).
-//! Each time the store connects, one transaction under the stored-query
-//! store's advisory lock creates the tables when absent and records the
-//! layout's schema version, and a newer one is refused. It runs on a
-//! connection of its own (`stored::postgres::Connection`), on a thread with a runtime of its
-//! own, because [`RevisionStore`] is called where a thread may block. No
-//! specification governs the storage: our own design.
+//! Each time the store connects, one transaction under the advisory lock
+//! FerroFED's own store migrates under creates the tables when absent and
+//! records the layout's schema version, and a newer one is refused. It runs
+//! on a connection of its own (`store::connection::Connection`), on a thread
+//! with a runtime of its own, because [`RevisionStore`] is called where a
+//! thread may block. It is never FerroFED's own store of `[store]`, which
+//! holds no configuration. No specification governs the storage: our own
+//! design.
 
 use ferrofed_registry::definition::store;
 use ferrohealth_secret::secret_url::SecretUrl;
@@ -28,7 +30,7 @@ use tokio_postgres::Client;
 use ferrofed_operator_api::revision::{Current, Revision, RevisionId, Signed};
 
 use crate::revision::{Corruption, Draft, RevisionStore, Saved, StoreError, Swapped};
-use crate::stored::postgres::{Connection, Statement, lock};
+use crate::store::connection::{Connection, Statement, Work};
 
 /// The table of revisions, qualified by its schema.
 pub const TABLE: &str = "ferrofed.config_revision";
@@ -38,6 +40,22 @@ pub const LAYOUT: &str = "config_revision";
 
 /// The schema version of the layout this binary writes and reads.
 pub const VERSION: i32 = 2;
+
+/// Takes the lock one replica migrates under, creates the schema when
+/// absent, and the table of schema versions.
+///
+/// The schema is created only when the catalogue lacks it, so a role without
+/// `CREATE` on the database can use a schema made for it.
+const LOCK: &str = "SELECT pg_advisory_xact_lock(x'666572726f666564'::bigint);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'ferrofed') THEN
+    CREATE SCHEMA ferrofed;
+  END IF;
+END $$;
+CREATE TABLE IF NOT EXISTS ferrofed.schema_version (
+  layout text PRIMARY KEY,
+  version integer NOT NULL
+);";
 
 /// The layout's version as `ferrofed.schema_version` records it.
 const SELECT_VERSION: &str = "SELECT version FROM ferrofed.schema_version WHERE layout = $1";
@@ -122,11 +140,7 @@ impl PostgresRevisions {
     }
 
     /// Runs `work` on the connection.
-    fn call<T, W>(&self, work: W) -> Result<T, StoreError>
-    where
-        T: Send + 'static,
-        W: for<'c> FnOnce(&'c Client) -> Statement<'c, T> + Send + 'static,
-    {
+    fn call<T: Send + 'static>(&self, work: impl Work<T>) -> Result<T, StoreError> {
         self.connection.call(work).map_err(revision_error)
     }
 
@@ -314,7 +328,10 @@ fn prepare_revisions(client: &mut Client) -> Statement<'_, ()> {
 /// transaction rolled back.
 async fn prepare(client: &mut Client) -> Result<(), store::StoreError> {
     let transaction = client.transaction().await.map_err(connection_backend)?;
-    lock(&transaction).await?;
+    transaction
+        .batch_execute(LOCK)
+        .await
+        .map_err(connection_backend)?;
     let found = transaction
         .query_opt(SELECT_VERSION, &[&LAYOUT])
         .await

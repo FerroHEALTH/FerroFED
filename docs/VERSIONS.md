@@ -587,19 +587,20 @@ an MSRV is only ever raised.
 ## Databases
 
 A single gateway needs no database (`docs/architecture.md` §8). PostgreSQL is
-used only as the optional backend of the stored-query store when several
-gateway replicas run. Every PostgreSQL FerroFED itself tests against or
+used only as FerroFED's own store, `[store]`, which a contact-point issuer
+and the stored-query registry's `postgres` backend need (#1636). Every PostgreSQL FerroFED itself tests against or
 documents is the latest release line. A member node in the test harness runs
 its product's documented database image, which is part of the product under
 test (§13): FerroEHR's, and for the node profile's second product EHRbase's,
 built on PostgreSQL 16.2 (#549). The stored-query store's end-to-end tests run
-on FerroEHR's image, built on `postgres:18.6`, one database per use (#268).
+on FerroEHR's image, built on `postgres:18.6`, one database per use (#268),
+serving TLS under a CA the harness generates for the run (#1636).
 The one other PostgreSQL image pinned is the database of the harness PIX
 Manager, SanteMPI, below (#622).
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| PostgreSQL | 18 | the stored-query `postgres` backend's tests, on the FerroEHR node database image below; the configuration page of the book |
+| PostgreSQL | 18 | the tests of FerroFED's own store and the stored-query `postgres` backend, on the FerroEHR node database image below; the store page of the book |
 
 ## Container images
 

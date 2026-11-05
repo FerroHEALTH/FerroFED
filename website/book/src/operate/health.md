@@ -35,8 +35,11 @@ port reads it. The body reads:
 ```
 
 Readiness reports the gateway's own subsystems by name: the configuration,
-the registry and the outbound clients when a registry is configured, and the
-stored-query store when one is. Its body names the phase of the process,
+the registry and the outbound clients when a registry is configured, the
+stored-query store when one is, and `store`, FerroFED's own PostgreSQL store,
+when `[store]` is set. `store` alone is checked on every probe: it is down
+while the database does not answer, which takes the replica out of rotation
+([FerroFED's own store](store.md#readiness-and-failure)). Its body names the phase of the process,
 `booting`, `serving` or `draining`. On `SIGTERM` readiness turns `503` at
 once, while the listener still accepts, so a load balancer stops sending
 requests before the gateway stops taking them

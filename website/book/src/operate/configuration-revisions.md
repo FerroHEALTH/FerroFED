@@ -36,7 +36,7 @@ path = "/var/lib/ferrofed/config-revisions.redb"   # redb: the store file
 | Key | Default | What it sets |
 |---|---|---|
 | `config.ui` | `off` | `managed` keeps the configuration as revisions on the admin listener |
-| `config.backend` | `redb` | `redb`, an embedded file one gateway process opens at a time, or `postgres`, one database every replica shares; `postgres` needs a build with the `postgres` feature |
+| `config.backend` | `redb` | `redb`, an embedded file one gateway process opens at a time, or `postgres`, one database every replica shares; it is never FerroFED's own store of `[store]`, which holds no configuration |
 | `config.path` | none | the `redb` store file, created when it does not exist |
 | `config.url`, `config.url_file` | none | the PostgreSQL connection string of the `postgres` backend, a URL or libpq key/value pairs; a secret, never logged, and its `sslmode` must be `require` when it carries a password over a network outside the development profile |
 
@@ -68,7 +68,7 @@ A revision never holds a secret value. Under `managed`, every secret
 outside the core is written as its `_file` reference, such as
 `password_file`, and the gateway refuses to start, and refuses a
 revision, that writes one inline (`password`, `client_identity`,
-`client_secret`, `assertion`, `stored_queries.url`, or a URL that carries a
+`client_secret`, `assertion`, `store.url`, or a URL that carries a
 password). The refusal names the key, never the value. A secret inside the
 core, such as an `[[auth.basic.users]]` `password_hash`, may stay inline, since the core is never stored.
 Comments are not kept: a revision is stored as TOML writes it.

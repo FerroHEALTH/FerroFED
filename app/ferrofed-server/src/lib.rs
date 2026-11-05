@@ -102,6 +102,7 @@ pub mod route_area;
 pub mod running;
 pub mod security;
 pub mod state;
+pub mod store;
 pub mod stored;
 pub mod support;
 pub mod upstream;
