@@ -209,7 +209,8 @@ impl Report {
         for (name, bytes) in files {
             let mut header = tar::Header::new_ustar();
             header.set_entry_type(tar::EntryType::Regular);
-            header.set_mode(0o644);
+            // NOTE: no specification governs this: our own design; each part is owner-only.
+            header.set_mode(0o600);
             header.set_mtime(mtime);
             header.set_uid(0);
             header.set_gid(0);

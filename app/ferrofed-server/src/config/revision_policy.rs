@@ -41,7 +41,7 @@ pub enum Kind {
 
 impl Kind {
     /// Every kind, as `config.approval` names it.
-    const ALL: [(Self, &'static str); 4] = [
+    const ALL: [(Self, &str); 4] = [
         (Self::OnwardCredentials, "onward-credentials"),
         (Self::Localization, "localization"),
         (Self::Consent, "consent"),

@@ -32,7 +32,7 @@ use crate::revision::service::Refused;
 pub const SETTINGS: &str = "/admin/config/settings";
 
 impl Shaped for SettingsRequest {
-    const SHAPE: &'static str =
+    const SHAPE: &str =
         r#"{"base": <revision>, "reason": "<text>", "settings": {"<dotted key>": "<value>"}}"#;
 }
 

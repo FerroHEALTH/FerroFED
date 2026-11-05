@@ -118,7 +118,7 @@ pub(super) struct MemberRequest {
 }
 
 impl Shaped for MemberRequest {
-    const SHAPE: &'static str = r#"{"base": <revision>, "reason": "<text>", "member": {"organisation": {...}, "node": {...}, "endpoints": [...]}}"#;
+    const SHAPE: &str = r#"{"base": <revision>, "reason": "<text>", "member": {"organisation": {...}, "node": {...}, "endpoints": [...]}}"#;
 }
 
 /// The body of a removal, of a member or of a section.
@@ -132,7 +132,7 @@ pub(super) struct RemoveRequest {
 }
 
 impl Shaped for RemoveRequest {
-    const SHAPE: &'static str = r#"{"base": <revision>, "reason": "<text>"}"#;
+    const SHAPE: &str = r#"{"base": <revision>, "reason": "<text>"}"#;
 }
 
 /// The body of a stored-query version's store.
@@ -144,7 +144,7 @@ pub(super) struct QueryRequest {
 }
 
 impl Shaped for QueryRequest {
-    const SHAPE: &'static str = r#"{"aql": "<text>"}"#;
+    const SHAPE: &str = r#"{"aql": "<text>"}"#;
 }
 
 /// The members `table`, a revision's configuration, holds under

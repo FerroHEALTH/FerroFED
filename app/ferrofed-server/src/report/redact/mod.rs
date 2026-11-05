@@ -249,7 +249,7 @@ endpoint = "https://collector-user:collector-pass@otel.example.org:4317/CANARY-P
 
 [stored_queries]
 backend = "postgres"
-url = "postgres://db-user:db-pass@db.example.org:5432/ferrofed?sslpassword=QUERY-SECRET-2"
+url = "postgres://db-user:db-pass_example@db.example.org:5432/ferrofed?sslpassword=QUERY-SECRET-2"
 
 [auth]
 audience = ["CANARY-AUDIENCE"]
@@ -419,11 +419,11 @@ ehr_id = "7d44b88c-4199-4bad-97dc-d78268e01398"
 header = "CANARY-HEADER-VALUE"
 document = "/home/canary-person/registry.toml"
 request_timeout_ms = "CANARY-STRING-IN-A-NUMBER"
-nested = [["CANARY-ARRAY"], [{ password = "CANARY-INLINE" }]]
+nested = [["CANARY-ARRAY"], [{ password = "CANARY-INLINE_example" }]]
 inline = { url = "https://canary-user2:canary-pass2@h.example.org/p?q#f" }
 
 [a.b.c.d]
-password = "CANARY-DEEP"
+password = "CANARY-DEEP_example"
 value = 111111110
 
 [[DEV.crossref]]

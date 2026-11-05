@@ -73,47 +73,45 @@ async fn the_page_marks_each_owner_and_offers_an_edit_only_for_a_console_member(
 -> Result<(), Box<dyn Error>> {
     let listener = listener().await;
     let (service, session) = signed_in_console(&listener).await?;
-    for path in ["/configuration/members"] {
-        let body = page(&service, &session, path).await?;
-        assert!(body.contains("<title>Configuration · "), "{body}");
-        assert!(body.contains("File, read-only"), "{body}");
-        assert!(body.contains(">pending<"), "{body}");
-        assert!(
-            body.contains(r#"href="/configuration/members/node-c""#),
-            "{body}"
-        );
-        assert!(
-            body.contains(r#"aria-label="Actions for node-c""#),
-            "a console member's row has its row menu: {body}"
-        );
-        assert!(
-            body.contains(r#"<a role="menuitem" href="/configuration/members/node-c""#),
-            "whose Edit opens the member's form: {body}"
-        );
-        assert!(
-            body.contains(r#"commandfor="cfg-remove-node-c-dialog""#),
-            "a console member's row offers its own confirmed removal: {body}"
-        );
-        removal_is_in_the_row_menu(&body)?;
-        assert!(
-            !body.contains("cfg-remove-node-a-dialog"),
-            "a member the file provides offers none: {body}"
-        );
-        assert!(
-            body.contains(r#"command="show-modal" commandfor="config-how""#),
-            "{body}"
-        );
-        assert!(body.contains(r#"<dialog id="config-how""#), "{body}");
-        assert!(body.contains("Revision 1 running"), "{body}");
-        assert!(body.contains("Revision 2 saved, not applied"), "{body}");
-        assert!(body.contains("Apply revision 2"), "{body}");
-        assert!(body.contains("What revision 2 changes, by key"), "{body}");
-        assert!(body.contains("registry.members[0].node.id"), "{body}");
-        assert!(
-            body.contains(r#"aria-current="page" data-tab="tab-members""#),
-            "{body}"
-        );
-    }
+    let body = page(&service, &session, "/configuration/members").await?;
+    assert!(body.contains("<title>Configuration · "), "{body}");
+    assert!(body.contains("File, read-only"), "{body}");
+    assert!(body.contains(">pending<"), "{body}");
+    assert!(
+        body.contains(r#"href="/configuration/members/node-c""#),
+        "{body}"
+    );
+    assert!(
+        body.contains(r#"aria-label="Actions for node-c""#),
+        "a console member's row has its row menu: {body}"
+    );
+    assert!(
+        body.contains(r#"<a role="menuitem" href="/configuration/members/node-c""#),
+        "whose Edit opens the member's form: {body}"
+    );
+    assert!(
+        body.contains(r#"commandfor="cfg-remove-node-c-dialog""#),
+        "a console member's row offers its own confirmed removal: {body}"
+    );
+    removal_is_in_the_row_menu(&body)?;
+    assert!(
+        !body.contains("cfg-remove-node-a-dialog"),
+        "a member the file provides offers none: {body}"
+    );
+    assert!(
+        body.contains(r#"command="show-modal" commandfor="config-how""#),
+        "{body}"
+    );
+    assert!(body.contains(r#"<dialog id="config-how""#), "{body}");
+    assert!(body.contains("Revision 1 running"), "{body}");
+    assert!(body.contains("Revision 2 saved, not applied"), "{body}");
+    assert!(body.contains("Apply revision 2"), "{body}");
+    assert!(body.contains("What revision 2 changes, by key"), "{body}");
+    assert!(body.contains("registry.members[0].node.id"), "{body}");
+    assert!(
+        body.contains(r#"aria-current="page" data-tab="tab-members""#),
+        "{body}"
+    );
     let edit = page(&service, &session, "/configuration/members/node-c").await?;
     assert!(edit.contains("Edit member node-c"), "{edit}");
     assert!(edit.contains(r#"name="form[query.0.url]""#), "{edit}");

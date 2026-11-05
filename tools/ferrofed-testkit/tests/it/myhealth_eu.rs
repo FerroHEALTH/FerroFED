@@ -20,8 +20,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
+use std::ffi::OsStr;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use flate2::read::GzDecoder;
 use serde_json::Value;
@@ -65,7 +66,7 @@ fn members(
 
 /// Whether the member name `name` ends in a `.json` extension, any case.
 fn is_json(name: &str) -> bool {
-    std::path::Path::new(name)
+    Path::new(name)
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
 }
@@ -162,14 +163,10 @@ fn committed_packages() -> Result<BTreeSet<String>, Box<dyn Error>> {
         }
         for file in std::fs::read_dir(&corpus)? {
             let file = file?.path();
-            if file.extension().and_then(|extension| extension.to_str()) != Some("tgz") {
+            if file.extension().and_then(OsStr::to_str) != Some("tgz") {
                 continue;
             }
-            let Some(relative) = file
-                .strip_prefix(vendored(""))
-                .ok()
-                .and_then(|relative| relative.to_str())
-            else {
+            let Some(relative) = file.strip_prefix(vendored("")).ok().and_then(Path::to_str) else {
                 continue;
             };
             let package = manifest(relative)?;

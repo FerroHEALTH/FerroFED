@@ -560,42 +560,42 @@ pub trait Report: serde::de::DeserializeOwned {
     /// The method it is read with.
     const METHOD: Method;
     /// Its path below `{base}`.
-    const PATH: &'static str;
+    const PATH: &str;
 }
 
 impl Report for OptionsRoot {
     const METHOD: Method = Method::OPTIONS;
-    const PATH: &'static str = "/";
+    const PATH: &str = "/";
 }
 
 impl Report for DependencyReport {
     const METHOD: Method = Method::GET;
-    const PATH: &'static str = "/operator/dependencies";
+    const PATH: &str = "/operator/dependencies";
 }
 
 impl Report for DeploymentReport {
     const METHOD: Method = Method::GET;
-    const PATH: &'static str = "/operator/deployment";
+    const PATH: &str = "/operator/deployment";
 }
 
 impl Report for IncidentReport {
     const METHOD: Method = Method::GET;
-    const PATH: &'static str = "/operator/incidents";
+    const PATH: &str = "/operator/incidents";
 }
 
 /// An item of a listing the operator surface answers a page at a time, read
 /// with [`Gateway::page`].
 pub trait Listed: serde::de::DeserializeOwned {
     /// The listing's path below `{base}`.
-    const PATH: &'static str;
+    const PATH: &str;
 }
 
 impl Listed for CreatingSystemEntry {
-    const PATH: &'static str = "/operator/creating-systems";
+    const PATH: &str = "/operator/creating-systems";
 }
 
 impl Listed for StoredVersion<StoredQuery> {
-    const PATH: &'static str = "/operator/stored-queries";
+    const PATH: &str = "/operator/stored-queries";
 }
 
 /// Runs the stored query `name` at its latest version.

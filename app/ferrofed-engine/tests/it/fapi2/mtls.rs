@@ -226,7 +226,7 @@ async fn refused_after(
         "a refused discovery sends no token request"
     );
     Ok(
-        match Error::source(&error).and_then(|source| source.downcast_ref::<Fapi2Error>()) {
+        match Error::source(&error).and_then(<dyn Error>::downcast_ref::<Fapi2Error>) {
             Some(Fapi2Error::Discovery(DiscoveryError::CertificateBinding)) => {
                 Some(DiscoveryError::CertificateBinding)
             }
@@ -339,7 +339,7 @@ async fn an_alias_on_a_host_the_grant_does_not_name_is_refused() -> TestResult {
             .await
             .err()
             .ok_or("the alias is refused")?;
-        let met = Error::source(&error).and_then(|source| source.downcast_ref::<Fapi2Error>());
+        let met = Error::source(&error).and_then(<dyn Error>::downcast_ref::<Fapi2Error>);
         assert!(
             matches!(
                 met,

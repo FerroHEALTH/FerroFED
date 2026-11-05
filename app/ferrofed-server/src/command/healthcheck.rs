@@ -141,7 +141,7 @@ impl fmt::Display for Line {
 fn other_certificate(error: &std::io::Error) -> bool {
     error
         .get_ref()
-        .and_then(|inner| inner.downcast_ref::<rustls::Error>())
+        .and_then(<dyn std::error::Error + Send + Sync>::downcast_ref::<rustls::Error>)
         .is_some_and(|inner| {
             matches!(
                 inner,
