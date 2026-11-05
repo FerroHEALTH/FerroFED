@@ -34,8 +34,9 @@ No specification governs this page: our own design.
      ghcr.io/ferrohealth/ferrofed:<new version> config check
    ```
 
-   The warnings it prints name every deprecated key you still set, and the
-   release that will refuse it.
+   A key the new release renamed or removed is refused by name, with the
+   key that replaces it, so fix each one the upgrade notes list before you
+   roll out.
 
 Then roll the new release out: `docker compose up --wait` with the new
 `compose.yaml`, or a rolling update of the StatefulSet. Readiness answers
@@ -55,24 +56,24 @@ rolled out replica by replica.
 
 ## The compatibility policy
 
-FerroFED is in its `0.0.x` series, and each release can change the
-configuration. These rules bound how.
+FerroFED has not released 1.0. Until it does, any release can change the
+configuration, and these rules bound how.
 
 - **A change that stops a configuration the last release accepted is in
   the Upgrade notes.** A key made mandatory, a value now refused, a table
   moved: each is listed with what to set instead. CI runs the new build's
   `config check` over the example configuration the last release attached,
   and refuses a change it rejects unless an upgrade note is pending.
-- **A key is never renamed or removed at once.** For at least one release
-  the old key is still read, under its new name, and `config check` and the
-  start-up log warn that it is deprecated and name the release that will
-  refuse it. Setting the old and the new key together is refused, so the
-  two cannot disagree. The Upgrade notes name the rename in the release
-  that deprecates the key and again in the release that refuses it.
-  v0.0.12 does not keep this rule: it moves the issuer policy of `[auth]`
-  to `[trust]`, removes every static bearer token and renames the
-  console's `FERROFED_VIEWER__` overrides to `FERROFED_CONSOLE__` with no
-  release that still reads the old keys. Its upgrade notes list each one.
+- **A key can be renamed or removed in any release.** Before 1.0 there is
+  no deprecation release: the release that renames or removes a key stops
+  reading the old one. It refuses the old key at start-up and in `config
+  check`, in the file and as a `FERROFED__` override: a renamed or moved
+  key naming the key that replaces it, and a key removed with nothing in its
+  place by its name. Its upgrade notes give the step.
+  The renames of v0.0.16 are refused naming their new keys (for example
+  `server.public_url was renamed to gateway.public_url`), and `[stored_queries]
+  url` and `url_file`, removed in favour of `[store]`, are refused naming
+  `[store]`.
 - **A new key is optional, or the Upgrade notes say otherwise.** A release
   that adds a key gives it a default that keeps the behaviour of the
   release before, unless the change is a security fix that cannot keep it.
@@ -81,7 +82,7 @@ configuration. These rules bound how.
   added since. Remove the keys the newer release added before rolling back
   ([Rollback](rollback.md#the-configuration)).
 - **The environment follows the file.** A `FERROFED__` override names the
-  same key as the file, so a rename applies to it too, and the warning
+  same key as the file, so a rename applies to it too, and the refusal
   names the dotted key.
 - **Stored data migrates forward only.** A stored-query store records its
   schema version, is migrated forward in order when the gateway starts, and
