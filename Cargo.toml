@@ -329,8 +329,10 @@ ferrohealth-ui = "=0.6.6"
 # section's URL in every rendering, a URL that does not parse included
 # (GHSA-vphj-3f8c-5hpx); 0.8.6 carries the SMART on openEHR scope grammar
 # itself, so the lock holds one openehr-sdt, and caches a verified Basic
-# credential for 300 s (#1390). Verified against crates.io on 2026-10-28.
-ferrohealth-smart = { version = "=0.8.8", default-features = false, features = ["fetch", "axum", "openehr"] }
+# credential for 300 s (#1390); 0.8.9 holds `scopeless_subjects` and
+# `role_claims` per issuer (GHSA-pfgx-xq28-2629). Verified against crates.io
+# on 2026-11-05.
+ferrohealth-smart = { version = "=0.8.9", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
