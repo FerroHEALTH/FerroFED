@@ -123,7 +123,7 @@ impl AppState {
     /// FerroFED's own store opened and migrated when `[store]` is set, and
     /// the stored-query store opened with every definition it holds read,
     /// before the gateway serves. Each subsystem built gets a [`Built`]
-    /// indicator, the store its own [`crate::store::Ready`], which is down
+    /// indicator, the store its own [`crate::store::ready::Ready`], which is down
     /// while the database does not answer, and no member node or identity
     /// source gets one. The state is booting
     /// until the run path marks boot complete. The metrics surface is built
@@ -199,7 +199,7 @@ impl AppState {
         let definitions = definitions(settings, federation.as_ref(), store.as_ref())?;
         let mut built: Vec<Arc<dyn HealthIndicator>> = vec![Arc::new(Built("configuration"))];
         if let Some(store) = &store {
-            built.push(Arc::new(crate::store::Ready(Arc::clone(store))));
+            built.push(Arc::new(crate::store::ready::Ready::new(Arc::clone(store))));
         }
         if federation.is_some() {
             built.push(Arc::new(Built("registry")));

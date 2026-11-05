@@ -46,6 +46,15 @@ pub enum Error {
         "[dev] is no longer read: FerroFED keeps no patient index, so it resolves every patient through a PIX Manager; remove [dev] and configure [[pixm.manager]]"
     )]
     DevRemoved,
+    /// A key a release renamed is still set under its old name, in the file
+    /// or as an override; the upgrade notes of that release give the step.
+    #[error("{old} was renamed to {new}; set {new} instead (see the upgrade notes)")]
+    Renamed {
+        /// The old dotted key.
+        old: String,
+        /// The dotted key that replaces it.
+        new: String,
+    },
     /// A secret and its `_file` sibling are both set, or the file cannot be
     /// read or holds nothing.
     #[error(transparent)]

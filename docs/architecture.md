@@ -1487,10 +1487,51 @@ each PIXm and PMIR record names the patient as its profile requires.
 | The `ehr_id` to node index (§12.5.1 step 3) | learned from resolution and probes | a bounded in-memory LRU |
 | Resolution bindings (§12.5.1 step 2) | per verified caller | in memory, keyed by the caller's session, bounded by a TTL and a capacity (decision A20) |
 | Integrity incidents (N42, §12b.2) | raised at request time | events: a structured log and a counter |
-| Stored-query definitions (N44) | a client `PUT` | the one durable store, behind `DefinitionStore` |
+| Stored-query definitions (N44) | a client `PUT` | behind `DefinitionStore`: the embedded `redb` file by default, a read-only `files` directory, or FerroFED's own PostgreSQL store, `[store]`, under `backend = "postgres"` |
 | Outbound credentials | the operator | `_file` secrets per endpoint |
 | Audit records awaiting delivery (ITI-55 audit messages) | ITI-20 store-and-forward (ITI TF-2 §3.20.4.1.1), one per XCPD exchange | a bounded spool directory, one fsynced `0600` file per message in a `0700` directory the gateway refuses to start on when it is open to other users, drained in order and removed once delivered, a message that cannot be read moved to its `quarantine` subdirectory and counted under the same bounds; in memory under the development profile without `spool_dir` (#418) |
 | Audit records awaiting delivery (BALP `AuditEvent`s of ITI-83, ITI-90, ITI-91, ITI-93, ITI-94) | ITI-20 store-and-forward over the FHIR Feed, one per transaction | a spool of its own, as above, holding FHIR JSON; a record the repository refuses is quarantined too (#486) |
+
+**FerroFED's own store** (#1636, decision A25 as amended on #1638). `[store]`
+is FerroFED's one PostgreSQL connection, to a database and login role of its
+own, never a member CDR's. It is required only when an issuer is declared a
+national contact point or the stored-query registry uses `backend =
+"postgres"`. A configuration in either case without it refuses to start,
+naming the key that needs it and `[store]`. Every other deployment runs with
+no PostgreSQL database, and the embedded `redb` file of the default
+stored-query backend and the read-only `files` backend stay as they are.
+
+The store holds the state that must both survive a restart and be one on
+every replica, and nothing else:
+
+- the stored-query definitions of the `postgres` backend (N44);
+- the emergency-access counter of the contact-point route (#1631), which
+  eHDSI Section II Security Services 10.0.0 §2.5 asks for: "The identity of
+  the HP is stored in a table. After a number of accesses made by the same HP
+  identity in a defined amount of time, the access control decision will be
+  'Deny'". Implementing Regulation (EU) 2026/2083 Art. 4(1) binds the contact
+  points to those specifications;
+- the SHA-256 hashes of the DPoP proof `jti`s seen on the contact-point
+  routes (#1637), which RFC 9449 §11.1 has a server "store … for the time
+  window in which the respective DPoP proof JWT would be accepted", and
+  notes the check fails when "multiple servers behind a single endpoint have
+  no shared state".
+
+The last two are exceptions to decisions A20 and A25, which keep learned and
+per-caller state in one process's memory: a count or a replay check that
+each replica held alone would admit, across replicas, what one replica would
+refuse. Caches (revocation and OCSP answers, issuer keys), audit records
+(the spools above), configuration (the revisions keep their own store) and
+clinical data stay out of it. A table a later release adds meets the same
+rule, and a row that expires carries its window's end in `expires_at`, which
+a periodic sweep deletes.
+
+#1636 is a breaking change for a deployment of the `postgres` stored-query
+backend: `[stored_queries] url` and `url_file` are removed and refused at
+load, naming `[store]`. The upgrade step is to move the connection string to
+`[store]` with `sslmode=require`; the gateway takes over the existing table
+with every definition it holds. #1636 also removed the server's `postgres`
+cargo feature, so the PostgreSQL client is in every build.
 
 **Routing state across replicas** (#641). The resolution bindings and the
 `ehr_id` index live in one process's memory, as decisions A20 and A25 place
@@ -1778,7 +1819,7 @@ the admin listener is admitted by the client authentication gate of
 `auth.product_scope`, from any peer; the development profile also admits a
 loopback peer that sends no credential (#635).
 
-**Stored queries** (§12.7, N44, #77) are the one state that needs a store.
+**Stored queries** (§12.7, N44, #77) are the first state that needs a durable store.
 A client registers a federated stored query with
 `PUT {base}/v1/definition/query/{name}/{version}`, and N44 makes each version
 immutable: a second `PUT` of a held name and version MUST be refused. That
@@ -1808,8 +1849,10 @@ one is refused, never one silent winner:
   immutability rule with no race, and an unversioned insert reads the newest
   version and writes the next in one write transaction. `redb` is the family's embedded store
   (FerroBRIDGE's identity store, FerroTERM's concept store);
-- **PostgreSQL 18** (the server's `postgres` cargo feature, off by default,
-  where several gateway replicas run; built with #268): the same interface,
+- **PostgreSQL 18** (`backend = "postgres"`, over FerroFED's own store,
+  `[store]`, where several gateway replicas run; built with #268 and moved
+  onto `[store]` by #1636, which removed the server's `postgres` cargo
+  feature, so the client is in every build): the same interface,
   with the primary key `(name, version)` of `ferrofed.stored_query_definition`
   as the race guard. The insert is `INSERT … ON CONFLICT DO NOTHING`, and the
   affected-row count says stored or held, so two replicas inserting one pair
@@ -1823,8 +1866,9 @@ one is refused, never one silent winner:
   `tokio-postgres` on a thread and runtime of the store's own, because the
   trait is called where a thread may block, with rustls and the platform's
   roots for TLS. The schema and table are created when absent at each
-  connect, under an advisory lock. The connection string is a `_file`
-  secret, and only the backend kind reaches the banner and the log;
+  connect, under an advisory lock. The connection string is `[store]`'s
+  `url` or `url_file` secret, and only the backend kind reaches the banner
+  and the log;
 - **read-only** (`backend = "files"`, #268): definitions loaded at start from
   one file per `{qualified_query_name}/{version}.aql`, each admitted as a
   `PUT` admits its body, and every `PUT` answered `405` with `Allow: GET,
@@ -2878,12 +2922,12 @@ R4 is #23, #25 and #27).
 | A17 | A resolver that cannot answer [R2 D4] | `not-resolved` with the error, `complete` cleared, `424` under all-or-nothing; only a `404` keeps N6's do-not-fail rule; best-effort may degrade it only when requested | a PIX outage must never look like an empty record; §11.1 does not separate the cases (held on #17) | decided (owner, 2026-10-01); re-checked against 1.0.0 (#354): §11.1 and N16 still define `not-resolved` alone and the `/$defs/endpointQueryStatus` enum of `federated-result-set.schema.json` is still closed, so this stands, because a ninth status would fail the schema and FerroFED already fails closed with `424` and names the error |
 | A18 | Vendoring the bindings [R2 D9] | PIXm 3.1.0, mCSD 4.0.0, PMIR 1.6.0 (CC-BY-4.0) and Nuts GF 0.3.0 (EUPL-1.2), each with the issue that first reads it; not the ITI TF volumes or IUA until their terms are read. IUA was vendored with #414 once they were: its supplement is CC-BY-4.0 in IHE's repository and General Introduction ch. 9 grants reproduction | `.claude/rules/vendored-inputs.md`; the licences were read from each `package.json` | decided (owner, 2026-10-01) |
 | A19 | Pseudonyms [R2 D10] | accept a pseudonym or a direct identifier; never pseudonymise in the core; a regional adapter may | §5.3, §B.7; a pseudonym is personal data under the same hygiene | decided (owner, 2026-10-01) |
-| A20 | The resolution cache [reconciles R2 §5 with R3 D2] | session-scoped, in memory, TTL-bounded; no cross-session cache keyed by a hash of the identifier; a consent denial drops the caller's resolution bindings that name the denied member; the shared `ehr_id` index is a routing hint and is kept | §12.5.1 step 2 scopes the binding to the session; a keyed hash is pseudonymised personal data | decided (owner, 2026-10-01) |
+| A20 | The resolution cache [reconciles R2 §5 with R3 D2] | session-scoped, in memory, TTL-bounded; no cross-session cache keyed by a hash of the identifier; a consent denial drops the caller's resolution bindings that name the denied member; the shared `ehr_id` index is a routing hint and is kept | §12.5.1 step 2 scopes the binding to the session; a keyed hash is pseudonymised personal data; the exceptions: eHDSI Section II Security Services 10.0.0 §2.5, under Implementing Regulation (EU) 2026/2083 Art. 4(1), stores the professional's emergency accesses "in a table" and denies past a number in a defined time, and RFC 9449 §11.1 has a server store each DPoP proof `jti` for its window, which "may not always be feasible … when multiple servers behind a single endpoint have no shared state" | decided (owner, 2026-10-01); amended on #1638 (2026-11-05): the emergency-access counter (#1631) and the DPoP proof replay store (#1637) of the contact-point routes are shared across replicas in FerroFED's own store, `[store]`, as exceptions, since a count or a replay check each replica held alone would admit across replicas what one replica refuses |
 | A21 | Identity conveyance [R2 D5] | RFC 7523 client credentials by default, the gateway-signed `openEHR-federation-client` JWT on every request, RFC 8693 per endpoint where offered | §13.1 leaves end-user conveyance open; production federations convey a signed assertion per request; the caller's token is never forwarded (RFC 9700 §2.3) | decided (owner, 2026-10-01) |
 | A22 | FerroEHR #3511 and #3512 [R2 D6] | confirmed; DPoP on the client: `openehr-its`'s `Credentials::Dpop` writes the `DPoP` scheme and its `DpopProver` proves each request and answers a node's nonce challenge, with no `Transport` decorator (section 7) | both are built on FerroEHR's side and ship in 0.0.74; the DPoP credential and its prover ship in 0.0.82 (FerroEHR #3558) | decided (owner, 2026-10-01; built on FerroEHR's side); the client-side prover replaced the decorator on 2026-10-04 with `openehr-its` 0.0.82 (#448), on `main` for v0.0.8 |
 | A23 | `OPTIONS {base}/` [R2 D7] | authenticated, `401` otherwise; the JWKS public | the stricter of §7a.2's two sentences; T158 holds the ambiguity | decided (owner, 2026-10-01) |
 | A24 | Purpose of use [R2 D8] | required by default, `403` without it; relaxed only by a declared setting | §13.4: a node must not be left to infer it | decided (owner, 2026-10-01) |
-| A25 | Storage [R3 D1] | membership as a reviewed document with no write API; learned state in memory; incidents as events; stored queries behind `DefinitionStore`, with the `PUT` registration API, on `redb` for one gateway, PostgreSQL 18 when several replicas run, or read-only | stored versions are immutable and must survive a restart (N44); replicas must see one version and one refusal; the clinical path holds no store handle; admission is an operator act (§12b.1) | decided (owner, 2026-10-01) |
+| A25 | Storage [R3 D1] | membership as a reviewed document with no write API; learned state in memory; incidents as events; stored queries behind `DefinitionStore`, with the `PUT` registration API, on `redb` for one gateway, PostgreSQL 18 when several replicas run, or read-only | stored versions are immutable and must survive a restart (N44); replicas must see one version and one refusal; the clinical path holds no store handle; admission is an operator act (§12b.1); the store's two later users answer eHDSI Section II Security Services 10.0.0 §2.5 under Implementing Regulation (EU) 2026/2083 Art. 4(1) and RFC 9449 §11.1 (A20); no specification governs storage: our own design | decided (owner, 2026-10-01); amended on #1638 (2026-11-05, recording #1636): FerroFED has one PostgreSQL store of its own, `[store]`, required only when an issuer is declared a national contact point or the registry uses `backend = "postgres"`, and otherwise no PostgreSQL database, the `redb` and `files` backends unchanged; it holds only state that must both survive a restart and be one on every replica (the stored-query definitions, the emergency-access counter of #1631, the DPoP proof `jti` hashes of #1637), and never caches, audit records, configuration or clinical data; `[stored_queries] url` and `url_file` are removed and refused naming `[store]`, the upgrade step being to move the connection string there with `sslmode=require` |
 | A26 | Patient-derived data at rest [R3 D2] | none | GDPR Art. 4(5), Recital 26; the cost is a re-probe after a restart | decided (owner, 2026-10-01) |
 | A27 | The N39 agreement check [R3 D3] | uid tie-break pushed down, `LIMIT n + 1`, and a cut node out of order reported `node-error` | §11.6.1's containment argument assumes an order AQL does not define; a wrong top `n` is undetectable for a client | superseded by A43 (owner, 2026-10-02: "always go to the specs and see how it should be done"; §11.6.1 and N39 require dispatching `LIMIT n`) |
 | A28 | An `ORDER BY` path not in `SELECT` [R3 D4] | a hidden column, stripped after the merge | the client's query stays answerable; hygiene re-checks the dispatched AQL | decided (owner, 2026-10-01) |
