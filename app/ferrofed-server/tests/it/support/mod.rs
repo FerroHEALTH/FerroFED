@@ -649,16 +649,12 @@ pub(crate) fn audit_toml() -> String {
     )
 }
 
-/// The synthetic password of [`store_table`]'s connection string, which no
-/// output may show.
-pub(crate) const STORE_PASSWORD: &str = "synthetic-store-pw-4q8";
-
-/// A `[store]` table whose connection string requires TLS, for a test that
-/// resolves a configuration needing FerroFED's own store and opens no
-/// connection.
+/// A `[store]` table whose connection string requires TLS and carries no
+/// password, for a test that resolves a configuration needing FerroFED's
+/// own store and opens no connection.
 pub(crate) fn store_table() -> String {
-    format!(
-        "\n[store]\nurl = \"postgres://ferrofed:{STORE_PASSWORD}@db.example.org:5432/ferrofed?sslmode=require\"\n"
+    String::from(
+        "\n[store]\nurl = \"postgres://ferrofed@db.example.org:5432/ferrofed?sslmode=require\"\n",
     )
 }
 

@@ -353,3 +353,70 @@ fn tls(ca: Option<&str>) -> Result<MakeRustlsConnect, StoreError> {
 pub(crate) fn backend(error: impl std::error::Error + Send + Sync + 'static) -> StoreError {
     StoreError::Backend(Box::new(error))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroUsize;
+    use std::time::Duration;
+
+    use ferrofed_registry::definition::store::StoreError;
+    use ferrofed_testkit::listener::ListenerCertificates;
+    use ferrohealth_secret::secret_url::SecretUrl;
+
+    use super::{Connection, ConnectionError, Statement, Target, tls};
+
+    /// A prepare that is never reached when the open fails first.
+    fn prepared(_client: &mut tokio_postgres::Client) -> Statement<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// The connection error inside `error`.
+    fn connection_error(error: &StoreError) -> Option<&ConnectionError> {
+        match error {
+            StoreError::Backend(source) => source.downcast_ref::<ConnectionError>(),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn the_ca_is_read_as_pem_and_anything_else_is_refused() {
+        let certificates = ListenerCertificates::generate().unwrap();
+        assert!(tls(Some(certificates.ca())).is_ok());
+        assert!(tls(None).is_ok(), "the platform's roots");
+        let refused = tls(Some(
+            "-----BEGIN CERTIFICATE-----\nnot base64 at all\n-----END CERTIFICATE-----\n",
+        ))
+        .err()
+        .unwrap();
+        assert!(matches!(refused, StoreError::Backend(_)), "{refused:?}");
+    }
+
+    #[test]
+    fn an_unparsable_url_is_refused_without_quoting_it() {
+        let url = SecretUrl::new(String::from("postgres://u@h:x/d?password=example-s3cr3t"));
+        let refused = Target::new(&url, None, Duration::from_secs(1))
+            .err()
+            .unwrap();
+        assert!(
+            matches!(
+                connection_error(&refused),
+                Some(ConnectionError::Unparsable)
+            ),
+            "{refused:?}"
+        );
+        assert!(!format!("{refused} {refused:?}").contains("s3cr3t"));
+    }
+
+    #[test]
+    fn a_pool_whose_database_cannot_be_reached_refuses_the_open() {
+        let url = SecretUrl::new(String::from(
+            "postgres://ferrofed@127.0.0.1:1/ferrofed?sslmode=require&connect_timeout=1",
+        ));
+        let target = Target::new(&url, None, Duration::from_secs(2)).unwrap();
+        let size = NonZeroUsize::new(3).unwrap();
+        let refused = Connection::pool(&target, "ferrofed-store-test", prepared, size)
+            .err()
+            .unwrap();
+        assert!(matches!(refused, StoreError::Backend(_)), "{refused:?}");
+    }
+}

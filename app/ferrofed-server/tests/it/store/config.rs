@@ -17,7 +17,10 @@ use ferrofed_server::config::store::{MAX_CONNECTIONS, StoreFault};
 use ferrohealth_secret::file::SecretError;
 
 use crate::run::binary;
-use crate::support::STORE_PASSWORD;
+
+/// A synthetic password the redaction checks look for, which no output may
+/// show.
+const STORE_PASSWORD: &str = "synthetic-store-pw-4q8";
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -33,7 +36,7 @@ const CONTACT_POINT: &str = "[auth]\naudience = [\"urn:example:gateway\"]\n\n\
 [[trust.issuer]]\nissuer = \"https://ncp.example.test\"\n\n\
 [trust.issuer.national_contact_point]\nfamily_name = \"f\"\ngiven_name = \"g\"\n\
 country_code = \"c\"\nprofessional_issuing_authority = \"pa\"\n\
-provider_issuing_authority = \"ha\"\nprovider_address = \"addr\"\n";
+provider_issuing_authority = \"ha\"\nprovider_address = \"addr\"\ntrc_patient = \"trc\"\n";
 
 /// A stored-query registry on the `postgres` backend, over a registry
 /// document in `dir`.

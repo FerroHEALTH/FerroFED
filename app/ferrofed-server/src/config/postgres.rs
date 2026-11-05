@@ -62,12 +62,12 @@ mod tests {
     #[test]
     fn a_url_and_libpq_pairs_parse_and_garbage_does_not() {
         for parsed in [
-            "postgres://ferrofed:secret@db.example.org:5432/ferrofed?sslmode=require",
-            "host=db.example.org user=ferrofed password=secret dbname=ferrofed",
+            "postgres://ferrofed@db.example.org:5432/ferrofed?sslmode=require",
+            "host=db.example.org user=ferrofed dbname=ferrofed",
         ] {
             assert!(parses(&SecretUrl::new(parsed)), "{parsed}");
         }
-        for refused in ["postgres://a:b@host:notaport/db", "host='unterminated"] {
+        for refused in ["postgres://ferrofed@host:notaport/db", "host='unterminated"] {
             assert!(!parses(&SecretUrl::new(refused)), "{refused}");
         }
     }
@@ -75,17 +75,17 @@ mod tests {
     #[test]
     fn only_sslmode_require_requires_tls() {
         for required in [
-            "postgres://ferrofed:secret@db.example.org/ferrofed?sslmode=require",
+            "postgres://ferrofed@db.example.org/ferrofed?sslmode=require",
             "host=db.example.org user=ferrofed sslmode=require",
         ] {
             assert!(requires_tls(&SecretUrl::new(required)), "{required}");
         }
         for off in [
-            "postgres://ferrofed:secret@db.example.org/ferrofed",
-            "postgres://ferrofed:secret@db.example.org/ferrofed?sslmode=prefer",
-            "postgres://ferrofed:secret@db.example.org/ferrofed?sslmode=disable",
+            "postgres://ferrofed@db.example.org/ferrofed",
+            "postgres://ferrofed@db.example.org/ferrofed?sslmode=prefer",
+            "postgres://ferrofed@db.example.org/ferrofed?sslmode=disable",
             "host=/run/postgresql user=ferrofed",
-            "postgres://a:b@host:notaport/db?sslmode=require",
+            "postgres://ferrofed@host:notaport/db?sslmode=require",
         ] {
             assert!(!requires_tls(&SecretUrl::new(off)), "{off}");
         }
