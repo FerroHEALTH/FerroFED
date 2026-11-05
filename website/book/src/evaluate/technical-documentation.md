@@ -301,7 +301,21 @@ yet ([#675](https://github.com/FerroHEALTH/FerroFED/issues/675)). Point 4 of a
 draft is the wording Annex IV has an issued declaration use, and a draft
 makes no such statement.
 
+Art 39(6) has the Commission "publish a standard uniform template for the
+EU declaration of conformity and make it available in a digital format in
+all official languages of the Union". The Commission has not published it
+yet, so the generator writes the items in the order of Annex IV.
+`scripts/checks/ehds-acts.sh` watches EUR-Lex for an act adopted on
+Art 39(6).
+
 ### Decisions open to the manufacturer
+
+- **Issuing the declaration.** Art 39(5): "By drawing up the EU declaration
+  of conformity, the manufacturer shall assume responsibility for the
+  compliance of the harmonised software components of the EHR system with
+  the requirements laid down in this Regulation when it is placed on the
+  market or put into service." Only Cadasto B.V. sets `issue = true` in its
+  file, and no step of the release lane sets it.
 
 - **Where the declaration is published again.** Art 39(4) asks for the
   declaration to stay "accessible online for the expected lifetime of the
