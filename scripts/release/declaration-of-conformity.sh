@@ -84,7 +84,7 @@ read_owner() {
   for key in $FIELDS; do eval "o_$key=''"; done
   while IFS= read -r line || [[ -n "$line" ]]; do
     n=$((n + 1))
-    case "$line" in '' | '#'*) continue ;; esac
+    case "$line" in '' | '#'*) continue ;; *) ;; esac
     if [[ "$line" =~ $re_bool ]]; then
       key=issue
       value="${BASH_REMATCH[1]}"
@@ -116,13 +116,13 @@ empty_fields() {
 
 # owner KEY: the OWNER value, or the marked placeholder that names it.
 owner() {
-  local value
-  eval "value=\$o_$1"
+  local key="$1" value
+  eval "value=\$o_$key"
   if [[ "$value" =~ [^[:space:]] ]]; then
     printf '%s\n' "$value"
   else
     # shellcheck disable=SC2016 # the backticks are Markdown the declaration prints, never expanded
-    printf '**[%s: `%s` in `%s`]**\n' "$MARK" "$1" "$OWNER"
+    printf '**[%s: `%s` in `%s`]**\n' "$MARK" "$key" "$OWNER"
   fi
 }
 
@@ -142,13 +142,15 @@ status() {
 
 # record WHAT VALUE: refuses an empty record.
 record() {
-  [[ -n "$2" ]] || die "$1"
-  printf '%s\n' "$2"
+  local what="$1" value="$2"
+  [[ -n "$value" ]] || die "$what"
+  printf '%s\n' "$value"
 }
 
 # maker_field ROOT KEY: one field of the MANUFACTURER constant.
 maker_field() {
-  awk -v key="$2" '
+  local root="$1" key="$2"
+  awk -v key="$key" '
     /^pub const MANUFACTURER/ { inside = 1; next }
     inside && /^};/ { inside = 0 }
     inside {
@@ -161,21 +163,23 @@ maker_field() {
         exit
       }
     }
-  ' "$1/$MAKER"
+  ' "$root/$MAKER"
 }
 
 # sheet_row ROOT LABEL: the second cell of the information sheet's row LABEL.
 sheet_row() {
-  awk -F'|' -v want="$2" '
+  local root="$1" label="$2"
+  awk -F'|' -v want="$label" '
     /^\|/ {
       c = $2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", c)
       if (c == want) { v = $3; gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); print v; exit }
     }
-  ' "$1/$SHEET"
+  ' "$root/$SHEET"
 }
 
 # standards ROOT: the rows of the sheet's table (e), as list items.
 standards() {
+  local root="$1"
   awk -F'|' '
     /^## \(e\)/ { inside = 1; next }
     inside && /^## / { inside = 0 }
@@ -186,28 +190,30 @@ standards() {
       if (item == "Item" || item == "Product version" || item ~ /^-+$/ || item == "") next
       print "- " item ": " pin
     }
-  ' "$1/$SHEET"
+  ' "$root/$SHEET"
 }
 
 # locked_version ROOT NAME: the version Cargo.lock resolves for package NAME.
 locked_version() {
-  awk -v name="$2" '
+  local root="$1" name="$2"
+  awk -v name="$name" '
     $0 == "name = \"" name "\"" { found = 1; next }
     found && /^version = / { gsub(/^version = "|"$/, ""); print; exit }
     /^\[\[package\]\]/ { found = 0 }
-  ' "$1/$LOCK"
+  ' "$root/$LOCK"
 }
 
 # common_specifications ROOT: the text of Annex IV point 6, from the index
 # rows of Annex III point 3.
 common_specifications() {
-  local statuses
-  statuses="$(awk -F'\t' '$1 == "3" { print $5 }' "$1/$INDEX")"
+  local root="$1" statuses
+  statuses="$(awk -F'\t' '$1 == "3" { print $5 }' "$root/$INDEX")"
   [[ -n "$statuses" ]] || die "$INDEX has no row for Annex III point 3, the common specifications"
   case "$statuses" in
   *documented* | *partial*)
     die "$INDEX documents a common specification under Annex III point 3; name it in this script before a declaration is written"
     ;;
+  *) ;;
   esac
   printf '%s\n' "None. No common specification under Article 36 is adopted, as the technical documentation records for Annex III, point 3."
 }

@@ -53,7 +53,8 @@ usage() {
 
 # package_of CRATE_DIR: the package name in CRATE_DIR/Cargo.toml.
 package_of() {
-  awk -F'"' '/^\[package\]/ { inside = 1; next } /^\[/ { inside = 0 } inside && /^name[[:space:]]*=/ { print $2; exit }' "$1/Cargo.toml"
+  local crate_dir="$1"
+  awk -F'"' '/^\[package\]/ { inside = 1; next } /^\[/ { inside = 0 } inside && /^name[[:space:]]*=/ { print $2; exit }' "$crate_dir/Cargo.toml"
 }
 
 # marks ROOT: one "binary <TAB> module prefix <TAB> function <TAB> token" row
@@ -83,7 +84,7 @@ marks() {
     esac
     module="${module%.rs}"
     module="${module%/mod}"
-    case "$module" in main | lib | mod) module="" ;; esac
+    case "$module" in main | lib | mod) module="" ;; *) ;; esac
     module="${module//\//::}"
     package="$(package_of "$root/$crate")"
     [[ -n "$binary" ]] && binary="$package::$binary" || binary="$package"
@@ -107,7 +108,8 @@ marks() {
 # outcomes SOURCE JUNIT: one "binary <TAB> test <TAB> pass|fail <TAB> SOURCE"
 # row per test case in the nextest JUnit file JUNIT.
 outcomes() {
-  awk -v source="$1" '
+  local source="$1" junit="$2"
+  awk -v source="$source" '
     function attribute(line, key,    found) {
       if (match(line, key "=\"[^\"]*\"")) {
         found = substr(line, RSTART + length(key) + 2, RLENGTH - length(key) - 3)
@@ -124,12 +126,13 @@ outcomes() {
     open && /<(failure|error)[ >\/]/ { outcome = "fail" }
     open && /<skipped/ { outcome = "skip" }
     open && /<\/testcase>/ { emit() }
-  ' "$2"
+  ' "$junit"
 }
 
 # results MARKS OUTCOMES: one "token <TAB> test <TAB> pass|fail|not-run" row
 # per marked test. A test under e2e:: counts only from a gated source.
 results() {
+  local marks_file="$1" outcomes_file="$2"
   awk -F'\t' '
     FILENAME == ARGV[1] {
       if ($3 == "skip") next
@@ -153,7 +156,7 @@ results() {
       }
       print token "\t" test "\t" result
     }
-  ' "$2" "$1" | sort -u
+  ' "$outcomes_file" "$marks_file" | sort -u
 }
 
 # table FILE KIND KEY_PREFIX RESULTS FINDINGS: one report row per data row of
@@ -395,14 +398,15 @@ self_test() {
   # expect WANT ROW RESULT OFFLINE GATED [NODES]: the report exits WANT and its
   # ROW (kind and id) reads RESULT.
   expect() {
-    local want="$1" row="$2" result="$3" status=0 got
-    generate "$tree" "$work/out" "$4" "$5" "${6:-}" > /dev/null 2>&1 || status=$?
+    local want="$1" row="$2" result="$3" offline_junit="$4" gated_junit="$5" node_dir="${6:-}" status=0 got
+    generate "$tree" "$work/out" "$offline_junit" "$gated_junit" "$node_dir" > /dev/null 2>&1 || status=$?
     got="$(awk -F'\t' -v row="$row" '($1 " " $2) == row { print $6 }' "$work/out/report.tsv")"
     if [[ "$status" -ne "$want" || "$got" != "$result" ]]; then
       echo "conformance-report: self-test failed: $row read $got (exit $status), wanted $result (exit $want)." >&2
       failed=1
     fi
   }
+  local node_cp4="node CP-4"
   expect 0 "gateway CP-1" pass "$work/offline.xml" "$work/gated.xml"
   expect 0 "gateway CP-2" pass "$work/offline.xml" "$work/gated.xml"
   expect 0 "gateway CP-3" pass "$work/offline.xml" "$work/gated.xml"
@@ -414,12 +418,12 @@ self_test() {
   expect 1 "gateway CP-2" fail "$work/offline.xml" "$work/failing.xml"
   expect 1 "track 1" fail "$work/offline.xml" "$work/failing.xml"
   # A Node or Operator point is its own class, and never sets the exit.
-  expect 0 "node CP-4" not-run "$work/offline.xml" "$work/gated.xml"
-  expect 0 "node CP-4" not-reported "$work/offline.xml" "$work/kit.xml"
-  expect 0 "node CP-4" node-fail "$work/offline.xml" "$work/kit.xml" "$work/nodes-fail"
-  expect 0 "node CP-4" node-pass "$work/offline.xml" "$work/kit.xml" "$work/nodes-pass"
-  expect 0 "node CP-4" node-not-observable "$work/offline.xml" "$work/kit.xml" "$work/nodes-none"
-  expect 0 "node CP-4" check-failed "$work/offline.xml" "$work/kit-failing.xml" "$work/nodes-pass"
+  expect 0 "$node_cp4" not-run "$work/offline.xml" "$work/gated.xml"
+  expect 0 "$node_cp4" not-reported "$work/offline.xml" "$work/kit.xml"
+  expect 0 "$node_cp4" node-fail "$work/offline.xml" "$work/kit.xml" "$work/nodes-fail"
+  expect 0 "$node_cp4" node-pass "$work/offline.xml" "$work/kit.xml" "$work/nodes-pass"
+  expect 0 "$node_cp4" node-not-observable "$work/offline.xml" "$work/kit.xml" "$work/nodes-none"
+  expect 0 "$node_cp4" check-failed "$work/offline.xml" "$work/kit-failing.xml" "$work/nodes-pass"
   expect 0 "node CP-7" unchecked "$work/offline.xml" "$work/kit.xml" "$work/nodes-pass"
   expect 0 "operator CP-6" operator-pass "$work/offline.xml" "$work/kit.xml" "$work/nodes-pass"
   expect 0 "operator CP-6" operator-not-observable "$work/offline.xml" "$work/kit.xml" "$work/nodes-fail"
@@ -463,6 +467,7 @@ while [[ $# -gt 0 ]]; do
         --gated) gated="$gated$2"$'\n' ;;
         --node-profile) nodes="$2" ;;
         --out) out="$2" ;;
+        *) ;;
       esac
       shift 2
       ;;

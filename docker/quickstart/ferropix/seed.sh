@@ -26,6 +26,7 @@ fed=0
 while IFS="$(printf '\t')" read -r member ehr_id namespace value domain; do
   case "$member" in
     '' | '#'*) continue ;;
+    *) ;;
   esac
   body="{\"resourceType\":\"Patient\",\"identifier\":[\
 {\"system\":\"$domain\",\"value\":\"$ehr_id\"},\
