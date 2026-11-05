@@ -193,7 +193,7 @@ fn the_postgres_backend_resolves_over_the_store_and_logs_its_kind_alone() -> Tes
         logged.contains(r#""stored_query_backend":"postgres""#),
         "{logged}"
     );
-    for hidden in [crate::support::STORE_PASSWORD, "db.example.org"] {
+    for hidden in ["ferrofed@", "db.example.org"] {
         assert!(
             !logged.contains(hidden),
             "the log names the kind only: {logged}"

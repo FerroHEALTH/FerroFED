@@ -72,6 +72,10 @@ sweep_interval_s = 60                          # how often expired rows are dele
 | `timeout_ms` | `10000` | how long one connection, or one statement, may take; zero is refused |
 | `sweep_interval_s` | `60` | how often the rows past their window are deleted; zero is refused |
 
+Give the credentials with `url_file`: write the whole connection string,
+password included, to a secret file only the gateway's user reads, and
+keep `url` for a connection string that carries no password.
+
 A key the table does not have refuses the configuration, naming it. A
 connection string that does not parse is refused naming its key, never
 quoting the string. The startup banner, the log and `ferrofed report` never

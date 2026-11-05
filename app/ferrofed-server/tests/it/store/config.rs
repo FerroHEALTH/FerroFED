@@ -17,7 +17,10 @@ use ferrofed_server::config::store::{MAX_CONNECTIONS, StoreFault};
 use ferrohealth_secret::file::SecretError;
 
 use crate::run::binary;
-use crate::support::STORE_PASSWORD;
+
+/// A synthetic password the redaction checks look for, which no output may
+/// show.
+const STORE_PASSWORD: &str = "synthetic-store-pw-4q8";
 
 type TestResult = Result<(), Box<dyn Error>>;
 

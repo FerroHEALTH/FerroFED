@@ -38,8 +38,8 @@ use crate::support::{call, chain, error_body};
 /// The qualified name the upgrade's definitions are held under.
 const NAME: &str = "org.example::upgraded";
 
-/// The `[store]` table of the database `name` on `server`, its CA written
-/// under `dir`.
+/// The `[store]` table of the database `name` on `server`, its connection
+/// string and its CA written to files under `dir`.
 pub(crate) fn store_toml(
     server: &PostgresTls,
     name: &str,
@@ -47,9 +47,11 @@ pub(crate) fn store_toml(
 ) -> Result<String, Box<dyn Error>> {
     let ca = dir.join(format!("{name}-ca.pem"));
     std::fs::write(&ca, server.ca())?;
+    let url = dir.join(format!("{name}-url"));
+    std::fs::write(&url, format!("{}\n", server.url(name)))?;
     Ok(format!(
-        "\n[store]\nurl = {}\nca_file = {}\nmax_connections = 2\ntimeout_ms = 5000\n",
-        toml::Value::String(server.url(name)),
+        "\n[store]\nurl_file = {}\nca_file = {}\nmax_connections = 2\ntimeout_ms = 5000\n",
+        toml::Value::String(url.display().to_string()),
         toml::Value::String(ca.display().to_string()),
     ))
 }

@@ -134,6 +134,21 @@ mod tests {
     }
 
     #[test]
+    fn a_newer_database_is_refused_naming_both_numbers_and_the_way_back() {
+        let refused = super::MigrationError::Newer {
+            found: KNOWN + 1,
+            known: KNOWN,
+        }
+        .to_string();
+        assert!(
+            refused.contains(&format!("migration {}", KNOWN + 1)),
+            "{refused}"
+        );
+        assert!(refused.contains(&format!("up to {KNOWN}")), "{refused}");
+        assert!(refused.contains("Rollback"), "{refused}");
+    }
+
+    #[test]
     fn the_first_migration_takes_over_the_stored_query_table_it_finds() {
         let [first] = MIGRATIONS;
         assert!(

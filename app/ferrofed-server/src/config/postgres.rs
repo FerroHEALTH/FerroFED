@@ -75,17 +75,17 @@ mod tests {
     #[test]
     fn only_sslmode_require_requires_tls() {
         for required in [
-            "postgres://ferrofed:secret@db.example.org/ferrofed?sslmode=require",
+            "postgres://ferrofed@db.example.org/ferrofed?sslmode=require",
             "host=db.example.org user=ferrofed sslmode=require",
         ] {
             assert!(requires_tls(&SecretUrl::new(required)), "{required}");
         }
         for off in [
-            "postgres://ferrofed:secret@db.example.org/ferrofed",
-            "postgres://ferrofed:secret@db.example.org/ferrofed?sslmode=prefer",
-            "postgres://ferrofed:secret@db.example.org/ferrofed?sslmode=disable",
+            "postgres://ferrofed@db.example.org/ferrofed",
+            "postgres://ferrofed@db.example.org/ferrofed?sslmode=prefer",
+            "postgres://ferrofed@db.example.org/ferrofed?sslmode=disable",
             "host=/run/postgresql user=ferrofed",
-            "postgres://a:b@host:notaport/db?sslmode=require",
+            "postgres://ferrofed@host:notaport/db?sslmode=require",
         ] {
             assert!(!requires_tls(&SecretUrl::new(off)), "{off}");
         }
