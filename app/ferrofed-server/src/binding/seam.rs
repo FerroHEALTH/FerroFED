@@ -182,7 +182,7 @@ pub enum LocalizationError {
     /// revocation check.
     #[error("the TLS material of the MyHealth@EU responding gateways cannot be used")]
     #[cfg(feature = "binding-ihe")]
-    XcpdRevocation(#[source] ferrofed_identity::revocation::RevocationSetupError),
+    XcpdRevocation(#[source] ferrohealth_server::revocation::RevocationSetupError),
     /// The XUA assertion is not one SAML 2.0 `Assertion` element.
     #[error("{key} is not one SAML 2.0 Assertion element")]
     #[cfg(feature = "binding-ihe")]

@@ -60,9 +60,6 @@
 //! - [`fhir`]: the one HTTP client build every outbound client of this crate
 //!   uses, with its [`Authentication`](fhir::Authentication) and its one
 //!   [`Tls`](fhir::Tls) type;
-//! - [`revocation`]: the TLS of an eHDSI link, which checks every
-//!   certificate the peer presents by CRL or OCSP before any data is sent
-//!   (eHDSI X.509 Certificates Profile 7.0.0 §3.2);
 //! - [`profile`]: the deployment profile a server configuration declares.
 //!
 //! How the gateway authenticates to each node as itself (§13.1, N25) is the
@@ -75,6 +72,5 @@ pub mod ihe;
 #[cfg(feature = "nl")]
 pub mod nl;
 pub mod profile;
-pub mod revocation;
 pub mod role;
 pub mod session;

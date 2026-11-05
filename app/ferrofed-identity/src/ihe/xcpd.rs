@@ -25,7 +25,8 @@
 //! logs it, and no error carries it.
 //!
 //! A gateway marked as a MyHealth@EU route is an eHDSI link: it is reached
-//! through its [`RevocationCheck`], which checks the chain the gateway
+//! through its [`RevocationCheck`], the family's revocation-checking TLS
+//! (`ferrohealth_server::revocation`), which checks the chain the gateway
 //! presents for revocation before the discovery is sent, and a chain that
 //! is revoked or whose status no source gives fails the discovery closed
 //! with nothing sent (eHDSI X.509 Certificates Profile 7.0.0 §3.2).
@@ -39,6 +40,7 @@ use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_server::revocation::{RevocationCheck, RevocationError, RevocationSetupError};
 use ihe_iti::xcpd::XcpdClient;
 use ihe_iti::xcpd::audit::{self, AuditError, AuditEvent, AuditRecorder};
 use ihe_iti::xcpd::discovery::Discovery;
@@ -54,7 +56,6 @@ use url::Url;
 use crate::fhir::{self, Authentication, ClientError, Tls};
 use crate::ihe::audit::AUDIT_TARGET;
 use crate::ihe::audit::balp::{audited_as, logged_as};
-use crate::revocation::{RevocationCheck, RevocationError, RevocationSetupError};
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};

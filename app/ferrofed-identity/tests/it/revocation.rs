@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The revocation check of an eHDSI link against a harness CA chain with a
+//! The revocation check of an eHDSI link, the family's
+//! `ferrohealth_server::revocation`, against a harness CA chain with a
 //! CRL and an OCSP responder: every certificate the peer presents is checked
 //! before any data is sent, a revoked one or one whose revocation source
 //! cannot be reached fails the connection, and a valid one passes (eHDSI
@@ -10,10 +11,11 @@
 use std::error::Error;
 use std::time::Duration;
 
-use ferrofed_identity::revocation::{RevocationCheck, RevocationError};
 use ferrofed_testkit::mock::{Server, recorded};
 use ferrofed_testkit::revocation::{RevocationFront, Source, Standing};
-use secrecy::SecretString;
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_server::revocation::{RevocationCheck, RevocationError};
+use ferrohealth_server::section::TlsVersion;
 use url::Url;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -42,8 +44,9 @@ async fn link(
 /// The check over the front's trust roots, presenting its client identity.
 fn check(front: &RevocationFront) -> Result<RevocationCheck, Box<dyn Error>> {
     Ok(RevocationCheck::from_pem(
-        &SecretString::from(front.client_identity()),
         front.trust_roots(),
+        Some(&Secret::new(front.client_identity())),
+        TlsVersion::Tls12,
     )?)
 }
 
@@ -162,7 +165,6 @@ async fn a_revoked_chain_stays_refused_by_the_client() -> TestResult {
 
 #[test]
 fn material_that_does_not_read_is_refused() {
-    let identity =
-        SecretString::from("-----BEGIN PRIVATE KEY-----\nQz7\n-----END PRIVATE KEY-----\n");
-    assert!(RevocationCheck::from_pem(&identity, "").is_err());
+    let identity = Secret::new("-----BEGIN PRIVATE KEY-----\nQz7\n-----END PRIVATE KEY-----\n");
+    assert!(RevocationCheck::from_pem("", Some(&identity), TlsVersion::Tls12).is_err());
 }

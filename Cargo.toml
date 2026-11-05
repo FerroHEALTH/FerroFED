@@ -309,11 +309,13 @@ pem = { version = "3.0.6", default-features = false, features = ["std"] }
 # crypto library rustls already builds on, so no private key is ever
 # committed. Verified against crates.io on 2026-10-04.
 rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs", "pem"] }
-# The revocation check of an eHDSI link (#1623, X.509 Certificates Profile
-# 7.0.0 §3.2): the X.509 certificate and CRL model and the DER codec at the
-# versions tokio-postgres-rustls already locks, and the RFC 6960 OCSP request
-# and response types over them, the 0.2 line that shares that x509-cert.
-# Verified against crates.io on 2026-11-05.
+# Test-only since the revocation check of an eHDSI link moved into
+# ferrohealth-server (#1646): the testkit's revocable front (#1623) reads
+# its certificates and writes its OCSP answers with the X.509 certificate
+# and CRL model and the DER codec at the versions tokio-postgres-rustls
+# already locks, and the RFC 6960 OCSP request and response types over
+# them, the 0.2 line that shares that x509-cert. Verified against crates.io
+# on 2026-11-05.
 der = { version = "0.7.10", default-features = false, features = ["std", "oid"] }
 x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
 x509-ocsp = { version = "0.2.1", default-features = false }
@@ -376,8 +378,10 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # 0.4.1 keeps a product's own fallback and its layers through the stack, and
 # 0.4.2 writes the server-rendered console's policy; 0.4.4 splits the stack
 # with the API unchanged; 0.5.0 removes five forwarders, whose replacements
-# the gateway calls (FerroSYS #231). Verified against crates.io on 2026-11-05.
-ferrohealth-server = { version = "=0.5.0", default-features = false }
+# the gateway calls (FerroSYS #231); 0.5.1 carries the revocation check of an
+# eHDSI link, feature `revocation`, which moved there from ferrofed-identity
+# (#1646, FerroHEALTH/FerroSYS#243). Verified against crates.io on 2026-11-05.
+ferrohealth-server = { version = "=0.5.1", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.
