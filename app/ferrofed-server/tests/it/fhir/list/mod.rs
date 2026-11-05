@@ -125,8 +125,19 @@ impl Members {
     pub(super) fn gateway_keyed(
         &self,
         dir: &std::path::Path,
-        (federation, tables): (&str, &str),
+        tables: (&str, &str),
         keys: &str,
+    ) -> Result<axum::Router, Box<dyn std::error::Error>> {
+        self.gateway_serving(dir, (tables, keys), &settings_with_room())
+    }
+
+    /// The gateway of [`Members::gateway_keyed`], its router built over the
+    /// server settings `server`.
+    pub(super) fn gateway_serving(
+        &self,
+        dir: &std::path::Path,
+        ((federation, tables), keys): ((&str, &str), &str),
+        server: &ferrofed_server::config::settings::ServerSettings,
     ) -> Result<axum::Router, Box<dyn std::error::Error>> {
         let rows = [("node-a", EHR_A), ("node-b", EHR_B)];
         let members = format!(
@@ -151,7 +162,7 @@ impl Members {
             Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?
                 .resolve()?;
         let state = Arc::new(AppState::build(&settings)?);
-        Ok(ferrofed_server::router(state, &settings_with_room()))
+        Ok(ferrofed_server::router(state, server))
     }
 
     /// Whether no section query reached either member's Query API.

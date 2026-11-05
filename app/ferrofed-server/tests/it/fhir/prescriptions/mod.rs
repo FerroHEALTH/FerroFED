@@ -21,6 +21,7 @@ mod paging;
 mod read;
 mod resolution;
 mod restricted;
+mod trc;
 mod version;
 mod vread;
 pub(super) mod withdraw;
