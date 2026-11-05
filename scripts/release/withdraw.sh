@@ -128,7 +128,8 @@ advisory_publish() {
 # finding_row FINDING VERSION: the register row with id FINDING, when its
 # versions column names VERSION.
 finding_row() {
-  awk -F '\t' -v id="$1" -v version="$2" '
+  local finding="$1" version="$2"
+  awk -F '\t' -v id="$finding" -v version="$version" '
     /^#/ || $1 != id { next }
     {
       n = split($3, listed, /[ ,;]+/)

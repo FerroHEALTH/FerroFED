@@ -43,6 +43,7 @@ run() {
     echo false
     return
     ;;
+  *) ;;
   esac
   refs="$(git ls-remote --tags --refs "$remote" 'v*')" ||
     die "the tags of $remote cannot be read, so whether $version is the latest release is unknown."

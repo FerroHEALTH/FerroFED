@@ -782,12 +782,12 @@ placeholder_tests_page() {
 # write_into STATEMENT_FILE TESTS_FILE BLOCK_FN PAGE_FN: write the statement
 # block and the tests page the two functions print.
 write_into() {
-  local statement="$1" tests="$2" block
+  local statement="$1" tests="$2" block_fn="$3" page_fn="$4" block
   block="$(mktemp)"
-  "$3" > "$block"
+  "$block_fn" > "$block"
   replace_block "$statement" statement "$block"
   rm -f "$block"
-  "$4" > "$tests"
+  "$page_fn" > "$tests"
 }
 
 case "${1:-}" in

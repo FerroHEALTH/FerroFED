@@ -38,10 +38,11 @@ die() {
 
 # sha256 FILE: the SHA-256 line of FILE in sha256sum form, run where FILE is.
 sha256() {
+  local file="$1"
   if command -v sha256sum > /dev/null 2>&1; then
-    sha256sum "$1"
+    sha256sum "$file"
   else
-    shasum -a 256 "$1"
+    shasum -a 256 "$file"
   fi
 }
 
@@ -56,7 +57,8 @@ pin() {
 
 # manifest_tag FILE IMAGE: the one tag FILE runs IMAGE at.
 manifest_tag() {
-  sed -nE "s|^[[:space:]]*image:[[:space:]]*ghcr\\.io/ferrohealth/$2:([^@[:space:]]+)[[:space:]]*\$|\\1|p" "$1" | sort -u
+  local file="$1" image="$2"
+  sed -nE "s|^[[:space:]]*image:[[:space:]]*ghcr\\.io/ferrohealth/$image:([^@[:space:]]+)[[:space:]]*\$|\\1|p" "$file" | sort -u
 }
 
 # package TAG GATEWAY CONSOLE OUT: writes the package of TAG into OUT.

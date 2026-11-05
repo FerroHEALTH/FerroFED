@@ -445,14 +445,14 @@ self_test() {
   expect "a directory holding only the README" 0 --check
   fragment 3-a-change.added.md '- An entry that runs' '  over two lines.' '  - and nests a list item.'
   expect "a well-formed fragment beside the README" 0 --check
-  local bad
+  local bad entry='- An entry.'
   for bad in 3-Upper.added.md a-no-issue.added.md 3-a.unknown.md 3-a.added.txt 3-a_b.fixed.md 3-.fixed.md; do
-    fragment "$bad" '- An entry.'
+    fragment "$bad" "$entry"
     expect "the misnamed fragment $bad" 1 --check
     grep -q "$bad is not named" "$work/out" || flunk "the misnamed fragment $bad failed without naming it."
     unfragment "$bad"
   done
-  fragment 4-heading.fixed.md '### Fixed' '' '- An entry.'
+  fragment 4-heading.fixed.md '### Fixed' '' "$entry"
   expect "a fragment holding a heading" 1 --check
   unfragment 4-heading.fixed.md
   fragment 4-prose.fixed.md 'A sentence, no list item.'
@@ -646,15 +646,15 @@ EOF
   fi
   cmp -s "$work/security.before" "$work/SECURITY.md" || flunk "the pre-release cut wrote SECURITY.md."
   stub_git commit -q -a -m "the rehearsal"
-  printf '%s\n' '# Changelog' '' '## [Unreleased]' '' '### Improved' '' '- An entry.' '' \
+  printf '%s\n' '# Changelog' '' '## [Unreleased]' '' '### Improved' '' "$entry" '' \
     '[Unreleased]: https://example.org/r/compare/v0.0.2...HEAD' > "$work/CHANGELOG.md"
   cp "$work/CHANGELOG.md" "$work/before"
   expect "a section Keep a Changelog does not define" 1 --assemble 0.0.3 2026-10-11
   cmp -s "$work/before" "$work/CHANGELOG.md" || flunk "a refused cut wrote CHANGELOG.md."
-  printf '%s\n' '# Changelog' '' '## [Unreleased]' '' 'Loose prose.' '' '### Added' '' '- An entry.' '' \
+  printf '%s\n' '# Changelog' '' '## [Unreleased]' '' 'Loose prose.' '' '### Added' '' "$entry" '' \
     '[Unreleased]: https://example.org/r/compare/v0.0.2...HEAD' > "$work/CHANGELOG.md"
   expect "text outside a section heading" 1 --assemble 0.0.3 2026-10-11
-  printf '%s\n' '# Changelog' '' '## [Unreleased]' '' '### Added' '' '- An entry.' > "$work/CHANGELOG.md"
+  printf '%s\n' '# Changelog' '' '## [Unreleased]' '' '### Added' '' "$entry" > "$work/CHANGELOG.md"
   expect "no [Unreleased] link reference" 1 --assemble 0.0.3 2026-10-11
 
   echo "changelog: self-test passed."
