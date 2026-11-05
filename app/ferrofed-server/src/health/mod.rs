@@ -11,7 +11,7 @@
 //! state, never its detail. An indicator checks one of the gateway's own
 //! subsystems (the configuration and the registry loaded, the stored-query
 //! store open, the outbound clients built, and FerroFED's own store
-//! answering, [`crate::store::Ready`]). A member node or the identity
+//! answering, [`crate::store::ready::Ready`]). A member node or the identity
 //! source never gates readiness: their last observed state is
 //! [`dependencies`]'s, reported on the operator surface. No specification
 //! governs health probes: our own design.

@@ -20,7 +20,7 @@
 //! a database a newer FerroFED migrated is refused and left as it was. A
 //! table whose rows expire carries the end of each row's window in an
 //! `expires_at timestamptz` column, and [`Store::sweep`] deletes every row
-//! past it. [`Ready`] is the store's readiness indicator, down while the
+//! past it. [`ready::Ready`] is the store's readiness indicator, down while the
 //! database does not answer, and a call the database does not answer fails
 //! with a typed error, so nothing that needs the store is answered without
 //! it. No specification governs the store: our own design.
@@ -28,12 +28,12 @@
 pub mod connection;
 pub mod emergency;
 pub mod migrations;
+pub mod ready;
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_registry::definition::store::StoreError;
-use ferrohealth_health::registry::{Check, HealthIndicator, Outcome};
 use tokio_postgres::Client;
 
 use crate::config::store::StoreSettings;
@@ -179,27 +179,4 @@ async fn sweep(client: &Client) -> Result<Vec<(String, u64)>, StoreError> {
 /// [`migrations::apply`], as a connection runs it each time it opens.
 fn prepare(client: &mut Client) -> Statement<'_, ()> {
     Box::pin(migrations::apply(client))
-}
-
-/// The store's readiness indicator: up while the database answers a
-/// statement within the store's budget.
-#[derive(Debug, Clone)]
-pub struct Ready(pub Arc<Store>);
-
-impl HealthIndicator for Ready {
-    fn name(&self) -> &'static str {
-        INDICATOR
-    }
-
-    fn check(&self) -> Check<'_> {
-        Box::pin(async move {
-            match self.0.ping().await {
-                Ok(()) => Outcome::up(),
-                Err(error) => {
-                    tracing::warn!(error = crate::chain(&error), "the store does not answer");
-                    Outcome::down("the store does not answer")
-                }
-            }
-        })
-    }
 }

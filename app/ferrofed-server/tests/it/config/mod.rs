@@ -9,6 +9,7 @@ mod drain;
 #[cfg(feature = "binding-ihe")]
 mod redaction;
 mod refusals;
+mod renamed;
 mod replica;
 mod secrets;
 mod sources;

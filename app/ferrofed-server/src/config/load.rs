@@ -165,6 +165,12 @@ pub(crate) fn with_pairs(
 /// `file` unless the refusal is that the file could not be read, which
 /// names it itself.
 fn refused(file: Option<&Path>, source: ConfigError) -> Error {
+    if let Some((old, new)) = renamed(&source) {
+        return Error::Renamed {
+            old: old.to_owned(),
+            new: new.to_owned(),
+        };
+    }
     let file = match source {
         ConfigError::Read { .. } => None,
         _ => file.map(Path::to_path_buf),
@@ -172,6 +178,31 @@ fn refused(file: Option<&Path>, source: ConfigError) -> Error {
     Error::Load {
         file,
         source: Box::new(source),
+    }
+}
+
+/// Each key a release renamed, with the key that replaces it.
+// NOTE: no specification governs this: our own design; before 1.0 a key is renamed
+// with no deprecation release, so the refusal names the replacement (#1643).
+const RENAMED: [(&str, &str); 4] = [
+    ("server.public_url", "gateway.public_url"),
+    ("server.replica", "gateway.replica"),
+    (
+        "server.bindings_drain_timeout_ms",
+        "gateway.bindings_drain_timeout_ms",
+    ),
+    ("server.overload_retry_after_s", "server.retry_after_s"),
+];
+
+/// The renamed key `source` refuses and its replacement, when it refuses
+/// one, alone or among other refusals.
+fn renamed(source: &ConfigError) -> Option<(&'static str, &'static str)> {
+    match source {
+        ConfigError::Invalid { key: Some(key), .. } => {
+            RENAMED.into_iter().find(|(old, _)| old == key)
+        }
+        ConfigError::Refusals { refusals } => refusals.iter().find_map(renamed),
+        _ => None,
     }
 }
 
