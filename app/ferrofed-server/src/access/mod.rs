@@ -35,6 +35,7 @@
 //! no value. No specification governs where the record is built: our own
 //! design.
 
+mod emergency;
 pub(crate) mod patient;
 pub(crate) mod routed;
 pub(crate) mod transformation;
@@ -545,6 +546,43 @@ impl Gate {
         }
     }
 
+    /// The operation a request of `method` to `path` names, as its record
+    /// names it: the FHIR face's resource, or the ITS-REST operation id.
+    fn operation(&self, method: &Method, path: &str) -> &'static str {
+        if let Some(face) = self
+            .state
+            .fhir()
+            .and_then(|fhir| crate::face_path::classify(fhir, path))
+        {
+            return match face {
+                crate::face_path::FacePath::Summary => "Patient/$summary",
+                crate::face_path::FacePath::Documents => "DocumentReference",
+                crate::face_path::FacePath::Patients => "Patient",
+                crate::face_path::FacePath::Binary => "Binary",
+                crate::face_path::FacePath::Bundle => "Bundle",
+                crate::face_path::FacePath::Medication(
+                    crate::face_path::Addressed::Prescriptions
+                    | crate::face_path::Addressed::Prescription
+                    | crate::face_path::Addressed::PrescriptionVersion,
+                ) => "MedicationRequest",
+                crate::face_path::FacePath::Medication(_) => "MedicationDispense",
+                crate::face_path::FacePath::Metadata | crate::face_path::FacePath::Other => "fhir",
+            };
+        }
+        let under_base = if self.base.is_root() {
+            Some(path)
+        } else {
+            path.strip_prefix(self.base.as_str())
+        };
+        match under_base
+            .and_then(|path| path.strip_prefix("/v1"))
+            .map(|relative| routes::lookup(method, relative))
+        {
+            Some(Lookup::Matched(matched)) => matched.operation_id,
+            _ => "its-rest",
+        }
+    }
+
     /// The place of the record of a request that `reach` says writes, taken
     /// in the access log's sink before any member is asked; `None` for a
     /// request that writes nothing or a federation that keeps no log.
@@ -586,6 +624,29 @@ fn carries_data(response: &Response) -> bool {
     response.status().is_success() || response.headers().contains_key(headers::ENDPOINT)
 }
 
+/// The answer of `next` to `request`, which `reach` says reaches patient
+/// data, from `caller`: or the refusal of an emergency access the limit
+/// denies or the store cannot count, with nothing sent ([`emergency`]).
+async fn served(
+    gate: &Gate,
+    (caller, reach): (Option<&Caller>, Reach),
+    (request_id, logged): (&str, &str),
+    (request, next): (Request, Next),
+) -> Response {
+    let attempt = emergency::Attempt {
+        method: request.method(),
+        path: request.uri().path(),
+        gate,
+        reach,
+        request_id,
+        logged,
+    };
+    match emergency::held(&gate.state, caller, attempt).await {
+        Some(refused) => refused,
+        None => next.run(request).await,
+    }
+}
+
 /// Stores the record of the access the answer of `next` carries before the
 /// answer leaves.
 ///
@@ -621,7 +682,8 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
             return error::fixed(Code::AccessUnrecorded, &request_id);
         }
     };
-    let mut response = next.run(request).await;
+    let ids = (request_id.as_str(), logged.as_str());
+    let mut response = served(&gate, (caller.as_ref(), reach), ids, (request, next)).await;
     let accessed = response.extensions_mut().remove::<Accessed>();
     let declared_none = response.extensions_mut().remove::<NoAccess>().is_some();
     let Some(mut accessed) = accessed else {
@@ -656,7 +718,8 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
         )
         .await;
     }
-    let record = accessed.record(&caller, address, &logged, response.status());
+    let mut record = accessed.record(&caller, address, &logged, response.status());
+    emergency::describe(&mut record, &response);
     if record.emergency.is_some() {
         tracing::warn!(
             request_id = logged,

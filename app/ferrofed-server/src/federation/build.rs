@@ -26,6 +26,7 @@ use crate::binding::seam::PublicDocument;
 use crate::binding::{self, Role};
 use crate::config::NodeSelection;
 use crate::config::auth::PatientBinding;
+use crate::config::emergency::EmergencyLimit;
 use crate::config::settings::{ConsentDisclosure, Scheme, Settings};
 use crate::federation::describe;
 use crate::health::dependencies::Dependencies;
@@ -217,6 +218,7 @@ impl Federation {
             client_keys: client_keys(settings),
             documents,
             access,
+            emergency_limit: settings.emergency,
         };
         describe::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -281,6 +283,7 @@ impl Federation {
             client_keys: Vec::new(),
             documents: Vec::new(),
             access: None,
+            emergency_limit: EmergencyLimit::default(),
         }
     }
 }

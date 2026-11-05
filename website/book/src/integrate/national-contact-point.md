@@ -210,6 +210,92 @@ access on them (MyHealth@EU Requirements Catalogue v10.0.0, 01 and 01.02),
 so a member that applies its own release rule to a contact-point request
 must not use them either.
 
+## The emergency access limit
+
+A health professional may ask for a patient's data in an emergency, when the
+patient cannot confirm their will, with the purpose of use `EMERGENCY`
+(eHDSI SAML Profile 10.0.0 §2.3). eHDSI Section II Security Services 10.0.0
+§2.5 has the contact point of the patient's country provide such access
+and limit it: "No more than five emergency access attempts per HP per
+24-hour period", which each country may tighten. The NCPeH Architecture
+Specifications 10.0.0 §5.1.9 make an emergency access past the
+country-defined threshold a deny response. Implementing Regulation (EU)
+2026/2083 Art 4(1) binds the contact points to these specifications.
+FerroFED applies the limit on the national side, behind the contact point,
+so the limit holds even though the contact point's own policy runs
+elsewhere. Where and how the count is kept is FerroFED's own design.
+
+A contact point's request is an emergency access when its token declares a
+purpose of use that `[[access_log.emergency_purpose]]` names, the same rule
+that marks the access record ([Emergency
+access](../operate/access-log.md#emergency-access)). Declare the code your
+contact point's tokens carry:
+
+```toml
+[[access_log.emergency_purpose]]
+system = "urn:uuid:3bc18518-d305-46c2-a8d6-94bd59856e9e"   # the system your tokens name
+code = "EMERGENCY"
+
+[emergency]
+threshold = 5        # 1 to 5: emergency accesses one professional is granted in one window
+window_s = 86400     # 1 to 86400: the window, in seconds
+```
+
+| Key | Default | What it sets |
+|---|---|---|
+| `threshold` | `5` | how many emergency accesses one professional is granted in any window, 1 to 5 |
+| `window_s` | `86400` | the window, in seconds, 1 to 86400 (24 hours) |
+
+The defaults are the §2.5 baseline. A country may only tighten it, so
+`config check`, the start and a reload refuse a `threshold` above 5 or a
+`window_s` above 86400, naming §2.5:
+
+```text
+emergency.threshold is 6, above the baseline of 5 emergency access attempts per health professional per 24-hour period of eHDSI Section II Security Services 10.0.0 §2.5, which a country may only tighten
+```
+
+A `threshold` or a `window_s` of zero is refused too: §2.5 has every country
+provide emergency access, so FerroFED never refuses it by default. A reload
+applies a changed limit.
+
+How the gateway counts:
+
+- **Per professional.** The professional is the one the token relays: the
+  contact point, `country_code`, the issuing authority and `hp_identifier`
+  (Implementing Regulation (EU) 2026/2099 Annex Table 1).
+- **Every request that reaches patient data.** The summary, the document
+  list, a document, a prescription search and read, and a dispensation each
+  count once. The patient lookup is the identification step and is never
+  counted.
+- **In any window.** The window slides: any span of `window_s` seconds holds
+  at most `threshold` granted accesses of one professional. A denied
+  attempt is not counted, so the professional is granted again once the
+  oldest access leaves the window.
+- **Across replicas and restarts.** The count lives in FerroFED's own store
+  (`ferrofed.emergency_access`, [FerroFED's own store](../operate/store.md)),
+  read and incremented in one statement, so replicas share one count and a
+  restart keeps it. The table names each professional by a SHA-256 digest
+  alone.
+
+Past the limit the request is denied before any member is asked. On the
+FHIR face the answer is `403 forbidden`, whose `issue.details` carries the
+refusal `emergency-limit-reached`
+(`https://ferrofed.eu/fhir/CodeSystem/refusal`) and `ERROR_SEC_GENERIC`
+(`https://ferrofed.eu/fhir/CodeSystem/myhealth-eu-exception`; eHDSI XCA
+Profile 8.0.1 §2.2.3, "Security validations for the request or the
+requestor failed"). Its diagnostics note that too many attempts for an
+emergency access have been made, as §2.5 asks. The access record of the
+denied attempt carries the emergency mark, and its outcome description
+names the anomaly warning `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS`
+(NCPeH Architecture §5.1.9), so the contact point and the national audit
+see it. The denial is also the security event `emergency-limit-reached`,
+logged under `ferrofed::security` and counted in the security metrics,
+naming the contact point and the professional.
+
+When the store does not answer, an emergency access cannot be counted, so
+it is refused `503 emergency-uncounted` and no member is asked. A request
+that is no emergency access never touches the count.
+
 ## Failures the connector relays
 
 The contact points exchange a common set of exceptions, and the national
@@ -220,12 +306,13 @@ it is:
 
 | What happened | Status and issue type | Temporary? |
 |---|---|---|
-| A member, the identity binding or the access record could not answer in time or at all | `503` `transient`, `504` `timeout` | yes, the connector may ask again |
+| A member, the identity binding, the access record or the store that counts emergency accesses could not answer in time or at all | `503` `transient`, `504` `timeout` | yes, the connector may ask again |
 | A member answered with an error, named in the outcome | `424` `incomplete` | the member's, which the outcome names |
 | The owner of a prescription failed on a dispensation or could not be reached | `502` `exception`, the member's own issues after the gateway's when it sent some | unknown: read the prescription before sending again |
 | The request is malformed or misses a parameter | `400` `invalid` | no |
 | The token misses an Annex attribute; the message names each missing one | `403` `forbidden` | no, until the contact point sends it |
 | The token names no TRC patient | `403` `forbidden`, `trc-missing` | no, until the contact point sends it |
+| The professional reached the emergency access limit | `403` `forbidden`, `emergency-limit-reached` and `ERROR_SEC_GENERIC` | yes, once the oldest emergency access leaves the window |
 | No member holds the patient, or the prescription, or the request is outside the TRC's patient | `404` `not-found`, `trc-patient-mismatch` and the service's `*_NOT_FOUND` code | no |
 | The member that owns the prescription refused the dispensation | `409` `conflict`, the member's own issues after the gateway's | no |
 | The gateway failed on its own | `500` `exception` | no |

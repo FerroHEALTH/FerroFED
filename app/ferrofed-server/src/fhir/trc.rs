@@ -249,6 +249,44 @@ pub(super) fn no_data(service: Service) -> Response {
     response
 }
 
+/// The refusal code of an emergency access a contact point relays past the
+/// professional's limit.
+pub(super) const EMERGENCY_LIMIT: &str = "emergency-limit-reached";
+
+/// The exception code name of a failed security validation of the request
+/// or the requestor (eHDSI XCA Profile 8.0.1 §2.2.3).
+pub(super) const SECURITY_GENERIC: &str = "ERROR_SEC_GENERIC";
+
+/// The `OperationOutcome` of an emergency access denied past the relayed
+/// professional's limit, answered with `status` and `diagnostics`: issue
+/// `forbidden`, the [`EMERGENCY_LIMIT`] refusal and [`SECURITY_GENERIC`]
+/// (eHDSI Section II Security Services 10.0.0 §2.5; `NCPeH` Architecture
+/// Specifications 10.0.0 §5.1.9).
+pub(super) fn emergency_denied(status: StatusCode, diagnostics: &str) -> Response {
+    let coding = |system: &str, code: &str| Coding {
+        system: Some(system.into()),
+        code: Some(code.into()),
+        ..Coding::default()
+    };
+    let outcome = OperationOutcome {
+        issue: vec![OperationOutcomeIssue {
+            severity: "error".into(),
+            code: "forbidden".into(),
+            details: Some(CodeableConcept {
+                coding: vec![
+                    coding(REFUSAL_SYSTEM, EMERGENCY_LIMIT),
+                    coding(EXCEPTION_SYSTEM, SECURITY_GENERIC),
+                ],
+                ..CodeableConcept::default()
+            }),
+            diagnostics: Some(diagnostics.into()),
+            ..OperationOutcomeIssue::default()
+        }],
+        ..OperationOutcome::default()
+    };
+    fhir_json(status, &outcome)
+}
+
 /// The `403` refusal of a contact point's patient-data request whose token
 /// names no TRC patient (eHDSI SAML Profile 10.0.0 §4.3 makes the TRC's
 /// `subject-id` mandatory).
@@ -279,7 +317,10 @@ fn recorded(admitted: &Admitted<'_>, binding: &Binding, reached: Reached<'_>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{EXCEPTION_SYSTEM, MISMATCH, MISSING, REFUSAL_SYSTEM, Service};
+    use super::{
+        EMERGENCY_LIMIT, EXCEPTION_SYSTEM, MISMATCH, MISSING, REFUSAL_SYSTEM, SECURITY_GENERIC,
+        Service,
+    };
 
     /// The published `CodeSystem` definitions the face's codes belong to.
     const REFUSAL: &str = include_str!("definition/CodeSystem-refusal.json");
@@ -289,9 +330,10 @@ mod tests {
     fn every_code_the_face_sends_is_in_its_published_code_system() {
         assert!(REFUSAL.contains(&format!("\"url\": \"{REFUSAL_SYSTEM}\"")));
         assert!(EXCEPTION.contains(&format!("\"url\": \"{EXCEPTION_SYSTEM}\"")));
-        for code in [MISMATCH, MISSING] {
+        for code in [MISMATCH, MISSING, EMERGENCY_LIMIT] {
             assert!(REFUSAL.contains(&format!("\"code\": \"{code}\"")), "{code}");
         }
+        assert!(EXCEPTION.contains(&format!("\"code\": \"{SECURITY_GENERIC}\"")));
         for service in [
             Service::PatientSummary,
             Service::Prescription,

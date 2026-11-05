@@ -6,7 +6,9 @@
 //! One database and login role of FerroFED's own, never a member's CDR, for
 //! the state that must both survive a restart and be one on every replica:
 //! the definitions of the stored-query registry's `postgres` backend
-//! (§12.7, N44). Caches, audit records, configuration and clinical data are
+//! (§12.7, N44), and the count of each relayed health professional's
+//! emergency accesses ([`emergency`]; eHDSI Section II Security Services
+//! 10.0.0 §2.5). Caches, audit records, configuration and clinical data are
 //! never kept here.
 //!
 //! Its tables live in the schema `ferrofed`. Each time a connection opens,
@@ -24,6 +26,7 @@
 //! it. No specification governs the store: our own design.
 
 pub mod connection;
+pub mod emergency;
 pub mod migrations;
 pub mod ready;
 

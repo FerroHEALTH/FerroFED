@@ -149,6 +149,15 @@ What the mark does and does not say:
   naming its node ([An emergency request](consent.md#consent)). The answer
   never shows it.
 
+One request is held to more than its mark: an emergency access a national
+contact point relays counts against the professional's limit, five per 24
+hours unless `[emergency]` tightens it, and past the limit it is denied
+before any node is asked. Its record carries the mark, and its outcome
+description names the warning
+`EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS` (eHDSI Section II Security
+Services 10.0.0 §2.5; [The emergency access
+limit](../integrate/national-contact-point.md#the-emergency-access-limit)).
+
 For each marked access the gateway writes one `warn` line, "the access was
 declared an emergency access by its purpose of use", under its request id
 and with no other value, so your security monitoring can watch for it.

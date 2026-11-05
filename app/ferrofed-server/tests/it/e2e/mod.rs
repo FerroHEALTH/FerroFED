@@ -59,7 +59,10 @@
 //! FerroFED's own store migrates once under two replicas booting together,
 //! takes over a stored-query database of the earlier release, reports not
 //! ready while its database is stopped, and sweeps its expired rows, in
-//! [`store`].
+//! [`store`]. The same store counts the emergency accesses a national
+//! contact point relays for one professional, across replicas and restarts,
+//! and denies one past the limit (eHDSI Section II Security Services 10.0.0
+//! §2.5), in [`emergency`].
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -90,6 +93,7 @@ mod commit;
 mod conformance_run;
 mod crossref;
 mod differential;
+mod emergency;
 mod keycloak;
 mod national;
 mod pixm;

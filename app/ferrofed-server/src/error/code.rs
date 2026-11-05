@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 76] = [
+    pub const GATEWAY: [Self; 78] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -86,6 +86,8 @@ impl Code {
         Self::ConfirmationPending,
         Self::SecretStoreUnavailable,
         Self::CredentialMalformed,
+        Self::EmergencyLimitReached,
+        Self::EmergencyUncounted,
         Self::TrcMissing,
         Self::TrcUnbound,
     ];
@@ -195,6 +197,8 @@ impl Code {
             Self::ConfirmationPending => "confirmation-pending",
             Self::SecretStoreUnavailable => "secret-store-unavailable",
             Self::CredentialMalformed => "credential-malformed",
+            Self::EmergencyLimitReached => "emergency-limit-reached",
+            Self::EmergencyUncounted => "emergency-uncounted",
             Self::TrcMissing => "trc-missing",
             Self::TrcUnbound => "trc-unbound",
         }
@@ -275,10 +279,12 @@ impl Code {
             | Self::TrcMissing
             | Self::TrcUnbound
             | Self::ApprovalOwn
-            | Self::OperatorUnverified => StatusCode::FORBIDDEN,
-            Self::AuthenticationUnavailable | Self::Overloaded | Self::AccessUnrecorded => {
-                StatusCode::SERVICE_UNAVAILABLE
-            }
+            | Self::OperatorUnverified
+            | Self::EmergencyLimitReached => StatusCode::FORBIDDEN,
+            Self::AuthenticationUnavailable
+            | Self::Overloaded
+            | Self::AccessUnrecorded
+            | Self::EmergencyUncounted => StatusCode::SERVICE_UNAVAILABLE,
             Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         }
     }
@@ -473,6 +479,12 @@ impl Code {
             Self::CredentialMalformed => {
                 "the request carries two credentials, or a credential field that is no credential (RFC 6750 §3.1)"
             }
+            Self::EmergencyLimitReached => {
+                "too many attempts for an emergency access have been made by this health professional in the window, so the access is denied (eHDSI Section II Security Services 10.0.0 §2.5)"
+            }
+            Self::EmergencyUncounted => {
+                "the emergency access could not be counted against the health professional's limit, so it is refused; no member was asked"
+            }
             Self::TrcMissing => {
                 "the national contact point's access token names no patient of a treatment relationship confirmation, so no patient data is served and nothing was sent"
             }
@@ -571,8 +583,10 @@ mod tests {
             Code::ConfirmationPending => Some(71),
             Code::SecretStoreUnavailable => Some(72),
             Code::CredentialMalformed => Some(73),
-            Code::TrcMissing => Some(74),
-            Code::TrcUnbound => Some(75),
+            Code::EmergencyLimitReached => Some(74),
+            Code::EmergencyUncounted => Some(75),
+            Code::TrcMissing => Some(76),
+            Code::TrcUnbound => Some(77),
         }
     }
 
@@ -724,6 +738,8 @@ mod tests {
             (Code::ConfirmationPending, StatusCode::CONFLICT),
             (Code::SecretStoreUnavailable, StatusCode::CONFLICT),
             (Code::CredentialMalformed, StatusCode::BAD_REQUEST),
+            (Code::EmergencyLimitReached, StatusCode::FORBIDDEN),
+            (Code::EmergencyUncounted, StatusCode::SERVICE_UNAVAILABLE),
             (Code::TrcMissing, StatusCode::FORBIDDEN),
             (Code::TrcUnbound, StatusCode::FORBIDDEN),
         ];
