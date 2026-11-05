@@ -29,7 +29,8 @@
 //! string claim `trc_patient` names, as one `system|value` token
 //! ([`TrcPatient`]): the authorization server acting for the contact point
 //! copies it from the TRC assertion's `subject-id` (eHDSI SAML Profile
-//! 10.0.0 §4.3). The FHIR face holds every patient-data request to it.
+//! 10.0.0 §4.3). The FHIR face and the ITS-REST face hold every patient-data
+//! request to it ([`crate::facade::trc`]).
 
 use std::fmt;
 

@@ -296,6 +296,15 @@ pub enum Code {
     /// The request carries two credentials, or a credential field that is no
     /// credential (RFC 6750 §3.1, `invalid_request`).
     CredentialMalformed,
+    /// A national contact point's patient-data request on the ITS-REST face
+    /// whose access token names no patient of a treatment relationship
+    /// confirmation (eHDSI SAML Profile 10.0.0 §4.3); nothing is sent.
+    TrcMissing,
+    /// A national contact point's patient-data request on the ITS-REST face
+    /// names no patient or EHR its treatment relationship confirmation can
+    /// bind: a population query, the creation of an EHR or a DEMOGRAPHIC
+    /// request (eHDSI XCA Profile 8.0.1 §4.2.1); nothing is sent.
+    TrcUnbound,
 }
 
 /// The code of a refused query: the refusal's stable kind

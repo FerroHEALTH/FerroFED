@@ -25,11 +25,6 @@
 //! 10.0.0 SR 5). Blocking the professional, XCA's SHOULD, stays with the
 //! contact point.
 
-use std::fmt::Write as _;
-use std::sync::LazyLock;
-
-use aws_lc_rs::hmac;
-use aws_lc_rs::rand::SystemRandom;
 use axum::response::Response;
 use ferrofed_eehrxf::face;
 use ferrofed_registry::id::{EhrId, NodeId};
@@ -37,14 +32,12 @@ use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
 use http::StatusCode;
-use secrecy::ExposeSecret;
 
 use super::admission::Admitted;
 use crate::access::NoAccess;
 use crate::facade::request::Arrived;
-use crate::facade::trc::Binding;
+use crate::facade::trc::{Binding, Reached};
 use crate::fhir_wire::fhir_json;
-use crate::security::{Event, TARGET};
 
 /// The code system of the gateway's own refusal codes on the FHIR face.
 // NOTE: no specification governs this: our own design; the refusal code travels as a coding
@@ -90,15 +83,6 @@ impl Service {
             Self::OriginalDocument => "ERROR_ORCD_NOT_FOUND",
         }
     }
-}
-
-/// What a break of the binding reached for, as its security record names it.
-#[derive(Debug, Clone, Copy)]
-pub(super) enum Reached<'a> {
-    /// A patient named by `system`|`value`.
-    Patient(&'a str, &'a str),
-    /// A resource at the member `node`, in its EHR `ehr_id`.
-    Resource(&'a NodeId, &'a EhrId),
 }
 
 /// The binding of `arrived`'s contact point, or `None` for a caller that is
@@ -282,57 +266,14 @@ fn missing() -> Response {
     response
 }
 
-/// The key the pseudonyms of one process are drawn with, generated at
-/// start and never written anywhere.
-static PSEUDONYM_KEY: LazyLock<Option<hmac::Key>> = LazyLock::new(|| {
-    // NOTE: no specification governs this: our own design; with no random source the
-    // record names no pseudonym, and never the identifier in its place.
-    hmac::Key::generate(hmac::HMAC_SHA256, &SystemRandom::new()).ok()
-});
-
-/// The pseudonym of `identifier`: the first 16 bytes of its HMAC-SHA256
-/// under this process's key, in hexadecimal.
-fn pseudonym(identifier: &str) -> String {
-    let Some(key) = PSEUDONYM_KEY.as_ref() else {
-        return String::from("unavailable");
-    };
-    let tag = hmac::sign(key, identifier.as_bytes());
-    tag.as_ref()
-        .iter()
-        .take(16)
-        .fold(String::with_capacity(32), |mut hex, byte| {
-            let _hex_written = write!(hex, "{byte:02x}");
-            hex
-        })
-}
-
-/// Records that `admitted`'s contact point reached `reached` outside the
-/// patient `binding` holds: a security event naming the relayed
-/// professional, with the patient or resource asked and the TRC patient
-/// each by its pseudonym alone.
+/// Records the break of `binding` that `admitted`'s contact point made by
+/// reaching `reached` ([`crate::facade::trc::recorded`]).
 fn recorded(admitted: &Admitted<'_>, binding: &Binding, reached: Reached<'_>) {
-    Event::TrcPatientMismatch.record();
-    let relayed = admitted.caller.relayed();
-    let professional = relayed.map(|relayed| &relayed.professional);
-    let (what, asked) = match reached {
-        Reached::Patient(system, value) => ("patient", pseudonym(&format!("{system}|{value}"))),
-        Reached::Resource(node, ehr_id) => (
-            "resource",
-            pseudonym(&format!("{}/{}", node.as_str(), ehr_id.as_str())),
-        ),
-    };
-    tracing::warn!(
-        target: TARGET,
-        event = Event::TrcPatientMismatch.as_str(),
-        what,
-        asked,
-        bound = pseudonym(binding.patient().token().expose_secret()),
-        contact_point = relayed.map(|relayed| relayed.contact_point.as_str()),
-        country_code = relayed.map(|relayed| relayed.country_code.as_str()),
-        hp_identifier = professional.map(|professional| professional.hp_identifier.as_str()),
-        hp_issuing_authority = professional.map(|professional| professional.issuing_authority_name.as_str()),
-        request_id = admitted.logged.as_str(),
-        "a national contact point's request reached outside the patient its treatment relationship confirmation binds, and was answered as no data"
+    crate::facade::trc::recorded(
+        admitted.caller.relayed(),
+        binding,
+        reached,
+        &admitted.logged,
     );
 }
 

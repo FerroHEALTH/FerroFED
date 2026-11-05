@@ -129,6 +129,10 @@ pub struct Arrived<'a> {
     /// Whom the request is on behalf of, conveyed to every node it reaches
     /// (§13.1, N24).
     pub conveyance: Conveyance,
+    /// The patient a national contact point's treatment relationship
+    /// confirmation binds, resolved at every member, which a patient-data
+    /// request is held to; `None` for every other caller and request.
+    pub(crate) trc: Option<&'a crate::facade::trc::Binding>,
 }
 
 /// Every path no route serves.
@@ -186,6 +190,22 @@ pub(crate) async fn unrouted(
             Ok(conveyance) => conveyance,
             Err(unconfined) => return unconfined.respond(request_id, &outbound.to_string()),
         };
+    let binding = if reaches_patient_data(&method, path) {
+        let logged = outbound.to_string();
+        match crate::facade::trc::admitted(
+            serving,
+            caller.as_deref(),
+            started,
+            (request_id, &logged),
+        )
+        .await
+        {
+            Ok(binding) => binding,
+            Err(refused) => return refused,
+        }
+    } else {
+        None
+    };
     let mut arrived = Arrived {
         method: &method,
         path,
@@ -198,6 +218,7 @@ pub(crate) async fn unrouted(
         requester: caller.as_deref().and_then(Caller::requester),
         on_behalf,
         conveyance,
+        trc: binding.as_ref(),
     };
     if let Some(definitions) = state.definitions()
         && let Lookup::Matched(matched) = routes::lookup(&method, path)
@@ -232,6 +253,18 @@ pub(crate) async fn unrouted(
     }
 }
 
+/// Whether the operation `method` names at `path` reaches patient data at a
+/// node, so a national contact point's request to it is held to its TRC
+/// patient ([`crate::facade::trc`]); a definition request and a path no
+/// operation matches reach none.
+fn reaches_patient_data(method: &Method, path: &str) -> bool {
+    match routes::lookup(method, path) {
+        Lookup::Matched(matched) => crate::auth::permission::of(&matched)
+            .is_some_and(crate::auth::permission::Requirement::reaches_patient_data),
+        Lookup::MethodNotAllowed { .. } | Lookup::NotFound => false,
+    }
+}
+
 /// Answers a request under the ITS-REST prefix that no other route serves.
 ///
 /// A request in the single-node EHR area, the creation of an EHR and a
@@ -254,6 +287,22 @@ pub async fn serve(federation: Option<&Federation>, arrived: Arrived<'_>) -> Res
     {
         let logged = arrived.outbound.to_string();
         return confined::refused("area", arrived.request_id, &logged);
+    }
+    // NOTE: eHDSI XCA Profile 8.0.1 §4.2.1: a contact point's request is held to its TRC
+    // patient, so one that names no patient or EHR it can bind is refused with nothing sent.
+    if let (Some(binding), Lookup::Matched(matched)) = (arrived.trc, &looked_up) {
+        let unbound = if crate::route_area::creates_ehr(matched) {
+            Some("ehr-create")
+        } else if crate::route_area::in_demographic_area(matched) {
+            Some("demographic")
+        } else {
+            None
+        };
+        if let Some(what) = unbound {
+            let logged = arrived.outbound.to_string();
+            let ids = (arrived.request_id, logged.as_str());
+            return crate::facade::trc::unbound(binding, arrived.conveyance.relayed(), what, ids);
+        }
     }
     match looked_up {
         Lookup::Matched(matched) if crate::route_area::in_ehr_area(&matched) => {

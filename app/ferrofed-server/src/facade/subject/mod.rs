@@ -73,7 +73,7 @@ use http::{HeaderMap, Method};
 use openehr_its::rest::client::path_segment;
 use openehr_its::rest::generated::ehr::EhrGetBySubjectParams;
 use openehr_its::rest::routes::RouteMatch;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 
 use crate::access::ConsentSetAside;
 use crate::error::{self, Code};
@@ -84,7 +84,7 @@ use crate::facade::provenance::Provenance;
 use crate::facade::route::{self, Arrived, Deadlines, Failure};
 use crate::facade::subject::resolved::resolve;
 use crate::facade::subject::unserved::Unserved;
-use crate::facade::{confined, consent};
+use crate::facade::{confined, consent, trc};
 use crate::federation::Federation;
 use crate::security::logged;
 
@@ -125,6 +125,9 @@ pub(crate) async fn serve(
     if let Err(refusal) = declared::held(matched, None, arrived.headers, &arrived.body) {
         return route::declared_refused(&refusal, request_id, &logged);
     }
+    if let Some(refused) = other_than_trc(&arrived, &subject, &logged) {
+        return refused;
+    }
     logged::subject_consumed(&logged);
     let Some(budget) = Deadlines::from(federation, started) else {
         return Unserved::Clock.respond(request_id, &logged);
@@ -164,17 +167,12 @@ pub(crate) async fn serve(
     let settled = resolved.settled().map_err(|unserved| {
         unserved.disclosed_as(federation.discloses_consent_to(&arrived.conveyance))
     });
-    // NOTE: §5.2, §12.5: a confined grant reads its own patient's EHR alone, and the gateway
-    // records nothing of another subject, no session binding and no index entry.
-    if confined::is_confined(&arrived.conveyance)
-        && !settled.as_ref().is_ok_and(|(endpoint, ehr_id)| {
-            confined::admits(&arrived.conveyance, endpoint.id(), ehr_id)
-        })
-    {
-        return set_aside(
-            confined::refused("subject", request_id, &logged),
-            &consented.set_aside,
-        );
+    let owner = settled
+        .as_ref()
+        .ok()
+        .map(|(endpoint, ehr_id)| (*endpoint, ehr_id));
+    if let Some(refused) = held_out(&arrived, owner, &logged) {
+        return set_aside(refused, &consented.set_aside);
     }
     learn(federation, &holders, (arrived.session, &consented), started);
     let (endpoint, ehr_id) = match settled {
@@ -218,6 +216,53 @@ pub(crate) async fn serve(
         }
     };
     set_aside(response, &consented.set_aside)
+}
+
+/// The answer to a national contact point's read by subject when the
+/// subject is not its TRC patient, compared before anything is looked up,
+/// or is a TRC patient no member holds; `None` for any other read (eHDSI
+/// XCA Profile 8.0.1 §4.2.1).
+fn other_than_trc(arrived: &Arrived<'_>, subject: &Subject, logged: &str) -> Option<Response> {
+    let binding = arrived.trc?;
+    let (system, value) = (
+        subject.patient.namespace().as_str(),
+        subject.value.expose_secret(),
+    );
+    if binding.names(system, value) {
+        return None;
+    }
+    if !binding.patient().is(system, value) {
+        let reached = trc::Reached::Patient(system, value);
+        trc::recorded(arrived.conveyance.relayed(), binding, reached, logged);
+    }
+    Some(trc::no_data(arrived.request_id))
+}
+
+/// The refusal of a read by subject whose `owner`, the endpoint and the
+/// `ehr_id` the resolution settled on, lies outside the caller's patient,
+/// or `None` to go on: a confined grant reads its own patient's EHR alone
+/// (§5.2, §12.5), and a contact point its TRC patient's own pairs alone,
+/// answered as no data (eHDSI XCA Profile 8.0.1 §4.2.2). Nothing is then
+/// recorded of another subject, no session binding and no index entry.
+fn held_out(
+    arrived: &Arrived<'_>,
+    owner: Option<(&Endpoint, &EhrId)>,
+    logged: &str,
+) -> Option<Response> {
+    if confined::is_confined(&arrived.conveyance)
+        && !owner.is_some_and(|(endpoint, ehr_id)| {
+            confined::admits(&arrived.conveyance, endpoint.id(), ehr_id)
+        })
+    {
+        return Some(confined::refused("subject", arrived.request_id, logged));
+    }
+    let (binding, (endpoint, ehr_id)) = arrived.trc.zip(owner)?;
+    if binding.holds(endpoint.node(), ehr_id) {
+        return None;
+    }
+    let reached = trc::Reached::Resource(endpoint.node(), ehr_id);
+    trc::recorded(arrived.conveyance.relayed(), binding, reached, logged);
+    Some(trc::no_data(arrived.request_id))
 }
 
 /// The read of the EHR `ehr_id` the gateway sends its holder, with the client's

@@ -27,15 +27,16 @@ use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::single_node::forward::{ForwardError, Forwarded, HeldRequest};
 use ferrofed_engine::single_node::probe::{self, Answer, Probe, ProbedEhrId};
 use ferrofed_identity::session::SessionKey;
-use ferrofed_registry::id::EhrId;
+use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::incident::Detection;
-use ferrofed_registry::snapshot::{Endpoint, EndpointStatus};
+use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, Method};
 use openehr_its::rest::routes::RouteMatch;
 
 use super::{Arrived, Deadlines, Failure, failed, forward, held, learn, passed, unheld};
 use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
+use crate::facade::trc::{self, Binding};
 use crate::facade::write::{self, Write};
 use crate::facade::{confined, follow_up, owner};
 use crate::federation::Federation;
@@ -81,16 +82,13 @@ pub(super) async fn route(
         Err(refused) => return *refused,
     };
     let snapshot = federation.snapshot();
-    let asked = ((arrived.headers, arrived.session), &arrived.conveyance);
+    let asked = (
+        (arrived.headers, arrived.session),
+        (&arrived.conveyance, arrived.trc),
+    );
     let located = match locate(federation, (asked, matched), write, &ehr_id, started) {
         Ok(located) => located,
-        Err(Unlocated::Untargeted(untargeted)) => {
-            return error::response(untargeted.code(), untargeted.to_string(), request_id);
-        }
-        Err(Unlocated::HeldElsewhere(refused)) => {
-            return held_elsewhere(&refused, (request_id, &logged));
-        }
-        Err(Unlocated::Confined) => return confined::refused("ehr_id", request_id, &logged),
+        Err(refused) => return unlocated(&arrived, &refused, &ehr_id, &logged),
     };
     let Some(budget) = Deadlines::from(federation, started) else {
         tracing::error!(
@@ -214,15 +212,16 @@ fn held_as(
 /// confined caller creates an EHR or reaches beyond its patient's pairs.
 fn locate<'a>(
     federation: &'a Federation,
-    (((headers, session), conveyance), matched): (
-        ((&HeaderMap, Option<&SessionKey>), &Conveyance),
-        &RouteMatch,
-    ),
+    (((headers, session), (conveyance, trc)), matched): (Asked<'_>, &RouteMatch),
     write: Write,
     ehr_id: &EhrId,
     started: Instant,
 ) -> Result<owner::Located<'a>, Unlocated> {
     let (snapshot, index) = (federation.snapshot(), federation.index());
+    let bound = match trc {
+        Some(binding) => Some(bound(snapshot, headers, binding, (write, ehr_id))?),
+        None => None,
+    };
     if let Some(confinement) = conveyance.confinement() {
         // NOTE: master08 §Resource Scopes: a patient grant reaches data in its patient's
         // existing EHRs, so it creates none.
@@ -236,6 +235,9 @@ fn locate<'a>(
         if !confined::admits_located(conveyance, &located, ehr_id) {
             return Err(Unlocated::Confined);
         }
+        return Ok(located);
+    }
+    if let Some(located) = bound {
         return Ok(located);
     }
     let held = session.map(|session| owner::Held {
@@ -264,6 +266,76 @@ fn locate<'a>(
         .unwrap_or(owner::Located::Unknown))
 }
 
+/// What a routed request asks with: its headers and the client session,
+/// the conveyance, and the binding of a contact point's TRC patient.
+type Asked<'a> = (
+    (&'a HeaderMap, Option<&'a SessionKey>),
+    (&'a Conveyance, Option<&'a Binding>),
+);
+
+/// The answer to a request `refused` before its owner is located, under
+/// the path `ehr_id`, logged under `logged`. A national contact point's
+/// creation of an EHR is `trc-unbound`, and its `ehr_id` outside the
+/// binding is no data, each recorded as a break of the binding with nothing
+/// sent (eHDSI XCA Profile 8.0.1 §4.2.1, §4.2.2).
+fn unlocated(arrived: &Arrived<'_>, refused: &Unlocated, ehr_id: &EhrId, logged: &str) -> Response {
+    let request_id = arrived.request_id;
+    let reached = match refused {
+        Unlocated::Untargeted(untargeted) => {
+            return error::response(untargeted.code(), untargeted.to_string(), request_id);
+        }
+        Unlocated::HeldElsewhere(held) => return held_elsewhere(held, (request_id, logged)),
+        Unlocated::Confined => return confined::refused("ehr_id", request_id, logged),
+        Unlocated::Unbound => None,
+        Unlocated::Outside(Some(node)) => Some(trc::Reached::Resource(node, ehr_id)),
+        Unlocated::Outside(None) => Some(trc::Reached::Ehr(ehr_id)),
+    };
+    let (Some(binding), relayed) = (arrived.trc, arrived.conveyance.relayed()) else {
+        return error::fixed(Code::Internal, request_id);
+    };
+    let Some(reached) = reached else {
+        return trc::unbound(binding, relayed, "ehr-create", (request_id, logged));
+    };
+    trc::recorded(relayed, binding, reached, logged);
+    trc::no_data(request_id)
+}
+
+/// Where a national contact point's request under the path `ehr_id`
+/// goes: located by the targeting headers or among the members `binding`
+/// holds `ehr_id` at, with no index lookup and no probe, and only to the
+/// TRC patient's own pair (eHDSI XCA Profile 8.0.1 §4.2.2).
+///
+/// # Errors
+///
+/// Returns [`Unlocated::Unbound`] for the creation of an EHR, which names
+/// no EHR of the TRC patient, and [`Unlocated::Outside`] for an `ehr_id`
+/// that is not the TRC patient's at the member it would go to.
+fn bound<'a>(
+    snapshot: &'a RegistrySnapshot,
+    headers: &HeaderMap,
+    binding: &Binding,
+    (write, ehr_id): (Write, &EhrId),
+) -> Result<owner::Located<'a>, Unlocated> {
+    if write == Write::NewEhr {
+        return Err(Unlocated::Unbound);
+    }
+    let located = owner::located_within(snapshot, headers, &binding.holding(ehr_id))?;
+    match &located {
+        owner::Located::At { endpoint, .. } if binding.holds(endpoint.node(), ehr_id) => {
+            Ok(located)
+        }
+        owner::Located::At { endpoint, .. } => {
+            Err(Unlocated::Outside(Some(endpoint.node().clone())))
+        }
+        // NOTE: §12.5.2, N42: two members holding the TRC patient's ehr_id are a collision,
+        // refused `409` with nothing sent to either.
+        owner::Located::Collision(_) => Ok(located),
+        owner::Located::Unreachable { .. } | owner::Located::Unknown => {
+            Err(Unlocated::Outside(None))
+        }
+    }
+}
+
 /// Why a routed request is refused before its owner is located.
 #[derive(Debug, thiserror::Error)]
 enum Unlocated {
@@ -278,6 +350,15 @@ enum Unlocated {
     /// at the member it would go to (§12.5).
     #[error("the request reaches beyond the patient the caller's grant is confined to")]
     Confined,
+    /// A national contact point's request creates an EHR, which no TRC
+    /// binds (eHDSI XCA Profile 8.0.1 §4.2.1).
+    #[error("a national contact point's request creates an EHR its TRC does not bind")]
+    Unbound,
+    /// A national contact point's request reaches an `ehr_id` that is not
+    /// its TRC patient's at the member it would go to, located at that
+    /// member when one is named (eHDSI XCA Profile 8.0.1 §4.2.2).
+    #[error("a national contact point's request reaches an EHR outside its TRC patient")]
+    Outside(Option<NodeId>),
 }
 
 /// The `409` refusing a new EHR whose `ehr_id` `refused` places at another
