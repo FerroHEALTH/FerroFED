@@ -14,7 +14,7 @@
 //! the TRC's own identifier, and a resource it reads or writes must sit in
 //! one of those pairs. A patient the cross-reference knows nowhere holds no
 //! pair, so a request for it is answered as one for another patient
-//! ([`crate::fhir`], [`no_data`]). No specification defines the binding
+//! ([`crate::fhir`], [`NO_DATA`]). No specification defines the binding
 //! across members: our own design over the XCA rule that NCP-A compares the
 //! patients.
 //!
@@ -140,17 +140,15 @@ pub(crate) async fn admitted(
         .map_err(|unconfined| unconfined.respond(request_id, logged))
 }
 
-/// The ITS-REST answer to a contact point's request outside its TRC
-/// patient, to one for a TRC patient no member holds, and to one every
-/// member that holds it restricts: the `404` `subject-unavailable` a
+/// The code of the ITS-REST answer to a contact point's request outside
+/// its TRC patient, to one for a TRC patient no member holds, and to one
+/// every member that holds it restricts: the `404` `subject-unavailable` a
 /// subject no member it may read holds gets under withheld consent
 /// exclusions, which a contact point's request always is (Regulation (EU)
-/// 2025/327 Art 8), with its fixed message.
+/// 2025/327 Art 8), answered with its fixed message.
 // NOTE: eHDSI XCA Profile 8.0.1 §4.2.1 returns an error and §4.2.2 "No Data" disclosing no
 // existence; ITS-REST 1.1.0 answers an EHR it does not find `404`, so the three read as one.
-pub(crate) fn no_data(request_id: &str) -> Response {
-    error::fixed(Code::SubjectUnavailable, request_id)
-}
+pub(crate) const NO_DATA: Code = Code::SubjectUnavailable;
 
 /// The `403` `trc-unbound` of a contact point's patient-data request that
 /// names no patient or EHR a TRC can bind, of the kind `what` names: a

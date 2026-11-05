@@ -297,7 +297,7 @@ fn unlocated(arrived: &Arrived<'_>, refused: &Unlocated, ehr_id: &EhrId, logged:
         return trc::unbound(binding, relayed, "ehr-create", (request_id, logged));
     };
     trc::recorded(relayed, binding, reached, logged);
-    trc::no_data(request_id)
+    error::fixed(trc::NO_DATA, request_id)
 }
 
 /// Where a national contact point's request under the path `ehr_id`

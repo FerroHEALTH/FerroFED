@@ -30,7 +30,7 @@
 //! ([`TrcPatient`]): the authorization server acting for the contact point
 //! copies it from the TRC assertion's `subject-id` (eHDSI SAML Profile
 //! 10.0.0 §4.3). The FHIR face and the ITS-REST face hold every patient-data
-//! request to it ([`crate::facade::trc`]).
+//! request to it.
 
 use std::fmt;
 

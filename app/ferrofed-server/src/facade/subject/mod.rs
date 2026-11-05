@@ -235,7 +235,7 @@ fn other_than_trc(arrived: &Arrived<'_>, subject: &Subject, logged: &str) -> Opt
         let reached = trc::Reached::Patient(system, value);
         trc::recorded(arrived.conveyance.relayed(), binding, reached, logged);
     }
-    Some(trc::no_data(arrived.request_id))
+    Some(error::fixed(trc::NO_DATA, arrived.request_id))
 }
 
 /// The refusal of a read by subject whose `owner`, the endpoint and the
@@ -262,7 +262,7 @@ fn held_out(
     }
     let reached = trc::Reached::Resource(endpoint.node(), ehr_id);
     trc::recorded(arrived.conveyance.relayed(), binding, reached, logged);
-    Some(trc::no_data(arrived.request_id))
+    Some(error::fixed(trc::NO_DATA, arrived.request_id))
 }
 
 /// The read of the EHR `ehr_id` the gateway sends its holder, with the client's
