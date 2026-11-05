@@ -64,17 +64,20 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.59" }
 # (ihe-atna), and the EHDS logging component (ehds-logging); 0.2.6 closes a
 # forwarder's syslog connection with close_notify (#1278); 0.3.1 is the
 # release on ferrohealth-smart 0.8 (#1390); 0.3.2 writes a data entity that
-# is no FHIR literal reference as what.identifier (#1416). Verified against
-# crates.io on 2026-10-29.
-ihe-atna = { version = "=0.3.2", default-features = false }
-ehds-logging = { version = "=0.3.2", default-features = false }
+# is no FHIR literal reference as what.identifier (#1416); 0.3.3 adds the
+# withheld::Holds register a product opts into, which the gateway builds none
+# of (#1605). Verified against crates.io on 2026-11-05.
+ihe-atna = { version = "=0.3.3", default-features = false }
+ehds-logging = { version = "=0.3.3", default-features = false }
 # The European interoperability software component of Regulation (EU)
 # 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
 # owner decision of 2026-10-28 (#813) and pinned exactly, because FerroBRIDGE's
 # crate line moves by patch; 0.1.152 is the release on openehr-* 0.0.128
 # with `Project::with_context`, which the map mode compiles the MPD project's
-# request context through (#1590). Verified against crates.io on 2026-11-04.
-eehrxf = { version = "=0.1.152", default-features = false }
+# request context through (#1590); 0.1.156 lists a second laboratory context,
+# so the laboratory mapping is narrowed to its result context (#1604, #1605).
+# Verified against crates.io on 2026-11-05.
+eehrxf = { version = "=0.1.156", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -207,25 +210,25 @@ fhir-types = { version = "0.1.128", default-features = false }
 # runs in process (#684), and the template index and mapping-file loader it
 # takes, both from FerroBRIDGE on the workspace openehr-* line, so the build
 # carries one copy of that family (#1028).
-# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.219 is
-# the release eehrxf 0.1.152 requires (#1590). Verified against crates.io on
-# 2026-11-04.
-fhirconnect = "=0.1.219"
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.221 is
+# the release eehrxf 0.1.156 requires (#1605). Verified against crates.io on
+# 2026-11-05.
+fhirconnect = "=0.1.221"
 # The FHIR terminology client the European interoperability component asks
 # its terminology server through (#925), from FerroBRIDGE, with the caller's
 # HTTP client for mutual TLS and the `context` form of `$validate-code`.
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.141 is
-# the release eehrxf 0.1.152 builds on (#1590). Verified against crates.io on
-# 2026-11-04.
+# the release eehrxf 0.1.156 builds on (#1605). Verified against crates.io on
+# 2026-11-05.
 ferrobridge-term = "=0.1.141"
 # The FHIR R4 profile validator a document received in the exchange format is
 # held to in full: every invariant, binding and entry profile (#808), from
 # FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.144
-# and openehr-mapping-core 0.1.141 are the releases eehrxf 0.1.152 requires
-# (#1590). Verified against crates.io on 2026-11-04.
+# and openehr-mapping-core 0.1.142 are the releases eehrxf 0.1.156 requires
+# (#1605). Verified against crates.io on 2026-11-05.
 ferrobridge-validator = "=0.1.144"
-openehr-mapping-core = "=0.1.141"
+openehr-mapping-core = "=0.1.142"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by
 # FerroHEALTH/FerroPIX since #367 and pinned exactly, because its crate line
@@ -340,9 +343,9 @@ ferrohealth-session = { version = "=0.2.3", default-features = false }
 # configuration revisions record. Pinned exactly, as a product pins every
 # family crate; 0.2.7 carries `Loaded::table_with_secrets` and
 # `Provenance::secret_source`, and 0.2.8 masks a refused value of any type
-# and names the key of a refusal inside an array of tables. Verified against
-# crates.io on 2026-10-29.
-ferrohealth-config = "=0.2.8"
+# and names the key of a refusal inside an array of tables; 0.2.9 splits the
+# loader with the API unchanged. Verified against crates.io on 2026-11-05.
+ferrohealth-config = "=0.2.9"
 # The health family of FerroHEALTH/FerroSYS (#1397): the readiness
 # document, and with `registry` the indicators and the lifecycle the gateway
 # runs. Pinned exactly, at the version ferrohealth-server requires.
@@ -355,23 +358,24 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # `client_auth = "none"` and keeps a listener's TLS reloadable from the
 # product's own reload path, 0.3.9 names that refusal's values readably,
 # 0.4.1 keeps a product's own fallback and its layers through the stack, and
-# 0.4.2 writes the server-rendered console's policy. Verified against
-# crates.io on 2026-10-31.
-ferrohealth-server = { version = "=0.4.3", default-features = false }
+# 0.4.2 writes the server-rendered console's policy; 0.4.4 splits the stack
+# with the API unchanged. Verified against crates.io on 2026-11-05.
+ferrohealth-server = { version = "=0.4.4", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.
 # Pinned exactly, as a product pins every family crate; 0.2.3 carries the
 # HTTP span conventions, the digit shape of a logged query value, the OTLP
 # TLS checks and `http.server.active_requests`, and 0.2.4 a panic hook whose
-# line names the request in flight (FerroHEALTH/FerroSYS#181). Verified
-# against crates.io on 2026-10-29.
-ferrohealth-telemetry = { version = "=0.2.4", default-features = false }
+# line names the request in flight (FerroHEALTH/FerroSYS#181); 0.2.5 splits
+# the request log with the API unchanged. Verified against crates.io on
+# 2026-11-05.
+ferrohealth-telemetry = { version = "=0.2.5", default-features = false }
 # The installation report of FerroHEALTH/FerroSYS to FerroPULSE (#1397): the
 # `[usage_report]` section, envelope v2, the instance id, the window and the
 # reporter. Pinned exactly, as a product pins every family crate. Verified
-# against crates.io on 2026-10-28.
-ferrohealth-usage-report = { version = "=0.2.0", default-features = false }
+# against crates.io on 2026-11-05.
+ferrohealth-usage-report = { version = "=0.2.1", default-features = false }
 # The console's string catalogs (#1162): Project Fluent messages embedded at
 # build time from app/ferrofed-console/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.
