@@ -67,7 +67,7 @@ async fn a_restriction_at_one_node_is_honoured_by_the_federated_query() -> TestR
         &plan(EHR_B, DemoComposition::FirstClinic),
     )
     .await?;
-    marks::restrict(&nodes.a.api_root(), EHR_A, restricted).await?;
+    marks::restrict(nodes.a.proxy.origin(), EHR_A, restricted).await?;
     let dir = tempfile::tempdir()?;
 
     let (status, text) = call(

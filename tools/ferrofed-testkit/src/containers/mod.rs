@@ -69,6 +69,10 @@ const CDR_PORT: u16 = 8080;
 /// The path of FerroEHR's ITS-REST API root, the path `/v1/ehr` lives under.
 pub const API_PATH: &str = "/ferroehr/rest/openehr";
 
+/// The root of FerroEHR's own extensions, beside [`API_PATH`]: every route
+/// ITS-REST does not define, the ADMIN API included.
+pub const EXTENSIONS_PATH: &str = "/ferroehr/rest/extensions/v1";
+
 /// The path that answers `200` once FerroEHR serves requests.
 const READINESS_PATH: &str = "/health/readiness";
 

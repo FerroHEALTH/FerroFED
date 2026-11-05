@@ -5,7 +5,8 @@
 //! restriction of processing at a node (GDPR Art. 18) and show that the
 //! federated query honours it (§13.2, N27; CP-19).
 //!
-//! The restriction is FerroEHR's own extension, `POST {base}/admin/restriction`
+//! The restriction is FerroEHR's own extension,
+//! `POST {origin}/ferroehr/rest/extensions/v1/admin/restriction`
 //! behind `[admin] enabled = true`: no openEHR specification defines a consent
 //! or restriction resource, so the harness sets the mark the way the node's
 //! operator would, outside ITS-REST. A restricted object leaves every AQL
@@ -23,8 +24,9 @@ use super::database::database_server;
 use super::images::FERROEHR;
 use super::retry;
 use super::{
-    DatabaseServer, FERROEHR_PRODUCT, HarnessError, NODE_A_DATABASE, NODE_A_SYSTEM_ID,
-    NODE_B_DATABASE, NODE_B_SYSTEM_ID, Node, ProxiedNode, TwoNodes, ferroehr_request, ready,
+    DatabaseServer, EXTENSIONS_PATH, FERROEHR_PRODUCT, HarnessError, NODE_A_DATABASE,
+    NODE_A_SYSTEM_ID, NODE_B_DATABASE, NODE_B_SYSTEM_ID, Node, ProxiedNode, TwoNodes,
+    ferroehr_request, ready,
 };
 
 /// The GDPR Art. 18 ground the harness restricts with: the accuracy of the
@@ -96,18 +98,18 @@ pub enum MarkError {
 }
 
 /// Restricts processing of the versioned object `vo_id` of the EHR `ehr_id`
-/// at the node of `api_root` (its ITS-REST API root), through the node's
-/// `POST {api_root}/v1/admin/restriction`.
+/// at the node reached at `origin` (with no path), through the node's
+/// `POST {origin}/ferroehr/rest/extensions/v1/admin/restriction`.
 ///
 /// # Errors
 ///
 /// Returns [`MarkError`] when the request reaches no answer or the node does
 /// not record the restriction.
-pub async fn restrict(api_root: &str, ehr_id: Uuid, vo_id: Uuid) -> Result<(), MarkError> {
+pub async fn restrict(origin: &str, ehr_id: Uuid, vo_id: Uuid) -> Result<(), MarkError> {
     let answer = reqwest::Client::new()
         .post(format!(
-            "{}/v1/admin/restriction",
-            api_root.trim_end_matches('/')
+            "{}{EXTENSIONS_PATH}/admin/restriction",
+            origin.trim_end_matches('/')
         ))
         .json(&serde_json::json!({
             "ehr_id": ehr_id.to_string(),

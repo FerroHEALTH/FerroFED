@@ -51,16 +51,16 @@ impl PinnedImage {
 /// FerroEHR, an openEHR CDR speaking ITS-REST 1.1.0, which both nodes run.
 pub const FERROEHR: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferroehr",
-    tag: "5.5.0",
-    digest: "sha256:e1b15849a3792481a7f16680081b1ae6a2d7160d66e5cb1657fcef5cccfed0dc",
+    tag: "5.6.3",
+    digest: "sha256:cd4e067a30c730a92b886c1669cd669eda9ffd3e47ddf727f28928738e197d62",
 };
 
 /// The database image FerroEHR documents, which carries the role, the
 /// database and the extensions its migrations expect.
 pub const FERROEHR_POSTGRES: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferroehr-postgres",
-    tag: "5.5.0",
-    digest: "sha256:dfe1d5c1bb95d31d3f6ff00fec03cd76ae20d57d20e6225b31e5bc68adf7fa81",
+    tag: "5.6.3",
+    digest: "sha256:5c976b9e7d1c363490bdb3ff2ed82bc8aefcb6b18e9ee3762124f7b5800abe7d",
 };
 
 /// EHRbase, an openEHR CDR of another vendor speaking ITS-REST, which the

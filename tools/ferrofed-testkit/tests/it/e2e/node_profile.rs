@@ -303,7 +303,7 @@ async fn ferroehr_is_checked_for_withholding_a_restricted_composition() -> TestR
     let [served, restricted] =
         [&report.compositions[0], &report.compositions[1]].map(versioned_object);
     let (served, restricted) = (served?, restricted?);
-    marks::restrict(&node.api_root(), EHR, restricted).await?;
+    marks::restrict(node.origin(), EHR, restricted).await?;
 
     let finding = checks::restriction_before_release(
         &interface(&node.api_root(), None)?,
