@@ -12,10 +12,11 @@ use ferrofed_identity::ihe::xcpd::{
     AssertionSource, FixedAssertion, GatewayConfig, LogAudit, Transport, XcpdConfig, XcpdLocalizer,
 };
 use ferrofed_identity::profile::Profile;
-use ferrofed_identity::revocation::{RevocationCheck, RevocationSetupError};
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_server::revocation::{RevocationCheck, RevocationSetupError};
+use ferrohealth_server::section::TlsVersion;
 
 use crate::binding::ihe::audit::{RepositoryTrail, trail};
 use crate::binding::seam::LocalizationError;
@@ -132,7 +133,7 @@ fn revocation(xcpd: &XcpdSettings) -> Result<Option<RevocationCheck>, Localizati
         .ok_or(LocalizationError::XcpdRevocation(
             RevocationSetupError::NoRoots,
         ))?;
-    RevocationCheck::from_pem(&identity.to_secret_string(), roots)
+    RevocationCheck::from_pem(roots, Some(identity), TlsVersion::Tls12)
         .map(Some)
         .map_err(LocalizationError::XcpdRevocation)
 }

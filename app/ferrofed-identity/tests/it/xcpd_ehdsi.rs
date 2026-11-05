@@ -15,12 +15,14 @@ use ferrofed_identity::fhir::Tls;
 use ferrofed_identity::ihe::xcpd::{
     GatewayConfig, Transport, XcpdConfig, XcpdConfigError, XcpdLocalizer,
 };
-use ferrofed_identity::revocation::RevocationCheck;
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError};
 use ferrofed_testkit::revocation::{RevocationFront, Source, Standing};
 use ferrofed_testkit::xcpd::{PATH, RespondingGateway};
+use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_server::revocation::RevocationCheck;
+use ferrohealth_server::section::TlsVersion;
 use secrecy::SecretString;
 
 use crate::support::registry;
@@ -76,8 +78,9 @@ fn localizer(
 /// The check over `front`'s roots, presenting its client identity.
 fn check(front: &RevocationFront) -> Result<RevocationCheck, Box<dyn Error>> {
     Ok(RevocationCheck::from_pem(
-        &SecretString::from(front.client_identity()),
         front.trust_roots(),
+        Some(&Secret::new(front.client_identity())),
+        TlsVersion::Tls12,
     )?)
 }
 

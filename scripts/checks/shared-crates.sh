@@ -21,22 +21,16 @@
 #     of the stack (the request id, the panic catch, the timeout, the body
 #     limit, the overload bound or the caller rate) of its own, or a
 #     healthcheck of its own: a certificate verifier that pins the
-#     listener's certificate, a readiness check or the readiness path
-#     (ferrohealth-server, whose `healthcheck::Get` reads a body over the
-#     pinned TLS too, #1448); the telemetry section, the console formats, the
-#     request log, the sampler, a trace export, an OTLP or Prometheus
-#     exporter or a panic hook of its own (ferrohealth-telemetry).
+#     listener's certificate or checks a peer's revocation status, a
+#     readiness check or the readiness path (ferrohealth-server, whose
+#     `revocation` checks a peer's chain by CRL and OCSP, #1646, and whose
+#     `healthcheck::Get` reads a body over the pinned TLS too, #1448); the
+#     telemetry section, the console formats, the request log, the sampler,
+#     a trace export, an OTLP or Prometheus exporter or a panic hook of its
+#     own (ferrohealth-telemetry).
 #
 # A crate joins ADOPTED, with the definitions it retires in RETIRED, in the
 # pull request that moves FerroFED onto it.
-#
-# One directory may define a certificate verifier of its own, because no
-# FerroSYS crate provides what it does: app/ferrofed-identity/src/revocation/,
-# the revocation gate of an eHDSI link's client (#1623), which admits a
-# server chain only once its CRL or OCSP status was checked (X.509
-# Certificates Profile 7.0.0 §3.2). It pins no listener certificate, which
-# is what the verifier rule retires. VERIFIER_HOME names it, and only the
-# two verifier rules exempt it.
 #
 #   scripts/checks/shared-crates.sh [--self-test]
 #
@@ -80,9 +74,6 @@ ferrohealth-server	with_custom_certificate_verifier
 ferrohealth-server	fn[[:space:]]+(check_tls|check_url|healthcheck_client)[[:space:]]*[<(]
 ferrohealth-server	const[[:space:]]+READINESS[[:space:]]*:"
 
-# The one directory a certificate verifier of FerroFED's own may live in.
-readonly VERIFIER_HOME='app/ferrofed-identity/src/revocation/'
-
 # check ROOT: prints every finding under ROOT and returns 1 when there is one.
 check() {
   local root="$1" found=0 crate pattern hits
@@ -96,12 +87,6 @@ check() {
     [[ -n "$crate" ]] || continue
     hits="$(cd "$root" && grep -rnE "$pattern" --include='*.rs' app crates tools 2> /dev/null \
       | grep -v -E '^[^:]*/tests/' || true)"
-    case "$pattern" in
-      *ServerCertVerifier* | *with_custom_certificate_verifier*)
-        hits="$(grep -v -F "$VERIFIER_HOME" <<< "$hits" || true)"
-        ;;
-      *) ;;
-    esac
     if [[ -n "$hits" ]]; then
       while IFS= read -r hit; do
         echo "::error file=${hit%%:*}::a local copy of what ${crate} provides; use the crate and delete it: ${hit#*:}" >&2
@@ -166,18 +151,15 @@ self_test() {
     fi
   done
   rm "$dir/app/x/src/copy.rs"
-  mkdir -p "$dir/$VERIFIER_HOME"
-  printf 'impl ServerCertVerifier for Gate {}\n' > "$dir/${VERIFIER_HOME}gate.rs"
-  if ! check "$dir" 2> /dev/null; then
-    echo "shared-crates: self-test: the revocation gate's own verifier was refused" >&2
-    return 1
-  fi
-  printf 'pub struct Secret(SecretString);\n' > "$dir/${VERIFIER_HOME}gate.rs"
+  # The revocation gate moved into ferrohealth-server (#1646): its old home
+  # holds no verifier of FerroFED's own any more.
+  mkdir -p "$dir/app/ferrofed-identity/src/revocation"
+  printf 'impl ServerCertVerifier for Gate {}\n' > "$dir/app/ferrofed-identity/src/revocation/gate.rs"
   if check "$dir" 2> /dev/null; then
-    echo "shared-crates: self-test: the verifier home hid another local copy" >&2
+    echo "shared-crates: self-test: the revocation gate's old home was exempt" >&2
     return 1
   fi
-  rm "$dir/${VERIFIER_HOME}gate.rs"
+  rm "$dir/app/ferrofed-identity/src/revocation/gate.rs"
   sed -i.bak 's/"=1.2.3"/"1.2.3"/' "$dir/Cargo.toml"
   if check "$dir" 2> /dev/null; then
     echo "shared-crates: self-test: missed a pin that is not exact" >&2
