@@ -82,10 +82,10 @@ check() {
     fi
   done
   while IFS=$'\t' read -r crate pattern; do
-    [ -n "$crate" ] || continue
+    [[ -n "$crate" ]] || continue
     hits="$(cd "$root" && grep -rnE "$pattern" --include='*.rs' app crates tools 2> /dev/null \
       | grep -v -E '^[^:]*/tests/' || true)"
-    if [ -n "$hits" ]; then
+    if [[ -n "$hits" ]]; then
       while IFS= read -r hit; do
         echo "::error file=${hit%%:*}::a local copy of what ${crate} provides; use the crate and delete it: ${hit#*:}" >&2
       done <<< "$hits"

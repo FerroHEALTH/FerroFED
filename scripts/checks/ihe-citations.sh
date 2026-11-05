@@ -55,9 +55,10 @@ readonly UNVENDORED='2:3.55	ITI TF-2 §3.55 Cross Gateway Patient Discovery [ITI
 # and the cached ones, one path per line, the FHIR packages and the
 # provenance records left out.
 corpus_files() {
-  local dirs=("$1/docs/specs")
-  [[ -d "$1/.vendor-cache" ]] && dirs+=("$1/.vendor-cache")
-  find "${dirs[@]}" \( -path "$1/docs/specs/ihe-*" -o -path "$1/.vendor-cache/ihe-*" \) -type f \
+  local root="$1"
+  local dirs=("$root/docs/specs")
+  [[ -d "$root/.vendor-cache" ]] && dirs+=("$root/.vendor-cache")
+  find "${dirs[@]}" \( -path "$root/docs/specs/ihe-*" -o -path "$root/.vendor-cache/ihe-*" \) -type f \
     \( -name '*.html' -o -name '*.md' -o -name '*.pdf' \) \
     ! -path '*/package/*' ! -name 'PROVENANCE.md' ! -name 'LICENSE*' \
     | LC_ALL=C sort
@@ -96,6 +97,7 @@ headings() {
       command -v pdftotext > /dev/null 2>&1 || return 0
       pdftotext -layout "$file" - | layout_headings
       ;;
+    *) ;;
   esac
 }
 
@@ -179,7 +181,8 @@ citations() {
 # of pdftotext; a citation INDEX does not hold may be in one of them, even
 # inside a transaction another text holds, so it is counted as not checked.
 judge() {
-  awk -F '\t' -v unread="$4" '
+  local unvendored="$1" index="$2" citations="$3" unread="$4"
+  awk -F '\t' -v unread="$unread" '
     FNR == 1 { part++ }
     part == 1 { skip[$1] = $2; order[++roots] = $1; next }
     part == 2 {
@@ -237,7 +240,7 @@ judge() {
       }
       if (bad > 0) { printf "ihe-citations: %d of %d citation(s) name a section the vendored text does not hold\n", bad, checked; exit 1 }
       printf "ihe-citations: %d IHE citation(s), every one in the vendored text\n", checked
-    }' "$1" "$2" "$3"
+    }' "$unvendored" "$index" "$citations"
 }
 
 # check ROOT: builds the index under ROOT and judges the citations read from
@@ -302,15 +305,15 @@ self_test() {
   # $search, with CI unset.
   local search="$PATH"
   expect() {
-    local want="$1" status=0
+    local want="$1" text="$2" status=0
     n=$((n + 1))
-    printf 'crates/x/src/lib.rs:%d:%s\n' "$n" "$2" | CI="" PATH="$search" check "$work" > "$work/out" 2>&1 || status=$?
+    printf 'crates/x/src/lib.rs:%d:%s\n' "$n" "$text" | CI="" PATH="$search" check "$work" > "$work/out" 2>&1 || status=$?
     if [[ "$status" -ne "$want" ]]; then
-      echo "ihe-citations: self-test failed: '$2' exited $status, wanted $want." >&2
+      echo "ihe-citations: self-test failed: '$text' exited $status, wanted $want." >&2
       sed 's/^/  /' "$work/out" >&2
       failed=1
     elif [[ "$want" -ne 0 ]] && ! grep -q -F "::error::crates/x/src/lib.rs:$n " "$work/out"; then
-      echo "ihe-citations: self-test failed: the refusal of '$2' does not name its file and line." >&2
+      echo "ihe-citations: self-test failed: the refusal of '$text' does not name its file and line." >&2
       failed=1
     fi
     if [[ -n "${IHE_CITATIONS_VERBOSE:-}" ]]; then

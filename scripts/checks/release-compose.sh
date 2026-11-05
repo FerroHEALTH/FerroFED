@@ -105,8 +105,9 @@ fi
 # need TOOL HOW: names TOOL and how to install it when it is not on PATH.
 missing=0
 need() {
-  if ! command -v "$1" > /dev/null 2>&1; then
-    echo "::error::release compose needs $1 on PATH; $2" >&2
+  local tool="$1" how="$2"
+  if ! command -v "$tool" > /dev/null 2>&1; then
+    echo "::error::release compose needs $tool on PATH; $how" >&2
     missing=1
   fi
 }

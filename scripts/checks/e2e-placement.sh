@@ -60,7 +60,8 @@ may_be_e2e() {
 
 # may_be_journey PATH: whether a file behind the journeys gate may sit at PATH.
 may_be_journey() {
-  [[ "$1" =~ ^tools/ferrofed-testkit/tests/it/journeys/.+\.rs$ ]]
+  local path="$1"
+  [[ "$path" =~ ^tools/ferrofed-testkit/tests/it/journeys/.+\.rs$ ]]
 }
 
 # check_file PATH FILE: reports PATH when FILE is gated where it may not be.
@@ -79,12 +80,14 @@ check_file() {
 
 # job_of FILE NAME: the lines of job NAME in workflow FILE.
 job_of() {
-  awk -v name="  $2:" '$0 == name { inside = 1; next } inside && /^  [^ #][^ ]*:$/ { inside = 0 } inside' "$1"
+  local file="$1" name="$2"
+  awk -v name="  $name:" '$0 == name { inside = 1; next } inside && /^  [^ #][^ ]*:$/ { inside = 0 } inside' "$file"
 }
 
 # trigger_of FILE: the lines of the on: block of workflow FILE.
 trigger_of() {
-  awk '/^on:/ { inside = 1; next } inside && /^[^ #]/ { inside = 0 } inside' "$1"
+  local file="$1"
+  awk '/^on:/ { inside = 1; next } inside && /^[^ #]/ { inside = 0 } inside' "$file"
 }
 
 # check_workflow FILE: whether the e2e job in FILE sets its gate, selects
@@ -92,44 +95,44 @@ trigger_of() {
 # feeds conclusion, and the journeys job sets its gate and selects the
 # testkit's journeys module.
 check_workflow() {
-  local fail=0 job
-  job="$(job_of "$1" e2e)"
+  local file="$1" fail=0 job
+  job="$(job_of "$file" e2e)"
   if [[ -z "$job" ]]; then
-    echo "::error file=$1::$1 has no e2e job, so no gated test runs." >&2
+    echo "::error file=$file::$file has no e2e job, so no gated test runs." >&2
     fail=1
   else
     if ! grep -q -E '^[[:space:]]*FERROFED_E2E: "1"' <<< "$job"; then
-      echo "::error file=$1::the e2e job of $1 no longer sets FERROFED_E2E to 1, so no gated test runs." >&2
+      echo "::error file=$file::the e2e job of $file no longer sets FERROFED_E2E to 1, so no gated test runs." >&2
       fail=1
     fi
     if ! grep -q -F -e '--workspace' <<< "$job" || ! grep -q -F 'test(/^e2e::/)' <<< "$job"; then
-      echo "::error file=$1::the e2e job of $1 no longer runs test(/^e2e::/) across the workspace, so a gated test this guard places under e2e:: may never run." >&2
+      echo "::error file=$file::the e2e job of $file no longer runs test(/^e2e::/) across the workspace, so a gated test this guard places under e2e:: may never run." >&2
       fail=1
     fi
     if grep -E '^    if:' <<< "$job" | grep -q -v -x -F "    if: ${E2E_IF}"; then
-      echo "::error file=$1::the e2e job of $1 runs on a condition other than ${E2E_IF}, so a change to the auth, credentials or config code, or to an e2e fixture, may skip it." >&2
+      echo "::error file=$file::the e2e job of $file runs on a condition other than ${E2E_IF}, so a change to the auth, credentials or config code, or to an e2e fixture, may skip it." >&2
       fail=1
     fi
   fi
-  if ! job_of "$1" conclusion | grep -q -x -E '      - e2e'; then
-    echo "::error file=$1::the conclusion job of $1 no longer needs the e2e job, so a failed container test does not block a merge." >&2
+  if ! job_of "$file" conclusion | grep -q -x -E '      - e2e'; then
+    echo "::error file=$file::the conclusion job of $file no longer needs the e2e job, so a failed container test does not block a merge." >&2
     fail=1
   fi
-  if trigger_of "$1" | grep -q -E '^[[:space:]]+paths(-ignore)?:'; then
-    echo "::error file=$1::$1 filters its triggers by path, so a change outside the filter runs no e2e job." >&2
+  if trigger_of "$file" | grep -q -E '^[[:space:]]+paths(-ignore)?:'; then
+    echo "::error file=$file::$file filters its triggers by path, so a change outside the filter runs no e2e job." >&2
     fail=1
   fi
-  job="$(job_of "$1" journeys)"
+  job="$(job_of "$file" journeys)"
   if [[ -z "$job" ]]; then
-    echo "::error file=$1::$1 has no journeys job, so no browser journey runs." >&2
+    echo "::error file=$file::$file has no journeys job, so no browser journey runs." >&2
     return 1
   fi
   if ! grep -q -E '^[[:space:]]*FERROFED_JOURNEYS: "1"' <<< "$job"; then
-    echo "::error file=$1::the journeys job of $1 no longer sets FERROFED_JOURNEYS to 1, so no browser journey runs." >&2
+    echo "::error file=$file::the journeys job of $file no longer sets FERROFED_JOURNEYS to 1, so no browser journey runs." >&2
     fail=1
   fi
   if ! grep -q -F -e '-p ferrofed-testkit' <<< "$job" || ! grep -q -F 'test(/^journeys::/)' <<< "$job"; then
-    echo "::error file=$1::the journeys job of $1 no longer runs test(/^journeys::/) in ferrofed-testkit, so a browser journey this guard places under journeys:: may never run." >&2
+    echo "::error file=$file::the journeys job of $file no longer runs test(/^journeys::/) in ferrofed-testkit, so a browser journey this guard places under journeys:: may never run." >&2
     fail=1
   fi
   return "$fail"
@@ -233,31 +236,32 @@ self_test() {
   local filter="'package(ferrofed-testkit) or test(/^e2e::/)'"
   local e2e_ok="cargo nextest run --locked --workspace -E $filter"
   local journeys_ok="cargo nextest run --locked -p ferrofed-testkit -E 'test(/^journeys::/)'"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok"
+  local e2e_on='FERROFED_E2E: "1"' journeys_on='FERROFED_JOURNEYS: "1"'
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok"
   expect_workflow 0 "selecting e2e:: across the workspace and journeys:: in the testkit"
-  workflow 'FERROFED_E2E: "1"' "cargo nextest run --locked -p ferrofed-server -E $filter" 'FERROFED_JOURNEYS: "1"' "$journeys_ok"
+  workflow "$e2e_on" "cargo nextest run --locked -p ferrofed-server -E $filter" "$journeys_on" "$journeys_ok"
   expect_workflow 1 "selecting one package for e2e"
-  workflow 'FERROFED_E2E: "0"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok"
+  workflow 'FERROFED_E2E: "0"' "$e2e_ok" "$journeys_on" "$journeys_ok"
   expect_workflow 1 "without the e2e gate"
-  workflow 'FERROFED_E2E: "1"' "cargo nextest run --locked --workspace -E 'test(/^e2e_/)'" 'FERROFED_JOURNEYS: "1"' "$journeys_ok"
+  workflow "$e2e_on" "cargo nextest run --locked --workspace -E 'test(/^e2e_/)'" "$journeys_on" "$journeys_ok"
   expect_workflow 1 "with another e2e filter"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "0"' "$journeys_ok"
+  workflow "$e2e_on" "$e2e_ok" 'FERROFED_JOURNEYS: "0"' "$journeys_ok"
   expect_workflow 1 "without the journeys gate"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "cargo nextest run --locked -p ferrofed-console -E 'test(/^journeys::/)'"
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "cargo nextest run --locked -p ferrofed-console -E 'test(/^journeys::/)'"
   expect_workflow 1 "selecting journeys in another package"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "cargo nextest run --locked -p ferrofed-testkit -E 'test(/^journey/)'"
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "cargo nextest run --locked -p ferrofed-testkit -E 'test(/^journey/)'"
   expect_workflow 1 "with another journeys filter"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" '# Runs on every change.'
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" '# Runs on every change.'
   expect_workflow 0 "with an e2e job that has no condition"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "if: needs.changes.outputs.rust == 'true'"
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" "if: needs.changes.outputs.rust == 'true'"
   expect_workflow 1 "with an e2e job behind a changed-paths condition"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "if: ${E2E_IF} && !contains(github.event.pull_request.labels.*.name, 'docs')"
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" "if: ${E2E_IF} && !contains(github.event.pull_request.labels.*.name, 'docs')"
   expect_workflow 1 "with an e2e job behind a second condition"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "" "e2e-placement"
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" "" "e2e-placement"
   expect_workflow 1 "with a conclusion that does not need the e2e job"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "" "" '  pull_request:\n    branches: [main]\n    paths:\n      - "app/**"'
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" "" "" '  pull_request:\n    branches: [main]\n    paths:\n      - "app/**"'
   expect_workflow 1 "with a pull request trigger filtered by path"
-  workflow 'FERROFED_E2E: "1"' "$e2e_ok" 'FERROFED_JOURNEYS: "1"' "$journeys_ok" "" "" '  pull_request:\n    paths-ignore:\n      - "docs/**"'
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" "" "" '  pull_request:\n    paths-ignore:\n      - "docs/**"'
   expect_workflow 1 "with a pull request trigger that ignores a path"
   printf 'jobs:\n  test:\n    env:\n      FERROFED_E2E: "1"\n    steps:\n      - run: cargo nextest run --workspace -E %s\n' "$filter" > "$job"
   expect_workflow 1 "with no e2e job"

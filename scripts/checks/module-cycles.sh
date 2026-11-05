@@ -34,7 +34,8 @@ export LC_ALL=C
 # Lists the pairs of top-level modules of the crate at $1 that import each
 # other, one `a b` per line.
 pairs() {
-  cargo run --manifest-path "$root/Cargo.toml" --locked --quiet --release -p module-cycles -- "$1"
+  local crate="$1"
+  cargo run --manifest-path "$root/Cargo.toml" --locked --quiet --release -p module-cycles -- "$crate"
 }
 
 check() {

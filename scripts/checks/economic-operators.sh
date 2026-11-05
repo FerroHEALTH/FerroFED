@@ -30,9 +30,10 @@ export LC_ALL=C
 
 # absolute PATH: PATH made absolute against the directory the script was called from.
 absolute() {
-  case "$1" in
-    /*) printf '%s\n' "$1" ;;
-    *) printf '%s/%s\n' "$PWD" "$1" ;;
+  local path="$1"
+  case "$path" in
+    /*) printf '%s\n' "$path" ;;
+    *) printf '%s/%s\n' "$PWD" "$path" ;;
   esac
 }
 
@@ -44,7 +45,8 @@ readonly COLUMNS='id	direction	supplied	operator	address	role	versions	form	memb
 # check_format FILE: the format refusals of FILE, one ::error:: line each;
 # exits 1 when there is one. The data rows go to stdout when ROWS_OUT is set.
 check_format() {
-  awk -F '\t' -v columns="$COLUMNS" -v name="$1" -v rows_out="${ROWS_OUT:-}" '
+  local file="$1"
+  awk -F '\t' -v columns="$COLUMNS" -v name="$file" -v rows_out="${ROWS_OUT:-}" '
     function bad(msg) { printf "::error::economic-operators: %s:%d: %s\n", name, NR, msg > "/dev/stderr"; refused++ }
     function is_date(d,   m, day) {
       if (d !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) return 0
@@ -89,7 +91,7 @@ check_format() {
       if (!header) bad("no column row")
       exit refused > 0
     }
-  ' "$1"
+  ' "$file"
 }
 
 # check_public FILE: FILE is well formed and holds no row.
@@ -167,11 +169,12 @@ self_test() {
 
   # expect WANT MODE FILE: the check MODE over FILE exits WANT.
   expect() {
+    local want="$1" mode="$2" target="$3"
     n=$((n + 1))
     status=0
-    "$2" "$3" > "$dir/out" 2>&1 || status=$?
-    if [[ "$status" -ne "$1" ]]; then
-      echo "economic-operators: self-test case $n failed: $2 over $3 exited $status, wanted $1." >&2
+    "$mode" "$target" > "$dir/out" 2>&1 || status=$?
+    if [[ "$status" -ne "$want" ]]; then
+      echo "economic-operators: self-test case $n failed: $mode over $target exited $status, wanted $want." >&2
       sed 's/^/  /' "$dir/out" >&2
       failed=1
     fi
@@ -219,8 +222,9 @@ self_test() {
   local repo="$dir/repo" file="$dir/repo/register.tsv"
   git init -q "$repo"
   commit() {
+    local message="$1"
     git -C "$repo" add register.tsv
-    git -C "$repo" -c user.name=self-test -c user.email=self-test@example.invalid -c commit.gpgsign=false commit -q -m "$1"
+    git -C "$repo" -c user.name=self-test -c user.email=self-test@example.invalid -c commit.gpgsign=false commit -q -m "$message"
   }
   register repo/register.tsv
   expect 0 check_register "$file"

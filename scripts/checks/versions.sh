@@ -304,7 +304,8 @@ landing_release() {
 
 # version_older A B: the dotted version A is older than B.
 version_older() {
-  awk -v a="$1" -v b="$2" 'BEGIN {
+  local older="$1" newer="$2"
+  awk -v a="$older" -v b="$newer" 'BEGIN {
     n = split(a, x, "."); m = split(b, y, ".")
     for (i = 1; i <= (n > m ? n : m); i++) {
       if (x[i] + 0 < y[i] + 0) exit 0
@@ -623,11 +624,12 @@ self_test() {
   expect "a landing page that names no release" 1 landing_release "$work/silent.html" "$work/CHANGELOG.md"
   expect "a changelog with no release" 1 landing_release "$work/agree.html" "$work/unreleased.md"
 
-  printf '%s\n' '## Status' '' 'FerroFED is at v0.0.9 on its 0.0.x line.' > "$work/readme-current.md"
-  printf '%s\n' '## Status' '' 'FerroFED is at v0.0.10 on its 0.0.x line.' > "$work/readme-ahead.md"
-  printf '%s\n' '## Status' '' 'FerroFED is at v0.0.7 on its 0.0.x line.' > "$work/readme-stale.md"
-  printf '%s\n' '## Status' '' 'FerroFED is at v0.0.9.' 'It was at v0.0.8 before.' 'Now it is at v0.0.8 again.' > "$work/readme-mixed.md"
-  printf '%s\n' '## Status' '' 'Built on main for v0.0.9.' > "$work/readme-silent.md"
+  local status_heading='## Status'
+  printf '%s\n' "$status_heading" '' 'FerroFED is at v0.0.9 on its 0.0.x line.' > "$work/readme-current.md"
+  printf '%s\n' "$status_heading" '' 'FerroFED is at v0.0.10 on its 0.0.x line.' > "$work/readme-ahead.md"
+  printf '%s\n' "$status_heading" '' 'FerroFED is at v0.0.7 on its 0.0.x line.' > "$work/readme-stale.md"
+  printf '%s\n' "$status_heading" '' 'FerroFED is at v0.0.9.' 'It was at v0.0.8 before.' 'Now it is at v0.0.8 again.' > "$work/readme-mixed.md"
+  printf '%s\n' "$status_heading" '' 'Built on main for v0.0.9.' > "$work/readme-silent.md"
   expect "a README at the product version" 0 readme_status "$work/readme-current.md" 0.0.9
   expect "a README at a release being built, compared by number" 0 readme_status "$work/readme-ahead.md" 0.0.9
   expect "a README two releases behind" 1 readme_status "$work/readme-stale.md" 0.0.9

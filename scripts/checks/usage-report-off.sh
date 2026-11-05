@@ -58,9 +58,10 @@ readonly RUST_SWITCH='\.env\( ?"FERROFED__USAGE_REPORT__ENABLED", ?"false",? ?\)
 # Prints the file's content without comment lines, one logical line per
 # backslash-continued command.
 logical_lines() {
+  local file="$1"
   awk '/^[[:space:]]*#/ { next }
        { l = $0; if (sub(/\\$/, "", l)) { buf = buf l " "; next } print buf l; buf = "" }
-       END { if (buf != "") print buf }' "$1"
+       END { if (buf != "") print buf }' "$file"
 }
 
 # The predicates grep a captured copy, never a pipe: `grep -q` exits at the

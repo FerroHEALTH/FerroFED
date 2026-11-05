@@ -175,7 +175,8 @@ W3C Bitstring Status List 1.0	vc-bitstring-status-list	-	-"
 # Gregorian calendar, for a difference in days; nothing for text that is no
 # date.
 day_number() {
-  awk -v date="$1" '
+  local date="$1"
+  awk -v date="$date" '
     BEGIN {
       if (date !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) exit
       split(date, part, "-"); y = part[1] + 0; m = part[2] + 0; d = part[3] + 0
@@ -191,7 +192,8 @@ day_number() {
 # w3c_date URL: the date a dated W3C publication URL ends in, as
 # YYYY-MM-DD; nothing for a URL that names no date.
 w3c_date() {
-  sed -nE 's|^https://www\.w3\.org/TR/[0-9]{4}/[A-Za-z]+-.*-([0-9]{4})([0-9]{2})([0-9]{2})/?$|\1-\2-\3|p' <<< "$1"
+  local url="$1"
+  sed -nE 's|^https://www\.w3\.org/TR/[0-9]{4}/[A-Za-z]+-.*-([0-9]{4})([0-9]{2})([0-9]{2})/?$|\1-\2-\3|p' <<< "$url"
 }
 
 # w3c_verdict PINNED LATEST HOLD LAG: how the pinned publication reads
@@ -276,7 +278,8 @@ unwatched_rows() {
 # pin cell of the matrix row whose first cell is LABEL, backticks and
 # trailing punctuation removed.
 matrix_cell_token() {
-  awk -F'|' -v want="$1" -v key="$2" '
+  local label="$1" key="$2" matrix="${3:-$MATRIX}"
+  awk -F'|' -v want="$label" -v key="$key" '
     NF >= 3 {
       label = $2; value = $3
       gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
@@ -284,7 +287,7 @@ matrix_cell_token() {
       gsub(/`/, "", value)
       n = split(value, word, " ")
       for (i = 1; i < n; i++) if (word[i] == key) { t = word[i + 1]; gsub(/[,.;:]+$/, "", t); print t; exit }
-    }' "${3:-$MATRIX}"
+    }' "$matrix"
 }
 
 # package_version: the version the package manifest of the FHIR package
@@ -303,13 +306,14 @@ gitlab_project() {
 # expression PATTERN in the pin cell of the matrix row whose first cell is
 # LABEL, backticks removed.
 matrix_first() {
-  awk -F'|' -v want="$1" -v pattern="$2" '
+  local label="$1" pattern="$2" matrix="${3:-$MATRIX}"
+  awk -F'|' -v want="$label" -v pattern="$pattern" '
     NF >= 3 {
       label = $2; value = $3
       gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
       gsub(/`/, "", value)
       if (label == want && match(value, pattern)) { print substr(value, RSTART, RLENGTH); exit }
-    }' "${3:-$MATRIX}"
+    }' "$matrix"
 }
 
 # One "constant<TAB>reason" record per line: a constant compared only within
@@ -387,7 +391,8 @@ registry_tags() {
 # next_page HEADERS: the target of the `rel="next"` link in the response
 # header file HEADERS (RFC 8288 §3), or nothing on the last page.
 next_page() {
-  tr -d '\r' < "$1" | awk '
+  local headers="$1"
+  tr -d '\r' < "$headers" | awk '
     tolower($1) == "link:" && /rel="?next"?/ && match($0, /<[^>]+>/) {
       print substr($0, RSTART + 1, RLENGTH - 2); exit
     }'
@@ -401,7 +406,8 @@ next_page() {
 # (`4.3`, `18`) names a line, not a release, so a release carries at least as
 # many components as the pin, up to three: a Temurin respin adds a fourth.
 newest_release() {
-  awk -v pinned="$1" -v line="${2:-}" '
+  local pinned="$1" line="${2:-}"
+  awk -v pinned="$pinned" -v line="$line" '
     function shape(tag) {
       if (!match(tag, /^[0-9]+(\.[0-9]+)*(_[0-9]+)?/)) return 0
       version = substr(tag, 1, RLENGTH); suffix = substr(tag, RLENGTH + 1)
@@ -435,7 +441,8 @@ newest_release() {
 # newer release of a released pin, and the first release of a ballot pin
 # does.
 newest_version() {
-  awk -v pinned="$1" '
+  local pinned="$1"
+  awk -v pinned="$pinned" '
     function key(v,   core, pre, n, p, i, k) {
       core = v; pre = ""
       if (index(v, "-") > 0) { core = substr(v, 1, index(v, "-") - 1); pre = substr(v, index(v, "-") + 1) }
@@ -457,7 +464,8 @@ newest_version() {
 # LABEL, past a `version` word. A row that pins two versions names the newer
 # first.
 matrix_package_version() {
-  awk -F'|' -v want="$1" -v package="\`$2\`" '
+  local label="$1" package="$2" matrix="${3:-$MATRIX}"
+  awk -F'|' -v want="$label" -v package="\`$package\`" '
     NF >= 3 {
       label = $2; value = $3
       gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
@@ -470,7 +478,7 @@ matrix_package_version() {
         v = word[j]; gsub(/`/, "", v); gsub(/[,;:]+$/, "", v)
         print v; exit
       }
-    }' "${3:-$MATRIX}"
+    }' "$matrix"
 }
 
 # The self-test runs newest_release and testkit_images over fixtures and
@@ -480,8 +488,9 @@ self_test() {
   local failed=0 got work
   # expect WANT GOT WHAT: one comparison of the self-test.
   expect() {
-    if [[ "$2" != "$1" ]]; then
-      printf 'pin-freshness: self-test failed: %s gave "%s", wanted "%s".\n' "$3" "$2" "$1" >&2
+    local want="$1" got="$2" what="$3"
+    if [[ "$got" != "$want" ]]; then
+      printf 'pin-freshness: self-test failed: %s gave "%s", wanted "%s".\n' "$what" "$got" "$want" >&2
       failed=1
     fi
   }
@@ -909,7 +918,7 @@ while IFS=$'\t' read -r label shortname hold lag; do
     continue
   fi
 
-  if ! latest="$(curl --fail --silent --show-error --location --user-agent "$REGISTRY_UA" \
+  if ! latest="$(curl --proto =https --fail --silent --show-error --location --user-agent "$REGISTRY_UA" \
     --header 'Accept: application/json' "$W3C_API/$shortname/versions/latest" \
     | jq --raw-output --exit-status '.uri' 2>&1)"; then
     printf 'UNREADABLE %s: could not read the newest version of %s from %s (%s)\n' \

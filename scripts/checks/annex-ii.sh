@@ -54,7 +54,7 @@ usage() {
 # no-break spaces turned into single spaces. A point's text runs from its
 # number to the next point's; the last runs to Annex III.
 segments() {
-  local nbsp
+  local out="$1" nbsp
   nbsp="$(printf '\302\240')"
   tr '\n\r\t' '   ' < "$REGULATION" |
     sed -e 's/<[^>]*>/ /g' -e "s/$nbsp/ /g" -e 's/&amp;/\&/g' -e 's/  */ /g' |
@@ -82,30 +82,32 @@ segments() {
           printf "%s\t%s\n", p[k], substr(text, at[k], end - at[k])
         }
       }
-    ' > "$1"
+    ' > "$out"
 }
 
 # has_heading FILE TEXT: FILE has a Markdown heading reading TEXT, outside a
 # fenced code block.
 has_heading() {
-  awk -v want="$2" '
+  local file="$1" text="$2"
+  awk -v want="$text" '
     /^```/ { fence = !fence; next }
     !fence && /^#+ / { h = $0; sub(/^#+ /, "", h); if (h == want) found = 1 }
     END { exit !found }
-  ' "$1"
+  ' "$file"
 }
 
 # has_test FILE NAME: FILE defines the function NAME under a test attribute,
 # among the attributes and comments directly above it.
 has_test() {
-  awk -v want="$2" '
+  local file="$1" name="$2"
+  awk -v want="$name" '
     { line[NR] = $0 }
     $0 ~ ("fn " want "\\(") {
       for (k = NR - 1; k > 0 && line[k] ~ /^[[:space:]]*(#\[|\/\/)/; k--)
         if (line[k] ~ /^[[:space:]]*#\[.*test(\]|\()/) found = 1
     }
     END { exit !found }
-  ' "$1"
+  ' "$file"
 }
 
 # check_evidence LINE EVIDENCE: every item of EVIDENCE, split on "; ".
@@ -126,6 +128,7 @@ check_evidence() {
       fail "$CHECKLIST line $line: \"$path\" is not a path inside the tree."
       continue
       ;;
+    *) ;;
     esac
     if [[ ! -f "$path" ]]; then
       fail "$CHECKLIST line $line: $path does not exist."
@@ -157,7 +160,7 @@ run() {
   seen=" "
   while IFS= read -r row; do
     line=$((line + 1))
-    case "$row" in '#'* | '') continue ;; esac
+    case "$row" in '#'* | '') continue ;; *) ;; esac
     if [[ "$(printf '%s\n' "$row" | awk -F'\t' '{ print NF }')" != 6 ]]; then
       fail "$CHECKLIST line $line has not six tab-separated columns."
       continue
@@ -280,7 +283,8 @@ self_test() {
   }
   # row POINT FIELD VALUE: set one field of POINT's row; a FIELD of 0 drops it.
   row() {
-    awk -F'\t' -v OFS='\t' -v point="$1" -v field="$2" -v value="${3:-}" '
+    local point="$1" field="$2" value="${3:-}"
+    awk -F'\t' -v OFS='\t' -v point="$point" -v field="$field" -v value="$value" '
       $1 == point && field == 0 { next }
       $1 == point { $field = value }
       { print }
@@ -288,7 +292,8 @@ self_test() {
   }
   # page POINT STATUS: set the status cell of POINT's page row.
   page() {
-    awk -v point="$1" -v status="$2" '
+    local point="$1" status="$2"
+    awk -v point="$point" -v status="$status" '
       index($0, "| " point " |") == 1 { $0 = "| " point " | rule | here | " status " | #1 |" }
       { print }
     ' "$repo/$PAGE" > "$work/page" && mv "$work/page" "$repo/$PAGE"
