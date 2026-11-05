@@ -65,6 +65,8 @@ docx_title='The docx core properties carry a stale title (dc:title "D3.7.2 Secti
 pdf_title='The PDF document information carries a stale title ("D3.7.2 Section I - Security Policies_v0.8"), so the sha256 identifies the file, not the metadata.'
 pdf_none='The PDF document information carries no title; the sha256 identifies the file.'
 
+appendix_6_4='Its appendix 6.4, MyHealth@EU Error Codes, is legacy: its codes "MUST be supported by MyHealth@EU for backward compatibility. New implementations of MyHealth@EU NCP-A MUST NOT issue these errors." The current list it points to, the wiki page Exception Handling in MyHealth@EU (https://webgate.ec.europa.eu/fpfis/wikis/x/HIfdPw), is section 1.25 of the Requirements Catalogue 10.0.0 pinned withheld below (#1624).'
+
 # ack SOURCE_LINE: the acknowledgement the cover names, quoted from its
 # source line.
 ack() { printf 'Acknowledgement: "Source: %s", the source line of the cover.' "$1"; }
@@ -128,7 +130,7 @@ pin supplied ehdsi-ncpeh-architecture-specifications-10.0.0.pdf \
 pin supplied ehdsi-ncpeh-components-specifications-10.0.0.pdf \
   'NCPeH Components Specifications, document version 10.0.0, 01/06/2026, status Wave 10 Operation Ready' \
   "$wiki" 5da44873fefdf3f9bb2a855d3d6c053990f8730a25a0b5ffe1ccfe75e0e73ba2 "$reuse" \
-  "$(ack 'DG SANTE, CEF MyHealth@EU, 2026') The owner supplied eHDSI_NCPeH_Components_Specifications_v10.0.0.pdf. $pdf_title"
+  "$(ack 'DG SANTE, CEF MyHealth@EU, 2026') The owner supplied eHDSI_NCPeH_Components_Specifications_v10.0.0.pdf. $pdf_title $appendix_6_4"
 pin supplied ehdsi-openncp-implementation-10.0.0.pdf \
   'OpenNCP Implementation, document version 10.0.0, 01/06/2026, status Wave 10 Operation Ready' \
   "$wiki" 1dcb77cfa1c7eac20bd922db66fc9a8a20c1f1d7c5d86ac415134aa30b546e04 "$reuse" \

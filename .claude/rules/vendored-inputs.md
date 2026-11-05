@@ -125,7 +125,13 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     provided the source is acknowledged.", so they are committed (owner
     decision, 2026-11-05). The MyHealth@EU Requirements Catalogue 10.0.0
     states no reuse terms: its sha256 is recorded and no copy is
-    committed or cached.
+    committed or cached. The Components appendix 6.4 error codes are
+    legacy, and the provenance names Catalogue §1.25 as the current list.
+  - `docs/specs/sogis-acm/`: the SOG-IS Agreed Cryptographic Mechanisms
+    1.3, whose "Legacy valid beyond 2025" level eHDSI Cryptographic
+    Algorithms 9.0.0 §2 sets as the floor. Neither the document nor the
+    SOG-IS page states a licence, so `scripts/vendor/sogis-acm.sh` pins it
+    `withheld` by URL and sha256 and copies it nowhere (#1624).
   - `docs/specs/eu-cra/`: Regulation (EU) 2024/2847 (the Cyber Resilience
     Act) with its three English corrigenda, Implementing Regulation (EU)
     2025/2392, Delegated Regulations (EU) 2025/1535 and 2026/881,

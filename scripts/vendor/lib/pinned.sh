@@ -265,7 +265,7 @@ pinned_provenance() {
   local dir="$1" title="$2" about="$3" pins="$4" digest="$5" ua="$6" read_by="$7"
   local dest="docs/specs/$dir" cache="$pinned_cache_root/$dir"
   local mode file version url sha licence note heading
-  local n_commit=0 n_cache=0 n_manual=0 n_withheld=0 fetched files tree body="" withheld_count=""
+  local n_commit=0 n_cache=0 n_manual=0 n_withheld=0 n_supplied=0 fetched files tree body="" withheld_count=""
   local served="publisher serves it"
 
   while IFS=$'\t' read -r mode file version url sha licence note; do
@@ -277,6 +277,7 @@ pinned_provenance() {
         ;;
       supplied)
         n_commit=$((n_commit + 1))
+        n_supplied=$((n_supplied + 1))
         heading="committed, supplied by the owner"
         ;;
       withheld)
@@ -343,9 +344,11 @@ pinned_provenance() {
   fetched="$(corpus_fetched)"
   if [ -n "$ua" ]; then
     fetched="$fetched, with the User-Agent \`$ua\`"
-  else
+  elif [ "$n_supplied" -gt 0 ]; then
     fetched="$fetched, from the owner's local copies; nothing is downloaded"
     served="owner supplied it"
+  else
+    fetched="$fetched; every artefact is read and not redistributed, so nothing is downloaded"
   fi
   files="$(corpus_file_count "$dest")"
   tree="$(corpus_tree_digest "$dest")"

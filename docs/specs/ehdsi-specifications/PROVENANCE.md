@@ -203,7 +203,7 @@ no copy of it enters the repository.
 - Supplied by the owner: the source answers an automated client with a
   login, so the owner places the file in a local directory and the script
   copies it verbatim after finding it by its sha256; it downloads nothing.
-- Note: Acknowledgement: "Source: DG SANTE, CEF MyHealth@EU, 2026", the source line of the cover. The owner supplied eHDSI_NCPeH_Components_Specifications_v10.0.0.pdf. The PDF document information carries a stale title ("D3.7.2 Section I - Security Policies_v0.8"), so the sha256 identifies the file, not the metadata.
+- Note: Acknowledgement: "Source: DG SANTE, CEF MyHealth@EU, 2026", the source line of the cover. The owner supplied eHDSI_NCPeH_Components_Specifications_v10.0.0.pdf. The PDF document information carries a stale title ("D3.7.2 Section I - Security Policies_v0.8"), so the sha256 identifies the file, not the metadata. Its appendix 6.4, MyHealth@EU Error Codes, is legacy: its codes "MUST be supported by MyHealth@EU for backward compatibility. New implementations of MyHealth@EU NCP-A MUST NOT issue these errors." The current list it points to, the wiki page Exception Handling in MyHealth@EU (https://webgate.ec.europa.eu/fpfis/wikis/x/HIfdPw), is section 1.25 of the Requirements Catalogue 10.0.0 pinned withheld below (#1624).
 
 ### `ehdsi-openncp-implementation-10.0.0.pdf` (committed, supplied by the owner)
 
