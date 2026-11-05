@@ -615,8 +615,8 @@ it.
 | Item | Pin | Repeated in |
 |---|---|---|
 | Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88` | `docker/Dockerfile` `FROM`, `docker/console/Dockerfile` `FROM` |
-| FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:5.5.0@sha256:e1b15849a3792481a7f16680081b1ae6a2d7160d66e5cb1657fcef5cccfed0dc` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:5.5.0@sha256:dfe1d5c1bb95d31d3f6ff00fec03cd76ae20d57d20e6225b31e5bc68adf7fa81` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:5.6.3@sha256:cd4e067a30c730a92b886c1669cd669eda9ffd3e47ddf727f28928738e197d62` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:5.6.3@sha256:5c976b9e7d1c363490bdb3ff2ed82bc8aefcb6b18e9ee3762124f7b5800abe7d` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroPIX PIX Manager image | `ghcr.io/ferrohealth/ferropix:0.0.17@sha256:7418567e53a2993d9b617cd99de2d1bbe4d940fd7432db2e793eb3837ce9f815` | `compose.yaml`, the `FERROPIX` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
