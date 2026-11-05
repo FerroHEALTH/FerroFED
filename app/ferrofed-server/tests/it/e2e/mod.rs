@@ -53,9 +53,13 @@
 //! composition out of the federated answer, and a follow-up read of it
 //! answers the node's `403`, in [`restriction`].
 //!
-//! With the `postgres` feature, the stored-query registry's PostgreSQL store
-//! runs its store suite, and two gateway instances sharing it race one new
-//! version with exactly one stored (§12.7, N44), in `stored_postgres`.
+//! The stored-query registry's PostgreSQL store runs its store suite over
+//! FerroFED's own store, and two gateway instances sharing it race one new
+//! version with exactly one stored (§12.7, N44), in [`stored_postgres`].
+//! FerroFED's own store migrates once under two replicas booting together,
+//! takes over a stored-query database of the earlier release, reports not
+//! ready while its database is stopped, and sweeps its expired rows, in
+//! [`store`].
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -90,11 +94,10 @@ mod keycloak;
 mod national;
 mod pixm;
 mod restriction;
-#[cfg(feature = "postgres")]
 mod revisions_postgres;
 mod santempi;
 mod scenario;
-#[cfg(feature = "postgres")]
+mod store;
 mod stored_postgres;
 mod track1;
 mod track10;

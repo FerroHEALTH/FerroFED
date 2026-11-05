@@ -100,8 +100,9 @@ learned `creating_system_id` routes are held in memory, bounded, and lost on a
 restart. The stored-query registry is the
 one durable store, holding parameterised AQL and never a patient identifier,
 over the backend [`[stored_queries]`](queries-and-areas.md#stored-queries)
-names: an embedded `redb` file for one gateway process, a shared PostgreSQL
-database for several replicas, or read-only definition files.
+names: an embedded `redb` file for one gateway process, FerroFED's own
+PostgreSQL store for several replicas ([`[store]`](store.md)), or read-only
+definition files. A contact-point issuer needs that store too.
 
 ## Running several replicas
 

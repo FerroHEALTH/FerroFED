@@ -20,6 +20,14 @@ pub fn parses(url: &SecretUrl) -> bool {
     Config::from_str(url.expose()).is_ok()
 }
 
+/// Whether the connection `url` names requires TLS: it parses and sets
+/// `sslmode=require`, the one mode the driver encrypts for certain.
+#[must_use]
+pub fn requires_tls(url: &SecretUrl) -> bool {
+    Config::from_str(url.expose())
+        .is_ok_and(|config| matches!(config.get_ssl_mode(), SslMode::Require))
+}
+
 /// Whether the connection `url` names sends a password over a network
 /// without requiring TLS.
 ///
@@ -49,7 +57,7 @@ pub fn exposes_password(url: &SecretUrl) -> bool {
 mod tests {
     use ferrohealth_secret::secret_url::SecretUrl;
 
-    use super::parses;
+    use super::{parses, requires_tls};
 
     #[test]
     fn a_url_and_libpq_pairs_parse_and_garbage_does_not() {
@@ -61,6 +69,25 @@ mod tests {
         }
         for refused in ["postgres://a:b@host:notaport/db", "host='unterminated"] {
             assert!(!parses(&SecretUrl::new(refused)), "{refused}");
+        }
+    }
+
+    #[test]
+    fn only_sslmode_require_requires_tls() {
+        for required in [
+            "postgres://ferrofed:secret@db.example.org/ferrofed?sslmode=require",
+            "host=db.example.org user=ferrofed sslmode=require",
+        ] {
+            assert!(requires_tls(&SecretUrl::new(required)), "{required}");
+        }
+        for off in [
+            "postgres://ferrofed:secret@db.example.org/ferrofed",
+            "postgres://ferrofed:secret@db.example.org/ferrofed?sslmode=prefer",
+            "postgres://ferrofed:secret@db.example.org/ferrofed?sslmode=disable",
+            "host=/run/postgresql user=ferrofed",
+            "postgres://a:b@host:notaport/db?sslmode=require",
+        ] {
+            assert!(!requires_tls(&SecretUrl::new(off)), "{off}");
         }
     }
 }

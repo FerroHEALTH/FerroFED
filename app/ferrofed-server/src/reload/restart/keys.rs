@@ -177,6 +177,7 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
         boot.federation.demographic_endpoint != fresh.federation.demographic_endpoint
     }),
     ("stored_queries", stored_queries_changed),
+    ("store", |boot, fresh| boot.store != fresh.store),
     ("fhir", |boot, fresh| {
         boot.fhir.as_ref().map(|fhir| &fhir.written)
             != fresh.fhir.as_ref().map(|fhir| &fhir.written)

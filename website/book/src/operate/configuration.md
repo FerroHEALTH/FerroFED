@@ -205,6 +205,7 @@ The sections, and the page that covers each:
 | `[access_log]` | the category map every access record is classified with: template ids and archetype ids to Art 14(1) categories, national categories, or `none`; `[access_log.retention]`, the years each record is kept by category and origin, at least three; `[access_log.labels]`, the security labels each record carries by category and origin; and `[[access_log.emergency_purpose]]`, the purposes of use that mark an emergency access (Art 11(5)) | [The access log](access-log.md#access_log), [Labelling the access records](access-labels.md) |
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
 | `[stored_queries]` | the stored-query registry and its backend | [Queries and API areas](queries-and-areas.md#stored-queries) |
+| `[store]` | FerroFED's own PostgreSQL database, which a contact-point issuer and the `postgres` stored-query backend need: its connection string, a secret that requires TLS, the CA it is verified by, and its bounds | [FerroFED's own store](store.md) |
 | `[fhir]` | the FHIR R4 face of the European exchange format: its base, the operator, the FHIRconnect mappings, the categories it receives (`[[fhir.receive]]`), the members that serve prescriptions and dispensations (`[[fhir.serve]]`), `receive_namespaces`, the identifier systems a received document's or dispensation's patient is resolved in, and `document_url_lifetime_secs`, how long a document URL of the document list stays valid (300 seconds unless set); it needs `[pdqm]`, which the summary header is asked of; `[eehrxf.terminology]`, the optional FHIR terminology server the face asks for `$translate`, `$lookup` and `$validate-code`, over `https` outside development | [The patient summary over FHIR](../integrate/patient-summary.md), [Terminology](../integrate/terminology.md), [Prescriptions and dispensations over FHIR](../integrate/prescriptions.md#declaring-the-serving-members) |
 | `[usage_report]` | the installation report to FerroPULSE, on by default: `enabled`, `state_dir`, the writable directory the instance id lives in and without which nothing is sent, `deployment` (`helm`, `compose`, `binary` or `unknown`) and `endpoint`, the collector | [The usage report](usage-report.md) |
 
@@ -481,16 +482,19 @@ N33). A node the gateway presents its own client certificate to
 ([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705))
 is `https` under every profile.
 
-**A database password.** Outside the development profile, the stored-query
-store's PostgreSQL connection string must set `sslmode=require` when it
-carries a password and reaches its host over the network. The driver reads
-`sslmode` as `disable`, `prefer` (its default, which falls back to no TLS) or
-`require`, and refuses any other value, so `disable` and `prefer` are
-refused, naming `stored_queries.url`, by the same commands and on a reload.
-A connection with no password, or whose every host is a Unix socket and
-that names no `hostaddr`, crosses no network with a secret and may leave
-`sslmode` as it is
-([Stored queries](queries-and-areas.md#stored-queries)).
+**A database password.** FerroFED's own store is reached over TLS under
+every profile: its connection string must set `sslmode=require`, or
+`config check`, the start and a reload refuse it, naming `store.url`
+([FerroFED's own store](store.md#tls-is-required)). Outside the development
+profile, the revision store's connection string, `config.url`, must set
+`sslmode=require` when it carries a password and reaches its host over the
+network. The driver reads `sslmode` as `disable`, `prefer` (its default,
+which falls back to no TLS) or `require`, and refuses any other value, so
+`disable` and `prefer` are refused, naming `config.url`, by the same
+commands and on a reload. A revision store connection with no password, or
+whose every host is a Unix socket and that names no `hostaddr`, crosses no
+network with a secret and may leave `sslmode` as it is
+([Configuration revisions](configuration-revisions.md)).
 
 Under the development profile the same configuration starts, so the
 [quickstart](container.md#the-quickstart) can reach its nodes over `http`

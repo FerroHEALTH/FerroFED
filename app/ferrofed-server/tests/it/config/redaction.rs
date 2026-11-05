@@ -94,7 +94,7 @@ fn otlp_url() -> String {
 
 /// A PostgreSQL connection URL that carries a password.
 fn postgres_url() -> String {
-    format!("postgres://ferrofed:{PG_PASSWORD}@db.example.org:5432/ferrofed")
+    format!("postgres://ferrofed:{PG_PASSWORD}@db.example.org:5432/ferrofed?sslmode=require")
 }
 
 /// The configuration under test: one endpoint whose `oauth` grant holds an
@@ -132,13 +132,13 @@ fn configuration(
     Ok(Config::from_sources(Some(&text), &env)?)
 }
 
-/// The `[stored_queries]` table of a PostgreSQL store, with the registry
-/// document it needs.
+/// The `[stored_queries]` table of the `postgres` backend, with the
+/// registry document it needs and FerroFED's own store it reads.
 fn postgres_store() -> String {
     let url = postgres_url();
     format!(
         "[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n\
-         [stored_queries]\nbackend = \"postgres\"\nurl = \"{url}\"\n"
+         [stored_queries]\nbackend = \"postgres\"\n\n[store]\nurl = \"{url}\"\n"
     )
 }
 
@@ -162,7 +162,7 @@ fn no_configuration_type_renders_a_credential_as_written() -> TestResult {
         shows_placeholder("PixManager.url", &manager.url);
     }
     shows_placeholder("TelemetrySection", &config.telemetry);
-    shows_placeholder("StoredQueries", &config.stored_queries);
+    shows_placeholder("Store", &config.store);
     let composed = ManagerConfig {
         tls: ferrofed_identity::fhir::Tls::default(),
         base: SecretUrl::new(pix_url_with_userinfo()),
@@ -177,7 +177,6 @@ fn no_configuration_type_renders_a_credential_as_written() -> TestResult {
     Ok(())
 }
 
-#[cfg(feature = "postgres")]
 #[test]
 fn a_resolved_postgres_store_never_renders_its_password() -> TestResult {
     let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
@@ -188,11 +187,8 @@ fn a_resolved_postgres_store_never_renders_its_password() -> TestResult {
     )?
     .resolve()?;
     shows_placeholder("Settings", &settings);
-    let store = settings
-        .stored_queries
-        .as_ref()
-        .ok_or("the store resolves")?;
-    shows_placeholder("Store", store);
+    let store = settings.store.as_ref().ok_or("the store resolves")?;
+    shows_placeholder("StoreSettings", store);
     Ok(())
 }
 
@@ -317,31 +313,24 @@ fn a_pix_manager_url_with_userinfo_is_refused_without_quoting_it() -> TestResult
     Ok(())
 }
 
-#[cfg(feature = "postgres")]
 #[test]
-fn a_postgres_url_file_resolves_into_its_redacting_type() -> TestResult {
+fn a_store_url_file_resolves_into_its_redacting_type() -> TestResult {
     let file = secret_file(&format!("{}\n", postgres_url()))?;
     let path = toml::Value::String(file.path().display().to_string());
     let settings = Config::from_sources(
         Some(&format!(
             "[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n\
-             [stored_queries]\nbackend = \"postgres\"\nurl_file = {path}\n{}",
+             [stored_queries]\nbackend = \"postgres\"\n\n[store]\nurl_file = {path}\n{}",
             crate::support::audit_toml()
         )),
         &BTreeMap::new(),
     )?
     .resolve()?;
-    let store = settings
-        .stored_queries
-        .as_ref()
-        .ok_or("the store resolves")?;
-    shows_placeholder("Store", store);
-    let ferrofed_server::config::stored_queries::Store::Postgres(url) = store else {
-        return Err("a PostgreSQL store".into());
-    };
+    let store = settings.store.as_ref().ok_or("the store resolves")?;
+    shows_placeholder("StoreSettings", store);
     assert_eq!(
         postgres_url(),
-        url.expose(),
+        store.url.expose(),
         "read from the file and trimmed"
     );
     Ok(())

@@ -704,7 +704,8 @@ listen = "127.0.0.1:9464"
   ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
 - **Several replicas.** The replicas share nothing in memory. A follow-up
   write needs the client to name its endpoint, or the balancer to keep a
-  client on one replica; the stored-query registry needs PostgreSQL; each
+  client on one replica; the stored-query registry and a contact-point
+  issuer need FerroFED's own PostgreSQL store ([`[store]`](store.md)); each
   replica keeps its own audit spool
   ([Running several replicas](deployment-shape.md#running-several-replicas)).
 - **Upgrades.** Read the release's upgrade notes, keep a copy of the

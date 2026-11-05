@@ -178,6 +178,7 @@ fn serve_command(
 ) -> anyhow::Result<()> {
     let server = settings.server.clone();
     let revision_poll = settings.revision_poll;
+    let sweep_interval = settings.store.as_ref().map(|store| store.sweep_interval);
     let usage = (std::time::Instant::now(), Usage::of(&settings));
     // NOTE: no specification governs this: our own design; the client and the admin
     // listener share one gate, so a reload of `[auth]` reaches both at once.
@@ -245,6 +246,10 @@ fn serve_command(
             listeners.push(with_tls(Listener::new(bound, app), admin_tls));
         }
         let running = state.processes().start(&reloader);
+        let sweeping = state
+            .store()
+            .zip(sweep_interval)
+            .map(|(store, every)| tokio::spawn(crate::store::sweeping(Arc::clone(store), every)));
         tokio::spawn(reload::on_hangup(reloader));
         state.lifecycle().booted();
         let report = usage.1.start(Arc::clone(state), usage.0).await;
@@ -258,6 +263,9 @@ fn serve_command(
         .await;
         if let Some(report) = report {
             report.abort();
+        }
+        if let Some(sweeping) = sweeping {
+            sweeping.abort();
         }
         if let Some(watch) = watch {
             watch.stop(server.bindings_drain).await;

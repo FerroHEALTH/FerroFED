@@ -118,7 +118,7 @@ async fn a_saved_setting_applies_as_a_revision_and_a_restart_setting_names_the_n
 async fn only_an_editable_setting_is_saved_and_a_refused_value_is_never_echoed() -> TestResult {
     let gateway = Gateway::start("")?;
     for settings in [
-        vec![("stored_queries.url", "postgres://synthetic-secret-93@db/x")],
+        vec![("store.url", "postgres://synthetic-secret-93@db/x")],
         vec![("access_log.templates", "{}")],
         vec![("server.listen", "0.0.0.0:8080")],
         vec![("federation.unknown_key", "1")],

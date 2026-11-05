@@ -22,7 +22,7 @@ messages! {
     SettingBestEffortDesc = "setting-best-effort-desc",
     /// `Connection`
     SettingConnection = "setting-connection",
-    /// `The PostgreSQL connection string, a secret, named by the file it is read from.`
+    /// `The connection string of FerroFED's own PostgreSQL store, a secret, named by the file it is read from.`
     SettingConnectionDesc = "setting-connection-desc",
     /// `Disclose exclusions`
     SettingDisclose = "setting-disclose",

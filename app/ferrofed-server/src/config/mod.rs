@@ -37,7 +37,6 @@ pub mod load;
 #[cfg(feature = "binding-nl")]
 pub mod nl;
 pub mod oauth;
-#[cfg(feature = "postgres")]
 pub mod postgres;
 pub mod public_url;
 pub mod registry;
@@ -50,6 +49,7 @@ pub mod service;
 #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub mod service_grant;
 pub mod settings;
+pub mod store;
 pub mod stored_queries;
 pub mod tls;
 pub mod transport;
@@ -126,6 +126,9 @@ pub struct Config {
     pub pdqm: Option<ihe::pdqm::Pdqm>,
     /// The federated stored-query registry (`[stored_queries]`, §12.7).
     pub stored_queries: stored_queries::StoredQueries,
+    /// FerroFED's own PostgreSQL store (`[store]`), unset unless the table
+    /// is written.
+    pub store: Option<store::Store>,
     /// The FHIR R4 face of the European exchange format (`[fhir]`,
     /// Regulation (EU) 2025/327 Annex II 2.1), off unless the table is set.
     pub fhir: Option<fhir::Fhir>,
@@ -190,6 +193,7 @@ impl Default for Config {
             #[cfg(feature = "binding-ihe")]
             pdqm: None,
             stored_queries: stored_queries::StoredQueries::default(),
+            store: None,
             fhir: None,
             eehrxf: eehrxf::Eehrxf::default(),
             metrics: server::Metrics::default(),

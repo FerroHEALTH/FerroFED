@@ -14,8 +14,8 @@
 //! only from the revision the writer read ([`Swapped::Stale`]), so two
 //! operators, or two replicas sharing one store, never overwrite each other.
 //! The embedded `redb` file serves one gateway process ([`embedded`]); a
-//! PostgreSQL database serves replicas that share it (`postgres`, behind the
-//! `postgres` feature). [`service::Revisions`] validates, applies and rolls
+//! PostgreSQL database serves replicas that share it ([`postgres`]).
+//! [`service::Revisions`] validates, applies and rolls
 //! back, [`routes`] serves them on the admin listener, and [`watch`] applies
 //! on each replica the revision another one marked running. No
 //! specification governs this: our own design.
@@ -33,7 +33,6 @@ use crate::auth::operator::Operator;
 use crate::config::revisions::Store;
 
 pub mod embedded;
-#[cfg(feature = "postgres")]
 pub mod postgres;
 pub mod resources;
 pub mod routes;
@@ -296,19 +295,10 @@ pub trait RevisionStore: fmt::Debug + Send + Sync {
 ///
 /// # Errors
 ///
-/// The [`StoreError`] of the backend's own `open`, and
-/// [`StoreError::Backend`] for a PostgreSQL store in a build without the
-/// `postgres` feature, which configuration refuses first.
+/// The [`StoreError`] of the backend's own `open`.
 pub fn open(store: &Store) -> Result<Box<dyn RevisionStore>, StoreError> {
     match store {
         Store::Redb(path) => Ok(Box::new(embedded::RedbRevisions::open(path)?)),
-        #[cfg(feature = "postgres")]
         Store::Postgres(url) => Ok(Box::new(postgres::PostgresRevisions::open(url)?)),
-        #[cfg(not(feature = "postgres"))]
-        Store::Postgres(_) => Err(StoreError::Backend(Box::new(
-            crate::config::revisions::RevisionsFault::Unavailable {
-                backend: store.backend(),
-            },
-        ))),
     }
 }

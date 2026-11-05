@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! What every handler shares: the phase of the process, the health registry,
-//! the federation, and the stored-query registry.
+//! the federation, the stored-query registry, and FerroFED's own store.
 
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError, RwLock};
@@ -48,6 +48,9 @@ pub struct AppState {
     /// The stored-query registry, when it is offered (§12.7). It sits beside
     /// the federation, which holds no store handle.
     definitions: Option<Arc<Definitions>>,
+    /// FerroFED's own PostgreSQL store, when `[store]` is set; fixed for the
+    /// life of the process.
+    store: Option<Arc<crate::store::Store>>,
     /// The FHIR R4 face of the exchange format, when it is served (Regulation
     /// (EU) 2025/327 Annex II 2.1). It is fixed for the life of the process.
     fhir: Option<Arc<FhirSettings>>,
@@ -91,6 +94,10 @@ pub enum StateError {
         #[source]
         source: StoreError,
     },
+    /// FerroFED's own store cannot be opened or migrated; the connection
+    /// string is never named.
+    #[error("FerroFED's own PostgreSQL store [store] could not be opened")]
+    Store(#[source] StoreError),
     /// The meter provider of the metrics surface cannot be built.
     #[error("the metrics surface cannot be built")]
     Metrics(#[source] InitError),
@@ -112,10 +119,13 @@ pub enum StateError {
 impl AppState {
     /// Returns the state `settings` describe.
     ///
-    /// The registry document is loaded, the outbound clients built, and the
-    /// stored-query store opened with every definition it holds read, before
-    /// the gateway serves. Each subsystem built gets a [`Built`] indicator,
-    /// and no member node or identity source gets one. The state is booting
+    /// The registry document is loaded, the outbound clients built,
+    /// FerroFED's own store opened and migrated when `[store]` is set, and
+    /// the stored-query store opened with every definition it holds read,
+    /// before the gateway serves. Each subsystem built gets a [`Built`]
+    /// indicator, the store its own [`crate::store::Ready`], which is down
+    /// while the database does not answer, and no member node or identity
+    /// source gets one. The state is booting
     /// until the run path marks boot complete. The metrics surface is built
     /// on a meter provider read by Prometheus alone, and the federation
     /// records its node requests through it. Every credential is held to the transport rule of
@@ -180,8 +190,17 @@ impl AppState {
         );
         let metrics = Arc::new(Metrics::new(telemetry, usage));
         let federation = federation.map(|federation| federation.metered(metrics.nodes()));
-        let definitions = definitions(settings, federation.as_ref())?;
+        let store = settings
+            .store
+            .as_ref()
+            .map(|store| crate::store::Store::open(store).map(Arc::new))
+            .transpose()
+            .map_err(StateError::Store)?;
+        let definitions = definitions(settings, federation.as_ref(), store.as_ref())?;
         let mut built: Vec<Arc<dyn HealthIndicator>> = vec![Arc::new(Built("configuration"))];
+        if let Some(store) = &store {
+            built.push(Arc::new(crate::store::Ready(Arc::clone(store))));
+        }
         if federation.is_some() {
             built.push(Arc::new(Built("registry")));
             built.push(Arc::new(Built("outbound_clients")));
@@ -194,6 +213,7 @@ impl AppState {
             health: Registry::new(built),
             federation: RwLock::new(federation.map(Arc::new)),
             definitions: definitions.map(Arc::new),
+            store,
             fhir: settings.fhir.clone().map(Arc::new),
             public_url: settings.server.public_url.clone(),
             metrics,
@@ -232,7 +252,7 @@ impl AppState {
         {
             // NOTE: no specification governs this: our own design; reading the
             // files once refuses here what a start refuses, a reserved name included.
-            opened(store, federation)?
+            opened(store, federation, None)?
                 .load()
                 .map_err(|source| refused(store, source))?;
         }
@@ -251,6 +271,7 @@ impl AppState {
             health,
             federation: RwLock::new(None),
             definitions: None,
+            store: None,
             fhir: None,
             public_url: None,
             metrics: Arc::default(),
@@ -270,6 +291,7 @@ impl AppState {
             health: Registry::default(),
             federation: RwLock::new(Some(Arc::new(federation.metered(metrics.nodes())))),
             definitions: None,
+            store: None,
             fhir: None,
             public_url: None,
             metrics,
@@ -370,6 +392,12 @@ impl AppState {
         self.definitions.as_ref()
     }
 
+    /// Returns FerroFED's own store, when `[store]` is set.
+    #[must_use]
+    pub fn store(&self) -> Option<&Arc<crate::store::Store>> {
+        self.store.as_ref()
+    }
+
     /// Returns the FHIR R4 face of the exchange format, when it is served.
     #[must_use]
     pub fn fhir(&self) -> Option<&Arc<FhirSettings>> {
@@ -422,27 +450,32 @@ pub fn admits_callers(settings: &Settings, federates: bool) -> Result<(), StateE
 fn definitions(
     settings: &Settings,
     federation: Option<&Federation>,
+    shared: Option<&Arc<crate::store::Store>>,
 ) -> Result<Option<Definitions>, StateError> {
     // NOTE: no specification governs this: our own design; configuration
     // refuses a registry without a registry document, so both are set together.
     let (Some(store), Some(federation)) = (settings.stored_queries.as_ref(), federation) else {
         return Ok(None);
     };
-    Definitions::open(opened(store, federation)?)
+    Definitions::open(opened(store, federation, shared)?)
         .map(Some)
         .map_err(|source| refused(store, source))
 }
 
 /// The store `store` names, opened.
-fn opened(store: &Store, federation: &Federation) -> Result<Box<dyn DefinitionStore>, StateError> {
-    stored::open(store, federation.context()).map_err(|source| refused(store, source))
+fn opened(
+    store: &Store,
+    federation: &Federation,
+    shared: Option<&Arc<crate::store::Store>>,
+) -> Result<Box<dyn DefinitionStore>, StateError> {
+    stored::open(store, federation.context(), shared).map_err(|source| refused(store, source))
 }
 
 /// The refusal to open `store`, for `source`.
 fn refused(store: &Store, source: StoreError) -> StateError {
     let path = match store {
         Store::Redb(path) | Store::Files(path) => Some(path.clone()),
-        Store::Postgres(_) => None,
+        Store::Postgres => None,
     };
     StateError::StoredQueries {
         backend: store.backend(),

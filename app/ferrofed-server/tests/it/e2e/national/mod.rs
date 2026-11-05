@@ -31,6 +31,7 @@ use eehrxf::crosswalk::prescription::MPD_MEDICATION_REQUEST;
 use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::atna_feed::FeedRepository;
+use ferrofed_testkit::containers::database::{self, PostgresTls};
 use ferrofed_testkit::containers::{self, TwoNodes};
 use ferrofed_testkit::eps;
 use ferrofed_testkit::issuer::Issuer;
@@ -44,6 +45,9 @@ use wiremock::{Mock, ResponseTemplate};
 
 use crate::e2e::{EHR_A, EHR_B, PATIENT, plan, registry_document};
 use crate::feed_audit::audit_tables;
+
+/// The database of FerroFED's own store the gateways of a test share.
+const STORE: &str = "national_store";
 
 /// The issuer of the connector's tokens.
 const NCP_ISSUER: &str = "https://ncp.example.test";
@@ -175,10 +179,12 @@ fn own_entry(id: &str, (node, organisation): (&str, &str), base: &str) -> String
 
 /// The services every gateway of a test shares: the two seeded FerroEHR
 /// nodes, each member's own FHIR endpoint behind a capturing proxy, the
-/// stub PDQm Supplier answering with the patient, and the Audit Record
-/// Repository the access records reach.
+/// stub PDQm Supplier answering with the patient, the Audit Record
+/// Repository the access records reach, and FerroFED's own store, which a
+/// contact-point issuer needs.
 struct Harness {
     nodes: TwoNodes,
+    store: PostgresTls,
     pdq: Server,
     own_a: Server,
     own_b: Server,
@@ -220,6 +226,7 @@ impl Harness {
         let proxy_b = CapturingProxy::start(own_b.uri(), Bind::Loopback).await?;
         Ok(Self {
             nodes,
+            store: database::postgres_tls(STORE, &[]).await?,
             pdq,
             own_a,
             own_b,
@@ -280,7 +287,7 @@ impl Harness {
              [[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [\"node-a\", \"node-b\"]\n\n\
              [pdqm]\nurl = \"{}\"\ntransaction = \"iti-78\"\nmaster = \"{namespace}\"\ntimeout_ms = 5000\n\n\
              [pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n\n\
-             [signing]\nkey_file = {}\njwks_uri = \"{origin}/.well-known/jwks.json\"\n{}",
+             [signing]\nkey_file = {}\njwks_uri = \"{origin}/.well-known/jwks.json\"\n{}{}",
             path_of(&document),
             path_of(&jwks),
             CLAIMS.toml(),
@@ -291,6 +298,7 @@ impl Harness {
             pdqm_stub::base_url(&self.pdq),
             toml::Value::String(crate::support::signing_key_file().to_owned()),
             audit_tables(&self.repository, ""),
+            crate::e2e::store::store_toml(&self.store, STORE, dir)?,
         );
         let settings =
             Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?

@@ -23,7 +23,7 @@ everything else it handed to another system, which keeps it
 | What | Where | What happens to it |
 |---|---|---|
 | Resolution bindings, the `ehr_id` index, the learned `creating_system_id` routes | each replica's memory | lost when the replica stops; export the routes first to move them to a replacement |
-| Stored-query definitions | the `[stored_queries]` backend: a `redb` file, the `ferrofed` schema of a PostgreSQL database, or read-only definition files | parameterised AQL, never a patient identifier; you remove it |
+| Stored-query definitions | the `[stored_queries]` backend: a `redb` file, the `ferrofed` schema of FerroFED's own PostgreSQL store (`[store]`), or read-only definition files | parameterised AQL, never a patient identifier; you remove it |
 | Configuration revisions, under `config.ui = "managed"` | `config.path` (a `redb` file) or the `ferrofed` schema of the `config.url` database, and the secret files the console wrote to `config.secrets_dir` | every revision with who made it and who approved it, and the secret values set from the console; you remove them |
 | IHE audit records and access records not yet delivered | the spools under `audit.repository.spool_dir` and `xcpd.audit_repository.spool_dir`, with their `quarantine` subdirectories | name patients and callers; delivered while a replica runs, then removed with the volume |
 | Access and audit records delivered | your Audit Record Repository | kept for their retention period, never removed by decommissioning the gateway |
@@ -129,9 +129,10 @@ publishes the public keys at `{base}/.well-known/jwks.json`
 
 ## 6. Remove the stores and the volumes
 
-- **The stored-query store and the revision store.** Delete the `redb`
-  files. Both PostgreSQL backends keep their tables in the `ferrofed`
-  schema; drop it, or the database, once nothing else you keep is in it.
+- **The stored-query store, FerroFED's own store and the revision store.**
+  Delete the `redb` files. FerroFED's own store (`[store]`) and the
+  PostgreSQL revision backend keep their tables in the `ferrofed` schema;
+  drop it, or the database, once nothing else you keep is in it.
 - **The spool volumes.** Delete each replica's spool volume once step 2
   holds for it. The records in it name patients, so the volume sits on an
   encrypted disk ([The audit spool](hardening.md#the-audit-spool)); remove

@@ -30,7 +30,7 @@ const RUNNING: &str = r#"{"ui":"managed","revision":1,"settings":[
      "default":true,"restart":true,"editable":true},
     {"key":"federation.consent.disclose","section":"consent","value":false,"source":"environment",
      "default":true,"restart":false,"editable":true},
-    {"key":"stored_queries.url","section":"stored-queries","source":"revision","restart":true,
+    {"key":"store.url","section":"stored-queries","source":"revision","restart":true,
      "secret":{"set":true,"reference":"/run/secrets/synthetic-stored-url"},"editable":false},
     {"key":"access_log.templates","section":"access-log","value":{"t.v1":{"categories":["lab"]},
      "t.v2":{"categories":["ips"]}},"source":"revision","default":{},"restart":false,"editable":false},

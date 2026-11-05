@@ -37,6 +37,9 @@ You connect a contact point in three steps:
    `[trust.issuer.national_contact_point]`, naming the claims its tokens
    carry the Implementing Regulation (EU) 2026/2099 Annex attributes in
    ([National contact points](../operate/authentication.md#national-contact-points)).
+4. Give FerroFED its own PostgreSQL store with `[store]`, which a
+   contact-point issuer needs; without it the gateway refuses to start
+   ([FerroFED's own store](../operate/store.md)).
 
 ```toml
 [fhir]
@@ -65,6 +68,9 @@ provider_issuing_authority = "hcp_issuing_authority_name"
 provider_address = "healthcare_provider_address"
 trc_patient = "trc_patient"
 correlation_header = "ncp-correlation-id"
+
+[store]
+url_file = "/run/secrets/ferrofed/store-url"
 ```
 
 `trc_patient` names the claim that carries the patient of the treatment
