@@ -1,0 +1,1 @@
+- The technical documentation quotes Art 39(5) and Art 39(6) of Regulation (EU) 2025/327: issuing the EU declaration of conformity is the manufacturer's act, and the generator keeps the order of Annex IV until the Commission publishes its uniform declaration template.
