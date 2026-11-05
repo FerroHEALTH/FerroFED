@@ -63,8 +63,14 @@ country_code = "country_code"
 professional_issuing_authority = "hp_issuing_authority_name"
 provider_issuing_authority = "hcp_issuing_authority_name"
 provider_address = "healthcare_provider_address"
+trc_patient = "trc_patient"
 correlation_header = "ncp-correlation-id"
 ```
+
+`trc_patient` names the claim that carries the patient of the treatment
+relationship confirmation (TRC): its `subject-id` (eHDSI SAML Profile
+10.0.0 §4.3), as one `system|value` token, which your authorization server
+copies from the TRC it validated. Every claim name is required.
 
 `ferrofed config check` reads the table, and `OPTIONS {base}/` declares the
 contact point under `federation.national_contact_point`, so the connector's
@@ -94,6 +100,53 @@ identity services confirmed, with that identifier's system. The gateway
 resolves it as it resolves any subject, through the configured identity
 binding, and answers a patient no member holds and a patient every member
 restricts alike.
+
+### The treatment relationship binding
+
+The patient lookup is the identification step and needs no TRC. Every other
+route reaches patient data, and the gateway holds it to the patient the
+token's `trc_patient` claim names (eHDSI XCA Profile 8.0.1 §4.2.1 and
+§4.2.2):
+
+- A token with no `trc_patient` claim, or one that is not `system|value`, is
+  refused `403 forbidden` with the diagnostics `trc-missing`, and nothing is
+  asked of anyone.
+- The patient a summary, a document list or a prescription search names must
+  be the TRC's patient, compared on the system and the value before the
+  identity binding or any member is asked. A dispensation's `subject` must
+  carry the TRC's identifier.
+- The gateway resolves the TRC's patient at every member before the request
+  goes on. A read of a prescription, a dispensation or a document by its id,
+  and a withdrawal, reaches its member only when the resource sits in that
+  patient's own EHR there.
+- A request outside the TRC's patient, a patient no member holds, and any
+  other `not-found` on these routes all get one answer: `404 not-found`,
+  whose `issue.details` carries the refusal `trc-patient-mismatch`
+  (`https://ferrofed.eu/fhir/CodeSystem/refusal`) and the service's
+  Requirements Catalogue 10.0.0 §1.25 code
+  (`https://ferrofed.eu/fhir/CodeSystem/myhealth-eu-exception`):
+  `ERROR_PS_NOT_FOUND` for the summary and its documents,
+  `ERROR_ORCD_NOT_FOUND` for a laboratory report, and `ERROR_EP_NOT_FOUND`
+  for prescriptions and dispensations. Nothing in it tells the cases apart,
+  so the connector answers "No Data" as XCA §4.2.2 asks. The legacy numeric
+  codes of the NCPeH Components Specifications 10.0.0 appendix 6.4 are never
+  used.
+- A request outside the TRC's patient is a security event. It is logged
+  under the target `ferrofed::security` as `trc-patient-mismatch` and counted
+  in the security metrics. The event names the contact point, the
+  professional (`hp_identifier`, its issuing authority and country) and the
+  request id, and names both patients by pseudonym alone: the first 16 bytes
+  of an HMAC-SHA256 under a key the process generates at start and never
+  writes anywhere (eHDSI Section I Security Policies 10.0.0 SR 5). The
+  contact point's own audit trail carries the patient, joined by the
+  correlation identifier. Blocking the professional, which XCA §4.2.2 asks
+  as a SHOULD, stays with the contact point.
+
+No specification governs the binding across members, the code systems the
+codes travel under, or the pseudonym: they are FerroFED's own design over the
+XCA rule that the contact point of the country of affiliation compares the
+patients. The binding holds on the FHIR face, the contact point's path.
+Holding a contact point's ITS-REST requests to it is the work of #1640.
 
 For every request of the contact point, the gateway:
 
@@ -130,7 +183,8 @@ it is:
 | The owner of a prescription failed on a dispensation or could not be reached | `502` `exception`, the member's own issues after the gateway's when it sent some | unknown: read the prescription before sending again |
 | The request is malformed or misses a parameter | `400` `invalid` | no |
 | The token misses an Annex attribute; the message names each missing one | `403` `forbidden` | no, until the contact point sends it |
-| No member holds the patient, or the prescription | an empty `searchset`, or `404` `not-found` | no |
+| The token names no TRC patient | `403` `forbidden`, `trc-missing` | no, until the contact point sends it |
+| No member holds the patient, or the prescription, or the request is outside the TRC's patient | `404` `not-found`, `trc-patient-mismatch` and the service's `*_NOT_FOUND` code | no |
 | The member that owns the prescription refused the dispensation | `409` `conflict`, the member's own issues after the gateway's | no |
 | The gateway failed on its own | `500` `exception` | no |
 

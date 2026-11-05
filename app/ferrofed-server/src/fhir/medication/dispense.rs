@@ -55,6 +55,14 @@ pub(in crate::fhir) async fn dispense(asked: Asked, body: Bytes) -> Response {
             Err(refused) => ControlFlow::Break(refused),
         },
         async |admitted, arrived, targeted| {
+            // NOTE: eHDSI XCA Profile 8.0.1 §4.2.1: a contact point dispenses for its TRC
+            // patient alone, held before any member is asked.
+            let service = crate::fhir::trc::Service::Prescription;
+            if let Err(refused) =
+                crate::fhir::trc::subject(admitted, &arrived, &received.patient, service)
+            {
+                return refused;
+            }
             crate::facade::dispensation::dispense(
                 &admitted.federation,
                 admitted.fhir,

@@ -43,6 +43,12 @@ pub struct ContactPointClaims {
     pub provider_issuing_authority: String,
     /// The claim carrying the `healthcare_provider_address` (Table 2).
     pub provider_address: String,
+    /// The claim carrying the patient the treatment relationship
+    /// confirmation binds, its `subject-id` (eHDSI SAML Profile 10.0.0 §4.3),
+    /// as one `system|value` token: the identifier's namespace and its
+    /// value. A patient-data request on the FHIR face names this patient or
+    /// is refused (eHDSI XCA Profile 8.0.1 §4.2.1).
+    pub trc_patient: String,
     /// The request header the contact point's national connector sends its
     /// correlation identifier in, recorded in the access record so it can be
     /// joined with the contact point's own log; absent by default, and then
@@ -122,6 +128,7 @@ impl ContactPointClaims {
                 &self.provider_issuing_authority,
             ),
             ("provider_address", &self.provider_address),
+            ("trc_patient", &self.trc_patient),
         ] {
             if claim.is_empty() {
                 return Err(Error::Missing {

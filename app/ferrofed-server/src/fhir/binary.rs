@@ -47,6 +47,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
 use super::admission::Asked;
+use super::trc::Service;
 use super::{UNADMITTED, admission, attach, outcome};
 use crate::access::{Accessed, NoAccess};
 use crate::auth::caller::Caller;
@@ -327,35 +328,56 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
         async |admitted, arrived, (member, named)| {
             let federation = &admitted.federation;
             let (request_id, outbound) = (admitted.request_id, admitted.outbound);
-            match named {
-                Named::Summary => {}
-                Named::Composition(composition) => {
-                    return super::laboratory::read(admitted, &arrived, (&member, &composition))
-                        .await;
+            let service = match named {
+                Named::Summary => Service::PatientSummary,
+                Named::Composition(_) | Named::Binary(_) => Service::OriginalDocument,
+            };
+            let mut response = async {
+                // NOTE: eHDSI XCA Profile 8.0.1 §4.2.2: a contact point reads only documents of its
+                // TRC patient, held before the member is asked.
+                let pair = (&member.node, &member.ehr_id);
+                if let Err(refused) = super::trc::located(admitted, &arrived, pair, service) {
+                    return refused;
                 }
-                Named::Binary(binary) => {
-                    return super::laboratory::read_own(admitted, &arrived, (&member, &binary))
+                match named {
+                    Named::Summary => {}
+                    Named::Composition(composition) => {
+                        return super::laboratory::read(
+                            admitted,
+                            &arrived,
+                            (&member, &composition),
+                        )
                         .await;
+                    }
+                    Named::Binary(binary) => {
+                        return super::laboratory::read_own(admitted, &arrived, (&member, &binary))
+                            .await;
+                    }
                 }
+                // NOTE: §5.4.1, N33; the read names no patient, so the gate withholds nothing beyond
+                // what it reads of every request, and the member is located by its ehr_id alone.
+                let asked = native::asked(
+                    federation,
+                    &arrived,
+                    vec![member],
+                    Arc::new(Withheld::default()),
+                )
+                .await;
+                let natives = match asked {
+                    Ok(natives) => natives,
+                    Err(failure) => return failure.respond(request_id, outbound),
+                };
+                let Some(native) = natives.first() else {
+                    return crate::error::fixed(Code::Internal, request_id);
+                };
+                let mut response = answered(native);
+                attach(&mut response, accessed(federation, native));
+                response
             }
-            // NOTE: §5.4.1, N33; the read names no patient, so the gate withholds nothing beyond
-            // what it reads of every request, and the member is located by its ehr_id alone.
-            let asked = native::asked(
-                federation,
-                &arrived,
-                vec![member],
-                Arc::new(Withheld::default()),
-            )
             .await;
-            let natives = match asked {
-                Ok(natives) => natives,
-                Err(failure) => return failure.respond(request_id, outbound),
-            };
-            let Some(native) = natives.first() else {
-                return crate::error::fixed(Code::Internal, request_id);
-            };
-            let mut response = answered(native);
-            attach(&mut response, accessed(federation, native));
+            // NOTE: Requirements Catalogue 10.0.0 §1.25: the document's own service names
+            // the no-data answer a contact point is given ([`super::errors::outcomes`]).
+            response.extensions_mut().insert(service);
             response
         },
     )

@@ -37,6 +37,7 @@ use openehr_federation::status::EndpointStatus;
 
 use super::admission::Asked;
 use super::patient_summary::refused;
+use super::trc::Service;
 use super::{UNADMITTED, attach, outcome};
 use crate::access::NoAccess;
 use crate::auth::caller::Caller;
@@ -85,6 +86,14 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
         async |read, admitted, arrived| {
             let federation = &admitted.federation;
             let patient = (read.system(), read.value());
+            let service = if read.admits_summaries() {
+                Service::PatientSummary
+            } else {
+                Service::OriginalDocument
+            };
+            if let Err(refused) = super::trc::named(admitted, &arrived, patient, service) {
+                return refused;
+            }
             let laboratory = match (read.admits_laboratory(), mapped) {
                 (false, _) => Laboratory::Unlisted,
                 (true, true) => Laboratory::Mapped,

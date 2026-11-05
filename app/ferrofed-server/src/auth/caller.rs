@@ -30,7 +30,7 @@ use std::fmt;
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_engine::conveyance::relayed::{Relayed, Role};
 
-use crate::auth::contact_point::MissingAnnex;
+use crate::auth::contact_point::{MissingAnnex, TrcPatient};
 use ferrofed_identity::role::behalf::{self, OnBehalfOf};
 use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::role::patient::IdentifierNamespace;
@@ -107,6 +107,9 @@ pub struct Caller {
     /// The correlation identifier the contact point's connector sent, when
     /// its issuer declares the header and the request carries it.
     correlation: Option<String>,
+    /// The patient the contact point's treatment relationship confirmation
+    /// binds, when its token names one in the `system|value` form.
+    trc_patient: Option<TrcPatient>,
 }
 
 impl fmt::Debug for Caller {
@@ -127,6 +130,7 @@ impl fmt::Debug for Caller {
             .field("representative", &self.representative)
             .field("contact_point", &self.contact_point)
             .field("relayed", &self.relayed)
+            .field("trc_patient", &self.trc_patient.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -297,6 +301,7 @@ impl Caller {
             relayed: None,
             annex_missing: MissingAnnex::default(),
             correlation: None,
+            trc_patient: None,
         }
     }
 
@@ -339,6 +344,22 @@ impl Caller {
     #[must_use]
     pub fn relayed(&self) -> Option<&Relayed> {
         self.relayed.as_deref()
+    }
+
+    /// Returns this caller, its contact point's token binding `trc`, the
+    /// patient of its treatment relationship confirmation, when it names one.
+    #[must_use]
+    pub fn binding_trc_patient(mut self, trc: Option<TrcPatient>) -> Self {
+        self.trc_patient = trc;
+        self
+    }
+
+    /// Returns the patient the contact point's treatment relationship
+    /// confirmation binds, when its token names one (eHDSI SAML Profile
+    /// 10.0.0 §4.3).
+    #[must_use]
+    pub fn trc_patient(&self) -> Option<&TrcPatient> {
+        self.trc_patient.as_ref()
     }
 
     /// Returns this caller, its request carrying the correlation identifier

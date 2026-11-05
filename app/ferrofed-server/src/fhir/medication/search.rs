@@ -67,6 +67,12 @@ pub(in crate::fhir) async fn search(asked: Asked, uri: Uri) -> Response {
             .members_of(Category::Prescription)
             .unwrap_or(&none);
         let patient = (read.system(), read.value());
+        // NOTE: eHDSI XCA Profile 8.0.1 §4.2.1: a contact point's patient is its TRC's.
+        if let Err(refused) =
+            crate::fhir::trc::named(admitted, &arrived, patient, crate::fhir::trc::Service::Prescription)
+        {
+            return refused;
+        }
         let now = jiff::Timestamp::now()
             .strftime("%Y-%m-%dT%H:%M:%SZ")
             .to_string();

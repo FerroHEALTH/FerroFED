@@ -121,6 +121,9 @@ fn words(key: &str) -> (Msg, Msg) {
             Msg::SettingNcpProviderAddress,
             Msg::SettingNcpProviderAddressDesc,
         ),
+        "trust.issuer[].national_contact_point.trc_patient" => {
+            (Msg::SettingNcpTrcPatient, Msg::SettingNcpTrcPatientDesc)
+        }
         "trust.issuer[].national_contact_point.correlation_header" => {
             (Msg::SettingNcpCorrelation, Msg::SettingNcpCorrelationDesc)
         }

@@ -26,6 +26,7 @@
 
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 
 use http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, LOCATION};
 use http::{HeaderMap, StatusCode};
@@ -98,6 +99,10 @@ pub struct ClaimNames {
     pub provider_issuing_authority: &'static str,
     /// The claim of [`HCP_ADDRESS`].
     pub provider_address: &'static str,
+    /// The claim of the patient the treatment relationship confirmation
+    /// binds, `system|value`, set once the device treats a patient
+    /// ([`NationalConnector::treating`]).
+    pub trc_patient: &'static str,
 }
 
 /// The claim names the device writes, which the gateway under test declares.
@@ -108,6 +113,7 @@ pub const CLAIMS: ClaimNames = ClaimNames {
     professional_issuing_authority: "ncp_hp_issuing_authority",
     provider_issuing_authority: "ncp_hcp_issuing_authority",
     provider_address: "ncp_hcp_address",
+    trc_patient: "ncp_trc_patient",
 };
 
 impl ClaimNames {
@@ -120,13 +126,14 @@ impl ClaimNames {
             "\n[trust.issuer.national_contact_point]\nfamily_name = \"{}\"\ngiven_name = \"{}\"\n\
              country_code = \"{}\"\nprofessional_issuing_authority = \"{}\"\n\
              provider_issuing_authority = \"{}\"\nprovider_address = \"{}\"\n\
-             correlation_header = \"{CORRELATION_HEADER}\"\n",
+             trc_patient = \"{}\"\ncorrelation_header = \"{CORRELATION_HEADER}\"\n",
             self.family_name,
             self.given_name,
             self.country_code,
             self.professional_issuing_authority,
             self.provider_issuing_authority,
-            self.provider_address
+            self.provider_address,
+            self.trc_patient
         )
     }
 }
@@ -232,6 +239,7 @@ pub struct NationalConnector {
     fhir_base: String,
     client: reqwest::Client,
     sent: AtomicU64,
+    treating: Mutex<Option<String>>,
 }
 
 impl fmt::Debug for NationalConnector {
@@ -265,6 +273,7 @@ impl NationalConnector {
                 .build()
                 .map_err(ConnectorError::Client)?,
             sent: AtomicU64::new(0),
+            treating: Mutex::new(None),
         })
     }
 
@@ -277,7 +286,8 @@ impl NationalConnector {
 
     /// Returns the claims of the device's token: a client token, its `sub`
     /// its `client_id`, every scope, the purpose of use `TREAT`, every Annex
-    /// attribute, and an IUA `person_id`.
+    /// attribute, an IUA `person_id`, and the TRC patient once the device
+    /// treats one ([`Self::treating`]).
     #[must_use]
     pub fn claims(&self) -> Claims {
         let mut claims = Claims::new(self.issuer.name(), &self.audience);
@@ -294,6 +304,14 @@ impl NationalConnector {
             iua.subject_organization = Some(HCP_NAME.to_owned());
             iua.person_id = Some(PERSON_ID.to_owned());
         }
+        let treating = self
+            .treating
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        if let Some(patient) = treating {
+            claims.other.insert(CLAIMS.trc_patient.to_owned(), patient);
+        }
         for (claim, value) in [
             (CLAIMS.family_name, FAMILY),
             (CLAIMS.given_name, GIVEN),
@@ -305,6 +323,15 @@ impl NationalConnector {
             claims.other.insert(claim.to_owned(), value.to_owned());
         }
         claims
+    }
+
+    /// Makes every later token carry `patient` as the patient of a treatment
+    /// relationship confirmation, as the contact point's authorization
+    /// server writes the TRC's `subject-id` once the patient is identified
+    /// (eHDSI SAML Profile 10.0.0 §4.3).
+    pub fn treating(&self, patient: NationalId<'_>) {
+        *self.treating.lock().unwrap_or_else(PoisonError::into_inner) =
+            Some(format!("{}|{}", patient.system, patient.value));
     }
 
     /// Returns a fresh token with [`Self::claims`].
@@ -371,14 +398,19 @@ impl NationalConnector {
 
     /// Looks `patient` up with `GET {fhir-base}/Patient?identifier=`, the
     /// patient lookup Xt-EHR D5.1 §3.4.6 `api-consumer-patient` has a
-    /// consumer use before it asks for data.
+    /// consumer use before it asks for data, and then treats `patient`
+    /// ([`Self::treating`]), as a contact point holds a treatment
+    /// relationship confirmation once the patient is identified.
     ///
     /// # Errors
     ///
     /// Returns [`ConnectorError::Token`] or [`ConnectorError::Send`].
     pub async fn lookup(&self, patient: NationalId<'_>) -> Result<Answer, ConnectorError> {
-        self.get(&format!("/Patient?identifier={}", patient.token()))
-            .await
+        let answer = self
+            .get(&format!("/Patient?identifier={}", patient.token()))
+            .await?;
+        self.treating(patient);
+        Ok(answer)
     }
 
     /// Asks `GET {fhir-base}/Patient/$summary` for `patient`.

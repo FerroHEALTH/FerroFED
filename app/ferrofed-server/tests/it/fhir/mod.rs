@@ -19,6 +19,7 @@
 
 mod binary;
 mod config;
+mod contact_point_trc;
 mod header;
 mod independence;
 mod list;

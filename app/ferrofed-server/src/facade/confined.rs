@@ -131,7 +131,6 @@ pub(crate) async fn confinement(
         .ok_or_else(|| Unconfined::Departed(context.endpoint().clone()))?
         .node()
         .clone();
-    let resolver = federation.resolver().ok_or(Unconfined::NoResolver)?;
     // NOTE: §5.2, §12.5: the ehrId is meaningful only at the member that issued it, so it
     // is resolved as an identifier in that member's ehr_id system, never matched bare.
     let patient = PatientRef::new(
@@ -139,25 +138,12 @@ pub(crate) async fn confinement(
         SecretString::from(context.ehr_id().as_str().to_owned()),
     )
     .map_err(Unconfined::Patient)?;
-    let members: Vec<NodeId> = snapshot.nodes().map(|node| node.id().clone()).collect();
-    let mut resolutions = resolver
-        .resolve(&patient, &members, &caller.on_behalf(), deadline)
-        .await;
-    let mut held: BTreeMap<NodeId, EhrId> = BTreeMap::new();
-    for member in members {
-        match resolutions.remove(&member) {
-            Some(Resolution::Resolved(ehr_id)) => {
-                if member == bound && ehr_id != *context.ehr_id() {
-                    return Err(Unconfined::Contradicted(member));
-                }
-                held.insert(member, ehr_id);
-            }
-            Some(Resolution::Unknown) => {}
-            Some(Resolution::Unavailable(source)) => {
-                return Err(Unconfined::Unavailable { member, source });
-            }
-            None => return Err(Unconfined::Unanswered(member)),
-        }
+    let mut held = everywhere(federation, &patient, &caller.on_behalf(), deadline).await?;
+    if held
+        .get(&bound)
+        .is_some_and(|ehr_id| ehr_id != context.ehr_id())
+    {
+        return Err(Unconfined::Contradicted(bound));
     }
     held.insert(bound, context.ehr_id().clone());
     let at = snapshot
@@ -168,6 +154,46 @@ pub(crate) async fn confinement(
         })
         .collect();
     Ok(Some(Confinement::new(context.endpoint().clone(), at)))
+}
+
+/// The `ehr_id` of `patient` at every member that holds it, resolved
+/// through the cross-reference at every member on behalf of `on_behalf`
+/// before `deadline` (§5.2).
+///
+/// # Errors
+///
+/// Returns an [`Unconfined`] when no resolver is configured or the
+/// cross-reference could not answer for a member, which may hold the
+/// patient.
+pub(crate) async fn everywhere(
+    federation: &Federation,
+    patient: &PatientRef,
+    on_behalf: &OnBehalfOf,
+    deadline: Instant,
+) -> Result<BTreeMap<NodeId, EhrId>, Unconfined> {
+    let resolver = federation.resolver().ok_or(Unconfined::NoResolver)?;
+    let members: Vec<NodeId> = federation
+        .snapshot()
+        .nodes()
+        .map(|node| node.id().clone())
+        .collect();
+    let mut resolutions = resolver
+        .resolve(patient, &members, on_behalf, deadline)
+        .await;
+    let mut held = BTreeMap::new();
+    for member in members {
+        match resolutions.remove(&member) {
+            Some(Resolution::Resolved(ehr_id)) => {
+                held.insert(member, ehr_id);
+            }
+            Some(Resolution::Unknown) => {}
+            Some(Resolution::Unavailable(source)) => {
+                return Err(Unconfined::Unavailable { member, source });
+            }
+            None => return Err(Unconfined::Unanswered(member)),
+        }
+    }
+    Ok(held)
 }
 
 /// Whether `patient`, the subject a confined request names, is the patient

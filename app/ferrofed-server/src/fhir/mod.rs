@@ -60,6 +60,7 @@ mod list;
 mod lookup;
 pub mod medication;
 mod patient_summary;
+mod trc;
 
 /// The product name the document's author `Device` and the capability
 /// statement carry.

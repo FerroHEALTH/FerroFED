@@ -12,10 +12,12 @@ use axum::response::Response;
 use ferrofed_eehrxf::face::FHIR_JSON;
 use http::{Method, StatusCode, header};
 
+use crate::auth::caller::Caller;
+use crate::face_path::{FacePath, classify};
 use crate::state::AppState;
 
 use super::outcome;
-use crate::face_path::classify;
+use super::trc::{self, Service};
 
 /// The largest error body the face rewrites as an `OperationOutcome`; the
 /// gateway's own error bodies are far smaller.
@@ -57,12 +59,49 @@ struct GatewayError {
     code: Option<String>,
 }
 
+/// What the layer reads of an `OperationOutcome` the face answered.
+#[derive(serde::Deserialize)]
+struct Outcome {
+    /// Its issues.
+    #[serde(default)]
+    issue: Vec<Issue>,
+}
+
+/// What the layer reads of one issue: its FHIR R4 `issue-type`.
+#[derive(serde::Deserialize)]
+struct Issue {
+    /// The issue type.
+    code: String,
+}
+
+/// The MyHealth@EU service of a patient-data request to `path` with the
+/// query `query`, or `None` for a path of the face that carries no patient
+/// data, the identification lookup among them.
+fn service(face: FacePath, query: Option<&str>) -> Option<Service> {
+    match face {
+        FacePath::Summary | FacePath::Binary => Some(Service::PatientSummary),
+        FacePath::Documents => Some(
+            match ferrofed_eehrxf::list::ListRequest::from_query(query) {
+                Ok(read) if !read.admits_summaries() => Service::OriginalDocument,
+                _ => Service::PatientSummary,
+            },
+        ),
+        FacePath::Medication(_) => Some(Service::Prescription),
+        FacePath::Metadata | FacePath::Patients | FacePath::Bundle | FacePath::Other => None,
+    }
+}
+
 /// The layer that rewrites every error the gateway answers under
 /// `{fhir-base}` with its own error body as an `OperationOutcome`, keeping
 /// its status and its headers.
 ///
 /// An answer that is already FHIR JSON, a success, or an answer outside the
-/// face passes unchanged.
+/// face passes unchanged, but for one case. To a national contact point,
+/// every `404` `not-found` on a path that carries patient data is the one
+/// no-data answer of the treatment relationship binding for the path's
+/// service, so an unknown patient, one no member may disclose and one
+/// outside the treatment relationship confirmation answer alike (eHDSI XCA
+/// Profile 8.0.1 §4.2.2).
 pub async fn outcomes(
     State(state): State<Arc<AppState>>,
     request: Request,
@@ -73,11 +112,22 @@ pub async fn outcomes(
         .get::<OriginalUri>()
         .map_or_else(|| request.uri().path(), |original| original.path())
         .to_owned();
-    let under = state
-        .fhir()
-        .is_some_and(|fhir| classify(fhir, &path).is_some());
+    let face = state.fhir().and_then(|fhir| classify(fhir, &path));
+    let under = face.is_some();
+    let relayed = request
+        .extensions()
+        .get::<Caller>()
+        .is_some_and(Caller::is_contact_point);
+    let no_data = face
+        .filter(|_| relayed)
+        .and_then(|face| service(face, request.uri().query()));
     let head = request.method() == Method::HEAD;
     let response = next.run(request).await;
+    if let Some(service) = no_data
+        && response.status() == StatusCode::NOT_FOUND
+    {
+        return not_found(response, service).await;
+    }
     if !under
         || head
         || !response.status().is_client_error() && !response.status().is_server_error()
@@ -111,4 +161,35 @@ pub async fn outcomes(
         parts.headers.insert(name.clone(), value.clone());
     }
     Response::from_parts(parts, rewritten_body)
+}
+
+/// `response`, a `404` to a national contact point on a path of `service`,
+/// as [`trc::no_data`] when its issue is `not-found`, the service its
+/// answer names kept and the access record it carries with it; any other
+/// `404` is passed as it came.
+async fn not_found(response: Response, service: Service) -> Response {
+    let service = response
+        .extensions()
+        .get::<Service>()
+        .copied()
+        .unwrap_or(service);
+    let (parts, body) = response.into_parts();
+    let no_data = |extensions: http::Extensions| {
+        let mut answer = trc::no_data(service);
+        *answer.extensions_mut() = extensions;
+        answer.extensions_mut().insert(service);
+        answer
+    };
+    let Ok(bytes) = axum::body::to_bytes(body, ERROR_BODY_LIMIT).await else {
+        return no_data(parts.extensions);
+    };
+    // NOTE: FHIR R4 `issue-type`: a `not-found` says the data are not there, which a
+    // contact point is told as no data; a `not-supported` category stays as it was.
+    let not_found = serde_json::from_slice::<Outcome>(&bytes)
+        .is_ok_and(|outcome| outcome.issue.iter().any(|issue| issue.code == "not-found"));
+    if not_found {
+        no_data(parts.extensions)
+    } else {
+        Response::from_parts(parts, axum::body::Body::from(bytes))
+    }
 }

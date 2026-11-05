@@ -88,6 +88,10 @@ messages! {
     SettingNcpProviderAuthority = "setting-ncp-provider-authority",
     /// `The claim carrying the authority that issued the provider's identifier (Annex Table 2).`
     SettingNcpProviderAuthorityDesc = "setting-ncp-provider-authority-desc",
+    /// `Treatment relationship patient claim`
+    SettingNcpTrcPatient = "setting-ncp-trc-patient",
+    /// `The claim carrying the patient the treatment relationship confirmation binds, as system|value; a patient-data request on the FHIR face names this patient (eHDSI XCA Profile 8.0.1 §4.2.1).`
+    SettingNcpTrcPatientDesc = "setting-ncp-trc-patient-desc",
     /// `Node selection`
     SettingNodeSelection = "setting-node-selection",
     /// `Which nodes a patient's query asks: localized, the nodes the localizer names, or ask-all, every node.`

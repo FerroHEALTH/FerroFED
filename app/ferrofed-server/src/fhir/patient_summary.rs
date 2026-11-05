@@ -28,6 +28,7 @@ use crate::facade::demographics::{self, Unheaded};
 use crate::facade::summary::laboratory::Laboratory;
 use crate::facade::summary::{self as gathered, Scope, Unsummarised};
 use crate::fhir::admission::Asked;
+use crate::fhir::trc::Service;
 use crate::fhir_wire::fhir_json;
 
 /// The answer to a summary request `read` from the request's caller and
@@ -61,6 +62,11 @@ pub(super) async fn summary_of(
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
     let (request_id, outbound, logged) = (admitted.request_id, admitted.outbound, &admitted.logged);
     let patient = (read.system(), read.value());
+    // NOTE: eHDSI XCA Profile 8.0.1 §4.2.1: a contact point's patient is its TRC's, compared
+    // before the demographics supplier or any member is asked.
+    if let Err(refused) = super::trc::named(admitted, &arrived, patient, Service::PatientSummary) {
+        return refused;
+    }
     // NOTE: eHN PS A.1.1, A.1.2; the header comes from the identity binding before any
     // member is asked, so no member is reached for a summary that could name no patient.
     let header = header_of(federation, &arrived, patient, (request_id, logged.as_str())).await;
