@@ -3,8 +3,58 @@
   "@id": "https://github.com/FerroHEALTH/FerroFED/blob/main/security/vex/rust-advisories.openvex.json",
   "author": "Cadasto B.V.",
   "role": "vendor",
-  "statements": [],
-  "timestamp": "2026-10-23T00:00:00Z",
+  "statements": [
+    {
+      "ferrofed:reachability": {
+        "direct_dependents": [
+          "testcontainers"
+        ],
+        "package": "astral-tokio-tar",
+        "workspace_roots": [
+          "ferrofed-console",
+          "ferrofed-eehrxf",
+          "ferrofed-engine",
+          "ferrofed-identity",
+          "ferrofed-server",
+          "ferrofed-testkit",
+          "openehr-federation"
+        ]
+      },
+      "impact_statement": "The advisory is informational: Astral ended maintenance of `astral-tokio-tar` on 2026-11-03 and no version is patched. Its one carrier is `testcontainers` 0.28.0, which `ferrofed-testkit`, the test-support crate (`publish = false`), uses to start the containers the integration tests run against. Every workspace root above reaches it only through a dev-dependency on `ferrofed-testkit` or on `testcontainers`, so the crate is in none of the products. `cargo tree -p ferrofed-server` and `cargo tree -p ferrofed-console` over normal and build edges, all features and all targets, find no `astral-tokio-tar` node, and the server binary, the `ferrofed` image and the `ferrofed-console` image are built from exactly those graphs. No release of `testcontainers` leaves the crate (0.28.0 requires ^0.6.1 and the upstream main branch requires 0.7.0). Re-evaluate when a `testcontainers` release drops the dependency, or if `ferrofed-testkit` ever becomes a normal dependency of a shipped crate.",
+      "justification": "component_not_present",
+      "products": [
+        {
+          "@id": "pkg:cargo/ferrofed-server",
+          "subcomponents": [
+            {
+              "@id": "pkg:cargo/astral-tokio-tar"
+            }
+          ]
+        },
+        {
+          "@id": "pkg:oci/ferrofed",
+          "subcomponents": [
+            {
+              "@id": "pkg:cargo/astral-tokio-tar"
+            }
+          ]
+        },
+        {
+          "@id": "pkg:oci/ferrofed-console",
+          "subcomponents": [
+            {
+              "@id": "pkg:cargo/astral-tokio-tar"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "vulnerability": {
+        "name": "RUSTSEC-2026-0440"
+      }
+    }
+  ],
+  "timestamp": "2026-11-05T00:00:00Z",
   "tooling": "scripts/security/vex-generate.sh from security/vex/rust-advisories.toml + deny.toml",
-  "version": 1
+  "version": 2
 }
