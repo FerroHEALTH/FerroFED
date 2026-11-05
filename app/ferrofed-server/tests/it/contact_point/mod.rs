@@ -13,9 +13,11 @@
 //! Art 8, Art 11(5); [`withheld`]); the attributes reach the node and the
 //! access record marked as asserted by the contact point, and no IUA
 //! `person_id` reaches a node (§13.4 authn-end-user, N24, N33; [`relayed`]);
-//! `OPTIONS {base}/` declares the setting ([`declared`]); and an emergency
+//! `OPTIONS {base}/` declares the setting ([`declared`]); an emergency
 //! access it relays is held to the professional's limit (eHDSI Section II
-//! Security Services 10.0.0 §2.5; [`emergency`]).
+//! Security Services 10.0.0 §2.5; [`emergency`]); and its requests on the
+//! ITS-REST face are held to the patient of its treatment relationship
+//! confirmation (eHDSI XCA Profile 8.0.1 §4.2; [`trc`]).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
@@ -26,6 +28,7 @@ mod config;
 mod declared;
 pub(crate) mod emergency;
 mod relayed;
+mod trc;
 mod withheld;
 
 use ferrofed_server::config::auth::AuthSettings;

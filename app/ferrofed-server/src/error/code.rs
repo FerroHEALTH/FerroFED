@@ -11,7 +11,7 @@ use super::{Code, RefusalCode};
 
 impl Code {
     /// Every code that is not a refusal, in declaration order.
-    pub const GATEWAY: [Self; 76] = [
+    pub const GATEWAY: [Self; 78] = [
         Self::BodyInvalid,
         Self::CompletenessInvalid,
         Self::PartialUnsupported,
@@ -88,6 +88,8 @@ impl Code {
         Self::CredentialMalformed,
         Self::EmergencyLimitReached,
         Self::EmergencyUncounted,
+        Self::TrcMissing,
+        Self::TrcUnbound,
     ];
 
     /// Every code: [`Code::GATEWAY`], then one per [`Refusal::KINDS`].
@@ -197,6 +199,8 @@ impl Code {
             Self::CredentialMalformed => "credential-malformed",
             Self::EmergencyLimitReached => "emergency-limit-reached",
             Self::EmergencyUncounted => "emergency-uncounted",
+            Self::TrcMissing => "trc-missing",
+            Self::TrcUnbound => "trc-unbound",
         }
     }
 
@@ -272,6 +276,8 @@ impl Code {
             | Self::PatientContextMissing
             | Self::PatientConfinement
             | Self::ContactPointAttributesRequired
+            | Self::TrcMissing
+            | Self::TrcUnbound
             | Self::ApprovalOwn
             | Self::OperatorUnverified
             | Self::EmergencyLimitReached => StatusCode::FORBIDDEN,
@@ -479,6 +485,12 @@ impl Code {
             Self::EmergencyUncounted => {
                 "the emergency access could not be counted against the health professional's limit, so it is refused; no member was asked"
             }
+            Self::TrcMissing => {
+                "the national contact point's access token names no patient of a treatment relationship confirmation, so no patient data is served and nothing was sent"
+            }
+            Self::TrcUnbound => {
+                "the national contact point's request names no patient or EHR its treatment relationship confirmation binds, so nothing was sent"
+            }
         }
     }
 }
@@ -573,6 +585,8 @@ mod tests {
             Code::CredentialMalformed => Some(73),
             Code::EmergencyLimitReached => Some(74),
             Code::EmergencyUncounted => Some(75),
+            Code::TrcMissing => Some(76),
+            Code::TrcUnbound => Some(77),
         }
     }
 
@@ -726,6 +740,8 @@ mod tests {
             (Code::CredentialMalformed, StatusCode::BAD_REQUEST),
             (Code::EmergencyLimitReached, StatusCode::FORBIDDEN),
             (Code::EmergencyUncounted, StatusCode::SERVICE_UNAVAILABLE),
+            (Code::TrcMissing, StatusCode::FORBIDDEN),
+            (Code::TrcUnbound, StatusCode::FORBIDDEN),
         ];
         assert_eq!(Code::GATEWAY.len(), table.len());
         for (code, status) in table {

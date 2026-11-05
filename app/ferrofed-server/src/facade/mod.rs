@@ -223,6 +223,11 @@ async fn federated(
             return refused;
         }
     }
+    let logged = outbound.to_string();
+    let binding = match trc::admitted(&federation, caller, started, (request_id, &logged)).await {
+        Ok(binding) => binding,
+        Err(refused) => return refused,
+    };
     let arrived = Arrived {
         headers,
         request_id,
@@ -232,7 +237,7 @@ async fn federated(
         session,
         requester: caller.and_then(Caller::requester),
         on_behalf: &on_behalf,
-        trc: None,
+        trc: binding.as_ref(),
     };
     answer::answer(&federation, arrived, submitted).await
 }

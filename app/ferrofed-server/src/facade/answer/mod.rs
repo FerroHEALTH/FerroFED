@@ -17,6 +17,7 @@ pub(super) mod confinement;
 pub(super) mod fan_out;
 pub(super) mod planning;
 mod result;
+pub(super) mod trc;
 
 use std::time::{Duration, Instant};
 
@@ -57,7 +58,7 @@ pub(crate) async fn answer(
         session,
         requester,
         on_behalf,
-        trc: _,
+        trc,
     } = arrived;
     let completion = match completeness::of(headers, federation.best_effort()) {
         Ok(completion) => completion,
@@ -86,6 +87,7 @@ pub(crate) async fn answer(
         session,
         requester,
         on_behalf,
+        trc,
     };
     match federate(federation, query).await {
         Ok((status, mut result_set, provenance, accessed)) => {
@@ -168,6 +170,17 @@ pub(crate) enum Failure {
     /// (§5.2, §11.2).
     #[error(transparent)]
     Unconfirmed(confined::Unconfined),
+    /// A national contact point's query names no patient and is scoped to
+    /// no `ehr_id`, or reads beyond its one `EHR`, so no TRC binds it (eHDSI
+    /// XCA Profile 8.0.1 §4.2.1).
+    #[error("{}", Code::TrcUnbound.message())]
+    Unbound,
+    /// A national contact point's query names another patient than its
+    /// TRC's, reaches a pair outside that patient's, or is sent to no
+    /// member: the one answer a subject no member may be read for gets
+    /// (eHDSI XCA Profile 8.0.1 §4.2.1, §4.2.2).
+    #[error("{}", Code::SubjectUnavailable.message())]
+    NoData,
     /// Node selection left no registry member in scope, so the request
     /// resolves to no destination (§11.2, §11.3).
     #[error(
@@ -203,6 +216,8 @@ impl Failure {
             Self::Plan(plan::TargetsError::Patient(_)) => Code::PatientInvalid,
             Self::Routed(unrouted) => unrouted.code(),
             Self::Confined => Code::PatientConfinement,
+            Self::Unbound => Code::TrcUnbound,
+            Self::NoData => Code::SubjectUnavailable,
             Self::Unconfirmed(_) => Code::PatientContextUnavailable,
             Self::NoDestination => Code::NoDestination,
             // NOTE: §11.1, a node row the gateway cannot use is a node-error
@@ -258,6 +273,9 @@ struct Query<'a> {
     requester: Option<&'a Requester>,
     /// The verified caller every identity exchange is made for.
     on_behalf: &'a OnBehalfOf,
+    /// The patient a national contact point's treatment relationship
+    /// confirmation binds, which the query is held to.
+    trc: Option<&'a crate::facade::trc::Binding>,
 }
 
 impl<'a> Query<'a> {
@@ -271,6 +289,7 @@ impl<'a> Query<'a> {
             started: self.started,
             outbound: self.outbound,
             conveyance: self.conveyance,
+            trc: self.trc,
         }
     }
 }
@@ -300,6 +319,7 @@ async fn federate(
         session,
         requester,
         on_behalf,
+        trc,
     } = query;
     let logged = outbound.to_string();
     let request_id = logged.as_str();
@@ -309,6 +329,8 @@ async fn federate(
     let deadline = started
         .checked_add(budget.overall())
         .ok_or(Failure::FanOut(FanOutError::Clock))?;
+    let relayed = (trc, conveyance.relayed());
+    trc::analysed(relayed, &analysis, request_id)?;
     let caller = (conveyance, on_behalf);
     confinement::confine(federation, caller, &analysis, (deadline, request_id)).await?;
     let routed = scoped::routed(federation, &analysis, named.as_ref(), scope).await?;
@@ -326,6 +348,7 @@ async fn federate(
     )
     .await?;
     confinement::held_within(federation, conveyance, (&analysis, &targets), request_id)?;
+    trc::planned(relayed, federation, (&analysis, &targets), request_id)?;
     if targets.plan.has_no_destination() {
         return Err(Failure::NoDestination);
     }

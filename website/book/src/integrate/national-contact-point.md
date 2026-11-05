@@ -151,8 +151,44 @@ token's `trc_patient` claim names (eHDSI XCA Profile 8.0.1 §4.2.1 and
 No specification governs the binding across members, the code systems the
 codes travel under, or the pseudonym: they are FerroFED's own design over the
 XCA rule that the contact point of the country of affiliation compares the
-patients. The binding holds on the FHIR face, the contact point's path.
-Holding a contact point's ITS-REST requests to it is the work of #1640.
+patients. The FHIR face is the contact point's path.
+
+### The binding on the ITS-REST face
+
+A contact point's token is admitted to the ITS-REST face as well, and the
+gateway holds a patient-data request there to the same TRC patient, in the
+answers ITS-REST gives (openEHR ITS-REST 1.1.0; eHDSI XCA Profile 8.0.1
+§4.2.1 and §4.2.2):
+
+- A token with no `trc_patient` claim is refused `403` with the code
+  `trc-missing` on every route that reaches patient data: the query routes,
+  the EHR API and the DEMOGRAPHIC API. A definition request reaches no
+  patient data and needs none.
+- A query, ad hoc or stored, sent by `POST` or `GET`, must name the TRC's
+  patient, compared on the namespace and the value before the demographics
+  supplier, a localizer, the consent pre-filter or any member is asked. A
+  query scoped to one `ehr_id` (N29) must be scoped to one of that patient's
+  own `ehr_id`s at the member it goes to.
+- A request under `{base}/v1/ehr/{ehr_id}`, reads and writes alike, goes
+  only to the member where that `ehr_id` is the TRC patient's own EHR,
+  located through the TRC patient's pairs: the `ehr_id` index is not read
+  and no member is probed. `GET {base}/v1/ehr` by subject must name the TRC's
+  patient.
+- Another patient, an EHR of another patient, a TRC patient no member holds,
+  and a TRC patient every member that holds it restricts all get one answer:
+  `404` with the code `subject-unavailable`, the answer an unavailable
+  subject gets when consent exclusions are withheld, which a contact point's
+  request always is. Nothing in it tells the cases apart, and no member is
+  sent anything.
+- A query that names no patient and is scoped to no `ehr_id`, the creation
+  of an EHR, and a DEMOGRAPHIC request name nothing a TRC binds: each is
+  refused `403` with the code `trc-unbound`, with nothing sent.
+- Every request outside the TRC's patient is the same `trc-patient-mismatch`
+  security event the FHIR face records, naming the professional and both
+  patients by pseudonym alone.
+
+ITS-REST has no MyHealth@EU service, so its answers carry no §1.25
+`*_NOT_FOUND` code ([Error codes](errors.md#subject-unavailable)).
 
 For every request of the contact point, the gateway:
 

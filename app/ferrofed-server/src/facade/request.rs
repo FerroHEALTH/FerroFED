@@ -59,8 +59,8 @@ pub(crate) struct Arrived<'a> {
     /// is made for and whom its audit record names (PIXm §2:3.83.5.2.1).
     pub(crate) on_behalf: &'a OnBehalfOf,
     /// The patient a national contact point's treatment relationship
-    /// confirmation binds, resolved at every member, which a request on the
-    /// FHIR face is held to; `None` for every other caller.
+    /// confirmation binds, resolved at every member, which a request on
+    /// either face is held to; `None` for every other caller.
     pub(crate) trc: Option<&'a crate::facade::trc::Binding>,
 }
 

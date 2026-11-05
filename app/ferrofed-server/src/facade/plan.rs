@@ -56,6 +56,9 @@ pub struct Targets {
     /// query under all-or-nothing (§11.3 covers only an answered lookup; no
     /// specification governs this: our own design).
     pub resolution_failed: bool,
+    /// Whether the localizer, or a step that feeds it, did not answer, so
+    /// a member it left out may hold the patient (§14.1).
+    pub unlocalized: bool,
     /// The endpoint of each member the resolver could not answer for, in
     /// endpoint order, which an answer that asks no query names.
     pub unresolved: Vec<EndpointId>,
@@ -259,10 +262,8 @@ pub async fn patient(
     if let Some(failure) = located.failure.clone() {
         plan = plan.localization_failed(failure);
     }
-    let mut sources = None;
-    let mut resolution_failed = false;
-    let mut unanswered = Vec::new();
-    let mut bound = Vec::new();
+    let (mut sources, mut resolution_failed) = (None, false);
+    let (mut unanswered, mut bound) = (Vec::new(), Vec::new());
     for (member, endpoint) in membership.asked {
         if !located.admits(&member) {
             plan = settle(plan, endpoint, located.not_localized())?;
@@ -305,6 +306,7 @@ pub async fn patient(
         plan,
         sources,
         resolution_failed,
+        unlocalized: located.failure.is_some(),
         unresolved: unanswered,
         resolved: bound,
         denied: consented.denied,
@@ -590,6 +592,7 @@ pub fn unscoped(
         plan,
         sources: query.node_query().columns().to_vec(),
         resolution_failed: false,
+        unlocalized: false,
         unresolved: Vec::new(),
         resolved: Vec::new(),
         denied: BTreeSet::new(),

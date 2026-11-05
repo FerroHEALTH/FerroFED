@@ -26,12 +26,13 @@ use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::single_node::probe::{Probe, ProbedEhrId};
 use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
-use ferrofed_registry::snapshot::Endpoint;
+use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use http::HeaderMap;
 use openehr_federation::aql::Analysis;
 
 use crate::error::Code;
 use crate::facade::route::ehr;
+use crate::facade::trc::{self, Binding, Reached};
 use crate::facade::{confined, owner};
 use crate::federation::Federation;
 use crate::security::logged;
@@ -77,6 +78,11 @@ pub(crate) enum Unrouted {
         "the ehr_id the query is scoped to is not the confined patient's at any member it could go to (§5.2, §12.5)"
     )]
     Confined,
+    /// A national contact point's query is scoped to an `ehr_id` that is
+    /// not its TRC patient's at the member it would go to, answered as one
+    /// no member holds (eHDSI XCA Profile 8.0.1 §4.2.2).
+    #[error("{}", Code::SubjectUnavailable.message())]
+    Outside,
     /// The ask-all probe named no owner.
     #[error("{message}")]
     Probe {
@@ -97,6 +103,7 @@ impl Unrouted {
             Self::Claimed(unsettled) => unsettled.code(),
             Self::NoEndpoint => Code::NoDestination,
             Self::Confined => Code::PatientConfinement,
+            Self::Outside => Code::SubjectUnavailable,
             Self::Probe { code, .. } => *code,
         }
     }
@@ -118,6 +125,9 @@ pub(crate) struct Scoped<'a> {
     pub(crate) outbound: OutboundId,
     /// Whom the request is on behalf of, conveyed to every member (§13.1, N24).
     pub(crate) conveyance: &'a Conveyance,
+    /// The patient a national contact point's treatment relationship
+    /// confirmation binds, which the `ehr_id` must be one of.
+    pub(crate) trc: Option<&'a Binding>,
 }
 
 /// The owner an undirected query scoped to one `ehr_id` is routed to, or
@@ -174,6 +184,9 @@ async fn owner<'a>(
         session,
         now: Instant::now(),
     });
+    if let Some(binding) = scoped.trc {
+        return bound(snapshot, scoped, binding, &ehr_id);
+    }
     let located = match scoped.conveyance.confinement() {
         // NOTE: §12.5, §12.5.2: a confined grant reaches its patient's own {node, ehr_id}
         // pairs alone, so an ehr_id outside them is refused and never probed for.
@@ -228,6 +241,48 @@ async fn owner<'a>(
                 endpoint,
                 step: owner::Step::AskAll,
             })
+        }
+    }
+}
+
+/// The owner of `ehr_id`, the one a national contact point's query is
+/// scoped to, among the members `binding` holds it at, or as the targeting
+/// headers of `scoped` name it: never the index and never the probe
+/// (eHDSI XCA Profile 8.0.1 §4.2.2).
+///
+/// # Errors
+///
+/// Returns [`Unrouted::Outside`] for an `ehr_id` that is not the TRC
+/// patient's at the member it would go to, recorded as a break of the
+/// binding, and the [`Unrouted`] of a collision or of headers that name no
+/// one endpoint.
+fn bound<'a>(
+    snapshot: &'a RegistrySnapshot,
+    scoped: Scoped<'_>,
+    binding: &Binding,
+    ehr_id: &EhrId,
+) -> Result<Owner<'a>, Unrouted> {
+    let logged = scoped.outbound.to_string();
+    let relayed = scoped.conveyance.relayed();
+    let located = owner::located_within(snapshot, scoped.headers, &binding.holding(ehr_id))?;
+    match located {
+        owner::Located::At { endpoint, step } if binding.holds(endpoint.node(), ehr_id) => {
+            Ok(Owner { endpoint, step })
+        }
+        owner::Located::At { endpoint, .. } => {
+            let reached = Reached::Resource(endpoint.node(), ehr_id);
+            trc::recorded(relayed, binding, reached, &logged);
+            Err(Unrouted::Outside)
+        }
+        owner::Located::Collision(claimed) => {
+            owner::collided(ehr_id, claimed.detection, &claimed.claimants);
+            Err(Unrouted::Claimed(owner::Unsettled::Claimed(
+                claimed.claimants,
+            )))
+        }
+        owner::Located::Unreachable { .. } | owner::Located::Unknown => {
+            trc::recorded(relayed, binding, Reached::Ehr(ehr_id), &logged);
+            Err(Unrouted::Outside)
         }
     }
 }
