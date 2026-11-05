@@ -18,6 +18,7 @@
 )]
 
 mod binary;
+mod binary_trc;
 mod config;
 mod contact_point_trc;
 mod header;

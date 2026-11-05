@@ -36,7 +36,7 @@ mod duplicate;
 pub(super) mod recorded;
 
 /// The `[[fhir.serve]]` tables declaring both members for both categories.
-const SERVED_BOTH: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\", \"node-b\"]\n\n\
+pub(super) const SERVED_BOTH: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\", \"node-b\"]\n\n\
      [[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [\"node-a\", \"node-b\"]\n";
 
 /// The system of the business identifier of every test dispensation.
@@ -77,7 +77,7 @@ pub(super) fn post(body: &str) -> Result<Request<Body>, http::Error> {
 }
 
 /// The own endpoint `id` of `node`, at `base`, serving both categories.
-fn own_endpoint(id: &str, (node, organisation): (&str, &str), base: &str) -> String {
+pub(super) fn own_endpoint(id: &str, (node, organisation): (&str, &str), base: &str) -> String {
     format!(
         "\n[[endpoint]]\nid = \"{id}\"\nnode = \"{node}\"\nurl = \"{base}/fhir\"\n\
          connection_type = \"hl7-fhir-rest\"\nmanaging_organisation = \"{organisation}\"\n\
