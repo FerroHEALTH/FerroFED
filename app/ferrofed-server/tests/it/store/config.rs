@@ -36,7 +36,7 @@ const CONTACT_POINT: &str = "[auth]\naudience = [\"urn:example:gateway\"]\n\n\
 [[trust.issuer]]\nissuer = \"https://ncp.example.test\"\n\n\
 [trust.issuer.national_contact_point]\nfamily_name = \"f\"\ngiven_name = \"g\"\n\
 country_code = \"c\"\nprofessional_issuing_authority = \"pa\"\n\
-provider_issuing_authority = \"ha\"\nprovider_address = \"addr\"\n";
+provider_issuing_authority = \"ha\"\nprovider_address = \"addr\"\ntrc_patient = \"trc\"\n";
 
 /// A stored-query registry on the `postgres` backend, over a registry
 /// document in `dir`.
