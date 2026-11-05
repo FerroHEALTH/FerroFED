@@ -117,6 +117,13 @@ database does not answer a statement within the readiness check's two
 seconds ([Health probes](health.md)). A down indicator takes the replica out
 of rotation.
 
+Every probe asks the database, but the log tells you only what changed. The
+first probe that finds the store down logs the warning `the store does not
+answer` with the cause. While it stays down, `the store still does not
+answer` repeats at most once every five minutes, with `down_for_s`. The
+first probe that finds it answering again logs `the store answers again`, with
+how long it was down. The five minutes are FerroFED's own choice.
+
 A database that cannot be reached at start, or within `timeout_ms`, refuses
 the start. Once running, a request that needs the store while the database
 does not answer is refused, and is never answered from memory: a stored
