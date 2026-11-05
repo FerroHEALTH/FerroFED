@@ -59,8 +59,8 @@
 id = "https://github.com/FerroHEALTH/FerroFED/blob/main/security/vex/rust-advisories.openvex.json"
 author = "Cadasto B.V."
 role = "vendor"
-timestamp = "2026-10-23T00:00:00Z"
-version = 1
+timestamp = "2026-11-05T00:00:00Z"
+version = 2
 
 # What the statements are about: the released gateway binary (the
 # `ferrofed-server` package), the gateway image built from it, and the
@@ -75,9 +75,39 @@ products = [
 
 # Accepted by the advisory gate. Every id here MUST appear in `deny.toml`'s
 # `[advisories].ignore`, and every id there MUST appear here. The generator
-# enforces both directions. None today: RUSTSEC-2024-0436 (`paste`) left with
-# the Leptos crates of the operator console (#1457); an entry here takes
-# `[[accepted]]`.
+# enforces both directions.
+
+[[accepted]]
+id = "RUSTSEC-2026-0440"
+crate = "astral-tokio-tar"
+carriers = ["testcontainers"]
+workspace_roots = [
+  "ferrofed-console",
+  "ferrofed-eehrxf",
+  "ferrofed-engine",
+  "ferrofed-identity",
+  "ferrofed-server",
+  "ferrofed-testkit",
+  "openehr-federation",
+]
+status = "not_affected"
+justification = "component_not_present"
+impact = """
+The advisory is informational: Astral ended maintenance of \
+`astral-tokio-tar` on 2026-11-03 and no version is patched. Its one \
+carrier is `testcontainers` 0.28.0, which `ferrofed-testkit`, the \
+test-support crate (`publish = false`), uses to start the containers the \
+integration tests run against. Every workspace root above reaches it only \
+through a dev-dependency on `ferrofed-testkit` or on `testcontainers`, so \
+the crate is in none of the products. `cargo tree -p ferrofed-server` and \
+`cargo tree -p ferrofed-console` over normal and build edges, all features \
+and all targets, find no `astral-tokio-tar` node, and the server binary, \
+the `ferrofed` image and the `ferrofed-console` image are built from \
+exactly those graphs. No release of `testcontainers` leaves the crate \
+(0.28.0 requires ^0.6.1 and the upstream main branch requires 0.7.0). \
+Re-evaluate when a `testcontainers` release drops the dependency, or if \
+`ferrofed-testkit` ever becomes a normal dependency of a shipped crate.\
+"""
 
 # Lock-file-only advisories: findings cargo-deny never raises, because it
 # resolves cargo features, but which a scanner reading `Cargo.lock` alone
