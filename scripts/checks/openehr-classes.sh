@@ -130,6 +130,7 @@ citations() {
 # exits 1 when there is one. A class.member citation whose class is no RM or
 # BASE class is not an openEHR citation and is passed over.
 judge() {
+  local index="$1" citations="$2"
   awk -F '\t' '
     FNR == 1 { part++ }
     part == 1 && $1 == "C" { if (!($2 in source)) { source[$2] = $3 } else if (index(source[$2], $3) == 0) { source[$2] = source[$2] ", " $3 }; next }
@@ -164,7 +165,7 @@ judge() {
     END {
       if (bad > 0) { printf "openehr-classes: %d of %d openEHR citation(s) name what the vendored definitions do not hold\n", bad, checked; exit 1 }
       printf "openehr-classes: %d openEHR citation(s), every one in the vendored RM, BASE and ITS-REST definitions\n", checked
-    }' "$1" "$2"
+    }' "$index" "$citations"
 }
 
 # check ROOT: builds the index under ROOT and judges the citations read from

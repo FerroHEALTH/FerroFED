@@ -55,10 +55,10 @@ check_html() {
 
 # check_llms FILE: exit 1 naming each line of FILE that links a working file.
 check_llms() {
-  local found
-  found="$(grep -n -E '\]\([^)]*(/\.claude/|/CLAUDE\.md)' "$1" || true)"
+  local file="$1" found
+  found="$(grep -n -E '\]\([^)]*(/\.claude/|/CLAUDE\.md)' "$file" || true)"
   if [[ -n "$found" ]]; then
-    printf '%s\n' "$found" | sed "s|^|::error::$1:|; s|\$| links a working file, not a public page|" >&2
+    printf '%s\n' "$found" | sed "s|^|::error::$file:|; s|\$| links a working file, not a public page|" >&2
     return 1
   fi
 }

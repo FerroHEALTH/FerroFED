@@ -39,7 +39,8 @@ usage() {
 # FILE, up to the next `## ` heading or MARKER, one per line as
 # `version|released|until`, sorted.
 rows() {
-  awk -v heading="$2" -v marker="${3:-}" '
+  local file="$1" heading="$2" marker="${3:-}"
+  awk -v heading="$heading" -v marker="$marker" '
     $0 == heading { inside = 1; next }
     inside && (/^## / || (marker != "" && $0 == marker)) { inside = 0 }
     inside && /^\|/ {
@@ -48,7 +49,7 @@ rows() {
       for (i = 2; i <= 4; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", c[i])
       if (c[2] ~ /^v[0-9]+\.[0-9]+\.[0-9]+$/) print c[2] "|" c[3] "|" c[4]
     }
-  ' "$1" | sort
+  ' "$file" | sort
 }
 
 run() {
@@ -125,7 +126,8 @@ self_test() {
   }
   # edit FILE SED: rewrite one fixture file with a sed program.
   edit() {
-    sed -e "$2" "$repo/$1" > "$work/edit" && mv "$work/edit" "$repo/$1"
+    local file="$1" program="$2"
+    sed -e "$program" "$repo/$file" > "$work/edit" && mv "$work/edit" "$repo/$file"
   }
 
   fixture

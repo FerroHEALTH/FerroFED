@@ -61,12 +61,14 @@ readonly RULES='4.0	an associative array	(^|[;&|({[:space:]])(declare|local|type
 
 # blank FILE: FILE with every full-line comment emptied, so line numbers hold.
 blank() {
-  sed -E 's/^[[:space:]]*#.*$//' "$1"
+  local file="$1"
+  sed -E 's/^[[:space:]]*#.*$//' "$file"
 }
 
 # declares_version FILE: whether FILE checks BASH_VERSINFO on a code line.
 declares_version() {
-  blank "$1" | grep -q -E 'BASH_VERSINFO'
+  local file="$1"
+  blank "$file" | grep -q -E 'BASH_VERSINFO'
 }
 
 # maybe_empty FILE: the arrays FILE assigns empty or fills with read -a.
@@ -145,7 +147,7 @@ self_test() {
       failed=1
     fi
   }
-  local d='$'
+  local d='$' empty='args=()'
   expect 1 'declare -A' 'declare -A seen=()'
   expect 1 'local -A' 'f() {' '  local -A map' '}'
   expect 1 'mapfile' 'mapfile -t lines < file'
@@ -172,13 +174,13 @@ self_test() {
   expect 1 'nameref' "f() { local -n ref=${d}1; }"
   expect 1 'wait -n' 'wait -n'
   expect 1 '@Q' "echo \"${d}{name@Q}\""
-  expect 1 'empty array expanded' 'args=()' "cmd \"${d}{args[@]}\""
+  expect 1 'empty array expanded' "$empty" "cmd \"${d}{args[@]}\""
   expect 1 'empty local array expanded' 'f() {' '  local -a args=()' "  cmd \"${d}{args[*]}\"" '}'
   expect 1 'read -a array expanded' "IFS=, read -r -a names <<< \"${d}1\"" "for n in \"${d}{names[@]}\"; do :; done"
-  expect 1 'unquoted empty array' 'args=()' "cmd ${d}{args[@]}"
-  expect 0 'guarded empty array' 'args=()' "cmd ${d}{args[@]+\"${d}{args[@]}\"}"
-  expect 0 'empty array length' 'args=()' "echo \"${d}{#args[@]}\""
-  expect 0 'empty array keys' 'args=()' "for i in \"${d}{!args[@]}\"; do :; done"
+  expect 1 'unquoted empty array' "$empty" "cmd ${d}{args[@]}"
+  expect 0 'guarded empty array' "$empty" "cmd ${d}{args[@]+\"${d}{args[@]}\"}"
+  expect 0 'empty array length' "$empty" "echo \"${d}{#args[@]}\""
+  expect 0 'empty array keys' "$empty" "for i in \"${d}{!args[@]}\"; do :; done"
   expect 0 'literal array' "paths=(a b c)" "cmd \"${d}{paths[@]}\""
   expect 0 'positional parameters' "cmd \"${d}@\""
   expect 0 'indexed array' 'declare -a list' 'local -r x=1' 'readonly y=2'

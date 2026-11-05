@@ -86,22 +86,24 @@ usage() {
 }
 
 has_heading() {
-  awk -v want="$2" '
+  local file="$1" text="$2"
+  awk -v want="$text" '
     /^```/ { fence = !fence; next }
     !fence && /^#+ / { h = $0; sub(/^#+ /, "", h); if (h == want) found = 1 }
     END { exit !found }
-  ' "$1"
+  ' "$file"
 }
 
 has_test() {
-  awk -v want="$2" '
+  local file="$1" name="$2"
+  awk -v want="$name" '
     { line[NR] = $0 }
     $0 ~ ("fn " want "\\(") {
       for (k = NR - 1; k > 0 && line[k] ~ /^[[:space:]]*(#\[|\/\/)/; k--)
         if (line[k] ~ /^[[:space:]]*#\[.*test(\]|\()/) found = 1
     }
     END { exit !found }
-  ' "$1"
+  ' "$file"
 }
 
 check_evidence() {
@@ -121,6 +123,7 @@ check_evidence() {
       fail "$MAPPING line $line: \"$path\" is not a path inside the tree."
       continue
       ;;
+    *) ;;
     esac
     if [[ ! -f "$path" ]]; then
       fail "$MAPPING line $line: $path does not exist."
@@ -156,7 +159,8 @@ check_note() {
 
 # sha256 FILE: the hex digest of FILE.
 sha256() {
-  if command -v sha256sum > /dev/null; then sha256sum "$1" | cut -c1-64; else shasum -a 256 "$1" | cut -c1-64; fi
+  local file="$1"
+  if command -v sha256sum > /dev/null; then sha256sum "$file" | cut -c1-64; else shasum -a 256 "$file" | cut -c1-64; fi
 }
 
 # check_copies: no file of the tree is the catalogue or named as one.
@@ -212,7 +216,7 @@ run() {
   done
   while IFS= read -r row; do
     line=$((line + 1))
-    case "$row" in '#'* | '') continue ;; esac
+    case "$row" in '#'* | '') continue ;; *) ;; esac
     if [[ "$(printf '%s\n' "$row" | awk -F'\t' '{ print NF }')" != 6 ]]; then
       fail "$MAPPING line $line has not six tab-separated columns."
       continue
@@ -315,7 +319,8 @@ self_test() {
   }
   # row ID FIELD VALUE: set one field of ID's row; a FIELD of 0 drops it.
   row() {
-    awk -F'\t' -v OFS='\t' -v id="$1" -v field="$2" -v value="${3:-}" '
+    local id="$1" field="$2" value="${3:-}"
+    awk -F'\t' -v OFS='\t' -v id="$id" -v field="$field" -v value="$value" '
       $1 == id && field == 0 { next }
       $1 == id { $field = value }
       { print }

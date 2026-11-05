@@ -91,7 +91,8 @@ readonly WATCHED_INITIATIVES="\
 # `Art 23(4)`, a zero-padded number (`A07P4`) without its zeros, with any
 # further qualifier kept verbatim in brackets.
 basis_text() {
-  awk -v code="$1" 'BEGIN {
+  local code="$1"
+  awk -v code="$code" 'BEGIN {
     if (!match(code, /^A[0-9]+/)) { print "[" code "]"; exit }
     text = "Art " (substr(code, 2, RLENGTH - 1) + 0); rest = substr(code, RLENGTH + 1)
     if (match(rest, /^P[0-9]+/)) { text = text "(" (substr(rest, 2, RLENGTH - 1) + 0) ")"; rest = substr(rest, RLENGTH + 1) }
@@ -104,7 +105,8 @@ basis_text() {
 # corrigendum's `R(NN)` suffix included, then those NOT_VENDORED records, one
 # per line.
 known_acts() {
-  grep -oE 'CELEX 3[0-9]{4}[A-Z][0-9]{4}(R\([0-9]{2}\))?' "$1" | awk '{ print $2 }'
+  local script="$1"
+  grep -oE 'CELEX 3[0-9]{4}[A-Z][0-9]{4}(R\([0-9]{2}\))?' "$script" | awk '{ print $2 }'
   awk -F'\t' '{ print $1 }' <<< "$NOT_VENDORED"
 }
 
@@ -170,8 +172,9 @@ self_test() {
   local failed=0 got status
   # expect WANT GOT WHAT: one comparison of the self-test.
   expect() {
-    if [[ "$2" != "$1" ]]; then
-      printf 'ehds-acts: self-test failed: %s gave "%s", wanted "%s".\n' "$3" "$2" "$1" >&2
+    local want="$1" got="$2" what="$3"
+    if [[ "$got" != "$want" ]]; then
+      printf 'ehds-acts: self-test failed: %s gave "%s", wanted "%s".\n' "$what" "$got" "$want" >&2
       failed=1
     fi
   }
@@ -254,6 +257,8 @@ resource_legal_corrects_resource_legal	corrigendum"
 # way, the article and paragraph Cellar records on each legal-basis link and
 # the English title. The minimum is taken over the string forms: over the
 # typed date, grouped by two keys, the endpoint returned another act's date.
+# Each http:// IRI in it is a Cellar or W3C namespace identifier that nothing
+# fetches; the query itself goes to $SPARQL over HTTPS.
 pairs=""
 while IFS=$'\t' read -r base label; do
   while IFS=$'\t' read -r property kind; do
@@ -323,13 +328,12 @@ else
   while IFS=$'\t' read -r id title; do
     [[ -n "$id" ]] || continue
     stage="-"
-    if grep -qE "^$id"$'\t' <<< "$WATCHED_INITIATIVES"; then
-      if ! stage="$(curl --fail --silent --show-error --max-time 60 --user-agent "$UA" \
+    if grep -qE "^$id"$'\t' <<< "$WATCHED_INITIATIVES" &&
+      ! stage="$(curl --fail --silent --show-error --max-time 60 --user-agent "$UA" \
         "$REGISTER/groupInitiatives/$id" | jq --raw-output --exit-status '.stage' 2>&1)"; then
-        printf 'UNREADABLE Have your say: the stage of initiative %s could not be read (%s)\n' "$id" "$stage"
-        unreadable=1
-        continue
-      fi
+      printf 'UNREADABLE Have your say: the stage of initiative %s could not be read (%s)\n' "$id" "$stage"
+      unreadable=1
+      continue
     fi
     records="$records$id"$'\t'"$stage"$'\t'"$title"$'\n'
   done <<< "$search"

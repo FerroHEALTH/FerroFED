@@ -77,26 +77,28 @@ usage() {
 # regulation_text IN OUT: the vendored Regulation IN as one line of plain
 # text, the markup and the no-break spaces turned into single spaces.
 regulation_text() {
-  local nbsp
+  local in="$1" out="$2" nbsp
   nbsp="$(printf '\302\240')"
-  tr '\n\r\t' '   ' < "$1" |
-    sed -e 's/<[^>]*>/ /g' -e "s/$nbsp/ /g" -e 's/&amp;/\&/g' -e 's/  */ /g' > "$2"
+  tr '\n\r\t' '   ' < "$in" |
+    sed -e 's/<[^>]*>/ /g' -e "s/$nbsp/ /g" -e 's/&amp;/\&/g' -e 's/  */ /g' > "$out"
 }
 
 # has_heading FILE TEXT: FILE has a Markdown heading reading TEXT, outside a
 # fenced code block.
 has_heading() {
-  awk -v want="$2" '
+  local file="$1" text="$2"
+  awk -v want="$text" '
     /^```/ { fence = !fence; next }
     !fence && /^#+ / { h = $0; sub(/^#+ /, "", h); if (h == want) found = 1 }
     END { exit !found }
-  ' "$1"
+  ' "$file"
 }
 
 # table_has FILE HEADING CELL VALUE: a table row under the `## HEADING` of
 # FILE whose CELLth cell, trimmed, is VALUE.
 table_has() {
-  awk -v heading="## $2" -v cell="$3" -v want="$4" '
+  local file="$1" heading="$2" cell="$3" value="$4"
+  awk -v heading="## $heading" -v cell="$cell" -v want="$value" '
     $0 == heading { inside = 1; next }
     inside && /^## / { inside = 0 }
     inside && /^\|/ {
@@ -108,7 +110,7 @@ table_has() {
       }
     }
     END { exit !found }
-  ' "$1"
+  ' "$file"
 }
 
 # check_index INDEX REGULATION ITEMS PREFIX WHAT NA: every row of INDEX held
@@ -131,7 +133,7 @@ check_index() {
   seen=" "
   while IFS= read -r row; do
     line=$((line + 1))
-    case "$row" in '#'* | '') continue ;; esac
+    case "$row" in '#'* | '') continue ;; *) ;; esac
     if [[ "$(printf '%s\n' "$row" | awk -F'\t' '{ print NF }')" != 6 ]]; then
       fail "$index line $line has not six tab-separated columns."
       continue
@@ -326,11 +328,12 @@ self_test() {
   # row_in INDEX ITEM FIELD VALUE: set one field of ITEM's row of INDEX; a
   # FIELD of 0 drops it. row and cra_row name the index.
   row_in() {
-    awk -F'\t' -v OFS='\t' -v item="$2" -v field="$3" -v value="${4:-}" '
+    local index="$1" item="$2" field="$3" value="${4:-}"
+    awk -F'\t' -v OFS='\t' -v item="$item" -v field="$field" -v value="$value" '
       $1 == item && field == 0 { next }
       $1 == item { $field = value }
       { print }
-    ' "$repo/$1" > "$work/index" && mv "$work/index" "$repo/$1"
+    ' "$repo/$index" > "$work/index" && mv "$work/index" "$repo/$index"
   }
   row() { row_in "$INDEX" "$@"; }
   cra_row() { row_in "$CRA_INDEX" "$@"; }
