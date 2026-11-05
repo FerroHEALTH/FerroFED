@@ -86,8 +86,8 @@ pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
 /// lane resolves and localizes patients through.
 pub const FERROPIX: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferropix",
-    tag: "0.0.14",
-    digest: "sha256:389f40d144fe2ef3d79c1c1628e9a662a058961b1650c5541e601addc27112d8",
+    tag: "0.0.17",
+    digest: "sha256:7418567e53a2993d9b617cd99de2d1bbe4d940fd7432db2e793eb3837ce9f815",
 };
 
 /// The PostgreSQL FerroPIX keeps its cross-reference in: the release FerroPIX
