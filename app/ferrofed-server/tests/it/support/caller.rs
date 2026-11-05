@@ -144,9 +144,11 @@ pub(crate) fn auth() -> AuthSettings {
 
 /// Returns the `[auth]` and `[trust]` of [`auth`] as configuration text,
 /// its issuer an `[[auth.issuer]]` entry, so a test can append another.
+/// `role_claims` is empty because beside a second issuer a bare entry,
+/// the default included, refuses the start, and the gateway reads no role.
 pub(crate) fn auth_toml() -> String {
     format!(
-        "\n[auth]\naudience = [\"{AUDIENCE}\"]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\njwks_file = {}\n\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
+        "\n[auth]\naudience = [\"{AUDIENCE}\"]\nproduct_scope = \"{OPERATOR_SCOPE}\"\nrole_claims = []\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\njwks_file = {}\n\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
         toml_path(jwks_file()),
         claims().client_id
     )
