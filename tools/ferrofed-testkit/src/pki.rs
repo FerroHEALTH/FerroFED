@@ -14,7 +14,7 @@ use std::io;
 use std::sync::Arc;
 
 use ferrohealth_server::section::{ClientAuth, TlsSection, TlsVersion};
-use ferrohealth_server::tls::{self, TlsError};
+use ferrohealth_server::tls::{self, TlsError, TlsKeys};
 use rcgen::{
     BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa,
     Issuer, KeyPair,
@@ -106,7 +106,9 @@ pub(crate) fn server_tls(
         healthcheck_identity_file: None,
         min_version: TlsVersion::Tls12,
     };
-    let mut config = Arc::unwrap_or_clone(tls::server_config(&section).map_err(PkiError::Tls)?);
+    let mut config = Arc::unwrap_or_clone(
+        tls::server_config_of(&section, TlsKeys::SERVER).map_err(PkiError::Tls)?,
+    );
     config.alpn_protocols.clear();
     Ok(config)
 }

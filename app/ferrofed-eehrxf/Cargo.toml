@@ -68,6 +68,9 @@ thiserror.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+# The archetype the operational template is printed as, parsed back as ADL 2
+# (#1581).
+openehr-am.workspace = true
 # The patient summary fixtures and the check of a document against the
 # vendored HL7 Europe Patient Summary profiles.
 ferrofed-testkit.workspace = true

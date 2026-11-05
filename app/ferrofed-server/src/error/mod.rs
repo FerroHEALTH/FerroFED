@@ -369,9 +369,7 @@ impl Code {
 /// which may carry a patient identifier (§5.4.3, RFC 9457 §5).
 #[must_use]
 pub fn body(code: Code, message: impl Into<String>, request_id: &str) -> Problem {
-    let problem = code
-        .problem_type()
-        .problem()
+    let problem = Problem::of(code.problem_type())
         .with_detail(message)
         .with_request_id(request_id);
     extended(

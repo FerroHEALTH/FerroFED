@@ -11,6 +11,10 @@ use eehrxf::crosswalk::prescription::MPD_MEDICATION_REQUEST;
 use ferrofed_eehrxf::prescriptions::mapped::{self, MapMode, MapModeError, Template};
 use ferrofed_testkit::medication;
 use fhir_types::codec::Value;
+use openehr_adl::parse::Dialect;
+use openehr_am::v2_4::aom2::archetype::archetype::Archetype;
+use openehr_am::v2_4::aom2::archetype::authored_archetype::AuthoredArchetype;
+use openehr_mapping_core::template::TemplateSource;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -123,6 +127,40 @@ fn a_template_that_does_not_parse_is_refused() {
         matches!(refused, Err(MapModeError::Syntax { .. })),
         "{refused:?}"
     );
+}
+
+#[test]
+fn the_operational_template_prints_as_adl2_that_parses_back() -> TestResult {
+    let medication::Written {
+        template,
+        archetypes,
+    } = medication::template()?;
+    let source = Template::Adl2 {
+        template: &template,
+        archetypes: &archetypes,
+    }
+    .source()?;
+    let TemplateSource::Opt2 {
+        template: built,
+        resolved_id,
+    } = source
+    else {
+        return Err("an ADL 2 template built no OPT2".into());
+    };
+    assert_eq!(medication::TEMPLATE, resolved_id);
+    let printed = openehr_adl::print::print(&Archetype::AuthoredArchetype(Box::new(
+        AuthoredArchetype::OperationalTemplate(built),
+    )))?;
+    let parsed = openehr_adl::assemble::parse_artefact(&printed, Dialect::Adl2)
+        .map_err(|errors| format!("the printed OPT2 does not parse back: {errors:?}"))?;
+    let Archetype::AuthoredArchetype(authored) = parsed else {
+        return Err("the printed OPT2 parses back as a template overlay".into());
+    };
+    let AuthoredArchetype::OperationalTemplate(reparsed) = *authored else {
+        return Err("the printed OPT2 parses back as no operational template".into());
+    };
+    assert_eq!(medication::TEMPLATE, reparsed.archetype_id.to_string());
+    Ok(())
 }
 
 /// A received dispensation with its product contained.
