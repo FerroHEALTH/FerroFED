@@ -258,6 +258,7 @@ async fn two_replicas_booting_together_over_an_empty_database_apply_each_migrati
     .await?;
     assert_eq!(
         vec![
+            String::from("emergency_access"),
             String::from("store_migration"),
             String::from("stored_query_definition")
         ],
@@ -442,6 +443,8 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
                ('past-1', now() - interval '1 hour'),
                ('past-2', now() - interval '1 second'),
                ('future', now() + interval '1 hour');
+             INSERT INTO ferrofed.emergency_access VALUES
+               ('expired', ARRAY[now() - interval '2 days'], true, now() - interval '1 day');
              CREATE TABLE public.window_elsewhere (id text, expires_at timestamptz NOT NULL);
              INSERT INTO public.window_elsewhere VALUES ('outside', now() - interval '1 hour');
              INSERT INTO {TABLE} (name, version, saved, aql)
@@ -451,7 +454,14 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
     )
     .await?;
     let swept = store.sweep().await?;
-    assert_eq!(vec![(String::from("window_probe"), 2)], swept);
+    assert_eq!(
+        vec![
+            (String::from("emergency_access"), 1),
+            (String::from("window_probe"), 2)
+        ],
+        swept,
+        "every table of the store with a window is swept, the emergency count's included"
+    );
     assert_eq!(
         vec![String::from("future")],
         column(&url, "SELECT id FROM ferrofed.window_probe").await?,
@@ -468,7 +478,10 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
         "a table without a window is never swept"
     );
     assert_eq!(
-        vec![(String::from("window_probe"), 0)],
+        vec![
+            (String::from("emergency_access"), 0),
+            (String::from("window_probe"), 0)
+        ],
         store.sweep().await?
     );
     Ok(())

@@ -24,6 +24,10 @@
     {
       "code": "ERROR_ORCD_NOT_FOUND",
       "display": "No original clinical document"
+    },
+    {
+      "code": "ERROR_SEC_GENERIC",
+      "display": "Generic security error"
     }
   ]
 }

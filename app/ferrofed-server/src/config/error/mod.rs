@@ -177,6 +177,9 @@ pub enum Error {
     /// `[config]` is refused.
     #[error(transparent)]
     Revisions(#[from] crate::config::revisions::RevisionsFault),
+    /// `[emergency]` loosens the eHDSI emergency access baseline.
+    #[error(transparent)]
+    Emergency(#[from] crate::config::emergency::EmergencyFault),
     /// `[store]` is refused, or the configuration needs it and sets none.
     #[error(transparent)]
     Store(#[from] crate::config::store::StoreFault),

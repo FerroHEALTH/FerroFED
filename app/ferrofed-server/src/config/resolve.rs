@@ -164,6 +164,7 @@ impl Config {
             pdqm: None,
             stored_queries,
             store,
+            emergency: crate::config::emergency::resolve(&self.emergency)?,
             metrics,
             signing,
             access_log: crate::config::access_log::resolve(&self.access_log)?,

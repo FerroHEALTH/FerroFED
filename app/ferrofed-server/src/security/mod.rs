@@ -67,11 +67,16 @@ pub enum Event {
     /// resource, outside the patient its treatment relationship
     /// confirmation binds (eHDSI XCA Profile 8.0.1 §4.2.1, §4.2.2).
     TrcPatientMismatch,
+    /// A health professional a national contact point relays reached the
+    /// limit of emergency accesses in the window, so the access was denied
+    /// (eHDSI Section II Security Services 10.0.0 §2.5; `NCPeH` Architecture
+    /// Specifications 10.0.0 §5.1.9).
+    EmergencyLimitReached,
 }
 
 impl Event {
     /// Every event, in declaration order.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 19] = [
         Self::KeySetUnavailable,
         Self::IntrospectionUnavailable,
         Self::AqlRefused,
@@ -90,6 +95,7 @@ impl Event {
         Self::AdminWriteAdmitted,
         Self::WriteUnrecorded,
         Self::TrcPatientMismatch,
+        Self::EmergencyLimitReached,
     ];
 
     /// The label value, the `event` field of the security log line.
@@ -114,6 +120,7 @@ impl Event {
             Self::AdminWriteAdmitted => "admin-write-admitted",
             Self::WriteUnrecorded => "write-unrecorded",
             Self::TrcPatientMismatch => "trc-patient-mismatch",
+            Self::EmergencyLimitReached => "emergency-limit-reached",
         }
     }
 

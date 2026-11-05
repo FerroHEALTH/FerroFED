@@ -46,6 +46,7 @@ every replica:
 | Table | What a row holds | When it goes |
 |---|---|---|
 | `ferrofed.stored_query_definition` | a stored-query definition of the `postgres` backend: name, version, the instant it was stored, its parameterised AQL (§12.7, N44) | never: a stored version is immutable |
+| `ferrofed.emergency_access` | the emergency accesses granted to one health professional a national contact point relays, keyed by a SHA-256 digest of the professional's identity: the instants granted inside the window, and the end of that window ([The emergency access limit](../integrate/national-contact-point.md#the-emergency-access-limit)) | at `expires_at`, the end of the window of the last access granted, by the sweep |
 | `ferrofed.store_migration` | one migration applied, and when | never |
 
 These stay out of the store: caches (revocation and OCSP answers, issuer

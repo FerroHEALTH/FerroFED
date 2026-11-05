@@ -26,6 +26,7 @@ pub mod auth;
 pub mod base_path;
 pub mod catalog;
 pub mod eehrxf;
+pub mod emergency;
 pub mod error;
 pub mod fhir;
 pub mod gateway;
@@ -129,6 +130,9 @@ pub struct Config {
     /// FerroFED's own PostgreSQL store (`[store]`), unset unless the table
     /// is written.
     pub store: Option<store::Store>,
+    /// The limit of each relayed health professional's emergency accesses
+    /// (`[emergency]`, eHDSI Section II Security Services 10.0.0 §2.5).
+    pub emergency: emergency::Emergency,
     /// The FHIR R4 face of the European exchange format (`[fhir]`,
     /// Regulation (EU) 2025/327 Annex II 2.1), off unless the table is set.
     pub fhir: Option<fhir::Fhir>,
@@ -194,6 +198,7 @@ impl Default for Config {
             pdqm: None,
             stored_queries: stored_queries::StoredQueries::default(),
             store: None,
+            emergency: emergency::Emergency::default(),
             fhir: None,
             eehrxf: eehrxf::Eehrxf::default(),
             metrics: server::Metrics::default(),

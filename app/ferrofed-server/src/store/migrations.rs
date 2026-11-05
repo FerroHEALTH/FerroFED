@@ -25,7 +25,7 @@ use crate::store::connection::backend;
 /// The migrations, in the order they apply: version `n` is the `n`th.
 ///
 /// A released migration never changes; a new one is added at the end.
-pub const MIGRATIONS: [&str; 1] = [
+pub const MIGRATIONS: [&str; 2] = [
     // 1: the stored-query definitions (§12.7, N44), as the `postgres` backend
     // of the stored-query registry created them.
     "CREATE TABLE IF NOT EXISTS ferrofed.stored_query_definition (
@@ -35,10 +35,18 @@ pub const MIGRATIONS: [&str; 1] = [
   aql text NOT NULL,
   PRIMARY KEY (name, version)
 );",
+    // 2: the emergency accesses granted to each relayed health professional, by the
+    // digest of the professional's identity (eHDSI Section II Security Services §2.5).
+    "CREATE TABLE ferrofed.emergency_access (
+  professional text PRIMARY KEY,
+  granted timestamptz[] NOT NULL,
+  admitted boolean NOT NULL,
+  expires_at timestamptz NOT NULL
+);",
 ];
 
 /// The newest migration this binary has, the length of [`MIGRATIONS`].
-pub const KNOWN: u32 = 1;
+pub const KNOWN: u32 = 2;
 
 /// The table that records each migration applied.
 pub const LEDGER: &str = "ferrofed.store_migration";
@@ -150,7 +158,7 @@ mod tests {
 
     #[test]
     fn the_first_migration_takes_over_the_stored_query_table_it_finds() {
-        let [first] = MIGRATIONS;
+        let [first, ..] = MIGRATIONS;
         assert!(
             first.starts_with("CREATE TABLE IF NOT EXISTS ferrofed.stored_query_definition ("),
             "{first}"
