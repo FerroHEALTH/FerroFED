@@ -116,8 +116,9 @@ live under `docs/specs/`, one directory per corpus, each fetched by its own
     Commission's legal notice page is cited by URL and not pinned, because
     its bytes change with every render.
   - `docs/specs/ehdsi-specifications/`: the eHDSI Interoperability
-    Specifications 8.0.1 and the twelve transport, security and audit
-    profiles under them, which the owner retrieved from the eHDSI wiki
+    Specifications 8.0.1, the twelve transport, security and audit
+    profiles under them and the NCPeH architecture, components and
+    OpenNCP implementation documents, which the owner retrieved from the eHDSI wiki
     behind EU Login (`scripts/vendor/ehdsi-specifications.sh` downloads
     nothing: it finds each file the owner places locally by its sha256).
     Each cover states distribution level PU and "Reuse is authorised,
