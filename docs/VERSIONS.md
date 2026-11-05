@@ -467,9 +467,9 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | =0.1.152 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | =0.1.219 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | =0.1.141 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | =0.1.156 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | =0.1.221 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | =0.1.142 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `ferrobridge-term` | =0.1.141 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `ferrobridge-validator` | =0.1.144 | the root `Cargo.toml` `[workspace.dependencies]` |
 
@@ -484,8 +484,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | =0.3.2 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | =0.3.2 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | =0.3.3 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | =0.3.3 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 

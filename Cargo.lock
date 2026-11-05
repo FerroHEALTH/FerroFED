@@ -1186,9 +1186,9 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.1.152"
+version = "0.1.156"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ae395d5421bafb87dfb19727925ed685a57946f4befa9f9e7a5ba63acef4a27"
+checksum = "4557d78bd43b7ab843dede6ddc57af8e687f53964aa9c30180bce1142eaeb895"
 dependencies = [
  "async-trait",
  "ferrobridge-term",
@@ -1210,9 +1210,9 @@ dependencies = [
 
 [[package]]
 name = "ehds-logging"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b839cd65ff1dbb3768a95d2c0a9a89b36192059a955276827b72eb89bff7212"
+checksum = "b8a31b1841c26a94db2d1f3346db0fa2102756f5cc27f109391f0824aea1eb57"
 dependencies = [
  "async-trait",
  "ihe-atna",
@@ -1274,7 +1274,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1662,9 +1662,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-config"
-version = "0.2.8"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab89a62803c75b674b29fdac122a8214d116e4bc36041c78dcc56624177e4db8"
+checksum = "43fce09cf320e16a77da56adef2b2f4a12a197380a1248edd68d30efde101509"
 dependencies = [
  "ferrohealth-secret",
  "percent-encoding",
@@ -1698,9 +1698,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-server"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a5250dd38dd1dc1487cc099d49aea99100bab7cff180757e4e7589d43316e20"
+checksum = "1de314456e75cd94cf0b65464e2ac6d32d9ebfe4b31c64212ba8f487044413e2"
 dependencies = [
  "axum",
  "clap",
@@ -1777,9 +1777,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-telemetry"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56c1c97e78bf3437209be78f32928ce36361f80990137a81a21de57ece511d35"
+checksum = "edfb01663a1a976dfa637065df3f82f1a68d5bc0e3de4225979f729dea92a8f1"
 dependencies = [
  "axum",
  "ferrohealth-secret",
@@ -1818,9 +1818,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-usage-report"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "244de83090953a4d780a29304837cc250980e834bf98fcfa98598ce8f7cd2859"
+checksum = "c0fcadf75b67e4d4782862c29f92ad56da989efdbfcd558108f54fd94c9e4606"
 dependencies = [
  "ferrohealth-telemetry",
  "http",
@@ -1860,9 +1860,9 @@ dependencies = [
 
 [[package]]
 name = "fhirconnect"
-version = "0.1.219"
+version = "0.1.221"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f6cd7a11a56ed5a9e99913cb0f6e163469bddc3fc5078a17df279951a583604"
+checksum = "04b82c36cf8143abcde0ddf0e7c29fd5efe35ad0232b47bcde15e0d6c1484e0e"
 dependencies = [
  "base64 0.23.1",
  "fhir-types",
@@ -2588,9 +2588,9 @@ dependencies = [
 
 [[package]]
 name = "ihe-atna"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17a88f7c7e6ca09dd644a282e014a3cec46cf90f58e6ceffb054d259281f9e9d"
+checksum = "9aca996fcfe65f5b550fefc5b5e88618b6b4cd09d490a2dfada8b770e2469598"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -3392,9 +3392,9 @@ dependencies = [
 
 [[package]]
 name = "openehr-mapping-core"
-version = "0.1.141"
+version = "0.1.142"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cb49212d4141fc0ff0ad9f5cb7161cc3592ecfa026157275566e62425bdcfae"
+checksum = "fc4129a50891d7c429f846f0a4c470935a4ad1c233391fbdaee8d9e0b86a7453"
 dependencies = [
  "jsonschema",
  "openehr-am",
@@ -3955,7 +3955,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4283,7 +4283,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4342,7 +4342,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4914,10 +4914,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5834,7 +5834,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
