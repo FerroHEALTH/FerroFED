@@ -81,6 +81,7 @@ pub mod stored;
 pub mod subject;
 pub(crate) mod summary;
 pub mod target;
+pub(crate) mod trc;
 pub mod write;
 
 use std::sync::Arc;
@@ -231,6 +232,7 @@ async fn federated(
         session,
         requester: caller.and_then(Caller::requester),
         on_behalf: &on_behalf,
+        trc: None,
     };
     answer::answer(&federation, arrived, submitted).await
 }

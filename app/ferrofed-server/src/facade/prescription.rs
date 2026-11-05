@@ -50,7 +50,7 @@ use ferrofed_engine::single_node::native_create::Created;
 use ferrofed_engine::single_node::native_search::By;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::role::resolver::Identification;
-use ferrofed_registry::id::{EndpointId, NodeId};
+use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use http::HeaderMap;
 
 use crate::access::{Accessed, Asked};
@@ -156,6 +156,11 @@ pub(crate) enum Unfound {
     /// the id names is another.
     #[error("the id names an EHR beyond the caller's patient")]
     Confined,
+    /// The caller is a national contact point, and the id names an EHR that
+    /// is not its treatment relationship confirmation's patient's at that
+    /// member (eHDSI XCA Profile 8.0.1 §4.2.2).
+    #[error("the id names an EHR beyond the patient the treatment relationship confirmation binds")]
+    Unbound(NodeId, EhrId),
     /// The member the id names has no endpoint its requests leave through
     /// (§11.1).
     #[error("the member endpoint {0} has no endpoint in service")]
@@ -225,6 +230,7 @@ pub(crate) async fn read(
         return Err(Unfound::Offline(named));
     };
     let ehr_id = locator.ehr_id();
+    bound(arrived, &node, ehr_id)?;
     // NOTE: §12.5.1: the face reads no targeting header, so the routing steps start at the
     // session's resolution bindings, and a confined grant stands as that step.
     let untargeted = HeaderMap::new();
@@ -543,4 +549,20 @@ fn recorded(
         inserted: None,
         transformations: Vec::new(),
     })
+}
+
+/// Holds a read of `ehr_id` at `node` to the patient a contact point's
+/// treatment relationship confirmation binds, before the member is asked.
+///
+/// # Errors
+///
+/// [`Unfound::Unbound`] when the pair is not the TRC patient's own
+/// (eHDSI XCA Profile 8.0.1 §4.2.2).
+fn bound(arrived: &Arrived<'_>, node: &NodeId, ehr_id: &EhrId) -> Result<(), Unfound> {
+    match arrived.trc {
+        Some(binding) if !binding.holds(node, ehr_id) => {
+            Err(Unfound::Unbound(node.clone(), ehr_id.clone()))
+        }
+        _ => Ok(()),
+    }
 }

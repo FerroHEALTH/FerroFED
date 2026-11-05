@@ -22,13 +22,14 @@ use super::{Layers, at, indexed, provenance_key, sourced};
 
 /// The keys of `[trust.issuer.national_contact_point]`, in the order the
 /// book's table lists them.
-const CONTACT_POINT: [&str; 8] = [
+const CONTACT_POINT: [&str; 9] = [
     "family_name",
     "given_name",
     "country_code",
     "professional_issuing_authority",
     "provider_issuing_authority",
     "provider_address",
+    "trc_patient",
     "correlation_header",
     "additional_countries",
 ];
@@ -186,6 +187,7 @@ country_code = "ncp_country_code"
 professional_issuing_authority = "ncp_hp_issuing_authority"
 provider_issuing_authority = "ncp_hcp_issuing_authority"
 provider_address = "ncp_hcp_address"
+trc_patient = "ncp_trc_patient"
 correlation_header = "ncp-correlation-id"
 additional_countries = ["XA"]
 "#;

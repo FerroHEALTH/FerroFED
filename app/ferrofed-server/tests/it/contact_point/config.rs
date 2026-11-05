@@ -24,13 +24,14 @@ fn declaring(table: &str) -> String {
 }
 
 /// Every claim name of the table, with the claim it names.
-const NAMES: [(&str, &str); 6] = [
+const NAMES: [(&str, &str); 7] = [
     ("family_name", "f"),
     ("given_name", "g"),
     ("country_code", "c"),
     ("professional_issuing_authority", "pa"),
     ("provider_issuing_authority", "ha"),
     ("provider_address", "addr"),
+    ("trc_patient", "trc"),
 ];
 
 /// Every claim name set but `skipped`, and `extra`.

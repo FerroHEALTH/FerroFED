@@ -100,6 +100,7 @@ readonly DEFINITIONS=(
   app/ferrofed-identity/src/ihe/mcsd/definition
   app/ferrofed-registry/src
   app/ferrofed-server/src/access
+  app/ferrofed-server/src/fhir/definition
 )
 for dir in "${DEFINITIONS[@]}"; do
   for definition in "$dir"/StructureDefinition-*.json "$dir"/CodeSystem-*.json \

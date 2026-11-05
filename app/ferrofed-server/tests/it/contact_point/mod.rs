@@ -41,6 +41,9 @@ pub(crate) const CORRELATION: &str = "Qz7-ncp-exchange-0815";
 /// token may carry and the gateway never reads.
 pub(crate) const PERSON_ID: &str = "SENTINEL-PERSON-ID-7q3z";
 
+/// The claim the test contact point's token names its TRC patient in.
+pub(crate) const TRC_CLAIM: &str = "ncp_trc_patient";
+
 /// The synthetic attribute values the test contact point relays, each
 /// unlike any other text.
 pub(crate) const FAMILY: &str = "Qz7-family-61";
@@ -66,6 +69,7 @@ pub(crate) fn claim_names() -> ContactPointClaims {
         professional_issuing_authority: String::from("ncp_hp_issuing_authority"),
         provider_issuing_authority: String::from("ncp_hcp_issuing_authority"),
         provider_address: String::from("ncp_hcp_address"),
+        trc_patient: String::from(TRC_CLAIM),
         correlation_header: Some(CORRELATION_HEADER.to_owned()),
         additional_countries: Vec::new(),
     }
@@ -109,5 +113,11 @@ pub(crate) fn relaying() -> Claims {
     ] {
         claims.other.insert(claim, value.to_owned());
     }
+    // NOTE: eHDSI SAML Profile 10.0.0 §4.3: the TRC's subject-id, here the facade suite's
+    // synthetic patient, as the contact point's authorization server writes it.
+    claims.other.insert(
+        names.trc_patient,
+        format!("{}|{}", crate::facade::NAMESPACE, crate::facade::PATIENT),
+    );
     claims
 }

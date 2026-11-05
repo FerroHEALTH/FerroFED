@@ -63,11 +63,15 @@ pub enum Event {
     /// in the place reserved for it before the write, so the write stands
     /// unrecorded (Regulation (EU) 2025/327 Annex II 3.2).
     WriteUnrecorded,
+    /// A national contact point's request named a patient, or reached a
+    /// resource, outside the patient its treatment relationship
+    /// confirmation binds (eHDSI XCA Profile 8.0.1 §4.2.1, §4.2.2).
+    TrcPatientMismatch,
 }
 
 impl Event {
     /// Every event, in declaration order.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::KeySetUnavailable,
         Self::IntrospectionUnavailable,
         Self::AqlRefused,
@@ -85,6 +89,7 @@ impl Event {
         Self::ScrapeRefused,
         Self::AdminWriteAdmitted,
         Self::WriteUnrecorded,
+        Self::TrcPatientMismatch,
     ];
 
     /// The label value, the `event` field of the security log line.
@@ -108,6 +113,7 @@ impl Event {
             Self::ScrapeRefused => "scrape-refused",
             Self::AdminWriteAdmitted => "admin-write-admitted",
             Self::WriteUnrecorded => "write-unrecorded",
+            Self::TrcPatientMismatch => "trc-patient-mismatch",
         }
     }
 

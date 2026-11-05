@@ -14,7 +14,8 @@ use eehrxf::category::Category;
 use http::StatusCode;
 
 use crate::facade::dispensation::withdrawal::{self, WITHDRAWN};
-use crate::facade::prescription::{self, Readable};
+use crate::facade::prescription::{self, Readable, Unfound};
+use crate::fhir::trc::{self, Service};
 
 use crate::fhir::admission::Asked;
 use crate::fhir::{admission, refusal};
@@ -72,6 +73,9 @@ pub(in crate::fhir) async fn withdraw(
         },
         |_| ControlFlow::Continue(()),
         async |admitted, arrived, ()| {
+            if let Err(missing) = trc::binding(admitted, &arrived) {
+                return missing;
+            }
             let federation = &admitted.federation;
             let none = BTreeSet::new();
             let declared = admitted
@@ -81,6 +85,12 @@ pub(in crate::fhir) async fn withdraw(
                 .unwrap_or(&none);
             let dispensation = (Readable::Dispensation, id.as_str());
             match prescription::read(federation, &arrived, dispensation, (declared, None)).await {
+                Err(Unfound::Unbound(member, member_ehr_id)) => trc::unbound(
+                    admitted,
+                    &arrived,
+                    (&member, &member_ehr_id),
+                    Service::Prescription,
+                ),
                 Ok(read) => {
                     withdrawal::withdraw(federation, &arrived, (&received, text), &read).await
                 }

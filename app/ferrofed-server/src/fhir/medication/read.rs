@@ -23,6 +23,7 @@ use crate::error::Code;
 use crate::facade::prescription::{self, Readable, Unfound};
 use crate::facade::provenance::Provenance;
 use crate::federation::Federation;
+use crate::fhir::trc::{self, Service};
 use crate::fhir_wire::fhir_json;
 
 use crate::fhir::admission::Asked;
@@ -112,8 +113,14 @@ async fn read_of(
                 now: &now,
             };
             let mapped = (readable == Readable::Prescription).then_some(&mapped);
+            if let Err(missing) = trc::binding(admitted, &arrived) {
+                return missing;
+            }
             let read =
                 prescription::read(federation, &arrived, (readable, &id), (declared, mapped)).await;
+            if let Err(Unfound::Unbound(node, ehr_id)) = &read {
+                return trc::unbound(admitted, &arrived, (node, ehr_id), Service::Prescription);
+            }
             answered(
                 federation,
                 (readable, read, version),
@@ -202,6 +209,7 @@ pub(super) fn unread(
             ),
         ),
         Unfound::Confined => crate::error::fixed(Code::PatientConfinement, request_id),
+        Unfound::Unbound(..) => trc::no_data(Service::Prescription),
         Unfound::Unnamed => refusal(
             StatusCode::FAILED_DEPENDENCY,
             "processing",

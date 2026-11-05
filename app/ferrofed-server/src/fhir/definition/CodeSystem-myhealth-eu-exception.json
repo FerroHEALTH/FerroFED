@@ -1,0 +1,29 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "myhealth-eu-exception",
+  "url": "https://ferrofed.eu/fhir/CodeSystem/myhealth-eu-exception",
+  "name": "MyHealthEuException",
+  "title": "MyHealth@EU exception code names",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-11-05",
+  "publisher": "FerroFED",
+  "description": "The exception code names of the MyHealth@EU Requirements Catalogue 10.0.0 §1.25 that a FerroFED gateway names in the details of an OperationOutcome on its FHIR face. The catalogue defines the names and publishes no code system URI, so they travel under this one; it lists the names the gateway uses.",
+  "copyright": "Cadasto B.V., under the Business Source License 1.1. The code names are the MyHealth@EU Requirements Catalogue's.",
+  "caseSensitive": true,
+  "content": "fragment",
+  "concept": [
+    {
+      "code": "ERROR_PS_NOT_FOUND",
+      "display": "No patient summary"
+    },
+    {
+      "code": "ERROR_EP_NOT_FOUND",
+      "display": "No ePrescription"
+    },
+    {
+      "code": "ERROR_ORCD_NOT_FOUND",
+      "display": "No original clinical document"
+    }
+  ]
+}

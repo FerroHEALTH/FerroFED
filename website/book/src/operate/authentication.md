@@ -132,6 +132,7 @@ demographic_clients = []
 | `trust.issuer[].national_contact_point.family_name`, `.given_name`, `.country_code` | none | The string claims of this issuer's tokens that carry the professional's `family_name`, `given_name` and `country_code` (Implementing Regulation (EU) 2026/2099 Annex Table 1). Setting `[trust.issuer.national_contact_point]` declares the issuer a national contact point ([National contact points](#national-contact-points)), and every claim name is then required. |
 | `trust.issuer[].national_contact_point.professional_issuing_authority` | none | The claim carrying the `issuing_authority_name` of the professional's `hp_identifier` (Annex Table 1). |
 | `trust.issuer[].national_contact_point.provider_issuing_authority`, `.provider_address` | none | The claims carrying the `issuing_authority_name` of the provider identifier and the `healthcare_provider_address` (Annex Table 2). |
+| `trust.issuer[].national_contact_point.trc_patient` | none | The claim carrying the patient the treatment relationship confirmation binds, its `subject-id` (eHDSI SAML Profile 10.0.0 §4.3), as `system\|value`. A patient-data request on the FHIR face must name this patient ([The treatment relationship binding](../integrate/national-contact-point.md#the-treatment-relationship-binding)). |
 | `trust.issuer[].national_contact_point.correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
 | `trust.issuer[].national_contact_point.additional_countries` | `[]` | The ISO 3166-1 alpha-2 codes a `country_code` this contact point relays may name, in addition to the 27 EU Member States. Use it for a third country whose contact point the Commission connected to MyHealth@EU (Regulation (EU) 2025/327 Art 24(3)). Neither act names the EEA States, so add one here when your deployment serves it. A code that is not two upper-case letters, or that is already a Member State, is refused. |
 | `trust.edge.header` | none | The header the edge's assertion travels in, with `trust.mode = "edge"`. |
@@ -591,6 +592,7 @@ country_code = "country_code"
 professional_issuing_authority = "hp_issuing_authority_name"
 provider_issuing_authority = "hcp_issuing_authority_name"
 provider_address = "healthcare_provider_address"
+trc_patient = "trc_patient"
 correlation_header = "ncp-correlation-id"
 ```
 
@@ -618,6 +620,7 @@ attribute (ITI TF-2 3.71.4.2.2.1.1), the gateway reads it from
 | Table 2 `issuing_authority_name` | the claim `provider_issuing_authority` names |
 | Table 2 `healthcare_provider_name` | `extensions.ihe_iua.subject_organization` |
 | Table 2 `healthcare_provider_address` | the claim `provider_address` names |
+| the TRC's `subject-id`, as `system\|value` | the claim `trc_patient` names |
 
 IUA's `subject_name` is one string, so it does not give the Annex's
 separate family and given names; the gateway still reads it as the

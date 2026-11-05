@@ -67,6 +67,9 @@ pub(super) struct Confined {
     on_behalf: OnBehalfOf,
     /// The verified caller's session.
     session: SessionKey,
+    /// The patient a contact point's treatment relationship confirmation
+    /// binds, resolved at every member.
+    trc: Option<crate::facade::trc::Binding>,
 }
 
 /// Admits a request on the FHIR face that arrived at `started` with
@@ -132,10 +135,20 @@ impl Admitted<'_> {
             crate::facade::confined_by(&self.federation, caller, self.started, conveyance)
                 .await
                 .map_err(|unconfined| unconfined.respond(self.request_id, &self.logged))?;
+        let deadline = self
+            .started
+            .checked_add(self.federation.budget().overall())
+            .ok_or_else(|| crate::error::fixed(Code::Internal, self.request_id))?;
+        // NOTE: eHDSI XCA Profile 8.0.1 §4.2.1: the TRC's patient is resolved before any
+        // member is asked, so every read and write of the request is held to it.
+        let trc = crate::facade::trc::bind(&self.federation, self.caller, deadline)
+            .await
+            .map_err(|unconfined| unconfined.respond(self.request_id, &self.logged))?;
         Ok(Confined {
             conveyance,
             on_behalf,
             session: self.caller.session(),
+            trc,
         })
     }
 
@@ -150,6 +163,7 @@ impl Admitted<'_> {
             session: Some(&confined.session),
             requester: self.caller.requester(),
             on_behalf: &confined.on_behalf,
+            trc: confined.trc.as_ref(),
         }
     }
 }

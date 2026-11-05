@@ -57,6 +57,7 @@ pub(crate) async fn answer(
         session,
         requester,
         on_behalf,
+        trc: _,
     } = arrived;
     let completion = match completeness::of(headers, federation.best_effort()) {
         Ok(completion) => completion,

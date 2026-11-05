@@ -1,0 +1,28 @@
+{
+  "resourceType": "CodeSystem",
+  "id": "refusal",
+  "url": "https://ferrofed.eu/fhir/CodeSystem/refusal",
+  "name": "FerroFedRefusal",
+  "title": "FerroFED refusal",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-11-05",
+  "publisher": "FerroFED",
+  "description": "The refusals a FerroFED gateway names in the details of an OperationOutcome on its FHIR face, so a national connector can map each one.",
+  "copyright": "Cadasto B.V., under the Business Source License 1.1.",
+  "caseSensitive": true,
+  "content": "complete",
+  "count": 2,
+  "concept": [
+    {
+      "code": "trc-patient-mismatch",
+      "display": "No data for the treatment relationship's patient",
+      "definition": "A national contact point's request named another patient than its treatment relationship confirmation binds, reached a resource of another patient, or named a patient no member holds; the answer is the same in every case (eHDSI XCA Profile 8.0.1 §4.2.1, §4.2.2)."
+    },
+    {
+      "code": "trc-missing",
+      "display": "No treatment relationship patient",
+      "definition": "A national contact point's patient-data request carried no patient of a treatment relationship confirmation (eHDSI SAML Profile 10.0.0 §4.3)."
+    }
+  ]
+}

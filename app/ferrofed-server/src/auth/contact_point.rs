@@ -24,9 +24,19 @@
 //! `[trust.issuer.national_contact_point]` names the string claim of each
 //! other one. The IUA `person_id`, a patient identifier, is never read
 //! (§5.4.1, N33).
+//!
+//! The patient the treatment relationship confirmation binds travels in the
+//! string claim `trc_patient` names, as one `system|value` token
+//! ([`TrcPatient`]): the authorization server acting for the contact point
+//! copies it from the TRC assertion's `subject-id` (eHDSI SAML Profile
+//! 10.0.0 §4.3). The FHIR face holds every patient-data request to it.
+
+use std::fmt;
 
 use ferrofed_engine::conveyance::relayed::{HealthProfessional, HealthcareProvider, Relayed};
+use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use http::HeaderMap;
+use secrecy::{ExposeSecret, SecretString};
 
 use crate::auth::caller::Caller;
 use crate::auth::claims::IuaAnnex;
@@ -87,14 +97,92 @@ impl MissingAnnex {
     }
 }
 
+/// The patient a contact point's treatment relationship confirmation binds:
+/// the namespace and the value of its `subject-id`, as the token's
+/// `trc_patient` claim names them (eHDSI SAML Profile 10.0.0 §4.3).
+///
+/// The value is a [`SecretString`] and `Debug` shows the namespace alone, so
+/// no rendering shows the identifier (§5.4.1, N33).
+#[derive(Clone)]
+pub struct TrcPatient {
+    namespace: IdentifierNamespace,
+    value: SecretString,
+}
+
+impl TrcPatient {
+    /// Reads the token `text`, `system|value`, or `None` when it is not one
+    /// with a system and a value.
+    #[must_use]
+    pub fn read(text: &str) -> Option<Self> {
+        // NOTE: FHIR R4 search §3.1.1.5.5, the token form the face's own patient.identifier
+        // takes; a claim of any other form binds no patient, so the request is refused.
+        let (system, value) = text.split_once('|')?;
+        if system.is_empty() || value.is_empty() || value.contains('|') {
+            return None;
+        }
+        let namespace = IdentifierNamespace::new(system).ok()?;
+        Some(Self {
+            namespace,
+            value: SecretString::from(value.to_owned()),
+        })
+    }
+
+    /// Whether `system`|`value` is this patient's identifier, compared on the
+    /// assigning authority and the value (eHDSI XCA Profile 8.0.1 §4.2.1:
+    /// the request's identifier "equals" the TRC's).
+    #[must_use]
+    pub fn is(&self, system: &str, value: &str) -> bool {
+        self.namespace.as_str() == system && self.value.expose_secret() == value
+    }
+
+    /// The identifier as `system|value`, for the pseudonym a security record
+    /// names it by and never for a log line.
+    #[must_use]
+    pub fn token(&self) -> SecretString {
+        SecretString::from(format!(
+            "{}|{}",
+            self.namespace.as_str(),
+            self.value.expose_secret()
+        ))
+    }
+
+    /// The patient reference the cross-reference resolves.
+    ///
+    /// # Errors
+    ///
+    /// [`PatientRefError`] for an empty value, which [`TrcPatient::read`]
+    /// never builds.
+    pub fn patient(&self) -> Result<PatientRef, PatientRefError> {
+        PatientRef::new(self.namespace.clone(), self.value.clone())
+    }
+}
+
+impl fmt::Debug for TrcPatient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TrcPatient")
+            .field("namespace", &self.namespace.as_str())
+            .finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for TrcPatient {
+    fn eq(&self, other: &Self) -> bool {
+        self.namespace == other.namespace
+            && self.value.expose_secret() == other.value.expose_secret()
+    }
+}
+
+impl Eq for TrcPatient {}
+
 /// Whom a token's issuer vouches for, as [`read`] finds it.
 #[derive(Debug)]
 pub(super) enum Vouched {
     /// An issuer not declared a contact point.
     Own,
     /// A contact point, its token relaying what [`relayed`] read, or the
-    /// Annex attributes it lacks.
-    ContactPoint(Result<Box<Relayed>, MissingAnnex>),
+    /// Annex attributes it lacks, and the patient its treatment relationship
+    /// confirmation binds, when the token names one.
+    ContactPoint(Result<Box<Relayed>, MissingAnnex>, Option<TrcPatient>),
 }
 
 /// Whom a token of `issuer` vouches for: a contact point's caller with what
@@ -107,7 +195,8 @@ pub(super) fn read(
 ) -> Vouched {
     match &issuer.national_contact_point {
         Some(declared) => {
-            Vouched::ContactPoint(relayed((issuer.issuer.as_str(), declared), iua, text))
+            let trc = text(&declared.claims.trc_patient).and_then(|claim| TrcPatient::read(&claim));
+            Vouched::ContactPoint(relayed((issuer.issuer.as_str(), declared), iua, &text), trc)
         }
         None => Vouched::Own,
     }
@@ -117,7 +206,9 @@ pub(super) fn read(
 /// with what its token relays, or as it is.
 pub(super) fn vouched(caller: Caller, read: Vouched) -> Caller {
     match read {
-        Vouched::ContactPoint(relayed) => caller.relayed_by_contact_point(relayed),
+        Vouched::ContactPoint(relayed, trc) => caller
+            .relayed_by_contact_point(relayed)
+            .binding_trc_patient(trc),
         Vouched::Own => caller,
     }
 }
@@ -159,7 +250,7 @@ pub(super) fn relaying(caller: &Caller) -> Result<(), Refused> {
 fn relayed(
     (issuer, declared): (&str, &ContactPoint),
     iua: IuaAnnex,
-    text: impl Fn(&str) -> Option<String>,
+    text: &impl Fn(&str) -> Option<String>,
 ) -> Result<Box<Relayed>, MissingAnnex> {
     let claims = &declared.claims;
     // NOTE: 2026/2099 Annex Table 1 names "the Member State that issued" the data, and 2025/327
