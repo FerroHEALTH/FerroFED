@@ -8,9 +8,9 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `e03a49fe736e3b5209af1a9534792fc849d9a489046cb47e6cf086c9a3478ba2`
-- Fetched: 2026-10-29, with the User-Agent `ferrofed-vendor (scripts/vendor)`
-- Artefacts: 11 committed, 0 cache only, 2 needing
+  the pins): `c3cc6c576cc4b5c7e253600e1323f0554a12ce37f92181d1320dac7074fa3d7d`
+- Fetched: 2026-11-05, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Artefacts: 11 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 11 besides this one, each verbatim as the
   publisher serves it
@@ -36,10 +36,13 @@ The Regulation, the implementing acts, the Recommendation and the Decision
 are official EU legal acts published in the Official Journal. The
 Commission legal notice (https://commission.europa.eu/legal-notice_en)
 licenses the guidelines under CC BY 4.0; it is cited and not pinned, because
-the page's bytes change with every render. The MyHealth@EU requirements
-catalogue and the eHDSI interoperability specifications are on a wiki behind
-EU Login and are recorded for manual retrieval only: Decision 2011/833/EU
-Art 2(2)(c) leaves privileged-access documents out of its reuse grant.
+the page's bytes change with every render. The eHDSI interoperability
+specifications and the MyHealth@EU requirements catalogue are on a wiki
+behind EU Login and are recorded in docs/specs/ehdsi-specifications/: the
+cover of each specification states distribution level PU and "Reuse is
+authorised, provided the source is acknowledged." (read 2026-11-05), so
+they are vendored there, and the catalogue states no reuse terms and is
+not.
 
 ## Artefacts
 
@@ -129,25 +132,3 @@ Art 2(2)(c) leaves privileged-access documents out of its reuse grant.
 - sha256: `2d5bc877b9a5aad948af21c680aca1d3409f41df5dd0dcc57ef9b1b225f60982`
 - Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
 - Note: Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents, the reuse terms of the acts and the guidelines here (its Articles 3 and 6), kept as their licence evidence. It replaces the Commission legal notice page, whose bytes changed with every render. Pinned at the Cellar manifestation the CELEX resource resolves to.
-
-### `ehdsi-interoperability-specifications` (needs manual retrieval)
-
-- Source: <https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/2.+eHDSI+INTEROPERABILITY+SPECIFICATIONS%2C+Requirements+and+Frameworks>
-- Version: not retrieved
-- sha256: none, nothing is fetched
-- Licence: None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant
-- Needs manual retrieval: the source answers an automated client with a
-  login or a bot challenge, so the script fetches nothing and this
-  repository carries none of its content.
-- Note: Behind EU Login (the URL answered 302 to login.action on 2026-10-15, and again on 2026-10-24). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The normative eHDSI XCPD, XCA and XUA profiles and the eHDSI CDA implementation guides live here.
-
-### `myhealth-eu-requirements-catalogue` (needs manual retrieval)
-
-- Source: <https://webgate.ec.europa.eu/fpfis/wikis/display/EHDSI/1.+MyHealth@EU+Requirements+Catalogue>
-- Version: 9.0.0 (2025-03-24), not retrieved
-- sha256: none, nothing is fetched
-- Licence: None granted: Commission Decision 2011/833/EU Art 2(2)(c) excludes privileged-access documents from its reuse grant
-- Needs manual retrieval: the source answers an automated client with a
-  login or a bot challenge, so the script fetches nothing and this
-  repository carries none of its content.
-- Note: Behind EU Login (the URL answered 302 to login.action on 2026-10-15). Commission Decision 2011/833/EU Art 2(2)(c) leaves documents made accessible only under rules governing privileged access out of its reuse grant, so no copy may be vendored without a written grant from the Commission. The NCPeH API implementation guide names it the main reference for the national side, and Implementing Regulation (EU) 2026/2083 Art 4(2) to (4) has the Commission draw it up. Xt-EHR D6.1 section 5 names release 9.0.0 of 2025-03-24 and says it is available only with authorisation, requested from DG SANTE; the URL answered 302 to login.action again on 2026-10-24.

@@ -408,6 +408,8 @@ jobs:
   # so it is useful now and grows teeth as files appear. The self-tests of
   # the two weekly reads of pin-freshness.yml run here too, offline, so a
   # broken parser fails a pull request rather than reading as nothing new.
+  # The eHDSI specifications cannot be fetched again (EU Login), so their
+  # committed bytes are held to their pins here.
   versions:
     name: versions
     runs-on: ubuntu-latest
@@ -423,6 +425,7 @@ jobs:
           bash scripts/checks/versions.sh
           bash scripts/checks/pin-freshness.sh --self-test
           bash scripts/checks/ehds-acts.sh --self-test
+          bash scripts/vendor/ehdsi-specifications.sh --check
 
   # The book theme favicons are copies of the brand mark, so the mark exists
   # twice and only this guard keeps the two byte-identical.
