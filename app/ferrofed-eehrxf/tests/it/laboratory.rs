@@ -122,3 +122,17 @@ fn the_query_sits_under_its_reserved_name_at_the_immutable_version() -> TestResu
 fn the_query_feeds_a_row_of_the_laboratory_report_crosswalk() {
     assert!(LABORATORY.row(ELEMENT).is_some(), "{ELEMENT}");
 }
+
+#[test]
+fn the_gateway_and_the_testkit_name_one_result_context() {
+    assert_eq!(
+        laboratory::RESULT_CONTEXT,
+        ferrofed_testkit::laboratory::RESULT_CONTEXT
+    );
+    assert!(
+        eehrxf::mappings::LABORATORY
+            .contexts()
+            .contains(&laboratory::RESULT_CONTEXT),
+        "the shipped project lists the result context"
+    );
+}
