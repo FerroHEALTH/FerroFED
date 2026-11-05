@@ -428,6 +428,42 @@ count = 7
         assert_eq!(None, stripped_url("ffd-test-0038"));
     }
 
+    /// The synthetic password the `[store]` fixture's connection string
+    /// carries, written into it at run time as [`DATABASE_PASSWORD`] is.
+    const STORE_PASSWORD: &str = "synthetic-store-pw-8q2";
+
+    #[test]
+    fn the_store_table_is_shown_with_its_bounds_and_without_its_secrets() {
+        let url = format!(
+            "postgres://store-user:{STORE_PASSWORD}@store.example.org:5432/CANARY-DB?password=QUERY-SECRET-3"
+        );
+        let tree: toml::Table = toml::from_str(&format!(
+            "[store]\nurl = \"{url}\"\nurl_file = \"/home/CANARY-PERSON/store-url\"\n\
+             ca_file = \"/home/CANARY-PERSON/store-ca.pem\"\nmax_connections = 8\n\
+             timeout_ms = 2500\nsweep_interval_s = 30\n"
+        ))
+        .expect("the fixture parses");
+        let written =
+            toml::to_string(&redact(&tree, Keys::Settings)).expect("the redacted tree writes");
+        for canary in ["store-user", STORE_PASSWORD, "CANARY", "QUERY-SECRET"] {
+            assert!(!written.contains(canary), "{canary} leaked: {written}");
+        }
+        let redacted: toml::Table = toml::from_str(&written).expect("the output reads back");
+        let store = redacted["store"]
+            .as_table()
+            .expect("the store table is shown by name");
+        assert_eq!(
+            "postgres://***@store.example.org:5432/***?***",
+            store["url"].as_str().expect("stripped as every URL is")
+        );
+        for path in ["url_file", "ca_file"] {
+            assert_eq!("***", store[path].as_str().expect("a path is redacted"));
+        }
+        assert_eq!(8, store["max_connections"].as_integer().expect("kept"));
+        assert_eq!(2500, store["timeout_ms"].as_integer().expect("kept"));
+        assert_eq!(30, store["sweep_interval_s"].as_integer().expect("kept"));
+    }
+
     /// Every shape a value could slip past a key-based redactor in, each
     /// carrying a canary: other casings and separators, unknown keys, deep
     /// nesting, arrays of arrays, inline tables, numbers, dates, URLs under
