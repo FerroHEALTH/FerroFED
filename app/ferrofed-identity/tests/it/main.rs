@@ -35,9 +35,12 @@ mod pixm_identify;
 mod pixm_localizer;
 #[cfg(feature = "ihe")]
 mod pmir;
+mod revocation;
 mod session;
 mod support;
 #[cfg(feature = "ihe")]
 mod timing;
 #[cfg(feature = "ihe")]
 mod xcpd;
+#[cfg(feature = "ihe")]
+mod xcpd_ehdsi;

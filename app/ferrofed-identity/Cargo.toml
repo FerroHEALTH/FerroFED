@@ -41,6 +41,8 @@ nl = ["dep:nl-generic-functions", "ihe-iti/authorizer"]
 [dependencies]
 ferrohealth-secret.workspace = true
 async-trait.workspace = true
+aws-lc-rs.workspace = true
+der.workspace = true
 ferrofed-registry.workspace = true
 # The OAuth 2.0 client-credentials token an IHE FHIR client and Mitz send,
 # fetched, cached and renewed by the family's client (IUA ITI-71).
@@ -71,13 +73,17 @@ nl-generic-functions = { workspace = true, optional = true, features = ["lrza", 
 # The Authorization value of the credentials for an IHE FHIR server,
 # composed as the node client composes it (RFC 7617 §2, RFC 6750 §2.1).
 openehr-its = { workspace = true, features = ["rest-client"] }
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["rustls"] }
+rustls.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "net", "time"] }
+tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
 tracing.workspace = true
 url.workspace = true
+x509-cert.workspace = true
+x509-ocsp.workspace = true
 
 [dev-dependencies]
 # The mock server that drops off the runtime.

@@ -110,7 +110,7 @@ impl MutualTls {
 
     /// Starts a front over `material` that passes every connection to
     /// `origin`.
-    fn over(origin: &str, material: &Material) -> Result<Self, TlsHarnessError> {
+    pub(crate) fn over(origin: &str, material: &Material) -> Result<Self, TlsHarnessError> {
         let target = origin
             .strip_prefix("http://")
             .map(|rest| rest.trim_end_matches('/'))
@@ -221,7 +221,7 @@ struct Counters {
 }
 
 /// The RFC 8705 §3.1 thumbprint of the certificate whose DER is `der`.
-fn thumbprint(der: &[u8]) -> String {
+pub(crate) fn thumbprint(der: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(digest(&SHA256, der))
 }
 
@@ -236,11 +236,11 @@ impl Drop for MutualTls {
 }
 
 /// The certificates of one front and the server configuration over them.
-struct Material {
-    trust_roots: String,
-    client_identity: String,
-    client_thumbprint: String,
-    config: ServerConfig,
+pub(crate) struct Material {
+    pub(crate) trust_roots: String,
+    pub(crate) client_identity: String,
+    pub(crate) client_thumbprint: String,
+    pub(crate) config: ServerConfig,
 }
 
 /// A CA, a server certificate for `127.0.0.1` and a client certificate it

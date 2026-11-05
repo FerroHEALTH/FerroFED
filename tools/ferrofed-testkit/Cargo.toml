@@ -79,6 +79,9 @@ tempfile.workspace = true
 # certificate at run time, so no private key is ever committed, and serves
 # syslog over TLS with them.
 rcgen.workspace = true
+der.workspace = true
+x509-cert.workspace = true
+x509-ocsp.workspace = true
 tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
 # The identifier systems, extensions and connection type the harness mCSD
 # directory writes its members with, as the FHIR form of the registry reads

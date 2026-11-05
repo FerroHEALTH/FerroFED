@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The synthetic certificates of the harness TLS servers: the gateway's
-//! listener ([`crate::listener`]), the mutual-TLS front ([`crate::tls`]) and
-//! the Audit Record Repository ([`crate::atna`]).
+//! The synthetic certificates of the harness TLS servers.
+//!
+//! They serve the gateway's listener ([`crate::listener`]), the mutual-TLS
+//! front ([`crate::tls`]), the Audit Record Repository ([`crate::atna`]) and
+//! the revocation harness ([`crate::revocation`]).
 //!
 //! Each is a CA generated at run time and the server or client certificates
 //! it signs, valid from yesterday to tomorrow and never committed, and the
@@ -25,7 +27,7 @@ use tokio_rustls::rustls::ServerConfig;
 pub(crate) struct Authority {
     /// The CA certificate.
     pub(crate) certificate: Certificate,
-    issuer: Issuer<'static, KeyPair>,
+    pub(crate) issuer: Issuer<'static, KeyPair>,
 }
 
 impl Authority {
@@ -83,6 +85,15 @@ pub(crate) fn server_tls(
     (certificate, key): (&Certificate, &KeyPair),
     clients: Option<&Certificate>,
 ) -> Result<ServerConfig, PkiError> {
+    server_tls_chain((&certificate.pem(), key), clients)
+}
+
+/// The configuration [`server_tls`] builds, presenting the PEM chain
+/// `chain`, the server certificate first and its intermediates after it.
+pub(crate) fn server_tls_chain(
+    (chain, key): (&str, &KeyPair),
+    clients: Option<&Certificate>,
+) -> Result<ServerConfig, PkiError> {
     let dir = tempfile::tempdir().map_err(PkiError::Write)?;
     let write = |name: &str, pem: String| {
         let path = dir.path().join(name);
@@ -94,7 +105,7 @@ pub(crate) fn server_tls(
         .map(|ca| write("client-ca.pem", ca.pem()))
         .transpose()?;
     let section = TlsSection {
-        certificate_file: write("server.pem", certificate.pem())?,
+        certificate_file: write("server.pem", chain.to_owned())?,
         key_file: write("server.key", key.serialize_pem())?,
         client_auth: if client_ca_file.is_some() {
             ClientAuth::Required
@@ -114,7 +125,7 @@ pub(crate) fn server_tls(
 }
 
 /// Makes `params` valid from yesterday to tomorrow.
-fn validity(params: &mut CertificateParams) {
+pub(crate) fn validity(params: &mut CertificateParams) {
     let today = jiff::Zoned::now().date();
     let (yesterday, tomorrow) = (
         today.yesterday().unwrap_or(today),

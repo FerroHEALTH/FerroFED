@@ -93,6 +93,7 @@ async fn a_discovery_still_recording_its_audit_at_the_budget_fails_closed_under_
                 endpoint: SecretUrl::new(holding.endpoint().as_str()),
                 device: "2.999.50.1".to_owned(),
                 community: None,
+                myhealth_eu: false,
             }],
             communities: BTreeMap::from([
                 (COMMUNITY_A.to_owned(), "node-a".parse()?),
@@ -101,6 +102,7 @@ async fn a_discovery_still_recording_its_audit_at_the_budget_fails_closed_under_
             namespaces: BTreeMap::new(),
             transport: Transport::UnencryptedForDevelopment,
             tls: Tls::default(),
+            revocation: None,
         },
         None,
         federation.snapshot(),

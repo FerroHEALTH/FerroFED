@@ -12,6 +12,7 @@ use ferrofed_identity::ihe::xcpd::{
     AssertionSource, FixedAssertion, GatewayConfig, LogAudit, Transport, XcpdConfig, XcpdLocalizer,
 };
 use ferrofed_identity::profile::Profile;
+use ferrofed_identity::revocation::{RevocationCheck, RevocationSetupError};
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -69,6 +70,7 @@ pub(super) fn localizer(
                 endpoint: gateway.url.clone(),
                 device: gateway.device.clone(),
                 community: gateway.community.clone(),
+                myhealth_eu: gateway.myhealth_eu,
             })
             .collect(),
         communities,
@@ -84,6 +86,7 @@ pub(super) fn localizer(
             xcpd.trust_roots.as_deref(),
         )
         .map_err(LocalizationError::Tls)?,
+        revocation: revocation(xcpd)?,
     };
     let localizer =
         XcpdLocalizer::from_config(config, assertion, snapshot).map_err(LocalizationError::Xcpd)?;
@@ -108,4 +111,28 @@ pub(super) fn localizer(
         audit: Some(xcpd.audit.as_str()),
         indicators,
     })
+}
+
+/// The revocation check of the gateways `xcpd` marks as MyHealth@EU routes,
+/// over its client identity and trust roots, which configuration load
+/// requires of such a gateway; none when no gateway is marked.
+fn revocation(xcpd: &XcpdSettings) -> Result<Option<RevocationCheck>, LocalizationError> {
+    if !xcpd.gateways.iter().any(|gateway| gateway.myhealth_eu) {
+        return Ok(None);
+    }
+    let identity = xcpd
+        .client_identity
+        .as_ref()
+        .ok_or(LocalizationError::XcpdRevocation(
+            RevocationSetupError::NoClientCertificate,
+        ))?;
+    let roots = xcpd
+        .trust_roots
+        .as_deref()
+        .ok_or(LocalizationError::XcpdRevocation(
+            RevocationSetupError::NoRoots,
+        ))?;
+    RevocationCheck::from_pem(&identity.to_secret_string(), roots)
+        .map(Some)
+        .map_err(LocalizationError::XcpdRevocation)
 }
