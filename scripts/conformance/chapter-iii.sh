@@ -16,6 +16,11 @@
 set -euo pipefail
 export LC_ALL=C
 
+# The awk functions both renderers share (#1675).
+# shellcheck source=scripts/checks/lib/evidence.sh
+# shellcheck disable=SC1091 # shellcheck is not run with -x; the library is checked on its own
+. "$(dirname "$0")/../checks/lib/evidence.sh"
+
 readonly RECORD=conformance/chapter-iii.tsv
 readonly PAGE=website/book/src/evaluate/conformity-record.md
 readonly BOOK=website/book/src/
@@ -38,58 +43,7 @@ page_block() {
   [[ -f "$RECORD" ]] || die "$RECORD is missing"
   printf '%s\n' "$BEGIN"
   printf '<!-- Rendered from %s by scripts/conformance/chapter-iii.sh --write. Do not edit between the markers. -->\n' "$RECORD"
-  awk -F'\t' -v book="$BOOK" -v repo="$REPO_URL" '
-    function slug(text,   s) {
-      s = tolower(text)
-      gsub(/[^a-z0-9 _-]/, "", s)
-      gsub(/ /, "-", s)
-      return s
-    }
-    function rel(path,   p) {
-      p = substr(path, length(book) + 1)
-      if (p ~ /^evaluate\//) return substr(p, length("evaluate/") + 1)
-      return "../" p
-    }
-    function title(path,   line, t) {
-      t = path
-      while ((getline line < path) > 0)
-        if (line ~ /^# /) { t = substr(line, 3); break }
-      close(path)
-      return t
-    }
-    function item(it,   path, anchor, i) {
-      i = index(it, "::")
-      path = it
-      anchor = ""
-      if (i > 0) { path = substr(it, 1, i - 1); anchor = substr(it, i + 2) }
-      if (index(path, book) == 1 && path ~ /\.md$/) {
-        if (anchor == "") return "[" title(path) "](" rel(path) ")"
-        return "[" anchor "](" rel(path) "#" slug(anchor) ")"
-      }
-      if (path ~ /\.rs$/ && anchor != "") return "`" path "` (`" anchor "`)"
-      if (anchor != "") return "[`" path "`](" repo "/blob/main/" path "), " anchor
-      return "[`" path "`](" repo "/blob/main/" path ")"
-    }
-    function evidence(text,   n, parts, k, out) {
-      n = split(text, parts, "; ")
-      out = ""
-      for (k = 1; k <= n; k++) out = out (k > 1 ? "; " : "") item(parts[k])
-      return out
-    }
-    function issues(text,   n, parts, k, out, owner, num) {
-      if (text == "-") return "-"
-      n = split(text, parts, " ")
-      out = ""
-      for (k = 1; k <= n; k++) {
-        num = parts[k]
-        sub(/^.*#/, "", num)
-        owner = parts[k]
-        sub(/#.*$/, "", owner)
-        if (owner == "") owner = "FerroHEALTH/FerroFED"
-        out = out (k > 1 ? ", " : "") "[" parts[k] "](https://github.com/" owner "/issues/" num ")"
-      }
-      return out
-    }
+  awk -F'\t' -v book="$BOOK" -v repo="$REPO_URL" "$(links_awk)"'
     function applies(code) {
       if (code == "2027") return "26 March 2027"
       if (code == "2031") return "26 March 2031"
