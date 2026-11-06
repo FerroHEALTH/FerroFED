@@ -8,7 +8,6 @@
 
 use ehds_logging::record::{Accessor, Professional, Purpose};
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
-use ferrofed_engine::conveyance::relayed::Relayed;
 
 use crate::auth::caller::Caller;
 use crate::auth::contact_point;
@@ -21,8 +20,10 @@ use crate::auth::contact_point;
 /// For a caller a national contact point vouched for, the client is the
 /// contact point's connector, and the record also names the professional
 /// and the provider of another Member State it relays, with their
-/// country and issuing authorities, marked as asserted by the contact point
-/// (Implementing Regulation (EU) 2026/2099 Art 7, Annex Tables 1 and 2).
+/// country and issuing authorities and what the identity assertion states
+/// of them, marked as asserted by the contact point and with no name or
+/// address (Implementing Regulation (EU) 2026/2099 Art 7; GDPR
+/// Art 5(1)(c)).
 pub(super) fn accessor(caller: &Caller) -> Accessor {
     let requester = caller.requester();
     Accessor {
@@ -63,7 +64,7 @@ pub(super) fn accessor(caller: &Caller) -> Accessor {
                 code: purpose.code.clone(),
             })
             .collect(),
-        relayed: caller.relayed().map(relayed),
+        relayed: relayed(caller),
         // NOTE: no specification governs this: our own design; the gateway binds no
         // caller to a party and reads no actor chain or representation into the record.
         binding: None,
@@ -72,12 +73,16 @@ pub(super) fn accessor(caller: &Caller) -> Accessor {
     }
 }
 
-/// What a contact point relays, as the access record names it.
+/// What a contact point relays for `caller`, as the access record names
+/// it.
 #[expect(
     clippy::expect_used,
     reason = "the gate admits a contact point's caller only with what contact_point::record accepts, so the record holds the same relayed values"
 )]
-fn relayed(relayed: &Relayed) -> ehds_logging::record::Relayed {
-    contact_point::record(relayed)
-        .expect("the gate should have refused what the access record refuses")
+fn relayed(caller: &Caller) -> Option<ehds_logging::record::Relayed> {
+    let (relayed, asserted) = caller.relayed().zip(caller.asserted())?;
+    Some(
+        contact_point::record(relayed, asserted)
+            .expect("the gate should have refused what the access record refuses"),
+    )
 }

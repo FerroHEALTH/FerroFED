@@ -232,7 +232,7 @@ async fn a_demographic_request_of_a_caller_that_is_no_contact_point_is_routed() 
 async fn a_definition_request_needs_no_trc_patient() -> TestResult {
     let bound = gateway().await?;
     let listed = at_a(Request::get("/v1/definition/template/adl1.4").body(Body::empty())?)?;
-    let (status, text) = answered(&bound, bearing(listed, &minted(&untreated())?)?).await?;
+    let (status, text) = answered(&bound, super::super::presenting(listed, &untreated())?).await?;
     assert_ne!(StatusCode::FORBIDDEN, status, "{text}");
     assert_reached_a(&bound, &Method::GET, "/v1/definition/template/adl1.4").await
 }
@@ -241,12 +241,16 @@ async fn a_definition_request_needs_no_trc_patient() -> TestResult {
 #[tokio::test]
 async fn a_routed_request_whose_token_names_no_trc_patient_is_trc_missing() -> TestResult {
     let bound = gateway().await?;
-    let token = minted(&untreated())?;
     let read = to_ehr(&Method::GET, "/ehr/{ehr_id}", EHR_A)?;
-    assert_refused_as(&bound, bearing(read, &token)?, "trc-missing").await?;
     assert_refused_as(
         &bound,
-        bearing(by_subject(PATIENT)?, &token)?,
+        super::super::presenting(read, &untreated())?,
+        "trc-missing",
+    )
+    .await?;
+    assert_refused_as(
+        &bound,
+        super::super::presenting(by_subject(PATIENT)?, &untreated())?,
         "trc-missing",
     )
     .await

@@ -163,12 +163,11 @@ pub(crate) struct ReadContactPoint {
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ReadProfessional {
-    pub(crate) family_name: String,
-    pub(crate) given_name: String,
     pub(crate) country_code: String,
     pub(crate) hp_identifier: String,
     pub(crate) issuing_authority_name: String,
     pub(crate) hp_professional_role: Vec<ReadPurpose>,
+    pub(crate) on_behalf_of: Option<ReadPurpose>,
     pub(crate) healthcare_provider_identifier: String,
 }
 
@@ -178,8 +177,6 @@ pub(crate) struct ReadProfessional {
 pub(crate) struct ReadProvider {
     pub(crate) healthcare_provider_identifier: String,
     pub(crate) issuing_authority_name: String,
-    pub(crate) healthcare_provider_name: String,
-    pub(crate) healthcare_provider_address: String,
 }
 
 /// The synthetic national contact point.
@@ -193,20 +190,20 @@ pub(crate) fn relayed() -> Relayed {
         contact_point: CONTACT_POINT.to_owned(),
         country_code: "XA".to_owned(),
         professional: HealthProfessional {
-            family_name: "Example-Family".to_owned(),
-            given_name: "Example-Given".to_owned(),
             hp_identifier: "XA-HP-0042".to_owned(),
             issuing_authority_name: "Example Professional Register".to_owned(),
             hp_professional_role: vec![Role {
                 system: Some("urn:oid:2.999.9".to_owned()),
                 code: "physician".to_owned(),
             }],
+            on_behalf_of: Some(Role {
+                system: Some("urn:oid:2.999.9".to_owned()),
+                code: "nurse".to_owned(),
+            }),
         },
         provider: HealthcareProvider {
             identifier: "XA-HCP-0007".to_owned(),
             issuing_authority_name: "Example Provider Register".to_owned(),
-            name: "Example Hospital".to_owned(),
-            address: "1 Example Street, Example City".to_owned(),
         },
     }
 }

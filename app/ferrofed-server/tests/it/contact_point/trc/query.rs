@@ -183,7 +183,7 @@ async fn a_population_query_of_a_caller_that_is_no_contact_point_is_served() -> 
 async fn a_query_whose_token_names_no_trc_patient_is_trc_missing_and_asks_nobody() -> TestResult {
     let bound = gateway().await?;
     for request in [posted(PATIENT)?, got(PATIENT)?, stored_posted(PATIENT)?] {
-        let request = bearing(request, &minted(&untreated())?)?;
+        let request = super::super::presenting(request, &untreated())?;
         assert_refused_as(&bound, request, "trc-missing").await?;
     }
     Ok(())

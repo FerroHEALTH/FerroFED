@@ -77,27 +77,26 @@ pub(crate) struct ConveyedContactPoint {
     pub(crate) healthcare_provider: ConveyedProvider,
 }
 
-/// 2026/2099 Annex Table 1 as a node reads it.
+/// 2026/2099 Annex Table 1 as a node reads it, with `on-behalf-of` and no
+/// name.
 #[derive(Debug, Deserialize, serde::Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ConveyedProfessional {
-    pub(crate) family_name: String,
-    pub(crate) given_name: String,
     pub(crate) country_code: String,
     pub(crate) hp_identifier: String,
     pub(crate) issuing_authority_name: String,
     pub(crate) hp_professional_role: Vec<ConveyedPurpose>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) on_behalf_of: Option<ConveyedPurpose>,
     pub(crate) healthcare_provider_identifier: String,
 }
 
-/// 2026/2099 Annex Table 2 as a node reads it.
+/// 2026/2099 Annex Table 2 as a node reads it, with no name or address.
 #[derive(Debug, Deserialize, serde::Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ConveyedProvider {
     pub(crate) healthcare_provider_identifier: String,
     pub(crate) issuing_authority_name: String,
-    pub(crate) healthcare_provider_name: String,
-    pub(crate) healthcare_provider_address: String,
 }
 
 /// The claims `token` carries, read without verifying it.

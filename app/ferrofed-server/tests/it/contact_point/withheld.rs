@@ -24,14 +24,13 @@ use ferrofed_server::config::auth::AuthSettings;
 use ferrofed_server::config::settings::ConsentDisclosure;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
-use ferrofed_testkit::issuer::Issuer;
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
 use openehr_its::rest::client::ReqwestTransport;
 
-use super::{declared, relaying};
+use super::{declared, presenting, relaying};
 use crate::auth::{TestResult, bearing, minted, query, sent};
 use crate::consent_withheld::{
     AT_A, AT_B, BOTH, Crossref, Denies, NOWHERE, by_subject, ehr_node, names_consent, record_of,
@@ -76,7 +75,7 @@ async fn as_contact_point(
     app: &Router,
     request: Request<Body>,
 ) -> Result<(StatusCode, String), Box<dyn Error>> {
-    let (status, _, text) = sent(app, bearing(request, &minted(&relaying())?)?).await?;
+    let (status, _, text) = sent(app, presenting(request, &relaying())?).await?;
     Ok((status, text))
 }
 
@@ -88,17 +87,13 @@ async fn as_contact_point(
 async fn an_excluded_member_and_one_without_the_patient_answer_alike() -> TestResult {
     let a = node_answering("uid-at-a").await;
     let b = node_answering("uid-at-b").await;
-    let restricted = disclosing((&a, &b), (Crossref::Knows(BOTH), Denies(true)), declared()?)?;
+    let restricted = disclosing((&a, &b), (Crossref::Knows(BOTH), Denies(true)), declared())?;
     let (status, hidden) = as_contact_point(&restricted, query()?).await?;
     assert_eq!(StatusCode::OK, status, "{hidden}");
     assert!(!names_consent(&hidden), "Art 8: {hidden}");
     assert!(wire(&b).await?.is_empty(), "N27a: node B receives nothing");
 
-    let unknown = disclosing(
-        (&a, &b),
-        (Crossref::Knows(AT_A), Denies(false)),
-        declared()?,
-    )?;
+    let unknown = disclosing((&a, &b), (Crossref::Knows(AT_A), Denies(false)), declared())?;
     let (_, absent) = as_contact_point(&unknown, query()?).await?;
     assert_eq!(
         record_of(&absent, "node-b-pub")?,
@@ -116,20 +111,7 @@ async fn an_excluded_member_and_one_without_the_patient_answer_alike() -> TestRe
 async fn the_deployments_own_caller_still_sees_the_exclusion_disclosed() -> TestResult {
     let a = node_answering("uid-at-a").await;
     let b = node_answering("uid-at-b").await;
-    let contact_point = Issuer::new("https://ncp.example.test")?;
-    let mut auth = crate::support::caller::auth();
-    let mut declared_issuer = declared()?
-        .issuers
-        .into_iter()
-        .next()
-        .ok_or("the declared issuer")?;
-    contact_point.name().clone_into(&mut declared_issuer.issuer);
-    declared_issuer.verification = crate::support::caller::key_set(
-        contact_point.name(),
-        &crate::support::caller::jwks_file_of(&contact_point)?,
-    );
-    auth.issuers.push(declared_issuer);
-    let app = disclosing((&a, &b), (Crossref::Knows(BOTH), Denies(true)), auth)?;
+    let app = disclosing((&a, &b), (Crossref::Knows(BOTH), Denies(true)), declared())?;
     let (status, _, text) = sent(
         &app,
         bearing(query()?, &minted(&crate::support::caller::claims())?)?,
@@ -143,10 +125,7 @@ async fn the_deployments_own_caller_still_sees_the_exclusion_disclosed() -> Test
         "N27a: {text}"
     );
 
-    let mut relayed = relaying();
-    contact_point.name().clone_into(&mut relayed.iss);
-    let request = bearing(query()?, &contact_point.mint(&relayed)?)?;
-    let (status, _, text) = sent(&app, request).await?;
+    let (status, _, text) = sent(&app, presenting(query()?, &relaying())?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let answer: Answer = serde_json::from_str(&text)?;
     assert_eq!(
@@ -165,7 +144,7 @@ async fn the_deployments_own_caller_still_sees_the_exclusion_disclosed() -> Test
 async fn a_restricted_patient_and_an_unknown_one_answer_alike() -> TestResult {
     let a = ehr_node("cdr-a.example.org", crate::facade::EHR_A).await;
     let b = ehr_node("cdr-b.example.org", crate::facade::EHR_B).await;
-    let restricted = disclosing((&a, &b), (Crossref::Knows(AT_B), Denies(true)), declared()?)?;
+    let restricted = disclosing((&a, &b), (Crossref::Knows(AT_B), Denies(true)), declared())?;
     let (status, text) = as_contact_point(&restricted, by_subject()?).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "RFC 9110 §15.5.5: {text}");
     let hidden = error_body(&text)?;
@@ -176,7 +155,7 @@ async fn a_restricted_patient_and_an_unknown_one_answer_alike() -> TestResult {
     let unknown = disclosing(
         (&a, &b),
         (Crossref::Knows(NOWHERE), Denies(false)),
-        declared()?,
+        declared(),
     )?;
     let (absent_status, absent_text) = as_contact_point(&unknown, by_subject()?).await?;
     let absent = error_body(&absent_text)?;

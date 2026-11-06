@@ -5,8 +5,9 @@
 //! (Regulation (EU) 2025/327 Annex II 3.2(a), (b); Implementing Regulation
 //! (EU) 2026/2099 Art 7, Annex Tables 1 and 2): the professional and the
 //! provider of another Member State with their country and issuing
-//! authorities, marked as asserted by the contact point it names, and the
-//! correlation identifier the connector sent.
+//! authorities and what the eHDSI identity assertion states of them, marked
+//! as asserted by the contact point it names, with no name or address (GDPR
+//! Art 5(1)(c)), and the correlation identifier the connector sent.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -21,15 +22,14 @@ use serde_json::Value;
 use super::{
     LAB_REPORT, TestResult, accesses, composition, details, gateway_under, node_with_rows,
 };
-use crate::auth::{bearing, minted, query};
+use crate::auth::query;
 use crate::contact_point::{
-    CORRELATION, CORRELATION_HEADER, COUNTRY, FAMILY, GIVEN, HCP_ADDRESS, HCP_AUTHORITY, HCP_ID,
-    HCP_NAME, HP_AUTHORITY, HP_ID, ROLE, ROLE_SYSTEM, declared, relaying,
+    CORRELATION, CORRELATION_HEADER, COUNTRY, HCP_AUTHORITY, HCP_ID, HCP_NAME, HP_AUTHORITY, HP_ID,
+    HP_NAME, NCP_ISSUER, ROLE, ROLE_SYSTEM, declared, presenting, relaying,
 };
 use crate::facade::settings_with_room;
 use crate::feed_audit::SETTLE;
 use crate::support::call;
-use crate::support::caller::ISSUER;
 
 const UID_A: &str = "6a7b8c9d-1e2f-4a3b-8c4d-5e6f7a8b9c0d::cdr-a.example.org::1";
 
@@ -42,7 +42,7 @@ async fn recorded(correlation: Option<&str>) -> Result<Value, Box<dyn Error>> {
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
     let mut server = settings_with_room();
-    server.auth = declared()?;
+    server.auth = declared();
     let app = gateway_under(
         dir.path(),
         (&node_a.uri(), &node_b.uri()),
@@ -50,7 +50,7 @@ async fn recorded(correlation: Option<&str>) -> Result<Value, Box<dyn Error>> {
         "",
         &server,
     )?;
-    let mut request = bearing(query()?, &minted(&relaying())?)?;
+    let mut request = presenting(query()?, &relaying())?;
     if let Some(correlation) = correlation {
         request
             .headers_mut()
@@ -66,24 +66,26 @@ async fn recorded(correlation: Option<&str>) -> Result<Value, Box<dyn Error>> {
 }
 
 /// Annex II 3.2(a), (b), 2026/2099 Annex Tables 1 and 2: the record names
-/// every attribute the contact point relays, marked as its assertion.
+/// every attribute the contact point relays, marked as its assertion, and
+/// names the professional by their identifier, with no name or address
+/// field and no name the assertion carries (GDPR Art 5(1)(c)).
 #[tokio::test]
 async fn the_record_names_the_relayed_professional_and_provider_as_asserted() -> TestResult {
     let record = recorded(Some(CORRELATION)).await?;
     let relayed = |kind: &str| details(&record, "ehds-relayed", kind);
     for (kind, value) in [
         ("relayed-via", "contact-point"),
-        ("relayed-issuer", ISSUER),
+        ("relayed-issuer", NCP_ISSUER),
         ("asserted", "true"),
         ("country-code", COUNTRY),
-        ("hp-family-name", FAMILY),
-        ("hp-given-name", GIVEN),
+        ("hp-name", HP_ID),
         ("hp-identifier", HP_ID),
         ("hp-issuing-authority", HP_AUTHORITY),
         ("provider-identifier", HCP_ID),
         ("provider-issuing-authority", HCP_AUTHORITY),
-        ("provider-name", HCP_NAME),
-        ("provider-address", HCP_ADDRESS),
+        ("point-of-care", "Qz9-ncp-point-of-care"),
+        ("identity-assertion-id", "_Qz9-ncp-ida-1"),
+        ("trc-assertion-id", "_Qz9-ncp-trc-1"),
     ] {
         assert_eq!(relayed(kind), [value], "{kind}");
     }
@@ -91,6 +93,18 @@ async fn the_record_names_the_relayed_professional_and_provider_as_asserted() ->
         relayed("hp-professional-role"),
         [format!("{ROLE_SYSTEM}|{ROLE}")]
     );
+    for kind in [
+        "hp-family-name",
+        "hp-given-name",
+        "provider-name",
+        "provider-address",
+    ] {
+        assert!(relayed(kind).is_empty(), "{kind}");
+    }
+    let text = record.to_string();
+    for name in [HP_NAME, HCP_NAME] {
+        assert!(!text.contains(name), "the record names {name}");
+    }
     Ok(())
 }
 

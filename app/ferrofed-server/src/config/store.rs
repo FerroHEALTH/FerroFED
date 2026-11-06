@@ -18,7 +18,7 @@
 //! The store is needed in two cases, and a configuration that needs it and
 //! sets no `[store]` is refused naming the key that needs it ([`required`]):
 //! an issuer declared a national contact point
-//! (`[trust.issuer.national_contact_point]`), and the stored-query registry
+//! (`[[federation.contact_point]]`), and the stored-query registry
 //! on `backend = "postgres"`. Otherwise the gateway runs with no PostgreSQL
 //! database. No specification governs the store or its configuration: our
 //! own design.
@@ -221,12 +221,8 @@ pub fn resolve(config: &Config) -> Result<Option<StoreSettings>, Error> {
 pub fn required(config: &Config) -> Option<String> {
     // NOTE: no specification governs this: our own design; a contact point's limits must
     // hold across replicas and restarts, so its issuer is never served without the store.
-    let contact_point = config
-        .trust
-        .issuer
-        .iter()
-        .position(|issuer| issuer.national_contact_point.is_some())
-        .map(|index| format!("trust.issuer[{index}].national_contact_point"));
+    let contact_point = (!config.federation.contact_point.is_empty())
+        .then(|| String::from("federation.contact_point[0]"));
     contact_point.or_else(|| {
         (config.stored_queries.backend == Some(Backend::Postgres))
             .then(|| String::from("stored_queries.backend"))

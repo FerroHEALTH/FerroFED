@@ -110,7 +110,8 @@ impl Config {
         let metrics = resolve_metrics(&self.metrics, listen, self.profile)?;
         let auth = scrape_users(
             &metrics,
-            self.auth.resolve(&self.trust, public_url.as_ref())?,
+            self.auth
+                .resolve(&self.trust, &self.federation, public_url.as_ref())?,
         )?;
         stored_query_fan_out(&federation, stored_queries.as_ref())?;
         let terminology = self.resolve_terminology()?;

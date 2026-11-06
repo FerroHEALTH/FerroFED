@@ -8,8 +8,7 @@
 //! for beyond their `user/` and `system/` grants: the backend clients whose
 //! `system/aql-*` grant counts, the clients admitted to the DEMOGRAPHIC API,
 //! the member its `patient/` grants are bound to, the claims of the
-//! requester, the assurance and the professional, and its declaration as a
-//! national contact point. Each entry names an `[[auth.issuer]]`, which says
+//! requester, the assurance and the professional. Each entry names an `[[auth.issuer]]`, which says
 //! how its tokens are verified. `mode = "edge"` with `[trust.edge]` reads the
 //! credential from the header a trusted proxy signs its assertion in, and
 //! `[trust.purpose_of_use]` sets the §13.4 rule. No specification governs
@@ -21,9 +20,9 @@ use ferrohealth_smart::resource::Settings as KeySetSettings;
 use ferrohealth_smart::resource::introspection::IntrospectionSettings;
 use http::HeaderName;
 use serde::Deserialize;
+use serde::de::IgnoredAny;
 
 use crate::config::auth::assurance::AssuranceClaims;
-use crate::config::auth::contact_point::ContactPointClaims;
 use crate::config::auth::requester::RequesterClaims;
 use crate::config::auth::{
     AuthFault, AuthMode, IssuerSettings, PatientBinding, Verification, fault,
@@ -120,11 +119,24 @@ pub struct TrustedIssuer {
     /// Implementing Regulation (EU) 2026/2099 Annex Table 1; absent by
     /// default, and then none is read or conveyed.
     pub professional_issuing_authority: Option<String>,
-    /// The declaration of this issuer as a national contact point for
-    /// digital health, with the claims of its tokens that carry the
-    /// Implementing Regulation (EU) 2026/2099 Annex attributes
-    /// (`[trust.issuer.national_contact_point]`); absent by default.
-    pub national_contact_point: Option<ContactPointClaims>,
+    /// The removed `[trust.issuer.national_contact_point]`, read only so that
+    /// a configuration still setting it is refused by name
+    /// ([`AuthFault::ContactPointMoved`]); its value is never kept.
+    pub national_contact_point: Option<Removed>,
+}
+
+/// A removed table, read only so that a configuration still setting it is
+/// refused by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Removed;
+
+impl<'de> Deserialize<'de> for Removed {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        IgnoredAny::deserialize(deserializer).map(|_ignored| Self)
+    }
 }
 
 /// `[trust.issuer.patient]`: the one member endpoint whose platform issues
@@ -263,11 +275,12 @@ fn policy(
         &format!("{key}.professional_issuing_authority"),
         written.professional_issuing_authority.as_ref(),
     )?;
-    let national_contact_point = written
-        .national_contact_point
-        .as_ref()
-        .map(|claims| claims.resolve(&format!("{key}.national_contact_point")))
-        .transpose()?;
+    if written.national_contact_point.is_some() {
+        return Err(fault(
+            &format!("{key}.national_contact_point"),
+            AuthFault::ContactPointMoved,
+        ));
+    }
     Ok(IssuerSettings {
         backend_clients: written.backend_clients.iter().cloned().collect(),
         demographic_clients: written.demographic_clients.iter().cloned().collect(),
@@ -276,7 +289,6 @@ fn policy(
         assurance,
         client_tokens_act_for_professional: written.client_tokens_act_for_professional,
         professional_issuing_authority,
-        national_contact_point,
         ..IssuerSettings::new(written.issuer.clone(), verification)
     })
 }

@@ -66,36 +66,12 @@ messages! {
     SettingNcpCorrelationDesc = "setting-ncp-correlation-desc",
     /// `Added countries`
     SettingNcpCountries = "setting-ncp-countries",
-    /// `The countries beside the 27 Member States a relayed country code may name.`
+    /// `The countries beside the 27 Member States the contact point's countries may name.`
     SettingNcpCountriesDesc = "setting-ncp-countries-desc",
-    /// `Country code claim`
-    SettingNcpCountryCode = "setting-ncp-country-code",
-    /// `The claim carrying the country that issued the professional's identification data (Implementing Regulation (EU) 2026/2099 Annex Table 1).`
-    SettingNcpCountryCodeDesc = "setting-ncp-country-code-desc",
-    /// `Family name claim`
-    SettingNcpFamilyName = "setting-ncp-family-name",
-    /// `The claim carrying the professional's family name (Annex Table 1). Set, it declares the issuer a national contact point.`
-    SettingNcpFamilyNameDesc = "setting-ncp-family-name-desc",
-    /// `Given name claim`
-    SettingNcpGivenName = "setting-ncp-given-name",
-    /// `The claim carrying the professional's given name (Annex Table 1).`
-    SettingNcpGivenNameDesc = "setting-ncp-given-name-desc",
-    /// `Professional's issuing authority claim`
-    SettingNcpProfessionalAuthority = "setting-ncp-professional-authority",
-    /// `The claim carrying the authority that issued the professional's identifier (Annex Table 1).`
-    SettingNcpProfessionalAuthorityDesc = "setting-ncp-professional-authority-desc",
-    /// `Provider address claim`
-    SettingNcpProviderAddress = "setting-ncp-provider-address",
-    /// `The claim carrying the healthcare provider's address (Annex Table 2).`
-    SettingNcpProviderAddressDesc = "setting-ncp-provider-address-desc",
-    /// `Provider's issuing authority claim`
-    SettingNcpProviderAuthority = "setting-ncp-provider-authority",
-    /// `The claim carrying the authority that issued the provider's identifier (Annex Table 2).`
-    SettingNcpProviderAuthorityDesc = "setting-ncp-provider-authority-desc",
-    /// `Treatment relationship patient claim`
-    SettingNcpTrcPatient = "setting-ncp-trc-patient",
-    /// `The claim carrying the patient the treatment relationship confirmation binds, as system|value; a patient-data request on the FHIR face names this patient (eHDSI XCA Profile 8.0.1 §4.2.1).`
-    SettingNcpTrcPatientDesc = "setting-ncp-trc-patient-desc",
+    /// `Contact point issuer`
+    SettingNcpIssuer = "setting-ncp-issuer",
+    /// `The token issuer of a national contact point, a federation issuer whose [[auth.federation]] table sets contact_point = true.`
+    SettingNcpIssuerDesc = "setting-ncp-issuer-desc",
     /// `Node selection`
     SettingNodeSelection = "setting-node-selection",
     /// `Which nodes a patient's query asks: localized, the nodes the localizer names, or ask-all, every node.`

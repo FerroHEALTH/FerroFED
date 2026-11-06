@@ -1,17 +1,17 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The settings of who may call, in the running configuration: `[auth]` and
-//! `[trust]`, which only the file sets, so a revision never holds them.
+//! The settings of who may call, in the running configuration: `[auth]`,
+//! `[trust]` and `[[federation.contact_point]]`, which only the file sets,
+//! so a revision never holds them.
 //!
 //! The document lists the product scope, each `[[auth.issuer]]` by its
 //! issuer, kind, key set file and audience, with the client secret of its
-//! introspection when it has one, and each `[[trust.issuer]]` by its issuer
-//! and, for an issuer declared a national contact point (Regulation (EU)
-//! 2025/327 Art 23), every key of its `[trust.issuer.national_contact_point]`:
-//! the claim each Implementing Regulation (EU) 2026/2099 Annex attribute is
-//! read from, the correlation header and the added countries. An issuer is
-//! keyed by its position, as the reload names it (`trust.issuer[0].issuer`).
+//! introspection when it has one, each `[[trust.issuer]]` by its issuer, and
+//! each national contact point's `[[federation.contact_point]]` (Regulation
+//! (EU) 2025/327 Art 23) by its issuer, correlation header and added
+//! countries. An issuer is keyed by its position, as the reload names it
+//! (`trust.issuer[0].issuer`).
 //! A secret is named by its file and never by a value, and a Basic user's
 //! password hash is not listed. Every change but an issuer's audience
 //! applies at the next reload. No specification governs this: our own
@@ -21,25 +21,16 @@ use ferrofed_operator_api::running::{SecretSetting, Section, Setting, Source};
 
 use super::{Layers, at, indexed, provenance_key, sourced};
 
-/// The keys of `[trust.issuer.national_contact_point]`, in the order the
-/// book's table lists them.
-const CONTACT_POINT: [&str; 9] = [
-    "family_name",
-    "given_name",
-    "country_code",
-    "professional_issuing_authority",
-    "provider_issuing_authority",
-    "provider_address",
-    "trc_patient",
-    "correlation_header",
-    "additional_countries",
-];
+/// The keys of a `[[federation.contact_point]]`, in the order the book's
+/// table lists them.
+const CONTACT_POINT: [&str; 3] = ["issuer", "correlation_header", "additional_countries"];
 
 /// The keys of an `[[auth.issuer]]` the document lists that apply at the
 /// next reload.
 const ISSUER: [&str; 3] = ["issuer", "kind", "jwks_file"];
 
-/// The settings of `[auth]` and `[trust]` as `layers` set them.
+/// The settings of `[auth]`, `[trust]` and `[[federation.contact_point]]` as
+/// `layers` set them.
 pub(super) fn settings(layers: &Layers) -> Vec<Setting> {
     let mut settings = vec![listed(layers, "auth.product_scope", false)];
     match at(&layers.file_now, "auth.issuer") {
@@ -66,21 +57,23 @@ pub(super) fn settings(layers: &Layers) -> Vec<Setting> {
         _ => 0,
     };
     for index in 0..trusted {
-        let prefix = format!("trust.issuer[{index}]");
-        settings.push(listed(layers, &format!("{prefix}.issuer"), false));
-        if indexed(
-            &layers.file_now,
-            &format!("{prefix}.national_contact_point"),
-        )
-        .is_some()
-        {
-            for key in CONTACT_POINT {
-                settings.push(listed(
-                    layers,
-                    &format!("{prefix}.national_contact_point.{key}"),
-                    false,
-                ));
-            }
+        settings.push(listed(
+            layers,
+            &format!("trust.issuer[{index}].issuer"),
+            false,
+        ));
+    }
+    let contact_points = match at(&layers.file_now, "federation.contact_point") {
+        Some(toml::Value::Array(tables)) => tables.len(),
+        _ => 0,
+    };
+    for index in 0..contact_points {
+        for key in CONTACT_POINT {
+            settings.push(listed(
+                layers,
+                &format!("federation.contact_point[{index}].{key}"),
+                false,
+            ));
         }
     }
     settings
@@ -164,7 +157,7 @@ mod tests {
     }
 
     /// A file declaring one introspected issuer, with its client secret
-    /// inline, and its trust entry declaring it a national contact point.
+    /// inline, its trust entry, and its `[[federation.contact_point]]`.
     const FILE: &str = r#"
 [auth]
 product_scope = "__ferrofed.operator"
@@ -186,14 +179,8 @@ password_hash = "SENTINEL-HASH-4f1"
 [[trust.issuer]]
 issuer = "https://ncp.example.org"
 
-[trust.issuer.national_contact_point]
-family_name = "ncp_family_name"
-given_name = "ncp_given_name"
-country_code = "ncp_country_code"
-professional_issuing_authority = "ncp_hp_issuing_authority"
-provider_issuing_authority = "ncp_hcp_issuing_authority"
-provider_address = "ncp_hcp_address"
-trc_patient = "ncp_trc_patient"
+[[federation.contact_point]]
+issuer = "https://ncp.example.org"
 correlation_header = "ncp-correlation-id"
 additional_countries = ["XA"]
 "#;
@@ -225,11 +212,11 @@ additional_countries = ["XA"]
             for (key, value) in [
                 ("trust.issuer[0].issuer", "https://ncp.example.org"),
                 (
-                    "trust.issuer[0].national_contact_point.family_name",
-                    "ncp_family_name",
+                    "federation.contact_point[0].issuer",
+                    "https://ncp.example.org",
                 ),
                 (
-                    "trust.issuer[0].national_contact_point.correlation_header",
+                    "federation.contact_point[0].correlation_header",
                     "ncp-correlation-id",
                 ),
                 ("auth.issuer[0].issuer", "https://ncp.example.org"),
@@ -243,7 +230,7 @@ additional_countries = ["XA"]
                 assert!(!setting.editable, "{key}: the file alone sets it");
             }
             let countries = document
-                .setting("trust.issuer[0].national_contact_point.additional_countries")
+                .setting("federation.contact_point[0].additional_countries")
                 .expect("listed");
             assert_eq!(
                 Some(toml::Value::Array(vec![toml::Value::from("XA")])),
@@ -287,7 +274,7 @@ additional_countries = ["XA"]
     }
 
     #[test]
-    fn an_issuer_not_declared_a_contact_point_lists_no_contact_point_key() {
+    fn a_file_with_no_contact_point_lists_no_contact_point_key() {
         let mut layers = layers(false);
         layers.file_now = tree(
             "[[auth.issuer]]\nissuer = \"https://idp.example.org\"\n\n[auth.issuer.introspection.client]\nclient_secret_file = \"/run/secret\"\n\n[[trust.issuer]]\nissuer = \"https://idp.example.org\"\n",
@@ -298,7 +285,7 @@ additional_countries = ["XA"]
             document
                 .settings
                 .iter()
-                .all(|setting| !setting.key.contains("national_contact_point"))
+                .all(|setting| !setting.key.contains("contact_point"))
         );
         let secret = document
             .setting("auth.issuer[0].introspection.client.client_secret")

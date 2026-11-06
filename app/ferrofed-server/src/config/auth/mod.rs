@@ -29,12 +29,14 @@ use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
 use ferrohealth_smart::basic::PasswordStore;
 use ferrohealth_smart::config::{AuthSection, BasicSection, IssuerKey};
+use ferrohealth_smart::federation::FederationSection;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 use ferrohealth_smart::resource::introspection::IntrospectionSettings;
 use http::HeaderName;
 use secrecy::ExposeSecret as _;
 use serde::{Deserialize, Serialize};
 
+use crate::config::Federation;
 use crate::config::auth::assurance::Assurance;
 use crate::config::auth::contact_point::ContactPoint;
 use crate::config::auth::requester::RequesterClaims;
@@ -221,10 +223,11 @@ pub struct IssuerSettings {
     /// The claim that carries the agency that issued the professional's
     /// identifier, when this issuer's tokens carry one.
     pub professional_issuing_authority: Option<String>,
-    /// This issuer as a national contact point, when the deployment declares
-    /// it one: its requests are served with consent exclusions withheld,
-    /// and its tokens relay the professional and the provider of another
-    /// Member State.
+    /// This issuer as a national contact point, when its `[[auth.federation]]`
+    /// table sets `contact_point = true`, with its
+    /// `[[federation.contact_point]]`: its requests are served with consent
+    /// exclusions withheld, and its tokens relay the professional and the
+    /// provider of another Member State.
     pub national_contact_point: Option<ContactPoint>,
 }
 
@@ -284,6 +287,24 @@ impl Verification {
         }
     }
 
+    /// Returns the issuer's `[[auth.federation]]` table, when it is a
+    /// `federation` issuer.
+    #[must_use]
+    pub fn federation(&self) -> Option<&FederationSection> {
+        match self {
+            Self::KeySet(settings) => settings.federation.as_ref(),
+            Self::Introspection(settings) => settings.federation.as_ref(),
+        }
+    }
+
+    /// Whether the issuer is a MyHealth@EU contact point, its
+    /// `[[auth.federation]]` table setting `contact_point = true`.
+    #[must_use]
+    pub fn is_contact_point(&self) -> bool {
+        self.federation()
+            .is_some_and(|section| section.contact_point == Some(true))
+    }
+
     /// Returns the audiences, to be changed.
     pub fn audience_mut(&mut self) -> &mut Vec<String> {
         match self {
@@ -341,8 +362,17 @@ pub enum AuthFault {
     /// which the access record would then hold.
     CorrelationCredential,
     /// An additional country is no ISO 3166-1 alpha-2 code, or is a Member
-    /// State, which every contact point already admits.
+    /// State, which every contact point already admits; or a contact point's
+    /// `countries` names a code that is neither.
     CountryCode,
+    /// A `[[federation.contact_point]]` names no issuer whose
+    /// `[[auth.federation]]` table sets `contact_point = true`.
+    NotContactPoint,
+    /// A contact-point issuer has no `[[federation.contact_point]]`.
+    ContactPointUndeclared,
+    /// `[trust.issuer.national_contact_point]`, removed in favour of
+    /// `[[auth.federation]]` and `[[federation.contact_point]]`.
+    ContactPointMoved,
 }
 
 impl fmt::Display for AuthFault {
@@ -372,15 +402,25 @@ impl fmt::Display for AuthFault {
                 "names a header that carries a credential, which the access record would then hold"
             }
             Self::CountryCode => {
-                "names a code that is not two upper-case letters (ISO 3166-1 alpha-2), or a Member State, which every contact point admits"
+                "names a code that is not two upper-case letters (ISO 3166-1 alpha-2), or a Member State, which every contact point admits; or, in a contact point's countries, a code that is no Member State and not one of its [[federation.contact_point]] additional_countries"
+            }
+            Self::NotContactPoint => {
+                "names no [[auth.issuer]] of kind \"federation\" whose [[auth.federation]] table sets contact_point = true"
+            }
+            Self::ContactPointUndeclared => {
+                "is a contact point, and no [[federation.contact_point]] table names it"
+            }
+            Self::ContactPointMoved => {
+                "is removed: declare a contact point as a kind = \"federation\" [[auth.issuer]] whose [[auth.federation]] table sets contact_point = true, with its correlation_header and additional_countries in [[federation.contact_point]]"
             }
         })
     }
 }
 
 impl Auth {
-    /// Resolves `[auth]` with `trust`, its policy, reading every `_file`
-    /// secret.
+    /// Resolves `[auth]` with `trust`, its policy, and the
+    /// `[[federation.contact_point]]` tables of `federation`, reading every
+    /// `_file` secret.
     ///
     /// An `[[auth.issuer]]` that names no audience takes `public`, the public
     /// base URL as written, when that is set. A section that names no issuer
@@ -390,10 +430,12 @@ impl Auth {
     /// # Errors
     /// Returns [`Error::Smart`] for a section `ferrohealth-smart` refuses,
     /// [`Error::Auth`] naming the key and the [`AuthFault`] for one FerroFED
-    /// refuses, and the errors of `[trust]`.
+    /// refuses, and the errors of `[trust]` and of
+    /// [`contact_point::declare`].
     pub fn resolve(
         &self,
         trust: &Trust,
+        federation: &Federation,
         public: Option<&PublicUrl>,
     ) -> Result<AuthSettings, Error> {
         let mut section = self.0.clone();
@@ -444,7 +486,8 @@ impl Auth {
                 basic = Some(BasicUsers::new(store, written));
             }
         }
-        let (mode, purpose_required, issuers) = trust.resolve(keyed, introspected)?;
+        let (mode, purpose_required, mut issuers) = trust.resolve(keyed, introspected)?;
+        contact_point::declare(&mut issuers, &federation.contact_point)?;
         Ok(AuthSettings {
             mode,
             purpose_required,

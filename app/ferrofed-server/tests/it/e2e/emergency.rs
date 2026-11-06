@@ -36,7 +36,8 @@ use serde_json::Value;
 use super::TestResult;
 use super::store::store_toml;
 use crate::access::node_with_rows;
-use crate::auth::{bearing, minted, sent};
+use crate::auth::{minted, sent};
+use crate::contact_point::bound;
 use crate::contact_point::emergency::{
     ANOMALY, asked, contact_point_router, emergency_settings, marked, records, relayed_for,
 };
@@ -95,7 +96,7 @@ impl Members {
         )?;
         let state = Arc::new(tokio::task::block_in_place(|| AppState::build(&settings))?);
         Ok(Replica {
-            app: contact_point_router(Arc::clone(&state))?,
+            app: contact_point_router(Arc::clone(&state)),
             _state: state,
             _dir: dir,
         })
@@ -294,7 +295,7 @@ async fn two_replicas_racing_grant_exactly_the_threshold() -> TestResult {
         } else {
             second.app.clone()
         };
-        let request = bearing(
+        let request = bound(
             crate::auth::query()?,
             &minted(&relayed_for(HP, "EMERGENCY"))?,
         )?;
@@ -368,7 +369,8 @@ mod fhir_face {
     use super::super::TestResult;
     use super::super::store::store_toml;
     use super::HP;
-    use crate::auth::{bearing, minted, sent};
+    use crate::auth::{minted, sent};
+    use crate::contact_point::bound;
     use crate::contact_point::emergency::{contact_point_router, emergency_purpose, relayed_for};
     use crate::facade::{EHR_A, EHR_B, received};
     use crate::feed_audit::audit_tables;
@@ -392,7 +394,7 @@ mod fhir_face {
         let dir = tempfile::tempdir()?;
         let app = fhir_gateway(dir.path(), (&a, &b, &pdq), &repository, &server)?;
         let token = minted(&relayed_for(HP, "EMERGENCY"))?;
-        let (status, _, text) = sent(&app, bearing(summary("")?, &token)?).await?;
+        let (status, _, text) = sent(&app, bound(summary("")?, &token)?).await?;
         assert_eq!(
             StatusCode::OK,
             status,
@@ -400,7 +402,7 @@ mod fhir_face {
         );
         let asked = received(&a).await?.len();
 
-        let (status, _, text) = sent(&app, bearing(summary("")?, &token)?).await?;
+        let (status, _, text) = sent(&app, bound(summary("")?, &token)?).await?;
         assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
         let outcome: Value = serde_json::from_str(&text)?;
         assert_eq!(
@@ -425,8 +427,8 @@ mod fhir_face {
 
     /// The FHIR face over `a` and `b`, the summary header asked of `pdq`,
     /// recording to `repository`, its emergency accesses counted in the store
-    /// database `emergency_fhir` on `server` at a threshold of one, its test
-    /// issuer declared a national contact point.
+    /// database `emergency_fhir` on `server` at a threshold of one, trusting
+    /// the test contact point.
     fn fhir_gateway(
         dir: &Path,
         (a, b, pdq): (&Server, &Server, &Server),
@@ -452,7 +454,7 @@ mod fhir_face {
         )?
         .resolve()?;
         let state = Arc::new(tokio::task::block_in_place(|| AppState::build(&settings))?);
-        contact_point_router(state)
+        Ok(contact_point_router(state))
     }
 }
 

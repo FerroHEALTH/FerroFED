@@ -10,7 +10,8 @@
   from a listed delegate. The access record names how a contact point
   relayed its accessor in `relayed-via` and `relayed-issuer`, and the gate
   refuses a contact point's token whose provider identifier is no
-  `urn:oid:` or `urn:hl7ii:` identifier, or whose role is ISCO `44`.
+  `urn:oid:` or `urn:hl7ii:` identifier, or whose role is ISCO `44` without
+  `on-behalf-of`.
 - Every `[[auth.issuer]]` holds its own `audience`, which takes
   `gateway.public_url` when unset; a changed `audience` of an issuer the
   gateway already trusts waits for a restart, named `auth.issuer.audience`

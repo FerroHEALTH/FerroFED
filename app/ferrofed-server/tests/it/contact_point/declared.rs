@@ -8,8 +8,8 @@
 //! authenticated by the gateway (Implementing Regulation (EU) 2026/2099
 //! Art 6(1) and (2); §13.4 authn-end-user, CP-39), that a purpose of use is
 //! required, the emergency access limit in effect (eHDSI Section II Security
-//! Services 10.0.0 §2.5), and, per issuer, the claim each Annex attribute is
-//! read from. A deployment that declares no contact point declares nothing.
+//! Services 10.0.0 §2.5), and, per issuer, the claim each attribute is read
+//! from. A deployment that declares no contact point declares nothing.
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -18,10 +18,10 @@ use axum::body::Body;
 use http::{Method, Request, StatusCode};
 use serde::Deserialize;
 
-use super::{CORRELATION_HEADER, declared};
+use super::{CORRELATION_HEADER, NCP_ISSUER, declared};
 use crate::auth::{Gateway, TestResult, bearing, minted, sent};
 use crate::facade::schema;
-use crate::support::caller::{ISSUER, claims};
+use crate::support::caller::claims;
 
 /// The members of `OPTIONS {base}/` this suite reads.
 #[derive(Debug, Deserialize)]
@@ -75,7 +75,7 @@ async fn described(gateway: &Gateway) -> Result<Options, Box<dyn Error>> {
 // conformance: CP-23
 #[tokio::test]
 async fn a_declared_contact_point_is_described_with_how_its_requests_are_served() -> TestResult {
-    let options = described(&Gateway::with(declared()?).await?).await?;
+    let options = described(&Gateway::with(declared()).await?).await?;
     let member = options
         .federation
         .national_contact_point
@@ -94,37 +94,38 @@ async fn a_declared_contact_point_is_described_with_how_its_requests_are_served(
     let [issuer] = member.issuers.as_slice() else {
         return Err("one contact point".into());
     };
-    assert_eq!(ISSUER, issuer.issuer);
+    assert_eq!(NCP_ISSUER, issuer.issuer);
     assert_eq!(
         Some(CORRELATION_HEADER),
         issuer.correlation_header.as_deref()
     );
-    for (attribute, claim) in [
-        ("health_professional.family_name", "ncp_family_name"),
+    for (field, claim) in [
         (
-            "health_professional.hp_identifier",
-            "extensions.ihe_iua.national_provider_identifier",
+            "professional.hp_identifier",
+            "ehdsi.professional.hp_identifier",
         ),
         (
-            "health_professional.hp_professional_role",
-            "extensions.ihe_iua.subject_role",
+            "provider.healthcare_provider_identifier",
+            "ehdsi.provider.healthcare_provider_identifier",
         ),
-        (
-            "healthcare_provider.healthcare_provider_identifier",
-            "extensions.ihe_iua.subject_organization_id",
-        ),
-        (
-            "healthcare_provider.healthcare_provider_address",
-            "ncp_hcp_address",
-        ),
+        ("purpose_of_use", "ehdsi.purpose_of_use"),
     ] {
         assert_eq!(
             Some(claim),
-            issuer.claims.get(attribute).map(String::as_str),
-            "{attribute}"
+            issuer.claims.get(field).map(String::as_str),
+            "{field}"
         );
     }
-    assert_eq!(10, issuer.claims.len(), "every Annex attribute, once");
+    for configured in [
+        "professional.country_code",
+        "professional.issuing_authority_name",
+        "provider.issuing_authority_name",
+    ] {
+        assert!(
+            !issuer.claims.contains_key(configured),
+            "a configured value is no claim: {configured}"
+        );
+    }
     Ok(())
 }
 
@@ -132,7 +133,7 @@ async fn a_declared_contact_point_is_described_with_how_its_requests_are_served(
 #[tokio::test]
 async fn a_tightened_emergency_limit_is_declared_as_the_one_in_effect() -> TestResult {
     let gateway = Gateway::with_rows(
-        declared()?,
+        declared(),
         "\n[emergency]\nthreshold = 2\nwindow_s = 3600\n",
     )
     .await?;

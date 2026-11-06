@@ -149,7 +149,7 @@ impl Code {
                 "the access token states no authentication assurance at the level patient data requires"
             }
             Self::ContactPointAttributesRequired => {
-                "the national contact point's access token does not carry every health professional and healthcare provider attribute of Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2"
+                "the national contact point's access token does not carry what the eHDSI identity and treatment assertions carry"
             }
             Self::CorrelationInvalid => {
                 "the national contact point's correlation header is sent once, as 1 to 128 visible ASCII characters"

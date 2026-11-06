@@ -282,6 +282,10 @@ impl Issuer {
 /// requires, every scope, and the purpose of use `TREAT` in the IHE IUA
 /// extension.
 #[derive(Debug, Clone, Serialize)]
+#[expect(
+    clippy::disallowed_types,
+    reason = "the test seam: a test writes the confirmation and the eHDSI attributes it asserts as JSON"
+)]
 pub struct Claims {
     /// `iss`.
     pub iss: String,
@@ -316,10 +320,54 @@ pub struct Claims {
     /// name, when set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub act: Option<std::collections::BTreeMap<String, String>>,
+    /// The RFC 7800 `cnf` claim, when set: the key or the certificate the
+    /// token is bound to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cnf: Option<serde_json::Value>,
+    /// What a contact point's authorization server writes under `ehdsi`,
+    /// each value at its dotted field name (`professional.hp_identifier`),
+    /// nested at the dots when the token is signed; empty by default.
+    #[serde(
+        serialize_with = "nested",
+        skip_serializing_if = "std::collections::BTreeMap::is_empty"
+    )]
+    pub ehdsi: Attributes,
     /// Any other string claim, by name: the claims a deployment maps in
     /// `[trust.issuer.requester]`, for instance.
     #[serde(flatten)]
     pub other: std::collections::BTreeMap<String, String>,
+}
+
+/// The attributes a test token asserts under `ehdsi`, each at its dotted
+/// field name.
+#[expect(
+    clippy::disallowed_types,
+    reason = "the test seam: a test writes each attribute it asserts as JSON"
+)]
+pub type Attributes = std::collections::BTreeMap<String, serde_json::Value>;
+
+/// Writes `fields`, each at a dotted name, as one object nested at the
+/// dots.
+fn nested<S: serde::Serializer>(fields: &Attributes, serializer: S) -> Result<S::Ok, S::Error> {
+    let mut root = serde_json::Map::new();
+    for (name, value) in fields {
+        let mut segments: Vec<&str> = name.split('.').collect();
+        let Some(last) = segments.pop() else {
+            continue;
+        };
+        let mut at = &mut root;
+        for segment in segments {
+            let entry = at
+                .entry(segment.to_owned())
+                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+            let serde_json::Value::Object(next) = entry else {
+                return Err(serde::ser::Error::custom("a field nests under a value"));
+            };
+            at = next;
+        }
+        at.insert(last.to_owned(), value.clone());
+    }
+    root.serialize(serializer)
 }
 
 impl Claims {
@@ -342,6 +390,8 @@ impl Claims {
             authorization_details: None,
             ehr_id: None,
             act: None,
+            cnf: None,
+            ehdsi: std::collections::BTreeMap::new(),
             other: std::collections::BTreeMap::new(),
         }
     }

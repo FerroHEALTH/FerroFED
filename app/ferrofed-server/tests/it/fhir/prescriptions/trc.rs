@@ -33,8 +33,8 @@ use super::dispense::{
 };
 use super::withdraw::withdrawal;
 use super::{AT_A, Members, RX_A, RX_B, face_id};
-use crate::auth::{bearing, minted};
-use crate::contact_point::{HP_ID, TRC_CLAIM, relaying};
+use crate::auth::minted;
+use crate::contact_point::{HP_ID, bound, with};
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, settings_with_room};
 use crate::fhir::receive::{OTHER, OTHER_A, OTHER_NAMESPACE, rows};
 use crate::fhir::{FHIR, TestResult, UNREACHED_SUPPLIER, text_registered};
@@ -44,8 +44,8 @@ use crate::support::{Logs, call};
 const UNKNOWN: &str = "SENTINEL-UNKNOWN-9t2k";
 
 /// The gateway over `members`, both serving prescriptions and dispensations,
-/// the test patient known at both and [`OTHER`] at node A, its issuer
-/// declared a national contact point.
+/// the test patient known at both and [`OTHER`] at node A, trusting the
+/// test contact point.
 fn gateway(members: &Members, dir: &Path) -> Result<Router, Box<dyn Error>> {
     let own = format!(
         "{}{}",
@@ -64,11 +64,7 @@ fn gateway(members: &Members, dir: &Path) -> Result<Router, Box<dyn Error>> {
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let state = Arc::new(AppState::build(&settings)?);
     let mut server = settings_with_room();
-    let declared =
-        crate::contact_point::claim_names().resolve("trust.issuer[0].national_contact_point")?;
-    for issuer in &mut server.auth.issuers {
-        issuer.national_contact_point = Some(declared.clone());
-    }
+    server.auth = crate::contact_point::declared();
     Ok(ferrofed_server::router(state, &server))
 }
 
@@ -80,10 +76,7 @@ async fn holding() -> Result<Members, Box<dyn Error>> {
 
 /// The contact point's token, its TRC binding `system`|`value`.
 fn treating(system: &str, value: &str) -> Result<String, Box<dyn Error>> {
-    let mut claims: Claims = relaying();
-    claims
-        .other
-        .insert(TRC_CLAIM.to_owned(), format!("{system}|{value}"));
+    let claims: Claims = with("patient.id", Value::String(format!("{system}|{value}")));
     minted(&claims)
 }
 
@@ -104,7 +97,7 @@ async fn unknown_answer(app: Router) -> Result<(StatusCode, String), Box<dyn Err
         "MedicationRequest?patient.identifier={}%7C{UNKNOWN}",
         NAMESPACE.replace(':', "%3A")
     ))?;
-    call(app, bearing(search, &treating(NAMESPACE, UNKNOWN)?)?).await
+    call(app, bound(search, &treating(NAMESPACE, UNKNOWN)?)?).await
 }
 
 /// The codes of the first issue's `details` of the outcome `text`.
@@ -163,7 +156,7 @@ async fn a_read_by_id_of_another_patients_prescription_is_no_data_recorded_and_s
     let token = treating(NAMESPACE, PATIENT)?;
     let answer = call(
         app,
-        bearing(
+        bound(
             get(&format!("MedicationRequest/{}", others("rx-o1")?))?,
             &token,
         )?,
@@ -200,7 +193,7 @@ async fn a_read_by_id_inside_the_trc_patients_ehr_is_served() -> TestResult {
     let token = treating(NAMESPACE, PATIENT)?;
     let (status, text) = call(
         app,
-        bearing(get(&format!("MedicationRequest/{id}"))?, &token)?,
+        bound(get(&format!("MedicationRequest/{id}"))?, &token)?,
     )
     .await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -234,7 +227,7 @@ async fn every_read_and_withdrawal_of_another_patients_resource_is_no_data() -> 
         ),
         ("a withdrawal", withdraw),
     ] {
-        let answer = call(app.clone(), bearing(request, &token)?).await?;
+        let answer = call(app.clone(), bound(request, &token)?).await?;
         assert_no_data(what, &answer, &unknown)?;
     }
     assert!(
@@ -254,7 +247,7 @@ async fn a_dispensation_for_another_patient_is_no_data_and_writes_nothing() -> T
     let body = dispensation(BY_IDENTIFIER)
         .replace(NAMESPACE, OTHER_NAMESPACE)
         .replace(PATIENT, OTHER);
-    let answer = call(app, bearing(post(&body)?, &token)?).await?;
+    let answer = call(app, bound(post(&body)?, &token)?).await?;
     assert_no_data("the dispensation", &answer, &unknown)?;
     assert!(members.unasked(), "no member is asked to look up or write");
     assert!(
@@ -270,7 +263,7 @@ async fn a_dispensation_for_the_trc_patient_is_written() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway(&members, dir.path())?;
     let token = treating(NAMESPACE, PATIENT)?;
-    let (status, text) = call(app, bearing(post(&dispensation(BY_IDENTIFIER))?, &token)?).await?;
+    let (status, text) = call(app, bound(post(&dispensation(BY_IDENTIFIER))?, &token)?).await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     assert_eq!(
         1,

@@ -35,7 +35,7 @@
 //! | `assurance_level` | `low`, `substantial` or `high`, the level of the caller's authentication (Regulation (EU) No 910/2014 Art 8(2)), when its issuer declares how its tokens state one |
 //! | `scope` | the caller's scopes as granted, or the `patient/` scopes that cover the operation under a [`Confinement`] |
 //! | `ehrId` | under a [`Confinement`] only: the patient's own `ehr_id` at the receiving node |
-//! | `national_contact_point` | for a caller a national contact point relays ([`Relayed`]): the professional of Implementing Regulation (EU) 2026/2099 Annex Table 1 under `health_professional` and the provider of Table 2 under `healthcare_provider`, each attribute under its Annex data identifier, and the contact point that asserted them as `asserted_by` |
+//! | `national_contact_point` | for a caller a national contact point relays ([`Relayed`]): the professional of Implementing Regulation (EU) 2026/2099 Annex Table 1 under `health_professional`, with `on_behalf_of` when stated, and the provider of Table 2 under `healthcare_provider`, each attribute the eHDSI identity assertion carries under its Annex data identifier and never a name or an address, and the contact point that asserted them as `asserted_by` |
 //!
 //! It never carries `person_id` or any other patient identifier (§5.4.1,
 //! N33): a [`Caller`](caller::Caller) holds no field for one, and the

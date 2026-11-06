@@ -97,8 +97,9 @@ token proving it. The caller's own token never reaches a node.
 **What changes the answer:** `trust.mode = "edge"` moves end-user
 authentication to your proxy, whose signed assertion the gateway then
 verifies; `[[auth.issuer]]` decides whose authentication you accept, and
-`[trust.issuer.national_contact_point]` declares an issuer whose tokens
-relay a professional another Member State authenticated.
+a `federation` issuer whose `[[auth.federation]]` table sets
+`contact_point = true` relays a professional another Member State
+authenticated.
 
 ## 3. Purpose of use
 
@@ -286,9 +287,9 @@ your deployment's documentation.
    The assurance level each issuer's tokens state, and the least level
      required for patient data ([trust.issuer.assurance]): …
    Issuers whose client tokens act for a named professional, and why: …
-   National contact points ([trust.issuer.national_contact_point]), the
-     entity of each Member State that authenticates its professionals
-     (2026/2099 Art 6(1)), and the claims carrying the Annex attributes: …
+   National contact points ([[federation.contact_point]]), the entity of
+     each Member State that authenticates its professionals (2026/2099
+     Art 6(1)), and the country and issuing authorities configured for each: …
    Token mode or edge mode, and for the edge mode which proxy: …
    How each node uses the conveyed caller in its release decision: …
 

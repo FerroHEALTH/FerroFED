@@ -54,8 +54,8 @@
 //!   dropped outside the test's runtime;
 //! - [`national_connector`]: the harness national connector, a test device
 //!   that plays a national contact point's connector on the FHIR face with
-//!   synthetic Implementing Regulation (EU) 2026/2099 Annex attributes
-//!   (#735);
+//!   synthetic eHDSI assertion attributes, bound to its client certificate
+//!   (#735, #1632);
 //! - [`nuts`]: the harness Nuts node, a test device that answers the
 //!   GF-Authentication access token request (Nuts RFC021) with a
 //!   `DPoP`-bound token for a valid Verifiable Presentation (#88);

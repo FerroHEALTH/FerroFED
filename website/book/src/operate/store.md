@@ -12,7 +12,7 @@ replica. No specification governs the store: it is FerroFED's own design.
 You need `[store]` in two cases:
 
 - an issuer is declared a national contact point
-  (`[trust.issuer.national_contact_point]`,
+  (`[[federation.contact_point]]`,
   [Client authentication](authentication.md));
 - the stored-query registry uses `backend = "postgres"`
   ([Stored queries](queries-and-areas.md#several-replicas-postgres)).

@@ -36,9 +36,11 @@ use ferrofed_testkit::containers::{self, TwoNodes};
 use ferrofed_testkit::eps;
 use ferrofed_testkit::issuer::Issuer;
 use ferrofed_testkit::mock::Server;
-use ferrofed_testkit::national_connector::{CLAIMS, NationalConnector, NationalId};
+use ferrofed_testkit::national_connector::{NationalConnector, NationalId, contact_point_toml};
 use ferrofed_testkit::pdqm_stub::{self, Entry};
 use ferrofed_testkit::proxy::{Bind, CapturingProxy};
+use ferrohealth_server::tls::PeerCertificates;
+use rustls::pki_types::CertificateDer;
 use tokio::net::TcpListener;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -277,8 +279,7 @@ impl Harness {
             "{identity}\n\n[gateway]\npublic_url = \"{origin}\"\n\n\
              [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
              node_selection = \"ask-all\"\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\n\n\
-             [auth]\n\n[[auth.issuer]]\nissuer = \"{NCP_ISSUER}\"\nkind = \"persons\"\n\
-             audience = [\"{AUDIENCE}\"]\njwks_file = {}\n\n[[trust.issuer]]\nissuer = \"{NCP_ISSUER}\"\n{}\n\
+             [auth]\n{}\n\
              [fhir]\nbase = \"{FHIR}\"\nreceive_namespaces = [\"{namespace}\"]\n\n\
              [fhir.operator]\nname = \"Synthetic Operator\"\nidentifier_system = \"urn:oid:2.999.9\"\n\
              identifier_value = \"operator-1\"\n\n[[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\n\
@@ -289,8 +290,7 @@ impl Harness {
              [pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n\n\
              [signing]\nkey_file = {}\njwks_uri = \"{origin}/.well-known/jwks.json\"\n{}{}",
             path_of(&document),
-            path_of(&jwks),
-            CLAIMS.toml(),
+            contact_point_toml(NCP_ISSUER, AUDIENCE, &jwks.display().to_string()),
             path_of(&eps::opt()),
             path_of(&model),
             path_of(&context),
@@ -305,21 +305,22 @@ impl Harness {
                 .resolve()?;
         let state = Arc::new(AppState::build(&settings)?);
         state.lifecycle().booted();
-        let app = ferrofed_server::router(Arc::clone(&state), &settings.server);
+        let connector =
+            NationalConnector::new(connector_issuer, AUDIENCE, format!("{origin}{FHIR}"))?;
+        // NOTE: RFC 8705 §3: the harness stands in for the listener's TLS layer, handing the
+        // gateway the connector's certificate as the certificate of the connection.
+        let presented = PeerCertificates(Arc::from(vec![CertificateDer::from(
+            connector.certificate().to_vec(),
+        )]));
+        let app = ferrofed_server::router(Arc::clone(&state), &settings.server)
+            .layer(axum::Extension(presented));
         let task = tokio::spawn(crate::support::serve_until(
             listener,
             app,
             Duration::ZERO,
             std::future::pending(),
         ));
-        Ok(Gateway {
-            connector: NationalConnector::new(
-                connector_issuer,
-                AUDIENCE,
-                format!("{origin}{FHIR}"),
-            )?,
-            task,
-        })
+        Ok(Gateway { connector, task })
     }
 }
 

@@ -167,12 +167,9 @@ demographic_clients = []
 | `trust.issuer[].assurance.claim` | `acr` | The string claim that carries the authentication assurance of this issuer's tokens. |
 | `trust.issuer[].assurance.minimum` | none | The least level a patient-data request needs: `low`, `substantial` or `high`. Required once `[trust.issuer.assurance]` is set. |
 | `trust.issuer[].assurance.low`, `.substantial`, `.high` | `[]` | The claim values that stand for each level. A value is listed at one level only, and some value must be at `minimum` or above it. |
-| `trust.issuer[].national_contact_point.family_name`, `.given_name`, `.country_code` | none | The string claims of this issuer's tokens that carry the professional's `family_name`, `given_name` and `country_code` (Implementing Regulation (EU) 2026/2099 Annex Table 1). Setting `[trust.issuer.national_contact_point]` declares the issuer a national contact point ([National contact points](#national-contact-points)), and every claim name is then required. |
-| `trust.issuer[].national_contact_point.professional_issuing_authority` | none | The claim carrying the `issuing_authority_name` of the professional's `hp_identifier` (Annex Table 1). |
-| `trust.issuer[].national_contact_point.provider_issuing_authority`, `.provider_address` | none | The claims carrying the `issuing_authority_name` of the provider identifier and the `healthcare_provider_address` (Annex Table 2). |
-| `trust.issuer[].national_contact_point.trc_patient` | none | The claim carrying the patient the treatment relationship confirmation binds, its `subject-id` (eHDSI SAML Profile 10.0.0 §4.3), as `system\|value`. A patient-data request on the FHIR face and on the ITS-REST face is held to this patient ([The treatment relationship binding](../integrate/national-contact-point.md#the-treatment-relationship-binding), [on the ITS-REST face](../integrate/national-contact-point.md#the-binding-on-the-its-rest-face)). |
-| `trust.issuer[].national_contact_point.correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
-| `trust.issuer[].national_contact_point.additional_countries` | `[]` | The ISO 3166-1 alpha-2 codes a `country_code` this contact point relays may name, in addition to the 27 EU Member States. Use it for a third country whose contact point the Commission connected to MyHealth@EU (Regulation (EU) 2025/327 Art 24(3)). Neither act names the EEA States, so add one here when your deployment serves it. A code that is not two upper-case letters, or that is already a Member State, is refused. |
+| `federation.contact_point[].issuer` | none | A national contact point: an `[[auth.issuer]]` of `kind = "federation"` whose `[[auth.federation]]` table sets `contact_point = true` ([National contact points](#national-contact-points)). Every such issuer needs one `[[federation.contact_point]]`, and one naming any other issuer is refused. |
+| `federation.contact_point[].correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
+| `federation.contact_point[].additional_countries` | `[]` | The ISO 3166-1 alpha-2 codes the contact point's `[[auth.federation]] countries` may name, in addition to the 27 EU Member States. Use it for a third country whose contact point the Commission connected to MyHealth@EU (Regulation (EU) 2025/327 Art 24(3)). Neither act names the EEA States, so add one here when your deployment serves it. A code that is not two upper-case letters, or that is already a Member State, is refused. |
 | `trust.edge.header` | none | The header the edge's assertion travels in, with `trust.mode = "edge"`. |
 
 `[auth] enabled = false` is refused: the gateway has no unauthenticated mode.
@@ -489,30 +486,39 @@ authentication and authorisation of that professional to the entity their
 Member State lists (Art 6(1), (2)), and has the contact point of the
 professional's Member State communicate the professional's and the
 provider's identification data, the attributes of its Annex Tables 1 and 2
-(Art 7). You declare the issuer of the contact point's tokens as one:
+(Art 7). You declare the issuer of the contact point's tokens as a
+`federation` issuer whose `[[auth.federation]]` table sets
+`contact_point = true`, and name it in a `[[federation.contact_point]]`:
 
 ```toml
 [[auth.issuer]]
 issuer = "https://ncp.example.org"
+kind = "federation"
+sender_constraint = "required"
 
-[[trust.issuer]]
+[[auth.federation]]
 issuer = "https://ncp.example.org"
+contact_point = true
+mapping = "ehdsi"
+countries = ["LU"]
+fields."professional.country_code" = [{ constant = "LU" }]
+fields."professional.issuing_authority_name" = [{ constant = "Example HP Register" }]
+fields."provider.issuing_authority_name" = [{ constant = "Example HCP Register" }]
 
-[trust.issuer.national_contact_point]
-family_name = "family_name"
-given_name = "given_name"
-country_code = "country_code"
-professional_issuing_authority = "hp_issuing_authority_name"
-provider_issuing_authority = "hcp_issuing_authority_name"
-provider_address = "healthcare_provider_address"
-trc_patient = "trc_patient"
+[[federation.contact_point]]
+issuer = "https://ncp.example.org"
 correlation_header = "ncp-correlation-id"
 ```
 
-An issuer declared a national contact point needs FerroFED's own store,
-[`[store]`](store.md): a configuration that declares one and sets no
-`[store]` refuses to start, naming `trust.issuer[0].national_contact_point`
-and `[store]`.
+A contact point needs FerroFED's own store, [`[store]`](store.md): a
+configuration that declares one and sets no `[store]` refuses to start,
+naming `federation.contact_point[0]` and `[store]`. The gateway refuses a
+contact point with no `[[federation.contact_point]]`, a
+`[[federation.contact_point]]` that names no contact point, a `countries`
+code that is neither a Member State nor one of its `additional_countries`,
+and an `[[auth.federation]]` table that names no source of
+`provider.issuing_authority_name`. The removed
+`[trust.issuer.national_contact_point]` is refused, naming its successor.
 
 **Who authenticates the professional.** The contact point's side does. The
 gateway verifies the contact point's token, as it verifies every caller's,
@@ -524,38 +530,32 @@ attributes marked as the contact point's assertion. An assurance level the
 token states is read through `[trust.issuer.assurance]` as for any issuer
 ([The assurance level](#the-assurance-level)).
 
-**The attributes.** Where IHE IUA defines a claim that carries an Annex
-attribute (ITI TF-2 3.71.4.2.2.1.1), the gateway reads it from
-`extensions.ihe_iua`; the table names the string claim of every other one:
+**The token.** The contact point's authorization server writes what it read
+from the validated HP Identity Assertion and treatment relationship
+confirmation under the token's `ehdsi` claim, each attribute at its field
+name, and binds the token to the connector's client certificate
+(`cnf."x5t#S256"`, RFC 8705 §3), which the connector presents on its mutual
+TLS connection to the gateway. `ferrohealth-smart` holds the token to the
+MyHealth@EU contact-point profile, what a conforming assertion carries
+(eHDSI SAML Profile 10.0.0 §2.1, §2.3): the professional's identifier, the
+assertion's `NameID`, the one-string name, the role with `on-behalf-of` for
+an ISCO `44` role, the authentication class, the provider's
+`organization-id`, the facility type, the home community, the point of
+care, a purpose of use of `TREATMENT` or `EMERGENCY`, and the assertion and
+TRC ids and windows. The gateway checks no field itself. The country and
+the issuing authorities are no part of the assertion, so you configure them
+as constants of the contact point. A token that falls short is refused
+`403 contact-point-attributes-required` on every route, and no node is
+asked anything; a token not bound to the connection's certificate is
+refused `401`. The contact point's connector acts for the professional the
+token names, so `client_tokens_act_for_professional` need not be set. The
+IUA `person_id`, a patient identifier, is never read (§5.4.1, N33): the
+patient is named in the request, as for every caller.
 
-| Annex attribute | Read from |
-|---|---|
-| Table 1 `family_name`, `given_name`, `country_code` | the claims `family_name`, `given_name` and `country_code` name; `country_code` must be the ISO 3166-1 alpha-2 code of an EU Member State, the Annex's "Member State that issued" the data, or of a country `additional_countries` adds |
-| Table 1 `hp_identifier` | `extensions.ihe_iua.national_provider_identifier` |
-| Table 1 `issuing_authority_name` | the claim `professional_issuing_authority` names |
-| Table 1 `hp_professional_role` | `extensions.ihe_iua.subject_role`, FHIR `Coding`s, at least one with a code |
-| Tables 1 and 2 `healthcare_provider_identifier` | `extensions.ihe_iua.subject_organization_id` |
-| Table 2 `issuing_authority_name` | the claim `provider_issuing_authority` names |
-| Table 2 `healthcare_provider_name` | `extensions.ihe_iua.subject_organization` |
-| Table 2 `healthcare_provider_address` | the claim `provider_address` names |
-| the TRC's `subject-id`, as `system\|value` | the claim `trc_patient` names |
-
-IUA's `subject_name` is one string, so it does not give the Annex's
-separate family and given names; the gateway still reads it as the
-professional's name. A request that reaches patient data needs every
-attribute, not empty, and a purpose of use, whatever
-`trust.purpose_of_use.required` says. A token that lacks an attribute is
-refused `403 contact-point-attributes-required`, one with no purpose of use
-`403 purpose-of-use-required`, and no node is asked anything. The message of
-the first names each attribute that is missing, empty or not admitted, by its
-Annex table and name (`missing or not admitted: Table 1 family_name, Table 2
-healthcare_provider_name`), and never a value, so the connector can tell the
-professional what to complete (MyHealth@EU Requirements Catalogue v10.0.0,
-§1.25). The contact
-point's connector is a client acting for the professional the token names,
-so `client_tokens_act_for_professional` need not be set. The IUA
-`person_id`, a patient identifier, is never read (§5.4.1, N33): the patient
-is named in the request, as for every caller.
+**What is never read.** The gateway reads no name and no address of the
+professional or the provider: a node and the access record are told the
+professional by their identifier (GDPR Art 5(1)(c)), and a node that needs a
+display name shows the identifier.
 
 **Consent exclusions stay hidden.** Every request of a contact point is
 served with `disclose = false`, whatever `[federation.consent] disclose`
@@ -568,8 +568,8 @@ rule of the Member State of treatment; release stays with the node, which
 receives the foreign professional in the conveyance (N26, N27).
 
 **What the record and the node receive.** The access record names the
-foreign professional and provider with their country and issuing
-authorities, marked as asserted by the contact point
+foreign professional by their identifier and the provider, with their
+country and issuing authorities, marked as asserted by the contact point
 ([Audit](access-log.md#a-request-a-national-contact-point-relays)), and each node
 is told them in the `national_contact_point` claim of the conveyance
 ([below](#what-a-node-is-told-about-the-caller)). A correlation identifier
@@ -582,10 +582,10 @@ byte outside visible ASCII is refused `400 correlation-invalid`.
 `federation.national_contact_point`: `disclose: false`, `professional:
 "asserted-by-contact-point"`, `purpose_of_use: "required"`, the emergency
 access limit in effect as `emergency` with its `threshold` and `window_s`,
-and per issuer the claim each Annex attribute is read from and the
-correlation header. The
-Annex defines no carrier for its attributes, so the claim names, the
-member and the header are FerroFED's own design.
+and per issuer the claim each field is read from, by its field name, and
+the correlation header. The eHDSI profile defines no token carrier for its
+attributes, so the claim names, the member and the header are FerroFED's
+own design.
 
 ## The edge mode
 
@@ -635,7 +635,7 @@ travelled.
 | `403` | `purpose-of-use-required` | the token declares no purpose of use |
 | `401` | `natural-person-required` | the request reaches patient data and the token names no natural person, and its issuer does not declare client tokens acting for the professional the token names |
 | `401` | `authentication-assurance-insufficient` | the request reaches patient data and the token states no assurance at the least level its issuer requires |
-| `403` | `contact-point-attributes-required` | the request reaches patient data and a national contact point's token lacks an Implementing Regulation (EU) 2026/2099 Annex attribute ([National contact points](#national-contact-points)) |
+| `403` | `contact-point-attributes-required` | a national contact point's token falls short of the MyHealth@EU contact-point profile ([National contact points](#national-contact-points)) |
 | `400` | `correlation-invalid` | a national contact point's correlation header is sent twice, empty, longer than 128 bytes, or not visible ASCII |
 | `403` | `operation-refused` | the ADMIN API, refused to every caller |
 | `403` | `patient-context-missing` | only a bound issuer's `patient/` scope covers the operation, and the token carries no `ehrId` |
