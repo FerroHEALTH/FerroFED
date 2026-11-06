@@ -109,12 +109,17 @@ territory = "NL"
 List every file of the project in `files`, in the order the project names
 them; the example shows the first. The composition carries each result's
 value with its unit, the report's code, status, time and conclusion and
-each specimen. A result's reference range and the order the report
-answers are read by no mapping and declared lost by none, so the member's
-record holds them only in the original document the composition keeps;
-hazard I-16 of the [clinical safety risk file](clinical-safety.md) is open
-on it until the mapping carries both
+each specimen. Since `eehrxf` 0.1.149 it also carries a result's normal
+reference range, as the `normal_range` of its quantity, and the order
+filler's identifier, as the order the template holds. A typed range, a
+range text, `Observation.basedOn` and an order named by reference alone are
+declared lost, and the answer's `OperationOutcome` names each loss
 ([FerroHEALTH/FerroBRIDGE#1481](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1481)).
+The member's record holds those only in the original document the
+composition keeps. Hazard I-16 of the [clinical safety risk
+file](clinical-safety.md) stays open until its rating is re-judged with
+these controls
+([#1668](https://github.com/FerroHEALTH/FerroFED/issues/1668)).
 
 ## Inserted by the person
 

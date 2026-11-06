@@ -31,7 +31,7 @@ This page is not legal advice.
 
 | Right | Who acts | FerroFED | Status |
 |---|---|---|---|
-| Art 3(1), access | the access service | the summary is served to a person's own grant, confined to them, and so are their prescriptions where members serve them; imaging, test results and discharge reports have no interface | partial |
+| Art 3(1), access | the access service | the summary is served to a person's own grant, confined to them, and so are their prescriptions where members serve them; imaging and discharge reports have no interface, and no test shows a person's grant reaching laboratory reports | partial |
 | Art 3(2), a download in the exchange format | the access service | patient summaries only | partial |
 | Art 4(2), a proxy or a legal representative | the proxy service | admits the token its issuer grants, records who acted, and marks what a declared representative inserts as theirs | not the gateway's |
 | Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR, marked as the person's or as a representative's the token names, and the record says so; the member keeps a person from changing a professional's entry | met |
@@ -90,12 +90,14 @@ asked ([Reading one prescription](../integrate/prescriptions.md#reading-one-pres
 `a_caller_confined_to_one_patient_reads_that_patients_prescription_alone`).
 A dispensation is read only by the id its receipt named.
 
-**The gap.** Imaging, test results and discharge reports have no interface
-in the exchange format (Annex II, point 2.1:
-[#522](https://github.com/FerroHEALTH/FerroFED/issues/522),
-[FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324),
+**The gap.** Imaging and discharge reports have no interface in the
+exchange format (Annex II, point 2.1:
+[#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405),
+[#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406),
 [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
-[FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
+[FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)). Laboratory reports are listed and read on the FHIR face
+([Laboratory reports over FHIR](../integrate/laboratory-reports.md)), and
+no test shows a person's own grant reaching them.
 
 ## Art 4(2): proxies and legal representatives
 
@@ -282,10 +284,10 @@ writes it to the member that owns its prescription
 ([Receiving a dispensation](../integrate/prescriptions.md#receiving-a-dispensation);
 `fhir/prescriptions/dispense.rs`:
 `a_dispensation_reaches_the_owner_alone_by_its_ehr_id_with_its_body_unchanged`).
-A prescription is served, never received. Imaging, test results and
-discharge reports are the gap of point 2.2
-([#665](https://github.com/FerroHEALTH/FerroFED/issues/665),
-[FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324),
+A prescription is served, never received. Imaging and discharge reports
+are the gap of point 2.2
+([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405),
+[#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406),
 [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
 [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
 

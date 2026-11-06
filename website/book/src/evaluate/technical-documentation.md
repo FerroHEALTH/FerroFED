@@ -53,7 +53,7 @@ partial or planned names the issue that completes it.
 | 1(i) | "a description of any change made to the system throughout its lifecycle" | the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md); [Changes to the harmonised components](#changes-to-the-harmonised-components); the clinical safety [review table](clinical-safety.md#review-and-change) | documented |
 | 1(j) | "the instructions for use for the user and, where applicable, installation instructions" | [Instructions for use](../operate/instructions-for-use.md); [A production deployment](../operate/production.md) | documented |
 | 2 | "A detailed description of the system in place to evaluate the EHR system performance, where applicable" | [Metrics](../operate/metrics.md); [Scoring a deployment](../operate/conformance-run.md); the [clinical safety method](clinical-safety.md#method) | documented |
-| 3 | "The references to any common specification used in accordance with Article 36" | none is adopted yet ([The obligations and their dates](regulatory-status.md#the-obligations-and-their-dates)) | planned, [#526](https://github.com/FerroHEALTH/FerroFED/issues/526) |
+| 3 | "The references to any common specification used in accordance with Article 36" | none is adopted yet ([The obligations and their dates](regulatory-status.md#the-obligations-and-their-dates)) | planned, [#799](https://github.com/FerroHEALTH/FerroFED/issues/799) |
 | 4 | "The results and critical analyses of all verifications and validation tests" | the [Annex II checklist](annex-ii.md), the Chapter III [conformity record](conformity-record.md), the [conformance statement](conformance-statement.md), the [conformance matrix](conformance.md), the [obligations checklist](obligations.md) and the [clinical safety risk file](clinical-safety.md); the Annex II checklist has points still partial, each with its issue ([What is missing](annex-ii.md#what-is-missing)) | partial, [#525](https://github.com/FerroHEALTH/FerroFED/issues/525) |
 | 5 | "A copy of the information sheet referred to in Article 38" | the [information sheet](information-sheet.md), attached to each release | documented |
 | 6 | "A copy of the EU declaration of conformity" | [The EU declaration of conformity](#the-eu-declaration-of-conformity), attached to each release as `ferrofed-vX.Y.Z-eu-declaration-of-conformity.md` once the manufacturer issues it; the generator [`scripts/release/declaration-of-conformity.sh`](https://github.com/FerroHEALTH/FerroFED/blob/main/scripts/release/declaration-of-conformity.sh) | partial, [#940](https://github.com/FerroHEALTH/FerroFED/issues/940) |
@@ -92,8 +92,8 @@ digital elements". A status of partial names the issue that completes it.
 | point 7 | "a copy of the EU declaration of conformity" | [The EU declaration of conformity](#the-eu-declaration-of-conformity); none is issued yet | partial, [#940](https://github.com/FerroHEALTH/FerroFED/issues/940) |
 | point 8 | "where applicable, the software bill of materials", on a reasoned request of a market surveillance authority | [The release binaries](../operate/container.md#the-release-binaries): every release attaches its SBOMs | documented |
 
-The single set of technical documentation for both acts is planned under
-[#525](https://github.com/FerroHEALTH/FerroFED/issues/525).
+This page holds the index for both acts in one set. The points still
+partial are the ones the two tables mark.
 
 ## Forms placed on the market
 
