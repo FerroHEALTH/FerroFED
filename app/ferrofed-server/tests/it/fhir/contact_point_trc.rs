@@ -380,3 +380,54 @@ async fn a_trc_patient_that_cannot_be_resolved_is_its_own_security_event() -> Te
     assert!(nobody_asked(&a, &b, &pdq).await?, "nothing is sent");
     Ok(())
 }
+
+/// MyHealth@EU RC 10.0.0 §1.25 requirement 11: a contact point's request
+/// with no TRC patient is refused with the `trc-missing` refusal and
+/// `ERROR_SEC_GENERIC` in the outcome's details, its national connector's
+/// code, and no legacy appendix 6.4 number.
+#[tokio::test]
+async fn trc_missing_names_the_generic_security_code() -> TestResult {
+    let (a, b, pdq) = servers().await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), (&a, &b, &pdq))?;
+    let token = minted(&untreated())?;
+    let (status, text) = call(app, bearing(summary("")?, &token)?).await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
+    let outcome: Value = serde_json::from_str(&text)?;
+    assert_eq!(
+        vec![
+            String::from("trc-missing"),
+            String::from("ERROR_SEC_GENERIC")
+        ],
+        details(&outcome),
+        "{text}"
+    );
+    Ok(())
+}
+
+/// MyHealth@EU RC 10.0.0 §1.25 requirement 05.01: members that answer the
+/// summary's questions with an error are the national infrastructure that
+/// cannot answer, `ERROR_REGISTRY_NOT_AVAILABLE` in the outcome's details.
+#[tokio::test]
+async fn failing_members_name_the_registry_not_available_code() -> TestResult {
+    let failing = || async {
+        let server = Server::start().await;
+        wiremock::Mock::given(wiremock::matchers::any())
+            .respond_with(wiremock::ResponseTemplate::new(503))
+            .mount(&server)
+            .await;
+        server
+    };
+    let (a, b, pdq) = (failing().await, failing().await, supplier().await);
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), (&a, &b, &pdq))?;
+    let token = minted(&treating(NAMESPACE, PATIENT))?;
+    let (status, text) = call(app, bearing(summary("")?, &token)?).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
+    let outcome: Value = serde_json::from_str(&text)?;
+    assert!(
+        details(&outcome).contains(&String::from("ERROR_REGISTRY_NOT_AVAILABLE")),
+        "{text}"
+    );
+    Ok(())
+}

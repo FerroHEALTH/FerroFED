@@ -81,6 +81,7 @@ use crate::auth::permission::{Requirement, Resource};
 use crate::auth::refusal::{BasicRefusal, Refusal, Refused};
 use crate::auth::verify::Verifiers;
 use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
+use crate::error::ncp::NcpError;
 
 /// The verifier of every caller, built from `[auth]` and `[trust]`.
 #[derive(Debug)]
@@ -193,6 +194,10 @@ impl Gate {
     /// verified it by signature or introspection; otherwise the token is
     /// dropped with the request's headers.
     ///
+    /// A refusal to a national contact point carries its Requirements
+    /// Catalogue 10.0.0 §1.25 code: the one `ferrohealth-smart` gives a
+    /// refused token, and [`NcpError::of`] the gateway's own refusal.
+    ///
     /// # Errors
     /// Returns the [`Refused`] the request is answered with.
     pub async fn admit(
@@ -216,8 +221,35 @@ impl Gate {
                 refusal: Refusal::Invalid,
                 check: Some(Reason::UntrustedIssuer),
                 missing: MissingAnnex::default(),
+                ncp: None,
             })?;
-        let trusted: &IssuerSettings = &entry;
+        let contact_point = entry.national_contact_point.is_some();
+        self.policy(
+            headers,
+            (smart, credential),
+            &entry,
+            (requirement, named),
+            exchanging,
+        )
+        .map_err(|refused| {
+            if contact_point {
+                refused.to_contact_point(NcpError::of(refused.refusal.code()))
+            } else {
+                refused
+            }
+        })
+    }
+
+    /// Holds the caller `smart` authenticates with `credential`, vouched for
+    /// by `trusted`, to the gateway's policy for `requirement` on `named`.
+    fn policy(
+        &self,
+        headers: &HeaderMap,
+        (smart, credential): (SmartCaller, String),
+        trusted: &IssuerSettings,
+        (requirement, named): (Requirement, Option<&str>),
+        exchanging: bool,
+    ) -> Result<Caller, Refused> {
         let caller = self.caller(&smart, trusted)?;
         let correlation = match &trusted.national_contact_point {
             Some(declared) => contact_point::correlation(headers, declared)?,
@@ -292,11 +324,10 @@ impl Gate {
     /// `Authorization`, or the edge's assertion from the header the
     /// deployment names, sent exactly once.
     async fn authenticate(&self, headers: &HeaderMap) -> Result<(SmartCaller, String), Refused> {
-        let access = self
-            .smart
-            .authenticate(headers)
-            .await
-            .map_err(|denied| Refused::from(&denied))?;
+        let (authenticated, refused) = verify::refused_code(self.smart.authenticate(headers)).await;
+        let access = authenticated.map_err(|denied| {
+            Refused::from(&denied).to_contact_point(refused.map(NcpError::shared))
+        })?;
         let Access::Caller(caller) = access else {
             return Err(Refusal::Missing.into());
         };
@@ -317,6 +348,7 @@ impl Gate {
             refusal: Refusal::Invalid,
             check: Some(Reason::Other(check)),
             missing: MissingAnnex::default(),
+            ncp: None,
         };
         // NOTE: RFC 9068 §2.2 requires `client_id`, and IHE IUA ITI TF-2 3.71.4.2.2.1
         // tells a client from a person by it, so a token without one does not hold.

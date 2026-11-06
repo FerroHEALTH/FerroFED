@@ -28,6 +28,7 @@
 
 mod code;
 mod message;
+pub mod ncp;
 
 use std::sync::LazyLock;
 
@@ -400,7 +401,7 @@ pub fn body(code: Code, message: impl Into<String>, request_id: &str) -> Problem
 /// `problem` with the text extension member `name` set to `value`.
 #[expect(
     clippy::expect_used,
-    reason = "name is CODE_MEMBER or REQUEST_ID_MEMBER, legal names a unit test adds, and text always serializes"
+    reason = "name is CODE_MEMBER, REQUEST_ID_MEMBER or ncp::MEMBER, legal names, and text always serializes"
 )]
 fn extended(problem: Problem, name: &str, value: &str) -> Problem {
     problem
@@ -408,11 +409,57 @@ fn extended(problem: Problem, name: &str, value: &str) -> Problem {
         .expect("a legal member name with a text value should be added")
 }
 
+/// What an error answer's problem was built from, kept in the answer's
+/// extensions so a refusal to a national contact point can be answered
+/// again with its §1.25 code ([`ncp::stamped`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Answered {
+    /// The code.
+    pub code: Code,
+    /// The problem's `detail`.
+    pub message: String,
+    /// The request id.
+    pub request_id: String,
+}
+
 /// Answers `code` with its status and its problem carrying `message` and
-/// `request_id`.
+/// `request_id`, what it was built from in the answer's extensions.
 #[must_use]
 pub fn response(code: Code, message: impl Into<String>, request_id: &str) -> Response {
-    body(code, message, request_id).into_response()
+    let message = message.into();
+    let mut response = body(code, message.clone(), request_id).into_response();
+    response.extensions_mut().insert(Answered {
+        code,
+        message,
+        request_id: request_id.to_owned(),
+    });
+    response
+}
+
+/// Answers `code` as [`response`] does, its problem also carrying `ncp`, the
+/// MyHealth@EU code of a refusal to a national contact point, in its
+/// [`ncp::MEMBER`] member and in the answer's extensions.
+#[must_use]
+pub fn to_contact_point(
+    code: Code,
+    message: impl Into<String>,
+    request_id: &str,
+    ncp: ncp::NcpError,
+) -> Response {
+    let message = message.into();
+    let mut response = extended(
+        body(code, message.clone(), request_id),
+        ncp::MEMBER,
+        ncp.as_str(),
+    )
+    .into_response();
+    response.extensions_mut().insert(Answered {
+        code,
+        message,
+        request_id: request_id.to_owned(),
+    });
+    response.extensions_mut().insert(ncp);
+    response
 }
 
 /// Answers `code` with its status and its fixed [`Code::message`].

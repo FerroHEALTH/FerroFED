@@ -26,7 +26,6 @@
 //! contact point.
 
 use axum::response::Response;
-use ferrofed_eehrxf::face;
 use ferrofed_registry::id::{EhrId, NodeId};
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::coding::Coding;
@@ -35,6 +34,8 @@ use http::StatusCode;
 
 use super::admission::Admitted;
 use crate::access::NoAccess;
+use crate::error::Code;
+use crate::error::ncp::NcpError;
 use crate::facade::request::Arrived;
 use crate::facade::trc::{Binding, Reached};
 use crate::fhir_wire::fhir_json;
@@ -253,30 +254,41 @@ pub(super) fn no_data(service: Service) -> Response {
 /// professional's limit.
 pub(super) const EMERGENCY_LIMIT: &str = "emergency-limit-reached";
 
-/// The exception code name of a failed security validation of the request
-/// or the requestor (eHDSI XCA Profile 8.0.1 §2.2.3).
-pub(super) const SECURITY_GENERIC: &str = "ERROR_SEC_GENERIC";
-
 /// The `OperationOutcome` of an emergency access denied past the relayed
 /// professional's limit, answered with `status` and `diagnostics`: issue
-/// `forbidden`, the [`EMERGENCY_LIMIT`] refusal and [`SECURITY_GENERIC`]
+/// `forbidden`, the [`EMERGENCY_LIMIT`] refusal and `ERROR_SEC_GENERIC`
 /// (eHDSI Section II Security Services 10.0.0 §2.5; `NCPeH` Architecture
 /// Specifications 10.0.0 §5.1.9).
 pub(super) fn emergency_denied(status: StatusCode, diagnostics: &str) -> Response {
+    refused(
+        status,
+        (EMERGENCY_LIMIT, NcpError::of(Code::EmergencyLimitReached)),
+        diagnostics,
+    )
+}
+
+/// The `OperationOutcome` of a refusal answered with `status`, its issue
+/// type read from it, naming the gateway's `refusal` code and, to a national
+/// contact point, its Requirements Catalogue 10.0.0 §1.25 code `ncp`, with
+/// `diagnostics`.
+pub(super) fn refused(
+    status: StatusCode,
+    (refusal, ncp): (&str, Option<NcpError>),
+    diagnostics: &str,
+) -> Response {
     let coding = |system: &str, code: &str| Coding {
         system: Some(system.into()),
         code: Some(code.into()),
         ..Coding::default()
     };
+    let mut codings = vec![coding(REFUSAL_SYSTEM, refusal)];
+    codings.extend(ncp.map(|ncp| coding(EXCEPTION_SYSTEM, ncp.as_str())));
     let outcome = OperationOutcome {
         issue: vec![OperationOutcomeIssue {
             severity: "error".into(),
-            code: "forbidden".into(),
+            code: super::errors::issue_type(status).into(),
             details: Some(CodeableConcept {
-                coding: vec![
-                    coding(REFUSAL_SYSTEM, EMERGENCY_LIMIT),
-                    coding(EXCEPTION_SYSTEM, SECURITY_GENERIC),
-                ],
+                coding: codings,
                 ..CodeableConcept::default()
             }),
             diagnostics: Some(diagnostics.into()),
@@ -287,17 +299,49 @@ pub(super) fn emergency_denied(status: StatusCode, diagnostics: &str) -> Respons
     fhir_json(status, &outcome)
 }
 
+/// The largest `OperationOutcome` the face reads back to add a §1.25 code.
+const OUTCOME_LIMIT: usize = 64 * 1024;
+
+/// `response`, an `OperationOutcome` the face answered a national contact
+/// point with, its every issue's `details` also naming `ncp`, the
+/// Requirements Catalogue 10.0.0 §1.25 code; its status, headers and
+/// extensions kept, and an answer that reads as no `OperationOutcome`
+/// passed as it came.
+pub(super) async fn coded(response: Response, ncp: NcpError) -> Response {
+    let (mut parts, body) = response.into_parts();
+    let Ok(bytes) = axum::body::to_bytes(body, OUTCOME_LIMIT).await else {
+        return Response::from_parts(parts, axum::body::Body::empty());
+    };
+    // NOTE: no specification governs this: our own design; an answer that is no
+    // OperationOutcome carries no issue to name the code in, so it passes unchanged.
+    let Ok(mut outcome) = serde_json::from_slice::<OperationOutcome>(&bytes) else {
+        return Response::from_parts(parts, axum::body::Body::from(bytes));
+    };
+    for issue in &mut outcome.issue {
+        let details = issue.details.get_or_insert_with(CodeableConcept::default);
+        details.coding.push(Coding {
+            system: Some(EXCEPTION_SYSTEM.into()),
+            code: Some(ncp.as_str().into()),
+            ..Coding::default()
+        });
+    }
+    let (fresh, body) = fhir_json(parts.status, &outcome).into_parts();
+    parts.headers.remove(http::header::CONTENT_LENGTH);
+    for (name, value) in &fresh.headers {
+        parts.headers.insert(name.clone(), value.clone());
+    }
+    Response::from_parts(parts, body)
+}
+
 /// The `403` refusal of a contact point's patient-data request whose token
 /// names no TRC patient (eHDSI SAML Profile 10.0.0 §4.3 makes the TRC's
-/// `subject-id` mandatory).
+/// `subject-id` mandatory), with its §1.25 code.
 fn missing() -> Response {
-    let mut response = fhir_json(
+    let mut response = refused(
         StatusCode::FORBIDDEN,
-        &face::outcome(
-            "forbidden",
-            &format!(
-                "{MISSING}: the national contact point's access token names no patient of a treatment relationship confirmation, so no patient data is served"
-            ),
+        (MISSING, NcpError::of(Code::TrcMissing)),
+        &format!(
+            "{MISSING}: the national contact point's access token names no patient of a treatment relationship confirmation, so no patient data is served"
         ),
     );
     response.extensions_mut().insert(NoAccess);
@@ -317,10 +361,11 @@ fn recorded(admitted: &Admitted<'_>, binding: &Binding, reached: Reached<'_>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        EMERGENCY_LIMIT, EXCEPTION_SYSTEM, MISMATCH, MISSING, REFUSAL_SYSTEM, SECURITY_GENERIC,
-        Service,
-    };
+    use ferrohealth_smart::federation::contact::EhdsiCode;
+
+    use super::{EMERGENCY_LIMIT, EXCEPTION_SYSTEM, MISMATCH, MISSING, REFUSAL_SYSTEM, Service};
+    use crate::error::Code;
+    use crate::error::ncp::NcpError;
 
     /// The published `CodeSystem` definitions the face's codes belong to.
     const REFUSAL: &str = include_str!("definition/CodeSystem-refusal.json");
@@ -333,7 +378,42 @@ mod tests {
         for code in [MISMATCH, MISSING, EMERGENCY_LIMIT] {
             assert!(REFUSAL.contains(&format!("\"code\": \"{code}\"")), "{code}");
         }
-        assert!(EXCEPTION.contains(&format!("\"code\": \"{SECURITY_GENERIC}\"")));
+        // NOTE: MyHealth@EU RC 10.0.0 §1.25: every refusal to a contact point that
+        // carries an exception code names its refusal and its code on the face.
+        let token = [
+            Code::Unauthenticated,
+            Code::CredentialMalformed,
+            Code::AuthenticationUnavailable,
+        ];
+        for code in Code::every().chain(token) {
+            let carried = NcpError::of(code).is_some() || token.contains(&code);
+            if carried {
+                let name = code.as_str();
+                assert!(REFUSAL.contains(&format!("\"code\": \"{name}\"")), "{name}");
+            }
+            if let Some(ncp) = NcpError::of(code) {
+                let name = ncp.as_str();
+                assert!(
+                    EXCEPTION.contains(&format!("\"code\": \"{name}\"")),
+                    "{name}"
+                );
+            }
+        }
+        for shared in [
+            EhdsiCode::HpiNoInformation,
+            EhdsiCode::HpiInsufficientInformation,
+            EhdsiCode::HpiHaiNoInformation,
+            EhdsiCode::HpiPocNoInformation,
+            EhdsiCode::HpiAuthenticationNotReceived,
+            EhdsiCode::SecDataIntegrityNotEnsured,
+            EhdsiCode::SecGeneric,
+        ] {
+            let name = NcpError::shared(shared).as_str();
+            assert!(
+                EXCEPTION.contains(&format!("\"code\": \"{name}\"")),
+                "{name}"
+            );
+        }
         for service in [
             Service::PatientSummary,
             Service::Prescription,

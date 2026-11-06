@@ -15,12 +15,14 @@
 //! tried again no sooner than the issuer's `jwks_refresh_interval_seconds`.
 //! No specification governs when the key set is first read: our own design.
 
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::Engine as _;
+use ferrohealth_smart::federation::contact::EhdsiCode;
 use ferrohealth_smart::refusal::Reason;
 use ferrohealth_smart::resource::{
     Caller as SmartCaller, LazyResourceServer, Rejection, ResourceError, ResourceServer,
@@ -62,8 +64,11 @@ impl Verifiers {
                 let issuer = settings.issuer.clone();
                 let server = ResourceServer::lazy(settings)
                     .expect("the issuer's settings should have been validated when [auth] resolved")
-                    .with_extension(trusted);
-                (issuer, Keyed::new(server))
+                    .with_extension(Arc::clone(&trusted));
+                (
+                    issuer,
+                    Keyed::new(server, trusted.national_contact_point.is_some()),
+                )
             })
             .collect();
         Self {
@@ -86,18 +91,22 @@ impl Verifiers {
                 return Err(malformed);
             }
             return match &self.introspected {
-                Some(introspector) => introspector.introspect(token).await,
+                Some(introspector) => noted(
+                    introspector.contact_point(),
+                    introspector.introspect(token).await,
+                ),
                 None => Err(untrusted),
             };
         }
         let issuer = unverified_issuer(token).ok_or(malformed)?;
         if let Some(keyed) = self.keyed.get(&issuer) {
-            return keyed.authenticate(token).await;
+            return noted(keyed.contact_point, keyed.authenticate(token).await);
         }
         match &self.introspected {
-            Some(introspector) if introspector.issuer() == issuer => {
-                introspector.introspect(token).await
-            }
+            Some(introspector) if introspector.issuer() == issuer => noted(
+                introspector.contact_point(),
+                introspector.introspect(token).await,
+            ),
             _ => Err(untrusted),
         }
     }
@@ -121,14 +130,18 @@ struct Keyed {
     server: LazyResourceServer,
     /// The failure last logged, so each failed read is logged once.
     logged: Mutex<Option<Arc<ResourceError>>>,
+    /// Whether the issuer is declared a national contact point.
+    contact_point: bool,
 }
 
 impl Keyed {
-    /// Returns the keyed issuer `server` verifies.
-    fn new(server: LazyResourceServer) -> Self {
+    /// Returns the keyed issuer `server` verifies, declared a national
+    /// contact point when `contact_point`.
+    fn new(server: LazyResourceServer, contact_point: bool) -> Self {
         Self {
             server,
             logged: Mutex::new(None),
+            contact_point,
         }
     }
 
@@ -179,4 +192,39 @@ fn unverified_issuer(token: &str) -> Option<String> {
     serde_json::from_slice::<Issued>(&bytes)
         .ok()
         .map(|issued| issued.iss)
+}
+
+tokio::task_local! {
+    /// The Requirements Catalogue 10.0.0 §1.25 code `ferrohealth-smart` gave
+    /// the refused token of a national contact point, for the one request
+    /// whose admission set the scope ([`refused_code`]).
+    static REFUSED: Cell<Option<EhdsiCode>>;
+}
+
+/// Returns `outcome`, noting the §1.25 code `ferrohealth-smart` gives its
+/// rejection when the issuer is declared a national contact point.
+fn noted(
+    contact_point: bool,
+    outcome: Result<SmartCaller, Rejection>,
+) -> Result<SmartCaller, Rejection> {
+    if contact_point && let Err(rejection) = &outcome {
+        // NOTE: no specification governs this: our own design; outside an admission's
+        // scope there is no request to answer, so nothing is noted.
+        match REFUSED.try_with(|refused| refused.set(Some(EhdsiCode::of(rejection)))) {
+            Ok(()) | Err(_) => {}
+        }
+    }
+    outcome
+}
+
+/// Runs `verifying`, the verification of one request's credential, and
+/// returns its outcome with the §1.25 code `ferrohealth-smart` gave a
+/// refused contact-point token, when it refused one.
+pub(super) async fn refused_code<T>(verifying: impl Future<Output = T>) -> (T, Option<EhdsiCode>) {
+    REFUSED
+        .scope(Cell::new(None), async {
+            let outcome = verifying.await;
+            (outcome, REFUSED.with(Cell::get))
+        })
+        .await
 }

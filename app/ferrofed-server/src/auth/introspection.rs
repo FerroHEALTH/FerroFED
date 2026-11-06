@@ -49,6 +49,11 @@ impl Introspected {
         &self.settings.issuer
     }
 
+    /// Whether the issuer is declared a national contact point.
+    pub(super) fn contact_point(&self) -> bool {
+        self.trusted.national_contact_point.is_some()
+    }
+
     /// Returns the caller `token` names, as the endpoint answers for it.
     pub(super) async fn introspect(&self, token: &str) -> Result<SmartCaller, Rejection> {
         let check = self

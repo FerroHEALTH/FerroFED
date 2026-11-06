@@ -20,6 +20,7 @@ use ferrohealth_smart::refusal::{Denied, Reason, Refusal as SmartRefusal, Scheme
 use http::{HeaderValue, StatusCode, header};
 
 use crate::auth::contact_point::MissingAnnex;
+use crate::error::ncp::NcpError;
 use crate::error::{self, Code};
 
 /// Why a request was refused at the gate.
@@ -247,6 +248,9 @@ pub struct Refused {
     /// The Annex attributes a contact point's token lacks, which the answer
     /// names, empty for every other refusal.
     pub missing: MissingAnnex,
+    /// The Requirements Catalogue 10.0.0 §1.25 code a refusal to a national
+    /// contact point carries, `None` for every other caller.
+    pub ncp: Option<NcpError>,
 }
 
 impl Refused {
@@ -258,25 +262,41 @@ impl Refused {
             refusal: Refusal::ContactPoint,
             check: None,
             missing,
+            ncp: None,
+        }
+    }
+
+    /// Returns this refusal carrying `ncp`, the §1.25 code of a refusal to a
+    /// national contact point, when it carries none yet.
+    #[must_use]
+    pub fn to_contact_point(self, ncp: Option<NcpError>) -> Self {
+        Self {
+            ncp: self.ncp.or(ncp),
+            ..self
         }
     }
 
     /// The answer to the refused request: the error body, naming the
-    /// missing Annex attributes of a contact point's token, with the
-    /// challenge naming `realm`.
+    /// missing Annex attributes of a contact point's token and the §1.25
+    /// code of a refusal to a contact point, with the challenge naming
+    /// `realm`.
     #[must_use]
     pub fn response(self, realm: &str, request_id: &str) -> Response {
-        if self.refusal != Refusal::ContactPoint || self.missing.is_empty() {
-            return self.refusal.response(realm, request_id);
-        }
-        let names: Vec<&str> = self.missing.names().collect();
-        let message = format!(
-            "{}; missing or not admitted: {}",
-            self.refusal.description(),
-            names.join(", ")
-        );
-        let mut response =
-            error::response(self.refusal.code(), message, request_id).into_response();
+        let code = self.refusal.code();
+        let message = if self.refusal == Refusal::ContactPoint && !self.missing.is_empty() {
+            let names: Vec<&str> = self.missing.names().collect();
+            format!(
+                "{}; missing or not admitted: {}",
+                self.refusal.description(),
+                names.join(", ")
+            )
+        } else {
+            self.refusal.description().to_owned()
+        };
+        let mut response = match self.ncp {
+            Some(ncp) => error::to_contact_point(code, message, request_id, ncp),
+            None => error::response(code, message, request_id),
+        };
         let challenge = self
             .refusal
             .smart()
@@ -296,6 +316,7 @@ impl From<Refusal> for Refused {
             refusal,
             check: None,
             missing: MissingAnnex::default(),
+            ncp: None,
         }
     }
 }
@@ -314,6 +335,7 @@ impl From<&Denied> for Refused {
             refusal,
             check: denied.reason(),
             missing: MissingAnnex::default(),
+            ncp: None,
         }
     }
 }

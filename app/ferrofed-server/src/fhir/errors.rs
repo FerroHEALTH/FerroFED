@@ -13,7 +13,9 @@ use ferrofed_eehrxf::face::FHIR_JSON;
 use http::{Method, StatusCode, header};
 
 use crate::auth::caller::Caller;
+use crate::auth::contact_point::ContactPointAnswer;
 use crate::error::Code;
+use crate::error::ncp::NcpError;
 use crate::face_path::{FacePath, classify};
 use crate::state::AppState;
 
@@ -25,7 +27,7 @@ use super::trc::{self, Service};
 const ERROR_BODY_LIMIT: usize = 64 * 1024;
 
 /// The FHIR R4 `issue-type` of an error answered with `status`.
-fn issue_type(status: StatusCode) -> &'static str {
+pub(super) fn issue_type(status: StatusCode) -> &'static str {
     match status {
         StatusCode::BAD_REQUEST => "invalid",
         StatusCode::UNAUTHORIZED => "login",
@@ -118,15 +120,17 @@ pub async fn outcomes(
         .to_owned();
     let face = state.fhir().and_then(|fhir| classify(fhir, &path));
     let under = face.is_some();
-    let relayed = request
+    let caller = request
         .extensions()
         .get::<Caller>()
         .is_some_and(Caller::is_contact_point);
-    let no_data = face
-        .filter(|_| relayed)
-        .and_then(|face| service(face, request.uri().query()));
+    let patient_data = face.and_then(|face| service(face, request.uri().query()));
     let head = request.method() == Method::HEAD;
     let response = next.run(request).await;
+    // NOTE: no specification governs this: our own design; the gate admits the caller
+    // inside this layer, so its answer says whether a contact point asked.
+    let relayed = caller || response.extensions().get::<ContactPointAnswer>().is_some();
+    let no_data = patient_data.filter(|_| relayed);
     if let Some(service) = no_data
         && response.status() == StatusCode::NOT_FOUND
     {
@@ -144,7 +148,10 @@ pub async fn outcomes(
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value.starts_with(FHIR_JSON));
     if is_fhir {
-        return response;
+        return match (relayed, response.extensions().get::<NcpError>().copied()) {
+            (true, Some(ncp)) => trc::coded(response, ncp).await,
+            _ => response,
+        };
     }
     let (mut parts, body) = response.into_parts();
     let read = axum::body::to_bytes(body, ERROR_BODY_LIMIT).await;
@@ -154,6 +161,7 @@ pub async fn outcomes(
     let limit_reached = error
         .as_ref()
         .is_some_and(|error| error.code.as_deref() == Some(Code::EmergencyLimitReached.as_str()));
+    let refusal = error.as_ref().and_then(|error| error.code.clone());
     let message = error.map_or_else(
         || String::from("the request was refused"),
         |error| match error.code {
@@ -161,10 +169,13 @@ pub async fn outcomes(
             None => error.message,
         },
     );
-    let rewritten = if limit_reached {
-        trc::emergency_denied(parts.status, &message)
-    } else {
-        outcome(parts.status, issue_type(parts.status), &message)
+    let ncp = parts.extensions.get::<NcpError>().copied();
+    let rewritten = match (limit_reached, ncp, refusal) {
+        (true, _, _) => trc::emergency_denied(parts.status, &message),
+        (false, Some(ncp), Some(refusal)) => {
+            trc::refused(parts.status, (&refusal, Some(ncp)), &message)
+        }
+        _ => outcome(parts.status, issue_type(parts.status), &message),
     };
     let (rewritten_parts, rewritten_body) = rewritten.into_parts();
     parts.headers.remove(header::CONTENT_LENGTH);
