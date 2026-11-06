@@ -478,11 +478,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | =0.1.158 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | =0.1.223 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | =0.1.170 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | =0.1.227 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | =0.1.143 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | =0.1.141 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | =0.1.144 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | =0.1.143 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | =0.1.149 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
