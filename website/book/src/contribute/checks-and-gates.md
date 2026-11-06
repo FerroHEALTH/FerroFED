@@ -86,6 +86,15 @@ request, and publishes them from `main`. A book that does not build fails it.
 The required link check is the `site-links` job of `ci.yml`, because the
 `Docs` build is no required check.
 
+No check fails a page that cites a closed issue as remaining work. Whether
+an issue is closed is the tracker's state, and a list of closed issues
+committed here would be wrong the moment the next one closes, so an offline
+check has nothing true to compare with. A check that asks the tracker could
+see the state, but a page also cites closed issues on purpose, as the
+record of what shipped, and no rule can tell that use from a claim of
+remaining work. A page names a closed issue with "(now closed)" or in the
+past tense, and review holds it to that.
+
 ## Running them locally
 
 ```sh
