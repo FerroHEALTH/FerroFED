@@ -14,6 +14,7 @@ mod check;
 mod display;
 mod inserted;
 mod laboratory;
+mod laboratory_grant;
 mod refused;
 mod representative;
 mod start;
