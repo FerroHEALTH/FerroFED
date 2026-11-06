@@ -33,8 +33,8 @@ key's `kid` and `typ` `openehr-federation-client+jwt`. Its claims:
 | `verified_by` | `signature`, `introspection`, or `edge` for an identity the edge asserted |
 | `subject_organization_id` | the caller's organisation, when its token names one (IHE IUA) |
 | `purpose_of_use` | each purpose of use the token declares, as `{"system", "code"}` (IHE IUA, HL7 v3 `PurposeOfUse`) |
-| `scope` | the caller's scopes as granted; under a [patient grant](authentication.md#patient-grants), only the `patient/` scopes that cover the operation |
-| `ehrId` | under a [patient grant](authentication.md#patient-grants) only: the patient's own `ehr_id` at this node (SMART on openEHR master04 §Capabilities) |
+| `scope` | the caller's scopes as granted; under a [patient grant](patient-grants.md), only the `patient/` scopes that cover the operation |
+| `ehrId` | under a [patient grant](patient-grants.md) only: the patient's own `ehr_id` at this node (SMART on openEHR master04 §Capabilities) |
 | `acting` | `person` when the caller's `sub` names a natural person, `client` when it names a client application ([Professionals and assurance](authentication.md#professionals-and-assurance)) |
 | `subject_name` | the professional's name, when the caller's token states `extensions.ihe_iua.subject_name` (IHE IUA) |
 | `national_provider_identifier` | the professional's identifier from their national authority, when the caller's token states it (IHE IUA) |

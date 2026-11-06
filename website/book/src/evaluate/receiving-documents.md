@@ -128,7 +128,7 @@ representative of Art 4(2), inserts in the person's EHR "be clearly
 distinguishable as having been inserted by the natural person or by his or
 her representative". When the caller is a person acting under their own grant,
 a token whose `sub` names the person and whose `patient/` scopes are
-confined to them ([Patient grants](../operate/authentication.md#patient-grants)),
+confined to them ([Patient grants](../operate/patient-grants.md)),
 the gateway has the component mark the composition before it is sent: every entry, in
 the composition and in each of its sections, names the record's subject
 as its `provider`. The openEHR RM defines `ENTRY.provider` as "the agent
@@ -151,7 +151,7 @@ A proxy or a legal representative who acts for the person under the
 person's grant is told apart only when the token says a representative
 acts: its issuer declares that the RFC 8693 `act` claim of its patient
 tokens names one, and the token carries that claim
-([Patient grants](../operate/authentication.md#patient-grants)). Every
+([Patient grants](../operate/patient-grants.md)). Every
 entry then names the representative as its `provider`, a
 `PARTY_IDENTIFIED`, which the Common Information Model uses for every party
 other than the subject of the record ("Referring to Demographic
@@ -168,7 +168,7 @@ person's own, and the gateway cannot mark the representative.
 
 The component only creates compositions, so it never changes an entry a
 professional wrote. What a person changes over ITS-REST is the member's to
-refuse ([Patient grants](../operate/authentication.md#patient-grants)).
+refuse ([Patient grants](../operate/patient-grants.md)).
 
 ## Hazards
 

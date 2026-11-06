@@ -201,18 +201,18 @@ pub(crate) async fn serve(
     let response = match forwarded {
         // NOTE: Regulation (EU) 2025/327 Art 8: a withheld refusal answers as no holder would, so
         // it names no acting endpoint (no specification governs this: our own design).
-        Ok(forwarded) => route::withheld(at, endpoint, &forwarded, (request_id, &logged))
+        Ok(forwarded) => route::answer::withheld(at, endpoint, &forwarded, (request_id, &logged))
             .unwrap_or_else(|| {
                 // NOTE: Regulation (EU) 2025/327 Art 11(5), N27a: a denial set aside holds for this
                 // request alone, so nothing its answer shows is learned for a later one.
                 if !consented.set_aside.contains(endpoint.node()) {
                     route::learn(federation, (&ehr_id, None), endpoint, &forwarded, &logged);
                 }
-                provenance.stamp(route::answered_by(endpoint, forwarded))
+                provenance.stamp(route::answer::answered_by(endpoint, forwarded))
             }),
         Err(Failure::Internal) => error::fixed(Code::Internal, request_id),
         Err(Failure::Forward(failure)) => {
-            route::failed(&failure, provenance, (request_id, &logged))
+            route::answer::failed(&failure, provenance, (request_id, &logged))
         }
     };
     set_aside(response, &consented.set_aside)

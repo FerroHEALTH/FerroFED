@@ -193,7 +193,7 @@ proxy's TLS settings.
 - consent is never inferred from localization: each node makes its own
   consent decision, whatever a pre-filter answered (§13.2, N27);
 - a `patient/` grant admits nothing unless you bind its issuer to one
-  member ([Patient grants](authentication.md#patient-grants)). Bound, the
+  member ([Patient grants](patient-grants.md)). Bound, the
   grant reaches only the patient's own `{node, ehr_id}` pairs, as your
   cross-reference service links them to the token's `ehrId`: a wrong link
   there admits the wrong EHR at that member, so record which issuers you

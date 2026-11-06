@@ -33,7 +33,8 @@ use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::{HeaderMap, Method};
 use openehr_its::rest::routes::RouteMatch;
 
-use super::{Arrived, Deadlines, Failure, failed, forward, held, learn, passed, unheld};
+use super::answer::{failed, passed};
+use super::{Arrived, Deadlines, Failure, forward, held, learn, unheld};
 use crate::error::{self, Code};
 use crate::facade::provenance::Provenance;
 use crate::facade::trc::{self, Binding};

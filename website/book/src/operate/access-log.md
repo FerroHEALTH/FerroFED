@@ -192,7 +192,7 @@ Regulation (EU) 2025/327 Art 5 lets a person insert information in their
 own EHR, which "shall be clearly distinguishable as having been inserted by
 the natural person". A document the FHIR face receives from a person under
 their own grant, a token acting for that person and confined to their
-patient ([Patient grants](authentication.md#patient-grants)), is written
+patient ([Patient grants](patient-grants.md)), is written
 with each entry naming the record's subject as its provider
 ([Inserted by the person](../evaluate/receiving-documents.md#inserted-by-the-person)).
 The record of that receipt carries one more entity:
@@ -210,7 +210,7 @@ member refused, and a professional's receipt, carry no such entity.
 
 A document a representative inserts for the person under the person's
 grant, whose token's issuer declares the `act` claim a representative
-([Patient grants](authentication.md#patient-grants)), carries the entity
+([Patient grants](patient-grants.md)), carries the entity
 `ehds-representative-inserted` in place of `ehds-subject-inserted`, with
 the same `type`, a `description` citing Art 4(2) and Art 5, and the
 `detail` `ehds-representative-inserted` set to `true`. It names no

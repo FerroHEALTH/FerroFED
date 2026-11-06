@@ -391,7 +391,7 @@ Supplier is asked.
 A person reads their own summary through an electronic health data access
 service (Regulation (EU) 2025/327 Art 3(1), Art 4). The service holds a
 token confined to the person
-([Patient grants](../operate/authentication.md#patient-grants)), with the
+([Patient grants](../operate/patient-grants.md)), with the
 scope `patient/aql-eu.ferrofed.eehrxf::*.s`, and asks for the summary by the
 person's identifier as any caller does. The gateway resolves that
 identifier at the member the token's issuer is bound to and compares it

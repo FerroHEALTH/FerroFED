@@ -120,7 +120,7 @@ nodes, unless the deployment binds the token's issuer to one member. The
 gateway then resolves the token's `ehrId` as an identifier of that member
 through the cross-reference service (§5.2), sends only to the patient's own
 `{node, ehr_id}` pairs, and tells each node the patient's `ehr_id` there
-([Patient grants](../operate/authentication.md#patient-grants)).
+([Patient grants](../operate/patient-grants.md)).
 
 **Authenticating to the node** ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81),
 §13.1, N25). The gateway sends the node's token endpoint an OAuth 2.0 client
