@@ -13,6 +13,7 @@ use axum::body::Body;
 use ferrofed_console::config::Config;
 use ferrofed_console::config::settings::Settings;
 use ferrofed_console::server::{ConsoleState, router};
+use ferrohealth_session::clock::ManualClock;
 use ferrohealth_session::record::{Credential, Ended, Held, SignedIn};
 use ferrohealth_session::sessions::Occupancy;
 use http::{HeaderMap, HeaderValue, Request, Response};
@@ -44,6 +45,17 @@ pub(crate) async fn console(text: &str) -> Result<(ConsoleState, axum::Router), 
     let state = ConsoleState::new(settings(text)?).await?;
     let service = router(state.clone());
     Ok((state, service))
+}
+
+/// The console of [`console`], counting every lifetime on a manual clock
+/// the test moves, and that clock.
+pub(crate) async fn console_on_clock(
+    text: &str,
+) -> Result<(ConsoleState, axum::Router, ManualClock), Box<dyn Error>> {
+    let time = ManualClock::new(jiff::Timestamp::now().as_second());
+    let state = ConsoleState::with_clock(settings(text)?, time.clock()).await?;
+    let service = router(state.clone());
+    Ok((state, service, time))
 }
 
 /// Sends `request` through `service` and reads the whole answer.

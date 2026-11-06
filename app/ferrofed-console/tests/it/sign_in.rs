@@ -14,7 +14,7 @@ use ferrohealth_session::sessions::Occupancy;
 use http::{Request, StatusCode};
 use url::Url;
 
-use crate::support::{WITH_OIDC, console, get, header, send};
+use crate::support::{WITH_OIDC, console, console_on_clock, get, header, send};
 
 /// The redirect and the session cookie of one `GET /login`.
 struct Redirect {
@@ -227,7 +227,9 @@ redirect_uri = "http://127.0.0.1:3000/auth/callback"
 #[tokio::test]
 async fn a_flood_of_sign_ins_stays_bounded_and_leaves_signed_in_sessions_alone()
 -> Result<(), Box<dyn Error>> {
-    let (state, service) = console(SMALL_SIGN_IN_POOL).await?;
+    // NOTE: no specification governs this: our own design; the store counts whole seconds,
+    // so on the wall clock a sign-in of a one-second pool could expire while the flood runs.
+    let (state, service, _time) = console_on_clock(SMALL_SIGN_IN_POOL).await?;
     let operator = crate::support::establish(&state, crate::support::signed_in().await?)?;
     let first = sign_in(&service).await?;
     let mut last = sign_in(&service).await?;
@@ -251,12 +253,12 @@ async fn a_flood_of_sign_ins_stays_bounded_and_leaves_signed_in_sessions_alone()
 #[tokio::test]
 async fn a_sign_in_past_its_timeout_is_refused_and_a_new_one_recovers() -> Result<(), Box<dyn Error>>
 {
-    let (state, service) = console(SMALL_SIGN_IN_POOL).await?;
+    let (state, service, time) = console_on_clock(SMALL_SIGN_IN_POOL).await?;
     for _ in 0..10 {
         sign_in(&service).await?;
     }
     let expired = sign_in(&service).await?;
-    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    time.advance(1);
     let query = format!("code=c&state={}", expired.state());
     let (refused, _body) = send(&service, callback(&query, Some(&expired.cookie))?).await?;
     assert_eq!(StatusCode::BAD_REQUEST, refused.status());

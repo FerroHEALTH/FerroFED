@@ -38,6 +38,7 @@ use ferrohealth_server::serve::Drained;
 use http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use http::{HeaderValue, Method, StatusCode};
 
+use ferrohealth_session::clock::Clock;
 use ferrohealth_session::cookies::{CookieNames, HOST_PREFIX};
 use ferrohealth_session::record::Held;
 use ferrohealth_session::routes::{SignIn, keep_session};
@@ -94,6 +95,15 @@ impl ConsoleState {
     /// be built, and [`StateError::Provider`] for a relying party that
     /// cannot be built or a provider whose metadata cannot be read.
     pub async fn new(settings: Settings) -> Result<Self, StateError> {
+        Self::with_clock(settings, Clock::system()).await
+    }
+
+    /// The state of [`ConsoleState::new`], counting every sign-in and
+    /// session lifetime on `clock`.
+    ///
+    /// # Errors
+    /// As [`ConsoleState::new`].
+    pub async fn with_clock(settings: Settings, clock: Clock) -> Result<Self, StateError> {
         let gateway = Gateway::new(&settings.gateway)?;
         let party =
             match &settings.oidc {
@@ -104,7 +114,11 @@ impl ConsoleState {
                 })?),
                 None => None,
             };
-        let sessions = Sessions::new(settings.session.clone(), CookieNames::for_console(COOKIES));
+        let sessions = Sessions::with_clock(
+            settings.session.clone(),
+            CookieNames::for_console(COOKIES),
+            clock,
+        );
         let pages = SignInPages::new(settings.locale.clone(), prefix(&settings));
         let sign_in = SignIn::new(sessions, party, pages);
         // NOTE: no specification governs this: our own design; the settings are
