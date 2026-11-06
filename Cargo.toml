@@ -317,13 +317,14 @@ rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs"
 # Test-only since the revocation check of an eHDSI link moved into
 # ferrohealth-server (#1646): the testkit's revocable front (#1623) reads
 # its certificates and writes its OCSP answers with the X.509 certificate
-# and CRL model and the DER codec at the versions tokio-postgres-rustls
-# already locks, and the RFC 6960 OCSP request and response types over
-# them, the 0.2 line that shares that x509-cert. Verified against crates.io
-# on 2026-11-05.
-der = { version = "0.7.10", default-features = false, features = ["std", "oid"] }
-x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
-x509-ocsp = { version = "0.2.1", default-features = false }
+# and CRL model and the DER codec, and the RFC 6960 OCSP request and
+# response types over them, on the 0.3 line that shares that x509-cert
+# (#1690). ferrohealth-server 0.5.1 and tokio-postgres-rustls 0.14.0 still
+# hold der 0.7 and x509-cert 0.2 for the gateway, so the lock carries both
+# lines until they move. Verified against crates.io on 2026-11-06.
+der = { version = "0.8.3", default-features = false, features = ["std", "oid"] }
+x509-cert = { version = "0.3.0", default-features = false, features = ["std"] }
+x509-ocsp = { version = "0.3.0-rc.0", default-features = false }
 # The FerroHEALTH component library of the operator console (#275; no
 # specification governs it: our own design): the components, rendered on the
 # server from Askama templates, the plain script modules and the asset router
