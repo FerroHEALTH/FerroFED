@@ -19,10 +19,10 @@
 //! stored. An answer that is no FHIR document `Bundle` whose identifier has
 //! a system and a value (FHIR R4 `bdl-9`) is never served: the member is
 //! named in `node-error` with `424` (§11.1, §11.3). A token of a laboratory
-//! report a member serves itself names its `Binary` by its logical id, and
-//! the read asks that member alone for it, answering its bytes as it sent
-//! them ([`super::laboratory::read_own`]). No specification governs the
-//! token: our own design.
+//! or discharge report a member serves itself names its `Binary` by its
+//! logical id, and the read asks that member alone for it, answering its
+//! bytes as it sent them ([`super::own::read`]). No specification governs
+//! the token: our own design.
 
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -55,6 +55,7 @@ use crate::config::fhir::FhirSettings;
 use crate::conveyed;
 use crate::error::Code;
 use crate::facade::native::{self, Chosen, Native};
+use crate::facade::summary::own::Kind;
 use crate::federation::Federation;
 
 /// The route of a member's document under `{fhir-base}`.
@@ -103,8 +104,8 @@ struct Claims {
     /// writes the document from, for a laboratory report; none for a
     /// document the member serves itself.
     composition: Option<String>,
-    /// The logical id of the member's `Binary`, for a laboratory report the
-    /// member serves itself; none otherwise.
+    /// The logical id of the member's `Binary`, for a laboratory or
+    /// discharge report the member serves itself; none otherwise.
     binary: Option<String>,
 }
 
@@ -116,8 +117,9 @@ enum Named {
     /// The laboratory report the gateway writes from the composition of
     /// this version.
     Composition(String),
-    /// The member's own laboratory report, its `Binary` of this logical id.
-    Binary(String),
+    /// The member's own document of the kind, its `Binary` of this logical
+    /// id.
+    Own(Kind, String),
 }
 
 /// Why a token is not taken; every reason answers alike.
@@ -175,23 +177,23 @@ pub(super) fn mint_laboratory(
     )
 }
 
-/// Returns the token naming, for `caller`, the laboratory report the member
-/// `chosen` serves itself as its `Binary` of the logical id `binary`, signed
-/// by `signer` for the face `fhir`.
+/// Returns the token naming, for `caller`, the document of the kind `kind`
+/// the member `chosen` serves itself as its `Binary` of the logical id
+/// `binary`, signed by `signer` for the face `fhir`.
 ///
 /// # Errors
 ///
 /// The [`jsonwebtoken::errors::Error`] of a key that cannot sign.
-pub(super) fn mint_own_laboratory(
+pub(super) fn mint_own(
     signer: &Signer,
     fhir: &FhirSettings,
     caller: &Caller,
-    (chosen, binary): (&Chosen, &str),
+    (chosen, kind, binary): (&Chosen, Kind, &str),
 ) -> Result<String, jsonwebtoken::errors::Error> {
     signed(
         (signer, fhir, caller),
         (&chosen.native, chosen),
-        (LABORATORY, LAB_BUNDLE),
+        (kind.code(), kind.profile()),
         (None, Some(binary)),
     )
 }
@@ -275,7 +277,8 @@ fn chosen(federation: &Federation, claims: &Claims) -> Result<Chosen, Untaken> {
         });
     }
     let (category, profile) = if claims.binary.is_some() {
-        (LABORATORY, LAB_BUNDLE)
+        let kind = Kind::of_category(&claims.category).ok_or(Untaken::Unheld)?;
+        (kind.code(), kind.profile())
     } else {
         (CATEGORY, EPS_COMPOSITION)
     };
@@ -330,7 +333,7 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
             let (request_id, outbound) = (admitted.request_id, admitted.outbound);
             let service = match named {
                 Named::Summary => Service::PatientSummary,
-                Named::Composition(_) | Named::Binary(_) => Service::OriginalDocument,
+                Named::Composition(_) | Named::Own(..) => Service::OriginalDocument,
             };
             let mut response = async {
                 // NOTE: eHDSI XCA Profile 8.0.1 §4.2.2: a contact point reads only documents of its
@@ -349,8 +352,8 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
                         )
                         .await;
                     }
-                    Named::Binary(binary) => {
-                        return super::laboratory::read_own(admitted, &arrived, (&member, &binary))
+                    Named::Own(kind, binary) => {
+                        return super::own::read(admitted, &arrived, (&member, kind, &binary))
                             .await;
                     }
                 }
@@ -405,7 +408,11 @@ fn taken(admitted: &admission::Admitted<'_>, token: &str) -> Result<(Chosen, Nam
     let member = chosen(federation, &claims).map_err(|refused| untaken(&refused, logged))?;
     let named = match (claims.composition, claims.binary) {
         (Some(composition), _) => Named::Composition(composition),
-        (None, Some(binary)) => Named::Binary(binary),
+        (None, Some(binary)) => {
+            let kind = Kind::of_category(&claims.category)
+                .ok_or_else(|| untaken(&Untaken::Unheld, logged))?;
+            Named::Own(kind, binary)
+        }
         (None, None) => Named::Summary,
     };
     Ok((member, named))

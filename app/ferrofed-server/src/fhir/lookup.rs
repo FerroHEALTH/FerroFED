@@ -33,7 +33,7 @@ use super::attach;
 use super::patient_summary::{Headless, header_of, refused, unheaded_outcome};
 use crate::access::NoAccess;
 use crate::facade::demographics::Unheaded;
-use crate::facade::summary::laboratory::Laboratory;
+use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
 use crate::fhir_wire::fhir_json;
@@ -63,7 +63,7 @@ pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {
                 Arc::clone(federation),
                 arrived,
                 patient,
-                (Scope::Lookup, Laboratory::Unlisted),
+                (Scope::Lookup, Wanted::default()),
             )
             .await
             {

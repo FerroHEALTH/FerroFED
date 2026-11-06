@@ -14,7 +14,7 @@
 //! patient summary the gateway writes on request, retrievable through
 //! `Patient/$summary`, and one for each document a member serves itself,
 //! read through the gateway at a URL it signs. A member that serves its
-//! laboratory reports as a Document Access Provider has its own
+//! laboratory or discharge reports as a Document Access Provider has its own
 //! `DocumentReference`s listed as it holds them ([`Match::Passed`]), each
 //! attachment URL readdressed to the gateway's ([`readdressed`]).
 
@@ -54,6 +54,10 @@ pub const PATIENT_SUMMARY: &str = "60591-5";
 /// `eehrxf-document-type-laboratory-report-vs` value set.
 pub const LABORATORY_REPORT: &str = "11502-2";
 
+/// The LOINC codes of a discharge report, the codes of the
+/// `eehrxf-document-type-discharge-report-vs` value set, in its order.
+pub const DISCHARGE_REPORTS: [&str; 2] = ["18842-5", "100719-4"];
+
 /// The canonical URL of the document `Bundle` profile the gateway's own
 /// summary follows.
 pub const EPS_BUNDLE: &str = "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps";
@@ -72,6 +76,7 @@ pub struct ListRequest {
     value: String,
     summaries: bool,
     laboratory: bool,
+    discharge: Vec<&'static str>,
 }
 
 impl std::fmt::Debug for ListRequest {
@@ -79,6 +84,7 @@ impl std::fmt::Debug for ListRequest {
         f.debug_struct("ListRequest")
             .field("summaries", &self.summaries)
             .field("laboratory", &self.laboratory)
+            .field("discharge", &self.discharge)
             .finish_non_exhaustive()
     }
 }
@@ -132,6 +138,14 @@ impl ListRequest {
         self.laboratory
     }
 
+    /// Returns the codes of [`DISCHARGE_REPORTS`] every `type` the search
+    /// gives admits, in their order; none when it admits no discharge
+    /// report.
+    #[must_use]
+    pub fn discharge(&self) -> &[&'static str] {
+        &self.discharge
+    }
+
     /// Reads the search from the query string `query` of a `GET`.
     ///
     /// # Errors
@@ -142,6 +156,7 @@ impl ListRequest {
         let mut identifier = None;
         let mut summaries = true;
         let mut laboratory = true;
+        let mut discharge = DISCHARGE_REPORTS.to_vec();
         for (name, value) in pairs {
             match &*name {
                 "patient.identifier" => {
@@ -158,6 +173,7 @@ impl ListRequest {
                     laboratory &= value
                         .split(',')
                         .any(|token| admits(token, LABORATORY_REPORT));
+                    discharge.retain(|code| value.split(',').any(|token| admits(token, code)));
                 }
                 "_format" => {
                     if !JSON_FORMATS.contains(&&*value) {
@@ -177,6 +193,7 @@ impl ListRequest {
             value: value.to_owned(),
             summaries,
             laboratory,
+            discharge,
         })
     }
 }
@@ -564,19 +581,22 @@ pub fn readdressed(document: &Value, mut to: impl FnMut(&str) -> Option<String>)
     Some(readdressed)
 }
 
-/// Returns the `OperationOutcome` that names a member whose own endpoint,
-/// `endpoint`, answered with laboratory reports the list cannot pass
-/// through, for the reason `reason`, with the §11.1 status `node-error`.
+/// Returns the `OperationOutcome` that names a member whose own endpoint
+/// answered documents the list cannot pass through.
+///
+/// The member's own endpoint is `endpoint`, the documents are named
+/// `documents`, such as laboratory reports, and `reason` says why; the
+/// member has the §11.1 status `node-error`.
 #[must_use]
-pub fn unread(endpoint: &str, reason: &str) -> OperationOutcome {
+pub fn unread(endpoint: &str, documents: &str, reason: &str) -> OperationOutcome {
     OperationOutcome {
         issue: vec![OperationOutcomeIssue {
             severity: "warning".into(),
             code: "incomplete".into(),
             diagnostics: Some(
                 format!(
-                    "the list is incomplete: {endpoint} (node-error) answered laboratory \
-                     reports the list cannot pass through: {reason} (§11.3)"
+                    "the list is incomplete: {endpoint} (node-error) answered {documents} \
+                     the list cannot pass through: {reason} (§11.3)"
                 )
                 .into(),
             ),
@@ -651,6 +671,35 @@ mod tests {
                 Err(refusal),
                 "{query}"
             );
+        }
+    }
+
+    #[test]
+    fn the_discharge_codes_every_type_admits_are_read_in_order() {
+        for (query, codes) in [
+            ("patient.identifier=a%7Cb", &["18842-5", "100719-4"][..]),
+            (
+                "patient.identifier=a%7Cb&type=http%3A%2F%2Floinc.org%7C",
+                &["18842-5", "100719-4"],
+            ),
+            (
+                "patient.identifier=a%7Cb&type=100719-4,http%3A%2F%2Floinc.org%7C18842-5",
+                &["18842-5", "100719-4"],
+            ),
+            ("patient.identifier=a%7Cb&type=100719-4", &["100719-4"]),
+            (
+                "patient.identifier=a%7Cb&type=18842-5,100719-4&type=18842-5",
+                &["18842-5"],
+            ),
+            ("patient.identifier=a%7Cb&type=60591-5", &[]),
+            (
+                "patient.identifier=a%7Cb&type=http%3A%2F%2Fexample.org%7C18842-5",
+                &[],
+            ),
+            ("patient.identifier=a%7Cb&type=18842-5&type=100719-4", &[]),
+        ] {
+            let read = ListRequest::from_query(Some(query)).unwrap();
+            assert_eq!(read.discharge(), codes, "{query}");
         }
     }
 

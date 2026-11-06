@@ -59,6 +59,7 @@ mod laboratory;
 mod list;
 mod lookup;
 pub mod medication;
+mod own;
 mod patient_summary;
 mod trc;
 
