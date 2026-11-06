@@ -32,6 +32,7 @@
   - [Information sheet](evaluate/information-sheet.md)
   - [CRA information to the user](evaluate/cra-user-information.md)
   - [Technical documentation](evaluate/technical-documentation.md)
+    - [Conformity record](evaluate/conformity-record.md)
     - [Annex II checklist](evaluate/annex-ii.md)
     - [Rights of natural persons](evaluate/natural-person-rights.md)
     - [Cybersecurity risk assessment](evaluate/cra-risk-assessment.md)
