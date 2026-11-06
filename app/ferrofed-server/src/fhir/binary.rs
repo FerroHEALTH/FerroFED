@@ -18,8 +18,8 @@
 //! list did; the bytes are answered as the member sent them and nothing is
 //! stored. An answer that is no FHIR document `Bundle` whose identifier has
 //! a system and a value (FHIR R4 `bdl-9`) is never served: the member is
-//! named in `node-error` with `424` (§11.1, §11.3). A token of a laboratory
-//! or discharge report a member serves itself names its `Binary` by its
+//! named in `node-error` with `424` (§11.1, §11.3). A token of a document
+//! of another category a member serves itself names its `Binary` by its
 //! logical id, and the read asks that member alone for it, answering its
 //! bytes as it sent them ([`super::own::read`]). No specification governs
 //! the token: our own design.
@@ -104,8 +104,9 @@ struct Claims {
     /// writes the document from, for a laboratory report; none for a
     /// document the member serves itself.
     composition: Option<String>,
-    /// The logical id of the member's `Binary`, for a laboratory or
-    /// discharge report the member serves itself; none otherwise.
+    /// The logical id of the member's `Binary`, for a laboratory,
+    /// discharge or imaging document the member serves itself; none
+    /// otherwise.
     binary: Option<String>,
 }
 

@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The documents a document list asks members for at their own endpoints
-//! (Regulation (EU) 2025/327 Art 14(1)(e) and (f), Annex II 2.1), and how
+//! (Regulation (EU) 2025/327 Art 14(1)(d) to (f), Annex II 2.1), and how
 //! their answers settle the list's completeness (§11.3, §11.4).
 //!
-//! A member declared `native` for `Laboratory-Reports` or
-//! `Discharge-Reports` is asked at its own endpoint, by its own `ehr_id`
+//! A member declared `native` for `Laboratory-Reports`,
+//! `Discharge-Reports` or `Medical-Imaging` is asked at its own endpoint, by its own `ehr_id`
 //! alone (§5.4.1, N33), with the interactions the HL7 Europe EU Health Data
 //! API 1.0.0-ballot `CapabilityStatement-EEHRxF-DocumentAccessProvider`
 //! SHALL support: `Patient?identifier=` for its patient's logical id, then
@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use eehrxf::document::discharge::HDR_BUNDLE;
+use eehrxf::document::imaging::IMAGING_BUNDLE;
 use eehrxf::document::laboratory::LAB_BUNDLE;
 use ehds_logging::category::Category;
 use ferrofed_eehrxf::list::{LABORATORY_REPORT, LOINC, RESOURCE, attachment_urls};
@@ -46,6 +47,8 @@ pub(crate) enum Kind {
     Laboratory,
     /// Discharge reports, Art 14(1)(f).
     Discharge,
+    /// Medical imaging studies and related reports, Art 14(1)(d).
+    Imaging,
 }
 
 impl Kind {
@@ -54,6 +57,7 @@ impl Kind {
         match self {
             Self::Laboratory => Category::MedicalTestResult,
             Self::Discharge => Category::DischargeReport,
+            Self::Imaging => Category::MedicalImaging,
         }
     }
 
@@ -62,6 +66,7 @@ impl Kind {
         match self {
             Self::Laboratory => eehrxf::category::Category::Laboratory.code(),
             Self::Discharge => eehrxf::category::Category::Discharge.code(),
+            Self::Imaging => eehrxf::category::Category::Imaging.code(),
         }
     }
 
@@ -70,6 +75,7 @@ impl Kind {
         match self {
             Self::Laboratory => LAB_BUNDLE,
             Self::Discharge => HDR_BUNDLE,
+            Self::Imaging => IMAGING_BUNDLE,
         }
     }
 
@@ -78,13 +84,14 @@ impl Kind {
         match self {
             Self::Laboratory => "laboratory reports",
             Self::Discharge => "discharge reports",
+            Self::Imaging => "imaging reports",
         }
     }
 
     /// The kind of the category of the code `code`, such as
     /// `Discharge-Reports`.
     pub(crate) fn of_category(code: &str) -> Option<Self> {
-        [Self::Laboratory, Self::Discharge]
+        [Self::Laboratory, Self::Discharge, Self::Imaging]
             .into_iter()
             .find(|kind| kind.code() == code)
     }
@@ -98,6 +105,18 @@ pub(crate) struct Wanted {
     /// The LOINC codes of the discharge reports the members that serve them
     /// themselves are asked for; none asks them nothing.
     pub(crate) discharge: Vec<&'static str>,
+    /// The LOINC codes of the imaging documents the members that serve them
+    /// themselves are asked for; none asks them nothing.
+    pub(crate) imaging: Vec<&'static str>,
+}
+
+impl Wanted {
+    /// Whether it names any document.
+    pub(crate) fn any(&self) -> bool {
+        self.laboratory != Laboratory::Unlisted
+            || !self.discharge.is_empty()
+            || !self.imaging.is_empty()
+    }
 }
 
 /// A member asked for its own documents of a kind, by the LOINC codes of
@@ -113,31 +132,38 @@ pub(crate) struct Asking {
 }
 
 /// Every member asked for its own documents: the members of `laboratory`
-/// for their laboratory reports, and, when `discharge` names a type, every
-/// member `located` dispatches to that serves discharge reports itself at
-/// an endpoint `snapshot` holds, for its discharge reports of those types.
+/// for their laboratory reports, and, for each kind `wanted` names types
+/// of, every member `located` dispatches to that serves that kind itself at
+/// an endpoint `snapshot` holds, for its documents of those types.
 pub(super) fn asking(
     snapshot: &RegistrySnapshot,
     located: &Located,
     laboratory: Vec<Chosen>,
-    discharge: &[&'static str],
+    wanted: &Wanted,
 ) -> Vec<Asking> {
-    let discharging = if discharge.is_empty() {
-        Vec::new()
-    } else {
-        native::chosen_for(snapshot, &located.targets, Category::DischargeReport.code())
-    };
-    let laboratory = laboratory.into_iter().map(|chosen| Asking {
-        kind: Kind::Laboratory,
-        codes: vec![LABORATORY_REPORT],
-        chosen,
-    });
-    let discharging = discharging.into_iter().map(|chosen| Asking {
-        kind: Kind::Discharge,
-        codes: discharge.to_vec(),
-        chosen,
-    });
-    laboratory.chain(discharging).collect()
+    let mut asking: Vec<Asking> = laboratory
+        .into_iter()
+        .map(|chosen| Asking {
+            kind: Kind::Laboratory,
+            codes: vec![LABORATORY_REPORT],
+            chosen,
+        })
+        .collect();
+    for (kind, codes) in [
+        (Kind::Discharge, &wanted.discharge),
+        (Kind::Imaging, &wanted.imaging),
+    ] {
+        if codes.is_empty() {
+            continue;
+        }
+        let chosen = native::chosen_for(snapshot, &located.targets, kind.code());
+        asking.extend(chosen.into_iter().map(|chosen| Asking {
+            kind,
+            codes: codes.clone(),
+            chosen,
+        }));
+    }
+    asking
 }
 
 /// A member that serves documents of a kind itself, and what its own
@@ -358,11 +384,10 @@ mod tests {
 
     #[test]
     fn each_kind_is_found_by_its_category_code() {
-        for kind in [Kind::Laboratory, Kind::Discharge] {
+        for kind in [Kind::Laboratory, Kind::Discharge, Kind::Imaging] {
             assert_eq!(Some(kind), Kind::of_category(kind.code()));
             assert_eq!(kind.code(), kind.category().code());
         }
         assert_eq!(None, Kind::of_category("Patient-Summaries"));
-        assert_eq!(None, Kind::of_category("Medical-Imaging"));
     }
 }
