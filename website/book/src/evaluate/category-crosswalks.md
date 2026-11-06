@@ -92,9 +92,11 @@ example simple" names (CKM cid `1013.26.408`, asset version 3). That
 template is a DRAFT CKM has not reviewed or published, so a reviewed
 template that names other entries would change the query; it is vendored
 by `scripts/vendor/openehr-ckm.sh` with its status recorded. A test holds the
-query to the template's entries. The mapping of laboratory results is
-component work in FerroBRIDGE
-([FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324)).
+query to the template's entries. The mapping of laboratory results is the
+laboratory mapping `eehrxf` ships, built in FerroBRIDGE (issue
+[FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324),
+now closed), and the FHIR face writes a member's report with it
+([Laboratory reports over FHIR](../integrate/laboratory-reports.md)).
 
 The discharge report and the imaging report have no section query yet.
 Building each report from the members' answers, and the FHIR face, are

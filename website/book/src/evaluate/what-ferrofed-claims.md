@@ -552,10 +552,10 @@ release, and every issue in it names the sections it answers.
 
 The European interoperability software component, `eehrxf` and every
 document it builds in the exchange format, moves to FerroBRIDGE
-([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)). The other
-priority categories and prescriptions from openEHR medication data through
-a FHIRconnect mapping are built there
-([FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321), [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322), [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325), [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
+([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)). Prescriptions from openEHR medication data through a
+FHIRconnect mapping and laboratory reports were built there (issues
+[FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321), [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322) and [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), now closed), and discharge
+reports and imaging are being built there ([FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325), [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
 FerroFED keeps the gateway half: the federation queries, the FHIR face
 routes and the access record, which v0.0.16 carries for prescriptions from
 openEHR medication data and test results ([#1403](https://github.com/FerroHEALTH/FerroFED/issues/1403), [#1404](https://github.com/FerroHEALTH/FerroFED/issues/1404)) and v0.0.17 for
@@ -608,11 +608,14 @@ These are the ones to know before you deploy FerroFED; the
   summary and receives a document in the exchange format on the gateway's
   FHIR face, and passes prescriptions and dispensations through from the
   members that serve them in the HL7 Europe MPD profiles on their own FHIR
-  endpoint
-  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md));
-  a member that holds its prescriptions only as openEHR data is not served
-  ([FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322)), and imaging, test results and discharge reports are planned
-  ([FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324),
+  endpoint, or maps them from a member's openEHR medication data in the
+  map mode
+  ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
+  It lists, reads and receives laboratory reports
+  ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)),
+  with hazards I-16 and I-18 of the [clinical safety risk
+  file](clinical-safety.md) open. Imaging and discharge reports are planned
+  ([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405), [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406),
   [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
   [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)). No EU
   declaration of conformity has been drawn up, and no release carries the

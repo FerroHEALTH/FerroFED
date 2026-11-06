@@ -519,8 +519,12 @@ them:
   It also searches and reads a patient's electronic prescriptions and
   receives a dispensation into the member that owns its prescription,
   passed through in the HL7 Europe MPD profiles from the members that serve
-  them on their own FHIR endpoint
+  them on their own FHIR endpoint, or mapped from a member's openEHR
+  medication data in the map mode
   ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
+  It lists, reads and receives laboratory reports in the HL7 Europe
+  Laboratory Report profiles
+  ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)).
 
 Seven of the manufacturer's obligations have a first answer:
 
@@ -567,14 +571,13 @@ before the Regulation applies on 26 March 2027:
   ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)), and is
   re-checked against the Art 15(1) implementing act once it is adopted.
   None is adopted.
-- [FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321): the rest of
-  the interoperability component for electronic prescriptions and
-  dispensations, serving them from openEHR medication data through a
-  FHIRconnect mapping
-  ([FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322)). The
-  interoperability component moves to FerroBRIDGE
-  ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)), and this
-  mapping is built there.
+- [#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405) and [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406): the gateway half of the interoperability
+  component for discharge reports and for imaging, beside the component
+  work in FerroBRIDGE ([FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
+  [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)). The component moved to FerroBRIDGE
+  ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)), where prescriptions from openEHR medication data and
+  laboratory reports were built (issues [FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321),
+  [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322) and [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), now closed).
 - [#525](https://github.com/FerroHEALTH/FerroFED/issues/525): the rest of
   the conformity work: the points the [Annex II checklist](annex-ii.md)
   leaves open, the EU declaration of conformity, which each release writes

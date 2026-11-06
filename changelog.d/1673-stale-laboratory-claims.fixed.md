@@ -1,0 +1,1 @@
+- The regulatory status, claims and category crosswalk pages say that laboratory reports and prescriptions from openEHR medication data are built, and they cite only open issues for discharge reports and imaging. The checks page says why no offline check can catch a closed issue cited as remaining work.
