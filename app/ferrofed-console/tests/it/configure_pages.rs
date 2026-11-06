@@ -17,7 +17,7 @@ use crate::configure::{changes, listener, page, signed_in_console};
 fn removal_is_in_the_row_menu(body: &str) -> Result<(), Box<dyn Error>> {
     assert!(
         body.contains(
-            r#"<div class="fui-menu-sep" role="separator"></div><button type="button" role="menuitem" class="fui-menu-item fui-menu-danger" command="show-modal" commandfor="cfg-remove-node-c-dialog""#
+            r#"<hr class="fui-menu-sep"><button type="button" role="menuitem" class="fui-menu-item fui-menu-danger" command="show-modal" commandfor="cfg-remove-node-c-dialog""#
         ),
         "Remove… is the row menu's item after its separator, opening the row's dialog: {body}"
     );

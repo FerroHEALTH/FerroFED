@@ -174,7 +174,7 @@ mod tests {
             "/login",
             "/health",
             "/favicon.ico",
-            "/ferrohealth-ui/0.6.6/ferrohealth-ui.css",
+            "/ferrohealth-ui/0.6.8/ferrohealth-ui.css",
         ] {
             assert!(!needs_session(open), "{open}");
         }
