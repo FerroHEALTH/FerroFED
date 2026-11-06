@@ -35,7 +35,7 @@ Decide three values before you start, because several settings repeat them:
 
 - the public base URL, here `https://gateway.example.org/fed`: its path is
   `server.base_path`, and `gateway.public_url` names it once, from which
-  `auth.audience`, the JWK Set's URL and the PMIR feed's URL follow
+  each issuer's `audience`, the JWK Set's URL and the PMIR feed's URL follow
   ([The public base URL](public-address.md#the-public-base-url));
 - the federation id, `federation.id`, which `OPTIONS {base}/` reports;
 - each member's node id and endpoint id, which the registry, the PIX
@@ -181,8 +181,8 @@ access token:
 
 - its JOSE header names the type `at+jwt`;
 - it carries `iss`, `exp`, `aud`, `sub`, `client_id`, `iat` and `jti`, and
-  `aud` names `auth.audience`, which is `gateway.public_url` unless you set
-  it;
+  `aud` names the issuer's `audience`, which is `gateway.public_url` unless
+  you set it;
 - its `scope` holds the SMART on openEHR scopes of each operation, such as
   `user/aql-*.s` for a federated query
   ([Scopes per route](authentication.md#scopes-per-route));
@@ -353,9 +353,13 @@ since the gateway compares `iss` exactly:
 ```toml
 # ferrofed.toml
 [auth]
-issuer = "https://idp.example.org/realms/ferrofed"
-clock_skew_seconds = 60
 product_scope = "__ferrofed.operator"
+
+[[auth.issuer]]
+issuer = "https://idp.example.org/realms/ferrofed"
+kind = "persons"
+first_party_clients = ["example-clinical-app", "example-reporting-service"]
+clock_skew_seconds = 60
 
 [[trust.issuer]]
 issuer = "https://idp.example.org/realms/ferrofed"
@@ -369,6 +373,10 @@ substantial = ["urn:example:loa:substantial"]
 high = ["urn:example:loa:high"]
 ```
 
+The realm's tokens are typed `at+jwt` and carry `client_id`, so the issuer
+keeps the default `rfc9068` profile. A person's token is admitted only
+through a client `first_party_clients` lists, the reporting service's too,
+since its service account's `sub` is a user's and never the client's.
 `system/aql-*` counts only for a client listed in `backend_clients`.
 `client_tokens_act_for_professional` admits the reporting service to
 patient data for the professional `professional.json` names; a client token

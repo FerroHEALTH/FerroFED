@@ -199,6 +199,7 @@ impl Refusal {
             Self::Missing => Some(SmartRefusal::Missing(Schemes {
                 bearer: true,
                 basic: false,
+                dpop: false,
             })),
             Self::Malformed => Some(SmartRefusal::InvalidRequest),
             Self::Invalid => Some(SmartRefusal::InvalidToken),
@@ -349,6 +350,7 @@ impl BasicRefusal {
             Self::Missing => SmartRefusal::Missing(Schemes {
                 bearer: false,
                 basic: true,
+                dpop: false,
             }),
             Self::Invalid => SmartRefusal::InvalidBasic,
             Self::Unlisted => return None,

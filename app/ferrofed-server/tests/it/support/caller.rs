@@ -12,6 +12,7 @@ use std::sync::LazyLock;
 
 use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::{Claims, Issuer, IssuerError};
+use ferrohealth_smart::kind::IssuerKind;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 
 use crate::support::toml_path;
@@ -120,11 +121,41 @@ pub(crate) fn jwks_file_of(issuer: &Issuer) -> Result<PathBuf, Box<dyn StdError>
     Ok(file)
 }
 
+/// The clients the suite's test tokens name, each a first-party client of
+/// the `persons` issuers the suite trusts: the default, the backend client,
+/// the client the DEMOGRAPHIC suite leaves off its list, and the clients the
+/// overload and outbound identifier suites name.
+pub(crate) const FIRST_PARTY: [&str; 6] = [
+    "synthetic-unlisted-client",
+    "synthetic-client",
+    "synthetic-backend",
+    "client-one",
+    "client-two",
+    "SYNTHETIC-NATIONAL-ID-0004",
+];
+
+/// Returns the keys of an `[[auth.issuer]]` table the suite trusts beside
+/// its identifier and key set: `kind = "persons"`, the audience
+/// [`AUDIENCE`] and the first-party clients [`FIRST_PARTY`].
+pub(crate) fn persons_toml() -> String {
+    let listed: Vec<String> = FIRST_PARTY
+        .iter()
+        .map(|client| format!("\"{client}\""))
+        .collect();
+    format!(
+        "kind = \"persons\"\naudience = [\"{AUDIENCE}\"]\nfirst_party_clients = [{}]\n",
+        listed.join(", ")
+    )
+}
+
 /// Returns how `issuer`'s tokens addressed to [`AUDIENCE`] are verified:
-/// against the key set in `jwks_file`, under `ferrohealth-smart`'s defaults.
+/// against the key set in `jwks_file`, as a `persons` issuer whose
+/// first-party clients are [`FIRST_PARTY`], under `ferrohealth-smart`'s
+/// `rfc9068` profile.
 pub(crate) fn key_set(issuer: &str, jwks_file: &Path) -> Verification {
-    let mut settings = KeySetSettings::new(issuer, AUDIENCE);
+    let mut settings = KeySetSettings::new(issuer, AUDIENCE, IssuerKind::Persons);
     settings.jwks_file = Some(jwks_file.to_owned());
+    settings.profile.first_party_clients = FIRST_PARTY.map(str::to_owned).to_vec();
     Verification::KeySet(Box::new(settings))
 }
 
@@ -135,7 +166,6 @@ pub(crate) fn auth() -> AuthSettings {
     let mut trusted = IssuerSettings::new(ISSUER, key_set(ISSUER, jwks_file()));
     trusted.demographic_clients = BTreeSet::from([claims().client_id]);
     AuthSettings {
-        audience: vec![AUDIENCE.to_owned()],
         product_scope: Some(OPERATOR_SCOPE.to_owned()),
         issuers: vec![trusted],
         ..AuthSettings::default()
@@ -144,11 +174,10 @@ pub(crate) fn auth() -> AuthSettings {
 
 /// Returns the `[auth]` and `[trust]` of [`auth`] as configuration text,
 /// its issuer an `[[auth.issuer]]` entry, so a test can append another.
-/// `role_claims` is empty because beside a second issuer a bare entry,
-/// the default included, refuses the start, and the gateway reads no role.
 pub(crate) fn auth_toml() -> String {
     format!(
-        "\n[auth]\naudience = [\"{AUDIENCE}\"]\nproduct_scope = \"{OPERATOR_SCOPE}\"\nrole_claims = []\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\njwks_file = {}\n\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
+        "\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\n{}jwks_file = {}\n\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
+        persons_toml(),
         toml_path(jwks_file()),
         claims().client_id
     )
@@ -158,8 +187,9 @@ pub(crate) fn auth_toml() -> String {
 /// a file as it is now.
 pub(crate) fn issuer_toml(issuer: &Issuer) -> Result<String, Box<dyn StdError>> {
     Ok(format!(
-        "\n[[auth.issuer]]\nissuer = \"{}\"\njwks_file = {}\n",
+        "\n[[auth.issuer]]\nissuer = \"{}\"\n{}jwks_file = {}\n",
         issuer.name(),
+        persons_toml(),
         toml_path(&jwks_file_of(issuer)?)
     ))
 }
@@ -214,4 +244,22 @@ pub(crate) fn scraping() -> String {
     format!(
         "scrape_users = [\"{SCRAPE_USER}\"]\n\n[auth]\n\n[[auth.basic.users]]\nuser = \"{SCRAPE_USER}\"\npassword_hash = \"{SCRAPE_HASH}\"\n"
     )
+}
+
+/// The issuer identifier of the suite's `patients` issuer, which signs with
+/// the test issuer's key.
+#[cfg(feature = "binding-ihe")]
+pub(crate) const PATIENT_ISSUER: &str = "https://patients.issuer.example.test";
+
+/// Returns the suite's `patients` issuer, its tokens verified against
+/// [`jwks_file`] and its `patient/` grants bound as `binding` says.
+#[cfg(feature = "binding-ihe")]
+pub(crate) fn patients_issuer(
+    binding: ferrofed_server::config::auth::PatientBinding,
+) -> IssuerSettings {
+    let mut settings = KeySetSettings::new(PATIENT_ISSUER, AUDIENCE, IssuerKind::Patients);
+    settings.jwks_file = Some(jwks_file().to_owned());
+    let mut issuer = IssuerSettings::new(PATIENT_ISSUER, Verification::KeySet(Box::new(settings)));
+    issuer.patient = Some(binding);
+    issuer
 }

@@ -27,8 +27,8 @@ pub const HOST_NAME_ENV: &str = "HOSTNAME";
 pub struct Gateway {
     /// The absolute URL clients reach `{base}` at, such as
     /// `https://gateway.example.org/fed`, whose path is `server.base_path`.
-    /// Set, `auth.audience`, `signing.jwks_uri` and `pmir.callback_url`
-    /// default from it, and a `signing.jwks_uri` or `pmir.callback_url` that
+    /// Set, each `[[auth.issuer]]` audience, `signing.jwks_uri` and
+    /// `pmir.callback_url` default from it, and a `signing.jwks_uri` or `pmir.callback_url` that
     /// names another route than the gateway serves under it is refused
     /// ([`public_url`](crate::config::public_url)). Unset, each is written
     /// out.

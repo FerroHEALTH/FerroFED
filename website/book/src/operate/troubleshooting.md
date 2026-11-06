@@ -139,7 +139,9 @@ answer's challenge says only `invalid_token` for every token that does not
 verify (RFC 6750 §3.1), so read the `check` in the log.
 
 **Fix.** By `check`: `issuer not trusted` is an `iss` no `[[auth.issuer]]`
-lists; `audience` is an `aud` other than `auth.audience`; `expired` and
+lists; `audience` is an `aud` other than the issuer's `audience`; a token
+the issuer's `kind` admits no caller for (an unlisted client, an unlisted
+actor) is `no caller kind`; `expired` and
 `not yet valid` past the issuer's clock skew point at a clock out of step;
 `no key of the set` is a `kid` the issuer does not publish; `algorithm not
 accepted`, `typ names another kind` and `a required claim is missing` are
@@ -163,8 +165,8 @@ endpoint did not answer, so its tokens cannot be verified` (`event`
 the `issuer` and the fetch `error`.
 
 **Fix.** Make the issuer's metadata, its key set or its
-`introspection_endpoint` reachable from the gateway, or raise
-`auth.timeout_ms`
+introspection endpoint reachable from the gateway, or raise the issuer's
+`timeout_ms`
 ([The key set](authentication.md#the-key-set)).
 
 ### Requests are refused `503 overloaded` or `429 rate-limited`

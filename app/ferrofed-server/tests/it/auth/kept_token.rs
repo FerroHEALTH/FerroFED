@@ -69,7 +69,6 @@ async fn an_edge_assertion_is_never_kept_as_a_token() -> TestResult {
     let file = support::caller::jwks_file_of(&edge)?;
     let gate = Gate::new(&AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static("ferrofed-edge-assertion")),
-        audience: vec![AUDIENCE.to_owned()],
         issuers: vec![IssuerSettings::new(
             "https://edge.example.test",
             support::caller::key_set("https://edge.example.test", &file),

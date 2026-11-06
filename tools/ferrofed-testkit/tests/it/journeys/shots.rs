@@ -111,7 +111,7 @@ pub(crate) const PAGES: [Shot; 29] = [
         image: "stored-query",
         route: "/stored-queries/:name",
         url: "/stored-queries/org.example::journey_001",
-        ready: "//div[contains(@class, 'fui-code-panel')]",
+        ready: "//section[contains(@class, 'fui-code-panel')]",
     },
     Shot {
         image: "stored-query-versions",

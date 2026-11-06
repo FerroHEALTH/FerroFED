@@ -504,8 +504,8 @@ travels unencrypted is named by key in the startup banner, in a `WARN` log
 line at boot and after each reload, and on stderr by `config check`.
 
 **Trust anchors.** A URL the gateway verifies its callers against, an
-issuer itself, the key set its metadata names, or an `introspection_endpoint`
-in [`[trust]`](authentication.md), must be `https`, or `http` to a loopback
+issuer itself, the key set its metadata names, or an introspection endpoint
+in [`[auth]`](authentication.md), must be `https`, or `http` to a loopback
 host, under every profile, development included. A key set fetched in the
 clear would let anyone on the network substitute keys and forge callers.
 

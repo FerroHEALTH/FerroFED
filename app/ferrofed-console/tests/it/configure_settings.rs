@@ -251,7 +251,7 @@ const AUTHENTICATION: &str = r#"{"ui":"managed","revision":1,"settings":[
      "source":"file","restart":false,"editable":false},
     {"key":"trust.issuer[0].issuer","section":"authentication","value":"https://ncp.example.org",
      "source":"file","restart":false,"editable":false},
-    {"key":"trust.issuer[0].client_secret","section":"authentication","source":"file","restart":false,
+    {"key":"auth.issuer[0].introspection.client.client_secret","section":"authentication","source":"file","restart":false,
      "secret":{"set":true,"reference":"/run/secrets/synthetic-introspection"},"editable":false},
     {"key":"trust.issuer[0].national_contact_point.family_name","section":"authentication",
      "value":"ncp_family_name","source":"file","restart":false,"editable":false},

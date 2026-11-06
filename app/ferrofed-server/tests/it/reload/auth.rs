@@ -203,9 +203,10 @@ async fn a_request_being_admitted_finishes_on_the_issuers_it_started_with() -> T
         .mount(&keys)
         .await;
     let fetched = format!(
-        "{}\n[[auth.issuer]]\nissuer = \"{}\"\n",
+        "{}\n[[auth.issuer]]\nissuer = \"{}\"\n{}",
         auth_a(),
-        slow.name()
+        slow.name(),
+        support::caller::persons_toml()
     );
     let gateway = Trusting::start(&fetched)?;
     let b = format!("Bearer {}", slow.mint(&Claims::new(slow.name(), AUDIENCE))?);
@@ -255,8 +256,9 @@ async fn an_auth_that_does_not_load_is_refused_with_the_whole_reload() -> TestRe
         &(member("a", "http://127.0.0.1:9/a") + &member("b", "http://127.0.0.1:9/b")),
     )?;
     let unverifiable = format!(
-        "{}\n[[auth.issuer]]\nissuer = \"http://issuer-b.example.test\"\n",
-        auth_a()
+        "{}\n[[auth.issuer]]\nissuer = \"http://issuer-b.example.test\"\n{}",
+        auth_a(),
+        support::caller::persons_toml()
     );
     gateway.write_auth(&unverifiable)?;
 
@@ -301,15 +303,24 @@ async fn an_auth_that_trusts_no_issuer_is_refused_and_the_running_issuers_stay()
 #[tokio::test]
 async fn a_changed_audience_waits_for_a_restart_while_the_issuers_apply() -> TestResult {
     let gateway = Trusting::start(&auth_a())?;
-    let moved = auth_a_and_b()?.replace(AUDIENCE, "urn:example:another-audience");
+    let moved = format!(
+        "{}{}",
+        auth_a().replace(AUDIENCE, "urn:example:another-audience"),
+        support::caller::issuer_toml(&SECOND)?
+    );
     gateway.write_auth(&moved)?;
 
     let applied = gateway.reloader.reload()?;
-    assert_eq!(vec!["auth.audience"], applied.needs_restart);
+    assert_eq!(vec!["auth.issuer.audience"], applied.needs_restart);
     assert_eq!(
         StatusCode::OK,
         status_of(&gateway.app, &bearer_b()?).await?,
-        "the added issuer applies, under the audience the process started with"
+        "the added issuer applies"
+    );
+    assert_eq!(
+        StatusCode::OK,
+        status_of(&gateway.app, &support::caller::bearer()?).await?,
+        "the running issuer keeps the audience the process started with"
     );
     assert!(gateway.trust.gate().admits_any());
     Ok(())

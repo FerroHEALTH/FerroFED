@@ -445,7 +445,7 @@ Nine sections take effect on a reload:
 | `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
 | `[nl_gf]` | `[audit]` and `[config]` |
 | `[access_log]` | `[fhir]` and `[eehrxf]` |
-| `[auth]`: the issuers, how each is verified, its key set read again | `auth.audience`, and a changed `[server.tls]` or `[metrics.tls]` path |
+| `[auth]`: the issuers, how each is verified, its key set read again | `auth.issuer.audience` of an issuer already trusted, and a changed `[server.tls]` or `[metrics.tls]` path |
 | `[trust]`: each issuer's policy, its edge and its purpose of use | `[usage_report]` |
 
 The same reload reads the certificate files of `[server.tls]` and

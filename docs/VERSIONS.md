@@ -495,8 +495,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | =0.3.3 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | =0.3.3 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | =0.4.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | =0.4.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
@@ -537,7 +537,7 @@ version it draws with, read from the crate. `scripts/checks/versions.sh` holds e
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ferrohealth-ui` (FerroUI) | 0.6.6 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `.claude/rules/console-ui.md` |
+| `ferrohealth-ui` (FerroUI) | 0.6.8 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `.claude/rules/console-ui.md` |
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only

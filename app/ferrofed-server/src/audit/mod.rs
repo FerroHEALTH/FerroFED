@@ -436,8 +436,9 @@ pub fn statuses() -> Vec<Status> {
         .collect()
 }
 
-/// The URL the access records name the gateway by: the audience its callers'
-/// tokens name it by, when that is a URL, and its listen address otherwise.
+/// The URL the access records name the gateway by: the audience the first
+/// trusted issuer's tokens name it by, when that is a URL, and its listen
+/// address otherwise.
 #[expect(
     clippy::expect_used,
     reason = "a socket address is an IP address, bracketed when IPv6, and a port, which always forms an http URL"
@@ -446,8 +447,9 @@ fn gateway(settings: &Settings) -> url::Url {
     settings
         .server
         .auth
-        .audience
+        .issuers
         .first()
+        .and_then(|issuer| issuer.verification.audience().first())
         // NOTE: RFC 7519 §4.1.3: an audience is any string, so one that is no URL is
         // legitimately not one, and the listen address names the gateway instead.
         .and_then(|audience| url::Url::parse(audience).ok())

@@ -558,8 +558,8 @@ fn configured(dir: &Path, endpoint: &str, resolving: bool) -> Result<String, Box
     Ok(format!(
         "{profile}[server]\nlisten = \"127.0.0.1:1\"\n\n[registry]\ndocument = {path}\n\n\
          [federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{crossref}\n\
-         [auth]\naudience = [\"urn:example:gateway\"]\n\n\
-         [[auth.issuer]]\nissuer = \"https://issuer.example.test\"\n\n\
+         [auth]\n\n\
+         [[auth.issuer]]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n\
          [[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n\n\
          [trust.issuer.patient]\nendpoint = \"{endpoint}\"\nehr_id_system = \"{EHR_SYSTEM}\"\n"
     ))

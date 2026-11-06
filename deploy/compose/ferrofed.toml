@@ -84,19 +84,29 @@ overall_timeout_ms = 25000
 # issuer.
 # https://ferrofed.eu/docs/operate/authentication.html
 [auth]
-# EDIT: an authorization server your callers get their tokens from. The
-# gateway reads its metadata (RFC 8414) and the key set it names; set
-# jwks_file for keys handed over out of band. Several issuers are an
-# [[auth.issuer]] list.
-issuer = "https://idp.example.org"
-# EDIT: the audience your issuers name this gateway by in `aud`.
-audience = ["https://gateway.example.org/fed"]
-# The clock skew allowed on exp, nbf and iat, at most 300 seconds.
-clock_skew_seconds = 60
 # EDIT: the scope that admits an operator to {base}/operator/ and to the
 # admin listener's write actions, a string starting with __ or a full URI;
 # unset, no caller reaches either.
 # product_scope = "__ferrofed.operator"
+
+# EDIT: an authorization server your callers get their tokens from, one
+# [[auth.issuer]] table each. The gateway reads its metadata (RFC 8414) and
+# the key set it names; set jwks_file for keys handed over out of band.
+[[auth.issuer]]
+issuer = "https://idp.example.org"
+# Whose tokens it signs: persons (your professionals, signing in through
+# your own clients), patients, machines or federation.
+kind = "persons"
+# The preset its tokens are read under: rfc9068 (the default), entra,
+# keycloak, okta or nl.
+profile = "rfc9068"
+# EDIT: the audience the issuer names this gateway by in `aud`.
+audience = ["https://gateway.example.org/fed"]
+# EDIT: the client_ids of your own applications, the only clients a
+# person's token of this issuer is admitted through.
+first_party_clients = ["example-clinical-app"]
+# The clock skew allowed on exp, nbf and iat, at most 300 seconds.
+clock_skew_seconds = 60
 
 # A token with no purpose of use is refused (§13.4). Set false only with the
 # reason recorded in your deployment's security decisions.
@@ -140,10 +150,14 @@ issuer = "https://idp.example.org"
 # high = ["urn:example:loa:high"]
 
 # Or an issuer whose opaque tokens are verified by RFC 7662 introspection, in
-# place of an [auth] issuer:
-# [[trust.issuer]]
+# place of its key set; one issuer at most is introspected:
+# [[auth.issuer]]
 # issuer = "https://opaque-idp.example.org"
-# introspection_endpoint = "https://opaque-idp.example.org/introspect"
+# kind = "persons"
+# audience = ["https://gateway.example.org/fed"]
+# first_party_clients = ["example-clinical-app"]
+# mode = "introspection"
+# [auth.issuer.introspection.client]
 # client_id = "ferrofed"
 # client_secret_file = "/run/secrets/ferrofed/introspection-secret"
 

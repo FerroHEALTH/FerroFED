@@ -143,7 +143,7 @@ async fn the_detail_shows_each_version_its_versions_tab_names() -> Result<(), Bo
             .await?;
         browser
             .element(By::XPath(
-                "//div[contains(@class, 'fui-code-panel')]//span[@class = 'fui-tok-parameter' and . = '$patient']",
+                "//section[contains(@class, 'fui-code-panel')]//span[@class = 'fui-tok-parameter' and . = '$patient']",
             ))
             .await?;
 
@@ -153,7 +153,7 @@ async fn the_detail_shows_each_version_its_versions_tab_names() -> Result<(), Bo
             )))
             .await?;
         let code = browser
-            .element(By::XPath("//div[contains(@class, 'fui-code-panel')]"))
+            .element(By::XPath("//section[contains(@class, 'fui-code-panel')]"))
             .await?
             .text()
             .await?;

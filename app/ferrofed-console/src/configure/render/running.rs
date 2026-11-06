@@ -89,14 +89,15 @@ fn words(key: &str) -> (Msg, Msg) {
         "fhir.base" => (Msg::SettingFhirBase, Msg::SettingFhirBaseDesc),
         "fhir.document_url_lifetime_secs" => (Msg::SettingUrlLifetime, Msg::SettingUrlLifetimeDesc),
         "fhir.receive" => (Msg::SettingReceived, Msg::SettingReceivedDesc),
-        "auth.audience" => (Msg::SettingAudience, Msg::SettingAudienceDesc),
         "auth.product_scope" => (Msg::SettingProductScope, Msg::SettingProductScopeDesc),
         "auth.issuer" | "auth.issuer[].issuer" => {
             (Msg::SettingTokenIssuer, Msg::SettingTokenIssuerDesc)
         }
+        "auth.issuer[].kind" => (Msg::SettingIssuerKind, Msg::SettingIssuerKindDesc),
         "auth.issuer[].jwks_file" => (Msg::SettingKeySetFile, Msg::SettingKeySetFileDesc),
+        "auth.issuer[].audience" => (Msg::SettingAudience, Msg::SettingAudienceDesc),
         "trust.issuer[].issuer" => (Msg::SettingTrustedIssuer, Msg::SettingTrustedIssuerDesc),
-        "trust.issuer[].client_secret" => (
+        "auth.issuer[].introspection.client.client_secret" => (
             Msg::SettingIntrospectionSecret,
             Msg::SettingIntrospectionSecretDesc,
         ),

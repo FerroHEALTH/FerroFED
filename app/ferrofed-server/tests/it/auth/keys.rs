@@ -20,13 +20,14 @@ use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::{Claims, Issuer, JWKS_PATH, METADATA_PATH};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
+use ferrohealth_smart::kind::IssuerKind;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 use jsonwebtoken::Algorithm;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::{method, path};
 
 use super::{Gateway, TestResult, assert_admitted, assert_refused, bearing, query};
-use crate::support::caller::AUDIENCE;
+use crate::support::caller::{AUDIENCE, FIRST_PARTY};
 
 /// The issuer identifier of the issuer these tests read from a file.
 const ROTATING: &str = "https://rotating-issuer.example.test";
@@ -35,11 +36,11 @@ const ROTATING: &str = "https://rotating-issuer.example.test";
 /// given and from its metadata otherwise, read again at most every
 /// `refresh`.
 fn trusting(issuer: &str, file: Option<PathBuf>, refresh: Duration) -> AuthSettings {
-    let mut settings = KeySetSettings::new(issuer, AUDIENCE);
+    let mut settings = KeySetSettings::new(issuer, AUDIENCE, IssuerKind::Persons);
+    settings.profile.first_party_clients = FIRST_PARTY.map(str::to_owned).to_vec();
     settings.jwks_file = file;
     settings.jwks_refresh_interval = refresh;
     AuthSettings {
-        audience: vec![AUDIENCE.to_owned()],
         issuers: vec![IssuerSettings::new(
             issuer,
             Verification::KeySet(Box::new(settings)),

@@ -35,19 +35,21 @@ resource-server crate every FerroHEALTH product runs on, which checks tokens
 and never issues them. The token is a JWT access token, verified as follows:
 
 - the bearer value is a `b64token` (RFC 6750 §2.1);
-- its JOSE header names an algorithm `auth.algorithms` admits, by default
-  RS256, RS384, PS256, PS384, ES256 and ES384. A token signed with `none` or
-  an HMAC algorithm is refused, and so is an HMAC algorithm in
-  `auth.algorithms` at load (RFC 8725 §3.1, §3.2);
-- under the default `auth.token_profile = "rfc9068"`, its header names the
-  type `at+jwt` (RFC 9068 §4) and it carries every claim RFC 9068 §2.2
-  requires: `iss`, `exp`, `aud`, `sub`, `client_id`, `iat` and `jti`. A
-  `sub` that is empty or blank names no caller and is refused;
-- its `iss` names an issuer `[auth]` trusts, whose key set verifies the
-  signature under the key its `kid` names. A token with no `kid` is verified
-  only when the set holds one candidate key;
-- `aud` names one of `auth.audience`;
-- `exp`, `nbf` and `iat` hold within `auth.clock_skew_seconds`.
+- its `iss` names an `[[auth.issuer]]` the gateway trusts, whose key set
+  verifies the signature under the key its `kid` names. A token with no
+  `kid` is verified only when the set holds one candidate key;
+- its JOSE header names an algorithm the issuer's `algorithms` admits, by
+  default RS256, RS384, PS256, PS384, ES256 and ES384. A token signed with
+  `none` or an HMAC algorithm is refused, and so is an HMAC algorithm in
+  `algorithms` at load (RFC 8725 §3.1, §3.2);
+- under the default `profile = "rfc9068"`, its header names the type
+  `at+jwt` (RFC 9068 §4) and it carries every claim RFC 9068 §2.2 requires:
+  `iss`, `exp`, `aud`, `sub`, `client_id`, `iat` and `jti`. A `sub` that is
+  empty or blank names no caller and is refused;
+- `aud` names one of the issuer's `audience`;
+- `exp`, `nbf` and `iat` hold within the issuer's `clock_skew_seconds`;
+- the token names a caller the issuer's `kind` admits
+  ([Who the caller is](#who-the-caller-is)).
 
 Every token that fails a check gets the same `401` with
 `WWW-Authenticate: Bearer realm="ferrofed", error="invalid_token"`, and no
@@ -59,12 +61,13 @@ request with no credential, or with a credential in another scheme, gets
 `Authorization` fields are a `400` (`credential-malformed`) with
 `error="invalid_request"`.
 
-An issuer can be verified by RFC 7662 introspection instead, configured
-under `[trust]`. The gateway then asks the issuer's endpoint about each
-token, authenticating with its own client credentials, and admits the token
-when the answer is `active`, names one of `auth.audience` in `aud`, and has
-an `exp` that has not passed. A token that is no JWS goes to the one issuer
-the deployment introspects.
+An issuer can be verified by RFC 7662 introspection instead, with
+`mode = "introspection"` and an `[auth.issuer.introspection]` table. The
+gateway reads the issuer's metadata when a token first needs it, then asks
+the issuer's endpoint about each token, authenticating with its own client
+credentials, and admits the token when the answer is `active`, names one of
+the issuer's `audience` in `aud`, and has an `exp` that has not passed. A
+token that is no JWS goes to the one issuer the deployment introspects.
 
 The gateway never forwards the client's token to a node. Its audience is the
 gateway, and one token would unlock every member that trusts its issuer (RFC
@@ -73,20 +76,50 @@ credentials ([Onward credentials](onward-credentials.md)), and the caller's
 identity in a token of its own
 ([below](#what-a-node-is-told-about-the-caller)).
 
+### Who the caller is
+
+Every `[[auth.issuer]]` declares its `kind`, whose tokens it signs, and
+`ferrohealth-smart` classifies each token it verifies under it:
+
+- `persons`: the professionals of your deployment, signing in through your
+  own clients. A token whose `sub` is its `client_id` is a system acting
+  without a user context; any other token is admitted only through a client
+  the issuer lists in `first_party_clients`, or a delegate it lists in
+  `delegates`, and an RFC 8693 `act` claim only when its actor is a listed
+  delegate;
+- `patients`: patients, each token carrying `patient/` scopes and no `user/`
+  or `system/` scope. An issuer bound to a member with
+  `[trust.issuer.patient]` is usually one;
+- `machines`: systems under the client credentials grant alone;
+- `federation`: another party's issuer, with its `[[auth.federation]]`
+  table.
+
+A token that matches no step for its issuer's kind is refused as an invalid
+token. The gateway counts a system caller as no natural person
+([Professionals and assurance](#professionals-and-assurance)). An HTTP Basic
+user is always a person, never a system, so `[[auth.basic.users]]` grants no
+`system/` scope: one that lists a `system/` scope refuses the start, naming
+the user (GHSA-jhg2-jwjp-hq74).
+
 ## Configuration
 
 Two sections configure client authentication. `[auth]` is the section of
-`ferrohealth-smart`, the same in every FerroHEALTH product: the issuers, the
-audiences, the token rules, the Basic users and the product scope.
+`ferrohealth-smart`, the same in every FerroHEALTH product: one
+`[[auth.issuer]]` table per issuer, with its kind, its profile, its
+audiences and its token rules, the Basic users and the product scope.
 `[trust]` is FerroFED's own policy over the callers `[auth]` verifies: what
-each issuer's tokens are honoured for, the introspected issuer, the edge
-mode and the purpose-of-use rule.
+each issuer's tokens are honoured for, the edge mode and the purpose-of-use
+rule.
 
 ```toml
 [auth]
-issuer = "https://idp.example.org"
-audience = ["https://gateway.example.org/fed"]
 product_scope = "__ferrofed.operator"
+
+[[auth.issuer]]
+issuer = "https://idp.example.org"
+kind = "persons"
+audience = ["https://gateway.example.org/fed"]
+first_party_clients = ["example-clinical-app"]
 
 [[trust.issuer]]
 issuer = "https://idp.example.org"
@@ -96,25 +129,30 @@ demographic_clients = []
 
 | Key | Default | Meaning |
 |---|---|---|
-| `auth.issuer` | none | The issuer identifier its tokens carry in `iss`: `https`, or `http` to a loopback host (RFC 8414 §2). Several issuers are an `[[auth.issuer]]` list, each entry an `issuer` with any of the keys below that differ for it. |
-| `auth.audience` | the public URL | The audiences, of which every token names one in `aud` (RFC 9068 §4). Unset, the `gateway.public_url` as written; an issuer without an audience refuses the start. |
-| `auth.algorithms` | six | The signature algorithms admitted: RS256, RS384, PS256, PS384, ES256 and ES384. An HMAC algorithm refuses the start. |
-| `auth.token_profile` | `rfc9068` | `rfc9068`: the `at+jwt` type and the claims RFC 9068 §2.2 requires. `jwt`: a JWT bearer token outside that profile, `typ` absent or `JWT`, for an issuer that issues no RFC 9068 tokens; the gateway still requires `client_id`. |
-| `auth.clock_skew_seconds` | `60` | The leeway on `exp`, `nbf` and `iat`, at most `300` (RFC 7519 §4.1.4). |
-| `auth.jwks_max_age_seconds` | `600` | How long a key set is used before it is read again. |
-| `auth.jwks_refresh_interval_seconds` | `60` | The least time between two reads of one key set, after an unknown `kid` or a failed read. |
-| `auth.jwks_file` | none | A JWK Set file handed over out of band, read in place of the `jwks_uri` the issuer's metadata names. |
-| `auth.timeout_ms` | `10000` | How long one call to an authorization server may take: its metadata, its key set, or an introspection. |
+| `auth.issuer[].issuer` | none | The issuer identifier its tokens carry in `iss`: `https`, or `http` to a loopback host (RFC 8414 §2). Each `auth.issuer[]` key below is the issuer's own; no `[auth]` key stands in for one an issuer leaves out. |
+| `auth.issuer[].kind` | none | Whose tokens the issuer signs: `persons`, `patients`, `machines` or `federation` ([Who the caller is](#who-the-caller-is)). Required. |
+| `auth.issuer[].profile` | `rfc9068` | The preset the issuer's tokens are read under: `rfc9068`, a standards-only authorization server; `entra`, `keycloak` and `okta`, each that product's token shape; `nl`, the Dutch harmonised authentication of Annex B. Any profile key set on the table, such as `token_types`, `required_claims` or `scope_claim`, is set over the preset. |
+| `auth.issuer[].first_party_clients` | `[]` | The `client_id`s of your own applications, the clients a `persons` token of the issuer is admitted through. |
+| `auth.issuer[].delegates` | `[]` | The third-party clients, each a `client_id`, and the RFC 8693 actors, each `{ issuer, sub }`, a `persons` token of the issuer is admitted through as a delegated person. |
+| `auth.issuer[].audience` | the public URL | The audiences, of which every token of the issuer names one in `aud` (RFC 9068 §4). Unset, the `gateway.public_url` as written; an issuer without an audience refuses the start. |
+| `auth.issuer[].algorithms` | six | The signature algorithms admitted: RS256, RS384, PS256, PS384, ES256 and ES384. An HMAC algorithm refuses the start. |
+| `auth.issuer[].clock_skew_seconds` | `60` | The leeway on `exp`, `nbf` and `iat`, at most `300` (RFC 7519 §4.1.4). |
+| `auth.issuer[].jwks_max_age_seconds` | `600` | How long a key set is used before it is read again. |
+| `auth.issuer[].jwks_refresh_interval_seconds` | `60` | The least time between two reads of one key set, after an unknown `kid` or a failed read. |
+| `auth.issuer[].jwks_file` | none | A JWK Set file handed over out of band, read in place of the `jwks_uri` the issuer's metadata names. |
+| `auth.issuer[].timeout_ms` | `10000` | How long one call to the authorization server may take: its metadata, its key set, or an introspection. |
+| `auth.issuer[].role_claims` | `["roles", "groups", "entitlements"]` | The claims `ferrohealth-smart` reads a token's roles from, each a dotted path. The gateway grants nothing by these roles: the professional's roles it conveys come from the IUA `subject_role`. |
+| `auth.issuer[].mode` | `jwt` | `jwt`: the token is a JWT checked against the key set. `introspection`: the token is checked at the issuer's RFC 7662 endpoint, under `[auth.issuer.introspection]`. One issuer at most is introspected. |
+| `auth.issuer[].introspection.endpoint` | the metadata's | The introspection endpoint, in place of the one the issuer's metadata names. |
+| `auth.issuer[].introspection.client` | none | The gateway's client authentication at the endpoint: `client_id` with `client_secret` or `client_secret_file`, or a `private_key_jwt` key, as an `[<lane>.credentials.oauth]` table takes them. |
 | `auth.ca_file` | none | A PEM file of trust roots added to the platform's for every issuer's metadata, key set and introspection, so an issuer behind a private certificate authority is reached without changing the trust of the whole process. A file that cannot be read, or holds no certificate, refuses the start. |
 | `auth.realm` | `ferrofed` | The realm every `WWW-Authenticate` challenge names. |
 | `auth.product_scope` | none | The scope that admits a caller to the read-only [operator surface](#the-operator-surface) and to the write actions of the [admin listener](metrics.md#who-the-admin-listener-serves): a string starting with `__` or a full URI you control (SMART App Launch 2.2.0, Scopes and Launch Context, Extensibility). Without it, no caller reaches either. |
-| `auth.role_claims` | `["roles", "groups", "entitlements"]` | The claims `ferrohealth-smart` reads a token's roles from, each a dotted path. The gateway grants nothing by these roles: the professional's roles it conveys come from the IUA `subject_role`. With several issuers each entry is written `<issuer>#<path>` and read from that issuer's tokens alone, and a bare entry refuses the start, the default included (GHSA-pfgx-xq28-2629), so a gateway with several issuers sets `role_claims = []`. |
-| `auth.basic.users[]` | none | The Basic users (RFC 7617): `user`, `password_hash` or `password_hash_file` holding the Argon2id PHC string of the password, and `scopes`. A scrape of the admin listener authenticates as one ([Metrics](metrics.md#who-the-admin-listener-serves)). |
+| `auth.basic.users[]` | none | The Basic users (RFC 7617): `user`, `password_hash` or `password_hash_file` holding the Argon2id PHC string of the password, and `scopes`, never a `system/` scope. A scrape of the admin listener authenticates as one ([Metrics](metrics.md#who-the-admin-listener-serves)). |
 | `auth.basic.cache_ttl_seconds` | `300` | How long a verified Basic credential is kept, so a repeat request skips the key derivation; `0` keeps none. |
 | `trust.mode` | `token` | `token`: the client presents a bearer token. `edge`: a proxy authenticates the client ([The edge mode](#the-edge-mode)). |
 | `trust.purpose_of_use.required` | `true` | Whether a token must declare a purpose of use ([Purpose of use](#purpose-of-use)). |
-| `trust.issuer[].issuer` | none | The issuer this entry's policy is for: an `[auth]` issuer, or with `introspection_endpoint` the introspected one. |
-| `trust.issuer[].introspection_endpoint` | none | Its RFC 7662 introspection endpoint, with `client_id` and `client_secret` or `client_secret_file`: `https`, or `http` to a loopback host, under every profile. The issuer is then not an `[auth]` issuer. |
+| `trust.issuer[].issuer` | none | The issuer this entry's policy is for, which an `[[auth.issuer]]` table trusts. |
 | `trust.issuer[].backend_clients` | `[]` | The `client_id`s whose `system/aql-*` grant is honoured. |
 | `trust.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
 | `trust.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[trust.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](patient-grants.md)). |
@@ -140,9 +178,13 @@ demographic_clients = []
 `[auth] enabled = false` is refused: the gateway has no unauthenticated mode.
 So are `auth.scopeless_subjects`, `auth.capabilities` and
 `auth.scopes_supported`, which the gateway reads nowhere: it serves no SMART
-discovery document and grants nothing without a scope. An `[[trust.issuer]]`
-entry names an `[auth]` issuer or an introspection endpoint, never both, and
-one issuer at most is introspected. A gateway that federates and lists no
+discovery document and grants nothing without a scope. A key `[auth]` held
+for every issuer before `ferrohealth-smart` 0.9 (`audience`, `algorithms`,
+`clock_skew_seconds`, `jwks_max_age_seconds`, `jwks_refresh_interval_seconds`,
+`jwks_file`, `timeout_ms`, `mode`, `role_claims`) is refused at the section,
+naming the `[[auth.issuer]]` table it moved to, and so is an issuer written
+as `[auth] issuer = "…"`. A `[[trust.issuer]]` entry names an
+`[[auth.issuer]]`. A gateway that federates and lists no
 issuer refuses to start, with exit code `78`, because it could admit no one.
 Each bad value refuses to start under its key; a value `ferrohealth-smart`
 refuses is named under `auth` with the crate's rule.
@@ -150,16 +192,16 @@ refuses is named under `auth` with the crate's rule.
 A [reload](registry.md#reloading-the-registry), on `SIGHUP` or
 `POST /admin/reload`, applies a changed `[auth]` and `[trust]` to every
 request that arrives after it, on the client face and the admin listener,
-and reads each issuer's metadata and key set again; `auth.audience` alone
-waits for a restart. A reload whose `[auth]` does not load, or trusts no
+and reads each issuer's metadata and key set again; a changed `audience`
+of an issuer the gateway already trusts waits for a restart. A reload whose `[auth]` does not load, or trusts no
 issuer of a federating gateway, is refused and the running issuers stay.
 
 ### The key set
 
 The gateway reads an issuer's metadata at its RFC 8414 location, with
 OpenID Connect Discovery 1.0 as the fallback, and the key set its
-`jwks_uri` names, when a token of that issuer first needs them; with
-`auth.jwks_file` it reads the file and no metadata. The set is read again
+`jwks_uri` names, when a token of that issuer first needs them; with the
+issuer's `jwks_file` it reads the file and no metadata. The set is read again
 once it is older than `jwks_max_age_seconds`. A token naming a key the set
 does not hold makes the gateway read the set once more, so a key the issuer
 rotated in is picked up; that read happens at most once per
@@ -562,8 +604,12 @@ admits no one in this mode.
 
 ```toml
 [auth]
+
+[[auth.issuer]]
 issuer = "https://edge.example.org"
+kind = "persons"
 audience = ["https://gateway.example.org/fed"]
+first_party_clients = ["example-clinical-app"]
 
 [trust]
 mode = "edge"

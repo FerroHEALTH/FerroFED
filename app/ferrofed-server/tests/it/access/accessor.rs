@@ -288,7 +288,11 @@ async fn a_contact_point_caller_names_the_foreign_professional_and_provider() ->
     );
     assert_eq!(details(&record, "ehds-relayed", "asserted"), ["true"]);
     assert_eq!(
-        details(&record, "ehds-relayed", "contact-point"),
+        details(&record, "ehds-relayed", "relayed-via"),
+        ["contact-point"]
+    );
+    assert_eq!(
+        details(&record, "ehds-relayed", "relayed-issuer"),
         [support::caller::ISSUER]
     );
     only_in_the_person(&record, &[NAME, "ihe-assuranceLevel"]);

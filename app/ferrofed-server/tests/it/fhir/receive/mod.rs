@@ -225,16 +225,22 @@ pub(super) async fn untouched(a: &Server, b: &Server) -> Result<bool, Box<dyn Er
     Ok(received(a).await?.is_empty() && received(b).await?.is_empty())
 }
 
-/// The suite's server settings, its issuer's patient tokens bound to node
-/// A, whose `ehr_id`s the cross-reference knows under [`EHR_SYSTEM`].
+/// The suite's server settings, its issuer's patient tokens and those of
+/// the suite's `patients` issuer bound to node A, whose `ehr_id`s the
+/// cross-reference knows under [`EHR_SYSTEM`].
 pub(super) fn bound() -> Result<ServerSettings, Box<dyn Error>> {
     let mut server = settings_with_room();
+    let binding = PatientBinding {
+        endpoint: EndpointId::new("node-a-pub")?,
+        ehr_id_system: IdentifierNamespace::new(EHR_SYSTEM)?,
+        act_is_representative: false,
+    };
     for issuer in &mut server.auth.issuers {
-        issuer.patient = Some(PatientBinding {
-            endpoint: EndpointId::new("node-a-pub")?,
-            ehr_id_system: IdentifierNamespace::new(EHR_SYSTEM)?,
-            act_is_representative: false,
-        });
+        issuer.patient = Some(binding.clone());
     }
+    server
+        .auth
+        .issuers
+        .push(crate::support::caller::patients_issuer(binding));
     Ok(server)
 }

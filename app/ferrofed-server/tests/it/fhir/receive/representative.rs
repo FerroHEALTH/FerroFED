@@ -14,9 +14,12 @@ use std::error::Error;
 use std::path::Path;
 
 use axum::Router;
+use ferrofed_server::config::auth::Verification;
 use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_testkit::issuer::Claims;
 use ferrofed_testkit::mock::Server;
+use ferrohealth_smart::kind::IssuerKind;
+use ferrohealth_smart::profile::Delegate;
 use http::StatusCode;
 use serde_json::Value;
 
@@ -28,7 +31,7 @@ use crate::auth::{bearing, minted};
 use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL};
 use crate::fhir::TestResult;
 use crate::support::call;
-use crate::support::caller::ISSUER;
+use crate::support::caller::PATIENT_ISSUER;
 
 /// The synthetic representative who acts for [`PERSON`]: the `act` `sub`.
 pub(super) const REPRESENTATIVE: &str = "synthetic-representative-5t7w";
@@ -37,6 +40,7 @@ pub(super) const REPRESENTATIVE: &str = "synthetic-representative-5t7w";
 /// string claims `act`.
 pub(super) fn acted_for(act: &[(&str, &str)]) -> Claims {
     let mut granted = own_grant();
+    PATIENT_ISSUER.clone_into(&mut granted.iss);
     granted.act = Some(
         act.iter()
             .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
@@ -46,12 +50,22 @@ pub(super) fn acted_for(act: &[(&str, &str)]) -> Claims {
 }
 
 /// The suite's server settings with every issuer declaring the `act` claim
-/// of its patient tokens a representative.
+/// of its patient tokens a representative, and each `persons` issuer
+/// declaring [`REPRESENTATIVE`] a delegate, the one actor `ferrohealth-smart`
+/// admits in a person's token's `act` (RFC 8693 §4.1).
 fn declaring() -> Result<ServerSettings, Box<dyn Error>> {
     let mut server = bound()?;
     for issuer in &mut server.auth.issuers {
         if let Some(patient) = issuer.patient.as_mut() {
             patient.act_is_representative = true;
+        }
+        if let Verification::KeySet(settings) = &mut issuer.verification
+            && settings.kind == IssuerKind::Persons
+        {
+            settings.profile.delegates.push(Delegate::Actor {
+                issuer: None,
+                sub: REPRESENTATIVE.to_owned(),
+            });
         }
     }
     Ok(server)
@@ -92,7 +106,7 @@ async fn a_representatives_document_names_them_as_every_entrys_provider() -> Tes
                 "_type": "PARTY_IDENTIFIED",
                 "identifiers": [{
                     "_type": "DV_IDENTIFIER",
-                    "issuer": ISSUER,
+                    "issuer": PATIENT_ISSUER,
                     "id": REPRESENTATIVE,
                 }],
             }),

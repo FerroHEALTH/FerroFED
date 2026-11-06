@@ -160,7 +160,7 @@ front of it.
 
 | | Threat | From | Mitigation | Provided by |
 |---|---|---|---|---|
-| S | a key set fetched in the clear and substituted | P3 | every issuer, the key set its metadata names, and every `introspection_endpoint` is `https`, or `http` to loopback, under every profile | [What must travel encrypted](../operate/configuration.md#what-must-travel-encrypted) |
+| S | a key set fetched in the clear and substituted | P3 | every issuer, the key set its metadata names, and every introspection endpoint is `https`, or `http` to loopback, under every profile | [What must travel encrypted](../operate/configuration.md#what-must-travel-encrypted) |
 | D | tokens naming unknown keys make the gateway flood the issuer | P1 | an unknown `kid` reads the set again at most once per `jwks_refresh_interval_seconds`; an unavailable key set is `503`, never a pass | `auth.jwks_refresh_interval_seconds`; `app/ferrofed-server/tests/it/auth/keys.rs` |
 | S, E | an issuer compromised: any token it signs is admitted | P5 | none in the gateway: a trusted issuer is trusted for every caller it vouches for | **carried by the deployment:** a short trust list, per-issuer `backend_clients` and `demographic_clients`, `auth.product_scope` granted by your operators' issuer alone, and removing an issuer at once, which a reload applies without a restart ([Reloading the registry](../operate/registry.md#reloading-the-registry)) |
 

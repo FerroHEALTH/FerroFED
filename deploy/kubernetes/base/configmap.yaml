@@ -98,14 +98,24 @@ data:
     # gateway that federates refuses to start without an issuer.
     # https://ferrofed.eu/docs/operate/authentication.html
     [auth]
-    # EDIT: an authorization server your callers get their tokens from; the
-    # gateway reads its RFC 8414 metadata and the key set it names.
-    issuer = "https://idp.example.org"
-    # EDIT: the audience your issuers name this gateway by in `aud`.
-    audience = ["https://gateway.example.org/fed"]
     # EDIT: the scope that admits an operator to {base}/operator/ and to the
     # admin listener's write actions; unset, no caller reaches either.
     # product_scope = "__ferrofed.operator"
+
+    # EDIT: an authorization server your callers get their tokens from, one
+    # [[auth.issuer]] table each; the gateway reads its RFC 8414 metadata
+    # and the key set it names. For RFC 7662 introspection in place of a key
+    # set, set mode = "introspection" with an [auth.issuer.introspection]
+    # table, its client secret a key of the ferrofed-secrets Secret.
+    [[auth.issuer]]
+    issuer = "https://idp.example.org"
+    # Whose tokens it signs: persons, patients, machines or federation.
+    kind = "persons"
+    # EDIT: the audience the issuer names this gateway by in `aud`.
+    audience = ["https://gateway.example.org/fed"]
+    # EDIT: the client_ids of your own applications, the only clients a
+    # person's token of this issuer is admitted through.
+    first_party_clients = ["example-clinical-app"]
 
     # The scraper, as the admin listener authenticates it with HTTP Basic.
     [[auth.basic.users]]
@@ -113,9 +123,7 @@ data:
     password_hash_file = "/run/secrets/ferrofed/metrics-scrape-hash"
 
     # What the issuer's tokens are honoured for beyond their user/ and
-    # system/ grants. For RFC 7662 introspection in place of a key set, give
-    # an entry introspection_endpoint, client_id and client_secret_file, the
-    # secret a key of the ferrofed-secrets Secret.
+    # system/ grants.
     [[trust.issuer]]
     issuer = "https://idp.example.org"
     # Whether its client tokens, which name no natural person, act for the

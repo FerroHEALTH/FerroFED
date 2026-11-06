@@ -48,7 +48,7 @@ const PROFESSIONAL_MAPPER: &str = "professional";
 
 /// The gateway over node A and node B, resolving the patient through the
 /// development cross-reference, under the page's public base URL and its
-/// path, which `auth.audience` follows, and trusting `idp` with the page's `[auth]`
+/// path, which each issuer's `audience` follows, and trusting `idp` with the page's `[auth]`
 /// table, its issuer and key set location moved to the Keycloak the test
 /// started.
 fn gateway(

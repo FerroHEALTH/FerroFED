@@ -4,17 +4,18 @@
 //! The settings of who may call, in the running configuration: `[auth]` and
 //! `[trust]`, which only the file sets, so a revision never holds them.
 //!
-//! The document lists the audience and the product scope, each `[[auth.issuer]]`
-//! by its issuer and key set file, and each `[[trust.issuer]]` by its issuer,
-//! the introspection secret it authenticates with, and, for an issuer declared
-//! a national contact point (Regulation (EU) 2025/327 Art 23), every key of
-//! its `[trust.issuer.national_contact_point]`: the claim each Implementing
-//! Regulation (EU) 2026/2099 Annex attribute is read from, the correlation
-//! header and the added countries. An issuer is keyed by its position, as the
-//! reload names it (`trust.issuer[0].issuer`). A secret is named by its file
-//! and never by a value, and a Basic user's password hash is not listed. Every
-//! change but the audience's applies at the next reload. No specification
-//! governs this: our own design.
+//! The document lists the product scope, each `[[auth.issuer]]` by its
+//! issuer, kind, key set file and audience, with the client secret of its
+//! introspection when it has one, and each `[[trust.issuer]]` by its issuer
+//! and, for an issuer declared a national contact point (Regulation (EU)
+//! 2025/327 Art 23), every key of its `[trust.issuer.national_contact_point]`:
+//! the claim each Implementing Regulation (EU) 2026/2099 Annex attribute is
+//! read from, the correlation header and the added countries. An issuer is
+//! keyed by its position, as the reload names it (`trust.issuer[0].issuer`).
+//! A secret is named by its file and never by a value, and a Basic user's
+//! password hash is not listed. Every change but an issuer's audience
+//! applies at the next reload. No specification governs this: our own
+//! design.
 
 use ferrofed_operator_api::running::{SecretSetting, Section, Setting, Source};
 
@@ -34,23 +35,25 @@ const CONTACT_POINT: [&str; 9] = [
     "additional_countries",
 ];
 
-/// The keys of an `[[auth.issuer]]` the document lists.
-const ISSUER: [&str; 2] = ["issuer", "jwks_file"];
+/// The keys of an `[[auth.issuer]]` the document lists that apply at the
+/// next reload.
+const ISSUER: [&str; 3] = ["issuer", "kind", "jwks_file"];
 
 /// The settings of `[auth]` and `[trust]` as `layers` set them.
 pub(super) fn settings(layers: &Layers) -> Vec<Setting> {
-    let mut settings = vec![
-        listed(layers, "auth.audience", true),
-        listed(layers, "auth.product_scope", false),
-    ];
+    let mut settings = vec![listed(layers, "auth.product_scope", false)];
     match at(&layers.file_now, "auth.issuer") {
         Some(toml::Value::Array(issuers)) => {
             for (index, _) in issuers.iter().enumerate() {
+                let prefix = format!("auth.issuer[{index}]");
                 for key in ISSUER {
-                    settings.push(listed(
+                    settings.push(listed(layers, &format!("{prefix}.{key}"), false));
+                }
+                settings.push(listed(layers, &format!("{prefix}.audience"), true));
+                if indexed(&layers.file_now, &format!("{prefix}.introspection")).is_some() {
+                    settings.push(secret(
                         layers,
-                        &format!("auth.issuer[{index}].{key}"),
-                        false,
+                        &format!("{prefix}.introspection.client.client_secret"),
                     ));
                 }
             }
@@ -65,7 +68,6 @@ pub(super) fn settings(layers: &Layers) -> Vec<Setting> {
     for index in 0..trusted {
         let prefix = format!("trust.issuer[{index}]");
         settings.push(listed(layers, &format!("{prefix}.issuer"), false));
-        settings.push(secret(layers, &format!("{prefix}.client_secret")));
         if indexed(
             &layers.file_now,
             &format!("{prefix}.national_contact_point"),
@@ -161,16 +163,21 @@ mod tests {
         toml::from_str(text).expect("the test tree parses")
     }
 
-    /// A file declaring one key-set issuer and one trusted issuer declared a
-    /// national contact point, with an introspection secret inline.
+    /// A file declaring one introspected issuer, with its client secret
+    /// inline, and its trust entry declaring it a national contact point.
     const FILE: &str = r#"
 [auth]
-audience = ["urn:example:gw"]
 product_scope = "__ferrofed.operator"
 
 [[auth.issuer]]
 issuer = "https://ncp.example.org"
+kind = "persons"
+audience = ["urn:example:gw"]
 jwks_file = "/run/ferrofed/ncp-jwks.json"
+
+[auth.issuer.introspection.client]
+client_id = "ferrofed"
+client_secret = "SENTINEL-SECRET-9k2"
 
 [[auth.basic.users]]
 user = "scraper"
@@ -178,7 +185,6 @@ password_hash = "SENTINEL-HASH-4f1"
 
 [[trust.issuer]]
 issuer = "https://ncp.example.org"
-client_secret = "SENTINEL-SECRET-9k2"
 
 [trust.issuer.national_contact_point]
 family_name = "ncp_family_name"
@@ -227,6 +233,7 @@ additional_countries = ["XA"]
                     "ncp-correlation-id",
                 ),
                 ("auth.issuer[0].issuer", "https://ncp.example.org"),
+                ("auth.issuer[0].kind", "persons"),
                 ("auth.product_scope", "__ferrofed.operator"),
             ] {
                 let setting = document.setting(key).expect(key);
@@ -252,7 +259,7 @@ additional_countries = ["XA"]
         assert!(!written.contains("SENTINEL-SECRET-9k2"), "{written}");
         assert!(!written.contains("SENTINEL-HASH-4f1"), "{written}");
         let secret = document
-            .setting("trust.issuer[0].client_secret")
+            .setting("auth.issuer[0].introspection.client.client_secret")
             .expect("listed");
         assert_eq!(None, secret.value);
         assert!(secret.secret.as_ref().is_some_and(|held| held.set));
@@ -263,7 +270,7 @@ additional_countries = ["XA"]
         let mut layers = layers(false);
         layers.file_now = tree(&FILE.replace("urn:example:gw", "urn:example:other"));
         let document = of(&layers);
-        let audience = document.setting("auth.audience").expect("listed");
+        let audience = document.setting("auth.issuer[0].audience").expect("listed");
         assert!(audience.restart);
         assert_eq!(
             Some(toml::Value::Array(vec![toml::Value::from(
@@ -283,7 +290,7 @@ additional_countries = ["XA"]
     fn an_issuer_not_declared_a_contact_point_lists_no_contact_point_key() {
         let mut layers = layers(false);
         layers.file_now = tree(
-            "[[trust.issuer]]\nissuer = \"https://idp.example.org\"\nclient_secret_file = \"/run/secret\"\n",
+            "[[auth.issuer]]\nissuer = \"https://idp.example.org\"\n\n[auth.issuer.introspection.client]\nclient_secret_file = \"/run/secret\"\n\n[[trust.issuer]]\nissuer = \"https://idp.example.org\"\n",
         );
         let document = of(&layers);
         assert!(document.setting("trust.issuer[0].issuer").is_some());
@@ -294,7 +301,7 @@ additional_countries = ["XA"]
                 .all(|setting| !setting.key.contains("national_contact_point"))
         );
         let secret = document
-            .setting("trust.issuer[0].client_secret")
+            .setting("auth.issuer[0].introspection.client.client_secret")
             .expect("listed");
         assert_eq!(
             Some("/run/secret"),

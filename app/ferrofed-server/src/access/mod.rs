@@ -55,7 +55,8 @@ use ehds_logging::emergency::EmergencyPurposes;
 use ehds_logging::label::LabelPolicy;
 use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{
-    AccessRecord, Action, CreatedEhr, DataSubject, Insertion, Origin, Outcome, WrittenVersion,
+    AccessRecord, Action, Correlation, CorrelationSource, CreatedEhr, DataSubject, Insertion,
+    Origin, Outcome, WrittenVersion,
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::{AccessSink, Reservation, SinkError};
@@ -328,7 +329,10 @@ impl Accessed {
                 query: self.query.clone(),
                 stored_query: self.stored_query.clone(),
                 client_address: address,
-                correlation: caller.correlation().map(str::to_owned),
+                correlation: caller.correlation().map(|value| Correlation {
+                    value: value.to_owned(),
+                    source: CorrelationSource::Header,
+                }),
             },
             retention,
             labels,

@@ -64,9 +64,17 @@ fn refused_by_the_crate(text: &str, rule: &str) -> Result<(), Box<dyn Error>> {
     }
 }
 
-/// One trusted issuer at `issuer`, under `[auth]` keys `extra`.
+/// One trusted `persons` issuer at `issuer`, under `[auth]` keys `extra`.
 fn issuer(extra: &str, issuer: &str) -> String {
-    format!("[auth]\nissuer = \"{issuer}\"\naudience = [\"urn:example:gateway\"]\n{extra}\n")
+    format!(
+        "[auth]\n{extra}\n\n[[auth.issuer]]\nissuer = \"{issuer}\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n"
+    )
+}
+
+/// One trusted `persons` issuer at [`ISSUER`], its `[[auth.issuer]]` table
+/// carrying the keys `extra`.
+fn issuer_table(extra: &str) -> String {
+    format!("{}{extra}\n", issuer("", ISSUER))
 }
 
 /// The test issuer's identifier.
@@ -116,29 +124,98 @@ fn a_disabled_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
 // RFC 7519 §4.1.4: "some small leeway, usually no more than a few minutes".
 #[test]
 fn a_clock_skew_past_five_minutes_is_refused() -> Result<(), Box<dyn Error>> {
-    refused_by_the_crate(&issuer("clock_skew_seconds = 301", ISSUER), "clock skew")
+    refused_by_the_crate(&issuer_table("clock_skew_seconds = 301"), "clock skew")
 }
 
 // RFC 9068 §4: the resource server validates that `aud` names it.
 #[test]
 fn an_issuer_without_an_audience_is_refused() -> Result<(), Box<dyn Error>> {
     refused_by_the_crate(
-        &format!("[auth]\nissuer = \"{ISSUER}\"\n"),
+        &format!("[auth]\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\n"),
         "name no audience",
     )
 }
 
+// RFC 7662 §2: an issuer whose tokens are introspected is one table with
+// `mode = "introspection"`, so a key-set issuer with an introspection table
+// is refused.
 #[test]
 fn an_issuer_verified_two_ways_is_refused() -> Result<(), Box<dyn Error>> {
-    let text = format!(
-        "{}\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\nintrospection_endpoint = \"https://issuer.example.test/introspect\"\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n",
-        issuer("", ISSUER)
-    );
-    refused_for(
-        &text,
-        "trust.issuer[0].introspection_endpoint",
-        AuthFault::TwoVerifications,
+    refused_by_the_crate(
+        &issuer_table(
+            "\n[auth.issuer.introspection]\nendpoint = \"https://issuer.example.test/introspect\"\n\n[auth.issuer.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n",
+        ),
+        "exclude each other",
     )
+}
+
+/// The `[trust.issuer]` introspection keys are gone with no compatibility
+/// reading: `[[auth.issuer]]` says how an issuer's tokens are verified.
+#[test]
+fn an_introspection_key_on_a_trust_entry_is_refused() -> Result<(), Box<dyn Error>> {
+    for written in [
+        "introspection_endpoint = \"https://issuer.example.test/introspect\"",
+        "client_id = \"ferrofed\"",
+        "client_secret = \"synthetic-secret\"",
+    ] {
+        let text = format!(
+            "{}\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\n{written}\n",
+            issuer("", ISSUER)
+        );
+        let error = Config::from_sources(Some(&text), &BTreeMap::new())
+            .and_then(|config| config.resolve())
+            .err()
+            .ok_or("refused")?;
+        assert!(
+            matches!(error, ConfigError::Load { .. }),
+            "{written}: {error:?}"
+        );
+    }
+    Ok(())
+}
+
+/// `ferrohealth-smart` 0.9 holds every issuer setting on its own
+/// `[[auth.issuer]]` table, and refuses each key `[auth]` held for every
+/// issuer, naming the table.
+#[test]
+fn a_section_level_issuer_key_is_refused_naming_the_issuer_table() -> Result<(), Box<dyn Error>> {
+    for written in [
+        "audience = [\"urn:example:gateway\"]",
+        "algorithms = [\"ES256\"]",
+        "clock_skew_seconds = 60",
+        "jwks_max_age_seconds = 600",
+        "jwks_refresh_interval_seconds = 30",
+        "jwks_file = \"jwks.json\"",
+        "timeout_ms = 5000",
+        "mode = \"jwt\"",
+        "role_claims = []",
+    ] {
+        refused_by_the_crate(&issuer(written, ISSUER), "[[auth.issuer]]")?;
+    }
+    Ok(())
+}
+
+/// `ferrohealth-smart` 0.9 has every issuer declare whose tokens it signs.
+#[test]
+fn an_issuer_without_a_kind_is_refused() -> Result<(), Box<dyn Error>> {
+    refused_by_the_crate(
+        &format!(
+            "[auth]\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\naudience = [\"urn:example:gateway\"]\n"
+        ),
+        "auth.issuer.kind",
+    )
+}
+
+/// GHSA-jhg2-jwjp-hq74: a Basic credential is a person's, so a Basic user
+/// granted a `system/` scope fails to load, naming the user.
+#[test]
+fn a_basic_user_with_a_system_scope_is_refused_naming_the_user() -> Result<(), Box<dyn Error>> {
+    let text = format!(
+        "{}\n[[auth.basic.users]]\nuser = \"synthetic-machine\"\npassword_hash = \"{}\"\nscopes = [\"system/aql-*.s\"]\n",
+        issuer("", ISSUER),
+        crate::support::caller::SCRAPE_HASH
+    );
+    refused_by_the_crate(&text, "synthetic-machine")
 }
 
 #[test]
@@ -220,7 +297,6 @@ fn a_key_of_the_former_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
         "key_set_max_age_s = 600",
         "key_set_refetch_s = 30",
         "fetch_timeout_ms = 5000",
-        "mode = \"token\"",
     ] {
         let text = issuer(written, ISSUER);
         let error = Config::from_sources(Some(&text), &BTreeMap::new())
@@ -233,7 +309,7 @@ fn a_key_of_the_former_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
         );
     }
     let inline = format!(
-        "[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\njwks = \"[1, 2]\"\n"
+        "[auth]\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\njwks = \"[1, 2]\"\n"
     );
     let error = Config::from_sources(Some(&inline), &BTreeMap::new())
         .and_then(|config| config.resolve())
@@ -250,26 +326,18 @@ fn a_key_of_the_former_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
 fn a_second_introspected_issuer_is_refused() -> Result<(), Box<dyn Error>> {
     let one = |name: &str| {
         format!(
-            "\n[[trust.issuer]]\nissuer = \"https://{name}.example.test\"\nintrospection_endpoint = \"https://{name}.example.test/introspect\"\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n"
+            "\n[[auth.issuer]]\nissuer = \"https://{name}.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\nmode = \"introspection\"\n\n[auth.issuer.introspection]\nendpoint = \"https://{name}.example.test/introspect\"\n\n[auth.issuer.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n"
         )
     };
-    let text = format!(
-        "[auth]\naudience = [\"urn:example:gateway\"]\n{}{}",
-        one("first"),
-        one("second")
-    );
-    refused_for(
-        &text,
-        "trust.issuer[1].introspection_endpoint",
-        AuthFault::SeveralIntrospection,
-    )
+    let text = format!("[auth]\n{}{}", one("first"), one("second"));
+    refused_for(&text, "auth.issuer", AuthFault::SeveralIntrospection)
 }
 
 #[test]
 fn the_edge_mode_needs_one_key_set_issuer_and_its_section_needs_the_mode()
 -> Result<(), Box<dyn Error>> {
     refused_for(
-        "[auth]\naudience = [\"urn:example:gateway\"]\n\n[trust]\nmode = \"edge\"\n\n[trust.edge]\nheader = \"ferrofed-edge-assertion\"\n",
+        "[auth]\n\n[trust]\nmode = \"edge\"\n\n[trust.edge]\nheader = \"ferrofed-edge-assertion\"\n",
         "auth.issuer",
         AuthFault::EdgeIssuer,
     )?;
@@ -312,7 +380,7 @@ fn a_federating_gateway_without_an_issuer_does_not_start() -> Result<(), Box<dyn
         "[server]\nlisten = \"127.0.0.1:1\"\n\n[registry]\ndocument = {path}\n\n\
          [federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     );
-    let untrusting = format!("{toml}\n[auth]\naudience = [\"urn:example:gateway\"]\n");
+    let untrusting = format!("{toml}\n[auth]\n");
     let output = binary(&["config", "check"], &untrusting)?;
     assert_eq!(Some(i32::from(EXIT_CONFIG)), output.status.code());
     let stderr = String::from_utf8_lossy(&output.stderr);

@@ -55,6 +55,8 @@ members = ["node-a", "node-b"]
 
 [[auth.issuer]]
 issuer = "https://ncp.example.org"
+kind = "persons"
+audience = ["https://gateway.example.org/fed"]
 
 [[trust.issuer]]
 issuer = "https://ncp.example.org"

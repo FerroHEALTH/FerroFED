@@ -27,7 +27,7 @@ use ferrohealth_smart::resource::{
     Settings as KeySetSettings, Verifier,
 };
 
-use crate::auth::introspection::Introspector;
+use crate::auth::introspection::Introspected;
 use crate::config::auth::IssuerSettings;
 use crate::security::Event;
 use crate::security::TARGET;
@@ -38,7 +38,7 @@ pub(super) struct Verifiers {
     /// The issuers verified by their key sets, by issuer identifier.
     keyed: BTreeMap<String, Keyed>,
     /// The introspected issuer, when one is trusted.
-    introspected: Option<Introspector>,
+    introspected: Option<Introspected>,
     /// Whether the credential is the edge's signed assertion, which is
     /// always a JWS.
     edge: bool,
@@ -53,7 +53,7 @@ impl Verifiers {
     )]
     pub(super) fn new(
         keyed: Vec<(KeySetSettings, Arc<IssuerSettings>)>,
-        introspected: Option<Introspector>,
+        introspected: Option<Introspected>,
         edge: bool,
     ) -> Self {
         let keyed = keyed

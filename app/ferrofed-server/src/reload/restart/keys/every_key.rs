@@ -201,15 +201,18 @@ node_jwks_cache_s = 300
 rotation_overlap_s = 600
 
 [auth]
+product_scope = "__ferrofed.operator"
+
+[[auth.issuer]]
+issuer = "https://idp.example.org"
+kind = "persons"
+profile = "rfc9068"
 audience = ["https://gateway.example.org/fed"]
 clock_skew_seconds = 60
 jwks_max_age_seconds = 300
 jwks_refresh_interval_seconds = 30
 timeout_ms = 2000
-product_scope = "__ferrofed.operator"
-
-[[auth.issuer]]
-issuer = "https://idp.example.org"
+first_party_clients = ["ferrofed-console"]
 
 [[auth.basic.users]]
 user = "synthetic-scraper"
@@ -445,11 +448,14 @@ const CHECKED_ONLY: &[&str] = &["signing.node_jwks_cache_s"];
 
 /// The keys another key of the maximal configuration holds to the one
 /// value it has, so no change of the key alone loads: a Basic user that
-/// `metrics.scrape_users` and `pmir.feed_users` name, and an issuer that
-/// `[[trust.issuer]]` and `[[auth.issuer]]` both name.
+/// `metrics.scrape_users` and `pmir.feed_users` name, an issuer that
+/// `[[trust.issuer]]` and `[[auth.issuer]]` both name, and an issuer's
+/// `kind` and `profile`, each one of a closed set of names.
 const HELD: &[&str] = &[
     "auth.basic.users[0].user",
     "auth.issuer[0].issuer",
+    "auth.issuer[0].kind",
+    "auth.issuer[0].profile",
     "config.backend",
     "config.ui",
     "pmir.feed_users",

@@ -34,7 +34,6 @@ fn at_the_edge(edge: &Issuer) -> Result<AuthSettings, Box<dyn Error>> {
     let file = support::caller::jwks_file_of(edge)?;
     Ok(AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static(HEADER)),
-        audience: vec![AUDIENCE.to_owned()],
         issuers: vec![IssuerSettings::new(
             EDGE,
             support::caller::key_set(EDGE, &file),

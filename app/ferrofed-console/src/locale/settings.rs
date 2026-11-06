@@ -10,7 +10,7 @@ messages! {
     SettingArchetypeMapDesc = "setting-archetype-map-desc",
     /// `Audience`
     SettingAudience = "setting-audience",
-    /// `The audiences a caller's token must name for this gateway.`
+    /// `The audiences a caller's token of this issuer must name for this gateway.`
     SettingAudienceDesc = "setting-audience-desc",
     /// `Backend`
     SettingBackend = "setting-backend",
@@ -44,6 +44,10 @@ messages! {
     SettingIntrospectionSecret = "setting-introspection-secret",
     /// `The secret the gateway authenticates to this issuer's introspection endpoint with, named by the file it is read from.`
     SettingIntrospectionSecretDesc = "setting-introspection-secret-desc",
+    /// `Issuer kind`
+    SettingIssuerKind = "setting-issuer-kind",
+    /// `Whose tokens this issuer signs: persons, patients, machines or federation.`
+    SettingIssuerKindDesc = "setting-issuer-kind-desc",
     /// `Key set file`
     SettingKeySetFile = "setting-key-set-file",
     /// `The file this issuer's signing keys are read from, when they are not fetched.`

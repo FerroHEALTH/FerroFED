@@ -2,7 +2,7 @@
 setting-archetype-map = Category map by archetype
 setting-archetype-map-desc = Archetype ids, each mapped to the categories of the data under it.
 setting-audience = Audience
-setting-audience-desc = The audiences a caller's token must name for this gateway.
+setting-audience-desc = The audiences a caller's token of this issuer must name for this gateway.
 setting-backend = Backend
 setting-backend-desc = Where the stored queries are kept: redb, postgres or files.
 setting-best-effort = Best effort
@@ -19,6 +19,8 @@ setting-fhir-base = Base
 setting-fhir-base-desc = Where the exchange-format face is served, beside the openEHR API.
 setting-introspection-secret = Introspection secret
 setting-introspection-secret-desc = The secret the gateway authenticates to this issuer's introspection endpoint with, named by the file it is read from.
+setting-issuer-kind = Issuer kind
+setting-issuer-kind-desc = Whose tokens this issuer signs: persons, patients, machines or federation.
 setting-key-set-file = Key set file
 setting-key-set-file-desc = The file this issuer's signing keys are read from, when they are not fetched.
 setting-localizer-budget = Localizer budget

@@ -9,33 +9,26 @@
 //! `system/aql-*` grant counts, the clients admitted to the DEMOGRAPHIC API,
 //! the member its `patient/` grants are bound to, the claims of the
 //! requester, the assurance and the professional, and its declaration as a
-//! national contact point. An entry with an `introspection_endpoint` adds
-//! the one issuer whose tokens are verified by RFC 7662 introspection in
-//! place of a key set. `mode = "edge"` with `[trust.edge]` reads the
+//! national contact point. Each entry names an `[[auth.issuer]]`, which says
+//! how its tokens are verified. `mode = "edge"` with `[trust.edge]` reads the
 //! credential from the header a trusted proxy signs its assertion in, and
 //! `[trust.purpose_of_use]` sets the §13.4 rule. No specification governs
 //! the keys: our own design.
 
-use std::path::PathBuf;
-use std::time::Duration;
-
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
-use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
+use ferrohealth_smart::resource::introspection::IntrospectionSettings;
 use http::HeaderName;
 use serde::Deserialize;
-use url::Url;
 
 use crate::config::auth::assurance::AssuranceClaims;
 use crate::config::auth::contact_point::ContactPointClaims;
 use crate::config::auth::requester::RequesterClaims;
 use crate::config::auth::{
-    AuthFault, AuthMode, Introspection, IssuerSettings, PatientBinding, Verification, fault,
+    AuthFault, AuthMode, IssuerSettings, PatientBinding, Verification, fault,
 };
 use crate::config::error::Error;
-use crate::config::transport;
-use ferrohealth_secret::file::read_secret;
 
 /// `[trust]` as written.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -94,20 +87,9 @@ pub struct Edge {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TrustedIssuer {
-    /// The issuer identifier its tokens carry in `iss`: an `[auth]` issuer,
-    /// or the introspected one.
+    /// The issuer identifier its tokens carry in `iss`, which an
+    /// `[[auth.issuer]]` table trusts.
     pub issuer: String,
-    /// Its RFC 7662 introspection endpoint, for an issuer `[auth]` does not
-    /// verify by its key set.
-    pub introspection_endpoint: Option<String>,
-    /// The client id the gateway authenticates to the introspection endpoint
-    /// with.
-    pub client_id: Option<String>,
-    /// The client secret the gateway authenticates to the introspection
-    /// endpoint with.
-    pub client_secret: Option<Secret>,
-    /// A file holding that client secret, read at boot.
-    pub client_secret_file: Option<PathBuf>,
     /// The `client_id`s of the backend clients whose `system/aql-*` grant is
     /// honoured.
     pub backend_clients: Vec<String>,
@@ -169,38 +151,29 @@ pub struct PatientIssuer {
     pub act_is_representative: bool,
 }
 
-/// What `[auth]` lends the introspected issuer: the audiences an answer
-/// must name, the clock skew, and how long one call may take.
-#[derive(Debug, Clone)]
-pub(super) struct Timing {
-    /// The audiences.
-    pub(super) audience: Vec<String>,
-    /// The clock skew.
-    pub(super) clock_skew: Duration,
-    /// How long one call may take.
-    pub(super) timeout: Duration,
-}
-
 impl Trust {
     /// Resolves `[trust]` over `keyed`, the issuers `[auth]` verifies by
-    /// their key sets, returning the mode, whether a purpose of use is
-    /// required, and every issuer with its policy: `keyed` in order, then
-    /// the introspected one.
+    /// their key sets, and `introspected`, the ones it verifies by RFC 7662
+    /// introspection, returning the mode, whether a purpose of use is
+    /// required, and every issuer with its policy: `keyed` in order, then the
+    /// introspected one.
     ///
     /// # Errors
     /// Returns [`Error::Auth`] naming the key and the [`AuthFault`],
-    /// [`Error::Missing`] for an issuer identifier, an edge header, an
-    /// introspection client credential or a patient binding's endpoint or
-    /// system that is not set, [`Error::PatientEndpoint`] for a patient
-    /// binding's endpoint that is no endpoint id, [`Error::Url`],
-    /// [`Error::UrlCredentials`] and [`Error::TrustAnchor`] for an
-    /// introspection endpoint that does not parse, carries credentials or
-    /// travels in the clear, and the secret errors of a `_file`.
+    /// [`Error::Missing`] for an issuer identifier, an edge header or a
+    /// patient binding's endpoint or system that is not set, and
+    /// [`Error::PatientEndpoint`] for a patient binding's endpoint that is no
+    /// endpoint id.
     pub(super) fn resolve(
         &self,
         keyed: Vec<KeySetSettings>,
-        timing: &Timing,
+        introspected: Vec<IntrospectionSettings>,
     ) -> Result<(AuthMode, bool, Vec<IssuerSettings>), Error> {
+        // NOTE: no specification governs this: our own design; an opaque token names
+        // no issuer, so one issuer at most is introspected.
+        if introspected.len() > 1 {
+            return Err(fault("auth.issuer", AuthFault::SeveralIntrospection));
+        }
         let mut issuers: Vec<IssuerSettings> = keyed
             .into_iter()
             .map(|settings| {
@@ -209,6 +182,12 @@ impl Trust {
                     Verification::KeySet(Box::new(settings)),
                 )
             })
+            .chain(introspected.into_iter().map(|settings| {
+                IssuerSettings::new(
+                    settings.issuer.clone(),
+                    Verification::Introspection(Box::new(settings)),
+                )
+            }))
             .collect();
         let mut named: Vec<&str> = Vec::new();
         for (index, written) in self.issuer.iter().enumerate() {
@@ -222,47 +201,11 @@ impl Trust {
                 return Err(fault(&format!("{key}.issuer"), AuthFault::DuplicateIssuer));
             }
             named.push(&written.issuer);
-            let introspection = introspection(&key, written, timing)?;
-            let held = issuers
-                .iter()
-                .position(|issuer| issuer.issuer == written.issuer);
-            let at = match (held, introspection) {
-                (Some(_), Some(_)) => {
-                    return Err(fault(
-                        &format!("{key}.introspection_endpoint"),
-                        AuthFault::TwoVerifications,
-                    ));
-                }
-                (Some(at), None) => at,
-                (None, Some(introspection)) => {
-                    let introspected = |issuer: &IssuerSettings| {
-                        matches!(issuer.verification, Verification::Introspection(_))
-                    };
-                    if issuers.iter().any(introspected) {
-                        return Err(fault(
-                            &format!("{key}.introspection_endpoint"),
-                            AuthFault::SeveralIntrospection,
-                        ));
-                    }
-                    issuers.push(IssuerSettings::new(
-                        written.issuer.clone(),
-                        Verification::Introspection(introspection),
-                    ));
-                    issuers.len().saturating_sub(1)
-                }
-                (None, None) => {
-                    return Err(fault(&format!("{key}.issuer"), AuthFault::UnknownIssuer));
-                }
-            };
-            let policy = policy(&key, written)?;
-            if let Some(issuer) = issuers.get_mut(at) {
-                let verification = issuer.verification.clone();
-                *issuer = IssuerSettings {
-                    issuer: written.issuer.clone(),
-                    verification,
-                    ..policy
-                };
-            }
+            let issuer = issuers
+                .iter_mut()
+                .find(|issuer| issuer.issuer == written.issuer)
+                .ok_or_else(|| fault(&format!("{key}.issuer"), AuthFault::UnknownIssuer))?;
+            *issuer = policy(&key, written, issuer.verification.clone())?;
         }
         let mode = self.resolve_mode(&issuers)?;
         Ok((mode, self.purpose_of_use.required, issuers))
@@ -296,56 +239,13 @@ impl Trust {
     }
 }
 
-/// The introspection endpoint the entry at `key` names, with the gateway's
-/// client credentials there, or `None` for an entry that names none.
-fn introspection(
+/// The issuer the entry at `key` writes the policy of, its tokens verified
+/// as `verification` says.
+fn policy(
     key: &str,
     written: &TrustedIssuer,
-    timing: &Timing,
-) -> Result<Option<Introspection>, Error> {
-    let client_secret = read_secret(
-        &format!("{key}.client_secret"),
-        written.client_secret.clone(),
-        written.client_secret_file.as_deref(),
-    )?;
-    let Some(endpoint) = &written.introspection_endpoint else {
-        if written.client_id.is_some() || client_secret.is_some() {
-            return Err(fault(
-                &format!("{key}.client_id"),
-                AuthFault::ClientWithoutIntrospection,
-            ));
-        }
-        return Ok(None);
-    };
-    let endpoint = url(&format!("{key}.introspection_endpoint"), endpoint)?;
-    let client_id = written
-        .client_id
-        .clone()
-        .filter(|id| !id.is_empty())
-        .ok_or_else(|| Error::Missing {
-            key: format!("{key}.client_id"),
-        })?;
-    let client_secret = client_secret.ok_or_else(|| Error::Missing {
-        key: format!("{key}.client_secret"),
-    })?;
-    if timing.audience.iter().all(String::is_empty) {
-        return Err(Error::Missing {
-            key: String::from("auth.audience"),
-        });
-    }
-    Ok(Some(Introspection {
-        endpoint,
-        client_id,
-        client_secret,
-        audience: timing.audience.clone(),
-        clock_skew: timing.clock_skew,
-        timeout: timing.timeout,
-    }))
-}
-
-/// The policy the entry at `key` writes, its verification a placeholder the
-/// caller replaces.
-fn policy(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, Error> {
+    verification: Verification,
+) -> Result<IssuerSettings, Error> {
     let patient = written
         .patient
         .as_ref()
@@ -377,13 +277,7 @@ fn policy(key: &str, written: &TrustedIssuer) -> Result<IssuerSettings, Error> {
         client_tokens_act_for_professional: written.client_tokens_act_for_professional,
         professional_issuing_authority,
         national_contact_point,
-        ..IssuerSettings::new(
-            written.issuer.clone(),
-            Verification::KeySet(Box::new(KeySetSettings::new(
-                written.issuer.clone(),
-                String::new(),
-            ))),
-        )
+        ..IssuerSettings::new(written.issuer.clone(), verification)
     })
 }
 
@@ -428,26 +322,4 @@ fn resolve_patient(key: &str, written: &PatientIssuer) -> Result<PatientBinding,
         ehr_id_system,
         act_is_representative: written.act_is_representative,
     })
-}
-
-/// Parses the URL at `key`, held to the trust-anchor policy of
-/// [`transport::trust_anchor`], with no credentials in it.
-fn url(key: &str, text: &str) -> Result<Url, Error> {
-    let url = Url::parse(text).map_err(|source| Error::Url {
-        key: key.to_owned(),
-        source,
-    })?;
-    if !url.username().is_empty() || url.password().is_some() {
-        return Err(Error::UrlCredentials {
-            key: key.to_owned(),
-            section: key
-                .rsplit_once('.')
-                .map_or(key, |(section, _)| section)
-                .to_owned(),
-        });
-    }
-    // NOTE: RFC 7662 §4, the introspection endpoint is protected by TLS; loopback
-    // http is our own design, as for every other trust anchor.
-    transport::trust_anchor(key, &url)?;
-    Ok(url)
 }

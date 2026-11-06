@@ -277,8 +277,8 @@ impl Harness {
             "{identity}\n\n[gateway]\npublic_url = \"{origin}\"\n\n\
              [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
              node_selection = \"ask-all\"\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\n\n\
-             [auth]\naudience = [\"{AUDIENCE}\"]\n\n[[auth.issuer]]\nissuer = \"{NCP_ISSUER}\"\n\
-             jwks_file = {}\n\n[[trust.issuer]]\nissuer = \"{NCP_ISSUER}\"\n{}\n\
+             [auth]\n\n[[auth.issuer]]\nissuer = \"{NCP_ISSUER}\"\nkind = \"persons\"\n\
+             audience = [\"{AUDIENCE}\"]\njwks_file = {}\n\n[[trust.issuer]]\nissuer = \"{NCP_ISSUER}\"\n{}\n\
              [fhir]\nbase = \"{FHIR}\"\nreceive_namespaces = [\"{namespace}\"]\n\n\
              [fhir.operator]\nname = \"Synthetic Operator\"\nidentifier_system = \"urn:oid:2.999.9\"\n\
              identifier_value = \"operator-1\"\n\n[[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\n\
