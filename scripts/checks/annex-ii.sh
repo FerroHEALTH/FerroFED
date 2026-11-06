@@ -17,14 +17,15 @@
 #   the status    met, partial, planned or not-applicable; a partial or
 #                 planned row names its issues and what is missing, a
 #                 not-applicable row says why;
-#   the book      the page lists every point with its status, and the
-#                 technical documentation index does not mark Annex III,
-#                 point 4, documented while a point is partial or planned.
+#   the book      the page block equals what scripts/conformance/annex-ii.sh
+#                 renders, the summary lists the page, and the technical
+#                 documentation index does not mark Annex III, point 4,
+#                 documented while a point is partial or planned.
 #
 # Usage:
 #   scripts/checks/annex-ii.sh
 #   scripts/checks/annex-ii.sh --self-test
-# Needs awk, grep, sed and tr. Exit 1 naming each refusal; 2 on a usage
+# Needs awk, diff, grep, sed and tr. Exit 1 naming each refusal; 2 on a usage
 # error; 0 otherwise.
 set -euo pipefail
 export LC_ALL=C
@@ -33,6 +34,7 @@ readonly CHECKLIST=conformance/annex-ii.tsv
 readonly PAGE=website/book/src/evaluate/annex-ii.md
 readonly SUMMARY=website/book/src/SUMMARY.md
 readonly INDEX=conformance/technical-documentation.tsv
+readonly RENDER=scripts/conformance/annex-ii.sh
 readonly REGULATION=docs/specs/eu-ehds/reg-eu-2025-327-en.xhtml
 readonly POINTS='1.1 1.2 1.3 1.4 2.1 2.2 2.3 2.4 2.5 2.6 3.1 3.2 3.2(a) 3.2(b) 3.2(c) 3.2(d) 3.2(e) 3.3 3.4'
 readonly HEADER=$'point\trequirement\tstatus\tevidence\tissue\tnote'
@@ -97,13 +99,14 @@ has_heading() {
 }
 
 # has_test FILE NAME: FILE defines the function NAME under a test attribute,
-# among the attributes and comments directly above it.
+# among the attributes, their continuation lines and the comments directly
+# above it, up to a blank line or a closing brace.
 has_test() {
   local file="$1" name="$2"
   awk -v want="$name" '
     { line[NR] = $0 }
     $0 ~ ("fn " want "\\(") {
-      for (k = NR - 1; k > 0 && line[k] ~ /^[[:space:]]*(#\[|\/\/)/; k--)
+      for (k = NR - 1; k > 0 && line[k] !~ /^[[:space:]]*(\}.*)?$/; k--)
         if (line[k] ~ /^[[:space:]]*#\[.*test(\]|\()/) found = 1
     }
     END { exit !found }
@@ -147,8 +150,8 @@ check_evidence() {
 
 run() {
   local text row line=0 seen point requirement status evidence issue note
-  local own unmet=""
-  for f in "$CHECKLIST" "$PAGE" "$SUMMARY" "$INDEX" "$REGULATION"; do
+  local own unmet="" fresh
+  for f in "$CHECKLIST" "$PAGE" "$SUMMARY" "$INDEX" "$REGULATION" "$RENDER"; do
     [[ -f "$f" ]] || {
       fail "$f is missing."
       finish
@@ -197,14 +200,12 @@ run() {
       ;;
     partial | planned)
       unmet="$unmet $point"
-      [[ "$issue" =~ ^#[0-9]+( #[0-9]+)*$ ]] ||
-        fail "$CHECKLIST line $line: a $status row names its issues as #N, separated by one space."
+      [[ "$issue" =~ ^([A-Za-z]+/[A-Za-z]+)?#[0-9]+( ([A-Za-z]+/[A-Za-z]+)?#[0-9]+)*$ ]] ||
+        fail "$CHECKLIST line $line: a $status row names its issues as #N or Owner/Repo#N, separated by one space."
       [[ "$note" != - ]] || fail "$CHECKLIST line $line: a $status row says what is missing in its note."
       ;;
     *) fail "$CHECKLIST line $line: status \"$status\" is not met, partial, planned or not-applicable." ;;
     esac
-    [[ -z "$status" ]] || grep -Eq "^\| $(printf '%s' "$point" | sed 's/[.()]/\\&/g') \|.*\| $status \|" "$PAGE" ||
-      fail "$PAGE lists no row for $point with the status $status."
   done < "$CHECKLIST"
   rm -f -- "$text"
   for point in $POINTS; do
@@ -213,6 +214,14 @@ run() {
     *) fail "$CHECKLIST has no row for $point." ;;
     esac
   done
+  fresh="$(mktemp)"
+  if bash "$RENDER" --page-block > "$fresh" 2> /dev/null; then
+    sed -n '/^<!-- annex-ii:begin -->$/,/^<!-- annex-ii:end -->$/p' "$PAGE" | diff -q "$fresh" - > /dev/null ||
+      fail "the $PAGE block is stale (run $RENDER --write)."
+  else
+    fail "$RENDER could not render the page block."
+  fi
+  rm -f -- "$fresh"
   grep -Fq '(evaluate/annex-ii.md)' "$SUMMARY" || fail "$SUMMARY does not list $PAGE."
   awk -F'\t' -v page="$PAGE" '$1 == "4" && $3 == page { found = 1 } END { exit !found }' "$INDEX" ||
     fail "$INDEX has no row for Annex III, point 4, that names $PAGE."
@@ -231,15 +240,17 @@ finish() {
 }
 
 self_test() {
-  local script status point
+  local script render status point
   # Global, so the EXIT trap still sees it after the function returns.
   work="$(mktemp -d)"
   trap 'rm -rf -- "$work"' EXIT
   script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
   repo="$work/repo"
-  mkdir -p "$repo/scripts/checks" "$repo/conformance" "$repo/docs/specs/eu-ehds" \
-    "$repo/website/book/src/evaluate" "$repo/tests"
+  render="$(cd "$(dirname "${BASH_SOURCE[0]}")/../conformance" && pwd)/annex-ii.sh"
+  mkdir -p "$repo/scripts/checks" "$repo/scripts/conformance" "$repo/conformance" \
+    "$repo/docs/specs/eu-ehds" "$repo/website/book/src/evaluate" "$repo/tests"
   cp "$script" "$repo/scripts/checks/annex-ii.sh"
+  cp "$render" "$repo/scripts/conformance/annex-ii.sh"
   flunk() {
     echo "annex-ii: self-test failed: $*" >&2
     cat "$work/out" >&2
@@ -272,14 +283,16 @@ self_test() {
         printf '%s\trule %s\tmet\t%s::The evidence; tests/it.rs::a_test\t-\t-\n' "$point" "$point" "$PAGE"
       done
     } > "$repo/$CHECKLIST"
-    {
-      printf '# Annex II\n\n## The evidence\n\n| Point | Requirement | Evidence | Status | Issue |\n|---|---|---|---|---|\n'
-      for point in $POINTS; do printf '| %s | rule | here | met | - |\n' "$point"; done
-    } > "$repo/$PAGE"
+    printf '# Annex II\n\n## The evidence\n\n<!-- annex-ii:begin -->\n<!-- annex-ii:end -->\n' > "$repo/$PAGE"
     printf -- '- [Annex II](evaluate/annex-ii.md)\n' > "$repo/$SUMMARY"
     printf 'item\telement\ttarget\tsection\tstatus\tissue\n4\tresults\t%s\t-\tdocumented\t-\n' \
       "$PAGE" > "$repo/$INDEX"
-    printf '#[test]\nfn a_test() {}\n\nfn not_a_test() {}\n' > "$repo/tests/it.rs"
+    printf '#[test]\n#[expect(\n    lint,\n    reason = "r"\n)]\nfn a_test() {}\n\nfn not_a_test() {}\n' > "$repo/tests/it.rs"
+    rendered
+  }
+  # rendered: write the page block from the checklist.
+  rendered() {
+    (cd "$repo" && bash scripts/conformance/annex-ii.sh --write)
   }
   # row POINT FIELD VALUE: set one field of POINT's row; a FIELD of 0 drops it.
   row() {
@@ -289,16 +302,8 @@ self_test() {
       $1 == point { $field = value }
       { print }
     ' "$repo/$CHECKLIST" > "$work/checklist" && mv "$work/checklist" "$repo/$CHECKLIST"
+    rendered
   }
-  # page POINT STATUS: set the status cell of POINT's page row.
-  page() {
-    local point="$1" status="$2"
-    awk -v point="$point" -v status="$status" '
-      index($0, "| " point " |") == 1 { $0 = "| " point " | rule | here | " status " | #1 |" }
-      { print }
-    ' "$repo/$PAGE" > "$work/page" && mv "$work/page" "$repo/$PAGE"
-  }
-
   fixture
   expect "a complete checklist" 0 "every Annex II point has its row"
 
@@ -343,17 +348,15 @@ self_test() {
   expect "an unknown status" 1 "status \"done\""
   fixture
   row 2.6 3 not-applicable
-  page 2.6 not-applicable
   expect "a not-applicable row with no reason" 1 "says why in its note"
   row 2.6 6 'no such function'
   expect "a not-applicable row with its reason" 0
   fixture
   row 3.1 3 partial
-  page 3.1 partial
   expect "a partial row with no issue" 1 "names its issues as #N"
   row 3.1 5 '#12,#13'
   expect "issues not separated by one space" 1 "names its issues as #N"
-  row 3.1 5 '#12 #13'
+  row 3.1 5 '#12 FerroHEALTH/FerroBRIDGE#13'
   expect "a partial row with no note" 1 "says what is missing"
   row 3.1 6 'what is missing'
   expect "a partial row while point 4 is documented" 1 "documented while Annex II point(s) 3.1"
@@ -361,8 +364,9 @@ self_test() {
     "$PAGE" > "$repo/$INDEX"
   expect "a partial row with point 4 partial" 0
   fixture
-  row 3.3 3 planned
-  expect "a status the page does not show" 1 "lists no row for 3.3 with the status planned"
+  sed 's/^3\.3\trule 3\.3\tmet/3.3\trule 3.3\tplanned/' "$repo/$CHECKLIST" > "$work/checklist" &&
+    mv "$work/checklist" "$repo/$CHECKLIST"
+  expect "a page that differs from the checklist" 1 "is stale"
   fixture
   printf '\n' > "$repo/$SUMMARY"
   expect "a page the summary does not list" 1 "does not list"
