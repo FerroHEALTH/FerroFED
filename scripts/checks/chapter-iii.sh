@@ -56,6 +56,11 @@ readonly STATEMENT='A statement that the EHR system in question is in conformity
 
 failures=0
 
+# The shared evidence lookups (#1675).
+# shellcheck source=scripts/checks/lib/evidence.sh
+# shellcheck disable=SC1091 # shellcheck is not run with -x; the library is checked on its own
+. "$(dirname "${BASH_SOURCE[0]}")/lib/evidence.sh"
+
 fail() {
   echo "::error::chapter-iii: $*" >&2
   failures=$((failures + 1))
@@ -156,67 +161,6 @@ phrase_refusals() {
   ' "$1" "$RECORD"
 }
 
-# has_heading FILE TEXT: FILE has a Markdown heading reading TEXT, outside a
-# fenced code block.
-has_heading() {
-  local file="$1" text="$2"
-  awk -v want="$text" '
-    /^```/ { fence = !fence; next }
-    !fence && /^#+ / { h = $0; sub(/^#+ /, "", h); if (h == want) found = 1 }
-    END { exit !found }
-  ' "$file"
-}
-
-# has_test FILE NAME: FILE defines the function NAME under a test attribute,
-# among the attributes, their continuation lines and the comments directly
-# above it, up to a blank line or a closing brace.
-has_test() {
-  local file="$1" name="$2"
-  awk -v want="$name" '
-    { line[NR] = $0 }
-    $0 ~ ("fn " want "\\(") {
-      for (k = NR - 1; k > 0 && line[k] !~ /^[[:space:]]*(\}.*)?$/; k--)
-        if (line[k] ~ /^[[:space:]]*#\[.*test(\]|\()/) found = 1
-    }
-    END { exit !found }
-  ' "$file"
-}
-
-# check_evidence LINE EVIDENCE: every item of EVIDENCE, split on "; ".
-check_evidence() {
-  local line="$1" rest="$2" item path anchor
-  [[ "$rest" != - && -n "$rest" ]] || {
-    fail "$RECORD line $line names no evidence."
-    return
-  }
-  while [[ -n "$rest" ]]; do
-    item="${rest%%; *}"
-    if [[ "$item" == "$rest" ]]; then rest=""; else rest="${rest#*; }"; fi
-    path="${item%%::*}"
-    anchor=""
-    [[ "$path" == "$item" ]] || anchor="${item#*::}"
-    case "$path" in
-    /* | *..* | '')
-      fail "$RECORD line $line: \"$path\" is not a path inside the tree."
-      continue
-      ;;
-    *) ;;
-    esac
-    if [[ ! -f "$path" ]]; then
-      fail "$RECORD line $line: $path does not exist."
-      continue
-    fi
-    [[ -n "$anchor" ]] || continue
-    case "$path" in
-    *.md) has_heading "$path" "$anchor" ||
-      fail "$RECORD line $line: $path has no heading \"$anchor\"." ;;
-    *.rs) has_test "$path" "$anchor" ||
-      fail "$RECORD line $line: $path has no test \"$anchor\"." ;;
-    *) fail "$RECORD line $line: $path takes no anchor; only a Markdown heading or a Rust test does." ;;
-    esac
-  done
-}
-
 # check_text TEXT: the Art 105 phrases are in the vendored Regulation.
 check_text() {
   local text="$1" rest="$ART_105" phrase
@@ -237,7 +181,7 @@ owner_section() {
 }
 
 run() {
-  local text row line=0 seen=" " provision requirement applies status evidence issue note
+  local text row line=0 seen=" " provision requirement applies status issue note
   local unmet="" owners statement_met="" fresh tabs refusal
   for f in "$RECORD" "$PAGE" "$SUMMARY" "$ANNEX_II" "$DECLARATION" "$REGULATION" "$RENDER"; do
     [[ -f "$f" ]] || {
@@ -251,7 +195,10 @@ run() {
   check_text "$text"
   while IFS= read -r refusal; do
     fail "$RECORD $refusal"
-  done < <(phrase_refusals "$text")
+  done < <(
+    phrase_refusals "$text"
+    evidence_refusals "$RECORD" 5 7 provision
+  )
   owners="$(owner_section)"
   while IFS= read -r row; do
     line=$((line + 1))
@@ -261,7 +208,7 @@ run() {
       fail "$RECORD line $line has not seven tab-separated columns."
       continue
     fi
-    IFS=$'\t' read -r provision requirement applies status evidence issue note <<< "$row"
+    IFS=$'\t' read -r provision requirement applies status _ issue note <<< "$row"
     if [[ "$provision" == provision ]]; then
       [[ "$row" == "$HEADER" ]] ||
         fail "$RECORD header is not provision, requirement, applies, status, evidence, issue, note."
@@ -281,7 +228,6 @@ run() {
     applies_for "$provision"
     [[ "$applies" == "$APPLIES" ]] ||
       fail "$RECORD line $line: $provision applies from $APPLIES under Art 105, not $applies."
-    check_evidence "$line" "$evidence"
     case "$status" in
     met | not-applicable)
       [[ "$issue" == - ]] || fail "$RECORD line $line: a $status row names no issue."
@@ -359,6 +305,8 @@ self_test() {
   mkdir -p "$repo/scripts/checks" "$repo/scripts/conformance" "$repo/conformance" \
     "$repo/docs/specs/eu-ehds" "$repo/website/book/src/evaluate" "$repo/tests"
   cp "$script" "$repo/scripts/checks/chapter-iii.sh"
+  mkdir -p "$repo/scripts/checks/lib"
+  cp "$(dirname "$script")/lib/evidence.sh" "$repo/scripts/checks/lib/evidence.sh"
   cp "$render" "$repo/scripts/conformance/chapter-iii.sh"
   flunk() {
     echo "chapter-iii: self-test failed: $*" >&2
@@ -374,12 +322,14 @@ self_test() {
   }
   # leaf PROVISION: the fixture's text of PROVISION, free of parentheses.
   leaf() {
-    printf 'rule %s' "$1" | tr '(' '_' | tr -d ')'
+    local text="rule $1"
+    text="${text//(/_}"
+    printf '%s' "${text//)/}"
   }
   # The fixture: a Regulation whose every provision has the text "rule
   # <provision>", split by markup and a no-break space; Art 105; one met row
   # per provision; the page with its owner list; a heading and a test.
-  fixture() {
+  build_fixture() {
     local prov art para pt last_art="" last_para="" rest rest_p
     {
       printf '<p>rule Art 25_1 before the articles</p>\n'
@@ -454,6 +404,18 @@ self_test() {
       { print }
     ' "$repo/$RECORD" > "$work/record" && mv "$work/record" "$repo/$RECORD"
     (cd "$repo" && bash scripts/conformance/chapter-iii.sh --write)
+  }
+
+  # fixture: the pristine fixture, built once by build_fixture and copied
+  # back for each case, so a case starts no process to rebuild it.
+  fixture() {
+    if [[ ! -d "$work/pristine" ]]; then
+      build_fixture
+      cp -R "$repo" "$work/pristine"
+      return
+    fi
+    rm -rf -- "$repo"
+    cp -R "$work/pristine" "$repo"
   }
 
   fixture

@@ -41,6 +41,11 @@ readonly HEADER=$'point\trequirement\tstatus\tevidence\tissue\tnote'
 
 failures=0
 
+# The shared evidence lookups (#1675).
+# shellcheck source=scripts/checks/lib/evidence.sh
+# shellcheck disable=SC1091 # shellcheck is not run with -x; the library is checked on its own
+. "$(dirname "${BASH_SOURCE[0]}")/lib/evidence.sh"
+
 fail() {
   echo "::error::annex-ii: $*" >&2
   failures=$((failures + 1))
@@ -87,70 +92,9 @@ segments() {
     ' > "$out"
 }
 
-# has_heading FILE TEXT: FILE has a Markdown heading reading TEXT, outside a
-# fenced code block.
-has_heading() {
-  local file="$1" text="$2"
-  awk -v want="$text" '
-    /^```/ { fence = !fence; next }
-    !fence && /^#+ / { h = $0; sub(/^#+ /, "", h); if (h == want) found = 1 }
-    END { exit !found }
-  ' "$file"
-}
-
-# has_test FILE NAME: FILE defines the function NAME under a test attribute,
-# among the attributes, their continuation lines and the comments directly
-# above it, up to a blank line or a closing brace.
-has_test() {
-  local file="$1" name="$2"
-  awk -v want="$name" '
-    { line[NR] = $0 }
-    $0 ~ ("fn " want "\\(") {
-      for (k = NR - 1; k > 0 && line[k] !~ /^[[:space:]]*(\}.*)?$/; k--)
-        if (line[k] ~ /^[[:space:]]*#\[.*test(\]|\()/) found = 1
-    }
-    END { exit !found }
-  ' "$file"
-}
-
-# check_evidence LINE EVIDENCE: every item of EVIDENCE, split on "; ".
-check_evidence() {
-  local line="$1" rest="$2" item path anchor
-  [[ "$rest" != - && -n "$rest" ]] || {
-    fail "$CHECKLIST line $line names no evidence."
-    return
-  }
-  while [[ -n "$rest" ]]; do
-    item="${rest%%; *}"
-    if [[ "$item" == "$rest" ]]; then rest=""; else rest="${rest#*; }"; fi
-    path="${item%%::*}"
-    anchor=""
-    [[ "$path" == "$item" ]] || anchor="${item#*::}"
-    case "$path" in
-    /* | *..* | '')
-      fail "$CHECKLIST line $line: \"$path\" is not a path inside the tree."
-      continue
-      ;;
-    *) ;;
-    esac
-    if [[ ! -f "$path" ]]; then
-      fail "$CHECKLIST line $line: $path does not exist."
-      continue
-    fi
-    [[ -n "$anchor" ]] || continue
-    case "$path" in
-    *.md) has_heading "$path" "$anchor" ||
-      fail "$CHECKLIST line $line: $path has no heading \"$anchor\"." ;;
-    *.rs) has_test "$path" "$anchor" ||
-      fail "$CHECKLIST line $line: $path has no test \"$anchor\"." ;;
-    *) fail "$CHECKLIST line $line: $path takes no anchor; only a Markdown heading or a Rust test does." ;;
-    esac
-  done
-}
-
 run() {
-  local text row line=0 seen point requirement status evidence issue note
-  local own unmet="" fresh
+  local text row line=0 seen point status issue note
+  local unmet="" fresh tabs refusal
   for f in "$CHECKLIST" "$PAGE" "$SUMMARY" "$INDEX" "$REGULATION" "$RENDER"; do
     [[ -f "$f" ]] || {
       fail "$f is missing."
@@ -160,15 +104,32 @@ run() {
   done
   text="$(mktemp)"
   segments "$text"
+  # NOTE: no specification governs this: our own design; one awk reads every
+  # row's phrase and one every row's evidence, so no process starts per row.
+  while IFS= read -r refusal; do
+    fail "$CHECKLIST $refusal"
+  done < <(
+    awk -F'\t' -v regulation="$REGULATION" -v points="$POINTS" '
+      BEGIN { n = split(points, p, " "); for (k = 1; k <= n; k++) known[p[k]] = 1 }
+      FILENAME == ARGV[1] { own[$1] = $2; next }
+      /^#/ || /^$/ || NF != 6 || $1 == "point" || !($1 in known) { next }
+      !($1 in own) { printf "line %d: %s has no point %s in Annex II.\n", FNR, regulation, $1; next }
+      index(own[$1], $2) == 0 {
+        printf "line %d: \"%s\" is not a phrase of point %s of %s.\n", FNR, $2, $1, regulation
+      }
+    ' "$text" "$CHECKLIST"
+    evidence_refusals "$CHECKLIST" 4 6 point
+  )
   seen=" "
   while IFS= read -r row; do
     line=$((line + 1))
     case "$row" in '#'* | '') continue ;; *) ;; esac
-    if [[ "$(printf '%s\n' "$row" | awk -F'\t' '{ print NF }')" != 6 ]]; then
+    tabs="${row//[!$'\t']/}"
+    if [[ "${#tabs}" -ne 5 ]]; then
       fail "$CHECKLIST line $line has not six tab-separated columns."
       continue
     fi
-    IFS=$'\t' read -r point requirement status evidence issue note <<< "$row"
+    IFS=$'\t' read -r point _ status _ issue note <<< "$row"
     if [[ "$point" == point ]]; then
       [[ "$row" == "$HEADER" ]] ||
         fail "$CHECKLIST header is not point, requirement, status, evidence, issue, note."
@@ -185,13 +146,6 @@ run() {
     *" $point "*) fail "$CHECKLIST line $line: $point has a second row." ;;
     *) seen="$seen$point " ;;
     esac
-    own="$(awk -F'\t' -v p="$point" '$1 == p { print $2 }' "$text")"
-    if [[ -z "$own" ]]; then
-      fail "$CHECKLIST line $line: $REGULATION has no point $point in Annex II."
-    elif [[ "$own" != *"$requirement"* ]]; then
-      fail "$CHECKLIST line $line: \"$requirement\" is not a phrase of point $point of $REGULATION."
-    fi
-    check_evidence "$line" "$evidence"
     case "$status" in
     met | not-applicable)
       [[ "$issue" == - ]] || fail "$CHECKLIST line $line: a $status row names no issue."
@@ -250,6 +204,8 @@ self_test() {
   mkdir -p "$repo/scripts/checks" "$repo/scripts/conformance" "$repo/conformance" \
     "$repo/docs/specs/eu-ehds" "$repo/website/book/src/evaluate" "$repo/tests"
   cp "$script" "$repo/scripts/checks/annex-ii.sh"
+  mkdir -p "$repo/scripts/checks/lib"
+  cp "$(dirname "$script")/lib/evidence.sh" "$repo/scripts/checks/lib/evidence.sh"
   cp "$render" "$repo/scripts/conformance/annex-ii.sh"
   flunk() {
     echo "annex-ii: self-test failed: $*" >&2
@@ -266,7 +222,7 @@ self_test() {
   # The fixture: a Regulation whose Annex II gives each point the text
   # "rule <point>", split by markup and a no-break space, one row per
   # point, the page, the summary, the index, a heading and a test.
-  fixture() {
+  build_fixture() {
     {
       printf '<p>rule 1.1 before the annex</p>\n<p>ANNEX II</p><p>Essential requirements</p>\n'
       for point in $POINTS; do
@@ -304,6 +260,18 @@ self_test() {
     ' "$repo/$CHECKLIST" > "$work/checklist" && mv "$work/checklist" "$repo/$CHECKLIST"
     rendered
   }
+  # fixture: the pristine fixture, built once by build_fixture and copied
+  # back for each case, so a case starts no process to rebuild it.
+  fixture() {
+    if [[ ! -d "$work/pristine" ]]; then
+      build_fixture
+      cp -R "$repo" "$work/pristine"
+      return
+    fi
+    rm -rf -- "$repo"
+    cp -R "$work/pristine" "$repo"
+  }
+
   fixture
   expect "a complete checklist" 0 "every Annex II point has its row"
 
