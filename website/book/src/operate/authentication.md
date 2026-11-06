@@ -667,8 +667,10 @@ byte outside visible ASCII is refused `400 correlation-invalid`.
 
 `OPTIONS {base}/` declares every contact point under
 `federation.national_contact_point`: `disclose: false`, `professional:
-"asserted-by-contact-point"`, `purpose_of_use: "required"`, and per issuer
-the claim each Annex attribute is read from and the correlation header. The
+"asserted-by-contact-point"`, `purpose_of_use: "required"`, the emergency
+access limit in effect as `emergency` with its `threshold` and `window_s`,
+and per issuer the claim each Annex attribute is read from and the
+correlation header. The
 Annex defines no carrier for its attributes, so the claim names, the
 member and the header are FerroFED's own design.
 

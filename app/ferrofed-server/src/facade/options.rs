@@ -7,7 +7,8 @@
 //!
 //! The body is built by [`crate::federation::describe::describe`] from the
 //! running federation, with the national contact points the deployment
-//! declares added ([`ContactPoints`]). No specification governs where it is
+//! declares and the emergency access limit in effect added
+//! ([`ContactPoints`]). No specification governs where it is
 //! answered: our own design.
 
 use std::sync::Arc;
@@ -47,7 +48,7 @@ pub async fn options_root(
     };
     let described = describe(&federation, state.definitions().is_some()).and_then(|body| {
         contact_points
-            .declared_in(body)
+            .declared_in(body, federation.emergency_limit())
             .map_err(DescribeError::from)
     });
     match described {

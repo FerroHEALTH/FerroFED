@@ -45,6 +45,7 @@ use crate::auth::refusal::{Refusal, Refused};
 use crate::config::auth::AuthSettings;
 use crate::config::auth::IssuerSettings;
 use crate::config::auth::contact_point::{ContactPoint, is_alpha_2};
+use crate::config::emergency::EmergencyLimit;
 use crate::federation::describe::NATIONAL_CONTACT_POINT;
 use openehr_federation::error::WireError;
 use openehr_federation::options::OptionsRoot;
@@ -381,9 +382,11 @@ pub(super) fn correlation(
 /// Art 11(5)); that the professional is authenticated by the contact point's
 /// side and asserted to the gateway, never authenticated by it (Implementing
 /// Regulation (EU) 2026/2099 Art 6(1) and (2); §13.4 authn-end-user, CP-39);
-/// that a patient-data request needs a purpose of use; and, per issuer, the
-/// claim each 2026/2099 Annex attribute is read from and the correlation
-/// header.
+/// that a patient-data request needs a purpose of use; the emergency access
+/// limit in effect, the `threshold` of accesses one relayed professional is
+/// granted in any `window_s` seconds (eHDSI Section II Security Services
+/// 10.0.0 §2.5); and, per issuer, the claim each 2026/2099 Annex attribute
+/// is read from and the correlation header.
 // NOTE: §7a.2 leaves the `federation` object open and names no such member (N30 requires
 // none), so the member is our own design.
 #[derive(Debug, Clone, Default)]
@@ -460,18 +463,29 @@ impl ContactPoints {
     }
 
     /// `body`, with the `national_contact_point` member when some issuer is
-    /// declared one.
+    /// declared one, declaring `emergency` as the emergency access limit in
+    /// effect.
     ///
     /// # Errors
     ///
     /// Returns the [`WireError`] when the member cannot be written.
-    pub fn declared_in(&self, mut body: OptionsRoot) -> Result<OptionsRoot, WireError> {
+    pub fn declared_in(
+        &self,
+        mut body: OptionsRoot,
+        emergency: EmergencyLimit,
+    ) -> Result<OptionsRoot, WireError> {
         #[derive(serde::Serialize)]
         struct Member<'a> {
             disclose: bool,
             professional: &'static str,
             purpose_of_use: &'static str,
+            emergency: Emergency,
             issuers: &'a [DeclaredContactPoint],
+        }
+        #[derive(serde::Serialize)]
+        struct Emergency {
+            threshold: u32,
+            window_s: u64,
         }
         if self.0.is_empty() {
             return Ok(body);
@@ -480,6 +494,10 @@ impl ContactPoints {
             disclose: false,
             professional: "asserted-by-contact-point",
             purpose_of_use: "required",
+            emergency: Emergency {
+                threshold: emergency.threshold.get(),
+                window_s: emergency.window.as_secs(),
+            },
             issuers: &self.0,
         };
         body.federation

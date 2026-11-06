@@ -256,7 +256,10 @@ emergency.threshold is 6, above the baseline of 5 emergency access attempts per 
 
 A `threshold` or a `window_s` of zero is refused too: §2.5 has every country
 provide emergency access, so FerroFED never refuses it by default. A reload
-applies a changed limit.
+applies a changed limit. `OPTIONS {base}/` declares the limit in effect
+under `federation.national_contact_point.emergency`, as `threshold` and
+`window_s`, so the contact point's operator can check what the gateway
+holds its professionals to.
 
 How the gateway counts:
 
