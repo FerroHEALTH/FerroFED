@@ -27,6 +27,7 @@
 //! defines the `code` member or its values: our own design.
 
 mod code;
+mod message;
 
 use std::sync::LazyLock;
 
