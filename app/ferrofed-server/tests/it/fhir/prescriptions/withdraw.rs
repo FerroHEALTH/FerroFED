@@ -12,6 +12,7 @@ use std::error::Error;
 use std::time::Duration;
 
 use axum::body::Body;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use wiremock::matchers::{method, path};
@@ -134,20 +135,12 @@ async fn a_withdrawal_reaches_its_member_alone_with_its_body_unchanged_but_for_i
         members.proxy_b.journal().is_empty(),
         "node B is never asked"
     );
-    for capture in members.proxy_a.journal() {
-        let outside = format!(
-            "{} {} {:?}",
-            capture.path,
-            capture.query.as_deref().unwrap_or_default(),
-            capture.headers
-        );
-        for withheld in [PATIENT, PATIENT_TAIL, "SYNTHETIC-RX-A1"] {
-            assert!(
-                !outside.contains(withheld),
-                "N33: no identifier in the path, the query or a header: {outside}"
-            );
-        }
-    }
+    leak::assert_withheld(
+        &members.proxy_a.journal(),
+        &[PATIENT, PATIENT_TAIL, "SYNTHETIC-RX-WITHHELD-A1"],
+        Scope::OutsideBodies,
+        "N33: no identifier in the path, the query or a header",
+    );
     Ok(())
 }
 

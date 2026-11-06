@@ -19,6 +19,7 @@ use axum::body::Body;
 use eehrxf::crosswalk::dispensation::MPD_MEDICATION_DISPENSE;
 use eehrxf::crosswalk::prescription::MPD_MEDICATION_REQUEST;
 use ferrofed_registry::incident::Kind;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode, header};
 use wiremock::matchers::{method, path};
@@ -67,7 +68,7 @@ pub(in crate::fhir) fn dispensation(authorizing: &str) -> String {
 /// The `authorizingPrescription` naming node A's prescription by its
 /// identifier.
 pub(in crate::fhir) const BY_IDENTIFIER: &str =
-    r#"{"identifier":{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}}"#;
+    r#"{"identifier":{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-WITHHELD-A1"}}"#;
 
 /// `POST {fhir-base}/MedicationDispense` of `body`.
 pub(super) fn post(body: &str) -> Result<Request<Body>, http::Error> {
@@ -201,20 +202,12 @@ async fn a_dispensation_reaches_the_owner_alone_by_its_ehr_id_with_its_body_unch
         "never a member that does not own it"
     );
     for proxy in [&members.proxy_a, &members.proxy_b] {
-        for capture in proxy.journal() {
-            let outside = format!(
-                "{} {} {:?}",
-                capture.path,
-                capture.query.as_deref().unwrap_or_default(),
-                capture.headers
-            );
-            for withheld in [PATIENT, PATIENT_TAIL, "SYNTHETIC-RX-A1"] {
-                assert!(
-                    !outside.contains(withheld),
-                    "N33: no identifier in the path, the query or a header: {outside}"
-                );
-            }
-        }
+        leak::assert_withheld(
+            &proxy.journal(),
+            &[PATIENT, PATIENT_TAIL, "SYNTHETIC-RX-WITHHELD-A1"],
+            Scope::OutsideBodies,
+            "N33: no identifier in the path, the query or a header",
+        );
     }
     Ok(())
 }
@@ -266,7 +259,7 @@ async fn a_reference_and_an_identifier_that_disagree_write_nothing() -> TestResu
     let members = members((&[RX_A], &[RX_B]), created()).await?;
     let dir = tempfile::tempdir()?;
     let both = format!(
-        r#"{{"reference":"MedicationRequest/{}","identifier":{{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}}}}"#,
+        r#"{{"reference":"MedicationRequest/{}","identifier":{{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-WITHHELD-A1"}}}}"#,
         face_id("node-b-mpd", EHR_B, "rx-b1")?
     );
     let (status, text) = call(gateway(&members, dir.path())?, post(&dispensation(&both))?).await?;
@@ -317,7 +310,10 @@ async fn a_prescription_two_members_hold_is_refused_with_an_integrity_incident()
         diagnostics.contains("node-a-mpd") && diagnostics.contains("node-b-mpd"),
         "N42 by analogy: both claimants are named: {diagnostics}"
     );
-    assert!(!diagnostics.contains("SYNTHETIC-RX-A1"), "{diagnostics}");
+    assert!(
+        !diagnostics.contains("SYNTHETIC-RX-WITHHELD-A1"),
+        "{diagnostics}"
+    );
     assert_eq!(
         before + 1,
         Kind::PrescriptionIdentifierCollision.emitted(),

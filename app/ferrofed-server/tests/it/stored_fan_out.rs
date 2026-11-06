@@ -293,7 +293,7 @@ async fn stored_once(server: &Server, aql: &str) -> TestResult {
         !composed.contains(COMMENT),
         "§5.4.2: no comment reaches a node"
     );
-    assert!(!composed.contains(PATIENT), "N33");
+    composed.assert_withholds(&[PATIENT], "N33");
     Ok(())
 }
 

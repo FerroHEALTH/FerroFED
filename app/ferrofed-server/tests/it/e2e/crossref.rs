@@ -13,6 +13,7 @@
 
 use ferrofed_server::conformance::scenarios::{track1, track2};
 use ferrofed_testkit::containers::{self, API_PATH};
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::seed::{self, DemoComposition};
 use http::StatusCode;
 
@@ -89,7 +90,7 @@ async fn one_result_set_over_two_cdr_nodes_and_no_identifier_on_the_wire() -> Te
             );
         }
     }
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
 
     // The README quickstart query: no patient, every member asked (N4).
     let (status, text) = call(
@@ -159,12 +160,13 @@ async fn both_patient_carriers_resolve_to_the_same_rows_over_two_cdr_nodes() -> 
             "{} received the same node query from both carriers (§7.1)",
             node.node.system_id()
         );
-        assert!(
-            !node.proxy.journal_contains(b"subject/identifiers"),
-            "{} received the ENTRY carrier (N33)",
-            node.node.system_id()
+        leak::assert_withheld(
+            &node.proxy.journal(),
+            &["subject/identifiers"],
+            Scope::WholeRequest,
+            &format!("{} received the ENTRY carrier (N33)", node.node.system_id()),
         );
     }
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
     Ok(())
 }

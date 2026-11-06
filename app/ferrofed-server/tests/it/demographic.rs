@@ -167,8 +167,8 @@ async fn with_the_setting_a_party_read_reaches_only_that_node_byte_identical() -
     );
     assert!(asked(&a).await?.is_empty(), "node A is never asked");
     let composed = wire(&b).await?;
-    assert!(!composed.contains(PATIENT), "N33: {composed}");
-    assert!(!composed.contains(CLIENT_TOKEN.as_str()), "N33: {composed}");
+    composed.assert_withholds(&[PATIENT], "N33");
+    composed.assert_withholds(&[CLIENT_TOKEN.as_str()], "N33");
     assert!(
         !composed.contains_ignoring_ascii_case("openehr-federation"),
         "the federation's own headers stay at the gateway: {composed}"
@@ -278,8 +278,8 @@ async fn with_the_setting_a_request_naming_no_endpoint_goes_to_the_declared_one_
     );
     assert!(asked(&a).await?.is_empty(), "node A is never asked");
     let composed = wire(&b).await?;
-    assert!(!composed.contains(PATIENT), "N33: {composed}");
-    assert!(!composed.contains(CLIENT_TOKEN.as_str()), "N33: {composed}");
+    composed.assert_withholds(&[PATIENT], "N33");
+    composed.assert_withholds(&[CLIENT_TOKEN.as_str()], "N33");
     Ok(())
 }
 

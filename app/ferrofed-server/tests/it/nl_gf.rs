@@ -245,9 +245,9 @@ async fn the_pseudonymised_walkthrough_runs_end_to_end_and_no_node_sees_the_pseu
     let pseudonym = patient().value();
     for (server, ehr_id) in servers.iter().zip([Some(EHR_A), Some(EHR_B), None]) {
         let wire = wire(server).await?;
-        assert!(
-            !wire.contains(&pseudonym),
-            "§B.7 Step 2: the pseudonym reached a node (N33, §5.4)"
+        wire.assert_withholds(
+            &[&pseudonym],
+            "§B.7 Step 2: the pseudonym reached a node (N33, §5.4)",
         );
         assert!(
             !wire.contains(&patient().namespace()),

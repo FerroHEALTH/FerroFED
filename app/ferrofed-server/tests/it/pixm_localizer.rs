@@ -179,10 +179,9 @@ async fn the_members_whose_domain_holds_the_patient_are_asked_over_one_iti_83_ca
 
     let identifier = patient().value();
     for server in &servers {
-        assert!(
-            !wire(server).await?.contains(&identifier),
-            "the identifier reached a member (N33)"
-        );
+        wire(server)
+            .await?
+            .assert_withholds(&[&identifier], "the identifier reached a member (N33)");
     }
 
     let request = Request::options("/").body(Body::empty())?;
@@ -269,10 +268,9 @@ async fn a_manager_asked_by_post_resolves_and_no_composed_url_names_the_patient(
                 "a member's URL names the patient (N33)"
             );
         }
-        assert!(
-            !wire(server).await?.contains(&identifier),
-            "the identifier reached a member (N33)"
-        );
+        wire(server)
+            .await?
+            .assert_withholds(&[&identifier], "the identifier reached a member (N33)");
     }
     Ok(())
 }

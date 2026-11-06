@@ -82,9 +82,9 @@ async fn imported(values: &[&str]) -> Result<(StatusCode, Answer), Box<dyn Error
     let (status, text) = call(app, request(&patient_query(), values)?).await?;
     schema::validate(&text)?;
     for server in [&a, &b] {
-        assert!(
-            !wire(server).await?.contains(PATIENT),
-            "§5.4.1, N33: no node receives the patient identifier"
+        wire(server).await?.assert_withholds(
+            &[PATIENT],
+            "§5.4.1, N33: no node receives the patient identifier",
         );
     }
     Ok((status, serde_json::from_str(&text)?))

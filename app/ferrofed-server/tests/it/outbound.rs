@@ -70,9 +70,9 @@ async fn asked_by_ehr_id_alone(server: &Server, own: &str, case: &str) -> TestRe
         "{case}: no patient carrier reaches a node: {sent}"
     );
     let all = wire(server).await?;
-    assert!(
-        !all.contains(PATIENT),
-        "{case}: the identifier reaches no request line, header or body: {all}"
+    all.assert_withholds(
+        &[PATIENT],
+        &format!("{case}: the identifier reaches no request line, header or body"),
     );
     Ok(())
 }

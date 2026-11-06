@@ -330,9 +330,6 @@ async fn the_mark_carries_no_patient_identifier_to_a_log_or_a_node() -> TestResu
         assert!(!log.contains(value), "N33: {value} in the log: {log}");
     }
     let wire = crate::facade::wire(&node_a).await?;
-    assert!(
-        !wire.contains(PATIENT),
-        "N33: the patient at the node: {wire}"
-    );
+    wire.assert_withholds(&[PATIENT], "N33: the patient at the node");
     Ok(())
 }

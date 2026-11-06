@@ -121,7 +121,7 @@ async fn the_keycloak_recipe_of_the_production_guide_admits_a_user_and_a_service
         );
         assert_eq!(2, answer.rows.len(), "{caller}: one row per member: {text}");
     }
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
 
     // NOTE: Regulation (EU) 2025/327 Annex II 3.1: a `system/` token names no natural
     // person, so without the professional mapper the service reaches no patient data.

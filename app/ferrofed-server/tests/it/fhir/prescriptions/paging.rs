@@ -6,6 +6,7 @@
 //! own answer by `_count` (FHIR R4 search §3.1.1.5.3).
 
 use axum::body::Body;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use serde_json::Value;
@@ -63,9 +64,11 @@ async fn a_members_next_page_is_followed_under_its_own_base() -> TestResult {
         "FHIR R4 http.html §3.1.0.14: the member's own link, as it wrote it"
     );
     for withheld in [PATIENT, PATIENT_TAIL] {
-        assert!(
-            !members.proxy_a.journal_contains(withheld.as_bytes()),
-            "N33"
+        leak::assert_withheld(
+            &members.proxy_a.journal(),
+            &[withheld],
+            Scope::WholeRequest,
+            "N33",
         );
     }
     Ok(())

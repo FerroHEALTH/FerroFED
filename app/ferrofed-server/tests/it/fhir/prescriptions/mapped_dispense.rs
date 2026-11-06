@@ -21,7 +21,7 @@ use wiremock::{Mock, ResponseTemplate};
 use super::dispense::{DISPENSATION_SYSTEM, DISPENSATION_VALUE, post};
 use super::mapped::{OWN_UID, gateway_with, order, query_api, served_with};
 use super::{RX_B, own, page, searchset};
-use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL};
+use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, wire};
 use crate::fhir::TestResult;
 use crate::support::call;
 
@@ -151,14 +151,11 @@ async fn a_dispensation_of_a_mapped_prescription_is_one_composition_at_its_owner
         if path.starts_with("/v1/ehr/") {
             assert!(path.contains(EHR_A), "N33: the owner's ehr_id: {path}");
         }
-        for withheld in [PATIENT, PATIENT_TAIL] {
-            assert!(
-                !path.contains(withheld)
-                    && !request.url.query().unwrap_or_default().contains(withheld),
-                "N33: no patient identifier in the path or query"
-            );
-        }
     }
+    wire(&a).await?.assert_withholds_outside_bodies(
+        &[PATIENT, PATIENT_TAIL],
+        "N33: no patient identifier in the path, the query or a header",
+    );
     Ok(())
 }
 

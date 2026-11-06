@@ -174,9 +174,9 @@ async fn each_resolution_reaches_the_repository_and_no_log_metric_or_node_names_
     let log = logs.text();
     assert!(!log.contains(PATIENT), "no identifier in the log: {log}");
     for node in [&a, &b] {
-        for request in received(node).await? {
-            assert!(!request.contains(PATIENT), "N33: {request}");
-        }
+        crate::facade::wire(node)
+            .await?
+            .assert_withholds(&[PATIENT], "N33");
     }
     Ok(())
 }

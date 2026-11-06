@@ -22,8 +22,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::facade::{
-    Answer, EHR_A, EHR_B, PATIENT, body, dev_gateway, patient_query, post, received, schema,
-    statuses, wire,
+    Answer, EHR_A, EHR_B, PATIENT, body, dev_gateway, patient_query, post, schema, statuses, wire,
 };
 use crate::support::{call, error_body, send};
 
@@ -339,10 +338,9 @@ async fn neither_form_carries_the_patient_identifier_to_a_node() -> TestResult {
         assert_eq!(StatusCode::OK, status, "{text}");
     }
     for node in [&a, &b] {
-        assert!(!wire(node).await?.contains(PATIENT), "N33: no node sees it");
-        for sent in received(node).await? {
-            assert!(!sent.contains(PATIENT), "N33: {sent}");
-        }
+        wire(node)
+            .await?
+            .assert_withholds(&[PATIENT], "N33: no node sees it");
     }
     Ok(())
 }

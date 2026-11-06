@@ -28,7 +28,9 @@ use ferrofed_engine::conveyance;
 use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::proxy::Capture;
 use http::{Request, header};
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
@@ -38,13 +40,14 @@ use crate::support::conveyed::searched_claims;
 use crate::support::{MINTED_REQUEST_ID, is_minted_form, settings};
 
 /// The synthetic patient identifier: visibly synthetic, under no real scheme.
-pub(crate) const PATIENT: &str = "SENTINEL-PATIENT-38kq";
+pub(crate) const PATIENT: &str = "SENTINEL-PATIENT-N33-WITHHELD-38kq7";
 
 /// The tail of [`PATIENT`], which a test searches for as a partial echo.
 ///
-/// It holds letters outside hexadecimal, so a minted request id (a version 4
-/// UUID, lowercase hexadecimal and hyphens) in a response can never contain it.
-pub(crate) const PATIENT_TAIL: &str = "38kq";
+/// It is a fixed marker of more than sixteen characters with letters outside
+/// hexadecimal, so neither a minted request id nor the base64url of a token
+/// or a signature can hold it by chance.
+pub(crate) const PATIENT_TAIL: &str = "N33-WITHHELD-38kq7";
 
 /// The synthetic issuing namespace, under the example OID arc.
 pub(crate) const NAMESPACE: &str = "urn:oid:2.999.1";
@@ -249,11 +252,28 @@ pub(crate) async fn received(server: &Server) -> Result<Vec<String>, Box<dyn Err
 }
 
 /// Every byte a mock server received, kept as bytes so a search sees a header
-/// value or a body that is not UTF-8 too.
+/// value or a body that is not UTF-8 too, and every request as the capturing
+/// proxy journals it, for the N33 scan.
 #[derive(Debug)]
-pub(crate) struct Wire(Vec<u8>);
+pub(crate) struct Wire(Vec<u8>, Vec<Capture>);
 
 impl Wire {
+    /// Asserts that no value of `withheld` reached any carrier of any
+    /// request, through the one N33 scan (§5.4.1, N33).
+    ///
+    /// A failure names each request, carrier and byte position it was seen
+    /// at, after `context`.
+    pub(crate) fn assert_withholds(&self, withheld: &[&str], context: &str) {
+        leak::assert_withheld(&self.1, withheld, Scope::WholeRequest, context);
+    }
+
+    /// Asserts as [`Wire::assert_withholds`] does, over everything but the
+    /// bodies, which carry client content the gateway passes through
+    /// unmodified (§5.4 scope note, N33).
+    pub(crate) fn assert_withholds_outside_bodies(&self, withheld: &[&str], context: &str) {
+        leak::assert_withheld(&self.1, withheld, Scope::OutsideBodies, context);
+    }
+
     /// Whether the received bytes hold `needle`'s bytes anywhere.
     pub(crate) fn contains(&self, needle: &str) -> bool {
         let needle = needle.as_bytes();
@@ -299,6 +319,7 @@ pub(crate) const CONVEYED: &str = "<conveyed-claims>";
 /// searched.
 pub(crate) async fn wire(server: &Server) -> Result<Wire, Box<dyn Error>> {
     let requests = server.received_requests().await.ok_or("recording is on")?;
+    let captures = requests.iter().map(Capture::from).collect();
     let mut bytes = Vec::new();
     for request in requests {
         bytes.extend_from_slice(request.url.as_str().as_bytes());
@@ -317,7 +338,7 @@ pub(crate) async fn wire(server: &Server) -> Result<Wire, Box<dyn Error>> {
         }
         bytes.extend_from_slice(&request.body);
     }
-    Ok(Wire(bytes))
+    Ok(Wire(bytes, captures))
 }
 
 /// Whether `name` and `value` are the `x-request-id` the gateway mints.

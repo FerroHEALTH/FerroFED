@@ -26,6 +26,7 @@ mod version;
 mod vread;
 pub(super) mod withdraw;
 
+use ferrofed_testkit::leak::{self, Scope};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
@@ -58,7 +59,7 @@ pub(super) const SERVED: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Presc
 /// Node A's prescription: an extension of a profile no package defines,
 /// nested arrays, and decimals whose text a number type would not keep.
 const RX_A: &str = r#"{ "resourceType" : "MedicationRequest", "id":"rx-a1", "extension":[{"url":"https://example.org/fhir/StructureDefinition/synthetic","extension":[{"url":"part","valueDecimal":0.1000}]}],
-  "identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}], "status":"active","intent":"order",
+  "identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-WITHHELD-A1"}], "status":"active","intent":"order",
   "subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"},
   "dosageInstruction":[{"doseAndRate":[{"doseQuantity":{"value":1.50,"unit":"mg"}}],"timing":{"repeat":{"frequency":2,"period":0.1000}}}],
   "dispenseRequest":{"quantity":{"value":1e2}} }"#;
@@ -124,7 +125,7 @@ const RX_A2: &str = r#"{"resourceType":"MedicationRequest","id":"rx-a2","identif
 const RX_B: &str = r#"{"resourceType":"MedicationRequest","id":"rx-b1","identifier":[{"system":"urn:oid:2.999.5.2","value":"SYNTHETIC-RX-B1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-b"},"medicationCodeableConcept":{"text":"Synthetic medicine B"}}"#;
 
 /// Node B's prescription under the identifier node A's carries.
-const RX_B_SAME: &str = r#"{"resourceType":"MedicationRequest","id":"rx-b9","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-b"},"medicationCodeableConcept":{"text":"Synthetic medicine A"}}"#;
+const RX_B_SAME: &str = r#"{"resourceType":"MedicationRequest","id":"rx-b9","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-WITHHELD-A1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-b"},"medicationCodeableConcept":{"text":"Synthetic medicine A"}}"#;
 
 /// A `searchset` of the prescriptions `resources`, each under a `fullUrl`
 /// at `base`, with the `next` link `next` when given.
@@ -417,15 +418,14 @@ async fn each_member_is_asked_by_its_ehr_id_alone() -> TestResult {
             "N33: the member's ehr_id alone"
         );
         for withheld in [PATIENT, PATIENT_TAIL] {
-            assert!(
-                !proxy.journal_contains(withheld.as_bytes()),
-                "N33: no identifier in the path, the query or a header"
+            leak::assert_withheld(
+                &proxy.journal(),
+                &[withheld],
+                Scope::WholeRequest,
+                "N33: no identifier in the path, the query or a header",
             );
             let captured = wire(own).await?;
-            assert!(
-                !captured.contains(withheld),
-                "N33: none in the caller claims either: {captured}"
-            );
+            captured.assert_withholds(&[withheld], "N33: none in the caller claims either");
         }
     }
     Ok(())
@@ -548,7 +548,7 @@ async fn a_prescription_identifier_two_members_hold_is_listed_once_per_member_an
         "both members are named: {diagnostics}"
     );
     assert!(
-        !diagnostics.contains("SYNTHETIC-RX-A1"),
+        !diagnostics.contains("SYNTHETIC-RX-WITHHELD-A1"),
         "the warning never quotes the identifier: {diagnostics}"
     );
     Ok(())

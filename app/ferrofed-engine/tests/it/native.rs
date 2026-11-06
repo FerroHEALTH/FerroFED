@@ -26,7 +26,9 @@ use ferrofed_engine::single_node::forward::ForwardError;
 use ferrofed_engine::single_node::native::{Answer, SummaryAsked, Unusable};
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::proxy::Capture;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
 use secrecy::SecretString;
@@ -167,16 +169,11 @@ async fn the_member_is_asked_by_its_ehr_id_alone_and_its_document_comes_back_unc
     );
     assert!(header("x-request-id").is_some(), "the minted request id");
     assert_eq!(header("accept").as_deref(), Some("application/fhir+json"));
-    let mut wire = request.url.as_str().as_bytes().to_vec();
-    for (name, value) in &request.headers {
-        wire.extend_from_slice(name.as_str().as_bytes());
-        wire.extend_from_slice(value.as_bytes());
-    }
-    assert!(
-        !wire
-            .windows(PATIENT.len())
-            .any(|window| window == PATIENT.as_bytes()),
-        "N33: no patient identifier in the path, the query or a header"
+    leak::assert_withheld(
+        &[Capture::from(request)],
+        &[PATIENT],
+        Scope::OutsideBodies,
+        "N33: no patient identifier in the path, the query or a header",
     );
     Ok(())
 }

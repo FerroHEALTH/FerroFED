@@ -13,7 +13,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::{creating, document, gateway, gateway_with, issue, post, receiving, rows, untouched};
-use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, settings_with_room};
+use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, settings_with_room, wire};
 use crate::fhir::TestResult;
 use crate::support::call;
 
@@ -85,19 +85,9 @@ async fn a_terminology_server_gives_the_missing_display() -> TestResult {
     )?;
     let (status, text) = call(app, post(&undisplayed()?)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    let sent = terminology
-        .received_requests()
-        .await
-        .ok_or("recording is on")?;
-    let bodies: String = sent
-        .iter()
-        .map(|request| String::from_utf8_lossy(&request.body).into_owned())
-        .collect();
-    for withheld in [PATIENT, PATIENT_TAIL] {
-        assert!(
-            !bodies.contains(withheld),
-            "the terminology server is sent codes alone: {bodies}"
-        );
-    }
+    wire(&terminology).await?.assert_withholds(
+        &[PATIENT, PATIENT_TAIL],
+        "the terminology server is sent codes alone",
+    );
     Ok(())
 }

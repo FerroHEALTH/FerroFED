@@ -35,7 +35,8 @@ use ferrofed_testkit::dpop::{self, HEADER};
 use ferrofed_testkit::fapi::{AuthorizationServer, DETAILS_TYPE, METADATA_PATH};
 use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::issuer::{Claims, Issuer};
-use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::leak;
+use ferrofed_testkit::mock::{self, Server};
 use ferrofed_testkit::oauth;
 use jsonwebtoken::Algorithm;
 use openehr_federation::outcome::ErrorDetail;
@@ -580,12 +581,11 @@ async fn no_carrier_to_the_server_or_the_node_names_the_patient() -> TestResult 
             assert!(!value.contains(PATIENT));
         }
     }
-    let requests = node.received_requests().await.ok_or("recording is on")?;
-    for request in requests {
-        for (name, value) in &request.headers {
-            let value = value.to_str().unwrap_or_default();
-            assert!(!value.contains(PATIENT), "{name} names the patient");
-        }
-    }
+    leak::assert_withheld(
+        &mock::journal(&node).await?,
+        &[PATIENT],
+        leak::Scope::OutsideBodies,
+        "no header names the patient",
+    );
     Ok(())
 }

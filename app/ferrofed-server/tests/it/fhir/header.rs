@@ -69,9 +69,9 @@ async fn the_header_is_the_supplier_s_and_no_header_value_reaches_a_node() -> Te
     for node in [&a, &b] {
         let captured = wire(node).await?;
         for withheld in [PATIENT, PATIENT_TAIL, FAMILY, GIVEN] {
-            assert!(
-                !captured.contains(withheld),
-                "N33: nothing of the header or the identifier in the query, path or headers: {captured}"
+            captured.assert_withholds(
+                &[withheld],
+                "N33: nothing of the header or the identifier in the query, path or headers",
             );
         }
     }

@@ -39,13 +39,10 @@ async fn an_identifier_in_a_client_header_never_reaches_the_node_nor_does_its_au
     );
     let received = only_request(&a).await?;
     let all = wire(&a).await?;
-    assert!(
-        !all.contains(PATIENT),
-        "the identifier reaches no part of the request: {all}"
-    );
-    assert!(
-        !all.contains(CLIENT_TOKEN.as_str()),
-        "the client's credential never reaches a node: {all}"
+    all.assert_withholds(&[PATIENT], "the identifier reaches no part of the request");
+    all.assert_withholds(
+        &[CLIENT_TOKEN.as_str()],
+        "the client's credential never reaches a node",
     );
     assert!(
         !all.contains_ignoring_ascii_case("openehr-federation"),

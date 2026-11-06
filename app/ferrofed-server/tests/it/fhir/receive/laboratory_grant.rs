@@ -19,7 +19,7 @@ use serde_json::Value;
 use super::laboratory::{LAB_OBJECT, holding, lab_composition, receiving};
 use super::{EHR_SYSTEM, OTHER, OTHER_A, OTHER_NAMESPACE, bound, gateway_with, rows, untouched};
 use crate::auth::{bearing, minted};
-use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL};
+use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, wire};
 use crate::fhir::TestResult;
 use crate::fhir::list::{binary, entries, list};
 use crate::fhir::patient_grant::own_grant;
@@ -94,15 +94,10 @@ async fn a_persons_own_grant_lists_and_reads_their_laboratory_report() -> TestRe
         Some(&Value::from(format!("urn:uuid:{LAB_OBJECT}"))),
         "the person's own report, as the list names it"
     );
-    for request in a.received_requests().await.unwrap_or_default() {
-        let carried = format!("{} {}", request.url, String::from_utf8_lossy(&request.body));
-        for withheld in [PATIENT, PATIENT_TAIL] {
-            assert!(
-                !carried.contains(withheld),
-                "N33: no patient identifier reaches node A"
-            );
-        }
-    }
+    wire(&a).await?.assert_withholds(
+        &[PATIENT, PATIENT_TAIL],
+        "N33: no patient identifier reaches node A",
+    );
     Ok(())
 }
 

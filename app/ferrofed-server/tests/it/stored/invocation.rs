@@ -51,10 +51,7 @@ async fn a_stored_query_invoked_by_name_fans_out_and_names_the_gateways_definiti
     for node in [&a, &b] {
         let captured = wire(node).await?;
         assert!(!captured.is_empty(), "each member was asked");
-        assert!(
-            !captured.contains(PATIENT_TAIL),
-            "N33: no node receives the identifier: {captured}"
-        );
+        captured.assert_withholds(&[PATIENT_TAIL], "N33: no node receives the identifier");
     }
     Ok(())
 }

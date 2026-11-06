@@ -263,9 +263,9 @@ async fn each_section_query_runs_by_name_and_no_patient_identifier_reaches_a_nod
             let captured = wire(node).await?;
             assert!(!captured.is_empty(), "{section:?}: the member was asked");
             for withheld in [PATIENT, PATIENT_TAIL] {
-                assert!(
-                    !captured.contains(withheld),
-                    "N33: {section:?}: no identifier in the query, path or headers: {captured}"
+                captured.assert_withholds(
+                    &[withheld],
+                    &format!("N33: {section:?}: no identifier in the query, path or headers"),
                 );
             }
             let dispatched = received(node).await?.concat();

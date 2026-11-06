@@ -8,6 +8,7 @@
 //! for no other token the gateway signs, and the read recorded (Annex II
 //! 3.2).
 
+use ferrofed_testkit::leak::{self, Scope};
 use std::time::Duration;
 
 use aws_lc_rs::digest::{SHA1_FOR_LEGACY_USE_ONLY, digest};
@@ -100,12 +101,14 @@ async fn a_read_asks_the_member_by_its_ehr_id_alone() -> TestResult {
         "N33: node B's ehr_id alone"
     );
     for withheld in [PATIENT, PATIENT_TAIL] {
-        assert!(
-            !members.proxy_b.journal_contains(withheld.as_bytes()),
-            "N33: no identifier in the path, the query or a header"
+        leak::assert_withheld(
+            &members.proxy_b.journal(),
+            &[withheld],
+            Scope::WholeRequest,
+            "N33: no identifier in the path, the query or a header",
         );
         let captured = wire(&members.own_b).await?;
-        assert!(!captured.contains(withheld), "N33: {captured}");
+        captured.assert_withholds(&[withheld], "N33");
     }
     assert!(
         !url.contains(PATIENT_TAIL),

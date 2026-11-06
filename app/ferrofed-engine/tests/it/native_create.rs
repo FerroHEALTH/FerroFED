@@ -23,7 +23,9 @@ use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::single_node::native_create::{CreateAsked, Created, UpdateAsked};
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::proxy::Capture;
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{ReqwestTransport, Transport, TransportError};
@@ -112,19 +114,12 @@ async fn the_body_leaves_byte_for_byte_once_and_nothing_else_carries_the_patient
         request.body.as_slice(),
         "§5.4 scope note: byte for byte"
     );
-    assert!(
-        !request.url.as_str().contains(PATIENT),
-        "N33: not in the URL"
+    leak::assert_withheld(
+        &[Capture::from(request)],
+        &[PATIENT],
+        Scope::OutsideBodies,
+        "N33: not in the URL or a header",
     );
-    for (name, value) in &request.headers {
-        assert!(
-            !value
-                .as_bytes()
-                .windows(PATIENT.len())
-                .any(|window| window == PATIENT.as_bytes()),
-            "N33: not in {name}"
-        );
-    }
     Ok(())
 }
 
@@ -238,9 +233,11 @@ async fn an_update_leaves_once_by_the_members_id_with_its_body_byte_for_byte() -
         "FHIR R4 http.html §3.1.0.4"
     );
     assert_eq!(BODY, request.body.as_slice(), "byte for byte");
-    assert!(
-        !request.url.as_str().contains(PATIENT),
-        "N33: not in the URL"
+    leak::assert_withheld(
+        &[Capture::from(request)],
+        &[PATIENT],
+        Scope::OutsideBodies,
+        "N33: not in the URL or a header",
     );
     Ok(())
 }

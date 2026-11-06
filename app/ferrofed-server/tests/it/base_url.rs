@@ -162,7 +162,9 @@ async fn a_read_by_subject_is_served_at_the_root_and_under_a_prefix() -> TestRes
             paths(&a).await?,
             "{base}: the node is asked at its own base by its own ehr_id (N28, N33)"
         );
-        assert!(!wire(&a).await?.contains(PATIENT), "{base}: N33");
+        wire(&a)
+            .await?
+            .assert_withholds(&[PATIENT], &format!("{base}: N33"));
     }
     Ok(())
 }

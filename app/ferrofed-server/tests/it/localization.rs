@@ -314,10 +314,9 @@ async fn a_member_the_localizer_does_not_name_is_not_localized_and_never_asked()
         "a localizer that answered reports no failure"
     );
     for server in &servers {
-        assert!(
-            !wire(server).await?.contains(PATIENT),
-            "the patient identifier reached a member (N33)"
-        );
+        wire(server)
+            .await?
+            .assert_withholds(&[PATIENT], "the patient identifier reached a member (N33)");
     }
     Ok(())
 }

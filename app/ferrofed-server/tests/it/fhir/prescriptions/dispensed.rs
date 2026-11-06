@@ -8,6 +8,7 @@
 //! §3.1.0.8; §5.4.1, N33).
 
 use axum::body::Body;
+use ferrofed_testkit::leak::{self, Scope};
 use http::{Request, StatusCode, header};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -94,7 +95,12 @@ async fn the_dispensation_a_receipt_located_is_read_at_its_member_by_its_ehr_id(
         ],
         "N33: the member's ehr_id and its own id alone"
     );
-    assert!(!members.proxy_a.journal_contains(PATIENT.as_bytes()));
+    leak::assert_withheld(
+        &members.proxy_a.journal(),
+        &[PATIENT],
+        Scope::WholeRequest,
+        "§5.4.1, N33",
+    );
     assert!(
         members.proxy_b.journal().is_empty(),
         "node B is never asked"

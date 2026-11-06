@@ -159,12 +159,7 @@ async fn nothing_identifying(servers: [&Server; 2]) -> TestResult {
     for server in servers {
         let captured = wire(server).await?;
         assert!(!captured.is_empty(), "each member was asked");
-        for needle in [PATIENT, PATIENT_TAIL, NAMESPACE] {
-            assert!(
-                !captured.contains(needle),
-                "{needle} reached a node (§5.4.1, N33): {captured}"
-            );
-        }
+        captured.assert_withholds(&[PATIENT, PATIENT_TAIL, NAMESPACE], "§5.4.1, N33");
     }
     Ok(())
 }
@@ -366,9 +361,9 @@ async fn a_client_ehr_id_in_the_query_string_is_dropped() -> TestResult {
     assert_eq!(StatusCode::OK, status, "{text}");
     for server in [&a, &b] {
         let captured = wire(server).await?;
-        assert!(
-            !captured.contains(FOREIGN_EHR),
-            "the node is scoped by its own ehr_id alone (N33): {captured}"
+        captured.assert_withholds(
+            &[FOREIGN_EHR],
+            "the node is scoped by its own ehr_id alone (N33)",
         );
     }
     nothing_identifying([&a, &b]).await

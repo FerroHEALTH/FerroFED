@@ -163,9 +163,9 @@ async fn an_undirected_patient_query_over_three_members_dispatches_to_the_two_th
 
     let identifier = patient().value();
     for (node, server) in [("A", &a), ("B", &b), ("C", &c)] {
-        assert!(
-            !wire(server).await?.contains(&identifier),
-            "the patient identifier reached node {node} (N33)"
+        wire(server).await?.assert_withholds(
+            &[&identifier],
+            &format!("the patient identifier reached node {node} (N33)"),
         );
     }
     Ok(())

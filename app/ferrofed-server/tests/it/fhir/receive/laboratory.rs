@@ -18,9 +18,10 @@ use http::StatusCode;
 use serde_json::Value;
 
 use super::super::{UNREACHED_SUPPLIER, fhir_tables_with};
-use super::write::composed;
 use super::{VERSION_A, creating, gateway_listing, gateway_with, issue, post, rows, untouched};
-use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room};
+use crate::facade::{
+    EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room, wire,
+};
 use crate::fhir::TestResult;
 use crate::fhir::list::{EHR_SYSTEM, binary, entries, list};
 use crate::support::call;
@@ -95,13 +96,10 @@ async fn a_laboratory_report_is_written_to_its_member_by_its_ehr_id_alone() -> T
     let write = requests.first().ok_or("the write")?;
     assert_eq!(write.url.path(), format!("/v1/ehr/{EHR_A}/composition"));
     assert_eq!(write.url.query(), None, "N33: no query string");
-    let wire = composed(&a).await?;
-    for withheld in [PATIENT, PATIENT_TAIL] {
-        assert!(
-            !wire.contains(withheld),
-            "N33: no identifier in the path or the headers: {wire}"
-        );
-    }
+    wire(&a).await?.assert_withholds_outside_bodies(
+        &[PATIENT, PATIENT_TAIL],
+        "N33: no identifier in the path or the headers",
+    );
     let composition: Value = serde_json::from_slice(&write.body)?;
     assert_eq!(
         composition
@@ -285,15 +283,10 @@ async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_rep
     ] {
         assert!(kinds.contains(&kind), "{kind}: {kinds:?}");
     }
-    for request in a.received_requests().await.unwrap_or_default() {
-        let carried = format!("{} {}", request.url, String::from_utf8_lossy(&request.body));
-        for withheld in [PATIENT, PATIENT_TAIL] {
-            assert!(
-                !carried.contains(withheld),
-                "N33: no patient identifier reaches node A"
-            );
-        }
-    }
+    wire(&a).await?.assert_withholds(
+        &[PATIENT, PATIENT_TAIL],
+        "N33: no patient identifier reaches node A",
+    );
     Ok(())
 }
 
