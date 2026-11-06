@@ -640,6 +640,27 @@ jobs:
           bash scripts/checks/annex-ii.sh --self-test
           bash scripts/checks/annex-ii.sh
 
+  # The Chapter III conformity record guard (Regulation (EU) 2025/327
+  # Art 25 to 30, 36 to 41, 49 and Annex IV): every provision has a row in
+  # conformance/chapter-iii.tsv whose phrase is in that provision's text,
+  # whose Art 105 date is right, whose evidence exists and whose gap names
+  # its issue; no row claims more than the others allow; and the book page
+  # equals a fresh rendering. Its self-test proves each refusal.
+  chapter-iii:
+    name: chapter-iii
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          bash scripts/checks/chapter-iii.sh --self-test
+          bash scripts/checks/chapter-iii.sh
+
   # The MyHealth@EU self-assessment guard: every requirement id of the
   # MyHealth@EU Requirements Catalogue v10.0.0 has one row in
   # conformance/myhealth-eu.tsv under its section number, with a status, a
@@ -1715,6 +1736,7 @@ jobs:
       - technical-documentation
       - support-periods
       - annex-ii
+      - chapter-iii
       - myhealth-eu
       - economic-operators
       - e2e-placement

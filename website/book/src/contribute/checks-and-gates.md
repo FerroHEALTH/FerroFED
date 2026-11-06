@@ -39,6 +39,7 @@ manifest check installs the toolchain only to read the manifests):
 | obligations | the [obligations checklist](../evaluate/obligations.md) agrees with the vendored specification, the conformance matrix and the tests it names, and a re-pin fails until every changed page is reclassified |
 | technical-documentation | every element of Annex III of Regulation (EU) 2025/327 has a row in the [technical documentation](../evaluate/technical-documentation.md) index whose file and heading exist, and a version whose harmonised components differ from the previous release has its review rows (Art 30(2)) |
 | annex-ii | every point of Annex II of Regulation (EU) 2025/327 has a row in the [Annex II checklist](../evaluate/annex-ii.md) whose phrase is in that point's text, whose evidence pages, headings and tests exist, and whose gap names its issue |
+| chapter-iii | every obligation of Chapter III of Regulation (EU) 2025/327 on the manufacturer, and every item of Annex IV, has a row in the [conformity record](../evaluate/conformity-record.md) whose phrase is in that provision's text, whose Art 105 date is right, whose evidence exists and whose gap names its issue, and no row claims more than the rest of the record supports |
 | site-links | every internal link and anchor of the assembled site (the landing page and this book) and of the README, checked offline by lychee, so a page or an anchor that does not exist fails the change |
 | tracker-helpers | the self-tests of the `scripts/gh` tracker helpers |
 | crate-version-guard self-test | the crate-version guard judges only what a pull request changes, against a stub repository |
@@ -108,6 +109,8 @@ bash scripts/checks/technical-documentation.sh --self-test
 bash scripts/checks/technical-documentation.sh
 bash scripts/checks/annex-ii.sh --self-test
 bash scripts/checks/annex-ii.sh
+bash scripts/checks/chapter-iii.sh --self-test
+bash scripts/checks/chapter-iii.sh
 bash scripts/checks/site-links.sh --self-test
 bash scripts/checks/site-links.sh
 bash scripts/checks/crate-version-guard.sh --self-test
