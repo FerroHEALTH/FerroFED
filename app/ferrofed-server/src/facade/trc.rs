@@ -77,13 +77,37 @@ impl Binding {
     }
 }
 
+/// Why the patient a contact point's TRC binds could not be resolved, so
+/// nothing is sent: the cross-reference failure, answered as the one of a
+/// confined grant and logged as the TRC's own security event.
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub(crate) struct Unresolved(Unconfined);
+
+impl Unresolved {
+    /// The answer to the request: the `424` a confined grant's unresolved
+    /// patient gets, logged under the gateway's `logged` id as the
+    /// `trc-patient-unresolved` security event with the cause.
+    pub(crate) fn respond(&self, request_id: &str, logged: &str) -> Response {
+        Event::TrcPatientUnresolved.record();
+        tracing::error!(
+            target: TARGET,
+            event = Event::TrcPatientUnresolved.as_str(),
+            error = crate::chain(&self.0),
+            request_id = logged,
+            "the patient a national contact point's treatment relationship confirmation binds could not be resolved, so nothing was sent"
+        );
+        self.0.answer(request_id)
+    }
+}
+
 /// The binding of `caller`'s TRC patient, resolved on the caller's behalf
 /// before `deadline`, or `None` for a caller whose token names no TRC
 /// patient.
 ///
 /// # Errors
 ///
-/// Returns an [`Unconfined`] when no resolver is configured, the identifier
+/// Returns an [`Unresolved`] when no resolver is configured, the identifier
 /// does not form a patient reference, or the cross-reference could not
 /// answer for a member, since a member it could not answer for may hold the
 /// patient.
@@ -91,13 +115,16 @@ pub(crate) async fn bind(
     federation: &Federation,
     caller: &Caller,
     deadline: Instant,
-) -> Result<Option<Binding>, Unconfined> {
+) -> Result<Option<Binding>, Unresolved> {
     let Some(trc) = caller.trc_patient() else {
         return Ok(None);
     };
-    let patient = trc.patient().map_err(Unconfined::Patient)?;
-    let held =
-        super::confined::everywhere(federation, &patient, &caller.on_behalf(), deadline).await?;
+    let patient = trc
+        .patient()
+        .map_err(|invalid| Unresolved(Unconfined::Patient(invalid)))?;
+    let held = super::confined::everywhere(federation, &patient, &caller.on_behalf(), deadline)
+        .await
+        .map_err(Unresolved)?;
     Ok(Some(Binding {
         patient: trc.clone(),
         held,
@@ -132,12 +159,12 @@ pub(crate) async fn admitted(
     }
     let deadline = started
         .checked_add(federation.budget().overall())
-        .ok_or_else(|| Unconfined::Clock.respond(request_id, logged))?;
+        .ok_or_else(|| Unresolved(Unconfined::Clock).respond(request_id, logged))?;
     // NOTE: eHDSI XCA Profile 8.0.1 §4.2.1: the TRC's patient is resolved before any
     // member is asked, so every read and write of the request is held to it.
     bind(federation, caller, deadline)
         .await
-        .map_err(|unconfined| unconfined.respond(request_id, logged))
+        .map_err(|unresolved| unresolved.respond(request_id, logged))
 }
 
 /// The code of the ITS-REST answer to a contact point's request outside

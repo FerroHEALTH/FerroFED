@@ -143,7 +143,7 @@ impl Admitted<'_> {
         // member is asked, so every read and write of the request is held to it.
         let trc = crate::facade::trc::bind(&self.federation, self.caller, deadline)
             .await
-            .map_err(|unconfined| unconfined.respond(self.request_id, &self.logged))?;
+            .map_err(|unresolved| unresolved.respond(self.request_id, &self.logged))?;
         Ok(Confined {
             conveyance,
             on_behalf,

@@ -4,7 +4,9 @@
 //! A break of the TRC binding on the ITS-REST face is the security event the
 //! FHIR face records (eHDSI XCA Profile 8.0.1 §4.2.2: an audit trail and a
 //! security alert), naming the professional and both patients by pseudonym
-//! alone (eHDSI Section I Security Policies 10.0.0 SR 5).
+//! alone (eHDSI Section I Security Policies 10.0.0 SR 5). A TRC patient
+//! the cross-reference cannot resolve is its own event, never the one of a
+//! `patient/` grant.
 #![expect(
     clippy::disallowed_types,
     reason = "the test seam: the test reads the security event's JSON log line"
@@ -14,7 +16,7 @@ use axum::body::Body;
 use http::{Request, StatusCode};
 use serde_json::Value;
 
-use super::{OTHER, OTHER_A, UNKNOWN, answered, as_treating, gateway};
+use super::{OTHER, OTHER_A, UNKNOWN, answered, as_treating, gateway, unresolving};
 use crate::contact_point::HP_ID;
 use crate::facade::{NAMESPACE, PATIENT, body, post};
 use crate::support::Logs;
@@ -29,11 +31,20 @@ fn event(logged: &str) -> Result<Value, Box<dyn std::error::Error>> {
     Ok(event.get("fields").cloned().unwrap_or(event))
 }
 
-/// Sends `request` and returns its status with what the log recorded.
+/// Sends `request` to the suite's gateway and returns its status with what
+/// the log recorded.
 async fn logged_by(
     request: Request<Body>,
 ) -> Result<(StatusCode, String), Box<dyn std::error::Error>> {
-    let bound = gateway().await?;
+    logged_at(&gateway().await?, request).await
+}
+
+/// Sends `request` to `bound` and returns its status with what the log
+/// recorded.
+async fn logged_at(
+    bound: &super::Bound,
+    request: Request<Body>,
+) -> Result<(StatusCode, String), Box<dyn std::error::Error>> {
     let logs = Logs::default();
     let capture = crate::support::console::subscriber(
         ferrohealth_telemetry::section::Rendering::Json,
@@ -42,9 +53,40 @@ async fn logged_by(
         logs.clone(),
     )?;
     let guard = tracing::subscriber::set_default(capture);
-    let (status, _) = answered(&bound, request).await?;
+    let (status, _) = answered(bound, request).await?;
     drop(guard);
     Ok((status, logs.text()))
+}
+
+// NOTE: no specification governs this: our own design; a TRC patient that cannot be
+// resolved names the TRC in the security log, never a `patient/` grant it does not hold.
+#[tokio::test]
+async fn a_trc_patient_that_cannot_be_resolved_is_its_own_security_event()
+-> Result<(), Box<dyn std::error::Error>> {
+    let bound = unresolving().await?;
+    let aql = format!(
+        "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
+         WHERE e/ehr_status/subject/external_ref/id/value = '{PATIENT}' \
+         AND e/ehr_status/subject/external_ref/namespace = '{NAMESPACE}'"
+    );
+    let request = as_treating(post(body(&aql)?)?, PATIENT)?;
+    let (status, logged) = logged_at(&bound, request).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{logged}");
+    let line = logged
+        .lines()
+        .find(|line| line.contains("\"trc-patient-unresolved\""))
+        .ok_or_else(|| format!("the TRC's own event is recorded: {logged}"))?;
+    assert!(
+        line.contains("treatment relationship confirmation"),
+        "the text names the TRC: {line}"
+    );
+    assert!(
+        !logged.contains("\"patient-context-unavailable\""),
+        "no patient/ grant is named: {logged}"
+    );
+    assert!(!logged.contains(PATIENT), "SR 5: {logged}");
+    bound.nobody_asked().await?;
+    Ok(())
 }
 
 #[tokio::test]
