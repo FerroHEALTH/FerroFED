@@ -117,34 +117,6 @@ impl Claims {
     }
 }
 
-/// An RFC 7662 §2.2 introspection answer: the members the gateway checks.
-#[derive(Debug, Deserialize)]
-pub(super) struct Introspected {
-    /// `active`, the one member RFC 7662 §2.2 requires.
-    pub(super) active: bool,
-    /// `iss`, which must name the issuer asked when it is present.
-    #[serde(default)]
-    pub(super) iss: Option<String>,
-    /// `sub`.
-    #[serde(default)]
-    pub(super) sub: Option<String>,
-    /// `client_id`.
-    #[serde(default)]
-    pub(super) client_id: Option<String>,
-    /// `scope`.
-    #[serde(default)]
-    pub(super) scope: Option<String>,
-    /// `aud`.
-    #[serde(default)]
-    pub(super) aud: Option<Audience>,
-    /// `exp`, in seconds since the epoch.
-    #[serde(default)]
-    pub(super) exp: Option<i64>,
-    /// `nbf`, in seconds since the epoch.
-    #[serde(default)]
-    pub(super) nbf: Option<i64>,
-}
-
 /// The claims a token carries besides the ones read by name: a string claim
 /// kept as its text, any other skipped.
 ///
@@ -188,26 +160,6 @@ impl std::fmt::Debug for Others {
         f.debug_struct("Others")
             .field("claims", &self.0.len())
             .finish()
-    }
-}
-
-/// An `aud` claim: one audience or several (RFC 7519 §4.1.3).
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-pub(super) enum Audience {
-    /// One audience.
-    One(String),
-    /// Several audiences.
-    Several(Vec<String>),
-}
-
-impl Audience {
-    /// Whether `audience` is among these.
-    pub(super) fn names(&self, audience: &str) -> bool {
-        match self {
-            Self::One(one) => one == audience,
-            Self::Several(several) => several.iter().any(|one| one == audience),
-        }
     }
 }
 

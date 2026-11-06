@@ -330,7 +330,6 @@ async fn an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent() ->
     );
     let auth = AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static(EDGE_HEADER)),
-        audience: vec![AUDIENCE.to_owned()],
         issuers: vec![IssuerSettings::new(
             EDGE,
             crate::support::caller::key_set(EDGE, &crate::support::caller::jwks_file_of(&edge)?),

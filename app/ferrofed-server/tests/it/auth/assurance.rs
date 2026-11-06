@@ -25,7 +25,7 @@ use crate::run::binary;
 /// appended to the text is the entry's.
 fn issuer() -> String {
     String::from(
-        "[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n",
+        "[auth]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n",
     )
 }
 

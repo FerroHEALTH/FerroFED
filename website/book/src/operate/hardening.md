@@ -81,7 +81,7 @@ page: our own design.
 - [ ] **Trust as few issuers as you can.** Every token an issuer signs is
   admitted for the scopes it carries, so an issuer you list is trusted for
   every caller it vouches for (B7). Serve each issuer's metadata, key set
-  and `introspection_endpoint` over `https`.
+  and introspection endpoint over `https`.
 - [ ] **Name the privileged clients per issuer.** `backend_clients` for
   `system/aql-*` and `demographic_clients` for the DEMOGRAPHIC API, under
   `[[trust.issuer]]`, and have only the issuer your operators sign in at

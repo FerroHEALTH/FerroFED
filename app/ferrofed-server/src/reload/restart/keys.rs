@@ -30,6 +30,21 @@ fn revisions_changed(boot: &Settings, fresh: &Settings) -> bool {
         }
 }
 
+/// Whether an issuer both `boot` and `fresh` trust names other audiences in
+/// `fresh`.
+fn audience_changed(boot: &Settings, fresh: &Settings) -> bool {
+    fresh.server.auth.issuers.iter().any(|issuer| {
+        boot.server
+            .auth
+            .issuers
+            .iter()
+            .find(|started| started.issuer == issuer.issuer)
+            .is_some_and(|started| {
+                started.verification.audience() != issuer.verification.audience()
+            })
+    })
+}
+
 /// Whether `fresh` names other signing keys, another JWK Set location,
 /// another assertion lifetime or another rotation overlap than the process
 /// started with; the keys are compared by `kid`, never by their material.
@@ -59,9 +74,7 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("config", revisions_changed),
     ("signing", signing_changed),
     ("audit", |boot, fresh| boot.audit != fresh.audit),
-    ("auth.audience", |boot, fresh| {
-        boot.server.auth.audience != fresh.server.auth.audience
-    }),
+    ("auth.issuer.audience", audience_changed),
     ("server.listen", |boot, fresh| {
         boot.server.listen != fresh.server.listen
     }),

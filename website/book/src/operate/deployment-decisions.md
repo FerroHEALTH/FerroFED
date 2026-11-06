@@ -52,7 +52,8 @@ presents its certificate. Every request also carries the
 `iss` the node can check against that same `client_id`.
 
 **What changes the answer:** `[auth]` issuers and `[[trust.issuer]]` (the
-trust list, by key set or introspection), `auth.audience`, `trust.mode`,
+trust list, by key set or introspection, with each issuer's `kind` and
+`audience`), `trust.mode`,
 `[credentials."<endpoint id>"]` and its `oauth2` section, and `[signing]`.
 
 ## 2. Who authenticates the end user, and where that trust stops

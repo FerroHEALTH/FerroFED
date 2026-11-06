@@ -157,10 +157,9 @@ carries:
 | `editable` | `true` when `PUT /admin/config/settings` may change it: under `managed`, a setting of one value that is no secret |
 
 The `authentication` section lists who may call, which only the file sets
-and no revision holds: `auth.audience` (a change waits for the next start),
-`auth.product_scope`, each `[[auth.issuer]]` by its `issuer` and
-`jwks_file`, and each `[[trust.issuer]]` by its `issuer`, its introspection
-`client_secret` as a secret named by its file, and, for an issuer declared a
+and no revision holds: `auth.product_scope`, each `[[auth.issuer]]` by its
+`issuer`, `kind`, `jwks_file` and `audience` (a change waits for the next
+start), and each `[[trust.issuer]]` by its `issuer`, and, for an issuer declared a
 [national contact point](authentication.md#national-contact-points), every
 key of its `national_contact_point` table. An issuer is keyed by its
 position, such as `trust.issuer[0].national_contact_point.family_name`, as a

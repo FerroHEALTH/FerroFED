@@ -31,8 +31,8 @@ fn url(query: &str) -> String {
 
 /// A trusted issuer declared a national contact point, every claim of its
 /// table named.
-const CONTACT_POINT: &str = "[auth]\naudience = [\"urn:example:gateway\"]\n\n\
-[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\n\n\
+const CONTACT_POINT: &str = "[auth]\n\n\
+[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n\
 [[trust.issuer]]\nissuer = \"https://ncp.example.test\"\n\n\
 [trust.issuer.national_contact_point]\nfamily_name = \"f\"\ngiven_name = \"g\"\n\
 country_code = \"c\"\nprofessional_issuing_authority = \"pa\"\n\

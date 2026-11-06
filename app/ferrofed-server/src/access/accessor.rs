@@ -6,13 +6,12 @@
 //! provider it relays (Regulation (EU) 2025/327 Annex II 3.1, 3.2(a), (b);
 //! Implementing Regulation (EU) 2026/2099 Art 7).
 
-use ehds_logging::record::{
-    Accessor, Coded, Professional, Purpose, RelayedProfessional, RelayedProvider,
-};
+use ehds_logging::record::{Accessor, Professional, Purpose};
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_engine::conveyance::relayed::Relayed;
 
 use crate::auth::caller::Caller;
+use crate::auth::contact_point;
 
 /// The accessor `caller` is: the person and the client the verified token
 /// names, the provider it acts for, who acts, the professional and the
@@ -65,35 +64,20 @@ pub(super) fn accessor(caller: &Caller) -> Accessor {
             })
             .collect(),
         relayed: caller.relayed().map(relayed),
+        // NOTE: no specification governs this: our own design; the gateway binds no
+        // caller to a party and reads no actor chain or representation into the record.
+        binding: None,
+        actors: Vec::new(),
+        represents: None,
     }
 }
 
 /// What a contact point relays, as the access record names it.
+#[expect(
+    clippy::expect_used,
+    reason = "the gate admits a contact point's caller only with what contact_point::record accepts, so the record holds the same relayed values"
+)]
 fn relayed(relayed: &Relayed) -> ehds_logging::record::Relayed {
-    let professional = &relayed.professional;
-    let provider = &relayed.provider;
-    ehds_logging::record::Relayed {
-        contact_point: relayed.contact_point.clone(),
-        country_code: relayed.country_code.clone(),
-        professional: RelayedProfessional {
-            family_name: professional.family_name.clone(),
-            given_name: professional.given_name.clone(),
-            identifier: professional.hp_identifier.clone(),
-            issuing_authority: professional.issuing_authority_name.clone(),
-            roles: professional
-                .hp_professional_role
-                .iter()
-                .map(|role| Coded {
-                    system: role.system.clone(),
-                    code: role.code.clone(),
-                })
-                .collect(),
-        },
-        provider: RelayedProvider {
-            identifier: provider.identifier.clone(),
-            issuing_authority: provider.issuing_authority_name.clone(),
-            name: provider.name.clone(),
-            address: provider.address.clone(),
-        },
-    }
+    contact_point::record(relayed)
+        .expect("the gate should have refused what the access record refuses")
 }

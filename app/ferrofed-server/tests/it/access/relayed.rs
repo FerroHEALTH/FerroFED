@@ -72,7 +72,8 @@ async fn the_record_names_the_relayed_professional_and_provider_as_asserted() ->
     let record = recorded(Some(CORRELATION)).await?;
     let relayed = |kind: &str| details(&record, "ehds-relayed", kind);
     for (kind, value) in [
-        ("contact-point", ISSUER),
+        ("relayed-via", "contact-point"),
+        ("relayed-issuer", ISSUER),
         ("asserted", "true"),
         ("country-code", COUNTRY),
         ("hp-family-name", FAMILY),

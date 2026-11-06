@@ -34,6 +34,9 @@
 
 use std::fmt;
 
+use ehds_logging::record::{
+    Coded, Gateways, RelayedError, RelayedParts, RelayedProfessional, RelayedProvider, Via,
+};
 use ferrofed_engine::conveyance::relayed::{HealthProfessional, HealthcareProvider, Relayed};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
 use http::HeaderMap;
@@ -260,7 +263,10 @@ pub(super) fn relaying(caller: &Caller) -> Result<(), Refused> {
 /// Returns every Annex attribute that is absent or empty, the role when no
 /// role has a code, and `country_code` when it is not the ISO 3166-1
 /// alpha-2 code of a Member State, or of a country the deployment adds for
-/// this contact point ([`ContactPoint::admits_country`]).
+/// this contact point ([`ContactPoint::admits_country`]); the provider
+/// identifier when it is no `urn:oid:` or `urn:hl7ii:` identifier, and the
+/// role when it is the ISCO `44` clerical role, which names whom it acts for
+/// in no Annex attribute ([`record`]).
 fn relayed(
     (issuer, declared): (&str, &ContactPoint),
     iua: IuaAnnex,
@@ -298,23 +304,32 @@ fn relayed(
             Some(provider_authority),
             Some(name),
             Some(address),
-        ) => Ok(Box::new(Relayed {
-            contact_point: issuer.to_owned(),
-            country_code,
-            professional: HealthProfessional {
-                family_name,
-                given_name,
-                hp_identifier,
-                issuing_authority_name: professional_authority,
-                hp_professional_role,
-            },
-            provider: HealthcareProvider {
-                identifier,
-                issuing_authority_name: provider_authority,
-                name,
-                address,
-            },
-        })),
+        ) => {
+            let relayed = Relayed {
+                contact_point: issuer.to_owned(),
+                country_code,
+                professional: HealthProfessional {
+                    family_name,
+                    given_name,
+                    hp_identifier,
+                    issuing_authority_name: professional_authority,
+                    hp_professional_role,
+                },
+                provider: HealthcareProvider {
+                    identifier,
+                    issuing_authority_name: provider_authority,
+                    name,
+                    address,
+                },
+            };
+            // NOTE: eHDSI SAML Profile 10.0.0 §2.3, the provider is an `urn:oid:` or
+            // `urn:hl7ii:` identifier and an ISCO 44 role names whom it acts for.
+            match record(&relayed) {
+                Ok(_) => Ok(Box::new(relayed)),
+                Err(RelayedError::ProviderIdentifierForm) => Err(MissingAnnex::default().with(6)),
+                Err(_) => Err(MissingAnnex::default().with(4)),
+            }
+        }
         read => {
             let absent = [
                 read.0.is_none(),
@@ -337,6 +352,64 @@ fn relayed(
                 }))
         }
     }
+}
+
+/// What a contact point relays, as the access record names it: marked as
+/// relayed by a contact point, under the rules the record holds it to.
+///
+/// The record names the professional by one full name, the given name
+/// before the family name (no specification governs the order: our own
+/// design over the two Annex Table 1 rows).
+///
+/// # Errors
+///
+/// Returns the [`RelayedError`] of a provider identifier that is no
+/// `urn:oid:` or `urn:hl7ii:` identifier, and of an ISCO `44` role relayed
+/// without whom it acts for (eHDSI SAML Profile 10.0.0 §2.3).
+pub fn record(relayed: &Relayed) -> Result<ehds_logging::record::Relayed, RelayedError> {
+    let professional = &relayed.professional;
+    let provider = &relayed.provider;
+    ehds_logging::record::Relayed::try_from(RelayedParts {
+        via: Via::ContactPoint {
+            issuer: relayed.contact_point.clone(),
+        },
+        country_code: relayed.country_code.clone(),
+        professional: Some(RelayedProfessional {
+            name: format!("{} {}", professional.given_name, professional.family_name),
+            family_name: Some(professional.family_name.clone()),
+            given_name: Some(professional.given_name.clone()),
+            identifier: professional.hp_identifier.clone(),
+            issuing_authority: professional.issuing_authority_name.clone(),
+            roles: professional
+                .hp_professional_role
+                .iter()
+                .map(|role| Coded {
+                    system: role.system.clone(),
+                    code: role.code.clone(),
+                })
+                .collect(),
+            healthcare_provider_identifier: Some(provider.identifier.clone()),
+            name_id: None,
+            authentication_method: None,
+            on_behalf_of: None,
+            permissions: Vec::new(),
+        }),
+        provider: RelayedProvider {
+            identifier: provider.identifier.clone(),
+            issuing_authority: provider.issuing_authority_name.clone(),
+            name: Some(provider.name.clone()),
+            address: Some(provider.address.clone()),
+            facility_type: None,
+            home_community_id: None,
+            organisation_type: None,
+        },
+        agreement: None,
+        point_of_care: None,
+        identity_assertion_id: None,
+        trc_assertion_id: None,
+        message_id: None,
+        gateways: Gateways::default(),
+    })
 }
 
 /// The correlation identifier `headers` carry in the header `declared`

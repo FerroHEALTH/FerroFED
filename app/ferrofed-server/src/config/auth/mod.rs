@@ -5,13 +5,13 @@
 //! N25), as written and as resolved.
 //!
 //! `[auth]` is the section `ferrohealth-smart` reads in every FerroHEALTH
-//! product: the issuers whose JWT access tokens the gateway accepts, each
-//! verified against the key set its metadata names (RFC 8414 §3) or a key
-//! set file, the audiences, the token rules, the Basic users of
-//! `[[auth.basic.users]]` and the product scope. `[trust]` is FerroFED's own
-//! policy beside it ([`trust`]): what each issuer's tokens are honoured for,
-//! the one issuer verified by RFC 7662 introspection, the edge mode, and the
-//! purpose-of-use rule. There is no unauthenticated mode: `enabled = false`
+//! product: one `[[auth.issuer]]` table per issuer the gateway trusts, with
+//! its `kind`, its profile, its audiences and its token rules, each issuer
+//! verified against the key set its metadata names (RFC 8414 §3), a key set
+//! file, or RFC 7662 introspection; the Basic users of `[[auth.basic.users]]`;
+//! and the product scope. `[trust]` is FerroFED's own policy beside it
+//! ([`trust`]): what each issuer's tokens are honoured for, the edge mode,
+//! and the purpose-of-use rule. There is no unauthenticated mode: `enabled = false`
 //! is refused, and with no issuer and no Basic user every guarded request is
 //! refused. The configuration keys are our own design; no specification
 //! governs them.
@@ -24,18 +24,16 @@ pub mod trust;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::sync::Arc;
-use std::time::Duration;
 
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
-use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::basic::PasswordStore;
 use ferrohealth_smart::config::{AuthSection, BasicSection, IssuerKey};
 use ferrohealth_smart::resource::Settings as KeySetSettings;
+use ferrohealth_smart::resource::introspection::IntrospectionSettings;
 use http::HeaderName;
 use secrecy::ExposeSecret as _;
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 use crate::config::auth::assurance::Assurance;
 use crate::config::auth::contact_point::ContactPoint;
@@ -87,9 +85,6 @@ fn hashes(basic: Option<&BasicSection>) -> Vec<Option<String>> {
 pub struct AuthSettings {
     /// Where the credential travels.
     pub mode: AuthMode,
-    /// The audiences every token must name one of, `[auth] audience` or the
-    /// public base URL; the first names the gateway in its access records.
-    pub audience: Vec<String>,
     /// Whether a token must carry a purpose of use (§13.4).
     pub purpose_required: bool,
     /// The scope that admits a caller to the operator surface and the admin
@@ -97,8 +92,8 @@ pub struct AuthSettings {
     pub product_scope: Option<String>,
     /// The realm every challenge names.
     pub realm: String,
-    /// The issuers on the trust list, `[auth]`'s in the order written, then
-    /// the introspected one.
+    /// The issuers on the trust list, `[auth]`'s key-set issuers in the order
+    /// written, then the introspected one.
     pub issuers: Vec<IssuerSettings>,
     /// The Basic users of `[[auth.basic.users]]`, when any is written.
     pub basic: Option<BasicUsers>,
@@ -110,7 +105,6 @@ impl Default for AuthSettings {
     fn default() -> Self {
         Self {
             mode: AuthMode::Token,
-            audience: Vec::new(),
             purpose_required: true,
             product_scope: None,
             realm: DEFAULT_REALM.to_owned(),
@@ -268,33 +262,52 @@ pub struct PatientBinding {
 }
 
 /// How an issuer's tokens are verified.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum Verification {
     /// As signed JWTs, by `ferrohealth-smart`, against the key set these
     /// settings name.
     KeySet(Box<KeySetSettings>),
-    /// By RFC 7662 introspection at the issuer.
-    Introspection(Introspection),
+    /// By RFC 7662 introspection at the issuer, by `ferrohealth-smart`, under
+    /// these settings.
+    Introspection(Box<IntrospectionSettings>),
 }
 
-/// An issuer's RFC 7662 introspection endpoint, the gateway's client
-/// credentials there, and the rules its answers are held to.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Introspection {
-    /// The endpoint.
-    pub endpoint: Url,
-    /// The gateway's client id.
-    pub client_id: String,
-    /// The gateway's client secret.
-    pub client_secret: Secret,
-    /// The audiences, of which an answer's `aud` must name one.
-    pub audience: Vec<String>,
-    /// The clock skew allowed on `exp` and `nbf`.
-    pub clock_skew: Duration,
-    /// How long one introspection call may take.
-    pub timeout: Duration,
+impl Verification {
+    /// Returns the audiences a token of the issuer must name one of; the
+    /// first names the gateway in its access records.
+    #[must_use]
+    pub fn audience(&self) -> &[String] {
+        match self {
+            Self::KeySet(settings) => &settings.audience,
+            Self::Introspection(settings) => &settings.audience,
+        }
+    }
+
+    /// Returns the audiences, to be changed.
+    pub fn audience_mut(&mut self) -> &mut Vec<String> {
+        match self {
+            Self::KeySet(settings) => &mut settings.audience,
+            Self::Introspection(settings) => &mut settings.audience,
+        }
+    }
 }
+
+impl PartialEq for Verification {
+    fn eq(&self, other: &Self) -> bool {
+        // NOTE: no specification governs this: our own design; the introspection
+        // settings hold a credential, so two compare by what their rendering shows.
+        match (self, other) {
+            (Self::KeySet(left), Self::KeySet(right)) => left == right,
+            (Self::Introspection(left), Self::Introspection(right)) => {
+                format!("{left:?}") == format!("{right:?}")
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Verification {}
 
 /// Why `[auth]` or `[trust]` is refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -304,14 +317,9 @@ pub enum AuthFault {
     Disabled,
     /// Two `[[trust.issuer]]` entries name the same issuer.
     DuplicateIssuer,
-    /// A `[[trust.issuer]]` entry names no `[auth]` issuer and no
-    /// introspection endpoint, so no token of it could be verified.
+    /// A `[[trust.issuer]]` entry names no `[[auth.issuer]]`, so no token of
+    /// it could be verified.
     UnknownIssuer,
-    /// A `[[trust.issuer]]` entry names an introspection endpoint for an
-    /// issuer `[auth]` already verifies by its key set.
-    TwoVerifications,
-    /// A client id or secret is set without an introspection endpoint.
-    ClientWithoutIntrospection,
     /// More than one issuer is introspected, so an opaque token, which names
     /// no issuer, could go to either.
     SeveralIntrospection,
@@ -343,13 +351,7 @@ impl fmt::Display for AuthFault {
             Self::Disabled => "is false, and the gateway admits no caller it did not authenticate",
             Self::DuplicateIssuer => "names an issuer another [[trust.issuer]] already names",
             Self::UnknownIssuer => {
-                "names an issuer [auth] does not trust and no introspection_endpoint, so no token of it could be verified"
-            }
-            Self::TwoVerifications => {
-                "names an introspection_endpoint for an issuer [auth] verifies by its key set"
-            }
-            Self::ClientWithoutIntrospection => {
-                "sets client_id or client_secret, which only introspection_endpoint uses"
+                "names an issuer no [[auth.issuer]] table trusts, so no token of it could be verified"
             }
             Self::SeveralIntrospection => {
                 "introspects at a second issuer: an opaque token names no issuer, so one issuer at most is introspected"
@@ -380,9 +382,10 @@ impl Auth {
     /// Resolves `[auth]` with `trust`, its policy, reading every `_file`
     /// secret.
     ///
-    /// An unset audience is `public`, the public base URL as written, when
-    /// that is set. A section that names no issuer and no Basic user
-    /// resolves to no issuer, and every guarded request is then refused.
+    /// An `[[auth.issuer]]` that names no audience takes `public`, the public
+    /// base URL as written, when that is set. A section that names no issuer
+    /// and no Basic user resolves to no issuer, and every guarded request is
+    /// then refused.
     ///
     /// # Errors
     /// Returns [`Error::Smart`] for a section `ferrohealth-smart` refuses,
@@ -409,32 +412,30 @@ impl Auth {
                 return Err(fault(key, AuthFault::Unread));
             }
         }
-        if section.audience.iter().all(String::is_empty)
-            && let Some(public) = public
-        {
-            section.audience = vec![public.as_str().to_owned()];
+        if let (IssuerKey::List(entries), Some(public)) = (&mut section.issuer, public) {
+            for entry in entries {
+                if entry.audience.iter().all(String::is_empty) {
+                    entry.audience = vec![public.as_str().to_owned()];
+                }
+            }
         }
-        let no_issuer = match &section.issuer {
-            IssuerKey::Flat(issuer) => issuer.is_empty(),
-            IssuerKey::List(entries) => entries.is_empty(),
-        };
+        let no_issuer = matches!(&section.issuer, IssuerKey::List(entries) if entries.is_empty());
         let no_basic = section
             .basic
             .as_ref()
             .is_none_or(|basic| basic.users.is_empty());
         let mut keyed = Vec::new();
+        let mut introspected = Vec::new();
         let mut basic = None;
         let mut realm = None;
         let mut product_scope = None;
         if !(no_issuer && no_basic) {
-            if no_issuer {
-                section.issuer = IssuerKey::Flat(String::new());
-            }
             let resolved = section.resolve().map_err(|source| Error::Smart {
                 section: String::from("auth"),
                 source: Box::new(source),
             })?;
             keyed = resolved.issuers;
+            introspected = resolved.introspection;
             realm = resolved.realm;
             product_scope = resolved.product_scope;
             if let (Some(store), Some(written)) = (resolved.basic, section.basic.clone())
@@ -443,20 +444,9 @@ impl Auth {
                 basic = Some(BasicUsers::new(store, written));
             }
         }
-        let timing = trust::Timing {
-            audience: section.audience.clone(),
-            clock_skew: Duration::from_secs(section.clock_skew_seconds),
-            timeout: Duration::from_millis(section.timeout_ms),
-        };
-        let (mode, purpose_required, issuers) = trust.resolve(keyed, &timing)?;
+        let (mode, purpose_required, issuers) = trust.resolve(keyed, introspected)?;
         Ok(AuthSettings {
             mode,
-            audience: section
-                .audience
-                .iter()
-                .filter(|audience| !audience.is_empty())
-                .cloned()
-                .collect(),
             purpose_required,
             product_scope,
             realm: realm.unwrap_or_else(|| DEFAULT_REALM.to_owned()),

@@ -140,7 +140,7 @@ fn a_configured_data_user_is_refused() -> TestResult {
 fn a_requester_mapping_without_a_claim_name_is_refused() -> TestResult {
     let (_dir, text) = edited(|table| {
         format!(
-            "{table}\n[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[trust.issuer.requester]\nprofessional = \"{PROFESSIONAL_CLAIM}\"\norganisation = \"{ORGANISATION_CLAIM}\"\norganisation_type = \"{ORGANISATION_TYPE_CLAIM}\"\n"
+            "{table}\n[auth]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[trust.issuer.requester]\nprofessional = \"{PROFESSIONAL_CLAIM}\"\norganisation = \"{ORGANISATION_CLAIM}\"\norganisation_type = \"{ORGANISATION_TYPE_CLAIM}\"\n"
         )
     })?;
     match resolved(&text) {

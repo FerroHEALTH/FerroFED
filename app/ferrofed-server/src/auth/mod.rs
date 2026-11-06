@@ -64,6 +64,7 @@ use ferrofed_registry::id::EhrId;
 use ferrohealth_smart::guard::{
     CredentialHeader, Gate as SmartGate, Requirement as SmartRequirement,
 };
+use ferrohealth_smart::kind::CallerKind;
 use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily, SmartScope};
 use ferrohealth_smart::openehr::{self, granted};
 use ferrohealth_smart::refusal::Reason;
@@ -75,7 +76,7 @@ use crate::auth::caller::{Caller, PatientContext, Stated, VerifiedBy};
 use crate::auth::claims::Claims;
 use crate::auth::contact_point::ContactPoints;
 use crate::auth::contact_point::MissingAnnex;
-use crate::auth::introspection::Introspector;
+use crate::auth::introspection::Introspected;
 use crate::auth::permission::{Requirement, Resource};
 use crate::auth::refusal::{BasicRefusal, Refusal, Refused};
 use crate::auth::verify::Verifiers;
@@ -86,8 +87,6 @@ use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
 pub struct Gate {
     /// Where the credential travels.
     mode: AuthMode,
-    /// The audience that names the gateway, `[auth]`'s first.
-    audience: Option<String>,
     /// Whether a purpose of use is required.
     purpose_required: bool,
     /// The scope that admits a caller to the operator surface.
@@ -149,12 +148,8 @@ impl Gate {
             let trusted = Arc::new(issuer.clone());
             match &issuer.verification {
                 Verification::KeySet(server) => keyed.push(((**server).clone(), trusted)),
-                Verification::Introspection(endpoint) => {
-                    introspected = Some(Introspector::new(
-                        issuer.issuer.clone(),
-                        endpoint.clone(),
-                        trusted,
-                    ));
+                Verification::Introspection(settings) => {
+                    introspected = Some(Introspected::new((**settings).clone(), trusted));
                 }
             }
         }
@@ -179,7 +174,6 @@ impl Gate {
         });
         Self {
             mode: settings.mode.clone(),
-            audience: settings.audience.first().cloned(),
             purpose_required: settings.purpose_required,
             product_scope: settings.product_scope.clone(),
             realm: settings.realm.clone(),
@@ -230,7 +224,7 @@ impl Gate {
             None => None,
         };
         let caller = caller
-            .with_audience(self.audience.clone())
+            .with_audience(trusted.verification.audience().first().cloned())
             .with_correlation(correlation);
         let mut caller = if exchanging {
             caller.with_token(SecretString::from(credential))
@@ -338,7 +332,12 @@ impl Gate {
             (_, Verification::KeySet(_)) => VerifiedBy::Signature,
         };
         let subject = smart.subject().to_owned();
-        let acting = acting(&subject, &client_id);
+        // NOTE: RFC 9068 §2.2 and the issuer's profile: `ferrohealth-smart` classifies an
+        // app-only token as a system, which names no natural person.
+        let acting = match smart.kind() {
+            CallerKind::System => Acting::Client,
+            _ => Acting::Person,
+        };
         let stated = Stated {
             issuer: trusted.issuer.clone(),
             subject,
@@ -537,16 +536,4 @@ fn assurance_of(
     // NOTE: no specification governs this: our own design; a value the entry declares at
     // no level states no level, which no minimum admits.
     stated(&assurance.claim).and_then(|value| assurance.level_of(&value))
-}
-
-/// Who acts behind a token whose `sub` is `subject` and whose `client_id`
-/// is `client_id`.
-fn acting(subject: &str, client_id: &str) -> Acting {
-    // NOTE: IHE IUA ITI TF-2 3.71.4.2.2.1: `sub` is the "unique identifier of the
-    // user" if known, "the client_id otherwise".
-    if subject == client_id {
-        Acting::Client
-    } else {
-        Acting::Person
-    }
 }

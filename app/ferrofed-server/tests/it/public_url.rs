@@ -38,13 +38,43 @@ fn gateway(base: &str, public: &str, signing: &str) -> String {
     )
 }
 
+/// An `[[auth.issuer]]` table trusting the suite's test issuer, with
+/// `audience` written when one is given.
+fn issuer(audience: Option<&str>) -> String {
+    let audience = audience.map_or_else(String::new, |audience| {
+        format!("audience = [\"{audience}\"]\n")
+    });
+    format!(
+        "\n[[auth.issuer]]\nissuer = \"{}\"\nkind = \"persons\"\n{audience}jwks_file = {}\n",
+        crate::support::caller::ISSUER,
+        crate::support::toml_path(crate::support::caller::jwks_file())
+    )
+}
+
+/// The audiences of the issuer `settings` trust first.
+fn audiences(settings: &Settings) -> Result<Vec<String>, Box<dyn Error>> {
+    Ok(settings
+        .server
+        .auth
+        .issuers
+        .first()
+        .ok_or("an issuer is trusted")?
+        .verification
+        .audience()
+        .to_vec())
+}
+
 #[test]
 fn the_audience_and_the_jwk_set_url_default_from_the_public_url() -> TestResult {
-    let settings = resolve(&gateway("/fed", "https://gateway.example.org/fed", ""))?
-        .map_err(|error| error.to_string())?;
+    let text = format!(
+        "{}{}",
+        gateway("/fed", "https://gateway.example.org/fed", ""),
+        issuer(None)
+    );
+    let settings = resolve(&text)?.map_err(|error| error.to_string())?;
     assert_eq!(
         vec![String::from("https://gateway.example.org/fed")],
-        settings.server.auth.audience
+        audiences(&settings)?
     );
     let signing = settings.signing.ok_or("[signing] is resolved")?;
     assert_eq!(
@@ -57,14 +87,12 @@ fn the_audience_and_the_jwk_set_url_default_from_the_public_url() -> TestResult 
 #[test]
 fn a_written_audience_is_taken_as_written() -> TestResult {
     let text = format!(
-        "{}\n[auth]\naudience = [\"ferrofed\"]\n",
-        gateway("/", "https://gateway.example.org/", "")
+        "{}{}",
+        gateway("/", "https://gateway.example.org/", ""),
+        issuer(Some("ferrofed"))
     );
     let settings = resolve(&text)?.map_err(|error| error.to_string())?;
-    assert_eq!(
-        vec![String::from("ferrofed")],
-        settings.server.auth.audience
-    );
+    assert_eq!(vec![String::from("ferrofed")], audiences(&settings)?);
     Ok(())
 }
 
@@ -131,15 +159,16 @@ fn a_public_url_whose_path_is_not_the_base_path_is_refused() -> TestResult {
 #[test]
 fn without_a_public_url_each_copy_is_read_as_written() -> TestResult {
     let text = format!(
-        "[server]\nbase_path = \"/fed\"\n\n[signing]\nkey_file = {}\njwks_uri = \"{JWKS_URI}\"\n",
-        toml::Value::String(signing_key_file().to_owned())
+        "[server]\nbase_path = \"/fed\"\n\n[signing]\nkey_file = {}\njwks_uri = \"{JWKS_URI}\"\n{}",
+        toml::Value::String(signing_key_file().to_owned()),
+        issuer(Some("ferrofed"))
     );
     let settings = resolve(&text)?.map_err(|error| error.to_string())?;
+    assert_eq!(vec![String::from("ferrofed")], audiences(&settings)?);
     assert_eq!(
         JWKS_URI,
         settings.signing.ok_or("[signing]")?.jwks_uri.as_str()
     );
-    assert_eq!(settings.server.auth.audience, Vec::<String>::new());
     Ok(())
 }
 

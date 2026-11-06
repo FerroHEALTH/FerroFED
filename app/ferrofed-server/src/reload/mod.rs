@@ -21,7 +21,7 @@
 //! listener that serves TLS again from its files, and puts `[auth]` in
 //! place, its issuers and their key sets, for every request that arrives
 //! afterwards ([`Trust`]); a changed listener path, and a changed
-//! `auth.audience`, take a restart. Every file and every check is read and
+//! `[[auth.issuer]] audience`, take a restart. Every file and every check is read and
 //! passed before anything changes: one that fails refuses the reload as a
 //! whole, and the running registry, gate and certificates stay. The admin
 //! listener runs the same reload at `POST /admin/reload` ([`action`]).

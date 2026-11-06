@@ -19,7 +19,7 @@ use ferrofed_server::config::error::Error as ConfigError;
 /// `table`, beside the FerroFED store a contact point needs.
 fn declaring(table: &str) -> String {
     format!(
-        "{}\n[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\n\n[[trust.issuer]]\nissuer = \"https://ncp.example.test\"\n\n[trust.issuer.national_contact_point]\n{table}",
+        "{}\n[auth]\n\n[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://ncp.example.test\"\n\n[trust.issuer.national_contact_point]\n{table}",
         crate::support::store_table()
     )
 }
@@ -85,7 +85,7 @@ fn a_complete_table_declares_the_issuer_a_contact_point() -> Result<(), Box<dyn 
 
 #[test]
 fn an_issuer_without_the_table_is_no_contact_point() -> Result<(), Box<dyn Error>> {
-    let text = "[auth]\naudience = [\"urn:example:gateway\"]\n\n[[auth.issuer]]\nissuer = \"https://idp.example.test\"\n";
+    let text = "[auth]\n\n[[auth.issuer]]\nissuer = \"https://idp.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n";
     let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
     let [issuer] = settings.server.auth.issuers.as_slice() else {
         return Err("one issuer".into());

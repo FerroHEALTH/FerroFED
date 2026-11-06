@@ -477,7 +477,6 @@ async fn an_edge_asserted_caller_is_conveyed_as_edge_asserted() -> TestResult {
     let edge = Issuer::new(EDGE)?;
     let gateway = Gateway::with(AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static(EDGE_HEADER)),
-        audience: vec![AUDIENCE.to_owned()],
         issuers: vec![IssuerSettings::new(
             EDGE,
             crate::support::caller::key_set(EDGE, &crate::support::caller::jwks_file_of(&edge)?),

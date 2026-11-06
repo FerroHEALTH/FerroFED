@@ -128,8 +128,11 @@ timeout_ms = 1000                 # one round of questions, within the query's b
 "node-a" = { type = "V6" }        # the URA from [nl_gf.nvi.custodians] or the directory
 "node-b" = { type = "V6", ura = "ura-test-0002" }
 
-[auth]                            # the issuer of your callers' tokens
+[[auth.issuer]]                   # the issuer of your callers' tokens
 issuer = "https://issuer.example.org"
+kind = "persons"
+audience = ["https://gateway.example.org/fed"]
+first_party_clients = ["example-clinical-app"]
 
 [[trust.issuer]]                  # FerroFED's policy for that issuer
 issuer = "https://issuer.example.org"

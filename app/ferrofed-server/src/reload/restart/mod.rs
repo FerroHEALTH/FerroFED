@@ -6,11 +6,11 @@
 //! The settings a reload builds the federation from, and the changed keys
 //! it leaves to the next start. Of `[federation]`, a reload applies the localization policy
 //! (`[federation.localization]`) and the consent reporting
-//! (`[federation.consent]`); of `[server]`, `[auth]` less its audience. No
+//! (`[federation.consent]`); of `[server]`, `[auth]` less its issuers' audiences. No
 //! specification governs this: our own design.
 
 use crate::binding;
-use crate::config::auth::{AuthSettings, Verification};
+use crate::config::auth::AuthSettings;
 use crate::config::settings::{ServerSettings, Settings};
 
 mod keys;
@@ -27,23 +27,25 @@ pub fn keys() -> Vec<&'static str> {
     RESTART_KEYS.iter().map(|(key, _)| *key).collect()
 }
 
-/// Returns `fresh`, its audiences the ones `boot` started with, at the
-/// section and at every issuer that took the section's.
+/// Returns `fresh`, each issuer `boot` started with keeping the audiences it
+/// started with.
 ///
 /// The audience also names the gateway in its access records, read once at
-/// start, so a changed `[auth] audience` waits for a restart (no
+/// start, so a changed `[[auth.issuer]] audience` waits for a restart (no
 /// specification governs this: our own design).
 fn boot_audience(boot: &AuthSettings, mut fresh: AuthSettings) -> AuthSettings {
     for issuer in &mut fresh.issuers {
-        let audience = match &mut issuer.verification {
-            Verification::KeySet(settings) => &mut settings.audience,
-            Verification::Introspection(endpoint) => &mut endpoint.audience,
-        };
-        if *audience == fresh.audience {
-            audience.clone_from(&boot.audience);
+        if let Some(started) = boot
+            .issuers
+            .iter()
+            .find(|started| started.issuer == issuer.issuer)
+        {
+            issuer
+                .verification
+                .audience_mut()
+                .clone_from(&started.verification.audience().to_vec());
         }
     }
-    fresh.audience.clone_from(&boot.audience);
     fresh
 }
 

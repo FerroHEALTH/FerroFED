@@ -63,8 +63,9 @@ fn gateway_configuration(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n\
          [signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
-         [auth]\nissuer = \"{ISSUER}\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {jwks}\n\
-         product_scope = \"{OPERATOR_SCOPE}\"\n"
+         [auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n\
+         [[auth.issuer]]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\n\
+         first_party_clients = [\"synthetic-client\"]\njwks_file = {jwks}\n"
     ))
 }
 

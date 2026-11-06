@@ -13,6 +13,8 @@ which your cross-reference service knows its `ehr_id`s:
 ```toml
 [[auth.issuer]]
 issuer = "https://patient-portal.example.org"
+kind = "patients"
+audience = ["https://gateway.example.org/fed"]
 
 [[trust.issuer]]
 issuer = "https://patient-portal.example.org"
@@ -21,6 +23,11 @@ issuer = "https://patient-portal.example.org"
 endpoint = "node-a-pub"
 ehr_id_system = "urn:oid:2.999.9.1"
 ```
+
+The issuer is a `patients` issuer: `ferrohealth-smart` admits its token only
+when the token carries `patient/` scopes and no `user/` or `system/` scope,
+so a professional of the same platform signs in through an issuer of its
+own ([Who the caller is](authentication.md#who-the-caller-is)).
 
 `config check` and the start refuse a binding whose endpoint the registry
 lacks, a binding without a registry, and a binding without a cross-reference

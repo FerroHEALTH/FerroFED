@@ -11,25 +11,24 @@
 
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::time::Duration;
 
 use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::assurance::Assurance;
-use ferrofed_server::config::auth::{AuthSettings, Introspection, IssuerSettings, Verification};
-use ferrofed_testkit::issuer::ACT_REASON;
+use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, Verification};
+use ferrofed_testkit::issuer::{ACT_REASON, METADATA_PATH};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
-use ferrohealth_secret::secret::Secret;
-use url::Url;
+use ferrohealth_smart::config::AuthSection;
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::{Gateway, TestResult, assert_admitted, assert_refused, bearing, query};
 use crate::support::caller::AUDIENCE;
 
-/// The issuer whose tokens are introspected.
-const ISSUER: &str = "https://introspected-issuer.example.test";
+/// What an answer names the issuer by, replaced with the endpoint's URL as
+/// the endpoint is mounted.
+const ISSUER: &str = "urn:example:introspected-issuer";
 
 /// An opaque token, which names no issuer.
 const OPAQUE: &str = "synthetic-opaque-token-7Hq2";
@@ -37,21 +36,23 @@ const OPAQUE: &str = "synthetic-opaque-token-7Hq2";
 /// The path the introspection endpoint answers at.
 const INTROSPECT: &str = "/introspect";
 
-/// `[auth]` introspecting at `endpoint` as the client `ferrofed` with the
-/// secret `synthetic-secret`.
+/// `[auth]` introspecting the `persons` issuer at `endpoint`, whose
+/// first-party client is `synthetic-client`, as the client `ferrofed` with
+/// the secret `synthetic-secret`.
 fn introspecting(endpoint: &str) -> Result<AuthSettings, Box<dyn Error>> {
+    let section: AuthSection = toml::from_str(&format!(
+        "[[issuer]]\nissuer = \"{endpoint}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\nfirst_party_clients = [\"synthetic-client\"]\nmode = \"introspection\"\n\n[issuer.introspection]\nendpoint = \"{endpoint}{INTROSPECT}\"\n\n[issuer.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n"
+    ))?;
+    let settings = section
+        .resolve()?
+        .introspection
+        .into_iter()
+        .next()
+        .ok_or("the issuer is introspected")?;
     Ok(AuthSettings {
-        audience: vec![AUDIENCE.to_owned()],
         issuers: vec![IssuerSettings::new(
-            ISSUER,
-            Verification::Introspection(Introspection {
-                endpoint: Url::parse(&format!("{endpoint}{INTROSPECT}"))?,
-                client_id: String::from("ferrofed"),
-                client_secret: Secret::new("synthetic-secret"),
-                audience: vec![AUDIENCE.to_owned()],
-                clock_skew: Duration::from_secs(60),
-                timeout: Duration::from_secs(10),
-            }),
+            endpoint,
+            Verification::Introspection(Box::new(settings)),
         )],
         ..AuthSettings::default()
     })
@@ -64,10 +65,23 @@ fn answer(active: bool, audience: &str, exp: i64) -> String {
     )
 }
 
-/// An introspection endpoint answering `status` with `body` to the
-/// gateway's authenticated call about [`OPAQUE`].
+/// An issuer whose metadata names it, answering `status` with `body` at its
+/// introspection endpoint to the gateway's authenticated call about
+/// [`OPAQUE`], the issuer `body` names being this one.
 async fn endpoint(status: u16, body: String) -> Server {
     let server = Server::start().await;
+    let metadata = serde_json::json!({
+        "issuer": server.uri(),
+        "token_endpoint": format!("{}/token", server.uri()),
+        "introspection_endpoint": format!("{}{INTROSPECT}", server.uri()),
+    });
+    Mock::given(method("GET"))
+        .and(path(METADATA_PATH))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(metadata.to_string(), "application/json"),
+        )
+        .mount(&server)
+        .await;
     Mock::given(method("POST"))
         .and(path(INTROSPECT))
         .and(header(
@@ -76,7 +90,10 @@ async fn endpoint(status: u16, body: String) -> Server {
         ))
         .and(header("content-type", "application/x-www-form-urlencoded"))
         .and(body_string_contains(format!("token={OPAQUE}")))
-        .respond_with(ResponseTemplate::new(status).set_body_raw(body, "application/json"))
+        .respond_with(
+            ResponseTemplate::new(status)
+                .set_body_raw(body.replace(ISSUER, &server.uri()), "application/json"),
+        )
         .mount(&server)
         .await;
     server

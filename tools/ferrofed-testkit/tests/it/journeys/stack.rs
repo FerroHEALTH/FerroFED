@@ -312,8 +312,9 @@ async fn gateway(
          best_effort = true\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\n\
          [stored_queries]\nbackend = \"redb\"\npath = {definitions}\n\n\
          [signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
-         [auth]\nissuer = \"{ISSUER}\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {jwks}\n\
-         product_scope = \"{OPERATOR_SCOPE}\"\n"
+         [auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n\
+         [[auth.issuer]]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\n\
+         first_party_clients = [\"synthetic-client\"]\njwks_file = {jwks}\n"
     );
     // NOTE: writing to a String cannot fail, so the result is dropped.
     let _written: std::fmt::Result = write!(
