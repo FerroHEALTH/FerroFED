@@ -16,8 +16,9 @@
 //! whose identifier has a system and a value (FHIR R4 `bdl-9`), is a member
 //! in `node-error` (§11.1): it fails the list under all-or-nothing, and
 //! under `partial` is named in an `outcome` entry (§11.3, §11.4). Laboratory
-//! reports are listed when the gateway maps them or a member serves them
-//! itself ([`super::laboratory`]).
+//! reports are listed when the gateway maps them ([`super::laboratory`]),
+//! and laboratory and discharge reports when a member serves them itself
+//! ([`super::own`]).
 
 use std::collections::BTreeSet;
 use std::ops::ControlFlow;
@@ -44,6 +45,7 @@ use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::facade::native::Native;
 use crate::facade::summary::laboratory::Laboratory;
+use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
 use crate::fhir_wire::fhir_json;
@@ -59,14 +61,17 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
         .fhir()
         .is_some_and(|fhir| fhir.laboratory.is_some());
     // NOTE: no specification governs this: our own design; a member declared native for the
-    // category serves its laboratory reports itself, with or without the gateway's own mapping.
-    let own = asked.state.federation().is_some_and(|federation| {
-        federation
-            .snapshot()
-            .native_endpoints()
-            .any(|native| native.serves(Category::MedicalTestResult.code()))
-    });
-    let lists_laboratory = mapped || own;
+    // category serves its reports itself, with or without the gateway's own mapping.
+    let serves = |category: Category| {
+        asked.state.federation().is_some_and(|federation| {
+            federation
+                .snapshot()
+                .native_endpoints()
+                .any(|native| native.serves(category.code()))
+        })
+    };
+    let lists_laboratory = mapped || serves(Category::MedicalTestResult);
+    let lists_discharge = serves(Category::DischargeReport);
     super::searched(
         (&asked, Instant::now()),
         read,
@@ -74,7 +79,10 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
         |read| {
             // NOTE: FHIR R4 search; a `type` that admits no document type the face lists matches
             // nothing, so the empty set is answered and nothing is resolved or sent.
-            if read.admits_summaries() || (lists_laboratory && read.admits_laboratory()) {
+            if read.admits_summaries()
+                || (lists_laboratory && read.admits_laboratory())
+                || (lists_discharge && !read.discharge().is_empty())
+            {
                 ControlFlow::Continue(())
             } else {
                 let mut response =
@@ -94,16 +102,12 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
             if let Err(refused) = super::trc::named(admitted, &arrived, patient, service) {
                 return refused;
             }
-            let laboratory = match (read.admits_laboratory(), mapped) {
-                (false, _) => Laboratory::Unlisted,
-                (true, true) => Laboratory::Mapped,
-                (true, false) => Laboratory::Own,
-            };
+            let wanted = wanted(read, (mapped, lists_discharge));
             match gathered::gather(
                 Arc::clone(federation),
                 arrived,
                 patient,
-                (Scope::List, laboratory),
+                (Scope::List, wanted),
             )
             .await
             {
@@ -146,6 +150,27 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
         },
     )
     .await
+}
+
+/// The documents the search `read` asks the members for beside the
+/// summaries: laboratory reports, through the gateway's mapping when
+/// `mapped`, and discharge reports of the types it admits when a member
+/// serves them itself, `discharge`.
+fn wanted(read: &ListRequest, (mapped, discharge): (bool, bool)) -> Wanted {
+    let laboratory = match (read.admits_laboratory(), mapped) {
+        (false, _) => Laboratory::Unlisted,
+        (true, true) => Laboratory::Mapped,
+        (true, false) => Laboratory::Own,
+    };
+    let discharge = if discharge {
+        read.discharge().to_vec()
+    } else {
+        Vec::new()
+    };
+    Wanted {
+        laboratory,
+        discharge,
+    }
 }
 
 /// The `searchset` `gathered` gives for the patient `system`|`value` on the
@@ -221,7 +246,7 @@ fn listed(
         }
     }
     let Some((reports, silent)) =
-        super::laboratory::every(federation, (fhir, caller), gathered, listing)
+        super::laboratory::listed(federation, (fhir, caller), gathered, listing)
     else {
         tracing::error!(
             request_id = logged,
@@ -230,6 +255,15 @@ fn listed(
         return unlisted(federation, gathered, (system, value), "laboratory report");
     };
     matches.extend(reports);
+    outcomes.extend(silent);
+    let Some((own, silent)) = super::own::listed(federation, (fhir, caller), gathered) else {
+        tracing::error!(
+            request_id = logged,
+            "a member's own report could not be named by a signed URL"
+        );
+        return unlisted(federation, gathered, (system, value), "report");
+    };
+    matches.extend(own);
     outcomes.extend(silent);
     // NOTE: Federation Tier §11.3, §11.4: under best-effort, a member the resolver could not
     // answer for is named as a silent one, so the list never reads as complete.

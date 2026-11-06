@@ -75,16 +75,12 @@ pub(crate) fn accessed(
         Scope::Summary => Evidence::reached(Basis::Returned, objects)
             .queried(gathered.queried.clone())
             .constructed(Category::PatientSummary),
-        // NOTE: Regulation (EU) 2025/327 Art 14(1)(e): a list that asked the laboratory report
-        // query reaches that category too.
-        Scope::List if !gathered.laboratory.is_empty() || !gathered.own_laboratory.is_empty() => {
-            Evidence::reached(Basis::Returned, objects)
-                .constructed(Category::PatientSummary)
-                .constructed(Category::MedicalTestResult)
-        }
-        Scope::List => {
-            Evidence::reached(Basis::Returned, objects).constructed(Category::PatientSummary)
-        }
+        // NOTE: Regulation (EU) 2025/327 Art 14(1)(e) and (f): a list that asked for laboratory
+        // or discharge reports reaches that category too.
+        Scope::List => listed_categories(gathered).into_iter().fold(
+            Evidence::reached(Basis::Returned, objects),
+            Evidence::constructed,
+        ),
         // NOTE: openEHR RM EHR; a lookup reaches the fact that the patient's EHRs exist, and no
         // composition, so it holds data of no category.
         Scope::Lookup => Evidence::resource(ResourceKind::Ehr),
@@ -194,9 +190,20 @@ fn laboratory_origins(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<A
         .collect()
 }
 
+/// The categories a list `gathered` holds documents of: the patient summary,
+/// and each category it asked a member for.
+fn listed_categories(gathered: &Gathered) -> BTreeSet<Category> {
+    let mut categories = BTreeSet::from([Category::PatientSummary]);
+    if !gathered.laboratory.is_empty() {
+        categories.insert(Category::MedicalTestResult);
+    }
+    categories.extend(gathered.own.iter().map(|own| own.kind.category()));
+    categories
+}
+
 /// The number of documents the members of `gathered` serve themselves that
 /// a list `delivered`: each member's own summary and each of its own
-/// laboratory reports, none when it delivered nothing.
+/// laboratory and discharge reports, none when it delivered nothing.
 fn documents(gathered: &Gathered, delivered: bool) -> usize {
     if !delivered {
         return 0;
@@ -212,18 +219,18 @@ fn documents(gathered: &Gathered, delivered: bool) -> usize {
         })
         .count();
     gathered
-        .own_laboratory
+        .own
         .iter()
         .map(|own| own.held.prescriptions())
         .fold(summaries, usize::saturating_add)
 }
 
-/// Each member a list asked at its own endpoint for its laboratory reports
-/// whose request left the gateway, with what it answered: with `delivered`,
+/// Each member a list asked at its own endpoint for its laboratory or
+/// discharge reports whose request left the gateway, with what it answered: with `delivered`,
 /// an origin that contributed when the list carries one of its documents.
 fn own_origins(snapshot: &RegistrySnapshot, gathered: &Gathered, delivered: bool) -> Vec<Asked> {
     gathered
-        .own_laboratory
+        .own
         .iter()
         .filter(|own| own.held.left())
         .map(|own| {
@@ -241,8 +248,7 @@ fn own_origins(snapshot: &RegistrySnapshot, gathered: &Gathered, delivered: bool
                 created_ehr: None,
                 contributed,
                 evidence: contributed.then(|| {
-                    Evidence::reached(Basis::Returned, Vec::new())
-                        .constructed(Category::MedicalTestResult)
+                    Evidence::reached(Basis::Returned, Vec::new()).constructed(own.kind.category())
                 }),
             }
         })
@@ -355,7 +361,7 @@ pub(crate) fn subject(
             .chain(native::ehrs(&gathered.natives))
             .chain(
                 gathered
-                    .own_laboratory
+                    .own
                     .iter()
                     .filter(|own| own.held.left())
                     .map(|own| EhrAt {
