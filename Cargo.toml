@@ -321,7 +321,7 @@ rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs"
 # already locks, and the RFC 6960 OCSP request and response types over
 # them, the 0.2 line that shares that x509-cert. Verified against crates.io
 # on 2026-11-05.
-der = { version = "0.7.10", default-features = false, features = ["std", "oid"] }
+der = { version = "0.8.3", default-features = false, features = ["std", "oid"] }
 x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
 x509-ocsp = { version = "0.2.1", default-features = false }
 # The FerroHEALTH component library of the operator console (#275; no
