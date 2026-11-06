@@ -109,17 +109,23 @@ fn rows() -> String {
 
 /// The suite's gateway, its issuer declared a national contact point.
 pub(super) async fn gateway() -> Result<Bound, Box<dyn Error>> {
-    gateway_with(declared()?).await
+    gateway_with(declared()?, &rows()).await
+}
+
+/// The suite's gateway with no cross-reference, its issuer declared a
+/// national contact point, so no TRC patient can be resolved.
+pub(super) async fn unresolving() -> Result<Bound, Box<dyn Error>> {
+    gateway_with(declared()?, "").await
 }
 
 /// The suite's gateway, its issuer no national contact point.
 pub(super) async fn plain() -> Result<Bound, Box<dyn Error>> {
-    gateway_with(support::caller::auth()).await
+    gateway_with(support::caller::auth(), &rows()).await
 }
 
-/// The suite's gateway authenticating its callers as `auth` says, its
-/// stored query held at version `1.0.0`.
-async fn gateway_with(auth: AuthSettings) -> Result<Bound, Box<dyn Error>> {
+/// The suite's gateway authenticating its callers as `auth` says, with the
+/// `[[testkit]]` rows `rows`, its stored query held at version `1.0.0`.
+async fn gateway_with(auth: AuthSettings, rows: &str) -> Result<Bound, Box<dyn Error>> {
     let a = node_answering("8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1").await;
     let b = node_answering("6cb19121-4307-4a29-9c1c-b6d6a2ab3b77::cdr-b.example.org::1").await;
     let dir = tempfile::tempdir()?;
@@ -132,8 +138,7 @@ async fn gateway_with(auth: AuthSettings) -> Result<Bound, Box<dyn Error>> {
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
          per_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\
          demographic_endpoint = \"node-a-pub\"\n\n\
-         [stored_queries]\npath = {store}\n{}",
-        rows()
+         [stored_queries]\npath = {store}\n{rows}"
     );
     let settings =
         Config::from_sources(Some(&support::signed(&text)), &BTreeMap::new())?.resolve()?;

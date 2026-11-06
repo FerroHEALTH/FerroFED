@@ -147,6 +147,10 @@ token's `trc_patient` claim names (eHDSI XCA Profile 8.0.1 §4.2.1 and
   contact point's own audit trail carries the patient, joined by the
   correlation identifier. Blocking the professional, which XCA §4.2.2 asks
   as a SHOULD, stays with the contact point.
+- A TRC patient the cross-reference cannot resolve at every member, or a
+  deployment with no cross-reference, is answered `424`
+  `patient-context-unavailable` with nothing sent, and logged under
+  `ferrofed::security` as `trc-patient-unresolved` with the cause.
 
 No specification governs the binding across members, the code systems the
 codes travel under, or the pseudonym: they are FerroFED's own design over the

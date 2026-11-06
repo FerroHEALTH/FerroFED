@@ -67,6 +67,10 @@ pub enum Event {
     /// resource, outside the patient its treatment relationship
     /// confirmation binds (eHDSI XCA Profile 8.0.1 §4.2.1, §4.2.2).
     TrcPatientMismatch,
+    /// The patient a national contact point's treatment relationship
+    /// confirmation binds could not be resolved at every member, so nothing
+    /// was sent (eHDSI XCA Profile 8.0.1 §4.2.1).
+    TrcPatientUnresolved,
     /// A health professional a national contact point relays reached the
     /// limit of emergency accesses in the window, so the access was denied
     /// (eHDSI Section II Security Services 10.0.0 §2.5; `NCPeH` Architecture
@@ -76,7 +80,7 @@ pub enum Event {
 
 impl Event {
     /// Every event, in declaration order.
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::KeySetUnavailable,
         Self::IntrospectionUnavailable,
         Self::AqlRefused,
@@ -95,6 +99,7 @@ impl Event {
         Self::AdminWriteAdmitted,
         Self::WriteUnrecorded,
         Self::TrcPatientMismatch,
+        Self::TrcPatientUnresolved,
         Self::EmergencyLimitReached,
     ];
 
@@ -120,6 +125,7 @@ impl Event {
             Self::AdminWriteAdmitted => "admin-write-admitted",
             Self::WriteUnrecorded => "write-unrecorded",
             Self::TrcPatientMismatch => "trc-patient-mismatch",
+            Self::TrcPatientUnresolved => "trc-patient-unresolved",
             Self::EmergencyLimitReached => "emergency-limit-reached",
         }
     }

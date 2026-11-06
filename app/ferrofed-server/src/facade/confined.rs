@@ -94,6 +94,11 @@ impl Unconfined {
             request_id = logged,
             "the patient of a patient/ grant could not be resolved, so nothing was sent"
         );
+        self.answer(request_id)
+    }
+
+    /// The `424` answering the request under `request_id`, unlogged.
+    pub(crate) fn answer(&self, request_id: &str) -> Response {
         error::response(
             Code::PatientContextUnavailable,
             self.to_string(),
