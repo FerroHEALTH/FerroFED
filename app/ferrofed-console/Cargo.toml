@@ -81,6 +81,9 @@ aws-lc-rs.workspace = true
 base64.workspace = true
 # The log lines a test captures and reads.
 tracing-subscriber.workspace = true
+# The manual clock a test counts session and sign-in lifetimes on, so a
+# lifetime of a second never depends on where the wall clock's second falls.
+ferrohealth-session = { workspace = true, features = ["axum", "test-clock"] }
 # The test OpenID Provider: an issuer whose key pair is generated at run
 # time, so no private key is committed, and the ID Tokens it signs.
 ferrofed-testkit.workspace = true

@@ -20,6 +20,7 @@ use ferrofed_console::config::Config;
 use ferrofed_console::config::error;
 use ferrofed_console::server::{ConsoleState, router};
 use ferrofed_testkit::mock::Server;
+use ferrohealth_session::clock::ManualClock;
 use http::StatusCode;
 use url::Url;
 use wiremock::matchers::{body_string_contains, method, path};
@@ -43,11 +44,12 @@ fn configuration(uri: &str, oidc: &str) -> String {
 }
 
 /// A console at the provider `server`, with `absolute` seconds as both the
-/// absolute and the idle timeout when given.
+/// absolute and the idle timeout when given, counting every lifetime on the
+/// manual clock it returns.
 async fn console(
     server: &Server,
     absolute: Option<u64>,
-) -> Result<(ConsoleState, axum::Router), Box<dyn Error>> {
+) -> Result<(ConsoleState, axum::Router, ManualClock), Box<dyn Error>> {
     let mut text = configuration(&server.uri(), "");
     if let Some(absolute) = absolute {
         text = text.replace(
@@ -57,9 +59,10 @@ async fn console(
             ),
         );
     }
-    let state = ConsoleState::new(settings(&text)?).await?;
+    let time = ManualClock::new(jiff::Timestamp::now().as_second());
+    let state = ConsoleState::with_clock(settings(&text)?, time.clock()).await?;
     let service = router(state.clone());
-    Ok((state, service))
+    Ok((state, service, time))
 }
 
 /// A session whose access token lasts `lifetime` and that holds [`FIRST`].
@@ -110,7 +113,7 @@ fn held(state: &ConsoleState, id: &SessionId) -> Result<String, Box<dyn Error>> 
 #[tokio::test]
 async fn a_session_outlives_its_access_token_by_refreshing_it() -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, None).await?;
+    let (state, service, _time) = console(&server, None).await?;
     let id = session(&state, Duration::ZERO).await?;
     assert!(crate::support::access_token(&state, &id)?.is_none());
     answers(&server, FIRST, "synthetic-access-second", 3600, None).await;
@@ -127,7 +130,7 @@ async fn a_session_outlives_its_access_token_by_refreshing_it() -> Result<(), Bo
 #[tokio::test]
 async fn a_rotated_refresh_token_is_the_one_sent_next() -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, None).await?;
+    let (state, service, _time) = console(&server, None).await?;
     let id = session(&state, Duration::ZERO).await?;
     let second = "synthetic-refresh-second";
     answers(&server, FIRST, "synthetic-access-second", 0, Some(second)).await;
@@ -143,7 +146,7 @@ async fn a_rotated_refresh_token_is_the_one_sent_next() -> Result<(), Box<dyn Er
 async fn requests_that_arrive_together_refresh_once_and_keep_the_rotated_token()
 -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, None).await?;
+    let (state, service, time) = console(&server, None).await?;
     let id = session(&state, Duration::ZERO).await?;
     let second = "synthetic-refresh-second";
     Mock::given(method("POST"))
@@ -176,7 +179,7 @@ async fn requests_that_arrive_together_refresh_once_and_keep_the_rotated_token()
     }
     assert_eq!("synthetic-access-second", held(&state, &id)?);
     // The refreshed token lasts 2 s, so it is due again after its first half.
-    tokio::time::sleep(Duration::from_millis(1100)).await;
+    time.advance(1);
     // The next refresh presents the rotated refresh token (RFC 6749 §6).
     Mock::given(method("POST"))
         .and(path("/token"))
@@ -202,7 +205,7 @@ async fn requests_that_arrive_together_refresh_once_and_keep_the_rotated_token()
 #[tokio::test]
 async fn sign_out_with_a_trailing_slash_sends_no_refresh() -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, None).await?;
+    let (state, service, _time) = console(&server, None).await?;
     let id = session(&state, Duration::ZERO).await?;
     Mock::given(method("POST"))
         .and(path("/token"))
@@ -225,7 +228,7 @@ async fn a_refused_refresh_ends_the_session_and_sends_the_operator_to_sign_in()
         (401, r#"{"error":"invalid_client"}"#),
     ] {
         let server = Server::start().await;
-        let (state, service) = console(&server, None).await?;
+        let (state, service, _time) = console(&server, None).await?;
         let id = session(&state, Duration::ZERO).await?;
         Mock::given(method("POST"))
             .and(path("/token"))
@@ -259,7 +262,7 @@ async fn a_refused_refresh_ends_the_session_and_sends_the_operator_to_sign_in()
 async fn an_unreached_refresh_keeps_the_session_and_sends_the_operator_to_sign_in()
 -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, None).await?;
+    let (state, service, _time) = console(&server, None).await?;
     let id = session(&state, Duration::ZERO).await?;
     Mock::given(method("POST"))
         .and(path("/token"))
@@ -279,11 +282,11 @@ async fn an_unreached_refresh_keeps_the_session_and_sends_the_operator_to_sign_i
 async fn the_absolute_timeout_ends_a_session_whatever_its_refresh_token()
 -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    let (state, service) = console(&server, Some(1)).await?;
+    let (state, service, time) = console(&server, Some(1)).await?;
     let id = session(&state, Duration::from_secs(3600)).await?;
     // NOTE: no specification governs this: our own design; the lifetimes count whole
     // seconds from the sign-in, so two seconds on the session is past its one.
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    time.advance(2);
     Mock::given(method("POST"))
         .and(path("/token"))
         .respond_with(ResponseTemplate::new(200))
@@ -336,7 +339,7 @@ async fn the_refresh_token_reaches_no_answer_cookie_or_log_line() -> Result<(), 
     let _logging = tracing::subscriber::set_default(subscriber);
 
     let server = Server::start().await;
-    let (state, service) = console(&server, None).await?;
+    let (state, service, _time) = console(&server, None).await?;
     let id = session(&state, Duration::ZERO).await?;
     let second = "synthetic-refresh-second";
     answers(&server, FIRST, "synthetic-access-second", 0, Some(second)).await;
