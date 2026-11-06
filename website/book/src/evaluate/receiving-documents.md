@@ -73,8 +73,9 @@ a success.
 
 ## A laboratory report
 
-A release receives two categories as documents: patient summaries and
-laboratory reports, Art 14(1)(e). A laboratory report is held to the HL7
+A release receives four categories as documents: patient summaries,
+medical imaging reports, Art 14(1)(d), laboratory reports, Art 14(1)(e), and
+discharge reports, Art 14(1)(f). A laboratory report is held to the HL7
 Europe Laboratory Report 2.0.0 `Bundle-eu-lab` and `Composition-eu-lab`
 profiles, which a document whose `Composition.type` is LOINC `11502-2`
 names, and mapped by the laboratory mapping the component ships over the
@@ -120,6 +121,23 @@ composition keeps. Hazard I-16 of the [clinical safety risk
 file](clinical-safety.md) stays open until its rating is re-judged with
 these controls
 ([#1668](https://github.com/FerroHEALTH/FerroFED/issues/1668)).
+
+## An imaging or a discharge report
+
+Since `eehrxf` 0.1.170 a medical imaging report, Art 14(1)(d), and a
+discharge report, Art 14(1)(f), are received the same way. An imaging report
+is held to the HL7 Europe Imaging Report 1.0.0-ballot `BundleReportEuImaging`
+and `CompositionEuImaging` profiles, which a document whose
+`Composition.category` is `Medical-Imaging` names, and mapped by the
+component's `mappings::IMAGING` project (context
+`ferrobridge_eu_imaging.context`). A discharge report is held to the HL7
+Europe Hospital Discharge Report 1.0.0 `bundle-eu-hdr` and
+`composition-eu-hdr` profiles, which a document whose `Composition.type` is
+LOINC `34105-7` names, and mapped by the `mappings::HDR` project (context
+`ferrobridge_eu_hdr.context`). Declare each category's member with its own
+`[[fhir.receive]]`, as the laboratory example above shows: the category's
+package and its dependency closure, the template the project maps over and
+every file of the project in its order.
 
 ## Inserted by the person
 
@@ -179,4 +197,8 @@ controls include the full validation above
 ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The safety
 review of 2026-10-25 closed both at S4, P1
 ([#1327](https://github.com/FerroHEALTH/FerroFED/issues/1327)). A received laboratory report adds I-16 (a result the
-record does not hold whole), open at S4, P3.
+record does not hold whole), open at S4, P3. What a received imaging or
+discharge report can lose of its own content is not yet rated; it is judged
+with the gateway half of each category
+([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405),
+[#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406)).

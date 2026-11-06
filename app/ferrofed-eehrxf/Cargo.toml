@@ -19,10 +19,13 @@ publish = false
 # The patient summary crosswalk, whose sections the stored queries feed, the
 # document, and the FHIRconnect mapping each composition runs through; the
 # prescription and dispensation profiles the members serve them in; the
+# imaging and discharge document profiles a member receives (#1694); the
 # component itself links nothing of FerroFED.
 eehrxf = { workspace = true, features = [
   "patient-summary",
+  "imaging",
   "laboratory",
+  "discharge",
   "prescription",
   "dispensation",
   "openehr",
