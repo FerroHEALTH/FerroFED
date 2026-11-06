@@ -252,7 +252,7 @@ async fn the_read_by_subject_asks_only_the_members_the_localizer_names() -> Test
     assert_eq!(1, asked.load(Ordering::SeqCst));
     assert_eq!(1, received(&a).await?.len());
     assert!(wire(&b).await?.is_empty(), "§14.1: node B learns nothing");
-    assert!(!wire(&a).await?.contains(PATIENT), "N33");
+    wire(&a).await?.assert_withholds(&[PATIENT], "N33");
     Ok(())
 }
 

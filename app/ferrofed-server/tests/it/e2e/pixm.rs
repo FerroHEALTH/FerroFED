@@ -197,7 +197,7 @@ async fn a_pix_resolved_query_asks_only_the_member_that_knows_the_patient() -> T
         nodes.b.proxy.journal().is_empty(),
         "node B, where the patient is not known, is never asked (N8)"
     );
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
     assert_eq!(1, pix.queries(), "one ITI-83 call for both members");
     Ok(())
 }
@@ -245,7 +245,7 @@ async fn a_patient_fed_at_both_members_resolves_through_pix_at_both() -> TestRes
             node.node.system_id()
         );
     }
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
     assert_eq!(1, pix.queries(), "one ITI-83 call for both members");
     Ok(())
 }

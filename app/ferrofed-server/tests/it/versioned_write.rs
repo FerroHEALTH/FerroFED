@@ -27,7 +27,7 @@ use http::{Method, Request, StatusCode, header};
 use wiremock::ResponseTemplate;
 
 use crate::facade::{
-    CONVEYED, EHR_A, EHR_B, PATIENT, body, gateway, node_answering, post, registry,
+    CONVEYED, EHR_A, EHR_B, PATIENT, body, gateway, node_answering, post, registry, wire,
 };
 use crate::path_ehr_id::{answer, probe_at};
 use crate::support::conveyed::searched_claims;
@@ -475,9 +475,10 @@ async fn a_versioned_write_lands_byte_identical_and_carries_no_identifier_outsid
             .map(http::HeaderValue::as_bytes),
         "If-Match reaches the node as sent"
     );
+    wire(&a)
+        .await?
+        .assert_withholds_outside_bodies(&[PATIENT, CLIENT_TOKEN.as_str()], "N33");
     let composed = outside_bodies(&a).await?;
-    assert!(!composed.contains(PATIENT), "N33: {composed}");
-    assert!(!composed.contains(CLIENT_TOKEN.as_str()), "{composed}");
     assert!(
         !composed.to_ascii_lowercase().contains("openehr-federation"),
         "{composed}"
@@ -630,8 +631,9 @@ async fn a_new_ehr_lands_byte_identical_at_the_one_named_node() -> TestResult {
             .and_then(|value| value.to_str().ok()),
         "a declared media type travels with the body"
     );
-    let composed = outside_bodies(&b).await?;
-    assert!(!composed.contains(PATIENT), "N33: {composed}");
+    wire(&b)
+        .await?
+        .assert_withholds_outside_bodies(&[PATIENT], "N33");
     assert!(asked(&a).await?.is_empty(), "node A is never asked");
     Ok(())
 }

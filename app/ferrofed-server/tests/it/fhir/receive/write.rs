@@ -5,8 +5,6 @@
 //! (§12.4, N23, §5.4.1, N33, CP-26), and the member's failures answered
 //! as failures (§11).
 
-use std::error::Error;
-
 use ferrofed_testkit::eps;
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
@@ -18,23 +16,9 @@ use super::{
     gateway, gateway_with, issue, post, receiving, rows, untouched,
 };
 use crate::auth::{bearing, claims, minted};
-use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, received};
+use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, received, wire};
 use crate::fhir::TestResult;
 use crate::support::call;
-
-/// Every request target and header `server` received, the bodies left out.
-pub(super) async fn composed(server: &Server) -> Result<String, Box<dyn Error>> {
-    let requests = server.received_requests().await.ok_or("recording is on")?;
-    let mut text = String::new();
-    for request in requests {
-        text.push_str(request.url.as_str());
-        for (name, value) in &request.headers {
-            text.push_str(name.as_str());
-            text.push_str(value.to_str().unwrap_or("<opaque>"));
-        }
-    }
-    Ok(text)
-}
 
 // conformance: CP-26 track-10
 #[tokio::test]
@@ -54,13 +38,10 @@ async fn a_document_is_written_to_its_member_by_its_ehr_id_alone() -> TestResult
     let write = requests.first().ok_or("the write")?;
     assert_eq!(write.url.path(), format!("/v1/ehr/{EHR_A}/composition"));
     assert_eq!(write.url.query(), None, "N33: no query string");
-    let wire = composed(&a).await?;
-    for withheld in [PATIENT, PATIENT_TAIL] {
-        assert!(
-            !wire.contains(withheld),
-            "N33: no identifier in the path or the headers: {wire}"
-        );
-    }
+    wire(&a).await?.assert_withholds_outside_bodies(
+        &[PATIENT, PATIENT_TAIL],
+        "N33: no identifier in the path or the headers",
+    );
     let body = String::from_utf8(write.body.clone())?;
     assert!(body.contains(SUBSTANCE), "the mapped content: {body}");
     assert!(

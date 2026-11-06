@@ -51,7 +51,7 @@ async fn the_pix_manager_resolves_both_carriers_to_each_nodes_own_ehr_id() -> Te
             );
         }
     }
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
     Ok(())
 }
 
@@ -76,6 +76,6 @@ async fn a_selected_subject_column_is_the_input_and_never_asked_of_a_node() -> T
             );
         }
     }
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
     Ok(())
 }

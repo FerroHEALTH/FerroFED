@@ -357,13 +357,9 @@ async fn the_identifier_and_namespace_reach_the_pix_manager_and_no_node() -> Tes
     );
     for (node, captured) in [("A", wire(&a).await?), ("B", wire(&b).await?)] {
         assert!(!captured.is_empty(), "node {node} was asked");
-        assert!(
-            !captured.contains(PATIENT),
-            "the identifier reached node {node} (§5.4.1, N33): {captured}"
-        );
-        assert!(
-            !captured.contains(NAMESPACE),
-            "the namespace reached node {node} (§5.4.1, N33): {captured}"
+        captured.assert_withholds(
+            &[PATIENT, NAMESPACE],
+            &format!("the identifier or the namespace reached node {node} (§5.4.1, N33)"),
         );
     }
     Ok(())

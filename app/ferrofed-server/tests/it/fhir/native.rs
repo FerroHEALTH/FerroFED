@@ -11,6 +11,7 @@
 //! (§7a.2) and a directive or a targeting header naming it is `400` (§8,
 //! N35); and configuration that cannot locate it refuses the start.
 
+use ferrofed_testkit::leak::{self, Scope};
 use std::collections::BTreeMap;
 
 use ferrofed_eehrxf::face::EPS_COMPOSITION;
@@ -180,15 +181,14 @@ async fn a_native_member_is_asked_by_its_ehr_id_alone_and_left_out_of_the_mapped
         "N33: node A's ehr_id alone"
     );
     for withheld in [PATIENT, PATIENT_TAIL] {
-        assert!(
-            !members.proxy.journal_contains(withheld.as_bytes()),
-            "N33: no identifier in the path, the query or a header"
+        leak::assert_withheld(
+            &members.proxy.journal(),
+            &[withheld],
+            Scope::WholeRequest,
+            "N33: no identifier in the path, the query or a header",
         );
         let captured = wire(&members.own).await?;
-        assert!(
-            !captured.contains(withheld),
-            "N33: none in the caller claims either: {captured}"
-        );
+        captured.assert_withholds(&[withheld], "N33: none in the caller claims either");
     }
     Ok(())
 }

@@ -171,8 +171,8 @@ async fn a_template_upload_with_a_target_reaches_only_that_node_byte_identical()
             "{at}: a declared media type travels with the body"
         );
         let composed = wire(&b).await?;
-        assert!(!composed.contains(PATIENT), "N33: {composed}");
-        assert!(!composed.contains(CLIENT_TOKEN.as_str()), "N33: {composed}");
+        composed.assert_withholds(&[PATIENT], "N33");
+        composed.assert_withholds(&[CLIENT_TOKEN.as_str()], "N33");
         assert!(
             !composed.contains_ignoring_ascii_case("openehr-federation"),
             "the federation's own headers stay at the gateway: {composed}"
@@ -358,11 +358,8 @@ async fn a_definition_request_carries_only_what_its_operation_declares() -> Test
         "declared, as received"
     );
     let composed = wire(&a).await?;
-    assert!(!composed.contains(PATIENT), "§5.4.1, N33: {composed}");
-    assert!(
-        !composed.contains(CLIENT_TOKEN.as_str()),
-        "§5.4.1, N33: {composed}"
-    );
+    composed.assert_withholds(&[PATIENT], "§5.4.1, N33");
+    composed.assert_withholds(&[CLIENT_TOKEN.as_str()], "§5.4.1, N33");
     assert!(!composed.contains_ignoring_ascii_case("openehr-federation"));
     assert_eq!(asked(&b).await?, Vec::<(String, String)>::new());
     for undeclared in [format!("patient={PATIENT}"), format!("ehr_id={EHR_A}")] {

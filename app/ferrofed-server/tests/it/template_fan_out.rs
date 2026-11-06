@@ -212,8 +212,8 @@ async fn uploaded_once(server: &Server, at: &str, sent: &str) -> TestResult {
     assert_eq!(at, only.url.path(), "the upload path");
     assert_eq!(sent.as_bytes(), only.body.as_slice(), "byte-identical");
     let composed = wire(server).await?;
-    assert!(!composed.contains(PATIENT), "N33: {at}");
-    assert!(!composed.contains(CLIENT_TOKEN.as_str()), "N33: {at}");
+    composed.assert_withholds(&[PATIENT], &format!("N33: {at}"));
+    composed.assert_withholds(&[CLIENT_TOKEN.as_str()], &format!("N33: {at}"));
     Ok(())
 }
 

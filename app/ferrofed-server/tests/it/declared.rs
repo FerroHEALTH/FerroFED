@@ -17,7 +17,9 @@
 use std::error::Error;
 
 use axum::body::Body;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::proxy::Capture;
 use http::{Request, StatusCode};
 use openehr_federation::headers::ENDPOINT;
 
@@ -145,8 +147,12 @@ async fn the_listed_values_of_a_commit_reach_the_node_and_no_client_text() -> Te
             "{name} reaches the node as the listed value"
         );
     }
-    let sent = format!("{:?}", commit.headers);
-    assert!(!sent.contains(PATIENT), "§5.4.1, N33: {sent}");
+    leak::assert_withheld(
+        &[Capture::from(commit)],
+        &[PATIENT],
+        Scope::OutsideBodies,
+        "§5.4.1, N33",
+    );
     Ok(())
 }
 

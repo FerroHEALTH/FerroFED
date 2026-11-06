@@ -19,7 +19,7 @@ use serde_json::Value;
 
 use super::{EHR_SYSTEM, bound, creating, document, gateway_with, post, receiving, rows};
 use crate::auth::{bearing, claims, minted};
-use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, received};
+use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, received, wire};
 use crate::fhir::TestResult;
 use crate::support::{Logs, call};
 
@@ -127,13 +127,10 @@ async fn a_persons_own_document_is_marked_as_inserted_by_them_with_no_identifier
             "RM ENTRY.provider: the record's subject, with no external_ref: {body}"
         );
     }
-    let captured = super::write::composed(&a).await?;
-    for withheld in [PATIENT, PATIENT_TAIL] {
-        assert!(
-            !captured.contains(withheld),
-            "N33: no identifier in the path or the headers: {captured}"
-        );
-    }
+    wire(&a).await?.assert_withholds_outside_bodies(
+        &[PATIENT, PATIENT_TAIL],
+        "N33: no identifier in the path or the headers",
+    );
     let professional = {
         let (c, d) = (creating().await, Server::start().await);
         let dir = tempfile::tempdir()?;

@@ -108,6 +108,24 @@ impl Capture {
     }
 }
 
+impl From<&wiremock::Request> for Capture {
+    /// Reads a request a wiremock server recorded as the proxy would have
+    /// journaled it, so one leakage search reads both.
+    fn from(request: &wiremock::Request) -> Self {
+        Self {
+            method: request.method.to_string(),
+            path: request.url.path().to_owned(),
+            query: request.url.query().map(str::to_owned),
+            headers: request
+                .headers
+                .iter()
+                .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_vec()))
+                .collect(),
+            body: request.body.clone(),
+        }
+    }
+}
+
 /// The proxy could not be started.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]

@@ -15,6 +15,7 @@
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use eehrxf::document::discharge::HDR_BUNDLE;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::proxy::Fault;
 use http::StatusCode;
 use serde_json::Value;
@@ -101,12 +102,14 @@ async fn a_members_own_discharge_report_is_listed_unchanged_but_for_its_url_and_
         "the Document Access Provider's SHALL interactions, by node A's ehr_id alone"
     );
     for withheld in [PATIENT, PATIENT_TAIL] {
-        assert!(
-            !members.proxy.journal_contains(withheld.as_bytes()),
-            "N33: no identifier in the path, the query or a header"
+        leak::assert_withheld(
+            &members.proxy.journal(),
+            &[withheld],
+            Scope::WholeRequest,
+            "N33: no identifier in the path, the query or a header",
         );
         let captured = wire(&members.own).await?;
-        assert!(!captured.contains(withheld), "N33: {captured}");
+        captured.assert_withholds(&[withheld], "N33");
     }
     assert!(
         received(&members.a).await?.is_empty() && received(&members.b).await?.is_empty(),

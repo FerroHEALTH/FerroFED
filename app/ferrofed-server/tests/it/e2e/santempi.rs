@@ -130,7 +130,7 @@ async fn a_patient_each_member_fed_to_santempi_is_answered_by_both() -> TestResu
             node.node.system_id()
         );
     }
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
 
     nodes.a.proxy.clear_journal();
     nodes.b.proxy.clear_journal();

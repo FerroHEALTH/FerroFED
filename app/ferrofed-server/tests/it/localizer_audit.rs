@@ -153,7 +153,7 @@ async fn a_discovery_still_recording_its_audit_at_the_budget_fails_closed_under_
     );
     assert_eq!(1, holding.requests().await?.len(), "the discovery was made");
     for node in [&node_a, &node_b] {
-        assert!(!wire(node).await?.contains(PATIENT), "N33");
+        wire(node).await?.assert_withholds(&[PATIENT], "N33");
     }
     Ok(())
 }

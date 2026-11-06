@@ -148,16 +148,16 @@ exchange format". A client sends such a document to
 `POST {fhir-base}/Bundle`, and FerroFED writes it to the one member the
 deployment declares for its category
 ([Receiving a document](receiving-documents.md)). This release can receive
-documents of two categories:
+documents of four categories:
 
 | Art 14(1) | Code | Received in the exchange format |
 |---|---|---|
 | (a) | `Patient-Summaries` | yes |
 | (b) | `Electronic-Prescriptions` | no |
 | (c) | `Electronic-Dispensations` | no |
-| (d) | `Medical-Imaging` | no |
+| (d) | `Medical-Imaging` | yes |
 | (e) | `Laboratory-Reports` | yes |
-| (f) | `Discharge-Reports` | no |
+| (f) | `Discharge-Reports` | yes |
 
 An electronic dispensation, Art 14(1)(c), is received as one resource,
 which the table above does not count: a client sends one
@@ -217,7 +217,7 @@ Item names its row in the matrix exactly.
 | HL7 Europe Laboratory Report | `hl7.fhir.eu.laboratory` 2.1.0 | with 2.0.0 beside it, the version the interoperability component reads: the laboratory report document the FHIR face receives, writes from a member's composition and lists, Art 14(1)(e) |
 | HL7 Europe Base and Core | `hl7.fhir.eu.base` 2.0.1 | the EU core profiles each mapped entry of the patient summary is written to |
 | HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, the Document Access Provider interactions it asks a member that serves its own laboratory reports, and the category codes of the access record |
-| `eehrxf` | =0.1.158 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
+| `eehrxf` | =0.1.170 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
 
 Beside them:
 

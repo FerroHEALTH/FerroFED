@@ -72,8 +72,11 @@ fn the_sheet_names_every_category_once_in_the_order_of_art_14() -> TestResult {
 fn the_sheet_calls_received_exactly_the_categories_this_build_receives() -> TestResult {
     let rows = rows(&std::fs::read_to_string(SHEET)?)?;
     for (code, received) in &rows {
+        // NOTE: eehrxf 0.1.170 `ReceivedDocument::category` names a category by its
+        // `Composition.type` or, for an imaging report, its `Composition.category` slice.
         let receivable = Category::of_code(code).is_some_and(|category| {
-            category.profiles().is_some() && category.document_type().is_some()
+            category.profiles().is_some()
+                && (category.document_type().is_some() || category.document_category().is_some())
         });
         assert_eq!(
             *received, receivable,

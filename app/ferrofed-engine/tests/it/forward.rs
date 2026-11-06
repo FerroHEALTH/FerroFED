@@ -23,7 +23,9 @@ use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::single_node::forward::{ClientRequest, ForwardError};
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::proxy::Capture;
 use http::{HeaderMap, Method, StatusCode};
 use openehr_its::rest::client::ReqwestTransport;
 use secrecy::SecretString;
@@ -35,7 +37,7 @@ use crate::timing;
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The synthetic patient identifier.
-const PATIENT: &str = "Sentinel-7731";
+const PATIENT: &str = "Sentinel-N33-WITHHELD-7731";
 
 /// A node-local `ehr_id`.
 const EHR: &str = "7d44b88c-4199-4bad-97dc-d78268e01398";
@@ -450,11 +452,11 @@ async fn the_host_a_node_receives_is_the_registry_authority_never_the_client_hos
         hosts,
         "§5.4.1, N33: Host is written from the registry's endpoint URL"
     );
-    assert!(
-        sent.headers
-            .values()
-            .all(|value| !String::from_utf8_lossy(value.as_bytes()).contains(PATIENT)),
-        "the client's Host never travels"
+    leak::assert_withheld(
+        &[Capture::from(sent)],
+        &[PATIENT],
+        Scope::OutsideBodies,
+        "the client's Host never travels",
     );
     Ok(())
 }

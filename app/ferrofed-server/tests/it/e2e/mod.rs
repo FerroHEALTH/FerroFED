@@ -78,6 +78,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::containers::{self, ProxiedNode};
+use ferrofed_testkit::leak::{Collides, Needles, Scope};
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::seed::{CompositionSeed, DemoComposition, EhrSeed, PatientId, SeedPlan};
 use http::{Request, header};
@@ -324,17 +325,27 @@ fn patient_query() -> String {
 }
 
 /// Asserts that, since the journals were last cleared, neither node saw
-/// [`PATIENT`]'s identifier or its namespace in any carrier (N33).
-pub(crate) fn assert_no_patient_identifier_on_the_wire(nodes: &containers::TwoNodes) {
+/// [`PATIENT`]'s identifier, its namespace or a fragment of it in any
+/// carrier (N33).
+///
+/// # Errors
+///
+/// Returns [`Collides`] when [`PATIENT`] is spelled like a UUID.
+pub(crate) fn assert_no_patient_identifier_on_the_wire(
+    nodes: &containers::TwoNodes,
+) -> Result<(), Collides> {
+    let needles = Needles::of(PATIENT)?;
     for node in [&nodes.a, &nodes.b] {
-        for carried in [PATIENT.value(), PATIENT.namespace()] {
-            assert!(
-                !node.proxy.journal_contains(carried.as_bytes()),
+        needles.assert_absent(
+            &node.proxy.journal(),
+            Scope::WholeRequest,
+            &format!(
                 "{} saw the patient identifier or its namespace (N33)",
                 node.node.system_id()
-            );
-        }
+            ),
+        );
     }
+    Ok(())
 }
 
 /// The vendored hospital composition with `patient`'s own identifier added

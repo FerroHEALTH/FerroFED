@@ -84,9 +84,11 @@ ehds-logging = { version = "=0.4.0", default-features = false }
 # with `Project::with_context`, which the map mode compiles the MPD project's
 # request context through (#1590); 0.1.156 lists a second laboratory context,
 # so the laboratory mapping is narrowed to its result context (#1604, #1605);
-# 0.1.158 is the release on openehr-* 0.0.129 (#1581). Verified against
-# crates.io on 2026-11-05.
-eehrxf = { version = "=0.1.158", default-features = false }
+# 0.1.158 is the release on openehr-* 0.0.129 (#1581); 0.1.170 carries the
+# imaging and discharge document profiles and their shipped projects, so
+# both categories are received (#1694). Verified against crates.io on
+# 2026-11-06.
+eehrxf = { version = "=0.1.170", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -219,24 +221,25 @@ fhir-types = { version = "0.1.128", default-features = false }
 # runs in process (#684), and the template index and mapping-file loader it
 # takes, both from FerroBRIDGE on the workspace openehr-* line, so the build
 # carries one copy of that family (#1028).
-# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.223 is
-# the release eehrxf 0.1.158 requires (#1581). Verified against crates.io on
-# 2026-11-05.
-fhirconnect = "=0.1.223"
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.227 is
+# the release eehrxf 0.1.170 requires (#1694). Verified against crates.io on
+# 2026-11-06.
+fhirconnect = "=0.1.227"
 # The FHIR terminology client the European interoperability component asks
 # its terminology server through (#925), from FerroBRIDGE, with the caller's
 # HTTP client for mutual TLS and the `context` form of `$validate-code`.
-# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.141 is
-# the release eehrxf 0.1.158 builds on (#1581). Verified against crates.io on
-# 2026-11-05.
-ferrobridge-term = "=0.1.141"
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.143 is
+# the release eehrxf 0.1.170 builds on, on ferrohealth-smart 0.9, so the lock
+# holds one ferrohealth-smart (#1694). Verified against crates.io on
+# 2026-11-06.
+ferrobridge-term = "=0.1.143"
 # The FHIR R4 profile validator a document received in the exchange format is
 # held to in full: every invariant, binding and entry profile (#808), from
 # FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
-# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.144
-# and openehr-mapping-core 0.1.143 are the releases eehrxf 0.1.158 requires
-# (#1581). Verified against crates.io on 2026-11-05.
-ferrobridge-validator = "=0.1.144"
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.149
+# and openehr-mapping-core 0.1.143 are the releases eehrxf 0.1.170 requires
+# (#1694). Verified against crates.io on 2026-11-06.
+ferrobridge-validator = "=0.1.149"
 openehr-mapping-core = "=0.1.143"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by
@@ -317,13 +320,14 @@ rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs"
 # Test-only since the revocation check of an eHDSI link moved into
 # ferrohealth-server (#1646): the testkit's revocable front (#1623) reads
 # its certificates and writes its OCSP answers with the X.509 certificate
-# and CRL model and the DER codec at the versions tokio-postgres-rustls
-# already locks, and the RFC 6960 OCSP request and response types over
-# them, the 0.2 line that shares that x509-cert. Verified against crates.io
-# on 2026-11-05.
-der = { version = "0.7.10", default-features = false, features = ["std", "oid"] }
-x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
-x509-ocsp = { version = "0.2.1", default-features = false }
+# and CRL model and the DER codec, and the RFC 6960 OCSP request and
+# response types over them, on the 0.3 line that shares that x509-cert
+# (#1690). ferrohealth-server 0.5.1 and tokio-postgres-rustls 0.14.0 still
+# hold der 0.7 and x509-cert 0.2 for the gateway, so the lock carries both
+# lines until they move. Verified against crates.io on 2026-11-06.
+der = { version = "0.8.3", default-features = false, features = ["std", "oid"] }
+x509-cert = { version = "0.3.0", default-features = false, features = ["std"] }
+x509-ocsp = { version = "0.3.0-rc.0", default-features = false }
 # The FerroHEALTH component library of the operator console (#275; no
 # specification governs it: our own design): the components, rendered on the
 # server from Askama templates, the plain script modules and the asset router

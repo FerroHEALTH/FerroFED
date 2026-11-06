@@ -24,12 +24,12 @@ use ferrofed_testkit::mock::Server;
 use http::{Method, Request, StatusCode, header};
 use wiremock::ResponseTemplate;
 
-use crate::facade::{EHR_A, EHR_B, PATIENT};
+use crate::facade::{EHR_A, EHR_B, PATIENT, wire};
 use crate::path_ehr_id::{answer, holder};
 use crate::support::{asked, error_body, mount, without_minted};
 use crate::versioned_write::{
     CREATED_AT_A, CREATED_BY_LEGACY, CREATED_ELSEWHERE, ENDPOINT_A, ENDPOINT_B, LEGACY_MAPPING,
-    outside_bodies, over, refused_at_neither, versioned,
+    over, refused_at_neither, versioned,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -182,8 +182,9 @@ async fn a_contribution_its_path_node_controls_reaches_it_once_byte_identical() 
         received.body.as_slice(),
         "the body lands byte-identical, its DV_IDENTIFIER included (N22, track 10)"
     );
-    let composed = outside_bodies(&a).await?;
-    assert!(!composed.contains(PATIENT), "N33: {composed}");
+    wire(&a)
+        .await?
+        .assert_withholds_outside_bodies(&[PATIENT], "N33");
     assert!(asked(&b).await?.is_empty(), "no other node is contacted");
     Ok(())
 }
@@ -380,8 +381,9 @@ async fn sent_once_as(server: &Server, media: &str, sent: &str) -> TestResult {
             .and_then(|value| value.to_str().ok()),
         "{media}: the node is told the representation the client declared"
     );
-    let composed = outside_bodies(server).await?;
-    assert!(!composed.contains(PATIENT), "{media}: N33: {composed}");
+    wire(server)
+        .await?
+        .assert_withholds_outside_bodies(&[PATIENT], &format!("{media}: N33"));
     Ok(())
 }
 

@@ -181,7 +181,7 @@ async fn the_bsn_reaches_mitz_only_and_no_node_log_or_error() -> TestResult {
     );
     for node in [&a, &b] {
         let seen = wire(node).await?;
-        assert!(!seen.contains(PATIENT_TAIL), "§5.4.1, N33: {seen}");
+        seen.assert_withholds(&[PATIENT_TAIL], "§5.4.1, N33");
     }
     let logged = logs.text();
     assert!(!logged.is_empty(), "the capture recorded the requests");

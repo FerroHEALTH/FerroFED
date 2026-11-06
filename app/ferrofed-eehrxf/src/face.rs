@@ -507,7 +507,15 @@ mod tests {
             .unreceived()
             .map(eehrxf::category::Category::code)
             .collect();
-        assert_eq!(unreceived, ["Patient-Summaries", "Laboratory-Reports"]);
+        assert_eq!(
+            unreceived,
+            [
+                "Patient-Summaries",
+                "Medical-Imaging",
+                "Laboratory-Reports",
+                "Discharge-Reports"
+            ]
+        );
         let documentation = super::bundle(&receivers)
             .documentation
             .unwrap()
@@ -515,7 +523,7 @@ mod tests {
             .unwrap();
         assert!(
             documentation.contains(
-                "Categories with no receiving member: Patient-Summaries, Laboratory-Reports;"
+                "Categories with no receiving member: Patient-Summaries, Medical-Imaging, Laboratory-Reports, Discharge-Reports;"
             ),
             "{documentation:?}"
         );

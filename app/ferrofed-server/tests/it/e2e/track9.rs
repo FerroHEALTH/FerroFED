@@ -20,6 +20,7 @@ use std::time::Duration;
 use ferrofed_server::conformance::client::HttpGateway;
 use ferrofed_server::conformance::scenarios::track9;
 use ferrofed_testkit::containers::{self, TwoNodes};
+use ferrofed_testkit::leak::{Needles, Scope};
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::seed::{self, DemoComposition, EhrSeed, SeedPlan};
 use secrecy::SecretString;
@@ -105,11 +106,20 @@ async fn an_unmodified_client_given_only_the_base_url_reads_and_writes_at_a_pref
             capture.method,
             capture.path
         );
-        assert!(
-            is_commit(capture) || !capture.contains(PATIENT.value().as_bytes()),
-            "N33: only the committed body carries the identifier, as modelled data"
-        );
     }
+    let (commits, others): (Vec<Capture>, Vec<Capture>) =
+        a.iter().chain(&b).cloned().partition(is_commit);
+    let needles = Needles::of(PATIENT)?;
+    needles.assert_absent(
+        &others,
+        Scope::WholeRequest,
+        "N33: only the committed body carries the identifier, as modelled data",
+    );
+    needles.assert_absent(
+        &commits,
+        Scope::OutsideBodies,
+        "N33: the commit carries the identifier in its body alone",
+    );
     assert_eq!(
         1,
         a.iter().filter(|c| is_commit(c)).count(),

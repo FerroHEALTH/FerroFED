@@ -7,7 +7,8 @@
 //! SanteMPI writes each change to the on-disk queue of its publish-and-
 //! subscribe broker, and a write that collides with another on one queue file
 //! is answered `500` with a `RestServiceFault` of type `IOException` naming a
-//! sharing violation on that file. The fault says nothing about the request,
+//! sharing violation on that file, or, on its FHIR interface, with an
+//! `OperationOutcome` issue of type `exception` naming it. The fault says nothing about the request,
 //! which succeeds when it is sent again (#1302). Every other refusal is an
 //! answer, and fails at once. No specification governs the harness: our own
 //! design.
@@ -25,15 +26,20 @@ const ATTEMPTS: u32 = 5;
 /// The wait before the second attempt, doubled before each later one.
 const FIRST_WAIT: Duration = Duration::from_millis(500);
 
-/// Whether `error` is SanteMPI's transient queue fault.
+/// Whether `error` is SanteMPI's transient queue fault, written as its
+/// `RestServiceFault` of type `IOException`, or, on the FHIR interface, as
+/// an `OperationOutcome` issue of type `exception`.
 pub(super) fn transient(error: &SanteMpiError) -> bool {
-    matches!(
-        error,
-        SanteMpiError::Refused { status, body, .. }
-            if *status == StatusCode::INTERNAL_SERVER_ERROR
-                && body.contains("<type>IOException</type>")
-                && body.contains("Sharing violation")
-    )
+    let SanteMpiError::Refused { status, body, .. } = error else {
+        return false;
+    };
+    let fault = body.contains("<type>IOException</type>") && body.contains("Sharing violation");
+    // NOTE: FHIR R4 OperationOutcome, issue-type `exception`: SanteMPI's FHIR interface
+    // answers the same queue fault in the message's OperationOutcome.
+    let outcome = body.contains("\"resourceType\":\"OperationOutcome\"")
+        && body.contains("\"code\":\"exception\"")
+        && body.contains("Sharing violation on path /santedb/queue/");
+    *status == StatusCode::INTERNAL_SERVER_ERROR && (fault || outcome)
 }
 
 /// Runs `attempt` until it succeeds, fails with anything but the transient
@@ -84,9 +90,26 @@ mod tests {
         }
     }
 
+    /// The fault SanteMPI answered the ITI-93 feed with on run 42246554774:
+    /// the same queue fault, written as the FHIR message's `OperationOutcome`.
+    fn sharing_violation_in_fhir() -> SanteMpiError {
+        SanteMpiError::Refused {
+            step: "the ITI-93 feed",
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            body: String::from(
+                "{\"resourceType\":\"Bundle\",\"type\":\"message\",\"entry\":[{\"resource\":{\"resourceType\":\"MessageHeader\",\"response\":{\"code\":\"fatal-error\"}}},{\"resource\":{\"resourceType\":\"OperationOutcome\",\"issue\":[{\"severity\":\"error\",\"code\":\"exception\",\"diagnostics\":\"Sharing violation on path /santedb/queue/sys.pubsub/00639295776080346490\"}]}}]}",
+            ),
+        }
+    }
+
     #[test]
     fn the_queue_sharing_violation_is_transient() {
         assert!(transient(&sharing_violation()));
+    }
+
+    #[test]
+    fn the_queue_sharing_violation_in_a_fhir_answer_is_transient() {
+        assert!(transient(&sharing_violation_in_fhir()));
     }
 
     #[test]
@@ -103,6 +126,14 @@ mod tests {
         assert!(!transient(&refused(
             StatusCode::CONFLICT,
             "<type>IOException</type> Sharing violation"
+        )));
+        assert!(!transient(&refused(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "{\"resourceType\":\"OperationOutcome\",\"issue\":[{\"code\":\"invalid\",\"diagnostics\":\"Sharing violation on path /santedb/queue/x\"}]}"
+        )));
+        assert!(!transient(&refused(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "{\"resourceType\":\"OperationOutcome\",\"issue\":[{\"code\":\"exception\",\"diagnostics\":\"duplicate identifier\"}]}"
         )));
     }
 

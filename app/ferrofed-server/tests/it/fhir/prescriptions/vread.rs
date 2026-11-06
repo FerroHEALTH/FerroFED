@@ -10,6 +10,8 @@
 //! dispensation's receipt answers reads back the dispensation it located.
 
 use axum::body::Body;
+use ferrofed_testkit::leak::{self, Scope};
+use ferrofed_testkit::proxy::Capture;
 use http::{Request, StatusCode, header};
 use serde_json::Value;
 use wiremock::matchers::{method, path};
@@ -64,6 +66,16 @@ fn dispensation_reads(members: &Members) -> usize {
         .iter()
         .filter(|capture| capture.method == "GET" && capture.path == "/fhir/MedicationDispense")
         .count()
+}
+
+/// Asserts that the version read `read` carries no patient identifier (N33).
+fn carries_no_patient(read: &Capture) {
+    leak::assert_withheld(
+        std::slice::from_ref(read),
+        &[PATIENT],
+        Scope::WholeRequest,
+        "N33: the version read carries no patient identifier",
+    );
 }
 
 // conformance: CP-26 track-10
@@ -157,10 +169,7 @@ async fn the_location_a_receipt_answered_reads_back_the_dispensation_it_located(
         ],
         "N33: the member's ehr_id and its own id alone, never the version"
     );
-    assert!(
-        !read.contains(PATIENT.as_bytes()),
-        "N33: the version read carries no patient identifier"
-    );
+    carries_no_patient(read);
     assert!(
         !members
             .proxy_b
