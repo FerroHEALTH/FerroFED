@@ -243,3 +243,16 @@ pub(super) fn url_of(reference: &Value) -> Result<String, Box<dyn std::error::Er
         .ok_or("an attachment url")?
         .to_owned())
 }
+
+/// The `type` the `DocumentReference` search asked node A's own endpoint
+/// for, if it was asked.
+pub(super) fn asked_type(members: &Members) -> Option<String> {
+    members
+        .asked()
+        .into_iter()
+        .find(|(path, _)| path == "/fhir/DocumentReference")?
+        .1
+        .into_iter()
+        .find(|(name, _)| name == "type")
+        .map(|(_, value)| value)
+}

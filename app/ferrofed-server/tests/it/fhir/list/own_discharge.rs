@@ -23,7 +23,8 @@ use wiremock::{Mock, ResponseTemplate};
 
 use super::super::TestResult;
 use super::own_member::{
-    BINARY, Declared, MEMBER_PATIENT, Members, PATIENTS, answered, documents, listed, url_of,
+    BINARY, Declared, MEMBER_PATIENT, Members, PATIENTS, answered, asked_type, documents, listed,
+    url_of,
 };
 use super::{EHR_SYSTEM, binary, entries, list};
 use crate::facade::{EHR_A, PATIENT, PATIENT_TAIL, received, wire};
@@ -57,19 +58,6 @@ const DISCHARGE: Declared = Declared {
     document: "doc-hdr-1",
     kind: None,
 };
-
-/// The `type` the `DocumentReference` search asked node A's own endpoint
-/// for, if it was asked.
-fn asked_type(members: &Members) -> Option<String> {
-    members
-        .asked()
-        .into_iter()
-        .find(|(path, _)| path == "/fhir/DocumentReference")?
-        .1
-        .into_iter()
-        .find(|(name, _)| name == "type")
-        .map(|(_, value)| value)
-}
 
 #[tokio::test]
 async fn a_members_own_discharge_report_is_listed_unchanged_but_for_its_url_and_read_unchanged()

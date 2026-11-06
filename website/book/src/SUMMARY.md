@@ -93,6 +93,7 @@
 - [The patient summary over FHIR](integrate/patient-summary.md)
   - [Laboratory reports over FHIR](integrate/laboratory-reports.md)
   - [Discharge reports over FHIR](integrate/discharge-reports.md)
+  - [Imaging reports over FHIR](integrate/imaging-reports.md)
   - [Terminology on the FHIR face](integrate/terminology.md)
 - [Prescriptions and dispensations over FHIR](integrate/prescriptions.md)
 - [A national contact point](integrate/national-contact-point.md)
