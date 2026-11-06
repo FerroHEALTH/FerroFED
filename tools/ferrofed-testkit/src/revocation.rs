@@ -166,8 +166,9 @@ impl RevocationFront {
         serve_crl(&status, "/intermediate.crl", &intermediate.issuer, &revoked).await?;
         let responder = Responder {
             subject: Certificate::from_der(intermediate.certificate.der())?
-                .tbs_certificate
-                .subject,
+                .tbs_certificate()
+                .subject()
+                .clone(),
             issuer: Arc::new(intermediate.issuer),
             known: BTreeSet::from([SERVER_SERIAL]),
             revoked: revoked.into_iter().collect(),
