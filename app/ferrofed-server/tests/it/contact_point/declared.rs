@@ -7,8 +7,9 @@
 //! 11(5)), that the professional is the contact point's assertion and never
 //! authenticated by the gateway (Implementing Regulation (EU) 2026/2099
 //! Art 6(1) and (2); §13.4 authn-end-user, CP-39), that a purpose of use is
-//! required, and, per issuer, the claim each Annex attribute is read from.
-//! A deployment that declares no contact point declares nothing.
+//! required, the emergency access limit in effect (eHDSI Section II Security
+//! Services 10.0.0 §2.5), and, per issuer, the claim each Annex attribute is
+//! read from. A deployment that declares no contact point declares nothing.
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -39,7 +40,15 @@ struct DeclaredContactPoint {
     disclose: bool,
     professional: String,
     purpose_of_use: String,
+    emergency: DeclaredEmergency,
     issuers: Vec<DeclaredIssuer>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct DeclaredEmergency {
+    threshold: u32,
+    window_s: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,6 +83,14 @@ async fn a_declared_contact_point_is_described_with_how_its_requests_are_served(
     assert!(!member.disclose, "Art 8, Art 11(5)");
     assert_eq!("asserted-by-contact-point", member.professional, "CP-39");
     assert_eq!("required", member.purpose_of_use, "§13.4");
+    assert_eq!(
+        DeclaredEmergency {
+            threshold: 5,
+            window_s: 86_400
+        },
+        member.emergency,
+        "the §2.5 baseline, in effect when [emergency] is not written"
+    );
     let [issuer] = member.issuers.as_slice() else {
         return Err("one contact point".into());
     };
@@ -108,6 +125,30 @@ async fn a_declared_contact_point_is_described_with_how_its_requests_are_served(
         );
     }
     assert_eq!(10, issuer.claims.len(), "every Annex attribute, once");
+    Ok(())
+}
+
+// conformance: CP-23
+#[tokio::test]
+async fn a_tightened_emergency_limit_is_declared_as_the_one_in_effect() -> TestResult {
+    let gateway = Gateway::with_rows(
+        declared()?,
+        "\n[emergency]\nthreshold = 2\nwindow_s = 3600\n",
+    )
+    .await?;
+    let member = described(&gateway)
+        .await?
+        .federation
+        .national_contact_point
+        .ok_or("the member is declared")?;
+    assert_eq!(
+        DeclaredEmergency {
+            threshold: 2,
+            window_s: 3600
+        },
+        member.emergency,
+        "a country tightens the §2.5 baseline"
+    );
     Ok(())
 }
 
