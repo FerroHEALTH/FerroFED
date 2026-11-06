@@ -274,7 +274,7 @@ user = "ferrofed"
 password_file = "/run/secrets/ferrofed/node-b-password"
 
 # FerroFED's own PostgreSQL store, off unless the table is set. A
-# contact-point issuer ([trust.issuer.national_contact_point]) and the
+# contact-point issuer ([[federation.contact_point]]) and the
 # postgres backend of [stored_queries] need it, and the gateway refuses to
 # start without it then. Give it a database and a role of its own, never a
 # CDR's. The connection string is a secret and must set sslmode=require: the

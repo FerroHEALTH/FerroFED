@@ -29,14 +29,15 @@ fn url(query: &str) -> String {
     format!("postgres://ferrofed:{STORE_PASSWORD}@db.example.org:5432/ferrofed{query}")
 }
 
-/// A trusted issuer declared a national contact point, every claim of its
-/// table named.
+/// A trusted contact-point issuer with its `[[federation.contact_point]]`.
 const CONTACT_POINT: &str = "[auth]\n\n\
-[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n\
-[[trust.issuer]]\nissuer = \"https://ncp.example.test\"\n\n\
-[trust.issuer.national_contact_point]\nfamily_name = \"f\"\ngiven_name = \"g\"\n\
-country_code = \"c\"\nprofessional_issuing_authority = \"pa\"\n\
-provider_issuing_authority = \"ha\"\nprovider_address = \"addr\"\ntrc_patient = \"trc\"\n";
+[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\nkind = \"federation\"\naudience = [\"urn:example:gateway\"]\n\
+sender_constraint = \"required\"\n\n\
+[[auth.federation]]\nissuer = \"https://ncp.example.test\"\ncontact_point = true\nmapping = \"ehdsi\"\ncountries = [\"LU\"]\n\
+fields.\"professional.country_code\" = [{ constant = \"LU\" }]\n\
+fields.\"professional.issuing_authority_name\" = [{ constant = \"pa\" }]\n\
+fields.\"provider.issuing_authority_name\" = [{ constant = \"ha\" }]\n\n\
+[[federation.contact_point]]\nissuer = \"https://ncp.example.test\"\n";
 
 /// A stored-query registry on the `postgres` backend, over a registry
 /// document in `dir`.
@@ -68,12 +69,12 @@ fn store(lines: &str) -> Result<Result<Settings, ConfigError>, Box<dyn Error>> {
 fn a_contact_point_issuer_without_the_store_is_refused_naming_both() -> TestResult {
     let refused = resolved(CONTACT_POINT)?.err().ok_or("refused")?;
     assert!(
-        matches!(&refused, ConfigError::Store(StoreFault::Required { key }) if key == "trust.issuer[0].national_contact_point"),
+        matches!(&refused, ConfigError::Store(StoreFault::Required { key }) if key == "federation.contact_point[0]"),
         "{refused:?}"
     );
     let text = refused.to_string();
     assert!(
-        text.contains("trust.issuer[0].national_contact_point") && text.contains("[store]"),
+        text.contains("federation.contact_point[0]") && text.contains("[store]"),
         "{text}"
     );
     let settings = resolved(&format!(
@@ -138,7 +139,7 @@ fn the_serve_and_check_jobs_refuse_a_contact_point_without_the_store_by_name() -
             "{job:?}: EX_CONFIG: {stderr}"
         );
         assert!(
-            stderr.contains("trust.issuer[0].national_contact_point") && stderr.contains("[store]"),
+            stderr.contains("federation.contact_point[0]") && stderr.contains("[store]"),
             "{job:?}: {stderr}"
         );
     }

@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The harness national connector, offline: its token carries every
-//! attribute of Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2
-//! and a purpose of use, synthetic and inside the `urn:oid:2.999` example
-//! arc; it confirms a national identifier at a stub PDQm Supplier over
+//! The harness national connector, offline: its token carries what a
+//! conforming eHDSI identity assertion provides and a purpose of use, bound
+//! to its client certificate, synthetic and inside the `urn:oid:2.999`
+//! example arc; it confirms a national identifier at a stub PDQm Supplier over
 //! ITI-78; and each call reaches the FHIR face's route with the token and a
 //! correlation identifier of its own.
 #![allow(
@@ -22,9 +22,9 @@ use std::error::Error;
 use ferrofed_testkit::issuer::Issuer;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::national_connector::{
-    CLAIMS, CLIENT_ID, CORRELATION_HEADER, COUNTRY, FAMILY, GIVEN, HCP_ADDRESS, HCP_AUTHORITY,
-    HCP_ID, HCP_NAME, HP_AUTHORITY, HP_ID, NationalConnector, NationalId, PERSON_ID, ROLE,
-    ROLE_SYSTEM,
+    AUTHENTICATION_CLASS, CLIENT_ID, CORRELATION_HEADER, COUNTRY, HCP_AUTHORITY, HCP_ID,
+    HP_AUTHORITY, HP_ID, NationalConnector, NationalId, PERSON_ID, ROLE, ROLE_SYSTEM, cnf,
+    contact_point_toml,
 };
 use ferrofed_testkit::pdqm_stub::{self, Entry};
 use http::StatusCode;
@@ -59,30 +59,34 @@ fn claims_of(token: &str) -> Result<serde_json::Map<String, serde_json::Value>, 
 }
 
 #[test]
-fn the_token_carries_every_annex_attribute_and_a_purpose_of_use() -> TestResult {
+fn the_token_carries_what_an_ehdsi_assertion_provides_bound_to_the_certificate() -> TestResult {
     let connector = connector("http://127.0.0.1:9")?;
     let claims = claims_of(&connector.token()?)?;
     assert_eq!(claims["client_id"], CLIENT_ID);
     assert_eq!(claims["sub"], CLIENT_ID, "a client token");
     assert_eq!(claims["aud"], AUDIENCE);
-    let iua = &claims["extensions"]["ihe_iua"];
-    assert_eq!(iua["national_provider_identifier"], HP_ID);
-    assert_eq!(iua["subject_organization_id"], HCP_ID);
-    assert_eq!(iua["subject_organization"], HCP_NAME);
-    assert_eq!(iua["subject_role"][0]["system"], ROLE_SYSTEM);
-    assert_eq!(iua["subject_role"][0]["code"], ROLE);
-    assert_eq!(iua["purpose_of_use"][0]["code"], "TREAT");
-    assert_eq!(iua["person_id"], PERSON_ID);
-    for (claim, value) in [
-        (CLAIMS.family_name, FAMILY),
-        (CLAIMS.given_name, GIVEN),
-        (CLAIMS.country_code, COUNTRY),
-        (CLAIMS.professional_issuing_authority, HP_AUTHORITY),
-        (CLAIMS.provider_issuing_authority, HCP_AUTHORITY),
-        (CLAIMS.provider_address, HCP_ADDRESS),
+    assert_eq!(claims["extensions"]["ihe_iua"]["person_id"], PERSON_ID);
+    let ehdsi = &claims["ehdsi"];
+    let professional = &ehdsi["professional"];
+    assert_eq!(professional["hp_identifier"], HP_ID);
+    assert_eq!(
+        professional["hp_professional_role"][0]["system"],
+        ROLE_SYSTEM
+    );
+    assert_eq!(professional["hp_professional_role"][0]["code"], ROLE);
+    assert_eq!(professional["authentication_method"], AUTHENTICATION_CLASS);
+    assert_eq!(ehdsi["provider"]["healthcare_provider_identifier"], HCP_ID);
+    for (member, value) in [
+        ("facility_type", &ehdsi["provider"]["facility_type"]),
+        ("home_community_id", &ehdsi["provider"]["home_community_id"]),
+        ("point_of_care", &ehdsi["point_of_care"]),
+        ("assertion.id", &ehdsi["assertion"]["id"]),
+        ("trc.id", &ehdsi["trc"]["id"]),
     ] {
-        assert_eq!(claims[claim], value, "{claim}");
+        assert!(value.is_string(), "{member}");
     }
+    assert_eq!(ehdsi["purpose_of_use"], "TREATMENT");
+    assert_eq!(claims["cnf"], cnf(connector.certificate()), "RFC 8705 §3.1");
     Ok(())
 }
 
@@ -94,25 +98,34 @@ fn every_identifier_the_token_relays_is_in_the_example_arc() {
 }
 
 #[test]
-fn the_declared_claim_names_are_the_ones_the_token_carries() -> TestResult {
-    let table: toml::Table = toml::from_str(&CLAIMS.toml())?;
-    let declared = &table["trust"]["issuer"]["national_contact_point"];
+fn the_declared_contact_point_configures_what_no_assertion_carries() -> TestResult {
+    let table: toml::Table = toml::from_str(&contact_point_toml(
+        "https://ncp.example.test",
+        AUDIENCE,
+        "/dev/null",
+    ))?;
+    let issuer = &table["auth"]["issuer"][0];
+    assert_eq!(issuer["kind"].as_str(), Some("federation"));
+    assert_eq!(issuer["sender_constraint"].as_str(), Some("required"));
+    let federation = &table["auth"]["federation"][0];
+    assert_eq!(federation["contact_point"].as_bool(), Some(true));
+    assert_eq!(federation["mapping"].as_str(), Some("ehdsi"));
+    for (field, value) in [
+        ("professional.country_code", COUNTRY),
+        ("professional.issuing_authority_name", HP_AUTHORITY),
+        ("provider.issuing_authority_name", HCP_AUTHORITY),
+    ] {
+        assert_eq!(
+            federation["fields"][field][0]["constant"].as_str(),
+            Some(value),
+            "{field}"
+        );
+    }
+    let declared = &table["federation"]["contact_point"][0];
     assert_eq!(
         declared["correlation_header"].as_str(),
         Some(CORRELATION_HEADER)
     );
-    let claims = claims_of(&connector("http://127.0.0.1:9")?.token()?)?;
-    for key in [
-        "family_name",
-        "given_name",
-        "country_code",
-        "professional_issuing_authority",
-        "provider_issuing_authority",
-        "provider_address",
-    ] {
-        let name = declared[key].as_str().ok_or(key)?;
-        assert!(claims.contains_key(name), "{key}: {name}");
-    }
     Ok(())
 }
 
@@ -208,7 +221,7 @@ async fn each_call_reaches_its_route_with_the_token_and_its_own_correlation() ->
             .ok_or("a token")?
             .to_str()?;
         let claims = claims_of(bearer.strip_prefix("Bearer ").ok_or("the Bearer scheme")?)?;
-        assert_eq!(claims[CLAIMS.family_name], FAMILY);
+        assert_eq!(claims["ehdsi"]["professional"]["hp_identifier"], HP_ID);
         let correlation = request
             .headers
             .get(CORRELATION_HEADER)

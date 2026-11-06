@@ -14,6 +14,8 @@ use axum::extract::{OriginalUri, Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
 use ferrofed_engine::outbound_id::OutboundId;
+use ferrohealth_server::tls::PeerCertificates;
+use ferrohealth_smart::sender::ClientCertificate;
 use http::Method;
 use openehr_its::rest::routes::{self, Lookup};
 
@@ -123,9 +125,16 @@ pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: 
         return next.run(request).await;
     };
     let outbound = request_id::outbound(request.extensions()).map(|id: OutboundId| id.to_string());
+    // NOTE: RFC 8705 §3: the resource server obtains the client certificate "from its TLS
+    // implementation layer", which puts the verified chain, the leaf first, in the request.
+    let certificate = request
+        .extensions()
+        .get::<PeerCertificates>()
+        .and_then(|chain| chain.0.first())
+        .map(|leaf| ClientCertificate::from_der(leaf.as_ref()));
     match gate
         .admit(
-            request.headers(),
+            (request.headers(), certificate.as_ref()),
             (requirement, named.as_deref()),
             guard.exchanging(),
         )

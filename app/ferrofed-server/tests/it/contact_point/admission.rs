@@ -1,218 +1,158 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! What a national contact point's token needs at the gate: every attribute
-//! of Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2 (Art 7)
-//! and a purpose of use (§13.4 authn-purpose-of-use) for patient data, and
-//! a correlation header in its declared form; a request that lacks one is
-//! refused and reaches no node.
+//! What a national contact point's token needs at the gate: what a
+//! conforming eHDSI HP Identity Assertion and Treatment Relationship
+//! Confirmation provide (eHDSI SAML Profile 10.0.0 §2.1, §2.3), as the
+//! shared contact-point profile of `ferrohealth-smart` checks it, bound to
+//! the client certificate of its connection (RFC 8705 §3), and a
+//! correlation header in its declared form; a request that lacks one is
+//! refused and reaches no node. The gateway checks no field itself: each
+//! test here holds FerroFED's use of the shared refusal.
 
 use axum::body::Body;
 use ferrofed_server::auth::refusal::Refusal;
-use ferrofed_testkit::issuer::Claims;
 use http::{Method, Request, StatusCode};
+use serde_json::json;
 
-use super::{CORRELATION, CORRELATION_HEADER, claim_names, declared, relaying};
+use super::{
+    CORRELATION, CORRELATION_HEADER, HP_ID, declared, presenting, relaying, told, with, without,
+};
 use crate::auth::{
     Gateway, TestResult, assert_admitted, assert_refused, bearing, minted, query, sent,
 };
 
-/// Every way a token can fall short of the Annex: each attribute removed,
-/// emptied, or, for the country, not in the ISO 3166-1 alpha-2 form.
-fn short_of_the_annex() -> Vec<(&'static str, Claims)> {
-    let names = claim_names();
-    let without = |claim: String| {
-        let mut claims = relaying();
-        claims.other.remove(&claim);
-        claims
-    };
-    let iua = |change: fn(&mut ferrofed_testkit::issuer::IheIua)| {
-        let mut claims = relaying();
-        if let Some(extensions) = claims.extensions.as_mut() {
-            change(&mut extensions.ihe_iua);
-        }
-        claims
-    };
-    let country_claim = names.country_code.clone();
-    let country = |code: &str| {
-        let mut claims = relaying();
-        claims.other.insert(country_claim.clone(), code.to_owned());
-        claims
-    };
-    let mut empty_family = relaying();
-    empty_family
-        .other
-        .insert(names.family_name.clone(), String::new());
-    vec![
-        ("family_name", without(names.family_name)),
-        ("given_name", without(names.given_name)),
-        ("country_code", without(names.country_code)),
-        (
-            "professional issuing_authority_name",
-            without(names.professional_issuing_authority),
-        ),
-        (
-            "provider issuing_authority_name",
-            without(names.provider_issuing_authority),
-        ),
-        (
-            "healthcare_provider_address",
-            without(names.provider_address),
-        ),
-        (
-            "hp_identifier",
-            iua(|iua| iua.national_provider_identifier = None),
-        ),
-        ("hp_professional_role", iua(|iua| iua.subject_role.clear())),
-        (
-            "healthcare_provider_identifier",
-            iua(|iua| iua.subject_organization_id = None),
-        ),
-        (
-            "healthcare_provider_name",
-            iua(|iua| iua.subject_organization = None),
-        ),
-        ("a country code not in the alpha-2 form", country("lu")),
-        ("a country that is no Member State", country("XA")),
-        ("a former Member State", country("GB")),
-        ("an empty family_name", empty_family),
-    ]
+/// SAML Profile 10.0.0 §2.1, §2.3: a token carrying exactly what a
+/// conforming assertion provides, and no Annex field it does not, reaches
+/// patient data.
+#[tokio::test]
+async fn a_token_with_what_a_conforming_assertion_provides_is_admitted() -> TestResult {
+    let gateway = Gateway::with(declared()).await?;
+    assert_admitted(&gateway, presenting(query()?, &relaying())?).await
 }
 
-/// 2026/2099 Art 7, Annex Tables 1 and 2: a contact point's token that
-/// carries every attribute and a purpose of use reaches patient data.
+/// SAML Profile 10.0.0 §2.1: the professional is named by the assertion's
+/// `NameID`, which is the identifier a node is told.
 #[tokio::test]
-async fn a_token_with_every_annex_attribute_is_admitted() -> TestResult {
-    let gateway = Gateway::with(declared()?).await?;
-    assert_admitted(&gateway, bearing(query()?, &minted(&relaying())?)?).await
+async fn the_hp_identifier_is_the_name_id() -> TestResult {
+    let gateway = Gateway::with(declared()).await?;
+    assert_admitted(&gateway, presenting(query()?, &relaying())?).await?;
+    let conveyed = told(&gateway.a)
+        .await?
+        .national_contact_point
+        .ok_or("the relayed attributes")?;
+    assert_eq!(HP_ID, conveyed.health_professional.hp_identifier);
+    Ok(())
 }
 
-/// 2026/2099 Art 7: a patient-data request missing any Annex attribute is
-/// `403 contact-point-attributes-required`, and no node is asked anything.
+/// SAML Profile 10.0.0 §2.3: a purpose of use other than `TREATMENT` or
+/// `EMERGENCY` is refused, and so is none, even where the deployment
+/// relaxed the purpose-of-use rule for its own callers.
 #[tokio::test]
-async fn a_request_missing_any_annex_attribute_is_403_with_nothing_sent() -> TestResult {
-    let gateway = Gateway::with(declared()?).await?;
-    for (missing, claims) in short_of_the_annex() {
-        let request = bearing(query()?, &minted(&claims)?)?;
-        let (status, _, text) = sent(&gateway.app, request).await?;
-        assert_eq!(StatusCode::FORBIDDEN, status, "{missing}: {text}");
-        assert!(
-            text.contains("contact-point-attributes-required"),
-            "{missing}: {text}"
-        );
-    }
-    gateway.nobody_asked().await
-}
-
-/// Requirements Catalogue v10.0.0 §1.25 (01): the refusal names each
-/// missing Annex attribute by its Annex name, in the tables' order, and
-/// quotes no claim value.
-#[tokio::test]
-async fn the_refusal_names_each_missing_attribute_and_no_value() -> TestResult {
-    let gateway = Gateway::with(declared()?).await?;
-    let names = claim_names();
-    let mut claims = relaying();
-    let family = claims.other.remove(&names.family_name);
-    if let Some(extensions) = claims.extensions.as_mut() {
-        extensions.ihe_iua.subject_organization = None;
-    }
-    let request = bearing(query()?, &minted(&claims)?)?;
-    let (status, _, text) = sent(&gateway.app, request).await?;
-    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
-    assert!(
-        text.contains(
-            "missing or not admitted: Table 1 family_name, Table 2 healthcare_provider_name"
-        ),
-        "{text}"
-    );
-    let given = relaying().other.get(&names.given_name).cloned();
-    for value in [family, given].into_iter().flatten() {
-        assert!(!text.contains(&value), "a claim value is quoted: {text}");
-    }
-    gateway.nobody_asked().await
-}
-
-/// A country code that is not admitted is named as `country_code`.
-#[tokio::test]
-async fn a_country_not_admitted_is_named() -> TestResult {
-    let gateway = Gateway::with(declared()?).await?;
-    let mut claims = relaying();
-    claims
-        .other
-        .insert(claim_names().country_code, String::from("XA"));
-    let (_, _, text) = sent(&gateway.app, bearing(query()?, &minted(&claims)?)?).await?;
-    assert!(
-        text.contains("missing or not admitted: Table 1 country_code"),
-        "{text}"
-    );
-    assert!(!text.contains("XA"), "{text}");
-    gateway.nobody_asked().await
-}
-
-/// The refusal of a short token carries its challenge, as every `403` of the
-/// gate does (RFC 6750 §3).
-#[tokio::test]
-async fn the_refusal_names_its_reason_in_the_challenge() -> TestResult {
-    let gateway = Gateway::with(declared()?).await?;
-    let mut claims = relaying();
-    claims.other.clear();
-    assert_refused(
-        &gateway,
-        bearing(query()?, &minted(&claims)?)?,
-        Refusal::ContactPoint,
-    )
-    .await
-}
-
-/// §13.4 authn-purpose-of-use: a contact point's patient-data request with
-/// no purpose of use is `403 purpose-of-use-required`, even where the
-/// deployment relaxed the rule for its own callers.
-#[tokio::test]
-async fn a_request_with_no_purpose_of_use_is_403_whatever_the_deployment_relaxed() -> TestResult {
-    let mut auth = declared()?;
+async fn a_purpose_of_use_other_than_treatment_or_emergency_is_refused() -> TestResult {
+    let mut auth = declared();
     auth.purpose_required = false;
     let gateway = Gateway::with(auth).await?;
-    let mut claims = relaying();
-    if let Some(extensions) = claims.extensions.as_mut() {
-        extensions.ihe_iua.purpose_of_use.clear();
+    for claims in [
+        with("purpose_of_use", json!("TREAT")),
+        with("purpose_of_use", json!("PUBLICHEALTH")),
+        without("purpose_of_use"),
+    ] {
+        assert_refused(
+            &gateway,
+            presenting(query()?, &claims)?,
+            Refusal::ContactPoint,
+        )
+        .await?;
     }
-    assert_refused(
-        &gateway,
-        bearing(query()?, &minted(&claims)?)?,
-        Refusal::PurposeOfUse,
-    )
-    .await
+    gateway.nobody_asked().await
 }
 
-/// The rule holds on every patient-data route: an EHR read is refused as a
-/// query is.
+/// SAML Profile 10.0.0 §2.3: a token missing the facility type is refused.
 #[tokio::test]
-async fn an_ehr_read_missing_an_attribute_is_refused() -> TestResult {
-    let gateway = Gateway::with(declared()?).await?;
-    let mut claims = relaying();
-    claims.other.clear();
-    let read = Request::get(format!("/v1/ehr/{}", crate::facade::EHR_A)).body(Body::empty())?;
+async fn a_token_missing_the_facility_type_is_refused() -> TestResult {
+    refused_without("provider.facility_type").await
+}
+
+/// SAML Profile 10.0.0 §2.3: a token missing the home community is refused.
+#[tokio::test]
+async fn a_token_missing_the_home_community_is_refused() -> TestResult {
+    refused_without("provider.home_community_id").await
+}
+
+/// SAML Profile 10.0.0 §2.3: a token missing the point of care is refused.
+#[tokio::test]
+async fn a_token_missing_the_point_of_care_is_refused() -> TestResult {
+    refused_without("point_of_care").await
+}
+
+/// SAML Profile 10.0.0 §2.1: a token missing the authentication class is
+/// refused.
+#[tokio::test]
+async fn a_token_missing_the_authentication_class_is_refused() -> TestResult {
+    refused_without("professional.authentication_method").await
+}
+
+/// SAML Profile 10.0.0 §2.3: `on-behalf-of` is mandatory for a clerical
+/// support worker, ISCO 44, so a token with that role and none is refused,
+/// and one that names it is admitted.
+#[tokio::test]
+async fn a_clerical_role_without_on_behalf_of_is_refused() -> TestResult {
+    let gateway = Gateway::with(declared()).await?;
+    let clerical = json!([{ "system": "2.16.840.1.113883.2.9.6.2.7", "code": "44" }]);
+    let without_whom = with("professional.hp_professional_role", clerical);
     assert_refused(
         &gateway,
-        bearing(read, &minted(&claims)?)?,
+        presenting(query()?, &without_whom)?,
         Refusal::ContactPoint,
     )
-    .await
+    .await?;
+    gateway.nobody_asked().await?;
+    let mut acting_for = without_whom;
+    acting_for.ehdsi.insert(
+        String::from("professional.on_behalf_of"),
+        json!([{ "system": "2.16.840.1.113883.2.9.6.2.7", "code": "221" }]),
+    );
+    assert_admitted(&gateway, presenting(query()?, &acting_for)?).await
 }
 
-/// The self-description reaches no patient data, so a contact point's
-/// token needs no Annex attribute for it.
+/// RFC 8705 §3, the contact point's `sender_constraint = "required"`: a
+/// token presented on a connection without the certificate it is bound to,
+/// or bound to nothing, is refused as a token that does not hold.
 #[tokio::test]
-async fn the_self_description_needs_no_annex_attribute() -> TestResult {
-    let gateway = Gateway::with(declared()?).await?;
-    let mut claims = relaying();
-    claims.other.clear();
+async fn a_token_not_bound_to_the_connection_is_refused() -> TestResult {
+    let gateway = Gateway::with(declared()).await?;
+    assert_refused(
+        &gateway,
+        bearing(query()?, &minted(&relaying())?)?,
+        Refusal::Invalid,
+    )
+    .await?;
+    let mut unbound = relaying();
+    unbound.cnf = None;
+    assert_refused(&gateway, presenting(query()?, &unbound)?, Refusal::Invalid).await?;
+    gateway.nobody_asked().await
+}
+
+/// The shared profile refuses the token itself, so a short token reaches no
+/// route, the self-description included.
+#[tokio::test]
+async fn a_short_token_is_refused_on_every_route() -> TestResult {
+    let gateway = Gateway::with(declared()).await?;
+    let short = without("point_of_care");
+    let read = Request::get(format!("/v1/ehr/{}", crate::facade::EHR_A)).body(Body::empty())?;
     let options = Request::builder()
         .method(Method::OPTIONS)
         .uri("/")
         .body(Body::empty())?;
-    let (status, _, text) = sent(&gateway.app, bearing(options, &minted(&claims)?)?).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
+    for request in [read, options] {
+        assert_refused(
+            &gateway,
+            presenting(request, &short)?,
+            Refusal::ContactPoint,
+        )
+        .await?;
+    }
     gateway.nobody_asked().await
 }
 
@@ -221,14 +161,13 @@ async fn the_self_description_needs_no_annex_attribute() -> TestResult {
 /// correlation-invalid`, with nothing sent.
 #[tokio::test]
 async fn a_correlation_header_out_of_its_form_is_400_with_nothing_sent() -> TestResult {
-    let gateway = Gateway::with(declared()?).await?;
-    let token = minted(&relaying())?;
-    let mut fine = bearing(query()?, &token)?;
+    let gateway = Gateway::with(declared()).await?;
+    let mut fine = presenting(query()?, &relaying())?;
     fine.headers_mut()
         .insert(CORRELATION_HEADER, CORRELATION.parse()?);
     assert_admitted(&gateway, fine).await?;
 
-    let gateway = Gateway::with(declared()?).await?;
+    let gateway = Gateway::with(declared()).await?;
     let too_long = "a".repeat(129);
     for values in [
         vec![CORRELATION, CORRELATION],
@@ -236,7 +175,7 @@ async fn a_correlation_header_out_of_its_form_is_400_with_nothing_sent() -> Test
         vec![too_long.as_str()],
         vec!["with space"],
     ] {
-        let mut request = bearing(query()?, &token)?;
+        let mut request = presenting(query()?, &relaying())?;
         for value in &values {
             request
                 .headers_mut()
@@ -247,11 +186,12 @@ async fn a_correlation_header_out_of_its_form_is_400_with_nothing_sent() -> Test
     Ok(())
 }
 
-/// An issuer not declared a contact point is held to none of this: the
-/// suite's default token reaches patient data with no Annex attribute.
+/// An issuer that is no contact point is held to none of this: the suite's
+/// default token reaches patient data with no eHDSI attribute and no
+/// binding.
 #[tokio::test]
-async fn an_issuer_not_declared_a_contact_point_needs_no_annex_attribute() -> TestResult {
-    let gateway = Gateway::trusting_the_test_issuer().await?;
+async fn an_issuer_that_is_no_contact_point_needs_no_ehdsi_attribute() -> TestResult {
+    let gateway = Gateway::with(declared()).await?;
     assert_admitted(
         &gateway,
         bearing(query()?, &minted(&crate::support::caller::claims())?)?,
@@ -259,22 +199,16 @@ async fn an_issuer_not_declared_a_contact_point_needs_no_annex_attribute() -> Te
     .await
 }
 
-/// Regulation (EU) 2025/327 Art 24(3): a country the deployment adds for a
-/// contact point, such as a third country whose contact point the
-/// Commission connected, is admitted for that contact point alone.
-#[tokio::test]
-async fn a_country_the_deployment_adds_is_admitted() -> TestResult {
-    let mut auth = declared()?;
-    let mut names = claim_names();
-    names.additional_countries = vec![String::from("XA")];
-    let resolved = names.resolve("trust.issuer[0].national_contact_point")?;
-    for issuer in &mut auth.issuers {
-        issuer.national_contact_point = Some(resolved.clone());
-    }
-    let gateway = Gateway::with(auth).await?;
-    let mut claims = relaying();
-    claims
-        .other
-        .insert(claim_names().country_code, String::from("XA"));
-    assert_admitted(&gateway, bearing(query()?, &minted(&claims)?)?).await
+/// A token of [`relaying`] without `field` is refused at the gate as the
+/// contact point's shortfall, and no node is asked anything.
+async fn refused_without(field: &str) -> TestResult {
+    let gateway = Gateway::with(declared()).await?;
+    let request = presenting(query()?, &without(field))?;
+    let (status, _, text) = sent(&gateway.app, request).await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "{field}: {text}");
+    assert!(
+        text.contains("contact-point-attributes-required"),
+        "{field}: {text}"
+    );
+    gateway.nobody_asked().await
 }

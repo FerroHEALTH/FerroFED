@@ -17,8 +17,7 @@ use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::containers;
 use ferrofed_testkit::containers::ferropix::{self, SOURCE};
 use ferrofed_testkit::national_connector::{
-    Answer, COUNTRY, FAMILY as HP_FAMILY, HCP_ADDRESS, HCP_ID, HCP_NAME, HP_ID, NationalConnector,
-    PERSON_ID,
+    Answer, COUNTRY, HCP_ID, HCP_NAME, HP_ID, HP_NAME, NationalConnector, PERSON_ID,
 };
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::seed::{self, CrossReferenceSeed};
@@ -105,7 +104,7 @@ fn conveyed(capture: &Capture) -> Result<crate::support::conveyed::Conveyed, Box
 
 /// Asserts that every request in `journal` was told the foreign
 /// professional and provider, marked as the contact point's assertion, and
-/// carried no IUA `person_id`.
+/// carried no name the assertion holds and no IUA `person_id`.
 fn told_the_relayed_caller(journal: &[Capture], at: &str) -> TestResult {
     assert!(!journal.is_empty(), "{at} was asked");
     for capture in journal {
@@ -113,13 +112,16 @@ fn told_the_relayed_caller(journal: &[Capture], at: &str) -> TestResult {
             .national_contact_point
             .ok_or_else(|| format!("{at}: {} names the contact point's caller", capture.path))?;
         assert_eq!(super::NCP_ISSUER, told.asserted_by, "{at}");
-        assert_eq!(HP_FAMILY, told.health_professional.family_name, "{at}");
         assert_eq!(HP_ID, told.health_professional.hp_identifier, "{at}");
         assert_eq!(COUNTRY, told.health_professional.country_code, "{at}");
         let provider = &told.healthcare_provider;
         assert_eq!(HCP_ID, provider.healthcare_provider_identifier, "{at}");
-        assert_eq!(HCP_NAME, provider.healthcare_provider_name, "{at}");
-        assert_eq!(HCP_ADDRESS, provider.healthcare_provider_address, "{at}");
+        for name in [HP_NAME, HCP_NAME] {
+            assert!(
+                !capture.contains(name.as_bytes()),
+                "GDPR Art 5(1)(c): {at} saw {name}"
+            );
+        }
         assert!(
             !capture.contains(PERSON_ID.as_bytes()),
             "N33: {at} saw the IUA person_id"
@@ -337,9 +339,9 @@ async fn recorded(repository: &FeedRepository, read: &Answers) -> TestResult {
     for record in &records {
         let relayed = |kind: &str| details(record, "ehds-relayed", kind);
         assert_eq!(relayed("asserted"), ["true"], "{record}");
-        assert_eq!(relayed("hp-family-name"), [HP_FAMILY], "{record}");
+        assert!(relayed("hp-family-name").is_empty(), "{record}");
         assert_eq!(relayed("hp-identifier"), [HP_ID], "{record}");
-        assert_eq!(relayed("provider-name"), [HCP_NAME], "{record}");
+        assert!(relayed("provider-name").is_empty(), "{record}");
         assert_eq!(relayed("provider-identifier"), [HCP_ID], "{record}");
         for correlation in correlations(record) {
             *by_correlation.entry(correlation).or_default() += 1;

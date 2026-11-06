@@ -34,14 +34,14 @@ use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::atna_feed::FeedRepository;
-use ferrofed_testkit::issuer::{Claims, Coding};
+use ferrofed_testkit::issuer::Claims;
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use serde_json::Value;
 
 use super::{declared, relaying};
 use crate::access::{RETENTION, accesses, details, named, node_with_rows, settings};
-use crate::auth::{bearing, minted, query, sent};
+use crate::auth::{query, sent};
 use crate::facade::{received, settings_with_room};
 use crate::feed_audit::SETTLE;
 use crate::run::binary;
@@ -72,12 +72,17 @@ pub(crate) fn emergency_purpose() -> String {
 /// §2.3).
 pub(crate) fn relayed_for(hp_identifier: &str, purpose: &str) -> Claims {
     let mut claims = relaying();
-    if let Some(extensions) = claims.extensions.as_mut() {
-        extensions.ihe_iua.national_provider_identifier = Some(hp_identifier.to_owned());
-        extensions.ihe_iua.purpose_of_use = vec![Coding {
-            system: EHDSI_PURPOSE.to_owned(),
-            code: purpose.to_owned(),
-        }];
+    for (field, value) in [
+        (
+            "professional.hp_identifier",
+            serde_json::json!(hp_identifier),
+        ),
+        (
+            "purpose_of_use",
+            serde_json::json!([{ "system": EHDSI_PURPOSE, "code": purpose }]),
+        ),
+    ] {
+        claims.ehdsi.insert(field.to_owned(), value);
     }
     claims
 }
@@ -100,12 +105,11 @@ pub(crate) fn emergency_settings(
     )
 }
 
-/// The router over `state`, its test issuer declared a national contact
-/// point.
-pub(crate) fn contact_point_router(state: Arc<AppState>) -> Result<Router, Box<dyn Error>> {
+/// The router over `state`, trusting the test contact point.
+pub(crate) fn contact_point_router(state: Arc<AppState>) -> Router {
     let mut server = settings_with_room();
-    server.auth = declared()?;
-    Ok(ferrofed_server::router(state, &server))
+    server.auth = declared();
+    ferrofed_server::router(state, &server)
 }
 
 /// Sends the patient query with a token over `claims` to `app`, and reads
@@ -114,7 +118,7 @@ pub(crate) async fn asked(
     app: &Router,
     claims: &Claims,
 ) -> Result<(StatusCode, String), Box<dyn Error>> {
-    let (status, _, text) = sent(app, bearing(query()?, &minted(claims)?)?).await?;
+    let (status, _, text) = sent(app, super::presenting(query()?, claims)?).await?;
     Ok((status, text))
 }
 
@@ -140,7 +144,7 @@ async fn storeless()
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
     let settings = emergency_settings(dir.path(), (&a.uri(), &b.uri()), &repository, "")?;
-    let app = contact_point_router(Arc::new(AppState::build(&settings)?))?;
+    let app = contact_point_router(Arc::new(AppState::build(&settings)?));
     Ok((app, a, b, repository, dir))
 }
 

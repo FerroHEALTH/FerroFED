@@ -221,7 +221,7 @@ fn relayed_caller() -> Caller {
 /// Implementing Regulation (EU) 2026/2099 Art 7, Annex Tables 1 and 2; §13.4
 /// authn-end-user: a node is told every attribute a contact point relays,
 /// each under its Annex data identifier, marked as the contact point's
-/// assertion.
+/// assertion, and no name or address (GDPR Art 5(1)(c)).
 // conformance: CP-16
 #[tokio::test]
 async fn a_relayed_caller_conveys_every_annex_attribute_marked_as_asserted() -> TestResult {
@@ -241,16 +241,12 @@ async fn a_relayed_caller_conveys_every_annex_attribute_marked_as_asserted() -> 
     let professional = &told.health_professional;
     assert_eq!(
         (
-            "Example-Family",
-            "Example-Given",
             "XA",
             "XA-HP-0042",
             "Example Professional Register",
             "XA-HCP-0007",
         ),
         (
-            professional.family_name.as_str(),
-            professional.given_name.as_str(),
             professional.country_code.as_str(),
             professional.hp_identifier.as_str(),
             professional.issuing_authority_name.as_str(),
@@ -265,19 +261,23 @@ async fn a_relayed_caller_conveys_every_annex_attribute_marked_as_asserted() -> 
         }],
         professional.hp_professional_role
     );
+    assert_eq!(
+        Some(ReadPurpose {
+            system: Some("urn:oid:2.999.9".to_owned()),
+            code: "nurse".to_owned(),
+        }),
+        professional.on_behalf_of,
+        "on-behalf-of (eHDSI SAML Profile 10.0.0 §2.3)"
+    );
     let provider = &told.healthcare_provider;
     assert_eq!(
         (
             relayed.provider.identifier.as_str(),
-            "Example Provider Register",
-            "Example Hospital",
-            "1 Example Street, Example City",
+            "Example Provider Register"
         ),
         (
             provider.healthcare_provider_identifier.as_str(),
             provider.issuing_authority_name.as_str(),
-            provider.healthcare_provider_name.as_str(),
-            provider.healthcare_provider_address.as_str(),
         ),
         "Annex Table 2"
     );
@@ -561,8 +561,6 @@ fn smuggling() -> Vec<Caller> {
         }),
         relaying(|relayed| relayed.contact_point = format!("https://{PATIENT}.example.test")),
         relaying(|relayed| PATIENT.clone_into(&mut relayed.country_code)),
-        relaying(|relayed| PATIENT.clone_into(&mut relayed.professional.family_name)),
-        relaying(|relayed| PATIENT.clone_into(&mut relayed.professional.given_name)),
         relaying(|relayed| PATIENT.clone_into(&mut relayed.professional.hp_identifier)),
         relaying(|relayed| PATIENT.clone_into(&mut relayed.professional.issuing_authority_name)),
         relaying(|relayed| {
@@ -574,9 +572,10 @@ fn smuggling() -> Vec<Caller> {
             PATIENT.clone_into(&mut relayed.provider.identifier);
         }),
         relaying(|relayed| PATIENT.clone_into(&mut relayed.provider.issuing_authority_name)),
-        relaying(|relayed| PATIENT.clone_into(&mut relayed.provider.name)),
         relaying(|relayed| {
-            relayed.provider.address = format!("{PATIENT} Example Street");
+            if let Some(role) = relayed.professional.on_behalf_of.as_mut() {
+                PATIENT.clone_into(&mut role.code);
+            }
         }),
     ]
 }

@@ -101,34 +101,11 @@ fn words(key: &str) -> (Msg, Msg) {
             Msg::SettingIntrospectionSecret,
             Msg::SettingIntrospectionSecretDesc,
         ),
-        "trust.issuer[].national_contact_point.family_name" => {
-            (Msg::SettingNcpFamilyName, Msg::SettingNcpFamilyNameDesc)
-        }
-        "trust.issuer[].national_contact_point.given_name" => {
-            (Msg::SettingNcpGivenName, Msg::SettingNcpGivenNameDesc)
-        }
-        "trust.issuer[].national_contact_point.country_code" => {
-            (Msg::SettingNcpCountryCode, Msg::SettingNcpCountryCodeDesc)
-        }
-        "trust.issuer[].national_contact_point.professional_issuing_authority" => (
-            Msg::SettingNcpProfessionalAuthority,
-            Msg::SettingNcpProfessionalAuthorityDesc,
-        ),
-        "trust.issuer[].national_contact_point.provider_issuing_authority" => (
-            Msg::SettingNcpProviderAuthority,
-            Msg::SettingNcpProviderAuthorityDesc,
-        ),
-        "trust.issuer[].national_contact_point.provider_address" => (
-            Msg::SettingNcpProviderAddress,
-            Msg::SettingNcpProviderAddressDesc,
-        ),
-        "trust.issuer[].national_contact_point.trc_patient" => {
-            (Msg::SettingNcpTrcPatient, Msg::SettingNcpTrcPatientDesc)
-        }
-        "trust.issuer[].national_contact_point.correlation_header" => {
+        "federation.contact_point[].issuer" => (Msg::SettingNcpIssuer, Msg::SettingNcpIssuerDesc),
+        "federation.contact_point[].correlation_header" => {
             (Msg::SettingNcpCorrelation, Msg::SettingNcpCorrelationDesc)
         }
-        "trust.issuer[].national_contact_point.additional_countries" => {
+        "federation.contact_point[].additional_countries" => {
             (Msg::SettingNcpCountries, Msg::SettingNcpCountriesDesc)
         }
         _ => (Msg::SettingUnknown, Msg::SettingUnknown),

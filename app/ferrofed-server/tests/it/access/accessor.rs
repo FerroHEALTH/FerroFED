@@ -16,12 +16,13 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
+use axum::body::Body;
 use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use ferrofed_server::config::auth::AuthSettings;
 use ferrofed_server::config::auth::assurance::Assurance;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::issuer::Claims;
-use http::StatusCode;
+use http::{Request, StatusCode};
 use serde_json::Value;
 
 use super::{
@@ -97,9 +98,9 @@ struct Recorded {
     exposition: String,
 }
 
-/// Sends the suite's patient query with a token over `claims` to a gateway
-/// authenticating with `auth`, and returns what the access left behind.
-async fn recorded(auth: AuthSettings, claims: &Claims) -> Result<Recorded, Box<dyn Error>> {
+/// Sends `request` to a gateway authenticating with `auth`, and returns
+/// what the access left behind.
+async fn recorded(auth: AuthSettings, request: Request<Body>) -> Result<Recorded, Box<dyn Error>> {
     let node_a = node_with_rows(&[composition(LAB_REPORT, UID_A)]).await;
     let node_b = node_with_rows(&[]).await;
     let repository = FeedRepository::start().await;
@@ -121,7 +122,7 @@ async fn recorded(auth: AuthSettings, claims: &Claims) -> Result<Recorded, Box<d
         logs.clone(),
     )?;
     let guard = tracing::subscriber::set_default(capture);
-    let (status, text) = call(app, bearing(query()?, &minted(claims)?)?).await?;
+    let (status, text) = call(app, request).await?;
     let records = accesses(&repository.wait_for(1, SETTLE).await)?;
     drop(guard);
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -216,9 +217,12 @@ fn only_in_the_person(record: &Value, values: &[&str]) {
 #[tokio::test]
 async fn a_person_is_recorded_with_the_professional_and_the_verified_level() -> TestResult {
     let claims = professional(SUBSTANTIAL);
-    let record = recorded(assured(AssuranceLevel::Substantial, false), &claims)
-        .await?
-        .record;
+    let record = recorded(
+        assured(AssuranceLevel::Substantial, false),
+        bearing(query()?, &minted(&claims)?)?,
+    )
+    .await?
+    .record;
     let person = person(&record)?;
     assert_eq!(person["who"]["identifier"]["value"], claims.sub.as_str());
     assert_eq!(person["who"]["display"], NAME, "IUA subject_name");
@@ -235,9 +239,12 @@ async fn a_person_is_recorded_with_the_professional_and_the_verified_level() -> 
 #[tokio::test]
 async fn a_declared_client_is_recorded_acting_for_the_professional() -> TestResult {
     let claims = as_client(professional(HIGH));
-    let record = recorded(assured(AssuranceLevel::Substantial, true), &claims)
-        .await?
-        .record;
+    let record = recorded(
+        assured(AssuranceLevel::Substantial, true),
+        bearing(query()?, &minted(&claims)?)?,
+    )
+    .await?
+    .record;
     let person = person(&record)?;
     assert_eq!(acting(person), Some("client"));
     assert_eq!(person["who"]["display"], NAME);
@@ -252,31 +259,23 @@ async fn a_declared_client_is_recorded_acting_for_the_professional() -> TestResu
 }
 
 /// Annex II 3.2(a), (b), Implementing Regulation (EU) 2026/2099 Art 7: the
-/// connector of an issuer declared a national contact point, a client
-/// acting for a foreign professional, is recorded with the foreign provider
-/// as the provider, the foreign professional as the natural person, the
-/// connector as the client that relayed the request, and the Annex
-/// attributes marked as the contact point's assertion.
+/// connector of a national contact point, acting for a foreign professional,
+/// is recorded with the foreign provider as the provider, the foreign
+/// professional as the natural person by their identifier and by no name
+/// (GDPR Art 5(1)(c)), the connector as the client that relayed the
+/// request, and the relayed attributes marked as the contact point's
+/// assertion.
 #[tokio::test]
 async fn a_contact_point_caller_names_the_foreign_professional_and_provider() -> TestResult {
     let mut claims = contact_point::relaying();
     CONNECTOR.clone_into(&mut claims.client_id);
     CONNECTOR.clone_into(&mut claims.sub);
-    claims.other.insert(String::from("acr"), HIGH.to_owned());
-    if let Some(extensions) = claims.extensions.as_mut() {
-        extensions.ihe_iua.subject_name = Some(NAME.to_owned());
-    }
-    let mut auth = assured(AssuranceLevel::High, false);
-    let declared = contact_point::declared()?;
-    for (issuer, contact) in auth.issuers.iter_mut().zip(declared.issuers) {
-        issuer.national_contact_point = contact.national_contact_point;
-    }
-    let record = recorded(auth, &claims).await?.record;
+    let request = contact_point::presenting(query()?, &claims)?;
+    let record = recorded(contact_point::declared(), request).await?.record;
     let person = person(&record)?;
-    assert_eq!(acting(person), Some("client"));
-    assert_eq!(person["who"]["display"], NAME, "3.2(b)");
+    assert_eq!(acting(person), Some("person"));
+    assert!(person["who"]["display"].is_null(), "no name: {person}");
     assert_eq!(identifiers(person), [contact_point::HP_ID], "3.2(b)");
-    assert_eq!(levels(person), ["high"]);
     let others = others(&record);
     assert!(
         others.contains(&contact_point::HCP_ID),
@@ -293,9 +292,12 @@ async fn a_contact_point_caller_names_the_foreign_professional_and_provider() ->
     );
     assert_eq!(
         details(&record, "ehds-relayed", "relayed-issuer"),
-        [support::caller::ISSUER]
+        [contact_point::NCP_ISSUER]
     );
-    only_in_the_person(&record, &[NAME, "ihe-assuranceLevel"]);
+    assert!(
+        !record.to_string().contains(contact_point::HP_NAME),
+        "the record names no professional by name"
+    );
     Ok(())
 }
 
@@ -303,9 +305,12 @@ async fn a_contact_point_caller_names_the_foreign_professional_and_provider() ->
 /// the record carries none, whatever the token states.
 #[tokio::test]
 async fn no_level_is_recorded_when_the_issuer_declares_none() -> TestResult {
-    let record = recorded(support::caller::auth(), &professional(HIGH))
-        .await?
-        .record;
+    let record = recorded(
+        support::caller::auth(),
+        bearing(query()?, &minted(&professional(HIGH))?)?,
+    )
+    .await?
+    .record;
     let person = person(&record)?;
     assert!(levels(person).is_empty(), "never inferred: {person}");
     assert_eq!(acting(person), Some("person"));
@@ -320,9 +325,12 @@ async fn a_token_naming_no_professional_records_none() -> TestResult {
     claims
         .other
         .insert(String::from("acr"), SUBSTANTIAL.to_owned());
-    let record = recorded(assured(AssuranceLevel::Substantial, false), &claims)
-        .await?
-        .record;
+    let record = recorded(
+        assured(AssuranceLevel::Substantial, false),
+        bearing(query()?, &minted(&claims)?)?,
+    )
+    .await?
+    .record;
     let person = person(&record)?;
     assert!(identifiers(person).is_empty(), "{person}");
     assert!(person["who"].get("display").is_none(), "{person}");
@@ -336,7 +344,11 @@ async fn the_professional_and_the_patient_reach_no_log_or_metric() -> TestResult
     let claims = professional(SUBSTANTIAL);
     let Recorded {
         log, exposition, ..
-    } = recorded(assured(AssuranceLevel::Substantial, false), &claims).await?;
+    } = recorded(
+        assured(AssuranceLevel::Substantial, false),
+        bearing(query()?, &minted(&claims)?)?,
+    )
+    .await?;
     recorded_the_query(&exposition, "node-a-pub")?;
     for value in [NAME, IDENTIFIER, PATIENT, EHR_A, EHR_B] {
         assert!(!log.contains(value), "N33: {value} in the log: {log}");

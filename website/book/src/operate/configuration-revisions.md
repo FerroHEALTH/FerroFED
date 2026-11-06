@@ -159,11 +159,11 @@ carries:
 The `authentication` section lists who may call, which only the file sets
 and no revision holds: `auth.product_scope`, each `[[auth.issuer]]` by its
 `issuer`, `kind`, `jwks_file` and `audience` (a change waits for the next
-start), and each `[[trust.issuer]]` by its `issuer`, and, for an issuer declared a
-[national contact point](authentication.md#national-contact-points), every
-key of its `national_contact_point` table. An issuer is keyed by its
-position, such as `trust.issuer[0].national_contact_point.family_name`, as a
-reload names it. None of them is editable, and a Basic user's password hash
+start), each `[[trust.issuer]]` by its `issuer`, and each
+[national contact point](authentication.md#national-contact-points)'s
+`[[federation.contact_point]]` by its `issuer`, `correlation_header` and
+`additional_countries`. An entry is keyed by its position, such as
+`federation.contact_point[0].correlation_header`, as a reload names it. None of them is editable, and a Basic user's password hash
 is not listed.
 
 `PUT /admin/config/settings` takes `{"base": <newest>, "reason": "…",

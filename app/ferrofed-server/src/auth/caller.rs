@@ -18,9 +18,10 @@
 //! it come the professional's identification the token states
 //! ([`Professional`]) and the assurance level its authentication reached
 //! (Regulation (EU) 2025/327 Annex II 3.1). A caller a national contact point
-//! vouched for also holds the professional and the provider of another
-//! Member State it relays, as it asserts them ([`Relayed`]), and the
-//! correlation identifier its connector sent. A caller whose patient token
+//! vouched for also holds what its token asserts, as `ferrohealth-smart`
+//! read it under the contact-point profile ([`External`]), the professional
+//! and the provider of another Member State it relays ([`Relayed`]), and
+//! the correlation identifier its connector sent. A caller whose patient token
 //! names a current actor ([`Actor`], RFC 8693 §4.1) holds it as the
 //! patient's representative only when the token's issuer declares its
 //! `act` claim one; the gateway never infers a representative.
@@ -30,13 +31,14 @@ use std::fmt;
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
 use ferrofed_engine::conveyance::relayed::{Relayed, Role};
 
-use crate::auth::contact_point::{MissingAnnex, TrcPatient};
+use crate::auth::contact_point::TrcPatient;
 use ferrofed_identity::role::behalf::{self, OnBehalfOf};
 use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrohealth_secret::secret::Secret;
+use ferrohealth_smart::federation::External;
 use ferrohealth_smart::openehr::smart_scopes::SmartScope;
 use secrecy::SecretString;
 
@@ -94,16 +96,10 @@ pub struct Caller {
     /// The representative the token names as acting for the patient, when
     /// its issuer declares its patient tokens' `act` one.
     representative: Option<Actor>,
-    /// Whether the issuer that vouched for the caller is declared a national
-    /// contact point.
-    contact_point: bool,
-    /// The professional and the provider the contact point relays, when its
-    /// token carries every Implementing Regulation (EU) 2026/2099 Annex
-    /// attribute.
-    relayed: Option<Box<Relayed>>,
-    /// The Annex attributes a contact point's token lacks, empty when it
-    /// carries every one or the issuer is no contact point.
-    annex_missing: MissingAnnex,
+    /// What a contact point's token asserts and the professional and the
+    /// provider it relays, when the issuer that vouched for the caller is a
+    /// national contact point.
+    relayed: Option<Box<(Relayed, External)>>,
     /// The correlation identifier the contact point's connector sent, when
     /// its issuer declares the header and the request carries it.
     correlation: Option<String>,
@@ -128,7 +124,6 @@ impl fmt::Debug for Caller {
             .field("assurance", &self.assurance)
             .field("acting", &self.acting)
             .field("representative", &self.representative)
-            .field("contact_point", &self.contact_point)
             .field("relayed", &self.relayed)
             .field("trc_patient", &self.trc_patient.is_some())
             .finish_non_exhaustive()
@@ -297,53 +292,40 @@ impl Caller {
             assurance: None,
             acting: Acting::Person,
             representative: None,
-            contact_point: false,
             relayed: None,
-            annex_missing: MissingAnnex::default(),
             correlation: None,
             trc_patient: None,
         }
     }
 
-    /// Returns this caller, vouched for by an issuer declared a national
-    /// contact point, its token relaying `relayed` when it carries every
-    /// Annex attribute, or lacking the attributes the error names.
+    /// Returns this caller, vouched for by a national contact point whose
+    /// token asserts `external`, relaying `relayed`.
     #[must_use]
-    pub fn relayed_by_contact_point(mut self, relayed: Result<Box<Relayed>, MissingAnnex>) -> Self {
-        self.contact_point = true;
-        match relayed {
-            Ok(relayed) => {
-                self.relayed = Some(relayed);
-                self.annex_missing = MissingAnnex::default();
-            }
-            Err(missing) => {
-                self.relayed = None;
-                self.annex_missing = missing;
-            }
-        }
+    pub fn relayed_by_contact_point(mut self, relayed: Relayed, external: External) -> Self {
+        self.relayed = Some(Box::new((relayed, external)));
         self
     }
 
-    /// Returns the Annex attributes the contact point's token lacks, empty
-    /// when it carries every one.
-    #[must_use]
-    pub fn annex_missing(&self) -> MissingAnnex {
-        self.annex_missing
-    }
-
-    /// Returns whether the issuer that vouched for the caller is declared a
-    /// national contact point, whose requests are served with consent
-    /// exclusions withheld.
+    /// Returns whether the issuer that vouched for the caller is a national
+    /// contact point, whose requests are served with consent exclusions
+    /// withheld.
     #[must_use]
     pub fn is_contact_point(&self) -> bool {
-        self.contact_point
+        self.relayed.is_some()
     }
 
     /// Returns the professional and the provider a contact point relays, as
-    /// it asserts them, when its token carries every Annex attribute.
+    /// it asserts them.
     #[must_use]
     pub fn relayed(&self) -> Option<&Relayed> {
-        self.relayed.as_deref()
+        self.relayed.as_deref().map(|(relayed, _)| relayed)
+    }
+
+    /// Returns what a contact point's token asserts, as `ferrohealth-smart`
+    /// read it under the contact-point profile.
+    #[must_use]
+    pub fn asserted(&self) -> Option<&External> {
+        self.relayed.as_deref().map(|(_, external)| external)
     }
 
     /// Returns this caller, its contact point's token binding `trc`, the

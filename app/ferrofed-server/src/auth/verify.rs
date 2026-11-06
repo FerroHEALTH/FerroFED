@@ -26,6 +26,7 @@ use ferrohealth_smart::resource::{
     Caller as SmartCaller, LazyResourceServer, Rejection, ResourceError, ResourceServer,
     Settings as KeySetSettings, Verifier,
 };
+use ferrohealth_smart::sender::Binding;
 
 use crate::auth::introspection::Introspected;
 use crate::config::auth::IssuerSettings;
@@ -73,8 +74,9 @@ impl Verifiers {
         }
     }
 
-    /// Returns the caller `token` authenticates.
-    async fn caller(&self, token: &str) -> Result<SmartCaller, Rejection> {
+    /// Returns the caller `token` authenticates, its `cnf` held to what
+    /// `binding` proves and to its issuer's sender constraint.
+    async fn caller(&self, token: &str, binding: &Binding) -> Result<SmartCaller, Rejection> {
         let malformed = Rejection::Invalid {
             reason: Reason::Malformed,
         };
@@ -86,17 +88,17 @@ impl Verifiers {
                 return Err(malformed);
             }
             return match &self.introspected {
-                Some(introspector) => introspector.introspect(token).await,
+                Some(introspector) => introspector.introspect(token, binding).await,
                 None => Err(untrusted),
             };
         }
         let issuer = unverified_issuer(token).ok_or(malformed)?;
         if let Some(keyed) = self.keyed.get(&issuer) {
-            return keyed.authenticate(token).await;
+            return keyed.authenticate(token, binding).await;
         }
         match &self.introspected {
             Some(introspector) if introspector.issuer() == issuer => {
-                introspector.introspect(token).await
+                introspector.introspect(token, binding).await
             }
             _ => Err(untrusted),
         }
@@ -108,7 +110,15 @@ impl Verifier for Verifiers {
         &'a self,
         token: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<SmartCaller, Rejection>> + Send + 'a>> {
-        Box::pin(self.caller(token))
+        Box::pin(async move { self.caller(token, &Binding::bearer()).await })
+    }
+
+    fn verify_bound<'a>(
+        &'a self,
+        token: &'a str,
+        binding: &'a Binding,
+    ) -> Pin<Box<dyn Future<Output = Result<SmartCaller, Rejection>> + Send + 'a>> {
+        Box::pin(self.caller(token, binding))
     }
 }
 
@@ -132,10 +142,10 @@ impl Keyed {
         }
     }
 
-    /// Returns the caller `token` authenticates, logging a failed read of the
-    /// issuer's metadata or key set once.
-    async fn authenticate(&self, token: &str) -> Result<SmartCaller, Rejection> {
-        let outcome = self.server.authenticate(token).await;
+    /// Returns the caller `token` authenticates under `binding`, logging a
+    /// failed read of the issuer's metadata or key set once.
+    async fn authenticate(&self, token: &str, binding: &Binding) -> Result<SmartCaller, Rejection> {
+        let outcome = self.server.authenticate_bound(token, binding).await;
         if let Err(Rejection::Unavailable { source }) = &outcome
             && self.server.get().is_none()
         {

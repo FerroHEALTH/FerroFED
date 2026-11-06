@@ -109,7 +109,7 @@ pub(super) async fn held(
         .collect();
     log.emergency().mark(&declared)?;
     // NOTE: no specification governs this: our own design; client authentication refuses a
-    // contact point's token without every Annex attribute, so an uncounted one is refused here too.
+    // contact point's token it relays nothing of, so an uncounted one is refused here too.
     let Some(relayed) = caller.relayed() else {
         return Some(refused(
             Code::ContactPointAttributesRequired,

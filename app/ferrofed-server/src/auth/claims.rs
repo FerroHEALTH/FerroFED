@@ -19,10 +19,9 @@
 //! `professional_issuing_authority` names as the agency that issued the
 //! identifier, and the string claim an issuer's
 //! `[trust.issuer.assurance]` names as the authentication assurance, by
-//! default `acr` (RFC 9068 §2.2.1). For an issuer declared a national contact
-//! point, the IUA `subject_organization` and `subject_role` and the string
-//! claims its `[trust.issuer.national_contact_point]` names are read as the
-//! Implementing Regulation (EU) 2026/2099 Annex attributes. The `iss` and
+//! default `acr` (RFC 9068 §2.2.1). A national contact point's token is read
+//! by `ferrohealth-smart` under the contact-point profile, never here. The
+//! `iss` and
 //! `sub` of the RFC 8693 §4.1 `act` claim are read as the current actor,
 //! which a patient token of an issuer that declares `act_is_representative`
 //! names as the patient's representative. Every other claim is passed over,
@@ -98,12 +97,6 @@ impl Claims {
     /// [`Declared::representative`] reads it.
     pub(super) fn representative(&self, issuer: &IssuerSettings) -> Option<Actor> {
         self.declared.representative(issuer)
-    }
-
-    /// Returns what the IUA extension states that the 2026/2099 Annex also
-    /// asks for.
-    pub(super) fn annex(&self) -> IuaAnnex {
-        self.declared.annex()
     }
 
     /// Returns the organisation the token names.
@@ -206,9 +199,6 @@ struct IheIua {
     /// `subject_name`, the user's name.
     #[serde(default)]
     subject_name: Option<String>,
-    /// `subject_organization`, the name of the user's organisation.
-    #[serde(default)]
-    subject_organization: Option<String>,
     /// `subject_role`, an array of FHIR `Coding`.
     #[serde(default)]
     subject_role: Option<Vec<Coding>>,
@@ -278,20 +268,6 @@ impl Declared {
             .collect()
     }
 
-    /// What the IUA extension states that Implementing Regulation (EU)
-    /// 2026/2099 Annex Tables 1 and 2 also ask for, each member when it is
-    /// set and not empty, and each role that has a code.
-    pub(super) fn annex(&self) -> IuaAnnex {
-        let iua = self.iua();
-        let text = |value: Option<&String>| value.filter(|value| !value.is_empty()).cloned();
-        IuaAnnex {
-            hp_identifier: text(iua.and_then(|iua| iua.national_provider_identifier.as_ref())),
-            roles: self.roles(),
-            provider_identifier: text(iua.and_then(|iua| iua.subject_organization_id.as_ref())),
-            provider_name: text(iua.and_then(|iua| iua.subject_organization.as_ref())),
-        }
-    }
-
     /// Every purpose of use declared, IUA first, sorted and without
     /// duplicates; a coding with no code declares none.
     pub(super) fn purposes(&self) -> Vec<PurposeOfUse> {
@@ -353,21 +329,6 @@ impl Declared {
     fn iua(&self) -> Option<&IheIua> {
         self.extensions.as_ref()?.ihe_iua.as_ref()
     }
-}
-
-/// What the IHE IUA extension states that Implementing Regulation (EU)
-/// 2026/2099 Annex Tables 1 and 2 also ask for, where the two coincide.
-#[derive(Debug, Default)]
-pub(super) struct IuaAnnex {
-    /// `national_provider_identifier`, the Annex `hp_identifier`.
-    pub(super) hp_identifier: Option<String>,
-    /// `subject_role`, the Annex `hp_professional_role`.
-    pub(super) roles: Vec<Role>,
-    /// `subject_organization_id`, the Annex
-    /// `healthcare_provider_identifier`.
-    pub(super) provider_identifier: Option<String>,
-    /// `subject_organization`, the Annex `healthcare_provider_name`.
-    pub(super) provider_name: Option<String>,
 }
 
 /// Reads `system|code`, or a bare `code`, as a purpose of use; an empty code

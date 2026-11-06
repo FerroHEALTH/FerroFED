@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use ferrohealth_smart::resource::introspection::{IntrospectionSettings, Introspector};
 use ferrohealth_smart::resource::{Caller as SmartCaller, Rejection};
+use ferrohealth_smart::sender::Binding;
 use tokio::sync::OnceCell;
 
 use crate::config::auth::IssuerSettings;
@@ -49,8 +50,13 @@ impl Introspected {
         &self.settings.issuer
     }
 
-    /// Returns the caller `token` names, as the endpoint answers for it.
-    pub(super) async fn introspect(&self, token: &str) -> Result<SmartCaller, Rejection> {
+    /// Returns the caller `token` names, as the endpoint answers for it,
+    /// its `cnf` held to what `binding` proves (RFC 8705 §3).
+    pub(super) async fn introspect(
+        &self,
+        token: &str,
+        binding: &Binding,
+    ) -> Result<SmartCaller, Rejection> {
         let check = self
             .check
             .get_or_try_init(|| async {
@@ -70,7 +76,7 @@ impl Introspected {
                 );
                 Rejection::upstream("introspection endpoint", source)
             })?;
-        let outcome = check.authenticate(token).await;
+        let outcome = check.authenticate_bound(token, binding).await;
         if let Err(Rejection::Upstream { .. }) = &outcome {
             Event::IntrospectionUnavailable.record();
             tracing::warn!(
