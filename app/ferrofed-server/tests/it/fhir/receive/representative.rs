@@ -28,7 +28,7 @@ use super::{
     EHR_SYSTEM, bound, creating, document, gateway_with, issue, post, receiving, rows, untouched,
 };
 use crate::auth::{bearing, minted};
-use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL};
+use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, wire};
 use crate::fhir::TestResult;
 use crate::support::call;
 use crate::support::caller::PATIENT_ISSUER;
@@ -120,13 +120,10 @@ async fn a_representatives_document_names_them_as_every_entrys_provider() -> Tes
             );
         }
     }
-    let captured = super::write::composed(&a).await?;
-    for withheld in [PATIENT, PATIENT_TAIL] {
-        assert!(
-            !captured.contains(withheld),
-            "N33: no identifier in the path or the headers: {captured}"
-        );
-    }
+    wire(&a).await?.assert_withholds_outside_bodies(
+        &[PATIENT, PATIENT_TAIL],
+        "N33: no identifier in the path or the headers",
+    );
     Ok(())
 }
 

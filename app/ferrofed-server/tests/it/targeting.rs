@@ -444,7 +444,7 @@ async fn no_node_receives_a_targeting_header_or_its_value() -> TestResult {
                 "§8.4: a node received {absent:?}: {captured}"
             );
         }
-        assert!(!captured.contains(PATIENT_TAIL), "§5.4.1, N33: {captured}");
+        captured.assert_withholds(&[PATIENT_TAIL], "§5.4.1, N33");
     }
     Ok(())
 }

@@ -18,7 +18,9 @@ use ferrofed_engine::hygiene::{Part, Withheld};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::proxy::Capture;
 use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
 use openehr_its::rest::client::ReqwestTransport;
 use secrecy::SecretString;
@@ -29,13 +31,13 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 /// The synthetic patient identifier, with a quote so the AQL-escaped form
 /// differs from the raw one.
-const PATIENT: &str = "O'Sentinel-5521";
+const PATIENT: &str = "O'Sentinel-N33-WITHHELD-5521";
 
 /// A clean node query, keyed on the node's own `ehr_id` alone.
 const CLEAN: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'";
 
 /// The node query with the identifier as the printer writes a literal.
-const LEAKING_ESCAPED: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398' AND c/name/value = 'O\\'Sentinel-5521'";
+const LEAKING_ESCAPED: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398' AND c/name/value = 'O\\'Sentinel-N33-WITHHELD-5521'";
 
 fn withheld() -> Withheld {
     Withheld::new([SecretString::from(PATIENT)])
@@ -128,14 +130,12 @@ async fn the_header_the_gateway_adds_is_its_minted_id_and_carries_no_identifier(
     let [request] = requests.as_slice() else {
         return Err(format!("expected one request, got {}", requests.len()).into());
     };
-    for (name, value) in &request.headers {
-        let raw = value.as_bytes();
-        assert!(
-            !raw.windows(PATIENT.len())
-                .any(|window| window == PATIENT.as_bytes()),
-            "the {name} header carries the identifier"
-        );
-    }
+    leak::assert_withheld(
+        &[Capture::from(request)],
+        &[PATIENT],
+        Scope::OutsideBodies,
+        "no header carries the identifier",
+    );
     assert_eq!(
         Some(id.to_string().as_bytes()),
         request

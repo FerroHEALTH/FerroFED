@@ -75,7 +75,7 @@ async fn assert_served_at_both(bound: &Bound, request: Request<Body>) -> TestRes
     for node in [&bound.a, &bound.b] {
         let captured = wire(node).await?;
         assert!(!captured.is_empty(), "each member was asked");
-        assert!(!captured.contains(PATIENT_TAIL), "N33: {captured}");
+        captured.assert_withholds(&[PATIENT_TAIL], "N33");
     }
     Ok(())
 }

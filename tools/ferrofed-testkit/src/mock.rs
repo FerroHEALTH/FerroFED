@@ -17,6 +17,8 @@ use std::ops::Deref;
 
 use wiremock::MockServer;
 
+use crate::proxy::Capture;
+
 /// A wiremock `MockServer` whose drop runs on a thread outside any runtime.
 ///
 /// It dereferences to the `MockServer`, so a mock mounts on `&server` and a
@@ -42,6 +44,16 @@ pub struct RecordingOff;
 /// rather than read an empty journal as nothing sent.
 pub async fn recorded(server: &MockServer) -> Result<Vec<wiremock::Request>, RecordingOff> {
     server.received_requests().await.ok_or(RecordingOff)
+}
+
+/// Returns every request `server` received, in order, as the capturing
+/// proxy journals them.
+///
+/// # Errors
+///
+/// Returns [`RecordingOff`] when the server records no requests.
+pub async fn journal(server: &MockServer) -> Result<Vec<Capture>, RecordingOff> {
+    Ok(recorded(server).await?.iter().map(Capture::from).collect())
 }
 
 impl Server {

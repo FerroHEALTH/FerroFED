@@ -118,9 +118,9 @@ async fn the_client_receives_one_recombined_row_in_its_own_columns() -> TestResu
                 && sent.contains(ehr_id),
             "AVG is asked as its SUM and COUNT, scoped to the node's ehr_id: {sent}"
         );
-        assert!(
-            !wire(server).await?.contains(PATIENT),
-            "§5.4.1, N33: no node receives the patient identifier"
+        wire(server).await?.assert_withholds(
+            &[PATIENT],
+            "§5.4.1, N33: no node receives the patient identifier",
         );
     }
     Ok(())

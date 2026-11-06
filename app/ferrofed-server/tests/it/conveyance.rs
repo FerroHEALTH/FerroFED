@@ -195,9 +195,9 @@ async fn a_query_conveys_the_verified_caller_to_each_node_signed_for_it() -> Tes
     assert_ne!(a.jti, b.jti, "a fresh jti per token");
     for server in [&gateway.a, &gateway.b] {
         let captured = wire(server).await?;
-        assert!(
-            !captured.contains(CLIENT_TOKEN.as_str()) && !captured.contains(PATIENT),
-            "neither the caller's token nor the patient reaches a node: {captured}"
+        captured.assert_withholds(
+            &[CLIENT_TOKEN.as_str(), PATIENT],
+            "neither the caller's token nor the patient reaches a node",
         );
     }
     Ok(())
@@ -259,9 +259,9 @@ async fn a_routed_read_a_routed_write_and_a_definition_request_convey_the_caller
         names_the_default_caller(read, "signature");
     }
     let captured = wire(&a).await?;
-    assert!(
-        !captured.contains(CLIENT_TOKEN.as_str()),
-        "the caller's own token is never forwarded (§13.1): {captured}"
+    captured.assert_withholds(
+        &[CLIENT_TOKEN.as_str()],
+        "the caller's own token is never forwarded (§13.1)",
     );
     assert!(tokens(&b).await?.is_empty(), "node B is never asked");
     Ok(())

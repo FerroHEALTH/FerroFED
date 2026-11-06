@@ -190,14 +190,11 @@ async fn asked_by_ehr_id_alone(server: &Server, ehr_id: &str) -> TestResult {
     assert_eq!(None, sent.url.query(), "no query string reaches the node");
     assert!(sent.body.is_empty(), "the read carries no body");
     let captured = wire(server).await?;
-    for needle in [
-        PATIENT,
-        PATIENT_TAIL,
-        NAMESPACE,
-        "subject_id",
-        "subject_namespace",
-        CLIENT_TOKEN.as_str(),
-    ] {
+    captured.assert_withholds(
+        &[PATIENT, PATIENT_TAIL, NAMESPACE, CLIENT_TOKEN.as_str()],
+        "§5.4.1, N33",
+    );
+    for needle in ["subject_id", "subject_namespace"] {
         assert!(
             !captured.contains_ignoring_ascii_case(needle),
             "{needle} reached the node (§5.4.1, N33): {captured}"
@@ -558,7 +555,7 @@ async fn a_subject_that_is_no_utf8_text_is_a_400_that_asks_no_resolver() -> Test
     let dir = tempfile::tempdir()?;
     let app = pix_gateway(dir.path(), &a.uri(), &b.uri(), &manager.uri())?;
     for uri in [
-        format!("/v1/ehr?subject_id=SENTINEL-%FF-38kq&subject_namespace={NAMESPACE}"),
+        format!("/v1/ehr?subject_id=SENTINEL-%FF-{PATIENT_TAIL}&subject_namespace={NAMESPACE}"),
         format!("/v1/ehr?subject_id={PATIENT}&subject_namespace=urn%3Aoid%3A%C3"),
     ] {
         let (status, _, text) = answer(app.clone(), get(&uri, None)?).await?;
@@ -575,6 +572,10 @@ async fn a_subject_that_is_no_utf8_text_is_a_400_that_asks_no_resolver() -> Test
     Ok(())
 }
 
+/// The tail both spellings of the subject with a plus share, which no
+/// request to a node may carry.
+const PLUS_TAIL: &str = "PLUS-N33-WITHHELD-38kq7";
+
 // conformance: CP-26
 #[tokio::test]
 async fn a_plus_in_the_subject_is_a_literal_plus() -> TestResult {
@@ -582,7 +583,7 @@ async fn a_plus_in_the_subject_is_a_literal_plus() -> TestResult {
     let b = node(SYSTEM_B, EHR_B).await;
     let dir = tempfile::tempdir()?;
     let rows = format!(
-        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL+PLUS-38kq\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL PLUS-38kq\"\nmember = \"node-b\"\nehr_id = \"{EHR_B}\"\n"
+        "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL+{PLUS_TAIL}\"\nmember = \"node-a\"\nehr_id = \"{EHR_A}\"\n\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL {PLUS_TAIL}\"\nmember = \"node-b\"\nehr_id = \"{EHR_B}\"\n"
     );
     let app = gateway(
         dir.path(),
@@ -590,7 +591,7 @@ async fn a_plus_in_the_subject_is_a_literal_plus() -> TestResult {
         "profile = \"development\"",
         &rows,
     )?;
-    let uri = format!("/v1/ehr?subject_id=SENTINEL+PLUS-38kq&subject_namespace={NAMESPACE}");
+    let uri = format!("/v1/ehr?subject_id=SENTINEL+{PLUS_TAIL}&subject_namespace={NAMESPACE}");
 
     let (status, headers, text) = answer(app, get(&uri, None)?).await?;
     assert_eq!(
@@ -601,10 +602,7 @@ async fn a_plus_in_the_subject_is_a_literal_plus() -> TestResult {
     names(&headers, ENDPOINT_A, SYSTEM_A);
     asked_by_ehr_id_alone(&a, EHR_A).await?;
     let sent = wire(&a).await?;
-    assert!(
-        !sent.contains_ignoring_ascii_case("PLUS"),
-        "the subject reached the node (§5.4.1, N33): {sent}"
-    );
+    sent.assert_withholds(&[PLUS_TAIL], "the subject reached the node (§5.4.1, N33)");
     assert_eq!(
         0,
         asked(&b).await?,

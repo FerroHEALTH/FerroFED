@@ -107,9 +107,9 @@ async fn a_patient_query_is_one_result_set_over_both_nodes() -> TestResult {
             "no subject path reaches a node (N2, CP-2): {sent}"
         );
         let all = wire(server).await?;
-        assert!(
-            !all.contains(PATIENT),
-            "the patient identifier reaches no request line, header or body (N33): {all}"
+        all.assert_withholds(
+            &[PATIENT],
+            "the patient identifier reaches no request line, header or body (N33)",
         );
     }
     Ok(())
@@ -367,9 +367,9 @@ async fn a_bound_parameter_resolves_like_a_literal_and_never_reaches_a_node() ->
     assert_eq!(2, answer.rows.len(), "both members answer");
     for server in [&a, &b] {
         let all = wire(server).await?;
-        assert!(
-            !all.contains(PATIENT),
-            "a bound identifier reaches no node either (N33): {all}"
+        all.assert_withholds(
+            &[PATIENT],
+            "a bound identifier reaches no node either (N33)",
         );
     }
     Ok(())

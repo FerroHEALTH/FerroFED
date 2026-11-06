@@ -15,7 +15,9 @@ use ferrofed_engine::dispatch::{
 };
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
+use ferrofed_testkit::leak::{self, Scope};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::proxy::Capture;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::Credentials;
 use wiremock::matchers::{method, path};
@@ -173,17 +175,12 @@ async fn a_sentinel_in_the_query_reaches_only_the_body() -> TestResult {
     let [request] = requests.as_slice() else {
         return Err(format!("expected one request, got {}", requests.len()).into());
     };
-    assert!(!request.url.as_str().contains(sentinel), "{}", request.url);
-    for (name, value) in &request.headers {
-        let carries = value
-            .as_bytes()
-            .windows(sentinel.len())
-            .any(|window| window == sentinel.as_bytes());
-        assert!(
-            !name.as_str().contains(sentinel) && !carries,
-            "the header {name} carries the sentinel"
-        );
-    }
+    leak::assert_withheld(
+        &[Capture::from(request)],
+        &[sentinel],
+        Scope::OutsideBodies,
+        "the sentinel outside the body",
+    );
     assert!(std::str::from_utf8(&request.body)?.contains(sentinel));
     Ok(())
 }

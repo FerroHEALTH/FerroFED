@@ -80,6 +80,6 @@ async fn the_example_query_adds_each_nodes_attributes_over_two_cdr_nodes() -> Te
             );
         }
     }
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
     Ok(())
 }

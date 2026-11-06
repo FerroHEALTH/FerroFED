@@ -62,7 +62,7 @@ async fn an_unmodified_client_gets_one_single_cdr_shaped_result_set() -> TestRes
             );
         }
     }
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
     Ok(())
 }
 

@@ -198,13 +198,10 @@ async fn neither_the_probe_nor_the_routed_read_carries_an_identifier_or_the_clie
     for server in [&a, &b] {
         let captured = wire(server).await?;
         assert!(!captured.is_empty(), "the member was probed");
-        assert!(
-            !captured.contains(PATIENT),
-            "no identifier reaches a member (N33): {captured:?}"
-        );
-        assert!(
-            !captured.contains(CLIENT_TOKEN.as_str()),
-            "the client's credential reaches no member: {captured:?}"
+        captured.assert_withholds(&[PATIENT], "no identifier reaches a member (N33)");
+        captured.assert_withholds(
+            &[CLIENT_TOKEN.as_str()],
+            "the client's credential reaches no member",
         );
         assert!(
             !captured.contains_ignoring_ascii_case("openehr-federation"),

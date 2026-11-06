@@ -12,8 +12,15 @@
 //! so a partial copy is found and an `ehr_id`, a minted request id or an
 //! operating-system port never matches by chance. A search reads every
 //! carrier of a [`Capture`] raw and percent-decoded, ASCII case ignored, and
-//! [`Needles::in_text`] reads any other captured text, the gateway's own log
-//! among it.
+//! each dot-separated segment of a token in a header value base64url-decoded,
+//! so a claim a node would decode is read too; [`Needles::in_text`] reads any
+//! other captured text, the gateway's own log among it.
+//!
+//! [`Needles::exact`] holds a fixture's withheld values as they are, each at
+//! least [`WITHHELD_MIN`] characters long, and [`Needles::assert_absent`] is
+//! the one check every N33 scan of what a node received makes, directly or
+//! through [`assert_withheld`]: a failure names the request, the carrier and
+//! the position of each sighting.
 //!
 //! No specification governs the search itself; it is FerroFED's own design.
 //!
@@ -21,6 +28,8 @@
 
 use crate::proxy::Capture;
 use crate::seed::PatientId;
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use std::fmt;
 
 /// The length of a fragment window over the identifier.
@@ -28,6 +37,13 @@ use std::fmt;
 /// Long enough that no header name or AQL keyword the gateway sends holds
 /// one by chance (`x-request-id` holds the four characters `est-`).
 pub const FRAGMENT: usize = 6;
+
+/// The fewest characters a value [`Needles::exact`] takes may have.
+///
+/// A token or a signature in a header is random base64url, and a needle of
+/// four characters turns up in one by chance; at twelve, with ASCII case
+/// ignored, the odds are below 1 in 10^18 per position.
+pub const WITHHELD_MIN: usize = 12;
 
 /// How many rounds of percent-decoding a search applies, so a value encoded
 /// twice is still found.
@@ -46,6 +62,14 @@ pub struct Needles {
     "the identifier is spelled in the alphabet of a UUID or a port, so a search would match an ehr_id or a port by chance"
 )]
 pub struct Collides;
+
+/// A withheld value is too short to be searched for without matching a
+/// token by chance.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "the withheld value {0:?} has fewer than {min} characters, so a search could match a token or a signature by chance", min = WITHHELD_MIN
+)]
+pub struct TooShort(pub String);
 
 /// Whether `text` holds a character neither a UUID nor a port can hold: one
 /// outside the hexadecimal digits and the hyphen.
@@ -103,6 +127,37 @@ impl Needles {
         Ok(Self { needles })
     }
 
+    /// Returns needles that are exactly `values`, in order, with no namespace
+    /// and no fragments.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ferrofed_testkit::leak::Needles;
+    ///
+    /// let needles = Needles::exact(["SENTINEL-PATIENT-WITHHELD-7q"])?;
+    /// assert_eq!(needles.identifier(), "SENTINEL-PATIENT-WITHHELD-7q");
+    /// assert!(Needles::exact(["38kq"]).is_err());
+    /// # Ok::<(), ferrofed_testkit::leak::TooShort>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TooShort`] for the first value with fewer than
+    /// [`WITHHELD_MIN`] characters.
+    pub fn exact<'a>(values: impl IntoIterator<Item = &'a str>) -> Result<Self, TooShort> {
+        let mut needles = Vec::new();
+        for value in values {
+            if value.chars().count() < WITHHELD_MIN {
+                return Err(TooShort(value.to_owned()));
+            }
+            if !needles.iter().any(|needle| needle == value) {
+                needles.push(value.to_owned());
+            }
+        }
+        Ok(Self { needles })
+    }
+
     /// Returns the identifier itself.
     #[must_use]
     pub fn identifier(&self) -> &str {
@@ -133,34 +188,103 @@ impl Needles {
     pub fn in_journal(&self, journal: &[Capture], scope: Scope) -> Vec<Sighting> {
         let mut sightings = Vec::new();
         for (index, capture) in journal.iter().enumerate() {
-            let mut carriers: Vec<(Carrier, &[u8])> =
-                vec![(Carrier::Path, capture.path.as_bytes())];
-            if let Some(query) = capture.query.as_deref() {
-                carriers.push((Carrier::Query, query.as_bytes()));
-            }
-            for (name, value) in &capture.headers {
-                carriers.push((Carrier::HeaderName, name.as_bytes()));
-                carriers.push((Carrier::Header(name.clone()), value));
-            }
-            if scope == Scope::WholeRequest {
-                carriers.push((Carrier::Body, &capture.body));
-            }
-            for (carrier, bytes) in carriers {
-                let forms = decoded_forms(bytes);
+            for (carrier, bytes) in carriers(capture, scope) {
+                let forms = decoded_forms(&bytes);
                 for needle in &self.needles {
-                    if forms.iter().any(|form| holds(form, needle.as_bytes())) {
+                    if let Some(position) = forms
+                        .iter()
+                        .find_map(|form| position(form, needle.as_bytes()))
+                    {
                         sightings.push(Sighting {
                             request: index,
                             method: capture.method.clone(),
                             path: capture.path.clone(),
                             carrier: carrier.clone(),
                             needle: needle.clone(),
+                            position,
                         });
                     }
                 }
             }
         }
         sightings
+    }
+}
+
+impl Needles {
+    /// Asserts that no needle reaches any carrier of any request in
+    /// `journal` that `scope` reaches (§5.4.1, N33).
+    ///
+    /// Every N33 scan of what a node received runs through here, so a
+    /// failure always lists each sighting with the request's position,
+    /// method and path, the carrier, and the byte position.
+    ///
+    /// # Panics
+    ///
+    /// Panics, prefixed with `context`, when a needle is seen.
+    pub fn assert_absent(&self, journal: &[Capture], scope: Scope, context: &str) {
+        let sightings = self.in_journal(journal, scope);
+        assert!(
+            sightings.is_empty(),
+            "{context}: a withheld value reached the node (§5.4.1, N33):\n  {}",
+            sightings
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n  ")
+        );
+    }
+}
+
+/// Every carrier of `capture` that `scope` reaches, with its bytes: the
+/// path, the query string, each header name and value, each token segment
+/// of a header value decoded, and under [`Scope::WholeRequest`] the body.
+fn carriers(capture: &Capture, scope: Scope) -> Vec<(Carrier, Vec<u8>)> {
+    let mut carriers = vec![(Carrier::Path, capture.path.as_bytes().to_vec())];
+    if let Some(query) = capture.query.as_deref() {
+        carriers.push((Carrier::Query, query.as_bytes().to_vec()));
+    }
+    for (name, value) in &capture.headers {
+        carriers.push((Carrier::HeaderName, name.as_bytes().to_vec()));
+        carriers.push((Carrier::Header(name.clone()), value.clone()));
+        for decoded in token_segments(value) {
+            carriers.push((Carrier::Token(name.clone()), decoded));
+        }
+    }
+    if scope == Scope::WholeRequest {
+        carriers.push((Carrier::Body, capture.body.clone()));
+    }
+    carriers
+}
+
+/// Every segment of a compact token in `value` that decodes as base64url: a
+/// JWS or a JWT in an `Authorization`, `DPoP` or conveyance header.
+fn token_segments(value: &[u8]) -> Vec<Vec<u8>> {
+    let text = String::from_utf8_lossy(value);
+    text.split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|word| word.contains('.'))
+        .flat_map(|word| word.split('.'))
+        .filter(|segment| !segment.is_empty())
+        .filter_map(|segment| URL_SAFE_NO_PAD.decode(segment.trim_end_matches('=')).ok())
+        .collect()
+}
+
+/// Asserts that no value of `withheld` reaches any carrier of any request in
+/// `journal` that `scope` reaches (§5.4.1, N33), through
+/// [`Needles::assert_absent`] over [`Needles::exact`].
+///
+/// # Panics
+///
+/// Panics, prefixed with `context`, when a value is shorter than
+/// [`WITHHELD_MIN`] or a value is seen.
+#[expect(
+    clippy::panic,
+    reason = "an assertion helper fails the test that calls it, naming what it saw"
+)]
+pub fn assert_withheld(journal: &[Capture], withheld: &[&str], scope: Scope, context: &str) {
+    match Needles::exact(withheld.iter().copied()) {
+        Ok(needles) => needles.assert_absent(journal, scope, context),
+        Err(short) => panic!("{context}: {short}"),
     }
 }
 
@@ -189,6 +313,9 @@ pub enum Carrier {
     HeaderName,
     /// The value of the header with this name.
     Header(String),
+    /// A token segment in the value of the header with this name, decoded
+    /// from base64url.
+    Token(String),
     /// The request body.
     Body,
 }
@@ -200,6 +327,7 @@ impl fmt::Display for Carrier {
             Self::Query => f.write_str("the query string"),
             Self::HeaderName => f.write_str("a header name"),
             Self::Header(name) => write!(f, "the {name} header"),
+            Self::Token(name) => write!(f, "a decoded token segment of the {name} header"),
             Self::Body => f.write_str("the body"),
         }
     }
@@ -218,14 +346,17 @@ pub struct Sighting {
     pub carrier: Carrier,
     /// The needle.
     pub needle: String,
+    /// The byte position of the needle in the carrier, after the rounds of
+    /// percent-decoding it took to find it.
+    pub position: usize,
 }
 
 impl fmt::Display for Sighting {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{:?} in {} of request {} ({} {})",
-            self.needle, self.carrier, self.request, self.method, self.path
+            "{:?} at byte {} of {} of request {} ({} {})",
+            self.needle, self.position, self.carrier, self.request, self.method, self.path
         )
     }
 }
@@ -278,10 +409,17 @@ fn hex(digit: u8) -> Option<u8> {
 
 /// Whether `haystack` holds `needle`, ASCII case ignored.
 fn holds(haystack: &[u8], needle: &[u8]) -> bool {
-    needle.is_empty()
-        || haystack
-            .windows(needle.len())
-            .any(|window| window.eq_ignore_ascii_case(needle))
+    position(haystack, needle).is_some()
+}
+
+/// The first byte position of `needle` in `haystack`, ASCII case ignored.
+fn position(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    haystack
+        .windows(needle.len())
+        .position(|window| window.eq_ignore_ascii_case(needle))
 }
 
 #[cfg(test)]

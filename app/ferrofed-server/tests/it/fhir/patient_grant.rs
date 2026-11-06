@@ -156,9 +156,9 @@ async fn a_persons_own_grant_gets_their_summary_and_no_identifier_reaches_a_node
         }
         let captured = wire(node).await?;
         for withheld in [PATIENT, PATIENT_TAIL] {
-            assert!(
-                !captured.contains(withheld),
-                "N33: no identifier in the query, path or headers: {captured}"
+            captured.assert_withholds(
+                &[withheld],
+                "N33: no identifier in the query, path or headers",
             );
         }
     }

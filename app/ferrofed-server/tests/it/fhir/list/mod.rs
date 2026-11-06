@@ -12,6 +12,7 @@
 //! (§11.3, §11.4); the search is authenticated and recorded (Annex II 3.2);
 //! and `metadata` declares it.
 
+use ferrofed_testkit::leak::{self, Scope};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -361,15 +362,14 @@ async fn a_native_member_is_asked_for_the_list_by_its_ehr_id_alone() -> TestResu
             "N33: the member's ehr_id alone"
         );
         for withheld in [PATIENT, PATIENT_TAIL] {
-            assert!(
-                !proxy.journal_contains(withheld.as_bytes()),
-                "N33: no identifier in the path, the query or a header"
+            leak::assert_withheld(
+                &proxy.journal(),
+                &[withheld],
+                Scope::WholeRequest,
+                "N33: no identifier in the path, the query or a header",
             );
             let captured = wire(own).await?;
-            assert!(
-                !captured.contains(withheld),
-                "N33: none in the caller claims either: {captured}"
-            );
+            captured.assert_withholds(&[withheld], "N33: none in the caller claims either");
         }
     }
     Ok(())

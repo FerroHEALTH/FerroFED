@@ -212,10 +212,9 @@ async fn the_communities_xcpd_discovers_select_the_members_asked() -> TestResult
         );
     }
     for server in &servers {
-        assert!(
-            !wire(server).await?.contains(PATIENT),
-            "the identifier reached a member (N33)"
-        );
+        wire(server)
+            .await?
+            .assert_withholds(&[PATIENT], "the identifier reached a member (N33)");
     }
 
     let request = Request::options("/").body(Body::empty())?;

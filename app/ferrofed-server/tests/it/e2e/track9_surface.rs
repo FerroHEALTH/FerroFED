@@ -21,6 +21,7 @@ use axum::body::Body;
 use ferrofed_server::conformance::client::FederationMeta;
 use ferrofed_server::conformance::scenarios::track9;
 use ferrofed_testkit::containers::{self, API_PATH, TwoNodes};
+use ferrofed_testkit::leak::{Needles, Scope};
 use ferrofed_testkit::proxy::Fault;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers::ENDPOINT;
@@ -134,7 +135,7 @@ async fn a_stored_query_is_held_at_the_gateway_and_runs_by_name_over_both_member
                 .all(|(verb, path)| verb == "POST" && path.ends_with("/v1/query/aql")),
             "the definition stays at the gateway; a node receives only its query"
         );
-        assert!(!node.proxy.journal_contains(PATIENT.value().as_bytes()));
+        Needles::of(PATIENT)?.assert_absent(&node.proxy.journal(), Scope::WholeRequest, "N33");
     }
 
     clear(&nodes);

@@ -212,7 +212,7 @@ async fn a_member_the_prefilter_denies_is_reported_and_never_contacted() -> Test
     );
     let at_a = wire(&a).await?;
     assert!(!at_a.is_empty(), "node A was asked");
-    assert!(!at_a.contains(PATIENT), "§5.4.1, N33: {at_a}");
+    at_a.assert_withholds(&[PATIENT], "§5.4.1, N33");
     Ok(())
 }
 

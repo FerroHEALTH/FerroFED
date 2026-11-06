@@ -203,12 +203,11 @@ async fn a_read_by_ehr_id_names_the_patient_the_identity_binding_holds() -> Test
         Some("https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientRead")
     );
     ehr_says(&record, "found")?;
-    let wire = received(&node).await?;
-    assert!(!wire.is_empty(), "the node was asked");
-    assert!(
-        !wire.contains(PATIENT),
-        "no patient identifier reaches the node: {wire}"
-    );
+    let seen = received(&node).await?;
+    assert!(!seen.is_empty(), "the node was asked");
+    crate::facade::wire(&node)
+        .await?
+        .assert_withholds(&[PATIENT], "no patient identifier reaches the node (N33)");
     Ok(())
 }
 

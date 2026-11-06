@@ -11,6 +11,7 @@
 //! without one, a caller confined to another patient `403`, as is its search
 //! for another patient, and a silent member is named (§11.1).
 
+use ferrofed_testkit::leak::{self, Scope};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
@@ -129,15 +130,14 @@ async fn the_member_is_asked_by_its_ehr_id_and_its_own_id_alone() -> TestResult 
         "N33: the member's ehr_id and its own id alone (FHIR R4 search §3.1.1.4.1)"
     );
     for withheld in [PATIENT, PATIENT_TAIL, id.as_str()] {
-        assert!(
-            !members.proxy_a.journal_contains(withheld.as_bytes()),
-            "N33: no identifier and no face id in the path, the query or a header"
+        leak::assert_withheld(
+            &members.proxy_a.journal(),
+            &[withheld],
+            Scope::WholeRequest,
+            "N33: no identifier and no face id in the path, the query or a header",
         );
         let captured = wire(&members.own_a).await?;
-        assert!(
-            !captured.contains(withheld),
-            "N33: none in the caller claims either: {captured}"
-        );
+        captured.assert_withholds(&[withheld], "N33: none in the caller claims either");
     }
     assert!(
         members.proxy_b.journal().is_empty(),
@@ -442,10 +442,11 @@ async fn a_caller_confined_to_one_patient_searches_that_patients_prescriptions_a
     );
     assert!(members.no_query().await?, "nor to any member's Query API");
     for proxy in [&members.proxy_a, &members.proxy_b] {
-        assert!(
-            !proxy.journal_contains(CONFINED.as_bytes())
-                && !proxy.journal_contains(ANOTHER.as_bytes()),
-            "N33: no patient identifier reaches a member"
+        leak::assert_withheld(
+            &proxy.journal(),
+            &[CONFINED, ANOTHER],
+            Scope::WholeRequest,
+            "N33: no patient identifier reaches a member",
         );
     }
     Ok(())

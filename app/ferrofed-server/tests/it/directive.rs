@@ -222,9 +222,9 @@ async fn no_node_receives_the_directive_and_each_receives_the_undirected_node_qu
                 "§8.1: a node received {absent:?}: {captured}"
             );
         }
-        assert!(
-            !captured.contains(PATIENT_TAIL),
-            "§5.4.1, N33: a node received the patient identifier: {captured}"
+        captured.assert_withholds(
+            &[PATIENT_TAIL],
+            "§5.4.1, N33: a node received the patient identifier",
         );
     }
     Ok(())

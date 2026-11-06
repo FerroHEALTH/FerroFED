@@ -134,7 +134,7 @@ async fn puts(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
         !composed.contains(COMMENT) && !composed.contains(SECOND_COMMENT),
         "§5.4.2: no comment reaches a node"
     );
-    assert!(!composed.contains(PATIENT), "N33");
+    composed.assert_withholds(&[PATIENT], "N33");
     Ok(bodies)
 }
 

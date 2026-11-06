@@ -86,9 +86,9 @@ async fn the_summary_is_an_eps_document_from_both_members_and_no_identifier_reac
     for (node, ehr_id) in [(&a, EHR_A), (&b, EHR_B)] {
         let captured = wire(node).await?;
         for withheld in [PATIENT, PATIENT_TAIL] {
-            assert!(
-                !captured.contains(withheld),
-                "N33: no identifier in the query, path or headers: {captured}"
+            captured.assert_withholds(
+                &[withheld],
+                "N33: no identifier in the query, path or headers",
             );
         }
         let dispatched = received(node).await?;

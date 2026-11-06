@@ -25,7 +25,7 @@ use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::{RX_B, built, entries, own, own_endpoint, page, provenance_agent, search, searchset};
-use crate::facade::{EHR_A, EHR_B, PATIENT, PATIENT_TAIL, received};
+use crate::facade::{EHR_A, EHR_B, PATIENT, PATIENT_TAIL, received, wire};
 use crate::fhir::{FHIR, TestResult};
 use crate::support::call;
 
@@ -186,13 +186,10 @@ async fn a_map_mode_members_own_orders_are_mapped_beside_a_native_members() -> T
     assert_eq!(bundle["total"], Value::from(2), "node B's prescription too");
     for asked in received(&a).await? {
         assert!(asked.contains(EHR_A), "N33: node A's ehr_id: {asked}");
-        for withheld in [PATIENT, PATIENT_TAIL] {
-            assert!(
-                !asked.contains(withheld),
-                "N33: no patient identifier: {asked}"
-            );
-        }
     }
+    wire(&a)
+        .await?
+        .assert_withholds(&[PATIENT, PATIENT_TAIL], "N33: no patient identifier");
     Ok(())
 }
 

@@ -34,8 +34,13 @@ use crate::support::{call, error_body};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-/// The §9.4 example query, as the specification writes it.
-const EXAMPLE: &str = r#"SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition_id FROM ENDPOINT p ["node_1","node_2"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '12345'"#;
+/// The patient of the §9.4 example, the specification's `12345` lengthened
+/// to a marker no token or signature can hold by chance.
+const EXAMPLE_PATIENT: &str = "SENTINEL-EXAMPLE-N33-12345";
+
+/// The §9.4 example query, as the specification writes it but for
+/// [`EXAMPLE_PATIENT`].
+const EXAMPLE: &str = r#"SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition_id FROM ENDPOINT p ["node_1","node_2"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'SENTINEL-EXAMPLE-N33-12345'"#;
 
 /// The composition ids of the §9.4 rows.
 const UID_1: &str = "8849182a-1d4b-4e3d-a3f3-f303d2f4f34b::cdr1.rso.nl::1";
@@ -141,7 +146,7 @@ impl Nodes {
     }
 
     /// A development gateway over the three nodes, `node_2` managed by
-    /// `second_organisation`, resolving the patient `12345` at node 1 and 2
+    /// `second_organisation`, resolving [`EXAMPLE_PATIENT`] at node 1 and 2
     /// in the default namespace.
     fn gateway(&self, dir: &Path, second_organisation: &str) -> Result<Router, Box<dyn Error>> {
         let document = dir.join("registry.toml");
@@ -161,7 +166,7 @@ impl Nodes {
         for (member, ehr_id) in [("node_1", EHR_1), ("node_2", EHR_2)] {
             write!(
                 text,
-                "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"12345\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
+                "\n[[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"SENTINEL-EXAMPLE-N33-12345\"\nmember = \"{member}\"\nehr_id = \"{ehr_id}\"\n"
             )?;
         }
         let settings =
@@ -229,7 +234,7 @@ fn columns(answer: &Answer) -> Vec<(&str, Option<&str>)> {
 /// `columns`, selected `FROM ENDPOINT p` over node 1 and node 2.
 fn selecting(columns: &str) -> String {
     format!(
-        r#"SELECT {columns} FROM ENDPOINT p ["node_1", "node_2"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = '12345'"#
+        r#"SELECT {columns} FROM ENDPOINT p ["node_1", "node_2"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'SENTINEL-EXAMPLE-N33-12345'"#
     )
 }
 
@@ -299,7 +304,8 @@ async fn the_example_query_answers_the_example_columns_and_rows() -> TestResult 
     assert_eq!([1, 1, 0], nodes.asked().await?);
     for node in [&nodes.one, &nodes.two] {
         let captured = wire(node).await?;
-        for absent in ["ENDPOINT", "p/", "system_id", "node_1", "node_2", "12345"] {
+        captured.assert_withholds(&[EXAMPLE_PATIENT], "§5.4.1, N33");
+        for absent in ["ENDPOINT", "p/", "system_id", "node_1", "node_2"] {
             assert!(
                 !captured.contains_ignoring_ascii_case(absent),
                 "§8.1, N33: a node received {absent:?}: {captured}"
@@ -404,7 +410,7 @@ async fn an_alias_that_leaves_the_collision_standing_is_refused_400() -> TestRes
     let (status, text) = call(nodes.gateway(dir.path(), "org-b")?, post(body(&query)?)?).await?;
     assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
     assert_eq!("endpoint-name-collision", error_body(&text)?.code);
-    assert!(!text.contains("12345"), "§5.4.3: {text}");
+    assert!(!text.contains(EXAMPLE_PATIENT), "§5.4.3: {text}");
     assert_eq!([0, 0, 0], nodes.asked().await?, "nothing is dispatched");
     Ok(())
 }
@@ -476,7 +482,8 @@ fn placed(answer: &Answer) -> Vec<(&str, &str)> {
 async fn assert_dispatched(nodes: &Nodes, sent: &str) -> TestResult {
     for node in [&nodes.one, &nodes.two] {
         let captured = wire(node).await?;
-        for absent in ["ENDPOINT", "p/", "node_1", "node_2", "12345"] {
+        captured.assert_withholds(&[EXAMPLE_PATIENT], "§5.4.1, N33");
+        for absent in ["ENDPOINT", "p/", "node_1", "node_2"] {
             assert!(
                 !captured.contains_ignoring_ascii_case(absent),
                 "§8.1, N33: a node received {absent:?}: {captured}"

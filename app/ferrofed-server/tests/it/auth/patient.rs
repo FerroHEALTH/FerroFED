@@ -198,7 +198,7 @@ async fn the_token_s_own_patient_is_admitted_at_every_member() -> TestResult {
             captured.contains(ehr_id),
             "under its own ehr_id: {captured}"
         );
-        assert!(!captured.contains(PATIENT), "{captured}");
+        captured.assert_withholds(&[PATIENT], "");
     }
     Ok(())
 }

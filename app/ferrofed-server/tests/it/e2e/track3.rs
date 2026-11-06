@@ -113,7 +113,7 @@ async fn a_named_member_where_the_patient_does_not_resolve_is_reported_not_error
     )
     .await?;
     assert!(asked(&nodes.b).is_empty(), "N8: node B is never asked");
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
     Ok(())
 }
 

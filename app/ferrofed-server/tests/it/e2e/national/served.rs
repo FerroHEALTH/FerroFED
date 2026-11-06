@@ -290,7 +290,7 @@ async fn members_received(harness: &Harness) -> TestResult {
         "node B's own endpoint created nothing"
     );
 
-    assert_no_patient_identifier_on_the_wire(&harness.nodes);
+    assert_no_patient_identifier_on_the_wire(&harness.nodes)?;
     for (node, ehr_id) in [(&harness.nodes.a, EHR_A), (&harness.nodes.b, EHR_B)] {
         let journal = node.proxy.journal();
         let at = node.node.system_id().to_string();

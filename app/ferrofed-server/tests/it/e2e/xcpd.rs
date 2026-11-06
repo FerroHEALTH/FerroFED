@@ -81,6 +81,6 @@ async fn an_undirected_query_asks_only_the_member_ferropix_names_over_iti_55() -
     );
     assert_eq!(1, answer.rows.len(), "{}", reply.text);
     assert!(asked(&nodes.b).is_empty(), "CP-5: node B is never asked");
-    assert_no_patient_identifier_on_the_wire(&nodes);
+    assert_no_patient_identifier_on_the_wire(&nodes)?;
     Ok(())
 }

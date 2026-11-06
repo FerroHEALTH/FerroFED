@@ -392,8 +392,10 @@ async fn no_patient_template_or_caller_reaches_the_log_a_metric_or_a_node() -> T
         assert!(!exposition.contains(value), "{value} in a metric");
     }
     for node in [&node_a, &node_b] {
+        crate::facade::wire(node)
+            .await?
+            .assert_withholds(&[PATIENT], "N33");
         for request in crate::facade::received(node).await? {
-            assert!(!request.contains(PATIENT), "N33: {request}");
             assert!(!request.contains("ehds"), "no record reaches a node");
         }
     }

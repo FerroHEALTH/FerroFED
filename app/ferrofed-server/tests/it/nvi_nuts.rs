@@ -322,7 +322,7 @@ async fn the_nuts_token_reaches_the_nvi_alone() -> TestResult {
         for proof in &proofs {
             assert!(!wire.contains(proof), "a node was sent the NVI's proof");
         }
-        assert!(!wire.contains(&pseudonym), "a node was sent the pseudonym");
+        wire.assert_withholds(&[&pseudonym], "a node was sent the pseudonym");
     }
     for (carrier, carried) in [
         ("the log", logs.text()),

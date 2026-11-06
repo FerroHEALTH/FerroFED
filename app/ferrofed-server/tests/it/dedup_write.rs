@@ -32,13 +32,12 @@ use wiremock::ResponseTemplate;
 
 use crate::dedup::{Answer, Dedup, request};
 use crate::facade::{
-    EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, gateway, node_answering, registry, schema,
+    EHR_A, EHR_B, NAMESPACE, PATIENT, crossref, gateway, node_answering, registry, schema, wire,
 };
 use crate::path_ehr_id::answer;
 use crate::support::{asked, error_body, mount, send};
 use crate::versioned_write::{
-    CREATED_ELSEWHERE, ENDPOINT_A, ENDPOINT_B, LEGACY_MAPPING, outside_bodies, over,
-    refused_at_neither, versioned,
+    CREATED_ELSEWHERE, ENDPOINT_A, ENDPOINT_B, LEGACY_MAPPING, over, refused_at_neither, versioned,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -259,7 +258,9 @@ async fn a_write_through_the_owners_ehr_id_reaches_the_owner_alone_and_claims_no
     let received = scenario.a.received_requests().await.ok_or("recording")?;
     let put = received.last().ok_or("node A was sent the write")?;
     assert_eq!(SENT.as_bytes(), put.body.as_slice(), "byte-identical (N22)");
-    assert!(!outside_bodies(&scenario.a).await?.contains(PATIENT), "N33");
+    wire(&scenario.a)
+        .await?
+        .assert_withholds_outside_bodies(&[PATIENT], "N33");
     assert_eq!(
         vec![queried()],
         asked(&scenario.b).await?,

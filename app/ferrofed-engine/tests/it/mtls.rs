@@ -32,7 +32,9 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::issuer::{Claims, Issuer};
+use ferrofed_testkit::leak;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
+use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::tls::MutualTls;
 use ferrohealth_secret::secret_url::SecretUrl;
 use jsonwebtoken::Algorithm;
@@ -498,14 +500,7 @@ async fn no_key_token_or_withheld_subject_leaves_the_gateway() -> TestResult {
         .received_requests()
         .await
         .ok_or("recording is on")?;
-    for request in &requests {
-        let seen = format!(
-            "{} {:?} {}",
-            request.url,
-            request.headers,
-            String::from_utf8_lossy(&request.body)
-        );
-        assert!(!seen.contains(WITHHELD), "{seen}");
-    }
+    let journal: Vec<Capture> = requests.iter().map(Capture::from).collect();
+    leak::assert_withheld(&journal, &[WITHHELD], leak::Scope::WholeRequest, "N33");
     Ok(())
 }

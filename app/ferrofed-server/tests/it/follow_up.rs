@@ -491,11 +491,8 @@ async fn a_version_read_reaches_the_node_byte_identical_and_carries_no_identifie
     let sent = requests.first().ok_or("node B was asked")?;
     assert_eq!(resource, sent.url.path(), "no uid is rewritten (N22)");
     let captured = wire(&b).await?;
-    assert!(
-        !captured.contains(PATIENT),
-        "no identifier reaches the node (N33): {captured}"
-    );
-    assert!(!captured.contains(CLIENT_TOKEN.as_str()), "{captured}");
+    captured.assert_withholds(&[PATIENT], "no identifier reaches the node (N33)");
+    captured.assert_withholds(&[CLIENT_TOKEN.as_str()], "");
     assert!(
         !captured.contains_ignoring_ascii_case("openehr-federation"),
         "{captured}"
