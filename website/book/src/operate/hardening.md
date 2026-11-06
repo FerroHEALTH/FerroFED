@@ -99,7 +99,7 @@ page: our own design.
 - [ ] **Bind a patient grant only with a cross-reference you trust.** An
   `[trust.issuer.patient]` binding confines a `patient/` grant through your
   identity service's links; leave it unset otherwise
-  ([Patient grants](authentication.md#patient-grants)).
+  ([Patient grants](patient-grants.md)).
 - [ ] **Use the edge mode only with a signing proxy.** `trust.mode = "edge"`
   verifies a signed assertion and nothing else; never configure a proxy that
   forwards an unsigned identity header (RFC 7239 §8.1).

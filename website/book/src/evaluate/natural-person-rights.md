@@ -66,7 +66,7 @@ delay access, which is that service's to apply.
 reads each member at the time of the request, so what a member registered
 is in the next answer ([Intended purpose](regulatory-status.md#intended-purpose)).
 A token confined to one patient reads that patient's EHR at every member
-and nothing else ([Patient grants](../operate/authentication.md#patient-grants);
+and nothing else ([Patient grants](../operate/patient-grants.md);
 `auth/patient.rs`: `the_token_s_own_patient_is_admitted_at_every_member`,
 `a_query_for_another_patient_is_refused`). The interoperability component
 serves the patient summary in the HL7 Europe format
@@ -129,7 +129,7 @@ A proxy service may instead issue a token in the person's name that names
 the representative in its RFC 8693 `act` claim, the party the person
 delegated to. The gateway reads that claim as a representative only when
 the issuer declares it one (`act_is_representative`), never by inference
-([Patient grants](../operate/authentication.md#patient-grants)). A
+([Patient grants](../operate/patient-grants.md)). A
 document such a token inserts names the representative as each entry's
 provider, and its access record says a representative inserted it
 ([Art 5](#art-5-inserting-information)). The record's caller is still the
@@ -185,7 +185,7 @@ from what the person inserts. When the token's issuer declares the RFC
 carries one, every entry names that representative as its `provider`, a
 `PARTY_IDENTIFIED` whose one identifier is the claim's `sub`, never the
 person's `PARTY_SELF`
-([Patient grants](../operate/authentication.md#patient-grants);
+([Patient grants](../operate/patient-grants.md);
 `fhir/receive/representative.rs`:
 `a_representatives_document_names_them_as_every_entrys_provider`), and
 the access record carries the `ehds-representative-inserted` entity in
@@ -205,7 +205,7 @@ patient grant whose scopes cover an update or a delete, the gateway sends it
 to the member as for any caller, with the body the client composed, and
 the member, which records who committed each version and is told that a
 person acts, decides whether the person may change it
-([Patient grants](../operate/authentication.md#patient-grants)). Keeping a
+([Patient grants](../operate/patient-grants.md)). Keeping a
 person from altering a professional's entry over ITS-REST is the member's.
 
 ## Art 6: rectification

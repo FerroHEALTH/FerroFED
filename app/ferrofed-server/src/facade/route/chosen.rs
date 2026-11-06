@@ -18,9 +18,8 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::{Endpoint, EndpointStatus, RegistrySnapshot};
 use http::HeaderMap;
 
-use super::{
-    Arrived, DEFINITION_GROUP, Deadlines, Failure, answered, failed, forward, held, passed, unheld,
-};
+use super::answer::{answered, failed, passed};
+use super::{Arrived, DEFINITION_GROUP, Deadlines, Failure, forward, held, unheld};
 use crate::error::{self, Code};
 use crate::facade::owner;
 use crate::facade::provenance::Provenance;

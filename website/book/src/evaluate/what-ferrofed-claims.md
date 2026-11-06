@@ -121,7 +121,7 @@ Released on 2026-10-04. It carries §13 to §15, Annex A and Annex B.
   `ehr_id` there; a bare `ehrId` is never compared across members (§12.5,
   N26;
   [#443](https://github.com/FerroHEALTH/FerroFED/issues/443),
-  [Patient grants](../operate/authentication.md#patient-grants)).
+  [Patient grants](../operate/patient-grants.md)).
 - The caller's identity conveyed on every request to a node, in a token the
   gateway signs for that node and a node verifies against the published JWK
   Set (§13.1, N24, CP-16;

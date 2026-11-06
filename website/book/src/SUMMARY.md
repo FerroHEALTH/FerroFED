@@ -66,6 +66,7 @@
     - [The access log](operate/access-log.md)
     - [Labelling the access records](operate/access-labels.md)
   - [Client authentication](operate/authentication.md)
+  - [Patient grants](operate/patient-grants.md)
     - [The §13.4 deployment decisions](operate/deployment-decisions.md)
     - [What a node is told about the caller](operate/caller-token.md)
   - [Onward credentials](operate/onward-credentials.md)
