@@ -247,8 +247,8 @@ Authorization: Bearer <token>
   alone. The patient is resolved as for a summary (§5.2).
 - `type`, when sent, is a token: `60591-5`, `http://loinc.org|60591-5` or
   `http://loinc.org|`. A `type` that admits no document type the list
-  serves (the patient summary, and the laboratory and discharge reports
-  when the list names them) matches nothing: the answer is an empty
+  serves (the patient summary, and the laboratory, discharge and imaging
+  documents when the list names them) matches nothing: the answer is an empty
   `searchset`, and nothing is resolved or sent.
 - `_format`, when sent, is `json`, `application/json` or
   `application/fhir+json`. Any other parameter or modifier is a `400`.
@@ -302,8 +302,9 @@ member and no summary written on request. It is never the empty
 The list also names the patient's laboratory reports, the ones the gateway
 writes from the members' compositions and the ones a member serves itself
 ([Laboratory reports over FHIR](laboratory-reports.md)), and the discharge
-reports a member serves itself
-([Discharge reports over FHIR](discharge-reports.md)).
+reports and imaging documents a member serves itself
+([Discharge reports over FHIR](discharge-reports.md),
+[Imaging reports over FHIR](imaging-reports.md)).
 
 `metadata` declares the search: the `DocumentReference` resource with the
 `search-type` interaction, its supported profile and the two parameters,

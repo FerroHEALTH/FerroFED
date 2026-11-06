@@ -14,8 +14,8 @@
 //! patient summary the gateway writes on request, retrievable through
 //! `Patient/$summary`, and one for each document a member serves itself,
 //! read through the gateway at a URL it signs. A member that serves its
-//! laboratory or discharge reports as a Document Access Provider has its own
-//! `DocumentReference`s listed as it holds them ([`Match::Passed`]), each
+//! laboratory, discharge or imaging reports as a Document Access Provider
+//! has its own `DocumentReference`s listed as it holds them ([`Match::Passed`]), each
 //! attachment URL readdressed to the gateway's ([`readdressed`]).
 
 use fhir_types::codec::Value;
@@ -58,6 +58,10 @@ pub const LABORATORY_REPORT: &str = "11502-2";
 /// `eehrxf-document-type-discharge-report-vs` value set, in its order.
 pub const DISCHARGE_REPORTS: [&str; 2] = ["18842-5", "100719-4"];
 
+/// The LOINC codes of a medical imaging document, the codes of the
+/// `eehrxf-document-type-medical-imaging-vs` value set, in its order.
+pub const IMAGING_DOCUMENTS: [&str; 2] = ["85430-7", "18748-4"];
+
 /// The canonical URL of the document `Bundle` profile the gateway's own
 /// summary follows.
 pub const EPS_BUNDLE: &str = "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps";
@@ -77,6 +81,7 @@ pub struct ListRequest {
     summaries: bool,
     laboratory: bool,
     discharge: Vec<&'static str>,
+    imaging: Vec<&'static str>,
 }
 
 impl std::fmt::Debug for ListRequest {
@@ -85,6 +90,7 @@ impl std::fmt::Debug for ListRequest {
             .field("summaries", &self.summaries)
             .field("laboratory", &self.laboratory)
             .field("discharge", &self.discharge)
+            .field("imaging", &self.imaging)
             .finish_non_exhaustive()
     }
 }
@@ -146,6 +152,14 @@ impl ListRequest {
         &self.discharge
     }
 
+    /// Returns the codes of [`IMAGING_DOCUMENTS`] every `type` the search
+    /// gives admits, in their order; none when it admits no imaging
+    /// document.
+    #[must_use]
+    pub fn imaging(&self) -> &[&'static str] {
+        &self.imaging
+    }
+
     /// Reads the search from the query string `query` of a `GET`.
     ///
     /// # Errors
@@ -157,6 +171,7 @@ impl ListRequest {
         let mut summaries = true;
         let mut laboratory = true;
         let mut discharge = DISCHARGE_REPORTS.to_vec();
+        let mut imaging = IMAGING_DOCUMENTS.to_vec();
         for (name, value) in pairs {
             match &*name {
                 "patient.identifier" => {
@@ -173,7 +188,9 @@ impl ListRequest {
                     laboratory &= value
                         .split(',')
                         .any(|token| admits(token, LABORATORY_REPORT));
-                    discharge.retain(|code| value.split(',').any(|token| admits(token, code)));
+                    for codes in [&mut discharge, &mut imaging] {
+                        codes.retain(|code| value.split(',').any(|token| admits(token, code)));
+                    }
                 }
                 "_format" => {
                     if !JSON_FORMATS.contains(&&*value) {
@@ -194,6 +211,7 @@ impl ListRequest {
             summaries,
             laboratory,
             discharge,
+            imaging,
         })
     }
 }
@@ -700,6 +718,30 @@ mod tests {
         ] {
             let read = ListRequest::from_query(Some(query)).unwrap();
             assert_eq!(read.discharge(), codes, "{query}");
+        }
+    }
+
+    #[test]
+    fn the_imaging_codes_every_type_admits_are_read_in_order() {
+        for (query, codes) in [
+            ("patient.identifier=a%7Cb", &["85430-7", "18748-4"][..]),
+            (
+                "patient.identifier=a%7Cb&type=http%3A%2F%2Floinc.org%7C",
+                &["85430-7", "18748-4"],
+            ),
+            ("patient.identifier=a%7Cb&type=18748-4", &["18748-4"]),
+            (
+                "patient.identifier=a%7Cb&type=18748-4,http%3A%2F%2Floinc.org%7C85430-7",
+                &["85430-7", "18748-4"],
+            ),
+            ("patient.identifier=a%7Cb&type=18842-5", &[]),
+            (
+                "patient.identifier=a%7Cb&type=http%3A%2F%2Fexample.org%7C85430-7",
+                &[],
+            ),
+        ] {
+            let read = ListRequest::from_query(Some(query)).unwrap();
+            assert_eq!(read.imaging(), codes, "{query}");
         }
     }
 

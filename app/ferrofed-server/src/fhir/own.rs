@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The laboratory and discharge reports of the document list a member
-//! serves itself (Regulation (EU) 2025/327 Art 14(1)(e) and (f), Annex II
+//! The laboratory, discharge and imaging documents of the document list a
+//! member serves itself (Regulation (EU) 2025/327 Art 14(1)(d) to (f), Annex II
 //! 2.1).
 //!
 //! A member that serves the documents of a category itself has each of its

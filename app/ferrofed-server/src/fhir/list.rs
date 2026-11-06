@@ -17,8 +17,8 @@
 //! in `node-error` (§11.1): it fails the list under all-or-nothing, and
 //! under `partial` is named in an `outcome` entry (§11.3, §11.4). Laboratory
 //! reports are listed when the gateway maps them ([`super::laboratory`]),
-//! and laboratory and discharge reports when a member serves them itself
-//! ([`super::own`]).
+//! and laboratory, discharge and imaging reports when a member serves them
+//! itself ([`super::own`]).
 
 use std::collections::BTreeSet;
 use std::ops::ControlFlow;
@@ -70,8 +70,18 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
                 .any(|native| native.serves(category.code()))
         })
     };
-    let lists_laboratory = mapped || serves(Category::MedicalTestResult);
-    let lists_discharge = serves(Category::DischargeReport);
+    let laboratory = if mapped {
+        Laboratory::Mapped
+    } else if serves(Category::MedicalTestResult) {
+        Laboratory::Own
+    } else {
+        Laboratory::Unlisted
+    };
+    let lists = Lists {
+        laboratory,
+        discharge: serves(Category::DischargeReport),
+        imaging: serves(Category::MedicalImaging),
+    };
     super::searched(
         (&asked, Instant::now()),
         read,
@@ -79,10 +89,7 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
         |read| {
             // NOTE: FHIR R4 search; a `type` that admits no document type the face lists matches
             // nothing, so the empty set is answered and nothing is resolved or sent.
-            if read.admits_summaries()
-                || (lists_laboratory && read.admits_laboratory())
-                || (lists_discharge && !read.discharge().is_empty())
-            {
+            if read.admits_summaries() || lists.wanted(read).any() {
                 ControlFlow::Continue(())
             } else {
                 let mut response =
@@ -102,7 +109,7 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
             if let Err(refused) = super::trc::named(admitted, &arrived, patient, service) {
                 return refused;
             }
-            let wanted = wanted(read, (mapped, lists_discharge));
+            let wanted = lists.wanted(read);
             match gathered::gather(
                 Arc::clone(federation),
                 arrived,
@@ -152,24 +159,35 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
     .await
 }
 
-/// The documents the search `read` asks the members for beside the
-/// summaries: laboratory reports, through the gateway's mapping when
-/// `mapped`, and discharge reports of the types it admits when a member
-/// serves them itself, `discharge`.
-fn wanted(read: &ListRequest, (mapped, discharge): (bool, bool)) -> Wanted {
-    let laboratory = match (read.admits_laboratory(), mapped) {
-        (false, _) => Laboratory::Unlisted,
-        (true, true) => Laboratory::Mapped,
-        (true, false) => Laboratory::Own,
-    };
-    let discharge = if discharge {
-        read.discharge().to_vec()
-    } else {
-        Vec::new()
-    };
-    Wanted {
-        laboratory,
-        discharge,
+/// The documents the list names beside the summaries, as the deployment
+/// declares them.
+#[derive(Debug, Clone, Copy)]
+struct Lists {
+    /// The laboratory reports it lists.
+    laboratory: Laboratory,
+    /// Whether a member serves its discharge reports itself.
+    discharge: bool,
+    /// Whether a member serves its imaging documents itself.
+    imaging: bool,
+}
+
+impl Lists {
+    /// The documents the search `read` asks the members for beside the
+    /// summaries: of each kind the list names, the types it admits.
+    fn wanted(self, read: &ListRequest) -> Wanted {
+        let laboratory = if read.admits_laboratory() {
+            self.laboratory
+        } else {
+            Laboratory::Unlisted
+        };
+        let types = |listed: bool, codes: &[&'static str]| {
+            if listed { codes.to_vec() } else { Vec::new() }
+        };
+        Wanted {
+            laboratory,
+            discharge: types(self.discharge, read.discharge()),
+            imaging: types(self.imaging, read.imaging()),
+        }
     }
 }
 

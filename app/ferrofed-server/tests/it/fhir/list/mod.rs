@@ -38,7 +38,9 @@ use crate::facade::{
 use crate::support::{call, exchange, field, send_as_is};
 
 mod own_discharge;
+mod own_imaging;
 mod own_laboratory;
+mod own_member;
 mod resolution;
 
 /// The identifier system the members' `ehr_id`s are written in, in the

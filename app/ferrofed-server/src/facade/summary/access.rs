@@ -75,8 +75,8 @@ pub(crate) fn accessed(
         Scope::Summary => Evidence::reached(Basis::Returned, objects)
             .queried(gathered.queried.clone())
             .constructed(Category::PatientSummary),
-        // NOTE: Regulation (EU) 2025/327 Art 14(1)(e) and (f): a list that asked for laboratory
-        // or discharge reports reaches that category too.
+        // NOTE: Regulation (EU) 2025/327 Art 14(1)(d) to (f): a list that asked for laboratory,
+        // discharge or imaging documents reaches that category too.
         Scope::List => listed_categories(gathered).into_iter().fold(
             Evidence::reached(Basis::Returned, objects),
             Evidence::constructed,
@@ -203,7 +203,8 @@ fn listed_categories(gathered: &Gathered) -> BTreeSet<Category> {
 
 /// The number of documents the members of `gathered` serve themselves that
 /// a list `delivered`: each member's own summary and each of its own
-/// laboratory and discharge reports, none when it delivered nothing.
+/// laboratory, discharge and imaging documents, none when it delivered
+/// nothing.
 fn documents(gathered: &Gathered, delivered: bool) -> usize {
     if !delivered {
         return 0;
@@ -225,8 +226,8 @@ fn documents(gathered: &Gathered, delivered: bool) -> usize {
         .fold(summaries, usize::saturating_add)
 }
 
-/// Each member a list asked at its own endpoint for its laboratory or
-/// discharge reports whose request left the gateway, with what it answered: with `delivered`,
+/// Each member a list asked at its own endpoint for its own documents
+/// whose request left the gateway, with what it answered: with `delivered`,
 /// an origin that contributed when the list carries one of its documents.
 fn own_origins(snapshot: &RegistrySnapshot, gathered: &Gathered, delivered: bool) -> Vec<Asked> {
     gathered

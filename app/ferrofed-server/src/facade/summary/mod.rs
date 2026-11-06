@@ -129,9 +129,9 @@ pub(crate) struct Gathered {
     /// What each member answered the laboratory report query, for a list
     /// that lists laboratory reports, in endpoint order.
     pub(crate) laboratory: Vec<(EndpointId, Answered)>,
-    /// The members that serve laboratory or discharge reports themselves,
-    /// each with what its own endpoint answered, for a list that lists them,
-    /// by kind and then in endpoint order.
+    /// The members that serve laboratory, discharge or imaging documents
+    /// themselves, each with what its own endpoint answered, for a list
+    /// that lists them, by kind and then in endpoint order.
     pub(crate) own: Vec<Own>,
 }
 
@@ -226,7 +226,7 @@ pub(crate) async fn gather(
         (system, value),
     )
     .await?;
-    let own = own::asking(federation.snapshot(), &held, own, &listed.discharge);
+    let own = own::asking(federation.snapshot(), &held, own, &listed);
     let Located {
         completion,
         mut targets,
