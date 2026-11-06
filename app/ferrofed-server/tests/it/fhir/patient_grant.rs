@@ -47,7 +47,7 @@ const SUMMARY_SCOPE: &str = "patient/aql-eu.ferrofed.eehrxf::*.s";
 
 /// The claims of a person's own grant: confined to [`PATIENT`], whose EHR
 /// at node A the token names, for the purpose `PATRQT`.
-fn own_grant() -> Claims {
+pub(in crate::fhir) fn own_grant() -> Claims {
     let mut granted = claims();
     PERSON.clone_into(&mut granted.sub);
     granted.scope = Some(SUMMARY_SCOPE.to_owned());

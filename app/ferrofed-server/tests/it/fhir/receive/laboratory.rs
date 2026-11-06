@@ -29,7 +29,7 @@ use wiremock::{Mock, ResponseTemplate};
 
 /// The `[fhir]` tables of a face that receives laboratory reports at node
 /// A, the mapping written into `dir`.
-fn receiving(dir: &Path) -> Result<String, Box<dyn Error>> {
+pub(super) fn receiving(dir: &Path) -> Result<String, Box<dyn Error>> {
     let path = |value: &Path| toml::Value::String(value.display().to_string()).to_string();
     let mapping = dir.join("laboratory");
     std::fs::create_dir_all(&mapping)?;
@@ -173,22 +173,22 @@ async fn a_laboratory_report_of_a_patient_no_member_holds_is_refused() -> TestRe
 }
 
 /// The versioned object node A's laboratory composition is held under.
-const LAB_OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000c0a1";
+pub(super) const LAB_OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000c0a1";
 
 /// The version of node A's laboratory composition, created at node A.
-const LAB_VERSION: &str = "5b0c3f7e-0000-4000-8000-00000000c0a1::cdr-a.example.org::1";
+pub(super) const LAB_VERSION: &str = "5b0c3f7e-0000-4000-8000-00000000c0a1::cdr-a.example.org::1";
 
 /// The archetype the laboratory report query selects compositions by.
 const LAB_ARCHETYPE: &str = "openEHR-EHR-OBSERVATION.laboratory_test_result.v1";
 
 /// The synthetic report as node A serves it, under [`LAB_VERSION`].
-fn lab_composition(dir: &Path) -> Result<String, Box<dyn Error>> {
+pub(super) fn lab_composition(dir: &Path) -> Result<String, Box<dyn Error>> {
     laboratory::composition(dir, &[(NAMESPACE, PATIENT)], LAB_VERSION)
 }
 
 /// A node answering the laboratory report query with `rows` and every other
 /// query with none, and the read of its composition with `composition`.
-async fn holding(rows: &str, composition: Option<&str>) -> Server {
+pub(super) async fn holding(rows: &str, composition: Option<&str>) -> Server {
     let server = Server::start().await;
     let columns = r#"[{"name":"composition","path":"c"},{"name":"uid","path":"c/uid/value"},{"name":"template_id","path":"c/archetype_details/template_id/value"}]"#;
     let answer = |rows: &str| {
