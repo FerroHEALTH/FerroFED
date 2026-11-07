@@ -26,6 +26,7 @@ has run on every change since the workspace landed.
 | Workflow | Runs on | What it does |
 |---|---|---|
 | `ci.yml` | push to `main`, pull request into `main` or a security patch branch, merge group, dispatch | the two tiers below and the `conclusion` check |
+| `perf.yml` | called by `ci.yml` on a change that reaches the gateway, on a push to `main` and a dispatch, and by `release.yml` on the tagged commit | the performance gate: the release build under `ferrohealth-perf`, the idle phase with every background worker running, the load phase against the entry of the runner's CPU model in `perf/baseline.toml`, and a planted store poller the idle phase must fail (`scripts/perf/gate.sh`, #1687) |
 | `label-guards.yml` | the `no-changelog` or `no-crate-bump` label added to or removed from a pull request | re-runs the guard that label escapes, and with it `conclusion`, in the CI run on the head commit (§Triggers and concurrency) |
 | `codeql.yml` | push to `main` and pull request into `main` or a security patch branch, touching workflows, actions, its configuration or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` and leaves out the `tests/` trees through `.github/codeql/codeql-config.yml` |
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
@@ -42,7 +43,7 @@ has run on every change since the workspace landed.
 | `ratchet-tighten.yml` | daily, dispatch, on `main` only | runs the `--update` of the duplication, file-length and stray-literal guards and, when a count fell, opens one pull request holding only their ratchet files, or moves its open one; a rise fails the lane and nothing fell does nothing (#1467, #1463) |
 | `fuzz.yml` | Wednesdays, dispatch, and pull requests touching `crates/openehr-federation`, `app/ferrofed-server`, `fuzz/` or `scripts/fuzz/` | the four `cargo fuzz` targets over the untrusted inputs, time-boxed and advisory, after a check that the generated seeds are current (§The fuzz lane) |
 
-Dependabot (`.github/dependabot.yml`) is the sixteenth piece and is described
+Dependabot (`.github/dependabot.yml`) is the seventeenth piece and is described
 under the pins below.
 
 ## The two tiers of `ci.yml`

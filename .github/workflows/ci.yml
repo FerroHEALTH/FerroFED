@@ -428,6 +428,8 @@ jobs:
           bash scripts/checks/ehds-acts.sh --self-test
           bash scripts/vendor/ehdsi-specifications.sh --check
           bash scripts/vendor/sogis-acm.sh --check
+      - name: The performance gate reads its pins, renders its plan and holds its two idle tables equal
+        run: bash scripts/perf/gate.sh --self-test
 
   # The book theme favicons are copies of the brand mark, so the mark exists
   # twice and only this guard keeps the two byte-identical.
@@ -944,10 +946,14 @@ jobs:
       contents: read
     outputs:
       cargo: ${{ steps.check.outputs.cargo }}
+      perf: ${{ steps.perf.outputs.perf }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The first parent of a pull request's merge commit and of a merge
+          # group's commit is its base, which the perf probe diffs against.
+          fetch-depth: 2
       - id: check
         run: |
           set -euo pipefail
@@ -958,6 +964,22 @@ jobs:
             echo "cargo=false" >> "$GITHUB_OUTPUT"
             echo "No root Cargo.toml: the Rust lanes are skipped."
           fi
+      # The performance gate runs on a push to main, on a dispatch, and on a
+      # pull request or merge group that changes what the gateway is built
+      # from or what the gate reads (#1687).
+      - id: perf
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          perf=true
+          if [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "merge_group" ]; then
+            changed="$(git diff --name-only HEAD^1 HEAD)"
+            if ! grep -qE '^(app/ferrofed-(server|engine|registry|identity|eehrxf|operator-api)/|crates/|perf/|scripts/perf/|scripts/quickstart/|docker/quickstart/|compose\.yaml$|Cargo\.toml$|Cargo\.lock$|rust-toolchain\.toml$|docs/VERSIONS\.md$|\.github/workflows/(ci|perf)\.yml$|\.github/actions/setup-rust/)' <<< "$changed"; then
+              perf=false
+            fi
+          fi
+          echo "perf=$perf" >> "$GITHUB_OUTPUT"
 
   fmt:
     name: rustfmt
@@ -1184,6 +1206,19 @@ jobs:
           path: target/differential/
           if-no-files-found: warn
           retention-days: 30
+
+  # The performance gate (#1687): the idle phase and the load phase of
+  # ferrohealth-perf against the release build, in perf.yml, which the release
+  # lane calls on the release commit too.
+  perf:
+    name: perf
+    needs: detect
+    if: needs.detect.outputs.cargo == 'true' && needs.detect.outputs.perf == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/perf.yml
+    with:
+      update: true
 
   # The conformance report of section 16.4 (#92; no specification governs its
   # form: our own design): every section 16.3 track and section 17 point as
@@ -1755,6 +1790,7 @@ jobs:
       - test
       - binding-tests
       - e2e
+      - perf
       - conformance-report
       - fhir-validator
       - release-compose

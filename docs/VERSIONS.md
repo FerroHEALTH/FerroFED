@@ -691,6 +691,19 @@ the reference implementation builds in it. The testkit's
 (`tools/ferrofed-testkit/src/reference.rs`) repeat the reference
 implementation row and the provenance, and the guard holds them equal.
 
+## The performance gate
+
+`.github/workflows/perf.yml` installs `ferrohealth-perf`, the family's
+performance gate (FerroHEALTH/FerroSYS#249), from crates.io at this exact
+version, and `scripts/perf/gate.sh` starts the quickstart's nodes and
+FerroPIX from `compose.yaml` and the store's PostgreSQL from the FerroPIX
+database image row above (#1687). No specification governs the choice: our
+own design.
+
+| Item | Pin | Repeated in |
+|---|---|---|
+| ferrohealth-perf | `0.2.0` | `.github/workflows/perf.yml` |
+
 ## Product and citation version
 
 The product version is the workspace `version` in the root `Cargo.toml`, which

@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# The performance gate's override of the quickstart's compose.yaml
+# (scripts/perf/gate.sh): FerroPIX is published on the host's loopback, so the
+# gateway the gate runs on the host resolves patients through it. No
+# specification governs this: our own design.
+services:
+  ferropix:
+    ports:
+      - "127.0.0.1:8090:8080"
