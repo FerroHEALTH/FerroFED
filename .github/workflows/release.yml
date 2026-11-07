@@ -4,8 +4,11 @@
 # The release lane. One workflow owns the `v*` tag, and every ordering in it is
 # a `needs` edge:
 #
-#   plan ── github-release (draft) ── build-binaries ── build-image ──┬─ vulnerability-record ── scan-and-tag ── finalize-release (publish) ── milestone
-#                                  └─ build-console ─────────────────┘
+#   plan ── perf ── github-release (draft) ── build-binaries ── build-image ──┬─ vulnerability-record ── scan-and-tag ── finalize-release (publish) ── milestone
+#                                          └─ build-console ─────────────────┘
+#
+# perf runs the performance gate on the tagged commit (#1687, perf.yml), with
+# no build cache, so a release the gate fails is never drafted.
 #
 # plan refuses a tag whose milestone (titled exactly as the tag) is missing or
 # still holds an open item, and milestone closes it once every leg succeeded
@@ -191,11 +194,22 @@ jobs:
           name: release-notes
           path: release-notes.md
 
+  # ---- perf: the performance gate on the release commit ---------------------
+
+  perf:
+    name: perf
+    needs: plan
+    permissions:
+      contents: read
+    uses: ./.github/workflows/perf.yml
+    with:
+      cache: false
+
   # ---- github-release: create the release as a DRAFT ------------------------
 
   github-release:
     name: github release (draft)
-    needs: plan
+    needs: [plan, perf]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

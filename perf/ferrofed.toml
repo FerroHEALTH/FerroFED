@@ -1,0 +1,79 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# The gateway the performance gate measures (scripts/perf/gate.sh): the
+# quickstart's gateway (docker/quickstart/ferrofed.toml) run from the release
+# build on the host, over the quickstart's four FerroEHR nodes and FerroPIX,
+# with FerroFED's own PostgreSQL store under the stored-query registry, so the
+# store's sweep and its migrations run as a deployment runs them. Every path
+# is relative to the repository root, under the gate's work directory,
+# target/perf-run, where the gate writes the registry document, the store's
+# connection string and CA, and the issuer's key set. No specification
+# governs this: our own design.
+
+profile = "development"
+
+[server]
+listen = "127.0.0.1:8080"
+drain_delay_ms = 0
+
+[gateway]
+bindings_drain_timeout_ms = 5000
+
+[registry]
+document = "target/perf-run/registry.toml"
+
+[federation]
+id = "perf"
+per_node_timeout_ms = 10000
+overall_timeout_ms = 25000
+node_selection = "ask-all"
+
+[auth]
+
+[[auth.issuer]]
+issuer = "https://quickstart-issuer.ferrofed.invalid"
+kind = "persons"
+audience = ["ferrofed-quickstart"]
+first_party_clients = ["quickstart-client"]
+jwks_file = "docker/quickstart/issuer/jwks.json"
+
+[signing]
+key_file = "docker/quickstart/signing/signing-key.pem"
+jwks_uri = "http://127.0.0.1:8080/.well-known/jwks.json"
+
+[credentials."node-a-query"]
+user = "ferroehr"
+password = "ferroehr"
+
+[credentials."node-b-query"]
+user = "ferroehr"
+password = "ferroehr"
+
+[credentials."node-c-query"]
+user = "ferroehr"
+password = "ferroehr"
+
+[credentials."node-d-query"]
+user = "ferroehr"
+password = "ferroehr"
+
+[[pixm.manager]]
+url = "http://127.0.0.1:8090/fhir/"
+
+[pixm.manager.members]
+"node-a" = "urn:oid:2.999.2.1"
+"node-b" = "urn:oid:2.999.2.2"
+"node-c" = "urn:oid:2.999.2.3"
+"node-d" = "urn:oid:2.999.2.4"
+
+[pixm.manager.credentials]
+user = "ferrofed"
+password = "ferrofed-consumer-example"
+
+[stored_queries]
+backend = "postgres"
+
+[store]
+url_file = "target/perf-run/store-url"
+ca_file = "target/perf-run/store-ca.pem"

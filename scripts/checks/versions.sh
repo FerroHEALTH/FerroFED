@@ -1115,6 +1115,20 @@ else
   note "no release-build.yml or release-image.yml yet, skipped the release tool pins"
 fi
 
+# The performance gate's tool against its row (#1687).
+perf_wf=.github/workflows/perf.yml
+if [[ -f "$perf_wf" ]]; then
+  want="$(pin_of "ferrohealth-perf" "$matrix")"
+  found="$(sed -nE 's|^[[:space:]]*FERROHEALTH_PERF_VERSION:[[:space:]]*([0-9][^[:space:]]*).*|\1|p' "$perf_wf" | sort -u)"
+  if [[ -z "$want" ]]; then
+    bad "$matrix has no ferrohealth-perf row"
+  elif [[ "$found" != "$want" ]]; then
+    bad "ferrohealth-perf: $perf_wf pins ${found:-nothing}, $matrix pins $want"
+  else
+    note "OK: ferrohealth-perf $want"
+  fi
+fi
+
 echo "== scanner pins (the image scans and the VEX gate <-> $matrix)"
 # env_pins KEY FILE...: every value KEY is set to in the files, deduplicated.
 env_pins() {
