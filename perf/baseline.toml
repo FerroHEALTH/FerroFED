@@ -1,11 +1,11 @@
-# The performance baseline of ferrohealth-perf, one [[baseline]] per CPU model.
+# The performance baseline of ferrohealth-perf, one [[baseline]] per host shape.
 # `ferrohealth-perf run --update` writes or lowers the entry of the runner's
 # model; a raise is a hand edit in a change that says why.
-schema = 2
+schema = 3
 
 [[baseline]]
-tool = "0.2.0"
-written = "2026-11-07T01:29:41.390583025Z"
+tool = "0.4.1"
+written = "2026-11-07T12:31:28.392177Z"
 
 [baseline.plan]
 rate = 20.0
@@ -18,11 +18,11 @@ groups = ["definition-read", "patient-query", "population-query", "self-descript
 arch = "x86_64"
 os = "linux"
 available_parallelism = 4
-cpu_model = "AMD EPYC 7763 64-Core Processor"
+cpu_model = "AMD EPYC 9V45 96-Core Processor"
 total_memory_bytes = 16760344576
 
 [baseline.tolerance]
-latency = 0.5
+latency = 0.25
 throughput = 0.2
 memory = 0.2
 cpu = 0.25
@@ -30,49 +30,49 @@ transactions = 0.1
 
 [baseline.metrics]
 throughput_rps = 20.0
-peak_memory_bytes = 55943168.0
-cpu_per_request_ms = 3.5416666666666665
+peak_memory_bytes = 56762368.0
+cpu_per_request_ms = 2.55
 transactions_per_request = 0.4085714285714286
-"definition-read.p50_ms" = 3.895
-"definition-read.p95_ms" = 4.355
-"definition-read.p99_ms" = 4.767
-"patient-query.p50_ms" = 11.439
-"patient-query.p95_ms" = 14.175
-"patient-query.p99_ms" = 17.983
-"population-query.p50_ms" = 7.959
-"population-query.p95_ms" = 9.911
-"population-query.p99_ms" = 14.383
-"self-description.p50_ms" = 2.075
-"self-description.p95_ms" = 2.583
-"self-description.p99_ms" = 2.751
-"stored-query-run.p50_ms" = 20.399
-"stored-query-run.p95_ms" = 24.719
-"stored-query-run.p99_ms" = 31.407
+"definition-read.p50_ms" = 3.149
+"definition-read.p95_ms" = 3.815
+"definition-read.p99_ms" = 4.823
+"patient-query.p50_ms" = 8.951
+"patient-query.p95_ms" = 11.479
+"patient-query.p99_ms" = 20.415
+"population-query.p50_ms" = 6.115
+"population-query.p95_ms" = 7.883
+"population-query.p99_ms" = 10.119
+"self-description.p50_ms" = 1.706
+"self-description.p95_ms" = 2.193
+"self-description.p99_ms" = 2.355
+"stored-query-run.p50_ms" = 14.823
+"stored-query-run.p95_ms" = 17.487
+"stored-query-run.p99_ms" = 28.575
 
 [baseline.noise]
 throughput_rps = 1.0
-peak_memory_bytes = 1.0041001610777567
-cpu_per_request_ms = 1.0143198090692123
-transactions_per_request = 1.0035087719298246
-"definition-read.p50_ms" = 1.0467265725288832
-"definition-read.p95_ms" = 1.068886337543054
-"definition-read.p99_ms" = 1.095657646318439
-"patient-query.p50_ms" = 1.021680216802168
-"patient-query.p95_ms" = 1.005079365079365
-"patient-query.p99_ms" = 1.0475330576105317
-"population-query.p50_ms" = 1.0226159065209197
-"population-query.p95_ms" = 1.0056502875592777
-"population-query.p99_ms" = 1.1660316173490068
-"self-description.p50_ms" = 1.129156626506024
-"self-description.p95_ms" = 1.0851722802942314
-"self-description.p99_ms" = 1.0399854598327882
-"stored-query-run.p50_ms" = 1.004728365266217
-"stored-query-run.p95_ms" = 1.0181237105060885
-"stored-query-run.p99_ms" = 1.1459481154449593
+peak_memory_bytes = 1.0015873015873016
+cpu_per_request_ms = 1.1503267973856208
+transactions_per_request = 1.0069930069930069
+"definition-read.p50_ms" = 1.2196942765730536
+"definition-read.p95_ms" = 1.2253284875594073
+"definition-read.p99_ms" = 1.1378747705486438
+"patient-query.p50_ms" = 1.1009943023125908
+"patient-query.p95_ms" = 1.078752504573569
+"patient-query.p99_ms" = 1.4388929708547638
+"population-query.p50_ms" = 1.134750613246116
+"population-query.p95_ms" = 1.101991627552962
+"population-query.p99_ms" = 1.2258034466697718
+"self-description.p50_ms" = 1.4108681245858186
+"self-description.p95_ms" = 1.3044542339696523
+"self-description.p99_ms" = 1.2727637384677097
+"stored-query-run.p50_ms" = 1.0917493085070498
+"stored-query-run.p95_ms" = 1.0759421284382686
+"stored-query-run.p99_ms" = 1.1515395528969667
 
 [[baseline]]
-tool = "0.2.0"
-written = "2026-11-07T01:40:42.396916675Z"
+tool = "0.4.1"
+written = "2026-11-07T12:31:28.392177Z"
 
 [baseline.plan]
 rate = 20.0
@@ -86,10 +86,10 @@ arch = "x86_64"
 os = "linux"
 available_parallelism = 4
 cpu_model = "AMD EPYC 9V74 80-Core Processor"
-total_memory_bytes = 16760348672
+total_memory_bytes = 16760340480
 
 [baseline.tolerance]
-latency = 0.5
+latency = 0.25
 throughput = 0.2
 memory = 0.2
 cpu = 0.25
@@ -97,49 +97,49 @@ transactions = 0.1
 
 [baseline.metrics]
 throughput_rps = 20.0
-peak_memory_bytes = 56672256.0
-cpu_per_request_ms = 2.9833333333333334
+peak_memory_bytes = 55492608.0
+cpu_per_request_ms = 2.825
 transactions_per_request = 0.4085714285714286
-"definition-read.p50_ms" = 3.363
-"definition-read.p95_ms" = 3.909
-"definition-read.p99_ms" = 5.963
-"patient-query.p50_ms" = 9.591
-"patient-query.p95_ms" = 13.743
-"patient-query.p99_ms" = 21.567
-"population-query.p50_ms" = 6.631
-"population-query.p95_ms" = 8.487
-"population-query.p99_ms" = 9.839
-"self-description.p50_ms" = 1.73
-"self-description.p95_ms" = 2.217
-"self-description.p99_ms" = 2.289
-"stored-query-run.p50_ms" = 16.431
-"stored-query-run.p95_ms" = 20.607
-"stored-query-run.p99_ms" = 35.231
+"definition-read.p50_ms" = 2.971
+"definition-read.p95_ms" = 3.535
+"definition-read.p99_ms" = 4.287
+"patient-query.p50_ms" = 9.303
+"patient-query.p95_ms" = 11.183
+"patient-query.p99_ms" = 23.535
+"population-query.p50_ms" = 6.219
+"population-query.p95_ms" = 7.987
+"population-query.p99_ms" = 9.127
+"self-description.p50_ms" = 1.566
+"self-description.p95_ms" = 2.001
+"self-description.p99_ms" = 2.169
+"stored-query-run.p50_ms" = 16.023
+"stored-query-run.p95_ms" = 19.183
+"stored-query-run.p99_ms" = 23.791
 
 [baseline.noise]
 throughput_rps = 1.0
-peak_memory_bytes = 1.0015177797051171
-cpu_per_request_ms = 1.0623145400593472
-transactions_per_request = 1.0035087719298246
-"definition-read.p50_ms" = 1.1664932362122789
-"definition-read.p95_ms" = 1.1133580176587865
-"definition-read.p99_ms" = 1.3922484240018678
-"patient-query.p50_ms" = 1.0480821768112774
-"patient-query.p95_ms" = 1.111983170159398
-"patient-query.p99_ms" = 2.890295358649789
-"population-query.p50_ms" = 1.0794400130229531
-"population-query.p95_ms" = 1.058361391694725
-"population-query.p99_ms" = 1.0318825380178291
-"self-description.p50_ms" = 1.154102735156771
-"self-description.p95_ms" = 1.1151911468812878
-"self-description.p99_ms" = 1.1106259097525475
-"stored-query-run.p50_ms" = 1.0410568333016537
-"stored-query-run.p95_ms" = 1.010093657495026
-"stored-query-run.p99_ms" = 1.1947977074643064
+peak_memory_bytes = 1.0022143489813995
+cpu_per_request_ms = 1.008849557522124
+transactions_per_request = 1.0069930069930069
+"definition-read.p50_ms" = 1.1319421070346685
+"definition-read.p95_ms" = 1.1493635077793491
+"definition-read.p99_ms" = 1.1054350361558198
+"patient-query.p50_ms" = 1.0421369450714824
+"patient-query.p95_ms" = 1.1523741393186087
+"patient-query.p99_ms" = 1.3657531336307627
+"population-query.p50_ms" = 1.0681781636919119
+"population-query.p95_ms" = 1.0846375359959934
+"population-query.p99_ms" = 1.145502355648077
+"self-description.p50_ms" = 1.2630906768837802
+"self-description.p95_ms" = 1.239880059970015
+"self-description.p99_ms" = 1.1964038727524204
+"stored-query-run.p50_ms" = 1.0254633963677215
+"stored-query-run.p95_ms" = 1.3077725069071573
+"stored-query-run.p99_ms" = 2.819175318397713
 
 [[baseline]]
-tool = "0.2.0"
-written = "2026-11-07T01:17:07.215837162Z"
+tool = "0.4.1"
+written = "2026-11-07T12:31:28.392177Z"
 
 [baseline.plan]
 rate = 20.0
@@ -156,7 +156,7 @@ cpu_model = "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz"
 total_memory_bytes = 16759304192
 
 [baseline.tolerance]
-latency = 0.5
+latency = 0.25
 throughput = 0.2
 memory = 0.2
 cpu = 0.25
@@ -164,42 +164,42 @@ transactions = 0.1
 
 [baseline.metrics]
 throughput_rps = 20.0
-peak_memory_bytes = 55799808.0
-cpu_per_request_ms = 3.4916666666666667
-transactions_per_request = 0.40714285714285714
-"definition-read.p50_ms" = 3.585
-"definition-read.p95_ms" = 4.155
-"definition-read.p99_ms" = 4.891
-"patient-query.p50_ms" = 10.543
-"patient-query.p95_ms" = 12.919
-"patient-query.p99_ms" = 16.655
-"population-query.p50_ms" = 7.319
-"population-query.p95_ms" = 9.383
-"population-query.p99_ms" = 10.679
-"self-description.p50_ms" = 2.022
-"self-description.p95_ms" = 2.453
-"self-description.p99_ms" = 2.717
-"stored-query-run.p50_ms" = 19.279
-"stored-query-run.p95_ms" = 22.287
-"stored-query-run.p99_ms" = 30.799
+peak_memory_bytes = 57368576.0
+cpu_per_request_ms = 3.6333333333333333
+transactions_per_request = 0.4085714285714286
+"definition-read.p50_ms" = 3.601
+"definition-read.p95_ms" = 4.167
+"definition-read.p99_ms" = 5.179
+"patient-query.p50_ms" = 10.783
+"patient-query.p95_ms" = 13.231
+"patient-query.p99_ms" = 16.639
+"population-query.p50_ms" = 7.547
+"population-query.p95_ms" = 9.815
+"population-query.p99_ms" = 11.735
+"self-description.p50_ms" = 1.949
+"self-description.p95_ms" = 2.371
+"self-description.p99_ms" = 2.451
+"stored-query-run.p50_ms" = 19.743
+"stored-query-run.p95_ms" = 23.199
+"stored-query-run.p99_ms" = 30.703
 
 [baseline.noise]
 throughput_rps = 1.0
-peak_memory_bytes = 1.0027159950084417
-cpu_per_request_ms = 1.0047732696897373
-transactions_per_request = 1.0035211267605635
-"definition-read.p50_ms" = 1.0384937238493723
-"definition-read.p95_ms" = 1.0250300842358604
-"definition-read.p99_ms" = 1.087130473438542
-"patient-query.p50_ms" = 1.0083467703689653
-"patient-query.p95_ms" = 1.0319514338205926
-"patient-query.p99_ms" = 1.0241037938879665
-"population-query.p50_ms" = 1.0262330919524525
-"population-query.p95_ms" = 1.0460407119258233
-"population-query.p99_ms" = 1.0719168461466428
-"self-description.p50_ms" = 1.0410484668644906
-"self-description.p95_ms" = 1.052996331023237
-"self-description.p99_ms" = 1.0264450321118248
-"stored-query-run.p50_ms" = 1.0116188598993723
-"stored-query-run.p95_ms" = 1.0136402387041774
-"stored-query-run.p99_ms" = 1.0906547682283367
+peak_memory_bytes = 1.0004997858060831
+cpu_per_request_ms = 1.0229357798165137
+transactions_per_request = 1.0069930069930069
+"definition-read.p50_ms" = 1.0527631213551791
+"definition-read.p95_ms" = 1.0508759299256059
+"definition-read.p99_ms" = 1.196176868121259
+"patient-query.p50_ms" = 1.0252248910321804
+"patient-query.p95_ms" = 1.0743707958582118
+"patient-query.p99_ms" = 1.149047418715067
+"population-query.p50_ms" = 1.0111302504306348
+"population-query.p95_ms" = 1.0163015792154866
+"population-query.p99_ms" = 1.4288027268853856
+"self-description.p50_ms" = 1.130323242688558
+"self-description.p95_ms" = 1.1130324757486292
+"self-description.p99_ms" = 1.171358629130967
+"stored-query-run.p50_ms" = 1.0170186901686675
+"stored-query-run.p95_ms" = 1.0613819561187983
+"stored-query-run.p99_ms" = 1.1005764908966549

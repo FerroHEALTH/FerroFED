@@ -35,37 +35,54 @@ background worker running. The load phase sends 20 requests a second for 60
 seconds over the gateway's hot paths: the self-description, a patient's
 federated query, a population query, a stored query run by name and a
 template list routed to the one member the registry names. A national contact point's routes are not in the
-set: their token is bound to the client certificate of the connection, which
-`ferrohealth-perf` 0.2.0 cannot present.
+set yet: their token is bound to the client certificate of the connection or
+to a `DPoP` key, which the tool presents from 0.4.0 on, and
+[#1702](https://github.com/FerroHEALTH/FerroFED/issues/1702) adds them.
 
 ## Reading the report
 
 The job's summary names each breach by its metric, such as
-`idle.transactions_per_second` or `patient-query.p95_ms`. The artifact
-`perf-report` holds the JSON reports, the gateway's log and the baseline the
-run would write. Exit 1 is a breach. Exit 2 means the run cannot be judged:
-no entry for the runner's CPU model, a generator that lagged, or a window
-that was not steady.
+`idle.transactions_per_second` or `patient-query.p95_ms`. A load metric that
+breaches is judged again on up to two fresh load phases, and the gate fails
+only when it breaches in most of the runs; the check says in how many. The
+artifact `perf-report-attempt-<n>` holds the JSON reports, every phase included, and the
+gateway's log. Exit 1 is a breach. Exit 2 means the run cannot be judged: no
+entry for the runner's host shape, a generator that lagged, a window that was
+not steady, or a runner that stalled (every route's p99 over ten times its
+p50 at once).
+
+Some runners stall every route for a whole job: on an AMD EPYC 9V74 the
+tails reach 100 to 300 ms while the p50 holds
+([FerroPIX #511](https://github.com/FerroHEALTH/FerroPIX/issues/511)). An
+attempt that ends with exit 1 or 2 on a CPU model the perf workflow lists in
+`STALL_PRONE` runs again on a fresh runner, at most twice, and the gate
+passes when the last attempt passed. A breach on any other model fails at
+once. The job summary names each attempt's CPU model, its verdict and why a
+retry ran, and each attempt uploads its reports as `perf-report-attempt-<n>`.
 
 ## Updating the baseline
 
-`perf/baseline.toml` holds one entry per CPU model, because GitHub's hosted
-runners mix CPU generations and a latency is comparable only on a like CPU.
-The `perf` job of `ci.yml` runs with `--update`, so the `perf-report` artifact
-always carries the baseline with the runner's entry written or lowered.
+`perf/baseline.toml` holds one entry per host shape, the CPU model and the
+memory size to the GiB together, because GitHub's hosted runners mix CPU
+generations and sizes and a latency is comparable only on a like host.
 
-- A run on a CPU model with no entry exits 2 and names the model. Take
-  `perf/baseline.toml` from that run's artifact and commit it.
-- An entry only moves to the better value on its own. A raise is a hand edit
+- An entry is measured by an update: set `update: true` on the `perf` job's
+  call of `.github/workflows/perf.yml` in `ci.yml` on a branch. An update
+  measures five load phases, each after its own warm-up, and writes each
+  metric as their median and its noise floor as how far the worst phase
+  strayed from it.
+- Machines of one shape still differ, so re-run the update job several
+  times, take each run's `perf/baseline.toml` from its `perf-report-attempt-<n>`
+  artifact, and fold them into the committed file with
+  `ferrohealth-perf merge --baseline perf/baseline.toml job-1.toml job-2.toml`.
+  Each entry then takes the median over the jobs, and its floor the spread
+  between them.
+- Every tolerance stays at the tool's default: latency and CPU 25 %,
+  throughput 20 %, memory 20 % and transactions 10 %. A raise is a hand edit
   in a pull request that says why.
-- Each entry's `[baseline.tolerance]` is FerroFED's own: latency may rise 50 %
-  past the larger of the entry and its noise floor, since a p99 of 240
-  samples at 20 requests a second moved by more than 25 % between two runs
-  of one commit on one CPU model; throughput 20 %, memory 20 %, CPU 25 % and
-  transactions 10 %, the tool's defaults.
-- A change of the plan's rate, window or request set writes each entry
-  afresh, so commit an entry for every model the runner pool serves after
-  such a change.
+- A run on a host shape with no entry exits 2 and names the shape; its entry
+  is added the same way. A change of the plan's rate, window or request set
+  writes each entry afresh.
 
 ## Running it yourself
 
@@ -73,7 +90,7 @@ The gate reads the gateway's CPU and memory from `/proc`, so it runs on Linux
 with Docker, Compose, `curl` and `openssl`:
 
 ```sh
-cargo install ferrohealth-perf --version =0.2.0 --locked
+cargo install ferrohealth-perf --version =0.4.1 --locked
 cargo build --release --locked -p ferrofed-server --bin ferrofed
 bash scripts/perf/gate.sh run
 ```
