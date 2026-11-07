@@ -32,6 +32,7 @@ use ferrohealth_smart::config::{AuthSection, BasicSection, IssuerKey};
 use ferrohealth_smart::federation::FederationSection;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 use ferrohealth_smart::resource::introspection::IntrospectionSettings;
+use ferrohealth_smart::sender::proof::ProofSettings;
 use http::HeaderName;
 use secrecy::ExposeSecret as _;
 use serde::{Deserialize, Serialize};
@@ -99,6 +100,9 @@ pub struct AuthSettings {
     pub issuers: Vec<IssuerSettings>,
     /// The Basic users of `[[auth.basic.users]]`, when any is written.
     pub basic: Option<BasicUsers>,
+    /// How a `DPoP` proof is checked (`[auth.dpop]`, RFC 9449 §4.3), when
+    /// the table is written; without it, no `DPoP` request is admitted.
+    pub dpop: Option<ProofSettings>,
 }
 
 impl Default for AuthSettings {
@@ -112,6 +116,7 @@ impl Default for AuthSettings {
             realm: DEFAULT_REALM.to_owned(),
             issuers: Vec::new(),
             basic: None,
+            dpop: None,
         }
     }
 }
@@ -471,6 +476,7 @@ impl Auth {
         let mut basic = None;
         let mut realm = None;
         let mut product_scope = None;
+        let mut dpop = None;
         if !(no_issuer && no_basic) {
             let resolved = section.resolve().map_err(|source| Error::Smart {
                 section: String::from("auth"),
@@ -480,6 +486,7 @@ impl Auth {
             introspected = resolved.introspection;
             realm = resolved.realm;
             product_scope = resolved.product_scope;
+            dpop = resolved.dpop;
             if let (Some(store), Some(written)) = (resolved.basic, section.basic.clone())
                 && !written.users.is_empty()
             {
@@ -495,6 +502,7 @@ impl Auth {
             realm: realm.unwrap_or_else(|| DEFAULT_REALM.to_owned()),
             issuers,
             basic,
+            dpop,
         })
     }
 }

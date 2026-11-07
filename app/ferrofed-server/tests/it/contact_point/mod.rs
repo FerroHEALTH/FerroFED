@@ -33,6 +33,7 @@ mod admission;
 mod config;
 mod declared;
 pub(crate) mod emergency;
+mod ncp_error;
 mod relayed;
 mod trc;
 mod withheld;

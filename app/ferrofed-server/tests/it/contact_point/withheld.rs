@@ -164,5 +164,17 @@ async fn a_restricted_patient_and_an_unknown_one_answer_alike() -> TestResult {
         (absent_status, absent.code, absent.message),
         "Art 8: a restricted patient reads as one no member holds"
     );
+    let exception = |text: &str| -> Result<Option<String>, Box<dyn Error>> {
+        let body: serde_json::Value = serde_json::from_str(text)?;
+        Ok(body
+            .get("ncp_error")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned))
+    };
+    assert_eq!(
+        exception(&absent_text)?,
+        exception(&text)?,
+        "Art 8: the §1.25 code discloses no consent either"
+    );
     Ok(())
 }

@@ -342,6 +342,32 @@ it is:
 A patient no member holds and a patient every member restricts answer
 alike, so the connector reports both as a patient with no data.
 
+### The §1.25 code of every refusal
+
+Every refusal to a contact point names its Requirements Catalogue 10.0.0
+§1.25 exception code, so the national connector maps it to the code NCPeH-A
+answers its NCP with. An ITS-REST error body carries it in `ncp_error`, a
+FHIR `OperationOutcome` in its `issue.details`
+(`https://ferrofed.eu/fhir/CodeSystem/myhealth-eu-exception`), and the
+access record leads its outcome description with it. No legacy numeric code
+of the NCPeH Components Specifications 10.0.0 appendix 6.4 is ever issued.
+
+| Refusal | §1.25 code |
+|---|---|
+| A token the contact-point profile refuses | the code `ferrohealth-smart` gives it: `ERROR_HPI_NO_INFORMATION`, `ERROR_HPI_INSUFFICIENT_INFORMATION`, `ERROR_HPI_HAI_NO_INFORMATION`, `ERROR_HPI_POC_NO_INFORMATION`, `ERROR_HPI_AUTHENTICATION_NOT_RECEIVED` or `ERROR_SEC_DATA_INTEGRITY_NOT_ENSURED` |
+| Any other refused token, its key set unreadable included | `ERROR_SEC_GENERIC`, as `ferrohealth-smart` gives it |
+| A scope, operation or rights refusal, no TRC patient, a request a TRC binds nothing to, and the emergency access limit | `ERROR_SEC_GENERIC` |
+| A member, the identity binding or a service it needs cannot answer | `ERROR_REGISTRY_NOT_AVAILABLE` |
+| Outside the TRC's patient, or a patient no member holds | the service's `*_NOT_FOUND` |
+| The gateway's own defect, or its own record that failed | `ERROR_INTERNAL_ERROR` |
+
+The gateway holds no table of its own for a refused token: the code is the
+one the shared crate's refusal carries. Which code each of the gateway's own
+refusals takes is FerroFED's own design over the catalogue's rows. A
+restricted patient answers a contact point exactly as a patient no member
+holds, code included (Regulation (EU) 2025/327 Art 8), so a contact point
+never reads `ERROR_NO_CONSENT`.
+
 The end-to-end test `e2e::national` drives these routes from the harness
 national connector of `tools/ferrofed-testkit` over two FerroEHR nodes.
 

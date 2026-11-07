@@ -201,7 +201,8 @@ pub(crate) fn chain(error: &dyn std::error::Error) -> String {
 /// compresses an answer of a client that accepts it under
 /// `server.compression`.
 pub fn router(state: Arc<AppState>, server: &ServerSettings) -> Router {
-    trusted_router(state, server, Arc::new(Trust::new(&server.auth)))
+    let trust = Arc::new(Trust::of(&server.auth, &state));
+    trusted_router(state, server, trust)
 }
 
 /// Builds the HTTP application over `state` as [`router`] does, its callers

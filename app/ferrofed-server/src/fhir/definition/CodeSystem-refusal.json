@@ -6,13 +6,13 @@
   "title": "FerroFED refusal",
   "status": "active",
   "experimental": false,
-  "date": "2026-11-05",
+  "date": "2026-11-06",
   "publisher": "FerroFED",
   "description": "The refusals a FerroFED gateway names in the details of an OperationOutcome on its FHIR face, so a national connector can map each one.",
   "copyright": "Cadasto B.V., under the Business Source License 1.1.",
   "caseSensitive": true,
   "content": "complete",
-  "count": 3,
+  "count": 24,
   "concept": [
     {
       "code": "trc-patient-mismatch",
@@ -28,6 +28,111 @@
       "code": "emergency-limit-reached",
       "display": "Too many emergency access attempts",
       "definition": "A national contact point relayed an emergency access for a health professional who reached the limit of emergency accesses in the window, so the access was denied (eHDSI Section II Security Services 10.0.0 §2.5; NCPeH Architecture Specifications 10.0.0 §5.1.9)."
+    },
+    {
+      "code": "trc-unbound",
+      "display": "No treatment relationship binding",
+      "definition": "A national contact point's request named no patient or EHR its treatment relationship confirmation binds, so nothing was sent (eHDSI XCA Profile 8.0.1 §4.2.1)."
+    },
+    {
+      "code": "unauthenticated",
+      "display": "No access token accepted",
+      "definition": "The request carried no access token the gateway accepts (§13.1, N25)."
+    },
+    {
+      "code": "credential-malformed",
+      "display": "Malformed credential",
+      "definition": "The request carried two credentials, or a credential field that is no credential (RFC 6750 §3.1)."
+    },
+    {
+      "code": "authentication-unavailable",
+      "display": "Access token not verifiable now",
+      "definition": "The access token could not be verified now, because the issuer's metadata, key set or introspection endpoint could not be read."
+    },
+    {
+      "code": "scope-insufficient",
+      "display": "Scope does not grant the operation",
+      "definition": "No scope of the access token grants the operation."
+    },
+    {
+      "code": "operation-refused",
+      "display": "Operation refused",
+      "definition": "The gateway admits no caller to the operation."
+    },
+    {
+      "code": "patient-confinement",
+      "display": "Outside the patient's grant",
+      "definition": "The request reached beyond the patient the access token's grant is confined to."
+    },
+    {
+      "code": "patient-context-missing",
+      "display": "No patient context",
+      "definition": "Only a patient grant covers the operation, and the access token names no patient context to confine it to."
+    },
+    {
+      "code": "correlation-invalid",
+      "display": "Correlation header refused",
+      "definition": "The national contact point's correlation header was repeated, empty, too long, or not visible ASCII."
+    },
+    {
+      "code": "node-timeout",
+      "display": "Member did not answer in time",
+      "definition": "A member node did not answer in time (§11.2)."
+    },
+    {
+      "code": "node-unreachable",
+      "display": "Member unreachable",
+      "definition": "A member node could not be reached (§11.2)."
+    },
+    {
+      "code": "node-refused",
+      "display": "Member refused the gateway",
+      "definition": "A member node refused the gateway's onward credentials (§11.2)."
+    },
+    {
+      "code": "node-error",
+      "display": "Member answered an error",
+      "definition": "A member node answered with an error (§11.2)."
+    },
+    {
+      "code": "controlling-system-unreachable",
+      "display": "Controlling member unreachable",
+      "definition": "No reachable member is the controlling system of the version (N36)."
+    },
+    {
+      "code": "resolution-unavailable",
+      "display": "Cross-reference unavailable",
+      "definition": "The cross-reference service could not answer, so where the patient has an EHR is unknown (§5.2, §11.2)."
+    },
+    {
+      "code": "localization-unavailable",
+      "display": "Localizer unavailable",
+      "definition": "The localizer could not answer, so no member was asked (§14.1, N4)."
+    },
+    {
+      "code": "patient-context-unavailable",
+      "display": "Patient context unresolved",
+      "definition": "The cross-reference could not resolve the patient of a patient grant, so nothing was sent (§5.2, §11.2)."
+    },
+    {
+      "code": "consent-denied",
+      "display": "Consent does not permit the request",
+      "definition": "The consent pre-filter does not permit asking the members that might hold the patient's EHR (N27a)."
+    },
+    {
+      "code": "internal",
+      "display": "Gateway failure",
+      "definition": "The gateway failed on its own side."
+    },
+    {
+      "code": "access-unrecorded",
+      "display": "Access not recorded",
+      "definition": "The access could not be recorded, so its answer was withheld."
+    },
+    {
+      "code": "emergency-uncounted",
+      "display": "Emergency access not counted",
+      "definition": "The emergency access could not be counted against the health professional's limit, so it was refused."
     }
   ]
 }

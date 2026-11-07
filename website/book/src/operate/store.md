@@ -22,7 +22,7 @@ A configuration in either case that sets no `[store]` refuses to start, and
 `[store]`:
 
 ```text
-trust.issuer[0].national_contact_point needs FerroFED's own PostgreSQL store, and the configuration sets no [store]; add [store] with url or url_file
+federation.contact_point[0] needs FerroFED's own PostgreSQL store, and the configuration sets no [store]; add [store] with url or url_file
 ```
 
 In every other case FerroFED runs with no PostgreSQL database. The embedded
@@ -47,6 +47,7 @@ every replica:
 |---|---|---|
 | `ferrofed.stored_query_definition` | a stored-query definition of the `postgres` backend: name, version, the instant it was stored, its parameterised AQL (§12.7, N44) | never: a stored version is immutable |
 | `ferrofed.emergency_access` | the emergency accesses granted to one health professional a national contact point relays, keyed by a SHA-256 digest of the professional's identity: the instants granted inside the window, and the end of that window ([The emergency access limit](../integrate/national-contact-point.md#the-emergency-access-limit)) | at `expires_at`, the end of the window of the last access granted, by the sweep |
+| `ferrofed.dpop_proof` | one `DPoP` proof the gateway accepted, by the SHA-256 of its `jti` alone, never the value, so a replay to any replica is refused (RFC 9449 §11.1; [`DPoP`](authentication.md#dpop)) | at `expires_at`, the end of the window the proof is accepted in, by the sweep |
 | `ferrofed.store_migration` | one migration applied, and when | never |
 
 These stay out of the store: caches (revocation and OCSP answers, issuer

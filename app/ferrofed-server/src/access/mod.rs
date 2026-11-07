@@ -343,6 +343,20 @@ impl Accessed {
     }
 }
 
+/// Leads the outcome description of `record`, the access of `caller` that
+/// `response` answers, with the Requirements Catalogue 10.0.0 §1.25 code of
+/// a refusal to a national contact point.
+fn contact_point_described(record: &mut AccessRecord, caller: &Caller, response: &Response) {
+    if caller.is_contact_point()
+        && let Some(ncp) = error::ncp::of_answer(response)
+    {
+        record.outcome_description = Some(error::ncp::described(
+            ncp,
+            record.outcome_description.take(),
+        ));
+    }
+}
+
 /// The categories of `asked`, one of `contributing` origins of what the
 /// access delivered, classified with `map`: the access's own `categories`
 /// when it alone contributed, those of its own answer when several did, and
@@ -638,6 +652,7 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
     }
     let mut record = accessed.record(&caller, address, &logged, response.status());
     emergency::describe(&mut record, &response);
+    contact_point_described(&mut record, &caller, &response);
     if record.emergency.is_some() {
         tracing::warn!(
             request_id = logged,

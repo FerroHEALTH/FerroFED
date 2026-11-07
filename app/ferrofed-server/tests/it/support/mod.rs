@@ -276,7 +276,7 @@ pub(crate) struct ErrorBody {
 
 /// The members a gateway problem may carry: those of RFC 9457 §3.1 and the
 /// two extension members.
-const PROBLEM_MEMBERS: [&str; 7] = [
+const PROBLEM_MEMBERS: [&str; 8] = [
     "type",
     "title",
     "status",
@@ -284,11 +284,13 @@ const PROBLEM_MEMBERS: [&str; 7] = [
     "instance",
     CODE_MEMBER,
     REQUEST_ID_MEMBER,
+    ferrofed_server::error::ncp::MEMBER,
 ];
 
 /// Reads `text` as the gateway's RFC 9457 problem: a `type` under the book
 /// page naming its `code`, the code's fixed message as `title`, a `status`,
-/// a `detail`, the request id, and no other member.
+/// a `detail`, the request id, to a national contact point its §1.25 code
+/// name in `ncp_error`, and no other member.
 #[expect(
     clippy::disallowed_types,
     reason = "a test reads the problem's members by name, to refuse one the gateway must not send"
@@ -309,6 +311,11 @@ pub(crate) fn error_body(text: &str) -> Result<ErrorBody, Box<dyn StdError>> {
         .find(|name| !PROBLEM_MEMBERS.contains(&name.as_str()))
     {
         return Err(format!("the problem carries {extra}: {text}").into());
+    }
+    if problem.contains_key(ferrofed_server::error::ncp::MEMBER)
+        && !member(ferrofed_server::error::ncp::MEMBER)?.starts_with("ERROR_")
+    {
+        return Err(format!("the problem's ncp_error is a §1.25 code name: {text}").into());
     }
     let defined = ferrofed_server::error::Code::every()
         .find(|known| known.as_str() == code)

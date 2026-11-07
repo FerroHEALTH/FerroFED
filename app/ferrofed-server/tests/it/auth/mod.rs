@@ -15,6 +15,7 @@
 mod assurance;
 mod cited;
 mod config;
+pub(crate) mod dpop;
 mod edge;
 mod introspection;
 mod kept_token;

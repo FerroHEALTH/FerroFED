@@ -149,6 +149,8 @@ demographic_clients = []
 | `auth.realm` | `ferrofed` | The realm every `WWW-Authenticate` challenge names. |
 | `auth.product_scope` | none | The scope that admits a caller to the read-only [operator surface](#the-operator-surface) and to the write actions of the [admin listener](metrics.md#who-the-admin-listener-serves): a string starting with `__` or a full URI you control (SMART App Launch 2.2.0, Scopes and Launch Context, Extensibility). Without it, no caller reaches either. |
 | `auth.basic.users[]` | none | The Basic users (RFC 7617): `user`, `password_hash` or `password_hash_file` holding the Argon2id PHC string of the password, and `scopes`, never a `system/` scope. A scrape of the admin listener authenticates as one ([Metrics](metrics.md#who-the-admin-listener-serves)). |
+| `auth.dpop.external_url` | none | The gateway's base URL as its clients address it; setting `[auth.dpop]` admits `DPoP` requests ([`DPoP`](#dpop)), and a proof's `htu` is compared with this URL, the request path appended. |
+| `auth.dpop.max_age_seconds`, `.clock_skew_seconds`, `.algorithms` | `60`, `10`, the six asymmetric algorithms | How long after its `iat` a proof is accepted, at most 300; how far an `iat` may lie ahead, at most 300; and the algorithms a proof may be signed with. |
 | `auth.basic.cache_ttl_seconds` | `300` | How long a verified Basic credential is kept, so a repeat request skips the key derivation; `0` keeps none. |
 | `trust.mode` | `token` | `token`: the client presents a bearer token. `edge`: a proxy authenticates the client ([The edge mode](#the-edge-mode)). |
 | `trust.purpose_of_use.required` | `true` | Whether a token must declare a purpose of use ([Purpose of use](#purpose-of-use)). |
@@ -587,6 +589,37 @@ the correlation header. The eHDSI profile defines no token carrier for its
 attributes, so the claim names, the member and the header are FerroFED's
 own design.
 
+## DPoP
+
+A client may bind its token to a key and prove it holds the key on every
+request with a `DPoP` proof (RFC 9449), presenting the token in the `DPoP`
+scheme. With `[auth.dpop]` the gateway admits such a request: it checks the
+proof against the request's method and URL (§4.3) and the token's
+`cnf.jkt` against the proof's key (§6), and spends the proof's `jti` so a
+second use is refused (§11.1). Without the table no `DPoP` request is
+admitted. A national contact point's tokens must be sender-constrained, by
+`DPoP` or by the client certificate of the connection (RFC 8705 §3).
+
+```toml
+[auth.dpop]
+external_url = "https://gateway.example.org"
+```
+
+RFC 9449 §11.1 notes that single use "may not always be feasible in
+practice, e.g., when multiple servers behind a single endpoint have no
+shared state". With [FerroFED's own store](store.md) set, every replica
+records each accepted proof in `ferrofed.dpop_proof`, by the SHA-256 of its
+`jti`, in the one statement that also checks it, so of two replicas sent one
+proof at once only one admits it. With the store down, a `DPoP` request is
+refused `503`, never checked in memory instead. A gateway with no store
+records proofs in its own memory, which holds within one replica alone, so
+run several replicas with `DPoP` only beside the store. A contact point
+needs the store in any case. A proof that does not hold, or was sent before,
+is refused `401` with the challenge `DPoP error="invalid_dpop_proof"`, and a
+token that does not hold in the `DPoP` scheme with `DPoP
+error="invalid_token"` (§7.1). The store and the single-statement check are
+FerroFED's own design.
+
 ## The edge mode
 
 A deployment that authenticates its clients at a proxy configures the edge
@@ -630,7 +663,7 @@ travelled.
 | Status | Code | When |
 |---|---|---|
 | `400` | `credential-malformed` | two `Authorization` fields, or one that is no credential; the challenge is `error="invalid_request"` (RFC 6750 §3.1) |
-| `401` | `unauthenticated` | no token, or one the gateway does not accept; the challenge carries `error="invalid_token"` for a token that does not hold and no error code for a missing one, and never names the check that failed |
+| `401` | `unauthenticated` | no token, or one the gateway does not accept; the challenge carries `error="invalid_token"` for a token that does not hold and no error code for a missing one, and never names the check that failed; in the `DPoP` scheme, `error="invalid_dpop_proof"` for a proof that does not hold or was sent before (RFC 9449 §7.1) |
 | `403` | `scope-insufficient` | no granted scope covers the operation, or the client is not admitted to the DEMOGRAPHIC API |
 | `403` | `purpose-of-use-required` | the token declares no purpose of use |
 | `401` | `natural-person-required` | the request reaches patient data and the token names no natural person, and its issuer does not declare client tokens acting for the professional the token names |

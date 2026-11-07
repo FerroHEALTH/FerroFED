@@ -343,5 +343,11 @@ pub(super) fn incomplete(what: &str, status: StatusCode, silent: &[(String, Stri
     } else {
         format!("the {what} is incomplete: no answer from {named} (§11.3)")
     };
-    outcome(status, code, &diagnostics)
+    let mut response = outcome(status, code, &diagnostics);
+    // NOTE: MyHealth@EU RC 10.0.0 §1.25 requirement 05.01: members that give no answer
+    // are a national infrastructure that cannot answer, which a contact point is told.
+    response
+        .extensions_mut()
+        .insert(crate::error::ncp::NcpError::REGISTRY_NOT_AVAILABLE);
+    response
 }

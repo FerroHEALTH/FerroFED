@@ -182,7 +182,7 @@ fn serve_command(
     let usage = (std::time::Instant::now(), Usage::of(&settings));
     // NOTE: no specification governs this: our own design; the client and the admin
     // listener share one gate, so a reload of `[auth]` reaches both at once.
-    let trust = Arc::new(Trust::new(&server.auth));
+    let trust = Arc::new(Trust::of(&server.auth, state));
     let admin = settings.metrics.listen.map(|address| {
         let access = admin::Access::sharing(
             Arc::clone(&trust),
