@@ -1170,6 +1170,21 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
 - **tokens:** cached per endpoint until `exp` minus 30 s and handed to the
   node's `rest-client` through its `CredentialsProvider`; a `401` drops the
   token;
+- **the onward lane** (built with #1703, of #1615): a node's
+  `[credentials."<id>".onward]` table, `ferrohealth-smart`'s
+  `[<lane>.credentials.onward]`, authenticated by the section's `oauth`
+  client. Every request a verified caller originates reaches the node under
+  the token `ferrohealth_smart::client::onward::exchange::Onward` obtains for
+  that caller: RFC 8693 token exchange, or the RFC 7523 JWT bearer grant
+  under the Entra profile, the issued token checked by the library's one
+  onward check and cached by it. The issuer's `kind` decides the callers it
+  carries (`ferrofed_engine::onward::grant::lane::route`): a person of the
+  node's organisation at `persons`, a professional of another domestic party
+  at `federation`, the patient at `patients`; every other caller, a system
+  included, fails that node with nothing sent. A refused exchange fails the
+  node and never falls back to the gateway's own token, which the `oauth`
+  table keeps for the gateway's own requests. Which caller is exchanged at
+  which kind is our own design;
 - **token exchange** (built with #439): where a node's authorization server
   supports RFC 8693, the endpoint's `oauth2` grant is `token_exchange`. The
   `subject_token` is the caller's verified access token, the `actor_token` an

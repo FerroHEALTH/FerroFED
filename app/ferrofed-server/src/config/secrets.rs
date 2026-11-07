@@ -42,6 +42,12 @@ pub(crate) fn resolve_credentials(
         }
         .into());
     }
+    if credentials.onward.is_some() {
+        return Err(CredentialsFault::OnwardOnService {
+            section: section.to_owned(),
+        }
+        .into());
+    }
     scheme(section, credentials, None)
 }
 
@@ -132,6 +138,16 @@ fn scheme(
         })
     };
     let basic = credentials.user.is_some() || password.is_some();
+    if credentials.onward.is_some()
+        && (basic || credentials.oauth2.is_some() || credentials.fapi2.is_some() || bound)
+    {
+        return Err(refused());
+    }
+    if credentials.onward.is_some() && credentials.oauth.is_none() {
+        return Err(Error::Missing {
+            key: format!("{section}.oauth"),
+        });
+    }
     if let Some(fapi2) = &credentials.fapi2 {
         if basic || credentials.oauth.is_some() || credentials.oauth2.is_some() || bound {
             return Err(refused());
@@ -159,11 +175,7 @@ fn scheme(
         if basic || credentials.oauth2.is_some() {
             return Err(refused());
         }
-        let grant = oauth.resolve(&format!("{section}.oauth"))?;
-        return Ok(Scheme::Oauth {
-            grant: Box::new(grant),
-            written: Box::new(oauth.clone()),
-        });
+        return oauth_scheme(section, oauth, credentials.onward.as_ref());
     }
     if let Some(oauth2) = &credentials.oauth2 {
         if basic {
@@ -194,6 +206,30 @@ fn scheme(
             section: section.to_owned(),
         })),
     }
+}
+
+/// Returns the scheme of `section`'s `oauth` table, with the onward lane it
+/// authenticates when `onward` is written.
+fn oauth_scheme(
+    section: &str,
+    oauth: &crate::config::oauth::Oauth,
+    onward: Option<&ferrohealth_smart::config::onward::OnwardSection>,
+) -> Result<Scheme, Error> {
+    let grant = oauth.resolve(&format!("{section}.oauth"))?;
+    let onward = onward
+        .map(|written| {
+            crate::config::oauth::Onward::resolve(
+                &format!("{section}.onward"),
+                written,
+                grant.clone(),
+            )
+        })
+        .transpose()?;
+    Ok(Scheme::Oauth {
+        grant: Box::new(grant),
+        written: Box::new(oauth.clone()),
+        onward: onward.map(Box::new),
+    })
 }
 
 /// The key the secret `name` of `section` was read from: its `_file` sibling

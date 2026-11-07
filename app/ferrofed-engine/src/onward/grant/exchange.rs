@@ -37,6 +37,7 @@ use aws_lc_rs::digest::{SHA256, digest};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ferrofed_registry::id::EndpointId;
+use ferrohealth_smart::client::onward::SubjectToken as OnwardSubject;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 use secrecy::{ExposeSecret, SecretString};
 
@@ -57,11 +58,14 @@ pub const CACHE_CAPACITY: usize = 1024;
 
 /// The caller's verified access token, and the scope its exchange asks for.
 ///
-/// `Debug` shows neither.
+/// It may also carry the caller as `ferrohealth-smart` verified it, the
+/// subject of an endpoint's onward lane ([`lane`](crate::onward::grant::lane)).
+/// `Debug` shows none of it.
 #[derive(Clone)]
 pub struct SubjectToken {
     token: SecretString,
     scope: String,
+    onward: Option<OnwardSubject>,
 }
 
 impl SubjectToken {
@@ -74,7 +78,23 @@ impl SubjectToken {
         Self {
             token,
             scope: scope.into(),
+            onward: None,
         }
+    }
+
+    /// This subject, carrying `onward`, the caller as `ferrohealth-smart`
+    /// verified it, for a node reached through an onward lane.
+    #[must_use]
+    pub fn with_onward(mut self, onward: OnwardSubject) -> Self {
+        self.onward = Some(onward);
+        self
+    }
+
+    /// The caller as `ferrohealth-smart` verified it, when the subject
+    /// carries it.
+    #[must_use]
+    pub fn onward(&self) -> Option<&OnwardSubject> {
+        self.onward.as_ref()
     }
 
     /// The caller's token.
@@ -204,10 +224,34 @@ impl<T: Transport + Clone + 'static> Exchange<T> {
 
 impl<T: Transport + Clone + 'static> OnBehalf for Exchange<T> {
     fn provider(&self, conveyance: &Conveyance, withheld: &Arc<Withheld>) -> SharedCredentials {
-        match conveyance.principal() {
-            Principal::Gateway => Arc::clone(&self.0.gateway),
-            Principal::Caller(caller) => Arc::new(OnBehalfOf {
+        match ForCall::of(conveyance, withheld) {
+            None => Arc::clone(&self.0.gateway),
+            Some(call) => Arc::new(OnBehalfOf {
                 inner: Arc::clone(&self.0),
+                call,
+            }),
+        }
+    }
+}
+
+/// What one call made for a verified caller hands its onward credentials.
+pub(crate) struct ForCall {
+    /// Whether the edge asserted the caller, so the gateway holds no token
+    /// of it.
+    pub(crate) edge: bool,
+    /// The caller's verified token, when the call carries it.
+    pub(crate) subject: Option<SubjectToken>,
+    /// The identifiers the request withholds.
+    pub(crate) withheld: Arc<Withheld>,
+}
+
+impl ForCall {
+    /// Returns the call `conveyance` makes for a verified caller, or `None`
+    /// for the gateway's own request.
+    pub(crate) fn of(conveyance: &Conveyance, withheld: &Arc<Withheld>) -> Option<Self> {
+        match conveyance.principal() {
+            Principal::Gateway => None,
+            Principal::Caller(caller) => Some(Self {
                 // NOTE: RFC 8693 §2.1, only a token the gateway itself verified is a
                 // caller's subject_token; an edge assertion never is.
                 edge: !matches!(
@@ -288,22 +332,20 @@ impl<T: Transport> Inner<T> {
 /// The credentials of one call made on behalf of a verified caller.
 struct OnBehalfOf<T> {
     inner: Arc<Inner<T>>,
-    edge: bool,
-    subject: Option<SubjectToken>,
-    withheld: Arc<Withheld>,
+    call: ForCall,
 }
 
 impl<T> OnBehalfOf<T> {
     /// The subject to exchange and its cache key, or why there is none.
     fn subject(&self) -> Result<(&SubjectToken, Key), ExchangeError> {
-        if self.edge {
+        if self.call.edge {
             return Err(ExchangeError::Edge);
         }
-        let subject = self.subject.as_ref().ok_or(ExchangeError::NoSubject)?;
+        let subject = self.call.subject.as_ref().ok_or(ExchangeError::NoSubject)?;
         if subject.scope().split_whitespace().next().is_none() {
             return Err(ExchangeError::NoScope);
         }
-        if carries_withheld(subject, &self.withheld) {
+        if carries_withheld(subject, &self.call.withheld) {
             return Err(ExchangeError::Withheld);
         }
         Ok((subject, Key::of(subject)))
@@ -333,14 +375,14 @@ impl<T> fmt::Debug for OnBehalfOf<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OnBehalfOf")
             .field("endpoint", &self.inner.endpoint)
-            .field("edge", &self.edge)
+            .field("edge", &self.call.edge)
             .finish_non_exhaustive()
     }
 }
 
 /// Whether `subject`'s token or scope carries an identifier of `withheld`,
 /// raw or in the decoded payload of a JWS.
-fn carries_withheld(subject: &SubjectToken, withheld: &Withheld) -> bool {
+pub(crate) fn carries_withheld(subject: &SubjectToken, withheld: &Withheld) -> bool {
     let token = subject.token().expose_secret();
     if withheld.carried_by(token) || withheld.carried_by(subject.scope()) {
         return true;

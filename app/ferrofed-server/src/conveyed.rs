@@ -92,7 +92,11 @@ pub fn of(signer: Option<&Arc<Signer>>, caller: Option<&Caller>) -> Result<Conve
     // token exchange needs; it reaches that authorization server alone.
     Ok(match caller.token() {
         Some(token) => {
-            conveyance.with_subject(SubjectToken::new(token.secret(), caller.covering()))
+            let subject = SubjectToken::new(token.secret(), caller.covering());
+            conveyance.with_subject(match token.onward() {
+                Some(onward) => subject.with_onward(onward.clone()),
+                None => subject,
+            })
         }
         None => conveyance,
     })
