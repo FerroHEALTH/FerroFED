@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ferrofed_registry::id::EndpointId;
+use ferrohealth_smart::kind::IssuerKind;
 use openehr_its::rest::client::{Client, ClientError, Transport};
 use url::Url;
 
@@ -37,6 +38,21 @@ impl<T: Transport + Clone> NodeClient<T> {
     pub fn with_on_behalf(mut self, source: SharedOnBehalf) -> Self {
         self.on_behalf = Some(source);
         self
+    }
+
+    /// The kind of the endpoint's onward lane, and the credentials provider
+    /// of one call under `options` through it, when the endpoint is reached
+    /// through one.
+    pub(crate) fn committing(
+        &self,
+        options: &DispatchOptions,
+    ) -> Option<(IssuerKind, SharedCredentials)> {
+        let source = self.on_behalf.as_ref()?;
+        let kind = source.committer_kind()?;
+        Some((
+            kind,
+            source.provider(&options.conveyance, &options.withheld),
+        ))
     }
 
     /// The ITS-REST client a request under `options` is sent through.

@@ -1184,7 +1184,12 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   included, fails that node with nothing sent. A refused exchange fails the
   node and never falls back to the gateway's own token, which the `oauth`
   table keeps for the gateway's own requests. Which caller is exchanged at
-  which kind is our own design;
+  which kind is our own design. A `CONTRIBUTION` through the lane names, in
+  its `audit`, every `commit_audit` and, for a `persons` lane, every
+  attestation, FerroEHR's committer placeholder of the onward token's `iss`
+  and `sub` (`ferrofed_engine::single_node::committer`, #1705); through any
+  other lane an attestation is refused `403` before sending; a header commit
+  is forwarded as sent, with no committer of the gateway's;
 - **token exchange** (built with #439): where a node's authorization server
   supports RFC 8693, the endpoint's `oauth2` grant is `token_exchange`. The
   `subject_token` is the caller's verified access token, the `actor_token` an

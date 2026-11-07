@@ -333,6 +333,7 @@ impl Contact {
             | ForwardError::Credentials { .. }
             | ForwardError::Compose { .. }
             | ForwardError::Conveyance { .. }
+            | ForwardError::Committer { .. }
             | ForwardError::Unrouted => Self::Unsent,
         }
     }

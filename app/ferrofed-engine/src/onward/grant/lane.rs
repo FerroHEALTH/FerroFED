@@ -156,6 +156,10 @@ impl OnBehalf for Lane {
             }),
         }
     }
+
+    fn committer_kind(&self) -> Option<IssuerKind> {
+        Some(self.0.kind)
+    }
 }
 
 impl fmt::Debug for Lane {

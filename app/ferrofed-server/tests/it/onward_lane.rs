@@ -350,3 +350,214 @@ fn an_onward_table_with_no_audience_is_refused() -> TestResult {
     );
     Ok(())
 }
+
+/// A canonical `CODE_PHRASE`-coded text of the openEHR terminology.
+fn coded(value: &str, code: &str) -> String {
+    format!(
+        r#"{{"_type":"DV_CODED_TEXT","value":"{value}","defining_code":{{"_type":"CODE_PHRASE","terminology_id":{{"_type":"TERMINOLOGY_ID","value":"openehr"}},"code_string":"{code}"}}}}"#
+    )
+}
+
+/// A `CONTRIBUTION` of one created `COMPOSITION` whose audits
+/// state a committer of the client's own, with `attestations` on the
+/// version when given.
+fn contribution(attestations: &str) -> String {
+    let audit = format!(
+        r#"{{"_type":"UPDATE_AUDIT","change_type":{},"committer":{{"_type":"PARTY_IDENTIFIED","name":"Synthetic clinician"}}}}"#,
+        coded("creation", "249")
+    );
+    let data = format!(
+        r#"{{"_type":"COMPOSITION","name":{{"_type":"DV_TEXT","value":"Synthetic note"}},"archetype_node_id":"openEHR-EHR-COMPOSITION.report.v1","language":{{"_type":"CODE_PHRASE","terminology_id":{{"_type":"TERMINOLOGY_ID","value":"ISO_639-1"}},"code_string":"en"}},"territory":{{"_type":"CODE_PHRASE","terminology_id":{{"_type":"TERMINOLOGY_ID","value":"ISO_3166-1"}},"code_string":"NL"}},"category":{},"composer":{{"_type":"PARTY_IDENTIFIED","name":"Synthetic clinician"}}}}"#,
+        coded("event", "433")
+    );
+    format!(
+        r#"{{"versions":[{{"lifecycle_state":{},"commit_audit":{audit},{attestations}"data":{data}}}],"audit":{audit}}}"#,
+        coded("complete", "532")
+    )
+}
+
+/// `body` posted as a `CONTRIBUTION` to node A's EHR, naming node A as its
+/// target, as `authorization`.
+fn contribution_post(body: String, authorization: &str) -> Result<Request<Body>, Box<dyn Error>> {
+    Ok(
+        Request::post(format!("/v1/ehr/{}/contribution", crate::facade::EHR_A))
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::AUTHORIZATION, authorization)
+            .header("openEHR-federation-endpoint", "node-a-pub")
+            .body(Body::from(body))?,
+    )
+}
+
+/// A node A that takes every `CONTRIBUTION` with `201`.
+async fn committing_node() -> Server {
+    let server = Server::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!(
+            "/v1/ehr/{}/contribution",
+            crate::facade::EHR_A
+        )))
+        .respond_with(ResponseTemplate::new(201))
+        .mount(&server)
+        .await;
+    server
+}
+
+/// The JSON bodies node A received.
+#[expect(
+    clippy::disallowed_types,
+    reason = "a test reads the JSON a stub node received"
+)]
+async fn received(server: &Server) -> Result<Vec<serde_json::Value>, Box<dyn Error>> {
+    server
+        .received_requests()
+        .await
+        .ok_or("recording is on")?
+        .iter()
+        .map(|request| Ok(serde_json::from_slice(&request.body)?))
+        .collect()
+}
+
+/// The placeholder FerroEHR takes where ITS-REST requires a committer and
+/// the node derives it: the onward token's `iss` and `sub`, nothing else.
+#[expect(
+    clippy::disallowed_types,
+    reason = "a test reads the JSON a stub node received"
+)]
+fn placeholder() -> serde_json::Value {
+    serde_json::json!({
+        "_type": "PARTY_IDENTIFIED",
+        "identifiers": [{"_type": "DV_IDENTIFIER", "issuer": ISSUER, "id": CALLER}],
+    })
+}
+
+/// A `CONTRIBUTION` sent through an onward lane names, in its `audit` and in
+/// every version's `commit_audit`, the placeholder of the onward token the
+/// node authenticates, and keeps every other member as the client sent it
+/// (ITS-REST 1.1.0 `UpdateAudit`, `UpdateVersion`).
+#[tokio::test]
+#[expect(
+    clippy::disallowed_types,
+    reason = "a test reads the JSON a stub node received"
+)]
+async fn a_contribution_names_the_onward_tokens_placeholder_as_its_committer() -> TestResult {
+    let exchanged = onward_token()?;
+    let server = authorization_server(&exchanged, 200).await;
+    let a = committing_node().await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), "persons", ""))?;
+    let sent = contribution("");
+
+    let (status, text) = call(app, contribution_post(sent.clone(), &bearer_as(CALLER)?)?).await?;
+    assert_eq!(StatusCode::CREATED, status, "{text}");
+    let [body] = received(&a).await?.try_into().map_err(|_n| "one request")?;
+    assert_eq!(placeholder(), body["audit"]["committer"]);
+    assert_eq!(
+        placeholder(),
+        body["versions"][0]["commit_audit"]["committer"]
+    );
+    let original: serde_json::Value = serde_json::from_str(&sent)?;
+    assert_eq!(original["versions"][0]["data"], body["versions"][0]["data"]);
+    assert_eq!(
+        original["audit"]["change_type"],
+        body["audit"]["change_type"]
+    );
+    Ok(())
+}
+
+/// The `attestations` member of a version, one `UPDATE_ATTESTATION` its
+/// client states a committer of its own for (ITS-REST 1.1.0
+/// `UpdateAttestation`).
+fn attestation() -> String {
+    format!(
+        r#""attestations":[{{"_type":"UPDATE_ATTESTATION","change_type":{},"committer":{{"_type":"PARTY_SELF"}},"reason":{{"_type":"DV_TEXT","value":"signed"}},"is_pending":false}}],"#,
+        coded("creation", "249")
+    )
+}
+
+/// A person's attestation takes the same placeholder (ITS-REST 1.1.0
+/// `UpdateAttestation`).
+#[tokio::test]
+async fn a_persons_attestation_names_the_placeholder() -> TestResult {
+    let exchanged = onward_token()?;
+    let server = authorization_server(&exchanged, 200).await;
+    let a = committing_node().await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), "persons", ""))?;
+    let sent = contribution(&attestation());
+    let (status, text) = call(app, contribution_post(sent, &bearer_as(CALLER)?)?).await?;
+    assert_eq!(StatusCode::CREATED, status, "{text}");
+    let [body] = received(&a).await?.try_into().map_err(|_n| "one request")?;
+    assert_eq!(
+        placeholder(),
+        body["versions"][0]["attestations"][0]["committer"]
+    );
+    Ok(())
+}
+
+/// An attestation through a `federation` lane is refused before any token
+/// is asked for and nothing reaches the node, which refuses every
+/// attestation by an external person.
+#[tokio::test]
+async fn an_attestation_through_a_federation_lane_is_refused_before_sending() -> TestResult {
+    let server = authorization_server("unused", 200).await;
+    let a = committing_node().await;
+    let dir = tempfile::tempdir()?;
+    let federation = format!(
+        "[credentials.\"node-a-pub\".onward.federation]\ncontact_point = false\nexchanges_from = [\"{ISSUER}\"]\nperson_mapping = \"sub\"\ncountries = [\"NL\"]\nissuing_authorities = [\"synthetic-authority\"]\nprovider_identifier_prefixes = [\"urn:oid:2.999\"]\n"
+    );
+    let tables = lane(&server.uri(), "federation", "").replace(
+        "[credentials.\"node-a-pub\".onward.keys]",
+        &format!("{federation}\n[credentials.\"node-a-pub\".onward.keys]"),
+    );
+    let app = gateway(dir.path(), &a.uri(), &tables)?;
+    let sent = contribution(&attestation());
+    let (status, text) = call(app, contribution_post(sent, &bearer_as(CALLER)?)?).await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
+    assert!(
+        exchanges(&server).await?.is_empty(),
+        "no token was asked for"
+    );
+    assert!(received(&a).await?.is_empty(), "node A was sent nothing");
+    Ok(())
+}
+
+/// A header commit through an onward lane is forwarded as the client sent
+/// it: the gateway writes no committer of its own into it.
+#[tokio::test]
+async fn a_header_commit_carries_no_committer_of_the_gateways() -> TestResult {
+    let exchanged = onward_token()?;
+    let server = authorization_server(&exchanged, 200).await;
+    let a = Server::start().await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&a)
+        .await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), "persons", ""))?;
+    let uid = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
+    let request = Request::put(format!(
+        "/v1/ehr/{}/composition/8849182c-82ad-4088-a07f-48ead4180515",
+        crate::facade::EHR_A
+    ))
+    .header(header::CONTENT_TYPE, "application/json")
+    .header(header::AUTHORIZATION, bearer_as(CALLER)?)
+    .header(header::IF_MATCH, format!("\"{uid}\""))
+    .header("openehr-audit-details", "change_type.code_string=\"251\"")
+    .header("openEHR-federation-endpoint", "node-a-pub")
+    .body(Body::from(r#"{"_type":"COMPOSITION"}"#))?;
+
+    let _answer = call(app, request).await?;
+    for sent in a.received_requests().await.ok_or("recording is on")? {
+        let audit: Vec<&str> = sent
+            .headers
+            .get_all("openehr-audit-details")
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .collect();
+        assert!(
+            audit.iter().all(|line| !line.contains("committer")),
+            "{audit:?}"
+        );
+    }
+    Ok(())
+}
