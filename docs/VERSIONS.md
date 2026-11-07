@@ -702,7 +702,7 @@ own design.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| ferrohealth-perf | `0.4.1` | `.github/workflows/perf.yml` |
+| ferrohealth-perf | `0.4.2` | `.github/workflows/perf.yml` |
 
 ## Product and citation version
 

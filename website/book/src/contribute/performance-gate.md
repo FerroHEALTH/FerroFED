@@ -45,11 +45,20 @@ The job's summary names each breach by its metric, such as
 `idle.transactions_per_second` or `patient-query.p95_ms`. A load metric that
 breaches is judged again on up to two fresh load phases, and the gate fails
 only when it breaches in most of the runs; the check says in how many. The
-artifact `perf-report` holds the JSON reports, every phase included, and the
+artifact `perf-report-attempt-<n>` holds the JSON reports, every phase included, and the
 gateway's log. Exit 1 is a breach. Exit 2 means the run cannot be judged: no
 entry for the runner's host shape, a generator that lagged, a window that was
 not steady, or a runner that stalled (every route's p99 over ten times its
 p50 at once).
+
+Some runners stall every route for a whole job: on an AMD EPYC 9V74 the
+tails reach 100 to 300 ms while the p50 holds
+([FerroPIX #511](https://github.com/FerroHEALTH/FerroPIX/issues/511)). An
+attempt that ends with exit 1 or 2 on a CPU model the perf workflow lists in
+`STALL_PRONE` runs again on a fresh runner, at most twice, and the gate
+passes when the last attempt passed. A breach on any other model fails at
+once. The job summary names each attempt's CPU model, its verdict and why a
+retry ran, and each attempt uploads its reports as `perf-report-attempt-<n>`.
 
 ## Updating the baseline
 
@@ -63,7 +72,7 @@ generations and sizes and a latency is comparable only on a like host.
   metric as their median and its noise floor as how far the worst phase
   strayed from it.
 - Machines of one shape still differ, so re-run the update job several
-  times, take each run's `perf/baseline.toml` from its `perf-report`
+  times, take each run's `perf/baseline.toml` from its `perf-report-attempt-<n>`
   artifact, and fold them into the committed file with
   `ferrohealth-perf merge --baseline perf/baseline.toml job-1.toml job-2.toml`.
   Each entry then takes the median over the jobs, and its floor the spread
