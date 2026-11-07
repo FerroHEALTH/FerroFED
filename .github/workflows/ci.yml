@@ -1217,8 +1217,6 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/perf.yml
-    with:
-      update: true
 
   # The conformance report of section 16.4 (#92; no specification governs its
   # form: our own design): every section 16.3 track and section 17 point as

@@ -1,11 +1,11 @@
-# The performance baseline of ferrohealth-perf, one [[baseline]] per CPU model.
+# The performance baseline of ferrohealth-perf, one [[baseline]] per host shape.
 # `ferrohealth-perf run --update` writes or lowers the entry of the runner's
 # model; a raise is a hand edit in a change that says why.
 schema = 3
 
 [[baseline]]
-tool = "0.3.0"
-written = "2026-11-07T08:20:54.513819933Z"
+tool = "0.4.1"
+written = "2026-11-07T12:31:28.392177Z"
 
 [baseline.plan]
 rate = 20.0
@@ -30,49 +30,49 @@ transactions = 0.1
 
 [baseline.metrics]
 throughput_rps = 20.0
-peak_memory_bytes = 55111680.0
-cpu_per_request_ms = 2.933333333333333
+peak_memory_bytes = 56762368.0
+cpu_per_request_ms = 2.55
 transactions_per_request = 0.4085714285714286
-"definition-read.p50_ms" = 3.587
-"definition-read.p95_ms" = 4.187
-"definition-read.p99_ms" = 5.291
-"patient-query.p50_ms" = 9.855
-"patient-query.p95_ms" = 12.383
-"patient-query.p99_ms" = 17.487
-"population-query.p50_ms" = 6.939
-"population-query.p95_ms" = 8.687
-"population-query.p99_ms" = 10.735
-"self-description.p50_ms" = 1.947
-"self-description.p95_ms" = 2.439
-"self-description.p99_ms" = 2.901
-"stored-query-run.p50_ms" = 16.183
-"stored-query-run.p95_ms" = 18.815
-"stored-query-run.p99_ms" = 26.079
+"definition-read.p50_ms" = 3.149
+"definition-read.p95_ms" = 3.815
+"definition-read.p99_ms" = 4.823
+"patient-query.p50_ms" = 8.951
+"patient-query.p95_ms" = 11.479
+"patient-query.p99_ms" = 20.415
+"population-query.p50_ms" = 6.115
+"population-query.p95_ms" = 7.883
+"population-query.p99_ms" = 10.119
+"self-description.p50_ms" = 1.706
+"self-description.p95_ms" = 2.193
+"self-description.p99_ms" = 2.355
+"stored-query-run.p50_ms" = 14.823
+"stored-query-run.p95_ms" = 17.487
+"stored-query-run.p99_ms" = 28.575
 
 [baseline.noise]
 throughput_rps = 1.0
-peak_memory_bytes = 1.0007432181345224
-cpu_per_request_ms = 1.0085227272727273
+peak_memory_bytes = 1.0015873015873016
+cpu_per_request_ms = 1.1503267973856208
 transactions_per_request = 1.0069930069930069
-"definition-read.p50_ms" = 1.0401449679397825
-"definition-read.p95_ms" = 1.0210174349176022
-"definition-read.p99_ms" = 1.0415800415800416
-"patient-query.p50_ms" = 1.0300355149670217
-"patient-query.p95_ms" = 1.0232576919970928
-"patient-query.p99_ms" = 1.4190541545147826
-"population-query.p50_ms" = 1.0438103473122928
-"population-query.p95_ms" = 1.0460458155865087
+"definition-read.p50_ms" = 1.2196942765730536
+"definition-read.p95_ms" = 1.2253284875594073
+"definition-read.p99_ms" = 1.1378747705486438
+"patient-query.p50_ms" = 1.1009943023125908
+"patient-query.p95_ms" = 1.078752504573569
+"patient-query.p99_ms" = 1.4388929708547638
+"population-query.p50_ms" = 1.134750613246116
+"population-query.p95_ms" = 1.101991627552962
 "population-query.p99_ms" = 1.2258034466697718
-"self-description.p50_ms" = 1.0364663585002567
-"self-description.p95_ms" = 1.0410004100041002
-"self-description.p99_ms" = 1.0179248534987935
-"stored-query-run.p50_ms" = 1.022245566335043
-"stored-query-run.p95_ms" = 1.0314642572415624
+"self-description.p50_ms" = 1.4108681245858186
+"self-description.p95_ms" = 1.3044542339696523
+"self-description.p99_ms" = 1.2727637384677097
+"stored-query-run.p50_ms" = 1.0917493085070498
+"stored-query-run.p95_ms" = 1.0759421284382686
 "stored-query-run.p99_ms" = 1.1515395528969667
 
 [[baseline]]
-tool = "0.3.0"
-written = "2026-11-07T09:20:41.995586443Z"
+tool = "0.4.1"
+written = "2026-11-07T12:31:28.392177Z"
 
 [baseline.plan]
 rate = 20.0
@@ -138,8 +138,8 @@ transactions_per_request = 1.0069930069930069
 "stored-query-run.p99_ms" = 2.819175318397713
 
 [[baseline]]
-tool = "0.3.0"
-written = "2026-11-07T09:50:17.570499267Z"
+tool = "0.4.1"
+written = "2026-11-07T12:31:28.392177Z"
 
 [baseline.plan]
 rate = 20.0
