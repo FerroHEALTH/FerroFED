@@ -24,18 +24,18 @@ A72).
 
 ## Connecting a national connector
 
-You connect a contact point in three steps:
+You connect a contact point in four steps:
 
 1. Serve the FHIR face under `[fhir]`, with the members that serve
    prescriptions and dispensations in `[[fhir.serve]]`
    ([The patient summary over FHIR](patient-summary.md),
    [Prescriptions and dispensations over FHIR](prescriptions.md)).
-2. Trust the issuer of the connector's tokens under `[[auth.issuer]]` and
-   `[[trust.issuer]]`, as for any client
+2. Trust the issuer of the connector's tokens as an `[[auth.issuer]]` of
+   `kind = "federation"` with `sender_constraint = "required"`, and give it
+   an `[[auth.federation]]` table that sets `contact_point = true`
    ([Authentication](../operate/authentication.md)).
-3. Declare that issuer a national contact point with
-   `[trust.issuer.national_contact_point]`, naming the claims its tokens
-   carry the Implementing Regulation (EU) 2026/2099 Annex attributes in
+3. Name that issuer in a `[[federation.contact_point]]`, with the header the
+   connector sends its correlation identifier in
    ([National contact points](../operate/authentication.md#national-contact-points)).
 4. Give FerroFED its own PostgreSQL store with `[store]`, which a
    contact-point issuer needs; without it the gateway refuses to start
@@ -55,39 +55,48 @@ members = ["node-a", "node-b"]
 
 [[auth.issuer]]
 issuer = "https://ncp.example.org"
-kind = "persons"
+kind = "federation"
 audience = ["https://gateway.example.org/fed"]
+sender_constraint = "required"
 
-[[trust.issuer]]
+[[auth.federation]]
 issuer = "https://ncp.example.org"
+contact_point = true
+mapping = "ehdsi"
+countries = ["LU"]
+fields."professional.country_code" = [{ constant = "LU" }]
+fields."professional.issuing_authority_name" = [{ constant = "Example HP Register" }]
+fields."provider.issuing_authority_name" = [{ constant = "Example HCP Register" }]
 
-[trust.issuer.national_contact_point]
-family_name = "family_name"
-given_name = "given_name"
-country_code = "country_code"
-professional_issuing_authority = "hp_issuing_authority_name"
-provider_issuing_authority = "hcp_issuing_authority_name"
-provider_address = "healthcare_provider_address"
-trc_patient = "trc_patient"
+[[federation.contact_point]]
+issuer = "https://ncp.example.org"
 correlation_header = "ncp-correlation-id"
 
 [store]
 url_file = "/run/secrets/ferrofed/store-url"
 ```
 
-`trc_patient` names the claim that carries the patient of the treatment
-relationship confirmation (TRC): its `subject-id` (eHDSI SAML Profile
-10.0.0 §4.3), as one `system|value` token, which your authorization server
-copies from the TRC it validated. Every claim name is required.
+Your contact point's authorization server writes what it read from the
+validated HP Identity Assertion and the treatment relationship confirmation
+(TRC) under the token's `ehdsi` claim, each attribute at its
+`ferrohealth-smart` field name (`ehdsi.professional.hp_identifier`,
+`ehdsi.point_of_care` and so on). The patient of the TRC, its `subject-id`
+(eHDSI SAML Profile 10.0.0 §4.3), travels in `ehdsi.patient.id` as one
+`system|value` token. The assertion carries no country and no issuing
+authority, so you configure them as constants for the contact point: the
+country of the contact point, and the authorities that issue its
+professionals' and providers' identifiers. The connector reaches the
+gateway over mutual TLS, and each token is bound to the connector's client
+certificate in its `cnf` claim (RFC 8705 §3).
 
-`ferrofed config check` reads the table, and `OPTIONS {base}/` declares the
+`ferrofed config check` reads the tables, and `OPTIONS {base}/` declares the
 contact point under `federation.national_contact_point`, so the connector's
 operator can check what the gateway expects. You see the running values on
 the operator console's Configuration page, on its Authentication tab, and in
 the running configuration of the admin listener
 ([The running configuration](../operate/configuration-revisions.md#the-running-configuration)):
-each claim name with its key, the correlation header and the added
-countries, and any secret by the file it is read from alone.
+the contact point's issuer, the correlation header and the added countries,
+and any secret by the file it is read from alone.
 
 ## What the connector calls
 
@@ -113,10 +122,10 @@ restricts alike.
 
 The patient lookup is the identification step and needs no TRC. Every other
 route reaches patient data, and the gateway holds it to the patient the
-token's `trc_patient` claim names (eHDSI XCA Profile 8.0.1 §4.2.1 and
+token's `ehdsi.patient.id` names (eHDSI XCA Profile 8.0.1 §4.2.1 and
 §4.2.2):
 
-- A token with no `trc_patient` claim, or one that is not `system|value`, is
+- A token with no `ehdsi.patient.id`, or one that is not `system|value`, is
   refused `403 forbidden` with the diagnostics `trc-missing`, and nothing is
   asked of anyone.
 - The patient a summary, a document list or a prescription search names must
@@ -166,7 +175,7 @@ gateway holds a patient-data request there to the same TRC patient, in the
 answers ITS-REST gives (openEHR ITS-REST 1.1.0; eHDSI XCA Profile 8.0.1
 §4.2.1 and §4.2.2):
 
-- A token with no `trc_patient` claim is refused `403` with the code
+- A token with no `ehdsi.patient.id` is refused `403` with the code
   `trc-missing` on every route that reaches patient data: the query routes,
   the EHR API and the DEMOGRAPHIC API. A definition request reaches no
   patient data and needs none.
@@ -198,16 +207,19 @@ ITS-REST has no MyHealth@EU service, so its answers carry no §1.25
 
 For every request of the contact point, the gateway:
 
-- requires every Annex attribute and a purpose of use, and refuses a
-  request that lacks one before any member is asked;
+- holds the token to the MyHealth@EU contact-point profile of
+  `ferrohealth-smart` (eHDSI SAML Profile 10.0.0 §2.1, §2.3), bound to the
+  connection's client certificate, and refuses one that falls short before
+  any member is asked;
 - withholds every consent exclusion, whatever `[federation.consent]
   disclose` says (Regulation (EU) 2025/327 Art 8, Art 11(5));
-- writes one access record naming the foreign professional and provider,
-  marked as asserted by the contact point, with the correlation identifier
+- writes one access record naming the foreign professional by their
+  identifier and the provider, marked as asserted by the contact point,
+  with the correlation identifier and no name or address
   ([Audit](../operate/access-log.md#a-request-a-national-contact-point-relays));
 - tells each member the foreign professional and provider in the caller's
-  conveyance, and sends no patient identifier to any member (Federation
-  Tier §5.4.1, N33).
+  conveyance, with no name or address (GDPR Art 5(1)(c)), and sends no
+  patient identifier to any member (Federation Tier §5.4.1, N33).
 
 The gateway never refuses a contact-point request because of the
 professional's role or the point of care: it conveys both for the record and
@@ -270,8 +282,9 @@ holds its professionals to.
 How the gateway counts:
 
 - **Per professional.** The professional is the one the token relays: the
-  contact point, `country_code`, the issuing authority and `hp_identifier`
-  (Implementing Regulation (EU) 2026/2099 Annex Table 1).
+  contact point, `country_code`, the issuing authority and `hp_identifier`,
+  the assertion's `NameID` (Implementing Regulation (EU) 2026/2099 Annex
+  Table 1; eHDSI SAML Profile 10.0.0 §2.1).
 - **Every request that reaches patient data.** The summary, the document
   list, a document, a prescription search and read, and a dispensation each
   count once. The patient lookup is the identification step and is never
@@ -319,7 +332,7 @@ it is:
 | A member answered with an error, named in the outcome | `424` `incomplete` | the member's, which the outcome names |
 | The owner of a prescription failed on a dispensation or could not be reached | `502` `exception`, the member's own issues after the gateway's when it sent some | unknown: read the prescription before sending again |
 | The request is malformed or misses a parameter | `400` `invalid` | no |
-| The token misses an Annex attribute; the message names each missing one | `403` `forbidden` | no, until the contact point sends it |
+| The token falls short of the MyHealth@EU contact-point profile | `403` `forbidden` | no, until the contact point sends what the assertion carries |
 | The token names no TRC patient | `403` `forbidden`, `trc-missing` | no, until the contact point sends it |
 | The professional reached the emergency access limit | `403` `forbidden`, `emergency-limit-reached` and `ERROR_SEC_GENERIC` | yes, once the oldest emergency access leaves the window |
 | No member holds the patient, or the prescription, or the request is outside the TRC's patient | `404` `not-found`, `trc-patient-mismatch` and the service's `*_NOT_FOUND` code | no |
@@ -328,6 +341,32 @@ it is:
 
 A patient no member holds and a patient every member restricts answer
 alike, so the connector reports both as a patient with no data.
+
+### The §1.25 code of every refusal
+
+Every refusal to a contact point names its Requirements Catalogue 10.0.0
+§1.25 exception code, so the national connector maps it to the code NCPeH-A
+answers its NCP with. An ITS-REST error body carries it in `ncp_error`, a
+FHIR `OperationOutcome` in its `issue.details`
+(`https://ferrofed.eu/fhir/CodeSystem/myhealth-eu-exception`), and the
+access record leads its outcome description with it. No legacy numeric code
+of the NCPeH Components Specifications 10.0.0 appendix 6.4 is ever issued.
+
+| Refusal | §1.25 code |
+|---|---|
+| A token the contact-point profile refuses | the code `ferrohealth-smart` gives it: `ERROR_HPI_NO_INFORMATION`, `ERROR_HPI_INSUFFICIENT_INFORMATION`, `ERROR_HPI_HAI_NO_INFORMATION`, `ERROR_HPI_POC_NO_INFORMATION`, `ERROR_HPI_AUTHENTICATION_NOT_RECEIVED` or `ERROR_SEC_DATA_INTEGRITY_NOT_ENSURED` |
+| Any other refused token, its key set unreadable included | `ERROR_SEC_GENERIC`, as `ferrohealth-smart` gives it |
+| A scope, operation or rights refusal, no TRC patient, a request a TRC binds nothing to, and the emergency access limit | `ERROR_SEC_GENERIC` |
+| A member, the identity binding or a service it needs cannot answer | `ERROR_REGISTRY_NOT_AVAILABLE` |
+| Outside the TRC's patient, or a patient no member holds | the service's `*_NOT_FOUND` |
+| The gateway's own defect, or its own record that failed | `ERROR_INTERNAL_ERROR` |
+
+The gateway holds no table of its own for a refused token: the code is the
+one the shared crate's refusal carries. Which code each of the gateway's own
+refusals takes is FerroFED's own design over the catalogue's rows. A
+restricted patient answers a contact point exactly as a patient no member
+holds, code included (Regulation (EU) 2025/327 Art 8), so a contact point
+never reads `ERROR_NO_CONSENT`.
 
 The end-to-end test `e2e::national` drives these routes from the harness
 national connector of `tools/ferrofed-testkit` over two FerroEHR nodes.

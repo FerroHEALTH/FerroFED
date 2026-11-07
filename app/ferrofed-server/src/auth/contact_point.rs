@@ -3,108 +3,64 @@
 
 //! The national-contact-point caller.
 //!
-//! An issuer the deployment declares as a national contact point for digital
-//! health vouches for its national connector, which relays the request of a
-//! health professional of another Member State. Implementing Regulation (EU) 2026/2099 Art 6(1) and (2) give the
-//! identification, authentication and authorisation of that professional to
-//! the entity their Member State lists, and Art 7 has the contact point
-//! communicate the professional's and the provider's identification data,
-//! the attributes of its Annex Tables 1 and 2. The gateway verifies the
-//! contact point's token and reads those attributes from it as the contact
-//! point asserts them: it never authenticates the professional, and the
-//! Federation Tier lets the source "rely on the requester's assertion" (§13.4
-//! authn-end-user). A request that reaches patient data needs every
-//! attribute and a purpose of use (§13.4 authn-purpose-of-use).
+//! A national contact point for digital health vouches for its national
+//! connector, which relays the request of a health professional of another
+//! Member State. Implementing Regulation (EU) 2026/2099 Art 6(1) and (2)
+//! give the identification, authentication and authorisation of that
+//! professional to the entity their Member State lists, and Art 7 has the
+//! contact point communicate the professional's and the provider's
+//! identification data. The gateway verifies the contact point's token and
+//! never authenticates the professional: the Federation Tier lets the
+//! source "rely on the requester's assertion" (§13.4 authn-end-user).
 //!
-//! The IHE IUA extension carries some of the attributes (ITI TF-2
-//! 3.71.4.2.2.1.1): `national_provider_identifier` is `hp_identifier`,
-//! `subject_role` is `hp_professional_role`, `subject_organization_id` is
-//! `healthcare_provider_identifier` and `subject_organization` is
-//! `healthcare_provider_name`. The issuer's
-//! `[trust.issuer.national_contact_point]` names the string claim of each
-//! other one. The IUA `person_id`, a patient identifier, is never read
-//! (§5.4.1, N33).
+//! `ferrohealth-smart` holds a `contact_point = true` issuer's token to the
+//! MyHealth@EU contact-point profile, what the eHDSI HP Identity Assertion
+//! and Treatment Relationship Confirmation carry (eHDSI SAML Profile 10.0.0
+//! §2.1, §2.3, §4), and refuses one that falls short; the gateway checks no
+//! field itself. It reads the crate's outcome ([`External`]) into what it
+//! relays to a node and to the access record ([`relayed`], [`record`]): the
+//! professional by the assertion's `NameID`, their role and organisation,
+//! the country and the purpose of use. No name and no address is read,
+//! relayed or recorded (GDPR Art 5(1)(c)); the assertion carries no address,
+//! and the record names the professional by their identifier.
 //!
 //! The patient the treatment relationship confirmation binds travels in the
-//! string claim `trc_patient` names, as one `system|value` token
+//! token's `patient.id` attribute, as one `system|value` token
 //! ([`TrcPatient`]): the authorization server acting for the contact point
 //! copies it from the TRC assertion's `subject-id` (eHDSI SAML Profile
 //! 10.0.0 §4.3). The FHIR face and the ITS-REST face hold every patient-data
 //! request to it.
 
+use std::collections::BTreeMap;
 use std::fmt;
 
 use ehds_logging::record::{
-    Coded, Gateways, RelayedError, RelayedParts, RelayedProfessional, RelayedProvider, Via,
+    AuthenticationMethod, Coded, Gateways, NameId, RelayedError, RelayedParts, RelayedProfessional,
+    RelayedProvider, Via,
 };
-use ferrofed_engine::conveyance::relayed::{HealthProfessional, HealthcareProvider, Relayed};
+use ferrofed_engine::conveyance::relayed::{HealthProfessional, HealthcareProvider, Relayed, Role};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
+use ferrohealth_smart::federation::{Attribute, External, Field, Source};
 use http::HeaderMap;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::auth::caller::Caller;
-use crate::auth::claims::IuaAnnex;
-use crate::auth::refusal::{Refusal, Refused};
+use crate::auth::caller::PurposeOfUse;
+use crate::auth::refusal::Refusal;
 use crate::config::auth::AuthSettings;
-use crate::config::auth::IssuerSettings;
-use crate::config::auth::contact_point::{ContactPoint, is_alpha_2};
+use crate::config::auth::contact_point::ContactPoint;
 use crate::config::emergency::EmergencyLimit;
 use crate::federation::describe::NATIONAL_CONTACT_POINT;
 use openehr_federation::error::WireError;
 use openehr_federation::options::OptionsRoot;
-use std::collections::BTreeMap;
 
 /// The most bytes a correlation identifier may carry.
 // NOTE: no specification governs this: our own design; 128 holds a UUID, a URN or a
 // trace id with room, and bounds what the access record stores from a header.
 pub const MAX_CORRELATION: usize = 128;
 
-/// One attribute of Implementing Regulation (EU) 2026/2099 Annex Tables 1
-/// and 2, in the tables' order.
-const ANNEX: [&str; 10] = [
-    "Table 1 family_name",
-    "Table 1 given_name",
-    "Table 1 hp_identifier",
-    "Table 1 issuing_authority_name",
-    "Table 1 hp_professional_role",
-    "Table 1 country_code",
-    "Table 2 healthcare_provider_identifier",
-    "Table 2 issuing_authority_name",
-    "Table 2 healthcare_provider_name",
-    "Table 2 healthcare_provider_address",
-];
-
-/// The Annex attributes a contact point's token lacks or carries in a form
-/// the gateway does not admit, named and never valued.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct MissingAnnex(u16);
-
-impl MissingAnnex {
-    /// Returns this set with the attribute at `index` of [`ANNEX`] added.
-    #[must_use]
-    const fn with(self, index: usize) -> Self {
-        Self(self.0 | (1 << index))
-    }
-
-    /// Returns whether no attribute is missing.
-    #[must_use]
-    pub const fn is_empty(self) -> bool {
-        self.0 == 0
-    }
-
-    /// The Annex names of the missing attributes, in the tables' order.
-    pub fn names(self) -> impl Iterator<Item = &'static str> {
-        ANNEX
-            .into_iter()
-            .enumerate()
-            .filter(move |(index, _)| self.0 & (1 << index) != 0)
-            .map(|(_, name)| name)
-    }
-}
-
 /// The patient a contact point's treatment relationship confirmation binds:
 /// the namespace and the value of its `subject-id`, as the token's
-/// `trc_patient` claim names them (eHDSI SAML Profile 10.0.0 §4.3).
+/// `patient.id` attribute names them (eHDSI SAML Profile 10.0.0 §4.3).
 ///
 /// The value is a [`SecretString`] and `Debug` shows the namespace alone, so
 /// no rendering shows the identifier (§5.4.1, N33).
@@ -191,222 +147,156 @@ impl PartialEq for TrcPatient {
 
 impl Eq for TrcPatient {}
 
-/// Whom a token's issuer vouches for, as [`read`] finds it.
-#[derive(Debug)]
-pub(super) enum Vouched {
-    /// An issuer not declared a contact point.
-    Own,
-    /// A contact point, its token relaying what [`relayed`] read, or the
-    /// Annex attributes it lacks, and the patient its treatment relationship
-    /// confirmation binds, when the token names one.
-    ContactPoint(Result<Box<Relayed>, MissingAnnex>, Option<TrcPatient>),
+/// The text of `field` in `external`, when the token asserts it as text.
+fn text(external: &External, field: Field) -> Option<String> {
+    external
+        .field(field)
+        .and_then(Attribute::text)
+        .filter(|text| !text.is_empty())
+        .map(str::to_owned)
 }
 
-/// Whom a token of `issuer` vouches for: a contact point's caller with what
-/// [`relayed`] reads from the IUA extension's `iua` and the string claims
-/// `text` reads, when the issuer is declared one.
-pub(super) fn read(
-    issuer: &IssuerSettings,
-    iua: IuaAnnex,
-    text: impl Fn(&str) -> Option<String>,
-) -> Vouched {
-    match &issuer.national_contact_point {
-        Some(declared) => {
-            let trc = text(&declared.claims.trc_patient).and_then(|claim| TrcPatient::read(&claim));
-            Vouched::ContactPoint(relayed((issuer.issuer.as_str(), declared), iua, &text), trc)
-        }
-        None => Vouched::Own,
-    }
-}
-
-/// Returns `caller` as [`read`] found it: vouched for by a contact point,
-/// with what its token relays, or as it is.
-pub(super) fn vouched(caller: Caller, read: Vouched) -> Caller {
-    match read {
-        Vouched::ContactPoint(relayed, trc) => caller
-            .relayed_by_contact_point(relayed)
-            .binding_trc_patient(trc),
-        Vouched::Own => caller,
+/// The codes of `field` in `external`: each coded value with its system, or
+/// the text as a code with none.
+fn codes(external: &External, field: Field) -> Vec<Role> {
+    match external.field(field) {
+        Some(Attribute::Codes(codes)) => codes
+            .iter()
+            .filter(|code| !code.code.is_empty())
+            .map(|code| Role {
+                system: code.system.clone().filter(|system| !system.is_empty()),
+                code: code.code.clone(),
+            })
+            .collect(),
+        Some(Attribute::Text(text)) if !text.is_empty() => vec![Role {
+            system: None,
+            code: text.clone(),
+        }],
+        _ => Vec::new(),
     }
 }
 
-/// Holds a caller a national contact point vouched for, admitted to patient
-/// data, to what Implementing Regulation (EU) 2026/2099 Art 7 has the
-/// contact point communicate, and to a purpose of use, whatever the
-/// deployment's `trust.purpose_of_use.required` (Federation Tier §13.4
-/// authn-purpose-of-use).
+/// What the contact point `issuer` relays in a token that asserts
+/// `external`.
 ///
-/// # Errors
-///
-/// Returns [`Refusal::PurposeOfUse`] when the token declares no purpose of
-/// use, and [`Refusal::ContactPoint`] with the attributes it lacks when it
-/// does not carry every Annex attribute.
-pub(super) fn relaying(caller: &Caller) -> Result<(), Refused> {
-    if !caller.is_contact_point() {
-        return Ok(());
+/// `None` when the token lacks the professional's identifier, its issuing
+/// authority, a role, the country, or the provider's identifier and issuing
+/// authority.
+#[must_use]
+pub fn relayed(issuer: &str, external: &External) -> Option<Relayed> {
+    let hp_professional_role = codes(external, Field::ProfessionalHpProfessionalRole);
+    if hp_professional_role.is_empty() {
+        return None;
     }
-    if caller.purposes().is_empty() {
-        return Err(Refusal::PurposeOfUse.into());
-    }
-    if caller.relayed().is_none() {
-        return Err(Refused::missing(caller.annex_missing()));
-    }
-    Ok(())
-}
-
-/// What the contact point `issuer`, declared as `declared`, relays in a
-/// token whose IUA extension states `iua` and whose string claims `text`
-/// reads, when the token carries every Annex attribute.
-///
-/// # Errors
-///
-/// Returns every Annex attribute that is absent or empty, the role when no
-/// role has a code, and `country_code` when it is not the ISO 3166-1
-/// alpha-2 code of a Member State, or of a country the deployment adds for
-/// this contact point ([`ContactPoint::admits_country`]); the provider
-/// identifier when it is no `urn:oid:` or `urn:hl7ii:` identifier, and the
-/// role when it is the ISCO `44` clerical role, which names whom it acts for
-/// in no Annex attribute ([`record`]).
-fn relayed(
-    (issuer, declared): (&str, &ContactPoint),
-    iua: IuaAnnex,
-    text: &impl Fn(&str) -> Option<String>,
-) -> Result<Box<Relayed>, MissingAnnex> {
-    let claims = &declared.claims;
-    // NOTE: 2026/2099 Annex Table 1 names "the Member State that issued" the data, and 2025/327
-    // Art 24(3) lets the Commission connect a third country's contact point, which the deployment adds.
-    let country_code =
-        text(&claims.country_code).filter(|code| is_alpha_2(code) && declared.admits_country(code));
-    let roles = Some(iua.roles).filter(|roles| !roles.is_empty());
-    // NOTE: ITI TF-2 3.71.4.2.2.1.1: `subject_name` is "The user's name as String", which
-    // cannot be split into the Annex family and given names, so both are configured claims.
-    let read = (
-        text(&claims.family_name),
-        text(&claims.given_name),
-        iua.hp_identifier,
-        text(&claims.professional_issuing_authority),
-        roles,
-        country_code,
-        iua.provider_identifier,
-        text(&claims.provider_issuing_authority),
-        iua.provider_name,
-        text(&claims.provider_address),
-    );
-    match read {
-        (
-            Some(family_name),
-            Some(given_name),
-            Some(hp_identifier),
-            Some(professional_authority),
-            Some(hp_professional_role),
-            Some(country_code),
-            Some(identifier),
-            Some(provider_authority),
-            Some(name),
-            Some(address),
-        ) => {
-            let relayed = Relayed {
-                contact_point: issuer.to_owned(),
-                country_code,
-                professional: HealthProfessional {
-                    family_name,
-                    given_name,
-                    hp_identifier,
-                    issuing_authority_name: professional_authority,
-                    hp_professional_role,
-                },
-                provider: HealthcareProvider {
-                    identifier,
-                    issuing_authority_name: provider_authority,
-                    name,
-                    address,
-                },
-            };
-            // NOTE: eHDSI SAML Profile 10.0.0 §2.3, the provider is an `urn:oid:` or
-            // `urn:hl7ii:` identifier and an ISCO 44 role names whom it acts for.
-            match record(&relayed) {
-                Ok(_) => Ok(Box::new(relayed)),
-                Err(RelayedError::ProviderIdentifierForm) => Err(MissingAnnex::default().with(6)),
-                Err(_) => Err(MissingAnnex::default().with(4)),
-            }
-        }
-        read => {
-            let absent = [
-                read.0.is_none(),
-                read.1.is_none(),
-                read.2.is_none(),
-                read.3.is_none(),
-                read.4.is_none(),
-                read.5.is_none(),
-                read.6.is_none(),
-                read.7.is_none(),
-                read.8.is_none(),
-                read.9.is_none(),
-            ];
-            Err(absent
+    Some(Relayed {
+        contact_point: issuer.to_owned(),
+        country_code: text(external, Field::ProfessionalCountryCode)?,
+        professional: HealthProfessional {
+            hp_identifier: text(external, Field::ProfessionalHpIdentifier)?,
+            issuing_authority_name: text(external, Field::ProfessionalIssuingAuthorityName)?,
+            hp_professional_role,
+            on_behalf_of: codes(external, Field::ProfessionalOnBehalfOf)
                 .into_iter()
-                .enumerate()
-                .filter(|(_, absent)| *absent)
-                .fold(MissingAnnex::default(), |missing, (index, _)| {
-                    missing.with(index)
-                }))
-        }
-    }
+                .next(),
+        },
+        provider: HealthcareProvider {
+            identifier: text(external, Field::ProviderHealthcareProviderIdentifier)?,
+            issuing_authority_name: text(external, Field::ProviderIssuingAuthorityName)?,
+        },
+    })
+}
+
+/// The purposes of use a contact point's token asserts.
+#[must_use]
+pub fn purposes(external: &External) -> Vec<PurposeOfUse> {
+    let mut purposes: Vec<PurposeOfUse> = codes(external, Field::PurposeOfUse)
+        .into_iter()
+        .map(|role| PurposeOfUse {
+            system: role.system,
+            code: role.code,
+        })
+        .collect();
+    purposes.sort();
+    purposes.dedup();
+    purposes
+}
+
+/// The patient a contact point's token binds, its `patient.id` in the
+/// `system|value` form, when it names one.
+#[must_use]
+pub fn trc_patient(external: &External) -> Option<TrcPatient> {
+    text(external, Field::PatientId).and_then(|token| TrcPatient::read(&token))
 }
 
 /// What a contact point relays, as the access record names it: marked as
-/// relayed by a contact point, under the rules the record holds it to.
+/// relayed by a contact point, with what its token asserts of the identity
+/// assertion, under the rules the record holds it to.
 ///
-/// The record names the professional by one full name, the given name
-/// before the family name (no specification governs the order: our own
-/// design over the two Annex Table 1 rows).
+/// The record names the professional by their identifier, the assertion's
+/// `NameID`, in place of a name (GDPR Art 5(1)(c); no specification governs
+/// this: our own design), and names no provider name or address.
 ///
 /// # Errors
 ///
 /// Returns the [`RelayedError`] of a provider identifier that is no
 /// `urn:oid:` or `urn:hl7ii:` identifier, and of an ISCO `44` role relayed
 /// without whom it acts for (eHDSI SAML Profile 10.0.0 §2.3).
-pub fn record(relayed: &Relayed) -> Result<ehds_logging::record::Relayed, RelayedError> {
+pub fn record(
+    relayed: &Relayed,
+    external: &External,
+) -> Result<ehds_logging::record::Relayed, RelayedError> {
     let professional = &relayed.professional;
     let provider = &relayed.provider;
+    let coded = |role: &Role| Coded {
+        system: role.system.clone(),
+        code: role.code.clone(),
+    };
+    let name_id = text(external, Field::AssertionIssuer).map(|issuer| NameId {
+        value: professional.hp_identifier.clone(),
+        sp_provided_id: None,
+        issuer,
+    });
     ehds_logging::record::Relayed::try_from(RelayedParts {
         via: Via::ContactPoint {
             issuer: relayed.contact_point.clone(),
         },
         country_code: relayed.country_code.clone(),
         professional: Some(RelayedProfessional {
-            name: format!("{} {}", professional.given_name, professional.family_name),
-            family_name: Some(professional.family_name.clone()),
-            given_name: Some(professional.given_name.clone()),
+            name: professional.hp_identifier.clone(),
+            family_name: None,
+            given_name: None,
             identifier: professional.hp_identifier.clone(),
             issuing_authority: professional.issuing_authority_name.clone(),
             roles: professional
                 .hp_professional_role
                 .iter()
-                .map(|role| Coded {
-                    system: role.system.clone(),
-                    code: role.code.clone(),
-                })
+                .map(coded)
                 .collect(),
             healthcare_provider_identifier: Some(provider.identifier.clone()),
-            name_id: None,
-            authentication_method: None,
-            on_behalf_of: None,
-            permissions: Vec::new(),
+            name_id,
+            authentication_method: text(external, Field::ProfessionalAuthenticationMethod)
+                .and_then(|uri| AuthenticationMethod::from_uri(&uri)),
+            on_behalf_of: professional.on_behalf_of.as_ref().map(coded),
+            permissions: codes(external, Field::ProfessionalPermissions)
+                .into_iter()
+                .map(|permission| permission.code)
+                .collect(),
         }),
         provider: RelayedProvider {
             identifier: provider.identifier.clone(),
             issuing_authority: provider.issuing_authority_name.clone(),
-            name: Some(provider.name.clone()),
-            address: Some(provider.address.clone()),
-            facility_type: None,
-            home_community_id: None,
+            name: None,
+            address: None,
+            facility_type: codes(external, Field::ProviderFacilityType)
+                .first()
+                .map(coded),
+            home_community_id: text(external, Field::ProviderHomeCommunityId),
             organisation_type: None,
         },
         agreement: None,
-        point_of_care: None,
-        identity_assertion_id: None,
-        trc_assertion_id: None,
+        point_of_care: text(external, Field::PointOfCare),
+        identity_assertion_id: text(external, Field::AssertionId),
+        trc_assertion_id: text(external, Field::TrcId),
         message_id: None,
         gateways: Gateways::default(),
     })
@@ -458,8 +348,8 @@ pub(super) fn correlation(
 /// that a patient-data request needs a purpose of use; the emergency access
 /// limit in effect, the `threshold` of accesses one relayed professional is
 /// granted in any `window_s` seconds (eHDSI Section II Security Services
-/// 10.0.0 §2.5); and, per issuer, the claim each 2026/2099 Annex attribute
-/// is read from and the correlation header.
+/// 10.0.0 §2.5); and, per issuer, the claim each attribute is read from and
+/// the correlation header.
 // NOTE: §7a.2 leaves the `federation` object open and names no such member (N30 requires
 // none), so the member is our own design.
 #[derive(Debug, Clone, Default)]
@@ -479,49 +369,24 @@ impl ContactPoints {
     /// The national contact points `auth` declares.
     #[must_use]
     pub fn of(auth: &AuthSettings) -> Self {
-        let iua = |claim: &str| format!("extensions.ihe_iua.{claim}");
         Self(
             auth.issuers
                 .iter()
                 .filter_map(|issuer| {
                     let declared = issuer.national_contact_point.as_ref()?;
-                    let named = &declared.claims;
-                    let claims = BTreeMap::from([
-                        ("health_professional.family_name", named.family_name.clone()),
-                        ("health_professional.given_name", named.given_name.clone()),
-                        (
-                            "health_professional.country_code",
-                            named.country_code.clone(),
-                        ),
-                        (
-                            "health_professional.hp_identifier",
-                            iua("national_provider_identifier"),
-                        ),
-                        (
-                            "health_professional.issuing_authority_name",
-                            named.professional_issuing_authority.clone(),
-                        ),
-                        (
-                            "health_professional.hp_professional_role",
-                            iua("subject_role"),
-                        ),
-                        (
-                            "healthcare_provider.healthcare_provider_identifier",
-                            iua("subject_organization_id"),
-                        ),
-                        (
-                            "healthcare_provider.issuing_authority_name",
-                            named.provider_issuing_authority.clone(),
-                        ),
-                        (
-                            "healthcare_provider.healthcare_provider_name",
-                            iua("subject_organization"),
-                        ),
-                        (
-                            "healthcare_provider.healthcare_provider_address",
-                            named.provider_address.clone(),
-                        ),
-                    ]);
+                    let section = issuer.verification.federation()?;
+                    // NOTE: no specification governs this: our own design; a constant is the
+                    // deployment's own value, so only where a claim carries a field is declared.
+                    let claims = section
+                        .sources()
+                        .into_iter()
+                        .filter_map(|(field, sources)| {
+                            sources.into_iter().find_map(|source| match source {
+                                Source::Claim(path) => Some((field.as_str(), path)),
+                                _ => None,
+                            })
+                        })
+                        .collect();
                     Some(DeclaredContactPoint {
                         issuer: issuer.issuer.clone(),
                         claims,

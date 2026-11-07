@@ -33,8 +33,8 @@ use wiremock::{Mock, ResponseTemplate};
 
 use super::receive::{OTHER, OTHER_A, OTHER_NAMESPACE, rows};
 use super::{FHIR, TestResult, UID_A, UID_B, node_holding, summary, supplier, text_registered};
-use crate::auth::{bearing, minted};
-use crate::contact_point::{HP_ID, TRC_CLAIM, claim_names, relaying};
+use crate::auth::minted;
+use crate::contact_point::{HP_ID, bound, with};
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, received, settings_with_room};
 use crate::support::{Logs, call};
 
@@ -77,27 +77,18 @@ fn gateway_with(
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let state = Arc::new(AppState::build(&settings)?);
     let mut server = settings_with_room();
-    let declared = claim_names().resolve("trust.issuer[0].national_contact_point")?;
-    for issuer in &mut server.auth.issuers {
-        issuer.national_contact_point = Some(declared.clone());
-    }
+    server.auth = crate::contact_point::declared();
     Ok(ferrofed_server::router(state, &server))
 }
 
 /// The contact point's claims, its TRC binding `system`|`value`.
 fn treating(system: &str, value: &str) -> Claims {
-    let mut claims = relaying();
-    claims
-        .other
-        .insert(TRC_CLAIM.to_owned(), format!("{system}|{value}"));
-    claims
+    with("patient.id", Value::String(format!("{system}|{value}")))
 }
 
 /// The contact point's claims with no TRC patient.
 fn untreated() -> Claims {
-    let mut claims = relaying();
-    claims.other.remove(TRC_CLAIM);
-    claims
+    crate::contact_point::without("patient.id")
 }
 
 /// `system`|`value` percent-encoded for a query.
@@ -160,7 +151,7 @@ async fn the_trc_patients_own_summary_is_served() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), (&a, &b, &pdq))?;
     let token = minted(&treating(NAMESPACE, PATIENT))?;
-    let (status, text) = call(app, bearing(summary("")?, &token)?).await?;
+    let (status, text) = call(app, bound(summary("")?, &token)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     Ok(())
 }
@@ -171,7 +162,7 @@ async fn another_patient_is_no_data_with_the_typed_refusal_and_nothing_asked() -
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), (&a, &b, &pdq))?;
     let token = minted(&treating(NAMESPACE, PATIENT))?;
-    let (status, text) = call(app, bearing(summary_of(OTHER_NAMESPACE, OTHER)?, &token)?).await?;
+    let (status, text) = call(app, bound(summary_of(OTHER_NAMESPACE, OTHER)?, &token)?).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "XCA §4.2.2 No Data: {text}");
     let outcome: Value = serde_json::from_str(&text)?;
     assert_eq!(
@@ -206,15 +197,12 @@ async fn an_unknown_patient_and_another_patient_answer_alike() -> TestResult {
     let unknown = minted(&treating(NAMESPACE, UNKNOWN))?;
     let (unknown_status, unknown_text) = call(
         app.clone(),
-        bearing(summary_of(NAMESPACE, UNKNOWN)?, &unknown)?,
+        bound(summary_of(NAMESPACE, UNKNOWN)?, &unknown)?,
     )
     .await?;
     let mismatch = minted(&treating(NAMESPACE, PATIENT))?;
-    let (other_status, other_text) = call(
-        app,
-        bearing(summary_of(OTHER_NAMESPACE, OTHER)?, &mismatch)?,
-    )
-    .await?;
+    let (other_status, other_text) =
+        call(app, bound(summary_of(OTHER_NAMESPACE, OTHER)?, &mismatch)?).await?;
     assert_eq!(StatusCode::NOT_FOUND, unknown_status, "{unknown_text}");
     assert_eq!(unknown_status, other_status);
     assert_eq!(
@@ -230,7 +218,7 @@ async fn another_patients_document_list_is_no_data() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), (&a, &b, &pdq))?;
     let token = minted(&treating(NAMESPACE, PATIENT))?;
-    let (status, text) = call(app, bearing(documents_of(OTHER_NAMESPACE, OTHER)?, &token)?).await?;
+    let (status, text) = call(app, bound(documents_of(OTHER_NAMESPACE, OTHER)?, &token)?).await?;
     assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
     let codes = details(&serde_json::from_str(&text)?);
     assert!(
@@ -246,15 +234,12 @@ async fn a_token_naming_no_trc_patient_is_trc_missing_with_nothing_asked() -> Te
     let (a, b, pdq) = servers().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), (&a, &b, &pdq))?;
-    for claims in [untreated(), {
-        let mut malformed = relaying();
-        malformed
-            .other
-            .insert(TRC_CLAIM.to_owned(), String::from("no-system"));
-        malformed
-    }] {
+    for claims in [
+        untreated(),
+        with("patient.id", Value::String(String::from("no-system"))),
+    ] {
         let token = minted(&claims)?;
-        let (status, text) = call(app.clone(), bearing(summary("")?, &token)?).await?;
+        let (status, text) = call(app.clone(), bound(summary("")?, &token)?).await?;
         assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
         let outcome: Value = serde_json::from_str(&text)?;
         let diagnostics = outcome
@@ -278,7 +263,7 @@ async fn the_identification_lookup_needs_no_trc_patient() -> TestResult {
         encoded(NAMESPACE, PATIENT)
     ))
     .body(Body::empty())?;
-    let (status, text) = call(app, bearing(lookup, &token)?).await?;
+    let (status, text) = call(app, bound(lookup, &token)?).await?;
     assert_eq!(
         StatusCode::OK,
         status,
@@ -301,7 +286,7 @@ async fn a_mismatch_is_a_security_event_naming_the_professional_and_pseudonyms()
         logs.clone(),
     )?;
     let guard = tracing::subscriber::set_default(capture);
-    let (status, _) = call(app, bearing(summary_of(OTHER_NAMESPACE, OTHER)?, &token)?).await?;
+    let (status, _) = call(app, bound(summary_of(OTHER_NAMESPACE, OTHER)?, &token)?).await?;
     drop(guard);
     assert_eq!(StatusCode::NOT_FOUND, status);
     let logged = logs.text();
@@ -360,7 +345,7 @@ async fn a_trc_patient_that_cannot_be_resolved_is_its_own_security_event() -> Te
         logs.clone(),
     )?;
     let guard = tracing::subscriber::set_default(capture);
-    let (status, _) = call(app, bearing(summary_of(NAMESPACE, PATIENT)?, &token)?).await?;
+    let (status, _) = call(app, bound(summary_of(NAMESPACE, PATIENT)?, &token)?).await?;
     drop(guard);
     let logged = logs.text();
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{logged}");
@@ -391,7 +376,7 @@ async fn trc_missing_names_the_generic_security_code() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), (&a, &b, &pdq))?;
     let token = minted(&untreated())?;
-    let (status, text) = call(app, bearing(summary("")?, &token)?).await?;
+    let (status, text) = call(app, bound(summary("")?, &token)?).await?;
     assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
     let outcome: Value = serde_json::from_str(&text)?;
     assert_eq!(
@@ -412,8 +397,8 @@ async fn trc_missing_names_the_generic_security_code() -> TestResult {
 async fn failing_members_name_the_registry_not_available_code() -> TestResult {
     let failing = || async {
         let server = Server::start().await;
-        wiremock::Mock::given(wiremock::matchers::any())
-            .respond_with(wiremock::ResponseTemplate::new(503))
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(503))
             .mount(&server)
             .await;
         server
@@ -422,7 +407,7 @@ async fn failing_members_name_the_registry_not_available_code() -> TestResult {
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), (&a, &b, &pdq))?;
     let token = minted(&treating(NAMESPACE, PATIENT))?;
-    let (status, text) = call(app, bearing(summary("")?, &token)?).await?;
+    let (status, text) = call(app, bound(summary("")?, &token)?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
     let outcome: Value = serde_json::from_str(&text)?;
     assert!(

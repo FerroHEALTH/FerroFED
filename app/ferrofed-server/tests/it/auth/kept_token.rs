@@ -32,7 +32,11 @@ async fn no_token_is_kept_where_no_node_exchanges_it() -> TestResult {
     let gate = Gate::new(&support::caller::auth());
     let token = support::caller::token()?;
     let caller = gate
-        .admit(&bearing(&token)?, (Requirement::Caller, None), false)
+        .admit(
+            (&bearing(&token)?, None),
+            (Requirement::Caller, None),
+            false,
+        )
         .await
         .map_err(|refusal| format!("{refusal:?}"))?;
     assert!(caller.token().is_none(), "the token is dropped");
@@ -47,7 +51,7 @@ async fn the_verified_token_is_kept_for_an_exchanging_node_and_never_shown() -> 
     let gate = Gate::new(&support::caller::auth());
     let token = support::caller::token()?;
     let caller = gate
-        .admit(&bearing(&token)?, (Requirement::Caller, None), true)
+        .admit((&bearing(&token)?, None), (Requirement::Caller, None), true)
         .await
         .map_err(|refusal| format!("{refusal:?}"))?;
     let kept = caller.token().ok_or("the token is kept")?;
@@ -79,7 +83,7 @@ async fn an_edge_assertion_is_never_kept_as_a_token() -> TestResult {
     let mut headers = HeaderMap::new();
     headers.insert("ferrofed-edge-assertion", assertion.parse()?);
     let caller = gate
-        .admit(&headers, (Requirement::Caller, None), true)
+        .admit((&headers, None), (Requirement::Caller, None), true)
         .await
         .map_err(|refusal| format!("{refusal:?}"))?;
     assert!(caller.token().is_none(), "an edge assertion is no token");

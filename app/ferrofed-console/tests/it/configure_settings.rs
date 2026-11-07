@@ -253,18 +253,18 @@ const AUTHENTICATION: &str = r#"{"ui":"managed","revision":1,"settings":[
      "source":"file","restart":false,"editable":false},
     {"key":"auth.issuer[0].introspection.client.client_secret","section":"authentication","source":"file","restart":false,
      "secret":{"set":true,"reference":"/run/secrets/synthetic-introspection"},"editable":false},
-    {"key":"trust.issuer[0].national_contact_point.family_name","section":"authentication",
-     "value":"ncp_family_name","source":"file","restart":false,"editable":false},
-    {"key":"trust.issuer[0].national_contact_point.correlation_header","section":"authentication",
+    {"key":"federation.contact_point[0].issuer","section":"authentication",
+     "value":"https://ncp.example.org","source":"file","restart":false,"editable":false},
+    {"key":"federation.contact_point[0].correlation_header","section":"authentication",
      "value":"ncp-correlation-id","source":"file","restart":false,"editable":false},
-    {"key":"trust.issuer[0].national_contact_point.additional_countries","section":"authentication",
+    {"key":"federation.contact_point[0].additional_countries","section":"authentication",
      "value":["XA"],"source":"file","restart":false,"editable":false}
 ]}"#;
 
 /// Regulation (EU) 2025/327 Art 23: an operator sees the national contact
-/// point the file declares, every claim name with its key, the correlation
-/// header and the added countries, on a read-only tab, and its secret by
-/// the file it is read from alone.
+/// point the file declares, its issuer with its key, the correlation header
+/// and the added countries, on a read-only tab, and its secret by the file
+/// it is read from alone.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_authentication_tab_shows_the_national_contact_point_read_only()
 -> Result<(), Box<dyn Error>> {
@@ -281,9 +281,8 @@ async fn the_authentication_tab_shows_the_national_contact_point_read_only()
         "Authentication",
         "Trusted issuer",
         "https://ncp.example.org",
-        "Family name claim",
-        "ncp_family_name",
-        "trust.issuer[0].national_contact_point.family_name",
+        "Contact point issuer",
+        "federation.contact_point[0].issuer",
         "Correlation header",
         "ncp-correlation-id",
         "Added countries",

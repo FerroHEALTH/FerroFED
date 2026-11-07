@@ -8,10 +8,9 @@
   existing table with every definition it holds
   ([FerroFED's own store](https://ferrofed.eu/docs/operate/store.html#moving-from-stored_queries-url),
   #1636).
-- A gateway with an issuer declared a national contact point
-  (`[trust.issuer.national_contact_point]`) needs `[store]` too: give it a
-  PostgreSQL database and role of its own, never a CDR's. Without it this
-  release refuses to start, naming `trust.issuer[0].national_contact_point`
-  and `[store]` (#1636).
+- A gateway with a national contact point (`[[federation.contact_point]]`)
+  needs `[store]` too: give it a PostgreSQL database and role of its own,
+  never a CDR's. Without it this release refuses to start, naming
+  `federation.contact_point[0]` and `[store]` (#1636).
 - A binary you build yourself no longer takes `--features postgres`; drop
   the flag (#1636).

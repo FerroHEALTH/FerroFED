@@ -24,10 +24,13 @@
 //! natural person behind the token, or a client its issuer declares as
 //! acting for the professional the token names, and the authentication
 //! assurance its issuer's entry requires (Regulation (EU) 2025/327 Annex II
-//! 3.1). An issuer declared a national contact point vouches for the
+//! 3.1). A national contact point, a `federation` issuer whose
+//! `[[auth.federation]]` table sets `contact_point = true`, vouches for the
 //! professional of another Member State whose request its connector relays
-//! ([`contact_point`]): such a request needs every Implementing Regulation
-//! (EU) 2026/2099 Annex attribute and a purpose of use. A request that
+//! ([`contact_point`]): `ferrohealth-smart` holds its token to the
+//! MyHealth@EU contact-point profile, and the token must be bound to the
+//! client certificate of the connection it arrives on (RFC 8705 §3). A
+//! request that
 //! fails is answered `400`, `401`, `403` or `503` and reaches nothing behind
 //! the gate; one that passes carries its [`Caller`] in its extensions. The
 //! caller's credential is never forwarded to a node: the node dispatch sends
@@ -69,19 +72,20 @@ use ferrohealth_smart::openehr::smart_scopes::{Permission, ResourceFamily, Smart
 use ferrohealth_smart::openehr::{self, granted};
 use ferrohealth_smart::refusal::Reason;
 use ferrohealth_smart::resource::{Access, Caller as SmartCaller, Honoured};
+use ferrohealth_smart::sender::ClientCertificate;
 use http::HeaderMap;
 use secrecy::SecretString;
 
-use crate::auth::caller::{Caller, PatientContext, Stated, VerifiedBy};
+use crate::auth::caller::{Caller, PatientContext, Professional, Stated, VerifiedBy};
 use crate::auth::claims::Claims;
 use crate::auth::contact_point::ContactPoints;
-use crate::auth::contact_point::MissingAnnex;
 use crate::auth::introspection::Introspected;
 use crate::auth::permission::{Requirement, Resource};
 use crate::auth::refusal::{BasicRefusal, Refusal, Refused};
 use crate::auth::verify::Verifiers;
 use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
 use crate::error::ncp::NcpError;
+use ferrohealth_smart::federation::contact::EhdsiCode;
 
 /// The verifier of every caller, built from `[auth]` and `[trust]`.
 #[derive(Debug)]
@@ -186,8 +190,10 @@ impl Gate {
         }
     }
 
-    /// Verifies the caller of a request with `headers` and checks it against
-    /// `requirement`, where `named` is the resource the request path names.
+    /// Verifies the caller of a request with `headers`, arriving on a
+    /// connection whose client presented `certificate`, and checks it
+    /// against `requirement`, where `named` is the resource the request path
+    /// names.
     ///
     /// The caller keeps its verified access token only when `exchanging`, a
     /// node's grant exchanging it (RFC 8693 §2.1), and only when the gateway
@@ -202,7 +208,7 @@ impl Gate {
     /// Returns the [`Refused`] the request is answered with.
     pub async fn admit(
         &self,
-        headers: &HeaderMap,
+        (headers, certificate): (&HeaderMap, Option<&ClientCertificate>),
         (requirement, named): (Requirement, Option<&str>),
         exchanging: bool,
     ) -> Result<Caller, Refused> {
@@ -211,7 +217,7 @@ impl Gate {
         if requirement == Requirement::Refused {
             return Err(Refusal::Operation.into());
         }
-        let (smart, credential) = self.authenticate(headers).await?;
+        let (smart, credential) = self.authenticate(headers, certificate).await?;
         // NOTE: no specification governs this: our own design; the verifier that
         // routed the token by its `iss` attached that issuer's trust entry.
         let entry = smart
@@ -220,7 +226,6 @@ impl Gate {
             .ok_or(Refused {
                 refusal: Refusal::Invalid,
                 check: Some(Reason::UntrustedIssuer),
-                missing: MissingAnnex::default(),
                 ncp: None,
             })?;
         let contact_point = entry.national_contact_point.is_some();
@@ -308,7 +313,6 @@ impl Gate {
             }
         }
         if requirement.reaches_patient_data() {
-            contact_point::relaying(&caller)?;
             professional(&caller, trusted)?;
         }
         // NOTE: §13.4 authn-purpose-of-use, a node must never be left to infer
@@ -319,14 +323,36 @@ impl Gate {
         Ok(caller)
     }
 
-    /// Returns the caller the credential of `headers` authenticates and the
-    /// credential itself: the bearer token `ferrohealth-smart` reads from
-    /// `Authorization`, or the edge's assertion from the header the
-    /// deployment names, sent exactly once.
-    async fn authenticate(&self, headers: &HeaderMap) -> Result<(SmartCaller, String), Refused> {
-        let (authenticated, refused) = verify::refused_code(self.smart.authenticate(headers)).await;
+    /// Returns the caller the credential of `headers` authenticates, its
+    /// `cnf` held to `certificate` (RFC 8705 §3), and the credential itself:
+    /// the bearer token `ferrohealth-smart` reads from `Authorization`, or
+    /// the edge's assertion from the header the deployment names, sent
+    /// exactly once.
+    async fn authenticate(
+        &self,
+        headers: &HeaderMap,
+        certificate: Option<&ClientCertificate>,
+    ) -> Result<(SmartCaller, String), Refused> {
+        let authenticated = match certificate {
+            None => self.smart.authenticate(headers).await,
+            Some(certificate) => {
+                let (mut parts, ()) = http::Request::new(()).into_parts();
+                parts.headers = headers.clone();
+                parts.extensions.insert(certificate.clone());
+                self.smart.authenticate_request(&parts).await
+            }
+        };
         let access = authenticated.map_err(|denied| {
-            Refused::from(&denied).to_contact_point(refused.map(NcpError::shared))
+            let refused = Refused::from(&denied);
+            // NOTE: MyHealth@EU RC 10.0.0 §1.25: the contact-point check's own code, else
+            // ERROR_SEC_GENERIC for any other refused token, as `EhdsiCode::of` gives it.
+            if denied.ehdsi().is_some() || self.names_contact_point(headers) {
+                refused.to_contact_point(Some(NcpError::shared(
+                    denied.ehdsi().unwrap_or(EhdsiCode::SecGeneric),
+                )))
+            } else {
+                refused
+            }
         })?;
         let Access::Caller(caller) = access else {
             return Err(Refusal::Missing.into());
@@ -347,7 +373,6 @@ impl Gate {
         let invalid = |check: &'static str| Refused {
             refusal: Refusal::Invalid,
             check: Some(Reason::Other(check)),
-            missing: MissingAnnex::default(),
             ncp: None,
         };
         // NOTE: RFC 9068 §2.2 requires `client_id`, and IHE IUA ITI TF-2 3.71.4.2.2.1
@@ -370,6 +395,11 @@ impl Gate {
             CallerKind::System => Acting::Client,
             _ => Acting::Person,
         };
+        if trusted.national_contact_point.is_some() {
+            let assurance = assurance_of(trusted, |claim| claims.text(claim));
+            return contact_point_caller(smart, trusted, (subject, client_id), verified_by)
+                .map(|caller| caller.with_assurance(assurance));
+        }
         let stated = Stated {
             issuer: trusted.issuer.clone(),
             subject,
@@ -378,7 +408,6 @@ impl Gate {
             granted: smart.scope().join(" "),
             purposes: claims.purposes(),
         };
-        let relayed = contact_point::read(trusted, claims.annex(), |claim| claims.text(claim));
         let caller = Caller::new(stated, verified_by)
             .with_launch_ehr_id(smart.ehr_id().map(str::to_owned))
             .with_requester(claims.requester(trusted.requester.as_ref()))
@@ -388,7 +417,7 @@ impl Gate {
             .with_assurance(assurance_of(trusted, |claim| claims.text(claim)))
             .with_acting(acting)
             .with_representative(claims.representative(trusted));
-        Ok(contact_point::vouched(caller, relayed))
+        Ok(caller)
     }
 
     /// Admits a request whose Basic credential (RFC 7617) names one of
@@ -422,6 +451,19 @@ impl Gate {
             .ok_or(BasicRefusal::Unlisted)
     }
 
+    /// Whether the credential of `headers` names a national contact point as
+    /// its issuer, read before anything is verified (RFC 7519 §7.2).
+    fn names_contact_point(&self, headers: &HeaderMap) -> bool {
+        self.smart
+            .credential(headers)
+            .and_then(verify::unverified_issuer)
+            .is_some_and(|issuer| {
+                self.issuers.iter().any(|trusted| {
+                    trusted.issuer == issuer && trusted.national_contact_point.is_some()
+                })
+            })
+    }
+
     /// Whether any caller can be admitted: some issuer is on the trust list.
     #[must_use]
     pub fn admits_any(&self) -> bool {
@@ -434,6 +476,60 @@ impl Gate {
     pub fn presents_credential(&self, headers: &HeaderMap) -> bool {
         headers.contains_key(self.smart.credential_header().name())
     }
+}
+
+/// Returns the caller a national contact point's token `smart` names,
+/// vouched for by `trusted`: what `ferrohealth-smart` read under the
+/// contact-point profile, never a claim the gateway reads itself.
+///
+/// The caller names the professional by the identifier the identity
+/// assertion carries and by no name (GDPR Art 5(1)(c)), its organisation
+/// is the provider's identifier, and its purposes of use are the token's;
+/// its assurance level is read as for any issuer, by the caller.
+///
+/// # Errors
+///
+/// Returns [`Refusal::Invalid`] when the crate classified the token as no
+/// professional of another party, and [`Refusal::ContactPoint`] when it
+/// lacks what the gateway relays or the access record refuses it.
+fn contact_point_caller(
+    smart: &SmartCaller,
+    trusted: &IssuerSettings,
+    (subject, client_id): (String, String),
+    verified_by: VerifiedBy,
+) -> Result<Caller, Refused> {
+    // NOTE: MyHealth@EU Requirements Catalogue 10.0.0 requirement 01: a contact point's
+    // token names the professional, so the crate admits it as an external person alone.
+    let CallerKind::ExternalPerson(external) = smart.kind() else {
+        return Err(Refused {
+            refusal: Refusal::Invalid,
+            check: Some(Reason::Other("contact-point")),
+            ncp: None,
+        });
+    };
+    let relayed = contact_point::relayed(&trusted.issuer, external)
+        .filter(|relayed| contact_point::record(relayed, external).is_ok())
+        .ok_or(Refusal::ContactPoint)?;
+    let professional = &relayed.professional;
+    let stated = Stated {
+        issuer: trusted.issuer.clone(),
+        subject,
+        client_id,
+        organisation: Some(relayed.provider.identifier.clone()),
+        granted: smart.scope().join(" "),
+        purposes: contact_point::purposes(external),
+    };
+    let named = Professional {
+        identifier: Some(professional.hp_identifier.clone()),
+        name: None,
+        issuing_authority: Some(professional.issuing_authority_name.clone()),
+        roles: professional.hp_professional_role.clone(),
+    };
+    Ok(Caller::new(stated, verified_by)
+        .with_professional(named)
+        .with_acting(Acting::Person)
+        .binding_trc_patient(contact_point::trc_patient(external))
+        .relayed_by_contact_point(relayed, (**external).clone()))
 }
 
 /// Returns `caller`, admitted to `permission` on a resource of `family`
@@ -541,9 +637,7 @@ fn patient_context(caller: &Caller, trusted: &IssuerSettings) -> Result<PatientC
 /// or the token names none, and [`Refusal::Assurance`] when the issuer
 /// requires a level and the token states none at or above it.
 fn professional(caller: &Caller, issuer: &IssuerSettings) -> Result<(), Refusal> {
-    // NOTE: 2026/2099 Art 7: a contact point's connector relays the professional its token
-    // names, so its client tokens act for that professional as a declared issuer's do.
-    let acts_for = issuer.client_tokens_act_for_professional || caller.is_contact_point();
+    let acts_for = issuer.client_tokens_act_for_professional;
     if caller.acting() == Acting::Client && !(acts_for && caller.names_professional()) {
         return Err(Refusal::NaturalPerson);
     }

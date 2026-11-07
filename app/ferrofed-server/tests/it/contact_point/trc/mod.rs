@@ -35,8 +35,8 @@ use ferrofed_testkit::mock::Server;
 use http::{Request, StatusCode};
 use tempfile::TempDir;
 
-use super::{TRC_CLAIM, declared, relaying};
-use crate::auth::{TestResult, bearing, minted, sent};
+use super::{declared, presenting, relaying};
+use crate::auth::{TestResult, sent};
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, node_answering, registry};
 use crate::support::{self, asked, error_body};
 
@@ -107,15 +107,15 @@ fn rows() -> String {
     text
 }
 
-/// The suite's gateway, its issuer declared a national contact point.
+/// The suite's gateway, trusting the test contact point.
 pub(super) async fn gateway() -> Result<Bound, Box<dyn Error>> {
-    gateway_with(declared()?, &rows()).await
+    gateway_with(declared(), &rows()).await
 }
 
 /// The suite's gateway with no cross-reference, its issuer declared a
 /// national contact point, so no TRC patient can be resolved.
 pub(super) async fn unresolving() -> Result<Bound, Box<dyn Error>> {
-    gateway_with(declared()?, "").await
+    gateway_with(declared(), "").await
 }
 
 /// The suite's gateway, its issuer no national contact point.
@@ -149,7 +149,8 @@ async fn gateway_with(auth: AuthSettings, rows: &str) -> Result<Bound, Box<dyn E
     let stored = Request::put(format!("/v1/definition/query/{NAME}/1.0.0"))
         .header(http::header::CONTENT_TYPE, "text/plain")
         .body(Body::from(stored_aql()))?;
-    let (status, _, text) = sent(&app, bearing(stored, &minted(&relaying())?)?).await?;
+    let token = crate::auth::minted(&support::caller::claims())?;
+    let (status, _, text) = sent(&app, crate::auth::bearing(stored, &token)?).await?;
     assert_eq!(StatusCode::OK, status, "§12.7: stored: {text}");
     Ok(Bound {
         app,
@@ -172,17 +173,16 @@ fn stored_aql() -> String {
 /// namespace.
 pub(super) fn treating(value: &str) -> Claims {
     let mut claims = relaying();
-    claims
-        .other
-        .insert(TRC_CLAIM.to_owned(), format!("{NAMESPACE}|{value}"));
+    claims.ehdsi.insert(
+        String::from("patient.id"),
+        serde_json::Value::String(format!("{NAMESPACE}|{value}")),
+    );
     claims
 }
 
 /// The contact point's claims with no TRC patient.
 pub(super) fn untreated() -> Claims {
-    let mut claims = relaying();
-    claims.other.remove(TRC_CLAIM);
-    claims
+    super::without("patient.id")
 }
 
 /// `request` bearing the contact point's token, its TRC binding `value`.
@@ -190,7 +190,7 @@ pub(super) fn as_treating(
     request: Request<Body>,
     value: &str,
 ) -> Result<Request<Body>, Box<dyn Error>> {
-    bearing(request, &minted(&treating(value))?)
+    presenting(request, &treating(value))
 }
 
 /// `request` sent to `bound`, with the status and the body of the answer.

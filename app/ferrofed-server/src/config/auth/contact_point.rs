@@ -1,63 +1,46 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! `[trust.issuer.national_contact_point]`, as written and as resolved.
+//! `[[federation.contact_point]]`, as written and as resolved.
 //!
-//! The table declares an issuer as a national contact point for digital
-//! health, whose national connector relays the requests of health
-//! professionals of another Member State (Regulation (EU) 2025/327
-//! Art 23; Implementing Regulation (EU) 2026/2099 Art 7). Its tokens carry
-//! every attribute of the 2026/2099 Annex Tables 1 and 2: the ones IHE IUA
-//! defines a claim for are read from it (ITI TF-2 3.71.4.2.2.1.1), and the
-//! table names the string claim of each other one. The Annex defines no
-//! carrier, so no claim name has a default: no specification governs this:
-//! our own design.
+//! A national contact point for digital health is an `[[auth.issuer]]` of
+//! kind `federation` whose `[[auth.federation]]` table sets
+//! `contact_point = true`: `ferrohealth-smart` holds its tokens to the
+//! MyHealth@EU contact-point profile (eHDSI SAML Profile 10.0.0 §2.1, §2.3)
+//! and reads what they assert. Its connector relays the requests of health
+//! professionals of another Member State (Regulation (EU) 2025/327 Art 23;
+//! Implementing Regulation (EU) 2026/2099 Art 7). One
+//! `[[federation.contact_point]]` per such issuer holds what the gateway
+//! itself needs of it: the header its correlation identifier travels in,
+//! and the countries beside the Member States its professionals may come
+//! from. No specification governs the keys: our own design.
 
 use std::collections::BTreeSet;
 
+use ferrohealth_smart::federation::{FederationSection, Field};
 use http::HeaderName;
 use serde::Deserialize;
 
-use crate::config::auth::{AuthFault, fault};
+use crate::config::auth::{AuthFault, IssuerSettings, fault};
 use crate::config::error::Error;
 
-/// `[trust.issuer.national_contact_point]`: the names of the string claims
-/// that carry the 2026/2099 Annex attributes IHE IUA defines no claim for,
-/// and the header a correlation identifier travels in.
+/// One `[[federation.contact_point]]` as written.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct ContactPointClaims {
-    /// The claim carrying the professional's `family_name` (Table 1).
-    pub family_name: String,
-    /// The claim carrying the professional's `given_name` (Table 1).
-    pub given_name: String,
-    /// The claim carrying `country_code`, the ISO 3166-1 alpha-2 code of
-    /// the Member State that issued the professional's identification data
-    /// (Table 1).
-    pub country_code: String,
-    /// The claim carrying the `issuing_authority_name` of the professional's
-    /// `hp_identifier` (Table 1).
-    pub professional_issuing_authority: String,
-    /// The claim carrying the `issuing_authority_name` of the
-    /// `healthcare_provider_identifier` (Table 2).
-    pub provider_issuing_authority: String,
-    /// The claim carrying the `healthcare_provider_address` (Table 2).
-    pub provider_address: String,
-    /// The claim carrying the patient the treatment relationship
-    /// confirmation binds, its `subject-id` (eHDSI SAML Profile 10.0.0 §4.3),
-    /// as one `system|value` token: the identifier's namespace and its
-    /// value. A patient-data request on the FHIR face names this patient or
-    /// is refused (eHDSI XCA Profile 8.0.1 §4.2.1).
-    pub trc_patient: String,
+pub struct ContactPointTable {
+    /// The `[[auth.issuer]]` the table describes, a `federation` issuer
+    /// whose `[[auth.federation]]` table sets `contact_point = true`.
+    pub issuer: String,
     /// The request header the contact point's national connector sends its
     /// correlation identifier in, recorded in the access record so it can be
     /// joined with the contact point's own log; absent by default, and then
     /// none is read.
     pub correlation_header: Option<String>,
     /// The ISO 3166-1 alpha-2 codes, beside the Member States
-    /// ([`MEMBER_STATES`]), a `country_code` this contact point relays may
-    /// name: a third country whose contact point the Commission connected
-    /// to MyHealth@EU (Regulation (EU) 2025/327 Art 24(3)); none by default.
+    /// ([`MEMBER_STATES`]), the `[[auth.federation]] countries` of this
+    /// contact point may name: a third country whose contact point the
+    /// Commission connected to MyHealth@EU (Regulation (EU) 2025/327
+    /// Art 24(3)); none by default.
     pub additional_countries: Vec<String>,
 }
 
@@ -85,57 +68,34 @@ const CREDENTIAL_HEADERS: [&str; 4] = ["authorization", "proxy-authorization", "
 /// An issuer's declaration as a national contact point, resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContactPoint {
-    /// The claim names, each set.
-    pub claims: ContactPointClaims,
     /// The correlation header, when one is declared.
     pub correlation_header: Option<HeaderName>,
-    /// The codes beside [`MEMBER_STATES`] a `country_code` may name.
+    /// The codes beside [`MEMBER_STATES`] the issuer's `countries` may name.
     pub additional_countries: BTreeSet<String>,
 }
 
 impl ContactPoint {
-    /// Whether a `country_code` this contact point relays may name `code`:
-    /// a Member State, or a country the deployment adds for it.
+    /// Whether this contact point's professionals may come from `code`: a
+    /// Member State, or a country the deployment adds for it.
     #[must_use]
     pub fn admits_country(&self, code: &str) -> bool {
         MEMBER_STATES.contains(&code) || self.additional_countries.contains(code)
     }
 }
 
-impl ContactPointClaims {
-    /// Resolves this table at `key`: every claim name set, and the
-    /// correlation header, when declared, an HTTP field name.
+impl ContactPointTable {
+    /// Resolves this table at `key`: the correlation header, when declared,
+    /// an HTTP field name that carries no credential, and each additional
+    /// country an alpha-2 code of no Member State.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Missing`] for a claim name not set, and
-    /// [`Error::Auth`] with [`AuthFault::HeaderName`] or
+    /// Returns [`Error::Auth`] with [`AuthFault::HeaderName`] or
     /// [`AuthFault::CorrelationCredential`] for a correlation header that is
     /// no field name or carries a credential, and with
     /// [`AuthFault::CountryCode`] for an additional country that is no
     /// alpha-2 code or is already a Member State.
     pub fn resolve(&self, key: &str) -> Result<ContactPoint, Error> {
-        for (name, claim) in [
-            ("family_name", &self.family_name),
-            ("given_name", &self.given_name),
-            ("country_code", &self.country_code),
-            (
-                "professional_issuing_authority",
-                &self.professional_issuing_authority,
-            ),
-            (
-                "provider_issuing_authority",
-                &self.provider_issuing_authority,
-            ),
-            ("provider_address", &self.provider_address),
-            ("trc_patient", &self.trc_patient),
-        ] {
-            if claim.is_empty() {
-                return Err(Error::Missing {
-                    key: format!("{key}.{name}"),
-                });
-            }
-        }
         let at = format!("{key}.correlation_header");
         let correlation_header = self
             .correlation_header
@@ -162,11 +122,87 @@ impl ContactPointClaims {
             additional_countries.insert(code.clone());
         }
         Ok(ContactPoint {
-            claims: self.clone(),
             correlation_header,
             additional_countries,
         })
     }
+}
+
+/// Declares each issuer of `issuers` that `tables` names a national contact
+/// point, as its table resolves.
+///
+/// # Errors
+///
+/// Returns [`Error::Missing`] for a table naming no issuer, or a
+/// contact-point table of `[[auth.federation]]` naming no source of
+/// `provider.issuing_authority_name`, which the access record names the
+/// provider's identifier by; and [`Error::Auth`] for a table that names an
+/// issuer twice or names no contact-point issuer
+/// ([`AuthFault::NotContactPoint`]), a contact-point issuer with no table
+/// ([`AuthFault::ContactPointUndeclared`]), a `countries` code that is
+/// neither a Member State nor one of the table's additional countries
+/// ([`AuthFault::CountryCode`]), and the errors of
+/// [`ContactPointTable::resolve`].
+pub fn declare(issuers: &mut [IssuerSettings], tables: &[ContactPointTable]) -> Result<(), Error> {
+    let mut named: Vec<&str> = Vec::new();
+    for (index, table) in tables.iter().enumerate() {
+        let key = format!("federation.contact_point[{index}]");
+        if table.issuer.is_empty() {
+            return Err(Error::Missing {
+                key: format!("{key}.issuer"),
+            });
+        }
+        if named.contains(&table.issuer.as_str()) {
+            return Err(fault(&format!("{key}.issuer"), AuthFault::DuplicateIssuer));
+        }
+        named.push(&table.issuer);
+        let issuer = issuers
+            .iter_mut()
+            .find(|issuer| issuer.issuer == table.issuer && issuer.verification.is_contact_point())
+            .ok_or_else(|| fault(&format!("{key}.issuer"), AuthFault::NotContactPoint))?;
+        let declared = table.resolve(&key)?;
+        if let Some(section) = issuer.verification.federation() {
+            checked(section, &declared)?;
+        }
+        issuer.national_contact_point = Some(declared);
+    }
+    if let Some(index) = issuers.iter().position(|issuer| {
+        issuer.verification.is_contact_point() && issuer.national_contact_point.is_none()
+    }) {
+        return Err(fault(
+            &format!("auth.issuer[{index}]"),
+            AuthFault::ContactPointUndeclared,
+        ));
+    }
+    Ok(())
+}
+
+/// Holds the `[[auth.federation]]` table of a contact point to what the
+/// gateway reads from it: a Member State or a declared additional country
+/// for every `countries` code, and a source of the provider's issuing
+/// authority.
+fn checked(section: &FederationSection, declared: &ContactPoint) -> Result<(), Error> {
+    // NOTE: 2026/2099 Annex Table 1 names "the Member State that issued" the data, and 2025/327
+    // Art 24(3) lets the Commission connect a third country's contact point, which the deployment adds.
+    if section
+        .countries
+        .iter()
+        .any(|code| !declared.admits_country(code))
+    {
+        return Err(fault("auth.federation.countries", AuthFault::CountryCode));
+    }
+    if !section
+        .sources()
+        .contains_key(&Field::ProviderIssuingAuthorityName)
+    {
+        return Err(Error::Missing {
+            key: format!(
+                "auth.federation.fields.\"{}\"",
+                Field::ProviderIssuingAuthorityName.as_str()
+            ),
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]

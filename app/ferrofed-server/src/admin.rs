@@ -196,7 +196,7 @@ impl Access {
         {
             return Ok(Operator::DevelopmentLoopback);
         }
-        gate.admit(headers, (Requirement::Operator, None), false)
+        gate.admit((headers, None), (Requirement::Operator, None), false)
             .await
             .map(|caller| Operator::Verified(Box::new(caller)))
             .map_err(AdminRefusal::Caller)

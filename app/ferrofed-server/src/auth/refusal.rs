@@ -19,7 +19,6 @@ use axum::response::{IntoResponse, Response};
 use ferrohealth_smart::refusal::{Denied, Reason, Refusal as SmartRefusal, Schemes, StepUp};
 use http::{HeaderValue, StatusCode, header};
 
-use crate::auth::contact_point::MissingAnnex;
 use crate::error::ncp::NcpError;
 use crate::error::{self, Code};
 
@@ -62,9 +61,9 @@ pub enum Refusal {
     /// authentication assurance at or above the least level its issuer's
     /// entry requires.
     Assurance,
-    /// The request reaches patient data, and the token of a national contact
-    /// point does not carry every attribute of Implementing Regulation (EU)
-    /// 2026/2099 Annex Tables 1 and 2.
+    /// The token of a national contact point falls short of the MyHealth@EU
+    /// contact-point profile `ferrohealth-smart` holds it to (eHDSI SAML
+    /// Profile 10.0.0 §2.1, §2.3), or of what the gateway relays of it.
     ContactPoint,
     /// The national contact point's correlation header is repeated, empty,
     /// longer than [`MAX_CORRELATION`](crate::auth::contact_point::MAX_CORRELATION)
@@ -165,7 +164,7 @@ impl Refusal {
                 "the access token states no authentication assurance at the level patient data requires"
             }
             Self::ContactPoint => {
-                "the national contact point's access token does not carry every attribute of Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2"
+                "the national contact point's access token does not carry what the eHDSI identity and treatment assertions carry"
             }
             Self::Correlation => {
                 "the correlation header is sent once, as 1 to 128 visible ASCII characters"
@@ -245,27 +244,12 @@ pub struct Refused {
     pub refusal: Refusal,
     /// The check that refused the credential, when one did.
     pub check: Option<Reason>,
-    /// The Annex attributes a contact point's token lacks, which the answer
-    /// names, empty for every other refusal.
-    pub missing: MissingAnnex,
     /// The Requirements Catalogue 10.0.0 §1.25 code a refusal to a national
     /// contact point carries, `None` for every other caller.
     pub ncp: Option<NcpError>,
 }
 
 impl Refused {
-    /// The refusal of a contact point's token that lacks the Annex
-    /// attributes `missing`.
-    #[must_use]
-    pub fn missing(missing: MissingAnnex) -> Self {
-        Self {
-            refusal: Refusal::ContactPoint,
-            check: None,
-            missing,
-            ncp: None,
-        }
-    }
-
     /// Returns this refusal carrying `ncp`, the §1.25 code of a refusal to a
     /// national contact point, when it carries none yet.
     #[must_use]
@@ -276,27 +260,17 @@ impl Refused {
         }
     }
 
-    /// The answer to the refused request: the error body, naming the
-    /// missing Annex attributes of a contact point's token and the §1.25
+    /// The answer to the refused request: the error body, naming the §1.25
     /// code of a refusal to a contact point, with the challenge naming
     /// `realm`.
     #[must_use]
     pub fn response(self, realm: &str, request_id: &str) -> Response {
+        let Some(ncp) = self.ncp else {
+            return self.refusal.response(realm, request_id);
+        };
         let code = self.refusal.code();
-        let message = if self.refusal == Refusal::ContactPoint && !self.missing.is_empty() {
-            let names: Vec<&str> = self.missing.names().collect();
-            format!(
-                "{}; missing or not admitted: {}",
-                self.refusal.description(),
-                names.join(", ")
-            )
-        } else {
-            self.refusal.description().to_owned()
-        };
-        let mut response = match self.ncp {
-            Some(ncp) => error::to_contact_point(code, message, request_id, ncp),
-            None => error::response(code, message, request_id),
-        };
+        let mut response =
+            error::to_contact_point(code, self.refusal.description(), request_id, ncp);
         let challenge = self
             .refusal
             .smart()
@@ -315,7 +289,6 @@ impl From<Refusal> for Refused {
         Self {
             refusal,
             check: None,
-            missing: MissingAnnex::default(),
             ncp: None,
         }
     }
@@ -324,6 +297,9 @@ impl From<Refusal> for Refused {
 impl From<&Denied> for Refused {
     fn from(denied: &Denied) -> Self {
         let refusal = match denied.refusal() {
+            // NOTE: no specification governs this: our own design; a token the contact-point
+            // profile refuses keeps the gateway's own code for a contact point's shortfall.
+            _ if denied.ehdsi().is_some() => Refusal::ContactPoint,
             SmartRefusal::Missing(_) => Refusal::Missing,
             SmartRefusal::InvalidRequest => Refusal::Malformed,
             SmartRefusal::Unavailable => Refusal::Unavailable,
@@ -334,7 +310,6 @@ impl From<&Denied> for Refused {
         Self {
             refusal,
             check: denied.reason(),
-            missing: MissingAnnex::default(),
             ncp: None,
         }
     }

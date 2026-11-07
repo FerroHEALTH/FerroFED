@@ -4,15 +4,17 @@
 //! What a national contact point for digital health relays with a request.
 //!
 //! The health professional and the healthcare provider, as the contact point
-//! asserts them (Implementing Regulation (EU) 2026/2099 Art 7 and its Annex
-//! Tables 1 and 2).
+//! asserts them from the eHDSI HP Identity Assertion (eHDSI SAML Profile
+//! 10.0.0 §2.1, §2.3; Implementing Regulation (EU) 2026/2099 Art 7).
 //!
 //! The gateway verified the contact point's token, and never the
 //! professional: Art 6(1) and (2) give the identification and
 //! authentication of the professional to the entity the professional's
 //! Member State lists, and Federation Tier §13.4 (authn-end-user) lets the
 //! source rely on the requester's assertion. Every value here is the
-//! contact point's, and travels to a node marked as its assertion.
+//! contact point's, and travels to a node marked as its assertion. No name
+//! and no address travels: the professional is named by their identifier,
+//! and the provider by its identifier (GDPR Art 5(1)(c)).
 
 use std::fmt;
 
@@ -44,42 +46,38 @@ impl fmt::Debug for Relayed {
 }
 
 /// The health professional a contact point relays (2026/2099 Annex
-/// Table 1); the provider identifier the table repeats is the
-/// [`HealthcareProvider`]'s.
+/// Table 1, as the HP Identity Assertion carries it); the provider
+/// identifier the table repeats is the [`HealthcareProvider`]'s.
 #[derive(Clone, PartialEq, Eq)]
 pub struct HealthProfessional {
-    /// `family_name`.
-    pub family_name: String,
-    /// `given_name`.
-    pub given_name: String,
-    /// `hp_identifier`, unique among the identifiers the Member State where
-    /// the professional is registered issues.
+    /// `hp_identifier`: the assertion's `NameID`, unique among the
+    /// identifiers the Member State where the professional is registered
+    /// issues (SAML Profile 10.0.0 §2.1).
     pub hp_identifier: String,
     /// `issuing_authority_name`: the agency that issued `hp_identifier`.
     pub issuing_authority_name: String,
     /// `hp_professional_role`, each a code the contact point states.
     pub hp_professional_role: Vec<Role>,
+    /// The role of the person the professional acts for, `on-behalf-of`,
+    /// when the contact point states one (SAML Profile 10.0.0 §2.3).
+    pub on_behalf_of: Option<Role>,
 }
 
 /// The healthcare provider a contact point relays (2026/2099 Annex
 /// Table 2): where the professional provides the treatment.
 #[derive(Clone, PartialEq, Eq)]
 pub struct HealthcareProvider {
-    /// `healthcare_provider_identifier`, unique in the Member State that
-    /// issued it.
+    /// `healthcare_provider_identifier`: the assertion's `organization-id`.
     pub identifier: String,
     /// `issuing_authority_name`: the agency that issued the identifier.
     pub issuing_authority_name: String,
-    /// `healthcare_provider_name`.
-    pub name: String,
-    /// `healthcare_provider_address`: the official registered full address.
-    pub address: String,
 }
 
 impl fmt::Debug for HealthProfessional {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("HealthProfessional")
             .field("roles", &self.hp_professional_role.len())
+            .field("on_behalf_of", &self.on_behalf_of.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -90,8 +88,7 @@ impl fmt::Debug for HealthcareProvider {
     }
 }
 
-/// A professional role: a code and the system that defines it, as an IHE
-/// IUA `subject_role` FHIR `Coding` carries it (ITI TF-2 3.71.4.2.2.1.1).
+/// A professional role: a code and the system that defines it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Role {
     /// The code system, when the contact point names one.
@@ -111,16 +108,16 @@ impl Relayed {
         let mut carried = vec![
             self.contact_point.as_str(),
             self.country_code.as_str(),
-            professional.family_name.as_str(),
-            professional.given_name.as_str(),
             professional.hp_identifier.as_str(),
             professional.issuing_authority_name.as_str(),
             provider.identifier.as_str(),
             provider.issuing_authority_name.as_str(),
-            provider.name.as_str(),
-            provider.address.as_str(),
         ];
-        for role in &professional.hp_professional_role {
+        for role in professional
+            .hp_professional_role
+            .iter()
+            .chain(professional.on_behalf_of.as_ref())
+        {
             carried.extend(role.system.as_deref());
             carried.push(&role.code);
         }
@@ -135,26 +132,23 @@ impl Relayed {
         Claim {
             asserted_by: &self.contact_point,
             health_professional: ProfessionalClaim {
-                family_name: &professional.family_name,
-                given_name: &professional.given_name,
                 country_code: &self.country_code,
                 hp_identifier: &professional.hp_identifier,
                 issuing_authority_name: &professional.issuing_authority_name,
                 hp_professional_role: &professional.hp_professional_role,
+                on_behalf_of: professional.on_behalf_of.as_ref(),
                 healthcare_provider_identifier: &provider.identifier,
             },
             healthcare_provider: ProviderClaim {
                 healthcare_provider_identifier: &provider.identifier,
                 issuing_authority_name: &provider.issuing_authority_name,
-                healthcare_provider_name: &provider.name,
-                healthcare_provider_address: &provider.address,
             },
         }
     }
 }
 
-/// The `national_contact_point` claim: Annex Table 1 and Table 2 as the
-/// Annex lists them, and who asserted them.
+/// The `national_contact_point` claim: the Annex Table 1 and Table 2 rows
+/// the HP Identity Assertion carries, and who asserted them.
 #[derive(Serialize)]
 pub(super) struct Claim<'a> {
     asserted_by: &'a str,
@@ -162,23 +156,22 @@ pub(super) struct Claim<'a> {
     healthcare_provider: ProviderClaim<'a>,
 }
 
-/// Annex Table 1, every row.
+/// Annex Table 1, without the names the assertion carries in no field of
+/// their own, and `on-behalf-of`.
 #[derive(Serialize)]
 struct ProfessionalClaim<'a> {
-    family_name: &'a str,
-    given_name: &'a str,
     country_code: &'a str,
     hp_identifier: &'a str,
     issuing_authority_name: &'a str,
     hp_professional_role: &'a [Role],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    on_behalf_of: Option<&'a Role>,
     healthcare_provider_identifier: &'a str,
 }
 
-/// Annex Table 2, every row.
+/// Annex Table 2, without the name and the address.
 #[derive(Serialize)]
 struct ProviderClaim<'a> {
     healthcare_provider_identifier: &'a str,
     issuing_authority_name: &'a str,
-    healthcare_provider_name: &'a str,
-    healthcare_provider_address: &'a str,
 }

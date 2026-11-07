@@ -7,33 +7,42 @@
 //! 2025/327 Art 23; Implementing Regulation (EU) 2026/2099 Art 7).
 //!
 //! **This is a test device, not a national connector.** It issues its own
-//! access tokens, each carrying every attribute of the 2026/2099 Annex
-//! Tables 1 and 2 and a purpose of use, synthetic and inside the
-//! `urn:oid:2.999` example arc, and calls the face the way a national
-//! connector reaches a Member State's national infrastructure: it confirms
-//! the patient's national identifier at a PDQm Supplier over ITI-78
+//! access tokens as the contact point's authorization server would, each
+//! carrying what a conforming eHDSI HP Identity Assertion and Treatment
+//! Relationship Confirmation provide (eHDSI SAML Profile 10.0.0 §2.1, §2.3,
+//! §4), synthetic and inside the `urn:oid:2.999` example arc, bound to the
+//! device's client certificate (RFC 8705 §3), and calls the face the way a
+//! national connector reaches a Member State's national infrastructure: it
+//! confirms the patient's national identifier at a PDQm Supplier over ITI-78
 //! (IHE PDQm 3.2.0 §2:3.78), then looks the patient up, asks
 //! `Patient/$summary`, the document list, the prescription list and read,
 //! and posts a dispensation, each with a correlation identifier of its own.
 //! The `NCPeH` API IG 9.1.1-ci puts the interface with the national connector
 //! out of scope, so no specification governs the device: our own design.
 //!
-//! The Annex attributes IHE IUA defines a claim for travel in its `ihe_iua`
-//! extension (ITI TF-2 3.71.4.2.2.1.1); each other one travels in the string
-//! claim [`CLAIMS`] names, which the gateway's
-//! `[trust.issuer.national_contact_point]` declares. Its `Debug` shows the
-//! issuer and the base it calls, and nothing here logs a value.
+//! The attributes travel under the `ehdsi` claim, each at its field name,
+//! which `ferrohealth-smart`'s `ehdsi` mapping reads; [`contact_point_toml`]
+//! is the configuration that declares the device's issuer a contact point.
+//! Its `Debug` shows the issuer and the base it calls, and nothing here
+//! logs a value.
+#![expect(
+    clippy::disallowed_types,
+    reason = "the test seam: the token's ehdsi and cnf claims are written as JSON"
+)]
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
 
+use base64::Engine as _;
 use http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, LOCATION};
 use http::{HeaderMap, StatusCode};
 use serde::Deserialize;
+use serde_json::{Value, json};
 use url::form_urlencoded;
 
-use crate::issuer::{Claims, Coding, Issuer, IssuerError};
+use crate::issuer::{Claims, Issuer, IssuerError};
 
 /// The media type of every FHIR body the device sends and accepts.
 const FHIR_JSON: &str = "application/fhir+json";
@@ -45,20 +54,21 @@ pub const CLIENT_ID: &str = "synthetic-national-connector";
 /// The request header the device sends each correlation identifier in.
 pub const CORRELATION_HEADER: &str = "ncp-correlation-id";
 
-/// The professional's `family_name` (2026/2099 Annex Table 1).
-pub const FAMILY: &str = "Qz9-ncp-family";
-
-/// The professional's `given_name` (Annex Table 1).
-pub const GIVEN: &str = "Qz9-ncp-given";
-
 /// The `country_code` of the Member State that issued the professional's
-/// identification data (Annex Table 1), a Member State.
+/// identification data (2026/2099 Annex Table 1), a Member State, which the
+/// deployment configures for the contact point.
 pub const COUNTRY: &str = "LU";
 
-/// The professional's `hp_identifier` (Annex Table 1).
+/// The professional's identifier, the assertion's `NameID` (SAML Profile
+/// 10.0.0 §2.1), the Annex `hp_identifier`.
 pub const HP_ID: &str = "urn:oid:2.999.9.71";
 
-/// The `issuing_authority_name` of [`HP_ID`] (Annex Table 1).
+/// The professional's name, the assertion's `subject-id` (SAML Profile
+/// 10.0.0 §2.3), which the gateway never relays or records.
+pub const HP_NAME: &str = "Qz9-ncp-subject-name";
+
+/// The `issuing_authority_name` of [`HP_ID`] (Annex Table 1), which the
+/// deployment configures for the contact point.
 pub const HP_AUTHORITY: &str = "Qz9-ncp-hp-authority";
 
 /// The code system of [`ROLE`].
@@ -67,75 +77,112 @@ pub const ROLE_SYSTEM: &str = "urn:oid:2.999.9";
 /// The professional's `hp_professional_role` (Annex Table 1).
 pub const ROLE: &str = "Qz9-ncp-role";
 
-/// The `healthcare_provider_identifier` (Annex Table 2).
+/// The `healthcare_provider_identifier`, the assertion's `organization-id`
+/// (Annex Table 2).
 pub const HCP_ID: &str = "urn:oid:2.999.9.72";
 
-/// The `issuing_authority_name` of [`HCP_ID`] (Annex Table 2).
-pub const HCP_AUTHORITY: &str = "Qz9-ncp-hcp-authority";
-
-/// The `healthcare_provider_name` (Annex Table 2).
+/// The provider's name, the assertion's `organization`, which the gateway
+/// never relays or records.
 pub const HCP_NAME: &str = "Qz9-ncp-hcp-name";
 
-/// The `healthcare_provider_address` (Annex Table 2).
-pub const HCP_ADDRESS: &str = "Qz9-ncp-hcp-address";
+/// The `issuing_authority_name` of [`HCP_ID`] (Annex Table 2), which the
+/// deployment configures for the contact point.
+pub const HCP_AUTHORITY: &str = "Qz9-ncp-hcp-authority";
 
 /// A synthetic IHE IUA `person_id`, a patient identifier the device's token
 /// carries so a test can show the gateway never reads it (§5.4.1, N33).
 pub const PERSON_ID: &str = "Qz9-ncp-person-id";
 
-/// The names of the string claims that carry the Annex attributes IHE IUA
-/// defines no claim for, in the order of `[trust.issuer.national_contact_point]`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ClaimNames {
-    /// The claim of [`FAMILY`].
-    pub family_name: &'static str,
-    /// The claim of [`GIVEN`].
-    pub given_name: &'static str,
-    /// The claim of [`COUNTRY`].
-    pub country_code: &'static str,
-    /// The claim of [`HP_AUTHORITY`].
-    pub professional_issuing_authority: &'static str,
-    /// The claim of [`HCP_AUTHORITY`].
-    pub provider_issuing_authority: &'static str,
-    /// The claim of [`HCP_ADDRESS`].
-    pub provider_address: &'static str,
-    /// The claim of the patient the treatment relationship confirmation
-    /// binds, `system|value`, set once the device treats a patient
-    /// ([`NationalConnector::treating`]).
-    pub trc_patient: &'static str,
+/// The authentication class of the professional, one of the seven of SAML
+/// Profile 10.0.0 §2.1.
+pub const AUTHENTICATION_CLASS: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:X509";
+
+/// What a contact point's authorization server writes under `ehdsi` for a
+/// conforming assertion of the professional `hp_identifier`.
+///
+/// The identity assertion and the treatment relationship confirmation are
+/// both valid from a minute before `now` for an hour, and each attribute
+/// sits at its field name: the mandatory attributes of SAML Profile 10.0.0
+/// §2.1 and §2.3, the provider's name, the purpose of use `purpose`, and no
+/// patient.
+#[must_use]
+pub fn asserted(hp_identifier: &str, purpose: &str, now: i64) -> BTreeMap<String, Value> {
+    let (start, end) = (now.saturating_sub(60), now.saturating_add(3600));
+    [
+        ("professional.hp_identifier", json!(hp_identifier)),
+        ("professional.name", json!(HP_NAME)),
+        (
+            "professional.hp_professional_role",
+            json!([{ "system": ROLE_SYSTEM, "code": ROLE }]),
+        ),
+        (
+            "professional.authentication_method",
+            json!(AUTHENTICATION_CLASS),
+        ),
+        ("provider.healthcare_provider_identifier", json!(HCP_ID)),
+        ("provider.healthcare_provider_name", json!(HCP_NAME)),
+        ("provider.facility_type", json!("Hospital")),
+        ("provider.home_community_id", json!("urn:oid:2.999.9.73")),
+        ("point_of_care", json!("Qz9-ncp-point-of-care")),
+        ("purpose_of_use", json!(purpose)),
+        ("assertion.issuer", json!("https://ncp-idp.example.test")),
+        ("assertion.id", json!("_Qz9-ncp-ida-1")),
+        ("assertion.not_before", json!(start)),
+        ("assertion.not_on_or_after", json!(end)),
+        ("trc.id", json!("_Qz9-ncp-trc-1")),
+        ("trc.not_before", json!(start)),
+        ("trc.not_on_or_after", json!(end)),
+    ]
+    .into_iter()
+    .map(|(field, value)| (field.to_owned(), value))
+    .collect()
 }
 
-/// The claim names the device writes, which the gateway under test declares.
-pub const CLAIMS: ClaimNames = ClaimNames {
-    family_name: "ncp_family_name",
-    given_name: "ncp_given_name",
-    country_code: "ncp_country_code",
-    professional_issuing_authority: "ncp_hp_issuing_authority",
-    provider_issuing_authority: "ncp_hcp_issuing_authority",
-    provider_address: "ncp_hcp_address",
-    trc_patient: "ncp_trc_patient",
-};
+/// A synthetic self-signed client certificate, its DER encoding, generated
+/// at run time so no private key is ever committed.
+///
+/// # Errors
+///
+/// Returns the [`rcgen::Error`] of a certificate that cannot be made.
+pub fn client_certificate() -> Result<Vec<u8>, rcgen::Error> {
+    let made = rcgen::generate_simple_self_signed(vec![String::from("ncp.example.test")])?;
+    Ok(made.cert.der().to_vec())
+}
 
-impl ClaimNames {
-    /// Returns the `[trust.issuer.national_contact_point]` table that
-    /// declares these names and [`CORRELATION_HEADER`], as configuration
-    /// text for the trust entry it follows.
-    #[must_use]
-    pub fn toml(&self) -> String {
-        format!(
-            "\n[trust.issuer.national_contact_point]\nfamily_name = \"{}\"\ngiven_name = \"{}\"\n\
-             country_code = \"{}\"\nprofessional_issuing_authority = \"{}\"\n\
-             provider_issuing_authority = \"{}\"\nprovider_address = \"{}\"\n\
-             trc_patient = \"{}\"\ncorrelation_header = \"{CORRELATION_HEADER}\"\n",
-            self.family_name,
-            self.given_name,
-            self.country_code,
-            self.professional_issuing_authority,
-            self.provider_issuing_authority,
-            self.provider_address,
-            self.trc_patient
-        )
-    }
+/// The `cnf` claim of a token bound to the certificate `der`: its
+/// `x5t#S256`, the base64url SHA-256 of the DER encoding (RFC 8705 §3.1).
+#[must_use]
+pub fn cnf(der: &[u8]) -> Value {
+    let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, der);
+    json!({ "x5t#S256": base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest.as_ref()) })
+}
+
+/// The configuration that declares `issuer` a contact point whose tokens
+/// name `audience`, its key set in the file `jwks_file`.
+///
+/// It is an `[[auth.issuer]]` of kind `federation` with `sender_constraint =
+/// "required"`, its `[[auth.federation]]` table on the `ehdsi` mapping with
+/// [`COUNTRY`], [`HP_AUTHORITY`] and [`HCP_AUTHORITY`] configured, and its
+/// `[[federation.contact_point]]` naming [`CORRELATION_HEADER`].
+#[must_use]
+pub fn contact_point_toml(issuer: &str, audience: &str, jwks_file: &str) -> String {
+    let jwks = toml_string(jwks_file);
+    format!(
+        "\n[[auth.issuer]]\nissuer = \"{issuer}\"\nkind = \"federation\"\n\
+         audience = [\"{audience}\"]\njwks_file = {jwks}\nsender_constraint = \"required\"\n\n\
+         [[auth.federation]]\nissuer = \"{issuer}\"\ncontact_point = true\nmapping = \"ehdsi\"\n\
+         countries = [\"{COUNTRY}\"]\n\
+         fields.\"professional.country_code\" = [{{ constant = \"{COUNTRY}\" }}]\n\
+         fields.\"professional.issuing_authority_name\" = [{{ constant = \"{HP_AUTHORITY}\" }}]\n\
+         fields.\"provider.issuing_authority_name\" = [{{ constant = \"{HCP_AUTHORITY}\" }}]\n\n\
+         [[federation.contact_point]]\nissuer = \"{issuer}\"\ncorrelation_header = \"{CORRELATION_HEADER}\"\n"
+    )
+}
+
+/// `text` as a TOML basic string.
+fn toml_string(text: &str) -> String {
+    let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
 }
 
 /// The device could not sign a token or reach a service.
@@ -148,6 +195,9 @@ pub enum ConnectorError {
     /// The HTTP client could not be built.
     #[error("the national connector's HTTP client could not be built")]
     Client(#[source] reqwest::Error),
+    /// The client certificate could not be made.
+    #[error("the national connector's client certificate could not be made")]
+    Certificate(#[source] rcgen::Error),
     /// An ITI-78 answer was no `searchset` the device reads.
     #[error("the PDQm Supplier's answer could not be read")]
     Json(#[source] serde_json::Error),
@@ -235,6 +285,7 @@ impl NationalId<'_> {
 /// The harness national connector, calling the FHIR face at one base.
 pub struct NationalConnector {
     issuer: Issuer,
+    certificate: Vec<u8>,
     audience: String,
     fhir_base: String,
     client: reqwest::Client,
@@ -253,13 +304,15 @@ impl fmt::Debug for NationalConnector {
 }
 
 impl NationalConnector {
-    /// Creates a connector whose tokens `issuer` signs for `audience`, and
-    /// which calls the FHIR face at `fhir_base`, with no trailing slash.
+    /// Creates a connector whose tokens `issuer` signs for `audience`, bound
+    /// to a client certificate of its own, and which calls the FHIR face at
+    /// `fhir_base`, with no trailing slash.
     ///
     /// # Errors
     ///
     /// Returns [`ConnectorError::Client`] when the HTTP client cannot be
-    /// built.
+    /// built, and [`ConnectorError::Certificate`] when the certificate
+    /// cannot be made.
     pub fn new(
         issuer: Issuer,
         audience: impl Into<String>,
@@ -267,6 +320,7 @@ impl NationalConnector {
     ) -> Result<Self, ConnectorError> {
         Ok(Self {
             issuer,
+            certificate: client_certificate().map_err(ConnectorError::Certificate)?,
             audience: audience.into(),
             fhir_base: fhir_base.into().trim_end_matches('/').to_owned(),
             client: reqwest::Client::builder()
@@ -284,43 +338,38 @@ impl NationalConnector {
         &self.issuer
     }
 
+    /// Returns the DER encoding of the client certificate the device's
+    /// tokens are bound to, which the harness hands the gateway as the
+    /// certificate of the connection, standing in for its TLS layer.
+    #[must_use]
+    pub fn certificate(&self) -> &[u8] {
+        &self.certificate
+    }
+
     /// Returns the claims of the device's token: a client token, its `sub`
-    /// its `client_id`, every scope, the purpose of use `TREAT`, every Annex
-    /// attribute, an IUA `person_id`, and the TRC patient once the device
-    /// treats one ([`Self::treating`]).
+    /// its `client_id`, every scope, what a conforming eHDSI assertion
+    /// provides with the purpose of use `TREATMENT` ([`asserted`]), bound to
+    /// the device's certificate, an IUA `person_id`, and the TRC patient once
+    /// the device treats one ([`Self::treating`]).
     #[must_use]
     pub fn claims(&self) -> Claims {
         let mut claims = Claims::new(self.issuer.name(), &self.audience);
         CLIENT_ID.clone_into(&mut claims.client_id);
         CLIENT_ID.clone_into(&mut claims.sub);
         if let Some(extensions) = claims.extensions.as_mut() {
-            let iua = &mut extensions.ihe_iua;
-            iua.national_provider_identifier = Some(HP_ID.to_owned());
-            iua.subject_role = vec![Coding {
-                system: ROLE_SYSTEM.to_owned(),
-                code: ROLE.to_owned(),
-            }];
-            iua.subject_organization_id = Some(HCP_ID.to_owned());
-            iua.subject_organization = Some(HCP_NAME.to_owned());
-            iua.person_id = Some(PERSON_ID.to_owned());
+            extensions.ihe_iua.person_id = Some(PERSON_ID.to_owned());
         }
+        claims.ehdsi = asserted(HP_ID, "TREATMENT", claims.iat);
+        claims.cnf = Some(cnf(&self.certificate));
         let treating = self
             .treating
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
         if let Some(patient) = treating {
-            claims.other.insert(CLAIMS.trc_patient.to_owned(), patient);
-        }
-        for (claim, value) in [
-            (CLAIMS.family_name, FAMILY),
-            (CLAIMS.given_name, GIVEN),
-            (CLAIMS.country_code, COUNTRY),
-            (CLAIMS.professional_issuing_authority, HP_AUTHORITY),
-            (CLAIMS.provider_issuing_authority, HCP_AUTHORITY),
-            (CLAIMS.provider_address, HCP_ADDRESS),
-        ] {
-            claims.other.insert(claim.to_owned(), value.to_owned());
+            claims
+                .ehdsi
+                .insert(String::from("patient.id"), Value::String(patient));
         }
         claims
     }

@@ -17,8 +17,8 @@ use super::list::{
     DOCUMENT_A, DOCUMENT_B, Members, binary, by_custodian, entries, fhir_document, list, names,
 };
 use super::receive::{OTHER, OTHER_NAMESPACE};
-use crate::auth::{bearing, minted};
-use crate::contact_point::{HP_ID, TRC_CLAIM, claim_names, relaying};
+use crate::auth::minted;
+use crate::contact_point::{HP_ID, bound, with};
 use crate::facade::{NAMESPACE, PATIENT, settings_with_room};
 use crate::support::{Logs, call};
 
@@ -27,23 +27,17 @@ const UNKNOWN: &str = "SENTINEL-UNKNOWN-6h1d";
 
 /// The contact point's token, its TRC binding `system`|`value`.
 fn treating(system: &str, value: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let mut claims = relaying();
-    claims
-        .other
-        .insert(TRC_CLAIM.to_owned(), format!("{system}|{value}"));
+    let claims = with("patient.id", Value::String(format!("{system}|{value}")));
     minted(&claims)
 }
 
-/// The gateway over `members`, its issuer declared a national contact point.
+/// The gateway over `members`, trusting the test contact point.
 fn gateway(
     members: &Members,
     dir: &std::path::Path,
 ) -> Result<axum::Router, Box<dyn std::error::Error>> {
     let mut server = settings_with_room();
-    let declared = claim_names().resolve("trust.issuer[0].national_contact_point")?;
-    for issuer in &mut server.auth.issuers {
-        issuer.national_contact_point = Some(declared.clone());
-    }
+    server.auth = crate::contact_point::declared();
     members.gateway_serving(dir, (("", ""), ""), &server)
 }
 
@@ -51,7 +45,7 @@ fn gateway(
 /// under the test patient's TRC.
 async fn listed_b(app: axum::Router) -> Result<String, Box<dyn std::error::Error>> {
     let token = treating(NAMESPACE, PATIENT)?;
-    let (status, text) = call(app, bearing(list("")?, &token)?).await?;
+    let (status, text) = call(app, bound(list("")?, &token)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
     let matches = entries(&bundle, "match");
@@ -66,7 +60,7 @@ async fn a_document_listed_under_its_own_trc_is_read_unchanged() -> TestResult {
     let app = gateway(&members, dir.path())?;
     let url = listed_b(app.clone()).await?;
     let token = treating(NAMESPACE, PATIENT)?;
-    let (status, text) = call(app, bearing(binary(&url)?, &token)?).await?;
+    let (status, text) = call(app, bound(binary(&url)?, &token)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(text.as_bytes(), DOCUMENT_B, "the member's bytes, unchanged");
     Ok(())
@@ -83,7 +77,7 @@ async fn a_document_read_under_another_patients_trc_is_no_data_recorded_and_fetc
     let listed = members.proxy_b.journal().len();
     let unknown = call(
         app.clone(),
-        bearing(
+        bound(
             http::Request::get(format!(
                 "{}/Patient/$summary?identifier={}%7C{UNKNOWN}",
                 super::FHIR,
@@ -104,7 +98,7 @@ async fn a_document_read_under_another_patients_trc_is_no_data_recorded_and_fetc
     let guard = tracing::subscriber::set_default(capture);
     let answer = call(
         app.clone(),
-        bearing(binary(&url)?, &treating(OTHER_NAMESPACE, OTHER)?)?,
+        bound(binary(&url)?, &treating(OTHER_NAMESPACE, OTHER)?)?,
     )
     .await?;
     drop(guard);

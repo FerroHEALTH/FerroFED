@@ -305,6 +305,10 @@ pub struct Federation {
     pub max_in_flight_per_node: u32,
     /// The most bytes read of one member answer, past which it is `node-error` (§11.1).
     pub max_node_answer_bytes: usize,
+    /// What the gateway needs of each national contact point, one
+    /// `[[federation.contact_point]]` per `[[auth.issuer]]` whose
+    /// `[[auth.federation]]` table sets `contact_point = true`.
+    pub contact_point: Vec<auth::contact_point::ContactPointTable>,
 }
 
 /// How a member the Step-1 consent pre-filter excludes is reported,
@@ -478,6 +482,7 @@ impl Default for Federation {
             consent: ConsentReporting::default(),
             max_in_flight_per_node: 64,
             max_node_answer_bytes: 16 * 1024 * 1024,
+            contact_point: Vec::new(),
         }
     }
 }

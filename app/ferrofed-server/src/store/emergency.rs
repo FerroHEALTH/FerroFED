@@ -159,17 +159,14 @@ mod tests {
             contact_point: String::from("https://ncp.example.org"),
             country_code: String::from("LU"),
             professional: HealthProfessional {
-                family_name: String::from("Qz7-family"),
-                given_name: String::from("Qz7-given"),
                 hp_identifier: id.to_owned(),
                 issuing_authority_name: authority.to_owned(),
                 hp_professional_role: Vec::new(),
+                on_behalf_of: None,
             },
             provider: HealthcareProvider {
                 identifier: String::from("urn:oid:2.999.9.66"),
                 issuing_authority_name: String::from("Qz7-hcp-authority"),
-                name: String::from("Qz7-hcp-name"),
-                address: String::from("Qz7-hcp-address"),
             },
         }
     }
@@ -194,12 +191,12 @@ mod tests {
             Professional::of(&relayed("ab", "c")),
             Professional::of(&relayed("a", "bc"))
         );
-        let mut other_name = relayed("Qz7-authority", "Qz7-hp-63");
-        other_name.professional.family_name = String::from("Qz7-other");
+        let mut other_provider = relayed("Qz7-authority", "Qz7-hp-63");
+        other_provider.provider.identifier = String::from("urn:oid:2.999.9.67");
         assert_eq!(
             Professional::of(&relayed("Qz7-authority", "Qz7-hp-63")),
-            Professional::of(&other_name),
-            "the name is no part of the identity"
+            Professional::of(&other_provider),
+            "the provider is no part of the identity"
         );
     }
 
