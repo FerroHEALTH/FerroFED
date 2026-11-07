@@ -212,6 +212,45 @@ async fn an_unknown_patient_and_another_patient_answer_alike() -> TestResult {
     Ok(())
 }
 
+/// eHDSI XCA Profile 8.0.1 §4.2.2, through the whole stack: the error layer
+/// outside the gate reads the caller from the mark the gate sets on its
+/// answer, so a contact point's `404` for a patient no member holds is the
+/// no-data answer, and the same `404` to a caller that is no contact point
+/// is not (#1691).
+#[tokio::test]
+async fn only_a_contact_points_not_found_is_the_no_data_answer() -> TestResult {
+    let (a, b, pdq) = servers().await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), (&a, &b, &pdq))?;
+    let relayed = minted(&treating(NAMESPACE, UNKNOWN))?;
+    let (status, text) = call(
+        app.clone(),
+        bound(summary_of(NAMESPACE, UNKNOWN)?, &relayed)?,
+    )
+    .await?;
+    assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
+    let codes = details(&serde_json::from_str(&text)?);
+    assert!(
+        codes.contains(&String::from("trc-patient-mismatch"))
+            && codes.contains(&String::from("ERROR_PS_NOT_FOUND")),
+        "the no-data answer: {codes:?}"
+    );
+    let own = minted(&crate::support::caller::claims())?;
+    let (status, text) = call(
+        app,
+        crate::auth::bearing(summary_of(NAMESPACE, UNKNOWN)?, &own)?,
+    )
+    .await?;
+    assert_eq!(StatusCode::NOT_FOUND, status, "{text}");
+    let codes = details(&serde_json::from_str(&text)?);
+    assert!(
+        !codes.contains(&String::from("trc-patient-mismatch"))
+            && !codes.contains(&String::from("ERROR_PS_NOT_FOUND")),
+        "no no-data answer for a caller that is no contact point: {codes:?}"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn another_patients_document_list_is_no_data() -> TestResult {
     let (a, b, pdq) = servers().await;

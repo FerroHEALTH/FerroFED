@@ -12,7 +12,6 @@ use axum::response::Response;
 use ferrofed_eehrxf::face::FHIR_JSON;
 use http::{Method, StatusCode, header};
 
-use crate::auth::caller::Caller;
 use crate::auth::contact_point::ContactPointAnswer;
 use crate::error::Code;
 use crate::error::ncp::NcpError;
@@ -120,16 +119,12 @@ pub async fn outcomes(
         .to_owned();
     let face = state.fhir().and_then(|fhir| classify(fhir, &path));
     let under = face.is_some();
-    let caller = request
-        .extensions()
-        .get::<Caller>()
-        .is_some_and(Caller::is_contact_point);
     let patient_data = face.and_then(|face| service(face, request.uri().query()));
     let head = request.method() == Method::HEAD;
     let response = next.run(request).await;
     // NOTE: no specification governs this: our own design; the gate admits the caller
-    // inside this layer, so its answer says whether a contact point asked.
-    let relayed = caller || response.extensions().get::<ContactPointAnswer>().is_some();
+    // inside this layer, so the mark it sets on its answer says whether a contact point asked.
+    let relayed = response.extensions().get::<ContactPointAnswer>().is_some();
     let no_data = patient_data.filter(|_| relayed);
     if let Some(service) = no_data
         && response.status() == StatusCode::NOT_FOUND

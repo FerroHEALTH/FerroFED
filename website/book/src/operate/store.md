@@ -22,7 +22,7 @@ A configuration in either case that sets no `[store]` refuses to start, and
 `[store]`:
 
 ```text
-trust.issuer[0].national_contact_point needs FerroFED's own PostgreSQL store, and the configuration sets no [store]; add [store] with url or url_file
+federation.contact_point[0] needs FerroFED's own PostgreSQL store, and the configuration sets no [store]; add [store] with url or url_file
 ```
 
 In every other case FerroFED runs with no PostgreSQL database. The embedded
