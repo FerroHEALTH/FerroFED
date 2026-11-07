@@ -16,6 +16,7 @@
 //! - [`patient_summary`]: one stored query per patient summary section;
 //! - [`laboratory`]: the stored query of the laboratory report;
 //! - [`discharge`]: the stored query of the discharge report;
+//! - [`imaging`]: the stored query of the imaging report;
 //! - [`report`]: what the reports the gateway writes from one member's
 //!   composition share;
 //! - [`medication`]: the stored queries of the medication orders and
@@ -68,6 +69,7 @@
 pub mod discharge;
 pub mod dispensations;
 pub mod face;
+pub mod imaging;
 pub mod laboratory;
 pub mod list;
 pub mod lookup;

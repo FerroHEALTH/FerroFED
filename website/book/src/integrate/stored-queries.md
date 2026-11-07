@@ -145,7 +145,8 @@ version `1.0.0`. ITS-REST names a stored query `[{namespace}::]{query-name}`,
 the namespace "in a form of a reverse domain name", so the gateway's sits
 under the reverse of `ferrofed.eu`. They are the laboratory report's query,
 `eu.ferrofed.eehrxf::laboratory-report`; the discharge report's,
-`eu.ferrofed.eehrxf::discharge-report`; the medication queries,
+`eu.ferrofed.eehrxf::discharge-report`; the imaging report's,
+`eu.ferrofed.eehrxf::imaging-report`; the medication queries,
 `eu.ferrofed.eehrxf::medication-orders`, every composition that holds a
 medication order and no `feeder_audit`, so an imported copy is left out,
 and `eu.ferrofed.eehrxf::medication-actions`, every composition that holds a

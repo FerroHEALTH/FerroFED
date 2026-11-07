@@ -240,6 +240,7 @@ ehdsi-specifications.sh	the eHDSI wiki sits behind EU Login and publishes no rel
 sogis-acm.sh	the SOG-IS Crypto Working Group publishes no release feed; ACM 1.3 is the version eHDSI Cryptographic Algorithms 9.0.0 names by URL, so a newer ACM applies only when an eHDSI release names it, and that is a re-pin
 kds-laborbericht.sh	a test fixture the laboratory report mapping of the pinned eehrxf compiles against, pinned by commit and checksum; it moves only when the eehrxf pin changes the template its mapping names
 openehr-ckm.sh	the openEHR Clinical Knowledge Manager publishes no release feed for a template; the script fails when an upstream byte moves, and a new asset version is a re-pin with its clinical safety review
+ferrobridge-imaging.sh	a test fixture the imaging report mapping of the pinned eehrxf compiles against, pinned by commit and checksum; it moves only when the eehrxf pin changes the template its mapping names
 ferrobridge-discharge.sh	a test fixture the discharge report mapping of the pinned eehrxf compiles against, pinned by commit and checksum; it moves only when the eehrxf pin changes the template its mapping names
 ferrobridge-medication.sh	a test fixture the MPD mapping of the pinned eehrxf compiles against, pinned by commit and checksum; it moves only when the eehrxf pin changes the template its mapping names
 ferropulse.sh	FerroPULSE is the family's own receiver and publishes no release feed; the envelope v2 schema is pinned by commit and checksum, and a new envelope version is a code change in the reporter, never a refresh"

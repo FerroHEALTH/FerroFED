@@ -28,6 +28,8 @@
 //!   to the vendored profiles, for HL7's FHIR Validator lane (#688);
 //! - [`discharge`]: the discharge report template, the archetypes it
 //!   specialises or holds, and a synthetic discharge composition (#1405);
+//! - [`imaging`]: the imaging report template, the archetypes it
+//!   specialises or holds, and a synthetic imaging composition (#1406);
 //! - [`laboratory`]: the laboratory report fixtures, the package, the
 //!   template and the mapping a receiving member is declared with, and a
 //!   synthetic report;
@@ -107,6 +109,7 @@ pub mod eps;
 pub mod fapi;
 pub mod fhir_packages;
 pub mod health_data_api;
+pub mod imaging;
 pub mod issuance;
 pub mod issuer;
 pub mod laboratory;

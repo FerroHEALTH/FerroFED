@@ -18,6 +18,8 @@
 //! has its own `DocumentReference`s listed as it holds them ([`Match::Passed`]), each
 //! attachment URL readdressed to the gateway's ([`readdressed`]).
 
+pub mod written;
+
 use fhir_types::codec::Value;
 use fhir_types::r4::attachment::Attachment;
 use fhir_types::r4::bundle::Bundle;
@@ -31,7 +33,6 @@ use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::{Resource, UnknownResource};
 
 use crate::face::FHIR_JSON;
-use crate::report::Written;
 use crate::summary::Organisation;
 
 /// The canonical URL of the profile every entry follows.
@@ -64,14 +65,19 @@ pub const DISCHARGE_SUMMARY: &str = "18842-5";
 
 /// The LOINC codes of a medical imaging document, the codes of the
 /// `eehrxf-document-type-medical-imaging-vs` value set, in its order.
-pub const IMAGING_DOCUMENTS: [&str; 2] = ["85430-7", "18748-4"];
+pub const IMAGING_DOCUMENTS: [&str; 2] = [IMAGING_REPORT, "18748-4"];
+
+/// The LOINC code of a diagnostic imaging report, the first code of the
+/// `eehrxf-document-type-medical-imaging-vs` value set, the type an imaging
+/// report the gateway writes is listed under.
+pub const IMAGING_REPORT: &str = "85430-7";
 
 /// The canonical URL of the document `Bundle` profile the gateway's own
 /// summary follows.
 pub const EPS_BUNDLE: &str = "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps";
 
 /// The system of an identifier that is a URI (FHIR R4 `identifier-registry`).
-const URI_SYSTEM: &str = "urn:ietf:rfc:3986";
+pub(super) const URI_SYSTEM: &str = "urn:ietf:rfc:3986";
 
 /// The `_format` values that ask for FHIR JSON.
 const JSON_FORMATS: [&str; 3] = ["json", "application/json", FHIR_JSON];
@@ -322,67 +328,17 @@ pub fn native(
     )
 }
 
-/// Returns the entry of a report of the category `written` the gateway
-/// writes on read.
-///
-/// The entry has the logical id `id` and the unique id `unique`, a
-/// `urn:uuid:` URN, and names the report of a composition of the member
-/// `custodian` at `url`, a URL the gateway signs relative to the FHIR base.
-///
-/// The document is in the category's `Bundle` profile
-/// ([`Written::bundle`]): an HL7 Europe Laboratory Report 2.0.0
-/// `Bundle-eu-lab` of the `eehrxf-document-type-laboratory-report-vs` type,
-/// or an HL7 Europe Hospital Discharge Report 1.0.0 `bundle-eu-hdr` of the
-/// `eehrxf-document-type-discharge-report-vs` type, named by the identifier
-/// its `Bundle.identifier` carries when it is read.
-#[must_use]
-pub fn written(
-    written: Written,
-    (id, unique): (&str, &str),
-    listing: Listing<'_>,
-    custodian: &Organisation,
-    url: &str,
-) -> DocumentReference {
-    let (kind, title) = match written {
-        Written::Discharge => (
-            DISCHARGE,
-            "Discharge report written by the gateway from the member's record",
-        ),
-        Written::Laboratory => (
-            LABORATORY,
-            "Laboratory report written by the gateway from the member's record",
-        ),
-    };
-    let attachment = Attachment {
-        content_type: Some(FHIR_JSON.into()),
-        url: Some(url.into()),
-        title: Some(title.into()),
-        ..Attachment::default()
-    };
-    let format = Coding {
-        system: Some(URI_SYSTEM.into()),
-        code: Some(written.bundle().into()),
-        ..Coding::default()
-    };
-    entry(
-        (id, (URI_SYSTEM, unique)),
-        (kind, listing),
-        custodian,
-        (attachment, Some(format)),
-    )
-}
-
 /// The document type and the priority category an entry names.
 #[derive(Debug, Clone, Copy)]
-struct Kind {
+pub(super) struct Kind {
     /// The LOINC code of the type.
-    code: &'static str,
+    pub(super) code: &'static str,
     /// Its display.
-    display: &'static str,
+    pub(super) display: &'static str,
     /// The priority category's code.
-    category: &'static str,
+    pub(super) category: &'static str,
     /// Its display.
-    category_display: &'static str,
+    pub(super) category_display: &'static str,
 }
 
 /// A patient summary.
@@ -393,27 +349,9 @@ const SUMMARY: Kind = Kind {
     category_display: "patient summaries",
 };
 
-/// A laboratory report.
-const LABORATORY: Kind = Kind {
-    code: LABORATORY_REPORT,
-    display: "Laboratory report",
-    category: "Laboratory-Reports",
-    category_display: "medical test results, including laboratory and other diagnostic results and related reports",
-};
-
-/// A discharge report, the `Discharge summary` code of the
-/// `eehrxf-document-type-discharge-report-vs` value set; the `34105-7`
-/// `composition-eu-hdr` fixes is not in it.
-const DISCHARGE: Kind = Kind {
-    code: DISCHARGE_SUMMARY,
-    display: "Discharge summary",
-    category: "Discharge-Reports",
-    category_display: "discharge reports",
-};
-
 /// The entry with the logical id `id` and the master identifier
 /// `system`|`value`, of the content `attachment` in the format `format`.
-fn entry(
+pub(super) fn entry(
     (id, (system, value)): (&str, (&str, &str)),
     (kind, listing): (Kind, Listing<'_>),
     custodian: &Organisation,
