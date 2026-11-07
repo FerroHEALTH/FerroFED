@@ -332,10 +332,10 @@ impl Report {
             None => Err(SourceError::NotServed(
                 "metrics.listen is not set, so no admin listener serves the metrics",
             )),
-            // NOTE: no specification governs this: our own design; a scrape user's password
-            // is held by the scraper alone, the configuration holds its hash, so none is sent.
-            Some(_) if !settings.metrics.scrape_users.is_empty() => Err(SourceError::NotServed(
-                "metrics.scrape_users asks a scrape for a Basic password the configuration does not hold",
+            // NOTE: no specification governs this: our own design; a scrape client's token
+            // is the scraper's own, which the configuration does not hold, so none is sent.
+            Some(_) if !settings.metrics.scrape_clients.is_empty() => Err(SourceError::NotServed(
+                "metrics.scrape_clients asks a scrape for a client-credentials token the configuration does not hold",
             )),
             Some(listen) => {
                 match Listener::new(listen, settings.metrics.tls.as_ref(), PROBE_TIMEOUT) {

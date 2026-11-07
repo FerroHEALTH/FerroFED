@@ -62,7 +62,7 @@ destinations. Create the Secrets the manifests name, then apply:
 ```sh
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out signing-key.pem
 kubectl -n ferrofed create secret generic ferrofed-secrets \
-  --from-file=signing-key.pem --from-file=metrics-scrape-hash
+  --from-file=signing-key.pem
 kubectl -n ferrofed create secret generic ferrofed-console-secrets \
   --from-file=client-secret=./console-client-secret
 kubectl apply -k my-overlay/
@@ -87,7 +87,7 @@ the `digest` of the image you verified
 | `console` | the operator console: a Deployment of one replica (its sessions live in its memory), its ConfigMap, its Service and a NetworkPolicy that admits the reverse proxy alone. It reaches the gateway's Service, and each replica's admin listener at `ferrofed-0.ferrofed-admin` and so on, for the configuration page |
 | `ingress`, `console-ingress` | an Ingress for the gateway and for the console, over TLS |
 | `gateway-api`, `console-route` | a Gateway API `HTTPRoute` for each, behind a Gateway whose HTTPS listener terminates TLS; use these or the Ingresses |
-| `service-monitor` | a Prometheus Operator `ServiceMonitor` that scrapes each replica's admin listener through the headless Service, with the scrape user's Basic credentials from the `ferrofed-scrape` Secret ([Metrics](metrics.md)) |
+| `service-monitor` | a Prometheus Operator `ServiceMonitor` that scrapes each replica's admin listener through the headless Service, with a client-credentials token of the scrape client, its secret from the `ferrofed-scrape` Secret ([Metrics](metrics.md)) |
 | `egress` | an egress NetworkPolicy: DNS, and the destinations you list |
 
 Behind either proxy, list the proxy's addresses in `server.trusted_proxies`

@@ -306,7 +306,7 @@ async fn a_merge_the_registry_sends_drops_the_merged_bindings() -> TestResult {
         gateway.bound()?,
         "an unauthenticated feed changes nothing"
     );
-    let applied = registry.send(&merge, Some(&feed_credentials())).await?;
+    let applied = registry.send(&merge, Some(&feed_credentials()?)).await?;
     assert_eq!(
         vec![StatusCode::OK],
         applied

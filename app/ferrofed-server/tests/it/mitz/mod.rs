@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use ferrofed_server::config::Config;
-use ferrofed_server::config::auth::requester::RequesterClaims;
+use ferrofed_server::config::auth::AuthSettings;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use http::StatusCode;
@@ -50,13 +50,17 @@ const PREFILTER_CALLS: &str = "ferrofed_consent_prefilter_requests_total";
 const URA_A: &str = "ura-test-0001";
 pub(crate) const URA_B: &str = "ura-test-0002";
 
-/// The names of the token claims the test issuer's
-/// `[trust.issuer.requester]` maps; configured, since no bound specification
+/// The names of the token claims the test issuer's `[[auth.federation]]`
+/// table reads the requester from; configured, since no bound specification
 /// names them.
 const PROFESSIONAL_CLAIM: &str = "test_uzi_number";
 const ROLE_CLAIM: &str = "test_uzi_role";
 const ORGANISATION_CLAIM: &str = "test_ura";
 const ORGANISATION_TYPE_CLAIM: &str = "test_organisation_type";
+
+/// The authentication context class every federation test token states,
+/// which the issuer's assurance table reads as level substantial.
+const ACR: &str = "urn:example:loa:substantial";
 
 /// The default caller: a synthetic professional number and role.
 pub(crate) const CALLER: (&str, &str) = ("professional0001", "01.015");
@@ -76,19 +80,53 @@ pub(crate) fn holders() -> String {
     )
 }
 
-/// The requester claims the test issuer's tokens carry.
-pub(crate) fn requester_claims() -> RequesterClaims {
-    RequesterClaims {
-        professional: PROFESSIONAL_CLAIM.to_owned(),
-        role: ROLE_CLAIM.to_owned(),
-        organisation: ORGANISATION_CLAIM.to_owned(),
-        organisation_type: ORGANISATION_TYPE_CLAIM.to_owned(),
-    }
+/// The domestic `federation` issuer the requester's tokens come from, which
+/// signs with the test issuer's key.
+pub(crate) const FEDERATION: &str = "https://federation.issuer.example.test";
+
+/// The suite's `[auth]` with a second issuer, [`FEDERATION`], a domestic
+/// `federation` issuer: an IUA mapping with the professional's country and
+/// issuing authority as constants, an assurance table, and the requester's
+/// four NL fields read from the claims named above.
+pub(crate) fn federation_toml() -> String {
+    let jwks = toml::Value::String(crate::support::caller::jwks_file().display().to_string());
+    format!(
+        "{persons}\n[[auth.issuer]]\nissuer = \"{issuer}\"\nkind = \"federation\"\naudience = [\"{audience}\"]\njwks_file = {jwks}\n\n[auth.issuer.assurance]\nlevels = {{ \"{ACR}\" = \"substantial\" }}\n\n[[auth.federation]]\nissuer = \"{issuer}\"\ncontact_point = false\nmapping = \"iua\"\ncountries = [\"NL\"]\nissuing_authorities = [\"CIBG\"]\nprovider_identifier_prefixes = [\"ura-test-\"]\n\n[auth.federation.fields]\n\"professional.country_code\" = [{{ constant = \"NL\" }}]\n\"professional.issuing_authority_name\" = [{{ constant = \"CIBG\" }}]\n\"nl.professional_number\" = [{{ claim = \"{PROFESSIONAL_CLAIM}\" }}]\n\"nl.role\" = [{{ claim = \"{ROLE_CLAIM}\" }}]\n\"nl.ura\" = [{{ claim = \"{ORGANISATION_CLAIM}\" }}]\n\"nl.organisation_type\" = [{{ claim = \"{ORGANISATION_TYPE_CLAIM}\" }}]\n",
+        persons = crate::support::caller::auth_toml(),
+        issuer = FEDERATION,
+        audience = crate::support::caller::AUDIENCE,
+    )
+}
+
+/// The `[auth]` [`federation_toml`] resolves to.
+pub(crate) fn federation_auth() -> Result<AuthSettings, Box<dyn Error>> {
+    let settings = Config::from_sources(Some(&federation_toml()), &BTreeMap::new())?.resolve()?;
+    Ok(settings.server.auth)
+}
+
+/// `claims`, a token of [`FEDERATION`] that the `iua` mapping reads as a
+/// professional of another domestic party: a name, a role, an identifier
+/// and an organisation, at level substantial.
+pub(crate) fn as_external_professional(claims: &mut ferrofed_testkit::issuer::Claims) {
+    FEDERATION.clone_into(&mut claims.iss);
+    let mut extensions = claims
+        .extensions
+        .take()
+        .unwrap_or_else(ferrofed_testkit::issuer::Extensions::treatment);
+    extensions.ihe_iua.subject_name = Some(String::from("Synthetic Professional"));
+    extensions.ihe_iua.national_provider_identifier = Some(String::from("hp-test-0001"));
+    extensions.ihe_iua.subject_organization_id = Some(String::from("ura-test-0100"));
+    extensions.ihe_iua.subject_role = vec![ferrofed_testkit::issuer::Coding {
+        system: String::from("urn:oid:2.999.4.15.111"),
+        code: String::from("01.015"),
+    }];
+    claims.extensions = Some(extensions);
+    claims.other.insert(String::from("acr"), ACR.to_owned());
 }
 
 /// The development gateway over node A and node B, resolving the patient at
-/// both, with the Mitz pre-filter asking `mitz`, and the test issuer's
-/// tokens naming their requester in [`requester_claims`].
+/// both, with the Mitz pre-filter asking `mitz`, and the test issuer a
+/// domestic `federation` issuer ([`federation_toml`]).
 fn gateway_over(dir: &Path, nodes: (&str, &str), mitz: &str) -> Result<Router, Box<dyn Error>> {
     Ok(metered_over(dir, nodes, mitz)?.0)
 }
@@ -121,19 +159,19 @@ fn metered_with(
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
     let mut server = crate::facade::settings_with_room();
-    for issuer in &mut server.auth.issuers {
-        issuer.requester = Some(requester_claims());
-    }
+    server.auth = federation_auth()?;
     let state = Arc::new(AppState::with_federation(federation));
     Ok((ferrofed_server::router(Arc::clone(&state), &server), state))
 }
 
-/// `claims`, naming the professional and role `(professional, role)` of a
-/// synthetic organisation in [`requester_claims`].
+/// `claims`, an external professional's ([`as_external_professional`])
+/// naming the professional and role `(professional, role)` of a synthetic
+/// organisation in the claims [`federation_toml`] reads the requester from.
 pub(crate) fn naming_requester(
     claims: &mut ferrofed_testkit::issuer::Claims,
     (professional, role): (&str, &str),
 ) {
+    as_external_professional(claims);
     for (name, value) in [
         (PROFESSIONAL_CLAIM, professional),
         (ROLE_CLAIM, role),
@@ -148,6 +186,7 @@ pub(crate) fn naming_requester(
 /// and role `asking`, or no requester at all.
 fn bearer_for(asking: Option<(&str, &str)>) -> Result<String, Box<dyn Error>> {
     let mut claims = crate::support::caller::claims();
+    as_external_professional(&mut claims);
     if let Some(asking) = asking {
         naming_requester(&mut claims, asking);
     }

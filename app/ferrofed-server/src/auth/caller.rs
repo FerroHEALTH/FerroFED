@@ -28,8 +28,9 @@
 
 use std::fmt;
 
-use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
+use ferrofed_engine::conveyance::caller::Acting;
 use ferrofed_engine::conveyance::relayed::{Relayed, Role};
+use ferrohealth_smart::assurance::AssuranceLevel;
 
 use crate::auth::contact_point::TrcPatient;
 use ferrofed_identity::role::behalf::{self, OnBehalfOf};
@@ -81,15 +82,15 @@ pub struct Caller {
     /// The patient the caller's grant is confined to, when only a
     /// `patient/` grant covers the operation.
     patient: Option<PatientContext>,
-    /// Who asks for the data, as the claims the issuer's
-    /// `[trust.issuer.requester]` names state it, when the token carries them
-    /// all (§13.4).
+    /// Who asks for the data, as the `[[auth.federation]]` field sources of
+    /// a professional of another party state it, when they state it whole
+    /// (§13.4).
     requester: Option<Requester>,
     /// The professional's identification the token states.
     professional: Professional,
-    /// The assurance level the caller's authentication reached, as its
-    /// issuer's `[trust.issuer.assurance]` reads the token, when the issuer
-    /// declares one and the token carries a value it declares.
+    /// The assurance level the caller's authentication reached, as
+    /// `ferrohealth-smart` assessed it under the issuer's
+    /// `[auth.issuer.assurance]`, when the token carries a value it maps.
     assurance: Option<AssuranceLevel>,
     /// Who acts: the person the token names, or a client application.
     acting: Acting,
@@ -414,14 +415,6 @@ impl Caller {
     #[must_use]
     pub fn representative(&self) -> Option<&Actor> {
         self.representative.as_ref()
-    }
-
-    /// Returns whether the token names the professional a client acts for:
-    /// an IUA `national_provider_identifier`, or the professional of the
-    /// requester its issuer's `[trust.issuer.requester]` reads.
-    #[must_use]
-    pub fn names_professional(&self) -> bool {
-        self.professional.identifier.is_some() || self.requester.is_some()
     }
 
     /// Returns this caller, admitted under `audience`, the audience their

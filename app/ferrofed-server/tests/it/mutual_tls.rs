@@ -33,7 +33,6 @@ use url::Url;
 use crate::facade::{Answer, body, gateway_within, node_answering, post, registry, statuses};
 use crate::pdqm::{ASK_ALL, gateway, local_query, manager, supplier};
 use crate::support::call;
-use crate::support::caller::SCRAPE_HASH;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -233,7 +232,8 @@ fn a_tls_file_that_cannot_be_read_is_refused_naming_its_key() -> TestResult {
         ),
         (
             format!(
-                "[[auth.basic.users]]\nuser = \"pmir-registry\"\npassword_hash = \"{SCRAPE_HASH}\"\n\n[registry]\ndocument = \"registry.toml\"\n\n[pmir]\nurl = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_users = [\"pmir-registry\"]\n{missing}"
+                "{}\n[registry]\ndocument = \"registry.toml\"\n\n[pmir]\nurl = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_clients = [\"pmir-registry\"]\n{missing}",
+                crate::support::caller::auth_toml()
             ),
             "pmir.trust_roots_file",
         ),

@@ -7,8 +7,7 @@
 //! One `[[trust.issuer]]` entry per issuer says what its tokens are honoured
 //! for beyond their `user/` and `system/` grants: the backend clients whose
 //! `system/aql-*` grant counts, the clients admitted to the DEMOGRAPHIC API,
-//! the member its `patient/` grants are bound to, the claims of the
-//! requester, the assurance and the professional. Each entry names an `[[auth.issuer]]`, which says
+//! the member its `patient/` grants are bound to and the professional. Each entry names an `[[auth.issuer]]`, which says
 //! how its tokens are verified. `mode = "edge"` with `[trust.edge]` reads the
 //! credential from the header a trusted proxy signs its assertion in, and
 //! `[trust.purpose_of_use]` sets the §13.4 rule. No specification governs
@@ -22,8 +21,6 @@ use http::HeaderName;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 
-use crate::config::auth::assurance::AssuranceClaims;
-use crate::config::auth::requester::RequesterClaims;
 use crate::config::auth::{
     AuthFault, AuthMode, IssuerSettings, PatientBinding, Verification, fault,
 };
@@ -99,20 +96,15 @@ pub struct TrustedIssuer {
     /// (`[trust.issuer.patient]`); absent by default, and then a `patient/`
     /// grant of this issuer admits nothing.
     pub patient: Option<PatientIssuer>,
-    /// The claims of this issuer's tokens that name who asks for the data
-    /// (`[trust.issuer.requester]`), which the consent pre-filter asks Mitz
-    /// about; absent by default, and then no caller of this issuer names a
-    /// requester.
-    pub requester: Option<RequesterClaims>,
-    /// The claim and the values that carry the authentication assurance of
-    /// this issuer's tokens, and the least level a patient-data request
-    /// needs (`[trust.issuer.assurance]`); absent by default, and then no
-    /// level is read or required.
-    pub assurance: Option<AssuranceClaims>,
-    /// Whether this issuer's client tokens, which name no natural person,
-    /// act for the professional they name; `false` by default, and then such
-    /// a token reaches no patient data.
-    pub client_tokens_act_for_professional: bool,
+    /// The removed `[trust.issuer.requester]`, refused by name
+    /// ([`AuthFault::RequesterMoved`]).
+    pub requester: Option<Removed>,
+    /// The removed `[trust.issuer.assurance]`, refused by name
+    /// ([`AuthFault::AssuranceMoved`]).
+    pub assurance: Option<Removed>,
+    /// The removed `client_tokens_act_for_professional`, refused by name
+    /// ([`AuthFault::ActsForRemoved`]).
+    pub client_tokens_act_for_professional: Option<Removed>,
     /// The name of the string claim of this issuer's tokens that carries
     /// the name of the agency that issued the professional's
     /// `national_provider_identifier`, the `issuing_authority_name` of
@@ -263,14 +255,19 @@ fn policy(
         .as_ref()
         .map(|patient| resolve_patient(&format!("{key}.patient"), patient))
         .transpose()?;
-    if let Some(requester) = &written.requester {
-        requester.check(&format!("{key}.requester"))?;
+    for (removed, name, refusal) in [
+        (written.requester, "requester", AuthFault::RequesterMoved),
+        (written.assurance, "assurance", AuthFault::AssuranceMoved),
+        (
+            written.client_tokens_act_for_professional,
+            "client_tokens_act_for_professional",
+            AuthFault::ActsForRemoved,
+        ),
+    ] {
+        if removed.is_some() {
+            return Err(fault(&format!("{key}.{name}"), refusal));
+        }
     }
-    let assurance = written
-        .assurance
-        .as_ref()
-        .map(|assurance| assurance.resolve(&format!("{key}.assurance")))
-        .transpose()?;
     let professional_issuing_authority = claim_name(
         &format!("{key}.professional_issuing_authority"),
         written.professional_issuing_authority.as_ref(),
@@ -285,9 +282,6 @@ fn policy(
         backend_clients: written.backend_clients.iter().cloned().collect(),
         demographic_clients: written.demographic_clients.iter().cloned().collect(),
         patient,
-        requester: written.requester.clone(),
-        assurance,
-        client_tokens_act_for_professional: written.client_tokens_act_for_professional,
         professional_issuing_authority,
         ..IssuerSettings::new(written.issuer.clone(), verification)
     })

@@ -46,8 +46,8 @@ pub(super) fn config_checked(
     }
     let surface = &settings.metrics;
     if let Some(address) = surface.listen.filter(|address| !address.ip().is_loopback()) {
-        let scrape = if !surface.scrape_users.is_empty() {
-            "a scrape that authenticates as a metrics.scrape_users user with HTTP Basic"
+        let scrape = if !surface.scrape_clients.is_empty() {
+            "a scrape whose client-credentials token names a metrics.scrape_clients client"
         } else if surface
             .tls
             .as_ref()

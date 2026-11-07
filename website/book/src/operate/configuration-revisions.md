@@ -70,7 +70,7 @@ outside the core is written as its `_file` reference, such as
 revision, that writes one inline (`password`, `client_identity`,
 `client_secret`, `assertion`, `store.url`, or a URL that carries a
 password). The refusal names the key, never the value. A secret inside the
-core, such as an `[[auth.basic.users]]` `password_hash`, may stay inline, since the core is never stored.
+core, such as a signing key's file path, may stay inline, since the core is never stored.
 Comments are not kept: a revision is stored as TOML writes it.
 
 Each revision records its number, the revision it was based on, where it

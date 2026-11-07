@@ -12,7 +12,7 @@
 //! url = "https://pmir.example.org/fhir"
 //! callback_url = "https://gateway.example.org/pmir/feed"
 //! path = "/pmir/feed"
-//! feed_users = ["pmir-registry"]
+//! feed_clients = ["pmir-registry"]
 //! identifier_system = "urn:oid:2.999.1"
 //! on_drain = "keep"
 //!
@@ -26,9 +26,9 @@
 //! `client_identity_file` and `trust_roots_file` give the mutual TLS the
 //! Registry asks for, as `[xcpd]` does ([`tls`](crate::config::tls)).
 //!
-//! The Registry sends the feed with HTTP Basic credentials (RFC 7617) of a
-//! user `feed_users` names from `[[auth.basic.users]]`, agreed with its
-//! operator out of band: the subscription carries no credential for the feed
+//! The Registry sends the feed with a client-credentials token (RFC 6749
+//! §4.4) of a client `feed_clients` names, issued by an `[[auth.issuer]]` the
+//! gateway trusts and agreed with its operator out of band: the subscription carries no credential for the feed
 //! (§2:3.94.5), and ITI-93 leaves the client authentication to "an
 //! appropriate agreement between client and server" (§2:3.93.5). Both the
 //! Registry's `url` and the `callback_url` carry patient identifiers, so each
@@ -45,7 +45,6 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::ITS_REST_PREFIX;
-use crate::config::auth::BasicUsers;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::public_url::PublicUrl;
@@ -81,9 +80,9 @@ pub struct Pmir {
     pub callback_url: String,
     /// The path under `{base}` the gateway serves the feed at.
     pub path: String,
-    /// The `[[auth.basic.users]]` users the Registry may send the feed as,
-    /// with HTTP Basic credentials (RFC 7617).
-    pub feed_users: Vec<String>,
+    /// The clients the Registry may send the feed as, each with a
+    /// client-credentials token of an `[[auth.issuer]]` (RFC 6749 §4.4).
+    pub feed_clients: Vec<String>,
     /// The assigning authority the feed is limited to, so the Registry sends
     /// only the Patients with an identifier it issued
     /// (`Patient?identifier=<system>|`, §2:3.94.4.1.2.1.1). Unset, every
@@ -131,7 +130,7 @@ impl Default for Pmir {
             trust_roots_file: None,
             callback_url: String::new(),
             path: String::from("/pmir/feed"),
-            feed_users: Vec::new(),
+            feed_clients: Vec::new(),
             identifier_system: None,
             timeout_ms: 5_000,
             check_interval_s: 60,
@@ -154,8 +153,8 @@ pub struct PmirSettings {
     pub callback_url: Url,
     /// The path under `{base}` the feed is served at.
     pub path: String,
-    /// The `[[auth.basic.users]]` users the Registry may send the feed as.
-    pub feed_users: Vec<String>,
+    /// The clients the Registry may send the feed as.
+    pub feed_clients: Vec<String>,
     /// The assigning authority the feed is limited to.
     pub identifier_system: Option<String>,
     /// How long one exchange with the Registry may take.
@@ -181,7 +180,7 @@ impl PmirSettings {
             && self.tls == other.tls
             && self.callback_url == other.callback_url
             && self.path == other.path
-            && self.feed_users == other.feed_users
+            && self.feed_clients == other.feed_clients
             && self.identifier_system == other.identifier_system
             && self.timeout == other.timeout
             && self.check_interval == other.check_interval
@@ -261,7 +260,7 @@ pub(crate) fn resolve(
     config: &Config,
     context: ServiceContext,
     public: Option<&PublicUrl>,
-    basic: Option<&BasicUsers>,
+    issuers: bool,
 ) -> Result<Option<PmirSettings>, Error> {
     let Some(pmir) = &config.pmir else {
         return Ok(None);
@@ -297,19 +296,13 @@ pub(crate) fn resolve(
     if let Some(public) = public {
         public.agrees(CALLBACK_URL, &callback_url, &path)?;
     }
-    if pmir.feed_users.is_empty() {
+    if pmir.feed_clients.is_empty() {
         return Err(Error::Missing {
-            key: String::from("pmir.feed_users"),
+            key: String::from("pmir.feed_clients"),
         });
     }
-    if let Some(user) = pmir
-        .feed_users
-        .iter()
-        .find(|user| !basic.is_some_and(|basic| basic.names(user.as_str())))
-    {
-        return Err(Error::Binding(BindingFault::FeedUser {
-            user: user.clone(),
-        }));
+    if !issuers {
+        return Err(Error::Binding(BindingFault::FeedIssuer));
     }
     let section = String::from("pmir.credentials");
     let credentials = pmir
@@ -335,7 +328,7 @@ pub(crate) fn resolve(
         tls,
         callback_url,
         path,
-        feed_users: pmir.feed_users.clone(),
+        feed_clients: pmir.feed_clients.clone(),
         identifier_system: pmir.identifier_system.clone(),
         timeout: positive("pmir.timeout_ms", Duration::from_millis(pmir.timeout_ms))?,
         check_interval: positive(

@@ -113,6 +113,15 @@ clock_skew_seconds = 60
 # [trust.purpose_of_use]
 # required = true
 
+# The claim, the level of each of its values and the least level patient
+# data needs; without it, no level is read or required, and config check
+# notes it.
+# https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
+# [auth.issuer.assurance]
+# claim = "acr"
+# minimum = "substantial"
+# levels = { "urn:example:loa:substantial" = "substantial", "urn:example:loa:high" = "high" }
+
 # What the issuer's tokens are honoured for beyond their user/ and system/
 # grants.
 [[trust.issuer]]
@@ -121,9 +130,6 @@ issuer = "https://idp.example.org"
 # backend_clients = ["example-reporting-service"]
 # The client_ids admitted to the DEMOGRAPHIC API.
 # demographic_clients = []
-# Whether its client tokens, which name no natural person, act for the
-# professional they name, and so reach patient data.
-# client_tokens_act_for_professional = false
 # The string claim that carries the agency that issued the professional's
 # national_provider_identifier, which each node is told.
 # professional_issuing_authority = "hp_issuing_authority"
@@ -138,16 +144,6 @@ issuer = "https://idp.example.org"
 # Whether the RFC 8693 act claim of these tokens names the patient's
 # representative (Regulation (EU) 2025/327 Art 4(2)).
 # act_is_representative = false
-#
-# The claim and the values that carry the authentication assurance of its
-# tokens, and the least level patient data needs; without it, no level is
-# read or required, and config check notes it.
-# https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
-# [trust.issuer.assurance]
-# claim = "acr"
-# minimum = "substantial"
-# substantial = ["urn:example:loa:substantial"]
-# high = ["urn:example:loa:high"]
 
 # Or an issuer whose opaque tokens are verified by RFC 7662 introspection, in
 # place of its key set; one issuer at most is introspected:
@@ -232,14 +228,15 @@ spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
 
 # Optionally, hear of identity merges as they happen: subscribe at your IHE
-# PMIR Patient Identity Registry, which sends each change to callback_url as
-# a Basic user of its own whose password you agree with its operator. A merge
+# PMIR Patient Identity Registry, which sends each change to callback_url
+# with a client-credentials token of its own client, agreed with its
+# operator. A merge
 # drops the resolution bindings it could have made stale.
 # https://ferrofed.eu/docs/operate/identity.html#the-identity-feed-pmir
 # [pmir]
 # url = "https://pmir.example.org/fhir"                    # EDIT
 # callback_url = "https://gateway.example.org/pmir/feed"   # EDIT
-# feed_users = ["pmir-registry"]
+# feed_clients = ["pmir-registry"]   # EDIT: the Registry's client at an [[auth.issuer]]
 #
 # [pmir.credentials.oauth]
 # token_endpoint = "https://pmir.example.org/auth/token"   # EDIT
@@ -247,10 +244,6 @@ spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # client_auth = "client_secret_basic"
 # client_secret_file = "/run/secrets/ferrofed/pmir-subscriber-secret"
 # scope = "*"
-#
-# [[auth.basic.users]]
-# user = "pmir-registry"
-# password_hash_file = "/run/secrets/ferrofed/pmir-registry-hash"   # its Argon2id PHC string
 
 # EDIT: the credentials the gateway sends each endpoint of registry.toml, one
 # section per endpoint id: the OAuth 2.0 client credentials grant, the

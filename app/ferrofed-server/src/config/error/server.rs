@@ -77,19 +77,18 @@ pub enum ServerFault {
     /// the development profile, and neither a Basic user nor a client CA
     /// authenticates the scrape there.
     #[error(
-        "metrics.listen is {address}, which is not a loopback address, and nothing authenticates GET /metrics there: name an [[auth.basic.users]] user in metrics.scrape_users, or set metrics.tls.client_auth = \"required\" with a metrics.tls.client_ca_file for mutual TLS, or keep the listener on loopback"
+        "metrics.listen is {address}, which is not a loopback address, and nothing authenticates GET /metrics there: name a client in metrics.scrape_clients, or set metrics.tls.client_auth = \"required\" with a metrics.tls.client_ca_file for mutual TLS, or keep the listener on loopback"
     )]
     MetricsUnauthenticated {
         /// The address `metrics.listen` names.
         address: std::net::SocketAddr,
     },
-    /// `metrics.scrape_users` names a user `[[auth.basic.users]]` does not
-    /// write.
-    #[error("metrics.scrape_users names {user:?}, which no [[auth.basic.users]] entry writes")]
-    ScrapeUser {
-        /// The user named.
-        user: String,
-    },
+    /// `metrics.scrape_clients` names clients and `[auth]` trusts no issuer
+    /// to sign their tokens.
+    #[error(
+        "metrics.scrape_clients names the scraper's clients, and [auth] trusts no [[auth.issuer]] to sign their client-credentials tokens"
+    )]
+    ScrapeIssuer,
     /// `metrics.listen` names the address `server.listen` binds, at a port
     /// other than 0.
     #[error("metrics.listen is {address}, the address server.listen binds; give it its own")]

@@ -106,14 +106,14 @@ list after it:
 [federation.consent]
 disclose = false               # Art 8: a restriction is never shown to a provider
 
-[[trust.issuer]]               # the issuer of the production guide's step 4
+[[auth.issuer]]                # the issuer of the production guide's step 4
 issuer = "https://idp.example.org/realms/ferrofed"
+kind = "persons"
 
-[trust.issuer.assurance]
+[auth.issuer.assurance]
 claim = "acr"
 minimum = "substantial"        # Annex II 3.1; "high" for cross-border from 26 March 2032
-substantial = ["urn:example:loa:substantial"]
-high = ["urn:example:loa:high"]
+levels = { "urn:example:loa:substantial" = "substantial", "urn:example:loa:high" = "high" }
 
 [audit]
 destination = "repository"     # the access records of Annex II 3.2
@@ -134,7 +134,7 @@ years = 3                      # Art 9(2): at least three years from each access
   ([Withholding consent exclusions](consent-exclusions.md)).
 - **The assurance level, per issuer.** Annex II, point 3.1, asks for
   "reliable mechanisms for the identification and authentication of health
-  professionals". Set `[trust.issuer.assurance]` for every issuer whose
+  professionals". Set `[auth.issuer.assurance]` for every issuer whose
   tokens reach patient data, with `minimum = "substantial"`; Implementing
   Regulation (EU) 2026/2099 Art 6(3) raises a cross-border exchange to
   `"high"` from 26 March 2032. List the values your issuer writes; no
@@ -287,7 +287,7 @@ event, and its frequency is the event's:
 | Watch the alerts | continuously, on the shipped alert rules | [Dashboard and alert rules](metrics.md#dashboard-and-alert-rules) |
 | Clear a quarantined audit record | when `ferrofed_audit_quarantined` rises, after reading why the repository refused it | [The audit spool](hardening.md#the-audit-spool) |
 | Rotate the signing key | on your key policy's schedule, and at once when it may have leaked | [Rotating the signing key](onward-credentials.md#rotating-the-signing-key) |
-| Rotate an HTTP Basic user's password | on your credential policy's schedule, and at once when it may have leaked: write the new Argon2id PHC string to the user's `password_hash_file` and give the Prometheus scraper or the PMIR Registry its new password | [`auth.basic.users`](authentication.md#configuration), [Who the admin listener serves](metrics.md#who-the-admin-listener-serves) |
+| Rotate a machine client's secret | on your credential policy's schedule, and at once when it may have leaked: rotate the client secret of the Prometheus scraper or the PMIR Registry at its issuer and give it the new one | [`metrics.scrape_clients`](metrics.md#who-the-admin-listener-serves), [`pmir.feed_clients`](identity.md#the-identity-feed-pmir) |
 | Renew TLS certificates and onward credentials | before each expires; send `SIGHUP` after replacing a listener's certificate files, or set the listener's `reload_interval_s` so the gateway reads them again on that period | [Hardening](hardening.md#tls), [TLS on the listeners](configuration.md#tls-on-the-listeners) |
 | Clear a held `ehr_id` collision | once the member at fault has fixed it, on each replica that holds it | [Clearing a held collision](registry.md#clearing-a-held-collision) |
 | Move to the newest release | when a new release is published, because an earlier release receives no fix; once the end date of your release in `SECURITY.md` has passed, the startup banner and `config check` say so as well | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions), [The startup banner](configuration.md#the-startup-banner) |
@@ -357,7 +357,7 @@ deployment in the EU must plan for are:
 - **The access record names the professional only as the token does.** It
   records the professional's identifier and the assurance level when your
   issuer's tokens state them, and an assurance level only for an issuer
-  with `[trust.issuer.assurance]`
+  with `[auth.issuer.assurance]`
   ([The person behind an access](access-log.md#the-person-behind-an-access)).
 - **A received document is checked only as far as the validator can
   evaluate it.** Every invariant, binding and entry profile is evaluated,

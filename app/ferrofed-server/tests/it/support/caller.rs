@@ -194,18 +194,47 @@ pub(crate) fn issuer_toml(issuer: &Issuer) -> Result<String, Box<dyn StdError>> 
     ))
 }
 
-/// The Basic user a scrape of the admin listener authenticates as.
-pub(crate) const SCRAPE_USER: &str = "synthetic-scraper";
+/// Sets the assurance table of every issuer of `auth`, as
+/// `[auth.issuer.assurance]` would: `acr` read at the `levels` given, with
+/// `minimum` the least level a patient-data request needs.
+pub(crate) fn assuring(
+    auth: &mut AuthSettings,
+    minimum: ferrohealth_smart::assurance::AssuranceLevel,
+    levels: &[(&str, ferrohealth_smart::assurance::AssuranceLevel)],
+) {
+    let section = ferrohealth_smart::assurance::AssuranceSection {
+        claim: String::from("acr"),
+        levels: levels
+            .iter()
+            .map(|(value, level)| ((*value).to_owned(), *level))
+            .collect(),
+        minimum: Some(minimum),
+    };
+    for issuer in &mut auth.issuers {
+        match &mut issuer.verification {
+            Verification::KeySet(settings) => settings.assurance = Some(section.clone()),
+            Verification::Introspection(settings) => settings.assurance = Some(section.clone()),
+            _ => {}
+        }
+    }
+}
 
-/// The synthetic password of [`SCRAPE_USER`].
-pub(crate) const SCRAPE_PASSWORD: &str = "synthetic-scrape-password";
+/// The client a scrape of the admin listener authenticates as.
+pub(crate) const SCRAPE_CLIENT: &str = "synthetic-scraper";
 
-/// The Argon2id PHC string of [`SCRAPE_PASSWORD`], under a fixed synthetic
-/// salt.
-pub(crate) const SCRAPE_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$c3ludGhldGljLXNhbHQtMTY$4es9c3W3V1fKeaFNam0B7dB/9kjZXP6/+9VB3yhq8ZA";
+/// Returns the `Authorization` value of `client`'s client-credentials token
+/// from the test issuer: its `sub` the client itself, which the `rfc9068`
+/// profile reads as a token with no person behind it (RFC 9068 §2.2).
+pub(crate) fn machine_bearer(client: &str) -> Result<String, IssuerError> {
+    let mut claims = claims();
+    client.clone_into(&mut claims.sub);
+    client.clone_into(&mut claims.client_id);
+    claims.scope = Some(String::from("system/aql-*.s"));
+    Ok(format!("Bearer {}", issuer().mint(&claims)?))
+}
 
 /// Returns the `Authorization` value of `user` with `password` in the
-/// Basic scheme (RFC 7617 §2).
+/// Basic scheme (RFC 7617 §2), which no lane of the gateway admits.
 pub(crate) fn basic(user: &str, password: &str) -> String {
     use base64::Engine as _;
     format!(
@@ -214,36 +243,10 @@ pub(crate) fn basic(user: &str, password: &str) -> String {
     )
 }
 
-/// Returns the `[auth]` of [`auth`] with `users`, each holding
-/// [`SCRAPE_PASSWORD`], as its `[[auth.basic.users]]`.
-pub(crate) fn auth_with_basic(users: &[&str]) -> Result<AuthSettings, Box<dyn StdError>> {
-    use ferrohealth_smart::basic::PasswordStore;
-    use ferrohealth_smart::config::{BasicSection, BasicUser};
-    use secrecy::SecretString;
-    let mut store = PasswordStore::new();
-    let mut written = BasicSection::default();
-    for user in users {
-        store = store.with_user(*user, SecretString::from(SCRAPE_HASH), "")?;
-        written.users.push(BasicUser {
-            user: (*user).to_owned(),
-            password_hash: Some(SecretString::from(SCRAPE_HASH)),
-            ..BasicUser::default()
-        });
-    }
-    Ok(AuthSettings {
-        basic: Some(ferrofed_server::config::auth::BasicUsers::new(
-            store, written,
-        )),
-        ..auth()
-    })
-}
-
-/// The `[metrics]` key naming [`SCRAPE_USER`] as the scrape's user, then
-/// the `[auth]` that writes that user with HTTP Basic.
+/// The `[metrics]` key naming [`SCRAPE_CLIENT`] as the scrape's client, then
+/// the `[auth]` whose issuer signs its token.
 pub(crate) fn scraping() -> String {
-    format!(
-        "scrape_users = [\"{SCRAPE_USER}\"]\n\n[auth]\n\n[[auth.basic.users]]\nuser = \"{SCRAPE_USER}\"\npassword_hash = \"{SCRAPE_HASH}\"\n"
-    )
+    format!("scrape_clients = [\"{SCRAPE_CLIENT}\"]\n{}", auth_toml())
 }
 
 /// The issuer identifier of the suite's `patients` issuer, which signs with

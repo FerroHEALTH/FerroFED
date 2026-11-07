@@ -11,15 +11,11 @@
 //! `authorization_details`, whose `purpose_of_use` is written `system|code`
 //! (the Federation Tier's Annex B §B.4a.3), and the SMART on openEHR `ehrId`,
 //! the `ehr_id` of the launch context, "conveyed via the `ehrId` token claim"
-//! (master04 §Capabilities). The string claims an issuer's
-//! `[trust.issuer.requester]` names are read as the requester the consent
-//! pre-filter asks about (§13.4). The IUA `subject_name`,
+//! (master04 §Capabilities). The IUA `subject_name`,
 //! `national_provider_identifier` and `subject_role` are read as the
 //! professional's identification, the string claim an issuer's
 //! `professional_issuing_authority` names as the agency that issued the
-//! identifier, and the string claim an issuer's
-//! `[trust.issuer.assurance]` names as the authentication assurance, by
-//! default `acr` (RFC 9068 §2.2.1). A national contact point's token is read
+//! identifier. A national contact point's token is read
 //! by `ferrohealth-smart` under the contact-point profile, never here. The
 //! `iss` and
 //! `sub` of the RFC 8693 §4.1 `act` claim are read as the current actor,
@@ -35,13 +31,11 @@
 use std::collections::BTreeMap;
 
 use ferrofed_engine::conveyance::relayed::Role;
-use ferrofed_identity::role::consent::Requester;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 
 use crate::auth::caller::{Actor, Professional, PurposeOfUse};
 use crate::config::auth::IssuerSettings;
-use crate::config::auth::requester::RequesterClaims;
 
 /// The claims of a verified caller the gateway reads beside its `sub`,
 /// `client_id`, `scope` and `ehrId`, which `ferrohealth-smart` reads: the
@@ -74,23 +68,11 @@ impl Claims {
         serde_json::from_value(serde_json::Value::Object(claims.clone()))
     }
 
-    /// Returns the string claim `name`, the claim an issuer's
-    /// `[trust.issuer.assurance]` names, when the token carries it.
-    pub(super) fn text(&self, name: &str) -> Option<String> {
-        self.others.text(name)
-    }
-
     /// Returns the professional's identification the token states, the
     /// identifier's issuing authority read from the claim `authority` names.
     pub(super) fn professional(&self, authority: Option<&str>) -> Professional {
         self.declared
             .professional(authority.and_then(|claim| self.others.text(claim)))
-    }
-
-    /// Returns the requester the claims `named` name, when the token carries
-    /// every one of them as a string.
-    pub(super) fn requester(&self, named: Option<&RequesterClaims>) -> Option<Requester> {
-        named.and_then(|named| self.others.requester(named))
     }
 
     /// Returns the representative of the patient the token names, as
@@ -135,16 +117,6 @@ impl Others {
             Claim::Text(text) if !text.is_empty() => Some(text.clone()),
             Claim::Text(_) | Claim::Other(_) => None,
         }
-    }
-
-    /// The requester the claims `named` name, when every one is a string.
-    pub(super) fn requester(&self, named: &RequesterClaims) -> Option<Requester> {
-        Requester::new(
-            self.text(&named.professional)?,
-            self.text(&named.role)?,
-            self.text(&named.organisation)?,
-            self.text(&named.organisation_type)?,
-        )
     }
 }
 
