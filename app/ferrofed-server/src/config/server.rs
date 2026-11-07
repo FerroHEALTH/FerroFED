@@ -62,11 +62,12 @@ pub struct Metrics {
     /// Whether `listen` may name an address other than a loopback one. A
     /// remote address is refused unless this is set.
     pub allow_remote: bool,
-    /// The `[[auth.basic.users]]` a scrape of `GET /metrics` may
-    /// authenticate as, with HTTP Basic (RFC 7617); empty, the scrape is
-    /// open. Outside the development profile a `listen` address that is not
-    /// a loopback one needs a user here, or `[metrics.tls] client_ca_file`.
-    pub scrape_users: Vec<String>,
+    /// The clients a scrape of `GET /metrics` may authenticate as, each with
+    /// a client-credentials token of an `[[auth.issuer]]` (RFC 6749 §4.4);
+    /// empty, the scrape is open. Outside the development profile a `listen`
+    /// address that is not a loopback one needs a client here, or
+    /// `[metrics.tls] client_ca_file`.
+    pub scrape_clients: Vec<String>,
     /// The TLS the admin listener serves (`[metrics.tls]`); unset, it serves
     /// plain HTTP.
     pub tls: Option<ListenerTls>,

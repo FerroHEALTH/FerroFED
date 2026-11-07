@@ -6,7 +6,8 @@
 
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
+use ferrohealth_smart::assurance::AssuranceLevel;
+use serde::Serialize;
 
 use crate::conveyance::relayed::{Relayed, Role};
 
@@ -72,8 +73,8 @@ pub struct Caller {
     pub professional: Box<Professional>,
     /// Who acts behind the caller's token.
     pub acting: Acting,
-    /// The assurance level of the caller's authentication, when its issuer
-    /// declares how its tokens state one.
+    /// The assurance level of the caller's authentication, as
+    /// `ferrohealth-smart` assessed it under its issuer's assurance table.
     pub assurance_level: Option<AssuranceLevel>,
     /// The professional and the provider a national contact point relays,
     /// as it asserts them, when the caller is one.
@@ -133,32 +134,6 @@ impl Acting {
         match self {
             Self::Person => "person",
             Self::Client => "client",
-        }
-    }
-}
-
-/// An assurance level of an electronic identification means, as Regulation
-/// (EU) No 910/2014 Art 8(2) names them, lowest first.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AssuranceLevel {
-    /// Level low, Art 8(2)(a).
-    Low,
-    /// Level substantial, Art 8(2)(b).
-    Substantial,
-    /// Level high, Art 8(2)(c).
-    High,
-}
-
-impl AssuranceLevel {
-    /// The level's name: the `assurance_level` claim's value, and the name
-    /// a configuration writes.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Low => "low",
-            Self::Substantial => "substantial",
-            Self::High => "high",
         }
     }
 }

@@ -108,7 +108,7 @@ impl Config {
         let stored_queries = stored_queries::resolve(self)?;
         let store = crate::config::store::resolve(self)?;
         let metrics = resolve_metrics(&self.metrics, listen, self.profile)?;
-        let auth = scrape_users(
+        let auth = scrape_clients(
             &metrics,
             self.auth
                 .resolve(&self.trust, &self.federation, public_url.as_ref())?,
@@ -399,20 +399,13 @@ fn signed_grants(
     Ok(())
 }
 
-/// Returns `auth`, refusing a scrape user `[metrics] scrape_users` names
-/// that its `[[auth.basic.users]]` does not write.
-fn scrape_users(metrics: &MetricsSettings, auth: AuthSettings) -> Result<AuthSettings, Error> {
-    match metrics.scrape_users.iter().find(|user| {
-        !auth
-            .basic
-            .as_ref()
-            .is_some_and(|basic| basic.names(user.as_str()))
-    }) {
-        Some(user) => Err(Error::Server(ServerFault::ScrapeUser {
-            user: user.clone(),
-        })),
-        None => Ok(auth),
+/// Returns `auth`, refusing `[metrics] scrape_clients` when `auth` trusts no
+/// issuer to sign a scraper's client-credentials token.
+fn scrape_clients(metrics: &MetricsSettings, auth: AuthSettings) -> Result<AuthSettings, Error> {
+    if !metrics.scrape_clients.is_empty() && auth.issuers.is_empty() {
+        return Err(Error::Server(ServerFault::ScrapeIssuer));
     }
+    Ok(auth)
 }
 
 /// Resolves `[metrics]`: the listener on a loopback address unless
@@ -452,7 +445,7 @@ fn resolve_metrics(
             .is_some_and(ListenerTlsSettings::requires_client_certificate);
         if !address.ip().is_loopback()
             && profile == Profile::Production
-            && metrics.scrape_users.is_empty()
+            && metrics.scrape_clients.is_empty()
             && !mutual
         {
             return Err(Error::Server(ServerFault::MetricsUnauthenticated {
@@ -463,7 +456,7 @@ fn resolve_metrics(
     Ok(MetricsSettings {
         listen,
         tls,
-        scrape_users: metrics.scrape_users.clone(),
+        scrape_clients: metrics.scrape_clients.clone(),
     })
 }
 

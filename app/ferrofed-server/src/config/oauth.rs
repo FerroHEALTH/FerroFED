@@ -27,8 +27,11 @@
 //! scope = "system/aql-*.s"
 //! ```
 
+use ferrofed_engine::onward::grant::lane::Organisations;
 use ferrohealth_smart::client::{ClientCredentials, Endpoint};
 use ferrohealth_smart::config::OauthSection;
+use ferrohealth_smart::config::onward::{OnwardLane, OnwardSection};
+use ferrohealth_smart::kind::IssuerKind;
 use secrecy::ExposeSecret as _;
 use serde::{Deserialize, Serialize};
 
@@ -71,6 +74,54 @@ impl Oauth {
         self.0.resolve().map_err(|source| Error::Smart {
             section: key.to_owned(),
             source: Box::new(source),
+        })
+    }
+}
+
+/// A node's `[credentials."<endpoint id>".onward]` table, resolved: the
+/// client of its issuer's onward grants and the node as their target.
+#[derive(Debug, Clone)]
+pub struct Onward {
+    /// The client and the target.
+    pub lane: OnwardLane,
+    /// Whose tokens the issuer signs.
+    pub kind: IssuerKind,
+    /// Whether the lane carries another party's organisation.
+    pub organisations: Organisations,
+    /// The table as written, which a reload compares.
+    pub written: OnwardSection,
+}
+
+impl Onward {
+    /// Resolves `written`, the table at `key`, authenticating as `grant`,
+    /// the lane's `oauth` client; the lane refuses another party's
+    /// organisation.
+    ///
+    /// # Errors
+    /// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
+    /// refuses: no issuer, kind or audience, a profile without
+    /// `max_onward_lifetime`, or a target its grant cannot ask for.
+    pub fn resolve(
+        key: &str,
+        written: &OnwardSection,
+        grant: ClientCredentials,
+    ) -> Result<Self, Error> {
+        let refused = |source| Error::Smart {
+            section: key.to_owned(),
+            source: Box::new(source),
+        };
+        let lane = written.resolve(grant).map_err(refused)?;
+        let kind = written
+            .kind
+            .ok_or(ferrohealth_smart::config::ConfigError::Missing {
+                key: "credentials.onward.kind",
+            })
+            .map_err(refused)?;
+        Ok(Self {
+            lane,
+            kind,
+            organisations: Organisations::Refused,
+            written: written.clone(),
         })
     }
 }

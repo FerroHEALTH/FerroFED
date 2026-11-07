@@ -21,9 +21,10 @@ use http::{Request, StatusCode, header};
 use serde::Deserialize;
 
 use super::{
-    DOMAIN_A, EHR_A, EHR_A2, FEED_USER, Gateway, OTHER_USER, PATH, feed_credentials, gateway, text,
+    DOMAIN_A, EHR_A, EHR_A2, FEED_CLIENT, Gateway, OTHER_CLIENT, PATH, feed_credentials, gateway,
+    text,
 };
-use crate::support::caller::{SCRAPE_PASSWORD, basic};
+use crate::support::caller::{basic, bearer, machine_bearer};
 use crate::support::{Logs, send_as_is};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -100,7 +101,7 @@ async fn an_authenticated_merge_drops_the_bindings_of_the_merged_ehr_ids() -> Te
     gateway.bind("caller-1", &[EHR_A, EHR_A2])?;
     gateway.bind("caller-2", &[EHR_A])?;
     let body = merge_message("patient-old", &[(DOMAIN_A, EHR_A)], "patient-new")?;
-    let (status, _, text) = deliver(&gateway, message(body, Some(&feed_credentials()))?).await?;
+    let (status, _, text) = deliver(&gateway, message(body, Some(&feed_credentials()?))?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_eq!(1, gateway.bound()?, "only the other ehr_id stays bound");
     let response: Response = serde_json::from_str(&text)?;
@@ -126,7 +127,7 @@ async fn a_merge_that_names_no_member_ehr_id_drops_every_binding() -> TestResult
         &[("urn:oid:2.999.1.999", "SYNTHETIC-1")],
         "patient-new",
     )?;
-    let (status, _, _) = deliver(&gateway, message(body, Some(&feed_credentials()))?).await?;
+    let (status, _, _) = deliver(&gateway, message(body, Some(&feed_credentials()?))?).await?;
     assert_eq!(StatusCode::OK, status);
     assert_eq!(0, gateway.bound()?);
     Ok(())
@@ -137,16 +138,14 @@ async fn an_unauthenticated_message_changes_nothing() -> TestResult {
     let (_dir, gateway) = feed_gateway()?;
     gateway.bind("caller-1", &[EHR_A])?;
     let body = merge_message("patient-old", &[(DOMAIN_A, EHR_A)], "patient-new")?;
-    let forged = basic(FEED_USER, "forged-password");
-    let unknown = basic("unknown-user", SCRAPE_PASSWORD);
-    let bearer = format!("Bearer {SCRAPE_PASSWORD}");
+    let forged = feed_credentials()?.replacen('.', ".x", 2);
+    let basic = basic(FEED_CLIENT, "forged-password");
     for authorization in [
         None,
         Some(forged.as_str()),
-        Some(unknown.as_str()),
-        Some(bearer.as_str()),
-        Some("Basic"),
-        Some("Basic not-base64!"),
+        Some(basic.as_str()),
+        Some("Bearer synthetic-not-a-token"),
+        Some("Bearer"),
     ] {
         let (status, headers, _) = deliver(&gateway, message(body.clone(), authorization)?).await?;
         assert_eq!(StatusCode::UNAUTHORIZED, status, "{authorization:?}");
@@ -154,22 +153,23 @@ async fn an_unauthenticated_message_changes_nothing() -> TestResult {
             .get(header::WWW_AUTHENTICATE)
             .and_then(|value| value.to_str().ok())
             .ok_or("a challenge")?;
-        assert!(challenge.starts_with("Basic "), "{challenge}");
+        assert!(challenge.starts_with("Bearer "), "{challenge}");
         assert_eq!(1, gateway.bound()?, "{authorization:?} applied nothing");
     }
-    let other = basic(OTHER_USER, SCRAPE_PASSWORD);
-    let (status, headers, _) = deliver(&gateway, message(body.clone(), Some(&other))?).await?;
-    assert_eq!(
-        StatusCode::FORBIDDEN,
-        status,
-        "a user the feed does not name"
-    );
-    assert!(!headers.contains_key(header::WWW_AUTHENTICATE));
-    assert_eq!(1, gateway.bound()?, "another user applied nothing");
-    let mut twice = message(body, Some(&feed_credentials()))?;
+    for other in [machine_bearer(OTHER_CLIENT)?, bearer()?] {
+        let (status, headers, _) = deliver(&gateway, message(body.clone(), Some(&other))?).await?;
+        assert_eq!(
+            StatusCode::FORBIDDEN,
+            status,
+            "a client the feed does not name, or a person"
+        );
+        assert!(!headers.contains_key(header::WWW_AUTHENTICATE));
+        assert_eq!(1, gateway.bound()?, "another caller applied nothing");
+    }
+    let mut twice = message(body, Some(&feed_credentials()?))?;
     twice
         .headers_mut()
-        .append(header::AUTHORIZATION, feed_credentials().parse()?);
+        .append(header::AUTHORIZATION, feed_credentials()?.parse()?);
     let (status, _, _) = deliver(&gateway, twice).await?;
     assert_eq!(
         StatusCode::UNAUTHORIZED,
@@ -184,7 +184,7 @@ async fn an_unauthenticated_message_changes_nothing() -> TestResult {
 async fn a_malformed_message_is_refused_and_changes_nothing() -> TestResult {
     let (_dir, gateway) = feed_gateway()?;
     gateway.bind("caller-1", &[EHR_A])?;
-    let bearer = feed_credentials();
+    let bearer = feed_credentials()?;
     let merge = merge_message("patient-old", &[(DOMAIN_A, EHR_A)], "patient-new")?;
     let off_profile = merge.replacen("patient-feed", "patient-feed-response", 1);
     let (status, headers, text) = deliver(&gateway, message(off_profile, Some(&bearer))?).await?;
@@ -211,7 +211,7 @@ async fn no_identifier_reaches_a_log_line_a_metric_or_an_answer() -> TestResult 
     let logs = Logs::default();
     let capture = subscriber(Rendering::Json, "trace", false, logs.clone())?;
     let guard = tracing::subscriber::set_default(capture);
-    let bearer = feed_credentials();
+    let bearer = feed_credentials()?;
     let merge = merge_message(
         SENTINEL_ID,
         &[("urn:oid:2.999.1.999", SENTINEL)],
@@ -240,8 +240,8 @@ async fn no_identifier_reaches_a_log_line_a_metric_or_an_answer() -> TestResult 
         .into_iter()
         .chain(answers.into_iter().map(|answer| ("an answer", answer)))
     {
-        let encoded = bearer.trim_start_matches("Basic ");
-        for sentinel in [SENTINEL, SENTINEL_ID, SCRAPE_PASSWORD, encoded] {
+        let token = bearer.trim_start_matches("Bearer ");
+        for sentinel in [SENTINEL, SENTINEL_ID, token] {
             assert!(!text.contains(sentinel), "{sentinel} in {surface}: {text}");
         }
     }
@@ -252,7 +252,11 @@ async fn no_identifier_reaches_a_log_line_a_metric_or_an_answer() -> TestResult 
 async fn the_feed_counts_each_message_by_result() -> TestResult {
     let (_dir, gateway) = feed_gateway()?;
     let merge = merge_message("patient-old", &[(DOMAIN_A, EHR_A)], "patient-new")?;
-    deliver(&gateway, message(merge.clone(), Some(&feed_credentials()))?).await?;
+    deliver(
+        &gateway,
+        message(merge.clone(), Some(&feed_credentials()?))?,
+    )
+    .await?;
     deliver(&gateway, message(merge, None)?).await?;
     let metrics = gateway.state.metrics().render()?;
     for result in ["applied", "unauthenticated"] {

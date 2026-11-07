@@ -7,12 +7,11 @@
 //! page prints them, and the tokens Keycloak then issues get a federated
 //! answer over the two FerroEHR nodes (§13.1, N25; RFC 9068).
 //!
-//! A user signed in to the clinical application and the reporting service's
-//! client-credentials grant, its token naming the professional it acts for
-//! and both stating the realm's `acr`, each get a `200`. Without the
-//! professional mapper, the service's token names no natural person and is
-//! refused `401 natural-person-required` (Regulation (EU) 2025/327 Annex II
-//! 3.1). With the client's
+//! A user signed in to the clinical application, the token stating the
+//! realm's `acr`, gets a `200`. The reporting service's client-credentials
+//! token, which only a `system/` scope covers, names no natural person and
+//! is refused `401 natural-person-required` (Regulation (EU) 2025/327 Annex
+//! II 3.1). With the client's
 //! `access.token.header.type.rfc9068` attribute off, the same user's token
 //! is refused `401` for its type (RFC 9068 §4), with the one `invalid_token`
 //! challenge and the type check named in the security log. Keycloak is an issuer here,
@@ -41,10 +40,6 @@ use crate::e2e::{
     query, registry_document,
 };
 use crate::support::{Logs, error_body, send_as_is};
-
-/// The name of the recipe's mapper that names the professional the
-/// reporting service acts for, in `professional.json` on the page.
-const PROFESSIONAL_MAPPER: &str = "professional";
 
 /// The gateway over node A and node B, resolving the patient through the
 /// development cross-reference, under the page's public base URL and its
@@ -89,7 +84,8 @@ async fn ask(app: Router, token: &str) -> Result<(StatusCode, HeaderMap, String)
 }
 
 #[tokio::test]
-async fn the_keycloak_recipe_of_the_production_guide_admits_a_user_and_a_service() -> TestResult {
+async fn the_keycloak_recipe_of_the_production_guide_admits_a_user_and_refuses_a_service()
+-> TestResult {
     if !containers::e2e_enabled() {
         return Ok(());
     }
@@ -105,32 +101,22 @@ async fn the_keycloak_recipe_of_the_production_guide_admits_a_user_and_a_service
     let app = gateway(dir.path(), &nodes, &recipe, &idp)?;
 
     let user = idp.user_token(&secrets.clinical_app).await?;
-    let service = idp
-        .client_credentials_token(REPORTING_SERVICE, &secrets.reporting_service)
-        .await?;
-    for (caller, token) in [
-        ("the signed-in user", &user),
-        ("the reporting service", &service),
-    ] {
-        let (status, _, text) = ask(app.clone(), token).await?;
-        assert_eq!(StatusCode::OK, status, "{caller}: {text}");
-        let answer: Answer = serde_json::from_str(&text)?;
-        assert!(
-            answer.meta.federation.complete,
-            "{caller}: both members answered: {text}"
-        );
-        assert_eq!(2, answer.rows.len(), "{caller}: one row per member: {text}");
-    }
+    let (status, _, text) = ask(app.clone(), &user).await?;
+    assert_eq!(StatusCode::OK, status, "the signed-in user: {text}");
+    let answer: Answer = serde_json::from_str(&text)?;
+    assert!(
+        answer.meta.federation.complete,
+        "both members answered: {text}"
+    );
+    assert_eq!(2, answer.rows.len(), "one row per member: {text}");
     assert_no_patient_identifier_on_the_wire(&nodes)?;
 
     // NOTE: Regulation (EU) 2025/327 Annex II 3.1: a `system/` token names no natural
-    // person, so without the professional mapper the service reaches no patient data.
-    idp.remove_mapper(REPORTING_SERVICE, PROFESSIONAL_MAPPER)
-        .await?;
-    let nameless = idp
+    // person, so the reporting service reaches no patient data.
+    let service = idp
         .client_credentials_token(REPORTING_SERVICE, &secrets.reporting_service)
         .await?;
-    let (status, _, text) = ask(app.clone(), &nameless).await?;
+    let (status, _, text) = ask(app.clone(), &service).await?;
     assert_eq!(StatusCode::UNAUTHORIZED, status, "{text}");
     assert_eq!("natural-person-required", error_body(&text)?.code, "{text}");
 

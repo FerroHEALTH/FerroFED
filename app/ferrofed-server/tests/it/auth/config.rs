@@ -213,7 +213,7 @@ fn a_basic_user_with_a_system_scope_is_refused_naming_the_user() -> Result<(), B
     let text = format!(
         "{}\n[[auth.basic.users]]\nuser = \"synthetic-machine\"\npassword_hash = \"{}\"\nscopes = [\"system/aql-*.s\"]\n",
         issuer("", ISSUER),
-        crate::support::caller::SCRAPE_HASH
+        "$argon2id$v=19$m=19456,t=2,p=1$c3ludGhldGljLXNhbHQtMTY$4es9c3W3V1fKeaFNam0B7dB/9kjZXP6/+9VB3yhq8ZA"
     );
     refused_by_the_crate(&text, "synthetic-machine")
 }

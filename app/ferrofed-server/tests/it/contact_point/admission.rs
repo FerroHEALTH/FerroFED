@@ -199,6 +199,22 @@ async fn an_issuer_that_is_no_contact_point_needs_no_ehdsi_attribute() -> TestRe
     .await
 }
 
+/// MyHealth@EU Requirements Catalogue 10.0.0 requirement 01 has country B
+/// send the professional's information, so a contact point's token that
+/// names no professional, shaped as an organisation's, is refused at the
+/// gate and never reaches an onward lane that carries organisations.
+#[tokio::test]
+async fn a_token_naming_no_professional_is_refused_and_never_an_organisation() -> TestResult {
+    let gateway = Gateway::with(declared()).await?;
+    let mut claims = relaying();
+    claims
+        .ehdsi
+        .retain(|field, _value| !field.starts_with("professional."));
+    let (status, _, text) = sent(&gateway.app, presenting(query()?, &claims)?).await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
+    gateway.nobody_asked().await
+}
+
 /// A token of [`relaying`] without `field` is refused at the gate as the
 /// contact point's shortfall, and no node is asked anything.
 async fn refused_without(field: &str) -> TestResult {

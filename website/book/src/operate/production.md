@@ -194,11 +194,10 @@ access token:
 
 Keycloak 26.2 added a client setting that types its access tokens `at+jwt`.
 The recipe below was run on 2026-10-06 against Keycloak 26.8.0: the gateway
-admitted a user's token and a client-credentials token made this way, and
-answered a federated query for each. With the `at+jwt` setting off, it
-refused the same user's token as "not typed at+jwt", and without the
-professional mapper it refused the client-credentials token as naming no
-natural person.
+admitted a user's token made this way and answered a federated query for
+it, and refused the reporting service's client-credentials token as naming
+no natural person. With the `at+jwt` setting off, it refused the same user's
+token as "not typed at+jwt".
 
 Run it with Keycloak's admin CLI, `kcadm.sh`, against your Keycloak's
 public address. It creates a realm, one client scope per SMART on openEHR
@@ -206,7 +205,7 @@ scope, a clinical application that signs users in, and a reporting service
 that uses the client-credentials grant. The realm's `acr.loa.map` names the
 levels of Keycloak's authentication flows, so its tokens carry `acr` as
 `urn:example:loa:substantial` for level 1 and `urn:example:loa:high` for
-level 2, the values the gateway's `[trust.issuer.assurance]` reads below.
+level 2, the values the gateway's `[auth.issuer.assurance]` reads below.
 Keycloak 26.8.0 wrote level 1 into a token after a password sign-in and
 into a client-credentials token. A real realm reaches each level only by a
 flow whose means meets it, which Regulation (EU) No 910/2014 Art 8(2)
@@ -234,8 +233,7 @@ kcadm.sh create clients -r ferrofed -s clientId=example-reporting-service \
 Each client then gets its scopes as default client scopes, loses the
 `profile` and `email` scopes, whose personal data the gateway never reads,
 and gets its protocol mappers: the audience and the purpose of use for
-both, `client_id` for the clinical application, and the professional the
-reporting service acts for:
+both, and `client_id` for the clinical application:
 
 ```sh
 id_of() { kcadm.sh get clients -r ferrofed -q "clientId=$1" --fields id --format csv --noquotes; }
@@ -257,7 +255,6 @@ for client in "$app" "$svc"; do
   kcadm.sh create "clients/$client/protocol-mappers/models" -r ferrofed -f purpose-of-use.json
 done
 kcadm.sh create "clients/$app/protocol-mappers/models" -r ferrofed -f client-id.json
-kcadm.sh create "clients/$svc/protocol-mappers/models" -r ferrofed -f professional.json
 ```
 
 `audience.json` puts the gateway's audience in `aud`:
@@ -319,33 +316,10 @@ token and not into the user's:
 }
 ```
 
-`professional.json` names the professional the reporting service acts for,
-in the IHE IUA extension. A `system/` scope acts without a user, so the
-gateway admits the service to patient data only for a professional its
-token names. The value is a synthetic identifier; yours is the identifier
-the professional's national authority issued:
-
-```json
-{
-  "name": "professional",
-  "protocol": "openid-connect",
-  "protocolMapper": "oidc-hardcoded-claim-mapper",
-  "config": {
-    "claim.name": "extensions.ihe_iua.national_provider_identifier",
-    "claim.value": "urn:oid:2.999.7.1.42",
-    "jsonType.label": "String",
-    "access.token.claim": "true",
-    "id.token.claim": "false",
-    "userinfo.token.claim": "false",
-    "introspection.token.claim": "true"
-  }
-}
-```
-
 A user who signs in to `example-clinical-app` then gets a token whose
 `scope` reads `user/composition-*.r user/aql-*.s`, and the reporting
-service a token with `system/aql-*.s` that names its professional, both
-with `acr` `urn:example:loa:substantial`. Keycloak's realm issuer is
+service a token with `system/aql-*.s`, both with `acr`
+`urn:example:loa:substantial`. Keycloak's realm issuer is
 `https://idp.example.org/realms/ferrofed`; copy `issuer` from
 `https://idp.example.org/realms/ferrofed/.well-known/openid-configuration`,
 since the gateway compares `iss` exactly:
@@ -361,27 +335,28 @@ kind = "persons"
 first_party_clients = ["example-clinical-app", "example-reporting-service"]
 clock_skew_seconds = 60
 
+[auth.issuer.assurance]
+claim = "acr"
+minimum = "substantial"
+
+[auth.issuer.assurance.levels]
+"urn:example:loa:substantial" = "substantial"
+"urn:example:loa:high" = "high"
+
 [[trust.issuer]]
 issuer = "https://idp.example.org/realms/ferrofed"
 backend_clients = ["example-reporting-service"]
-client_tokens_act_for_professional = true
-
-[trust.issuer.assurance]
-claim = "acr"
-minimum = "substantial"
-substantial = ["urn:example:loa:substantial"]
-high = ["urn:example:loa:high"]
 ```
 
 The realm's tokens are typed `at+jwt` and carry `client_id`, so the issuer
 keeps the default `rfc9068` profile. A person's token is admitted only
 through a client `first_party_clients` lists, the reporting service's too,
 since its service account's `sub` is a user's and never the client's.
-`system/aql-*` counts only for a client listed in `backend_clients`.
-`client_tokens_act_for_professional` admits the reporting service to
-patient data for the professional `professional.json` names; a client token
-of this issuer that names none is refused `401 natural-person-required`.
-`[trust.issuer.assurance]` reads the realm's `acr` and refuses a token below
+`system/aql-*` counts only for a client listed in `backend_clients`, and a
+token only a `system/` scope covers names no natural person, so the
+reporting service reaches no patient data: its query is refused
+`401 natural-person-required`.
+`[auth.issuer.assurance]` reads the realm's `acr` and refuses a token below
 `substantial` with `401 authentication-assurance-insufficient`
 ([Professionals and assurance](authentication.md#professionals-and-assurance)).
 The gateway reads the realm's metadata at its OpenID Connect location and
@@ -486,11 +461,7 @@ which [step 8](#8-tls-and-the-public-address) opens to the Registry alone
 # ferrofed.toml
 [pmir]
 url = "https://pmir.example.org/fhir"
-feed_users = ["pmir-registry"]
-
-[[auth.basic.users]]
-user = "pmir-registry"
-password_hash_file = "/run/secrets/ferrofed/pmir-registry-hash"
+feed_clients = ["pmir-registry"]   # the Registry's client at the issuer of step 4
 ```
 
 The Registry sends the feed to `pmir.callback_url`, which is
@@ -644,14 +615,11 @@ In Kubernetes, change the ConfigMap and send each pod `POST /admin/reload`
 
 ## 10. The first federated query
 
-Get a token from the issuer of [step 4](#4-client-authentication). The
-reporting service's client-credentials token needs no browser:
-
-```sh
-token="$(curl -s https://idp.example.org/realms/ferrofed/protocol/openid-connect/token \
-  -d grant_type=client_credentials -d client_id=example-reporting-service \
-  -d client_secret="$REPORTING_SERVICE_SECRET" | jq -r .access_token)"
-```
+Get a token from the issuer of [step 4](#4-client-authentication) for a
+person: sign in through `example-clinical-app`, which receives the access
+token at its callback, and put it in `$token`. A machine's
+client-credentials token, such as the reporting service's, names no natural
+person and is refused patient data `401 natural-person-required`.
 
 Then send one ordinary ITS-REST query for a patient both members know:
 
@@ -683,8 +651,8 @@ not be resolved ([Errors and status codes](../integrate/errors.md)).
 
 Turn on the admin listener, and scrape `GET /metrics` there. It stays on
 loopback unless you allow otherwise, and never sits under the base path.
-Off loopback, the scrape needs the Basic credentials of a scrape user, which
-your Prometheus sends with `basic_auth`, and a write action such as the
+Off loopback, the scrape needs a client-credentials token of a scrape
+client, which your Prometheus obtains with `oauth2`, and a write action such as the
 stored-query distribution needs an access token with `auth.product_scope`
 ([Metrics](metrics.md#who-the-admin-listener-serves)). A
 console with `[admin]` needs it on an internal address its server reaches
@@ -695,7 +663,7 @@ and no public network does ([Console](operator-console.md#configuration)):
 [metrics]
 listen = "127.0.0.1:9464"
 # off loopback: listen = "0.0.0.0:9464", allow_remote = true, and
-# scrape_users = ["prometheus"], a user of [[auth.basic.users]]
+# scrape_clients = ["prometheus"], a client of the issuer of step 4
 ```
 
 - **Alerts.** Load the shipped dashboard and alert rules, and add an alert

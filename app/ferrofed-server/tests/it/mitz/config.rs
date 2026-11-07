@@ -18,8 +18,8 @@ use ferrofed_server::federation::Federation;
 use ferrofed_server::federation::error::FederationError;
 
 use super::{
-    ORGANISATION_CLAIM, ORGANISATION_TYPE_CLAIM, PROFESSIONAL_CLAIM, TestResult, URA_B, holders,
-    mitz_table,
+    ORGANISATION_CLAIM, ORGANISATION_TYPE_CLAIM, PROFESSIONAL_CLAIM, ROLE_CLAIM, TestResult, URA_B,
+    holders, mitz_table,
 };
 use crate::facade::registry;
 
@@ -137,18 +137,23 @@ fn a_configured_data_user_is_refused() -> TestResult {
 }
 
 #[test]
-fn a_requester_mapping_without_a_claim_name_is_refused() -> TestResult {
+fn a_requester_table_on_a_trusted_issuer_is_refused_naming_its_replacement() -> TestResult {
     let (_dir, text) = edited(|table| {
         format!(
-            "{table}\n[auth]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[trust.issuer.requester]\nprofessional = \"{PROFESSIONAL_CLAIM}\"\norganisation = \"{ORGANISATION_CLAIM}\"\norganisation_type = \"{ORGANISATION_TYPE_CLAIM}\"\n"
+            "{table}\n[auth]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[trust.issuer.requester]\nprofessional = \"{PROFESSIONAL_CLAIM}\"\nrole = \"{ROLE_CLAIM}\"\norganisation = \"{ORGANISATION_CLAIM}\"\norganisation_type = \"{ORGANISATION_TYPE_CLAIM}\"\n"
         )
     })?;
     match resolved(&text) {
-        Err(error::Error::Missing { key }) => {
-            assert_eq!("trust.issuer[0].requester.role", key);
+        Err(refused @ error::Error::Auth { .. }) => {
+            let shown = refused.to_string();
+            assert!(
+                shown.contains("trust.issuer[0].requester")
+                    && shown.contains("[[auth.federation]]"),
+                "{shown}"
+            );
             Ok(())
         }
-        other => Err(format!("no claim name has a default: {other:?}").into()),
+        other => Err(format!("the removed table is refused by name: {other:?}").into()),
     }
 }
 

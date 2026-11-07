@@ -18,14 +18,11 @@
     reason = "a test asserts, and returns its setup errors"
 )]
 
-use std::collections::BTreeMap;
-
 use axum::body::Body;
-use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::auth::AuthSettings;
-use ferrofed_server::config::auth::assurance::Assurance;
 use ferrofed_testkit::issuer::Claims;
+use ferrohealth_smart::assurance::AssuranceLevel;
 use http::{Request, StatusCode};
 
 use super::{
@@ -47,23 +44,20 @@ const HIGH: &str = "urn:example:loa:high";
 /// `national_provider_identifier`).
 const PROFESSIONAL: &str = "urn:oid:2.999.7.1|hp-0042";
 
-/// The suite's `[auth]`, its issuer reading `acr` with the three values
-/// above, `minimum` the least level for patient data, and declaring its
-/// client tokens as acting for a professional when `clients` is set.
-fn requiring(minimum: AssuranceLevel, clients: bool) -> AuthSettings {
+/// The suite's `[auth]`, its issuer's `[auth.issuer.assurance]` reading
+/// `acr` with the three values above and `minimum` the least level for
+/// patient data.
+fn requiring(minimum: AssuranceLevel) -> AuthSettings {
     let mut auth = support::caller::auth();
-    for issuer in &mut auth.issuers {
-        issuer.assurance = Some(Assurance {
-            claim: String::from("acr"),
-            minimum,
-            values: BTreeMap::from([
-                (LOW.to_owned(), AssuranceLevel::Low),
-                (SUBSTANTIAL.to_owned(), AssuranceLevel::Substantial),
-                (HIGH.to_owned(), AssuranceLevel::High),
-            ]),
-        });
-        issuer.client_tokens_act_for_professional = clients;
-    }
+    support::caller::assuring(
+        &mut auth,
+        minimum,
+        &[
+            (LOW, AssuranceLevel::Low),
+            (SUBSTANTIAL, AssuranceLevel::Substantial),
+            (HIGH, AssuranceLevel::High),
+        ],
+    );
     auth
 }
 
@@ -93,7 +87,7 @@ fn naming_the_professional(mut claims: Claims) -> Claims {
 /// is a `401` with the RFC 9470 challenge, and reaches no node.
 #[tokio::test]
 async fn a_token_below_the_least_level_is_401_and_reaches_no_node() -> TestResult {
-    let gateway = Gateway::with(requiring(AssuranceLevel::Substantial, false)).await?;
+    let gateway = Gateway::with(requiring(AssuranceLevel::Substantial)).await?;
     let request = bearing(query()?, &minted(&stating(LOW))?)?;
     let (status, headers, text) = sent(&gateway.app, request).await?;
     assert_eq!(StatusCode::UNAUTHORIZED, status, "{text}");
@@ -116,7 +110,7 @@ async fn a_token_below_the_least_level_is_401_and_reaches_no_node() -> TestResul
 /// level, states no level, which no minimum admits.
 #[tokio::test]
 async fn a_token_without_the_claim_or_with_an_undeclared_value_is_refused() -> TestResult {
-    let gateway = Gateway::with(requiring(AssuranceLevel::Low, false)).await?;
+    let gateway = Gateway::with(requiring(AssuranceLevel::Low)).await?;
     assert_refused(
         &gateway,
         bearing(query()?, &minted(&claims())?)?,
@@ -135,7 +129,7 @@ async fn a_token_without_the_claim_or_with_an_undeclared_value_is_refused() -> T
 /// A token at the least level and one above it are admitted.
 #[tokio::test]
 async fn a_token_at_or_above_the_least_level_is_admitted() -> TestResult {
-    let gateway = Gateway::with(requiring(AssuranceLevel::Substantial, false)).await?;
+    let gateway = Gateway::with(requiring(AssuranceLevel::Substantial)).await?;
     assert_admitted(
         &gateway,
         bearing(query()?, &minted(&stating(SUBSTANTIAL))?)?,
@@ -148,7 +142,7 @@ async fn a_token_at_or_above_the_least_level_is_admitted() -> TestResult {
 /// below it as a query is.
 #[tokio::test]
 async fn an_ehr_read_below_the_least_level_is_refused() -> TestResult {
-    let gateway = Gateway::with(requiring(AssuranceLevel::High, false)).await?;
+    let gateway = Gateway::with(requiring(AssuranceLevel::High)).await?;
     let read = Request::get(format!("/v1/ehr/{}", crate::facade::EHR_A)).body(Body::empty())?;
     assert_refused(
         &gateway,
@@ -162,7 +156,7 @@ async fn an_ehr_read_below_the_least_level_is_refused() -> TestResult {
 /// not apply to it: the request passes the gate.
 #[tokio::test]
 async fn a_definition_request_needs_no_level() -> TestResult {
-    let gateway = Gateway::with(requiring(AssuranceLevel::High, false)).await?;
+    let gateway = Gateway::with(requiring(AssuranceLevel::High)).await?;
     let read =
         Request::get("/v1/definition/template/adl1.4/org.example::vitals").body(Body::empty())?;
     let (status, _, text) = sent(&gateway.app, bearing(read, &minted(&stating(LOW))?)?).await?;
@@ -208,41 +202,19 @@ async fn a_token_only_a_system_scope_covers_is_refused_patient_data() -> TestRes
     .await
 }
 
-/// An issuer whose client tokens the deployment declares as acting for a
-/// professional admits one that names the professional, and still refuses
-/// one that names none.
+/// A client token reaches no patient data whatever it names and however it
+/// authenticated: a professional acting through a client is a delegated
+/// person of a `persons` issuer, never a system.
 #[tokio::test]
-async fn a_declared_issuer_admits_a_client_token_only_when_it_names_the_professional() -> TestResult
-{
-    let mut auth = support::caller::auth();
-    for issuer in &mut auth.issuers {
-        issuer.client_tokens_act_for_professional = true;
-    }
-    let gateway = Gateway::with(auth).await?;
-    let nameless = as_client(claims());
+async fn a_client_token_naming_a_professional_is_refused_at_any_level() -> TestResult {
+    let gateway = Gateway::with(requiring(AssuranceLevel::Substantial)).await?;
+    let named = naming_the_professional(as_client(stating(HIGH)));
     assert_refused(
         &gateway,
-        bearing(query()?, &minted(&nameless)?)?,
+        bearing(query()?, &minted(&named)?)?,
         Refusal::NaturalPerson,
     )
-    .await?;
-    let named = naming_the_professional(as_client(claims()));
-    assert_admitted(&gateway, bearing(query()?, &minted(&named)?)?).await
-}
-
-/// A declared client token is still held to the issuer's least level.
-#[tokio::test]
-async fn a_declared_client_token_is_held_to_the_least_level() -> TestResult {
-    let gateway = Gateway::with(requiring(AssuranceLevel::Substantial, true)).await?;
-    let low = naming_the_professional(as_client(stating(LOW)));
-    assert_refused(
-        &gateway,
-        bearing(query()?, &minted(&low)?)?,
-        Refusal::Assurance,
-    )
-    .await?;
-    let substantial = naming_the_professional(as_client(stating(SUBSTANTIAL)));
-    assert_admitted(&gateway, bearing(query()?, &minted(&substantial)?)?).await
+    .await
 }
 
 /// The node is told who acts, the professional's identification and the
@@ -251,10 +223,10 @@ async fn a_declared_client_token_is_held_to_the_least_level() -> TestResult {
 // conformance: CP-16
 #[tokio::test]
 async fn the_node_is_told_who_acts_and_the_level_reached() -> TestResult {
-    let gateway = Gateway::with(requiring(AssuranceLevel::Substantial, true)).await?;
+    let gateway = Gateway::with(requiring(AssuranceLevel::Substantial)).await?;
     let keys = published(&gateway.app).await?;
-    let client = naming_the_professional(as_client(stating(HIGH)));
-    assert_admitted(&gateway, bearing(query()?, &minted(&client)?)?).await?;
+    let person = naming_the_professional(stating(HIGH));
+    assert_admitted(&gateway, bearing(query()?, &minted(&person)?)?).await?;
     let requests = gateway
         .a
         .received_requests()
@@ -271,7 +243,7 @@ async fn the_node_is_told_who_acts_and_the_level_reached() -> TestResult {
     let read = crate::conveyance::verified(token, &keys, "node-a-pub")?;
     assert_eq!(
         (
-            Some("client"),
+            Some("person"),
             Some("high"),
             Some(PROFESSIONAL),
             Some("Example Clinician")

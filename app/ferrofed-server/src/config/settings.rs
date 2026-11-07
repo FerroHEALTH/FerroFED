@@ -339,9 +339,9 @@ pub struct MetricsSettings {
     /// The TLS the admin listener serves, from `[metrics.tls]`; `None` serves
     /// plain HTTP.
     pub tls: Option<ListenerTlsSettings>,
-    /// The Basic users a scrape of `GET /metrics` may authenticate as;
-    /// empty leaves the scrape open.
-    pub scrape_users: Vec<String>,
+    /// The clients whose client-credentials token a scrape of `GET /metrics`
+    /// may carry; empty leaves the scrape open.
+    pub scrape_clients: Vec<String>,
 }
 
 /// An onward credential kind a binding adds beside the core's basic
@@ -379,6 +379,9 @@ pub enum Scheme {
         grant: Box<ferrohealth_smart::client::ClientCredentials>,
         /// The table as written, which a reload compares.
         written: Box<crate::config::oauth::Oauth>,
+        /// A node's onward lane, which this grant authenticates; the grant's
+        /// own token then carries only the gateway's own requests.
+        onward: Option<Box<crate::config::oauth::Onward>>,
     },
     /// FerroFED's own OAuth 2.0 grant with a JWT client assertion (RFC 6749
     /// §4.4, RFC 7523 §2.2), for what `Oauth` does not carry: token
@@ -415,7 +418,26 @@ impl Scheme {
                     password: now_password,
                 },
             ) => user == now_user && password == now_password,
-            (Self::Oauth { written: was, .. }, Self::Oauth { written: now, .. }) => was == now,
+            (
+                Self::Oauth {
+                    written: was,
+                    onward: was_onward,
+                    ..
+                },
+                Self::Oauth {
+                    written: now,
+                    onward: now_onward,
+                    ..
+                },
+            ) => {
+                was == now
+                    && was_onward
+                        .as_ref()
+                        .map(|onward| (&onward.written, onward.organisations))
+                        == now_onward
+                            .as_ref()
+                            .map(|onward| (&onward.written, onward.organisations))
+            }
             _ => false,
         }
     }

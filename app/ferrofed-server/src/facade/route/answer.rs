@@ -11,6 +11,7 @@ use axum::body::Body;
 use axum::response::Response;
 use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::dispatch::{REQUEST_ID_HEADER, is_consent_refusal};
+use ferrofed_engine::single_node::committer::CommitterError;
 use ferrofed_engine::single_node::forward::{ForwardError, Forwarded};
 use ferrofed_registry::snapshot::Endpoint;
 use http::StatusCode;
@@ -134,7 +135,14 @@ pub(crate) fn failed(
         }
         ForwardError::Unreachable { .. } => Code::NodeUnreachable,
         ForwardError::Refused { .. } => Code::NodeRefused,
-        ForwardError::Credentials { .. } | ForwardError::Oversized { .. } => Code::NodeError,
+        ForwardError::Committer {
+            source: CommitterError::Attestation { .. },
+            ..
+        }
+        | ForwardError::ReadOnly(_) => Code::OperationRefused,
+        ForwardError::Credentials { .. }
+        | ForwardError::Oversized { .. }
+        | ForwardError::Committer { .. } => Code::NodeError,
         _ => Code::Internal,
     };
     if code.status().is_server_error() {

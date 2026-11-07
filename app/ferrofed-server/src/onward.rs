@@ -27,6 +27,7 @@ use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::grant::exchange::{Exchange, SharedOnBehalf};
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
+use ferrofed_engine::onward::grant::lane::Lane;
 use ferrofed_engine::onward::{Grant, GrantKind, SystemClock};
 use ferrofed_identity::fhir::{self, Authentication};
 use ferrofed_registry::id::EndpointId;
@@ -186,7 +187,7 @@ pub(crate) fn onward(
     for (endpoint, scheme) in &settings.credentials {
         let engine = transports.get(endpoint).unwrap_or(&engine);
         let grant = match scheme {
-            Scheme::Oauth { grant, .. } => {
+            Scheme::Oauth { grant, onward, .. } => {
                 let shared: SharedCredentials = UpstreamToken::provider(
                     ferrohealth_smart::client::ClientCredentials::clone(grant),
                 )
@@ -194,6 +195,17 @@ pub(crate) fn onward(
                     section: format!("credentials.{endpoint}.oauth"),
                     source: Box::new(source),
                 })?;
+                // NOTE: §13.1 N25; under an onward lane the grant's own token carries the
+                // gateway's own requests alone, and every caller's goes through the lane.
+                if let Some(onward) = onward {
+                    let lane: SharedOnBehalf = Arc::new(Lane::new(
+                        endpoint.clone(),
+                        (onward.lane.onward.clone(), onward.lane.target.clone()),
+                        (onward.kind, onward.organisations),
+                        Arc::clone(&shared),
+                    ));
+                    on_behalf.insert(endpoint.clone(), lane);
+                }
                 credentials.insert(endpoint.clone(), shared);
                 continue;
             }

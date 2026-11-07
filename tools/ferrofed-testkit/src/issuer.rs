@@ -333,7 +333,7 @@ pub struct Claims {
     )]
     pub ehdsi: Attributes,
     /// Any other string claim, by name: the claims a deployment maps in
-    /// `[trust.issuer.requester]`, for instance.
+    /// an `[[auth.federation]]` table, for instance.
     #[serde(flatten)]
     pub other: std::collections::BTreeMap<String, String>,
 }

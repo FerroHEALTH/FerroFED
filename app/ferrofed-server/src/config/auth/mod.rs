@@ -8,39 +8,32 @@
 //! product: one `[[auth.issuer]]` table per issuer the gateway trusts, with
 //! its `kind`, its profile, its audiences and its token rules, each issuer
 //! verified against the key set its metadata names (RFC 8414 §3), a key set
-//! file, or RFC 7662 introspection; the Basic users of `[[auth.basic.users]]`;
-//! and the product scope. `[trust]` is FerroFED's own policy beside it
+//! file, or RFC 7662 introspection; and the product scope. No Basic user is
+//! admitted: `[[auth.basic.users]]` is refused, and a machine authenticates
+//! with a client-credentials token (RFC 6749 §4.4). `[trust]` is FerroFED's own policy beside it
 //! ([`trust`]): what each issuer's tokens are honoured for, the edge mode,
 //! and the purpose-of-use rule. There is no unauthenticated mode: `enabled = false`
-//! is refused, and with no issuer and no Basic user every guarded request is
-//! refused. The configuration keys are our own design; no specification
+//! is refused, and with no issuer every guarded request is refused. The configuration keys are our own design; no specification
 //! governs them.
 
-pub mod assurance;
 pub mod contact_point;
-pub mod requester;
 pub mod trust;
 
 use std::collections::BTreeSet;
 use std::fmt;
-use std::sync::Arc;
 
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
-use ferrohealth_smart::basic::PasswordStore;
-use ferrohealth_smart::config::{AuthSection, BasicSection, IssuerKey};
+use ferrohealth_smart::config::{AuthSection, IssuerKey};
 use ferrohealth_smart::federation::FederationSection;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 use ferrohealth_smart::resource::introspection::IntrospectionSettings;
 use ferrohealth_smart::sender::proof::ProofSettings;
 use http::HeaderName;
-use secrecy::ExposeSecret as _;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Federation;
-use crate::config::auth::assurance::Assurance;
 use crate::config::auth::contact_point::ContactPoint;
-use crate::config::auth::requester::RequesterClaims;
 use crate::config::auth::trust::Trust;
 use crate::config::error::Error;
 use crate::config::public_url::PublicUrl;
@@ -51,36 +44,15 @@ pub const DEFAULT_REALM: &str = "ferrofed";
 
 /// `[auth]` as written: the section `ferrohealth-smart` reads.
 ///
-/// Two sections compare equal when they render alike and every Basic user
-/// holds the same inline password hash, so a reload sees a changed hash.
+/// Two sections compare equal when they render alike.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct Auth(pub AuthSection);
 
 impl PartialEq for Auth {
     fn eq(&self, other: &Self) -> bool {
-        // NOTE: no specification governs this: our own design; the section renders
-        // every secret redacted, so the Basic users' hashes are compared besides.
         serde_json::to_value(&self.0).ok() == serde_json::to_value(&other.0).ok()
-            && hashes(self.0.basic.as_ref()) == hashes(other.0.basic.as_ref())
     }
-}
-
-/// The password hashes `basic`'s users carry inline, in order.
-fn hashes(basic: Option<&BasicSection>) -> Vec<Option<String>> {
-    basic
-        .map(|section| {
-            section
-                .users
-                .iter()
-                .map(|user| {
-                    user.password_hash
-                        .as_ref()
-                        .map(|hash| hash.expose_secret().to_owned())
-                })
-                .collect()
-        })
-        .unwrap_or_default()
 }
 
 /// `[auth]` and `[trust]`, resolved.
@@ -98,8 +70,6 @@ pub struct AuthSettings {
     /// The issuers on the trust list, `[auth]`'s key-set issuers in the order
     /// written, then the introspected one.
     pub issuers: Vec<IssuerSettings>,
-    /// The Basic users of `[[auth.basic.users]]`, when any is written.
-    pub basic: Option<BasicUsers>,
     /// How a `DPoP` proof is checked (`[auth.dpop]`, RFC 9449 §4.3), when
     /// the table is written; without it, no `DPoP` request is admitted.
     pub dpop: Option<ProofSettings>,
@@ -115,7 +85,6 @@ impl Default for AuthSettings {
             product_scope: None,
             realm: DEFAULT_REALM.to_owned(),
             issuers: Vec::new(),
-            basic: None,
             dpop: None,
         }
     }
@@ -123,72 +92,22 @@ impl Default for AuthSettings {
 
 impl AuthSettings {
     /// What `config check` notes about the issuers: each one that declares
-    /// no `[trust.issuer.assurance]`, so no assurance level is read from its
+    /// no `[auth.issuer.assurance]`, so no assurance level is read from its
     /// tokens or required of them (Regulation (EU) 2025/327 Annex II 3.1).
     #[must_use]
     pub fn notes(&self) -> Vec<String> {
         self.issuers
             .iter()
-            .filter(|issuer| issuer.assurance.is_none())
+            .filter(|issuer| issuer.verification.assurance().is_none())
             .map(|issuer| {
                 format!(
-                    "the issuer {} declares no [trust.issuer.assurance]: the gateway reads no authentication assurance from its tokens and requires none for patient data",
+                    "the issuer {} declares no [auth.issuer.assurance]: the gateway reads no authentication assurance from its tokens and requires none for patient data",
                     issuer.issuer
                 )
             })
             .collect()
     }
 }
-
-/// The Basic users of `[[auth.basic.users]]`, resolved.
-///
-/// Two compare equal when they were resolved from the same written table,
-/// so a reload sees a changed user.
-#[derive(Debug, Clone)]
-pub struct BasicUsers {
-    /// The users, their hashes checked.
-    store: Arc<PasswordStore>,
-    /// The table as written.
-    written: Auth,
-}
-
-impl BasicUsers {
-    /// Returns the users `store` holds, resolved from `written`.
-    #[must_use]
-    pub fn new(store: PasswordStore, written: BasicSection) -> Self {
-        Self {
-            store: Arc::new(store),
-            written: Auth(AuthSection {
-                basic: Some(written),
-                ..AuthSection::default()
-            }),
-        }
-    }
-
-    /// Returns the password store the users are checked against.
-    #[must_use]
-    pub fn store(&self) -> &Arc<PasswordStore> {
-        &self.store
-    }
-
-    /// Whether a user `user` is written.
-    #[must_use]
-    pub fn names(&self, user: &str) -> bool {
-        self.written
-            .0
-            .basic
-            .as_ref()
-            .is_some_and(|basic| basic.users.iter().any(|written| written.user == user))
-    }
-}
-
-impl PartialEq for BasicUsers {
-    fn eq(&self, other: &Self) -> bool {
-        self.written == other.written
-    }
-}
-
-impl Eq for BasicUsers {}
 
 /// Where a caller's credential travels, resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -215,16 +134,6 @@ pub struct IssuerSettings {
     /// Where this issuer's `patient/` grants are confined, when they are
     /// honoured at all.
     pub patient: Option<PatientBinding>,
-    /// The claims that name who asks for the data, when this issuer's tokens
-    /// carry them.
-    pub requester: Option<RequesterClaims>,
-    /// How this issuer's tokens state their authentication assurance, and
-    /// the least level a patient-data request needs, when the deployment
-    /// declares it.
-    pub assurance: Option<Assurance>,
-    /// Whether this issuer's client tokens act for the professional they
-    /// name.
-    pub client_tokens_act_for_professional: bool,
     /// The claim that carries the agency that issued the professional's
     /// identifier, when this issuer's tokens carry one.
     pub professional_issuing_authority: Option<String>,
@@ -247,9 +156,6 @@ impl IssuerSettings {
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
             patient: None,
-            requester: None,
-            assurance: None,
-            client_tokens_act_for_professional: false,
             professional_issuing_authority: None,
             national_contact_point: None,
         }
@@ -299,6 +205,17 @@ impl Verification {
         match self {
             Self::KeySet(settings) => settings.federation.as_ref(),
             Self::Introspection(settings) => settings.federation.as_ref(),
+        }
+    }
+
+    /// Returns the issuer's assurance table, `[auth.issuer.assurance]`: the
+    /// claim, the level of each of its values and the least level a
+    /// patient-data request needs, when the deployment declares it.
+    #[must_use]
+    pub fn assurance(&self) -> Option<&ferrohealth_smart::assurance::AssuranceSection> {
+        match self {
+            Self::KeySet(settings) => settings.assurance.as_ref(),
+            Self::Introspection(settings) => settings.assurance.as_ref(),
         }
     }
 
@@ -358,11 +275,6 @@ pub enum AuthFault {
     /// A key `[auth]` carries is read by no part of the gateway: it serves
     /// no SMART discovery document and grants nothing without a scope.
     Unread,
-    /// An assurance value is empty, or is declared at two levels.
-    AssuranceValue,
-    /// No value is declared at the minimum level or above it, so no token
-    /// could reach patient data.
-    AssuranceUnreachable,
     /// The correlation header names a header that carries a credential,
     /// which the access record would then hold.
     CorrelationCredential,
@@ -378,6 +290,17 @@ pub enum AuthFault {
     /// `[trust.issuer.national_contact_point]`, removed in favour of
     /// `[[auth.federation]]` and `[[federation.contact_point]]`.
     ContactPointMoved,
+    /// A `[[auth.basic.users]]` entry: the gateway admits no Basic caller.
+    BasicRemoved,
+    /// `[trust.issuer.requester]`, removed in favour of the NL fields of an
+    /// `[[auth.federation]]` table.
+    RequesterMoved,
+    /// `[trust.issuer.assurance]`, removed in favour of
+    /// `[auth.issuer.assurance]`.
+    AssuranceMoved,
+    /// `[trust.issuer] client_tokens_act_for_professional`, removed: a
+    /// client acting with no person reaches no patient data.
+    ActsForRemoved,
 }
 
 impl fmt::Display for AuthFault {
@@ -399,10 +322,6 @@ impl fmt::Display for AuthFault {
             Self::Unread => {
                 "is set, but the gateway serves no SMART discovery document and grants nothing without a scope"
             }
-            Self::AssuranceValue => "is empty, or is declared at two levels",
-            Self::AssuranceUnreachable => {
-                "declares no value at the minimum level or above it, so no token could reach patient data"
-            }
             Self::CorrelationCredential => {
                 "names a header that carries a credential, which the access record would then hold"
             }
@@ -414,6 +333,18 @@ impl fmt::Display for AuthFault {
             }
             Self::ContactPointUndeclared => {
                 "is a contact point, and no [[federation.contact_point]] table names it"
+            }
+            Self::RequesterMoved => {
+                "is removed: who asks for the data is read from the nl.professional_number, nl.role, nl.ura and nl.organisation_type field sources of the issuer's [[auth.federation]] table (kind = \"federation\")"
+            }
+            Self::AssuranceMoved => {
+                "is removed: declare the claim, the levels map and the minimum in the issuer's [auth.issuer.assurance] table"
+            }
+            Self::ActsForRemoved => {
+                "is removed: a token ferrohealth-smart classifies as a system's reaches no patient data; a professional acting through a client is a delegated person of a persons issuer"
+            }
+            Self::BasicRemoved => {
+                "is refused: the gateway admits no Basic caller; a machine authenticates with a client-credentials token (RFC 6749 §4.4) of an [[auth.issuer]], its client named in metrics.scrape_clients or pmir.feed_clients"
             }
             Self::ContactPointMoved => {
                 "is removed: declare a contact point as a kind = \"federation\" [[auth.issuer]] whose [[auth.federation]] table sets contact_point = true, with its correlation_header and additional_countries in [[federation.contact_point]]"
@@ -435,7 +366,8 @@ impl Auth {
     /// # Errors
     /// Returns [`Error::Smart`] for a section `ferrohealth-smart` refuses,
     /// [`Error::Auth`] naming the key and the [`AuthFault`] for one FerroFED
-    /// refuses, and the errors of `[trust]` and of
+    /// refuses, a `[[auth.basic.users]]` entry among them, and the errors
+    /// of `[trust]` and of
     /// [`contact_point::declare`].
     pub fn resolve(
         &self,
@@ -467,17 +399,17 @@ impl Auth {
             }
         }
         let no_issuer = matches!(&section.issuer, IssuerKey::List(entries) if entries.is_empty());
-        let no_basic = section
-            .basic
-            .as_ref()
-            .is_none_or(|basic| basic.users.is_empty());
         let mut keyed = Vec::new();
         let mut introspected = Vec::new();
-        let mut basic = None;
         let mut realm = None;
         let mut product_scope = None;
         let mut dpop = None;
-        if !(no_issuer && no_basic) {
+        let basic_user = section
+            .basic
+            .as_ref()
+            .and_then(|basic| basic.users.first())
+            .map(|user| user.user.clone());
+        if !no_issuer || basic_user.is_some() {
             let resolved = section.resolve().map_err(|source| Error::Smart {
                 section: String::from("auth"),
                 source: Box::new(source),
@@ -487,11 +419,14 @@ impl Auth {
             realm = resolved.realm;
             product_scope = resolved.product_scope;
             dpop = resolved.dpop;
-            if let (Some(store), Some(written)) = (resolved.basic, section.basic.clone())
-                && !written.users.is_empty()
-            {
-                basic = Some(BasicUsers::new(store, written));
-            }
+        }
+        // NOTE: RFC 6749 §4.4, a machine authenticates as a client; the crate refuses a
+        // Basic user granted a system/ scope first, and the gateway admits no other.
+        if let Some(user) = basic_user {
+            return Err(fault(
+                &format!("auth.basic.users {user:?}"),
+                AuthFault::BasicRemoved,
+            ));
         }
         let (mode, purpose_required, mut issuers) = trust.resolve(keyed, introspected)?;
         contact_point::declare(&mut issuers, &federation.contact_point)?;
@@ -501,7 +436,6 @@ impl Auth {
             product_scope,
             realm: realm.unwrap_or_else(|| DEFAULT_REALM.to_owned()),
             issuers,
-            basic,
             dpop,
         })
     }

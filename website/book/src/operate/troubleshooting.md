@@ -319,8 +319,8 @@ gateway was asked to stop; size the grace period
 **Symptom.** Prometheus reports the scrape target down with `401`, or the
 stored-query distribution answers `401` or `403`.
 
-**Cause.** `metrics.scrape_users` is set and the scrape does not carry the
-Basic credentials of one of them, or a write action's caller has no token
+**Cause.** `metrics.scrape_clients` is set and the scrape does not carry a
+client-credentials token of one of them, or a write action's caller has no token
 that verifies or no `auth.product_scope`.
 
 **Confirm.** `a request to the admin listener was refused at its
@@ -328,7 +328,7 @@ authentication` at `WARN` under `ferrofed::security`, with `event`
 `scrape-refused` and `reason` `missing`, `invalid` or `unlisted`, or `event`
 `admin-write-refused` and the client-authentication `reason`.
 
-**Fix.** Give the scrape job a scrape user's credentials in `basic_auth`, or
+**Fix.** Give the scrape job a scrape client's credentials in `oauth2`, or
 give the operator a token carrying `auth.product_scope`
 ([Who the admin listener serves](metrics.md#who-the-admin-listener-serves)).
 
@@ -488,8 +488,8 @@ which every row has.
 | `overloaded` | 503 | `server.max_concurrent_requests` requests were in flight. | `limit` `concurrency` under `ferrofed_server::overload`. | Size the limit ([The concurrency limit](overload.md#the-concurrency-limit)). |
 | `rate-limited` | 429 | One caller sent more than `[server.caller_rate]` admits. | `limit` `caller-rate` under `ferrofed_server::overload`. | Raise the rate, or the caller slows down ([The per-caller rate](overload.md#the-per-caller-rate)). |
 | `access-unrecorded` | 503 | The record of an access could not be stored. | `the access could not be recorded, so its answer is withheld` at `ERROR` under `ferrofed_server::access`. | Free the spool ([Requests are refused `503 access-unrecorded`](#requests-are-refused-503-access-unrecorded)). |
-| `natural-person-required` | 401 | A patient-data request's token names no natural person. | `caller-refused`, `reason` `natural-person`. | Use a user token, or declare `client_tokens_act_for_professional` ([Professionals and assurance](authentication.md#professionals-and-assurance)). |
-| `authentication-assurance-insufficient` | 401 | The token states no assurance at the issuer's minimum. | `caller-refused`, `reason` `assurance`. | The user authenticates at the level, or correct `[trust.issuer.assurance]` ([The assurance level](authentication.md#the-assurance-level)). |
+| `natural-person-required` | 401 | A patient-data request's token names no natural person. | `caller-refused`, `reason` `natural-person`. | Use a token of a person; a system's token reaches no patient data ([Professionals and assurance](authentication.md#professionals-and-assurance)). |
+| `authentication-assurance-insufficient` | 401 | The token states no assurance at the issuer's minimum. | `caller-refused`, `reason` `assurance`. | The user authenticates at the level, or correct `[auth.issuer.assurance]` ([The assurance level](authentication.md#the-assurance-level)). |
 | `contact-point-attributes-required` | 403 | A national contact point's token falls short of the MyHealth@EU contact-point profile. | `caller-refused`, `reason` `contact-point-attributes`. | The contact point sends what the eHDSI assertion carries under `ehdsi` ([National contact points](authentication.md#national-contact-points)). |
 | `emergency-limit-reached` | 403 | A professional a national contact point relays reached the limit of emergency accesses in the window. | `emergency-limit-reached` at `WARN` under `ferrofed::security`, naming the professional and `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS`. | None at the gateway: the limit holds until the oldest access leaves the window ([The emergency access limit](../integrate/national-contact-point.md#the-emergency-access-limit)). |
 | `emergency-uncounted` | 503 | The store did not answer when an emergency access was counted. | `a national contact point's emergency access could not be counted` at `ERROR` under `ferrofed_server::access::emergency`. | Bring the store back ([FerroFED's own store](store.md)). |

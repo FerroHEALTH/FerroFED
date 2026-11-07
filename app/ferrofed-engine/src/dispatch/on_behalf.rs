@@ -11,10 +11,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ferrofed_registry::id::EndpointId;
+use ferrohealth_smart::kind::IssuerKind;
 use openehr_its::rest::client::{Client, ClientError, Transport};
 use url::Url;
 
 use crate::onward::grant::exchange::SharedOnBehalf;
+use crate::onward::grant::lane::ReadOnly;
 
 use super::{DispatchOptions, NodeClient, NodeClients, SetupError, SharedCredentials};
 
@@ -37,6 +39,45 @@ impl<T: Transport + Clone> NodeClient<T> {
     pub fn with_on_behalf(mut self, source: SharedOnBehalf) -> Self {
         self.on_behalf = Some(source);
         self
+    }
+
+    /// The kind of the endpoint's onward lane, and the credentials provider
+    /// of one call under `options` through it, when the endpoint is reached
+    /// through one.
+    pub(crate) fn committing(
+        &self,
+        options: &DispatchOptions,
+    ) -> Option<(IssuerKind, SharedCredentials)> {
+        let source = self.on_behalf.as_ref()?;
+        let kind = source.committer_kind()?;
+        Some((
+            kind,
+            source.provider(&options.conveyance, &options.withheld),
+        ))
+    }
+
+    /// Refuses, with nothing sent and no token asked for, a request under
+    /// `options` that writes, when the endpoint's onward lane carries its
+    /// caller read-only; `reads` is whether the request only reads.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReadOnly`] naming the endpoint.
+    pub(crate) fn admit_write(
+        &self,
+        options: &DispatchOptions,
+        reads: bool,
+    ) -> Result<(), ReadOnly> {
+        let read_only = self
+            .on_behalf
+            .as_ref()
+            .is_some_and(|source| source.read_only(&options.conveyance));
+        if read_only && !reads {
+            return Err(ReadOnly {
+                endpoint: self.endpoint.clone(),
+            });
+        }
+        Ok(())
     }
 
     /// The ITS-REST client a request under `options` is sent through.

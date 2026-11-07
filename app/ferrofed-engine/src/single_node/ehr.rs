@@ -59,6 +59,10 @@ pub enum EhrCallError {
     /// was sent and the node was never asked (§11.5).
     #[error(transparent)]
     Expired(#[from] Expired),
+    /// A write through an onward lane that carries the caller read-only;
+    /// nothing was sent and no token was asked for.
+    #[error(transparent)]
+    ReadOnly(#[from] crate::onward::grant::lane::ReadOnly),
     /// The caller's identity could not be signed for the node, so nothing
     /// was sent (§13.1, N24).
     #[error("the caller's identity could not be conveyed to endpoint {endpoint}")]
@@ -179,6 +183,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             openehr_version: None,
             openehr_audit_details: None,
         };
+        self.admit_write(options, false)?;
         self.gate_ehr(("/ehr", None), &[("Prefer", PREFER_MINIMAL)], options)?;
         let call = options
             .call_options(self.endpoint())

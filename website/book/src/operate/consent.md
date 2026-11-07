@@ -130,18 +130,24 @@ timeout_ms = 1000                 # one round of questions, within the query's b
 
 [[auth.issuer]]                   # the issuer of your callers' tokens
 issuer = "https://issuer.example.org"
-kind = "persons"
+kind = "federation"
 audience = ["https://gateway.example.org/fed"]
-first_party_clients = ["example-clinical-app"]
 
-[[trust.issuer]]                  # FerroFED's policy for that issuer
+[[auth.federation]]               # what that issuer asserts
 issuer = "https://issuer.example.org"
+contact_point = false
+mapping = "iua"
+countries = ["NL"]
+issuing_authorities = ["CIBG"]
+provider_identifier_prefixes = ["urn:oid:2.16.528.1.1007.3.3."]
 
-[trust.issuer.requester]          # the claims of its tokens that name the requester
-professional = "uzi_number"       # the professional's UZI number
-role = "uzi_role"                 # the professional's UZI role code
-organisation = "ura"              # the organisation's URA
-organisation_type = "organisation_type"
+[auth.federation.fields]          # the claims of its tokens that name the requester
+"professional.country_code" = [{ constant = "NL" }]
+"professional.issuing_authority_name" = [{ constant = "CIBG" }]
+"nl.professional_number" = [{ claim = "uzi_number" }]   # the professional's UZI number
+"nl.role" = [{ claim = "uzi_role" }]                    # the professional's UZI role code
+"nl.ura" = [{ claim = "ura" }]                          # the organisation's URA
+"nl.organisation_type" = [{ claim = "organisation_type" }]
 ```
 
 `timeout_ms` bounds one round of questions, and it is a part of
@@ -170,11 +176,13 @@ What a deployment must provide:
   professional who asks, by UZI number and role, and their organisation, by
   URA and type. That is always the verified caller: Mitz records the
   professional and decides on their role, so the gateway never asks for
-  anyone else. Map, per trusted issuer, the four token claims that carry
-  them under `[trust.issuer.requester]`
+  anyone else. The caller is a professional of another domestic party, read
+  by `ferrohealth-smart` under the `federation` issuer's `[[auth.federation]]`
+  table, whose `nl.professional_number`, `nl.role`, `nl.ura` and
+  `nl.organisation_type` fields name the four
   ([Client authentication](authentication.md#configuration)); no
-  specification the gateway binds names these claims, so each is configured
-  and none has a default. A caller whose token does not carry all four is
+  specification the gateway binds names their claims, so each is configured
+  and none has a default. A caller of a `persons` issuer names no requester. A caller whose token does not carry all four is
   not asked about: Mitz is not called, no member is filtered, and each node
   checks consent itself (N27). The call is counted as `not-asked` with the
   reason `caller-claims`. A token that carries them in a form the question

@@ -23,7 +23,7 @@ use ferrofed_server::config::ihe::pmir::OnDrain;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::settings::Settings;
 
-use super::{FEED_USER, text};
+use super::{FEED_CLIENT, text};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -48,7 +48,7 @@ fn a_development_gateway_resolves_the_table() -> TestResult {
     let settings = resolve(&text)?.map_err(|error| error.to_string())?;
     let pmir = settings.pmir.ok_or("[pmir] is resolved")?;
     assert_eq!("/pmir/feed", pmir.path);
-    assert_eq!(vec![FEED_USER.to_owned()], pmir.feed_users);
+    assert_eq!(vec![FEED_CLIENT.to_owned()], pmir.feed_clients);
     Ok(())
 }
 
@@ -71,16 +71,12 @@ fn a_drain_keeps_the_subscription_unless_told_otherwise() -> TestResult {
 }
 
 #[test]
-fn a_feed_user_no_basic_user_writes_is_refused() -> TestResult {
+fn feed_clients_with_no_issuer_to_sign_their_tokens_are_refused() -> TestResult {
     let (_dir, text) = development("")?;
-    let text = text.replacen(
-        &format!("feed_users = [\"{FEED_USER}\"]"),
-        "feed_users = [\"unwritten-user\"]",
-        1,
-    );
+    let text = text.replacen(&crate::support::caller::auth_toml(), "", 1);
     let error = resolve(&text)?.err().ok_or("refused")?;
     assert!(
-        matches!(&error, ConfigError::Binding(BindingFault::FeedUser { user }) if user == "unwritten-user"),
+        matches!(&error, ConfigError::Binding(BindingFault::FeedIssuer)),
         "{error}"
     );
     Ok(())
@@ -89,7 +85,7 @@ fn a_feed_user_no_basic_user_writes_is_refused() -> TestResult {
 #[test]
 fn a_table_without_a_registry_is_refused() -> TestResult {
     let text = format!(
-        "[pmir]\nurl = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_users = [\"{FEED_USER}\"]\n"
+        "[pmir]\nurl = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_clients = [\"{FEED_CLIENT}\"]\n"
     );
     let error = resolve(&text)?.err().ok_or("refused")?;
     assert!(
@@ -100,12 +96,12 @@ fn a_table_without_a_registry_is_refused() -> TestResult {
 }
 
 #[test]
-fn a_table_without_a_feed_user_is_refused() -> TestResult {
+fn a_table_without_a_feed_client_is_refused() -> TestResult {
     let (_dir, text) = development("")?;
-    let text = text.replacen(&format!("feed_users = [\"{FEED_USER}\"]\n"), "", 1);
+    let text = text.replacen(&format!("feed_clients = [\"{FEED_CLIENT}\"]\n"), "", 1);
     let error = resolve(&text)?.err().ok_or("refused")?;
     assert!(
-        matches!(&error, ConfigError::Missing { key } if key == "pmir.feed_users"),
+        matches!(&error, ConfigError::Missing { key } if key == "pmir.feed_clients"),
         "{error}"
     );
     Ok(())

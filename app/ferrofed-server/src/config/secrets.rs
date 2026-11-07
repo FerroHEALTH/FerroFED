@@ -9,12 +9,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::onward::dpop::Prover;
+use ferrofed_engine::onward::grant::lane::Organisations;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::mtls::Thumbprint;
 use ferrofed_engine::onward::token::MAX_ASSERTION_LIFETIME;
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
 use ferrohealth_secret::file::read_secret;
 use ferrohealth_secret::secret::Secret;
+use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
@@ -23,6 +25,7 @@ use crate::config::error::Error;
 use crate::config::error::basic::BasicFault;
 use crate::config::error::credentials::CredentialsFault;
 use crate::config::grant;
+use crate::config::oauth::Onward;
 use crate::config::public_url::PublicUrl;
 use crate::config::settings::{JWKS_PATH, Scheme, SigningSettings};
 use crate::config::tls::{self, TlsFault, TlsSettings};
@@ -38,6 +41,12 @@ pub(crate) fn resolve_credentials(
 ) -> Result<Scheme, Error> {
     if credentials.names_tls() {
         return Err(TlsFault::OnService {
+            section: section.to_owned(),
+        }
+        .into());
+    }
+    if credentials.onward.is_some() {
+        return Err(CredentialsFault::OnwardOnService {
             section: section.to_owned(),
         }
         .into());
@@ -132,6 +141,22 @@ fn scheme(
         })
     };
     let basic = credentials.user.is_some() || password.is_some();
+    if credentials.onward.is_some()
+        && (basic || credentials.oauth2.is_some() || credentials.fapi2.is_some() || bound)
+    {
+        return Err(refused());
+    }
+    if credentials.onward_organisations && credentials.onward.is_none() {
+        return Err(CredentialsFault::OnwardOrganisations {
+            section: section.to_owned(),
+        }
+        .into());
+    }
+    if credentials.onward.is_some() && credentials.oauth.is_none() {
+        return Err(Error::Missing {
+            key: format!("{section}.oauth"),
+        });
+    }
     if let Some(fapi2) = &credentials.fapi2 {
         if basic || credentials.oauth.is_some() || credentials.oauth2.is_some() || bound {
             return Err(refused());
@@ -159,11 +184,7 @@ fn scheme(
         if basic || credentials.oauth2.is_some() {
             return Err(refused());
         }
-        let grant = oauth.resolve(&format!("{section}.oauth"))?;
-        return Ok(Scheme::Oauth {
-            grant: Box::new(grant),
-            written: Box::new(oauth.clone()),
-        });
+        return oauth_scheme(section, oauth, credentials);
     }
     if let Some(oauth2) = &credentials.oauth2 {
         if basic {
@@ -194,6 +215,40 @@ fn scheme(
             section: section.to_owned(),
         })),
     }
+}
+
+/// Returns the scheme of `section`'s `oauth` table, with the onward lane it
+/// authenticates when `credentials` write one, carrying another party's
+/// organisation when they opt in.
+fn oauth_scheme(
+    section: &str,
+    oauth: &crate::config::oauth::Oauth,
+    credentials: &Credentials,
+) -> Result<Scheme, Error> {
+    let grant = oauth.resolve(&format!("{section}.oauth"))?;
+    let onward = credentials
+        .onward
+        .as_ref()
+        .map(|written| Onward::resolve(&format!("{section}.onward"), written, grant.clone()))
+        .transpose()?;
+    let onward = match (onward, credentials.onward_organisations) {
+        (Some(onward), true) if onward.kind == IssuerKind::Federation => Some(Onward {
+            organisations: Organisations::ReadOnly,
+            ..onward
+        }),
+        (_, true) => {
+            return Err(CredentialsFault::OnwardOrganisations {
+                section: section.to_owned(),
+            }
+            .into());
+        }
+        (onward, false) => onward,
+    };
+    Ok(Scheme::Oauth {
+        grant: Box::new(grant),
+        written: Box::new(oauth.clone()),
+        onward: onward.map(Box::new),
+    })
 }
 
 /// The key the secret `name` of `section` was read from: its `_file` sibling

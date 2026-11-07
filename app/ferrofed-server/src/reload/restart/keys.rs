@@ -202,8 +202,8 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("metrics.listen", |boot, fresh| {
         boot.metrics.listen != fresh.metrics.listen
     }),
-    ("metrics.scrape_users", |boot, fresh| {
-        boot.metrics.scrape_users != fresh.metrics.scrape_users
+    ("metrics.scrape_clients", |boot, fresh| {
+        boot.metrics.scrape_clients != fresh.metrics.scrape_clients
     }),
 ];
 

@@ -333,20 +333,21 @@ impl From<&Denied> for Refused {
     }
 }
 
-/// Why a Basic credential was not admitted where only named Basic users
-/// are (RFC 7617).
+/// Why a machine was not admitted where only named client-credentials
+/// clients are (RFC 6749 §4.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum BasicRefusal {
-    /// The request carries no Basic credential.
+pub enum MachineRefusal {
+    /// The request carries no bearer token.
     Missing,
-    /// The Basic credential does not verify.
+    /// The bearer token does not verify.
     Invalid,
-    /// The Basic credential verifies, and its user is not one admitted here.
+    /// The token verifies, and it is no system's or its client is not one
+    /// admitted here.
     Unlisted,
 }
 
-impl BasicRefusal {
+impl MachineRefusal {
     /// The reason the security log names.
     #[must_use]
     pub const fn reason(self) -> &'static str {
@@ -358,16 +359,16 @@ impl BasicRefusal {
     }
 
     /// The `WWW-Authenticate` challenge naming `realm` the refusal carries:
-    /// one on a `401`, none on a `403` (RFC 7617 §2, §2.1).
+    /// one on a `401`, none on a `403` (RFC 6750 §3).
     #[must_use]
     pub fn challenge(self, realm: &str) -> Option<HeaderValue> {
         let refusal = match self {
             Self::Missing => SmartRefusal::Missing(Schemes {
-                bearer: false,
-                basic: true,
+                bearer: true,
+                basic: false,
                 dpop: false,
             }),
-            Self::Invalid => SmartRefusal::InvalidBasic,
+            Self::Invalid => SmartRefusal::InvalidToken,
             Self::Unlisted => return None,
         };
         refusal
@@ -376,7 +377,7 @@ impl BasicRefusal {
     }
 
     /// The status of the refusal: `401` for a credential that is missing or
-    /// does not verify, `403` for a user not admitted here.
+    /// does not verify, `403` for a client not admitted here.
     #[must_use]
     pub const fn status(self) -> StatusCode {
         match self {
@@ -385,8 +386,8 @@ impl BasicRefusal {
         }
     }
 
-    /// The answer to the refused request: the error body, with the Basic
-    /// challenge naming `realm` on a `401` (RFC 7617 §2, §2.1).
+    /// The answer to the refused request: the error body, with the bearer
+    /// challenge naming `realm` on a `401` (RFC 6750 §3).
     #[must_use]
     pub fn response(self, realm: &str, request_id: &str) -> Response {
         let code = match self {

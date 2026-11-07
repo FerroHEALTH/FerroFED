@@ -41,6 +41,8 @@ use crate::dispatch::reported;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::forwarded::UnlistedParameter;
 use crate::hygiene::{self, Composed, Part};
+use crate::onward::grant::lane::ReadOnly;
+use crate::single_node::committer::CommitterError;
 use crate::single_node::{under, withheld_part};
 use crate::trace_context;
 use ferrofed_registry::id::{EhrId, EndpointId};
@@ -274,6 +276,21 @@ pub enum ForwardError {
     /// what the request may carry and nothing was sent.
     #[error("the request addresses no ITS-REST operation, so it was not sent")]
     Unrouted,
+    /// A `CONTRIBUTION` through an onward lane got no committer; nothing was sent.
+    #[error(
+        "the CONTRIBUTION to endpoint {endpoint} could not name its committer, so it was not sent"
+    )]
+    Committer {
+        /// The endpoint.
+        endpoint: EndpointId,
+        /// Why it could not.
+        #[source]
+        source: CommitterError,
+    },
+    /// A write through an onward lane that carries the caller read-only;
+    /// nothing was sent and no token was asked for.
+    #[error(transparent)]
+    ReadOnly(#[from] ReadOnly),
 }
 
 impl ForwardError {
@@ -311,9 +328,9 @@ pub struct HeldRequest {
     method: Method,
     path: String,
     query: Option<String>,
-    operation: RouteMatch,
+    pub(super) operation: RouteMatch,
     headers: HeaderMap,
-    body: Vec<u8>,
+    pub(super) body: Vec<u8>,
 }
 
 impl HeldRequest {
@@ -457,6 +474,10 @@ impl<T: Transport + Clone> NodeClient<T> {
     ) -> Option<Result<Forwarded, ForwardError>> {
         let operation = request.operation.operation_id;
         let budgeted = async {
+            let request = match self.committed(request, options).await {
+                Ok(request) => request,
+                Err(refused) => return Some(Err(refused)),
+            };
             let outgoing = match self.outgoing(request, options) {
                 Ok(outgoing) => outgoing,
                 Err(refused) => return Some(Err(refused)),
@@ -487,6 +508,7 @@ impl<T: Transport + Clone> NodeClient<T> {
         request: HeldRequest,
         options: &DispatchOptions,
     ) -> Result<Forwarded, ForwardError> {
+        let request = self.committed(request, options).await?;
         let outgoing = self.outgoing(request, options)?;
         let slot = self.slot(options.deadline()).await?;
         self.sent(outgoing, slot, options).await

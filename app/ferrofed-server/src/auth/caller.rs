@@ -28,8 +28,9 @@
 
 use std::fmt;
 
-use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
+use ferrofed_engine::conveyance::caller::Acting;
 use ferrofed_engine::conveyance::relayed::{Relayed, Role};
+use ferrohealth_smart::assurance::AssuranceLevel;
 
 use crate::auth::contact_point::TrcPatient;
 use ferrofed_identity::role::behalf::{self, OnBehalfOf};
@@ -38,6 +39,7 @@ use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrohealth_secret::secret::Secret;
+use ferrohealth_smart::client::onward::SubjectToken as OnwardSubject;
 use ferrohealth_smart::federation::External;
 use ferrohealth_smart::openehr::smart_scopes::SmartScope;
 use secrecy::SecretString;
@@ -81,15 +83,15 @@ pub struct Caller {
     /// The patient the caller's grant is confined to, when only a
     /// `patient/` grant covers the operation.
     patient: Option<PatientContext>,
-    /// Who asks for the data, as the claims the issuer's
-    /// `[trust.issuer.requester]` names state it, when the token carries them
-    /// all (§13.4).
+    /// Who asks for the data, as the `[[auth.federation]]` field sources of
+    /// a professional of another party state it, when they state it whole
+    /// (§13.4).
     requester: Option<Requester>,
     /// The professional's identification the token states.
     professional: Professional,
-    /// The assurance level the caller's authentication reached, as its
-    /// issuer's `[trust.issuer.assurance]` reads the token, when the issuer
-    /// declares one and the token carries a value it declares.
+    /// The assurance level the caller's authentication reached, as
+    /// `ferrohealth-smart` assessed it under the issuer's
+    /// `[auth.issuer.assurance]`, when the token carries a value it maps.
     assurance: Option<AssuranceLevel>,
     /// Who acts: the person the token names, or a client application.
     acting: Acting,
@@ -215,14 +217,46 @@ impl fmt::Debug for Professional {
 /// nothing of it, and it is never logged or conveyed to a node: it reaches
 /// only the authorization server of a node whose grant exchanges it
 /// (RFC 8693 §2.1).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerifiedToken(Secret);
+///
+/// It may also carry the caller as `ferrohealth-smart` verified it, the
+/// subject of a node's onward lane; two tokens compare by their text alone.
+#[derive(Clone)]
+pub struct VerifiedToken {
+    /// The token text.
+    secret: Secret,
+    /// The caller behind it, as the onward lanes exchange it.
+    onward: Option<OnwardSubject>,
+}
 
 impl VerifiedToken {
     /// Returns the token text, for the one request that exchanges it.
     #[must_use]
     pub fn secret(&self) -> SecretString {
-        self.0.to_secret_string()
+        self.secret.to_secret_string()
+    }
+
+    /// Returns the caller behind the token as `ferrohealth-smart` verified
+    /// it, when the gateway kept it for a node's onward lane.
+    #[must_use]
+    pub fn onward(&self) -> Option<&OnwardSubject> {
+        self.onward.as_ref()
+    }
+}
+
+impl PartialEq for VerifiedToken {
+    fn eq(&self, other: &Self) -> bool {
+        self.secret == other.secret
+    }
+}
+
+impl Eq for VerifiedToken {}
+
+impl fmt::Debug for VerifiedToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VerifiedToken")
+            .field("secret", &self.secret)
+            .field("onward", &self.onward.is_some())
+            .finish()
     }
 }
 
@@ -416,14 +450,6 @@ impl Caller {
         self.representative.as_ref()
     }
 
-    /// Returns whether the token names the professional a client acts for:
-    /// an IUA `national_provider_identifier`, or the professional of the
-    /// requester its issuer's `[trust.issuer.requester]` reads.
-    #[must_use]
-    pub fn names_professional(&self) -> bool {
-        self.professional.identifier.is_some() || self.requester.is_some()
-    }
-
     /// Returns this caller, admitted under `audience`, the audience their
     /// token names this gateway by.
     #[must_use]
@@ -564,7 +590,21 @@ impl Caller {
             self.verified_by,
             VerifiedBy::Signature | VerifiedBy::Introspection
         ) {
-            self.token = Some(VerifiedToken(Secret::from(token)));
+            self.token = Some(VerifiedToken {
+                secret: Secret::from(token),
+                onward: None,
+            });
+        }
+        self
+    }
+
+    /// Returns this caller, its kept token carrying `onward`, the caller as
+    /// `ferrohealth-smart` verified it, for a node's onward lane; a caller
+    /// that keeps no token keeps none of it either.
+    #[must_use]
+    pub fn with_onward(mut self, onward: Option<OnwardSubject>) -> Self {
+        if let Some(token) = self.token.as_mut() {
+            token.onward = onward;
         }
         self
     }

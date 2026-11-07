@@ -27,7 +27,7 @@
 #      audit spool left where the example puts it, since config check writes
 #      nothing;
 #   7. runs it again without the [signing] table, and again without the
-#      [metrics] scrape user while the admin listener is off loopback, each
+#      [metrics] scrape client while the admin listener is off loopback, each
 #      of which it must refuse by name; and
 #   8. checks that a configuration with a registry sends its access records
 #      to an Audit Record Repository, never to the log target, which names
@@ -273,20 +273,20 @@ else
 fi
 
 # The admin listener is off loopback, so the example without its scrape
-# user is refused, naming the key that authenticates the scrape.
+# client is refused, naming the key that authenticates the scrape.
 awk '
   /^\[/ { inside = ($0 == "[metrics]") }
-  inside && $1 == "scrape_users" { next }
+  inside && $1 == "scrape_clients" { next }
   { print }
 ' "$work/ferrofed.toml" > "$work/unscraped.toml"
 if cmp -s "$work/ferrofed.toml" "$work/unscraped.toml"; then
-  bad "configmap.yaml sets no [metrics] scrape_users for its admin listener off loopback"
+  bad "configmap.yaml sets no [metrics] scrape_clients for its admin listener off loopback"
 elif out="$(check "$work/unscraped.toml" 2>&1)"; then
-  bad "ferrofed config check accepts the Kubernetes example without metrics.scrape_users"
-elif ! grep -q 'metrics.scrape_users' <<< "$out"; then
-  bad "ferrofed config check refuses the example without its scrape user without naming it: $out"
+  bad "ferrofed config check accepts the Kubernetes example without metrics.scrape_clients"
+elif ! grep -q 'metrics.scrape_clients' <<< "$out"; then
+  bad "ferrofed config check refuses the example without its scrape client without naming it: $out"
 else
-  echo "OK: the example without its scrape user is refused by name"
+  echo "OK: the example without its scrape client is refused by name"
 fi
 
 echo "== the access log names the caller and the patient"

@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! `[metrics]` and the admin listener's authentication: outside the
-//! development profile, a listener off loopback is refused unless a Basic
-//! user of `[[auth.basic.users]]` named in `scrape_users` or a client CA
-//! authenticates the scrape; a user's password hash is a secret with a
-//! `_file` sibling, never shown. No specification governs the admin
-//! listener: our own design.
+//! development profile, a listener off loopback is refused unless a client
+//! named in `scrape_clients`, whose client-credentials token a trusted issuer
+//! signs, or a client CA authenticates the scrape; and `[[auth.basic.users]]`
+//! is refused, naming the user. No specification governs the admin listener:
+//! our own design.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -21,8 +21,8 @@ use ferrofed_server::config::error::server::ServerFault;
 use ferrofed_server::config::settings::Settings;
 use ferrofed_testkit::listener::ListenerCertificates;
 
-use super::{everything, refusal, secret_file};
-use crate::support::caller::{SCRAPE_HASH, SCRAPE_USER};
+use super::refusal;
+use crate::support::caller::{SCRAPE_CLIENT, auth_toml};
 
 type TestResult = Result<(), Box<dyn StdError>>;
 
@@ -35,14 +35,9 @@ fn remote(listen: &str, extra: &str) -> String {
     format!("[metrics]\nlisten = \"{listen}\"\nallow_remote = true\n{extra}")
 }
 
-/// The `[metrics]` keys that name [`SCRAPE_USER`] as the scrape's user.
+/// The `[metrics]` keys that name [`SCRAPE_CLIENT`] as the scrape's client.
 fn scraping() -> String {
-    format!("scrape_users = [\"{SCRAPE_USER}\"]\n")
-}
-
-/// `[auth]` writing [`SCRAPE_USER`] as a Basic user with `password` keys.
-fn basic_user(password: &str) -> String {
-    format!("\n[auth]\n\n[[auth.basic.users]]\nuser = \"{SCRAPE_USER}\"\n{password}")
+    format!("scrape_clients = [\"{SCRAPE_CLIENT}\"]\n")
 }
 
 /// Resolves `text` with no environment.
@@ -65,7 +60,8 @@ fn production_refuses_a_remote_listener_nothing_authenticates() -> TestResult {
         );
         let shown = refused.to_string();
         assert!(
-            shown.contains("metrics.scrape_users") && shown.contains("metrics.tls.client_ca_file"),
+            shown.contains("metrics.scrape_clients")
+                && shown.contains("metrics.tls.client_ca_file"),
             "the refusal names what authenticates the scrape: {shown}"
         );
     }
@@ -73,86 +69,48 @@ fn production_refuses_a_remote_listener_nothing_authenticates() -> TestResult {
 }
 
 #[test]
-fn a_scrape_user_admits_a_remote_listener_and_its_hash_is_never_shown() -> TestResult {
+fn a_scrape_client_admits_a_remote_listener() -> TestResult {
     for listen in REMOTE {
-        let text = format!(
-            "{}{}",
-            remote(listen, &scraping()),
-            basic_user(&format!("password_hash = \"{SCRAPE_HASH}\"\n"))
-        );
+        let text = format!("{}{}", remote(listen, &scraping()), auth_toml());
         let settings = resolved(&text)?;
         assert_eq!(Some(listen.parse()?), settings.metrics.listen);
-        assert_eq!(vec![SCRAPE_USER.to_owned()], settings.metrics.scrape_users);
-        assert!(!format!("{settings:?}").contains(SCRAPE_HASH));
+        assert_eq!(
+            vec![SCRAPE_CLIENT.to_owned()],
+            settings.metrics.scrape_clients
+        );
     }
     Ok(())
 }
 
 #[test]
-fn a_scrape_user_no_basic_user_writes_is_refused() -> TestResult {
+fn a_scrape_client_with_no_issuer_to_sign_its_token_is_refused() -> TestResult {
     let refused = refusal(&remote("127.0.0.1:9464", &scraping()))?;
     assert!(
-        matches!(&refused, Error::Server(ServerFault::ScrapeUser { user }) if user == SCRAPE_USER),
+        matches!(&refused, Error::Server(ServerFault::ScrapeIssuer)),
         "{refused}"
     );
     Ok(())
 }
 
+// RFC 6749 §4.4: a machine authenticates as a client, so a Basic user is refused
+// and the refusal names it; one granted a `system/` scope is refused by the crate
+// first (`auth::config`).
 #[test]
-fn the_password_hash_is_read_from_its_file() -> TestResult {
-    let file = secret_file(&format!("{SCRAPE_HASH}\n"))?;
-    let text = format!(
-        "{}{}",
-        remote("0.0.0.0:9464", &scraping()),
-        basic_user(&format!("password_hash_file = {}\n", quoted(file.path())))
-    );
-    let settings = resolved(&text)?;
-    assert!(
-        settings
-            .server
-            .auth
-            .basic
-            .as_ref()
-            .is_some_and(|basic| basic.names(SCRAPE_USER))
-    );
-    Ok(())
-}
-
-#[test]
-fn the_password_hash_and_its_file_together_are_refused() -> TestResult {
-    let file = secret_file(SCRAPE_HASH)?;
-    let text = format!(
-        "{}{}",
-        remote("127.0.0.1:9464", &scraping()),
-        basic_user(&format!(
-            "password_hash = \"{SCRAPE_HASH}\"\npassword_hash_file = {}\n",
-            quoted(file.path())
-        ))
-    );
-    let refused = refusal(&text)?;
-    assert!(
-        matches!(&refused, Error::Smart { section, .. } if section == "auth"),
-        "{refused}"
-    );
-    assert!(!everything(&refused).contains(SCRAPE_HASH), "{refused}");
-    Ok(())
-}
-
-#[test]
-fn an_empty_or_missing_password_hash_file_is_refused() -> TestResult {
-    let empty = secret_file("\n")?;
-    let dir = tempfile::tempdir()?;
-    for path in [empty.path().to_owned(), dir.path().join("absent")] {
+fn a_basic_user_is_refused_naming_the_user() -> TestResult {
+    {
         let text = format!(
-            "{}{}",
+            "{}{}\n[[auth.basic.users]]\nuser = \"synthetic-basic-machine\"\npassword_hash = \"$argon2id$v=19$m=19456,t=2,p=1$c3ludGhldGljLXNhbHQtMTY$4es9c3W3V1fKeaFNam0B7dB/9kjZXP6/+9VB3yhq8ZA\"\n",
             remote("127.0.0.1:9464", &scraping()),
-            basic_user(&format!("password_hash_file = {}\n", quoted(&path)))
+            auth_toml()
         );
         let refused = refusal(&text)?;
         assert!(
-            matches!(&refused, Error::Smart { section, .. } if section == "auth"),
-            "{}: {refused}",
-            path.display()
+            matches!(&refused, Error::Auth { key, .. } if key.contains("synthetic-basic-machine")),
+            "{refused}"
+        );
+        assert!(
+            refused.to_string().contains("metrics.scrape_clients"),
+            "the refusal names the replacement: {refused}"
         );
     }
     Ok(())
@@ -192,7 +150,7 @@ fn development_and_loopback_need_no_scrape_authentication() -> TestResult {
             remote(listen, "")
         ))?;
         assert_eq!(Some(listen.parse()?), settings.metrics.listen);
-        assert_eq!(settings.metrics.scrape_users, Vec::<String>::new());
+        assert_eq!(settings.metrics.scrape_clients, Vec::<String>::new());
     }
     for loopback in ["127.0.0.1:9464", "[::1]:9464"] {
         let settings = resolved(&format!("[metrics]\nlisten = \"{loopback}\"\n"))?;

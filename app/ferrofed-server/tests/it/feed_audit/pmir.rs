@@ -45,12 +45,12 @@ fn audited(repository: &FeedRepository, extra: &str) -> String {
     )
 }
 
-/// The ITI-93 request carrying `body` with the feed user's credentials.
-fn message(body: String) -> Result<Request<Body>, http::Error> {
-    Request::post(PATH)
+/// The ITI-93 request carrying `body` with the feed client's token.
+fn message(body: String) -> Result<Request<Body>, Box<dyn Error>> {
+    Ok(Request::post(PATH)
         .header(header::CONTENT_TYPE, "application/fhir+json")
-        .header(header::AUTHORIZATION, crate::pmir::feed_credentials())
-        .body(Body::from(body))
+        .header(header::AUTHORIZATION, crate::pmir::feed_credentials()?)
+        .body(Body::from(body))?)
 }
 
 #[tokio::test]

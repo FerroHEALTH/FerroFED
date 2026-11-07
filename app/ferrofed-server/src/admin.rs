@@ -24,9 +24,9 @@
 //! `[auth]`) only for a caller whose token carries `[auth] product_scope`,
 //! from any peer ([`operator_only`]). Under `profile = "development"` a
 //! loopback peer that presents no credential is admitted as well. `GET
-//! /metrics` is open unless `[metrics] scrape_users` names Basic users, and
-//! then answers only a scrape that authenticates as one of them with HTTP
-//! Basic, checked against `[[auth.basic.users]]` ([`scrape`]). Every refusal
+//! /metrics` is open unless `[metrics] scrape_clients` names clients, and
+//! then answers only a scrape whose client-credentials token a trusted
+//! issuer signed for one of them ([`scrape`]). Every refusal
 //! is an [`AdminRefusal`], and every write action that ran is recorded with
 //! its [`Operator`].
 // NOTE: no specification governs this: our own design; §12.7 gives drift repair
@@ -50,7 +50,7 @@ use http::{HeaderMap, HeaderValue, StatusCode, header};
 
 use crate::auth::operator::Operator;
 use crate::auth::permission::Requirement;
-use crate::auth::refusal::{BasicRefusal, Refused};
+use crate::auth::refusal::{MachineRefusal, Refused};
 use crate::auth::trust::Trust;
 use crate::config::auth::AuthSettings;
 use crate::config::settings::Settings;
@@ -91,9 +91,9 @@ pub enum AdminRefusal {
     #[error("client authentication refused the caller of an admin action: {}", .0.refusal.description())]
     Caller(Refused),
     /// A scrape of `GET /metrics` carries no Basic credential of a user in
-    /// `[metrics] scrape_users`.
+    /// `[metrics] scrape_clients`.
     #[error("the scrape carries no Basic credential of a scrape user: {}", .0.reason())]
-    Scrape(BasicRefusal),
+    Scrape(MachineRefusal),
 }
 
 impl AdminRefusal {
@@ -116,7 +116,7 @@ impl AdminRefusal {
     }
 
     /// The answer to the refused request, its challenge naming `realm`: the
-    /// gate's answer for a caller, and the Basic challenge of RFC 7617 for a
+    /// gate's answer for a caller, and the bearer challenge of RFC 6750 for a
     /// scrape.
     #[must_use]
     pub fn response(self, realm: &str, request_id: &str) -> Response {
@@ -128,7 +128,7 @@ impl AdminRefusal {
 }
 
 /// Who the admin listener admits: the verifier of `[auth]`, the deployment
-/// profile, and the Basic users a scrape may authenticate as.
+/// profile, and the clients a scrape may authenticate as.
 #[derive(Debug)]
 pub struct Access {
     /// The verifier of every write action's caller and every scrape,
@@ -138,37 +138,37 @@ pub struct Access {
     profile: Profile,
     /// The Basic users a scrape may authenticate as; empty leaves the
     /// scrape open.
-    scrape_users: Vec<String>,
+    scrape_clients: Vec<String>,
 }
 
 impl Access {
     /// Returns the access that verifies a write action's caller as `auth`
-    /// describes, under `profile`, with `scrape_users` guarding the scrape.
+    /// describes, under `profile`, with `scrape_clients` guarding the scrape.
     #[must_use]
-    pub fn new(auth: &AuthSettings, profile: Profile, scrape_users: Vec<String>) -> Self {
-        Self::sharing(Arc::new(Trust::new(auth)), profile, scrape_users)
+    pub fn new(auth: &AuthSettings, profile: Profile, scrape_clients: Vec<String>) -> Self {
+        Self::sharing(Arc::new(Trust::new(auth)), profile, scrape_clients)
     }
 
     /// Returns the access that verifies a write action's caller with the
     /// gate `trust` holds when the request arrives, the one the client
     /// listener shares, so a reload of `[auth]` reaches both.
     #[must_use]
-    pub fn sharing(trust: Arc<Trust>, profile: Profile, scrape_users: Vec<String>) -> Self {
+    pub fn sharing(trust: Arc<Trust>, profile: Profile, scrape_clients: Vec<String>) -> Self {
         Self {
             trust,
             profile,
-            scrape_users,
+            scrape_clients,
         }
     }
 
     /// Returns the access `settings` describe: `[auth]`, the profile, and
-    /// `[metrics] scrape_users`.
+    /// `[metrics] scrape_clients`.
     #[must_use]
     pub fn of(settings: &Settings) -> Self {
         Self::new(
             &settings.server.auth,
             settings.profile,
-            settings.metrics.scrape_users.clone(),
+            settings.metrics.scrape_clients.clone(),
         )
     }
 
@@ -203,18 +203,18 @@ impl Access {
     }
 
     /// Admits a scrape with `headers`: any, unless scrape users are named,
-    /// and then one whose Basic credential is one of theirs.
+    /// and then one whose client-credentials token names one of them.
     ///
     /// # Errors
-    /// Returns [`AdminRefusal::Scrape`] with the gate's refusal of the Basic
-    /// credential.
+    /// Returns [`AdminRefusal::Scrape`] with the gate's refusal of the scrape's
+    /// token.
     pub async fn admit_scrape(&self, headers: &HeaderMap) -> Result<(), AdminRefusal> {
-        if self.scrape_users.is_empty() {
+        if self.scrape_clients.is_empty() {
             return Ok(());
         }
         self.trust
             .gate()
-            .admit_basic(headers, &self.scrape_users)
+            .admit_machine(headers, &self.scrape_clients)
             .await
             .map(|_user| ())
             .map_err(AdminRefusal::Scrape)
