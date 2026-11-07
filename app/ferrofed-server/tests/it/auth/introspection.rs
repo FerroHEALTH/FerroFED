@@ -9,16 +9,14 @@
     reason = "a test asserts, and returns its setup errors"
 )]
 
-use std::collections::BTreeMap;
 use std::error::Error;
 
-use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use ferrofed_server::auth::refusal::Refusal;
-use ferrofed_server::config::auth::assurance::Assurance;
 use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::{ACT_REASON, METADATA_PATH};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::unreachable;
+use ferrohealth_smart::assurance::AssuranceLevel;
 use ferrohealth_smart::config::AuthSection;
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -178,19 +176,14 @@ async fn an_answer_is_held_to_the_issuers_least_level() -> TestResult {
     };
     let requiring = |endpoint: &str| -> Result<AuthSettings, Box<dyn Error>> {
         let mut auth = introspecting(endpoint)?;
-        for issuer in &mut auth.issuers {
-            issuer.assurance = Some(Assurance {
-                claim: String::from("acr"),
-                minimum: AssuranceLevel::High,
-                values: BTreeMap::from([
-                    (
-                        String::from("urn:example:loa:substantial"),
-                        AssuranceLevel::Substantial,
-                    ),
-                    (String::from("urn:example:loa:high"), AssuranceLevel::High),
-                ]),
-            });
-        }
+        crate::support::caller::assuring(
+            &mut auth,
+            AssuranceLevel::High,
+            &[
+                ("urn:example:loa:substantial", AssuranceLevel::Substantial),
+                ("urn:example:loa:high", AssuranceLevel::High),
+            ],
+        );
         Ok(auth)
     };
     let substantial = endpoint(200, stating("urn:example:loa:substantial")).await;

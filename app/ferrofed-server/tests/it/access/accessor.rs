@@ -13,15 +13,13 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
-use std::collections::BTreeMap;
 use std::error::Error;
 
 use axum::body::Body;
-use ferrofed_engine::conveyance::caller::AssuranceLevel;
 use ferrofed_server::config::auth::AuthSettings;
-use ferrofed_server::config::auth::assurance::Assurance;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::issuer::Claims;
+use ferrohealth_smart::assurance::AssuranceLevel;
 use http::{Request, StatusCode};
 use serde_json::Value;
 
@@ -53,22 +51,18 @@ const IDENTIFIER: &str = "urn:oid:2.999.7.1|hp-0742";
 /// The synthetic `client_id` of a national contact point's connector.
 const CONNECTOR: &str = "Qz7-national-connector";
 
-/// The suite's `[auth]`, its issuer reading `acr` at the levels above and
-/// requiring `minimum`, and declaring its client tokens as acting for a
-/// professional when `clients` is set.
-fn assured(minimum: AssuranceLevel, clients: bool) -> AuthSettings {
+/// The suite's `[auth]`, its issuer's `[auth.issuer.assurance]` reading
+/// `acr` at the levels above and requiring `minimum`.
+fn assured(minimum: AssuranceLevel) -> AuthSettings {
     let mut auth = support::caller::auth();
-    for issuer in &mut auth.issuers {
-        issuer.assurance = Some(Assurance {
-            claim: String::from("acr"),
-            minimum,
-            values: BTreeMap::from([
-                (SUBSTANTIAL.to_owned(), AssuranceLevel::Substantial),
-                (HIGH.to_owned(), AssuranceLevel::High),
-            ]),
-        });
-        issuer.client_tokens_act_for_professional = clients;
-    }
+    support::caller::assuring(
+        &mut auth,
+        minimum,
+        &[
+            (SUBSTANTIAL, AssuranceLevel::Substantial),
+            (HIGH, AssuranceLevel::High),
+        ],
+    );
     auth
 }
 
@@ -81,12 +75,6 @@ fn professional(acr: &str) -> Claims {
         extensions.ihe_iua.subject_name = Some(NAME.to_owned());
         extensions.ihe_iua.national_provider_identifier = Some(IDENTIFIER.to_owned());
     }
-    claims
-}
-
-/// `claims` as a client token: its `sub` is its `client_id`.
-fn as_client(mut claims: Claims) -> Claims {
-    claims.sub.clone_from(&claims.client_id);
     claims
 }
 
@@ -218,7 +206,7 @@ fn only_in_the_person(record: &Value, values: &[&str]) {
 async fn a_person_is_recorded_with_the_professional_and_the_verified_level() -> TestResult {
     let claims = professional(SUBSTANTIAL);
     let record = recorded(
-        assured(AssuranceLevel::Substantial, false),
+        assured(AssuranceLevel::Substantial),
         bearing(query()?, &minted(&claims)?)?,
     )
     .await?
@@ -229,31 +217,6 @@ async fn a_person_is_recorded_with_the_professional_and_the_verified_level() -> 
     assert_eq!(identifiers(person), [IDENTIFIER], "IUA npi");
     assert_eq!(levels(person), ["substantial"], "Art 8(2)(b)");
     assert_eq!(acting(person), Some("person"));
-    only_in_the_person(&record, &[NAME, IDENTIFIER, "ihe-assuranceLevel"]);
-    Ok(())
-}
-
-/// Annex II 3.2(b): a client its issuer declares as acting for the
-/// professional the token names is recorded as a client, with that
-/// professional as the natural person.
-#[tokio::test]
-async fn a_declared_client_is_recorded_acting_for_the_professional() -> TestResult {
-    let claims = as_client(professional(HIGH));
-    let record = recorded(
-        assured(AssuranceLevel::Substantial, true),
-        bearing(query()?, &minted(&claims)?)?,
-    )
-    .await?
-    .record;
-    let person = person(&record)?;
-    assert_eq!(acting(person), Some("client"));
-    assert_eq!(person["who"]["display"], NAME);
-    assert_eq!(identifiers(person), [IDENTIFIER]);
-    assert_eq!(levels(person), ["high"], "Art 8(2)(c)");
-    assert!(
-        others(&record).contains(&claims.client_id.as_str()),
-        "the client application is its own agent"
-    );
     only_in_the_person(&record, &[NAME, IDENTIFIER, "ihe-assuranceLevel"]);
     Ok(())
 }
@@ -326,7 +289,7 @@ async fn a_token_naming_no_professional_records_none() -> TestResult {
         .other
         .insert(String::from("acr"), SUBSTANTIAL.to_owned());
     let record = recorded(
-        assured(AssuranceLevel::Substantial, false),
+        assured(AssuranceLevel::Substantial),
         bearing(query()?, &minted(&claims)?)?,
     )
     .await?
@@ -345,7 +308,7 @@ async fn the_professional_and_the_patient_reach_no_log_or_metric() -> TestResult
     let Recorded {
         log, exposition, ..
     } = recorded(
-        assured(AssuranceLevel::Substantial, false),
+        assured(AssuranceLevel::Substantial),
         bearing(query()?, &minted(&claims)?)?,
     )
     .await?;

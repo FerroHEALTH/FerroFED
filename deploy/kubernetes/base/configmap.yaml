@@ -5,20 +5,17 @@
 # registry document, mounted read-only at /etc/ferrofed by statefulset.yaml.
 # It holds no secret. Every secret is a key of the ferrofed-secrets Secret,
 # which statefulset.yaml mounts at /run/secrets/ferrofed, named here by a
-# `_file` key: the signing key and the scrape user's password hash below,
-# and for an endpoint that needs credentials, the password_file or
+# `_file` key: the signing key below, and for an endpoint that needs credentials, the password_file or
 # oauth.client_secret_file of its [credentials."<endpoint id>"] section. Make
 # the Secret with, for example:
 #
 #   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
 #     -out signing-key.pem
-#   openssl rand -hex 32 > metrics-scrape-password
-#   argon2 "$(openssl rand -hex 16)" -id -e < metrics-scrape-password \
-#     | tr -d '\n' > metrics-scrape-hash
 #   kubectl create secret generic ferrofed-secrets \
-#     --from-file=signing-key.pem --from-file=metrics-scrape-hash
+#     --from-file=signing-key.pem
 #
-# Give your Prometheus the scrape password in a Secret of its own.
+# Your Prometheus scrapes with a client-credentials token of its own client
+# at the issuer below; its client secret stays in a Secret of its own.
 #
 # The value itself never goes in a ConfigMap.
 # scripts/checks/kubernetes-example.sh runs `ferrofed config check` over this
@@ -61,18 +58,18 @@ data:
     requests_per_second = 10
     burst = 20
 
-    # The admin listener: GET /metrics for the scraper, which presents the
-    # HTTP Basic credentials of a scrape user of [[auth.basic.users]] below,
-    # and the write actions, such as the stored-query distribution, for a
+    # The admin listener: GET /metrics for the scraper, which presents a
+    # client-credentials token the issuer below signs for its client, and
+    # the write actions, such as the stored-query distribution, for a
     # caller whose access token carries auth.product_scope. Off loopback the
-    # gateway refuses to start unless a scrape user or a client CA
+    # gateway refuses to start unless a scrape client or a client CA
     # authenticates the scrape. networkpolicy.yaml admits the scraper alone
     # to this port as well.
     # https://ferrofed.eu/docs/operate/metrics.html
     [metrics]
     listen = "0.0.0.0:9464"
     allow_remote = true
-    scrape_users = ["prometheus"]
+    scrape_clients = ["prometheus"]   # EDIT: the scraper's client_id at the issuer
 
     [telemetry]
     format = "json"
@@ -117,31 +114,22 @@ data:
     # person's token of this issuer is admitted through.
     first_party_clients = ["example-clinical-app"]
 
-    # The scraper, as the admin listener authenticates it with HTTP Basic.
-    [[auth.basic.users]]
-    user = "prometheus"
-    password_hash_file = "/run/secrets/ferrofed/metrics-scrape-hash"
+    # The claim, the level of each of its values and the least level patient
+    # data needs; without it, no level is read or required, and config check
+    # notes it.
+    # https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
+    # [auth.issuer.assurance]
+    # claim = "acr"
+    # minimum = "substantial"
+    # levels = { "urn:example:loa:substantial" = "substantial", "urn:example:loa:high" = "high" }
 
     # What the issuer's tokens are honoured for beyond their user/ and
     # system/ grants.
     [[trust.issuer]]
     issuer = "https://idp.example.org"
-    # Whether its client tokens, which name no natural person, act for the
-    # professional they name, and so reach patient data.
-    # client_tokens_act_for_professional = false
     # The string claim that carries the agency that issued the professional's
     # national_provider_identifier, which each node is told.
     # professional_issuing_authority = "hp_issuing_authority"
-    #
-    # The claim and the values that carry the authentication assurance of
-    # its tokens, and the least level patient data needs; without it, no
-    # level is read or required, and config check notes it.
-    # https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
-    # [trust.issuer.assurance]
-    # claim = "acr"
-    # minimum = "substantial"
-    # substantial = ["urn:example:loa:substantial"]
-    # high = ["urn:example:loa:high"]
 
     # FerroFED's own PostgreSQL store, off unless the table is set. A
     # contact-point issuer and the postgres backend of [stored_queries] need

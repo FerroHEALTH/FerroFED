@@ -23,12 +23,7 @@ fn the_production_guide_carries_the_recipe_the_gated_test_applies() -> Result<()
         .map(|file| file.name.as_str())
         .collect();
     assert_eq!(
-        vec![
-            "audience.json",
-            "purpose-of-use.json",
-            "client-id.json",
-            "professional.json"
-        ],
+        vec!["audience.json", "purpose-of-use.json", "client-id.json"],
         names
     );
     for file in recipe.files() {
@@ -47,9 +42,9 @@ fn the_production_guide_carries_the_recipe_the_gated_test_applies() -> Result<()
         "{auth}"
     );
     assert!(
-        auth.contains("client_tokens_act_for_professional = true")
-            && auth.contains("[trust.issuer.assurance]"),
-        "the service acts for a named professional, at a declared level: {auth}"
+        auth.contains("[auth.issuer.assurance]")
+            && !auth.contains("client_tokens_act_for_professional"),
+        "the issuer declares its levels, and no client acts for a professional: {auth}"
     );
     assert!(
         commands.contains("acr.loa.map"),

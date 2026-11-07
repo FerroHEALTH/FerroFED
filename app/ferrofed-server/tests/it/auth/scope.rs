@@ -14,9 +14,7 @@ use axum::body::Body;
 use ferrofed_server::auth::refusal::Refusal;
 use http::{Method, Request, StatusCode};
 
-use super::{
-    Gateway, TestResult, assert_admitted, assert_refused, bearing, claims, minted, query, sent,
-};
+use super::{Gateway, TestResult, assert_refused, bearing, claims, minted, query, sent};
 use crate::facade::EHR_A;
 use crate::support::{self, error_body};
 
@@ -66,7 +64,9 @@ async fn a_scope_outside_the_grammar_and_no_scope_grant_nothing() -> TestResult 
 }
 
 /// CP-17, inbound half: `system/aql-*` counts only for a backend client the
-/// issuer's entry lists (master08 §Resource Scopes).
+/// issuer's entry lists (master08 §Resource Scopes). A listed client's grant
+/// passes the scope check, and its patient query is then refused for
+/// naming no natural person (Regulation (EU) 2025/327 Annex II 3.1).
 // conformance: CP-17
 #[tokio::test]
 async fn a_system_wide_aql_grant_counts_only_for_a_listed_backend_client() -> TestResult {
@@ -75,9 +75,6 @@ async fn a_system_wide_aql_grant_counts_only_for_a_listed_backend_client() -> Te
         issuer
             .backend_clients
             .insert(String::from("synthetic-backend"));
-        // NOTE: Regulation (EU) 2025/327 Annex II 3.1: a backend client reaches patient
-        // data only for the professional its token names, as its issuer declares.
-        issuer.client_tokens_act_for_professional = true;
     }
     let gateway = Gateway::with(auth).await?;
     let token = granting("system/aql-*.s")?;
@@ -88,7 +85,12 @@ async fn a_system_wide_aql_grant_counts_only_for_a_listed_backend_client() -> Te
     if let Some(extensions) = backend.extensions.as_mut() {
         extensions.ihe_iua.national_provider_identifier = Some(String::from("hp-0042"));
     }
-    assert_admitted(&gateway, bearing(query()?, &minted(&backend)?)?).await
+    assert_refused(
+        &gateway,
+        bearing(query()?, &minted(&backend)?)?,
+        Refusal::NaturalPerson,
+    )
+    .await
 }
 
 /// CP-17, inbound half: a `patient/` grant is confined to its launch

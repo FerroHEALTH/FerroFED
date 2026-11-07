@@ -58,12 +58,11 @@ and no other part of the record carries it:
 | who acts: `person` when the token's `sub` names a natural person, `client` when a client application acts for the professional the token names | a `role` coded `person` or `client` |
 
 The assurance level is recorded only when the issuer's
-`[trust.issuer.assurance]` table declares the claim and the token states a
+`[auth.issuer.assurance]` table declares the claim and the token states a
 value it maps; the gateway never infers one, so a record of an issuer that
-declares no mapping carries no level. A client is admitted to patient data
-only when its issuer declares that its client tokens act for the
-professional they name, and the record then names that professional in the
-`agent:user` and the client in the Application agent. BALP fixes no
+declares no mapping carries no level. A client acting with no person behind
+it reaches no patient data, so every record names a person as the one who
+acts. BALP fixes no
 vocabulary for the assurance level and names no element for who acts, so
 both codes, written with no `system`, are FerroFED's own design.
 

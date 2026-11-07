@@ -10,8 +10,9 @@
 //!
 //! The route sits under `{base}` at the configured path, outside the ITS-REST
 //! surface and its client authentication. A message is applied only when it
-//! carries the HTTP Basic credentials of a user `feed_users` names; one
-//! without them is answered `401`, one of another user `403`, one that does
+//! carries a client-credentials token (RFC 6749 §4.4) a trusted issuer signed
+//! for a client `feed_clients` names; one without it is answered `401`, one of
+//! another client or of a person `403`, one that does
 //! not hold to
 //! the PMIR profiles `400` (`415` for another media type), and either changes
 //! nothing. An applied message drops the resolution bindings it could have
@@ -43,7 +44,7 @@ use ihe_iti::pmir::subscription::{Criteria, SubscriptionRequest};
 use url::Url;
 
 use crate::auth::Gate;
-use crate::auth::refusal::BasicRefusal;
+use crate::auth::refusal::MachineRefusal;
 use crate::config::ihe::pmir::{OnDrain, PmirSettings};
 use crate::config::service::{self, ServiceAuthError, TlsRefused};
 use ferrofed_operator_api::health::Observed;
@@ -78,7 +79,7 @@ pub struct IdentityFeed {
     registry: Url,
     audit: Option<Arc<dyn AuditRecorder>>,
     request: SubscriptionRequest,
-    feed_users: Vec<String>,
+    feed_clients: Vec<String>,
     domains: BTreeSet<String>,
     source: String,
     path: String,
@@ -140,7 +141,7 @@ impl IdentityFeed {
             registry,
             audit,
             request,
-            feed_users: settings.feed_users.clone(),
+            feed_clients: settings.feed_clients.clone(),
             domains,
             source: settings.callback_url.to_string(),
             path: settings.path.clone(),
@@ -217,10 +218,14 @@ impl IdentityFeed {
         self.watch.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Returns the `[[auth.basic.users]]` user `headers` authenticate with
-    /// HTTP Basic (RFC 7617), when `gate` verifies it and `feed_users` names
+    /// Returns the client whose client-credentials token `headers` carry,
+    /// when `gate` verifies it as a system's and `feed_clients` names
     /// it.
-    async fn authenticate(&self, gate: &Gate, headers: &HeaderMap) -> Result<String, BasicRefusal> {
-        gate.admit_basic(headers, &self.feed_users).await
+    async fn authenticate(
+        &self,
+        gate: &Gate,
+        headers: &HeaderMap,
+    ) -> Result<String, MachineRefusal> {
+        gate.admit_machine(headers, &self.feed_clients).await
     }
 }

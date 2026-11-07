@@ -152,7 +152,7 @@ device = "2.999.50.1"
 url = "https://pmir.example.org/fhir/"
 callback_url = "https://gateway.example.org/fed/pmir/feed"
 path = "/pmir/feed"
-feed_users = ["synthetic-scraper"]
+feed_clients = ["synthetic-scraper"]
 timeout_ms = 2000
 check_interval_s = 60
 on_drain = "keep"
@@ -187,7 +187,7 @@ sweep_interval_s = 60
 
 [metrics]
 listen = "127.0.0.1:9090"
-scrape_users = ["synthetic-scraper"]
+scrape_clients = ["synthetic-scraper"]
 
 [metrics.tls]
 certificate_file = "@DIR@/listener.crt"
@@ -213,10 +213,6 @@ jwks_max_age_seconds = 300
 jwks_refresh_interval_seconds = 30
 timeout_ms = 2000
 first_party_clients = ["ferrofed-console"]
-
-[[auth.basic.users]]
-user = "synthetic-scraper"
-password_hash = "$argon2id$v=19$m=19456,t=2,p=1$c3ludGhldGljLXNhbHQtMTY$4es9c3W3V1fKeaFNam0B7dB/9kjZXP6/+9VB3yhq8ZA"
 
 [trust.purpose_of_use]
 required = true
@@ -447,18 +443,15 @@ const REFUSED: &[&str] = &["profile"];
 const CHECKED_ONLY: &[&str] = &["signing.node_jwks_cache_s"];
 
 /// The keys another key of the maximal configuration holds to the one
-/// value it has, so no change of the key alone loads: a Basic user that
-/// `metrics.scrape_users` and `pmir.feed_users` name, an issuer that
+/// value it has, so no change of the key alone loads: an issuer that
 /// `[[trust.issuer]]` and `[[auth.issuer]]` both name, and an issuer's
 /// `kind` and `profile`, each one of a closed set of names.
 const HELD: &[&str] = &[
-    "auth.basic.users[0].user",
     "auth.issuer[0].issuer",
     "auth.issuer[0].kind",
     "auth.issuer[0].profile",
     "config.backend",
     "config.ui",
-    "pmir.feed_users",
     "stored_queries.backend",
     "trust.issuer[0].issuer",
 ];

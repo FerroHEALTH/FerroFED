@@ -84,7 +84,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `eehrxf` | =0.1.170 (FerroBRIDGE, BUSL-1.1) | the European interoperability software component (decision A58), published from FerroHEALTH/FerroBRIDGE since the owner decision of 2026-10-28 (A76, #813) |
 | `fhirconnect`, `openehr-mapping-core` | =0.1.212 and =0.1.138 (FerroBRIDGE, BUSL-1.1) | the FHIRconnect 1.0.0 engine `eehrxf` runs in process under `openehr` (#730), pinned exactly because FerroBRIDGE's crate line moves by patch (decision A61, #684) |
 | `ferrobridge-term` | =0.1.143 (FerroBRIDGE, BUSL-1.1) | the FHIR terminology client the interoperability component asks its optional terminology server through (decision A63, #925): `$translate`, `$lookup` and `$validate-code` in R4, over the HTTP client the gateway builds with its credential and TLS material |
-| `ferrohealth-smart` | =0.9.2 (`fetch`, `axum`, `openehr`; BUSL-1.1) | the SMART and OAuth 2.0 resource-server crate every FerroHEALTH product runs on (#1174): it checks tokens and never issues them, verifies each issuer's tokens from its RFC 8414 metadata and key set, admits HTTP Basic users, decides the SMART on openEHR grants through `ferrohealth_smart::openehr`, and obtains the gateway's own token with the client credentials grant of `[<section>.oauth]` |
+| `ferrohealth-smart` | =0.9.2 (`fetch`, `axum`, `openehr`; BUSL-1.1) | the SMART and OAuth 2.0 resource-server crate every FerroHEALTH product runs on (#1174): it checks tokens and never issues them, verifies each issuer's tokens from its RFC 8414 metadata and key set, decides the SMART on openEHR grants through `ferrohealth_smart::openehr`, and obtains the gateway's own token with the client credentials grant of `[<section>.oauth]` |
 | `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for the outbound assertions of the `oauth2`, Nuts and FAPI 2.0 grants and the caller token |
 | `jsonschema` | 0.60.2 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
@@ -663,8 +663,10 @@ request carrying one XACML 3.0 `XACMLAuthzDecisionQuery` over mutual TLS,
 asked once per data holder among the candidates, through the `mitz` feature
 of `nl-generic-functions`. The data user is the verified caller: its
 professional by UZI number and role and its organisation by URA and type,
-read from the claims each trusted issuer's `[trust.issuer.requester]` maps
-and carried to the seam as a `Requester` (§3.2.4.2, §13.4). Mitz records
+read by `ferrohealth-smart` from the `nl.professional_number`, `nl.role`,
+`nl.ura` and `nl.organisation_type` fields of a domestic `federation`
+issuer's `[[auth.federation]]` table, the caller an `ExternalPerson`, and
+carried to the seam as a `Requester` (§3.2.4.2, §13.4; #1704). Mitz records
 that professional and decides on that role, so a configured identity is
 never substituted: a caller whose token lacks the claims is not asked
 about, and no member is filtered for it. Each member's data holder is its care provider by URA, from the configuration,
@@ -929,9 +931,9 @@ interval, and on a drain stops the loop before it deletes the subscription.
 The route sits under `{base}` outside the ITS-REST surface. The subscription
 carries no credential for the feed (PMIR §2:3.94.5) and ITI-93 leaves the
 client authentication to an agreement between the two parties (§2:3.93.5),
-so the Registry authenticates as a Basic user of `[[auth.basic.users]]`
-that `pmir.feed_users` names, its password agreed out of band and checked
-by `ferrohealth-smart` (#1174); a message without those credentials, or one that breaks the PMIR profiles,
+so the Registry authenticates with a client-credentials token (RFC 6749
+§4.4) of a client `pmir.feed_clients` names, agreed out of band, which
+`ferrohealth-smart` classifies as a system's (#1704); a message without one, or one that breaks the PMIR profiles,
 changes nothing. A merge or a delete is scoped by the identifiers its Patient
 carries in a member's `ehr_id` domain (the `[pixm]` map, Annex A.1); an
 update states only the identity as it now is, so it is unscoped, and so is a
@@ -1120,13 +1122,12 @@ March 2032, for a cross-border exchange. A request that reaches patient data
 after its scopes and before its purpose of use. A token names no natural
 person when its `sub` is its `client_id` (IUA ITI TF-2 3.71.4.2.2.1) or only
 `system/` scopes cover the operation (`master08-scopes.adoc`: "acting
-without a user context"); it is refused `401 natural-person-required` unless
-its issuer sets `client_tokens_act_for_professional` and the token names the
-professional (the IUA `national_provider_identifier` or the
-`[trust.issuer.requester]` professional). Per issuer,
-`[trust.issuer.assurance]` names the claim (`acr` by default, RFC 9068
-§2.2.1), the values at each Regulation (EU) No 910/2014 Art 8(2) level and
-the least level; a token without a value at that level or above is
+without a user context"); it is refused `401 natural-person-required`
+whatever professional it names (#1704). Per issuer,
+`ferrohealth-smart`'s `[auth.issuer.assurance]` names the claim (`acr` by
+default, RFC 9068 §2.2.1), the Regulation (EU) No 910/2014 Art 8(2) level of
+each value and the least level, and the gateway reads the level the crate
+assessed; a token without a value at that level or above is
 `401 authentication-assurance-insufficient`, with the RFC 9470 §3
 `insufficient_user_authentication` challenge. An issuer without the table
 requires no level and `config check` notes it. A national contact point's
@@ -1794,10 +1795,10 @@ so no client of the federation reaches it; the
 configuration refuses a non-loopback address unless `[metrics]
 allow_remote = true`, an address equal to `server.listen`, and a collector
 that is no `http://` URL. The scrape is open until `[metrics]
-scrape_users` names users of `[[auth.basic.users]]`, one of whose HTTP Basic
-credentials it must carry; outside the development profile a non-loopback
-listener is refused unless those users or `[metrics.tls] client_ca_file`
-authenticate the scrape (#635, #1174). The instruments fill from what the gateway already
+scrape_clients` names clients, a client-credentials token of one of which,
+classified as a system's, it must carry; outside the development profile a
+non-loopback listener is refused unless those clients or `[metrics.tls]
+client_ca_file` authenticate the scrape (#635, #1174, #1704). The instruments fill from what the gateway already
 observes and send nothing of their own: `ferrofed.integrity.incidents{kind}`
 reads the per-kind counts `Incident::emit` keeps, `ferrofed.node.requests
 {endpoint, outcome}` and `ferrofed.node.request.duration{endpoint}` read the
@@ -3036,6 +3037,7 @@ R4 is #23, #25 and #27).
 | A115 | Passing a member's own discharge reports through the document list [#1405, extending A64 and A114] | the document list lists discharge reports when a member is declared `native` for `Discharge-Reports` (A64); a `type` admits them by the LOINC codes `18842-5` and `100719-4`, and the list asks each such member, by its own `ehr_id` alone, `Patient?identifier={system}|{ehr_id}` for its patient's logical id and then `DocumentReference?patient={id}&type=` with the codes the search admits ORed in one value (`http://loinc.org|18842-5,http://loinc.org|100719-4` when it admits both), each page followed under its base; each `DocumentReference` it answers is listed as A114 lists a member's own laboratory report, its `content.attachment.url` a `Binary/{token}` whose token names the `Discharge-Reports` category and the `bundle-eu-hdr` profile, the read answering the member's `Binary` unchanged; completeness, `node-error` and the access record under `Discharge-Reports` as A114; the gateway writes no discharge report from a member's compositions until the component maps the category out of openEHR | the HL7 Europe EU Health Data API 1.0.0-ballot `eehrxf-document-type-discharge-report-vs` holds LOINC `18842-5` and `100719-4`, and `CapabilityStatement-EEHRxF-DocumentAccessProvider` makes the `DocumentReference` search by `patient` and `type` SHALL; FHIR R4 search: every search parameter takes comma-separated values that it ORs; the HL7 Europe Hospital Discharge Report 1.0.0 `bundle-eu-hdr`; Regulation (EU) 2025/327 Art 14(1)(f), Annex II 2.1, Annex II 3.2; Federation Tier §5.4.1 and N33; the token kind: no specification governs this: our own design | decided on #1405 (2026-11-06) |
 | A116 | Passing a member's own imaging documents through the document list [#1406, extending A64, A114 and A115] | the document list lists imaging documents when a member is declared `native` for `Medical-Imaging` (A64), as A115 lists discharge reports: a `type` admits them by the LOINC codes `85430-7` and `18748-4`, the member is asked by its own `ehr_id` alone `Patient?identifier={system}|{ehr_id}` and then `DocumentReference?patient={id}&type=` with the codes the search admits ORed in one value, and each `DocumentReference` is listed as the member holds it, its `content.attachment.url` a `Binary/{token}` whose token names the `Medical-Imaging` category and the `BundleReportEuImaging` profile, the read answering the member's `Binary` unchanged; completeness, `node-error` and the access record under `Medical-Imaging` as A114; the gateway writes no imaging report from a member's compositions until the component maps the category out of openEHR | the HL7 Europe EU Health Data API 1.0.0-ballot `eehrxf-document-type-medical-imaging-vs` holds LOINC `85430-7` and `18748-4`, and `CapabilityStatement-EEHRxF-DocumentAccessProvider` makes the `DocumentReference` search by `patient` and `type` SHALL; FHIR R4 search: every search parameter takes comma-separated values that it ORs; the HL7 Europe Imaging Report 1.0.0-ballot `BundleReportEuImaging`; Regulation (EU) 2025/327 Art 14(1)(d), Annex II 2.1, Annex II 3.2; Federation Tier §5.4.1 and N33; the token kind: no specification governs this: our own design | decided on #1406 (2026-11-06) |
 | A117 | Client authentication on `ferrohealth-smart` 0.9 [#1682, amending A101 and A103] | every trusted issuer is one `[[auth.issuer]]` table with its required `kind` (`persons`, `patients`, `machines` or `federation`), its `profile` and every setting of its own, `audience` included, with no section-level value; an issuer with no audience takes `gateway.public_url`; `ferrohealth-smart` classifies every token it verifies under its issuer's kind and profile and refuses one that matches no step as an invalid token, so a `persons` token passes only through a client in `first_party_clients` or `delegates`; the gateway reads a system caller from `Caller::kind`; an introspected issuer is `mode = "introspection"` on its table, checked by the crate's introspection check, whose metadata the gateway reads when a token first needs it, one issuer at most; `[[trust.issuer]]` names an `[[auth.issuer]]` and loses its introspection keys; a changed `audience` of an issuer already trusted waits for a restart, a new issuer's applies at the reload; a Basic user is a person and never holds a `system/` scope; the access record takes the relayed accessor of `ehds-logging` 0.4, so a contact point's provider identifier that is no `urn:oid:` or `urn:hl7ii:` identifier, or an ISCO `44` role, is refused at the gate; no key is kept for compatibility | the family's one classification lives in FerroAUTH and is never copied into a product; the owner ruled on #1643 that FerroFED has no 1.0, so keys and types are dropped and renamed freely; RFC 9068 §2.2 and RFC 8693 §4.1 for who a token names; GHSA-jhg2-jwjp-hq74 for Basic; eHDSI SAML Profile 10.0.0 §2.3 for the provider identifier and the clerical role | decided on #1682 (2026-11-06) |
+| A118 | No Basic caller and no per-issuer caller policy of FerroFED's own [#1704, of #1615, amending A103 and A117] | the gateway admits no HTTP Basic caller: `[[auth.basic.users]]` refuses the start naming the user, and the two machine lanes name client-credentials clients of an `[[auth.issuer]]` (`metrics.scrape_clients`, `pmir.feed_clients`), admitted only for a token the crate classifies as a system's; `[trust.issuer.requester]`, `[trust.issuer.assurance]` and `client_tokens_act_for_professional` refuse the start naming their replacements: the requester is read from the NL fields of an `[[auth.federation]]` table, the level from the crate's `[auth.issuer.assurance]`, and a system's token reaches no patient data whatever it names; the engine keeps no assurance type of its own | FerroAUTH#215: a Basic credential is a person's and a machine uses the client-credentials grant (RFC 6749 §4.4); the family's one classification lives in FerroAUTH; Regulation (EU) 2025/327 Annex II 3.1; the owner ruled on #1643 that FerroFED has no 1.0, so no key is kept for compatibility | decided on #1615 (2026-11-07) |
 
 ## 16. Regulatory status
 

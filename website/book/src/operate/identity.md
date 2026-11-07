@@ -542,7 +542,7 @@ ITI-93 message (PMIR 1.6.0, Annex A.4).
 url = "https://pmir.example.org/fhir"                    # the Registry's FHIR base
 callback_url = "https://gateway.example.org/pmir/feed"   # where the Registry sends the feed
 path = "/pmir/feed"                                       # the route under {base}, the default
-feed_users = ["pmir-registry"]                            # the [[auth.basic.users]] the Registry sends as
+feed_clients = ["pmir-registry"]                          # the clients the Registry sends as, at an [[auth.issuer]]
 # identifier_system = "urn:oid:2.999.1"                  # only Patients with an identifier here
 # timeout_ms = 5000
 # check_interval_s = 60
@@ -554,10 +554,6 @@ client_id = "ferrofed-pmir-subscriber"
 client_auth = "client_secret_basic"
 client_secret_file = "/run/secrets/pmir-subscriber-secret"
 scope = "*"
-
-[[auth.basic.users]]                  # the Registry, as the feed authenticates it
-user = "pmir-registry"
-password_hash_file = "/run/secrets/pmir-registry-hash"
 ```
 
 - **The subscription.** At start the gateway creates a `Subscription` at
@@ -587,13 +583,13 @@ password_hash_file = "/run/secrets/pmir-registry-hash"
   never learned where it was. PMIR lets a subscriber delete a subscription
   (§2:3.94.4.5) and does not say when.
 - **Authenticating the feed.** The subscription carries no credential for the
-  feed (PMIR §2:3.94.5), so you give the Registry a Basic user of its own
-  under `[[auth.basic.users]]`, name it in `feed_users`, and agree its
-  password with the Registry's operator. The Registry sends the user and
-  password in the HTTP Basic scheme (RFC 7617). A message without them, or
-  with a password that does not verify, is answered `401` with a `Basic`
-  challenge, one from another Basic user `403`, and neither changes
-  anything.
+  feed (PMIR §2:3.94.5), so you register the Registry as a client of an
+  `[[auth.issuer]]` the gateway trusts, name its `client_id` in
+  `feed_clients`, and agree the client with the Registry's operator. The
+  Registry sends a client-credentials token (RFC 6749 §4.4) in the bearer
+  scheme. A message without one, or with one that does not verify, is
+  answered `401` with a `Bearer` challenge, one of another client or of a
+  person `403`, and neither changes anything.
 - **The route.** `POST {base}{path}` takes one ITI-93 message. The route
   sits outside the ITS-REST surface and its client authentication, so the
   path may not be under `/v1`, `/health` or `/.well-known`. A message that

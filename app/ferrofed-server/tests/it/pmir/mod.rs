@@ -26,7 +26,6 @@ use ferrofed_server::config::Config;
 use ferrofed_server::state::AppState;
 
 use crate::facade::{registry, settings_with_room};
-use crate::support::caller::SCRAPE_HASH;
 
 /// The `ehr_id` domain of node A at the PIX Manager, which scopes a merge.
 pub(crate) const DOMAIN_A: &str = "urn:oid:2.999.1.910";
@@ -40,16 +39,16 @@ pub(crate) const EHR_A: &str = "9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a";
 /// Another synthetic `ehr_id` at node A.
 pub(crate) const EHR_A2: &str = "9c9c9c9c-9c9c-4c9c-8c9c-9c9c9c9c9c9c";
 
-/// The `[[auth.basic.users]]` user the harness Registry sends the feed as,
-/// agreed with the gateway out of band.
-pub(crate) const FEED_USER: &str = "pmir-registry";
+/// The client the harness Registry sends the feed as, agreed with the
+/// gateway out of band.
+pub(crate) const FEED_CLIENT: &str = "pmir-registry";
 
-/// An `[[auth.basic.users]]` user the feed does not admit.
-pub(crate) const OTHER_USER: &str = "another-client";
+/// A client the test issuer signs for and the feed does not admit.
+pub(crate) const OTHER_CLIENT: &str = "another-client";
 
-/// The `Authorization` value of [`FEED_USER`] in the Basic scheme.
-pub(crate) fn feed_credentials() -> String {
-    crate::support::caller::basic(FEED_USER, crate::support::caller::SCRAPE_PASSWORD)
+/// The `Authorization` value of [`FEED_CLIENT`]'s client-credentials token.
+pub(crate) fn feed_credentials() -> Result<String, Box<dyn Error>> {
+    Ok(crate::support::caller::machine_bearer(FEED_CLIENT)?)
 }
 
 /// The path the feed is served at.
@@ -107,7 +106,8 @@ pub(crate) fn text(
     )?;
     let document = toml::Value::String(document.display().to_string());
     Ok(format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[auth]\n\n[[auth.basic.users]]\nuser = \"{FEED_USER}\"\npassword_hash = \"{SCRAPE_HASH}\"\n\n[[auth.basic.users]]\nuser = \"{OTHER_USER}\"\npassword_hash = \"{SCRAPE_HASH}\"\n\n[pmir]\nurl = \"{registry_url}\"\ncallback_url = \"{callback_url}\"\npath = \"{PATH}\"\nfeed_users = [\"{FEED_USER}\"]\n{extra}"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n{}\n[pmir]\nurl = \"{registry_url}\"\ncallback_url = \"{callback_url}\"\npath = \"{PATH}\"\nfeed_clients = [\"{FEED_CLIENT}\"]\n{extra}",
+        crate::support::caller::auth_toml()
     ))
 }
 
@@ -117,15 +117,6 @@ pub(crate) fn gateway(text: &str) -> Result<Gateway, Box<dyn Error>> {
         Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve()?;
     let state = Arc::new(AppState::build(&settings)?);
     let room = settings_with_room();
-    // NOTE: no specification governs this: our own design; the harness admits its
-    // operator token as every test gateway does, and the feed's Basic users besides.
-    let room = ferrofed_server::config::settings::ServerSettings {
-        auth: ferrofed_server::config::auth::AuthSettings {
-            basic: settings.server.auth.basic.clone(),
-            ..room.auth.clone()
-        },
-        ..room
-    };
     let app = ferrofed_server::router(Arc::clone(&state), &room);
     Ok(Gateway { state, app })
 }

@@ -139,7 +139,7 @@ pub(crate) fn resolve(config: &Config, settings: &mut Settings) -> Result<(), Er
         config,
         ServiceContext::of(settings),
         settings.server.public_url.as_ref(),
-        settings.server.auth.basic.as_ref(),
+        !settings.server.auth.issuers.is_empty(),
     )?;
     if let (Some(fhir), Some(pmir)) = (&settings.fhir, &settings.pmir) {
         let route = settings.server.base_path.join(&pmir.path);

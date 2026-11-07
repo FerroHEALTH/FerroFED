@@ -284,7 +284,7 @@ sample_ratio = 1.0     # the share of requests whose spans are exported, 0.0 to 
 # The metrics surface, off by default; see Metrics.
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-query distribution; loopback unless allow_remote
-# scrape_users = ["prometheus"]   # the [[auth.basic.users]] GET /metrics admits; needed off loopback outside development, unless [metrics.tls] requires a client certificate
+# scrape_clients = ["prometheus"]   # the clients whose client-credentials token GET /metrics admits; needed off loopback outside development, unless [metrics.tls] requires a client certificate
 # [metrics.tls] takes certificate_file, key_file, client_auth, client_ca_file, min_version and reload_interval_s, as [server.tls] does.
 
 # Outbound credentials, one section per endpoint id. Each section names one
