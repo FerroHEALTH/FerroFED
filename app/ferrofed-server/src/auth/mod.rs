@@ -66,6 +66,7 @@ use std::sync::Arc;
 use ferrofed_engine::conveyance::caller::Acting;
 use ferrofed_identity::role::consent::Requester;
 use ferrofed_registry::id::EhrId;
+use ferrohealth_smart::client::onward::SubjectToken as OnwardSubject;
 use ferrohealth_smart::federation::{Attribute, Field};
 use ferrohealth_smart::guard::{
     CredentialHeader, Gate as SmartGate, Requirement as SmartRequirement,
@@ -303,7 +304,14 @@ impl Gate {
             .with_audience(trusted.verification.audience().first().cloned())
             .with_correlation(correlation);
         let mut caller = if exchanging {
-            caller.with_token(SecretString::from(credential))
+            // NOTE: no specification governs this: our own design; a caller with no
+            // bearer token of its own (Basic, or asserted by the edge) is legitimately
+            // no onward subject, and a node's onward lane then refuses it.
+            let onward =
+                OnwardSubject::from_caller(&smart, SecretString::from(credential.clone())).ok();
+            caller
+                .with_token(SecretString::from(credential))
+                .with_onward(onward)
         } else {
             caller
         };

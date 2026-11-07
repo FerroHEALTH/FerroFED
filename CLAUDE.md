@@ -314,7 +314,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   holds beside a deployment's own, #776) and
   `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing, the calls
   to one node in `single_node`, the onward grants in `onward::grant`
-  (client credentials, token exchange, FAPI 2.0, and the Nuts grant under
+  (client credentials, token exchange, FAPI 2.0, the onward lane over
+  `ferrohealth-smart`'s onward client, #1703, and the Nuts grant under
   `nl`) beside the DPoP and mutual TLS sender constraints, the signed caller
   token in `conveyance`, and the outbound identifier-hygiene gate every
   request to a node passes, #45).

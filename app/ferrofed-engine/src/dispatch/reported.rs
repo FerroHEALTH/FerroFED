@@ -18,12 +18,14 @@ use std::sync::Arc;
 
 use ferrofed_registry::id::EndpointId;
 use ferrohealth_smart::client::TokenError as SmartTokenError;
+use ferrohealth_smart::client::onward::OnwardError;
 use http::StatusCode;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::client::{CredentialsError, ErrorBody};
 
 use crate::hygiene::Withheld;
 use crate::hygiene::mask::MASK;
+use crate::onward::grant::lane::LaneError;
 use crate::onward::token::{ErrorCode, TokenError};
 use crate::outbound_id::OutboundId;
 
@@ -123,11 +125,13 @@ pub fn unauthenticated(
         .or_else(|| {
             cause
                 .and_then(<dyn std::error::Error>::downcast_ref::<Arc<SmartTokenError>>)
-                .and_then(|error| match error.as_ref() {
-                    SmartTokenError::Refused {
-                        error: Some(refused),
-                        ..
-                    } => ErrorCode::registered(&refused.error),
+                .and_then(|error| refused_code(error))
+        })
+        .or_else(|| {
+            cause
+                .and_then(<dyn std::error::Error>::downcast_ref::<LaneError>)
+                .and_then(|error| match error {
+                    LaneError::Onward(OnwardError::Token(error)) => refused_code(error),
                     _ => None,
                 })
         });
@@ -137,6 +141,18 @@ pub fn unauthenticated(
             code.as_str()
         )),
         None => ErrorDetail::Text(UNAUTHENTICATED.to_owned()),
+    }
+}
+
+/// The RFC 6749 §5.2 code `error` refused with, when it names a registered
+/// one.
+fn refused_code(error: &SmartTokenError) -> Option<ErrorCode> {
+    match error {
+        SmartTokenError::Refused {
+            error: Some(refused),
+            ..
+        } => ErrorCode::registered(&refused.error),
+        _ => None,
     }
 }
 

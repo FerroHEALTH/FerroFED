@@ -28,6 +28,13 @@ pub enum CredentialsFault {
         /// The credentials section.
         section: String,
     },
+    /// A service's credentials section names an onward lane, which only a
+    /// node's takes.
+    #[error("{section}.onward applies to a node's credentials alone; remove it")]
+    OnwardOnService {
+        /// The credentials section.
+        section: String,
+    },
     /// A credentials section names no scheme at all.
     #[error("{section} names no credentials; remove the section or set one scheme")]
     NoScheme {

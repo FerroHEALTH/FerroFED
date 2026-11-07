@@ -10,7 +10,9 @@ the grants on this page, which obtain a token at the node's authorization
 server before the request:
 
 - `oauth`: the client-credentials grant of `ferrohealth-smart`, the table
-  every FerroHEALTH product reads for an upstream it calls as itself;
+  every FerroHEALTH product reads for an upstream it calls as itself, with
+  an optional `onward` table beside it that carries each caller to the
+  node ([The onward lane of a node](#the-onward-lane-of-a-node));
 - `oauth2`: token exchange, or a client-credentials token bound to a key or
   a certificate, authenticated by an ES256 or ES384 assertion signed with
   the `[signing]` key;
@@ -162,6 +164,75 @@ until 30 seconds before it expires, and dropped when the node answers
 
 The caller's token reaches the node's authorization server, which must
 trust the caller's issuer, and never the node itself.
+
+## The onward lane of a node
+
+An `onward` table beside a node's `oauth` table makes every request a
+verified caller originates reach that node under a token of the node's own
+issuer, obtained for that caller. It is the `[<lane>.credentials.onward]`
+table of `ferrohealth-smart`, and the `oauth` table authenticates the gateway
+at the onward issuer:
+
+```toml
+[credentials."cdr-f".oauth]
+issuer = "https://as.cdr-f.example.org"
+client_id = "ferrofed-gateway"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/cdr-f-client.pem"
+scope = "system/aql-*.s"            # the gateway's own requests alone
+
+[credentials."cdr-f".onward]
+issuer = "https://as.cdr-f.example.org"
+kind = "persons"                    # persons, federation or patients
+profile = "keycloak"                # rfc9068, entra or keycloak: picks the grant
+audiences = ["cdr-f"]               # what an issued token's aud may name
+indicators = ["cdr-f"]              # sent as resource or audience, by the profile
+# scope = "..."                     # the Entra profile names the node here
+# correlation_claim = "..."         # a chained federation route
+
+[credentials."cdr-f".onward.keys]
+max_onward_lifetime = 3600          # required
+```
+
+`ferrohealth-smart` runs the grant the profile picks: RFC 8693 token
+exchange with the caller's token as `subject_token` (with `audience` under
+the Keycloak profile), or the RFC 7523 JWT bearer grant with the on-behalf-of
+parameters under the Entra profile. It checks every issued token before use
+(its issuer, its `aud` inside `audiences`, its lifetime against
+`max_onward_lifetime`, the gateway as its client or `act`, and the caller's
+person), and caches it until shortly before it or the caller's token
+expires. A `federation` issuer adds a `[credentials."<id>".onward.federation]`
+table whose `exchanges_from` lists the caller issuers it is trusted to map
+and whose `person_mapping` names the subject-token claim the issued token's
+`professional.hp_identifier` must carry.
+
+Which caller the lane carries depends on `kind`:
+
+| `kind` | Carried | Refused |
+|---|---|---|
+| `persons` | a person of the node's organisation, acting alone, through a client or for another | everyone else |
+| `federation` | a professional of another domestic party | everyone else |
+| `patients` | the patient, on a token naming the patient context | everyone else |
+
+- A caller the lane does not carry, a system included, fails that node as
+  `node-error`, and nothing is sent to the token endpoint or the node.
+- A refused exchange fails that node as `node-error`, naming the token
+  endpoint's error code. The gateway's own token is never sent in its place,
+  and a `401` from the node is never retried under it.
+- The gateway's own requests, which no caller originates, use the `oauth`
+  table's token.
+- A caller the edge mode asserted, or a Basic caller, has no token to
+  exchange, so that node is `node-error` and is sent nothing.
+- With the Keycloak profile, the caller's token must name the gateway's
+  client in `aud`: give the inbound client scope an audience mapper that adds
+  it, and list the gateway among the node's delegates. Check this before the
+  lane carries traffic.
+
+The configuration refuses an `onward` table without its `oauth` table,
+beside a user and password or another grant, on a service's credentials,
+and when `ferrohealth-smart` refuses it: no `issuer`, `kind` or `audiences`,
+no `max_onward_lifetime`, a `federation` issuer without `exchanges_from` or
+`person_mapping`, or a target its grant cannot ask for.
 
 ## Tokens bound to a key: DPoP
 
