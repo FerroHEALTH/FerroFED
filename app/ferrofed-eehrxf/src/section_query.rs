@@ -72,6 +72,13 @@ pub fn query(archetypes: &[Archetype], held: &[Placed]) -> Option<SelectQuery> {
     Some(selecting(class("COMPOSITION", "c", None), Some(entries)))
 }
 
+/// Returns the query that selects every composition containing
+/// `archetype`, in the shape [`query`] gives.
+#[must_use]
+pub fn containing(archetype: &Archetype) -> SelectQuery {
+    selecting(class("COMPOSITION", "c", None), Some(leaf(archetype, 0)))
+}
+
 /// Returns the query that selects every composition of the composition
 /// archetype `composition`, whatever entries it holds, in the shape
 /// [`query`] gives.

@@ -10,10 +10,12 @@ documents of a member that serves them itself, beside the patient summary,
 each at a `Binary/{token}` URL the gateway signs for you
 ([Reading a member's document](patient-summary.md#reading-a-members-document)).
 
-The gateway does not yet write an imaging report from a member's openEHR
-compositions. That waits on the component's mapping out of openEHR, which
-FerroBRIDGE builds in the published `eehrxf` crate, so a member that holds
-its imaging reports only as openEHR compositions lists none.
+The gateway also writes an imaging report from a member's openEHR
+composition when you declare the template those compositions are of
+([Imaging reports the gateway writes](#imaging-reports-the-gateway-writes)).
+It receives no imaging report yet: holding a received report to its
+profiles needs the HL7 Europe Imaging Report package's dependency closure,
+which the gateway cannot load yet.
 
 ## Imaging documents in the list
 
@@ -23,6 +25,48 @@ the LOINC codes of `eehrxf-document-type-medical-imaging-vs`: `85430-7`
 `type` of either code, alone or in the LOINC system, or
 `http://loinc.org|`, admits them, and a `type` that admits only them lists
 no summary. With no `type`, the list names every document type it serves.
+
+## Imaging reports the gateway writes
+
+Declare the template of the members' imaging compositions in a
+`[[fhir.report]]` entry, as for a
+[discharge report](discharge-reports.md#discharge-reports-the-gateway-writes):
+
+```toml
+[[fhir.report]]
+category = "Medical-Imaging"
+template = "/etc/ferrofed/templates/ferrobridge_imaging_report.adlt"
+archetypes = [
+  "/etc/ferrofed/archetypes/openEHR-EHR-COMPOSITION.report-result.v1.adl",
+  "/etc/ferrofed/archetypes/openEHR-EHR-OBSERVATION.imaging_exam_result.v1.adl",
+]
+```
+
+The shipped imaging mapping of `eehrxf` maps FerroBRIDGE's imaging report
+template, `openEHR-EHR-COMPOSITION.ferrobridge_imaging_report.v1.0.0`, a
+report composition holding one `openEHR-EHR-OBSERVATION.imaging_exam_result.v1`.
+The configuration refuses a template the mapping does not compile against.
+
+The list then runs the reserved stored query
+`eu.ferrofed.eehrxf::imaging-report` on every member the patient resolves
+at that does not serve its imaging documents itself. It selects every whole
+composition that contains `openEHR-EHR-OBSERVATION.imaging_exam_result.v1`,
+by the member's own `ehr_id` alone. The list names one `DocumentReference`
+per composition, typed `85430-7`, in the category `Medical-Imaging`, its
+format `BundleReportEuImaging` and its master identifier the composition's
+versioned object as a `urn:uuid:`. A search whose `type` admits only
+`18748-4` asks no member this query.
+
+Reading the URL asks that member alone for the composition and writes it
+as an HL7 Europe Imaging Report 1.0.0-ballot `BundleReportEuImaging`: a
+`CompositionEuImaging` authored by the gateway's `Device` and the operator,
+about a `Patient` named by the identifier the identity binding holds behind
+the member's `ehr_id`, with the `DiagnosticReportEuImaging` and the
+`ImagingStudyEuImaging` the mapping writes. The imaging study section lists
+the study, and the order, history and procedure sections the profile
+requires are empty as `unavailable`. One `Provenance` names the member.
+Completeness, the access record under `Medical-Imaging` and the `424`
+answers follow the discharge report's.
 
 ## A member's own imaging documents
 
