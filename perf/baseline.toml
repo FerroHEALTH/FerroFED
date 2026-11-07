@@ -72,6 +72,73 @@ transactions_per_request = 1.0035087719298246
 
 [[baseline]]
 tool = "0.2.0"
+written = "2026-11-07T01:40:42.396916675Z"
+
+[baseline.plan]
+rate = 20.0
+warmup_secs = 10
+duration_secs = 60
+requests = 5
+groups = ["definition-read", "patient-query", "population-query", "self-description", "stored-query-run"]
+
+[baseline.host]
+arch = "x86_64"
+os = "linux"
+available_parallelism = 4
+cpu_model = "AMD EPYC 9V74 80-Core Processor"
+total_memory_bytes = 16760348672
+
+[baseline.tolerance]
+latency = 0.25
+throughput = 0.2
+memory = 0.2
+cpu = 0.25
+transactions = 0.1
+
+[baseline.metrics]
+throughput_rps = 20.0
+peak_memory_bytes = 56672256.0
+cpu_per_request_ms = 2.9833333333333334
+transactions_per_request = 0.4085714285714286
+"definition-read.p50_ms" = 3.363
+"definition-read.p95_ms" = 3.909
+"definition-read.p99_ms" = 5.963
+"patient-query.p50_ms" = 9.591
+"patient-query.p95_ms" = 13.743
+"patient-query.p99_ms" = 21.567
+"population-query.p50_ms" = 6.631
+"population-query.p95_ms" = 8.487
+"population-query.p99_ms" = 9.839
+"self-description.p50_ms" = 1.73
+"self-description.p95_ms" = 2.217
+"self-description.p99_ms" = 2.289
+"stored-query-run.p50_ms" = 16.431
+"stored-query-run.p95_ms" = 20.607
+"stored-query-run.p99_ms" = 35.231
+
+[baseline.noise]
+throughput_rps = 1.0
+peak_memory_bytes = 1.0015177797051171
+cpu_per_request_ms = 1.0623145400593472
+transactions_per_request = 1.0035087719298246
+"definition-read.p50_ms" = 1.1664932362122789
+"definition-read.p95_ms" = 1.1133580176587865
+"definition-read.p99_ms" = 1.3922484240018678
+"patient-query.p50_ms" = 1.0480821768112774
+"patient-query.p95_ms" = 1.111983170159398
+"patient-query.p99_ms" = 2.890295358649789
+"population-query.p50_ms" = 1.0794400130229531
+"population-query.p95_ms" = 1.058361391694725
+"population-query.p99_ms" = 1.0318825380178291
+"self-description.p50_ms" = 1.154102735156771
+"self-description.p95_ms" = 1.1151911468812878
+"self-description.p99_ms" = 1.1106259097525475
+"stored-query-run.p50_ms" = 1.0410568333016537
+"stored-query-run.p95_ms" = 1.010093657495026
+"stored-query-run.p99_ms" = 1.1947977074643064
+
+[[baseline]]
+tool = "0.2.0"
 written = "2026-11-07T01:17:07.215837162Z"
 
 [baseline.plan]
