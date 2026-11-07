@@ -1,0 +1,206 @@
+-- SPDX-FileCopyrightText: Cadasto B.V.
+-- SPDX-License-Identifier: BUSL-1.1
+-- FerroBRIDGE's discharge report template over six published CKM archetypes
+-- (fixtures/ckm/discharge and fixtures/ckm/medication): a transfer of care
+-- summary COMPOSITION, whose context is the hospital stay, with three ad hoc
+-- SECTIONs: a diagnostic summary holding EVALUATION.problem_diagnosis.v1,
+-- significant procedures holding ACTION.procedure.v1, and discharge
+-- medications holding INSTRUCTION.medication_order.v3. No specification
+-- governs this template: our own design for the HL7 Europe Hospital
+-- Discharge Report sections of the same names. Node identifiers are
+-- at-coded, the ADL 1.4 codes of the CKM sources.
+template (adl_version=2.4.0; rm_release=1.1.0)
+    openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.0.0
+
+specialize
+    openEHR-EHR-COMPOSITION.transfer_summary.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Hospital Discharge Report of FerroBRIDGE.">
+        >
+    >
+
+definition
+    COMPOSITION[at0000.1] matches {
+        content matches {
+            use_archetype SECTION[at0000.2, openEHR-EHR-SECTION.adhoc-ferrobridge_diagnostic_summary.v1]
+            use_archetype SECTION[at0000.3, openEHR-EHR-SECTION.adhoc-ferrobridge_significant_procedures.v1]
+            use_archetype SECTION[at0000.4, openEHR-EHR-SECTION.adhoc-ferrobridge_discharge_medications.v1]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Discharge report">
+                description = <"The report of a hospital stay written at discharge.">
+            >
+            ["at0000.2"] = <
+                text = <"Diagnostic summary">
+                description = <"The problems and diagnoses of the hospital stay.">
+            >
+            ["at0000.3"] = <
+                text = <"Significant procedures">
+                description = <"The procedures performed during the hospital stay.">
+            >
+            ["at0000.4"] = <
+                text = <"Discharge medications">
+                description = <"The medicines the patient is to take after discharge, recorded as medication orders.">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-SECTION.adhoc-ferrobridge_diagnostic_summary.v1.0.0
+
+specialize
+    openEHR-EHR-SECTION.adhoc.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Hospital Discharge Report of FerroBRIDGE.">
+        >
+    >
+
+definition
+    SECTION[at0000.1] matches {
+        name matches {
+            DV_TEXT matches {
+                value matches {"Diagnostic summary"}
+            }
+        }
+        items matches {
+            use_archetype EVALUATION[at0000.2, openEHR-EHR-EVALUATION.problem_diagnosis.v1] occurrences matches {0..*}
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Diagnostic summary">
+                description = <"Diagnostic summary">
+            >
+            ["at0000.2"] = <
+                text = <"Problem/Diagnosis">
+                description = <"Problem/Diagnosis">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-SECTION.adhoc-ferrobridge_significant_procedures.v1.0.0
+
+specialize
+    openEHR-EHR-SECTION.adhoc.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Hospital Discharge Report of FerroBRIDGE.">
+        >
+    >
+
+definition
+    SECTION[at0000.1] matches {
+        name matches {
+            DV_TEXT matches {
+                value matches {"Significant procedures"}
+            }
+        }
+        items matches {
+            use_archetype ACTION[at0000.2, openEHR-EHR-ACTION.procedure.v1] occurrences matches {0..*}
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Significant procedures">
+                description = <"Significant procedures">
+            >
+            ["at0000.2"] = <
+                text = <"Procedure">
+                description = <"Procedure">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-SECTION.adhoc-ferrobridge_discharge_medications.v1.0.0
+
+specialize
+    openEHR-EHR-SECTION.adhoc.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Hospital Discharge Report of FerroBRIDGE.">
+        >
+    >
+
+definition
+    SECTION[at0000.1] matches {
+        name matches {
+            DV_TEXT matches {
+                value matches {"Discharge medications"}
+            }
+        }
+        items matches {
+            use_archetype INSTRUCTION[at0000.2, openEHR-EHR-INSTRUCTION.medication_order.v3] occurrences matches {0..*}
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Discharge medications">
+                description = <"Discharge medications">
+            >
+            ["at0000.2"] = <
+                text = <"Medication order">
+                description = <"Medication order">
+            >
+        >
+    >

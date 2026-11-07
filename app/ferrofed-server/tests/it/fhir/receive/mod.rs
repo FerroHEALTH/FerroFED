@@ -11,6 +11,7 @@
 #[cfg(feature = "binding-ihe")]
 mod audit;
 mod check;
+mod discharge;
 mod display;
 mod inserted;
 mod laboratory;

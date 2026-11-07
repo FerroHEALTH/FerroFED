@@ -41,6 +41,7 @@ use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRefError};
 use serde::Deserialize;
 
+pub mod report;
 pub mod serve;
 
 use crate::config::Config;
@@ -71,6 +72,9 @@ pub struct Fhir {
     /// The members that serve electronic prescriptions and dispensations,
     /// one entry per category.
     pub serve: Vec<ServeEntry>,
+    /// The categories the gateway writes reports of from the members'
+    /// compositions, each with the template they are of.
+    pub report: Vec<report::ReportEntry>,
     /// How long, in seconds, the URL of a member's document in the
     /// document list stays valid.
     pub document_url_lifetime_secs: u64,
@@ -85,6 +89,7 @@ impl Default for Fhir {
             receive_namespaces: Vec::new(),
             receive: Vec::new(),
             serve: Vec::new(),
+            report: Vec::new(),
             document_url_lifetime_secs: 300,
         }
     }
@@ -171,6 +176,11 @@ pub struct FhirSettings {
     /// `Laboratory-Reports` `[[fhir.receive]]` entry, or none when no entry
     /// receives laboratory reports.
     pub laboratory: Option<Arc<Served>>,
+    /// The discharge mapping the document list writes a member's discharge
+    /// composition with, compiled against the template of the
+    /// `Discharge-Reports` `[[fhir.report]]` entry, or none when there is
+    /// none.
+    pub discharge: Option<Arc<ferrofed_eehrxf::discharge::Served>>,
     /// The members that serve prescriptions in the map mode, each by its node
     /// id with its mapping.
     pub mapped: Arc<BTreeMap<String, MapMode>>,
@@ -347,6 +357,17 @@ pub enum FhirError {
         #[source]
         source: Box<ServedError>,
     },
+    /// The shipped discharge mapping does not compile against the template of
+    /// the `Discharge-Reports` `[[fhir.report]]` entry.
+    #[error("the discharge mapping the document list writes reports with is refused")]
+    Discharge {
+        /// Why.
+        #[source]
+        source: Box<ferrofed_eehrxf::discharge::ServedError>,
+    },
+    /// A `[[fhir.report]]` entry is refused.
+    #[error("a [[fhir.report]] is refused")]
+    Report(#[from] report::ReportError),
     /// A served category cannot be declared as written.
     #[error("a [[fhir.serve]] is refused")]
     Serving(#[from] ServingError),
@@ -556,44 +577,13 @@ impl Fhir {
             serving: Arc::new(self.serving()?),
             mapped: Arc::new(self.mapped()?),
             laboratory: self.laboratory()?.map(Arc::new),
+            discharge: self.discharge()?.map(Arc::new),
             document_url_lifetime: std::time::Duration::from_secs(self.document_url_lifetime_secs),
             terminology: Terminology::none(),
             validating: None,
             terminology_written: None,
             written: self.clone(),
         })
-    }
-
-    /// Compiles the shipped laboratory mapping against the template of the
-    /// `Laboratory-Reports` `[[fhir.receive]]` entry, when there is one.
-    ///
-    /// # Errors
-    ///
-    /// [`FhirError::ReceiveTemplate`] when the template cannot be read, and
-    /// [`FhirError::Laboratory`] when the mapping does not compile against it.
-    fn laboratory(&self) -> Result<Option<Served>, FhirError> {
-        // NOTE: no specification governs this: our own design; the template a member's received
-        // reports are written in is the one its laboratory compositions are of.
-        let Some((position, entry)) = self
-            .receive
-            .iter()
-            .enumerate()
-            .find(|(_, entry)| entry.category == Category::Laboratory.code())
-        else {
-            return Ok(None);
-        };
-        let opt = std::fs::read_to_string(&entry.template).map_err(|source| {
-            FhirError::ReceiveTemplate {
-                position,
-                path: entry.template.clone(),
-                source,
-            }
-        })?;
-        Served::compile(&opt)
-            .map(Some)
-            .map_err(|source| FhirError::Laboratory {
-                source: Box::new(source),
-            })
     }
 
     /// Compiles the `[[fhir.receive]]` entries.

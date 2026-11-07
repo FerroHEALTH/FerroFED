@@ -218,12 +218,12 @@ pub fn patient_summary_template() -> Result<Written, Box<dyn Error>> {
 }
 
 /// The language, encoding and subject of a synthetic entry.
-const ENTRY: &str = r#""language": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }, "code_string": "en" },
+pub(crate) const ENTRY: &str = r#""language": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }, "code_string": "en" },
   "encoding": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "IANA_character-sets" }, "code_string": "UTF-8" },
   "subject": { "_type": "PARTY_SELF" }"#;
 
 /// The archetype details of `id`.
-fn details(id: &str) -> String {
+pub(crate) fn details(id: &str) -> String {
     format!(
         r#""archetype_node_id": "{id}", "archetype_details": {{ "_type": "ARCHETYPED", "archetype_id": {{ "_type": "ARCHETYPE_ID", "value": "{id}" }}, "rm_version": "1.1.0" }}"#
     )
@@ -237,7 +237,7 @@ fn coded(value: &str, code: &str) -> String {
 }
 
 /// A synthetic medication order of the medicine `code`.
-fn summary_order(code: &str) -> String {
+pub(crate) fn summary_order(code: &str) -> String {
     format!(
         r#"{{
   "_type": "INSTRUCTION",
@@ -337,17 +337,31 @@ pub fn summary_composition(uid: &str, (medicine, vaccine): (&str, &str)) -> Stri
     "template_id": {{ "_type": "TEMPLATE_ID", "value": "{PATIENT_SUMMARY_TEMPLATE}" }},
     "rm_version": "1.1.0"
   }},
-  "uid": {{ "_type": "OBJECT_VERSION_ID", "value": "{uid}" }},
-  "language": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }}, "code_string": "en" }},
-  "territory": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_3166-1" }}, "code_string": "NL" }},
-  "category": {{ "_type": "DV_CODED_TEXT", "value": "event", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "433" }} }},
-  "composer": {{ "_type": "PARTY_IDENTIFIED", "name": "Synthetic composer" }},
+  {held}
   "context": {{
     "_type": "EVENT_CONTEXT",
     "start_time": {{ "_type": "DV_DATE_TIME", "value": "2026-10-01T08:00:00Z" }},
-    "setting": {{ "_type": "DV_CODED_TEXT", "value": "other care", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "238" }} }}
+    "setting": {OTHER_CARE}
   }},
   "content": [{content}]
-}}"#
+}}"#,
+        held = held(uid),
     )
 }
+
+/// The uid, language, territory, category and composer of a synthetic
+/// event composition in English of the Netherlands, under the version id
+/// `uid`, as members of a canonical JSON object.
+pub(crate) fn held(uid: &str) -> String {
+    format!(
+        r#""uid": {{ "_type": "OBJECT_VERSION_ID", "value": "{uid}" }},
+  "language": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }}, "code_string": "en" }},
+  "territory": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_3166-1" }}, "code_string": "NL" }},
+  "category": {{ "_type": "DV_CODED_TEXT", "value": "event", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "433" }} }},
+  "composer": {{ "_type": "PARTY_IDENTIFIED", "name": "Synthetic composer" }},"#
+    )
+}
+
+/// The `other care` setting of the openEHR terminology, a canonical JSON
+/// `DV_CODED_TEXT`.
+pub(crate) const OTHER_CARE: &str = r#"{ "_type": "DV_CODED_TEXT", "value": "other care", "defining_code": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "openehr" }, "code_string": "238" } }"#;

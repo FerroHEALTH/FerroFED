@@ -13,6 +13,7 @@
 //! `DocumentReference?patient=&type=` for its documents of the category,
 //! each searchset followed to its last page.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use eehrxf::document::discharge::HDR_BUNDLE;
@@ -20,6 +21,7 @@ use eehrxf::document::imaging::IMAGING_BUNDLE;
 use eehrxf::document::laboratory::LAB_BUNDLE;
 use ehds_logging::category::Category;
 use ferrofed_eehrxf::list::{LABORATORY_REPORT, LOINC, RESOURCE, attachment_urls};
+use ferrofed_eehrxf::report::Written;
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::{Completion, FanOutError};
 use ferrofed_engine::hygiene::Withheld;
@@ -29,7 +31,6 @@ use http::StatusCode;
 use tokio::task::JoinSet;
 use url::Url;
 
-use super::laboratory::Laboratory;
 use crate::facade::answer::Failure;
 use crate::facade::located::Located;
 use crate::facade::native::{self, Chosen};
@@ -100,20 +101,25 @@ impl Kind {
 /// The documents a list names beside the summaries.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Wanted {
-    /// The laboratory reports.
-    pub(crate) laboratory: Laboratory,
+    /// Whether the members that serve their laboratory reports themselves
+    /// are asked for them.
+    pub(crate) laboratory: bool,
     /// The LOINC codes of the discharge reports the members that serve them
     /// themselves are asked for; none asks them nothing.
     pub(crate) discharge: Vec<&'static str>,
     /// The LOINC codes of the imaging documents the members that serve them
     /// themselves are asked for; none asks them nothing.
     pub(crate) imaging: Vec<&'static str>,
+    /// The categories the gateway writes reports of from every other
+    /// member's compositions.
+    pub(crate) written: BTreeSet<Written>,
 }
 
 impl Wanted {
     /// Whether it names any document.
     pub(crate) fn any(&self) -> bool {
-        self.laboratory != Laboratory::Unlisted
+        self.laboratory
+            || !self.written.is_empty()
             || !self.discharge.is_empty()
             || !self.imaging.is_empty()
     }
@@ -343,7 +349,7 @@ fn logical(id: &str) -> bool {
 /// all-or-nothing, `504` for one in `time-out` or `offline` and `424`
 /// otherwise (§11.3, §11.4).
 pub(super) fn settled(own: &[Own], status: StatusCode, completion: Completion) -> StatusCode {
-    super::laboratory::settled_by(own.iter().map(|own| own.held.status()), status, completion)
+    super::written::settled_by(own.iter().map(|own| own.held.status()), status, completion)
 }
 
 #[cfg(test)]

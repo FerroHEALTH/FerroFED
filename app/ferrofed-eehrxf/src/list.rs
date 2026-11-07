@@ -30,9 +30,8 @@ use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue}
 use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::{Resource, UnknownResource};
 
-use eehrxf::document::laboratory::LAB_BUNDLE;
-
 use crate::face::FHIR_JSON;
+use crate::report::Written;
 use crate::summary::Organisation;
 
 /// The canonical URL of the profile every entry follows.
@@ -56,7 +55,12 @@ pub const LABORATORY_REPORT: &str = "11502-2";
 
 /// The LOINC codes of a discharge report, the codes of the
 /// `eehrxf-document-type-discharge-report-vs` value set, in its order.
-pub const DISCHARGE_REPORTS: [&str; 2] = ["18842-5", "100719-4"];
+pub const DISCHARGE_REPORTS: [&str; 2] = [DISCHARGE_SUMMARY, "100719-4"];
+
+/// The LOINC code of a discharge summary, the first code of the
+/// `eehrxf-document-type-discharge-report-vs` value set, the type a
+/// discharge report the gateway writes is listed under.
+pub const DISCHARGE_SUMMARY: &str = "18842-5";
 
 /// The LOINC codes of a medical imaging document, the codes of the
 /// `eehrxf-document-type-medical-imaging-vs` value set, in its order.
@@ -318,36 +322,51 @@ pub fn native(
     )
 }
 
-/// Returns the entry of a laboratory report the gateway writes on read.
+/// Returns the entry of a report of the category `written` the gateway
+/// writes on read.
 ///
 /// The entry has the logical id `id` and the unique id `unique`, a
 /// `urn:uuid:` URN, and names the report of a composition of the member
 /// `custodian` at `url`, a URL the gateway signs relative to the FHIR base.
 ///
-/// The document is an HL7 Europe Laboratory Report 2.0.0 `Bundle-eu-lab`,
-/// of the `eehrxf-document-type-laboratory-report-vs` type, named by the
-/// identifier its `Bundle.identifier` carries when it is read.
+/// The document is in the category's `Bundle` profile
+/// ([`Written::bundle`]): an HL7 Europe Laboratory Report 2.0.0
+/// `Bundle-eu-lab` of the `eehrxf-document-type-laboratory-report-vs` type,
+/// or an HL7 Europe Hospital Discharge Report 1.0.0 `bundle-eu-hdr` of the
+/// `eehrxf-document-type-discharge-report-vs` type, named by the identifier
+/// its `Bundle.identifier` carries when it is read.
 #[must_use]
-pub fn laboratory(
+pub fn written(
+    written: Written,
     (id, unique): (&str, &str),
     listing: Listing<'_>,
     custodian: &Organisation,
     url: &str,
 ) -> DocumentReference {
+    let (kind, title) = match written {
+        Written::Discharge => (
+            DISCHARGE,
+            "Discharge report written by the gateway from the member's record",
+        ),
+        Written::Laboratory => (
+            LABORATORY,
+            "Laboratory report written by the gateway from the member's record",
+        ),
+    };
     let attachment = Attachment {
         content_type: Some(FHIR_JSON.into()),
         url: Some(url.into()),
-        title: Some("Laboratory report written by the gateway from the member's record".into()),
+        title: Some(title.into()),
         ..Attachment::default()
     };
     let format = Coding {
         system: Some(URI_SYSTEM.into()),
-        code: Some(LAB_BUNDLE.into()),
+        code: Some(written.bundle().into()),
         ..Coding::default()
     };
     entry(
         (id, (URI_SYSTEM, unique)),
-        (LABORATORY, listing),
+        (kind, listing),
         custodian,
         (attachment, Some(format)),
     )
@@ -380,6 +399,16 @@ const LABORATORY: Kind = Kind {
     display: "Laboratory report",
     category: "Laboratory-Reports",
     category_display: "medical test results, including laboratory and other diagnostic results and related reports",
+};
+
+/// A discharge report, the `Discharge summary` code of the
+/// `eehrxf-document-type-discharge-report-vs` value set; the `34105-7`
+/// `composition-eu-hdr` fixes is not in it.
+const DISCHARGE: Kind = Kind {
+    code: DISCHARGE_SUMMARY,
+    display: "Discharge summary",
+    category: "Discharge-Reports",
+    category_display: "discharge reports",
 };
 
 /// The entry with the logical id `id` and the master identifier

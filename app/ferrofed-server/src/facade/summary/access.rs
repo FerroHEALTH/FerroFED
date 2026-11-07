@@ -18,6 +18,7 @@ use openehr_federation::aql::Analysis;
 use openehr_federation::status::EndpointStatus;
 use secrecy::SecretString;
 
+use super::own::Kind;
 use super::{Gathered, LIST, LOOKUP, OPERATION, Scope};
 use crate::access::{Accessed, Asked};
 use crate::facade::mapped::Answered;
@@ -115,7 +116,7 @@ pub(crate) fn accessed(
         &gathered.natives,
         natives_delivered,
     ));
-    origins.extend(laboratory_origins(federation.snapshot(), gathered));
+    origins.extend(written_origins(federation.snapshot(), gathered));
     origins.extend(own_origins(
         federation.snapshot(),
         gathered,
@@ -157,19 +158,21 @@ pub(crate) fn accessed(
     })
 }
 
-/// Each member a list asked the laboratory report query of, with what it
-/// answered: an origin that contributed when it holds a laboratory report.
-fn laboratory_origins(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<Asked> {
+/// Each member a list asked a written category's query of, with what it
+/// answered: an origin that contributed when it holds a report of it.
+fn written_origins(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<Asked> {
     gathered
-        .laboratory
+        .written
         .iter()
-        .filter_map(|(endpoint, answered)| {
+        .flat_map(|(written, answers)| answers.iter().map(move |answer| (*written, answer)))
+        .filter_map(|(written, (endpoint, answered))| {
             let (status, rows) = match answered {
                 Answered::Rows(held) => (EndpointStatus::Active, held.len()),
                 Answered::Silent { status, left: true } => (*status, 0),
                 Answered::Silent { .. } => return None,
             };
             let node = node_of(snapshot, endpoint)?;
+            let category = Kind::of_category(written.category())?.category();
             Some(Asked {
                 endpoint: endpoint.as_str().to_owned(),
                 node: Some(node.as_str().to_owned()),
@@ -181,10 +184,8 @@ fn laboratory_origins(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<A
                 version: None,
                 created_ehr: None,
                 contributed: rows > 0,
-                evidence: (rows > 0).then(|| {
-                    Evidence::reached(Basis::Returned, Vec::new())
-                        .constructed(Category::MedicalTestResult)
-                }),
+                evidence: (rows > 0)
+                    .then(|| Evidence::reached(Basis::Returned, Vec::new()).constructed(category)),
             })
         })
         .collect()
@@ -194,9 +195,14 @@ fn laboratory_origins(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<A
 /// and each category it asked a member for.
 fn listed_categories(gathered: &Gathered) -> BTreeSet<Category> {
     let mut categories = BTreeSet::from([Category::PatientSummary]);
-    if !gathered.laboratory.is_empty() {
-        categories.insert(Category::MedicalTestResult);
-    }
+    categories.extend(
+        gathered
+            .written
+            .iter()
+            .filter(|(_, answers)| !answers.is_empty())
+            .filter_map(|(written, _)| Kind::of_category(written.category()))
+            .map(Kind::category),
+    );
     categories.extend(gathered.own.iter().map(|own| own.kind.category()));
     categories
 }

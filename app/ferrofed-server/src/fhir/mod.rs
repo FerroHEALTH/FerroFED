@@ -55,13 +55,13 @@ use crate::state::AppState;
 mod admission;
 mod binary;
 pub mod errors;
-mod laboratory;
 mod list;
 mod lookup;
 pub mod medication;
 mod own;
 mod patient_summary;
 mod trc;
+mod written;
 
 /// The product name the document's author `Device` and the capability
 /// statement carry.

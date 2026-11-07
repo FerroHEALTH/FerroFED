@@ -22,8 +22,8 @@
 //! them fails the whole summary, naming it (§11.3, §11.4).
 
 pub(crate) mod access;
-pub(crate) mod laboratory;
 pub(crate) mod own;
+pub(crate) mod written;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -126,9 +126,10 @@ pub(crate) struct Gathered {
     /// The Query API endpoint of each member the resolver could not answer
     /// for, in endpoint order.
     pub(crate) unresolved: Vec<EndpointId>,
-    /// What each member answered the laboratory report query, for a list
-    /// that lists laboratory reports, in endpoint order.
-    pub(crate) laboratory: Vec<(EndpointId, Answered)>,
+    /// What each member answered the stored query of each category the
+    /// gateway writes reports of, for a list that lists them, by category
+    /// and then in endpoint order.
+    pub(crate) written: written::Answers,
     /// The members that serve laboratory, discharge or imaging documents
     /// themselves, each with what its own endpoint answered, for a list
     /// that lists them, by kind and then in endpoint order.
@@ -219,10 +220,10 @@ pub(crate) async fn gather(
     } else {
         Wanted::default()
     };
-    let (own, laboratory) = laboratory::queried(
+    let (own, written) = written::queried(
         &federation,
         &arrived,
-        (&held, listed.laboratory),
+        (&held, listed.laboratory, &listed.written),
         (system, value),
     )
     .await?;
@@ -294,7 +295,7 @@ pub(crate) async fn gather(
     // design; a list asks no section query, so its failed resolution is settled here.
     let status = answer::fan_out::settled(status, targets.resolution_failed, completion);
     let status = native::settled(&natives, status, completion);
-    let status = laboratory::laboratory_settled(&laboratory, status, completion);
+    let status = written::written_settled(&written, status, completion);
     let status = own::settled(&own, status, completion);
     let mut gathered = collected(
         &federation,
@@ -310,7 +311,7 @@ pub(crate) async fn gather(
         }
     }
     gathered.natives = natives;
-    laboratory::kept(&mut gathered, laboratory, own);
+    written::kept(&mut gathered, written, own);
     concluded(gathered, status, (scope, dispatched))
 }
 
@@ -343,7 +344,7 @@ fn concluded(
             .filter(|(_, status)| *status != EndpointStatus::Active)
             .map(|(endpoint, status)| (endpoint.as_str().to_owned(), status.as_str().to_owned()))
             .collect();
-        for (endpoint, answered) in &gathered.laboratory {
+        for (endpoint, answered) in gathered.written.values().flatten() {
             if let Answered::Silent { status, .. } = answered
                 && !silent.iter().any(|(named, _)| named == endpoint.as_str())
             {
@@ -525,7 +526,7 @@ fn collected(
         set_aside: BTreeSet::new(),
         natives: Vec::new(),
         unresolved: Vec::new(),
-        laboratory: Vec::new(),
+        written: written::Answers::new(),
         own: Vec::new(),
     };
     for (section, answer, sources, rows) in answers {

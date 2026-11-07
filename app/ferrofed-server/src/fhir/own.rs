@@ -28,7 +28,7 @@ use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
 
 use super::admission::Admitted;
-use super::laboratory::Listed;
+use super::written::Listed;
 use super::{attach, outcome};
 use crate::access::{Accessed, Asked};
 use crate::auth::caller::Caller;

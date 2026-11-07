@@ -21,7 +21,8 @@
 //! identifier, and the rewrite replaces the two predicates with each
 //! member's own `ehr_id` (§7.1, §5.4.1, N33). Each category names its
 //! archetypes from an openEHR template ([`crate::patient_summary`],
-//! [`crate::laboratory`]).
+//! [`crate::laboratory`]), or, for a document one composition archetype
+//! carries whole, by that archetype ([`composed`], [`crate::discharge`]).
 
 use openehr_query::ast::{
     ArchetypePredicate, ClassExprOperand, ColumnExpr, CompareOperand, ContainsConstraint,
@@ -67,12 +68,28 @@ pub struct Placed {
 /// section is not selected (AQL §CONTAINS).
 #[must_use]
 pub fn query(archetypes: &[Archetype], held: &[Placed]) -> Option<SelectQuery> {
+    let entries = entries(archetypes, held)?;
+    Some(selecting(class("COMPOSITION", "c", None), Some(entries)))
+}
+
+/// Returns the query that selects every composition of the composition
+/// archetype `composition`, whatever entries it holds, in the shape
+/// [`query`] gives.
+#[must_use]
+pub fn composed(composition: &str) -> SelectQuery {
+    let predicate = PathPredicate::Archetype(ArchetypePredicate::Hrid(composition.to_owned()));
+    selecting(class("COMPOSITION", "c", Some(predicate)), None)
+}
+
+/// The query that selects each whole composition `composition` names,
+/// containing `entries` when given, with its uid and its template id, for
+/// the patient the two parameters name.
+fn selecting(composition: ClassExprOperand, entries: Option<ContainsExpr>) -> SelectQuery {
     let column = |path: IdentifiedPath, alias: &str| SelectExpr {
         column: ColumnExpr::Path(path),
         alias: Some(alias.to_owned()),
     };
-    let entries = entries(archetypes, held)?;
-    Some(SelectQuery {
+    SelectQuery {
         select: SelectClause {
             distinct: true,
             top: None,
@@ -87,7 +104,7 @@ pub fn query(archetypes: &[Archetype], held: &[Placed]) -> Option<SelectQuery> {
         },
         from: contained(
             class("EHR", "e", None),
-            Some(contained(class("COMPOSITION", "c", None), Some(entries))),
+            Some(contained(composition, entries)),
         ),
         where_: Some(WhereExpr::And(
             Box::new(subject(&["id", "value"], PATIENT)),
@@ -95,7 +112,7 @@ pub fn query(archetypes: &[Archetype], held: &[Placed]) -> Option<SelectQuery> {
         )),
         order_by: Vec::new(),
         limit: None,
-    })
+    }
 }
 
 /// The `CONTAINS` expression under the composition: one class expression

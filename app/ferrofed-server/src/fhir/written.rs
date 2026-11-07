@@ -1,35 +1,39 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The laboratory reports of the document list (Regulation (EU) 2025/327
-//! Art 14(1)(e), Annex II 2.1).
+//! The reports the gateway writes for the document list (Regulation (EU)
+//! 2025/327 Art 14(1)(e) and (f), Annex II 2.1).
 //!
-//! The list runs the reserved query `eu.ferrofed.eehrxf::laboratory-report`
-//! on every member the patient resolves at, beside the patient summary, and
-//! names one `EehrxfMhdDocumentReference` of the type `11502-2` per
-//! laboratory composition, at a `Binary/{token}` URL the gateway signs for
-//! the caller ([`super::binary`]). A composition two members hold under one
-//! full version id is listed once, from the member whose `system_id`
-//! created it, else the lowest endpoint (Federation Tier §10.3). The read
-//! asks that member alone for that composition, by its `ehr_id` alone
-//! (§5.4.1, N33), and writes it as an HL7 Europe Laboratory Report 2.0.0
-//! `Bundle-eu-lab` through the shipped laboratory mapping compiled against
-//! the deployment's laboratory template
-//! ([`ferrofed_eehrxf::laboratory::Served`]), its patient named as the
+//! The list runs the reserved query of each written category
+//! (`eu.ferrofed.eehrxf::laboratory-report`,
+//! `eu.ferrofed.eehrxf::discharge-report`) on every member the patient
+//! resolves at, beside the patient summary, and names one
+//! `EehrxfMhdDocumentReference` per composition, of the type `11502-2` for a
+//! laboratory report and `18842-5` for a discharge report, at a
+//! `Binary/{token}` URL the gateway signs for the caller ([`super::binary`]).
+//! A composition two members hold under one full version id is listed once,
+//! from the member whose `system_id` created it, else the lowest endpoint
+//! (Federation Tier §10.3). The read asks that member alone for that
+//! composition, by its `ehr_id` alone (§5.4.1, N33), and writes it through
+//! the shipped mapping compiled against the deployment's template, as an HL7
+//! Europe Laboratory Report 2.0.0 `Bundle-eu-lab`
+//! ([`ferrofed_eehrxf::laboratory::Served`]) or an HL7 Europe Hospital
+//! Discharge Report 1.0.0 `bundle-eu-hdr`
+//! ([`ferrofed_eehrxf::discharge::Served`]), its patient named as the
 //! identity binding names it behind the `ehr_id`. Writing the report on
 //! read, and naming it by its composition, are our own design: no
 //! specification governs them.
 //!
-//! A member that serves laboratory reports itself has them listed as it
-//! holds them ([`super::own`]).
+//! A member that serves its reports itself has them listed as it holds them
+//! ([`super::own`]).
 
 use std::collections::BTreeMap;
 use std::time::Instant;
 
 use axum::response::Response;
 use ehds_logging::category::Category;
-use ferrofed_eehrxf::laboratory::Report;
 use ferrofed_eehrxf::list::{self, Listing, Match};
+use ferrofed_eehrxf::report::{Report, Written};
 use ferrofed_eehrxf::summary::Held;
 use ferrofed_registry::id::EndpointId;
 use fhir_types::r4::operation_outcome::OperationOutcome;
@@ -55,7 +59,7 @@ use crate::fhir_wire::fhir_json;
 /// `fullUrl`.
 pub(super) type Listed = (Vec<(String, Match)>, Vec<(String, OperationOutcome)>);
 
-/// The entries the list names for the laboratory reports `gathered` holds,
+/// The entries the list names for the written reports `gathered` holds,
 /// on the face `fhir`, for `caller`: each composition's
 /// `DocumentReference`, each by its `fullUrl`, and an `OperationOutcome`
 /// for each member that did not answer the query; `None` when a URL cannot
@@ -70,7 +74,7 @@ pub(super) fn listed(
     let minted = || format!("urn:uuid:{}", uuid::Uuid::new_v4());
     let mut matches = Vec::new();
     let mut outcomes = Vec::new();
-    for (endpoint, held) in once(federation, gathered) {
+    for (written, endpoint, held) in once(federation, gathered) {
         let Some(chosen) = member(federation, gathered, &endpoint) else {
             continue;
         };
@@ -83,19 +87,21 @@ pub(super) fn listed(
         let Ok(object) = uuid::Uuid::parse_str(&object) else {
             tracing::warn!(
                 endpoint = endpoint.as_str(),
-                "a member's laboratory composition has no UUID to name its report by"
+                "a member's composition has no UUID to name its report by"
             );
             continue;
         };
         let signer = federation.signer()?;
         let token =
-            super::binary::mint_laboratory(signer, fhir, caller, (&chosen, &held.uid)).ok()?;
+            super::binary::mint_written(signer, fhir, caller, (&chosen, written, &held.uid))
+                .ok()?;
         let custodian = organisation(snapshot, &chosen.node);
         let id = uuid::Uuid::new_v4().to_string();
         let unique = format!("urn:uuid:{object}");
         matches.push((
             format!("urn:uuid:{id}"),
-            Match::Written(Box::new(list::laboratory(
+            Match::Written(Box::new(list::written(
+                written,
                 (&id, &unique),
                 listing,
                 &custodian,
@@ -103,7 +109,7 @@ pub(super) fn listed(
             ))),
         ));
     }
-    for (endpoint, answered) in &gathered.laboratory {
+    for (endpoint, answered) in gathered.written.values().flatten() {
         if let Answered::Silent { status, .. } = answered {
             outcomes.push((minted(), list::silent(endpoint.as_str(), status.as_str())));
         }
@@ -111,45 +117,46 @@ pub(super) fn listed(
     Some((matches, outcomes))
 }
 
-/// Every laboratory composition `gathered` holds, once: a composition two
-/// members answered with under one full version id is kept at the member
-/// whose `system_id` created it, else at the lowest endpoint.
-fn once(federation: &Federation, gathered: &Gathered) -> Vec<(EndpointId, Held)> {
+/// Every composition of each written category `gathered` holds, once: a
+/// composition two members answered with under one full version id is kept
+/// at the member whose `system_id` created it, else at the lowest endpoint.
+fn once(federation: &Federation, gathered: &Gathered) -> Vec<(Written, EndpointId, Held)> {
     let snapshot = federation.snapshot();
-    let mut kept: BTreeMap<String, (EndpointId, Held, bool)> = BTreeMap::new();
-    let mut unversioned = Vec::new();
-    for (endpoint, answered) in &gathered.laboratory {
-        let Answered::Rows(rows) = answered else {
-            continue;
-        };
-        let system = snapshot
-            .endpoint(endpoint)
-            .and_then(|held| snapshot.node(held.node()))
-            .map(|node| node.system_id().as_str().to_owned());
-        for held in rows {
-            let Ok(version) = ObjectVersionId::new(&held.uid) else {
-                unversioned.push((endpoint.clone(), held.clone()));
+    let mut every = Vec::new();
+    for (written, answers) in &gathered.written {
+        let mut kept: BTreeMap<String, (EndpointId, Held, bool)> = BTreeMap::new();
+        for (endpoint, answered) in answers {
+            let Answered::Rows(rows) = answered else {
                 continue;
             };
-            let originating = system.as_deref().is_some_and(|system| {
-                composite_ids_equal(system, version.creating_system_id_str())
-            });
-            let key = composite_id_key(version.value());
-            // NOTE: Federation Tier §10.3: the copy kept is the originating member's, else the
-            // lowest endpoint's, which the endpoint order visits first.
-            let replace = kept
-                .get(&key)
-                .is_none_or(|(_, _, held_originating)| originating && !held_originating);
-            if replace {
-                kept.insert(key, (endpoint.clone(), held.clone(), originating));
+            let system = snapshot
+                .endpoint(endpoint)
+                .and_then(|held| snapshot.node(held.node()))
+                .map(|node| node.system_id().as_str().to_owned());
+            for held in rows {
+                let Ok(version) = ObjectVersionId::new(&held.uid) else {
+                    every.push((*written, endpoint.clone(), held.clone()));
+                    continue;
+                };
+                let originating = system.as_deref().is_some_and(|system| {
+                    composite_ids_equal(system, version.creating_system_id_str())
+                });
+                let key = composite_id_key(version.value());
+                // NOTE: Federation Tier §10.3: the copy kept is the originating member's, else the
+                // lowest endpoint's, which the endpoint order visits first.
+                let replace = kept
+                    .get(&key)
+                    .is_none_or(|(_, _, held_originating)| originating && !held_originating);
+                if replace {
+                    kept.insert(key, (endpoint.clone(), held.clone(), originating));
+                }
             }
         }
+        every.extend(
+            kept.into_values()
+                .map(|(endpoint, held, _)| (*written, endpoint, held)),
+        );
     }
-    let mut every: Vec<(EndpointId, Held)> = kept
-        .into_values()
-        .map(|(endpoint, held, _)| (endpoint, held))
-        .collect();
-    every.extend(unversioned);
     every
 }
 
@@ -171,21 +178,26 @@ fn member(federation: &Federation, gathered: &Gathered, endpoint: &EndpointId) -
     })
 }
 
-/// `GET {fhir-base}/Binary/{token}` of a laboratory report: the composition
-/// of the version `composition` at `member`, written as a `Bundle-eu-lab`.
+/// `GET {fhir-base}/Binary/{token}` of a written report: the composition of
+/// the version `composition` at `member`, written in the `Bundle` profile of
+/// `written`.
 pub(super) async fn read(
     admitted: &Admitted<'_>,
     arrived: &Arrived<'_>,
-    (member, composition): (&Chosen, &str),
+    (member, written, composition): (&Chosen, Written, &str),
 ) -> Response {
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
-    let Some(served) = fhir.laboratory.as_deref() else {
+    let served = match written {
+        Written::Laboratory => fhir.laboratory.is_some(),
+        Written::Discharge => fhir.discharge.is_some(),
+    };
+    if !served {
         return outcome(
             StatusCode::NOT_FOUND,
             "not-found",
             "no document at this URL; list the documents again",
         );
-    };
+    }
     let deadline = Instant::now()
         .checked_add(federation.budget().per_node())
         .unwrap_or_else(Instant::now);
@@ -198,7 +210,7 @@ pub(super) async fn read(
     };
     let mut response = match fetched {
         Ok(Composition::Body(body)) => {
-            written(admitted, arrived, (member, composition), (served, &body)).await
+            document(admitted, arrived, (member, composition), (written, &body)).await
         }
         Ok(Composition::Absent) => outcome(
             StatusCode::NOT_FOUND,
@@ -214,19 +226,28 @@ pub(super) async fn read(
         super::own::accessed(
             federation,
             (member, &member.via),
-            (Category::MedicalTestResult, status, left, delivered),
+            (category(written), status, left, delivered),
         ),
     );
     response
 }
 
-/// The `Bundle-eu-lab` the composition `body` of the version `composition`
-/// at `member` is written as by `served`, naming its member.
-async fn written(
+/// The priority category `written` is recorded under.
+const fn category(written: Written) -> Category {
+    match written {
+        Written::Laboratory => Category::MedicalTestResult,
+        Written::Discharge => Category::DischargeReport,
+    }
+}
+
+/// The document the composition `body` of the version `composition` at
+/// `member` is written as, in the `Bundle` profile of `written`, naming its
+/// member.
+async fn document(
     admitted: &Admitted<'_>,
     arrived: &Arrived<'_>,
     (member, composition): (&Chosen, &str),
-    (served, body): (&ferrofed_eehrxf::laboratory::Served, &[u8]),
+    (written, body): (Written, &[u8]),
 ) -> Response {
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
     let deadline = Instant::now()
@@ -243,7 +264,10 @@ async fn written(
         return outcome(
             StatusCode::FAILED_DEPENDENCY,
             "processing",
-            "the identity binding names no patient in fhir.receive_namespaces for the member's EHR, and a laboratory report names its patient",
+            &format!(
+                "the identity binding names no patient in fhir.receive_namespaces for the member's EHR, and a {} names its patient",
+                written.named()
+            ),
         );
     };
     let object = ObjectVersionId::new(composition).map_or_else(
@@ -264,21 +288,36 @@ async fn written(
         operator: &fhir.operator,
         member: &custodian,
     };
-    match served.document(&String::from_utf8_lossy(body), report) {
+    let body = String::from_utf8_lossy(body);
+    let bundle: Result<_, Box<dyn std::error::Error + Send + Sync>> = match written {
+        Written::Discharge => fhir
+            .discharge
+            .as_deref()
+            .ok_or_else(|| "no discharge mapping".into())
+            .and_then(|served| Ok(served.document(&body, report)?)),
+        Written::Laboratory => fhir
+            .laboratory
+            .as_deref()
+            .ok_or_else(|| "no laboratory mapping".into())
+            .and_then(|served| Ok(served.document(&body, report)?)),
+    };
+    match bundle {
         Ok(bundle) => Provenance::member(snapshot, &member.via, &member.node)
             .stamp(fhir_json(StatusCode::OK, &bundle)),
         Err(refusal) => {
             tracing::warn!(
                 request_id = %admitted.outbound,
-                error = %crate::chain(&refusal),
-                "a member's laboratory composition was not written as a report"
+                error = %crate::chain(refusal.as_ref()),
+                "a member's composition was not written as a report"
             );
             outcome(
                 StatusCode::FAILED_DEPENDENCY,
                 "processing",
                 &format!(
-                    "the laboratory report could not be written: the composition at {} does not map into Bundle-eu-lab",
-                    member.via
+                    "the {} could not be written: the composition at {} does not map into {}",
+                    written.named(),
+                    member.via,
+                    written.bundle()
                 ),
             )
         }

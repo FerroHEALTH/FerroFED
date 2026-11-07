@@ -1,19 +1,20 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The laboratory reports a document list gathers beside the patient
-//! summary (Regulation (EU) 2025/327 Art 14(1)(e)), and how their answers
+//! The reports a document list gathers beside the patient summary
+//! (Regulation (EU) 2025/327 Art 14(1)(e) and (f)), and how their answers
 //! settle the list's completeness (§11.3, §11.4).
 //!
 //! A member declared `native` for `Laboratory-Reports` is asked at its own
-//! endpoint ([`super::own`]) and left out of the laboratory report query,
-//! which every other member is asked when the gateway maps the category
-//! ([`Laboratory::Mapped`]).
+//! endpoint ([`super::own`]). Every category the gateway writes from a
+//! member's composition ([`Written`]) has its stored query asked of every
+//! member that does not serve the category itself.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use ehds_logging::category::Category;
+use ferrofed_eehrxf::report::Written;
 use ferrofed_engine::fanout::Completion;
 use ferrofed_registry::id::EndpointId;
 use http::StatusCode;
@@ -28,22 +29,15 @@ use crate::facade::prescriptions::Unprescribed;
 use crate::facade::request::Arrived;
 use crate::federation::Federation;
 
-/// The laboratory reports a list gathers.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum Laboratory {
-    /// None.
-    #[default]
-    Unlisted,
-    /// Each member's own, from the members that serve them themselves.
-    Own,
-    /// Those, and the gateway's, from every other member's compositions.
-    Mapped,
-}
+/// What each member answered the stored query of each written category, by
+/// category and then in endpoint order.
+pub(crate) type Answers = BTreeMap<Written, Vec<(EndpointId, Answered)>>;
 
 /// The members `located` dispatches to that serve laboratory reports at
-/// their own endpoint, in endpoint order, and, when `laboratory` is
-/// [`Laboratory::Mapped`], what every other member answered the laboratory
-/// report query for the patient `system`|`value`.
+/// their own endpoint, in endpoint order, when `laboratory` asks for them,
+/// and what every member that does not serve a category of `written`
+/// itself answered that category's stored query for the patient
+/// `system`|`value`.
 ///
 /// # Errors
 ///
@@ -51,34 +45,39 @@ pub(crate) enum Laboratory {
 pub(super) async fn queried(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
-    (located, laboratory): (&Located, Laboratory),
+    (located, laboratory, written): (&Located, bool, &BTreeSet<Written>),
     patient: (&str, &str),
-) -> Result<(Vec<Chosen>, Vec<(EndpointId, Answered)>), Unsummarised> {
-    if laboratory == Laboratory::Unlisted {
-        return Ok((Vec::new(), Vec::new()));
-    }
-    let own = native::chosen_for(
-        federation.snapshot(),
-        &located.targets,
-        Category::MedicalTestResult.code(),
-    );
-    let answered = if laboratory == Laboratory::Mapped {
-        laboratory_reports(federation, arrived, (located, &own), patient).await?
+) -> Result<(Vec<Chosen>, Answers), Unsummarised> {
+    let own = if laboratory {
+        native::chosen_for(
+            federation.snapshot(),
+            &located.targets,
+            Category::MedicalTestResult.code(),
+        )
     } else {
         Vec::new()
     };
-    Ok((own, answered))
+    let mut answers = Answers::new();
+    for category in written {
+        let serving =
+            native::chosen_for(federation.snapshot(), &located.targets, category.category());
+        let answered = reports(
+            federation,
+            arrived,
+            (located, &serving),
+            (*category, patient),
+        )
+        .await?;
+        answers.insert(*category, answered);
+    }
+    Ok((own, answers))
 }
 
-/// Keeps in `gathered` what the members answered the laboratory report
-/// query, `laboratory`, and what those that serve documents themselves
+/// Keeps in `gathered` what the members answered the written categories'
+/// queries, `written`, and what those that serve documents themselves
 /// answered, `own`, with every endpoint a request left for.
-pub(super) fn kept(
-    gathered: &mut super::Gathered,
-    laboratory: Vec<(EndpointId, Answered)>,
-    own: Vec<Own>,
-) {
-    for (endpoint, answered) in &laboratory {
+pub(super) fn kept(gathered: &mut super::Gathered, written: Answers, own: Vec<Own>) {
+    for (endpoint, answered) in written.values().flatten() {
         if matches!(
             answered,
             Answered::Rows(_) | Answered::Silent { left: true, .. }
@@ -91,24 +90,24 @@ pub(super) fn kept(
             gathered.sent.insert(member.chosen.native.clone());
         }
     }
-    gathered.laboratory = laboratory;
+    gathered.written = written;
     gathered.own = own;
 }
 
 /// What every member the plan of `located` dispatches to, but those of
-/// `own`, answered the laboratory report query for the patient
-/// `system`|`value` ([`ferrofed_eehrxf::laboratory`]), run as the
-/// medication queries are.
-async fn laboratory_reports(
+/// `own`, answered the stored query of `category` for the patient
+/// `system`|`value`, run as the medication queries are.
+async fn reports(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
     (located, own): (&Located, &[Chosen]),
-    (system, value): (&str, &str),
+    (category, (system, value)): (Written, (&str, &str)),
 ) -> Result<Vec<(EndpointId, Answered)>, Unsummarised> {
-    let name = ferrofed_eehrxf::laboratory::name()
-        .map_err(|_unnamed| Unsummarised::Internal("the laboratory query has no qualified name"))?;
+    let name = category
+        .name()
+        .map_err(|_unnamed| Unsummarised::Internal("a report query has no qualified name"))?;
     // NOTE: Federation Tier § The four identifiers, N33: a member asked at its own endpoint for
-    // its laboratory reports is asked no laboratory query, so no report is listed twice.
+    // its reports of a category is asked no query of it, so no report is listed twice.
     let members: BTreeSet<EndpointId> = located
         .targets
         .plan
@@ -123,32 +122,32 @@ async fn laboratory_reports(
         federation,
         arrived,
         located,
-        (
-            (system, value),
-            (name.as_str(), ferrofed_eehrxf::laboratory::aql()),
-        ),
+        ((system, value), (name.as_str(), category.aql())),
         &members,
     )
     .await
     .map_err(|unprescribed| match unprescribed {
         Unprescribed::Failure(failure) => Unsummarised::Failure(failure),
-        _ => Unsummarised::Internal("the laboratory query could not be run"),
+        _ => Unsummarised::Internal("a report query could not be run"),
     })
 }
 
-/// The status `status` becomes once the laboratory report query's answers
-/// `laboratory` are settled under `completion`: a silent member fails it
-/// under all-or-nothing, `504` for one in `time-out` or `offline` and `424`
+/// The status `status` becomes once the written categories' answers
+/// `written` are settled under `completion`: a silent member fails it under
+/// all-or-nothing, `504` for one in `time-out` or `offline` and `424`
 /// otherwise (§11.3, §11.4).
-pub(super) fn laboratory_settled(
-    laboratory: &[(EndpointId, Answered)],
+pub(super) fn written_settled(
+    written: &Answers,
     status: StatusCode,
     completion: Completion,
 ) -> StatusCode {
-    let queried = laboratory.iter().map(|(_, answered)| match answered {
-        Answered::Rows(_) => EndpointStatus::Active,
-        Answered::Silent { status, .. } => *status,
-    });
+    let queried = written
+        .values()
+        .flatten()
+        .map(|(_, answered)| match answered {
+            Answered::Rows(_) => EndpointStatus::Active,
+            Answered::Silent { status, .. } => *status,
+        });
     settled_by(queried, status, completion)
 }
 
