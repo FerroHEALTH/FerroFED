@@ -122,6 +122,12 @@ pub trait OnBehalf: Send + Sync + fmt::Debug {
     /// refuses to send the caller's token when it carries an identifier of
     /// `withheld` (§5.4.1, N33).
     fn provider(&self, conveyance: &Conveyance, withheld: &Arc<Withheld>) -> SharedCredentials;
+
+    /// The kind of tokens the source's issuer signs, when the source is an
+    /// onward lane, whose node derives each commit's committer from them.
+    fn committer_kind(&self) -> Option<ferrohealth_smart::kind::IssuerKind> {
+        None
+    }
 }
 
 /// A shared [`OnBehalf`] source of one endpoint.

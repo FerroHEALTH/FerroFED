@@ -228,6 +228,30 @@ Which caller the lane carries depends on `kind`:
   it, and list the gateway among the node's delegates. Check this before the
   lane carries traffic.
 
+### Who commits through the lane
+
+A node reached through an onward lane authenticates the onward token, so it
+derives the committer of every commit from that token, and takes, where
+ITS-REST requires a committer, one placeholder naming the token's `iss` and
+`sub`, which it recognises and discards (FerroEHR's committer rules):
+
+```json
+{"_type": "PARTY_IDENTIFIED", "identifiers": [{"_type": "DV_IDENTIFIER", "issuer": "<token iss>", "id": "<token sub>"}]}
+```
+
+- A `CONTRIBUTION` names the placeholder of the onward token the lane
+  obtained for the caller in its `audit` and in every version's
+  `commit_audit` (ITS-REST 1.1.0 `UpdateAudit`, `UpdateVersion`). The gateway
+  writes these members alone and keeps the rest of the body as sent.
+- An attestation (`UpdateAttestation`) takes the same placeholder for a
+  person exchanged at a `persons` issuer. Through a `federation` or a
+  `patients` lane a `CONTRIBUTION` that carries an attestation is refused
+  `403 operation-refused` before any token is asked for, because the node
+  refuses every attestation by an external person.
+- A header commit (`PUT` or `POST` of a composition, an `EHR_STATUS` or a
+  directory) is forwarded as the client sent it. The gateway adds no
+  committer to its `openehr-audit-details`, and the node derives it.
+
 The configuration refuses an `onward` table without its `oauth` table,
 beside a user and password or another grant, on a service's credentials,
 and when `ferrohealth-smart` refuses it: no `issuer`, `kind` or `audiences`,
