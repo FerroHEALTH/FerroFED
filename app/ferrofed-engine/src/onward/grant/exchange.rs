@@ -128,6 +128,13 @@ pub trait OnBehalf: Send + Sync + fmt::Debug {
     fn committer_kind(&self) -> Option<ferrohealth_smart::kind::IssuerKind> {
         None
     }
+
+    /// Whether a call conveying `conveyance` reaches the node read-only
+    /// through the source, so a write is refused before any token is asked
+    /// for.
+    fn read_only(&self, _conveyance: &Conveyance) -> bool {
+        false
+    }
 }
 
 /// A shared [`OnBehalf`] source of one endpoint.

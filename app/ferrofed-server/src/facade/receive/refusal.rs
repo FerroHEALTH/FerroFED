@@ -121,6 +121,11 @@ pub(super) fn failed(
             "timeout",
             format!("member {member} did not answer at endpoint {endpoint} before the deadline"),
         ),
+        EhrCallError::ReadOnly(_) => (
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            format!("member {member} is reached read-only for this caller, so nothing was written"),
+        ),
         EhrCallError::Capped(_) | EhrCallError::Expired(_) => (
             StatusCode::SERVICE_UNAVAILABLE,
             "transient",

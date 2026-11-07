@@ -35,6 +35,16 @@ pub enum CredentialsFault {
         /// The credentials section.
         section: String,
     },
+    /// A credentials section opts its onward lane in to another party's
+    /// organisation, and has no onward table of kind `federation`, the only
+    /// issuer that exchanges an organisation's token.
+    #[error(
+        "{section}.onward_organisations applies to an onward table of kind \"federation\" alone; remove it or set the lane's kind"
+    )]
+    OnwardOrganisations {
+        /// The credentials section.
+        section: String,
+    },
     /// A credentials section names no scheme at all.
     #[error("{section} names no credentials; remove the section or set one scheme")]
     NoScheme {

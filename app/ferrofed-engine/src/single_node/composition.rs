@@ -85,6 +85,7 @@ impl<T: Transport + Clone> NodeClient<T> {
             openehr_audit_details: None,
             openehr_template_id: None,
         };
+        self.admit_write(options, false)?;
         let path = format!(
             "/ehr/{}/composition",
             openehr_its::rest::client::path_segment(&params.ehr_id)

@@ -138,7 +138,8 @@ pub(crate) fn failed(
         ForwardError::Committer {
             source: CommitterError::Attestation { .. },
             ..
-        } => Code::OperationRefused,
+        }
+        | ForwardError::ReadOnly(_) => Code::OperationRefused,
         ForwardError::Credentials { .. }
         | ForwardError::Oversized { .. }
         | ForwardError::Committer { .. } => Code::NodeError,

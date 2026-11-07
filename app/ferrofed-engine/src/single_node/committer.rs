@@ -162,12 +162,18 @@ fn raw_of(value: &impl Serialize) -> Result<Box<RawValue>, CommitterError> {
 impl<T: Transport + Clone> NodeClient<T> {
     /// The held `request` with the committer an onward lane's token names
     /// written into its body, when the endpoint is reached through one and
-    /// the request takes it ([`committed`]).
+    /// the request takes it ([`committed`]); a write through a lane that
+    /// carries its caller read-only is refused first, before any token is
+    /// asked for.
     pub(super) async fn committed(
         &self,
         mut request: HeldRequest,
         options: &DispatchOptions,
     ) -> Result<HeldRequest, ForwardError> {
+        self.admit_write(
+            options,
+            crate::onward::grant::lane::reads(&request.operation),
+        )?;
         let Some(lane) = self.committing(options) else {
             return Ok(request);
         };

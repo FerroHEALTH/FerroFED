@@ -334,6 +334,7 @@ impl Contact {
             | ForwardError::Compose { .. }
             | ForwardError::Conveyance { .. }
             | ForwardError::Committer { .. }
+            | ForwardError::ReadOnly(_)
             | ForwardError::Unrouted => Self::Unsent,
         }
     }
@@ -351,6 +352,7 @@ impl Contact {
             EhrCallError::Capped(_) => Self::Capped,
             EhrCallError::Withheld { .. }
             | EhrCallError::Expired(_)
+            | EhrCallError::ReadOnly(_)
             | EhrCallError::Conveyance { .. } => Self::Unsent,
             EhrCallError::Failed { source, .. } => Self::of_client_error(source),
         }
@@ -508,6 +510,10 @@ pub enum DispatchError {
         #[source]
         source: ConveyanceError,
     },
+    /// A write through an onward lane that carries the caller read-only;
+    /// nothing was sent and no token was asked for.
+    #[error(transparent)]
+    ReadOnly(#[from] crate::onward::grant::lane::ReadOnly),
 }
 
 impl DispatchError {

@@ -188,7 +188,7 @@ profile = "keycloak"                # rfc9068, entra or keycloak: picks the gran
 audiences = ["cdr-f"]               # what an issued token's aud may name
 indicators = ["cdr-f"]              # sent as resource or audience, by the profile
 # scope = "..."                     # the Entra profile names the node here
-# correlation_claim = "..."         # a chained federation route
+# correlation_claim = "txn"         # a chained federation route
 
 [credentials."cdr-f".onward.keys]
 max_onward_lifetime = 3600          # required
@@ -211,7 +211,7 @@ Which caller the lane carries depends on `kind`:
 | `kind` | Carried | Refused |
 |---|---|---|
 | `persons` | a person of the node's organisation, acting alone, through a client or for another | everyone else |
-| `federation` | a professional of another domestic party | everyone else |
+| `federation` | a professional of another domestic party, and another domestic party's organisation when the section opts in | everyone else |
 | `patients` | the patient, on a token naming the patient context | everyone else |
 
 - A caller the lane does not carry, a system included, fails that node as
@@ -223,6 +223,22 @@ Which caller the lane carries depends on `kind`:
   table's token.
 - A caller the edge mode asserted, or a Basic caller, has no token to
   exchange, so that node is `node-error` and is sent nothing.
+- A request with no named person, from another domestic organisation, is
+  carried only where the node's agreement declares it: set
+  `onward_organisations = true` in the node's `[credentials."<id>"]`
+  section, beside an `onward` table of kind `federation`. The issuer
+  exchanges the organisation's token for one naming the organisation alone,
+  and the node is reached read-only: a request outside the ITS-REST `query`
+  group and outside `GET`, `HEAD` and `OPTIONS` is refused
+  `403 operation-refused` before any token is asked for. Configuration
+  refuses the switch without an `onward` table or on any other `kind`. A
+  national contact point is never carried as an organisation: its token
+  always names a professional.
+- Under a `chained` agreement, set `correlation_claim` to the claim that
+  holds the requester's log correlation id. A caller whose token does not
+  carry it is refused before the token endpoint is asked, and an opaque
+  token is refused too, since the gateway cannot read its claims. The
+  issued token must carry the same value, or that node is `node-error`.
 - With the Keycloak profile, the caller's token must name the gateway's
   client in `aud`: give the inbound client scope an audience mapper that adds
   it, and list the gateway among the node's delegates. Check this before the

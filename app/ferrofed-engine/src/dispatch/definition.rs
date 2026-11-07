@@ -128,6 +128,7 @@ impl<T: Transport + Clone> NodeClient<T> {
         aql: &str,
         options: &DispatchOptions,
     ) -> Result<Stored, DispatchError> {
+        self.admit_write(options, false)?;
         self.gate_definition(definition, aql, options)?;
         let params = DefinitionQueryVersionStoreYamlParams {
             qualified_query_name: definition.name.to_owned(),

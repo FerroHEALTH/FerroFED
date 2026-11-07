@@ -431,8 +431,12 @@ impl Scheme {
                 },
             ) => {
                 was == now
-                    && was_onward.as_ref().map(|onward| &onward.written)
-                        == now_onward.as_ref().map(|onward| &onward.written)
+                    && was_onward
+                        .as_ref()
+                        .map(|onward| (&onward.written, onward.organisations))
+                        == now_onward
+                            .as_ref()
+                            .map(|onward| (&onward.written, onward.organisations))
             }
             _ => false,
         }
