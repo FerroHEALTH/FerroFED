@@ -16,6 +16,7 @@ use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::document::laboratory::LAB_BUNDLE;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
+use eehrxf::mappings::UnknownContext;
 use ferrofed_registry::definition::{QueryName, QueryNameError};
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::device::{Device, DeviceDeviceName};
@@ -27,6 +28,7 @@ use fhirconnect::engine::context::CallContext;
 use fhirconnect::operations::contract::ToFhirResponse;
 use fhirconnect::operations::run::Settings;
 
+use crate::prescriptions::mapped::MapModeError;
 use crate::stack::{Deep, deep};
 use crate::summary::Organisation;
 use crate::summary::resources::{organization, reference};
@@ -52,15 +54,33 @@ pub struct Report<'a> {
     pub member: &'a Organisation,
 }
 
-/// Why a served report's mapping run wrote nothing.
-#[derive(Debug)]
-pub(crate) enum Unwritten {
-    /// The document does not take a resource.
-    Document(DocumentError),
-    /// The run did not run on its thread.
-    Deep(Deep),
+/// Why a report the gateway writes is not served; no variant's text names
+/// a value a composition carries.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum ServedError {
+    /// The shipped project names no context of the name selected.
+    #[error("the shipped project names no context to compile")]
+    Context(#[source] UnknownContext),
+    /// The template does not read, or its operational template cannot be
+    /// built.
+    #[error("the report template does not read")]
+    Template(#[source] MapModeError),
+    /// The shipped mapping does not compile against the template.
+    #[error("the shipped mapping does not compile against the template")]
+    Compile(#[source] MappingError),
+    /// The mapping did not run on its thread.
+    #[error(transparent)]
+    Deep(#[from] Deep),
+    /// The composition is no canonical JSON composition with a language.
+    #[error("the composition names no language")]
+    Language(#[source] serde_json::Error),
     /// The composition does not map.
-    Run(MappingError),
+    #[error("the composition does not map")]
+    Run(#[source] MappingError),
+    /// The document cannot be assembled from what the composition maps to.
+    #[error("the report document cannot be assembled")]
+    Document(#[source] DocumentError),
 }
 
 /// Names in `document` the patient `report` names and the authors, the
@@ -69,13 +89,14 @@ pub(crate) enum Unwritten {
 ///
 /// # Errors
 ///
-/// The [`Unwritten`] that says why the run wrote nothing.
+/// [`ServedError::Document`] for a resource the document does not take,
+/// and [`ServedError::Run`] when the composition does not map.
 pub(crate) fn authored(
     document: &mut Document,
     report: Report<'_>,
     software: &str,
     (mapping, composition): (&Mapping, &str),
-) -> Result<ToFhirResponse, Unwritten> {
+) -> Result<ToFhirResponse, ServedError> {
     let (system, value) = report.patient;
     let subject = document
         .with_patient(Patient {
@@ -87,7 +108,7 @@ pub(crate) fn authored(
             }],
             ..Patient::default()
         })
-        .map_err(Unwritten::Document)?;
+        .map_err(ServedError::Document)?;
     let operator = document.full_url("Organization", "operator");
     let device = document
         .with_author(&Resource::Device(Box::new(Device {
@@ -104,20 +125,18 @@ pub(crate) fn authored(
             owner: Some(reference(&operator)),
             ..Device::default()
         })))
-        .map_err(Unwritten::Document)?;
+        .map_err(ServedError::Document)?;
     document
         .with_author(&Resource::Organization(Box::new(organization(
             "operator",
             report.operator,
         ))))
-        .map_err(Unwritten::Document)?;
+        .map_err(ServedError::Document)?;
     let settings = Settings::new(device.clone(), report.timestamp);
     let context = CallContext::new()
         .with_patient(reference(&subject))
         .with_who(reference(&device));
-    deep(|| mapping.to_fhir_with(composition, &settings, context))
-        .map_err(Unwritten::Deep)?
-        .map_err(Unwritten::Run)
+    deep(|| mapping.to_fhir_with(composition, &settings, context))?.map_err(ServedError::Run)
 }
 
 /// Adds to `document` the member `report` names as an `Organization`, and

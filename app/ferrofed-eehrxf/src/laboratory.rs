@@ -29,18 +29,18 @@
 use eehrxf::document::laboratory::{LAB_SLOTS, LABORATORY_REPORT_FORM};
 use eehrxf::document::section::Section;
 use eehrxf::document::{Document, DocumentError};
-use eehrxf::mapping::{Mapping, MappingError};
-use eehrxf::mappings::{LABORATORY, UnknownContext};
+use eehrxf::mapping::Mapping;
+use eehrxf::mappings::LABORATORY;
 use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
 use fhir_types::r4::bundle::Bundle;
 use openehr_query::ast::SelectQuery;
 use openehr_query::printer;
 
-use crate::prescriptions::mapped::{MapModeError, Template};
-use crate::report::{self, Report};
+use crate::prescriptions::mapped::Template;
+use crate::report::{self, Report, ServedError};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query::{self, Archetype};
-use crate::stack::{Deep, deep};
+use crate::stack::deep;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "laboratory-report";
@@ -113,42 +113,6 @@ pub struct Served {
 /// The context of the shipped laboratory project a laboratory composition
 /// is mapped by, in both directions.
 pub const RESULT_CONTEXT: &str = "ferrobridge_eu_laboratory.context";
-
-/// Why a laboratory report is not served; no variant's text names a value
-/// a composition carries.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum ServedError {
-    /// The shipped laboratory project names no [`RESULT_CONTEXT`].
-    #[error("the shipped laboratory project names no result context")]
-    Context(#[source] UnknownContext),
-    /// The template does not read, or its operational template cannot be
-    /// built.
-    #[error("the laboratory report template does not read")]
-    Template(#[source] MapModeError),
-    /// The shipped laboratory mapping does not compile against the template.
-    #[error("the shipped laboratory mapping does not compile against the template")]
-    Compile(#[source] MappingError),
-    /// The mapping did not run on its thread.
-    #[error(transparent)]
-    Deep(#[from] Deep),
-    /// The composition does not map.
-    #[error("the laboratory composition does not map")]
-    Run(#[source] MappingError),
-    /// The document cannot be assembled from what the composition maps to.
-    #[error("the laboratory report document cannot be assembled")]
-    Document(#[source] DocumentError),
-}
-
-impl From<report::Unwritten> for ServedError {
-    fn from(unwritten: report::Unwritten) -> Self {
-        match unwritten {
-            report::Unwritten::Document(source) => Self::Document(source),
-            report::Unwritten::Deep(source) => Self::Deep(source),
-            report::Unwritten::Run(source) => Self::Run(source),
-        }
-    }
-}
 
 impl Served {
     /// Compiles the result context ([`RESULT_CONTEXT`]) of the shipped

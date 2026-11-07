@@ -26,18 +26,18 @@
 use eehrxf::document::discharge::{DISCHARGE_REPORT_FORM, HDR_SLOTS};
 use eehrxf::document::section::Section;
 use eehrxf::document::{Document, DocumentError};
-use eehrxf::mapping::{Mapping, MappingError};
+use eehrxf::mapping::Mapping;
 use eehrxf::mappings::HDR;
 use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
 use fhir_types::r4::bundle::Bundle;
 use openehr_query::printer;
 use serde::Deserialize;
 
-use crate::prescriptions::mapped::{MapModeError, Template};
-use crate::report::{self, Report};
+use crate::prescriptions::mapped::Template;
+use crate::report::{self, Report, ServedError};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query;
-use crate::stack::{Deep, deep};
+use crate::stack::deep;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "discharge-report";
@@ -93,32 +93,6 @@ pub struct Served {
     mapping: Mapping,
 }
 
-/// Why a discharge report is not served; no variant's text names a value a
-/// composition carries.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum ServedError {
-    /// The template does not read, or its operational template cannot be
-    /// built.
-    #[error("the discharge report template does not read")]
-    Template(#[source] MapModeError),
-    /// The shipped discharge mapping does not compile against the template.
-    #[error("the shipped discharge mapping does not compile against the template")]
-    Compile(#[source] MappingError),
-    /// The mapping did not run on its thread.
-    #[error(transparent)]
-    Deep(#[from] Deep),
-    /// The composition is no canonical JSON composition with a language.
-    #[error("the discharge composition names no language")]
-    Language(#[source] serde_json::Error),
-    /// The composition does not map.
-    #[error("the discharge composition does not map")]
-    Run(#[source] MappingError),
-    /// The document cannot be assembled from what the composition maps to.
-    #[error("the discharge report document cannot be assembled")]
-    Document(#[source] DocumentError),
-}
-
 /// The language of a canonical JSON composition (RM 1.1.0
 /// `COMPOSITION.language`).
 #[derive(Deserialize)]
@@ -130,16 +104,6 @@ struct Written {
 #[derive(Deserialize)]
 struct Language {
     code_string: String,
-}
-
-impl From<report::Unwritten> for ServedError {
-    fn from(unwritten: report::Unwritten) -> Self {
-        match unwritten {
-            report::Unwritten::Document(source) => Self::Document(source),
-            report::Unwritten::Deep(source) => Self::Deep(source),
-            report::Unwritten::Run(source) => Self::Run(source),
-        }
-    }
 }
 
 impl Served {

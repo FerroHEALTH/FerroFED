@@ -30,10 +30,11 @@ use std::sync::Arc;
 
 use eehrxf::category::Category;
 use eehrxf::terminology::Terminology;
-use ferrofed_eehrxf::laboratory::{Served, ServedError};
+use ferrofed_eehrxf::laboratory::Served;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::prescriptions::mapped::{MapMode, MapModeError};
 use ferrofed_eehrxf::receive::{Receivers, ReceiversError};
+use ferrofed_eehrxf::report::ServedError;
 use ferrofed_eehrxf::serving::{Serving, ServingError};
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_eehrxf::summary::mappings::{Mappings, MappingsError, Source};
@@ -363,7 +364,7 @@ pub enum FhirError {
     Discharge {
         /// Why.
         #[source]
-        source: Box<ferrofed_eehrxf::discharge::ServedError>,
+        source: Box<ServedError>,
     },
     /// A `[[fhir.report]]` entry is refused.
     #[error("a [[fhir.report]] is refused")]
