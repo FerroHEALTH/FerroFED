@@ -4,6 +4,73 @@
 schema = 3
 
 [[baseline]]
+tool = "0.4.2"
+written = "2026-11-07T19:50:28.31698Z"
+
+[baseline.plan]
+rate = 20.0
+warmup_secs = 10
+duration_secs = 60
+requests = 5
+groups = ["definition-read", "patient-query", "population-query", "self-description", "stored-query-run"]
+
+[baseline.host]
+arch = "x86_64"
+os = "linux"
+available_parallelism = 4
+cpu_model = "AMD EPYC 7763 64-Core Processor"
+total_memory_bytes = 16760344576
+
+[baseline.tolerance]
+latency = 0.25
+throughput = 0.2
+memory = 0.2
+cpu = 0.25
+transactions = 0.1
+
+[baseline.metrics]
+throughput_rps = 20.0
+peak_memory_bytes = 56274944.0
+cpu_per_request_ms = 3.375
+transactions_per_request = 0.4085714285714286
+"definition-read.p50_ms" = 3.513
+"definition-read.p95_ms" = 4.195
+"definition-read.p99_ms" = 4.963
+"patient-query.p50_ms" = 11.127
+"patient-query.p95_ms" = 14.103
+"patient-query.p99_ms" = 17.839
+"population-query.p50_ms" = 7.571
+"population-query.p95_ms" = 9.975
+"population-query.p99_ms" = 12.671
+"self-description.p50_ms" = 1.905
+"self-description.p95_ms" = 2.377
+"self-description.p99_ms" = 2.553
+"stored-query-run.p50_ms" = 20.111
+"stored-query-run.p95_ms" = 24.607
+"stored-query-run.p99_ms" = 30.255
+
+[baseline.noise]
+throughput_rps = 1.0
+peak_memory_bytes = 1.0085886891331246
+cpu_per_request_ms = 1.1012345679012345
+transactions_per_request = 1.0069930069930069
+"definition-read.p50_ms" = 1.1932543299908842
+"definition-read.p95_ms" = 1.1722807919773721
+"definition-read.p99_ms" = 1.3106076210092688
+"patient-query.p50_ms" = 1.06772944249302
+"patient-query.p95_ms" = 1.1327915145671188
+"patient-query.p99_ms" = 1.7960272208938755
+"population-query.p50_ms" = 1.107232913072329
+"population-query.p95_ms" = 1.0822452965971008
+"population-query.p99_ms" = 2.3637439823218376
+"self-description.p50_ms" = 1.551930758988016
+"self-description.p95_ms" = 1.3725588382573861
+"self-description.p99_ms" = 1.3560859188544152
+"stored-query-run.p50_ms" = 1.0429615633235543
+"stored-query-run.p95_ms" = 1.1167493641329276
+"stored-query-run.p99_ms" = 1.5360096902578302
+
+[[baseline]]
 tool = "0.4.1"
 written = "2026-11-07T12:31:28.392177Z"
 
@@ -136,6 +203,73 @@ transactions_per_request = 1.0069930069930069
 "stored-query-run.p50_ms" = 1.0254633963677215
 "stored-query-run.p95_ms" = 1.3077725069071573
 "stored-query-run.p99_ms" = 2.819175318397713
+
+[[baseline]]
+tool = "0.4.2"
+written = "2026-11-07T19:50:28.31698Z"
+
+[baseline.plan]
+rate = 20.0
+warmup_secs = 10
+duration_secs = 60
+requests = 5
+groups = ["definition-read", "patient-query", "population-query", "self-description", "stored-query-run"]
+
+[baseline.host]
+arch = "x86_64"
+os = "linux"
+available_parallelism = 4
+cpu_model = "INTEL(R) XEON(R) PLATINUM 8573C"
+total_memory_bytes = 16759304192
+
+[baseline.tolerance]
+latency = 0.25
+throughput = 0.2
+memory = 0.2
+cpu = 0.25
+transactions = 0.1
+
+[baseline.metrics]
+throughput_rps = 20.0
+peak_memory_bytes = 56492032.0
+cpu_per_request_ms = 3.408333333333333
+transactions_per_request = 0.4085714285714286
+"definition-read.p50_ms" = 3.391
+"definition-read.p95_ms" = 4.035
+"definition-read.p99_ms" = 4.467
+"patient-query.p50_ms" = 11.287
+"patient-query.p95_ms" = 13.495
+"patient-query.p99_ms" = 17.295
+"population-query.p50_ms" = 7.323
+"population-query.p95_ms" = 9.463
+"population-query.p99_ms" = 12.327
+"self-description.p50_ms" = 1.791
+"self-description.p95_ms" = 2.287
+"self-description.p99_ms" = 2.469
+"stored-query-run.p50_ms" = 19.615
+"stored-query-run.p95_ms" = 22.799
+"stored-query-run.p99_ms" = 29.839
+
+[baseline.noise]
+throughput_rps = 1.0
+peak_memory_bytes = 1.0050754060324827
+cpu_per_request_ms = 1.0635696821515892
+transactions_per_request = 1.0069930069930069
+"definition-read.p50_ms" = 1.2028188380886904
+"definition-read.p95_ms" = 1.184562802620336
+"definition-read.p99_ms" = 1.3017982799061767
+"patient-query.p50_ms" = 1.0585933580816695
+"patient-query.p95_ms" = 1.0792342904702454
+"patient-query.p99_ms" = 1.8642242607258848
+"population-query.p50_ms" = 1.0791222376757843
+"population-query.p95_ms" = 1.0477175897748021
+"population-query.p99_ms" = 1.3286707697226443
+"self-description.p50_ms" = 1.321669736034377
+"self-description.p95_ms" = 1.289759320434167
+"self-description.p99_ms" = 1.2536585365853659
+"stored-query-run.p50_ms" = 1.074392325348714
+"stored-query-run.p95_ms" = 1.1298302557129698
+"stored-query-run.p99_ms" = 1.2034829845023165
 
 [[baseline]]
 tool = "0.4.1"
