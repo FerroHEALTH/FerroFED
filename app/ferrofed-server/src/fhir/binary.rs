@@ -31,11 +31,11 @@ use std::time::Instant;
 use axum::body::Body;
 use axum::extract::Path;
 use axum::response::{IntoResponse, Response};
-use eehrxf::document::laboratory::LAB_BUNDLE;
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{Action, DataSubject};
 use ferrofed_eehrxf::face::EPS_COMPOSITION;
+use ferrofed_eehrxf::report::Written;
 use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::fanout::Completion;
 use ferrofed_engine::hygiene::Withheld;
@@ -70,9 +70,6 @@ const OPERATION: &str = "Binary";
 /// The category the list names documents of.
 const CATEGORY: &str = "Patient-Summaries";
 
-/// The category of a laboratory report the gateway writes.
-const LABORATORY: &str = "Laboratory-Reports";
-
 /// The claims of a token.
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -100,9 +97,9 @@ struct Claims {
     category: String,
     /// The profile it was asked in.
     profile: String,
-    /// The version of the member's laboratory composition the gateway
-    /// writes the document from, for a laboratory report; none for a
-    /// document the member serves itself.
+    /// The version of the member's composition the gateway writes the
+    /// document from, for a report it writes; none for a document the
+    /// member serves itself.
     composition: Option<String>,
     /// The logical id of the member's `Binary`, for a laboratory,
     /// discharge or imaging document the member serves itself; none
@@ -115,9 +112,9 @@ struct Claims {
 enum Named {
     /// The member's own patient summary.
     Summary,
-    /// The laboratory report the gateway writes from the composition of
-    /// this version.
-    Composition(String),
+    /// The report of the category the gateway writes from the composition
+    /// of this version.
+    Composition(Written, String),
     /// The member's own document of the kind, its `Binary` of this logical
     /// id.
     Own(Kind, String),
@@ -157,23 +154,24 @@ pub(super) fn mint(
     )
 }
 
-/// Returns the token naming, for `caller`, the laboratory report the gateway
-/// writes from the composition of the version `composition` at the member
-/// `chosen`, signed by `signer` for the face `fhir`.
+/// Returns the token naming, for `caller`, the report of the category
+/// `written` the gateway writes from the composition of the version
+/// `composition` at the member `chosen`, signed by `signer` for the face
+/// `fhir`.
 ///
 /// # Errors
 ///
 /// The [`jsonwebtoken::errors::Error`] of a key that cannot sign.
-pub(super) fn mint_laboratory(
+pub(super) fn mint_written(
     signer: &Signer,
     fhir: &FhirSettings,
     caller: &Caller,
-    (chosen, composition): (&Chosen, &str),
+    (chosen, written, composition): (&Chosen, Written, &str),
 ) -> Result<String, jsonwebtoken::errors::Error> {
     signed(
         (signer, fhir, caller),
         (&chosen.via, chosen),
-        (LABORATORY, LAB_BUNDLE),
+        (written.category(), written.bundle()),
         (Some(composition), None),
     )
 }
@@ -262,7 +260,8 @@ fn chosen(federation: &Federation, claims: &Claims) -> Result<Chosen, Untaken> {
     let via = EndpointId::new(claims.via.as_str()).map_err(|_bad| Untaken::Unheld)?;
     let ehr_id = EhrId::new(claims.ehr_id.as_str()).map_err(|_bad| Untaken::Unheld)?;
     if claims.composition.is_some() {
-        let mapped = claims.category == LABORATORY && claims.profile == LAB_BUNDLE;
+        let mapped = Written::of_category(&claims.category)
+            .is_some_and(|written| claims.profile == written.bundle());
         if !mapped || claims.binary.is_some() || native != via {
             return Err(Untaken::Unheld);
         }
@@ -334,7 +333,7 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
             let (request_id, outbound) = (admitted.request_id, admitted.outbound);
             let service = match named {
                 Named::Summary => Service::PatientSummary,
-                Named::Composition(_) | Named::Own(..) => Service::OriginalDocument,
+                Named::Composition(..) | Named::Own(..) => Service::OriginalDocument,
             };
             let mut response = async {
                 // NOTE: eHDSI XCA Profile 8.0.1 §4.2.2: a contact point reads only documents of its
@@ -345,11 +344,11 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
                 }
                 match named {
                     Named::Summary => {}
-                    Named::Composition(composition) => {
-                        return super::laboratory::read(
+                    Named::Composition(written, composition) => {
+                        return super::written::read(
                             admitted,
                             &arrived,
-                            (&member, &composition),
+                            (&member, written, &composition),
                         )
                         .await;
                     }
@@ -408,7 +407,11 @@ fn taken(admitted: &admission::Admitted<'_>, token: &str) -> Result<(Chosen, Nam
     }
     let member = chosen(federation, &claims).map_err(|refused| untaken(&refused, logged))?;
     let named = match (claims.composition, claims.binary) {
-        (Some(composition), _) => Named::Composition(composition),
+        (Some(composition), _) => {
+            let written = Written::of_category(&claims.category)
+                .ok_or_else(|| untaken(&Untaken::Unheld, logged))?;
+            Named::Composition(written, composition)
+        }
         (None, Some(binary)) => {
             let kind = Kind::of_category(&claims.category)
                 .ok_or_else(|| untaken(&Untaken::Unheld, logged))?;

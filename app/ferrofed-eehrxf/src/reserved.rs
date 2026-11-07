@@ -29,8 +29,8 @@ pub const VERSION: QueryVersion = QueryVersion::new(1, 0, 0);
 pub const SAVED: Timestamp = Timestamp::constant(1_791_244_800, 0);
 
 /// Every stored query the gateway holds in the reserved namespace: the
-/// patient summary's section queries, the laboratory report's, then the
-/// medication orders' and actions'.
+/// patient summary's section queries, the laboratory report's, the
+/// discharge report's, then the medication orders' and actions'.
 ///
 /// # Errors
 ///
@@ -38,6 +38,7 @@ pub const SAVED: Timestamp = Timestamp::constant(1_791_244_800, 0);
 pub fn definitions() -> Result<Vec<StoredDefinition>, QueryNameError> {
     let mut held = crate::patient_summary::definitions()?;
     held.push(crate::laboratory::definition()?);
+    held.push(crate::discharge::definition()?);
     held.extend(crate::medication::definitions()?);
     Ok(held)
 }

@@ -15,6 +15,9 @@
 //!   its template id, from every member (Federation Tier §12.7, N44);
 //! - [`patient_summary`]: one stored query per patient summary section;
 //! - [`laboratory`]: the stored query of the laboratory report;
+//! - [`discharge`]: the stored query of the discharge report;
+//! - [`report`]: what the reports the gateway writes from one member's
+//!   composition share;
 //! - [`medication`]: the stored queries of the medication orders and
 //!   actions a member serves prescriptions and dispensations from;
 //! - [`summary`]: the patient summary document assembled from what the
@@ -62,6 +65,7 @@
 
 #![doc(test(attr(deny(warnings))))]
 
+pub mod discharge;
 pub mod dispensations;
 pub mod face;
 pub mod laboratory;
@@ -71,6 +75,7 @@ pub mod medication;
 pub mod patient_summary;
 pub mod prescriptions;
 pub mod receive;
+pub mod report;
 pub mod reserved;
 pub mod section_query;
 pub mod serving;

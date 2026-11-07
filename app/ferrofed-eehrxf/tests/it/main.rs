@@ -17,6 +17,7 @@
 )]
 
 mod crosswalk;
+mod discharge;
 mod laboratory;
 mod mapped;
 mod medication;

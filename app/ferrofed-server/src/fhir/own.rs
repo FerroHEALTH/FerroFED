@@ -28,7 +28,7 @@ use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
 
 use super::admission::Admitted;
-use super::laboratory::Listed;
+use super::written::{Listed, minted_urn};
 use super::{attach, outcome};
 use crate::access::{Accessed, Asked};
 use crate::auth::caller::Caller;
@@ -56,9 +56,7 @@ pub(super) fn listed(
     gathered: &Gathered,
 ) -> Option<Listed> {
     let snapshot = federation.snapshot();
-    let minted = || format!("urn:uuid:{}", uuid::Uuid::new_v4());
-    let mut matches = Vec::new();
-    let mut outcomes = Vec::new();
+    let (mut matches, mut outcomes): Listed = (Vec::new(), Vec::new());
     for own in &gathered.own {
         let endpoint = own.chosen.native.as_str();
         match &own.held {
@@ -79,20 +77,23 @@ pub(super) fn listed(
                         .ok()?;
                         Some(format!("Binary/{token}"))
                     })?;
-                    matches.push((minted(), Match::Passed(passed)));
+                    matches.push((minted_urn(), Match::Passed(passed)));
                 }
             }
             prescriptions::Held::Unusable { reason, .. } => {
                 outcomes.push((
-                    minted(),
+                    minted_urn(),
                     list::unread(endpoint, own.kind.documents(), &reason.to_string()),
                 ));
             }
             prescriptions::Held::Silent(searched) => {
-                outcomes.push((minted(), list::silent(endpoint, searched.status().as_str())));
+                outcomes.push((
+                    minted_urn(),
+                    list::silent(endpoint, searched.status().as_str()),
+                ));
             }
             prescriptions::Held::Unanswered { status, .. } => {
-                outcomes.push((minted(), list::silent(endpoint, status.as_str())));
+                outcomes.push((minted_urn(), list::silent(endpoint, status.as_str())));
             }
         }
     }

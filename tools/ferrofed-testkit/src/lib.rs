@@ -26,6 +26,8 @@
 //!   (#689);
 //! - [`emit`]: where a test writes an exchange-format document it has held
 //!   to the vendored profiles, for HL7's FHIR Validator lane (#688);
+//! - [`discharge`]: the discharge report template, the archetypes it
+//!   specialises or holds, and a synthetic discharge composition (#1405);
 //! - [`laboratory`]: the laboratory report fixtures, the package, the
 //!   template and the mapping a receiving member is declared with, and a
 //!   synthetic report;
@@ -98,6 +100,7 @@ pub mod atna_feed;
 pub mod console_sign_in;
 pub mod containers;
 pub mod crossref;
+pub mod discharge;
 pub mod dpop;
 pub mod emit;
 pub mod eps;

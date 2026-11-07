@@ -29,27 +29,18 @@
 use eehrxf::document::laboratory::{LAB_SLOTS, LABORATORY_REPORT_FORM};
 use eehrxf::document::section::Section;
 use eehrxf::document::{Document, DocumentError};
-use eehrxf::mapping::{Mapping, MappingError};
-use eehrxf::mappings::{LABORATORY, UnknownContext};
+use eehrxf::mapping::Mapping;
+use eehrxf::mappings::LABORATORY;
 use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
 use fhir_types::r4::bundle::Bundle;
-use fhir_types::r4::codeable_concept::CodeableConcept;
-use fhir_types::r4::device::{Device, DeviceDeviceName};
-use fhir_types::r4::identifier::Identifier;
-use fhir_types::r4::patient::Patient;
-use fhir_types::r4::provenance::{Provenance, ProvenanceAgent};
-use fhir_types::r4::resource::Resource;
-use fhirconnect::engine::context::CallContext;
-use fhirconnect::operations::run::Settings;
-use openehr_mapping_core::template::{PathError, TemplateSource};
 use openehr_query::ast::SelectQuery;
 use openehr_query::printer;
 
+use crate::prescriptions::mapped::Template;
+use crate::report::{self, Report, ServedError};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query::{self, Archetype};
-use crate::stack::{Deep, deep};
-use crate::summary::Organisation;
-use crate::summary::resources::{organization, reference};
+use crate::stack::deep;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "laboratory-report";
@@ -123,64 +114,18 @@ pub struct Served {
 /// is mapped by, in both directions.
 pub const RESULT_CONTEXT: &str = "ferrobridge_eu_laboratory.context";
 
-/// Why a laboratory report is not served; no variant's text names a value
-/// a composition carries.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum ServedError {
-    /// The shipped laboratory project names no [`RESULT_CONTEXT`].
-    #[error("the shipped laboratory project names no result context")]
-    Context(#[source] UnknownContext),
-    /// The OPT 1.4 template does not read.
-    #[error("the laboratory report template does not read as an OPT 1.4")]
-    Template(#[source] PathError),
-    /// The shipped laboratory mapping does not compile against the template.
-    #[error("the shipped laboratory mapping does not compile against the template")]
-    Compile(#[source] MappingError),
-    /// The mapping did not run on its thread.
-    #[error(transparent)]
-    Deep(#[from] Deep),
-    /// The composition does not map.
-    #[error("the laboratory composition does not map")]
-    Run(#[source] MappingError),
-    /// The document cannot be assembled from what the composition maps to.
-    #[error("the laboratory report document cannot be assembled")]
-    Document(#[source] DocumentError),
-}
-
-/// What one served report names beside its composition.
-///
-/// It is the gateway's absolute FHIR base, the document's identifier, a
-/// `urn:uuid:` URN, when it is written, a FHIR `instant`, the patient by an
-/// identifier, the operator and the member it was read at.
-#[derive(Debug, Clone, Copy)]
-pub struct Report<'a> {
-    /// The absolute FHIR base the entries are named under.
-    pub base: &'a str,
-    /// The document's `Bundle.identifier`.
-    pub identifier: &'a str,
-    /// When it is written.
-    pub timestamp: &'a str,
-    /// The patient, as a system and a value.
-    pub patient: (&'a str, &'a str),
-    /// The operator, the document's author beside the gateway.
-    pub operator: &'a Organisation,
-    /// The member the composition was read at.
-    pub member: &'a Organisation,
-}
-
 impl Served {
     /// Compiles the result context ([`RESULT_CONTEXT`]) of the shipped
-    /// laboratory mapping (`eehrxf::mappings::LABORATORY`) against the OPT
-    /// 1.4 template `opt`.
+    /// laboratory mapping (`eehrxf::mappings::LABORATORY`) against
+    /// `template`.
     ///
     /// # Errors
     ///
-    /// [`ServedError::Template`] when `opt` does not read,
+    /// [`ServedError::Template`] when the template does not read,
     /// [`ServedError::Context`] when the project names no result context, and
     /// [`ServedError::Compile`] when the mapping does not compile against it.
-    pub fn compile(opt: &str) -> Result<Self, ServedError> {
-        let source = TemplateSource::opt14(opt).map_err(ServedError::Template)?;
+    pub fn compile(template: Template<'_>) -> Result<Self, ServedError> {
+        let source = template.source().map_err(ServedError::Template)?;
         // NOTE: no specification governs this: our own design; the project may list more than one
         // context over one template, so only the result context is compiled and run.
         let result = LABORATORY
@@ -212,69 +157,16 @@ impl Served {
             report.timestamp.to_owned(),
             String::from("Laboratory report"),
         );
-        let (system, value) = report.patient;
-        let subject = document
-            .with_patient(Patient {
-                id: Some(String::from("patient")),
-                identifier: vec![Identifier {
-                    system: Some(system.into()),
-                    value: Some(value.into()),
-                    ..Identifier::default()
-                }],
-                ..Patient::default()
-            })
-            .map_err(ServedError::Document)?;
-        let operator = document.full_url("Organization", "operator");
-        let device = document
-            .with_author(&Resource::Device(Box::new(Device {
-                id: Some(String::from("gateway")),
-                device_name: vec![DeviceDeviceName {
-                    name: "FerroFED".into(),
-                    r#type: "manufacturer-name".into(),
-                    ..DeviceDeviceName::default()
-                }],
-                r#type: Some(CodeableConcept {
-                    text: Some("Software that writes the laboratory report from the member's record automatically".into()),
-                    ..CodeableConcept::default()
-                }),
-                owner: Some(reference(&operator)),
-                ..Device::default()
-            })))
-            .map_err(ServedError::Document)?;
-        document
-            .with_author(&Resource::Organization(Box::new(organization(
-                "operator",
-                report.operator,
-            ))))
-            .map_err(ServedError::Document)?;
-        let context = CallContext::new()
-            .with_patient(reference(&subject))
-            .with_who(reference(&device));
-        let settings = Settings::new(device.clone(), report.timestamp);
-        let run = deep(|| self.mapping.to_fhir_with(composition, &settings, context))?
-            .map_err(ServedError::Run)?;
+        let mapped = report::authored(
+            &mut document,
+            report,
+            "Software that writes the laboratory report from the member's record automatically",
+            (&self.mapping, composition),
+        )?;
         let results = document
-            .with_mapped_report(run.bundle())
+            .with_mapped_report(mapped.bundle())
             .map_err(ServedError::Document)?;
-        let member = document
-            .add(&[Resource::Organization(Box::new(organization(
-                "member",
-                report.member,
-            )))])
-            .map_err(ServedError::Document)?;
-        if let Some(member) = member.first() {
-            document
-                .add(&[Resource::Provenance(Box::new(Provenance {
-                    target: results.iter().map(|url| reference(url)).collect(),
-                    recorded: report.timestamp.into(),
-                    agent: vec![ProvenanceAgent {
-                        who: reference(member),
-                        ..ProvenanceAgent::default()
-                    }],
-                    ..Provenance::default()
-                }))])
-                .map_err(ServedError::Document)?;
-        }
+        report::sourced(&mut document, report, &results).map_err(ServedError::Document)?;
         let slot = LAB_SLOTS
             .iter()
             .find(|slot| slot.code == SECTION)
