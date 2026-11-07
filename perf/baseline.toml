@@ -1,0 +1,71 @@
+# The performance baseline of ferrohealth-perf, one [[baseline]] per CPU model.
+# `ferrohealth-perf run --update` writes or lowers the entry of the runner's
+# model; a raise is a hand edit in a change that says why.
+schema = 2
+
+[[baseline]]
+tool = "0.2.0"
+written = "2026-11-07T01:17:07.215837162Z"
+
+[baseline.plan]
+rate = 20.0
+warmup_secs = 10
+duration_secs = 60
+requests = 5
+groups = ["definition-read", "patient-query", "population-query", "self-description", "stored-query-run"]
+
+[baseline.host]
+arch = "x86_64"
+os = "linux"
+available_parallelism = 4
+cpu_model = "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz"
+total_memory_bytes = 16759304192
+
+[baseline.tolerance]
+latency = 0.25
+throughput = 0.2
+memory = 0.2
+cpu = 0.25
+transactions = 0.1
+
+[baseline.metrics]
+throughput_rps = 20.0
+peak_memory_bytes = 55799808.0
+cpu_per_request_ms = 3.4916666666666667
+transactions_per_request = 0.40714285714285714
+"definition-read.p50_ms" = 3.585
+"definition-read.p95_ms" = 4.155
+"definition-read.p99_ms" = 4.891
+"patient-query.p50_ms" = 10.543
+"patient-query.p95_ms" = 12.919
+"patient-query.p99_ms" = 16.655
+"population-query.p50_ms" = 7.319
+"population-query.p95_ms" = 9.383
+"population-query.p99_ms" = 10.679
+"self-description.p50_ms" = 2.022
+"self-description.p95_ms" = 2.453
+"self-description.p99_ms" = 2.717
+"stored-query-run.p50_ms" = 19.279
+"stored-query-run.p95_ms" = 22.287
+"stored-query-run.p99_ms" = 30.799
+
+[baseline.noise]
+throughput_rps = 1.0
+peak_memory_bytes = 1.0027159950084417
+cpu_per_request_ms = 1.0047732696897373
+transactions_per_request = 1.0035211267605635
+"definition-read.p50_ms" = 1.0384937238493723
+"definition-read.p95_ms" = 1.0250300842358604
+"definition-read.p99_ms" = 1.087130473438542
+"patient-query.p50_ms" = 1.0083467703689653
+"patient-query.p95_ms" = 1.0319514338205926
+"patient-query.p99_ms" = 1.0241037938879665
+"population-query.p50_ms" = 1.0262330919524525
+"population-query.p95_ms" = 1.0460407119258233
+"population-query.p99_ms" = 1.0719168461466428
+"self-description.p50_ms" = 1.0410484668644906
+"self-description.p95_ms" = 1.052996331023237
+"self-description.p99_ms" = 1.0264450321118248
+"stored-query-run.p50_ms" = 1.0116188598993723
+"stored-query-run.p95_ms" = 1.0136402387041774
+"stored-query-run.p99_ms" = 1.0906547682283367
