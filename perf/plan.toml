@@ -39,7 +39,7 @@ group = "patient-query"
 method = "POST"
 path = "/v1/query/aql"
 status = 200
-body = '{"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = ''ffd-test-0001'' AND e/ehr_status/subject/external_ref/namespace = ''urn:oid:2.999.1.1''"}'
+body = "{\"q\": \"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'\"}"
 headers = { authorization = "Bearer {token}", content-type = "application/json" }
 
 # A population query fanned out to every node and merged (§11).
