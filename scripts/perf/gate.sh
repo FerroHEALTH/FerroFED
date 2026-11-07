@@ -224,7 +224,7 @@ run() {
   render "$PLAN" "$WORK/plan.toml" "$token" || exit 2
   ferrohealth-perf run --plan "$WORK/plan.toml" --pid "$server_pid" --base-url "$BASE" \
     --database-url "$ADMIN_URL" --baseline perf/baseline.toml --out-dir target/perf \
-    "${update[@]}" || code=$?
+    ${update[@]+"${update[@]}"} || code=$?
   busy_loop || { [[ "$code" -ne 0 ]] || code=1; }
   if [[ "$code" -ne 0 ]]; then
     echo "perf-gate: the gateway log follows" >&2
