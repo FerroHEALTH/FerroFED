@@ -32,6 +32,7 @@ fhir-types = { workspace = true, features = ["r4", "resources"] }
 # a deployment keeps its files (#1405).
 eehrxf = { workspace = true, features = [
   "discharge",
+  "imaging",
   "laboratory",
   "patient-summary",
   "prescription",

@@ -33,7 +33,7 @@ use std::time::Instant;
 use axum::response::Response;
 use ehds_logging::category::Category;
 use ferrofed_eehrxf::list::{self, Listing, Match};
-use ferrofed_eehrxf::report::{Report, Written};
+use ferrofed_eehrxf::report::{Report, Writes, Written};
 use ferrofed_eehrxf::summary::Held;
 use ferrofed_registry::id::EndpointId;
 use fhir_types::r4::operation_outcome::OperationOutcome;
@@ -103,7 +103,7 @@ pub(super) fn listed(
         let unique = format!("urn:uuid:{object}");
         matches.push((
             format!("urn:uuid:{id}"),
-            Match::Written(Box::new(list::written(
+            Match::Written(Box::new(list::written::entry(
                 written,
                 (&id, &unique),
                 listing,
@@ -193,17 +193,13 @@ pub(super) async fn read(
     (member, written, composition): (&Chosen, Written, &str),
 ) -> Response {
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
-    let served = match written {
-        Written::Laboratory => fhir.laboratory.is_some(),
-        Written::Discharge => fhir.discharge.is_some(),
-    };
-    if !served {
+    let Some(served) = fhir.writes(written) else {
         return outcome(
             StatusCode::NOT_FOUND,
             "not-found",
             "no document at this URL; list the documents again",
         );
-    }
+    };
     let deadline = Instant::now()
         .checked_add(federation.budget().per_node())
         .unwrap_or_else(Instant::now);
@@ -216,7 +212,13 @@ pub(super) async fn read(
     };
     let mut response = match fetched {
         Ok(Composition::Body(body)) => {
-            document(admitted, arrived, (member, composition), (written, &body)).await
+            document(
+                admitted,
+                arrived,
+                (member, composition),
+                (written, served, &body),
+            )
+            .await
         }
         Ok(Composition::Absent) => outcome(
             StatusCode::NOT_FOUND,
@@ -243,6 +245,7 @@ const fn category(written: Written) -> Category {
     match written {
         Written::Laboratory => Category::MedicalTestResult,
         Written::Discharge => Category::DischargeReport,
+        Written::Imaging => Category::MedicalImaging,
     }
 }
 
@@ -253,7 +256,7 @@ async fn document(
     admitted: &Admitted<'_>,
     arrived: &Arrived<'_>,
     (member, composition): (&Chosen, &str),
-    (written, body): (Written, &[u8]),
+    (written, served, body): (Written, &dyn Writes, &[u8]),
 ) -> Response {
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
     let deadline = Instant::now()
@@ -295,25 +298,14 @@ async fn document(
         member: &custodian,
     };
     let body = String::from_utf8_lossy(body);
-    let bundle: Result<_, Box<dyn std::error::Error + Send + Sync>> = match written {
-        Written::Discharge => fhir
-            .discharge
-            .as_deref()
-            .ok_or_else(|| "no discharge mapping".into())
-            .and_then(|served| Ok(served.document(&body, report)?)),
-        Written::Laboratory => fhir
-            .laboratory
-            .as_deref()
-            .ok_or_else(|| "no laboratory mapping".into())
-            .and_then(|served| Ok(served.document(&body, report)?)),
-    };
+    let bundle = served.document(&body, report);
     match bundle {
         Ok(bundle) => Provenance::member(snapshot, &member.via, &member.node)
             .stamp(fhir_json(StatusCode::OK, &bundle)),
         Err(refusal) => {
             tracing::warn!(
                 request_id = %admitted.outbound,
-                error = %crate::chain(refusal.as_ref()),
+                error = %crate::chain(&refusal),
                 "a member's composition was not written as a report"
             );
             outcome(

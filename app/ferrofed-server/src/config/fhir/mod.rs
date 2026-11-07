@@ -182,6 +182,10 @@ pub struct FhirSettings {
     /// `Discharge-Reports` `[[fhir.report]]` entry, or none when there is
     /// none.
     pub discharge: Option<Arc<ferrofed_eehrxf::discharge::Served>>,
+    /// The imaging mapping the document list writes a member's imaging
+    /// composition with, compiled against the template of the
+    /// `Medical-Imaging` `[[fhir.report]]` entry, or none when there is none.
+    pub imaging: Option<Arc<ferrofed_eehrxf::imaging::Served>>,
     /// The members that serve prescriptions in the map mode, each by its node
     /// id with its mapping.
     pub mapped: Arc<BTreeMap<String, MapMode>>,
@@ -362,6 +366,14 @@ pub enum FhirError {
     /// the `Discharge-Reports` `[[fhir.report]]` entry.
     #[error("the discharge mapping the document list writes reports with is refused")]
     Discharge {
+        /// Why.
+        #[source]
+        source: Box<ServedError>,
+    },
+    /// The shipped imaging mapping does not compile against the template of
+    /// the `Medical-Imaging` `[[fhir.report]]` entry.
+    #[error("the imaging mapping the document list writes reports with is refused")]
+    Imaging {
         /// Why.
         #[source]
         source: Box<ServedError>,
@@ -579,6 +591,7 @@ impl Fhir {
             mapped: Arc::new(self.mapped()?),
             laboratory: self.laboratory()?.map(Arc::new),
             discharge: self.discharge()?.map(Arc::new),
+            imaging: self.imaging()?.map(Arc::new),
             document_url_lifetime: std::time::Duration::from_secs(self.document_url_lifetime_secs),
             terminology: Terminology::none(),
             validating: None,
