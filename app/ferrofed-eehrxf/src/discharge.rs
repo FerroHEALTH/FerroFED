@@ -132,6 +132,16 @@ struct Language {
     code_string: String,
 }
 
+impl From<report::Unwritten> for ServedError {
+    fn from(unwritten: report::Unwritten) -> Self {
+        match unwritten {
+            report::Unwritten::Document(source) => Self::Document(source),
+            report::Unwritten::Deep(source) => Self::Deep(source),
+            report::Unwritten::Run(source) => Self::Run(source),
+        }
+    }
+}
+
 impl Served {
     /// Compiles the shipped discharge mapping (`eehrxf::mappings::HDR`)
     /// against `template`.
@@ -177,17 +187,12 @@ impl Served {
         // NOTE: HL7 Europe HDR 1.0.0 bundle-eu-hdr: Bundle.language is 1..1, the language the
         // member's composition is written in (RM 1.1.0 COMPOSITION.language).
         document.with_language(written.language.code_string);
-        let run = report::authored(
+        let mapped = report::authored(
             &mut document,
             report,
             "Software that writes the discharge report from the member's record automatically",
-        )
-        .map_err(ServedError::Document)?;
-        let mapped = deep(|| {
-            self.mapping
-                .to_fhir_with(composition, &run.settings, run.context)
-        })?
-        .map_err(ServedError::Run)?;
+            (&self.mapping, composition),
+        )?;
         let sections = document
             .with_mapped_composition(mapped.bundle())
             .map_err(ServedError::Document)?;

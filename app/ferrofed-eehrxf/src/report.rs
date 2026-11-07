@@ -15,6 +15,7 @@ use eehrxf::category::Category;
 use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::document::laboratory::LAB_BUNDLE;
 use eehrxf::document::{Document, DocumentError};
+use eehrxf::mapping::{Mapping, MappingError};
 use ferrofed_registry::definition::{QueryName, QueryNameError};
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::device::{Device, DeviceDeviceName};
@@ -23,8 +24,10 @@ use fhir_types::r4::patient::Patient;
 use fhir_types::r4::provenance::{Provenance, ProvenanceAgent};
 use fhir_types::r4::resource::Resource;
 use fhirconnect::engine::context::CallContext;
+use fhirconnect::operations::contract::ToFhirResponse;
 use fhirconnect::operations::run::Settings;
 
+use crate::stack::{Deep, deep};
 use crate::summary::Organisation;
 use crate::summary::resources::{organization, reference};
 
@@ -49,63 +52,72 @@ pub struct Report<'a> {
     pub member: &'a Organisation,
 }
 
-/// What a mapping run of a served report is given: its settings and its
-/// call context, naming the document's patient and the gateway's `Device`.
+/// Why a served report's mapping run wrote nothing.
 #[derive(Debug)]
-pub(crate) struct Run {
-    /// The run's settings.
-    pub(crate) settings: Settings,
-    /// The run's call context.
-    pub(crate) context: CallContext,
+pub(crate) enum Unwritten {
+    /// The document does not take a resource.
+    Document(DocumentError),
+    /// The run did not run on its thread.
+    Deep(Deep),
+    /// The composition does not map.
+    Run(MappingError),
 }
 
 /// Names in `document` the patient `report` names and the authors, the
 /// gateway's `Device`, described as `software`, and the operator's
-/// `Organization`, and returns what a mapping run is given.
+/// `Organization`, then runs `mapping` over `composition` for them.
 ///
 /// # Errors
 ///
-/// The [`DocumentError`] of a resource the document does not take.
+/// The [`Unwritten`] that says why the run wrote nothing.
 pub(crate) fn authored(
     document: &mut Document,
     report: Report<'_>,
     software: &str,
-) -> Result<Run, DocumentError> {
+    (mapping, composition): (&Mapping, &str),
+) -> Result<ToFhirResponse, Unwritten> {
     let (system, value) = report.patient;
-    let subject = document.with_patient(Patient {
-        id: Some(String::from("patient")),
-        identifier: vec![Identifier {
-            system: Some(system.into()),
-            value: Some(value.into()),
-            ..Identifier::default()
-        }],
-        ..Patient::default()
-    })?;
+    let subject = document
+        .with_patient(Patient {
+            id: Some(String::from("patient")),
+            identifier: vec![Identifier {
+                system: Some(system.into()),
+                value: Some(value.into()),
+                ..Identifier::default()
+            }],
+            ..Patient::default()
+        })
+        .map_err(Unwritten::Document)?;
     let operator = document.full_url("Organization", "operator");
-    let device = document.with_author(&Resource::Device(Box::new(Device {
-        id: Some(String::from("gateway")),
-        device_name: vec![DeviceDeviceName {
-            name: "FerroFED".into(),
-            r#type: "manufacturer-name".into(),
-            ..DeviceDeviceName::default()
-        }],
-        r#type: Some(CodeableConcept {
-            text: Some(software.into()),
-            ..CodeableConcept::default()
-        }),
-        owner: Some(reference(&operator)),
-        ..Device::default()
-    })))?;
-    document.with_author(&Resource::Organization(Box::new(organization(
-        "operator",
-        report.operator,
-    ))))?;
-    Ok(Run {
-        settings: Settings::new(device.clone(), report.timestamp),
-        context: CallContext::new()
-            .with_patient(reference(&subject))
-            .with_who(reference(&device)),
-    })
+    let device = document
+        .with_author(&Resource::Device(Box::new(Device {
+            id: Some(String::from("gateway")),
+            device_name: vec![DeviceDeviceName {
+                name: "FerroFED".into(),
+                r#type: "manufacturer-name".into(),
+                ..DeviceDeviceName::default()
+            }],
+            r#type: Some(CodeableConcept {
+                text: Some(software.into()),
+                ..CodeableConcept::default()
+            }),
+            owner: Some(reference(&operator)),
+            ..Device::default()
+        })))
+        .map_err(Unwritten::Document)?;
+    document
+        .with_author(&Resource::Organization(Box::new(organization(
+            "operator",
+            report.operator,
+        ))))
+        .map_err(Unwritten::Document)?;
+    let settings = Settings::new(device.clone(), report.timestamp);
+    let context = CallContext::new()
+        .with_patient(reference(&subject))
+        .with_who(reference(&device));
+    deep(|| mapping.to_fhir_with(composition, &settings, context))
+        .map_err(Unwritten::Deep)?
+        .map_err(Unwritten::Run)
 }
 
 /// Adds to `document` the member `report` names as an `Organization`, and

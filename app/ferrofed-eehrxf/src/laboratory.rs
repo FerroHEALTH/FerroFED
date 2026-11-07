@@ -140,6 +140,16 @@ pub enum ServedError {
     Document(#[source] DocumentError),
 }
 
+impl From<report::Unwritten> for ServedError {
+    fn from(unwritten: report::Unwritten) -> Self {
+        match unwritten {
+            report::Unwritten::Document(source) => Self::Document(source),
+            report::Unwritten::Deep(source) => Self::Deep(source),
+            report::Unwritten::Run(source) => Self::Run(source),
+        }
+    }
+}
+
 impl Served {
     /// Compiles the result context ([`RESULT_CONTEXT`]) of the shipped
     /// laboratory mapping (`eehrxf::mappings::LABORATORY`) against
@@ -183,17 +193,12 @@ impl Served {
             report.timestamp.to_owned(),
             String::from("Laboratory report"),
         );
-        let run = report::authored(
+        let mapped = report::authored(
             &mut document,
             report,
             "Software that writes the laboratory report from the member's record automatically",
-        )
-        .map_err(ServedError::Document)?;
-        let mapped = deep(|| {
-            self.mapping
-                .to_fhir_with(composition, &run.settings, run.context)
-        })?
-        .map_err(ServedError::Run)?;
+            (&self.mapping, composition),
+        )?;
         let results = document
             .with_mapped_report(mapped.bundle())
             .map_err(ServedError::Document)?;

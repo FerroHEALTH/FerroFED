@@ -59,6 +59,11 @@ use crate::fhir_wire::fhir_json;
 /// `fullUrl`.
 pub(super) type Listed = (Vec<(String, Match)>, Vec<(String, OperationOutcome)>);
 
+/// A fresh `urn:uuid:` URN, the `fullUrl` of a list entry.
+pub(super) fn minted_urn() -> String {
+    format!("urn:uuid:{}", uuid::Uuid::new_v4())
+}
+
 /// The entries the list names for the written reports `gathered` holds,
 /// on the face `fhir`, for `caller`: each composition's
 /// `DocumentReference`, each by its `fullUrl`, and an `OperationOutcome`
@@ -71,9 +76,7 @@ pub(super) fn listed(
     listing: Listing<'_>,
 ) -> Option<Listed> {
     let snapshot = federation.snapshot();
-    let minted = || format!("urn:uuid:{}", uuid::Uuid::new_v4());
-    let mut matches = Vec::new();
-    let mut outcomes = Vec::new();
+    let (mut matches, mut outcomes): Listed = (Vec::new(), Vec::new());
     for (written, endpoint, held) in once(federation, gathered) {
         let Some(chosen) = member(federation, gathered, &endpoint) else {
             continue;
@@ -111,7 +114,10 @@ pub(super) fn listed(
     }
     for (endpoint, answered) in gathered.written.values().flatten() {
         if let Answered::Silent { status, .. } = answered {
-            outcomes.push((minted(), list::silent(endpoint.as_str(), status.as_str())));
+            outcomes.push((
+                minted_urn(),
+                list::silent(endpoint.as_str(), status.as_str()),
+            ));
         }
     }
     Some((matches, outcomes))
