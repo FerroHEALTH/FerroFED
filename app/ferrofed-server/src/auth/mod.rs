@@ -84,6 +84,8 @@ use crate::auth::permission::{Requirement, Resource};
 use crate::auth::refusal::{BasicRefusal, Refusal, Refused};
 use crate::auth::verify::Verifiers;
 use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
+use crate::error::ncp::NcpError;
+use ferrohealth_smart::federation::contact::EhdsiCode;
 
 /// The verifier of every caller, built from `[auth]` and `[trust]`.
 #[derive(Debug)]
@@ -198,6 +200,10 @@ impl Gate {
     /// verified it by signature or introspection; otherwise the token is
     /// dropped with the request's headers.
     ///
+    /// A refusal to a national contact point carries its Requirements
+    /// Catalogue 10.0.0 §1.25 code: the one `ferrohealth-smart` gives a
+    /// refused token, and [`NcpError::of`] the gateway's own refusal.
+    ///
     /// # Errors
     /// Returns the [`Refused`] the request is answered with.
     pub async fn admit(
@@ -220,8 +226,35 @@ impl Gate {
             .ok_or(Refused {
                 refusal: Refusal::Invalid,
                 check: Some(Reason::UntrustedIssuer),
+                ncp: None,
             })?;
-        let trusted: &IssuerSettings = &entry;
+        let contact_point = entry.national_contact_point.is_some();
+        self.policy(
+            headers,
+            (smart, credential),
+            &entry,
+            (requirement, named),
+            exchanging,
+        )
+        .map_err(|refused| {
+            if contact_point {
+                refused.to_contact_point(NcpError::of(refused.refusal.code()))
+            } else {
+                refused
+            }
+        })
+    }
+
+    /// Holds the caller `smart` authenticates with `credential`, vouched for
+    /// by `trusted`, to the gateway's policy for `requirement` on `named`.
+    fn policy(
+        &self,
+        headers: &HeaderMap,
+        (smart, credential): (SmartCaller, String),
+        trusted: &IssuerSettings,
+        (requirement, named): (Requirement, Option<&str>),
+        exchanging: bool,
+    ) -> Result<Caller, Refused> {
         let caller = self.caller(&smart, trusted)?;
         let correlation = match &trusted.national_contact_point {
             Some(declared) => contact_point::correlation(headers, declared)?,
@@ -309,7 +342,18 @@ impl Gate {
                 self.smart.authenticate_request(&parts).await
             }
         };
-        let access = authenticated.map_err(|denied| Refused::from(&denied))?;
+        let access = authenticated.map_err(|denied| {
+            let refused = Refused::from(&denied);
+            // NOTE: MyHealth@EU RC 10.0.0 §1.25: the contact-point check's own code, else
+            // ERROR_SEC_GENERIC for any other refused token, as `EhdsiCode::of` gives it.
+            if denied.ehdsi().is_some() || self.names_contact_point(headers) {
+                refused.to_contact_point(Some(NcpError::shared(
+                    denied.ehdsi().unwrap_or(EhdsiCode::SecGeneric),
+                )))
+            } else {
+                refused
+            }
+        })?;
         let Access::Caller(caller) = access else {
             return Err(Refusal::Missing.into());
         };
@@ -329,6 +373,7 @@ impl Gate {
         let invalid = |check: &'static str| Refused {
             refusal: Refusal::Invalid,
             check: Some(Reason::Other(check)),
+            ncp: None,
         };
         // NOTE: RFC 9068 §2.2 requires `client_id`, and IHE IUA ITI TF-2 3.71.4.2.2.1
         // tells a client from a person by it, so a token without one does not hold.
@@ -406,6 +451,19 @@ impl Gate {
             .ok_or(BasicRefusal::Unlisted)
     }
 
+    /// Whether the credential of `headers` names a national contact point as
+    /// its issuer, read before anything is verified (RFC 7519 §7.2).
+    fn names_contact_point(&self, headers: &HeaderMap) -> bool {
+        self.smart
+            .credential(headers)
+            .and_then(verify::unverified_issuer)
+            .is_some_and(|issuer| {
+                self.issuers.iter().any(|trusted| {
+                    trusted.issuer == issuer && trusted.national_contact_point.is_some()
+                })
+            })
+    }
+
     /// Whether any caller can be admitted: some issuer is on the trust list.
     #[must_use]
     pub fn admits_any(&self) -> bool {
@@ -446,6 +504,7 @@ fn contact_point_caller(
         return Err(Refused {
             refusal: Refusal::Invalid,
             check: Some(Reason::Other("contact-point")),
+            ncp: None,
         });
     };
     let relayed = contact_point::relayed(&trusted.issuer, external)

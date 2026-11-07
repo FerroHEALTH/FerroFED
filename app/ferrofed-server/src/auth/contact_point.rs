@@ -444,3 +444,8 @@ impl ContactPoints {
         Ok(body)
     }
 }
+
+/// The mark an answer to a national contact point carries, set by the gate
+/// that admitted it, for the layers outside the gate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ContactPointAnswer;

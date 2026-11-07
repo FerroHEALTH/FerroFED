@@ -6,7 +6,7 @@
   "title": "MyHealth@EU exception code names",
   "status": "active",
   "experimental": false,
-  "date": "2026-11-05",
+  "date": "2026-11-06",
   "publisher": "FerroFED",
   "description": "The exception code names of the MyHealth@EU Requirements Catalogue 10.0.0 §1.25 that a FerroFED gateway names in the details of an OperationOutcome on its FHIR face. The catalogue defines the names and publishes no code system URI, so they travel under this one; it lists the names the gateway uses.",
   "copyright": "Cadasto B.V., under the Business Source License 1.1. The code names are the MyHealth@EU Requirements Catalogue's.",
@@ -28,6 +28,42 @@
     {
       "code": "ERROR_SEC_GENERIC",
       "display": "Generic security error"
+    },
+    {
+      "code": "ERROR_REGISTRY_NOT_AVAILABLE",
+      "display": "National infrastructure unavailable"
+    },
+    {
+      "code": "ERROR_NO_CONSENT",
+      "display": "No consent"
+    },
+    {
+      "code": "ERROR_INTERNAL_ERROR",
+      "display": "Internal error"
+    },
+    {
+      "code": "ERROR_SEC_DATA_INTEGRITY_NOT_ENSURED",
+      "display": "Assertion attributes missing or out of their window"
+    },
+    {
+      "code": "ERROR_HPI_NO_INFORMATION",
+      "display": "No health professional named"
+    },
+    {
+      "code": "ERROR_HPI_INSUFFICIENT_INFORMATION",
+      "display": "Health professional attributes incomplete"
+    },
+    {
+      "code": "ERROR_HPI_HAI_NO_INFORMATION",
+      "display": "No healthcare provider organisation named"
+    },
+    {
+      "code": "ERROR_HPI_POC_NO_INFORMATION",
+      "display": "No point of care named"
+    },
+    {
+      "code": "ERROR_HPI_AUTHENTICATION_NOT_RECEIVED",
+      "display": "No admitted authentication class"
     }
   ]
 }

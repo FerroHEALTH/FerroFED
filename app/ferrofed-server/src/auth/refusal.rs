@@ -19,6 +19,7 @@ use axum::response::{IntoResponse, Response};
 use ferrohealth_smart::refusal::{Denied, Reason, Refusal as SmartRefusal, Schemes, StepUp};
 use http::{HeaderValue, StatusCode, header};
 
+use crate::error::ncp::NcpError;
 use crate::error::{self, Code};
 
 /// Why a request was refused at the gate.
@@ -243,14 +244,43 @@ pub struct Refused {
     pub refusal: Refusal,
     /// The check that refused the credential, when one did.
     pub check: Option<Reason>,
+    /// The Requirements Catalogue 10.0.0 §1.25 code a refusal to a national
+    /// contact point carries, `None` for every other caller.
+    pub ncp: Option<NcpError>,
 }
 
 impl Refused {
-    /// The answer to the refused request: the error body, with the
-    /// challenge naming `realm`.
+    /// Returns this refusal carrying `ncp`, the §1.25 code of a refusal to a
+    /// national contact point, when it carries none yet.
+    #[must_use]
+    pub fn to_contact_point(self, ncp: Option<NcpError>) -> Self {
+        Self {
+            ncp: self.ncp.or(ncp),
+            ..self
+        }
+    }
+
+    /// The answer to the refused request: the error body, naming the §1.25
+    /// code of a refusal to a contact point, with the challenge naming
+    /// `realm`.
     #[must_use]
     pub fn response(self, realm: &str, request_id: &str) -> Response {
-        self.refusal.response(realm, request_id)
+        let Some(ncp) = self.ncp else {
+            return self.refusal.response(realm, request_id);
+        };
+        let code = self.refusal.code();
+        let mut response =
+            error::to_contact_point(code, self.refusal.description(), request_id, ncp);
+        let challenge = self
+            .refusal
+            .smart()
+            .and_then(|refusal| refusal.challenge(Some(realm)));
+        if let Some(value) = challenge.and_then(|text| HeaderValue::from_str(&text).ok()) {
+            response
+                .headers_mut()
+                .insert(header::WWW_AUTHENTICATE, value);
+        }
+        response
     }
 }
 
@@ -259,6 +289,7 @@ impl From<Refusal> for Refused {
         Self {
             refusal,
             check: None,
+            ncp: None,
         }
     }
 }
@@ -279,6 +310,7 @@ impl From<&Denied> for Refused {
         Self {
             refusal,
             check: denied.reason(),
+            ncp: None,
         }
     }
 }

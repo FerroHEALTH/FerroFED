@@ -144,8 +144,20 @@ pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: 
             if caller.verified_by() == VerifiedBy::Edge {
                 gate.references.edge_asserted(&caller, outbound.as_deref());
             }
+            let contact_point = caller.is_contact_point();
             request.extensions_mut().insert(caller);
-            next.run(request).await
+            let response = next.run(request).await;
+            // NOTE: MyHealth@EU RC 10.0.0 §1.25: a refusal to a national contact point names
+            // its exception code, so its national connector maps it one to one.
+            if contact_point {
+                let mut response = crate::error::ncp::stamped(response);
+                response
+                    .extensions_mut()
+                    .insert(crate::auth::contact_point::ContactPointAnswer);
+                response
+            } else {
+                response
+            }
         }
         Err(refused) => {
             let refusal = refused.refusal;

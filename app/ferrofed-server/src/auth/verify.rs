@@ -179,7 +179,7 @@ struct Issued {
 }
 
 /// Returns the `iss` claim of `token`, read without checking anything.
-fn unverified_issuer(token: &str) -> Option<String> {
+pub(super) fn unverified_issuer(token: &str) -> Option<String> {
     let payload = token.split('.').nth(1)?;
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(payload)
