@@ -85,6 +85,19 @@ fn lane(issuer: &str, kind: &str, extra: &str) -> String {
     )
 }
 
+/// The `oauth` and `onward` tables of node A at the token endpoint `issuer`,
+/// whose onward issuer is of kind `federation` and maps the suite's test
+/// issuer.
+fn federation_lane(issuer: &str) -> String {
+    let federation = format!(
+        "[credentials.\"node-a-pub\".onward.federation]\ncontact_point = false\nexchanges_from = [\"{ISSUER}\"]\nperson_mapping = \"sub\"\ncountries = [\"NL\"]\nissuing_authorities = [\"synthetic-authority\"]\nprovider_identifier_prefixes = [\"urn:oid:2.999\"]\n"
+    );
+    lane(issuer, "federation", "").replace(
+        "[credentials.\"node-a-pub\".onward.keys]",
+        &format!("{federation}\n[credentials.\"node-a-pub\".onward.keys]"),
+    )
+}
+
 /// The gateway over node A at `a` and an unreachable node B, the patient
 /// resolving at node A, with `tables`.
 fn gateway(dir: &Path, a: &str, tables: &str) -> Result<Router, Box<dyn Error>> {
@@ -273,13 +286,7 @@ async fn a_caller_the_issuer_does_not_carry_is_refused_before_anything_is_sent()
     let server = authorization_server("unused", 200).await;
     let a = node(OWN_TOKEN).await?;
     let dir = tempfile::tempdir()?;
-    let federation = format!(
-        "[credentials.\"node-a-pub\".onward.federation]\ncontact_point = false\nexchanges_from = [\"{ISSUER}\"]\nperson_mapping = \"sub\"\ncountries = [\"NL\"]\nissuing_authorities = [\"synthetic-authority\"]\nprovider_identifier_prefixes = [\"urn:oid:2.999\"]\n"
-    );
-    let tables = lane(&server.uri(), "federation", "").replace(
-        "[credentials.\"node-a-pub\".onward.keys]",
-        &format!("{federation}\n[credentials.\"node-a-pub\".onward.keys]"),
-    );
+    let tables = federation_lane(&server.uri());
     let app = gateway(dir.path(), &a.uri(), &tables)?;
 
     let (status, text) = call(app, patient_post(&bearer_as(CALLER)?)?).await?;
@@ -348,6 +355,41 @@ fn an_onward_table_with_no_audience_is_refused() -> TestResult {
         matches!(&error, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.onward"),
         "{error:?}"
     );
+    Ok(())
+}
+
+/// `tables` with node A's credentials opted in to organisations.
+fn opted_in(tables: &str) -> String {
+    format!("[credentials.\"node-a-pub\"]\nonward_organisations = true\n\n{tables}")
+}
+
+/// A lane opts in to another party's organisation only at a `federation`
+/// issuer, and only with an onward table: a `persons` lane and an `oauth`
+/// grant alone refuse the switch at load.
+#[test]
+fn onward_organisations_needs_a_federation_lane() -> TestResult {
+    let persons = lane("https://as.example.org", "persons", "");
+    let start = persons
+        .find("[credentials.\"node-a-pub\".onward]")
+        .ok_or("the onward table")?;
+    let oauth_alone = persons.get(..start).ok_or("the oauth part")?;
+    for tables in [opted_in(&persons), opted_in(oauth_alone)] {
+        let error = refusal(&tables)?;
+        assert!(
+            matches!(&error, ConfigError::Credentials(CredentialsFault::OnwardOrganisations { section }) if section == "credentials.node-a-pub"),
+            "{error:?}"
+        );
+    }
+    Ok(())
+}
+
+/// A `federation` lane takes the switch, and loads without it as before.
+#[test]
+fn a_federation_lane_takes_onward_organisations() -> TestResult {
+    let federation = federation_lane("https://as.example.org");
+    for tables in [opted_in(&federation), federation] {
+        Config::from_sources(Some(&signed(&tables)), &BTreeMap::new())?.resolve()?;
+    }
     Ok(())
 }
 
@@ -502,13 +544,7 @@ async fn an_attestation_through_a_federation_lane_is_refused_before_sending() ->
     let server = authorization_server("unused", 200).await;
     let a = committing_node().await;
     let dir = tempfile::tempdir()?;
-    let federation = format!(
-        "[credentials.\"node-a-pub\".onward.federation]\ncontact_point = false\nexchanges_from = [\"{ISSUER}\"]\nperson_mapping = \"sub\"\ncountries = [\"NL\"]\nissuing_authorities = [\"synthetic-authority\"]\nprovider_identifier_prefixes = [\"urn:oid:2.999\"]\n"
-    );
-    let tables = lane(&server.uri(), "federation", "").replace(
-        "[credentials.\"node-a-pub\".onward.keys]",
-        &format!("{federation}\n[credentials.\"node-a-pub\".onward.keys]"),
-    );
+    let tables = federation_lane(&server.uri());
     let app = gateway(dir.path(), &a.uri(), &tables)?;
     let sent = contribution(&attestation());
     let (status, text) = call(app, contribution_post(sent, &bearer_as(CALLER)?)?).await?;

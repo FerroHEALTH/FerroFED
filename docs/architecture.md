@@ -1181,8 +1181,18 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   onward check and cached by it. The issuer's `kind` decides the callers it
   carries (`ferrofed_engine::onward::grant::lane::route`): a person of the
   node's organisation at `persons`, a professional of another domestic party
-  at `federation`, the patient at `patients`; every other caller, a system
-  included, fails that node with nothing sent. A refused exchange fails the
+  at `federation`, another domestic party's organisation at a `federation`
+  issuer whose section sets `onward_organisations = true` (#1710), the
+  patient at `patients`; every other caller, a system included, fails that
+  node with nothing sent. An organisation reaches the node read-only: a
+  request outside the ITS-REST `query` group and outside `GET`, `HEAD` and
+  `OPTIONS` is refused `403` before any token is asked for. A contact point
+  never reaches that arm, since `ferrohealth-smart` classifies every
+  contact-point token as a person. A lane whose table sets
+  `correlation_claim` refuses, before the token endpoint is asked, a caller
+  whose token does not carry the claim in its JWS payload, an opaque token
+  included, and the library holds the issued token to carry the same
+  value. A refused exchange fails the
   node and never falls back to the gateway's own token, which the `oauth`
   table keeps for the gateway's own requests. Which caller is exchanged at
   which kind is our own design. A `CONTRIBUTION` through the lane names, in

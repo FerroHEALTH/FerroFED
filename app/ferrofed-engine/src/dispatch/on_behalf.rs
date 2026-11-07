@@ -16,6 +16,7 @@ use openehr_its::rest::client::{Client, ClientError, Transport};
 use url::Url;
 
 use crate::onward::grant::exchange::SharedOnBehalf;
+use crate::onward::grant::lane::ReadOnly;
 
 use super::{DispatchOptions, NodeClient, NodeClients, SetupError, SharedCredentials};
 
@@ -53,6 +54,30 @@ impl<T: Transport + Clone> NodeClient<T> {
             kind,
             source.provider(&options.conveyance, &options.withheld),
         ))
+    }
+
+    /// Refuses, with nothing sent and no token asked for, a request under
+    /// `options` that writes, when the endpoint's onward lane carries its
+    /// caller read-only; `reads` is whether the request only reads.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReadOnly`] naming the endpoint.
+    pub(crate) fn admit_write(
+        &self,
+        options: &DispatchOptions,
+        reads: bool,
+    ) -> Result<(), ReadOnly> {
+        let read_only = self
+            .on_behalf
+            .as_ref()
+            .is_some_and(|source| source.read_only(&options.conveyance));
+        if read_only && !reads {
+            return Err(ReadOnly {
+                endpoint: self.endpoint.clone(),
+            });
+        }
+        Ok(())
     }
 
     /// The ITS-REST client a request under `options` is sent through.

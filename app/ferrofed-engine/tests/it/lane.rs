@@ -20,7 +20,7 @@ use ferrofed_engine::conveyance::caller::Principal;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::grant::exchange::{OnBehalf as _, SubjectToken};
-use ferrofed_engine::onward::grant::lane::{Lane, LaneError};
+use ferrofed_engine::onward::grant::lane::{Lane, LaneError, Organisations};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_testkit::mock::Server;
 use ferrohealth_smart::client::onward::{OnwardError, Rejected, SubjectToken as OnwardSubject};
@@ -39,19 +39,20 @@ use crate::conveyed::{UPSTREAM, caller, shared};
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The token endpoint's onward issuer.
-const ONWARD_ISSUER: &str = "https://federation.cdr-a.example.org";
+pub(crate) const ONWARD_ISSUER: &str = "https://federation.cdr-a.example.org";
 
 /// The node the onward tokens are for.
-const NODE: &str = "https://cdr-a.example.org/openehr";
+pub(crate) const NODE: &str = "https://cdr-a.example.org/openehr";
 
 /// The token-exchange grant type, form-encoded (RFC 8693 §2.1).
-const TOKEN_EXCHANGE: &str = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange";
+pub(crate) const TOKEN_EXCHANGE: &str =
+    "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange";
 
 /// The gateway's own token, which no caller's call may carry.
-const OWN_TOKEN: &str = "synthetic-gateway-own-token";
+pub(crate) const OWN_TOKEN: &str = "synthetic-gateway-own-token";
 
 /// An authorization server refusing every exchange with `invalid_grant`.
-async fn refusing() -> Server {
+pub(crate) async fn refusing() -> Server {
     let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/token"))
@@ -67,6 +68,18 @@ async fn refusing() -> Server {
 /// The lane of a `federation` issuer at `server`, trusted to map the persons
 /// of `exchanges_from`.
 fn federation_lane(server: &Server, exchanges_from: &str) -> Result<Lane, Box<dyn Error>> {
+    lane_of(server, exchanges_from, Organisations::Refused, None)
+}
+
+/// The lane of a `federation` issuer at `server`, trusted to map the callers
+/// of `exchanges_from`, carrying `organisations`, whose route carries the
+/// correlation claim `correlation` when one is given.
+pub(crate) fn lane_of(
+    server: &Server,
+    exchanges_from: &str,
+    organisations: Organisations,
+    correlation: Option<&str>,
+) -> Result<Lane, Box<dyn Error>> {
     let oauth: OauthSection = serde_json::from_value(serde_json::json!({
         "token_endpoint": format!("{}/token", server.uri()),
         "client_id": "ferrofed-onward-gateway",
@@ -80,6 +93,7 @@ fn federation_lane(server: &Server, exchanges_from: &str) -> Result<Lane, Box<dy
         "token_endpoint": format!("{}/token", server.uri()),
         "audiences": [NODE],
         "indicators": [NODE],
+        "correlation_claim": correlation.unwrap_or_default(),
         "keys": {"max_onward_lifetime": 3600},
         "federation": {
             "contact_point": false,
@@ -88,6 +102,12 @@ fn federation_lane(server: &Server, exchanges_from: &str) -> Result<Lane, Box<dy
             "countries": ["NL"],
             "issuing_authorities": ["synthetic-authority"],
             "provider_identifier_prefixes": ["urn:oid:2.999"],
+            "fields": {
+                "provider.healthcare_provider_identifier": [{"claim": "organisation_id"}],
+            },
+            "attests_authorization_details": true,
+            "authorization_details_type": "organisation_access",
+            "organisation_types": ["organisation_access"],
         },
     }))?;
     let lane = section.resolve(oauth.resolve()?)?;
@@ -95,7 +115,7 @@ fn federation_lane(server: &Server, exchanges_from: &str) -> Result<Lane, Box<dy
     Ok(Lane::new(
         EndpointId::new("node-a-pub")?,
         (lane.onward, lane.target),
-        IssuerKind::Federation,
+        (IssuerKind::Federation, organisations),
         own,
     ))
 }
@@ -137,7 +157,7 @@ fn external_person() -> CallerKind {
 
 /// Whether the lane refuses a call conveying `conveyance` as `expected`
 /// says, with its refusal's account.
-async fn refuses(
+pub(crate) async fn refuses(
     lane: &Lane,
     conveyance: &Conveyance,
     expected: impl Fn(&LaneError) -> bool,
@@ -154,7 +174,7 @@ async fn refuses(
 }
 
 /// The forms the token endpoint received for an exchange.
-async fn exchanges(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
+pub(crate) async fn exchanges(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await

@@ -41,6 +41,7 @@ use crate::dispatch::reported;
 use crate::dispatch::{Contact, DispatchOptions, NodeClient, OptionsError, dpop};
 use crate::hygiene::forwarded::UnlistedParameter;
 use crate::hygiene::{self, Composed, Part};
+use crate::onward::grant::lane::ReadOnly;
 use crate::single_node::committer::CommitterError;
 use crate::single_node::{under, withheld_part};
 use crate::trace_context;
@@ -286,6 +287,10 @@ pub enum ForwardError {
         #[source]
         source: CommitterError,
     },
+    /// A write through an onward lane that carries the caller read-only;
+    /// nothing was sent and no token was asked for.
+    #[error(transparent)]
+    ReadOnly(#[from] ReadOnly),
 }
 
 impl ForwardError {

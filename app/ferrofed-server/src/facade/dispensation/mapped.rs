@@ -376,6 +376,12 @@ fn unmade_composition(error: &EhrCallError) -> (StatusCode, EndpointStatus, &'st
                 "did not answer the write in time; the outcome is unknown, and the gateway never sends it again",
             ),
         ),
+        EhrCallError::ReadOnly(_) => (
+            StatusCode::FORBIDDEN,
+            EndpointStatus::NodeError,
+            "forbidden",
+            String::from("is reached read-only for this caller, so nothing was written"),
+        ),
         EhrCallError::Withheld { .. }
         | EhrCallError::Expired(_)
         | EhrCallError::Capped(_)

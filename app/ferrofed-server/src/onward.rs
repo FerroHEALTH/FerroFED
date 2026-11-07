@@ -201,7 +201,7 @@ pub(crate) fn onward(
                     let lane: SharedOnBehalf = Arc::new(Lane::new(
                         endpoint.clone(),
                         (onward.lane.onward.clone(), onward.lane.target.clone()),
-                        onward.kind,
+                        (onward.kind, onward.organisations),
                         Arc::clone(&shared),
                     ));
                     on_behalf.insert(endpoint.clone(), lane);

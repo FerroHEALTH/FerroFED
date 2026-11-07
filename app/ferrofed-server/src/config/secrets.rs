@@ -9,12 +9,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::onward::dpop::Prover;
+use ferrofed_engine::onward::grant::lane::Organisations;
 use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::mtls::Thumbprint;
 use ferrofed_engine::onward::token::MAX_ASSERTION_LIFETIME;
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
 use ferrohealth_secret::file::read_secret;
 use ferrohealth_secret::secret::Secret;
+use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
@@ -23,6 +25,7 @@ use crate::config::error::Error;
 use crate::config::error::basic::BasicFault;
 use crate::config::error::credentials::CredentialsFault;
 use crate::config::grant;
+use crate::config::oauth::Onward;
 use crate::config::public_url::PublicUrl;
 use crate::config::settings::{JWKS_PATH, Scheme, SigningSettings};
 use crate::config::tls::{self, TlsFault, TlsSettings};
@@ -143,6 +146,12 @@ fn scheme(
     {
         return Err(refused());
     }
+    if credentials.onward_organisations && credentials.onward.is_none() {
+        return Err(CredentialsFault::OnwardOrganisations {
+            section: section.to_owned(),
+        }
+        .into());
+    }
     if credentials.onward.is_some() && credentials.oauth.is_none() {
         return Err(Error::Missing {
             key: format!("{section}.oauth"),
@@ -175,7 +184,7 @@ fn scheme(
         if basic || credentials.oauth2.is_some() {
             return Err(refused());
         }
-        return oauth_scheme(section, oauth, credentials.onward.as_ref());
+        return oauth_scheme(section, oauth, credentials);
     }
     if let Some(oauth2) = &credentials.oauth2 {
         if basic {
@@ -209,22 +218,32 @@ fn scheme(
 }
 
 /// Returns the scheme of `section`'s `oauth` table, with the onward lane it
-/// authenticates when `onward` is written.
+/// authenticates when `credentials` write one, carrying another party's
+/// organisation when they opt in.
 fn oauth_scheme(
     section: &str,
     oauth: &crate::config::oauth::Oauth,
-    onward: Option<&ferrohealth_smart::config::onward::OnwardSection>,
+    credentials: &Credentials,
 ) -> Result<Scheme, Error> {
     let grant = oauth.resolve(&format!("{section}.oauth"))?;
-    let onward = onward
-        .map(|written| {
-            crate::config::oauth::Onward::resolve(
-                &format!("{section}.onward"),
-                written,
-                grant.clone(),
-            )
-        })
+    let onward = credentials
+        .onward
+        .as_ref()
+        .map(|written| Onward::resolve(&format!("{section}.onward"), written, grant.clone()))
         .transpose()?;
+    let onward = match (onward, credentials.onward_organisations) {
+        (Some(onward), true) if onward.kind == IssuerKind::Federation => Some(Onward {
+            organisations: Organisations::ReadOnly,
+            ..onward
+        }),
+        (_, true) => {
+            return Err(CredentialsFault::OnwardOrganisations {
+                section: section.to_owned(),
+            }
+            .into());
+        }
+        (onward, false) => onward,
+    };
     Ok(Scheme::Oauth {
         grant: Box::new(grant),
         written: Box::new(oauth.clone()),

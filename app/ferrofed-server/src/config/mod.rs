@@ -521,6 +521,13 @@ pub struct Credentials {
     /// RFC 7523 §2.1), authenticated by `oauth`, whose own token carries
     /// only the gateway's own requests. A node's section alone takes it.
     pub onward: Option<ferrohealth_smart::config::onward::OnwardSection>,
+    /// Whether the node's onward lane carries another party's organisation,
+    /// a request no named person stands behind, which its `federation`
+    /// issuer exchanges for a token naming the organisation alone and the
+    /// node is reached with read-only; the deployment's choice per
+    /// agreement, `false` by default. Only an `onward` table of kind
+    /// `federation` takes it.
+    pub onward_organisations: bool,
     /// FerroFED's own OAuth 2.0 grant at the node's token endpoint
     /// (`[credentials."<endpoint id>".oauth2]`), for what `oauth` does not
     /// carry: token exchange, tokens bound with `DPoP` or to the TLS client

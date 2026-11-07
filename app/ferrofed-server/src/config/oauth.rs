@@ -27,6 +27,7 @@
 //! scope = "system/aql-*.s"
 //! ```
 
+use ferrofed_engine::onward::grant::lane::Organisations;
 use ferrohealth_smart::client::{ClientCredentials, Endpoint};
 use ferrohealth_smart::config::OauthSection;
 use ferrohealth_smart::config::onward::{OnwardLane, OnwardSection};
@@ -85,13 +86,16 @@ pub struct Onward {
     pub lane: OnwardLane,
     /// Whose tokens the issuer signs.
     pub kind: IssuerKind,
+    /// Whether the lane carries another party's organisation.
+    pub organisations: Organisations,
     /// The table as written, which a reload compares.
     pub written: OnwardSection,
 }
 
 impl Onward {
     /// Resolves `written`, the table at `key`, authenticating as `grant`,
-    /// the lane's `oauth` client.
+    /// the lane's `oauth` client; the lane refuses another party's
+    /// organisation.
     ///
     /// # Errors
     /// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
@@ -116,6 +120,7 @@ impl Onward {
         Ok(Self {
             lane,
             kind,
+            organisations: Organisations::Refused,
             written: written.clone(),
         })
     }
