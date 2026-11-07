@@ -51,7 +51,10 @@ archetypes = [
 - The configuration refuses an entry of a category the gateway writes no
   report of, a category named twice, a file it cannot read, and a template
   the mapping does not compile against. A `Laboratory-Reports` entry takes
-  the place of the template of the category's `[[fhir.receive]]` entry.
+  the place of the template of the category's `[[fhir.receive]]` entry,
+  and a `Medical-Imaging` entry declares the
+  [imaging reports](imaging-reports.md#imaging-reports-the-gateway-writes)
+  the gateway writes.
 - `fhir.receive_namespaces` names the identifier systems the report names
   its patient in.
 

@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! What every report the gateway writes from one member's composition
-//! shares: the laboratory report ([`crate::laboratory`]) and the discharge
-//! report ([`crate::discharge`]).
+//! shares.
+//!
+//! The reports are the laboratory report ([`crate::laboratory`]), the
+//! discharge report ([`crate::discharge`]) and the imaging report
+//! ([`crate::imaging`]).
 //!
 //! Each is a document the gateway authors with its `Device` and the
 //! operator's `Organization`, about the `Patient` an identifier names, whose
@@ -13,11 +16,13 @@
 
 use eehrxf::category::Category;
 use eehrxf::document::discharge::HDR_BUNDLE;
+use eehrxf::document::imaging::IMAGING_BUNDLE;
 use eehrxf::document::laboratory::LAB_BUNDLE;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
-use eehrxf::mappings::UnknownContext;
+use eehrxf::mappings::{Project, UnknownContext};
 use ferrofed_registry::definition::{QueryName, QueryNameError};
+use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::device::{Device, DeviceDeviceName};
 use fhir_types::r4::identifier::Identifier;
@@ -28,7 +33,7 @@ use fhirconnect::engine::context::CallContext;
 use fhirconnect::operations::contract::ToFhirResponse;
 use fhirconnect::operations::run::Settings;
 
-use crate::prescriptions::mapped::MapModeError;
+use crate::prescriptions::mapped::{MapModeError, Template};
 use crate::stack::{Deep, deep};
 use crate::summary::Organisation;
 use crate::summary::resources::{organization, reference};
@@ -81,6 +86,17 @@ pub enum ServedError {
     /// The document cannot be assembled from what the composition maps to.
     #[error("the report document cannot be assembled")]
     Document(#[source] DocumentError),
+}
+
+/// Compiles the shipped `project` against `template`.
+///
+/// # Errors
+///
+/// [`ServedError::Template`] when the template does not read and
+/// [`ServedError::Compile`] when the project does not compile against it.
+pub(crate) fn compiled(template: Template<'_>, project: &Project) -> Result<Mapping, ServedError> {
+    let source = template.source().map_err(ServedError::Template)?;
+    deep(|| Mapping::compile_project(&source, project))?.map_err(ServedError::Compile)
 }
 
 /// Names in `document` the patient `report` names and the authors, the
@@ -169,6 +185,18 @@ pub(crate) fn sourced(
     Ok(())
 }
 
+/// A shipped mapping compiled against a deployment's template, which writes
+/// a member's composition as the document of its category.
+pub trait Writes: std::fmt::Debug + Send + Sync {
+    /// Writes `composition`, a composition in canonical JSON, as the
+    /// document `report` names.
+    ///
+    /// # Errors
+    ///
+    /// The [`ServedError`] that says why no document is written.
+    fn document(&self, composition: &str, report: Report<'_>) -> Result<Bundle, ServedError>;
+}
+
 /// A category of report the gateway writes from one member's composition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Written {
@@ -176,6 +204,8 @@ pub enum Written {
     Laboratory,
     /// The discharge report, Art 14(1)(f) ([`crate::discharge`]).
     Discharge,
+    /// The imaging report, Art 14(1)(d) ([`crate::imaging`]).
+    Imaging,
 }
 
 impl Written {
@@ -183,7 +213,7 @@ impl Written {
     /// `Discharge-Reports`.
     #[must_use]
     pub fn of_category(code: &str) -> Option<Self> {
-        [Self::Laboratory, Self::Discharge]
+        [Self::Laboratory, Self::Discharge, Self::Imaging]
             .into_iter()
             .find(|written| written.category() == code)
     }
@@ -197,6 +227,7 @@ impl Written {
         match self {
             Self::Laboratory => crate::laboratory::name(),
             Self::Discharge => crate::discharge::name(),
+            Self::Imaging => crate::imaging::name(),
         }
     }
 
@@ -206,6 +237,7 @@ impl Written {
         match self {
             Self::Laboratory => crate::laboratory::aql(),
             Self::Discharge => crate::discharge::aql(),
+            Self::Imaging => crate::imaging::aql(),
         }
     }
 
@@ -216,6 +248,7 @@ impl Written {
         match self {
             Self::Laboratory => Category::Laboratory.code(),
             Self::Discharge => Category::Discharge.code(),
+            Self::Imaging => Category::Imaging.code(),
         }
     }
 
@@ -225,6 +258,7 @@ impl Written {
         match self {
             Self::Laboratory => LAB_BUNDLE,
             Self::Discharge => HDR_BUNDLE,
+            Self::Imaging => IMAGING_BUNDLE,
         }
     }
 
@@ -235,6 +269,7 @@ impl Written {
         match self {
             Self::Laboratory => "laboratory report",
             Self::Discharge => "discharge report",
+            Self::Imaging => "imaging report",
         }
     }
 }

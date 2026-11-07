@@ -37,7 +37,7 @@ use openehr_query::ast::SelectQuery;
 use openehr_query::printer;
 
 use crate::prescriptions::mapped::Template;
-use crate::report::{self, Report, ServedError};
+use crate::report::{self, Report, ServedError, Writes};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query::{self, Archetype};
 use crate::stack::deep;
@@ -135,7 +135,9 @@ impl Served {
             deep(|| Mapping::compile_project(&source, &result))?.map_err(ServedError::Compile)?;
         Ok(Self { mapping })
     }
+}
 
+impl Writes for Served {
     /// Writes `composition`, a laboratory composition in canonical JSON, as
     /// the `Bundle-eu-lab` document `report` names.
     ///
@@ -149,7 +151,7 @@ impl Served {
     ///
     /// [`ServedError::Run`] when the composition does not map, and
     /// [`ServedError::Document`] when the document cannot be assembled.
-    pub fn document(&self, composition: &str, report: Report<'_>) -> Result<Bundle, ServedError> {
+    fn document(&self, composition: &str, report: Report<'_>) -> Result<Bundle, ServedError> {
         let mut document = Document::of(
             &LABORATORY_REPORT_FORM,
             report.base,

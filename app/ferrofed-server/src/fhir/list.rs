@@ -16,7 +16,7 @@
 //! whose identifier has a system and a value (FHIR R4 `bdl-9`), is a member
 //! in `node-error` (§11.1): it fails the list under all-or-nothing, and
 //! under `partial` is named in an `outcome` entry (§11.3, §11.4). Laboratory
-//! and discharge reports are listed when the gateway maps them
+//! discharge and imaging reports are listed when the gateway maps them
 //! ([`super::written`]),
 //! and laboratory, discharge and imaging reports when a member serves them
 //! itself ([`super::own`]).
@@ -31,7 +31,9 @@ use axum::response::Response;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use ehds_logging::category::Category;
-use ferrofed_eehrxf::list::{self, DISCHARGE_SUMMARY, Fetched, ListRequest, Listing, Match};
+use ferrofed_eehrxf::list::{
+    self, DISCHARGE_SUMMARY, Fetched, IMAGING_REPORT, ListRequest, Listing, Match,
+};
 use ferrofed_eehrxf::report::Written;
 use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native::Answer;
@@ -70,11 +72,12 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
     };
     let laboratory = fhir.is_some_and(|fhir| fhir.laboratory.is_some());
     let discharge = fhir.is_some_and(|fhir| fhir.discharge.is_some());
+    let imaging = fhir.is_some_and(|fhir| fhir.imaging.is_some());
     let lists = Lists {
         laboratory: laboratory || serves(Category::MedicalTestResult),
-        written: (laboratory, discharge),
+        written: (laboratory, discharge, imaging),
         discharge: discharge || serves(Category::DischargeReport),
-        imaging: serves(Category::MedicalImaging),
+        imaging: imaging || serves(Category::MedicalImaging),
     };
     super::searched(
         (&asked, Instant::now()),
@@ -159,12 +162,12 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
 struct Lists {
     /// Whether it lists laboratory reports.
     laboratory: bool,
-    /// Whether the gateway writes laboratory and discharge reports from the
-    /// members' compositions.
-    written: (bool, bool),
+    /// Whether the gateway writes laboratory, discharge and imaging reports
+    /// from the members' compositions.
+    written: (bool, bool, bool),
     /// Whether it lists discharge reports.
     discharge: bool,
-    /// Whether a member serves its imaging documents itself.
+    /// Whether it lists imaging documents.
     imaging: bool,
 }
 
@@ -180,10 +183,13 @@ impl Lists {
         if self.written.0 && laboratory {
             written.insert(Written::Laboratory);
         }
-        // NOTE: no specification governs this: our own design; the gateway lists the report it
-        // writes under the value set's discharge summary code alone.
+        // NOTE: no specification governs this: our own design; the gateway lists each report it
+        // writes under one code of the category's value set alone.
         if self.written.1 && read.discharge().contains(&DISCHARGE_SUMMARY) {
             written.insert(Written::Discharge);
+        }
+        if self.written.2 && read.imaging().contains(&IMAGING_REPORT) {
+            written.insert(Written::Imaging);
         }
         Wanted {
             laboratory,

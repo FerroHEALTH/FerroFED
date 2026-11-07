@@ -16,7 +16,7 @@ use eehrxf::crosswalk::discharge::{DISCHARGE, HDR_COMPOSITION};
 use eehrxf::document::discharge::{HDR_BUNDLE, HDR_ENCOUNTER};
 use ferrofed_eehrxf::discharge::{self, COMPOSITION, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
-use ferrofed_eehrxf::report::{Report, ServedError};
+use ferrofed_eehrxf::report::{Report, ServedError, Writes as _};
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, SAVED, VERSION};
 use ferrofed_eehrxf::section_query::{self, ISSUER, PATIENT};
 use ferrofed_eehrxf::summary::Organisation;

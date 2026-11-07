@@ -172,8 +172,26 @@ pub fn order_composition(
     uid: &str,
     prescription: &str,
 ) -> Result<String, Box<dyn Error>> {
-    let mapping = Mapping::compile_project(source, &MPD)?;
-    let received = ReceivedResources::read(&collection(prescription))?;
+    composed(
+        &Mapping::compile_project(source, &MPD)?,
+        &collection(prescription),
+        uid,
+    )
+}
+
+/// Returns the composition `mapping` writes from the `collection` of
+/// resources, under the version id `uid`, with no `feeder_audit`, as a
+/// member's own composition has none.
+///
+/// # Errors
+///
+/// When the mapping refuses the collection.
+pub(crate) fn composed(
+    mapping: &Mapping,
+    collection: &str,
+    uid: &str,
+) -> Result<String, Box<dyn Error>> {
+    let received = ReceivedResources::read(collection)?;
     let composed = mapping.resources_to_openehr(&received, &settings())?;
     let mut canonical: Value = serde_json::from_str(composed.composition())?;
     let object = canonical

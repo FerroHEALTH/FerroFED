@@ -13,6 +13,7 @@ mod audit;
 mod check;
 mod discharge;
 mod display;
+mod imaging;
 mod inserted;
 mod laboratory;
 mod laboratory_grant;

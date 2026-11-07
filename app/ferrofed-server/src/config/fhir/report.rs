@@ -4,8 +4,8 @@
 //! The `[[fhir.report]]` entries.
 //!
 //! Each names a category of report the gateway writes from the members'
-//! compositions for the document list, `Laboratory-Reports` or
-//! `Discharge-Reports`, with the operational template those compositions
+//! compositions for the document list, `Laboratory-Reports`,
+//! `Discharge-Reports` or `Medical-Imaging`, with the operational template those compositions
 //! are of: an OPT 1.4, or an ADL 2 template with the archetypes it
 //! specialises or fills a slot with. A laboratory report without an entry
 //! is written with the template of its `[[fhir.receive]]` entry. No
@@ -16,17 +16,17 @@ use std::path::PathBuf;
 use eehrxf::category::Category;
 use ferrofed_eehrxf::laboratory::Served;
 use ferrofed_eehrxf::prescriptions::mapped::Template;
-use ferrofed_eehrxf::report::Written;
+use ferrofed_eehrxf::report::{ServedError, Writes, Written};
 use serde::Deserialize;
 
-use super::{Fhir, FhirError};
+use super::{Fhir, FhirError, FhirSettings};
 
 /// One `[[fhir.report]]` entry.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ReportEntry {
     /// The category, by its HL7 Europe priority category code:
-    /// `Laboratory-Reports` or `Discharge-Reports`.
+    /// `Laboratory-Reports`, `Discharge-Reports` or `Medical-Imaging`.
     pub category: String,
     /// The operational template the members' compositions of the category
     /// are of: an OPT 1.4 `.opt`, or an ADL 2 template beside `archetypes`.
@@ -166,14 +166,44 @@ impl Fhir {
     pub(super) fn discharge(
         &self,
     ) -> Result<Option<ferrofed_eehrxf::discharge::Served>, FhirError> {
-        let Some(declared) = self.declared(Category::Discharge)? else {
+        self.served(
+            Category::Discharge,
+            ferrofed_eehrxf::discharge::Served::compile,
+            |source| FhirError::Discharge { source },
+        )
+    }
+
+    /// Compiles the shipped imaging mapping against the template of the
+    /// `Medical-Imaging` `[[fhir.report]]` entry, when there is one.
+    ///
+    /// # Errors
+    ///
+    /// The [`FhirError::Report`] of an entry that is refused, and
+    /// [`FhirError::Imaging`] when the mapping does not compile against the
+    /// template.
+    pub(super) fn imaging(&self) -> Result<Option<ferrofed_eehrxf::imaging::Served>, FhirError> {
+        self.served(
+            Category::Imaging,
+            ferrofed_eehrxf::imaging::Served::compile,
+            |source| FhirError::Imaging { source },
+        )
+    }
+
+    /// Compiles a shipped mapping with `compile` against the template of the
+    /// `[[fhir.report]]` entry of `category`, when there is one, refused as
+    /// `refused` says.
+    fn served<T>(
+        &self,
+        category: Category,
+        compile: impl FnOnce(Template<'_>) -> Result<T, ServedError>,
+        refused: impl FnOnce(Box<ServedError>) -> FhirError,
+    ) -> Result<Option<T>, FhirError> {
+        let Some(declared) = self.declared(category)? else {
             return Ok(None);
         };
-        ferrofed_eehrxf::discharge::Served::compile(declared.template())
+        compile(declared.template())
             .map(Some)
-            .map_err(|source| FhirError::Discharge {
-                source: Box::new(source),
-            })
+            .map_err(|source| refused(Box::new(source)))
     }
 
     /// Compiles the shipped laboratory mapping against the template of the
@@ -214,5 +244,19 @@ impl Fhir {
             .map_err(|source| FhirError::Laboratory {
                 source: Box::new(source),
             })
+    }
+}
+
+impl FhirSettings {
+    /// The mapping the document list writes a report of the category
+    /// `written` with, or `None` when the face writes none of it.
+    #[must_use]
+    pub fn writes(&self, written: Written) -> Option<&dyn Writes> {
+        let served: Option<&dyn Writes> = match written {
+            Written::Laboratory => Some(self.laboratory.as_deref()?),
+            Written::Discharge => Some(self.discharge.as_deref()?),
+            Written::Imaging => Some(self.imaging.as_deref()?),
+        };
+        served
     }
 }

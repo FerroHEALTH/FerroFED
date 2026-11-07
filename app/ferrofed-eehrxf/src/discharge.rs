@@ -34,10 +34,9 @@ use openehr_query::printer;
 use serde::Deserialize;
 
 use crate::prescriptions::mapped::Template;
-use crate::report::{self, Report, ServedError};
+use crate::report::{self, Report, ServedError, Writes};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query;
-use crate::stack::deep;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "discharge-report";
@@ -116,12 +115,13 @@ impl Served {
     /// [`ServedError::Compile`] when the mapping does not compile against
     /// it.
     pub fn compile(template: Template<'_>) -> Result<Self, ServedError> {
-        let source = template.source().map_err(ServedError::Template)?;
-        let mapping =
-            deep(|| Mapping::compile_project(&source, &HDR))?.map_err(ServedError::Compile)?;
-        Ok(Self { mapping })
+        Ok(Self {
+            mapping: report::compiled(template, &HDR)?,
+        })
     }
+}
 
+impl Writes for Served {
     /// Writes `composition`, a discharge composition in canonical JSON, as
     /// the `bundle-eu-hdr` document `report` names, in the composition's
     /// language.
@@ -139,7 +139,7 @@ impl Served {
     /// [`ServedError::Language`] when the composition names no language,
     /// [`ServedError::Run`] when it does not map, and
     /// [`ServedError::Document`] when the document cannot be assembled.
-    pub fn document(&self, composition: &str, report: Report<'_>) -> Result<Bundle, ServedError> {
+    fn document(&self, composition: &str, report: Report<'_>) -> Result<Bundle, ServedError> {
         let written: Written = serde_json::from_str(composition).map_err(ServedError::Language)?;
         let mut document = Document::of(
             &DISCHARGE_REPORT_FORM,
