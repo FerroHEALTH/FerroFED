@@ -60,6 +60,7 @@ pub mod refusal;
 pub mod trust;
 mod verify;
 
+use std::fmt;
 use std::sync::Arc;
 
 use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
@@ -73,6 +74,8 @@ use ferrohealth_smart::openehr::{self, granted};
 use ferrohealth_smart::refusal::Reason;
 use ferrohealth_smart::resource::{Access, Caller as SmartCaller, Honoured};
 use ferrohealth_smart::sender::ClientCertificate;
+use ferrohealth_smart::sender::proof::ProofCheck;
+use ferrohealth_smart::sender::replay::{MemoryReplayStore, ReplayStore};
 use http::HeaderMap;
 use secrecy::SecretString;
 
@@ -113,22 +116,48 @@ pub struct Gate {
     references: Arc<reference::References>,
     /// The national contact points `OPTIONS {base}/` declares.
     contact_points: Arc<ContactPoints>,
+    /// Where each accepted `DPoP` proof is recorded, kept by every gate that
+    /// succeeds this one.
+    replay: Replay,
+}
+
+/// The store a gate records each accepted `DPoP` proof in.
+#[derive(Clone)]
+struct Replay(Arc<dyn ReplayStore>);
+
+impl fmt::Debug for Replay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Replay").finish_non_exhaustive()
+    }
 }
 
 impl Gate {
-    /// Returns the gate `settings` describe; no metadata or key set is read
-    /// yet.
+    /// Returns the gate `settings` describe, its `DPoP` proofs recorded in
+    /// the memory of this process alone; no metadata or key set is read yet.
     #[must_use]
     pub fn new(settings: &AuthSettings) -> Self {
-        Self::keyed(settings, Arc::new(reference::References::fresh()))
+        Self::replaying(settings, Arc::new(MemoryReplayStore::new()))
+    }
+
+    /// Returns the gate `settings` describe, its `DPoP` proofs recorded in
+    /// `replay`; no metadata or key set is read yet.
+    #[must_use]
+    pub fn replaying(settings: &AuthSettings, replay: Arc<dyn ReplayStore>) -> Self {
+        Self::keyed(
+            settings,
+            (Arc::new(reference::References::fresh()), Replay(replay)),
+        )
     }
 
     /// Returns the gate `settings` describe in place of this one, with the
-    /// same caller references; no metadata or key set is read yet, so each
-    /// issuer's is read again.
+    /// same caller references and replay store; no metadata or key set is
+    /// read yet, so each issuer's is read again.
     #[must_use]
     pub fn succeeding(&self, settings: &AuthSettings) -> Self {
-        Self::keyed(settings, Arc::clone(&self.references))
+        Self::keyed(
+            settings,
+            (Arc::clone(&self.references), self.replay.clone()),
+        )
     }
 
     /// Returns the national contact points the gate's issuers declare, as
@@ -145,8 +174,15 @@ impl Gate {
     }
 
     /// Returns the gate `settings` describe, its caller references made
-    /// under `references`.
-    fn keyed(settings: &AuthSettings, references: Arc<reference::References>) -> Self {
+    /// under `references` and its `DPoP` proofs recorded in `replay`.
+    #[expect(
+        clippy::expect_used,
+        reason = "ferrohealth-smart's AuthSection::resolve validated the [auth.dpop] settings, the one check ProofCheck::new repeats"
+    )]
+    fn keyed(
+        settings: &AuthSettings,
+        (references, replay): (Arc<reference::References>, Replay),
+    ) -> Self {
         let mut keyed = Vec::new();
         let mut introspected = None;
         for issuer in &settings.issuers {
@@ -172,6 +208,15 @@ impl Gate {
                 smart.with_credential_header(CredentialHeader::bare(name.clone()))
             }
         };
+        // NOTE: RFC 9449 §7.1, §11.1: a DPoP request is admitted only with
+        // [auth.dpop], and its proof is spent in the store every replica shares.
+        let smart = match &settings.dpop {
+            Some(proofs) => smart.with_dpop(Arc::new(
+                ProofCheck::new(proofs.clone(), Arc::clone(&replay.0))
+                    .expect("the DPoP settings should have been validated when [auth] resolved"),
+            )),
+            None => smart,
+        };
         let basic = settings.basic.as_ref().map(|users| {
             SmartGate::open()
                 .with_basic(Arc::clone(users.store()))
@@ -187,6 +232,7 @@ impl Gate {
             basic,
             references,
             contact_points: Arc::new(ContactPoints::of(settings)),
+            replay,
         }
     }
 
@@ -208,7 +254,7 @@ impl Gate {
     /// Returns the [`Refused`] the request is answered with.
     pub async fn admit(
         &self,
-        (headers, certificate): (&HeaderMap, Option<&ClientCertificate>),
+        (headers, line): (&HeaderMap, Option<Line<'_>>),
         (requirement, named): (Requirement, Option<&str>),
         exchanging: bool,
     ) -> Result<Caller, Refused> {
@@ -217,7 +263,7 @@ impl Gate {
         if requirement == Requirement::Refused {
             return Err(Refusal::Operation.into());
         }
-        let (smart, credential) = self.authenticate(headers, certificate).await?;
+        let (smart, credential) = self.authenticate(headers, line).await?;
         // NOTE: no specification governs this: our own design; the verifier that
         // routed the token by its `iss` attached that issuer's trust entry.
         let entry = smart
@@ -331,14 +377,18 @@ impl Gate {
     async fn authenticate(
         &self,
         headers: &HeaderMap,
-        certificate: Option<&ClientCertificate>,
+        line: Option<Line<'_>>,
     ) -> Result<(SmartCaller, String), Refused> {
-        let authenticated = match certificate {
+        let authenticated = match line {
             None => self.smart.authenticate(headers).await,
-            Some(certificate) => {
+            Some(line) => {
                 let (mut parts, ()) = http::Request::new(()).into_parts();
+                line.method.clone_into(&mut parts.method);
+                parts.uri = http::Uri::try_from(line.path).map_err(|_path| Refusal::Malformed)?;
                 parts.headers = headers.clone();
-                parts.extensions.insert(certificate.clone());
+                if let Some(certificate) = line.certificate {
+                    parts.extensions.insert(certificate.clone());
+                }
                 self.smart.authenticate_request(&parts).await
             }
         };
@@ -530,6 +580,19 @@ fn contact_point_caller(
         .with_acting(Acting::Person)
         .binding_trc_patient(contact_point::trc_patient(external))
         .relayed_by_contact_point(relayed, (**external).clone()))
+}
+
+/// The request line a caller's credential is held to: its method and path,
+/// which a `DPoP` proof binds (RFC 9449 §4.3), and the client certificate of
+/// its connection (RFC 8705 §3).
+#[derive(Debug, Clone, Copy)]
+pub struct Line<'a> {
+    /// The method.
+    pub method: &'a http::Method,
+    /// The path as the gateway received it, without its query.
+    pub path: &'a str,
+    /// The client certificate of the connection, when there was one.
+    pub certificate: Option<&'a ClientCertificate>,
 }
 
 /// Returns `caller`, admitted to `permission` on a resource of `family`

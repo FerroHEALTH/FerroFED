@@ -130,3 +130,81 @@ pub fn challenge(nonce: &str) -> ResponseTemplate {
         )
         .insert_header(NONCE_HEADER, nonce)
 }
+
+/// A test client's `DPoP` key, which signs the proofs of its requests and
+/// whose thumbprint the tokens bound to it name (RFC 9449 §4.2, §6.1).
+///
+/// `Debug` shows the thumbprint alone.
+pub struct Holder {
+    /// The private key.
+    private: jsonwebtoken::EncodingKey,
+    /// The public key each proof carries in its header.
+    public: jsonwebtoken::jwk::Jwk,
+    /// The public key's RFC 7638 thumbprint.
+    jkt: String,
+}
+
+impl std::fmt::Debug for Holder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Holder")
+            .field("jkt", &self.jkt)
+            .finish_non_exhaustive()
+    }
+}
+
+/// A test client's `DPoP` key could not be made.
+#[derive(Debug, thiserror::Error)]
+#[error("the DPoP test key could not be made")]
+pub struct HolderError(#[source] Box<dyn std::error::Error + Send + Sync + 'static>);
+
+impl Holder {
+    /// Returns a holder of a fresh P-256 key, signing ES256.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HolderError`] when the key cannot be generated or read.
+    pub fn generate() -> Result<Self, HolderError> {
+        let pem = crate::oauth::Curve::P256
+            .pem()
+            .map_err(|source| HolderError(Box::new(source)))?;
+        let private = jsonwebtoken::EncodingKey::from_ec_pem(pem.as_bytes())
+            .map_err(|source| HolderError(Box::new(source)))?;
+        let public = jsonwebtoken::jwk::Jwk::from_encoding_key(&private, Algorithm::ES256)
+            .map_err(|source| HolderError(Box::new(source)))?;
+        let jkt = public
+            .thumbprint(ThumbprintHash::SHA256)
+            .map_err(|source| HolderError(Box::new(source)))?;
+        Ok(Self {
+            private,
+            public,
+            jkt,
+        })
+    }
+
+    /// Returns the key's thumbprint, the `cnf.jkt` of a token bound to it.
+    #[must_use]
+    pub fn jkt(&self) -> &str {
+        &self.jkt
+    }
+
+    /// Returns a fresh proof of a request with `method` to `htu`, a URL with
+    /// no query or fragment, carrying `token`, with its own `jti`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HolderError`] when the proof cannot be signed.
+    pub fn prove(&self, method: &str, htu: &str, token: &str) -> Result<String, HolderError> {
+        let mut header = jsonwebtoken::Header::new(Algorithm::ES256);
+        header.typ = Some(String::from("dpop+jwt"));
+        header.jwk = Some(self.public.clone());
+        let claims = serde_json::json!({
+            "jti": uuid::Uuid::new_v4().to_string(),
+            "htm": method,
+            "htu": htu,
+            "iat": jiff::Timestamp::now().as_second(),
+            "ath": ath(token),
+        });
+        jsonwebtoken::encode(&header, &claims, &self.private)
+            .map_err(|source| HolderError(Box::new(source)))
+    }
+}
