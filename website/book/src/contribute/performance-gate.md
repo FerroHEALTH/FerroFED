@@ -58,6 +58,11 @@ always carries the baseline with the runner's entry written or lowered.
   `perf/baseline.toml` from that run's artifact and commit it.
 - An entry only moves to the better value on its own. A raise is a hand edit
   in a pull request that says why.
+- Each entry's `[baseline.tolerance]` is FerroFED's own: latency may rise 50 %
+  past the larger of the entry and its noise floor, since a p99 of 240
+  samples at 20 requests a second moved by more than 25 % between two runs
+  of one commit on one CPU model; throughput 20 %, memory 20 %, CPU 25 % and
+  transactions 10 %, the tool's defaults.
 - A change of the plan's rate, window or request set writes each entry
   afresh, so commit an entry for every model the runner pool serves after
   such a change.

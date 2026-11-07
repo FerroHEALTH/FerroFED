@@ -22,7 +22,7 @@ cpu_model = "AMD EPYC 7763 64-Core Processor"
 total_memory_bytes = 16760344576
 
 [baseline.tolerance]
-latency = 0.25
+latency = 0.5
 throughput = 0.2
 memory = 0.2
 cpu = 0.25
@@ -89,7 +89,7 @@ cpu_model = "AMD EPYC 9V74 80-Core Processor"
 total_memory_bytes = 16760348672
 
 [baseline.tolerance]
-latency = 0.25
+latency = 0.5
 throughput = 0.2
 memory = 0.2
 cpu = 0.25
@@ -156,7 +156,7 @@ cpu_model = "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz"
 total_memory_bytes = 16759304192
 
 [baseline.tolerance]
-latency = 0.25
+latency = 0.5
 throughput = 0.2
 memory = 0.2
 cpu = 0.25
