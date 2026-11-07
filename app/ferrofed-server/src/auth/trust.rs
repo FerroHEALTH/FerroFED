@@ -14,8 +14,12 @@
 
 use std::sync::{Arc, PoisonError, RwLock};
 
+use ferrohealth_smart::sender::replay::{MemoryReplayStore, ReplayStore};
+
 use crate::auth::Gate;
 use crate::config::auth::AuthSettings;
+use crate::state::AppState;
+use crate::store::replay::Proofs;
 
 /// The gate in place, shared by every surface that admits callers.
 #[derive(Debug)]
@@ -25,11 +29,32 @@ pub struct Trust {
 }
 
 impl Trust {
-    /// Returns the trust `settings` describe; no key set is read yet.
+    /// Returns the trust `settings` describe, its `DPoP` proofs recorded in
+    /// the memory of this process alone; no key set is read yet.
     #[must_use]
     pub fn new(settings: &AuthSettings) -> Self {
+        Self::replaying(settings, Arc::new(MemoryReplayStore::new()))
+    }
+
+    /// Returns the trust `settings` describe, its `DPoP` proofs recorded in
+    /// `replay`, which every gate that succeeds the first keeps; no key set
+    /// is read yet.
+    #[must_use]
+    pub fn replaying(settings: &AuthSettings, replay: Arc<dyn ReplayStore>) -> Self {
         Self {
-            current: RwLock::new(Arc::new(Gate::new(settings))),
+            current: RwLock::new(Arc::new(Gate::replaying(settings, replay))),
+        }
+    }
+
+    /// Returns the trust `settings` describe over `state`: its `DPoP` proofs
+    /// recorded in FerroFED's own store when `state` has one, which every
+    /// replica shares (RFC 9449 §11.1), and in the memory of this process
+    /// otherwise.
+    #[must_use]
+    pub fn of(settings: &AuthSettings, state: &AppState) -> Self {
+        match state.store() {
+            Some(store) => Self::replaying(settings, Arc::new(Proofs::new(Arc::clone(store)))),
+            None => Self::new(settings),
         }
     }
 

@@ -33,6 +33,12 @@ pub enum Refusal {
     Malformed,
     /// The credential does not hold (RFC 6750 §3.1, `invalid_token`).
     Invalid,
+    /// A `DPoP` request's proof does not hold, or was sent before (RFC 9449
+    /// §7.1, `invalid_dpop_proof`; §11.1).
+    DpopProof,
+    /// The access token of a `DPoP` request does not hold (RFC 9449 §7.1,
+    /// `invalid_token` in the `DPoP` scheme).
+    DpopToken,
     /// The issuer's metadata, key set or introspection endpoint cannot be
     /// had, so the token cannot be verified.
     Unavailable,
@@ -100,10 +106,12 @@ impl Refusal {
     }
 
     /// Every refusal, in declaration order.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 16] = [
         Self::Missing,
         Self::Malformed,
         Self::Invalid,
+        Self::DpopProof,
+        Self::DpopToken,
         Self::Unavailable,
         Self::Operation,
         Self::Scope,
@@ -124,6 +132,8 @@ impl Refusal {
             Self::Missing => "missing",
             Self::Malformed => "malformed",
             Self::Invalid => "invalid",
+            Self::DpopProof => "dpop-proof",
+            Self::DpopToken => "dpop-token",
             Self::Unavailable => "unavailable",
             Self::Operation => "operation",
             Self::Scope => "scope",
@@ -147,6 +157,8 @@ impl Refusal {
                 "the request carries two credentials, or a credential field that is no credential"
             }
             Self::Invalid => "the credential is not valid",
+            Self::DpopProof => "the DPoP proof is not valid, or was sent before",
+            Self::DpopToken => "the access token of the DPoP request is not valid",
             Self::Unavailable => "the access token cannot be verified now",
             Self::Operation => "this gateway admits no caller to this operation",
             Self::Scope | Self::Demographic => "the access token does not grant this operation",
@@ -176,7 +188,9 @@ impl Refusal {
     #[must_use]
     pub const fn code(self) -> Code {
         match self {
-            Self::Missing | Self::Invalid => Code::Unauthenticated,
+            Self::Missing | Self::Invalid | Self::DpopProof | Self::DpopToken => {
+                Code::Unauthenticated
+            }
             Self::Malformed => Code::CredentialMalformed,
             Self::Unavailable => Code::AuthenticationUnavailable,
             Self::Operation => Code::OperationRefused,
@@ -203,6 +217,8 @@ impl Refusal {
             })),
             Self::Malformed => Some(SmartRefusal::InvalidRequest),
             Self::Invalid => Some(SmartRefusal::InvalidToken),
+            Self::DpopProof => Some(SmartRefusal::InvalidDpopProof),
+            Self::DpopToken => Some(SmartRefusal::InvalidDpopToken),
             Self::Unavailable => Some(SmartRefusal::Unavailable),
             Self::Operation => Some(SmartRefusal::Unclassified),
             Self::Scope
@@ -305,6 +321,8 @@ impl From<&Denied> for Refused {
             SmartRefusal::Unavailable => Refusal::Unavailable,
             SmartRefusal::Forbidden => Refusal::Scope,
             SmartRefusal::Unclassified => Refusal::Operation,
+            SmartRefusal::InvalidDpopProof => Refusal::DpopProof,
+            SmartRefusal::InvalidDpopToken => Refusal::DpopToken,
             _ => Refusal::Invalid,
         };
         Self {
@@ -396,17 +414,19 @@ mod tests {
             Refusal::Missing => 0,
             Refusal::Malformed => 1,
             Refusal::Invalid => 2,
-            Refusal::Unavailable => 3,
-            Refusal::Operation => 4,
-            Refusal::Scope => 5,
-            Refusal::Demographic => 6,
-            Refusal::PurposeOfUse => 7,
-            Refusal::PatientContext => 8,
-            Refusal::PatientDemographic => 9,
-            Refusal::NaturalPerson => 10,
-            Refusal::Assurance => 11,
-            Refusal::ContactPoint => 12,
-            Refusal::Correlation => 13,
+            Refusal::DpopProof => 3,
+            Refusal::DpopToken => 4,
+            Refusal::Unavailable => 5,
+            Refusal::Operation => 6,
+            Refusal::Scope => 7,
+            Refusal::Demographic => 8,
+            Refusal::PurposeOfUse => 9,
+            Refusal::PatientContext => 10,
+            Refusal::PatientDemographic => 11,
+            Refusal::NaturalPerson => 12,
+            Refusal::Assurance => 13,
+            Refusal::ContactPoint => 14,
+            Refusal::Correlation => 15,
         }
     }
 

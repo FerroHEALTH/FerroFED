@@ -25,7 +25,7 @@ use crate::store::connection::backend;
 /// The migrations, in the order they apply: version `n` is the `n`th.
 ///
 /// A released migration never changes; a new one is added at the end.
-pub const MIGRATIONS: [&str; 2] = [
+pub const MIGRATIONS: [&str; 3] = [
     // 1: the stored-query definitions (§12.7, N44), as the `postgres` backend
     // of the stored-query registry created them.
     "CREATE TABLE IF NOT EXISTS ferrofed.stored_query_definition (
@@ -43,10 +43,16 @@ pub const MIGRATIONS: [&str; 2] = [
   admitted boolean NOT NULL,
   expires_at timestamptz NOT NULL
 );",
+    // 3: the DPoP proofs accepted inside their window, by the SHA-256 of each proof's `jti`
+    // (RFC 9449 §11.1), so a replay to any replica is refused.
+    "CREATE TABLE ferrofed.dpop_proof (
+  proof text PRIMARY KEY,
+  expires_at timestamptz NOT NULL
+);",
 ];
 
 /// The newest migration this binary has, the length of [`MIGRATIONS`].
-pub const KNOWN: u32 = 2;
+pub const KNOWN: u32 = 3;
 
 /// The table that records each migration applied.
 pub const LEDGER: &str = "ferrofed.store_migration";

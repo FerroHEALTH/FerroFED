@@ -20,6 +20,7 @@ use http::Method;
 use openehr_its::rest::routes::{self, Lookup};
 
 use crate::ITS_REST_PREFIX;
+use crate::auth::Line;
 use crate::auth::caller::VerifiedBy;
 use crate::auth::permission::{self, Requirement, Resource};
 use crate::auth::trust::Trust;
@@ -134,7 +135,14 @@ pub async fn guard(State(guard): State<Arc<Guard>>, mut request: Request, next: 
         .map(|leaf| ClientCertificate::from_der(leaf.as_ref()));
     match gate
         .admit(
-            (request.headers(), certificate.as_ref()),
+            (
+                request.headers(),
+                Some(Line {
+                    method: request.method(),
+                    path: &path,
+                    certificate: certificate.as_ref(),
+                }),
+            ),
             (requirement, named.as_deref()),
             guard.exchanging(),
         )
