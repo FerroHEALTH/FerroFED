@@ -38,6 +38,7 @@ use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::session::SessionKey;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrohealth_secret::secret::Secret;
+use ferrohealth_smart::client::onward::SubjectToken as OnwardSubject;
 use ferrohealth_smart::federation::External;
 use ferrohealth_smart::openehr::smart_scopes::SmartScope;
 use secrecy::SecretString;
@@ -215,14 +216,46 @@ impl fmt::Debug for Professional {
 /// nothing of it, and it is never logged or conveyed to a node: it reaches
 /// only the authorization server of a node whose grant exchanges it
 /// (RFC 8693 §2.1).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerifiedToken(Secret);
+///
+/// It may also carry the caller as `ferrohealth-smart` verified it, the
+/// subject of a node's onward lane; two tokens compare by their text alone.
+#[derive(Clone)]
+pub struct VerifiedToken {
+    /// The token text.
+    secret: Secret,
+    /// The caller behind it, as the onward lanes exchange it.
+    onward: Option<OnwardSubject>,
+}
 
 impl VerifiedToken {
     /// Returns the token text, for the one request that exchanges it.
     #[must_use]
     pub fn secret(&self) -> SecretString {
-        self.0.to_secret_string()
+        self.secret.to_secret_string()
+    }
+
+    /// Returns the caller behind the token as `ferrohealth-smart` verified
+    /// it, when the gateway kept it for a node's onward lane.
+    #[must_use]
+    pub fn onward(&self) -> Option<&OnwardSubject> {
+        self.onward.as_ref()
+    }
+}
+
+impl PartialEq for VerifiedToken {
+    fn eq(&self, other: &Self) -> bool {
+        self.secret == other.secret
+    }
+}
+
+impl Eq for VerifiedToken {}
+
+impl fmt::Debug for VerifiedToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VerifiedToken")
+            .field("secret", &self.secret)
+            .field("onward", &self.onward.is_some())
+            .finish()
     }
 }
 
@@ -564,7 +597,21 @@ impl Caller {
             self.verified_by,
             VerifiedBy::Signature | VerifiedBy::Introspection
         ) {
-            self.token = Some(VerifiedToken(Secret::from(token)));
+            self.token = Some(VerifiedToken {
+                secret: Secret::from(token),
+                onward: None,
+            });
+        }
+        self
+    }
+
+    /// Returns this caller, its kept token carrying `onward`, the caller as
+    /// `ferrohealth-smart` verified it, for a node's onward lane; a caller
+    /// that keeps no token keeps none of it either.
+    #[must_use]
+    pub fn with_onward(mut self, onward: Option<OnwardSubject>) -> Self {
+        if let Some(token) = self.token.as_mut() {
+            token.onward = onward;
         }
         self
     }

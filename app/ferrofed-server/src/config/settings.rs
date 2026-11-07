@@ -379,6 +379,9 @@ pub enum Scheme {
         grant: Box<ferrohealth_smart::client::ClientCredentials>,
         /// The table as written, which a reload compares.
         written: Box<crate::config::oauth::Oauth>,
+        /// A node's onward lane, which this grant authenticates; the grant's
+        /// own token then carries only the gateway's own requests.
+        onward: Option<Box<crate::config::oauth::Onward>>,
     },
     /// FerroFED's own OAuth 2.0 grant with a JWT client assertion (RFC 6749
     /// §4.4, RFC 7523 §2.2), for what `Oauth` does not carry: token
@@ -415,7 +418,22 @@ impl Scheme {
                     password: now_password,
                 },
             ) => user == now_user && password == now_password,
-            (Self::Oauth { written: was, .. }, Self::Oauth { written: now, .. }) => was == now,
+            (
+                Self::Oauth {
+                    written: was,
+                    onward: was_onward,
+                    ..
+                },
+                Self::Oauth {
+                    written: now,
+                    onward: now_onward,
+                    ..
+                },
+            ) => {
+                was == now
+                    && was_onward.as_ref().map(|onward| &onward.written)
+                        == now_onward.as_ref().map(|onward| &onward.written)
+            }
             _ => false,
         }
     }

@@ -27,6 +27,7 @@ mod fanout;
 mod fapi2;
 mod forward;
 mod gate;
+mod lane;
 mod masking;
 mod mtls;
 mod native;
