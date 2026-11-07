@@ -58,11 +58,12 @@ always carries the baseline with the runner's entry written or lowered.
   `perf/baseline.toml` from that run's artifact and commit it.
 - An entry only moves to the better value on its own. A raise is a hand edit
   in a pull request that says why.
-- Each entry's `[baseline.tolerance]` is FerroFED's own: latency may rise 50 %
-  past the larger of the entry and its noise floor, since a p99 of 240
-  samples at 20 requests a second moved by more than 25 % between two runs
-  of one commit on one CPU model; throughput 20 %, memory 20 %, CPU 25 % and
-  transactions 10 %, the tool's defaults.
+- An update measures five load phases, each after its own warm-up, and
+  writes each metric as their median and its noise floor as how far the
+  worst phase strayed from it. A p99 that moves from run to run is judged
+  against the movement it showed, so every tolerance stays at the tool's
+  default: latency and CPU 25 %, throughput 20 %, memory 20 % and
+  transactions 10 %.
 - A change of the plan's rate, window or request set writes each entry
   afresh, so commit an entry for every model the runner pool serves after
   such a change.
@@ -73,7 +74,7 @@ The gate reads the gateway's CPU and memory from `/proc`, so it runs on Linux
 with Docker, Compose, `curl` and `openssl`:
 
 ```sh
-cargo install ferrohealth-perf --version =0.2.0 --locked
+cargo install ferrohealth-perf --version =0.3.0 --locked
 cargo build --release --locked -p ferrofed-server --bin ferrofed
 bash scripts/perf/gate.sh run
 ```
