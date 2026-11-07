@@ -108,13 +108,13 @@ pub enum BindingFault {
         /// The key that carries the path.
         key: String,
     },
-    /// `pmir.feed_users` names a user `[[auth.basic.users]]` does not write.
-    #[error("pmir.feed_users names {user:?}, which no [[auth.basic.users]] entry writes")]
+    /// `pmir.feed_clients` names clients and `[auth]` trusts no issuer to
+    /// sign their tokens.
+    #[error(
+        "pmir.feed_clients names the Registry's clients, and [auth] trusts no [[auth.issuer]] to sign their client-credentials tokens"
+    )]
     #[cfg(feature = "binding-ihe")]
-    FeedUser {
-        /// The user named.
-        user: String,
-    },
+    FeedIssuer,
     /// The demographics step's budget and the localizer's do not end before
     /// the overall budget, of which each is a part, so the two could leave
     /// no time to resolve and ask the members (§11.5; no specification

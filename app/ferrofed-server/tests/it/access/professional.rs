@@ -11,12 +11,9 @@
     reason = "test assertions in tests that return their setup errors"
 )]
 
-use std::collections::BTreeMap;
-
-use ferrofed_engine::conveyance::caller::AssuranceLevel;
-use ferrofed_server::config::auth::assurance::Assurance;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::issuer::Claims;
+use ferrohealth_smart::assurance::AssuranceLevel;
 use http::StatusCode;
 
 use super::{LAB_REPORT, TestResult, accesses, composition, gateway_under, node_with_rows};
@@ -48,16 +45,14 @@ async fn a_request_refused_for_its_person_or_assurance_writes_no_access_record()
     let dir = tempfile::tempdir()?;
     let mut server = settings_with_room();
     server.auth = support::caller::auth();
-    for issuer in &mut server.auth.issuers {
-        issuer.assurance = Some(Assurance {
-            claim: String::from("acr"),
-            minimum: AssuranceLevel::Substantial,
-            values: BTreeMap::from([
-                (LOW.to_owned(), AssuranceLevel::Low),
-                (SUBSTANTIAL.to_owned(), AssuranceLevel::Substantial),
-            ]),
-        });
-    }
+    support::caller::assuring(
+        &mut server.auth,
+        AssuranceLevel::Substantial,
+        &[
+            (LOW, AssuranceLevel::Low),
+            (SUBSTANTIAL, AssuranceLevel::Substantial),
+        ],
+    );
     let app = gateway_under(
         dir.path(),
         (&node_a.uri(), &node_b.uri()),

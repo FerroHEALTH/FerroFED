@@ -10,7 +10,7 @@ use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use ferrofed_engine::conveyance::caller::{
-    Acting, AssuranceLevel, Caller, Principal, Professional, Purpose, Verification,
+    Acting, Caller, Principal, Professional, Purpose, Verification,
 };
 use ferrofed_engine::conveyance::relayed::{HealthProfessional, HealthcareProvider, Relayed, Role};
 use ferrofed_engine::conveyance::signer::Signer;
@@ -18,6 +18,7 @@ use ferrofed_engine::conveyance::{Conveyance, TYPE};
 use ferrofed_engine::onward::SystemClock;
 use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
 use ferrofed_testkit::oauth;
+use ferrohealth_smart::assurance::AssuranceLevel;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use secrecy::SecretString;
 use serde::Deserialize;

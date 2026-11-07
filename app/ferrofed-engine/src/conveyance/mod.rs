@@ -56,11 +56,12 @@ use ferrofed_registry::id::{EhrId, EndpointId};
 use jsonwebtoken::Header;
 use serde::Serialize;
 
-use crate::conveyance::caller::{AssuranceLevel, Principal, Purpose};
+use crate::conveyance::caller::{Principal, Purpose};
 use crate::conveyance::confinement::Confinement;
 use crate::conveyance::relayed::{Relayed, Role};
 use crate::conveyance::signer::Signer;
 use crate::onward::grant::exchange::SubjectToken;
+use ferrohealth_smart::assurance::AssuranceLevel;
 
 /// The header every request to a node carries the caller's identity in.
 pub const HEADER: &str = "openEHR-federation-client";
@@ -375,13 +376,14 @@ pub(crate) mod tests {
 
     use super::{Conveyance, ConveyanceError};
     use crate::conveyance::caller::{
-        Acting, AssuranceLevel, Caller, Principal, Professional, Purpose, Verification,
+        Acting, Caller, Principal, Professional, Purpose, Verification,
     };
     use crate::conveyance::confinement::Confinement;
     use crate::conveyance::relayed::Role;
     use crate::conveyance::signer::Signer;
     use crate::onward::SystemClock;
     use crate::onward::keys::{Curve, KeyRing, SigningKey};
+    use ferrohealth_smart::assurance::AssuranceLevel;
 
     /// The code system of the synthetic caller's role.
     const PRACTITIONER_ROLE: &str = "http://terminology.hl7.org/CodeSystem/practitioner-role";

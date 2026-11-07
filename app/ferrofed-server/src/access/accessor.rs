@@ -7,7 +7,8 @@
 //! Implementing Regulation (EU) 2026/2099 Art 7).
 
 use ehds_logging::record::{Accessor, Professional, Purpose};
-use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
+use ferrofed_engine::conveyance::caller::Acting;
+use ferrohealth_smart::assurance::AssuranceLevel;
 
 use crate::auth::caller::Caller;
 use crate::auth::contact_point;

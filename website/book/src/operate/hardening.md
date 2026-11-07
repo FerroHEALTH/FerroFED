@@ -87,11 +87,9 @@ page: our own design.
   `[[trust.issuer]]`, and have only the issuer your operators sign in at
   grant `auth.product_scope` ([Client authentication](authentication.md)).
 - [ ] **Require an assurance level per issuer.** Set
-  `[trust.issuer.assurance]` on every issuer whose tokens reach patient data,
+  `[auth.issuer.assurance]` on every issuer whose tokens reach patient data,
   with the values it writes for each level and the least level you accept;
-  `config check` names each issuer without one. Declare
-  `client_tokens_act_for_professional` only for an issuer whose client
-  tokens name the professional they act for
+  `config check` names each issuer without one
   ([Professionals and assurance](authentication.md#professionals-and-assurance)).
 - [ ] **Keep `trust.purpose_of_use.required = true`**, its default, unless
   your §13.4 decisions say why not
@@ -156,12 +154,11 @@ page: our own design.
   it to an internal address the console's server can reach and no public
   network can ([The operator console](operator-console.md#configuration)).
   The console presents no client certificate: guard the scrape with
-  `scrape_users` on a listener the console calls, never with a required
+  `scrape_clients` on a listener the console calls, never with a required
   client certificate.
-- [ ] **Authenticate the scrape off loopback.** Name a scrape user in
-  `metrics.scrape_users`, write it under `[[auth.basic.users]]` with the
-  Argon2id hash of a long random password, such as `openssl rand -hex 32`,
-  and give your Prometheus the password with `basic_auth.password_file`; or
+- [ ] **Authenticate the scrape off loopback.** Register your Prometheus as
+  a client of an `[[auth.issuer]]`, name it in `metrics.scrape_clients`, and
+  give your Prometheus its client secret with `oauth2.client_secret_file`; or
   set `[metrics.tls]` with `client_auth = "required"` and a
   `client_ca_file` that admits the scraper.
   Outside the development profile the gateway refuses to start with a
@@ -205,10 +202,10 @@ page: our own design.
 
 - [ ] **Use `https` and, where offered, mutual TLS** to the PIX Manager,
   the PDQm Supplier, the XCPD gateways, the NVI and Mitz (B3).
-- [ ] **Give the PMIR Registry its own Basic user.** Write it under
-  `[[auth.basic.users]]`, name it in `pmir.feed_users`, and agree the
-  password with the Registry's operator; a message without its credentials
-  changes nothing.
+- [ ] **Give the PMIR Registry its own client.** Register it at an
+  `[[auth.issuer]]`, name it in `pmir.feed_clients`, and agree the client
+  with the Registry's operator; a message without its token changes
+  nothing.
 - [ ] **Set `federation.binding_ttl_ms`** no longer than you would accept a
   follow-up routed on a superseded identity
   ([Resolution bindings](registry.md#resolution-bindings)).

@@ -90,9 +90,7 @@ async fn asked(federation: &str, identity: &str, claims: &Claims) -> Result<Aske
     server.auth = support::caller::auth();
     #[cfg(feature = "binding-nl")]
     if identity.contains("[nl_gf.mitz]") {
-        for issuer in &mut server.auth.issuers {
-            issuer.requester = Some(crate::mitz::requester_claims());
-        }
+        server.auth = crate::mitz::federation_auth()?;
     }
     let app = ferrofed_server::router(state, &server);
     let (status, text) = call(app, bearing(query()?, &minted(claims)?)?).await?;

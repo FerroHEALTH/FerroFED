@@ -229,7 +229,7 @@ fn config_check_refuses_a_remote_listener_without_the_flag() -> TestResult {
     )?;
     assert_eq!(Some(i32::from(EXIT_CONFIG)), unauthenticated.status.code());
     let stderr = String::from_utf8_lossy(&unauthenticated.stderr);
-    assert!(stderr.contains("metrics.scrape_users"), "{stderr}");
+    assert!(stderr.contains("metrics.scrape_clients"), "{stderr}");
     let allowed = binary(
         &["config", "check"],
         &format!(
@@ -245,13 +245,10 @@ fn config_check_refuses_a_remote_listener_without_the_flag() -> TestResult {
     );
     let stdout = String::from_utf8_lossy(&allowed.stdout);
     assert!(
-        stdout.contains("a scrape that authenticates as a metrics.scrape_users user")
-            && stdout.contains("product_scope"),
+        stdout.contains(
+            "a scrape whose client-credentials token names a metrics.scrape_clients client"
+        ) && stdout.contains("product_scope"),
         "config check says who the remote listener answers: {stdout}"
-    );
-    assert!(
-        !stdout.contains(crate::support::caller::SCRAPE_HASH),
-        "{stdout}"
     );
     Ok(())
 }

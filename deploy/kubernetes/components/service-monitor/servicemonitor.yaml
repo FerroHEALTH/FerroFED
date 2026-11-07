@@ -1,16 +1,16 @@
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
-# Each replica is scraped on its own admin listener, with the scrape user's
-# HTTP Basic credentials from a Secret in this namespace, made with, for
+# Each replica is scraped on its own admin listener, with a client-credentials
+# token the scrape client of configmap.yaml's scrape_clients obtains at the
+# issuer, its client secret from a Secret in this namespace, made with, for
 # example:
 #
 #   kubectl create secret generic ferrofed-scrape \
-#     --from-literal=username=prometheus \
-#     --from-file=password=metrics-scrape-password
+#     --from-literal=client-id=prometheus \
+#     --from-file=client-secret=metrics-scrape-client-secret
 #
-# where metrics-scrape-password is the password whose hash configmap.yaml
-# names (https://ferrofed.eu/docs/operate/metrics.html). The base's
+# (https://ferrofed.eu/docs/operate/metrics.html). The base's
 # NetworkPolicy admits the Prometheus pods to the metrics port.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -28,10 +28,12 @@ spec:
     - port: metrics
       path: /metrics
       interval: 30s
-      basicAuth:
-        username:
+      oauth2:
+        clientId:
+          secret:
+            name: ferrofed-scrape
+            key: client-id
+        clientSecret:
           name: ferrofed-scrape
-          key: username
-        password:
-          name: ferrofed-scrape
-          key: password
+          key: client-secret
+        tokenUrl: https://idp.example.org/realms/ferrofed/protocol/openid-connect/token   # EDIT

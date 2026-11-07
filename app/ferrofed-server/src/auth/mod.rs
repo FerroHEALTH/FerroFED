@@ -63,9 +63,11 @@ mod verify;
 use std::fmt;
 use std::sync::Arc;
 
-use ferrofed_engine::conveyance::caller::{Acting, AssuranceLevel};
+use ferrofed_engine::conveyance::caller::Acting;
+use ferrofed_identity::role::consent::Requester;
 use ferrofed_registry::id::EhrId;
 use ferrohealth_smart::client::onward::SubjectToken as OnwardSubject;
+use ferrohealth_smart::federation::{Attribute, Field};
 use ferrohealth_smart::guard::{
     CredentialHeader, Gate as SmartGate, Requirement as SmartRequirement,
 };
@@ -85,7 +87,7 @@ use crate::auth::claims::Claims;
 use crate::auth::contact_point::ContactPoints;
 use crate::auth::introspection::Introspected;
 use crate::auth::permission::{Requirement, Resource};
-use crate::auth::refusal::{BasicRefusal, Refusal, Refused};
+use crate::auth::refusal::{MachineRefusal, Refusal, Refused};
 use crate::auth::verify::Verifiers;
 use crate::config::auth::{AuthMode, AuthSettings, IssuerSettings, Verification};
 use crate::error::ncp::NcpError;
@@ -108,9 +110,6 @@ pub struct Gate {
     /// or from the edge's header in the edge mode, and checks it with the
     /// issuers' verifiers.
     smart: SmartGate,
-    /// The crate's gate over the Basic users of `[[auth.basic.users]]`,
-    /// when any is written.
-    basic: Option<SmartGate>,
     /// The key the security log's caller references are made under, kept
     /// by every gate that succeeds this one, so a reference stays stable for
     /// the life of the process.
@@ -218,11 +217,6 @@ impl Gate {
             )),
             None => smart,
         };
-        let basic = settings.basic.as_ref().map(|users| {
-            SmartGate::open()
-                .with_basic(Arc::clone(users.store()))
-                .with_realm(settings.realm.clone())
-        });
         Self {
             mode: settings.mode.clone(),
             purpose_required: settings.purpose_required,
@@ -230,7 +224,6 @@ impl Gate {
             realm: settings.realm.clone(),
             issuers: settings.issuers.clone(),
             smart,
-            basic,
             references,
             contact_points: Arc::new(ContactPoints::of(settings)),
             replay,
@@ -453,8 +446,10 @@ impl Gate {
             CallerKind::System => Acting::Client,
             _ => Acting::Person,
         };
+        // NOTE: Regulation (EU) No 910/2014 Art 8(2); the level is the one
+        // `ferrohealth-smart` assessed under the issuer's [auth.issuer.assurance].
+        let assurance = smart.assurance().level;
         if trusted.national_contact_point.is_some() {
-            let assurance = assurance_of(trusted, |claim| claims.text(claim));
             return contact_point_caller(smart, trusted, (subject, client_id), verified_by)
                 .map(|caller| caller.with_assurance(assurance));
         }
@@ -468,45 +463,53 @@ impl Gate {
         };
         let caller = Caller::new(stated, verified_by)
             .with_launch_ehr_id(smart.ehr_id().map(str::to_owned))
-            .with_requester(claims.requester(trusted.requester.as_ref()))
+            .with_requester(requester(smart.kind()))
             .with_professional(
                 claims.professional(trusted.professional_issuing_authority.as_deref()),
             )
-            .with_assurance(assurance_of(trusted, |claim| claims.text(claim)))
+            .with_assurance(assurance)
             .with_acting(acting)
             .with_representative(claims.representative(trusted));
         Ok(caller)
     }
 
-    /// Admits a request whose Basic credential (RFC 7617) names one of
-    /// `users`, written in `[[auth.basic.users]]`, and returns the user.
+    /// Admits a machine whose client-credentials token (RFC 6749 §4.4) a
+    /// trusted issuer signed for one of `clients`, and returns its client.
+    ///
+    /// The token must classify as a system, a token with no person behind
+    /// it, under its issuer's profile; a person's token is never a machine's.
     ///
     /// # Errors
-    /// Returns [`BasicRefusal::Missing`] when the request carries no Basic
-    /// credential or no Basic user is written, [`BasicRefusal::Invalid`] for
-    /// one that does not verify, and [`BasicRefusal::Unlisted`] for a user
-    /// not in `users`.
-    pub async fn admit_basic(
+    /// Returns [`MachineRefusal::Missing`] when the request carries no
+    /// bearer token, [`MachineRefusal::Invalid`] for one that does not
+    /// verify, and [`MachineRefusal::Unlisted`] for a token of no system or
+    /// of a client not in `clients`.
+    pub async fn admit_machine(
         &self,
         headers: &HeaderMap,
-        users: &[String],
-    ) -> Result<String, BasicRefusal> {
-        let basic = self.basic.as_ref().ok_or(BasicRefusal::Missing)?;
+        clients: &[String],
+    ) -> Result<String, MachineRefusal> {
         let access =
-            basic
+            self.smart
                 .authenticate(headers)
                 .await
                 .map_err(|denied| match denied.refusal() {
-                    ferrohealth_smart::refusal::Refusal::Missing(_) => BasicRefusal::Missing,
-                    _ => BasicRefusal::Invalid,
+                    ferrohealth_smart::refusal::Refusal::Missing(_) => MachineRefusal::Missing,
+                    _ => MachineRefusal::Invalid,
                 })?;
-        if access.caller().is_none() {
-            return Err(BasicRefusal::Missing);
+        let Access::Caller(caller) = access else {
+            return Err(MachineRefusal::Missing);
+        };
+        // NOTE: RFC 6749 §4.4, a machine authenticates as a client alone, so only a
+        // token classified as a system's is admitted on a machine lane.
+        if *caller.kind() != CallerKind::System {
+            return Err(MachineRefusal::Unlisted);
         }
-        access
-            .basic_user_in(users)
+        caller
+            .client_id()
+            .filter(|client| clients.iter().any(|listed| listed == client))
             .map(str::to_owned)
-            .ok_or(BasicRefusal::Unlisted)
+            .ok_or(MachineRefusal::Unlisted)
     }
 
     /// Whether the credential of `headers` names a national contact point as
@@ -692,45 +695,54 @@ fn patient_context(caller: &Caller, trusted: &IssuerSettings) -> Result<PatientC
 }
 
 /// Holds `caller`, admitted to patient data, to who acts and how they
-/// authenticated, as `issuer`'s entry requires.
+/// authenticated, as `issuer`'s assurance table requires.
 ///
 /// Regulation (EU) 2025/327 Annex II 3.1 asks for "reliable mechanisms for
 /// the identification and authentication of health professionals", and
 /// Implementing Regulation (EU) 2026/2099 Art 6(3) sets the assurance level
 /// of that authentication for a cross-border exchange. Which claim values
 /// stand for which level, and the least level, are the deployment's per
-/// issuer: no specification governs this: our own design.
+/// issuer, in `[auth.issuer.assurance]`: no specification governs this: our
+/// own design.
 ///
 /// # Errors
 ///
-/// Returns [`Refusal::NaturalPerson`] when a client acts and the issuer does
-/// not declare its client tokens as acting for the professional they name,
-/// or the token names none, and [`Refusal::Assurance`] when the issuer
-/// requires a level and the token states none at or above it.
+/// Returns [`Refusal::NaturalPerson`] when a client acts with no person
+/// behind it, and [`Refusal::Assurance`] when the issuer requires a level
+/// and the token states none at or above it.
 fn professional(caller: &Caller, issuer: &IssuerSettings) -> Result<(), Refusal> {
-    let acts_for = issuer.client_tokens_act_for_professional;
-    if caller.acting() == Acting::Client && !(acts_for && caller.names_professional()) {
+    if caller.acting() == Acting::Client {
         return Err(Refusal::NaturalPerson);
     }
-    if let Some(assurance) = &issuer.assurance
-        && caller
-            .assurance()
-            .is_none_or(|level| level < assurance.minimum)
+    if let Some(minimum) = issuer
+        .verification
+        .assurance()
+        .and_then(|assurance| assurance.minimum)
+        && caller.assurance().is_none_or(|level| level < minimum)
     {
         return Err(Refusal::Assurance);
     }
     Ok(())
 }
 
-/// The assurance level `stated`, the value of the claim `issuer`'s entry
-/// names, stands for, when the entry declares a mapping and the value is in
-/// it.
-fn assurance_of(
-    issuer: &IssuerSettings,
-    stated: impl Fn(&str) -> Option<String>,
-) -> Option<AssuranceLevel> {
-    let assurance = issuer.assurance.as_ref()?;
-    // NOTE: no specification governs this: our own design; a value the entry declares at
-    // no level states no level, which no minimum admits.
-    stated(&assurance.claim).and_then(|value| assurance.level_of(&value))
+/// Returns who asks for the data, as a professional of another domestic
+/// party's `[[auth.federation]]` field sources state it: the professional's
+/// number and role and the organisation's URA and type, when every one is
+/// stated (§13.1, §13.4).
+fn requester(kind: &CallerKind) -> Option<Requester> {
+    let CallerKind::ExternalPerson(external) = kind else {
+        return None;
+    };
+    let text = |field| {
+        external
+            .field(field)
+            .and_then(Attribute::text)
+            .map(str::to_owned)
+    };
+    Requester::new(
+        text(Field::NlProfessionalNumber)?,
+        text(Field::NlRole)?,
+        text(Field::NlUra)?,
+        text(Field::NlOrganisationType)?,
+    )
 }

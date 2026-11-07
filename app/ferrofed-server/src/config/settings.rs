@@ -339,9 +339,9 @@ pub struct MetricsSettings {
     /// The TLS the admin listener serves, from `[metrics.tls]`; `None` serves
     /// plain HTTP.
     pub tls: Option<ListenerTlsSettings>,
-    /// The Basic users a scrape of `GET /metrics` may authenticate as;
-    /// empty leaves the scrape open.
-    pub scrape_users: Vec<String>,
+    /// The clients whose client-credentials token a scrape of `GET /metrics`
+    /// may carry; empty leaves the scrape open.
+    pub scrape_clients: Vec<String>,
 }
 
 /// An onward credential kind a binding adds beside the core's basic

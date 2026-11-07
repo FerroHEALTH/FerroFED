@@ -128,7 +128,7 @@ async fn an_iti_93_record_in_the_log_names_no_patient_master_identity() -> TestR
     let body = merge_message(SENTINEL, &[("urn:oid:2.999.1.999", SENTINEL)], SENTINEL)?;
     let request = Request::post(PATH)
         .header(header::CONTENT_TYPE, "application/fhir+json")
-        .header(header::AUTHORIZATION, crate::pmir::feed_credentials())
+        .header(header::AUTHORIZATION, crate::pmir::feed_credentials()?)
         .body(Body::from(body))?;
     let response = send_as_is(gateway.app.clone(), request).await?;
     assert_eq!(StatusCode::OK, response.status());
