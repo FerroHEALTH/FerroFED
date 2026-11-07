@@ -33,8 +33,8 @@ The idle phase holds the gateway to 2 % of one core and one committed
 transaction a second for 60 seconds, with the store's sweep and every other
 background worker running. The load phase sends 20 requests a second for 60
 seconds over the gateway's hot paths: the self-description, a patient's
-federated query, a population query, a stored query run by name and a stored
-query's definition read. A national contact point's routes are not in the
+federated query, a population query, a stored query run by name and a
+template list routed to the one member the registry names. A national contact point's routes are not in the
 set: their token is bound to the client certificate of the connection, which
 `ferrohealth-perf` 0.2.0 cannot present.
 

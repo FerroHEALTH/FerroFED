@@ -60,10 +60,10 @@ status = 200
 body = '{"query_parameters": {"patient": "ffd-test-0001", "namespace": "urn:oid:2.999.1.1"}}'
 headers = { authorization = "Bearer {token}", content-type = "application/json" }
 
-# A stored query's definition read from the registry (§12.7).
+# A definition read routed by the registry to the one member it names (§12.6).
 [[requests]]
-group = "registry-read"
+group = "definition-read"
 method = "GET"
-path = "/v1/definition/query/eu.ferrofed.eehrxf::patient-summary-problems/1.0.0"
+path = "/v1/definition/template/adl1.4"
 status = 200
-headers = { authorization = "Bearer {token}" }
+headers = { authorization = "Bearer {token}", openEHR-federation-endpoint = "node-a-query" }
