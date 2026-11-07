@@ -246,7 +246,8 @@ pub fn sites(
 ///
 /// # Errors
 /// [`Error::Missing`] for no registry, no `url`, no `callback_url` or no feed
-/// user; [`BindingFault::FeedUser`] for a feed user `basic` does not write; [`Error::Url`] or [`Error::HttpUrl`] for a URL that does not parse
+/// client; [`BindingFault::FeedIssuer`] when `issuers` is false, so no issuer
+/// signs a feed client's token; [`Error::Url`] or [`Error::HttpUrl`] for a URL that does not parse
 /// or is no `http(s)` URL without credentials;
 /// [`ServerFault::PublicUrlDisagrees`] for a `callback_url` that names another
 /// route than the feed's under `public`; [`Error::Cleartext`] for one
