@@ -18,7 +18,6 @@ use ferrofed_engine::dispatch::{
     Contact, DispatchOptions, NodeClient, NodeQuery, SharedCredentials,
 };
 use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
-use ferrofed_engine::onward::keys::KeyRing;
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -28,6 +27,7 @@ use ferrofed_testkit::issuer::Claims;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::keys::KeyRing;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{Credentials, CredentialsProvider as _, Transport, TransportError};
@@ -57,7 +57,7 @@ fn jtis(
             .ok_or_else(|| format!("a token request without {field}"))?;
         let claims = oauth::verify(
             assertion,
-            &keys.published(),
+            &serde_json::from_value(keys.published())?,
             CLIENT_ID,
             &endpoint.token_url(),
         )?;
@@ -74,7 +74,7 @@ fn jtis(
 #[tokio::test]
 async fn a_nonce_resend_signs_a_new_client_assertion() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     endpoint.issuance().require_nonce("synthetic-as-nonce-4");
     let prover = prover()?;
     let provider = provider(grant(&endpoint, &prover)?, Arc::clone(&keys), transport()?)?;
@@ -102,7 +102,7 @@ async fn a_nonce_resend_signs_a_new_client_assertion() -> TestResult {
 #[tokio::test]
 async fn a_nonce_resend_of_an_exchange_signs_new_assertions() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     endpoint.accept_exchange(CALLERS.jwks(), UPSTREAM);
     endpoint.issuance().require_nonce("synthetic-as-nonce-5");
     let node = Server::start().await;

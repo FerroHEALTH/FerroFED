@@ -42,7 +42,9 @@ use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native::Answer;
 use ferrofed_registry::id::{EhrId, EndpointId};
+use ferrohealth_smart::client::assertion::AssertionError;
 use http::{HeaderValue, StatusCode, header};
+use jsonwebtoken::jwk::Jwk;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
@@ -145,7 +147,7 @@ pub(super) fn mint(
     fhir: &FhirSettings,
     caller: &Caller,
     chosen: &Chosen,
-) -> Result<String, jsonwebtoken::errors::Error> {
+) -> Result<String, AssertionError> {
     signed(
         (signer, fhir, caller),
         (&chosen.native, chosen),
@@ -167,7 +169,7 @@ pub(super) fn mint_written(
     fhir: &FhirSettings,
     caller: &Caller,
     (chosen, written, composition): (&Chosen, Written, &str),
-) -> Result<String, jsonwebtoken::errors::Error> {
+) -> Result<String, AssertionError> {
     signed(
         (signer, fhir, caller),
         (&chosen.via, chosen),
@@ -188,7 +190,7 @@ pub(super) fn mint_own(
     fhir: &FhirSettings,
     caller: &Caller,
     (chosen, kind, binary): (&Chosen, Kind, &str),
-) -> Result<String, jsonwebtoken::errors::Error> {
+) -> Result<String, AssertionError> {
     signed(
         (signer, fhir, caller),
         (&chosen.native, chosen),
@@ -206,7 +208,7 @@ fn signed(
     (endpoint, chosen): (&EndpointId, &Chosen),
     (category, profile): (&str, &str),
     (composition, binary): (Option<&str>, Option<&str>),
-) -> Result<String, jsonwebtoken::errors::Error> {
+) -> Result<String, AssertionError> {
     let iat = jiff::Timestamp::now().as_second();
     let lifetime = i64::try_from(fhir.document_url_lifetime.as_secs()).unwrap_or(i64::MAX);
     let claims = Claims {
@@ -225,7 +227,7 @@ fn signed(
         composition: composition.map(str::to_owned),
         binary: binary.map(str::to_owned),
     };
-    signer.sign(TYPE, &claims)
+    signer.keys().current().sign(TYPE, &claims)
 }
 
 /// The claims of `token` when the gateway signed it for the face `fhir`
@@ -236,12 +238,18 @@ fn verified(signer: &Signer, fhir: &FhirSettings, token: &str) -> Result<Claims,
         return Err(Untaken::Unverified(None));
     }
     let keys = signer.keys();
-    let key = [Some(keys.current()), keys.previous(), keys.next()]
-        .into_iter()
-        .flatten()
-        .find(|key| header.kid.as_deref() == Some(key.kid()) && header.alg == key.algorithm())
-        .ok_or(Untaken::Unverified(None))?;
-    let decoding = DecodingKey::from_jwk(key.public()).map_err(|e| Untaken::Unverified(Some(e)))?;
+    let key = [
+        Some(keys.current()),
+        keys.previous_at(Instant::now()),
+        keys.next(),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|key| header.kid.as_deref() == Some(key.kid()) && header.alg == key.algorithm())
+    .ok_or(Untaken::Unverified(None))?;
+    let public: Jwk =
+        serde_json::from_value(key.public_jwk()).map_err(|_unread| Untaken::Unverified(None))?;
+    let decoding = DecodingKey::from_jwk(&public).map_err(|e| Untaken::Unverified(Some(e)))?;
     let algorithm: Algorithm = key.algorithm();
     let mut validation = Validation::new(algorithm);
     validation.leeway = 0;

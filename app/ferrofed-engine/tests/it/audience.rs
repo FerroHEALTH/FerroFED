@@ -16,15 +16,15 @@ use std::time::Duration;
 
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::issuer::Issuer;
-use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
 use ferrofed_engine::onward::{AssertionAudience, Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::keys::KeyRing;
 use jsonwebtoken::Algorithm;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
-use secrecy::SecretString;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -40,14 +40,13 @@ async fn provider_of(
     grant: impl FnOnce(&TokenEndpoint) -> Result<Grant, Box<dyn Error>>,
 ) -> Result<(TokenEndpoint, ClientCredentials<ReqwestTransport>), Box<dyn Error>> {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
-    let keys = Arc::new(KeyRing::new(
-        key,
+    let key = AssertionKey::from_pem(
+        oauth::Curve::P384.pem()?.as_bytes(),
+        Some(Algorithm::ES384),
         None,
-        Duration::ZERO,
-        Arc::new(SystemClock),
-    )?);
-    endpoint.trust(keys.published());
+    )?;
+    let keys = Arc::new(KeyRing::new(key));
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let provider = ClientCredentials::new(
         EndpointId::new("node-a-pub")?,
         grant(&endpoint)?,

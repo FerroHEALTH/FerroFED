@@ -19,9 +19,10 @@ use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::fapi2::metadata::{DiscoveryError, RESPONSE_LIMIT};
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Error, Fapi2Grant, Fapi2GrantError};
 use ferrofed_engine::onward::issuer::{EndpointError, Issuer};
-use ferrofed_engine::onward::keys::{Curve, SigningKey};
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
 use ferrofed_testkit::oauth;
+use ferrohealth_smart::client::assertion::AssertionKey;
+use jsonwebtoken::Algorithm;
 use openehr_its::rest::client::{CredentialsError, CredentialsProvider as _};
 use secrecy::SecretString;
 
@@ -71,7 +72,7 @@ async fn refusal_of(
 /// default metadata.
 async fn refused_after(edit: impl FnOnce(&mut Metadata)) -> Result<Refused, Box<dyn Error>> {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let mut metadata = server.metadata();
     edit(&mut metadata);
     server.publish(&metadata);
@@ -176,7 +177,7 @@ async fn a_server_without_the_client_credentials_grant_is_refused() -> TestResul
 #[tokio::test]
 async fn an_exchanging_grant_needs_token_exchange_listed() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let mut metadata = server.metadata();
     metadata.grant_types_supported = Some(list(&["client_credentials"]));
     server.publish(&metadata);
@@ -226,7 +227,7 @@ async fn a_grant_without_details_needs_no_listed_type() -> TestResult {
     let key = client_key()?;
     let server = AuthorizationServer::start(CLIENT_ID, Some(300)).await;
     server.endpoint().trust(jsonwebtoken::jwk::JwkSet {
-        keys: vec![key.public().clone()],
+        keys: vec![serde_json::from_value(key.public_jwk())?],
     });
     let mut metadata = server.metadata();
     metadata.authorization_details_types_supported = None;
@@ -247,7 +248,7 @@ async fn a_grant_without_details_needs_no_listed_type() -> TestResult {
 #[tokio::test]
 async fn an_answer_that_is_no_metadata_document_is_refused() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let body = serde_json::to_string(&server.metadata())?;
     server.publish_raw(&body, "text/plain");
     refusal_of(&server, grant(&server, key.clone(), &prover()?)?)
@@ -282,7 +283,11 @@ fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
             Some(AuthorizationDetails::parse(DETAILS)?),
         ))
     };
-    let es384 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
+    let es384 = AssertionKey::from_pem(
+        oauth::Curve::P384.pem()?.as_bytes(),
+        Some(Algorithm::ES384),
+        None,
+    )?;
     assert!(matches!(
         Fapi2Grant::new(issuer()?, CLIENT_ID, (es384, prover()?), request()?),
         Err(Fapi2GrantError::ClientKey)
@@ -317,7 +322,7 @@ fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
 #[test]
 fn debug_shows_no_key() -> TestResult {
     let pem = oauth::Curve::P256.pem()?;
-    let key = SigningKey::from_pem(&SecretString::from(pem.clone()), Curve::P256)?;
+    let key = AssertionKey::from_pem(pem.clone().as_bytes(), Some(Algorithm::ES256), None)?;
     let grant = Fapi2Grant::new(
         Issuer::parse("https://as.example.org")?,
         CLIENT_ID,

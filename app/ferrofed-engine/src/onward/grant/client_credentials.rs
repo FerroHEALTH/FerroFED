@@ -25,9 +25,9 @@ use ferrofed_registry::id::EndpointId;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 
 use crate::onward::grant::cache::TokenCache;
-use crate::onward::keys::KeyRing;
 use crate::onward::token::{self, MAX_ASSERTION_LIFETIME, TokenError};
 use crate::onward::{Clock, Grant};
+use ferrohealth_smart::client::keys::KeyRing;
 
 /// Whom a [`ClientCredentials`] provider obtains its tokens for, named in
 /// its `Debug` and its log events.

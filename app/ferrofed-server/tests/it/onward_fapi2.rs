@@ -26,7 +26,6 @@ use axum::Router;
 use axum::body::Body;
 use ferrofed_engine::onward::AssertionAudience;
 use ferrofed_engine::onward::grant::fapi2::Fapi2GrantError;
-use ferrofed_engine::onward::keys::{Curve, SigningKey};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::credentials::CredentialsFault;
@@ -38,10 +37,11 @@ use ferrofed_testkit::fapi::{AuthorizationServer, DETAILS_TYPE};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth;
 use ferrofed_testkit::unreachable;
+use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
+use jsonwebtoken::Algorithm;
 use jsonwebtoken::jwk::JwkSet;
-use secrecy::SecretString;
 use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, ResponseTemplate};
 
@@ -161,7 +161,8 @@ async fn node_a_receives_the_dpop_bound_fapi2_token() -> TestResult {
     let a = node(authority.endpoint().dpop_bound(None)).await;
     let (app, _state) = gateway(dir.path(), &a.uri(), &material.tables)?;
     let jwks = published(&app).await?;
-    let client_key = SigningKey::from_pem(&SecretString::from(material.client_pem), Curve::P256)?;
+    let client_key =
+        AssertionKey::from_pem(material.client_pem.as_bytes(), Some(Algorithm::ES256), None)?;
     assert!(
         jwks.find(client_key.kid()).is_some(),
         "the client key is published"
@@ -489,12 +490,13 @@ async fn a_rotated_client_key_is_published_beside_the_previous_one_and_alone_sig
         .try_into()
         .map_err(|_more| "one assertion before the rotation")?;
 
-    let old = SigningKey::from_pem(
-        &SecretString::from(material.client_pem.clone()),
-        Curve::P256,
+    let old = AssertionKey::from_pem(
+        material.client_pem.clone().as_bytes(),
+        Some(Algorithm::ES256),
+        None,
     )?;
     let new_pem = oauth::Curve::P256.pem()?;
-    let new = SigningKey::from_pem(&SecretString::from(new_pem.clone()), Curve::P256)?;
+    let new = AssertionKey::from_pem(new_pem.clone().as_bytes(), Some(Algorithm::ES256), None)?;
     let new_file = dir.path().join("fapi2-client-new.pem");
     std::fs::write(&new_file, &new_pem)?;
     let new_file = toml::Value::String(new_file.display().to_string());
@@ -535,7 +537,7 @@ async fn a_rotated_client_key_is_published_beside_the_previous_one_and_alone_sig
         &signed_by_old,
         &rotated_set,
         (CLIENT_ID, &issuer),
-        Some(jsonwebtoken::Algorithm::ES256),
+        Some(Algorithm::ES256),
     )?;
     let sent = assertions_at(&authority);
     let rotated_assertions = sent.get(1..).ok_or("assertions after the rotation")?;
@@ -551,7 +553,7 @@ async fn a_rotated_client_key_is_published_beside_the_previous_one_and_alone_sig
             assertion,
             &rotated_set,
             (CLIENT_ID, &issuer),
-            Some(jsonwebtoken::Algorithm::ES256),
+            Some(Algorithm::ES256),
         )?;
     }
     Ok(())

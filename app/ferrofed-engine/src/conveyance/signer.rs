@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use ferrofed_registry::id::EndpointId;
 
-use crate::onward::keys::KeyRing;
+use ferrohealth_smart::client::assertion::AssertionError;
+use ferrohealth_smart::client::keys::KeyRing;
 
 /// The gateway's signer of conveyances: its keys, and the `iss` each node
 /// knows it by.
@@ -63,17 +64,13 @@ impl Signer {
     ///
     /// # Errors
     ///
-    /// The [`jsonwebtoken::errors::Error`] of a key that cannot sign.
+    /// The [`AssertionError`] of a key that cannot sign.
     pub fn sign(
         &self,
         typ: &str,
         claims: &impl serde::Serialize,
-    ) -> Result<String, jsonwebtoken::errors::Error> {
-        let key = self.keys.current();
-        let mut header = jsonwebtoken::Header::new(key.algorithm());
-        header.typ = Some(typ.to_owned());
-        header.kid = Some(key.kid().to_owned());
-        jsonwebtoken::encode(&header, claims, key.private())
+    ) -> Result<String, AssertionError> {
+        self.keys.current().sign(typ, claims)
     }
 }
 

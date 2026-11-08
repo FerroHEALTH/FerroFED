@@ -24,7 +24,6 @@ use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeRepl
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
-use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::token::{GRANT_TYPE, TokenError};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
@@ -37,6 +36,8 @@ use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::tls::MutualTls;
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::keys::KeyRing;
 use jsonwebtoken::Algorithm;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
@@ -215,13 +216,12 @@ fn field<'f>(form: &'f [(String, String)], name: &str) -> Option<&'f str> {
 
 /// The gateway's keys, which sign the actor token of a token exchange.
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
-    Ok(Arc::new(KeyRing::new(
-        key,
+    let key = AssertionKey::from_pem(
+        oauth::Curve::P384.pem()?.as_bytes(),
+        Some(Algorithm::ES384),
         None,
-        Duration::ZERO,
-        Arc::new(SystemClock),
-    )?))
+    )?;
+    Ok(Arc::new(KeyRing::new(key)))
 }
 
 /// The engine reads the certificate's thumbprint as RFC 8705 §3.1 defines
@@ -419,7 +419,9 @@ async fn an_assertion_grant_without_a_key_sends_nothing() -> TestResult {
 async fn token_exchange_composes_with_mutual_tls() -> TestResult {
     let harness = Harness::start().await?;
     let keys = keys()?;
-    harness.endpoint.trust(keys.published());
+    harness
+        .endpoint
+        .trust(serde_json::from_value(keys.published())?);
     harness.endpoint.accept_exchange(CALLERS.jwks(), UPSTREAM);
     harness.endpoint.expect_resource(RESOURCE);
     harness

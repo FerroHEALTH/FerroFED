@@ -6,8 +6,9 @@
 //!
 //! For an endpoint configured with a [`Grant`], the gateway obtains an
 //! access token at the node's token endpoint, authenticating with an ES256 or ES384
-//! client assertion (RFC 7523 §2.2) signed by the current key of its
-//! [`keys::KeyRing`], whose public keys it publishes as a JWK Set (RFC 7517).
+//! client assertion (RFC 7523 §2.2) signed by the current key of its key
+//! ring, `ferrohealth-smart`'s `client::keys::KeyRing`, whose public keys it
+//! publishes as a JWK Set (RFC 7517).
 //! A [`GrantKind::ClientCredentials`] grant (RFC 6749 §4.4) gives the
 //! endpoint one token for every caller, through the
 //! [`grant::client_credentials::ClientCredentials`] provider. A [`GrantKind::TokenExchange`]
@@ -41,8 +42,7 @@
 //!
 //! The grant kinds sit in [`grant`], a regional binding's in a folder of
 //! their own behind its feature. Beside them are the plumbing every grant
-//! shares, the token request ([`token`]), the signing keys ([`keys`]) and
-//! the RFC 9396 details ([`authorization_details`]), and the two sender
+//! shares, the token request ([`token`]) and the RFC 9396 details ([`authorization_details`]), and the two sender
 //! constraints, [`dpop`] and [`mtls`].
 
 use std::fmt;
@@ -63,7 +63,6 @@ pub mod authorization_details;
 pub mod dpop;
 pub mod grant;
 pub mod issuer;
-pub mod keys;
 pub mod mtls;
 pub mod token;
 

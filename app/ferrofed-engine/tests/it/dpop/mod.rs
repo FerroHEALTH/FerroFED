@@ -22,7 +22,6 @@ use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeRepl
 use ferrofed_engine::onward::dpop::{DpopKeyError, Prover};
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
-use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -32,6 +31,8 @@ use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::keys::KeyRing;
 use jsonwebtoken::Algorithm;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{Credentials, CredentialsProvider as _, ReqwestTransport};
@@ -67,13 +68,12 @@ static CALLERS: LazyLock<Issuer> =
 
 /// The gateway's signing keys.
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
-    Ok(Arc::new(KeyRing::new(
-        key,
+    let key = AssertionKey::from_pem(
+        oauth::Curve::P384.pem()?.as_bytes(),
+        Some(Algorithm::ES384),
         None,
-        Duration::ZERO,
-        Arc::new(SystemClock),
-    )?))
+    )?;
+    Ok(Arc::new(KeyRing::new(key)))
 }
 
 /// A fresh `DPoP` key of the P-256 curve.
@@ -84,11 +84,11 @@ fn prover() -> Result<Arc<Prover>, Box<dyn Error>> {
 }
 
 /// A token endpoint requiring `DPoP` and trusting `keys`.
-async fn endpoint(keys: &KeyRing) -> TokenEndpoint {
+async fn endpoint(keys: &KeyRing) -> Result<TokenEndpoint, Box<dyn Error>> {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.trust(keys.published());
+    endpoint.trust(serde_json::from_value(keys.published())?);
     endpoint.require_dpop();
-    endpoint
+    Ok(endpoint)
 }
 
 /// The client-credentials grant at `endpoint`, bound to `prover`'s key.
@@ -198,7 +198,7 @@ fn credential_and_proof(request: &wiremock::Request) -> Result<(&str, &str), Box
 #[tokio::test]
 async fn a_dpop_bound_token_reaches_the_node_with_a_proof_of_its_key() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;
@@ -242,7 +242,7 @@ async fn a_dpop_bound_token_reaches_the_node_with_a_proof_of_its_key() -> TestRe
 #[tokio::test]
 async fn a_dpop_bound_token_is_never_a_bearer_credential() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let prover = prover()?;
     let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
 
@@ -263,7 +263,7 @@ async fn a_dpop_bound_token_is_never_a_bearer_credential() -> TestResult {
 #[tokio::test]
 async fn the_token_endpoints_nonce_is_answered_once() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     endpoint.issuance().require_nonce("synthetic-as-nonce-1");
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
@@ -358,7 +358,7 @@ async fn the_token_endpoints_nonce_is_answered_no_more_than_once() -> TestResult
 #[tokio::test]
 async fn the_nodes_nonce_is_answered_once() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = Server::start().await;
     answer_when(
         &node,
@@ -414,7 +414,7 @@ async fn the_nodes_nonce_is_answered_once() -> TestResult {
 #[tokio::test]
 async fn an_exchanged_token_is_dpop_bound() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     endpoint.accept_exchange(CALLERS.jwks(), UPSTREAM);
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
@@ -459,7 +459,7 @@ async fn an_exchanged_token_is_dpop_bound() -> TestResult {
 async fn a_bearer_token_where_dpop_was_asked_fails_the_node() -> TestResult {
     let keys = keys()?;
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.trust(keys.published());
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let node = Server::start().await;
     answer_when(&node, endpoint.bearer(), ResponseTemplate::new(401)).await;
     let prover = prover()?;
@@ -482,7 +482,7 @@ async fn a_bearer_token_where_dpop_was_asked_fails_the_node() -> TestResult {
 async fn a_request_without_a_bound_token_carries_no_proof() -> TestResult {
     let keys = keys()?;
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.trust(keys.published());
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let node = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/openehr/v1/query/aql"))

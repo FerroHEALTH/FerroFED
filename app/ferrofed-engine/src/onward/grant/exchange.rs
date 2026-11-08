@@ -46,10 +46,10 @@ use crate::conveyance::caller::{Principal, Verification};
 use crate::dispatch::SharedCredentials;
 use crate::hygiene::Withheld;
 use crate::onward::grant::client_credentials::ClientCredentials;
-use crate::onward::keys::KeyRing;
 use crate::onward::token::{self, Subject, TokenError};
 use crate::onward::token::{MAX_ASSERTION_LIFETIME, REFRESH_MARGIN};
 use crate::onward::{Clock, Grant};
+use ferrohealth_smart::client::keys::KeyRing;
 
 /// The most exchanged tokens one endpoint keeps.
 // NOTE: no specification governs this bound: our own design; a full cache

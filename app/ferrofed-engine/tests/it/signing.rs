@@ -21,15 +21,15 @@ use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::conveyance::caller::Principal;
 use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
-use ferrofed_engine::onward::keys::{KeyError, KeyRing, SigningKey};
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::assertion::{AssertionError, AssertionKey};
+use ferrohealth_smart::client::keys::{KeyRing, KeyRingError};
 use jsonwebtoken::Algorithm;
-use jsonwebtoken::jwk::KeyAlgorithm;
+use jsonwebtoken::jwk::{Jwk, JwkSet, KeyAlgorithm};
 use openehr_its::rest::client::{CredentialsProvider, ReqwestTransport};
-use secrecy::SecretString;
 
 use crate::conveyed;
 
@@ -42,45 +42,49 @@ const CLIENT_ID: &str = "ferrofed-test-gateway";
 const NODE: &str = "node-a-pub";
 
 /// A `[signing]` key read from `pem` by its curve.
-fn read(pem: String) -> Result<SigningKey, KeyError> {
-    SigningKey::from_ec_pem(&SecretString::from(pem))
+fn read(pem: &str) -> Result<AssertionKey, AssertionError> {
+    AssertionKey::from_pem(pem.as_bytes(), None, None)
 }
 
-/// A ring of `current` alone, published for no overlap.
-fn ring(current: SigningKey) -> Result<Arc<KeyRing>, KeyError> {
-    Ok(Arc::new(KeyRing::new(
-        current,
-        None,
-        Duration::ZERO,
-        Arc::new(SystemClock),
-    )?))
+/// A ring of `current` alone.
+fn ring(current: AssertionKey) -> Arc<KeyRing> {
+    Arc::new(KeyRing::new(current))
+}
+
+/// The JWK Set `keys` publishes now.
+fn published(keys: &KeyRing) -> Result<JwkSet, serde_json::Error> {
+    serde_json::from_value(keys.published())
 }
 
 /// The algorithm a published key names.
-fn published_algorithm(key: &SigningKey) -> Option<KeyAlgorithm> {
-    key.public().common.key_algorithm
+fn published_algorithm(key: &AssertionKey) -> Result<Option<KeyAlgorithm>, serde_json::Error> {
+    let public: Jwk = serde_json::from_value(key.public_jwk())?;
+    Ok(public.common.key_algorithm)
 }
 
 #[test]
 fn a_p256_key_signs_es256_and_a_p384_key_es384() -> TestResult {
-    let p256 = read(oauth::Curve::P256.pem()?)?;
+    let p256 = read(&oauth::Curve::P256.pem()?)?;
     assert_eq!(Algorithm::ES256, p256.algorithm());
-    assert_eq!(Some(KeyAlgorithm::ES256), published_algorithm(&p256));
-    let p384 = read(oauth::Curve::P384.pem()?)?;
+    assert_eq!(Some(KeyAlgorithm::ES256), published_algorithm(&p256)?);
+    let p384 = read(&oauth::Curve::P384.pem()?)?;
     assert_eq!(Algorithm::ES384, p384.algorithm());
-    assert_eq!(Some(KeyAlgorithm::ES384), published_algorithm(&p384));
+    assert_eq!(Some(KeyAlgorithm::ES384), published_algorithm(&p384)?);
     Ok(())
 }
 
 #[test]
 fn a_key_on_neither_curve_is_refused_and_quotes_nothing() -> TestResult {
-    let p521 = read(oauth::Curve::P521.pem()?);
+    let p521 = read(&oauth::Curve::P521.pem()?);
     assert!(
-        matches!(p521, Err(KeyError::CurveUnsupported(_))),
+        matches!(p521, Err(AssertionError::Curve { .. })),
         "{p521:?}"
     );
-    let garbage = read(String::from("Qz7-not-a-key"));
-    assert!(matches!(garbage, Err(KeyError::Pem(_))), "{garbage:?}");
+    let garbage = read("Qz7-not-a-key");
+    assert!(
+        matches!(garbage, Err(AssertionError::Key { .. })),
+        "{garbage:?}"
+    );
     let shown = format!("{garbage:?}");
     assert!(!shown.contains("Qz7"), "{shown}");
     Ok(())
@@ -92,8 +96,8 @@ fn a_key_on_neither_curve_is_refused_and_quotes_nothing() -> TestResult {
 #[tokio::test]
 async fn an_es256_signing_key_signs_the_client_assertion_es256() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, None).await;
-    let keys = ring(read(oauth::Curve::P256.pem()?)?)?;
-    endpoint.trust(keys.published());
+    let keys = ring(read(&oauth::Curve::P256.pem()?)?);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     endpoint.expect_assertion(Algorithm::ES256, &endpoint.token_url());
     let grant = Grant::new(
         &SecretUrl::new(endpoint.token_url()),
@@ -119,7 +123,7 @@ async fn an_es256_signing_key_signs_the_client_assertion_es256() -> TestResult {
     );
     oauth::verify_signed(
         &assertion,
-        &keys.published(),
+        &published(&keys)?,
         (CLIENT_ID, &endpoint.token_url()),
         Some(Algorithm::ES256),
     )?;
@@ -136,7 +140,7 @@ fn the_conveyance_is_signed_with_the_current_keys_algorithm() -> TestResult {
         (oauth::Curve::P256.pem()?, Algorithm::ES256),
         (oauth::Curve::P384.pem()?, Algorithm::ES384),
     ] {
-        let keys = ring(read(pem)?)?;
+        let keys = ring(read(&pem)?);
         let signer = Arc::new(Signer::new(Arc::clone(&keys), conveyed::GATEWAY));
         let conveyance = Conveyance::new(signer, Principal::Caller(conveyed::caller()));
         let token = conveyance.signed_for(&EndpointId::new(NODE)?)?;
@@ -153,24 +157,20 @@ fn the_conveyance_is_signed_with_the_current_keys_algorithm() -> TestResult {
 // conformance: CP-16
 #[test]
 fn a_rotation_across_curves_publishes_both_and_signs_with_the_new() -> TestResult {
-    let old = read(oauth::Curve::P384.pem()?)?;
-    let new = read(oauth::Curve::P256.pem()?)?;
+    let old = read(&oauth::Curve::P384.pem()?)?;
+    let new = read(&oauth::Curve::P256.pem()?)?;
     let node = EndpointId::new(NODE)?;
-    let before = ring(old.clone())?;
+    let before = ring(old.clone());
     let signed_by_old = Conveyance::new(
         Arc::new(Signer::new(before, conveyed::GATEWAY)),
         Principal::Caller(conveyed::caller()),
     )
     .signed_for(&node)?;
 
-    let rotated = Arc::new(KeyRing::new(
-        new.clone(),
-        Some(old.clone()),
-        Duration::from_mins(65),
-        Arc::new(SystemClock),
-    )?);
-    let published: Vec<_> = rotated
-        .published()
+    let rotated = Arc::new(
+        KeyRing::new(new.clone()).with_previous_for(old.clone(), Duration::from_mins(65))?,
+    );
+    let published: Vec<_> = published(&rotated)?
         .keys
         .iter()
         .map(|jwk| (jwk.common.key_id.clone(), jwk.common.key_algorithm))
@@ -201,15 +201,11 @@ fn a_rotation_across_curves_publishes_both_and_signs_with_the_new() -> TestResul
 // conformance: CP-16
 #[test]
 fn a_next_key_is_published_ahead_and_never_signs() -> TestResult {
-    let old = read(oauth::Curve::P384.pem()?)?;
-    let new = read(oauth::Curve::P384.pem()?)?;
+    let old = read(&oauth::Curve::P384.pem()?)?;
+    let new = read(&oauth::Curve::P384.pem()?)?;
     let node = EndpointId::new(NODE)?;
-    let ahead = Arc::new(
-        KeyRing::new(old.clone(), None, Duration::ZERO, Arc::new(SystemClock))?
-            .with_next(new.clone())?,
-    );
-    let published: Vec<Option<String>> = ahead
-        .published()
+    let ahead = Arc::new(KeyRing::new(old.clone()).with_next(new.clone())?);
+    let published: Vec<Option<String>> = published(&ahead)?
         .keys
         .iter()
         .map(|jwk| jwk.common.key_id.clone())
@@ -219,7 +215,7 @@ fn a_next_key_is_published_ahead_and_never_signs() -> TestResult {
         published,
         "the current key, then the next one"
     );
-    assert_eq!(Some(new.kid()), ahead.next().map(SigningKey::kid));
+    assert_eq!(Some(new.kid()), ahead.next().map(AssertionKey::kid));
     assert_eq!(old.kid(), ahead.current().kid(), "the next key never signs");
     let signed_ahead = Conveyance::new(
         Arc::new(Signer::new(Arc::clone(&ahead), conveyed::GATEWAY)),
@@ -229,12 +225,9 @@ fn a_next_key_is_published_ahead_and_never_signs() -> TestResult {
     let header = jsonwebtoken::decode_header(&signed_ahead)?;
     assert_eq!(Some(old.kid()), header.kid.as_deref());
 
-    let rotated = Arc::new(KeyRing::new(
-        new.clone(),
-        Some(old.clone()),
-        Duration::from_mins(65),
-        Arc::new(SystemClock),
-    )?);
+    let rotated = Arc::new(
+        KeyRing::new(new.clone()).with_previous_for(old.clone(), Duration::from_mins(65))?,
+    );
     let signed_by_new = Conveyance::new(
         Arc::new(Signer::new(rotated, conveyed::GATEWAY)),
         Principal::Caller(conveyed::caller()),
@@ -249,15 +242,11 @@ fn a_next_key_that_is_the_current_or_the_previous_key_is_refused() -> TestResult
     let current_pem = oauth::Curve::P384.pem()?;
     let previous_pem = oauth::Curve::P384.pem()?;
     for reused in [&current_pem, &previous_pem] {
-        let ring = KeyRing::new(
-            read(current_pem.clone())?,
-            Some(read(previous_pem.clone())?),
-            Duration::from_mins(65),
-            Arc::new(SystemClock),
-        )?;
-        let refused = ring.with_next(read(reused.clone())?);
+        let ring = KeyRing::new(read(&current_pem)?)
+            .with_previous_for(read(&previous_pem)?, Duration::from_mins(65))?;
+        let refused = ring.with_next(read(reused)?);
         assert!(
-            matches!(refused, Err(KeyError::NextReused { .. })),
+            matches!(refused, Err(KeyRingError::NextReused { .. })),
             "{refused:?}"
         );
     }

@@ -53,7 +53,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_registry::id::{EhrId, EndpointId};
-use jsonwebtoken::Header;
 use serde::Serialize;
 
 use crate::conveyance::caller::{Principal, Purpose};
@@ -81,7 +80,7 @@ pub const LIFETIME: Duration = Duration::from_secs(60);
 pub enum ConveyanceError {
     /// The token could not be signed.
     #[error("the caller's identity could not be signed for the node")]
-    Sign(#[source] jsonwebtoken::errors::Error),
+    Sign(#[source] ferrohealth_smart::client::assertion::AssertionError),
     /// The caller's grant is confined to one patient, and the patient has no
     /// `ehr_id` at the node this endpoint reaches.
     #[error(
@@ -324,11 +323,12 @@ impl Conveyance {
             claims.assurance_level = caller.assurance_level.map(AssuranceLevel::as_str);
             claims.national_contact_point = caller.relayed.as_deref().map(Relayed::claim);
         }
-        let key = self.0.signer.keys().current();
-        let mut header = Header::new(key.algorithm());
-        header.typ = Some(TYPE.to_owned());
-        header.kid = Some(key.kid().to_owned());
-        jsonwebtoken::encode(&header, &claims, key.private()).map_err(ConveyanceError::Sign)
+        self.0
+            .signer
+            .keys()
+            .current()
+            .sign(TYPE, &claims)
+            .map_err(ConveyanceError::Sign)
     }
 
     /// Every claim value that comes from the caller's credential, which the
@@ -369,10 +369,8 @@ impl Conveyance {
 pub(crate) mod tests {
     use std::collections::BTreeMap;
     use std::sync::{Arc, LazyLock};
-    use std::time::Duration;
 
     use ferrofed_registry::id::{EhrId, EndpointId};
-    use secrecy::SecretString;
 
     use super::{Conveyance, ConveyanceError};
     use crate::conveyance::caller::{
@@ -381,9 +379,9 @@ pub(crate) mod tests {
     use crate::conveyance::confinement::Confinement;
     use crate::conveyance::relayed::Role;
     use crate::conveyance::signer::Signer;
-    use crate::onward::SystemClock;
-    use crate::onward::keys::{Curve, KeyRing, SigningKey};
     use ferrohealth_smart::assurance::AssuranceLevel;
+    use ferrohealth_smart::client::assertion::AssertionKey;
+    use ferrohealth_smart::client::keys::KeyRing;
 
     /// The code system of the synthetic caller's role.
     const PRACTITIONER_ROLE: &str = "http://terminology.hl7.org/CodeSystem/practitioner-role";
@@ -393,12 +391,8 @@ pub(crate) mod tests {
         let pem = ferrofed_testkit::oauth::Curve::P384
             .pem()
             .expect("a test key should generate");
-        let key =
-            SigningKey::from_pem(&SecretString::from(pem), Curve::P384).expect("an ES384 key");
-        Arc::new(
-            KeyRing::new(key, None, Duration::ZERO, Arc::new(SystemClock))
-                .expect("one key is a ring"),
-        )
+        let key = AssertionKey::from_pem(pem.as_bytes(), None, None).expect("an ES384 key");
+        Arc::new(KeyRing::new(key))
     });
 
     fn caller() -> Caller {

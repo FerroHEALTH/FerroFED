@@ -18,6 +18,7 @@ use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_identity::session::ResolutionBindings;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
+use ferrohealth_smart::client::keys::KeyRing;
 use jsonwebtoken::jwk::{Jwk, JwkSet};
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
@@ -395,9 +396,15 @@ fn client_keys(settings: &Settings) -> Vec<Jwk> {
     let mut keys: Vec<Jwk> = Vec::new();
     for scheme in settings.credentials.values() {
         let published: Vec<Jwk> = match scheme {
-            Scheme::Fapi2(grant) => grant.published_client_keys().keys,
-            // NOTE: RFC 7517 §5, the crate renders its ring's JWK Set, which reads as one;
+            // NOTE: RFC 7517 §5, the crate renders each ring's JWK Set, which reads as one;
             // a set no JWK reader takes is legitimately not published.
+            Scheme::Fapi2(grant) => grant
+                .client_key_ring()
+                .into_iter()
+                .map(KeyRing::published)
+                .filter_map(|set| serde_json::from_value::<JwkSet>(set).ok())
+                .flat_map(|set| set.keys)
+                .collect(),
             Scheme::Oauth { grant, .. } => grant
                 .assertion_keys
                 .iter()

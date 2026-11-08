@@ -41,11 +41,12 @@ use ferrofed_engine::onward::authorization_details::{
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
 use ferrofed_engine::onward::issuer::{AliasHost, InvalidAliasHost, InvalidIssuer, Issuer};
-use ferrofed_engine::onward::keys::{Curve, KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SenderConstraint};
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::assertion::{AssertionError, AssertionKey};
+use jsonwebtoken::Algorithm;
 use serde::Deserialize;
 
 use crate::config::error::Error;
@@ -177,7 +178,7 @@ pub enum GrantFault {
         key: String,
         /// Why it is refused; it quotes no part of the key.
         #[source]
-        source: KeyError,
+        source: AssertionError,
     },
     /// The `authorization_details` are no RFC 9396 §2 array.
     #[error("{key} is not an RFC 9396 §2 authorization_details array")]
@@ -527,7 +528,7 @@ pub(super) fn resolve_fapi2(
 }
 
 /// Reads the client key `client_key_file` names, a P-256 key.
-fn client_key(section: &str, fapi2: &Fapi2) -> Result<SigningKey, Error> {
+fn client_key(section: &str, fapi2: &Fapi2) -> Result<AssertionKey, Error> {
     let key = format!("{section}.client_key_file");
     let path = fapi2
         .client_key_file
@@ -558,11 +559,11 @@ fn with_previous_client_key(
 }
 
 /// Reads the P-256 key the `_file` sibling of `key` names, at `path`.
-fn p256_key(key: &str, path: &Path) -> Result<SigningKey, Error> {
+fn p256_key(key: &str, path: &Path) -> Result<AssertionKey, Error> {
     let named = format!("{key}_file");
     let pem = read_secret::<Secret>(key, None, Some(path))?
         .ok_or_else(|| Error::Missing { key: named.clone() })?;
-    SigningKey::from_pem(&pem.to_secret_string(), Curve::P256)
+    AssertionKey::from_pem(pem.expose().as_bytes(), Some(Algorithm::ES256), None)
         .map_err(|source| GrantFault::ClientKey { key: named, source }.into())
 }
 

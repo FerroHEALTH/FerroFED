@@ -8,41 +8,43 @@
 //! design.
 
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
-use ferrofed_engine::onward::keys::{Curve, KeyError, SigningKey};
 use ferrofed_engine::onward::mtls::TlsClientAuth;
 use ferrofed_engine::onward::{ClientAuthentication, Scope, SenderConstraint};
 use ferrofed_testkit::oauth;
+use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::keys::KeyRingError;
+use jsonwebtoken::Algorithm;
+use jsonwebtoken::jwk::JwkSet;
 use openehr_its::rest::client::CredentialsProvider as _;
-use secrecy::SecretString;
 
 use super::{TestResult, client_key, grant, prover, provider, server};
 
 /// The `kid` of every key of the grant's published set, in order.
-fn published(grant: &Fapi2Grant) -> Vec<Option<String>> {
-    grant
-        .published_client_keys()
+fn published(grant: &Fapi2Grant) -> Result<Vec<Option<String>>, Box<dyn std::error::Error>> {
+    let set: JwkSet = serde_json::from_value(grant.client_key_ring().ok_or("a set")?.published())?;
+    Ok(set
         .keys
         .iter()
         .map(|key| key.common.key_id.clone())
-        .collect()
+        .collect())
 }
 
 #[tokio::test]
 async fn the_previous_client_key_is_published_after_the_current_one() -> TestResult {
     let (old, new) = (client_key()?, client_key()?);
-    let server = server(&old).await;
+    let server = server(&old).await?;
     let rotated = grant(&server, new.clone(), &prover()?)?.with_previous_client_key(old.clone())?;
-    assert_eq!(Some(new.kid()), rotated.client_key().map(SigningKey::kid));
+    assert_eq!(Some(new.kid()), rotated.client_key().map(AssertionKey::kid));
     assert_eq!(
         Some(old.kid()),
-        rotated.previous_client_key().map(SigningKey::kid)
+        rotated.previous_client_key().map(AssertionKey::kid)
     );
     assert_eq!(
         vec![Some(new.kid().to_owned()), Some(old.kid().to_owned())],
-        published(&rotated)
+        published(&rotated)?
     );
     let unrotated = grant(&server, new.clone(), &prover()?)?;
-    assert_eq!(vec![Some(new.kid().to_owned())], published(&unrotated));
+    assert_eq!(vec![Some(new.kid().to_owned())], published(&unrotated)?);
     Ok(())
 }
 
@@ -53,9 +55,10 @@ async fn the_previous_client_key_is_published_after_the_current_one() -> TestRes
 #[tokio::test]
 async fn only_the_current_client_key_signs_while_the_previous_one_is_published() -> TestResult {
     let (old, new) = (client_key()?, client_key()?);
-    let server = server(&old).await;
+    let server = server(&old).await?;
     let rotated = grant(&server, new.clone(), &prover()?)?.with_previous_client_key(old)?;
-    let published_set = rotated.published_client_keys();
+    let published_set: JwkSet =
+        serde_json::from_value(rotated.client_key_ring().ok_or("a set")?.published())?;
     let provider = provider(rotated)?;
     assert!(
         provider.credentials().await.is_err(),
@@ -78,13 +81,20 @@ async fn only_the_current_client_key_signs_while_the_previous_one_is_published()
 #[tokio::test]
 async fn a_previous_client_key_that_is_the_current_one_or_no_es256_key_is_refused() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let same = grant(&server, key.clone(), &prover()?)?.with_previous_client_key(key.clone());
     assert!(
-        matches!(same, Err(Fapi2GrantError::Keys(KeyError::SameKey { .. }))),
+        matches!(
+            same,
+            Err(Fapi2GrantError::Keys(KeyRingError::SameKey { .. }))
+        ),
         "{same:?}"
     );
-    let p384 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
+    let p384 = AssertionKey::from_pem(
+        oauth::Curve::P384.pem()?.as_bytes(),
+        Some(Algorithm::ES384),
+        None,
+    )?;
     let es384 = grant(&server, key, &prover()?)?.with_previous_client_key(p384);
     assert!(
         matches!(es384, Err(Fapi2GrantError::PreviousClientKey)),
@@ -98,7 +108,7 @@ async fn a_previous_client_key_that_is_the_current_one_or_no_es256_key_is_refuse
 #[tokio::test]
 async fn a_grant_with_no_client_key_publishes_none_and_takes_no_previous_one() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let by_certificate = Fapi2Grant::secured(
         ferrofed_engine::onward::issuer::Issuer::parse(&server.issuer())?,
         super::CLIENT_ID,
@@ -109,10 +119,7 @@ async fn a_grant_with_no_client_key_publishes_none_and_takes_no_previous_one() -
         },
         (Some(Scope::parse(super::SCOPE)?), None),
     )?;
-    assert_eq!(
-        by_certificate.published_client_keys().keys,
-        Vec::<jsonwebtoken::jwk::Jwk>::new()
-    );
+    assert!(by_certificate.client_key_ring().is_none());
     assert!(by_certificate.previous_client_key().is_none());
     let refused = by_certificate.with_previous_client_key(key);
     assert!(
