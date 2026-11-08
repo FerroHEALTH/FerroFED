@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use eehrxf::mapping::Mapping;
 use eehrxf::mappings::MPD;
 use eehrxf::receive::ReceivedResources;
-use fhirconnect::engine::traverse::Defaults;
+use fhirconnect::engine::traverse::defaults::Defaults;
 use fhirconnect::operations::run::Settings;
 use openehr_mapping_core::template::TemplateSource;
 use serde_json::Value;
