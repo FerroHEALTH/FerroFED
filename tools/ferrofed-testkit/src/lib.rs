@@ -127,6 +127,7 @@ pub mod nvi;
 pub mod oauth;
 pub mod otlp;
 pub mod pdqm_stub;
+pub mod perf_token;
 pub mod pixm_stub;
 pub mod pki;
 pub mod pmir;
