@@ -18,6 +18,7 @@
 
 mod ehr;
 mod event;
+mod exchange;
 mod query;
 
 use std::collections::BTreeMap;
