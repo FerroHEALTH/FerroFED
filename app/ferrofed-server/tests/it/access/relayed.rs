@@ -66,9 +66,10 @@ async fn recorded(correlation: Option<&str>) -> Result<Value, Box<dyn Error>> {
 }
 
 /// Annex II 3.2(a), (b), 2026/2099 Annex Tables 1 and 2: the record names
-/// every attribute the contact point relays, marked as its assertion, and
-/// names the professional by their identifier, with no name or address
-/// field and no name the assertion carries (GDPR Art 5(1)(c)).
+/// every attribute the contact point relays, marked as its assertion: the
+/// professional by the assertion's `subject-id` and identifier, the provider
+/// by its identifier and name and as the provider acted for, and no field
+/// the token does not assert.
 #[tokio::test]
 async fn the_record_names_the_relayed_professional_and_provider_as_asserted() -> TestResult {
     let record = recorded(Some(CORRELATION)).await?;
@@ -78,11 +79,12 @@ async fn the_record_names_the_relayed_professional_and_provider_as_asserted() ->
         ("relayed-issuer", NCP_ISSUER),
         ("asserted", "true"),
         ("country-code", COUNTRY),
-        ("hp-name", HP_ID),
+        ("hp-name", HP_NAME),
         ("hp-identifier", HP_ID),
         ("hp-issuing-authority", HP_AUTHORITY),
         ("provider-identifier", HCP_ID),
         ("provider-issuing-authority", HCP_AUTHORITY),
+        ("provider-name", HCP_NAME),
         ("point-of-care", "Qz9-ncp-point-of-care"),
         ("identity-assertion-id", "_Qz9-ncp-ida-1"),
         ("trc-assertion-id", "_Qz9-ncp-trc-1"),
@@ -93,18 +95,19 @@ async fn the_record_names_the_relayed_professional_and_provider_as_asserted() ->
         relayed("hp-professional-role"),
         [format!("{ROLE_SYSTEM}|{ROLE}")]
     );
-    for kind in [
-        "hp-family-name",
-        "hp-given-name",
-        "provider-name",
-        "provider-address",
-    ] {
+    for kind in ["hp-family-name", "hp-given-name", "provider-address"] {
         assert!(relayed(kind).is_empty(), "{kind}");
     }
-    let text = record.to_string();
-    for name in [HP_NAME, HCP_NAME] {
-        assert!(!text.contains(name), "the record names {name}");
-    }
+    assert_eq!(
+        details(&record, "ehds-accessor", "acts-for"),
+        [format!("{HCP_AUTHORITY}|{HCP_ID}")],
+        "3.2(a): the provider acted for"
+    );
+    let asserted = relayed("asserted-field");
+    assert!(
+        !asserted.iter().any(|field| field.starts_with("patient.")),
+        "the patient is the record's subject, never an asserted field: {asserted:?}"
+    );
     Ok(())
 }
 

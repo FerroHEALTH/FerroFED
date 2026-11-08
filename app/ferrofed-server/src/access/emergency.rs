@@ -14,22 +14,23 @@
 //! these specifications, and the gateway behind the contact point applies
 //! them on its national side (our own design).
 //!
-//! A request of a contact point's caller is an emergency access when the
-//! access log marks it one: its token declares a purpose of use
-//! `[[access_log.emergency_purpose]]` names (Regulation (EU) 2025/327
-//! Art 11(5)). Every such request that reaches patient data is counted
-//! before any member is asked, the patient lookup excepted, which is the
-//! identification step and reaches no clinical data. The count is
-//! FerroFED's own store's ([`crate::store::emergency`]), so it holds across
-//! replicas and restarts. Past the limit the request is denied
+//! A request of a contact point's caller is an emergency access when its
+//! token declares a purpose of use `[[access_log.emergency_purpose]]` names
+//! (Regulation (EU) 2025/327 Art 11(5)), whether or not an access log
+//! records the accesses: the limit is a deny decision of its own, apart from
+//! the access record of Annex II 3.2. Every such request that reaches
+//! patient data is counted before any member is asked, the patient lookup
+//! excepted, which is the identification step and reaches no clinical data.
+//! The count is FerroFED's own store's ([`crate::store::emergency`]), so it
+//! holds across replicas and restarts. Past the limit the request is denied
 //! `emergency-limit-reached`, which the FHIR face answers with
 //! `ERROR_SEC_GENERIC` (eHDSI XCA Profile 8.0.1 §2.2.3, "Security
-//! validations for the request or the requestor failed"); its access record
+//! validations for the request or the requestor failed"); it is the security
+//! event `emergency-limit-reached`, and with an access log its record
 //! carries the emergency mark and the anomaly warning
 //! `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS` (`NCPeH` Architecture
-//! Specifications 10.0.0 §5.1.9), and it is the security event
-//! `emergency-limit-reached`. A request the store cannot count is refused
-//! `emergency-uncounted`, so an access is never granted uncounted.
+//! Specifications 10.0.0 §5.1.9). A request the store cannot count is
+//! refused `emergency-uncounted`, so an access is never granted uncounted.
 
 use std::sync::Arc;
 
@@ -98,7 +99,7 @@ pub(super) async fn held(
         return None;
     }
     let federation = state.federation()?;
-    let log = federation.access_log()?;
+    let log = federation.access_log();
     let declared: Vec<Purpose> = caller
         .purposes()
         .iter()
@@ -107,7 +108,7 @@ pub(super) async fn held(
             code: purpose.code.clone(),
         })
         .collect();
-    log.emergency().mark(&declared)?;
+    federation.emergency_purposes().mark(&declared)?;
     // NOTE: no specification governs this: our own design; client authentication refuses a
     // contact point's token it relays nothing of, so an uncounted one is refused here too.
     let Some(relayed) = caller.relayed() else {
@@ -169,9 +170,18 @@ fn patient_lookup(state: &AppState, path: &str) -> bool {
 }
 
 /// The refusal `code` of `attempt` by `caller`, carrying the access the
-/// record layer stores: no origin asked, nothing delivered.
-fn refused(code: Code, log: &Arc<AccessLog>, caller: &Caller, attempt: Attempt<'_>) -> Response {
+/// record layer stores in `log`, when one is configured: no origin asked,
+/// nothing delivered.
+fn refused(
+    code: Code,
+    log: Option<&Arc<AccessLog>>,
+    caller: &Caller,
+    attempt: Attempt<'_>,
+) -> Response {
     let mut response = error::fixed(code, attempt.request_id);
+    let Some(log) = log else {
+        return response;
+    };
     response.extensions_mut().insert(Accessed {
         log: Arc::clone(log),
         action: action(attempt.method, attempt.reach),

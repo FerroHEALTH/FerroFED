@@ -27,7 +27,9 @@ use ferrofed_engine::onward::grant::exchange::{OnBehalf as _, SubjectToken};
 use ferrofed_engine::onward::grant::lane::{Lane, LaneError, Organisations};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_testkit::mock::Server;
-use ferrohealth_smart::client::onward::{OnwardError, Rejected, SubjectToken as OnwardSubject};
+use ferrohealth_smart::client::onward::{
+    AssertionWindow, OnwardError, Rejected, SubjectToken as OnwardSubject,
+};
 use ferrohealth_smart::config::OauthSection;
 use ferrohealth_smart::config::onward::OnwardSection;
 use ferrohealth_smart::federation::{Attribute, External, Field};
@@ -466,6 +468,32 @@ pub(crate) fn partner_call() -> Result<Conveyance, Box<dyn Error>> {
     conveyance(PARTNER, kind, &claims)
 }
 
+/// A partner's professional relayed by a contact point, whose identity
+/// assertion and treatment confirmation windows end `ida` and `trc`
+/// seconds from now.
+fn contact_call(ida: i64, trc: i64) -> Result<Conveyance, Box<dyn Error>> {
+    let fields = BTreeMap::from([
+        (
+            Field::ProfessionalHpIdentifier,
+            Attribute::Text(HP_IDENTIFIER.to_owned()),
+        ),
+        (
+            Field::AssertionNotOnOrAfter,
+            Attribute::Text((now() + ida).to_string()),
+        ),
+        (
+            Field::TrcNotOnOrAfter,
+            Attribute::Text((now() + trc).to_string()),
+        ),
+    ]);
+    let kind = CallerKind::ExternalPerson(Box::new(External::new(PERSON, fields)));
+    let claims = json!({
+        "iss": PARTNER, "sub": PERSON, "aud": CLIENT_ID, "client_id": "synthetic-client",
+        "hp_identifier": HP_IDENTIFIER, "iat": now(), "exp": now() + 600,
+    });
+    conveyance(PARTNER, kind, &claims)
+}
+
 /// A domestic federation exchange answered with the mapped professional is
 /// what the node is sent.
 #[tokio::test]
@@ -489,6 +517,41 @@ async fn a_federation_token_for_another_professional_is_refused_before_use() -> 
         matches!(
             error,
             LaneError::Onward(OnwardError::Rejected(Rejected::PersonMapping))
+        )
+    })
+    .await?;
+    assert!(refused, "{account}");
+    Ok(())
+}
+
+/// eHDSI SAML Profile 10.0.0 §2.1, §4.1: a token issued for a contact
+/// point's caller inside both assertion windows is what the node is sent.
+#[tokio::test]
+async fn a_token_within_both_assertion_windows_is_sent() -> TestResult {
+    let issued = federation_token(HP_IDENTIFIER);
+    let server = issuing(&issued).await;
+    let lane = federation_lane(&server)?;
+
+    assert_eq!(
+        jws(&issued),
+        sent(&lane, &contact_call(3_600, 1_800)?).await?
+    );
+    Ok(())
+}
+
+/// eHDSI SAML Profile 10.0.0 §4.1: a token that outlives the treatment
+/// confirmation's window by more than the 60 s drift is refused before use.
+#[tokio::test]
+async fn a_token_past_the_treatment_window_is_refused_before_use() -> TestResult {
+    let server = issuing(&federation_token(HP_IDENTIFIER)).await;
+    let lane = federation_lane(&server)?;
+
+    let (refused, account) = refuses(&lane, &contact_call(3_600, 120)?, |error| {
+        matches!(
+            error,
+            LaneError::Onward(OnwardError::Rejected(Rejected::AssertionWindow(
+                AssertionWindow::Treatment
+            )))
         )
     })
     .await?;

@@ -224,10 +224,10 @@ async fn a_person_is_recorded_with_the_professional_and_the_verified_level() -> 
 /// Annex II 3.2(a), (b), Implementing Regulation (EU) 2026/2099 Art 7: the
 /// connector of a national contact point, acting for a foreign professional,
 /// is recorded with the foreign provider as the provider, the foreign
-/// professional as the natural person by their identifier and by no name
-/// (GDPR Art 5(1)(c)), the connector as the client that relayed the
-/// request, and the relayed attributes marked as the contact point's
-/// assertion.
+/// professional as the natural person by their identifier, the connector as
+/// the client that relayed the request, and the relayed attributes, the
+/// professional's name among them (2026/2099 Annex Table 1), marked as the
+/// contact point's assertion.
 #[tokio::test]
 async fn a_contact_point_caller_names_the_foreign_professional_and_provider() -> TestResult {
     let mut claims = contact_point::relaying();
@@ -257,9 +257,10 @@ async fn a_contact_point_caller_names_the_foreign_professional_and_provider() ->
         details(&record, "ehds-relayed", "relayed-issuer"),
         [contact_point::NCP_ISSUER]
     );
-    assert!(
-        !record.to_string().contains(contact_point::HP_NAME),
-        "the record names no professional by name"
+    assert_eq!(
+        details(&record, "ehds-relayed", "hp-name"),
+        [contact_point::HP_NAME],
+        "the name is the contact point's assertion"
     );
     Ok(())
 }

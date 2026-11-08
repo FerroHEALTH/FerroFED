@@ -8,11 +8,14 @@
 # store's sweep and its migrations run as a deployment runs them. Every path
 # is relative to the repository root, under the gate's work directory,
 # target/perf-run, where the gate writes the registry document, the store's
-# connection string and CA, and the issuer's key set. The gate runs the head
-# and the base of a change side by side from this file, each with its own
-# listener, key set URL and store connection string set through `FERROFED__`
-# overrides. No specification
-# governs this: our own design.
+# connection string and CA, and the key sets of both issuers. The gate runs
+# the head and the base of a change side by side from this file, each with its
+# own listener, key set URL, public URL, DPoP URL and store connection string
+# set through `FERROFED__` overrides. Beside the quickstart's development
+# issuer it trusts a synthetic national contact point whose tokens are bound
+# to a DPoP key (RFC 9449), with the FHIR face its patient summary is asked
+# on and the emergency access limit its professionals are held to (#1702).
+# No specification governs this: our own design.
 
 profile = "development"
 
@@ -22,6 +25,7 @@ drain_delay_ms = 0
 
 [gateway]
 bindings_drain_timeout_ms = 5000
+public_url = "http://127.0.0.1:8080"
 
 [registry]
 document = "target/perf-run/registry.toml"
@@ -40,6 +44,79 @@ kind = "persons"
 audience = ["ferrofed-quickstart"]
 first_party_clients = ["quickstart-client"]
 jwks_file = "docker/quickstart/issuer/jwks.json"
+
+# The synthetic national contact point, its key set written by the gate. Its
+# constants follow tools/ferrofed-testkit/src/national_connector.rs.
+[[auth.issuer]]
+issuer = "https://perf-ncp.ferrofed.invalid"
+kind = "federation"
+audience = ["ferrofed-perf"]
+jwks_file = "target/perf-run/ncp-jwks.json"
+sender_constraint = "required"
+
+[[auth.federation]]
+issuer = "https://perf-ncp.ferrofed.invalid"
+contact_point = true
+mapping = "ehdsi"
+countries = ["LU"]
+fields."professional.country_code" = [{ constant = "LU" }]
+fields."professional.issuing_authority_name" = [{ constant = "Qz9-ncp-hp-authority" }]
+fields."provider.issuing_authority_name" = [{ constant = "Qz9-ncp-hcp-authority" }]
+
+[auth.dpop]
+external_url = "http://127.0.0.1:8080"
+
+[[federation.contact_point]]
+issuer = "https://perf-ncp.ferrofed.invalid"
+correlation_header = "ncp-correlation-id"
+
+# The eHDSI EMERGENCY purpose (SAML Profile 10.0.0 §2.3). The load sends one
+# professional at a fixed rate, so the window is one second: five accesses a
+# second keep the group admitted. No [audit] is set, so the existing groups
+# do the base's work; the gateway counts in the store without it once #1737
+# lands.
+[[access_log.emergency_purpose]]
+system = "urn:uuid:3bc18518-d305-46c2-a8d6-94bd59856e9e"
+code = "EMERGENCY"
+
+[emergency]
+threshold = 5
+window_s = 1
+
+# The FHIR face the contact point asks for the patient summary, its header
+# read from FerroPIX's PDQm Supplier (ITI-78) with the PIXm Consumer's
+# development credential. The face needs one mapping, so it takes the test
+# kit's synthetic allergy mapping; the seeded compositions are of another
+# template, so the summary counts them in its narrative.
+[fhir]
+base = "/fhir"
+
+[[fhir.mapping]]
+section = "allergies-and-intolerances"
+template = "tools/ferrofed-testkit/fixtures/eehrxf/opt/allergy.opt"
+files = [
+  "tools/ferrofed-testkit/fixtures/eehrxf/mapping/ferrofed_allergy.yml",
+  "tools/ferrofed-testkit/fixtures/eehrxf/mapping/eu_allergy.context.yml",
+]
+context = "ferrofed_eu_allergy.context"
+
+[fhir.operator]
+name = "FerroFED performance gate"
+identifier_system = "urn:oid:2.999.9"
+identifier_value = "perf-operator"
+
+[pdqm]
+url = "http://127.0.0.1:8090/fhir/"
+transaction = "iti-78"
+master = "urn:oid:2.999.1.1"
+timeout_ms = 5000
+
+[pdqm.namespaces]
+"urn:oid:2.999.7" = "urn:oid:2.999.7"
+
+[pdqm.credentials]
+user = "ferrofed"
+password = "ferrofed-consumer-example"
 
 [signing]
 key_file = "docker/quickstart/signing/signing-key.pem"

@@ -104,6 +104,7 @@ pub mod containers;
 pub mod crossref;
 pub mod discharge;
 pub mod dpop;
+pub mod ehdsi_exchange;
 pub mod emit;
 pub mod eps;
 pub mod fapi;
