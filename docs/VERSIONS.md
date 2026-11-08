@@ -703,12 +703,16 @@ performance gate (FerroHEALTH/FerroSYS#249), from crates.io at this exact
 version, and `scripts/perf/gate.sh` starts the quickstart's nodes and
 FerroPIX from `compose.yaml` and the store's PostgreSQL from the FerroPIX
 database image row above (#1687). 0.5.0 carries the A/B mode the gate runs
-in, the head of a change judged against its base on the same runner (#1731). No specification governs the choice: our
-own design.
+in, the head of a change judged against its base on the same runner (#1731),
+0.5.1 makes the count of pairs even, four by default
+(FerroHEALTH/FerroSYS#283), and 0.5.2 runs the two phases of a pair at once,
+each gateway at the plan's rate, so a runner whose speed moves from one
+phase to the next no longer favours either side (FerroHEALTH/FerroSYS#287).
+No specification governs the choice: our own design.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| ferrohealth-perf | `0.5.0` | `.github/workflows/perf.yml` |
+| ferrohealth-perf | `0.5.2` | `.github/workflows/perf.yml` |
 
 ## Product and citation version
 

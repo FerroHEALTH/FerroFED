@@ -60,10 +60,12 @@ The A/B run has two parts:
    2 % of one core and its store under one committed transaction a second,
    with the store's sweep and every other background worker running. These
    limits are absolute and compared with nothing.
-2. **Load, in pairs.** Three pairs of load phases, each phase 20 arrivals a
-   second for 60 seconds after a 10-second warm-up, open loop, against one
-   gateway: the base first in the first pair, the head first in the second,
-   the base first in the third. The arrivals go over the gateway's hot
+2. **Load, in pairs.** Four pairs, each a load phase against both gateways
+   at once: 20 arrivals a second to each for 60 seconds after a 10-second
+   warm-up, open loop, one gateway's arrivals half an interval after the
+   other's, the gateway that leads alternating by pair. Run side by side,
+   both arms see the same runner, whose speed can move by a third from one
+   minute to the next. The arrivals go over the gateway's hot
    paths: the self-description, a patient's federated query, a population
    query, a stored query run by name and a template list routed to the one
    member the registry names. Every request must be answered with the
@@ -77,7 +79,7 @@ bound to the client certificate of the connection or to a `DPoP` key, and
 
 Each load metric (throughput, latency p50, p95 and p99 per group, peak
 memory, CPU time per request and transactions per request) is the median of
-an arm's three phases. Its noise floor is the worse of the two arms' spread,
+an arm's four phases. Its noise floor is the worse of the two arms' spread,
 how far an arm's worst phase strayed from its median. A metric breaches when
 the head's median is worse than the base's by more than the larger of its
 tolerance and that floor. The tolerances are the plan's `[tolerance]`
