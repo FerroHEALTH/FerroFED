@@ -85,7 +85,7 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// The client is the endpoint's own, or one whose credentials are
     /// obtained on behalf of the principal `options` conveys; under `DPoP`
     /// it proves its requests with the endpoint's
-    /// [`NodeProver`](crate::onward::dpop::NodeProver).
+    /// [`NodeProver`](crate::dispatch::dpop::NodeProver).
     pub(crate) fn client_for(&self, options: &DispatchOptions) -> Cow<'_, Client<T>> {
         let client = match &self.on_behalf {
             None => Cow::Borrowed(&self.client),

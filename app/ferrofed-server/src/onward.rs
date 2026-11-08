@@ -23,7 +23,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ferrofed_engine::dispatch::SharedCredentials;
-use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::grant::exchange::{Exchange, SharedOnBehalf};
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
@@ -32,6 +31,7 @@ use ferrofed_engine::onward::{Grant, GrantKind, SystemClock};
 use ferrofed_identity::fhir::{self, Authentication};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_smart::client::dpop::DpopKey;
 use openehr_its::rest::client::Credentials;
 
 use crate::binding::seam::ProvideError;
@@ -148,7 +148,7 @@ pub(crate) struct Onward {
     pub(crate) on_behalf: BTreeMap<EndpointId, SharedOnBehalf>,
     /// The key each endpoint whose grant binds its tokens with `DPoP`
     /// proves its node requests with (RFC 9449).
-    pub(crate) dpop: BTreeMap<EndpointId, Arc<Prover>>,
+    pub(crate) dpop: BTreeMap<EndpointId, Arc<DpopKey>>,
 }
 
 /// The onward credentials of each endpoint that has a `[credentials]`

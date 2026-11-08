@@ -38,7 +38,6 @@ use std::sync::Arc;
 use ferrofed_engine::onward::authorization_details::{
     AuthorizationDetails, AuthorizationDetailsError,
 };
-use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Grant, Fapi2GrantError, Fapi2Security};
 use ferrofed_engine::onward::issuer::{AliasHost, InvalidAliasHost, InvalidIssuer, Issuer};
 use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
@@ -46,6 +45,7 @@ use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SenderConstrai
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::client::assertion::{AssertionError, AssertionKey};
+use ferrohealth_smart::client::dpop::DpopKey;
 use jsonwebtoken::Algorithm;
 use serde::Deserialize;
 
@@ -568,7 +568,7 @@ fn p256_key(key: &str, path: &Path) -> Result<AssertionKey, Error> {
 }
 
 /// Reads the `DPoP` key `dpop_key_file` names.
-fn dpop_key(section: &str, fapi2: &Fapi2) -> Result<Prover, Error> {
+fn dpop_key(section: &str, fapi2: &Fapi2) -> Result<DpopKey, Error> {
     let key = format!("{section}.dpop_key_file");
     let path = fapi2
         .dpop_key_file
@@ -576,6 +576,6 @@ fn dpop_key(section: &str, fapi2: &Fapi2) -> Result<Prover, Error> {
         .ok_or_else(|| Error::Missing { key: key.clone() })?;
     let pem = read_secret::<Secret>(&format!("{section}.dpop_key"), None, Some(path))?
         .ok_or_else(|| Error::Missing { key: key.clone() })?;
-    Prover::from_pem(&pem.to_secret_string())
+    DpopKey::from_pem(pem.expose().as_bytes())
         .map_err(|source| Error::Credentials(CredentialsFault::DpopKey { key, source }))
 }

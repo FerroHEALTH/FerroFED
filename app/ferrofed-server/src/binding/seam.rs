@@ -16,10 +16,10 @@ use crate::audit::AuditTrailError;
 use crate::config::service::{GrantRefused, TlsRefused};
 use crate::health::dependencies::Indicator;
 use ferrofed_engine::dispatch::SharedCredentials;
-use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_identity::role::demographics::Demographics;
 use ferrofed_identity::role::localizer::Localizer;
 use ferrofed_identity::role::resolver::Resolver;
+use ferrohealth_smart::client::dpop::DpopKey;
 
 /// The resolver a binding builds, with the localizer it doubles as.
 #[derive(Clone)]
@@ -119,7 +119,7 @@ pub struct Provided {
     pub credentials: SharedCredentials,
     /// The key the node requests are proven with, when the grant binds its
     /// tokens with `DPoP` (RFC 9449).
-    pub dpop: Option<Arc<Prover>>,
+    pub dpop: Option<Arc<DpopKey>>,
 }
 
 /// A localization configuration that cannot be set up.

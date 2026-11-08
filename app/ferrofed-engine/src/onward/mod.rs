@@ -24,16 +24,16 @@
 //! ([`conveyance`](crate::conveyance); N24).
 //!
 //! A grant may bind its tokens to a key of the gateway's with `DPoP` (RFC
-//! 9449): its [`dpop::Prover`] proves every request to its token endpoint,
-//! and every request to its node through the node client's
-//! [`dpop::NodeProver`]. A grant may instead authenticate the gateway by its
+//! 9449): its `ferrohealth-smart` `DpopKey` proves every request to its token
+//! endpoint, and every request to its node through the node client's
+//! `NodeProver`. A grant may instead authenticate the gateway by its
 //! TLS client certificate, and bind its tokens to that certificate (RFC
 //! 8705, [`mtls`]); one grant binds its tokens one way or the other, never
 //! both ([`SenderConstraint`]).
 //!
 //! An endpoint on the Dutch Generic Functions' Nuts track (Annex B §B.4)
 //! obtains its token with a Verifiable Presentation of the gateway's
-//! credentials instead, bound with `DPoP` to its own [`dpop::Prover`]
+//! credentials instead, bound with `DPoP` to its own `DpopKey`
 //! (`grant::nl::nuts`). An endpoint whose authorization server follows the FAPI 2.0
 //! Security Profile, as the BgZ/eOverdracht track of Annex B §B.4a does,
 //! discovers that server from its issuer and obtains a `DPoP`-bound token
@@ -42,8 +42,8 @@
 //!
 //! The grant kinds sit in [`grant`], a regional binding's in a folder of
 //! their own behind its feature. Beside them are the plumbing every grant
-//! shares, the token request ([`token`]) and the RFC 9396 details ([`authorization_details`]), and the two sender
-//! constraints, [`dpop`] and [`mtls`].
+//! shares, the token request ([`token`]) and the RFC 9396 details
+//! ([`authorization_details`]), and the certificate binding ([`mtls`]).
 
 use std::fmt;
 use std::sync::Arc;
@@ -56,11 +56,10 @@ use secrecy::SecretString;
 use url::Url;
 
 use crate::onward::authorization_details::AuthorizationDetails;
-use crate::onward::dpop::Prover;
 use crate::onward::mtls::{Thumbprint, TlsClientAuth};
+use ferrohealth_smart::client::dpop::DpopKey;
 
 pub mod authorization_details;
-pub mod dpop;
 pub mod grant;
 pub mod issuer;
 pub mod mtls;
@@ -287,7 +286,7 @@ impl ClientAuthentication {
 pub enum SenderConstraint {
     /// A key of the gateway's, proven with `DPoP` on every request (RFC
     /// 9449).
-    Dpop(Arc<Prover>),
+    Dpop(Arc<DpopKey>),
     /// The TLS client certificate of this thumbprint, which the endpoint's
     /// transport presents to the token endpoint and the node alike (RFC
     /// 8705 §3).
@@ -445,10 +444,10 @@ impl Grant {
     /// This grant, binding its tokens to `prover`'s key with `DPoP` (RFC
     /// 9449): the token endpoint must answer `token_type` `DPoP` (§5), and
     /// the requests to the token endpoint and to the node carry proofs of
-    /// that key ([`dpop::NodeProver`] for the node's). It replaces a
+    /// that key (the node client's `NodeProver` for the node's). It replaces a
     /// certificate binding: a token is bound one way.
     #[must_use]
-    pub fn with_dpop(mut self, prover: Arc<Prover>) -> Self {
+    pub fn with_dpop(mut self, prover: Arc<DpopKey>) -> Self {
         self.sender = Some(SenderConstraint::Dpop(prover));
         self
     }
@@ -519,7 +518,7 @@ impl Grant {
     /// The key the grant's tokens are bound to with `DPoP` (RFC 9449), when
     /// they are.
     #[must_use]
-    pub fn dpop(&self) -> Option<&Arc<Prover>> {
+    pub fn dpop(&self) -> Option<&Arc<DpopKey>> {
         match &self.sender {
             Some(SenderConstraint::Dpop(prover)) => Some(prover),
             _ => None,

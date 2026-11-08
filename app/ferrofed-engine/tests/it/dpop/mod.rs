@@ -19,7 +19,6 @@ use std::time::{Duration, Instant};
 use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::conveyance::caller::{Principal, Verification};
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
-use ferrofed_engine::onward::dpop::{DpopKeyError, Prover};
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
 use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
@@ -32,6 +31,7 @@ use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::dpop::{DpopKey, DpopKeyError};
 use ferrohealth_smart::client::keys::KeyRing;
 use jsonwebtoken::Algorithm;
 use openehr_federation::status::EndpointStatus;
@@ -77,10 +77,10 @@ fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
 }
 
 /// A fresh `DPoP` key of the P-256 curve.
-fn prover() -> Result<Arc<Prover>, Box<dyn Error>> {
-    Ok(Arc::new(Prover::from_pem(&SecretString::from(
-        oauth::Curve::P256.pem()?,
-    ))?))
+fn prover() -> Result<Arc<DpopKey>, Box<dyn Error>> {
+    Ok(Arc::new(DpopKey::from_pem(
+        oauth::Curve::P256.pem()?.as_bytes(),
+    )?))
 }
 
 /// A token endpoint requiring `DPoP` and trusting `keys`.
@@ -92,7 +92,7 @@ async fn endpoint(keys: &KeyRing) -> Result<TokenEndpoint, Box<dyn Error>> {
 }
 
 /// The client-credentials grant at `endpoint`, bound to `prover`'s key.
-fn grant(endpoint: &TokenEndpoint, prover: &Arc<Prover>) -> Result<Grant, Box<dyn Error>> {
+fn grant(endpoint: &TokenEndpoint, prover: &Arc<DpopKey>) -> Result<Grant, Box<dyn Error>> {
     Ok(Grant::new(
         &SecretUrl::new(endpoint.token_url()),
         CLIENT_ID,
@@ -522,12 +522,15 @@ async fn a_request_without_a_bound_token_carries_no_proof() -> TestResult {
 /// no EC key in PKCS#8 PEM is refused naming no part of it (RFC 7518 §3.4).
 #[test]
 fn a_dpop_key_signs_with_the_algorithm_of_its_curve() -> TestResult {
-    let p256 = Prover::from_pem(&SecretString::from(oauth::Curve::P256.pem()?))?;
+    let p256 = DpopKey::from_pem(oauth::Curve::P256.pem()?.as_bytes())?;
     assert_eq!(Algorithm::ES256, p256.algorithm());
-    let p384 = Prover::from_pem(&SecretString::from(oauth::Curve::P384.pem()?))?;
+    let p384 = DpopKey::from_pem(oauth::Curve::P384.pem()?.as_bytes())?;
     assert_eq!(Algorithm::ES384, p384.algorithm());
-    let refused = Prover::from_pem(&SecretString::from(String::from("synthetic: no key")));
-    assert!(matches!(refused, Err(DpopKeyError::Pem(_))), "{refused:?}");
+    let refused = DpopKey::from_pem(b"synthetic: no key");
+    assert!(
+        matches!(refused, Err(DpopKeyError::Key { .. })),
+        "{refused:?}"
+    );
     assert!(
         !format!("{p256:?}").contains("PRIVATE"),
         "Debug shows the thumbprint alone"

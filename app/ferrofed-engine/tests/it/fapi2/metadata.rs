@@ -15,16 +15,15 @@ use std::sync::Arc;
 
 use ferrofed_engine::onward::Scope;
 use ferrofed_engine::onward::authorization_details::AuthorizationDetails;
-use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::fapi2::metadata::{DiscoveryError, RESPONSE_LIMIT};
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Error, Fapi2Grant, Fapi2GrantError};
 use ferrofed_engine::onward::issuer::{EndpointError, Issuer};
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
 use ferrofed_testkit::oauth;
 use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::dpop::DpopKey;
 use jsonwebtoken::Algorithm;
 use openehr_its::rest::client::{CredentialsError, CredentialsProvider as _};
-use secrecy::SecretString;
 
 use super::{CLIENT_ID, DETAILS, SCOPE, TestResult, client_key, grant, prover, provider, server};
 
@@ -292,9 +291,7 @@ fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
         Fapi2Grant::new(issuer()?, CLIENT_ID, (es384, prover()?), request()?),
         Err(Fapi2GrantError::ClientKey)
     ));
-    let p384 = Arc::new(Prover::from_pem(&SecretString::from(
-        oauth::Curve::P384.pem()?,
-    ))?);
+    let p384 = Arc::new(DpopKey::from_pem(oauth::Curve::P384.pem()?.as_bytes())?);
     assert!(matches!(
         Fapi2Grant::new(issuer()?, CLIENT_ID, (client_key()?, p384), request()?),
         Err(Fapi2GrantError::DpopKey)

@@ -23,7 +23,6 @@ use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::authorization_details::AuthorizationDetails;
-use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::exchange::SubjectToken;
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
 use ferrofed_engine::onward::token::{CLIENT_ASSERTION_TYPE, GRANT_TYPE};
@@ -38,6 +37,7 @@ use ferrofed_testkit::leak;
 use ferrofed_testkit::mock::{self, Server};
 use ferrofed_testkit::oauth;
 use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::dpop::DpopKey;
 use jsonwebtoken::Algorithm;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
@@ -96,10 +96,10 @@ fn client_key() -> Result<AssertionKey, Box<dyn Error>> {
 }
 
 /// A fresh P-256 `DPoP` key.
-fn prover() -> Result<Arc<Prover>, Box<dyn Error>> {
-    Ok(Arc::new(Prover::from_pem(&SecretString::from(
-        oauth::Curve::P256.pem()?,
-    ))?))
+fn prover() -> Result<Arc<DpopKey>, Box<dyn Error>> {
+    Ok(Arc::new(DpopKey::from_pem(
+        oauth::Curve::P256.pem()?.as_bytes(),
+    )?))
 }
 
 /// A harness server trusting `key`, requiring the [`DETAILS_TYPE`] details.
@@ -119,7 +119,7 @@ async fn server(key: &AssertionKey) -> Result<AuthorizationServer, Box<dyn Error
 fn grant(
     server: &AuthorizationServer,
     key: AssertionKey,
-    prover: &Arc<Prover>,
+    prover: &Arc<DpopKey>,
 ) -> Result<Fapi2Grant, Box<dyn Error>> {
     Ok(Fapi2Grant::new(
         ferrofed_engine::onward::issuer::Issuer::parse(&server.issuer())?,
@@ -185,7 +185,7 @@ async fn node(server: &AuthorizationServer) -> Server {
 /// The client of the node at `server`, proving with `prover`.
 fn client(
     server: &Server,
-    prover: &Arc<Prover>,
+    prover: &Arc<DpopKey>,
 ) -> Result<NodeClient<ReqwestTransport>, Box<dyn Error>> {
     let document = format!(
         "[[organisation]]\nid = \"org-a\"\n\n[[node]]\nid = \"node-a\"\norganisation = \"org-a\"\nsystem_id = \"cdr-a.example.org\"\n\n[[endpoint]]\nid = \"node-a-pub\"\nnode = \"node-a\"\nurl = \"{}/openehr\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n",

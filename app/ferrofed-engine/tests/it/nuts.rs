@@ -18,7 +18,6 @@ use std::time::{Duration, Instant};
 
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::onward::SystemClock;
-use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::nl::nuts::{NutsCredentials, NutsGrant};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -27,6 +26,7 @@ use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::nuts::{self, NutsNode};
 use ferrofed_testkit::oauth;
+use ferrohealth_smart::client::dpop::DpopKey;
 use jsonwebtoken::Algorithm;
 use nl_generic_functions::nuts_auth::holder::{Did, Holder, HolderKey};
 use nl_generic_functions::nuts_auth::{Grant, NutsClient};
@@ -55,7 +55,7 @@ const EMPTY_RESULT_SET: &str = r##"{"q":"SELECT c/uid/value FROM EHR e CONTAINS 
 pub(crate) struct Setup {
     pub(crate) authority: NutsNode,
     pub(crate) grant: NutsGrant,
-    pub(crate) prover: Arc<Prover>,
+    pub(crate) prover: Arc<DpopKey>,
     pub(crate) credential: String,
 }
 
@@ -94,9 +94,7 @@ pub(crate) async fn setup() -> Result<Setup, Box<dyn Error>> {
             SecretString::from(credential.clone()),
         )],
     )?;
-    let prover = Arc::new(Prover::from_pem(&SecretString::from(
-        oauth::Curve::P256.pem()?,
-    ))?);
+    let prover = Arc::new(DpopKey::from_pem(oauth::Curve::P256.pem()?.as_bytes())?);
     let grant = NutsGrant::new(
         Grant::new(&authority.issuer(), SCOPE)?,
         Arc::new(holder),
