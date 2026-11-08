@@ -8,7 +8,10 @@
 # store's sweep and its migrations run as a deployment runs them. Every path
 # is relative to the repository root, under the gate's work directory,
 # target/perf-run, where the gate writes the registry document, the store's
-# connection string and CA, and the issuer's key set. No specification
+# connection string and CA, and the issuer's key set. The gate runs the head
+# and the base of a change side by side from this file, each with its own
+# listener, key set URL and store connection string set through `FERROFED__`
+# overrides. No specification
 # governs this: our own design.
 
 profile = "development"
@@ -75,5 +78,5 @@ password = "ferrofed-consumer-example"
 backend = "postgres"
 
 [store]
-url_file = "target/perf-run/store-url"
+url_file = "target/perf-run/head/store-url"
 ca_file = "target/perf-run/store-ca.pem"

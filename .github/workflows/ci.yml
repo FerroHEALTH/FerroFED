@@ -428,7 +428,7 @@ jobs:
           bash scripts/checks/ehds-acts.sh --self-test
           bash scripts/vendor/ehdsi-specifications.sh --check
           bash scripts/vendor/sogis-acm.sh --check
-      - name: The performance gate reads its pins, renders its plan and holds its two idle tables equal
+      - name: The performance gate reads its pins, renders its plan, resolves its base and holds its two idle tables equal
         run: bash scripts/perf/gate.sh --self-test
 
   # The book theme favicons are copies of the brand mark, so the mark exists
@@ -1207,9 +1207,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-  # The performance gate (#1687): the idle phase and the load phase of
-  # ferrohealth-perf against the release build, in perf.yml, which the release
-  # lane calls on the release commit too.
+  # The performance gate (#1687, #1731): ferrohealth-perf's A/B mode, the
+  # release build judged against the build of its base on the same runner,
+  # in perf.yml, which the release lane calls on the release commit too. The
+  # base is the pull request's base, the merge group's, or the commit before
+  # a push; a dispatch takes the previous release.
   perf:
     name: perf
     needs: detect
@@ -1217,6 +1219,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/perf.yml
+    with:
+      base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
 
   # The conformance report of section 16.4 (#92; no specification governs its
   # form: our own design): every section 16.3 track and section 17 point as

@@ -4,52 +4,105 @@
 # The performance gate
 
 Every pull request that changes what the gateway is built from runs the
-`perf` job, and so does every push to `main` and every release. It fails when
-the gateway does work while idle, or is slower, heavier or busier under load
-than the baseline the repository commits. FerroPIX shipped an outbox sender
-that busy-looped at about 8,000 PostgreSQL transactions a second while idle,
-and nothing caught it before release; this gate catches that shape. No
-specification governs it: it is FerroFED's own design over the family's
-measuring tool, `ferrohealth-perf`.
+`perf` job, and so does every push to `main` and every release. It fails
+when the gateway does work while idle, or is slower, heavier or busier under
+load than the build of its base, measured beside it on the same runner in
+the same job. FerroPIX shipped an outbox sender that busy-looped at about
+8,000 PostgreSQL transactions a second while idle, and nothing caught it
+before release; this gate catches that shape. No specification governs it:
+it is FerroFED's own design over the family's measuring tool,
+`ferrohealth-perf`.
+
+## Why the head is judged against its base
+
+GitHub's hosted runners differ: two runners that report the same CPU model
+and memory measured one commit 25 to 45 % apart in p50 latency and CPU per
+request
+([FerroEHR #5095](https://github.com/FerroHEALTH/FerroEHR/issues/5095)).
+A baseline stored from one machine failed unchanged code on another, so the
+gate keeps none. It builds the base of the change and the change itself,
+the head, runs both on one runner, and judges the head over the base. The
+difference between machines reaches both alike and cancels.
+
+The base is:
+
+- for a pull request, the merge base of the commit CI checks out with the
+  pull request's base branch;
+- for a merge group, its base on `main`;
+- for a push to `main`, the commit before the push;
+- for the release commit and a manual dispatch, the previous release tag.
 
 ## What runs
 
-`scripts/perf/gate.sh run` builds nothing itself. The `perf` workflow builds
-the release binary and installs `ferrohealth-perf` at its pin in
-`docs/VERSIONS.md`, then the script:
+The `perf` workflow installs `ferrohealth-perf` at its pin in
+`docs/VERSIONS.md`. `scripts/perf/gate.sh build` builds the release gateway
+of the base, from `git archive` of the base commit under
+`target/perf-base/`, and of the head. `scripts/perf/gate.sh run` then:
 
 1. starts the quickstart's four FerroEHR nodes and FerroPIX from
    `compose.yaml`, with `perf/compose.yaml` publishing FerroPIX on loopback,
    and seeds both with `docker/quickstart/patients.tsv`;
-2. starts a PostgreSQL server over TLS for FerroFED's own store;
-3. starts `target/release/ferrofed` with `perf/ferrofed.toml`: the
-   quickstart's gateway with the stored-query registry on the store;
-4. runs `ferrohealth-perf` with `perf/plan.toml` against
-   `perf/baseline.toml`;
-5. plants a poller of the store that never waits, and runs the idle phase of
-   `perf/busy-loop.toml` beside it, which must fail on idle transactions.
+2. starts a PostgreSQL server over TLS for FerroFED's own store, with a
+   database for each gateway;
+3. starts both gateways over the same nodes and FerroPIX: the head on port
+   8080 with `perf/ferrofed.toml`, the base on port 8070 with the base's own
+   `perf/ferrofed.toml`, each the quickstart's gateway with the stored-query
+   registry on its own store database;
+4. runs `ferrohealth-perf ab` over `perf/plan.toml`;
+5. plants a poller of the head's store that never waits, and runs the idle
+   phase of `perf/busy-loop.toml` beside it, which must fail on idle
+   transactions. That proves the gate still catches the case it was built
+   for.
 
-The idle phase holds the gateway to 2 % of one core and one committed
-transaction a second for 60 seconds, with the store's sweep and every other
-background worker running. The load phase sends 20 requests a second for 60
-seconds over the gateway's hot paths: the self-description, a patient's
-federated query, a population query, a stored query run by name and a
-template list routed to the one member the registry names. A national contact point's routes are not in the
-set yet: their token is bound to the client certificate of the connection or
-to a `DPoP` key, which the tool presents from 0.4.0 on, and
+The A/B run has two parts:
+
+1. **Idle.** No request for 60 seconds. The head's CPU time must stay under
+   2 % of one core and its store under one committed transaction a second,
+   with the store's sweep and every other background worker running. These
+   limits are absolute and compared with nothing.
+2. **Load, in pairs.** Three pairs of load phases, each phase 20 arrivals a
+   second for 60 seconds after a 10-second warm-up, open loop, against one
+   gateway: the base first in the first pair, the head first in the second,
+   the base first in the third. The arrivals go over the gateway's hot
+   paths: the self-description, a patient's federated query, a population
+   query, a stored query run by name and a template list routed to the one
+   member the registry names. Every request must be answered with the
+   status the plan names.
+
+A national contact point's routes are not in the set yet: their token is
+bound to the client certificate of the connection or to a `DPoP` key, and
 [#1702](https://github.com/FerroHEALTH/FerroFED/issues/1702) adds them.
 
 ## Reading the report
 
-The job's summary names each breach by its metric, such as
-`idle.transactions_per_second` or `patient-query.p95_ms`. A load metric that
-breaches is judged again on up to two fresh load phases, and the gate fails
-only when it breaches in most of the runs; the check says in how many. The
-artifact `perf-report-attempt-<n>` holds the JSON reports, every phase included, and the
-gateway's log. Exit 1 is a breach. Exit 2 means the run cannot be judged: no
-entry for the runner's host shape, a generator that lagged, a window that was
-not steady, or a runner that stalled (every route's p99 over ten times its
-p50 at once).
+Each load metric (throughput, latency p50, p95 and p99 per group, peak
+memory, CPU time per request and transactions per request) is the median of
+an arm's three phases. Its noise floor is the worse of the two arms' spread,
+how far an arm's worst phase strayed from its median. A metric breaches when
+the head's median is worse than the base's by more than the larger of its
+tolerance and that floor. The tolerances are the plan's `[tolerance]`
+table: latency and CPU 25 %, throughput 20 %, memory 20 %, transactions per
+request 10 %. A metric fails only when the head also breaches against the
+base in most of the pairs, so a stall in one phase clears and a regression,
+which repeats in every pair, fails.
+
+The job summary names the base commit, the head's idle limits, and per
+metric the base, the head, their ratio, the tolerance, the floor, the
+threshold and in how many pairs the head breached. Requests the head
+answered other than expected fail the gate; those the base answered other
+than expected, such as a route the change adds, are notes. Each attempt
+uploads its reports as `perf-report-attempt-<n>`: the JSON reports under
+`target/perf/`, both gateways' logs, the compose and seed logs and the base
+commit, so `ferrohealth-perf compare --report target/perf/latest.json`
+judges a report again without a gateway.
+
+The tool exits 0 for a pass, 1 for a breach or a request answered other
+than expected, and 2 for a run it cannot judge: a phase whose generator
+could not hold its rate, whose second half differs from its first, or that
+stalled (every route's p99 over ten times its p50 at once), and a base that
+fell behind the schedule.
+
+## Retries
 
 Some runners stall every route for a whole job: on an AMD EPYC 9V74 the
 tails reach 100 to 300 ms while the p50 holds
@@ -58,44 +111,26 @@ attempt that ends with exit 2 runs again on a fresh runner on any CPU model,
 since a run that cannot be judged says nothing about the code. An attempt
 that ends with exit 1 runs again only on a CPU model the perf workflow lists
 in `STALL_PRONE`. At most two retries run, and the gate passes when the last
-attempt passed. A breach on any other model fails at once. The job summary names each attempt's CPU model, its verdict and why a
-retry ran, and each attempt uploads its reports as `perf-report-attempt-<n>`.
+attempt passed. A breach on any other model fails at once. The job summary
+names each attempt's CPU model, its verdict and why a retry ran.
 
-## Updating the baseline
+## Changing the plan or the tolerances
 
-`perf/baseline.toml` holds one entry per host shape, the CPU model and the
-memory size to the GiB together, because GitHub's hosted runners mix CPU
-generations and sizes and a latency is comparable only on a like host.
-
-- An entry is measured by an update: set `update: true` on the `perf` job's
-  call of `.github/workflows/perf.yml` in `ci.yml` on a branch. An update
-  measures five load phases, each after its own warm-up, and writes each
-  metric as their median and its noise floor as how far the worst phase
-  strayed from it.
-- Machines of one shape still differ, so re-run the update job several
-  times, take each run's `perf/baseline.toml` from its `perf-report-attempt-<n>`
-  artifact, and fold them into the committed file with
-  `ferrohealth-perf merge --baseline perf/baseline.toml job-1.toml job-2.toml`.
-  Each entry then takes the median over the jobs, and its floor the spread
-  between them.
-- Every tolerance stays at the tool's default: latency and CPU 25 %,
-  throughput 20 %, memory 20 % and transactions 10 %. A raise is a hand edit
-  in a pull request that says why.
-- A run on a host shape with no entry exits 2 and names the shape; its entry
-  is added the same way. A change of the plan's rate, window or request set
-  writes each entry afresh.
+The plan is the head's: a change to `perf/plan.toml` is measured on both
+gateways in the same pull request. A tolerance is the product's and moves
+only in a pull request that says why.
 
 ## Running it yourself
 
-The gate reads the gateway's CPU and memory from `/proc`, so it runs on Linux
-with Docker, Compose, `curl` and `openssl`:
+The gate reads each gateway's CPU and memory from `/proc`, so it runs on
+Linux with Docker, Compose, `curl`, `git` and `openssl`:
 
 ```sh
-cargo install ferrohealth-perf --version =0.4.1 --locked
-cargo build --release --locked -p ferrofed-server --bin ferrofed
+cargo install ferrohealth-perf --version =0.5.0 --locked
+bash scripts/perf/gate.sh build origin/main
 bash scripts/perf/gate.sh run
 ```
 
 `bash scripts/perf/gate.sh --self-test` checks the pin reader, the plan
-rendering, the registry rewrite and the two plans' idle limits on any
-machine.
+rendering, the registry rewrite, the base resolution and the two plans'
+idle limits on any machine.

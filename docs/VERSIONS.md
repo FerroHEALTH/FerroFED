@@ -702,12 +702,13 @@ implementation row and the provenance, and the guard holds them equal.
 performance gate (FerroHEALTH/FerroSYS#249), from crates.io at this exact
 version, and `scripts/perf/gate.sh` starts the quickstart's nodes and
 FerroPIX from `compose.yaml` and the store's PostgreSQL from the FerroPIX
-database image row above (#1687). No specification governs the choice: our
+database image row above (#1687). 0.5.0 carries the A/B mode the gate runs
+in, the head of a change judged against its base on the same runner (#1731). No specification governs the choice: our
 own design.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| ferrohealth-perf | `0.4.2` | `.github/workflows/perf.yml` |
+| ferrohealth-perf | `0.5.0` | `.github/workflows/perf.yml` |
 
 ## Product and citation version
 
