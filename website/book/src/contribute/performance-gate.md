@@ -87,6 +87,31 @@ purposes, which a plan names as `{ncp_token}` and `{ncp_emergency_token}`.
 The request groups follow once a release carries that configuration, since
 the release lane's base is the previous release.
 
+## The onward lane under load
+
+Node A is reached through an onward lane
+([The onward lane of a node](../operate/onward-credentials.md#the-onward-lane-of-a-node)),
+so every request a caller sends to node A has the caller's token exchanged
+for one of node A's issuer, and the gateway caches the issued token. The
+test kit's `ferrofed-perf-token` stands in for node A's authorization
+server: `gate.sh` starts it before the nodes, it answers the
+client-credentials grant and RFC 8693 token exchange with ES256 tokens, and
+it writes its key sets under `target/perf-run/onward`, which
+`perf/compose.yaml` mounts into node A beside `perf/ferroehr-onward.toml`,
+the quickstart's node configuration with the token endpoint's issuers
+trusted. The other three nodes keep their Basic user.
+
+Node A's share of the load, the definition reads and its part of every
+query, carries the exchange and the cache in both arms. A missing or broken
+cache shows as one more round trip per request, which a 25 % latency
+tolerance can miss, so the gate also counts the exchanges. After the A/B run
+it sends 200 definition reads to node A through the head and reads the
+token endpoint's `/calls`: more than 5 % as many exchanges as requests fails
+the gate. Then it starts a third gateway, the head with `cache = false` on
+node A's onward table, and sends it the same 200 reads; it must fail that
+limit, which proves the count still catches an uncached lane. The job
+summary names both counts.
+
 ## Both arms run the head's configuration
 
 The pair judges code, so both arms must do the same work. Each arm once

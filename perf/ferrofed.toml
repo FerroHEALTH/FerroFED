@@ -14,8 +14,9 @@
 # set through `FERROFED__` overrides. Beside the quickstart's development
 # issuer it trusts a synthetic national contact point whose tokens are bound
 # to a DPoP key (RFC 9449), with the FHIR face its patient summary is asked
-# on and the emergency access limit its professionals are held to (#1702).
-# No specification governs this: our own design.
+# on and the emergency access limit its professionals are held to (#1702),
+# and it reaches node A through an onward lane at the gate's token endpoint
+# (#1712). No specification governs this: our own design.
 
 profile = "development"
 
@@ -122,9 +123,28 @@ password = "ferrofed-consumer-example"
 key_file = "docker/quickstart/signing/signing-key.pem"
 jwks_uri = "http://127.0.0.1:8080/.well-known/jwks.json"
 
-[credentials."node-a-query"]
-user = "ferroehr"
-password = "ferroehr"
+# Node A is reached through its onward lane (#1712): each caller's token is
+# exchanged at the gate's token endpoint (ferrofed-perf-token) for one of the
+# issuer perf/ferroehr-onward.toml trusts, and the gateway's own requests
+# take the client-credentials token. The gate counts the exchanges, and runs
+# this lane again with `cache = false`, which it must fail.
+[credentials."node-a-query".oauth]
+token_endpoint = "http://127.0.0.1:8095/token"
+client_id = "ferrofed-perf"
+client_auth = "client_secret_post"
+client_secret_file = "target/perf-run/onward-secret"
+scope = "system/aql-*.s"
+
+[credentials."node-a-query".onward]
+issuer = "https://quickstart-issuer.ferrofed.invalid"
+kind = "persons"
+profile = "rfc9068"
+token_endpoint = "http://127.0.0.1:8095/token"
+audiences = ["https://node-a.perf.ferrofed.invalid"]
+indicators = ["https://node-a.perf.ferrofed.invalid"]
+
+[credentials."node-a-query".onward.keys]
+max_onward_lifetime = 3600
 
 [credentials."node-b-query"]
 user = "ferroehr"

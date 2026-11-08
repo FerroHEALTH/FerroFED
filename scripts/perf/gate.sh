@@ -32,7 +32,12 @@
 #       phase, then pairs of load phases in turn. Then it plants a poller of
 #       the head's store that never waits and runs the idle phase of
 #       perf/busy-loop.toml beside it, which must fail on idle transactions.
-#       Exit 0 when both hold, 1 when the gate fails or the planted poller
+#       Node A is reached through an onward lane at the test kit's token
+#       endpoint (ferrofed-perf-token, #1712): after the A/B run the head
+#       must answer ONWARD_REQUESTS requests to node A with at most
+#       ONWARD_LIMIT_PERCENT % as many token exchanges, and a third gateway,
+#       the head with the lane's `cache = false`, must fail that limit.
+#       Exit 0 when all hold, 1 when the gate fails or a planted case
 #       passes, 2 when the run cannot be judged or set up.
 #   scripts/perf/gate.sh --self-test
 #       Proves the pin reader, the plan rendering, the registry rewrite, the
@@ -57,6 +62,18 @@ readonly STORE_NAME=ferrofed-perf-store
 readonly STORE_PORT=5433
 readonly STORE_PASSWORD=perf
 readonly SERVICES=(ferroehr-a ferroehr-b ferroehr-c ferroehr-d ferropix)
+# The onward lane of node A (perf/ferrofed.toml, perf/ferroehr-onward.toml):
+# the token endpoint's address, the key sets it writes for node A, the
+# client secret, and the third gateway that runs the lane uncached.
+readonly ONWARD_URL=http://127.0.0.1:8095
+readonly ONWARD_DIR=$WORK/onward
+readonly ONWARD_SECRET=$WORK/onward-secret
+readonly ONWARD_LANE='[credentials."node-a-query".onward]'
+readonly UNCACHED_CONFIG=$WORK/ferrofed-uncached.toml
+readonly UNCACHED_URL=http://127.0.0.1:8060
+readonly ONWARD_REQUESTS=200
+readonly ONWARD_LIMIT_PERCENT=5
+readonly QUICKSTART_ISSUER=https://quickstart-issuer.ferrofed.invalid
 # The synthetic national contact point of perf/ferrofed.toml, its constants
 # those of tools/ferrofed-testkit/src/national_connector.rs. NCP_DIR holds its
 # signing key and the DPoP key its tokens are bound to, which the plan's
@@ -287,6 +304,7 @@ build() {
   [[ -f "$BASE_TREE/base.md" ]] || printf "The base is \`%s\`.\n" "$rev" > "$BASE_TREE/base.md"
   echo "perf-gate: $(< "$BASE_TREE/base.md")"
   cargo build --release --locked -p ferrofed-server --bin ferrofed
+  cargo build --release --locked -p ferrofed-testkit --bin ferrofed-perf-token
 }
 
 compose() {
@@ -296,10 +314,12 @@ compose() {
 head_pid=""
 base_pid=""
 poller_pid=""
+token_pid=""
+uncached_pid=""
 cleanup() {
   [[ -n "$poller_pid" ]] && kill "$poller_pid" 2> /dev/null || true
   local pid
-  for pid in "$head_pid" "$base_pid"; do
+  for pid in "$head_pid" "$base_pid" "$uncached_pid" "$token_pid"; do
     [[ -n "$pid" ]] && kill "$pid" 2> /dev/null || true
     [[ -n "$pid" ]] && wait "$pid" 2> /dev/null || true
   done
@@ -400,6 +420,93 @@ accepts() {
   die "the base at $(< "$BASE_TREE/rev") refuses $2: $refused"
 }
 
+# onward_start: the token endpoint of node A's onward lane in the
+# background, its key sets under ONWARD_DIR for node A to mount, before the
+# nodes start.
+onward_start() {
+  mkdir -p "$ONWARD_DIR"
+  chmod 0755 "$ONWARD_DIR"
+  (umask 077 && od -An -N16 -tx1 /dev/urandom | tr -d ' \n' > "$ONWARD_SECRET")
+  target/release/ferrofed-perf-token --listen 127.0.0.1:8095 \
+    --persons-issuer "$QUICKSTART_ISSUER" --persons-jwks "$ONWARD_DIR/persons.json" \
+    --machines-issuer https://perf-onward.ferrofed.invalid/machines --machines-jwks "$ONWARD_DIR/machines.json" \
+    --audience https://node-a.perf.ferrofed.invalid --client-id ferrofed-perf \
+    --client-secret-file "$ONWARD_SECRET" --caller-issuer "$QUICKSTART_ISSUER" \
+    --caller-jwks docker/quickstart/issuer/jwks.json --lifetime-s 3600 > "$WORK/onward.log" 2>&1 &
+  token_pid=$!
+  wait_for "the onward token endpoint" 30 curl --fail --silent "$ONWARD_URL/calls"
+}
+
+# exchanges: the token exchanges the onward token endpoint has answered.
+exchanges() {
+  curl --fail --silent "$ONWARD_URL/calls" | grep -oE '"token_exchange":[0-9]+' | cut -d: -f2
+}
+
+# onward_holds EXCHANGES REQUESTS: whether REQUESTS onward requests caused at
+# most ONWARD_LIMIT_PERCENT % as many token exchanges, the cache answering
+# the rest.
+onward_holds() {
+  (($1 * 100 <= $2 * ONWARD_LIMIT_PERCENT))
+}
+
+# uncached CONFIG: CONFIG with node A's onward lane uncached, refused when
+# CONFIG has no such lane.
+uncached() {
+  grep -qxF "$ONWARD_LANE" "$1" || {
+    echo "perf-gate: $1 has no $ONWARD_LANE" >&2
+    return 1
+  }
+  awk -v lane="$ONWARD_LANE" '{ print } $0 == lane { print "cache = false" }' "$1"
+}
+
+# onward_probe URL TOKEN: the token exchanges ONWARD_REQUESTS definition
+# reads routed to node A through the gateway at URL cause; exit 2 when one
+# is answered other than 200.
+onward_probe() {
+  local before after code i
+  before="$(exchanges)" || die "the onward token endpoint did not answer"
+  for ((i = 0; i < ONWARD_REQUESTS; i++)); do
+    code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+      --header "authorization: Bearer $2" --header 'openEHR-federation-endpoint: node-a-query' \
+      "$1/v1/definition/template/adl1.4")"
+    [[ "$code" == 200 ]] || die "a definition read through node A's onward lane at $1 was answered $code"
+  done
+  after="$(exchanges)" || die "the onward token endpoint did not answer"
+  echo "$((after - before))"
+}
+
+# onward TOKEN: the head's onward lane must hold the limit, and the planted
+# uncached lane must fail it; 1 when either does not.
+onward() {
+  local head uncached_exchanges code=0
+  head="$(onward_probe "$HEAD_URL" "$1")" || exit 2
+  if onward_holds "$head" "$ONWARD_REQUESTS"; then
+    echo "perf-gate: the head's onward lane caused $head token exchanges for $ONWARD_REQUESTS requests"
+  else
+    echo "perf-gate: the head's onward lane caused $head token exchanges for $ONWARD_REQUESTS requests, over ${ONWARD_LIMIT_PERCENT} %" >&2
+    code=1
+  fi
+  uncached "$CONFIG" > "$UNCACHED_CONFIG" || exit 2
+  uncached_pid="$(serve uncached target/release/ferrofed "$UNCACHED_CONFIG" ferrofed_uncached 8060)"
+  wait_for "the uncached gateway" 60 curl --fail --silent "$UNCACHED_URL/health/readiness"
+  uncached_exchanges="$(onward_probe "$UNCACHED_URL" "$1")" || exit 2
+  if onward_holds "$uncached_exchanges" "$ONWARD_REQUESTS"; then
+    echo "perf-gate: the planted uncached onward lane caused $uncached_exchanges token exchanges for $ONWARD_REQUESTS requests and was NOT failed" >&2
+    code=1
+  else
+    echo "perf-gate: the planted uncached onward lane fails on its $uncached_exchanges token exchanges for $ONWARD_REQUESTS requests"
+  fi
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    printf '## The onward lane
+
+%s definition reads through node A'"'"'s onward lane caused %s token exchanges at the head and %s at the planted uncached lane; the limit is %s %%.
+
+' \
+      "$ONWARD_REQUESTS" "$head" "$uncached_exchanges" "$ONWARD_LIMIT_PERCENT" >> "$GITHUB_STEP_SUMMARY"
+  fi
+  return "$code"
+}
+
 start() {
   local store_image
   store_image="$(pin "FerroPIX database image")"
@@ -411,6 +518,9 @@ start() {
   chmod 0700 "$WORK"
 
   bash scripts/quickstart/signing-key.sh > /dev/null
+  # The caller issuer's key set, which the token endpoint verifies against.
+  bash scripts/quickstart/token.sh > /dev/null
+  onward_start
   contact_point_keys "$NCP_DIR" "$NCP_JWKS" || die "the contact point's keys could not be made"
   compose up --detach --wait "${SERVICES[@]}" > "$WORK/compose.log" 2>&1 ||
     die "the quickstart's nodes and FerroPIX did not come up: $(tail -n 20 "$WORK/compose.log")"
@@ -433,8 +543,9 @@ start() {
   # database of its own, so each arm counts its own transactions.
   docker exec "$STORE_NAME" psql --quiet -v ON_ERROR_STOP=1 --username postgres --dbname ferrofed \
     --command "CREATE ROLE ferrofed LOGIN PASSWORD '${STORE_PASSWORD}'" \
-    --command "CREATE DATABASE ferrofed_base" > /dev/null
-  for db in ferrofed ferrofed_base; do
+    --command "CREATE DATABASE ferrofed_base" \
+    --command "CREATE DATABASE ferrofed_uncached" > /dev/null
+  for db in ferrofed ferrofed_base ferrofed_uncached; do
     docker exec "$STORE_NAME" psql --quiet -v ON_ERROR_STOP=1 --username postgres --dbname ferrofed \
       --command "GRANT CREATE ON DATABASE ${db} TO ferrofed" > /dev/null
   done
@@ -505,10 +616,11 @@ run() {
     --head-url "$HEAD_URL" --head-pid "$head_pid" --head-database-url "$(admin_url ferrofed)" \
     --out-dir target/perf || code=$?
   busy_loop || { [[ "$code" -ne 0 ]] || code=1; }
+  onward "$token" || { [[ "$code" -ne 0 ]] || code=1; }
   if [[ "$code" -ne 0 ]]; then
-    for server in head base; do
+    for server in head base uncached; do
       echo "perf-gate: the $server gateway's log follows" >&2
-      tail -n 50 "$WORK/$server/server.log" >&2
+      [[ -f "$WORK/$server/server.log" ]] && tail -n 50 "$WORK/$server/server.log" >&2
     done
   fi
   exit "$code"
@@ -674,6 +786,20 @@ self_test() {
     "$(grep -cxF "issuer = \"$NCP_ISSUER\"" "$config")"
   check "the gateway reads the contact point's audience and key set" 2 \
     "$(grep -cxE "audience = \[\"$NCP_AUDIENCE\"\]|jwks_file = \"$NCP_JWKS\"" "$config")"
+  check "a lane with few exchanges holds the limit" 0 "$(onward_holds 10 200 && echo 0 || echo 1)"
+  check "a lane past the limit fails it" 1 "$(onward_holds 11 200 && echo 0 || echo 1)"
+  check "an exchange per request fails the limit" 1 "$(onward_holds 200 200 && echo 0 || echo 1)"
+  printf '[a]\n%s\nissuer = "x"\n\n[b]\n' "$ONWARD_LANE" > "$work/onward.toml"
+  check "the uncached lane sets cache = false in node A's onward table" \
+    "$(printf '[a]\n%s\ncache = false\nissuer = "x"\n\n[b]' "$ONWARD_LANE")" "$(uncached "$work/onward.toml")"
+  check "a configuration with no onward lane is refused" 1 \
+    "$(uncached "$work/base.toml" > /dev/null 2>&1 && echo 0 || echo 1)"
+  check "the gate's configuration has node A's onward lane, cached" 1 \
+    "$(uncached "$config" | grep -cxF 'cache = false')"
+  check "the quickstart issuer signs the caller's token and the onward lane's, for node A's audience" 3 \
+    "$(grep -cxE "issuer = \"$QUICKSTART_ISSUER\"|audiences = \[\"https://node-a.perf.ferrofed.invalid\"\]" "$config")"
+  check "node A trusts the token endpoint's issuers" 2 \
+    "$(grep -cxE 'jwks_file = "/etc/ferroehr/onward/(persons|machines).json"' "$root/perf/ferroehr-onward.toml")"
   [[ "$failed" -eq 0 ]] || exit 1
   echo "perf-gate: self-test OK ($n checks)."
 }
