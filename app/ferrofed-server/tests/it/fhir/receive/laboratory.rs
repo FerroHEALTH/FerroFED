@@ -129,6 +129,66 @@ async fn a_laboratory_report_is_written_to_its_member_by_its_ehr_id_alone() -> T
     Ok(())
 }
 
+/// Returns the `DV_QUANTITY` of the canonical composition `value` whose
+/// magnitude is `magnitude`.
+fn quantity_of(value: &Value, magnitude: f64) -> Option<&Value> {
+    match value {
+        Value::Object(members) => {
+            if value["_type"] == "DV_QUANTITY"
+                && value["magnitude"]
+                    .as_f64()
+                    .is_some_and(|held| held.to_bits() == magnitude.to_bits())
+            {
+                return Some(value);
+            }
+            members
+                .values()
+                .find_map(|member| quantity_of(member, magnitude))
+        }
+        Value::Array(items) => items.iter().find_map(|item| quantity_of(item, magnitude)),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => None,
+    }
+}
+
+// NOTE: openEHR RM data_types §DV_ORDERED `normal_range`; hazard I-16 of the clinical
+// safety risk file: a received range and order reach the member's structured record.
+#[tokio::test]
+async fn a_received_normal_range_and_order_reach_the_members_composition() -> TestResult {
+    let (a, b) = (creating().await, Server::start().await);
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &a, &b)?;
+    let (status, text) = call(app, post(&report()?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert!(
+        !text.contains("no structured element"),
+        "nothing is declared lost: {text}"
+    );
+    let requests = a.received_requests().await.ok_or("recording is on")?;
+    let write = requests.first().ok_or("the write")?;
+    let composition: Value = serde_json::from_slice(&write.body)?;
+    let measured = quantity_of(&composition, 182.0).ok_or("the result's quantity")?;
+    let (lower, upper) = laboratory::NORMAL_RANGE;
+    for (bound, magnitude) in [("lower", lower), ("upper", upper)] {
+        assert_eq!(
+            measured["normal_range"][bound]["magnitude"].as_f64(),
+            Some(magnitude),
+            "{bound}: {measured}"
+        );
+        assert_eq!(
+            measured["normal_range"][bound]["units"], "mg/dL",
+            "{measured}"
+        );
+    }
+    let protocol = composition
+        .pointer("/content/0/protocol")
+        .ok_or("the result's protocol")?;
+    assert!(
+        protocol.to_string().contains(laboratory::ORDER_IDENTIFIER),
+        "the order filler's identifier is held: {protocol}"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_laboratory_report_that_breaks_its_profiles_reaches_no_member() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
@@ -220,11 +280,11 @@ pub(super) async fn holding(rows: &str, composition: Option<&str>) -> Server {
     server
 }
 
-#[tokio::test]
-async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_report() -> TestResult
-{
-    let dir = tempfile::tempdir()?;
-    let composition = lab_composition(dir.path())?;
+/// Lists node A's laboratory composition and reads it through its
+/// attachment, returning the list's reference, the served document and
+/// node A.
+async fn served(dir: &Path) -> Result<(Value, Value, Server), Box<dyn Error>> {
+    let composition = lab_composition(dir)?;
     let row = format!(
         r#"[{composition},"{LAB_VERSION}","{}"]"#,
         laboratory::TEMPLATE
@@ -233,7 +293,7 @@ async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_rep
         holding(&row, Some(&composition)).await,
         holding("", None).await,
     );
-    let app = gateway(dir.path(), &a, &b)?;
+    let app = gateway(dir, &a, &b)?;
     let (status, text) = call(app.clone(), list("&type=11502-2")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
@@ -241,6 +301,42 @@ async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_rep
     let [reference] = matches.as_slice() else {
         return Err(format!("one laboratory report listed: {bundle}").into());
     };
+    let url = reference
+        .pointer("/content/0/attachment/url")
+        .and_then(Value::as_str)
+        .ok_or("an attachment url")?;
+    assert!(url.starts_with("Binary/"), "{url}");
+    let (status, text) = call(app, binary(url)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let read = eehrxf::receive::ReceivedDocument::read(&text)?;
+    assert_eq!(
+        eehrxf::category::Category::Laboratory,
+        read.category()?,
+        "the served document is a laboratory report"
+    );
+    Ok(((*reference).clone(), serde_json::from_str(&text)?, a))
+}
+
+/// The resource of `kind` among the entries of the document `document`.
+fn only<'a>(document: &'a Value, kind: &str) -> Result<&'a Value, Box<dyn Error>> {
+    let found: Vec<&Value> = document["entry"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get("resource"))
+        .filter(|resource| resource["resourceType"] == kind)
+        .collect();
+    let [resource] = found.as_slice() else {
+        return Err(format!("one {kind}: {document}").into());
+    };
+    Ok(resource)
+}
+
+#[tokio::test]
+async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_report() -> TestResult
+{
+    let dir = tempfile::tempdir()?;
+    let (reference, document, a) = served(dir.path()).await?;
     assert_eq!(
         reference.pointer("/type/coding/0/code"),
         Some(&Value::from("11502-2"))
@@ -253,16 +349,6 @@ async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_rep
         reference.pointer("/masterIdentifier/value"),
         Some(&Value::from(format!("urn:uuid:{LAB_OBJECT}")))
     );
-    let url = reference
-        .pointer("/content/0/attachment/url")
-        .and_then(Value::as_str)
-        .ok_or("an attachment url")?;
-    assert!(url.starts_with("Binary/"), "{url}");
-    let (status, text) = call(app, binary(url)?).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
-    let read = eehrxf::receive::ReceivedDocument::read(&text)?;
-    assert_eq!(eehrxf::category::Category::Laboratory, read.category()?);
-    let document: Value = serde_json::from_str(&text)?;
     assert_eq!(
         document.pointer("/identifier/value"),
         Some(&Value::from(format!("urn:uuid:{LAB_OBJECT}"))),
@@ -286,6 +372,30 @@ async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_rep
     wire(&a).await?.assert_withholds(
         &[PATIENT, PATIENT_TAIL],
         "N33: no patient identifier reaches node A",
+    );
+    Ok(())
+}
+
+// NOTE: R4 Observation.referenceRange and DiagnosticReport.basedOn; hazard I-18 of the
+// clinical safety risk file: a served report keeps the member's normal range and order.
+#[tokio::test]
+async fn a_served_laboratory_report_carries_the_normal_range_and_the_order() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (_, document, _) = served(dir.path()).await?;
+    let result = only(&document, "Observation")?;
+    let (low, high) = laboratory::NORMAL_RANGE;
+    for (bound, value) in [("low", low), ("high", high)] {
+        let quantity = result
+            .pointer(&format!("/referenceRange/0/{bound}"))
+            .ok_or_else(|| format!("the range's {bound}: {result}"))?;
+        assert_eq!(quantity["value"].as_f64(), Some(value), "{quantity}");
+        assert_eq!(quantity["code"], "mg/dL", "{quantity}");
+    }
+    let report = only(&document, "DiagnosticReport")?;
+    assert_eq!(
+        report.pointer("/basedOn/0/identifier/value"),
+        Some(&Value::from(laboratory::ORDER_IDENTIFIER)),
+        "the order the report answers: {report}"
     );
     Ok(())
 }
