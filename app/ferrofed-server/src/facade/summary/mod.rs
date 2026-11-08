@@ -698,8 +698,10 @@ pub(crate) fn elsewhere(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec
             endpoint: native.chosen.native.as_str().to_owned(),
             organisation: organisation(snapshot, &native.chosen.node),
             answer: match &native.answer {
-                ferrofed_engine::single_node::native::Answer::Document(_) => Covered::Document,
-                ferrofed_engine::single_node::native::Answer::Absent => Covered::Absent,
+                native::Answer::Document(_) => Covered::Document,
+                native::Answer::Unread(ferrofed_engine::single_node::native::Answer::Absent) => {
+                    Covered::Absent
+                }
                 silent => Covered::Silent {
                     status: silent.status().as_str().to_owned(),
                 },
