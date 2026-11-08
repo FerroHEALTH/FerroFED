@@ -30,6 +30,7 @@ mod gate;
 mod lane;
 mod lane_checked;
 mod lane_organisation;
+mod lane_profiles;
 mod masking;
 mod mtls;
 mod native;
