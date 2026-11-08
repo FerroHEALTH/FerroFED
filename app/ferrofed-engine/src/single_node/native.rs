@@ -20,11 +20,12 @@
 //! is the member's bytes, unchanged.
 //!
 //! The answer is read as the probe reads one: a success is the member's
-//! document when it is a FHIR document `Bundle` whose identifier has a
-//! system and a value (FHIR R4 `bdl-9`), `404` says it holds none for that
-//! `ehr_id`, and any other success, every other status, or no answer at
-//! all says nothing about the patient and is a failure the caller reports
-//! with its §11.1 status, never an empty document (§11.2, §11.3).
+//! answer, its bytes passed up unread, `404` says it holds none for that
+//! `ehr_id`, and every other status, or no answer at all, says nothing about
+//! the patient and is a failure the caller reports with its §11.1 status,
+//! never an empty document (§11.2, §11.3). The engine compiles no FHIR
+//! model, so whether a success is a FHIR document `Bundle` with an
+//! identifier (FHIR R4 `bdl-9`) is read by the caller.
 
 use ferrofed_registry::id::EhrId;
 use ferrofed_registry::native::NativeEndpoint;
@@ -61,128 +62,15 @@ pub struct SummaryAsked<'a> {
     pub profile: &'a str,
 }
 
-/// A member's own document: its bytes as it sent them, and the
-/// `Bundle.identifier` they carry (FHIR R4 `bdl-9`).
-///
-/// `Debug` shows the answer's status and sizes and the identifier's system,
-/// never the body or the identifier's value.
-pub struct Document {
-    forwarded: Forwarded,
-    system: String,
-    value: String,
-}
-
-impl std::fmt::Debug for Document {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Document")
-            .field("forwarded", &self.forwarded)
-            .field("system", &self.system)
-            .finish_non_exhaustive()
-    }
-}
-
-impl Document {
-    /// Reads `forwarded` as a member's document.
-    ///
-    /// # Errors
-    ///
-    /// The [`Unusable`] that says why the body is no FHIR document `Bundle`
-    /// whose identifier has a system and a value, which FHIR R4 `bdl-9`
-    /// requires of every document.
-    pub fn read(forwarded: Forwarded) -> Result<Self, Unusable> {
-        let head: Head = serde_json::from_slice(forwarded.body()).map_err(Unusable::Unreadable)?;
-        if head.resource_type.as_deref() != Some("Bundle") {
-            return Err(Unusable::NotBundle);
-        }
-        if head.kind.as_deref() != Some("document") {
-            return Err(Unusable::NotDocument);
-        }
-        let identifier = head.identifier.ok_or(Unusable::NoIdentifier)?;
-        match (identifier.system, identifier.value) {
-            (Some(system), Some(value)) if !system.is_empty() && !value.is_empty() => Ok(Self {
-                forwarded,
-                system,
-                value,
-            }),
-            _ => Err(Unusable::NoIdentifier),
-        }
-    }
-
-    /// Returns the member's answer, its bytes unchanged.
-    #[must_use]
-    pub fn forwarded(&self) -> &Forwarded {
-        &self.forwarded
-    }
-
-    /// Returns the system and the value of the document's
-    /// `Bundle.identifier`.
-    #[must_use]
-    pub fn identifier(&self) -> (&str, &str) {
-        (&self.system, &self.value)
-    }
-}
-
-/// What a document is read for: its type and its `Bundle.identifier`.
-#[derive(serde::Deserialize)]
-struct Head {
-    /// The resource type.
-    #[serde(rename = "resourceType")]
-    resource_type: Option<String>,
-    /// The `Bundle.type`.
-    #[serde(rename = "type")]
-    kind: Option<String>,
-    /// The document's identifier.
-    identifier: Option<HeadIdentifier>,
-}
-
-/// An identifier's system and value.
-#[derive(serde::Deserialize)]
-struct HeadIdentifier {
-    /// The system.
-    system: Option<String>,
-    /// The value.
-    value: Option<String>,
-}
-
-/// Why a member's success is no document; no variant's text names a value
-/// the answer carries.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum Unusable {
-    /// The answer is no JSON object of a FHIR resource's shape.
-    #[error("the answer is no FHIR resource in JSON")]
-    Unreadable(#[source] serde_json::Error),
-    /// The answer is a resource other than a `Bundle`.
-    #[error("the answer is no Bundle")]
-    NotBundle,
-    /// The `Bundle` is of a type other than `document`.
-    #[error("the Bundle is no document")]
-    NotDocument,
-    /// The document carries no identifier with a system and a value
-    /// (FHIR R4 `bdl-9`).
-    #[error("the document carries no identifier with a system and a value (bdl-9)")]
-    NoIdentifier,
-}
-
 /// What a member answered the request for its own patient summary.
 #[derive(Debug)]
 pub enum Answer {
-    /// A success that is a FHIR document `Bundle` with an identifier: the
-    /// member's document, as it sent it.
-    Document(Document),
+    /// A success: the member's answer, as it sent it, unread.
+    Success(Forwarded),
     /// `404 Not Found`: the member holds no summary for the `ehr_id`.
     Absent,
     /// Any other status, which says nothing about the patient.
     Erred(StatusCode),
-    /// A success, of the status `status`, that is no FHIR document `Bundle`
-    /// whose identifier has a system and a value (FHIR R4 `bdl-9`), so it
-    /// says nothing about the patient either.
-    Unusable {
-        /// The member's status.
-        status: StatusCode,
-        /// What the answer misses.
-        reason: Unusable,
-    },
     /// No answer of the member's: the request was refused at the gateway,
     /// timed out, could not reach the member, or was never sent.
     Failed(ForwardError),
@@ -192,10 +80,10 @@ pub enum Answer {
 }
 
 impl Answer {
-    /// Whether the member answered, with its document or with none.
+    /// Whether the member answered, with a success or with none.
     #[must_use]
     pub fn answered(&self) -> bool {
-        matches!(self, Self::Document(_) | Self::Absent)
+        matches!(self, Self::Success(_) | Self::Absent)
     }
 
     /// The §11.1 status of the member: `active` when it answered,
@@ -205,13 +93,13 @@ impl Answer {
     #[must_use]
     pub fn status(&self) -> EndpointStatus {
         match self {
-            Self::Document(_) | Self::Absent => EndpointStatus::Active,
+            Self::Success(_) | Self::Absent => EndpointStatus::Active,
             Self::Abandoned
             | Self::Failed(
                 ForwardError::TimeOut { .. } | ForwardError::Expired(_) | ForwardError::Capped(_),
             ) => EndpointStatus::TimeOut,
             Self::Failed(ForwardError::Unreachable { .. }) => EndpointStatus::Offline,
-            Self::Erred(_) | Self::Unusable { .. } | Self::Failed(_) => EndpointStatus::NodeError,
+            Self::Erred(_) | Self::Failed(_) => EndpointStatus::NodeError,
         }
     }
 
@@ -219,9 +107,9 @@ impl Answer {
     #[must_use]
     pub fn contact(&self) -> Contact {
         match self {
-            Self::Document(document) => Contact::Answered(document.forwarded().status()),
+            Self::Success(forwarded) => Contact::Answered(forwarded.status()),
             Self::Absent => Contact::Answered(StatusCode::NOT_FOUND),
-            Self::Erred(status) | Self::Unusable { status, .. } => Contact::Answered(*status),
+            Self::Erred(status) => Contact::Answered(*status),
             Self::Failed(error) => Contact::of_forward_error(error),
             Self::Abandoned => Contact::Silent,
         }
@@ -258,11 +146,7 @@ impl<T: Transport + Clone> NodeClient<T> {
                 })
             }
             Some(Ok(answer)) if answer.status().is_success() => {
-                let status = answer.status();
-                match Document::read(Forwarded::of_answer(answer)) {
-                    Ok(document) => Answer::Document(document),
-                    Err(reason) => Answer::Unusable { status, reason },
-                }
+                Answer::Success(Forwarded::of_answer(answer))
             }
             Some(Ok(answer)) if answer.status() == StatusCode::NOT_FOUND => Answer::Absent,
             Some(Ok(answer)) => Answer::Erred(answer.status()),

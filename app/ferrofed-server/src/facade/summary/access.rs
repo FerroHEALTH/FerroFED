@@ -218,12 +218,7 @@ fn documents(gathered: &Gathered, delivered: bool) -> usize {
     let summaries = gathered
         .natives
         .iter()
-        .filter(|native| {
-            matches!(
-                native.answer,
-                ferrofed_engine::single_node::native::Answer::Document(_)
-            )
-        })
+        .filter(|native| matches!(native.answer, native::Answer::Document(_)))
         .count();
     gathered
         .own
