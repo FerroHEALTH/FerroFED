@@ -31,9 +31,9 @@ use ferrofed_eehrxf::prescriptions::mapped::{ORDER_ACTIVITY, order_in};
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_registry::id::EndpointId;
+use fhir_types::codec::Value;
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
-use serde::Deserialize;
 
 use super::answer::{Lookup, Wrote, accessed, attach, refused_after};
 use super::lookup;
@@ -220,84 +220,45 @@ async fn duplicated(
     }
 }
 
-/// What a composition is read for: the original content its feeder audit
-/// keeps.
-#[derive(Deserialize)]
-struct Fed {
-    /// The `feeder_audit`.
-    feeder_audit: Option<Audit>,
-}
-
-/// A `FEEDER_AUDIT`.
-#[derive(Deserialize)]
-struct Audit {
-    /// The `original_content`.
-    original_content: Option<Content>,
-}
-
-/// A `DV_PARSABLE` original content.
-#[derive(Deserialize)]
-struct Content {
-    /// The `value`.
-    value: Option<String>,
-}
-
-/// A received collection, read for its dispensations' identifiers.
-#[derive(Deserialize)]
-struct Kept {
-    /// Its entries.
-    #[serde(default)]
-    entry: Vec<Entry>,
-}
-
-/// One entry of a kept collection.
-#[derive(Deserialize)]
-struct Entry {
-    /// Its resource.
-    resource: Option<Resource>,
-}
-
-/// A kept resource's type and identifiers.
-#[derive(Deserialize)]
-struct Resource {
-    /// The `resourceType`.
-    #[serde(rename = "resourceType")]
-    resource_type: Option<String>,
-    /// The `identifier`s.
-    #[serde(default)]
-    identifier: Vec<Identifier>,
-}
-
-/// A kept identifier.
-#[derive(Deserialize)]
-struct Identifier {
-    /// The system.
-    system: Option<String>,
-    /// The value.
-    value: Option<String>,
-}
-
 /// Whether the composition `composition` keeps, in its feeder audit, a
 /// received `MedicationDispense` of the identifier `system`|`value`.
 fn keeps(composition: &str, (system, value): (&str, &str)) -> bool {
     // NOTE: RM 1.1.0 FEEDER_AUDIT.original_content: a composition the gateway did not write keeps
     // no received dispensation, so its content legitimately reads as none.
-    let Some(kept) = serde_json::from_str::<Fed>(composition)
+    let Some(text) = serde_json::from_str::<Value>(composition)
         .ok()
-        .and_then(|fed| fed.feeder_audit?.original_content?.value)
-        .and_then(|text| serde_json::from_str::<Kept>(&text).ok())
+        .and_then(|fed| {
+            fed.get("feeder_audit")?
+                .get("original_content")?
+                .get("value")?
+                .as_str()
+                .map(str::to_owned)
+        })
     else {
         return false;
     };
-    kept.entry
+    // NOTE: FHIR R4 `json.html`; an entry, resource or identifier of another JSON kind holds no
+    // dispensation identifier, so it is skipped and the rest of the collection still counts.
+    let Ok(kept) = serde_json::from_str::<Value>(&text) else {
+        return false;
+    };
+    items(&kept, "entry")
         .iter()
-        .filter_map(|entry| entry.resource.as_ref())
-        .filter(|resource| resource.resource_type.as_deref() == Some("MedicationDispense"))
-        .flat_map(|resource| resource.identifier.iter())
-        .any(|identifier| {
-            identifier.system.as_deref() == Some(system)
-                && identifier.value.as_deref() == Some(value)
+        .filter_map(|entry| entry.get("resource"))
+        .filter(|resource| {
+            resource.get("resourceType").and_then(Value::as_str) == Some("MedicationDispense")
         })
+        .flat_map(|resource| items(resource, "identifier"))
+        .any(|identifier| {
+            identifier.get("system").and_then(Value::as_str) == Some(system)
+                && identifier.get("value").and_then(Value::as_str) == Some(value)
+        })
+}
+
+/// The items of the repeating element `name` of `held`, none when it is
+/// absent or no array.
+fn items<'a>(held: &'a Value, name: &str) -> &'a [Value] {
+    held.get(name).and_then(Value::as_array).unwrap_or(&[])
 }
 
 /// The answer to the dispensation `received` written in the map mode at
