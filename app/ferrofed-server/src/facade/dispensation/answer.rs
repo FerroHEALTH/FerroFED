@@ -31,7 +31,9 @@ use ferrofed_engine::single_node::native_create::{Answered, Created};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::incident::Incident;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use fhir_types::codec::Value;
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
+use fhir_types::r4::resource::Resource;
 use http::{HeaderValue, StatusCode, header};
 use openehr_federation::status::EndpointStatus;
 use secrecy::SecretString;
@@ -374,25 +376,13 @@ fn relayed(
     outcome
 }
 
-/// What a member's answer body is read for: whether it is an
-/// `OperationOutcome`, and its issues.
-#[derive(serde::Deserialize)]
-struct MemberOutcome {
-    /// The resource type the body names.
-    #[serde(rename = "resourceType")]
-    resource_type: String,
-    /// The issues, when it is an `OperationOutcome`.
-    #[serde(default)]
-    issue: Vec<OperationOutcomeIssue>,
-}
-
 /// The issues of `body` when it is a FHIR R4 `OperationOutcome`, and none
 /// otherwise.
 fn member_issues(body: &[u8]) -> Vec<OperationOutcomeIssue> {
     // NOTE: a body that is no OperationOutcome is legitimately absent here: the member's status
     // alone already carries the verdict, so an unreadable body is left out, never an error.
-    match serde_json::from_slice::<MemberOutcome>(body) {
-        Ok(read) if read.resource_type == "OperationOutcome" => read.issue,
+    match serde_json::from_slice::<Resource>(body) {
+        Ok(Resource::OperationOutcome(outcome)) => outcome.issue,
         Ok(_) | Err(_) => Vec::new(),
     }
 }
@@ -459,13 +449,6 @@ pub(super) fn from_member(
     Provenance::member(federation.snapshot(), &writing.native, &writing.node).stamp(response)
 }
 
-/// What a created resource's body is read for: its id.
-#[derive(serde::Deserialize)]
-struct Head {
-    /// The resource's logical id.
-    id: Option<String>,
-}
-
 /// The member's own id of the resource `made` created, and its version,
 /// read from `Location` (FHIR R4 `http.html` §3.1.0.8,
 /// `[base]/[type]/[id]/_history/[vid]`) or else from the body's `id`.
@@ -492,9 +475,11 @@ fn created_id(made: &Forwarded) -> (Option<String>, Option<String>) {
             }
         }
     }
-    let id = serde_json::from_slice::<Head>(made.body())
+    // NOTE: FHIR R4 `http.html` §3.1.0.8; a body that names no id legitimately leaves the
+    // created resource unnamed, which the answer reports.
+    let id = serde_json::from_slice::<Value>(made.body())
         .ok()
-        .and_then(|head| head.id);
+        .and_then(|body| body.get("id").and_then(Value::as_str).map(str::to_owned));
     (id, None)
 }
 
