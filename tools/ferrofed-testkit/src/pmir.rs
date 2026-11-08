@@ -46,12 +46,9 @@ use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
 use fhir_types::r4::subscription::Subscription;
 use http::header::{AUTHORIZATION, CONTENT_TYPE, HeaderValue, LOCATION};
-use http::{Method, Request, Response, StatusCode};
-use http_body_util::{BodyExt, Full};
-use hyper::body::Incoming;
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper_util::rt::TokioIo;
+use http::request::Parts;
+use http::{Method, Response, StatusCode};
+use http_body_util::Full;
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 
@@ -167,7 +164,11 @@ impl PatientIdentityRegistry {
             .map_err(RegistryError::Bind)?;
         let address = listener.local_addr().map_err(RegistryError::Bind)?;
         let shared = Arc::new(Shared::default());
-        let task = tokio::spawn(accept_loop(listener, Arc::clone(&shared)));
+        let task = tokio::spawn(crate::connection::accept(
+            listener,
+            Arc::clone(&shared),
+            handle,
+        ));
         Ok(Self {
             origin: format!("http://{address}"),
             shared,
@@ -383,54 +384,27 @@ pub fn merge_message(
     serde_json::to_string(&message).map_err(RegistryError::Write)
 }
 
-/// Accepts connections until the device is dropped.
-async fn accept_loop(listener: TcpListener, shared: Arc<Shared>) {
-    loop {
-        let Ok((stream, _)) = listener.accept().await else {
-            continue;
-        };
-        let connection_shared = Arc::clone(&shared);
-        tokio::spawn(async move {
-            let service =
-                service_fn(move |request| handle(Arc::clone(&connection_shared), request));
-            // A connection ends in an error whenever a client hangs up, which a
-            // test does on purpose; the device has nothing to report about it.
-            match http1::Builder::new()
-                .serve_connection(TokioIo::new(stream), service)
-                .await
-            {
-                Ok(()) | Err(_) => {}
-            }
-        });
-    }
-}
-
 /// Routes one request to its interaction.
 async fn handle(
     shared: Arc<Shared>,
-    request: Request<Incoming>,
-) -> Result<Response<Full<Bytes>>, std::convert::Infallible> {
-    let (parts, body) = request.into_parts();
-    let Ok(body) = body
-        .collect()
-        .await
-        .map(http_body_util::Collected::to_bytes)
-    else {
-        return Ok(outcome(StatusCode::BAD_REQUEST, "structure"));
+    parts: Parts,
+    body: crate::connection::Body,
+) -> Response<Full<Bytes>> {
+    let Ok(body) = body else {
+        return outcome(StatusCode::BAD_REQUEST, "structure");
     };
     let path = parts.uri.path();
     let id = path
         .strip_prefix(BASE)
         .and_then(|rest| rest.strip_prefix("/Subscription/"))
         .filter(|id| !id.is_empty() && !id.contains('/'));
-    let answer = match (&parts.method, path, id) {
+    match (&parts.method, path, id) {
         (&Method::POST, "/fhir/Subscription", _) => create(&shared, &body).await,
         (&Method::GET, "/fhir/Subscription", _) => search(&shared, parts.uri.query()),
         (&Method::GET, _, Some(id)) => read(&shared, id),
         (&Method::DELETE, _, Some(id)) => delete(&shared, id),
         _ => outcome(StatusCode::NOT_FOUND, "not-supported"),
-    };
-    Ok(answer)
+    }
 }
 
 /// ITI-94: a `Subscription` that holds to the request profile is created

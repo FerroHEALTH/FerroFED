@@ -25,6 +25,7 @@ mod mcsd;
 mod myhealth_eu;
 mod national_connector;
 mod otlp;
+mod perf_token;
 mod pixm_stub;
 mod pmir;
 mod proxy;

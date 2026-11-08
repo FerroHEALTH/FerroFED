@@ -99,6 +99,7 @@
 
 pub mod atna;
 pub mod atna_feed;
+mod connection;
 pub mod console_sign_in;
 pub mod containers;
 pub mod crossref;
@@ -127,6 +128,7 @@ pub mod nvi;
 pub mod oauth;
 pub mod otlp;
 pub mod pdqm_stub;
+pub mod perf_token;
 pub mod pixm_stub;
 pub mod pki;
 pub mod pmir;
