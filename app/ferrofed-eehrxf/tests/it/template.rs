@@ -156,10 +156,16 @@ fn each_placed_archetype_is_selected_under_the_section_the_component_places_it_i
     };
     assert_eq!(
         placed(Section::MedicationSummary),
-        [(
-            "openEHR-EHR-SECTION.adhoc.v1",
-            "openEHR-EHR-INSTRUCTION.medication_order.v3"
-        )]
+        [
+            (
+                "openEHR-EHR-SECTION.adhoc.v1",
+                "openEHR-EHR-INSTRUCTION.medication_order.v3"
+            ),
+            (
+                "openEHR-EHR-SECTION.adhoc.v1",
+                "openEHR-EHR-ACTION.medication.v1"
+            )
+        ]
     );
     assert_eq!(
         placed(Section::Immunisations),
@@ -188,24 +194,33 @@ fn each_placed_archetype_is_selected_under_the_section_the_component_places_it_i
     }
 }
 
+/// FerroHEALTH/FerroBRIDGE#1696: a medication action is selected by the
+/// section that holds it, the medication summary's ad hoc section for the
+/// medication summary and the vaccination list for the immunisations.
 #[test]
-fn a_medication_action_is_selected_for_the_immunisations_alone_and_only_under_its_section() {
+fn a_medication_action_is_selected_by_the_section_that_holds_it() {
     let medication = Section::MedicationSummary.aql();
-    assert!(
-        !medication.contains("openEHR-EHR-ACTION.medication.v1"),
-        "the medication summary never selects a vaccine by its archetype: {medication}"
-    );
     assert!(
         medication.contains("SECTION s2[openEHR-EHR-SECTION.adhoc.v1] CONTAINS INSTRUCTION a2[openEHR-EHR-INSTRUCTION.medication_order.v3]"),
         "{medication}"
+    );
+    assert!(
+        medication.contains("SECTION s3[openEHR-EHR-SECTION.adhoc.v1] CONTAINS ACTION a3[openEHR-EHR-ACTION.medication.v1]"),
+        "{medication}"
+    );
+    assert!(
+        !medication.contains("openEHR-EHR-SECTION.immunisation_list.v0"),
+        "the medication summary never selects a vaccine by its section: {medication}"
     );
     let immunisations = Section::Immunisations.aql();
     assert!(
         immunisations.contains("SECTION s1[openEHR-EHR-SECTION.immunisation_list.v0] CONTAINS ACTION a1[openEHR-EHR-ACTION.medication.v1]"),
         "{immunisations}"
     );
-    assert!(
-        openehr_query::parser::parse_str(&immunisations).is_ok(),
-        "the query parses: {immunisations}"
-    );
+    for aql in [&medication, &immunisations] {
+        assert!(
+            openehr_query::parser::parse_str(aql).is_ok(),
+            "the query parses: {aql}"
+        );
+    }
 }

@@ -88,8 +88,10 @@ ehds-logging = { version = "=0.4.0", default-features = false }
 # 0.1.158 is the release on openehr-* 0.0.129 (#1581); 0.1.170 carries the
 # imaging and discharge document profiles and their shipped projects, so
 # both categories are received (#1694); 0.1.179 is the release on openehr-*
-# 0.0.130 (#1722). Verified against crates.io on 2026-11-08.
-eehrxf = { version = "=0.1.179", default-features = false }
+# 0.0.130 (#1722); 0.1.181 assembles the patient summary from one EPS root
+# context and selects a medication action under the Medication Summary
+# section (#1742). Verified against crates.io on 2026-11-08.
+eehrxf = { version = "=0.1.181", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -222,10 +224,10 @@ fhir-types = { version = "0.1.128", default-features = false }
 # runs in process (#684), and the template index and mapping-file loader it
 # takes, both from FerroBRIDGE on the workspace openehr-* line, so the build
 # carries one copy of that family (#1028).
-# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.235 is
-# the release eehrxf 0.1.179 requires (#1722). Verified against crates.io on
+# Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.236 is
+# the release eehrxf 0.1.181 requires (#1742). Verified against crates.io on
 # 2026-11-08.
-fhirconnect = "=0.1.235"
+fhirconnect = "=0.1.236"
 # The FHIR terminology client the European interoperability component asks
 # its terminology server through (#925), from FerroBRIDGE, with the caller's
 # HTTP client for mutual TLS and the `context` form of `$validate-code`.
@@ -239,7 +241,8 @@ ferrobridge-term = "=0.1.145"
 # FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
 # Pinned exactly, because FerroBRIDGE's crate line moves by patch; 0.1.151
 # and openehr-mapping-core 0.1.144 are the releases eehrxf 0.1.179 requires
-# (#1722). Verified against crates.io on 2026-11-08.
+# (#1722), and eehrxf 0.1.181 too (#1742). Verified against crates.io on
+# 2026-11-08.
 ferrobridge-validator = "=0.1.151"
 openehr-mapping-core = "=0.1.144"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit

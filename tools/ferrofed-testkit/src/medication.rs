@@ -305,10 +305,16 @@ pub(crate) fn summary_order(code: &str) -> String {
 /// A synthetic medication action recording a dose of the vaccine `code`
 /// administered.
 fn administered(code: &str) -> String {
+    action("Vaccination administered", ("Synthetic vaccine", code))
+}
+
+/// A synthetic medication action named `name` recording a dose of the
+/// medicine `display`, coded `code`, administered.
+fn action(name: &str, (display, code): (&str, &str)) -> String {
     format!(
         r#"{{
   "_type": "ACTION",
-  "name": {{ "_type": "DV_TEXT", "value": "Vaccination administered" }},
+  "name": {{ "_type": "DV_TEXT", "value": "{name}" }},
   {details},
   {ENTRY},
   "time": {{ "_type": "DV_DATE_TIME", "value": "2026-09-15T09:30:00Z" }},
@@ -322,12 +328,12 @@ fn administered(code: &str) -> String {
     "name": {{ "_type": "DV_TEXT", "value": "Tree" }},
     "archetype_node_id": "at0017",
     "items": [
-      {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Medication item" }}, "archetype_node_id": "at0020", "value": {vaccine} }}
+      {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Medication item" }}, "archetype_node_id": "at0020", "value": {medicine} }}
     ]
   }}
 }}"#,
         details = details("openEHR-EHR-ACTION.medication.v1"),
-        vaccine = coded("Synthetic vaccine", code),
+        medicine = coded(display, code),
     )
 }
 
@@ -338,6 +344,28 @@ fn administered(code: &str) -> String {
 /// medication action in its vaccination list section.
 #[must_use]
 pub fn summary_composition(uid: &str, (medicine, vaccine): (&str, &str)) -> String {
+    summary_holding(uid, summary_order(medicine), vaccine)
+}
+
+/// Returns a synthetic composition of [`PATIENT_SUMMARY_TEMPLATE`].
+///
+/// It is under the version id `uid`, the medicine `medicine` taken recorded
+/// as a medication action in its medication summary section and the vaccine
+/// `vaccine` administered as a medication action in its vaccination list
+/// section.
+#[must_use]
+pub fn summary_composition_taken(uid: &str, (medicine, vaccine): (&str, &str)) -> String {
+    summary_holding(
+        uid,
+        action("Medication taken", ("Synthetic tablet 500 mg", medicine)),
+        vaccine,
+    )
+}
+
+/// A synthetic composition of [`PATIENT_SUMMARY_TEMPLATE`] under the version
+/// id `uid`, its medication summary section holding `medication` and its
+/// vaccination list the vaccine `vaccine` administered.
+fn summary_holding(uid: &str, medication: String, vaccine: &str) -> String {
     let section = |name: &str, archetype: &str, item: String| {
         format!(
             r#"{{ "_type": "SECTION", "name": {{ "_type": "DV_TEXT", "value": "{name}" }}, {}, "items": [{item}] }}"#,
@@ -348,7 +376,7 @@ pub fn summary_composition(uid: &str, (medicine, vaccine): (&str, &str)) -> Stri
         section(
             "Medication summary",
             "openEHR-EHR-SECTION.adhoc.v1",
-            summary_order(medicine),
+            medication,
         ),
         section(
             "Immunisations",

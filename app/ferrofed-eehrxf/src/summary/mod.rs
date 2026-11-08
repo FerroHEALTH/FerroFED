@@ -29,6 +29,14 @@
 //!   server that refuses or does not answer fails the document
 //!   ([`eehrxf::terminology::translation`]); with none, the code is
 //!   transferred as recorded (eHN PS Art 10(7));
+//! - a composition a context maps whole, the root context of `eehrxf`'s EPS
+//!   project, is run once however many sections selected it, and each
+//!   section takes the entries of its own slot
+//!   ([`eehrxf::document::Document::with_mapped_section`]), each held to the
+//!   profiles the crosswalk admits for the section, so a medication action
+//!   under the medication summary section is a medication summary entry and
+//!   one under the immunisations section an immunisation (hazard I-03 of the
+//!   clinical safety risk file);
 //! - a composition that holds a context's start archetype more than once,
 //!   two medicines in two entries of one archetype, is mapped once per
 //!   entry by the engine, and each entry is listed on its own, each placed
@@ -69,8 +77,9 @@ pub mod resources;
 use std::collections::{BTreeMap, BTreeSet};
 
 use eehrxf::category::Category;
-use eehrxf::document::Document;
+use eehrxf::document::form::Slot;
 use eehrxf::document::section::EmptyReason;
+use eehrxf::document::{Document, LOINC};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::terminology::Terminology;
 use eehrxf::terminology::ehn;
@@ -78,6 +87,7 @@ use eehrxf::terminology::translation::Translator;
 use eehrxf::terminology::withheld::Withheld;
 use eehrxf::transformation::{Direction, Pin, Report, Tally};
 use ferrofed_identity::role::header::PatientHeader;
+use fhir_types::codec::{Json, Value};
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::resource::Resource;
 use fhirconnect::engine::context::CallContext;
@@ -87,7 +97,7 @@ use fhirconnect::operations::run::Settings;
 
 use crate::patient_summary::{Reason, Section, UNSELECTED};
 use crate::summary::error::AssemblyError;
-use crate::summary::mappings::{Mappings, slot_of};
+use crate::summary::mappings::{Feed, Mappings, Writes, admitted, slot_of};
 use crate::summary::narrative::{authors_shown, covered_elsewhere, narrative};
 use crate::summary::once::ListedOnce;
 use crate::summary::resources::{device, organization, patient, reference};
@@ -289,6 +299,7 @@ pub async fn assemble(
         mapped: BTreeSet::new(),
         unmapped: BTreeSet::new(),
         reports: BTreeMap::new(),
+        composed: BTreeMap::new(),
     };
     let mut translator = Translator::new(terminology, &ehn::PATIENT_SUMMARY);
     for answers in sections {
@@ -314,7 +325,7 @@ pub async fn assemble(
 /// The narrative line of the elements one run dropped, by path, never by
 /// value, so a loss is never silent in the document (hazard I-03 of the
 /// clinical safety risk file); `None` when it dropped none.
-fn dropped_line(dropped: &Tally) -> Option<String> {
+fn dropped_line(dropped: &Tally, writes: Writes) -> Option<String> {
     if dropped.count() == 0 {
         return None;
     }
@@ -324,10 +335,16 @@ fn dropped_line(dropped: &Tally) -> Option<String> {
     } else {
         format!(" ({})", paths.join(", "))
     };
-    Some(format!(
-        "{} element(s) of a record could not be carried into this section{named}, so the record holds more than the section shows",
-        dropped.count()
-    ))
+    Some(match writes {
+        Writes::Entries => format!(
+            "{} element(s) of a record could not be carried into this section{named}, so the record holds more than the section shows",
+            dropped.count()
+        ),
+        Writes::Composition => format!(
+            "{} element(s) of a record this section takes from could not be carried into the summary{named}, so the record holds more than the summary shows",
+            dropped.count()
+        ),
+    })
 }
 
 /// What one mapping run added: the `fullUrl` of each resource it mapped, one
@@ -360,7 +377,7 @@ fn not_applicable(refused: &MappingError) -> bool {
 
 /// The slots of the sections no openEHR content is named to feed, the gaps
 /// of [`UNSELECTED`], which every summary writes as not supplied.
-fn not_supplied() -> Result<Vec<&'static eehrxf::document::form::Slot>, AssemblyError> {
+fn not_supplied() -> Result<Vec<&'static Slot>, AssemblyError> {
     UNSELECTED
         .iter()
         .filter(|unselected| matches!(unselected.reason, Reason::Gap { .. }))
@@ -386,6 +403,14 @@ struct Assembly {
     mapped: BTreeSet<(usize, String)>,
     unmapped: BTreeSet<(usize, String)>,
     reports: BTreeMap<(String, Option<String>), Report>,
+    composed: BTreeMap<(usize, String, String), Option<Composed>>,
+}
+
+/// One composition a context mapped whole, its resources translated, and
+/// the narrative lines of what the run withheld or dropped.
+struct Composed {
+    bundle: Bundle,
+    lines: Vec<String>,
 }
 
 impl Assembly {
@@ -436,12 +461,20 @@ impl Assembly {
                 }
                 let member = self.member(*index, origin)?;
                 let mut applied = false;
-                for mapping in runs {
-                    let (entry, lines, key) =
-                        match self.run(mapping, composition, &member, translator).await? {
-                            Outcome::Ran(ran) => ran,
-                            Outcome::NotApplicable => continue,
-                        };
+                for feed in runs {
+                    let ran = self
+                        .feed(
+                            feed,
+                            composition,
+                            &member,
+                            (answers.section, slot),
+                            translator,
+                        )
+                        .await?;
+                    let (entry, lines, key) = match ran {
+                        Outcome::Ran(ran) => ran,
+                        Outcome::NotApplicable => continue,
+                    };
                     applied = true;
                     entries.extend(entry);
                     keys.extend(
@@ -505,51 +538,15 @@ impl Assembly {
         member: &str,
         translator: &mut Translator<'_>,
     ) -> Result<Outcome, AssemblyError> {
-        let context = CallContext::new()
-            .with_patient(reference(&self.subject))
-            .with_who(reference(&self.device))
-            .with_on_behalf_of(reference(member));
-        let (answer, warnings) = match mapping.to_fhir_with_warnings(
-            &composition.composition,
-            &self.settings,
-            context,
-        ) {
-            Ok(ran) => ran,
-            Err(refused) if not_applicable(&refused) => return Ok(Outcome::NotApplicable),
-            Err(source) => {
-                return Err(AssemblyError::Mapping {
-                    template: composition.template.clone(),
-                    source,
-                });
-            }
+        let Some((bundle, mut withheld)) = self.mapped(mapping, composition, member)? else {
+            return Ok(Outcome::NotApplicable);
         };
-        let withheld = warnings
-            .iter()
-            .filter_map(Withheld::of)
-            .map(|mapping| mapping.narrative())
-            .collect();
-        let mapped: Vec<Resource> = answer
-            .bundle()
-            .entry
-            .iter()
-            .filter_map(|entry| entry.resource.clone())
-            .collect();
-        let mut resources = Vec::with_capacity(mapped.len());
-        for resource in mapped {
-            resources.push(match resource {
-                Resource::Provenance(_) | Resource::OperationOutcome(_) => resource,
-                other => translator
-                    .translate(&other, preferred)
-                    .await
-                    .map_err(|source| AssemblyError::Translation {
-                        template: composition.template.clone(),
-                        source,
-                    })?,
-            });
+        let mut resources = Vec::with_capacity(bundle.entry.len());
+        for resource in bundle.entry.into_iter().filter_map(|entry| entry.resource) {
+            resources.push(translated(resource, translator, &composition.template).await?);
         }
         let dropped = self.transformed(mapping, &composition.template, &resources)?;
-        let mut withheld: Vec<String> = withheld;
-        withheld.extend(dropped_line(&dropped));
+        withheld.extend(dropped_line(&dropped, Writes::Entries));
         // NOTE: HL7 Europe Patient Summary 1.0.0-ballot `bundle-eu-eps` slices `Bundle.entry` by the
         // document's content and names no `OperationOutcome`; the run's losses go to its report.
         let entries: Vec<Resource> = resources
@@ -571,6 +568,154 @@ impl Assembly {
         Ok(Outcome::Ran((urls, withheld, keys)))
     }
 
+    /// Runs `mapping` over `composition` for the member at `member`, and
+    /// returns the `Bundle` it answers and the narrative line of each term
+    /// mapping the run wrote as no coding; `None` when the context's
+    /// condition does not hold over the composition.
+    fn mapped(
+        &self,
+        mapping: &Mapping,
+        composition: &Held,
+        member: &str,
+    ) -> Result<Option<(Bundle, Vec<String>)>, AssemblyError> {
+        let context = CallContext::new()
+            .with_patient(reference(&self.subject))
+            .with_who(reference(&self.device))
+            .with_on_behalf_of(reference(member));
+        let (answer, warnings) = match mapping.to_fhir_with_warnings(
+            &composition.composition,
+            &self.settings,
+            context,
+        ) {
+            Ok(ran) => ran,
+            Err(refused) if not_applicable(&refused) => return Ok(None),
+            Err(source) => {
+                return Err(AssemblyError::Mapping {
+                    template: composition.template.clone(),
+                    source,
+                });
+            }
+        };
+        let withheld = warnings
+            .iter()
+            .filter_map(Withheld::of)
+            .map(|mapping| mapping.narrative())
+            .collect();
+        Ok(Some((answer.bundle().clone(), withheld)))
+    }
+
+    /// Runs `feed` over `composition` for the member at `member`, taking
+    /// what it writes into the section `slot` of `section`.
+    async fn feed(
+        &mut self,
+        feed: &Feed,
+        composition: &Held,
+        member: &str,
+        placed: (Section, &'static Slot),
+        translator: &mut Translator<'_>,
+    ) -> Result<Outcome, AssemblyError> {
+        match feed.writes() {
+            Writes::Entries => {
+                self.run(feed.mapping(), composition, member, translator)
+                    .await
+            }
+            Writes::Composition => {
+                self.take(feed, composition, member, placed, translator)
+                    .await
+            }
+        }
+    }
+
+    /// Takes the section `slot` of `section` from the run of `feed`, a
+    /// context that maps the whole composition, over `composition` for the
+    /// member at `member`, running it the first time a section asks.
+    ///
+    /// The section's entries must each claim a profile the crosswalk admits
+    /// for an entry of `section`; a run that writes no section in `slot` did
+    /// not apply.
+    async fn take(
+        &mut self,
+        feed: &Feed,
+        composition: &Held,
+        member: &str,
+        (section, slot): (Section, &'static Slot),
+        translator: &mut Translator<'_>,
+    ) -> Result<Outcome, AssemblyError> {
+        let key = (feed.id(), member.to_owned(), composition.uid.clone());
+        if !self.composed.contains_key(&key) {
+            let composed = self
+                .compose(feed.mapping(), composition, member, translator)
+                .await?;
+            self.composed.insert(key.clone(), composed);
+        }
+        let Some(Some(composed)) = self.composed.get(&key) else {
+            return Ok(Outcome::NotApplicable);
+        };
+        let resources: Vec<Resource> = composed
+            .bundle
+            .entry
+            .iter()
+            .filter_map(|entry| entry.resource.clone())
+            .collect();
+        let Some(entries) = section_entries(&resources, slot, &composition.template)? else {
+            return Ok(Outcome::NotApplicable);
+        };
+        let admitted = admitted(section)?;
+        let mut keys = Vec::new();
+        for (resource, claimed) in &entries {
+            if !claimed
+                .iter()
+                .any(|profile| admitted.contains(&profile.as_str()))
+            {
+                return Err(AssemblyError::EntryProfile {
+                    section: section.slug(),
+                    template: composition.template.clone(),
+                    claimed: claimed.clone(),
+                });
+            }
+            keys.extend(duplicates::Key::of_entry(resource, &resources));
+        }
+        let lines = composed.lines.clone();
+        let Some(mapped) = self
+            .document
+            .with_mapped_section(&composed.bundle, slot.slice)?
+        else {
+            return Ok(Outcome::NotApplicable);
+        };
+        Ok(Outcome::Ran((mapped.entries, lines, keys)))
+    }
+
+    /// Runs `mapping`, a context that maps the whole composition, over
+    /// `composition` for the member at `member`, translates every resource
+    /// it wrote but the composition, its `Provenance` and its
+    /// `OperationOutcome` with `translator`, and counts the run into its
+    /// report; `None` when the context's condition does not hold.
+    async fn compose(
+        &mut self,
+        mapping: &Mapping,
+        composition: &Held,
+        member: &str,
+        translator: &mut Translator<'_>,
+    ) -> Result<Option<Composed>, AssemblyError> {
+        let Some((mut bundle, mut lines)) = self.mapped(mapping, composition, member)? else {
+            return Ok(None);
+        };
+        for entry in &mut bundle.entry {
+            if let Some(resource) = entry.resource.take() {
+                entry.resource =
+                    Some(translated(resource, translator, &composition.template).await?);
+            }
+        }
+        let resources: Vec<Resource> = bundle
+            .entry
+            .iter()
+            .filter_map(|entry| entry.resource.clone())
+            .collect();
+        let dropped = self.transformed(mapping, &composition.template, &resources)?;
+        lines.extend(dropped_line(&dropped, Writes::Composition));
+        Ok(Some(Composed { bundle, lines }))
+    }
+
     /// Counts what `mapping` did to a composition of `template`, which it
     /// mapped to `resources`, into the report of its context.
     fn transformed(
@@ -589,7 +734,7 @@ impl Assembly {
         let mut report = Report::new(Direction::Provided, Category::PatientSummary, pin);
         for resource in resources {
             match resource {
-                Resource::Provenance(_) => {}
+                Resource::Provenance(_) | Resource::Composition(_) => {}
                 Resource::OperationOutcome(outcome) => report.count_losses(outcome),
                 other => {
                     report.count_coded(other, preferred).map_err(|source| {
@@ -648,4 +793,107 @@ impl Assembly {
         self.members.insert(index, url.clone());
         Ok(url)
     }
+}
+
+/// `resource`, mapped from a composition of `template`, with each code in
+/// no preferred system translated by `translator`; a `Composition`, a
+/// `Provenance` and an `OperationOutcome` are kept as they are.
+///
+/// # Errors
+///
+/// [`AssemblyError::Translation`] when the terminology server refuses or
+/// does not answer.
+async fn translated(
+    resource: Resource,
+    translator: &mut Translator<'_>,
+    template: &str,
+) -> Result<Resource, AssemblyError> {
+    match resource {
+        Resource::Composition(_) | Resource::Provenance(_) | Resource::OperationOutcome(_) => {
+            Ok(resource)
+        }
+        other => translator
+            .translate(&other, preferred)
+            .await
+            .map_err(|source| AssemblyError::Translation {
+                template: template.to_owned(),
+                source,
+            }),
+    }
+}
+
+/// One entry a composition run writes into a section, with the profiles it
+/// claims.
+type Claimed = (Resource, Vec<String>);
+
+/// The entries the section in `slot` of the one `Composition` among
+/// `resources` names, each with the profiles it claims; `None` when the
+/// composition holds no section in that slot.
+///
+/// # Errors
+///
+/// [`AssemblyError::Resource`] for a resource that cannot be read as JSON;
+/// a run with no composition, or an entry it does not hold, is refused
+/// when the document takes the section.
+fn section_entries(
+    resources: &[Resource],
+    slot: &Slot,
+    template: &str,
+) -> Result<Option<Vec<Claimed>>, AssemblyError> {
+    let Some(composition) = resources.iter().find_map(|resource| match resource {
+        Resource::Composition(composition) => Some(composition),
+        _ => None,
+    }) else {
+        return Ok(None);
+    };
+    let Some(section) = composition.section.iter().find(|section| {
+        section
+            .code
+            .iter()
+            .flat_map(|code| &code.coding)
+            .any(|coding| {
+                coding
+                    .system
+                    .as_ref()
+                    .and_then(|system| system.value.as_deref())
+                    == Some(LOINC)
+                    && coding.code.as_ref().and_then(|code| code.value.as_deref())
+                        == Some(slot.code)
+            })
+    }) else {
+        return Ok(None);
+    };
+    let mut read = Vec::with_capacity(resources.len());
+    for resource in resources {
+        let object = Json::to_json(resource).map_err(|source| AssemblyError::Resource {
+            template: template.to_owned(),
+            source,
+        })?;
+        let text = |name: &str| object.get(name).and_then(Value::as_str).map(str::to_owned);
+        let key = text("resourceType")
+            .zip(text("id"))
+            .map(|(kind, id)| format!("{kind}/{id}"));
+        let claimed: Vec<String> = object
+            .get("meta")
+            .and_then(|meta| meta.get("profile"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect();
+        read.push((key, resource, claimed));
+    }
+    Ok(Some(
+        section
+            .entry
+            .iter()
+            .filter_map(|entry| entry.reference.as_ref()?.value.as_deref())
+            .filter_map(|named| {
+                read.iter()
+                    .find(|(key, _, _)| key.as_deref() == Some(named))
+                    .map(|(_, resource, claimed)| ((*resource).clone(), claimed.clone()))
+            })
+            .collect(),
+    ))
 }
