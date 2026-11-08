@@ -192,6 +192,9 @@ indicators = ["cdr-f"]              # sent as resource or audience, by the profi
 
 [credentials."cdr-f".onward.keys]
 max_onward_lifetime = 3600          # required
+# The Keycloak profile only: the issuer's service accounts, whose sub is a
+# user's; the profile refuses the table at load until you list them.
+app_only = [{ subjects = ["service-account-cdr-f-batch"] }]
 ```
 
 `ferrohealth-smart` runs the grant the profile picks: RFC 8693 token
