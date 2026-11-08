@@ -68,7 +68,7 @@ pub const HP_ID: &str = "urn:oid:2.999.9.71";
 pub const NAME_ID_FORMAT: &str = "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified";
 
 /// The professional's name, the assertion's `subject-id` (SAML Profile
-/// 10.0.0 §2.3), which the gateway never relays or records.
+/// 10.0.0 §2.3), which the gateway records and never relays to a node.
 pub const HP_NAME: &str = "Qz9-ncp-subject-name";
 
 /// The `issuing_authority_name` of [`HP_ID`] (Annex Table 1), which the
@@ -86,7 +86,7 @@ pub const ROLE: &str = "Qz9-ncp-role";
 pub const HCP_ID: &str = "urn:oid:2.999.9.72";
 
 /// The provider's name, the assertion's `organization`, which the gateway
-/// never relays or records.
+/// records and never relays to a node.
 pub const HCP_NAME: &str = "Qz9-ncp-hcp-name";
 
 /// The `issuing_authority_name` of [`HCP_ID`] (Annex Table 2), which the
