@@ -30,7 +30,10 @@ The base is:
   pull request's base branch;
 - for a merge group, its base on `main`;
 - for a push to `main`, the commit before the push;
-- for the release commit and a manual dispatch, the previous release tag.
+- for a manual dispatch, the previous release tag;
+- for the release commit, the previous release tag, or the release commit's
+  first parent on `main` when that release cannot read the head's
+  configuration (see below).
 
 ## What runs
 
@@ -108,7 +111,28 @@ perf-gate: the base at <commit> does not know the key(s) emergency of perf/ferro
 ```
 
 A configuration the base refuses for another reason stops the run with
-exit 2 too, with the refusal.
+exit 2 too, with the refusal. Pull requests, merge groups, pushes to `main`
+and manual dispatches all stop this way.
+
+The release lane is the one exception. Its base is the previous release,
+which can predate the gate's configuration altogether: v0.0.16 has no
+`store`, `emergency` or `auth.dpop` key, so a v0.0.17 release judged
+against it could never be drafted. The release lane runs
+`scripts/perf/gate.sh build --fallback`, which builds the previous release
+and runs its `ferrofed config check` over the head's `perf/ferrofed.toml`.
+When the check names a key the release does not know, the gate builds the
+release commit's first parent on `main` as the base instead. That commit
+passed its own pairwise gate against its parent when it merged, so the
+chain of judged pairs reaches the release. The job summary and
+`target/perf-base/base.md` in the uploaded report name the base and why:
+
+```text
+The base is `<commit>`, the release commit's first parent: the previous release `v0.0.16` (`<commit>`) does not know the key(s) `emergency` `store` of `perf/ferrofed.toml`, so it cannot do the head's work.
+```
+
+A release that reads the configuration stays the base. When the previous
+release is itself the first parent, there is no other base, and the run
+stops with exit 2.
 
 ## Reading the report
 
@@ -129,8 +153,8 @@ threshold and in how many pairs the head breached. Requests the head
 answered other than expected fail the gate; those the base answered other
 than expected, such as a route the change adds, are notes. Each attempt
 uploads its reports as `perf-report-attempt-<n>`: the JSON reports under
-`target/perf/`, both gateways' logs, the compose and seed logs and the base
-commit, so `ferrohealth-perf compare --report target/perf/latest.json`
+`target/perf/`, both gateways' logs, the compose and seed logs, the base
+commit and `base.md`, the line naming the base, so `ferrohealth-perf compare --report target/perf/latest.json`
 judges a report again without a gateway.
 
 The tool exits 0 for a pass, 1 for a breach or a request answered other
@@ -169,5 +193,6 @@ bash scripts/perf/gate.sh run
 ```
 
 `bash scripts/perf/gate.sh --self-test` checks the pin reader, the plan
-rendering, the registry rewrite, the base resolution and the two plans'
-idle limits on any machine.
+rendering, the registry rewrite, the base resolution, the release lane's
+fallback, a pull request's refusal and the two plans' idle limits on any
+machine.

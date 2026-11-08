@@ -19,6 +19,10 @@ inputs:
     description: The commit or ref the base is the merge base with; empty takes the previous release.
     required: false
     default: ""
+  fallback:
+    description: '"true" falls back to the first parent when the previous release cannot read the configuration.'
+    required: false
+    default: "false"
   version:
     description: The ferrohealth-perf version to install, exactly.
     required: true
@@ -47,7 +51,13 @@ runs:
       shell: bash
       env:
         BASE: ${{ inputs.base }}
-      run: bash scripts/perf/gate.sh build "$BASE"
+        FALLBACK: ${{ inputs.fallback }}
+      run: |
+        if [ "$FALLBACK" = true ]; then
+          bash scripts/perf/gate.sh build --fallback
+        else
+          bash scripts/perf/gate.sh build "$BASE"
+        fi
     - name: Gate the performance
       id: gate
       shell: bash
@@ -112,5 +122,6 @@ runs:
           target/perf-run/*.log
           target/perf-run/*/server.log
           target/perf-base/rev
+          target/perf-base/base.md
         if-no-files-found: ignore
         retention-days: 30

@@ -11,7 +11,9 @@
 # base and the head on the same runner, the head judged over the base, and
 # the planted store poller the idle phase must fail. The base is the merge
 # base of the commit with the `base` input, or with none the previous
-# release. An attempt that ends with exit 2 could not be judged and says
+# release; on the release lane, a previous release that does not know a
+# key of perf/ferrofed.toml gives way to the release commit's first parent
+# (#1762). An attempt that ends with exit 2 could not be judged and says
 # nothing about the code, so it is retried on a fresh runner on any CPU
 # model. Some runners stall the gate for a whole job
 # (FerroHEALTH/FerroPIX#511), so an attempt that ends with exit 1 on a CPU
@@ -36,6 +38,14 @@ on:
         description: Restore and save the Rust build cache; the release lane passes false.
         required: false
         default: true
+        type: boolean
+      fallback:
+        description: >-
+          When the previous release cannot read the head's perf/ferrofed.toml,
+          judge against the commit's first parent; only the release lane passes
+          true.
+        required: false
+        default: false
         type: boolean
 
 permissions: {}
@@ -74,6 +84,7 @@ jobs:
         with:
           attempt: "1"
           base: ${{ inputs.base }}
+          fallback: ${{ inputs.fallback }}
           version: ${{ env.FERROHEALTH_PERF_VERSION }}
           stall-prone: ${{ env.STALL_PRONE }}
 
@@ -103,6 +114,7 @@ jobs:
         with:
           attempt: "2"
           base: ${{ inputs.base }}
+          fallback: ${{ inputs.fallback }}
           version: ${{ env.FERROHEALTH_PERF_VERSION }}
           stall-prone: ${{ env.STALL_PRONE }}
 
@@ -132,6 +144,7 @@ jobs:
         with:
           attempt: "3"
           base: ${{ inputs.base }}
+          fallback: ${{ inputs.fallback }}
           version: ${{ env.FERROHEALTH_PERF_VERSION }}
           stall-prone: ${{ env.STALL_PRONE }}
 

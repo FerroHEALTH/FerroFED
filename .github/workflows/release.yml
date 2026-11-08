@@ -9,7 +9,9 @@
 #
 # perf runs the performance gate on the tagged commit (#1687, perf.yml), with
 # no build cache, judged against the previous release built beside it
-# (#1731), so a release the gate fails is never drafted.
+# (#1731), or by the release commit's first parent when that release does not
+# know a key of perf/ferrofed.toml (#1762), so a release the gate fails is
+# never drafted.
 #
 # plan refuses a tag whose milestone (titled exactly as the tag) is missing or
 # still holds an open item, and milestone closes it once every leg succeeded
@@ -205,6 +207,7 @@ jobs:
     uses: ./.github/workflows/perf.yml
     with:
       cache: false
+      fallback: true
 
   # ---- github-release: create the release as a DRAFT ------------------------
 
