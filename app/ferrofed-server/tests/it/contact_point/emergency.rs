@@ -29,6 +29,7 @@ use std::time::Duration;
 
 use axum::Router;
 use ferrofed_server::config::Config;
+use ferrofed_server::config::audit::AuditSettings;
 use ferrofed_server::config::emergency::{EmergencyFault, EmergencyLimit};
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::settings::Settings;
@@ -165,6 +166,25 @@ async fn an_emergency_access_no_store_counts_is_refused_with_no_member_asked() -
         .map_err(|_unexpected| "one record")?;
     assert!(marked(&record), "{record}");
     assert_ne!(Some("0"), record["outcome"].as_str(), "a failure: {record}");
+    Ok(())
+}
+
+/// §2.5 asks for the count whatever becomes of the access record: under
+/// development with no `[audit]`, so no access log, an emergency access the
+/// gateway cannot count is still refused before any member is asked.
+#[tokio::test]
+async fn with_no_access_log_an_emergency_access_is_still_counted() -> TestResult {
+    let (a, b) = (node_with_rows(&[]).await, node_with_rows(&[]).await);
+    let repository = FeedRepository::start().await;
+    let dir = tempfile::tempdir()?;
+    let mut settings = emergency_settings(dir.path(), (&a.uri(), &b.uri()), &repository, "")?;
+    settings.audit = AuditSettings::default();
+    let app = contact_point_router(Arc::new(AppState::build(&settings)?));
+    let (status, text) = asked(&app, &relayed_for("Qz7-hp-73", "EMERGENCY")).await?;
+    assert_eq!(StatusCode::SERVICE_UNAVAILABLE, status, "{text}");
+    assert_eq!("emergency-uncounted", error_body(&text)?.code);
+    assert!(received(&a).await?.is_empty(), "node A was not asked");
+    assert!(received(&b).await?.is_empty(), "node B was not asked");
     Ok(())
 }
 

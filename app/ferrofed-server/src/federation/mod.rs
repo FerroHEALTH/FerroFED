@@ -23,6 +23,7 @@ use std::collections::BTreeSet;
 use std::num::{NonZeroU32, NonZeroUsize};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use ehds_logging::emergency::EmergencyPurposes;
 use ehds_logging::record::Purpose;
 use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::conveyance::caller::Principal;
@@ -84,6 +85,7 @@ pub struct Federation {
     client_keys: Vec<Jwk>,
     documents: Vec<PublicDocument>,
     access: Option<Arc<AccessLog>>,
+    emergency: EmergencyPurposes,
     emergency_limit: EmergencyLimit,
 }
 
@@ -183,6 +185,9 @@ impl Federation {
     ///
     /// The pre-filter is still asked, every candidate is asked, and each
     /// node decides (N26, N27); the gateway never infers the purpose (§13.4).
+    /// A gateway with no access log sets nothing aside, since Art 11(5) asks
+    /// that such a case be logged; a contact point's emergency limit reads
+    /// [`Federation::emergency_purposes`], which needs no log.
     #[must_use]
     pub fn sets_aside_consent_for(&self, conveyance: &Conveyance) -> bool {
         let Principal::Caller(caller) = conveyance.principal() else {
@@ -239,6 +244,14 @@ impl Federation {
     #[must_use]
     pub fn emergency_limit(&self) -> EmergencyLimit {
         self.emergency_limit
+    }
+
+    /// The purposes of use that make a request an emergency access, as
+    /// `[[access_log.emergency_purpose]]` names them, whether or not an
+    /// access log records the accesses (Regulation (EU) 2025/327 Art 11(5)).
+    #[must_use]
+    pub fn emergency_purposes(&self) -> &EmergencyPurposes {
+        &self.emergency
     }
 
     /// This federation, holding each relayed professional's emergency

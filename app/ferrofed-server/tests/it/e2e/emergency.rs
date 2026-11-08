@@ -21,10 +21,13 @@
 )]
 
 use std::error::Error;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
+use ferrofed_server::config::audit::AuditSettings;
+use ferrofed_server::config::settings::Settings;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::containers::database::PostgresTls;
@@ -84,17 +87,46 @@ impl Members {
         limit: &str,
     ) -> Result<Replica, Box<dyn Error>> {
         let dir = tempfile::tempdir()?;
-        let tables = format!(
-            "{}\n[emergency]\n{limit}",
-            store_toml(server, name, dir.path())?
-        );
-        let settings = emergency_settings(
-            dir.path(),
+        let settings = self.settings(server, name, limit, dir.path())?;
+        Self::serving(&settings, dir)
+    }
+
+    /// A replica of [`Members::replica`] under development with no `[audit]`,
+    /// so it keeps no access log.
+    fn unaudited(
+        &self,
+        server: &PostgresTls,
+        name: &str,
+        limit: &str,
+    ) -> Result<Replica, Box<dyn Error>> {
+        let dir = tempfile::tempdir()?;
+        let mut settings = self.settings(server, name, limit, dir.path())?;
+        settings.audit = AuditSettings::default();
+        Self::serving(&settings, dir)
+    }
+
+    /// The settings of a replica over these members and the store database
+    /// `name` on `server`, with the `[emergency]` keys `limit`, its files in
+    /// `dir`.
+    fn settings(
+        &self,
+        server: &PostgresTls,
+        name: &str,
+        limit: &str,
+        dir: &Path,
+    ) -> Result<Settings, Box<dyn Error>> {
+        let tables = format!("{}\n[emergency]\n{limit}", store_toml(server, name, dir)?);
+        emergency_settings(
+            dir,
             (&self.a.uri(), &self.b.uri()),
             &self.repository,
             &tables,
-        )?;
-        let state = Arc::new(tokio::task::block_in_place(|| AppState::build(&settings))?);
+        )
+    }
+
+    /// The replica serving `settings`, its files in `dir`.
+    fn serving(settings: &Settings, dir: tempfile::TempDir) -> Result<Replica, Box<dyn Error>> {
+        let state = Arc::new(tokio::task::block_in_place(|| AppState::build(settings))?);
         Ok(Replica {
             app: contact_point_router(Arc::clone(&state)),
             _state: state,
@@ -191,6 +223,30 @@ async fn five_emergency_accesses_pass_and_the_sixth_is_denied_and_recorded() -> 
         held.iter()
             .all(|key| key.len() == 64 && !key.contains(HP) && !key.contains(OTHER_HP)),
         "the table names no professional: {held:?}"
+    );
+    Ok(())
+}
+
+/// §2.5 asks for the deny whatever becomes of the access record: under
+/// development with no `[audit]`, so no access log, the sixth emergency
+/// access of one professional is still denied with no member asked.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn with_no_access_log_the_sixth_emergency_access_is_still_denied() -> TestResult {
+    if !containers::e2e_enabled() {
+        return Ok(());
+    }
+    let server = database::postgres_tls("emergency_unaudited", &[]).await?;
+    let members = Members::start().await;
+    let replica = members.unaudited(&server, "emergency_unaudited", "")?;
+    for attempt in 1..=5 {
+        let (status, text) = emergency(&replica, HP).await?;
+        assert_eq!(StatusCode::OK, status, "attempt {attempt}: {text}");
+    }
+    assert_denied(&emergency(&replica, HP).await?)?;
+    assert_eq!(
+        5,
+        members.asked_at_a().await?,
+        "the sixth reached no member"
     );
     Ok(())
 }
