@@ -18,11 +18,12 @@
 //! and Treatment Relationship Confirmation carry (eHDSI SAML Profile 10.0.0
 //! §2.1, §2.3, §4), and refuses one that falls short; the gateway checks no
 //! field itself. It reads the crate's outcome ([`External`]) into what it
-//! relays to a node and to the access record ([`relayed`], [`record`]): the
-//! professional by the assertion's `NameID`, their role and organisation,
-//! the country and the purpose of use. No name and no address is read,
-//! relayed or recorded (GDPR Art 5(1)(c)); the assertion carries no address,
-//! and the record names the professional by their identifier.
+//! relays to a node ([`relayed`]): the professional by the assertion's
+//! `NameID`, their role and organisation, the country and the purpose of
+//! use, with no name (GDPR Art 5(1)(c)). The access record ([`record`]) also
+//! names the professional by the assertion's `subject-id`, which
+//! Implementing Regulation (EU) 2026/2099 Annex Table 1 makes mandatory, and
+//! lists every further field the token asserts.
 //!
 //! The patient the treatment relationship confirmation binds travels in the
 //! token's `patient.id` attribute, as one `system|value` token
@@ -40,6 +41,7 @@ use ehds_logging::record::{
 };
 use ferrofed_engine::conveyance::relayed::{HealthProfessional, HealthcareProvider, Relayed, Role};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
+use ferrohealth_smart::federation::contact::TrcPatientId;
 use ferrohealth_smart::federation::{Attribute, External, Field, Source};
 use http::HeaderMap;
 use secrecy::{ExposeSecret, SecretString};
@@ -71,20 +73,16 @@ pub struct TrcPatient {
 }
 
 impl TrcPatient {
-    /// Reads the token `text`, `system|value`, or `None` when it is not one
-    /// with a system and a value.
+    /// The patient `id` names, or `None` when its system is no identifier
+    /// namespace the cross-reference resolves.
     #[must_use]
-    pub fn read(text: &str) -> Option<Self> {
-        // NOTE: FHIR R4 search §3.1.1.5.5, the token form the face's own patient.identifier
-        // takes; a claim of any other form binds no patient, so the request is refused.
-        let (system, value) = text.split_once('|')?;
-        if system.is_empty() || value.is_empty() || value.contains('|') {
-            return None;
-        }
-        let namespace = IdentifierNamespace::new(system).ok()?;
+    pub fn of(id: &TrcPatientId) -> Option<Self> {
+        // NOTE: no specification governs this: our own design; a system the cross-reference
+        // cannot name binds no patient it can resolve, so the request is refused.
+        let namespace = IdentifierNamespace::new(id.system()).ok()?;
         Some(Self {
             namespace,
-            value: SecretString::from(value.to_owned()),
+            value: SecretString::from(id.value().to_owned()),
         })
     }
 
@@ -123,8 +121,8 @@ impl TrcPatient {
     ///
     /// # Errors
     ///
-    /// [`PatientRefError`] for an empty value, which [`TrcPatient::read`]
-    /// never builds.
+    /// [`PatientRefError`] for an empty value, which [`TrcPatientId`] never
+    /// holds.
     pub fn patient(&self) -> Result<PatientRef, PatientRefError> {
         PatientRef::new(self.namespace.clone(), self.value.clone())
     }
@@ -242,22 +240,74 @@ pub fn permits(external: &External, code: &str) -> Option<bool> {
 /// `system|value` form, when it names one.
 #[must_use]
 pub fn trc_patient(external: &External) -> Option<TrcPatient> {
-    text(external, Field::PatientId).and_then(|token| TrcPatient::read(&token))
+    external.trc_patient().as_ref().and_then(TrcPatient::of)
 }
 
-/// What a contact point relays, as the access record names it: marked as
-/// relayed by a contact point, with what its token asserts of the identity
-/// assertion, under the rules the record holds it to.
+/// The fields the access record holds at a member of its own, which
+/// [`record`] leaves out of what it lists as asserted beside them.
 ///
-/// The record names the professional by their identifier, the assertion's
-/// `NameID`, in place of a name (GDPR Art 5(1)(c); no specification governs
-/// this: our own design), and names no provider name or address.
+/// The purposes of use are the accessor's, and the patient fields name the
+/// record's subject, which the record holds apart from its accessor.
+const RECORDED: [Field; 25] = [
+    Field::ProfessionalName,
+    Field::ProfessionalFamilyName,
+    Field::ProfessionalGivenName,
+    Field::ProfessionalCountryCode,
+    Field::ProfessionalHpIdentifier,
+    Field::ProfessionalIssuingAuthorityName,
+    Field::ProfessionalHpProfessionalRole,
+    Field::ProfessionalHealthcareProviderIdentifier,
+    Field::ProfessionalAuthenticationMethod,
+    Field::ProfessionalOnBehalfOf,
+    Field::ProfessionalPermissions,
+    Field::ProviderHealthcareProviderIdentifier,
+    Field::ProviderIssuingAuthorityName,
+    Field::ProviderHealthcareProviderName,
+    Field::ProviderHealthcareProviderAddress,
+    Field::ProviderFacilityType,
+    Field::ProviderHomeCommunityId,
+    Field::PointOfCare,
+    Field::AssertionIssuer,
+    Field::AssertionId,
+    Field::TrcId,
+    Field::PurposeOfUse,
+    Field::PatientId,
+    Field::PatientIdSource,
+    Field::PatientPidIssuerCountry,
+];
+
+/// Every string `attribute` carries: its text, or each code as
+/// `system|code`, or the code alone when it names no system.
+fn strings(attribute: &Attribute) -> Vec<String> {
+    match attribute {
+        Attribute::Text(text) => vec![text.clone()],
+        Attribute::Codes(codes) => codes
+            .iter()
+            .map(|code| match code.system.as_deref() {
+                Some(system) if !system.is_empty() => format!("{system}|{}", code.code),
+                _ => code.code.clone(),
+            })
+            .collect(),
+    }
+}
+
+/// What a contact point relays, as the access record names it.
+///
+/// It is marked as relayed by a contact point, with each Implementing
+/// Regulation (EU) 2026/2099 Annex field and eHDSI SAML Profile 10.0.0 §2.3
+/// attribute its token asserts at its member, and every other field it
+/// asserts by its name.
+///
+/// The professional's name is the assertion's `subject-id`, one full-name
+/// string, which Annex Table 1 makes mandatory; their given and family names
+/// are recorded only when the token states them apart.
 ///
 /// # Errors
 ///
-/// Returns the [`RelayedError`] of a provider identifier that is no
-/// `urn:oid:` or `urn:hl7ii:` identifier, and of an ISCO `44` role relayed
-/// without whom it acts for (eHDSI SAML Profile 10.0.0 §2.3).
+/// Returns the [`RelayedError`] of a token that asserts no name for the
+/// professional, of a provider identifier that is no `urn:oid:` or
+/// `urn:hl7ii:` identifier, and of an ISCO `44` role relayed without whom it
+/// acts for (eHDSI SAML Profile 10.0.0 §2.3).
 pub fn record(
     relayed: &Relayed,
     external: &External,
@@ -273,23 +323,36 @@ pub fn record(
         sp_provided_id: None,
         issuer,
     });
+    let asserted = external
+        .fields()
+        .iter()
+        .filter(|(field, _)| !RECORDED.contains(field))
+        .map(|(field, attribute)| (field.as_str().to_owned(), strings(attribute)))
+        .filter(|(_, values)| !values.is_empty())
+        .collect();
     ehds_logging::record::Relayed::try_from(RelayedParts {
         via: Via::ContactPoint {
             issuer: relayed.contact_point.clone(),
         },
-        country_code: relayed.country_code.clone(),
+        country_code: Some(relayed.country_code.clone()),
         professional: Some(RelayedProfessional {
-            name: professional.hp_identifier.clone(),
-            family_name: None,
-            given_name: None,
-            identifier: professional.hp_identifier.clone(),
-            issuing_authority: professional.issuing_authority_name.clone(),
+            name: text(external, Field::ProfessionalName),
+            family_name: text(external, Field::ProfessionalFamilyName),
+            given_name: text(external, Field::ProfessionalGivenName),
+            identifier: Some(professional.hp_identifier.clone()),
+            issuing_authority: Some(professional.issuing_authority_name.clone()),
             roles: professional
                 .hp_professional_role
                 .iter()
                 .map(coded)
                 .collect(),
-            healthcare_provider_identifier: Some(provider.identifier.clone()),
+            // NOTE: eHDSI SAML Profile 10.0.0 §2.3: the assertion's organization-id names
+            // where the professional treats, so it stands for Annex Table 1's identifier.
+            healthcare_provider_identifier: text(
+                external,
+                Field::ProfessionalHealthcareProviderIdentifier,
+            )
+            .or_else(|| Some(provider.identifier.clone())),
             name_id,
             authentication_method: text(external, Field::ProfessionalAuthenticationMethod)
                 .and_then(|uri| AuthenticationMethod::from_uri(&uri)),
@@ -299,23 +362,24 @@ pub fn record(
                 .map(|permission| permission.code)
                 .collect(),
         }),
-        provider: RelayedProvider {
+        provider: Some(RelayedProvider {
             identifier: provider.identifier.clone(),
-            issuing_authority: provider.issuing_authority_name.clone(),
-            name: None,
-            address: None,
+            issuing_authority: Some(provider.issuing_authority_name.clone()),
+            name: text(external, Field::ProviderHealthcareProviderName),
+            address: text(external, Field::ProviderHealthcareProviderAddress),
             facility_type: codes(external, Field::ProviderFacilityType)
                 .first()
                 .map(coded),
             home_community_id: text(external, Field::ProviderHomeCommunityId),
             organisation_type: None,
-        },
+        }),
         agreement: None,
         point_of_care: text(external, Field::PointOfCare),
         identity_assertion_id: text(external, Field::AssertionId),
         trc_assertion_id: text(external, Field::TrcId),
         message_id: None,
         gateways: Gateways::default(),
+        asserted,
     })
 }
 

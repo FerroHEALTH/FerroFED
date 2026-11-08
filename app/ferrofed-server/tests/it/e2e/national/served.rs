@@ -332,7 +332,8 @@ async fn members_received(harness: &Harness) -> TestResult {
 }
 
 /// Asserts one access record per request of `read`, each naming the relayed
-/// professional and provider as asserted by the contact point.
+/// professional and provider as asserted by the contact point, their names
+/// among them (2026/2099 Annex Table 1), which no node is told.
 async fn recorded(repository: &FeedRepository, read: &Answers) -> TestResult {
     let records = access_records(repository, REQUESTS).await?;
     let mut by_correlation: BTreeMap<String, usize> = BTreeMap::new();
@@ -341,7 +342,8 @@ async fn recorded(repository: &FeedRepository, read: &Answers) -> TestResult {
         assert_eq!(relayed("asserted"), ["true"], "{record}");
         assert!(relayed("hp-family-name").is_empty(), "{record}");
         assert_eq!(relayed("hp-identifier"), [HP_ID], "{record}");
-        assert!(relayed("provider-name").is_empty(), "{record}");
+        assert_eq!(relayed("hp-name"), [HP_NAME], "{record}");
+        assert_eq!(relayed("provider-name"), [HCP_NAME], "{record}");
         assert_eq!(relayed("provider-identifier"), [HCP_ID], "{record}");
         for correlation in correlations(record) {
             *by_correlation.entry(correlation).or_default() += 1;

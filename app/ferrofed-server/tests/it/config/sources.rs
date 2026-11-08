@@ -266,3 +266,66 @@ fn a_key_from_the_old_server_table_is_refused_by_its_name() -> Result<(), Box<dy
     }
     Ok(())
 }
+
+/// The `[credentials."<endpoint id>".onward]` table of `endpoint`, with
+/// `extra` written into it.
+fn onward_lane(endpoint: &str, extra: &str) -> String {
+    format!(
+        "[credentials.\"{endpoint}\".oauth]\n\
+         token_endpoint = \"https://as.example.org/token\"\n\
+         client_id = \"ferrofed\"\n\
+         client_secret = \"synthetic-inline-token\"\n\n\
+         [credentials.\"{endpoint}\".onward]\n\
+         issuer = \"https://federation.cdr-a.example.org\"\n\
+         kind = \"persons\"\n\
+         profile = \"rfc9068\"\n\
+         audiences = [\"https://cdr-a.example.org/openehr\"]\n\
+         indicators = [\"https://cdr-a.example.org/openehr\"]\n\
+         {extra}\n\
+         [credentials.\"{endpoint}\".onward.keys]\n\
+         max_onward_lifetime = 3600\n\n"
+    )
+}
+
+/// Whether the onward lane `settings` resolve for `endpoint` holds the
+/// tokens it obtains.
+fn caches(
+    settings: &ferrofed_server::config::settings::Settings,
+    endpoint: &str,
+) -> Result<bool, Box<dyn StdError>> {
+    match settings.credentials.get(&EndpointId::new(endpoint)?) {
+        Some(Scheme::Oauth {
+            onward: Some(onward),
+            ..
+        }) => Ok(onward.lane.onward.caches()),
+        other => {
+            Err(format!("{endpoint} is an oauth scheme with an onward lane: {other:?}").into())
+        }
+    }
+}
+
+/// An onward lane holds the tokens it obtains unless its table writes
+/// `cache = false`, which a performance measurement's self-test sets so every
+/// call is exchanged at the issuer (`ferrohealth-smart` 0.10 `OnwardSection`).
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "a test asserts, and returns its setup errors"
+)]
+fn an_onward_lane_with_the_cache_off_holds_no_token() -> Result<(), Box<dyn StdError>> {
+    let toml = format!(
+        "[server]\nlisten = \"127.0.0.1:1\"\n\n{}{}",
+        onward_lane("node-cached", ""),
+        onward_lane("node-uncached", "cache = false\n"),
+    );
+    let settings = Config::from_sources(Some(&toml), &BTreeMap::new())?.resolve()?;
+    assert!(
+        caches(&settings, "node-cached")?,
+        "the cache is on by default"
+    );
+    assert!(
+        !caches(&settings, "node-uncached")?,
+        "cache = false turns the lane's cache off"
+    );
+    Ok(())
+}
