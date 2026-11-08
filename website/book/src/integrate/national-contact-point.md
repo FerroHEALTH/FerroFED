@@ -111,6 +111,7 @@ when you declared one, its correlation header:
 | `GET {fhir-base}/MedicationRequest?patient.identifier=system\|value` | the patient's prescriptions at the serving members |
 | `GET {fhir-base}/MedicationRequest/{id}` | one prescription |
 | `POST {fhir-base}/MedicationDispense` | a dispensation, written to the member that owns its prescription |
+| `PUT {fhir-base}/MedicationDispense/{id}` | the discard of a dispensation, `status` `entered-in-error`, written to the member that holds it |
 
 The connector names the patient by the national identifier its own
 identity services confirmed, with that identifier's system. The gateway
@@ -158,6 +159,37 @@ token's `ehdsi.patient.id` names (eHDSI XCA Profile 8.0.1 §4.2.1 and
   contact point's own audit trail carries the patient, joined by the
   correlation identifier. Blocking the professional, which XCA §4.2.2 asks
   as a SHOULD, stays with the contact point.
+
+### Dispensations and their discard
+
+eHDSI SAML Profile 10.0.0 §2.5 has a professional carry at least `PPD-046`
+for a notification on dispensation and on its discard. When the token's
+`ehdsi.professional.permissions` lists permissions without it, the gateway
+refuses the dispensation `403 forbidden` with `permission-missing` and
+`ERROR_SEC_GENERIC`, and the discard with `discard-refused` and
+`ERROR_ED_DISCARD_FAILED`. A token that lists no permissions is not held to
+it.
+
+A discard is admitted only within 24 hours of the dispensation and from the
+point of care that dispensed it (MyHealth@EU Requirements Catalogue 10.0.0
+07.04; NCPeH Components Specifications 10.0.0 §3.1.6.4.2, "issued by the
+same HCPO"). The identity assertion names the point of care by a name
+alone, so the gateway matches identifiers:
+
+- When the owner creates a contact point's dispensation, the gateway keeps
+  the token's `ehdsi.provider.healthcare_provider_identifier` (the
+  assertion's `organization-id`) and the identifier of the `Organization`
+  the dispensation names on `performer.actor`, contained or by its logical
+  identifier (HL7 Europe MPD 1.0.0), for 24 hours in
+  [FerroFED's store](../operate/store.md).
+- A contact point's discard must carry the same `organization-id` and name
+  the same facility on `performer.actor`. One from another organisation or
+  facility, one after 24 hours, and one of a dispensation the gateway kept
+  no dispenser of (written by another caller, or naming no facility) is
+  refused `403 forbidden` with `discard-refused` and
+  `ERROR_ED_DISCARD_FAILED`, and the member is never asked.
+
+Other callers' discards are not held to this; the member decides.
 - A TRC patient the cross-reference cannot resolve at every member, or a
   deployment with no cross-reference, is answered `424`
   `patient-context-unavailable` with nothing sent, and logged under

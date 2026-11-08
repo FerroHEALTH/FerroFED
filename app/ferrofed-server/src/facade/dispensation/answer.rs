@@ -432,6 +432,9 @@ fn made_answer(
         }
     }
     let mut response = from_member(federation, writing, made, response);
+    if let Some(id) = located {
+        response.extensions_mut().insert(super::Dispensed(id));
+    }
     attach(
         &mut response,
         accessed(federation, lookup, wrote(writing, created, own.as_deref())),

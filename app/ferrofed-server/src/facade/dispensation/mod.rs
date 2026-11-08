@@ -64,6 +64,11 @@ use crate::security::logged;
 use answer::{Lookup, refused, refused_after};
 use lookup::Owned;
 
+/// The face's id of a dispensation the owner created, which the answer
+/// carries as an extension so the FHIR face can record who dispensed it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Dispensed(pub(crate) String);
+
 /// The operation an access record names for a received dispensation: the
 /// FHIR R4 `create` interaction on `MedicationDispense`.
 pub(crate) const OPERATION: &str = "create MedicationDispense";

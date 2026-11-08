@@ -94,6 +94,7 @@ mod commit;
 mod conformance_run;
 mod crossref;
 mod differential;
+mod discard;
 mod dpop_replay;
 mod emergency;
 mod keycloak;

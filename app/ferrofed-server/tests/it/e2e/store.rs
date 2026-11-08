@@ -81,7 +81,7 @@ pub(crate) async fn executed(url: &str, statement: &str) -> TestResult {
 }
 
 /// The first column of every row `query` answers at `url`, as text.
-async fn column(url: &str, query: &str) -> Result<Vec<String>, Box<dyn Error>> {
+pub(crate) async fn column(url: &str, query: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
     let driven = tokio::spawn(connection);
     let rows = client.query(query, &[]).await?;
@@ -258,6 +258,7 @@ async fn two_replicas_booting_together_over_an_empty_database_apply_each_migrati
     .await?;
     assert_eq!(
         vec![
+            String::from("contact_point_dispensation"),
             String::from("dpop_proof"),
             String::from("emergency_access"),
             String::from("store_migration"),
@@ -449,6 +450,9 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
              INSERT INTO ferrofed.dpop_proof VALUES
                ('spent', now() - interval '1 minute'),
                ('live', now() + interval '1 minute');
+             INSERT INTO ferrofed.contact_point_dispensation VALUES
+               ('discarded', 'urn:oid:2.999.9', 'urn:oid:2.999.8', 'F-1', now() - interval '1 second'),
+               ('open', 'urn:oid:2.999.9', 'urn:oid:2.999.8', 'F-2', now() + interval '1 hour');
              CREATE TABLE public.window_elsewhere (id text, expires_at timestamptz NOT NULL);
              INSERT INTO public.window_elsewhere VALUES ('outside', now() - interval '1 hour');
              INSERT INTO {TABLE} (name, version, saved, aql)
@@ -460,12 +464,13 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
     let swept = store.sweep().await?;
     assert_eq!(
         vec![
+            (String::from("contact_point_dispensation"), 1),
             (String::from("dpop_proof"), 1),
             (String::from("emergency_access"), 1),
             (String::from("window_probe"), 2)
         ],
         swept,
-        "every table of the store with a window is swept, the emergency count's and the DPoP proofs' included"
+        "every table of the store with a window is swept, the emergency count's, the DPoP proofs' and the dispensers' included"
     );
     assert_eq!(
         vec![String::from("future")],
@@ -484,6 +489,7 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
     );
     assert_eq!(
         vec![
+            (String::from("contact_point_dispensation"), 0),
             (String::from("dpop_proof"), 0),
             (String::from("emergency_access"), 0),
             (String::from("window_probe"), 0)
