@@ -16,7 +16,7 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use crate::medication::{
-    ENTRY, OTHER_CARE, Written, details, held, patient_summary_template, summary_order,
+    ENTRY, OTHER_CARE, Written, details, held, order, patient_summary_template, summary_order,
 };
 
 /// The workspace root, two levels above this crate's manifest.
@@ -115,22 +115,18 @@ fn instant(value: &str) -> String {
     format!(r#"{{ "_type": "DV_DATE_TIME", "value": "{value}" }}"#)
 }
 
-/// The synthetic diagnosis, recognised during the stay.
-fn diagnosis() -> String {
+/// A problem or diagnosis holding `items`.
+fn evaluation(items: &[String]) -> String {
     format!(
         r#"{{ "_type": "EVALUATION", "name": {{ "_type": "DV_TEXT", "value": "Problem/Diagnosis" }}, {details}, {ENTRY},
-  "data": {{ "_type": "ITEM_TREE", "name": {{ "_type": "DV_TEXT", "value": "structure" }}, "archetype_node_id": "at0001", "items": [{name}] }} }}"#,
+  "data": {{ "_type": "ITEM_TREE", "name": {{ "_type": "DV_TEXT", "value": "structure" }}, "archetype_node_id": "at0001", "items": [{items}] }} }}"#,
         details = details("openEHR-EHR-EVALUATION.problem_diagnosis.v1"),
-        name = element(
-            "at0002",
-            "Problem/Diagnosis name",
-            &synthetic("ferrofed-diagnoses", "Synthetic diagnosis", DIAGNOSIS),
-        ),
+        items = items.join(","),
     )
 }
 
-/// The synthetic procedure, completed during the stay.
-fn procedure() -> String {
+/// A procedure completed at `time`, holding `items`.
+fn completed(time: &str, items: &[String]) -> String {
     format!(
         r#"{{ "_type": "ACTION", "name": {{ "_type": "DV_TEXT", "value": "Procedure" }}, {details}, {ENTRY},
   "time": {time},
@@ -139,14 +135,31 @@ fn procedure() -> String {
     "current_state": {{ "_type": "DV_CODED_TEXT", "value": "completed", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "532" }} }},
     "careflow_step": {{ "_type": "DV_CODED_TEXT", "value": "Procedure completed", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "local" }}, "code_string": "at0043" }} }}
   }},
-  "description": {{ "_type": "ITEM_TREE", "name": {{ "_type": "DV_TEXT", "value": "Tree" }}, "archetype_node_id": "at0001", "items": [{name}] }} }}"#,
+  "description": {{ "_type": "ITEM_TREE", "name": {{ "_type": "DV_TEXT", "value": "Tree" }}, "archetype_node_id": "at0001", "items": [{items}] }} }}"#,
         details = details("openEHR-EHR-ACTION.procedure.v1"),
-        time = instant("2026-10-14T13:00:00Z"),
-        name = element(
+        time = instant(time),
+        items = items.join(","),
+    )
+}
+
+/// The synthetic diagnosis, recognised during the stay.
+fn diagnosis() -> String {
+    evaluation(&[element(
+        "at0002",
+        "Problem/Diagnosis name",
+        &synthetic("ferrofed-diagnoses", "Synthetic diagnosis", DIAGNOSIS),
+    )])
+}
+
+/// The synthetic procedure, completed during the stay.
+fn procedure() -> String {
+    completed(
+        "2026-10-14T13:00:00Z",
+        &[element(
             "at0002",
             "Procedure name",
             &synthetic("ferrofed-procedures", "Synthetic procedure", PROCEDURE),
-        ),
+        )],
     )
 }
 
@@ -157,17 +170,174 @@ fn procedure() -> String {
 /// procedures and discharge medications sections each hold one entry.
 #[must_use]
 pub fn composition(uid: &str) -> String {
-    let sections = [
-        ("Diagnostic summary", diagnosis()),
-        ("Significant procedures", procedure()),
-        ("Discharge medications", summary_order(MEDICINE)),
+    composed(
+        uid,
+        &[
+            ("Diagnostic summary", vec![diagnosis()]),
+            ("Significant procedures", vec![procedure()]),
+            ("Discharge medications", vec![summary_order(MEDICINE)]),
+        ],
+    )
+}
+
+/// A problem or diagnosis of the full synthetic discharge composition, each
+/// element the shipped HDR mapping reads.
+#[derive(Debug, Clone, Copy)]
+pub struct Diagnosis {
+    /// The code of the diagnosis, in a code system under `example.org`.
+    pub code: &'static str,
+    /// When it began.
+    pub onset: &'static str,
+    /// When it was clinically recognised.
+    pub recognised: &'static str,
+    /// The body site, as text.
+    pub body_site: &'static str,
+    /// The comment.
+    pub comment: &'static str,
+}
+
+/// A procedure of the full synthetic discharge composition, each element
+/// the shipped HDR mapping reads.
+#[derive(Debug, Clone, Copy)]
+pub struct Procedure {
+    /// The code of the procedure, in a code system under `example.org`.
+    pub code: &'static str,
+    /// When it was completed.
+    pub performed: &'static str,
+    /// The body site, as text.
+    pub body_site: &'static str,
+    /// The comment.
+    pub comment: &'static str,
+}
+
+/// A discharge medicine of the full synthetic discharge composition, each
+/// element the shipped HDR mapping reads.
+#[derive(Debug, Clone, Copy)]
+pub struct Medicine {
+    /// The code of the medicine, in a code system under `example.org`.
+    pub code: &'static str,
+    /// The overall directions.
+    pub directions: &'static str,
+    /// The comment.
+    pub comment: &'static str,
+}
+
+/// The two problems or diagnoses of the full synthetic discharge
+/// composition.
+pub const DIAGNOSES: [Diagnosis; 2] = [
+    Diagnosis {
+        code: DIAGNOSIS,
+        onset: "2026-10-11T18:00:00Z",
+        recognised: "2026-10-12T10:15:00Z",
+        body_site: "Synthetic body site one",
+        comment: "Synthetic diagnosis comment one",
+    },
+    Diagnosis {
+        code: "SYN-DIAGNOSIS-0002",
+        onset: "2026-10-13T07:00:00Z",
+        recognised: "2026-10-13T09:40:00Z",
+        body_site: "Synthetic body site two",
+        comment: "Synthetic diagnosis comment two",
+    },
+];
+
+/// The two procedures of the full synthetic discharge composition.
+pub const PROCEDURES: [Procedure; 2] = [
+    Procedure {
+        code: PROCEDURE,
+        performed: "2026-10-14T13:00:00Z",
+        body_site: "Synthetic procedure site one",
+        comment: "Synthetic procedure comment one",
+    },
+    Procedure {
+        code: "SYN-PROCEDURE-0002",
+        performed: "2026-10-16T08:30:00Z",
+        body_site: "Synthetic procedure site two",
+        comment: "Synthetic procedure comment two",
+    },
+];
+
+/// The two discharge medicines of the full synthetic discharge composition.
+pub const MEDICINES: [Medicine; 2] = [
+    Medicine {
+        code: MEDICINE,
+        directions: "One synthetic tablet each morning",
+        comment: "Synthetic medicine comment one",
+    },
+    Medicine {
+        code: "SYN-MEDICINE-0002",
+        directions: "Two synthetic tablets each evening",
+        comment: "Synthetic medicine comment two",
+    },
+];
+
+/// A plain text.
+fn text(value: &str) -> String {
+    format!(r#"{{ "_type": "DV_TEXT", "value": "{value}" }}"#)
+}
+
+/// A problem or diagnosis with each element the HDR mapping reads.
+fn full_diagnosis(diagnosis: &Diagnosis) -> String {
+    let items = [
+        element(
+            "at0002",
+            "Problem/Diagnosis name",
+            &synthetic("ferrofed-diagnoses", "Synthetic diagnosis", diagnosis.code),
+        ),
+        element("at0012", "Body site", &text(diagnosis.body_site)),
+        element("at0077", "Date/time of onset", &instant(diagnosis.onset)),
+        element(
+            "at0003",
+            "Date/time clinically recognised",
+            &instant(diagnosis.recognised),
+        ),
+        element("at0069", "Comment", &text(diagnosis.comment)),
     ];
+    evaluation(&items)
+}
+
+/// A completed procedure with each element the HDR mapping reads.
+fn full_procedure(procedure: &Procedure) -> String {
+    let items = [
+        element(
+            "at0002",
+            "Procedure name",
+            &synthetic("ferrofed-procedures", "Synthetic procedure", procedure.code),
+        ),
+        element("at0063", "Body site", &text(procedure.body_site)),
+        element("at0005", "Comment", &text(procedure.comment)),
+    ];
+    completed(procedure.performed, &items)
+}
+
+/// A medication order with each element the HDR mapping reads.
+fn full_order(medicine: &Medicine) -> String {
+    let items = [
+        element(
+            "at0070",
+            "Medication item",
+            &synthetic("ferrofed-products", "Synthetic tablet", medicine.code),
+        ),
+        element(
+            "at0009",
+            "Overall directions description",
+            &text(medicine.directions),
+        ),
+        element("at0167", "Comment", &text(medicine.comment)),
+    ];
+    order(&items)
+}
+
+/// A discharge composition of the sections `sections`, each a name and its
+/// entries.
+fn composed(uid: &str, sections: &[(&str, Vec<String>)]) -> String {
     let content: Vec<String> = sections
         .iter()
-        .map(|(name, item)| {
+        .map(|(name, items)| {
             format!(
-                r#"{{ "_type": "SECTION", "name": {{ "_type": "DV_TEXT", "value": "{name}" }}, {section}, "items": [{item}] }}"#,
+                r#"{{ "_type": "SECTION", "name": {{ "_type": "DV_TEXT", "value": "{name}" }}, {section}, "items": [{items}] }}"#,
                 section = details("openEHR-EHR-SECTION.adhoc.v1"),
+                items = items.join(","),
             )
         })
         .collect();
@@ -195,6 +365,33 @@ pub fn composition(uid: &str) -> String {
         start = instant(ADMITTED),
         end = instant(DISCHARGED),
         content = content.join(","),
+    )
+}
+
+/// Returns the full synthetic discharge composition as a member serves it.
+///
+/// It is of [`TEMPLATE`], under the version id `uid`: a stay from
+/// [`ADMITTED`] to [`DISCHARGED`] whose three sections, the only ones the
+/// template holds, hold two entries each, [`DIAGNOSES`], [`PROCEDURES`] and
+/// [`MEDICINES`], with every element the shipped HDR mapping reads.
+#[must_use]
+pub fn full_composition(uid: &str) -> String {
+    composed(
+        uid,
+        &[
+            (
+                "Diagnostic summary",
+                DIAGNOSES.iter().map(full_diagnosis).collect(),
+            ),
+            (
+                "Significant procedures",
+                PROCEDURES.iter().map(full_procedure).collect(),
+            ),
+            (
+                "Discharge medications",
+                MEDICINES.iter().map(full_order).collect(),
+            ),
+        ],
     )
 }
 

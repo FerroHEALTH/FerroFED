@@ -178,6 +178,97 @@ async fn a_members_imaging_composition_is_listed_and_read_as_an_imaging_report()
 }
 
 #[tokio::test]
+async fn an_imaging_composition_is_served_with_the_report_its_study_and_impression() -> TestResult {
+    let composition = written_composition()?;
+    let row = format!(r#"[{composition},"{VERSION}","{}"]"#, imaging::TEMPLATE);
+    let (a, b) = (
+        holding(&row, Some(&composition)).await,
+        holding("", None).await,
+    );
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &a, &b)?;
+    let (status, text) = call(app.clone(), list("&type=85430-7")?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let bundle: Value = serde_json::from_str(&text)?;
+    let url = entries(&bundle, "match")
+        .first()
+        .and_then(|reference| reference.pointer("/content/0/attachment/url"))
+        .and_then(Value::as_str)
+        .ok_or("an attachment url")?
+        .to_owned();
+    let (status, text) = call(app, binary(&url)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let document: Value = serde_json::from_str(&text)?;
+    let resources: Vec<&Value> = document["entry"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get("resource"))
+        .collect();
+    let only = |kind: &str| -> Result<&Value, Box<dyn Error>> {
+        let found: Vec<&&Value> = resources
+            .iter()
+            .filter(|resource| resource["resourceType"] == kind)
+            .collect();
+        let [resource] = found.as_slice() else {
+            return Err(format!("one {kind}: {document}").into());
+        };
+        Ok(resource)
+    };
+    let report = only("DiagnosticReport")?;
+    assert_eq!(report["status"], "final", "{report}");
+    assert_eq!(
+        report.pointer("/code/coding/0/code"),
+        Some(&Value::from(imaging::EXAMINATION)),
+        "{report}"
+    );
+    assert_eq!(report["effectiveDateTime"], imaging::OBSERVED, "{report}");
+    assert_eq!(
+        report["conclusion"],
+        imaging::CONCLUSION,
+        "the impression: {report}"
+    );
+    assert_eq!(
+        report.pointer("/identifier/0/value"),
+        Some(&Value::from(imaging::REPORT_IDENTIFIER)),
+        "{report}"
+    );
+    let study = only("ImagingStudy")?;
+    assert_eq!(study["status"], "available", "{study}");
+    assert_eq!(
+        study.pointer("/identifier/0/value"),
+        Some(&Value::from(imaging::STUDY_UID)),
+        "{study}"
+    );
+    assert_eq!(
+        study.pointer("/modality/0/code"),
+        Some(&Value::from(imaging::MODALITY)),
+        "{study}"
+    );
+    assert_eq!(study["started"], imaging::STARTED, "{study}");
+    assert_eq!(study["description"], imaging::DESCRIPTION, "{study}");
+    let study_url = document["entry"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|entry| entry.pointer("/resource/resourceType") == Some(&Value::from("ImagingStudy")))
+        .and_then(|entry| entry["fullUrl"].as_str())
+        .ok_or("the study's fullUrl")?;
+    let section = only("Composition")?["section"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|section| section.pointer("/code/coding/0/code") == Some(&Value::from("18726-0")))
+        .ok_or("the imaging study section")?;
+    assert_eq!(
+        section.pointer("/entry/0/reference"),
+        Some(&Value::from(study_url)),
+        "{section}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_member_silent_at_the_imaging_query_fails_the_list_and_is_named() -> TestResult {
     let a = Server::start().await;
     Mock::given(method("POST"))
