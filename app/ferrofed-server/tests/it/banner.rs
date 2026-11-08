@@ -22,7 +22,7 @@ use ferrofed_server::config::stored_queries::{Backend, Store};
 use ferrofed_server::federation::{error::FederationError, registry::read_registry};
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_server::support::Support;
-use ferrohealth_telemetry::section::Format;
+use ferrohealth_telemetry::section::{Format, Rendering};
 use ferrohealth_telemetry::telemetry::Console;
 
 use crate::facade::{NAMESPACE, PATIENT, registry};
@@ -63,29 +63,39 @@ fn value_of<'a>(banner: &'a str, label: &str) -> Option<&'a str> {
 
 #[test]
 fn the_banner_carries_the_wordmark_the_version_and_the_maintainer() -> TestResult {
-    let banner = render("9.9.9", &deployment()?, false);
+    let banner = render("9.9.9", &deployment()?, false, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
     assert!(banner.contains(WORDMARK), "{banner}");
     assert!(
-        banner.contains(&format!("{TAGLINE} · v9.9.9")),
+        banner.lines().any(|line| line == "ferrofed 9.9.9"),
         "the version is substituted: {banner}"
     );
-    assert!(banner.contains("Maintained by Ruben Talstra"), "{banner}");
-    assert!(
-        banner.contains("https://github.com/FerroHEALTH/FerroFED"),
+    assert_eq!(Some(TAGLINE), value_of(&banner, "Product"), "{banner}");
+    assert_eq!(
+        Some("Ruben Talstra · https://github.com/FerroHEALTH/FerroFED"),
+        value_of(&banner, "Maintainer"),
         "{banner}"
+    );
+    assert_eq!(
+        None,
+        render("9.9.9", &deployment()?, false, Rendering::Json),
+        "no banner precedes the JSON rendering"
     );
     Ok(())
 }
 
 #[test]
 fn an_audit_spool_in_memory_is_declared() -> TestResult {
-    let quiet = render("9.9.9", &deployment()?, false);
+    let quiet = render("9.9.9", &deployment()?, false, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
     assert_eq!(None, value_of(&quiet, "Audit spool"), "{quiet}");
     let declared = render(
         "9.9.9",
         &deployment()?.with_audit_spool_in_memory(true),
         false,
-    );
+        Rendering::Pretty,
+    )
+    .ok_or("pretty renders the banner")?;
     assert_eq!(
         Some("in memory: a restart loses the audit messages not yet delivered"),
         value_of(&declared, "Audit spool"),
@@ -96,7 +106,8 @@ fn an_audit_spool_in_memory_is_declared() -> TestResult {
 
 #[test]
 fn every_pin_is_read_from_its_constant() -> TestResult {
-    let banner = render("9.9.9", &deployment()?, false);
+    let banner = render("9.9.9", &deployment()?, false, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
     for (label, pin) in [
         ("Federation Tier", openehr_federation::FEDERATION_SPEC),
         ("ITS-REST", ferrofed_engine::ITS_REST),
@@ -110,7 +121,8 @@ fn every_pin_is_read_from_its_constant() -> TestResult {
 
 #[test]
 fn the_deployment_lines_name_the_base_the_address_the_registry_and_the_store() -> TestResult {
-    let banner = render("9.9.9", &deployment()?, false);
+    let banner = render("9.9.9", &deployment()?, false, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
     assert_eq!(Some("/federation"), value_of(&banner, "Base path"));
     assert_eq!(Some("127.0.0.1:8080"), value_of(&banner, "Listen"));
     assert_eq!(
@@ -124,7 +136,8 @@ fn the_deployment_lines_name_the_base_the_address_the_registry_and_the_store() -
     ] {
         let mut stored = deployment()?;
         stored.stored_queries = Some(backend);
-        let banner = render("9.9.9", &stored, false);
+        let banner = render("9.9.9", &stored, false, Rendering::Pretty)
+            .ok_or("pretty renders the banner")?;
         assert_eq!(
             Some(shown),
             value_of(&banner, "Stored queries"),
@@ -135,7 +148,8 @@ fn the_deployment_lines_name_the_base_the_address_the_registry_and_the_store() -
     let mut bare = deployment()?;
     bare.registry = Registry::Unset;
     bare.stored_queries = None;
-    let banner = render("9.9.9", &bare, false);
+    let banner =
+        render("9.9.9", &bare, false, Rendering::Pretty).ok_or("pretty renders the banner")?;
     assert_eq!(
         Some("none, the gateway federates nothing"),
         value_of(&banner, "Registry")
@@ -143,7 +157,8 @@ fn the_deployment_lines_name_the_base_the_address_the_registry_and_the_store() -
     assert_eq!(Some("off"), value_of(&banner, "Stored queries"));
 
     bare.registry = Registry::Unreadable;
-    let banner = render("9.9.9", &bare, false);
+    let banner =
+        render("9.9.9", &bare, false, Rendering::Pretty).ok_or("pretty renders the banner")?;
     assert_eq!(
         Some("does not load; the log says why"),
         value_of(&banner, "Registry")
@@ -153,7 +168,8 @@ fn the_deployment_lines_name_the_base_the_address_the_registry_and_the_store() -
         members: 1,
         endpoints: 1,
     };
-    let banner = render("9.9.9", &bare, false);
+    let banner =
+        render("9.9.9", &bare, false, Rendering::Pretty).ok_or("pretty renders the banner")?;
     assert_eq!(Some("1 member, 1 endpoint"), value_of(&banner, "Registry"));
     Ok(())
 }
@@ -163,13 +179,15 @@ fn the_development_notice_prints_in_red_and_in_plain_words() -> TestResult {
     let mut development = deployment()?;
     development.development = true;
 
-    let plain = render("9.9.9", &development, false);
+    let plain = render("9.9.9", &development, false, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
     let words = plain.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(words.contains(DEVELOPMENT_NOTICE), "{plain}");
     assert!(words.contains("must not hold or reach real patient data"));
     assert!(!plain.contains('\x1b'), "no escape code without colour");
 
-    let coloured = render("9.9.9", &development, true);
+    let coloured = render("9.9.9", &development, true, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
     let notice: Vec<&str> = coloured.lines().filter(|l| l.contains('\x1b')).collect();
     assert!(!notice.is_empty(), "{coloured}");
     for line in notice {
@@ -186,7 +204,8 @@ fn the_development_notice_prints_in_red_and_in_plain_words() -> TestResult {
 #[test]
 fn a_production_deployment_prints_no_notice() -> TestResult {
     for colour in [false, true] {
-        let banner = render("9.9.9", &deployment()?, colour);
+        let banner = render("9.9.9", &deployment()?, colour, Rendering::Pretty)
+            .ok_or("pretty renders the banner")?;
         assert!(!banner.contains("DEVELOPMENT"), "{banner}");
         assert!(!banner.contains('\x1b'), "{banner}");
     }
@@ -201,7 +220,8 @@ const SUPPORT_END: jiff::civil::Date = jiff::civil::date(2031, 10, 5);
 #[test]
 fn on_the_last_day_of_support_the_banner_names_the_end_date() -> TestResult {
     let supported = deployment()?.with_support(Support::at(Some(SUPPORT_END), SUPPORT_END));
-    let banner = render("9.9.9", &supported, false);
+    let banner =
+        render("9.9.9", &supported, false, Rendering::Pretty).ok_or("pretty renders the banner")?;
     assert_eq!(
         Some("newest release only, fixes until 2031-10-05"),
         value_of(&banner, "Support")
@@ -218,7 +238,8 @@ fn the_day_after_support_ends_the_banner_says_the_release_is_past_it() -> TestRe
         Some(SUPPORT_END),
         jiff::civil::date(2031, 10, 6),
     ));
-    let plain = render("9.9.9", &ended, false);
+    let plain =
+        render("9.9.9", &ended, false, Rendering::Pretty).ok_or("pretty renders the banner")?;
     assert_eq!(Some("ended on 2031-10-05"), value_of(&plain, "Support"));
     let words = plain.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
@@ -231,7 +252,8 @@ fn the_day_after_support_ends_the_banner_says_the_release_is_past_it() -> TestRe
     for line in plain.lines() {
         assert!(line.chars().count() <= 80, "{line:?}");
     }
-    let coloured = render("9.9.9", &ended, true);
+    let coloured =
+        render("9.9.9", &ended, true, Rendering::Pretty).ok_or("pretty renders the banner")?;
     let notice: Vec<&str> = coloured.lines().filter(|l| l.contains('\x1b')).collect();
     assert!(!notice.is_empty(), "{coloured}");
     for line in notice {
@@ -250,7 +272,8 @@ fn the_day_after_support_ends_the_banner_says_the_release_is_past_it() -> TestRe
 #[test]
 fn a_build_without_a_release_date_says_it_has_no_support_period() -> TestResult {
     let unreleased = deployment()?.with_support(Support::at(None, jiff::civil::date(2099, 1, 1)));
-    let banner = render("9.9.9", &unreleased, false);
+    let banner = render("9.9.9", &unreleased, false, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
     assert_eq!(
         Some("none, this build is no release"),
         value_of(&banner, "Support")
@@ -265,7 +288,13 @@ fn every_line_fits_80_columns() -> TestResult {
     assert_eq!(5, wordmark.len(), "the standard font is five lines high");
     let mut development = deployment()?;
     development.development = true;
-    let banner = render(env!("CARGO_PKG_VERSION"), &development, false);
+    let banner = render(
+        env!("CARGO_PKG_VERSION"),
+        &development,
+        false,
+        Rendering::Pretty,
+    )
+    .ok_or("pretty renders the banner")?;
     for line in banner.lines() {
         assert!(
             line.chars().count() <= 80,
@@ -495,7 +524,8 @@ fn no_secret_from_the_configuration_reaches_the_banner() -> TestResult {
     );
     assert!(deployment.development);
     for colour in [false, true] {
-        let banner = render("9.9.9", &deployment, colour);
+        let banner = render("9.9.9", &deployment, colour, Rendering::Pretty)
+            .ok_or("pretty renders the banner")?;
         for leak in [SECRET, PATIENT, "example.org", "ehrbase", "https://node"] {
             assert!(!banner.contains(leak), "{leak} leaked: {banner}");
         }

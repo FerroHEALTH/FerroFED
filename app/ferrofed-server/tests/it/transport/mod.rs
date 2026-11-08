@@ -401,7 +401,8 @@ fn the_banner_names_each_cleartext_credential_by_key() -> TestResult {
         settings.profile == Profile::Development,
     )
     .with_cleartext(checked.as_deref());
-    let banner = render("9.9.9", &deployment, false);
+    let banner = render("9.9.9", &deployment, false, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
     let line = banner
         .lines()
         .find(|line| line.trim_start().starts_with("Unencrypted"))
