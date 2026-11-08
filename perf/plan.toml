@@ -68,7 +68,10 @@ status = 200
 body = '{"query_parameters": {"patient": "ffd-test-0001", "namespace": "urn:oid:2.999.1.1"}}'
 headers = { authorization = "Bearer {token}", content-type = "application/json" }
 
-# A definition read routed by the registry to the one member it names (§12.6).
+# A definition read routed by the registry to the one member it names
+# (§12.6). Node A is reached through its onward lane (#1712), so this group,
+# and node A's share of the queries above, carry the per-caller token
+# exchange and its cache.
 [[requests]]
 group = "definition-read"
 method = "GET"

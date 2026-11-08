@@ -3,9 +3,18 @@
 
 # The performance gate's override of the quickstart's compose.yaml
 # (scripts/perf/gate.sh): FerroPIX is published on the host's loopback, so the
-# gateway the gate runs on the host resolves patients through it. No
-# specification governs this: our own design.
+# gateway the gate runs on the host resolves patients through it, and node A
+# reads perf/ferroehr-onward.toml, which trusts the gate's token endpoint
+# beside the Basic user, with the key sets that endpoint writes under
+# target/perf-run/onward, so the gateway reaches node A through its onward
+# lane (#1712). No specification governs this: our own design.
 services:
   ferropix:
     ports:
       - "127.0.0.1:8090:8080"
+  ferroehr-a:
+    environment:
+      FERROEHR_CONFIG: /etc/ferroehr/onward.toml
+    volumes:
+      - ./perf/ferroehr-onward.toml:/etc/ferroehr/onward.toml:ro
+      - ./target/perf-run/onward:/etc/ferroehr/onward:ro

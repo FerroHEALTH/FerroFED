@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+
+# Node A's FerroEHR configuration under the performance gate
+# (scripts/perf/gate.sh, perf/compose.yaml): the quickstart's inline
+# ferroehr-config of compose.yaml, with the gate's token endpoint
+# (ferrofed-perf-token) trusted beside the Basic user, so the gateway reaches
+# node A through its onward lane (#1712). The persons issuer signs the token
+# each caller's is exchanged for, the machines issuer the gateway's own; the
+# token endpoint writes both key sets under target/perf-run/onward, mounted
+# here. No specification governs this: our own design.
+
+[server]
+listen = "0.0.0.0:8080"
+
+[ehr_index]
+provider = "local"
+
+[auth]
+enabled = true
+
+[[auth.basic.users]]
+user = "ferroehr"
+password_hash = "$argon2id$v=19$m=19456,t=2,p=1$ZmVycm9laHJEZXZTYWx0$be5nPwWjfUl1qvSrvkvqvdMOuCgM0VFcN/VN4MFLjT8"
+scopes = ["user/composition-*.cruds", "user/template-*.cruds", "user/aql-*.cruds", "__ferroehr.platform"]
+roles = ["ADMIN", "USER"]
+
+[[auth.issuer]]
+issuer = "https://quickstart-issuer.ferrofed.invalid"
+audience = ["https://node-a.perf.ferrofed.invalid"]
+jwks_file = "/etc/ferroehr/onward/persons.json"
+
+[[auth.issuer]]
+issuer = "https://perf-onward.ferrofed.invalid/machines"
+audience = ["https://node-a.perf.ferrofed.invalid"]
+jwks_file = "/etc/ferroehr/onward/machines.json"
+
+[authz.rbac]
+enabled = false
