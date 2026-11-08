@@ -16,10 +16,8 @@
 //! client could read as the member's prescriptions, so it is [`Unusable`],
 //! never an empty page.
 
-use fhir_types::codec::Value;
+use fhir_types::codec::{Object, Value};
 use fhir_types::r4::resource::UnknownResource;
-use serde::Deserialize;
-use serde_json::value::RawValue;
 use url::Url;
 
 /// A resource of a member's page, its JSON value as the member sent it,
@@ -118,6 +116,10 @@ pub enum Unusable {
     /// The answer is a resource other than a `Bundle`.
     #[error("the answer is no Bundle")]
     NotBundle,
+    /// An element the face reads holds a JSON value of another kind than
+    /// its FHIR JSON form (FHIR R4 `json.html`).
+    #[error("the searchset's {0} is not of its FHIR JSON form")]
+    Shape(&'static str),
     /// The `Bundle` is of a type other than `searchset`.
     #[error("the Bundle is no searchset")]
     NotSearchset,
@@ -138,71 +140,6 @@ pub enum Unusable {
     Next(#[source] url::ParseError),
 }
 
-/// What a page is read for.
-#[derive(Deserialize)]
-struct Head {
-    /// The resource type.
-    #[serde(rename = "resourceType")]
-    resource_type: Option<String>,
-    /// The `Bundle.type`.
-    #[serde(rename = "type")]
-    kind: Option<String>,
-    /// The entries.
-    #[serde(default)]
-    entry: Vec<Entry>,
-    /// The links.
-    #[serde(default)]
-    link: Vec<Link>,
-}
-
-/// One entry of a page.
-#[derive(Deserialize)]
-struct Entry {
-    /// The `fullUrl`.
-    #[serde(rename = "fullUrl")]
-    full_url: Option<String>,
-    /// The resource, as the member sent it.
-    resource: Option<Box<RawValue>>,
-    /// The search information.
-    search: Option<Search>,
-}
-
-/// An entry's search information.
-#[derive(Deserialize)]
-struct Search {
-    /// The search mode.
-    mode: Option<String>,
-}
-
-/// One link of a page.
-#[derive(Deserialize)]
-struct Link {
-    /// The relation.
-    relation: Option<String>,
-    /// The URL.
-    url: Option<String>,
-}
-
-/// What a resource is read for: its type and its identifiers.
-#[derive(Deserialize)]
-struct Resource {
-    /// The resource type.
-    #[serde(rename = "resourceType")]
-    resource_type: Option<String>,
-    /// The identifiers.
-    #[serde(default)]
-    identifier: Vec<Identifier>,
-}
-
-/// An identifier's system and value.
-#[derive(Deserialize)]
-struct Identifier {
-    /// The system.
-    system: Option<String>,
-    /// The value.
-    value: Option<String>,
-}
-
 impl Page {
     /// Reads `body`, a member's answer to a search of the resource type
     /// `matched`, as a page of the member whose base is `base`; each match is
@@ -212,39 +149,51 @@ impl Page {
     ///
     /// The [`Unusable`] that says why the body is no page of `matched`.
     pub fn read(body: &[u8], base: &Url, matched: &str) -> Result<Self, Unusable> {
-        let head: Head = serde_json::from_slice(body).map_err(Unusable::Unreadable)?;
-        if head.resource_type.as_deref() != Some("Bundle") {
+        // NOTE: fhir-types 0.1.109 `codec::Value` reads through `RawValue`, so a number keeps
+        // the text the member wrote, which `Value::from_serde_json` would not.
+        let Value::Object(mut bundle) =
+            serde_json::from_slice::<Value>(body).map_err(Unusable::Unreadable)?
+        else {
+            return Err(Unusable::NotBundle);
+        };
+        if text(&bundle, "resourceType", "resourceType")? != Some("Bundle") {
             return Err(Unusable::NotBundle);
         }
-        if head.kind.as_deref() != Some("searchset") {
+        if text(&bundle, "type", "type")? != Some("searchset") {
             return Err(Unusable::NotSearchset);
         }
         let mut page = Self::default();
-        for entry in head.entry {
-            let resource = entry.resource.ok_or(Unusable::Empty)?;
-            let read: Resource =
-                serde_json::from_str(resource.get()).map_err(Unusable::Unreadable)?;
-            let resource_type = read.resource_type.unwrap_or_default();
-            let mode = entry.search.and_then(|search| search.mode);
+        for entry in list(bundle.remove("entry"), "entry")? {
+            let Value::Object(mut entry) = entry else {
+                return Err(Unusable::Shape("entry"));
+            };
+            let full_url = text(&entry, "fullUrl", "entry.fullUrl")?.map(str::to_owned);
+            let mode = match entry.get("search") {
+                None | Some(Value::Null) => None,
+                Some(Value::Object(search)) => {
+                    text(search, "mode", "entry.search.mode")?.map(str::to_owned)
+                }
+                Some(_) => return Err(Unusable::Shape("entry.search")),
+            };
+            let resource = match entry.remove("resource") {
+                None | Some(Value::Null) => return Err(Unusable::Empty),
+                Some(Value::Object(resource)) => resource,
+                Some(_) => return Err(Unusable::Shape("entry.resource")),
+            };
+            let resource_type = text(&resource, "resourceType", "entry.resource.resourceType")?
+                .unwrap_or_default()
+                .to_owned();
             let prescribed = resource_type == matched;
-            // NOTE: fhir-types 0.1.109 `codec::Value` reads through `RawValue`, so a number keeps
-            // the text the member wrote, which `Value::from_serde_json` would not.
-            let value: Value =
-                serde_json::from_str(resource.get()).map_err(Unusable::Unreadable)?;
+            let identifiers = identifiers(&resource)?;
             let kept = Kept {
-                full_url: entry.full_url,
-                resource: value,
+                full_url,
+                resource: Value::Object(resource),
                 resource_type,
             };
             match (mode.as_deref(), prescribed) {
                 (Some("match") | None, true) => page.prescriptions.push(Prescription {
                     kept,
-                    identifiers: read
-                        .identifier
-                        .into_iter()
-                        .filter_map(|identifier| Some((identifier.system?, identifier.value?)))
-                        .filter(|(system, value)| !system.is_empty() && !value.is_empty())
-                        .collect(),
+                    identifiers,
                     unreadable: false,
                 }),
                 (Some("match"), false) => return Err(Unusable::Foreign),
@@ -258,16 +207,74 @@ impl Page {
         }
         // NOTE: FHIR R4 `http.html` §3.1.0.14; the links are opaque to the client, so the
         // member's own `next` names its following page, resolved as a URL against its base.
-        let next = head
-            .link
-            .into_iter()
-            .find(|link| link.relation.as_deref() == Some("next"))
-            .and_then(|link| link.url);
+        let mut next = None;
+        for link in list(bundle.remove("link"), "link")? {
+            let Value::Object(link) = link else {
+                return Err(Unusable::Shape("link"));
+            };
+            let relation = text(&link, "relation", "link.relation")?;
+            let url = text(&link, "url", "link.url")?;
+            if next.is_none() && relation == Some("next") {
+                next = Some(url.map(str::to_owned));
+            }
+        }
         page.next = next
+            .flatten()
             .map(|next| base.join(&next))
             .transpose()
             .map_err(Unusable::Next)?;
         Ok(page)
+    }
+}
+
+/// The identifiers of a prescription that carry both a system and a value
+/// (`MedicationRequest.identifier`, 0..*).
+fn identifiers(resource: &Object) -> Result<Vec<(String, String)>, Unusable> {
+    let mut found = Vec::new();
+    let held = match resource.get("identifier") {
+        None | Some(Value::Null) => &[][..],
+        Some(Value::Array(items)) => items.as_slice(),
+        Some(_) => return Err(Unusable::Shape("entry.resource.identifier")),
+    };
+    for identifier in held {
+        let Value::Object(identifier) = identifier else {
+            return Err(Unusable::Shape("entry.resource.identifier"));
+        };
+        let system = text(identifier, "system", "entry.resource.identifier.system")?;
+        let value = text(identifier, "value", "entry.resource.identifier.value")?;
+        if let (Some(system), Some(value)) = (system, value)
+            && !system.is_empty()
+            && !value.is_empty()
+        {
+            found.push((system.to_owned(), value.to_owned()));
+        }
+    }
+    Ok(found)
+}
+
+/// The string `object` holds under `key`, `None` when it is absent or
+/// `null`, refused as [`Unusable::Shape`] naming `element` when it is
+/// another kind of JSON value.
+fn text<'a>(
+    object: &'a Object,
+    key: &str,
+    element: &'static str,
+) -> Result<Option<&'a str>, Unusable> {
+    match object.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(text)) => Ok(Some(text)),
+        Some(_) => Err(Unusable::Shape(element)),
+    }
+}
+
+/// The items of the repeating element `held`, none when it is absent or
+/// `null`, refused as [`Unusable::Shape`] naming `element` when it is no
+/// array.
+fn list(held: Option<Value>, element: &'static str) -> Result<Vec<Value>, Unusable> {
+    match held {
+        None | Some(Value::Null) => Ok(Vec::new()),
+        Some(Value::Array(items)) => Ok(items),
+        Some(_) => Err(Unusable::Shape(element)),
     }
 }
 
@@ -373,6 +380,40 @@ mod tests {
                 other => panic!("{other:?}"),
             };
             assert_eq!(expected, name);
+        }
+    }
+
+    #[test]
+    fn an_element_of_another_json_kind_is_refused_by_its_name() {
+        for (body, element) in [
+            (&br#"{"resourceType":1}"#[..], "resourceType"),
+            (br#"{"resourceType":"Bundle","type":"searchset","entry":{}}"#, "entry"),
+            (br#"{"resourceType":"Bundle","type":"searchset","entry":[1]}"#, "entry"),
+            (
+                br#"{"resourceType":"Bundle","type":"searchset","entry":[{"fullUrl":2,"resource":{"resourceType":"MedicationRequest"}}]}"#,
+                "entry.fullUrl",
+            ),
+            (
+                br#"{"resourceType":"Bundle","type":"searchset","entry":[{"resource":"rx"}]}"#,
+                "entry.resource",
+            ),
+            (
+                br#"{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"Medication","identifier":[{"value":3}]},"search":{"mode":"include"}}]}"#,
+                "entry.resource.identifier.value",
+            ),
+            (
+                br#"{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"MedicationRequest"},"search":{"mode":true}}]}"#,
+                "entry.search.mode",
+            ),
+            (
+                br#"{"resourceType":"Bundle","type":"searchset","link":[{"relation":"next","url":4}]}"#,
+                "link.url",
+            ),
+        ] {
+            match Page::read(body, &base(), RESOURCE) {
+                Err(Unusable::Shape(named)) => assert_eq!(element, named),
+                other => panic!("{element}: {other:?}"),
+            }
         }
     }
 }
