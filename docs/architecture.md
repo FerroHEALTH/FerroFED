@@ -84,7 +84,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `eehrxf` | =0.1.170 (FerroBRIDGE, BUSL-1.1) | the European interoperability software component (decision A58), published from FerroHEALTH/FerroBRIDGE since the owner decision of 2026-10-28 (A76, #813) |
 | `fhirconnect`, `openehr-mapping-core` | =0.1.212 and =0.1.138 (FerroBRIDGE, BUSL-1.1) | the FHIRconnect 1.0.0 engine `eehrxf` runs in process under `openehr` (#730), pinned exactly because FerroBRIDGE's crate line moves by patch (decision A61, #684) |
 | `ferrobridge-term` | =0.1.143 (FerroBRIDGE, BUSL-1.1) | the FHIR terminology client the interoperability component asks its optional terminology server through (decision A63, #925): `$translate`, `$lookup` and `$validate-code` in R4, over the HTTP client the gateway builds with its credential and TLS material |
-| `ferrohealth-smart` | =0.9.2 (`fetch`, `axum`, `openehr`; BUSL-1.1) | the SMART and OAuth 2.0 resource-server crate every FerroHEALTH product runs on (#1174): it checks tokens and never issues them, verifies each issuer's tokens from its RFC 8414 metadata and key set, decides the SMART on openEHR grants through `ferrohealth_smart::openehr`, and obtains the gateway's own token with the client credentials grant of `[<section>.oauth]` |
+| `ferrohealth-smart` | =0.9.4 (`fetch`, `axum`, `openehr`; BUSL-1.1) | the SMART and OAuth 2.0 resource-server crate every FerroHEALTH product runs on (#1174): it checks tokens and never issues them, verifies each issuer's tokens from its RFC 8414 metadata and key set, decides the SMART on openEHR grants through `ferrohealth_smart::openehr`, and obtains the gateway's own token with the client credentials grant of `[<section>.oauth]` |
 | `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for the outbound assertions of the `oauth2`, Nuts and FAPI 2.0 grants and the caller token |
 | `jsonschema` | 0.60.2 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
@@ -1189,10 +1189,10 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   `OPTIONS` is refused `403` before any token is asked for. A contact point
   never reaches that arm, since `ferrohealth-smart` classifies every
   contact-point token as a person. A lane whose table sets
-  `correlation_claim` refuses, before the token endpoint is asked, a caller
-  whose token does not carry the claim in its JWS payload, an opaque token
-  included, and the library holds the issued token to carry the same
-  value. A refused exchange fails the
+  `correlation_claim` has `ferrohealth-smart` refuse, before the token
+  endpoint is asked, a caller whose verified claims (a JWT's payload, or an
+  opaque token's introspection answer) do not carry the claim, and the
+  library holds the issued token to carry the same value (#1615). A refused exchange fails the
   node and never falls back to the gateway's own token, which the `oauth`
   table keeps for the gateway's own requests. Which caller is exchanged at
   which kind is our own design. A `CONTRIBUTION` through the lane names, in

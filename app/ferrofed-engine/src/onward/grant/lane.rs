@@ -13,9 +13,9 @@
 //! party at a `federation` issuer, another party's organisation at a
 //! `federation` issuer whose lane opts in ([`Organisations`]), and a patient
 //! at a `patients` issuer. Every other caller is refused before anything is
-//! sent. An organisation reaches the node read-only ([`reads`]), and a lane
-//! with a correlation claim refuses a caller whose token does not carry it
-//! before the token endpoint is asked ([`carries_claim`]). The client
+//! sent. An organisation reaches the node read-only ([`reads`]), and the
+//! library refuses a caller whose token does not carry the lane's
+//! correlation claim before the token endpoint is asked. The client
 //! credentials grant of the lane's own `oauth` table carries only the
 //! gateway's own work, which no caller originates, and never stands in for a
 //! failed exchange.
@@ -25,12 +25,9 @@
 //! person) and caches it under the caller's token and the target. Which
 //! caller is exchanged at which issuer kind is our own design.
 
-use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
-use base64::Engine as _;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ferrofed_registry::id::EndpointId;
 use ferrohealth_smart::client::onward::exchange::Onward;
 use ferrohealth_smart::client::onward::{OnwardError, SubjectToken as OnwardSubject, Target};
@@ -38,8 +35,7 @@ use ferrohealth_smart::kind::{CallerKind, IssuerKind};
 use http::Method;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider};
 use openehr_its::rest::routes::RouteMatch;
-use secrecy::{ExposeSecret as _, SecretString};
-use serde_json::value::RawValue;
+use secrecy::SecretString;
 
 use crate::conveyance::Conveyance;
 use crate::dispatch::SharedCredentials;
@@ -110,45 +106,6 @@ pub fn reads(operation: &RouteMatch) -> bool {
         || [Method::GET, Method::HEAD, Method::OPTIONS].contains(&operation.method)
 }
 
-/// Returns whether `token`, a compact JWS, carries a value other than
-/// `null` at the dotted claim path `claim`.
-///
-/// An opaque token carries nothing the gateway can read, so it never
-/// carries the claim.
-#[must_use]
-pub fn carries_claim(token: &str, claim: &str) -> bool {
-    // NOTE: RFC 7515 §7.1, the payload is the second of three segments, base64url.
-    let mut segments = token.split('.');
-    let (Some(_), Some(payload), Some(_), None) = (
-        segments.next(),
-        segments.next(),
-        segments.next(),
-        segments.next(),
-    ) else {
-        return false;
-    };
-    let Ok(payload) = URL_SAFE_NO_PAD.decode(payload) else {
-        return false;
-    };
-    let Ok(mut object) = serde_json::from_slice::<BTreeMap<String, Box<RawValue>>>(&payload) else {
-        return false;
-    };
-    let mut steps = claim.split('.').peekable();
-    while let Some(step) = steps.next() {
-        let Some(value) = object.remove(step) else {
-            return false;
-        };
-        if steps.peek().is_none() {
-            return value.get() != "null";
-        }
-        let Ok(inner) = serde_json::from_str(value.get()) else {
-            return false;
-        };
-        object = inner;
-    }
-    false
-}
-
 /// Why a call made for a caller got no onward token, so nothing was sent.
 ///
 /// No variant carries a token, a secret or a claim value.
@@ -170,14 +127,6 @@ pub enum LaneError {
         /// The issuer's kind.
         issuer: IssuerKind,
     },
-    /// The lane carries the correlation claim of a chained route and the
-    /// caller's token, opaque or a JWT without it, does not carry it, so it
-    /// was not sent to the token endpoint.
-    #[error("the caller's token carries no {claim} correlation claim, which the lane requires")]
-    NoCorrelation {
-        /// The configured claim path; never its value.
-        claim: String,
-    },
     /// The caller's token carries an identifier the request withholds, so
     /// it was not sent to the token endpoint (§5.4.1, N33).
     #[error("the caller's token carries a withheld patient identifier, so it was not exchanged")]
@@ -186,7 +135,9 @@ pub enum LaneError {
     /// client cannot send.
     #[error("the onward issuer issued a token the node client cannot send as a bearer token")]
     NotBearer,
-    /// The exchange was refused, or its token failed the onward check.
+    /// The exchange was refused, the caller's token lacks the correlation
+    /// claim of a chained route, or the issued token failed the onward
+    /// check.
     #[error("the onward exchange failed")]
     Onward(#[source] OnwardError),
 }
@@ -302,13 +253,6 @@ impl ForCaller {
         if carries_withheld(subject, &self.call.withheld) {
             return Err(LaneError::Withheld);
         }
-        if let Some(claim) = self.inner.target.correlation_claim()
-            && !carries_claim(subject.token().expose_secret(), claim)
-        {
-            return Err(LaneError::NoCorrelation {
-                claim: claim.to_owned(),
-            });
-        }
         Ok(onward)
     }
 
@@ -366,9 +310,7 @@ fn credential<'a>(value: &'a str, scheme: &str) -> Option<&'a str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Organisations, Route, carries_claim, credential, reads, route};
-    use base64::Engine as _;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use super::{Organisations, Route, credential, reads, route};
     use ferrohealth_smart::federation::External;
     use ferrohealth_smart::kind::{CallerKind, IssuerKind};
     use http::Method;
@@ -483,35 +425,5 @@ mod tests {
             &format!("/ehr/{ehr}/composition")
         )));
         assert!(!reads(&operation(Method::POST, "/ehr")));
-    }
-
-    fn jws(payload: &str) -> String {
-        format!("e30.{}.c2ln", URL_SAFE_NO_PAD.encode(payload))
-    }
-
-    #[test]
-    fn a_claim_is_read_from_a_jws_payload_along_its_dotted_path() {
-        let token = jws(r#"{"txn":"c-1","ctx":{"log":{"id":"c-2"}},"empty":null}"#);
-        assert!(carries_claim(&token, "txn"));
-        assert!(carries_claim(&token, "ctx.log.id"));
-        assert!(carries_claim(&token, "ctx.log"));
-        assert!(!carries_claim(&token, "empty"));
-        assert!(!carries_claim(&token, "ctx.log.other"));
-        assert!(!carries_claim(&token, "txn.id"));
-        assert!(!carries_claim(&token, "absent"));
-    }
-
-    #[test]
-    fn an_opaque_or_malformed_token_carries_no_claim() {
-        let payload = URL_SAFE_NO_PAD.encode(r#"{"txn":"c-1"}"#);
-        for token in [
-            String::from("synthetic-opaque-token"),
-            format!("e30.{payload}"),
-            format!("e30.{payload}.c2ln.extra"),
-            String::from("e30.%%%.c2ln"),
-            jws("[1]"),
-        ] {
-            assert!(!carries_claim(&token, "txn"), "{token}");
-        }
     }
 }
