@@ -2,15 +2,14 @@
 # SPDX-License-Identifier: BUSL-1.1
 
 # The plan of the performance gate (ferrohealth-perf, FerroHEALTH/FerroSYS
-# #249), run by scripts/perf/gate.sh against the gateway of
-# perf/ferrofed.toml over the quickstart's four seeded FerroEHR nodes and
-# FerroPIX. The idle phase runs the store's sweep, the identity bindings'
-# expiry and every other background worker with nothing to do; the load phase
-# sends the gateway's hot paths with the quickstart's development token, which
-# the gate puts in place of {token}. A contact point's routes are not in the
-# set: their token is bound to the connection's client certificate (RFC 8705
-# §3), which ferrohealth-perf 0.2.0 cannot present. No specification governs
-# this: our own design.
+# #249), run by scripts/perf/gate.sh in the tool's A/B mode against the base
+# and the head of a change, each the gateway of its perf/ferrofed.toml over
+# the quickstart's four seeded FerroEHR nodes and FerroPIX. The idle phase
+# runs the head's store sweep, the identity bindings' expiry and every other
+# background worker with nothing to do; the load phase sends the gateway's
+# hot paths to each gateway in turn with the quickstart's development token,
+# which the gate puts in place of {token}. A contact point's routes are not
+# in the set yet (#1702). No specification governs this: our own design.
 
 [idle]
 duration_secs = 60
@@ -23,6 +22,15 @@ max_transactions_per_second = 1.0
 rate = 20.0
 warmup_secs = 10
 duration_secs = 60
+
+# How far the head may stray from the base, beyond the noise the two arms
+# show: the family's tolerances (FerroHEALTH/FerroSYS#249).
+[tolerance]
+latency = 0.25
+throughput = 0.2
+memory = 0.2
+cpu = 0.25
+transactions = 0.1
 
 # The self-description, OPTIONS {base}/ (§7a.2).
 [[requests]]

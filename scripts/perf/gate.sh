@@ -2,31 +2,39 @@
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 #
-# The performance gate of the federation gateway (#1687): ferrohealth-perf
-# (FerroHEALTH/FerroSYS#249) against the release build of ferrofed, over the
-# quickstart's four FerroEHR nodes and FerroPIX (compose.yaml, at their pins)
-# and a PostgreSQL server for FerroFED's own store, at the "FerroPIX database
-# image" pin of docs/VERSIONS.md.
+# The performance gate of the federation gateway (#1687, #1731):
+# ferrohealth-perf (FerroHEALTH/FerroSYS#249) in its A/B mode, the head of a
+# change judged against its base measured beside it on the same runner, each
+# the release build of ferrofed over the quickstart's four FerroEHR nodes and
+# FerroPIX (compose.yaml, at their pins), with a database of its own in one
+# PostgreSQL server for FerroFED's store, at the "FerroPIX database image"
+# pin of docs/VERSIONS.md.
 #
-#   scripts/perf/gate.sh run [--update]
+#   scripts/perf/gate.sh build [BASE]
+#       Builds the release gateway of the checkout, the head, and of its
+#       base: the merge base of HEAD with BASE, a commit or ref, or with no
+#       BASE the newest v* tag before HEAD, else HEAD's first parent. The
+#       base is built from `git archive` of that commit under target/, with
+#       its own toolchain pin, into the same target directory, so the
+#       dependencies build once.
+#   scripts/perf/gate.sh run
 #       Starts the quickstart's nodes and FerroPIX, seeds them, starts the
-#       store's PostgreSQL over TLS and target/release/ferrofed with
+#       store's PostgreSQL over TLS and both gateways, the head on 8080 with
+#       perf/ferrofed.toml and the base on 8070 with the base's own
 #       perf/ferrofed.toml, renders perf/plan.toml with the quickstart's
-#       development token, and runs the gate against perf/baseline.toml, one
-#       entry per CPU model. Then it plants a poller of the store that never
-#       waits and runs the idle phase of perf/busy-loop.toml beside it, which
-#       must fail on idle transactions. --update writes the entry of the
-#       runner's CPU model from a run that passes. Exit 0 when both hold, 1
-#       when the gate fails or the planted poller passes, 2 when the run
-#       cannot be judged or set up.
-#   scripts/perf/gate.sh build
-#       Builds the release gateway the gate measures.
+#       development token, and runs `ferrohealth-perf ab`: the head's idle
+#       phase, then pairs of load phases in turn. Then it plants a poller of
+#       the head's store that never waits and runs the idle phase of
+#       perf/busy-loop.toml beside it, which must fail on idle transactions.
+#       Exit 0 when both hold, 1 when the gate fails or the planted poller
+#       passes, 2 when the run cannot be judged or set up.
 #   scripts/perf/gate.sh --self-test
-#       Proves the pin reader, the plan rendering, the registry rewrite and
-#       the agreement of the two plans' idle limits offline.
+#       Proves the pin reader, the plan rendering, the registry rewrite, the
+#       base resolution and the agreement of the two plans' idle limits
+#       offline.
 #
-# Needs Docker with Compose, curl, openssl and ferrohealth-perf on PATH, on
-# Linux, where the tool reads the server's CPU and memory from /proc. No
+# Needs Docker with Compose, curl, git, openssl and ferrohealth-perf on PATH,
+# on Linux, where the tool reads the servers' CPU and memory from /proc. No
 # specification governs this: our own design.
 set -euo pipefail
 
@@ -36,12 +44,16 @@ readonly BUSY_PLAN=perf/busy-loop.toml
 readonly CONFIG=perf/ferrofed.toml
 readonly OVERRIDE=perf/compose.yaml
 readonly WORK=target/perf-run
-readonly BASE=http://127.0.0.1:8080
+readonly BASE_TREE=target/perf-base
+readonly HEAD_URL=http://127.0.0.1:8080
+readonly BASE_URL=http://127.0.0.1:8070
 readonly STORE_NAME=ferrofed-perf-store
 readonly STORE_PORT=5433
 readonly STORE_PASSWORD=perf
-readonly ADMIN_URL="postgresql://postgres:${STORE_PASSWORD}@127.0.0.1:${STORE_PORT}/ferrofed?sslmode=disable"
 readonly SERVICES=(ferroehr-a ferroehr-b ferroehr-c ferroehr-d ferropix)
+# admin_url DB: the superuser on DB, which the gate counts transactions as.
+admin_url() { printf 'postgresql://postgres:%s@127.0.0.1:%s/%s?sslmode=disable' "$STORE_PASSWORD" "$STORE_PORT" "$1"; }
+
 # A poll of the emergency count of the store (app/ferrofed-server/src/store/
 # emergency.rs) with no wait between two reads.
 readonly POLL='SELECT count(*) FROM ferrofed.emergency_access;'
@@ -98,16 +110,52 @@ wait_for() {
   die "$what did not come up"
 }
 
+# base_rev [BASE] [AT]: the commit the base is built from, as `build` names
+# it, resolved from AT (HEAD by default).
+base_rev() {
+  local base="${1:-}" at="${2:-HEAD}" tag
+  # The commit before the push that created a branch is all zeros.
+  [[ "$base" =~ ^0+$ ]] && base=""
+  if [[ -n "$base" ]]; then
+    git -C "$root" merge-base "$at" "$base"
+  elif tag="$(git -C "$root" describe --tags --abbrev=0 --match 'v*' "$at^" 2> /dev/null)"; then
+    git -C "$root" rev-parse "$tag^{commit}"
+  else
+    git -C "$root" rev-parse "$at^1"
+  fi
+}
+
+# build [BASE]: the base's release gateway into target/perf-base/ferrofed,
+# then the head's into target/release/ferrofed.
+build() {
+  local rev
+  cd "$root"
+  rev="$(base_rev "${1:-}")" || die "the base of ${1:-the previous release} cannot be resolved"
+  echo "perf-gate: the base is $rev"
+  rm -rf "$BASE_TREE"
+  mkdir -p "$BASE_TREE/src"
+  git archive "$rev" | tar -x -C "$BASE_TREE/src"
+  printf '%s\n' "$rev" > "$BASE_TREE/rev"
+  # From inside the base's tree, so its own toolchain pin builds it.
+  (cd "$BASE_TREE/src" && cargo build --release --locked -p ferrofed-server --bin ferrofed --target-dir "$root/target")
+  cp target/release/ferrofed "$BASE_TREE/ferrofed"
+  cargo build --release --locked -p ferrofed-server --bin ferrofed
+}
+
 compose() {
   FERROFED__USAGE_REPORT__ENABLED=false docker compose -f compose.yaml -f "$OVERRIDE" "$@"
 }
 
-server_pid=""
+head_pid=""
+base_pid=""
 poller_pid=""
 cleanup() {
   [[ -n "$poller_pid" ]] && kill "$poller_pid" 2> /dev/null || true
-  [[ -n "$server_pid" ]] && kill "$server_pid" 2> /dev/null || true
-  [[ -n "$server_pid" ]] && wait "$server_pid" 2> /dev/null || true
+  local pid
+  for pid in "$head_pid" "$base_pid"; do
+    [[ -n "$pid" ]] && kill "$pid" 2> /dev/null || true
+    [[ -n "$pid" ]] && wait "$pid" 2> /dev/null || true
+  done
   docker rm --force "$STORE_NAME" > /dev/null 2>&1 || true
   compose down --volumes > /dev/null 2>&1 || true
 }
@@ -135,11 +183,29 @@ EOF
   cp "$tls/ca.crt" "$WORK/store-ca.pem"
 }
 
+# serve NAME BINARY CONFIG DB PORT: starts one gateway in the background,
+# its store URL under $WORK/NAME, and prints its pid.
+serve() {
+  local binary="$2" config="$3" db="$4" port="$5" dir="$WORK/$1"
+  mkdir -p "$dir"
+  chmod 0700 "$dir"
+  printf 'postgres://ferrofed:%s@127.0.0.1:%s/%s?sslmode=require' \
+    "$STORE_PASSWORD" "$STORE_PORT" "$db" > "$dir/store-url"
+  FERROFED__USAGE_REPORT__ENABLED=false FERROFED_CONFIG="$config" \
+    FERROFED__SERVER__LISTEN="127.0.0.1:$port" \
+    FERROFED__SIGNING__JWKS_URI="http://127.0.0.1:$port/.well-known/jwks.json" \
+    FERROFED__STORE__URL_FILE="$dir/store-url" \
+    "$binary" serve > "$dir/server.log" 2>&1 &
+  echo "$!"
+}
+
 start() {
-  local store_image
+  local store_image base_config=$CONFIG db
   store_image="$(pin "FerroPIX database image")"
   [[ -n "$store_image" ]] || die "docs/VERSIONS.md pins no FerroPIX database image"
   [[ -x target/release/ferrofed ]] || die "target/release/ferrofed is not built"
+  [[ -x "$BASE_TREE/ferrofed" ]] || die "$BASE_TREE/ferrofed is not built: run gate.sh build first"
+  [[ -f "$BASE_TREE/src/$CONFIG" ]] && base_config="$BASE_TREE/src/$CONFIG"
   rm -rf "$WORK"
   mkdir -p "$WORK"
   chmod 0700 "$WORK"
@@ -161,18 +227,21 @@ start() {
     "$store_image" > /dev/null
   wait_for "the store's PostgreSQL" 60 docker exec "$STORE_NAME" \
     psql --username postgres --dbname ferrofed --host 127.0.0.1 --command 'SHOW ssl' --tuples-only
-  # A role of its own with CREATE on the database, as the store page asks;
-  # the gate counts its transactions as the superuser.
+  # A role of its own with CREATE on each database, as the store page asks;
+  # the gate counts transactions as the superuser. Each gateway has a
+  # database of its own, so each arm counts its own transactions.
   docker exec "$STORE_NAME" psql --quiet -v ON_ERROR_STOP=1 --username postgres --dbname ferrofed \
     --command "CREATE ROLE ferrofed LOGIN PASSWORD '${STORE_PASSWORD}'" \
-    --command "GRANT CREATE ON DATABASE ferrofed TO ferrofed" > /dev/null
-  printf 'postgres://ferrofed:%s@127.0.0.1:%s/ferrofed?sslmode=require' \
-    "$STORE_PASSWORD" "$STORE_PORT" > "$WORK/store-url"
+    --command "CREATE DATABASE ferrofed_base" > /dev/null
+  for db in ferrofed ferrofed_base; do
+    docker exec "$STORE_NAME" psql --quiet -v ON_ERROR_STOP=1 --username postgres --dbname ferrofed \
+      --command "GRANT CREATE ON DATABASE ${db} TO ferrofed" > /dev/null
+  done
 
-  FERROFED__USAGE_REPORT__ENABLED=false FERROFED_CONFIG="$CONFIG" \
-    target/release/ferrofed serve > "$WORK/server.log" 2>&1 &
-  server_pid=$!
-  wait_for "the gateway" 60 curl --fail --silent "$BASE/health/readiness"
+  head_pid="$(serve head target/release/ferrofed "$CONFIG" ferrofed 8080)"
+  base_pid="$(serve base "$BASE_TREE/ferrofed" "$base_config" ferrofed_base 8070)"
+  wait_for "the head gateway" 60 curl --fail --silent "$HEAD_URL/health/readiness"
+  wait_for "the base gateway" 60 curl --fail --silent "$BASE_URL/health/readiness"
 }
 
 # busy_loop: the planted poller must fail the idle phase on its
@@ -182,8 +251,8 @@ busy_loop() {
   yes "$POLL" | docker exec --interactive --env PGAPPNAME=perf-busy-loop "$STORE_NAME" \
     psql --quiet --no-psqlrc --username ferrofed --dbname ferrofed > /dev/null 2>&1 &
   poller_pid=$!
-  GITHUB_STEP_SUMMARY='' ferrohealth-perf run --plan "$BUSY_PLAN" --pid "$server_pid" \
-    --base-url "$BASE" --database-url "$ADMIN_URL" --baseline "$WORK/no-baseline.toml" \
+  GITHUB_STEP_SUMMARY='' ferrohealth-perf run --plan "$BUSY_PLAN" --pid "$head_pid" \
+    --base-url "$HEAD_URL" --database-url "$(admin_url ferrofed)" --baseline "$WORK/no-baseline.toml" \
     --out-dir target/perf/busy-loop --summary "$summary" > /dev/null || code=$?
   kill "$poller_pid" 2> /dev/null || true
   poller_pid=""
@@ -211,26 +280,27 @@ report_busy_loop() {
 }
 
 run() {
-  local update=()
-  case "${1:-}" in
-    --update) update=(--update) ;;
-    "") ;;
-    *) die "usage: gate.sh run [--update]" ;;
-  esac
+  [[ $# -eq 0 ]] || die "usage: gate.sh run"
   cd "$root"
   command -v ferrohealth-perf > /dev/null || die "ferrohealth-perf is not on PATH"
   trap cleanup EXIT
   start
-  local token code=0
+  local token code=0 server
   token="$(bash scripts/quickstart/token.sh)" || die "the development token could not be minted"
   render "$PLAN" "$WORK/plan.toml" "$token" || exit 2
-  ferrohealth-perf run --plan "$WORK/plan.toml" --pid "$server_pid" --base-url "$BASE" \
-    --database-url "$ADMIN_URL" --baseline perf/baseline.toml --out-dir target/perf \
-    ${update[@]+"${update[@]}"} || code=$?
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    printf "The base is \`%s\`.\n\n" "$(< "$BASE_TREE/rev")" >> "$GITHUB_STEP_SUMMARY"
+  fi
+  ferrohealth-perf ab --plan "$WORK/plan.toml" \
+    --base-url "$BASE_URL" --base-pid "$base_pid" --base-database-url "$(admin_url ferrofed_base)" \
+    --head-url "$HEAD_URL" --head-pid "$head_pid" --head-database-url "$(admin_url ferrofed)" \
+    --out-dir target/perf || code=$?
   busy_loop || { [[ "$code" -ne 0 ]] || code=1; }
   if [[ "$code" -ne 0 ]]; then
-    echo "perf-gate: the gateway log follows" >&2
-    tail -n 50 "$WORK/server.log" >&2
+    for server in head base; do
+      echo "perf-gate: the $server gateway's log follows" >&2
+      tail -n 50 "$WORK/$server/server.log" >&2
+    done
   fi
   exit "$code"
 }
@@ -270,19 +340,41 @@ self_test() {
     echo "  FAIL: $PLAN holds no [idle] table" >&2
     failed=1
   }
+  local repo="$work/repo" saved_root="$root"
+  git init --quiet "$repo"
+  commit() { git -C "$repo" -c user.name=t -c user.email=t@t -c commit.gpgsign=false -c tag.gpgsign=false commit --quiet --allow-empty -m "$1"; }
+  commit one
+  commit two
+  git -C "$repo" -c tag.gpgsign=false tag v0.0.1
+  commit three
+  git -C "$repo" branch side
+  commit four
+  git -C "$repo" checkout --quiet side
+  commit side-only
+  git -C "$repo" checkout --quiet -
+  root="$repo"
+  check "with no BASE the base is the newest tag before HEAD" \
+    "$(git -C "$repo" rev-parse v0.0.1)" "$(base_rev "")"
+  check "a BASE names its merge base with HEAD" \
+    "$(git -C "$repo" rev-parse HEAD~1)" "$(base_rev side)"
+  check "an all-zero BASE takes the previous release" \
+    "$(git -C "$repo" rev-parse v0.0.1)" "$(base_rev 0000000000000000000000000000000000000000)"
+  check "with no tag before it the base is the first parent" \
+    "$(git -C "$repo" rev-parse v0.0.1~1)" "$(base_rev "" v0.0.1)"
+  root="$saved_root"
   [[ "$failed" -eq 0 ]] || exit 1
   echo "perf-gate: self-test OK ($n checks)."
 }
 
 case "${1:-}" in
   build)
-    cd "$root"
-    cargo build --release --locked -p ferrofed-server --bin ferrofed
+    shift
+    build "$@"
     ;;
   run)
     shift
     run "$@"
     ;;
   --self-test) self_test ;;
-  *) die "usage: gate.sh build | run [--update] | --self-test" ;;
+  *) die "usage: gate.sh build [BASE] | run | --self-test" ;;
 esac

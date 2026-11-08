@@ -8,7 +8,8 @@
 #                                          └─ build-console ─────────────────┘
 #
 # perf runs the performance gate on the tagged commit (#1687, perf.yml), with
-# no build cache, so a release the gate fails is never drafted.
+# no build cache, judged against the previous release built beside it
+# (#1731), so a release the gate fails is never drafted.
 #
 # plan refuses a tag whose milestone (titled exactly as the tag) is missing or
 # still holds an open item, and milestone closes it once every leg succeeded
