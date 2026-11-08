@@ -550,10 +550,12 @@ token names, which `ferrohealth-smart` classifies as an external person. The
 IUA `person_id`, a patient identifier, is never read (§5.4.1, N33): the
 patient is named in the request, as for every caller.
 
-**What is never read.** The gateway reads no name and no address of the
-professional or the provider: a node and the access record are told the
-professional by their identifier (GDPR Art 5(1)(c)), and a node that needs a
-display name shows the identifier.
+**What a node is told.** A node is told the professional by their
+identifier and by no name or address (GDPR Art 5(1)(c)), and a node that
+needs a display name shows the identifier. The access record keeps the
+name the identity assertion states, which Implementing Regulation (EU)
+2026/2099 Annex Table 1 makes mandatory ([The access
+log](access-log.md#a-request-a-national-contact-point-relays)).
 
 **Consent exclusions stay hidden.** Every request of a contact point is
 served with `disclose = false`, whatever `[federation.consent] disclose`

@@ -72,7 +72,7 @@ A national contact point's connector acts for the professional of another
 Member State its token names ([National contact
 points](authentication.md#national-contact-points)). Its record names the
 foreign provider as the provider agent, the foreign professional in the
-`agent:user` by their identifier and by no name, and the connector as the
+`agent:user` by their identifier, and the connector as the
 Application agent, the client that relayed the request. Beside them, one
 entity named `ehds-relayed` carries what the contact point asserted of the
 Implementing Regulation (EU) 2026/2099 Annex Tables 1 and 2 and of the
@@ -83,15 +83,18 @@ eHDSI identity assertion, each a `detail`:
 | `relayed-via`, `relayed-issuer` | `contact-point`, and the contact point that asserted them, by its issuer |
 | `asserted` | `true`: the values are the contact point's assertion, never verified by the gateway |
 | `country-code` | Table 1 `country_code` |
-| `hp-name`, `hp-identifier`, `hp-issuing-authority` | Table 1 `hp_identifier`, the assertion's `NameID`, which also stands for the name, and its `issuing_authority_name` |
+| `hp-name`, `hp-family-name`, `hp-given-name` | Table 1 `hp_name`, the assertion's `subject-id` as one full-name string, and the family and given names when the token states them apart |
+| `hp-identifier`, `hp-issuing-authority` | Table 1 `hp_identifier`, the assertion's `NameID`, and its `issuing_authority_name` |
 | `hp-professional-role`, `hp-on-behalf-of` | Table 1 `hp_professional_role`, once per role, `system\|code`, and the role the professional acts for |
 | `hp-name-id`, `hp-authentication-method` | the assertion's `NameID` with its issuer, and its authentication class |
-| `provider-identifier`, `provider-issuing-authority` | Table 2 `healthcare_provider_identifier` and its `issuing_authority_name` |
+| `provider-identifier`, `provider-issuing-authority`, `provider-name`, `provider-address` | Table 2 `healthcare_provider_identifier`, its `issuing_authority_name`, and the provider's name and address when the token states them |
 | `provider-facility-type`, `provider-home-community-id`, `point-of-care` | the facility type, the home community and the point of care the assertion states |
 | `identity-assertion-id`, `trc-assertion-id` | the ids of the identity assertion and of the treatment relationship confirmation |
+| `asserted-field` | every further field the token asserts, such as the speciality or the assertion windows, as `<name>=<value>`; the patient fields are never listed, since the patient is the record's subject |
 
-No name and no address of the professional or the provider is recorded
-(GDPR Art 5(1)(c)).
+The `ehds-accessor` entity names the provider acted for, `acts-for`, as
+`<issuing authority>|<identifier>` (Annex II 3.2(a)). A node is still told
+the professional by their identifier alone (GDPR Art 5(1)(c)).
 
 A correlation identifier the connector sent in the header its issuer
 declares is a `correlation-id` detail of `entity:transaction`, so the
