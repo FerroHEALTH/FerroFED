@@ -52,8 +52,10 @@ impl NcpError {
             | Code::PatientContextMissing
             | Code::CorrelationInvalid
             | Code::EmergencyLimitReached
-            | Code::TrcMissing
             | Code::TrcUnbound => Some(Self("ERROR_SEC_GENERIC")),
+            // NOTE: RC 10.0.0 §1.25 requirement 11.01.02: a contact point's token without the
+            // TRC patient misses an assertion attribute, the code ferrohealth-smart gives the rest.
+            Code::TrcMissing => Some(Self::shared(EhdsiCode::SecDataIntegrityNotEnsured)),
             // NOTE: RC 10.0.0 §1.25 requirements 05.01, 06.01 and 07.01: a national
             // infrastructure that cannot answer, here a member node or a service it needs.
             Code::NodeTimeout

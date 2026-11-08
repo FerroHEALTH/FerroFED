@@ -405,12 +405,13 @@ async fn a_trc_patient_that_cannot_be_resolved_is_its_own_security_event() -> Te
     Ok(())
 }
 
-/// MyHealth@EU RC 10.0.0 §1.25 requirement 11: a contact point's request
-/// with no TRC patient is refused with the `trc-missing` refusal and
-/// `ERROR_SEC_GENERIC` in the outcome's details, its national connector's
-/// code, and no legacy appendix 6.4 number.
+/// MyHealth@EU RC 10.0.0 §1.25 requirement 11.01.02: a contact point's
+/// request with no TRC patient misses an assertion attribute, so it is
+/// refused with the `trc-missing` refusal and
+/// `ERROR_SEC_DATA_INTEGRITY_NOT_ENSURED` in the outcome's details, its
+/// national connector's code, and no legacy appendix 6.4 number.
 #[tokio::test]
-async fn trc_missing_names_the_generic_security_code() -> TestResult {
+async fn trc_missing_names_the_data_integrity_code() -> TestResult {
     let (a, b, pdq) = servers().await;
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), (&a, &b, &pdq))?;
@@ -421,7 +422,7 @@ async fn trc_missing_names_the_generic_security_code() -> TestResult {
     assert_eq!(
         vec![
             String::from("trc-missing"),
-            String::from("ERROR_SEC_GENERIC")
+            String::from("ERROR_SEC_DATA_INTEGRITY_NOT_ENSURED")
         ],
         details(&outcome),
         "{text}"

@@ -356,7 +356,8 @@ of the NCPeH Components Specifications 10.0.0 appendix 6.4 is ever issued.
 |---|---|
 | A token the contact-point profile refuses | the code `ferrohealth-smart` gives it: `ERROR_HPI_NO_INFORMATION`, `ERROR_HPI_INSUFFICIENT_INFORMATION`, `ERROR_HPI_HAI_NO_INFORMATION`, `ERROR_HPI_POC_NO_INFORMATION`, `ERROR_HPI_AUTHENTICATION_NOT_RECEIVED` or `ERROR_SEC_DATA_INTEGRITY_NOT_ENSURED` |
 | Any other refused token, its key set unreadable included | `ERROR_SEC_GENERIC`, as `ferrohealth-smart` gives it |
-| A scope, operation or rights refusal, no TRC patient, a request a TRC binds nothing to, and the emergency access limit | `ERROR_SEC_GENERIC` |
+| A patient-data request whose token names no TRC patient (`trc-missing`) | `ERROR_SEC_DATA_INTEGRITY_NOT_ENSURED` (requirement 11.01.02), the code `ferrohealth-smart` gives every other missing assertion attribute |
+| A scope, operation or rights refusal, a request a TRC binds nothing to, and the emergency access limit | `ERROR_SEC_GENERIC` |
 | A member, the identity binding or a service it needs cannot answer | `ERROR_REGISTRY_NOT_AVAILABLE` |
 | Outside the TRC's patient, or a patient no member holds | the service's `*_NOT_FOUND` |
 | The gateway's own defect, or its own record that failed | `ERROR_INTERNAL_ERROR` |
