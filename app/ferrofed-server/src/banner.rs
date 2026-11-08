@@ -3,21 +3,26 @@
 
 //! The startup banner `ferrofed serve` prints before its log starts.
 //!
-//! The wordmark, the product version, the maintainer and the repository, the
+//! The family's banner, `ferrohealth_server::build_info::banner`, draws the
+//! wordmark, the build line with the product version, and one aligned line
+//! per fact: the product, the maintainer and the repository, the
 //! manufacturer with its contact and postal address (Regulation (EU)
 //! 2025/327 Art 30(1)(g)), the releases the gateway serves, the end of the
-//! release's support period with a notice once it has passed (Regulation
-//! (EU) 2024/2847 Art 13(19)), and the deployment facts an operator checks first. The wordmark is committed text, so the boot path loads no font and
-//! carries no dependency for it. Every pin is read from the crate constant
-//! `scripts/checks/versions.sh` holds to the pin matrix, never typed here.
+//! release's support period (Regulation (EU) 2024/2847 Art 13(19)), and the
+//! deployment facts an operator checks first. The notices follow it: the
+//! support notification once the period has passed and the development
+//! notice, in red on a terminal with colour. The wordmark is committed text,
+//! so the boot path loads no font and carries no dependency for it. Every pin
+//! is read from the crate constant `scripts/checks/versions.sh` holds to the
+//! pin matrix, never typed here.
 //!
 //! The banner prints only when the console renders the terminal form, so a
 //! log pipeline reading JSON never receives it. It shows counts, an address,
 //! a path, switches, and the configuration keys of each credential or
 //! patient identifier that travels unencrypted: never a credential, a
-//! URL, a header value or anything from a request. No specification governs the banner: our own design.
+//! URL, a header value or anything from a request. No specification governs
+//! the banner: our own design.
 
-use std::fmt::Write as _;
 use std::net::SocketAddr;
 
 use ferrofed_operator_api::manufacturer::MANUFACTURER;
@@ -28,6 +33,7 @@ use crate::config::stored_queries::Backend;
 use crate::config::transport::{CleartextError, ProtectedSite};
 use crate::federation::error::FederationError;
 use crate::support::Support;
+use ferrohealth_server::build_info::{self, BuildInfo};
 use ferrohealth_telemetry::section::{Format, Rendering};
 
 /// The `FerroFED` wordmark in the `FIGlet` "standard" font.
@@ -56,9 +62,6 @@ pub const PINS: [(&str, &str); 4] = [
 pub const DEVELOPMENT_NOTICE: &str = "DEVELOPMENT: this deployment runs the development profile, \
      which relaxes checks a production deployment must pass, such as encryption to a loopback \
      service. It must not hold or reach real patient data.";
-
-/// The column every value of the aligned list starts at, after its label.
-const LABEL_WIDTH: usize = 17;
 
 /// The width the development notice is wrapped to, inside 80 columns.
 const NOTICE_WIDTH: usize = 76;
@@ -197,64 +200,22 @@ pub fn prints(format: Format, stdout_is_terminal: bool) -> bool {
     format.resolve(stdout_is_terminal) == Rendering::Pretty
 }
 
-/// Renders the banner for the product `version` and `deployment`, the
-/// development notice in red when `colour` is set.
+/// Renders the banner for the product `version` and `deployment`, or `None`
+/// unless the console `rendering` is the terminal form.
 ///
-/// Parameterized so a test fixes every input; [`print()`] supplies the
-/// running version.
+/// `ferrohealth_server::build_info::banner` draws the wordmark, the build
+/// line and one aligned line per fact; the notices follow it, in red when
+/// `colour` is set. Parameterized so a test fixes every input; [`print()`]
+/// supplies the running version.
 #[must_use]
-pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
-    let mut out = format!(
-        "{WORDMARK}\n\n  openEHR federation gateway · v{version}\n  Maintained by {} · {}\n  \
-         Manufactured by {} · {}\n  {}\n\n",
-        env!("CARGO_PKG_AUTHORS"),
-        env!("CARGO_PKG_REPOSITORY"),
-        MANUFACTURER.name,
-        MANUFACTURER.email,
-        MANUFACTURER.postal_address,
-    );
-    for (label, pin) in PINS {
-        line(&mut out, label, pin);
-    }
-    // NOTE: Regulation (EU) 2024/2847 Art 13(19): the end date of the support
-    // period is stated, and a notification is displayed once it is reached.
-    let support = match deployment.support {
-        Support::NoPeriod => "none, this build is no release".to_owned(),
-        Support::Until(end) => format!("newest release only, fixes until {end}"),
-        Support::Ended(end) => format!("ended on {end}"),
-    };
-    line(&mut out, "Support", &support);
-    out.push('\n');
-    line(&mut out, "Base path", deployment.base_path.as_str());
-    line(&mut out, "Listen", &deployment.listen.to_string());
-    let registry = match deployment.registry {
-        Registry::Unset => "none, the gateway federates nothing".to_owned(),
-        Registry::Read { members, endpoints } => format!(
-            "{}, {}",
-            counted(members, "member"),
-            counted(endpoints, "endpoint")
-        ),
-        Registry::Unreadable => "does not load; the log says why".to_owned(),
-    };
-    line(&mut out, "Registry", &registry);
-    let stored_queries = match deployment.stored_queries {
-        None => "off",
-        Some(Backend::Redb) => "on, redb",
-        Some(Backend::Postgres) => "on, postgres",
-        Some(Backend::Files) => "on, files, read-only",
-    };
-    line(&mut out, "Stored queries", stored_queries);
-    for (index, site) in deployment.cleartext.iter().enumerate() {
-        let label = if index == 0 { "Unencrypted" } else { "" };
-        line(&mut out, label, &site.payload);
-    }
-    if deployment.audit_spool_in_memory {
-        line(
-            &mut out,
-            "Audit spool",
-            "in memory: a restart loses the audit messages not yet delivered",
-        );
-    }
+pub fn render(
+    version: &'static str,
+    deployment: &Deployment,
+    colour: bool,
+    rendering: Rendering,
+) -> Option<String> {
+    let info = BuildInfo::new("ferrofed", version);
+    let mut out = build_info::banner(&info, WORDMARK, &facts(deployment), rendering)?;
     // The same words with and without colour, because colour is the first
     // thing a scraped log loses.
     let (on, off) = if colour { (RED, RESET) } else { ("", "") };
@@ -275,10 +236,70 @@ pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
             }
         }
     }
-    out
+    Some(out)
 }
 
-/// Prints the banner for the running version to stdout.
+/// The facts the banner lists under the build line, by label.
+fn facts(deployment: &Deployment) -> Vec<(&'static str, String)> {
+    let mut facts = vec![
+        ("Product", "openEHR federation gateway".to_owned()),
+        (
+            "Maintainer",
+            format!(
+                "{} · {}",
+                env!("CARGO_PKG_AUTHORS"),
+                env!("CARGO_PKG_REPOSITORY")
+            ),
+        ),
+        (
+            "Manufacturer",
+            format!("{} · {}", MANUFACTURER.name, MANUFACTURER.email),
+        ),
+        ("Address", MANUFACTURER.postal_address.to_owned()),
+    ];
+    facts.extend(PINS.map(|(label, pin)| (label, pin.to_owned())));
+    // NOTE: Regulation (EU) 2024/2847 Art 13(19): the end date of the support
+    // period is stated, and a notification is displayed once it is reached.
+    let support = match deployment.support {
+        Support::NoPeriod => "none, this build is no release".to_owned(),
+        Support::Until(end) => format!("newest release only, fixes until {end}"),
+        Support::Ended(end) => format!("ended on {end}"),
+    };
+    facts.push(("Support", support));
+    facts.push(("Base path", deployment.base_path.as_str().to_owned()));
+    facts.push(("Listen", deployment.listen.to_string()));
+    let registry = match deployment.registry {
+        Registry::Unset => "none, the gateway federates nothing".to_owned(),
+        Registry::Read { members, endpoints } => format!(
+            "{}, {}",
+            counted(members, "member"),
+            counted(endpoints, "endpoint")
+        ),
+        Registry::Unreadable => "does not load; the log says why".to_owned(),
+    };
+    facts.push(("Registry", registry));
+    let stored_queries = match deployment.stored_queries {
+        None => "off",
+        Some(Backend::Redb) => "on, redb",
+        Some(Backend::Postgres) => "on, postgres",
+        Some(Backend::Files) => "on, files, read-only",
+    };
+    facts.push(("Stored queries", stored_queries.to_owned()));
+    for (index, site) in deployment.cleartext.iter().enumerate() {
+        let label = if index == 0 { "Unencrypted" } else { "" };
+        facts.push((label, site.payload.clone()));
+    }
+    if deployment.audit_spool_in_memory {
+        facts.push((
+            "Audit spool",
+            "in memory: a restart loses the audit messages not yet delivered".to_owned(),
+        ));
+    }
+    facts
+}
+
+/// Prints the banner for the running version to stdout, when the console
+/// `rendering` is the terminal form.
 ///
 /// `serve` calls it before the log subscriber exists, so no formatter
 /// touches the art.
@@ -286,15 +307,10 @@ pub fn render(version: &str, deployment: &Deployment, colour: bool) -> String {
     clippy::print_stdout,
     reason = "the startup banner is console output, printed before any log subscriber exists"
 )]
-pub fn print(deployment: &Deployment, colour: bool) {
-    println!("{}", render(env!("CARGO_PKG_VERSION"), deployment, colour));
-}
-
-/// Appends one aligned `label value` line to `out`.
-fn line(out: &mut String, label: &str, value: &str) {
-    // NOTE: no specification governs this: our own design; writing to a
-    // String cannot fail.
-    let _written: std::fmt::Result = writeln!(out, "  {label:<LABEL_WIDTH$}{value}");
+pub fn print(deployment: &Deployment, colour: bool, rendering: Rendering) {
+    if let Some(banner) = render(env!("CARGO_PKG_VERSION"), deployment, colour, rendering) {
+        println!("{banner}");
+    }
 }
 
 /// Returns `count` with `noun`, plural unless the count is one.

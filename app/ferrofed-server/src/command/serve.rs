@@ -90,6 +90,7 @@ pub(super) fn serve_job(
                         .any(|binding| binding.spools_in_memory(&settings)),
             ),
             console.colour(format),
+            format.resolve(stdout_is_terminal),
         );
     }
     let runtime = match tokio::runtime::Builder::new_multi_thread()

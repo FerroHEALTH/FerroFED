@@ -19,6 +19,7 @@ use ferrofed_operator_api::manufacturer::MANUFACTURER;
 use ferrofed_server::banner::{Deployment, Registry, render};
 use ferrofed_server::cli::Cli;
 use ferrofed_server::support::Support;
+use ferrohealth_telemetry::section::Rendering;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -54,9 +55,13 @@ fn the_banner_names_the_manufacturer_its_contact_and_its_address() -> TestResult
         audit_spool_in_memory: false,
         support: Support::NoPeriod,
     };
-    let banner = render("9.9.9", &deployment, false);
+    let banner = render("9.9.9", &deployment, false, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
     assert!(
-        banner.contains("Manufactured by Cadasto B.V. · info@cadasto.com"),
+        banner.lines().any(|line| line
+            .trim_start()
+            .strip_prefix("Manufacturer")
+            .is_some_and(|value| value.trim() == "Cadasto B.V. · info@cadasto.com")),
         "{banner}"
     );
     for text in PINNED {

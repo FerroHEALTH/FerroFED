@@ -101,7 +101,8 @@ ferrofed: note: [[fhir.serve]] names no member for Electronic-Dispensations: the
 ### The startup banner
 
 When the log renders for a person, `serve` prints a banner before the first
-log line: the wordmark, the version, the maintainer, the manufacturer with
+log line: the family's banner with the wordmark and the version, then one
+line each for the product, the maintainer, the manufacturer with
 its contact and postal address, the releases the gateway serves, the end
 date of its support period, and the deployment facts to check first. Built from
 source and run on a terminal with the development configuration of
@@ -113,18 +114,16 @@ source and run on a terminal with the development configuration of
 | |_ / _ \ '__| '__/ _ \| |_  |  _| | | | |
 |  _|  __/ |  | | | (_) |  _| | |___| |_| |
 |_|  \___|_|  |_|  \___/|_|   |_____|____/
-
-  openEHR federation gateway · v0.0.9
-  Maintained by Ruben Talstra · https://github.com/FerroHEALTH/FerroFED
-  Manufactured by Cadasto B.V. · info@cadasto.com
-  Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands
-
+ferrofed 0.0.9
+  Product          openEHR federation gateway
+  Maintainer       Ruben Talstra · https://github.com/FerroHEALTH/FerroFED
+  Manufacturer     Cadasto B.V. · info@cadasto.com
+  Address          Comeniusstraat 2d, 1817 MS Alkmaar, The Netherlands
   Federation Tier  1.0.1
   ITS-REST         1.1.0
   AQL              1.1.0
   openehr-*        0.0.87
   Support          none, this build is no release
-
   Base path        /
   Listen           0.0.0.0:8080
   Registry         4 members, 4 endpoints
