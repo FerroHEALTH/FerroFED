@@ -71,9 +71,18 @@ The A/B run has two parts:
    member the registry names. Every request must be answered with the
    status the plan names.
 
-A national contact point's routes are not in the set yet: their token is
+A national contact point's routes are not in the set yet. Its token must be
 bound to the client certificate of the connection or to a `DPoP` key, and
-[#1702](https://github.com/FerroHEALTH/FerroFED/issues/1702) adds them.
+the base of a change has to serve the same routes as the head, so
+[#1702](https://github.com/FerroHEALTH/FerroFED/issues/1702) adds them in
+two steps. `perf/ferrofed.toml` already trusts a synthetic contact point
+whose tokens are bound to a `DPoP` key (RFC 9449), with the FHIR face for
+its patient summary and the emergency access limit, and `gate.sh` makes the
+contact point's signing key, its key set and the P-256 `DPoP` key under
+`target/perf-run/` and mints its tokens for the treatment and the emergency
+purposes, which a plan names as `{ncp_token}` and `{ncp_emergency_token}`.
+The request groups follow once a release carries that configuration, since
+the release lane's base is the previous release.
 
 ## Reading the report
 
