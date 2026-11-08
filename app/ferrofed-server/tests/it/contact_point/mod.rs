@@ -94,7 +94,7 @@ pub(crate) const HCP_NAME: &str = "Qz7-hcp-name-68";
     clippy::expect_used,
     reason = "a test process that cannot make a certificate cannot test anything"
 )]
-static CERTIFICATE: LazyLock<Vec<u8>> = LazyLock::new(|| {
+pub(crate) static CERTIFICATE: LazyLock<Vec<u8>> = LazyLock::new(|| {
     national_connector::client_certificate().expect("a test certificate should be made")
 });
 

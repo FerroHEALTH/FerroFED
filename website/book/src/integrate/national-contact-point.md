@@ -89,6 +89,40 @@ professionals' and providers' identifiers. The connector reaches the
 gateway over mutual TLS, and each token is bound to the connector's client
 certificate in its `cnf` claim (RFC 8705 §3).
 
+### The exchange your authorization server answers
+
+No product we can name accepts the HP Identity Assertion as a token to
+exchange. RFC 7522 needs a `bearer` assertion, and the identity assertion is
+`sender-vouches` (eHDSI SAML Profile 10.0.0 §2.1). So your Member State runs
+the authorization server acting for NCPeH-A. FerroFED publishes the
+exchange it expects that server to answer, and its test suite runs a harness
+that answers it the same way:
+
+- **The request.** The national connector sends an RFC 8693 token exchange
+  (§2.1): `grant_type` `urn:ietf:params:oauth:grant-type:token-exchange`,
+  with the identity assertion, base64url, as `subject_token` of
+  `subject_token_type` `urn:ietf:params:oauth:token-type:saml2`. Once the
+  patient is identified, it adds the TRC, base64url, as `trc_token` of
+  `trc_token_type` `urn:ietf:params:oauth:token-type:saml2`. A
+  discovery-phase exchange sends no `trc_token`. The names `trc_token` and
+  `trc_token_type` are FerroFED's own design. RFC 6749 §8.2 lets a profile
+  define them, and RFC 8693 has no parameter for a second subject
+  assertion.
+- **The checks.** Your server checks both assertions as
+  `ferrohealth-smart`'s `federation::assertion::Validator` does:
+  - the enveloped signature by NCP-B's trusted seal, at or above the
+    Cryptographic Algorithms 9.0.0 §2 floor (an RSA key of at least 3000
+    bits, SHA-256 or above, no elliptic curve);
+  - the SAML Profile 10.0.0 §2 and §4 checks;
+  - a TRC whose `Advice/AssertionIDRef` names the identity assertion's
+    `@ID`.
+
+  It refuses with RFC 6749 §5.2 `invalid_grant`, naming the Requirements
+  Catalogue 10.0.0 §1.25 code.
+- **The token.** It carries the `ehdsi` claim `identity::ehdsi_claim`
+  writes, is bound to the connector's certificate, and lives no longer than
+  the identity assertion or the TRC.
+
 `ferrofed config check` reads the tables, and `OPTIONS {base}/` declares the
 contact point under `federation.national_contact_point`, so the connector's
 operator can check what the gateway expects. You see the running values on
