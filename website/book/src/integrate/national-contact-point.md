@@ -350,6 +350,15 @@ When the store does not answer, an emergency access cannot be counted, so
 it is refused `503 emergency-uncounted` and no member is asked. A request
 that is no emergency access never touches the count.
 
+The count does not depend on the access log. A development gateway with
+`[audit] destination = "off"`, which keeps no access record, still counts
+and denies a contact point's emergency accesses: the limit is a deny
+decision (NCPeH Architecture §5.1.9), apart from the access record of
+Regulation (EU) 2025/327 Annex II 3.2. Such a denial carries no access
+record and is still the security event `emergency-limit-reached`. The
+`[[access_log.emergency_purpose]]` entries and the store are what the count
+needs either way.
+
 ## Failures the connector relays
 
 The contact points exchange a common set of exceptions, and the national

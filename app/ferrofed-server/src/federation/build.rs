@@ -9,6 +9,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use ehds_logging::category::Category;
+use ehds_logging::emergency::EmergencyPurposes;
 use ferrofed_eehrxf::face::EPS_COMPOSITION;
 use ferrofed_eehrxf::serving;
 use ferrofed_engine::dispatch::NodeClients;
@@ -218,6 +219,7 @@ impl Federation {
             client_keys: client_keys(settings),
             documents,
             access,
+            emergency: settings.access_log.emergency.clone(),
             emergency_limit: settings.emergency,
         };
         describe::describe(&federation, false).map_err(FederationError::Describe)?;
@@ -283,6 +285,7 @@ impl Federation {
             client_keys: Vec::new(),
             documents: Vec::new(),
             access: None,
+            emergency: EmergencyPurposes::default(),
             emergency_limit: EmergencyLimit::default(),
         }
     }
