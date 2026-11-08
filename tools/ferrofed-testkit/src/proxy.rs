@@ -23,9 +23,6 @@ use http::header::{self, HeaderMap, HeaderName};
 use http::{Request, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper_util::rt::TokioIo;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -304,19 +301,7 @@ async fn accept_loop(listener: TcpListener, shared: Arc<Shared>) {
             drop(stream);
             continue;
         }
-        let connection_shared = Arc::clone(&shared);
-        tokio::spawn(async move {
-            let service =
-                service_fn(move |request| handle(Arc::clone(&connection_shared), request));
-            // A connection ends in an error whenever a client hangs up or the
-            // handler refuses it; both are outcomes a test causes on purpose.
-            match http1::Builder::new()
-                .serve_connection(TokioIo::new(stream), service)
-                .await
-            {
-                Ok(()) | Err(_) => {}
-            }
-        });
+        crate::connection::serve(stream, Arc::clone(&shared), handle);
     }
 }
 

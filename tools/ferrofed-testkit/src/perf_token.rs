@@ -33,9 +33,6 @@ use bytes::Bytes;
 use http::{HeaderValue, Method, Request, Response, StatusCode, header};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper_util::rt::TokioIo;
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
@@ -277,19 +274,7 @@ async fn accept_loop(listener: TcpListener, shared: Arc<Shared>) {
         let Ok((stream, _)) = listener.accept().await else {
             continue;
         };
-        let connection_shared = Arc::clone(&shared);
-        tokio::spawn(async move {
-            let service =
-                service_fn(move |request| handle(Arc::clone(&connection_shared), request));
-            // A connection ends in an error whenever a client hangs up; the
-            // device has nothing to report about it.
-            match http1::Builder::new()
-                .serve_connection(TokioIo::new(stream), service)
-                .await
-            {
-                Ok(()) | Err(_) => {}
-            }
-        });
+        crate::connection::serve(stream, Arc::clone(&shared), handle);
     }
 }
 
