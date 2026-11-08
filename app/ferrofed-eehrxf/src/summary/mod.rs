@@ -29,6 +29,11 @@
 //!   server that refuses or does not answer fails the document
 //!   ([`eehrxf::terminology::translation`]); with none, the code is
 //!   transferred as recorded (eHN PS Art 10(7));
+//! - a composition that holds a context's start archetype more than once,
+//!   two medicines in two entries of one archetype, is mapped once per
+//!   entry by the engine, and each entry is listed on its own, each placed
+//!   by its context's condition (hazard I-03 of the clinical safety risk
+//!   file);
 //! - a member's data are listed as mapped, beside every other member's,
 //!   never merged with them, and two members' medication entries that name
 //!   the same medicine, strength and route are marked in the section's
@@ -59,7 +64,6 @@ pub mod error;
 pub mod mappings;
 mod narrative;
 pub mod once;
-pub mod repeated;
 pub mod resources;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -326,23 +330,16 @@ fn dropped_line(dropped: &Tally) -> Option<String> {
     ))
 }
 
-/// What one mapping run added: the `fullUrl` of the mapped resource, the
-/// narrative line of each term mapping it wrote as no coding, and the
-/// probable-duplicate key of its medication entry.
-type Run = (Option<String>, Vec<String>, Option<duplicates::Key>);
+/// What one mapping run added: the `fullUrl` of each resource it mapped, one
+/// per occurrence of the context's start archetype, the narrative line of
+/// each term mapping it wrote as no coding, and the probable-duplicate key
+/// of each medication entry.
+type Run = (Vec<String>, Vec<String>, Vec<duplicates::Key>);
 
 /// What running one mapping over one composition came to.
 enum Outcome {
     /// The context's condition does not hold over the composition.
     NotApplicable,
-    /// The composition holds the context's start archetype `count` times,
-    /// which one resource cannot carry apart, so the context was not run.
-    Repeated {
-        /// The start archetype.
-        archetype: String,
-        /// How many entries of it the composition holds.
-        count: usize,
-    },
     /// The context ran.
     Ran(Run),
 }
@@ -440,23 +437,17 @@ impl Assembly {
                 let member = self.member(*index, origin)?;
                 let mut applied = false;
                 for mapping in runs {
-                    let (entry, lines, key) = match self
-                        .run(mapping, composition, &member, translator)
-                        .await?
-                    {
-                        Outcome::Ran(ran) => ran,
-                        Outcome::NotApplicable => continue,
-                        Outcome::Repeated { archetype, count } => {
-                            withheld.push(format!(
-                                    "A record from {} holds {count} entries of {archetype}, which the mapping cannot carry apart, so this section leaves the record out.",
-                                    origin.organisation.shown()
-                                ));
-                            continue;
-                        }
-                    };
+                    let (entry, lines, key) =
+                        match self.run(mapping, composition, &member, translator).await? {
+                            Outcome::Ran(ran) => ran,
+                            Outcome::NotApplicable => continue,
+                        };
                     applied = true;
                     entries.extend(entry);
-                    keys.extend(key.map(|key| (origin.organisation.shown().to_owned(), key)));
+                    keys.extend(
+                        key.into_iter()
+                            .map(|key| (origin.organisation.shown().to_owned(), key)),
+                    );
                     withheld.extend(
                         lines
                             .into_iter()
@@ -514,18 +505,6 @@ impl Assembly {
         member: &str,
         translator: &mut Translator<'_>,
     ) -> Result<Outcome, AssemblyError> {
-        if let Some(archetype) = mapping.start_archetype(&composition.template) {
-            let count =
-                repeated::occurrences(&composition.composition, &archetype).map_err(|source| {
-                    AssemblyError::Composition {
-                        template: composition.template.clone(),
-                        source,
-                    }
-                })?;
-            if count > 1 {
-                return Ok(Outcome::Repeated { archetype, count });
-            }
-        }
         let context = CallContext::new()
             .with_patient(reference(&self.subject))
             .with_who(reference(&self.device))
@@ -577,12 +556,19 @@ impl Assembly {
             .into_iter()
             .filter(|resource| !matches!(resource, Resource::OperationOutcome(_)))
             .collect();
-        let key = duplicates::Key::of(&entries);
-        Ok(Outcome::Ran((
-            self.document.add(&entries)?.into_iter().next(),
-            withheld,
-            key,
-        )))
+        let added = self.document.add(&entries)?;
+        let mut urls = Vec::new();
+        let mut keys = Vec::new();
+        // NOTE: FerroHEALTH/FerroBRIDGE#1254: the engine runs a context once per occurrence of its
+        // start archetype, so each resource the run writes, but a Medication it names, is one entry.
+        for (url, resource) in added.into_iter().zip(&entries) {
+            if matches!(resource, Resource::Provenance(_) | Resource::Medication(_)) {
+                continue;
+            }
+            urls.push(url);
+            keys.extend(duplicates::Key::of_entry(resource, &entries));
+        }
+        Ok(Outcome::Ran((urls, withheld, keys)))
     }
 
     /// Counts what `mapping` did to a composition of `template`, which it

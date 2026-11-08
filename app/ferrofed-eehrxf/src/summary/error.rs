@@ -26,15 +26,6 @@ pub enum AssemblyError {
         #[source]
         source: MappingError,
     },
-    /// A composition a member answered with is no JSON.
-    #[error("a composition of the template {template} is no JSON")]
-    Composition {
-        /// The composition's template id.
-        template: String,
-        /// Why.
-        #[source]
-        source: serde_json::Error,
-    },
     /// The document could not be written.
     #[error(transparent)]
     Document(#[from] DocumentError),

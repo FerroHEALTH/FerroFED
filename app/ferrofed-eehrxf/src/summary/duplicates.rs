@@ -75,6 +75,42 @@ impl Key {
         })
     }
 
+    /// Returns the key of `entry`, one medication entry a run wrote, with the
+    /// `Medication` among `run` its medicine names by `Medication/{id}`, as
+    /// [`Key::of`] reads them; `None` for an entry of any other type.
+    #[must_use]
+    pub fn of_entry(entry: &Resource, run: &[Resource]) -> Option<Self> {
+        let named = match entry {
+            Resource::MedicationStatement(statement) => match &statement.medication {
+                MedicationStatementMedication::Reference(reference) => reference.reference.as_ref(),
+                MedicationStatementMedication::CodeableConcept(_) => None,
+            },
+            Resource::MedicationRequest(request) => match &request.medication {
+                MedicationRequestMedication::Reference(reference) => reference.reference.as_ref(),
+                MedicationRequestMedication::CodeableConcept(_) => None,
+            },
+            _ => return None,
+        }
+        .and_then(|text| text.value.as_deref());
+        let mut resources = vec![entry.clone()];
+        resources.extend(
+            run.iter()
+                .filter(|resource| match resource {
+                    Resource::Medication(medication) => {
+                        named.is_some()
+                            && medication
+                                .id
+                                .as_deref()
+                                .map(|id| format!("Medication/{id}"))
+                                == named.map(str::to_owned)
+                    }
+                    _ => false,
+                })
+                .cloned(),
+        );
+        Self::of(&resources)
+    }
+
     /// Whether `other` names the same medicine, strength and route.
     fn same(&self, other: &Self) -> bool {
         self.medicine == other.medicine
