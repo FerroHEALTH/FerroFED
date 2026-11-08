@@ -63,6 +63,32 @@ async fn node_requiring(endpoint: &TokenEndpoint) -> Server {
 // conformance: CP-17
 #[tokio::test]
 async fn the_admission_check_authenticates_with_the_onward_grant() -> TestResult {
+    admitted_with("").await
+}
+
+/// Beside an onward lane, which carries every caller's request, the
+/// admission check, which no caller originates, is still sent under the
+/// token of the endpoint's client credentials grant (§13.1, N25).
+// conformance: CP-17
+#[tokio::test]
+async fn beside_an_onward_lane_the_admission_check_uses_the_client_credentials_grant() -> TestResult
+{
+    admitted_with(concat!(
+        "\n[credentials.\"node-a-pub\".onward]\n",
+        "issuer = \"https://federation.cdr-a.example.org\"\n",
+        "kind = \"persons\"\n",
+        "profile = \"rfc9068\"\n",
+        "audiences = [\"https://cdr-a.example.org/openehr\"]\n",
+        "indicators = [\"https://cdr-a.example.org/openehr\"]\n\n",
+        "[credentials.\"node-a-pub\".onward.keys]\n",
+        "max_onward_lifetime = 3600\n",
+    ))
+    .await
+}
+
+/// Runs the admission check over node A, which admits only a token of the
+/// endpoint's client credentials grant, with `onward` beside that grant.
+async fn admitted_with(onward: &str) -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     let a = node_requiring(&endpoint).await;
     let dir = tempfile::tempdir()?;
@@ -73,7 +99,7 @@ async fn the_admission_check_authenticates_with_the_onward_grant() -> TestResult
         "{}\n[signing]\nkey_file = {key}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"system/composition-*.cr\"\n",
         crossref(&[("node-a", V4[0])]),
         endpoint.token_url()
-    );
+    ) + onward;
     let federation = federation(
         dir.path(),
         &registry(&a.uri(), unreachable::BASE, ""),

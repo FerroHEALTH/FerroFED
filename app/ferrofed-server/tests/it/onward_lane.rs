@@ -597,3 +597,77 @@ async fn a_header_commit_carries_no_committer_of_the_gateways() -> TestResult {
     }
     Ok(())
 }
+
+/// The `Authorization` values `server` received.
+async fn authorizations(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
+    Ok(server
+        .received_requests()
+        .await
+        .ok_or("recording is on")?
+        .iter()
+        .filter_map(|request| request.headers.get(header::AUTHORIZATION.as_str()))
+        .filter_map(|value| value.to_str().ok().map(str::to_owned))
+        .collect())
+}
+
+/// No inbound request reaches node A under the token of the endpoint's
+/// client credentials grant, though the authorization server would issue
+/// one: a person's query and write go under the exchanged token, and a
+/// system caller, its token's `sub` its own client (RFC 9068 §2.2), is
+/// refused patient data at the guard and every other read at the lane, with
+/// nothing sent (§13.1, N25).
+// conformance: CP-17
+#[tokio::test]
+async fn no_inbound_request_reaches_the_node_under_the_client_credentials_token() -> TestResult {
+    let exchanged = onward_token()?;
+    let server = authorization_server(&exchanged, 200).await;
+    let a = node(&exchanged).await?;
+    Mock::given(method("POST"))
+        .and(path(format!(
+            "/v1/ehr/{}/contribution",
+            crate::facade::EHR_A
+        )))
+        .respond_with(ResponseTemplate::new(201))
+        .mount(&a)
+        .await;
+    let dir = tempfile::tempdir()?;
+    let tables = lane(&server.uri(), "persons", "");
+
+    let app = gateway(dir.path(), &a.uri(), &tables)?;
+    let (status, text) = call(app, patient_post(&bearer_as(CALLER)?)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let app = gateway(dir.path(), &a.uri(), &tables)?;
+    let write = contribution_post(contribution(""), &bearer_as(CALLER)?)?;
+    let (status, text) = call(app, write).await?;
+    assert_eq!(StatusCode::CREATED, status, "{text}");
+    let sent = authorizations(&a).await?;
+    assert_eq!(vec![format!("Bearer {exchanged}"); 2], sent);
+
+    let app = gateway(dir.path(), &a.uri(), &tables)?;
+    let mut claims = crate::support::caller::claims();
+    "synthetic-backend".clone_into(&mut claims.sub);
+    "synthetic-backend".clone_into(&mut claims.client_id);
+    let system = format!("Bearer {}", issuer().mint(&claims)?);
+    let (status, text) = call(app, patient_post(&system)?).await?;
+    assert_eq!(StatusCode::UNAUTHORIZED, status, "{text}");
+    assert!(text.contains("natural-person-required"), "{text}");
+    let app = gateway(dir.path(), &a.uri(), &tables)?;
+    let templates = Request::get("/v1/definition/template/adl1.4")
+        .header(header::AUTHORIZATION, &system)
+        .header("openEHR-federation-endpoint", "node-a-pub")
+        .body(Body::empty())?;
+    let (status, text) = call(app, templates).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
+    assert_eq!(
+        2,
+        authorizations(&a).await?.len(),
+        "the system was sent nothing"
+    );
+    assert!(
+        !authorizations(&a)
+            .await?
+            .contains(&format!("Bearer {OWN_TOKEN}")),
+        "the gateway's own token never reached the node"
+    );
+    Ok(())
+}
