@@ -15,7 +15,8 @@
 //! 8693 token exchange verifies the `subject_token` against the caller
 //! issuer's key set (its signature, `iss` and `exp`) and issues a token of
 //! the persons issuer for the same `sub`, the client as `client_id`, the
-//! requested `scope`, and the `resource` or `audience` it names as `aud`.
+//! requested `scope` or else the subject token's, and the `resource` or
+//! `audience` it names as `aud`.
 //! Both issued tokens are ES256 JWTs typed `at+jwt` (RFC 9068 §2.1) that
 //! live [`Settings::lifetime_s`]. `GET /calls` answers how many requests
 //! of each grant it answered and how many it refused, which the gate reads
@@ -30,9 +31,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use bytes::Bytes;
-use http::{HeaderValue, Method, Request, Response, StatusCode, header};
-use http_body_util::{BodyExt, Full};
-use hyper::body::Incoming;
+use http::request::Parts;
+use http::{HeaderValue, Method, Response, StatusCode, header};
+use http_body_util::Full;
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
@@ -197,7 +198,11 @@ impl PerfTokenEndpoint {
             token_exchange: AtomicU64::new(0),
             refused: AtomicU64::new(0),
         });
-        let task = tokio::spawn(accept_loop(listener, Arc::clone(&shared)));
+        let task = tokio::spawn(crate::connection::accept(
+            listener,
+            Arc::clone(&shared),
+            handle,
+        ));
         Ok(Self {
             address,
             shared,
@@ -266,28 +271,20 @@ impl Shared {
 #[derive(Debug, Deserialize)]
 struct Subject {
     sub: String,
-}
-
-/// Accepts connections until the device is dropped.
-async fn accept_loop(listener: TcpListener, shared: Arc<Shared>) {
-    loop {
-        let Ok((stream, _)) = listener.accept().await else {
-            continue;
-        };
-        crate::connection::serve(stream, Arc::clone(&shared), handle);
-    }
+    #[serde(default)]
+    scope: Option<String>,
 }
 
 /// Routes one request.
 async fn handle(
     shared: Arc<Shared>,
-    request: Request<Incoming>,
-) -> Result<Response<Full<Bytes>>, std::convert::Infallible> {
-    let (parts, body) = request.into_parts();
-    let answer = match (&parts.method, parts.uri.path()) {
+    parts: Parts,
+    body: crate::connection::Body,
+) -> Response<Full<Bytes>> {
+    match (&parts.method, parts.uri.path()) {
         (&Method::GET, CALLS_PATH) => json(StatusCode::OK, &shared.calls()),
-        (&Method::POST, TOKEN_PATH) => match body.collect().await {
-            Ok(collected) => token(&shared, &collected.to_bytes()),
+        (&Method::POST, TOKEN_PATH) => match body {
+            Ok(body) => token(&shared, &body),
             Err(_) => refuse(&shared, "invalid_request"),
         },
         _ => {
@@ -295,8 +292,7 @@ async fn handle(
             *answer.status_mut() = StatusCode::NOT_FOUND;
             answer
         }
-    };
-    Ok(answer)
+    }
 }
 
 /// Answers one token request.
@@ -330,7 +326,14 @@ fn token(shared: &Shared, body: &[u8]) -> Response<Full<Bytes>> {
             };
             let mut claims = Claims::new(&settings.persons_issuer, audience);
             claims.sub = subject.sub;
-            issue(shared, &shared.persons, claims, scope, true)
+            // NOTE: RFC 8693 §2.1: with no `scope` the server picks it; the device grants the subject's.
+            issue(
+                shared,
+                &shared.persons,
+                claims,
+                scope.or(subject.scope),
+                true,
+            )
         }
         _ => refuse(shared, "unsupported_grant_type"),
     }

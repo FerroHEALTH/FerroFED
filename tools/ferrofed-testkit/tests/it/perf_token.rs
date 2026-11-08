@@ -152,6 +152,20 @@ async fn a_caller_s_token_is_exchanged_for_one_of_the_onward_issuer() -> TestRes
 }
 
 #[tokio::test]
+async fn an_exchange_naming_no_scope_is_granted_the_subject_s() -> TestResult {
+    let (endpoint, caller, _dir) = device().await?;
+    let mut subject = Claims::new(CALLER, "ferrofed-quickstart");
+    subject.scope = Some(String::from("user/aql-*.s user/template-*.cruds"));
+    let subject = caller.mint(&subject)?;
+    let (status, body) = post(&endpoint, &format!("{EXCHANGE}&subject_token={subject}")).await?;
+    assert_eq!(status, 200, "{body}");
+    let issued = claims(&serde_json::from_str::<TokenAnswer>(&body)?.access_token)?;
+    assert_eq!(issued.scope, "user/aql-*.s user/template-*.cruds");
+    assert_eq!(issued.aud, NODE);
+    Ok(())
+}
+
+#[tokio::test]
 async fn every_refusal_is_an_error_answer_and_counted() -> TestResult {
     let (endpoint, _caller, _dir) = device().await?;
     let wrong = reqwest::Client::new()
