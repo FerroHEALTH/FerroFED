@@ -155,6 +155,20 @@ async fn a_missing_assertion_is_sec_data_integrity_not_ensured() -> TestResult {
     .await
 }
 
+/// RC §1.25 requirement 11.01.02: a patient-data request whose token names
+/// no TRC patient misses an assertion attribute, and is refused
+/// `trc-missing` with `ERROR_SEC_DATA_INTEGRITY_NOT_ENSURED` before any
+/// member is asked (eHDSI SAML Profile 10.0.0 §4.3).
+#[tokio::test]
+async fn no_trc_patient_is_the_data_integrity_code() -> TestResult {
+    refused_as(
+        &without("patient.id"),
+        StatusCode::FORBIDDEN,
+        EhdsiCode::SecDataIntegrityNotEnsured,
+    )
+    .await
+}
+
 /// RC §1.25 requirement 11: a scope refusal to a contact point is
 /// `ERROR_SEC_GENERIC` (eHDSI XCA Profile 8.0.1 §2.2.3).
 #[tokio::test]
