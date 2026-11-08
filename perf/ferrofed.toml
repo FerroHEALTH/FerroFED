@@ -70,14 +70,11 @@ external_url = "http://127.0.0.1:8080"
 issuer = "https://perf-ncp.ferrofed.invalid"
 correlation_header = "ncp-correlation-id"
 
-# The access records go to the log: the gateway counts a contact point's
-# emergency accesses only beside an access log (Annex II 3.2).
-[audit]
-destination = "log"
-
 # The eHDSI EMERGENCY purpose (SAML Profile 10.0.0 §2.3). The load sends one
 # professional at a fixed rate, so the window is one second: five accesses a
-# second keep the group admitted, and each still counts in the store.
+# second keep the group admitted. No [audit] is set, so the existing groups
+# do the base's work; the gateway counts in the store without it once #1737
+# lands.
 [[access_log.emergency_purpose]]
 system = "urn:uuid:3bc18518-d305-46c2-a8d6-94bd59856e9e"
 code = "EMERGENCY"
