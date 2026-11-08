@@ -45,28 +45,28 @@ use crate::lane::{NODE, OWN_TOKEN, refuses};
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The node's `persons` issuer, which also issued the caller's token.
-const PERSONS: &str = "https://as.cdr-a.example.org";
+pub(crate) const PERSONS: &str = "https://as.cdr-a.example.org";
 
 /// The node's `federation` issuer.
-const FEDERATION: &str = "https://federation.cdr-a.example.org";
+pub(crate) const FEDERATION: &str = "https://federation.cdr-a.example.org";
 
 /// The issuer of another domestic party's professionals.
-const PARTNER: &str = "https://as.partner.example.org";
+pub(crate) const PARTNER: &str = "https://as.partner.example.org";
 
 /// The gateway's client at the onward issuer.
-const CLIENT_ID: &str = "ferrofed-onward-gateway";
+pub(crate) const CLIENT_ID: &str = "ferrofed-onward-gateway";
 
 /// The caller, a person of the node's organisation.
-const PERSON: &str = "synthetic-clinician-0042";
+pub(crate) const PERSON: &str = "synthetic-clinician-0042";
 
 /// The caller's token as the token endpoint receives it.
-const CALLER_TOKEN: &str = "synthetic-caller-token";
+pub(crate) const CALLER_TOKEN: &str = "synthetic-caller-token";
 
 /// The professional the partner's token names, the mapped claim.
-const HP_IDENTIFIER: &str = "synthetic-hp-0042";
+pub(crate) const HP_IDENTIFIER: &str = "synthetic-hp-0042";
 
 /// The seconds since the Unix epoch.
-fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     jiff::Timestamp::now().as_second()
 }
 
@@ -75,7 +75,7 @@ fn now() -> i64 {
     clippy::disallowed_types,
     reason = "the claims and tables a test token and lane carry are written as JSON"
 )]
-fn jws(claims: &serde_json::Value) -> String {
+pub(crate) fn jws(claims: &serde_json::Value) -> String {
     format!("e30.{}.c2ln", URL_SAFE_NO_PAD.encode(claims.to_string()))
 }
 
@@ -84,7 +84,7 @@ fn jws(claims: &serde_json::Value) -> String {
     clippy::disallowed_types,
     reason = "the claims and tables a test token and lane carry are written as JSON"
 )]
-async fn issuing(issued: &serde_json::Value) -> Server {
+pub(crate) async fn issuing(issued: &serde_json::Value) -> Server {
     let server = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/token"))
@@ -100,7 +100,7 @@ async fn issuing(issued: &serde_json::Value) -> Server {
 }
 
 /// The forms the token endpoint received.
-async fn forms(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
+pub(crate) async fn forms(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await
@@ -118,7 +118,22 @@ async fn forms(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
 fn lane(
     server: &Server,
     kind: IssuerKind,
+    section: serde_json::Value,
+) -> Result<Lane, Box<dyn Error>> {
+    lane_carrying(server, kind, section, Organisations::Refused)
+}
+
+/// The lane of `section`'s issuer of `kind` at `server`, carrying
+/// `organisations`.
+#[expect(
+    clippy::disallowed_types,
+    reason = "the claims and tables a test token and lane carry are written as JSON"
+)]
+pub(crate) fn lane_carrying(
+    server: &Server,
+    kind: IssuerKind,
     mut section: serde_json::Value,
+    organisations: Organisations,
 ) -> Result<Lane, Box<dyn Error>> {
     let oauth: OauthSection = serde_json::from_value(json!({
         "token_endpoint": format!("{}/token", server.uri()),
@@ -145,7 +160,7 @@ fn lane(
     Ok(Lane::new(
         EndpointId::new("node-a-pub")?,
         (resolved.onward, resolved.target),
-        (kind, Organisations::Refused),
+        (kind, organisations),
         own,
     ))
 }
@@ -174,7 +189,7 @@ fn persons_lane(
     clippy::disallowed_types,
     reason = "the claims and tables a test token and lane carry are written as JSON"
 )]
-fn conveyance(
+pub(crate) fn conveyance(
     issuer: &str,
     kind: CallerKind,
     claims: &serde_json::Value,
@@ -224,7 +239,7 @@ fn issued_for(person: &str) -> serde_json::Value {
 }
 
 /// The bearer token the lane gives a call conveying `conveyance`.
-async fn sent(lane: &Lane, conveyance: &Conveyance) -> Result<String, Box<dyn Error>> {
+pub(crate) async fn sent(lane: &Lane, conveyance: &Conveyance) -> Result<String, Box<dyn Error>> {
     let withheld = Arc::new(Withheld::new(Vec::<SecretString>::new()));
     match lane.provider(conveyance, &withheld).credentials().await? {
         Credentials::Bearer(token) => Ok(token.expose_secret().to_owned()),
@@ -263,7 +278,7 @@ async fn the_standards_profile_exchanges_the_person_for_the_node_as_its_resource
     clippy::disallowed_types,
     reason = "the claims and tables a test token and lane carry are written as JSON"
 )]
-fn keycloak_keys() -> serde_json::Value {
+pub(crate) fn keycloak_keys() -> serde_json::Value {
     json!({
         "indicators": [NODE],
         "keys": {"app_only": [{"subjects": ["service-account-ferrofed"]}]},
@@ -415,7 +430,7 @@ fn federation_lane(server: &Server) -> Result<Lane, Box<dyn Error>> {
     clippy::disallowed_types,
     reason = "the claims and tables a test token and lane carry are written as JSON"
 )]
-fn federation_token(professional: &str) -> serde_json::Value {
+pub(crate) fn federation_token(professional: &str) -> serde_json::Value {
     json!({
         "iss": FEDERATION, "sub": "synthetic-mapped-0042", "client_id": CLIENT_ID,
         "aud": NODE, "jti": "synthetic-issued-2", "iat": now(), "exp": now() + 300,
@@ -438,7 +453,7 @@ fn federation_token(professional: &str) -> serde_json::Value {
 }
 
 /// The partner's professional, whose token names [`HP_IDENTIFIER`].
-fn partner_call() -> Result<Conveyance, Box<dyn Error>> {
+pub(crate) fn partner_call() -> Result<Conveyance, Box<dyn Error>> {
     let fields = BTreeMap::from([(
         Field::ProfessionalHpIdentifier,
         Attribute::Text(HP_IDENTIFIER.to_owned()),

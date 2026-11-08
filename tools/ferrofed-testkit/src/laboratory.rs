@@ -45,6 +45,16 @@ pub const CONCLUSION: &str = "A synthetic conclusion.";
 /// The business identifier of the synthetic report.
 pub const REPORT_IDENTIFIER: &str = "synthetic-report-0001";
 
+/// The order filler's identifier of the order the synthetic report answers.
+pub const ORDER_IDENTIFIER: &str = "synthetic-order-0001";
+
+/// The system of [`ORDER_IDENTIFIER`].
+pub const ORDER_SYSTEM: &str = "http://example.org/fhir/sid/synthetic-lab-orders";
+
+/// The lower and upper bound, in mg/dL, of the synthetic result's normal
+/// range.
+pub const NORMAL_RANGE: (f64, f64) = (120.0, 200.0);
+
 /// The canonical URL of the laboratory result profile.
 const RESULT_PROFILE: &str =
     "http://hl7.eu/fhir/laboratory/StructureDefinition/Observation-resultslab-eu-lab";
@@ -115,7 +125,8 @@ fn resource(kind: &str, value: &Value) -> Result<Resource, Box<dyn Error>> {
 ///
 /// Each identifier is a `(system, value)`. The document is in the HL7
 /// Europe Laboratory Report 2.0.0 form: one serum cholesterol result of
-/// 182 mg/dL with its specimen and the report that names both.
+/// 182 mg/dL with its normal range and specimen, and the report that names
+/// both and the order it answers.
 ///
 /// # Errors
 ///
@@ -264,12 +275,27 @@ fn result() -> Value {
             "unit": "mg/dL",
             "system": "http://unitsofmeasure.org",
             "code": "mg/dL"
-        }
+        },
+        "referenceRange": [{
+            "low": milligrams(NORMAL_RANGE.0),
+            "high": milligrams(NORMAL_RANGE.1)
+        }]
+    })
+}
+
+/// A UCUM quantity of `value` mg/dL.
+fn milligrams(value: f64) -> Value {
+    serde_json::json!({
+        "value": value,
+        "unit": "mg/dL",
+        "system": "http://unitsofmeasure.org",
+        "code": "mg/dL"
     })
 }
 
 /// A synthetic report in the shape `DiagnosticReport-eu-lab` constrains,
-/// naming the result and the specimen.
+/// naming the result, the specimen and, by its filler's identifier, the
+/// order it answers.
 fn report() -> Value {
     serde_json::json!({
         "resourceType": "DiagnosticReport",
@@ -278,6 +304,10 @@ fn report() -> Value {
         "identifier": [{
             "system": "http://example.org/fhir/sid/synthetic-lab-reports",
             "value": REPORT_IDENTIFIER
+        }],
+        "basedOn": [{
+            "type": "ServiceRequest",
+            "identifier": { "system": ORDER_SYSTEM, "value": ORDER_IDENTIFIER }
         }],
         "status": "final",
         "code": { "coding": [{

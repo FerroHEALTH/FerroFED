@@ -118,9 +118,8 @@ declared lost, and the answer's `OperationOutcome` names each loss
 ([FerroHEALTH/FerroBRIDGE#1481](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1481)).
 The member's record holds those only in the original document the
 composition keeps. Hazard I-16 of the [clinical safety risk
-file](clinical-safety.md) stays open until its rating is re-judged with
-these controls
-([#1668](https://github.com/FerroHEALTH/FerroFED/issues/1668)).
+file](clinical-safety.md) stays open at S4, P3: a reader of the member's
+record is not told of those losses, so they still arise in normal use.
 
 ## An imaging or a discharge report
 
