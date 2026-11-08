@@ -10,13 +10,17 @@
 # PostgreSQL server for FerroFED's store, at the "FerroPIX database image"
 # pin of docs/VERSIONS.md.
 #
-#   scripts/perf/gate.sh build [BASE]
+#   scripts/perf/gate.sh build [--fallback | BASE]
 #       Builds the release gateway of the checkout, the head, and of its
 #       base: the merge base of HEAD with BASE, a commit or ref, or with no
 #       BASE the newest v* tag before HEAD, else HEAD's first parent. The
 #       base is built from `git archive` of that commit under target/, with
 #       its own toolchain pin, into the same target directory, so the
-#       dependencies build once.
+#       dependencies build once. With --fallback, the release lane's, a
+#       previous release whose `config check` names a key of
+#       perf/ferrofed.toml it does not know gives way to HEAD's first
+#       parent, and target/perf-base/base.md names the refused release and
+#       its keys. Without it such a base stops `run` with exit 2.
 #   scripts/perf/gate.sh run
 #       Starts the quickstart's nodes and FerroPIX, seeds them, starts the
 #       store's PostgreSQL over TLS and both gateways, the head on 8080 and
@@ -225,20 +229,63 @@ base_rev() {
   fi
 }
 
-# build [BASE]: the base's release gateway into target/perf-base/ferrofed,
-# then the head's into target/release/ferrofed.
-build() {
-  local rev
-  cd "$root"
-  rev="$(base_rev "${1:-}")" || die "the base of ${1:-the previous release} cannot be resolved"
-  echo "perf-gate: the base is $rev"
-  rm -rf "$BASE_TREE"
+# build_base REV: the release gateway of REV into target/perf-base/ferrofed,
+# REV into target/perf-base/rev.
+build_base() {
+  local rev="$1"
+  echo "perf-gate: building the base at $rev"
+  rm -rf "$BASE_TREE/src"
   mkdir -p "$BASE_TREE/src"
   git archive "$rev" | tar -x -C "$BASE_TREE/src"
   printf '%s\n' "$rev" > "$BASE_TREE/rev"
   # From inside the base's tree, so its own toolchain pin builds it.
   (cd "$BASE_TREE/src" && cargo build --release --locked -p ferrofed-server --bin ferrofed --target-dir "$root/target")
   cp target/release/ferrofed "$BASE_TREE/ferrofed"
+}
+
+# fallback_base BINARY CONFIG REV [AT]: when the gateway BINARY, built from
+# the previous release REV, names a key of CONFIG it does not know, the
+# first parent of AT (HEAD by default), with the record of the fallback in
+# $BASE_TREE/base.md; nothing when it names none. Exit 2 when that parent is
+# REV itself, the one base there is.
+fallback_base() {
+  local binary="$1" config="$2" rev="$3" at="${4:-HEAD}" keys parent release
+  keys="$(refused_keys "$binary" "$config")"
+  [[ -n "$keys" ]] || return 0
+  parent="$(git -C "$root" rev-parse "$at^1")" || die "the first parent of $at cannot be resolved"
+  release="$(git -C "$root" describe --tags --exact-match --match 'v*' "$rev" 2> /dev/null || echo "$rev")"
+  [[ "$parent" != "$rev" ]] ||
+    die "the previous release $release does not know the key(s) ${keys} of $config, and it is the first parent too: the pair is not judged"
+  mkdir -p "$BASE_TREE"
+  # shellcheck disable=SC2016 # the backticks are Markdown's, never expanded
+  printf "The base is \`%s\`, the release commit's first parent: the previous release \`%s\` (\`%s\`) does not know the key(s) %s of \`%s\`, so it cannot do the head's work.\n" \
+    "$parent" "$release" "$rev" "$(sed -E 's/[^ ]+/`&`/g' <<< "$keys")" "$config" > "$BASE_TREE/base.md"
+  echo "perf-gate: the previous release $release does not know the key(s) ${keys} of $config; the base falls back to the first parent $parent" >&2
+  printf '%s\n' "$parent"
+}
+
+# build [--fallback | BASE]: the base's release gateway into
+# target/perf-base/ferrofed, the record of the base into
+# target/perf-base/base.md, then the head's into target/release/ferrofed.
+build() {
+  local fallback=0 rev parent=""
+  if [[ "${1:-}" == --fallback ]]; then
+    fallback=1
+    shift
+    [[ -z "${1:-}" ]] || die "--fallback falls back from the previous release, so it takes no BASE"
+  fi
+  cd "$root"
+  rev="$(base_rev "${1:-}")" || die "the base of ${1:-the previous release} cannot be resolved"
+  rm -rf "$BASE_TREE"
+  build_base "$rev"
+  # NOTE: no specification governs this: our own design; the release lane's first parent passed its
+  # own pairwise gate on main, so it stands in for a previous release that cannot read the head's keys.
+  if ((fallback)); then
+    parent="$(fallback_base "$BASE_TREE/ferrofed" "$CONFIG" "$rev")" || exit 2
+    [[ -z "$parent" ]] || build_base "$parent"
+  fi
+  [[ -f "$BASE_TREE/base.md" ]] || printf "The base is \`%s\`.\n" "$rev" > "$BASE_TREE/base.md"
+  echo "perf-gate: $(< "$BASE_TREE/base.md")"
   cargo build --release --locked -p ferrofed-server --bin ferrofed
 }
 
@@ -323,13 +370,31 @@ unknown_keys() {
   grep -oE '`[^`]+` is not valid: unknown field' <<< "$1" | sed -E 's/^`([^`]+)`.*$/\1/' || true
 }
 
+# refusal BINARY CONFIG DB PORT: the base gateway BINARY's refusal of
+# CONFIG, under the base's environment; nothing, and exit 0, when it reads it.
+refusal() {
+  local binary="$1" vars=() var out
+  while IFS= read -r var; do vars+=("$var"); done < <(gateway_env base "$2" "$3" "$4")
+  out="$(env ${vars[@]+"${vars[@]}"} "$binary" config check 2>&1)" && return 0
+  printf '%s\n' "$out"
+  return 1
+}
+
+# refused_keys BINARY CONFIG: the keys of CONFIG the gateway BINARY does not
+# know, on one line; nothing when it knows them all. A refusal for another
+# reason, such as a file `run` makes first, names no key here.
+refused_keys() {
+  local refused
+  refused="$(refusal "$1" "$2" ferrofed_base 8070)" && return 0
+  unknown_keys "$refused" | paste -sd ' ' -
+}
+
 # accepts BINARY CONFIG DB PORT: whether the base gateway BINARY reads CONFIG
 # as the head does; exit 2 naming each key of CONFIG it does not know, so a
 # key newer than the base is never left out of one arm in silence.
 accepts() {
-  local binary="$1" vars=() var refused keys
-  while IFS= read -r var; do vars+=("$var"); done < <(gateway_env base "$2" "$3" "$4")
-  refused="$(env ${vars[@]+"${vars[@]}"} "$binary" config check 2>&1)" && return 0
+  local binary="$1" refused keys
+  refused="$(refusal "$binary" "$2" "$3" "$4")" && return 0
   keys="$(unknown_keys "$refused" | paste -sd ' ' -)"
   [[ -n "$keys" ]] && die "the base at $(< "$BASE_TREE/rev") does not know the key(s) ${keys} of $2, so it cannot do the head's work: the pair is not judged"
   die "the base at $(< "$BASE_TREE/rev") refuses $2: $refused"
@@ -423,15 +488,18 @@ run() {
   cd "$root"
   command -v ferrohealth-perf > /dev/null || die "ferrohealth-perf is not on PATH"
   trap cleanup EXIT
+  [[ -f "$BASE_TREE/rev" ]] || die "$BASE_TREE/rev is missing: run gate.sh build first"
+  [[ -f "$BASE_TREE/base.md" ]] || printf "The base is \`%s\`.\n" "$(< "$BASE_TREE/rev")" > "$BASE_TREE/base.md"
+  echo "perf-gate: $(< "$BASE_TREE/base.md")"
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    printf '%s\n\n' "$(< "$BASE_TREE/base.md")" >> "$GITHUB_STEP_SUMMARY"
+  fi
   start
   local token ncp ncp_emergency code=0 server
   token="$(bash scripts/quickstart/token.sh)" || die "the development token could not be minted"
   ncp="$(ncp_token "$NCP_DIR" TREATMENT)" || die "the contact point's token could not be minted"
   ncp_emergency="$(ncp_token "$NCP_DIR" EMERGENCY)" || die "the contact point's emergency token could not be minted"
   render "$PLAN" "$WORK/plan.toml" "$token" "$ncp" "$ncp_emergency" || exit 2
-  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-    printf "The base is \`%s\`.\n\n" "$(< "$BASE_TREE/rev")" >> "$GITHUB_STEP_SUMMARY"
-  fi
   ferrohealth-perf ab --plan "$WORK/plan.toml" \
     --base-url "$BASE_URL" --base-pid "$base_pid" --base-database-url "$(admin_url ferrofed_base)" \
     --head-url "$HEAD_URL" --head-pid "$head_pid" --head-database-url "$(admin_url ferrofed)" \
@@ -502,6 +570,44 @@ self_test() {
     "$(git -C "$repo" rev-parse v0.0.1)" "$(base_rev 0000000000000000000000000000000000000000)"
   check "with no tag before it the base is the first parent" \
     "$(git -C "$repo" rev-parse v0.0.1~1)" "$(base_rev "" v0.0.1)"
+  # A stand-in for a base binary: `refuses` names two keys it does not know,
+  # `misses` refuses a file and `reads` reads the configuration.
+  local bin="$work/bin" lane="$work/lane" kind out code
+  mkdir -p "$bin" "$lane/$BASE_TREE" "$lane/perf"
+  : > "$lane/perf/ferrofed.toml"
+  for kind in refuses misses reads; do
+    # shellcheck disable=SC2016 # the stand-in's own parameters, expanded when it runs
+    printf '#!/usr/bin/env bash\n[[ "$1 $2" == "config check" ]] || exit 64\n' > "$bin/$kind"
+  done
+  # shellcheck disable=SC2016 # the backticks are the refusal's, never expanded
+  printf '%s\n' 'echo "refused: 2 configuration refusals; \`emergency\` is not valid: unknown field \`emergency\`; \`auth.federation[0]\` is not valid: unknown field \`federation\`" >&2' 'exit 1' >> "$bin/refuses"
+  printf '%s\n' 'echo "the signing key file is missing" >&2' 'exit 1' >> "$bin/misses"
+  chmod +x "$bin"/*
+  printf '%s\n' "$(git -C "$repo" rev-parse v0.0.1)" > "$lane/$BASE_TREE/rev"
+  check "a base's unknown keys are read from its config check" "emergency auth.federation[0]" \
+    "$(cd "$lane" && refused_keys "$bin/refuses" perf/ferrofed.toml)"
+  check "a base refusing a file names no key" "" "$(cd "$lane" && refused_keys "$bin/misses" perf/ferrofed.toml)"
+  check "a base reading the configuration names no key" "" "$(cd "$lane" && refused_keys "$bin/reads" perf/ferrofed.toml)"
+  out="$(cd "$lane" && fallback_base "$bin/refuses" perf/ferrofed.toml "$(git -C "$repo" rev-parse v0.0.1)" 2> /dev/null)"
+  check "a release refusing a key falls back to the first parent" "$(git -C "$repo" rev-parse HEAD~1)" "$out"
+  check "the fallback names the base, the refused release and its keys" \
+    "The base is \`$(git -C "$repo" rev-parse HEAD~1)\`, the release commit's first parent: the previous release \`v0.0.1\` (\`$(git -C "$repo" rev-parse v0.0.1)\`) does not know the key(s) \`emergency\` \`auth.federation[0]\` of \`perf/ferrofed.toml\`, so it cannot do the head's work." \
+    "$(< "$lane/$BASE_TREE/base.md")"
+  rm -f -- "$lane/$BASE_TREE/base.md"
+  check "a release reading the configuration is kept" "" \
+    "$(cd "$lane" && fallback_base "$bin/reads" perf/ferrofed.toml "$(git -C "$repo" rev-parse v0.0.1)")"
+  check "a kept release writes no fallback record" 0 "$([[ -f "$lane/$BASE_TREE/base.md" ]] && echo 1 || echo 0)"
+  code=0
+  (cd "$lane" && fallback_base "$bin/refuses" perf/ferrofed.toml "$(git -C "$repo" rev-parse v0.0.1)" HEAD~1) > /dev/null 2>&1 || code=$?
+  check "a refused release that is the first parent too is not judged" 2 "$code"
+  code=0
+  out="$(cd "$lane" && accepts "$bin/refuses" perf/ferrofed.toml ferrofed_base 8070 2>&1)" || code=$?
+  check "a pull request's base refusing a key stops the run with exit 2" 2 "$code"
+  check "the refusal names each key and the base" 1 \
+    "$(grep -cF "the base at $(git -C "$repo" rev-parse v0.0.1) does not know the key(s) emergency auth.federation[0] of perf/ferrofed.toml" <<< "$out")"
+  code=0
+  (build --fallback main) > /dev/null 2>&1 || code=$?
+  check "--fallback takes no BASE" 2 "$code"
   root="$saved_root"
   # RFC 9449 §6.1: the thumbprint of the key of the example proof (§4.1).
   check "a P-256 key's thumbprint is RFC 7638's" "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I" \
@@ -582,5 +688,5 @@ case "${1:-}" in
     run "$@"
     ;;
   --self-test) self_test ;;
-  *) die "usage: gate.sh build [BASE] | run | --self-test" ;;
+  *) die "usage: gate.sh build [--fallback | BASE] | run | --self-test" ;;
 esac
