@@ -2,9 +2,10 @@
 -- SPDX-License-Identifier: BUSL-1.1
 -- FerroBRIDGE's patient summary template over five published CKM archetypes
 -- (fixtures/ckm/medication): a health summary COMPOSITION with a medication
--- summary section, an ad hoc SECTION holding INSTRUCTION.medication_order.v3,
--- and an immunisations section, the vaccination list SECTION whose
--- "Vaccinations administered" slot holds ACTION.medication.v1. No specification
+-- summary section, an ad hoc SECTION holding INSTRUCTION.medication_order.v3
+-- and ACTION.medication.v1, and an immunisations section, the vaccination list
+-- SECTION whose "Vaccinations administered" slot holds ACTION.medication.v1.
+-- The section path places an entry. No specification
 -- governs this template: our own design for the HL7 Europe Patient Summary
 -- medication summary and immunisations. Node identifiers are at-coded, the
 -- ADL 1.4 codes of the CKM sources.
@@ -46,7 +47,7 @@ terminology
             >
             ["at0000.2"] = <
                 text = <"Medication summary">
-                description = <"The medicines the patient takes, recorded as medication orders.">
+                description = <"The medicines the patient takes, recorded as medication orders or actions.">
             >
             ["at0000.3"] = <
                 text = <"Immunisations">
@@ -81,6 +82,7 @@ definition
     SECTION[at0000.1] matches {
         items matches {
             use_archetype INSTRUCTION[at0000.2, openEHR-EHR-INSTRUCTION.medication_order.v3]
+            use_archetype ACTION[at0000.3, openEHR-EHR-ACTION.medication.v1]
         }
     }
 
@@ -94,6 +96,10 @@ terminology
             ["at0000.2"] = <
                 text = <"Medication order">
                 description = <"Medication order">
+            >
+            ["at0000.3"] = <
+                text = <"Medication action">
+                description = <"A medicine the patient takes, recorded as a medication action.">
             >
         >
     >

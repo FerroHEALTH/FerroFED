@@ -64,6 +64,31 @@ pub enum AssemblyError {
         #[source]
         source: TranslationError,
     },
+    /// A resource a mapping wrote cannot be read back as JSON.
+    #[error(
+        "a resource mapped from a composition of the template {template} cannot be read as JSON"
+    )]
+    Resource {
+        /// The composition's template id.
+        template: String,
+        /// Why.
+        #[source]
+        source: fhir_types::codec::EncodeError,
+    },
+    /// An entry a composition mapping writes into a section claims no
+    /// profile the crosswalk admits for an entry of that section.
+    #[error(
+        "an entry mapped from a composition of the template {template} into the section {section} claims [{}], none of which the section's entries take",
+        claimed.join(", ")
+    )]
+    EntryProfile {
+        /// The section slug.
+        section: &'static str,
+        /// The composition's template id.
+        template: String,
+        /// The profiles the entry claims.
+        claimed: Vec<String>,
+    },
     /// The header names the patient by no family name, given name or text,
     /// which the HL7 Europe Patient Summary `Patient` requires (`ips-pat-1`).
     #[error("the patient header holds no name, which the EPS Patient requires (ips-pat-1)")]

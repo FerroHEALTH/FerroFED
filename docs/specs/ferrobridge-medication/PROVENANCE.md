@@ -8,14 +8,14 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `0df792aa8d25e4045fa48f30da026932ee81492b6c520450ba5de02c0e6a00fe`
-- Fetched: 2026-11-04, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+  the pins): `959cf679f784af3d14dcf0721da583ecf3e4f645513a38369804754e20345767`
+- Fetched: 2026-11-08, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 10 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 10 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `259cb80047a5f325f651d9d0fbf81db5f6d6a84b87b3dad56d9b13d72727fb57`
+  `PROVENANCE.md` excluded): `44560125d035b3211ca315627e99200e90314020a2b5559f2c4f6575b3a225d9`
 - Read by: #1560 (the map mode of the prescription face) and #1551 (the
   patient summary's placement by template section), app/ferrofed-eehrxf
 
@@ -27,8 +27,9 @@ the medication, therapeutic direction, dosage and daily timing slots. The
 HL7 Europe MPD project the `eehrxf` crate ships (`mappings::MPD`) maps
 over this template. Beside it is FerroBRIDGE's ADL 2 patient summary template,
 `openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0`, whose ad hoc
-medication summary section holds the medication order and whose vaccination
-list section holds the medication action, the placement `eehrxf` reads in
+medication summary section holds the medication order and the medication
+action and whose vaccination list section holds the medication action, the
+placement `eehrxf` reads in
 `crosswalk::patient_summary::SOURCES`, and the eight published or
 in-development archetypes of the openEHR international Clinical Knowledge
 Manager the two specialise that `docs/specs/openehr-ckm-medication/` does
@@ -51,9 +52,9 @@ committed verbatim with attribution, as CC BY-SA permits.
 
 ### `ferrobridge_patient_summary.adlt` (committed)
 
-- Source: <https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/ea09df2cc37910437748c00615392df52b3c28d1/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt>
-- Version: FerroHEALTH/FerroBRIDGE tag v0.0.17, template openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0
-- sha256: `9ae82fcf4813d26aacbeec381a059f75fad9848d8737a0bab58ee4a56a1765ee`
+- Source: <https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/4919759845d7297201bf52995da21ec79861648a/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt>
+- Version: FerroHEALTH/FerroBRIDGE commit 4919759 (FerroHEALTH/FerroBRIDGE#1696), template openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0
+- sha256: `3afafd92712ee2a64e0cc1f9596622771ed95532e5123c38a085e154683ee0ae`
 - Licence: BUSL-1.1, the licence of the Licensor, Cadasto B.V., which publishes FerroBRIDGE (the file's own SPDX header)
 - Note: The ADL 2 patient summary template, whose sections place the component's medication entries.
 
