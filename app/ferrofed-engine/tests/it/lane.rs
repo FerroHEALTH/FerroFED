@@ -24,7 +24,7 @@ use ferrofed_engine::onward::grant::lane::{Lane, LaneError, Organisations};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_testkit::mock::Server;
 use ferrohealth_smart::client::onward::{OnwardError, Rejected, SubjectToken as OnwardSubject};
-use ferrohealth_smart::config::OauthSection;
+use ferrohealth_smart::config::credentials::OauthSection;
 use ferrohealth_smart::config::onward::OnwardSection;
 use ferrohealth_smart::federation::{Attribute, External, Field};
 use ferrohealth_smart::kind::{CallerKind, IssuerKind};

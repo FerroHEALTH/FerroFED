@@ -7,9 +7,12 @@
 //! `trc_token`, both checked by `ferrohealth-smart`'s validator, and the
 //! token it issues presented at the gateway (FerroHEALTH/FerroFED#1620).
 //!
-//! A TRC naming another identity assertion and an assertion signed by an
-//! RSA key below 3000 bits are refused (eHDSI SAML Profile 10.0.0 §4.1;
-//! Cryptographic Algorithms 9.0.0 §2); an exchange with no TRC gives a
+//! A client other than the national connector is refused before any
+//! assertion is read (SAML Profile 10.0.0 §2.1: `sender-vouches` names no
+//! presenter); a TRC naming another identity assertion, an assertion signed
+//! by an RSA key below 3000 bits and a second exchange of the same
+//! assertions are refused (eHDSI SAML Profile 10.0.0 §4.1; Cryptographic
+//! Algorithms 9.0.0 §2; RFC 7522 §3); an exchange with no TRC gives a
 //! discovery-phase token that patient data refuses as `trc-missing`; and a
 //! full exchange reaches the TRC patient's member under a token that lives
 //! within both assertion windows.
@@ -24,9 +27,8 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ferrofed_testkit::ehdsi_exchange::{
     Assertion, Exchange, ExchangeServer, HP_ID, HP_NAME, ORGANIZATION_ID, SAML2, Seal, SealKey,
-    TOKEN_EXCHANGE, X_BORDER, token_of,
+    TOKEN_EXCHANGE, connector_authorization, token_of,
 };
-use ferrohealth_smart::federation::assertion::Validator;
 use ferrohealth_smart::federation::assertion::signer::{SignerError, TrustedSigner};
 use http::{Method, StatusCode};
 use serde_json::Value;
@@ -57,7 +59,7 @@ fn now() -> i64 {
 /// certificate.
 async fn trusting(seal: TrustedSigner) -> ExchangeServer {
     ExchangeServer::start(Exchange {
-        validator: Validator::new(vec![seal], vec![X_BORDER.to_owned()]),
+        seals: vec![seal],
         signer: caller::issuer(),
         issuer: NCP_ISSUER.to_owned(),
         audience: caller::AUDIENCE.to_owned(),
@@ -67,9 +69,21 @@ async fn trusting(seal: TrustedSigner) -> ExchangeServer {
 }
 
 /// The status and the JSON body of the exchange of the signed identity
-/// assertion `identity` and, when given, the signed TRC `trc`.
+/// assertion `identity` and, when given, the signed TRC `trc`, presented by
+/// the national connector.
 async fn exchange(
     server: &ExchangeServer,
+    identity: &str,
+    trc: Option<&str>,
+) -> Result<(StatusCode, Value), Box<dyn Error>> {
+    presented(server, &connector_authorization(), identity, trc).await
+}
+
+/// The status and the JSON body of the exchange of `identity` and `trc`,
+/// the client authenticating with the `Authorization` value `client`.
+async fn presented(
+    server: &ExchangeServer,
+    client: &str,
     identity: &str,
     trc: Option<&str>,
 ) -> Result<(StatusCode, Value), Box<dyn Error>> {
@@ -83,6 +97,7 @@ async fn exchange(
     }
     let answer = reqwest::Client::new()
         .post(server.token_url())
+        .header(http::header::AUTHORIZATION, client)
         .header(
             http::header::CONTENT_TYPE,
             "application/x-www-form-urlencoded",
@@ -160,10 +175,58 @@ async fn an_assertion_signed_by_an_rsa_key_below_3000_bits_is_refused() -> TestR
     Ok(())
 }
 
+/// eHDSI SAML Profile 10.0.0 §2.1: a `sender-vouches` assertion names no
+/// presenter, so an exchange presented by any client other than the
+/// national connector is refused `invalid_client` (RFC 6749 §5.2), whatever
+/// it carries.
+#[tokio::test]
+async fn an_exchange_presented_by_another_client_is_refused() -> TestResult {
+    let seal = Seal::new(SealKey::Rsa3072)?;
+    let server = trusting(seal.trusted()?).await;
+    let identity = seal.sign(&Assertion::identity(IDA, now()))?;
+    let other = format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD
+            .encode("synthetic-other-client:synthetic-other-secret")
+    );
+    for client in [other.as_str(), ""] {
+        let (status, answer) = presented(&server, client, &identity, None).await?;
+        assert_eq!(StatusCode::UNAUTHORIZED, status, "{answer}");
+        assert_eq!(answer["error"], "invalid_client", "{answer}");
+    }
+    let (status, answer) = exchange(&server, &identity, None).await?;
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "the refused presentations admitted no exchange: {answer}"
+    );
+    Ok(())
+}
+
+/// RFC 7522 §3, item 6, and SAML 2.0 Core §2.5.1.5: an exchange of the same
+/// assertions inside their window is admitted once, and its replay refused
+/// `invalid_grant` naming the data-integrity code.
+#[tokio::test]
+async fn a_second_exchange_of_the_same_assertions_is_refused() -> TestResult {
+    let seal = Seal::new(SealKey::Rsa3072)?;
+    let server = trusting(seal.trusted()?).await;
+    let now = now();
+    let identity = seal.sign(&Assertion::identity(IDA, now))?;
+    let trc = seal.sign(&Assertion::treatment(TRC, IDA, ("2.999.1", PATIENT), now))?;
+
+    for presented in [None, Some(trc.as_str())] {
+        let (status, answer) = exchange(&server, &identity, presented).await?;
+        access_token(status, &answer)?;
+        let (status, answer) = exchange(&server, &identity, presented).await?;
+        assert_integrity_refused(status, &answer);
+    }
+    Ok(())
+}
+
 /// The discovery phase: an exchange with no `trc_token` is issued a token
-/// bounded by the identity assertion that binds no patient, and a
-/// patient-data request under it reaches no member.
-// TODO(#1745): assert `trc-missing` once ferrohealth-smart admits the discovery-phase token.
+/// bounded by the identity assertion that binds no patient; the gateway
+/// admits it, and refuses a patient-data request under it `trc-missing`
+/// with nothing sent to any member.
 #[tokio::test]
 async fn without_a_trc_the_discovery_token_reaches_no_patient_data() -> TestResult {
     let seal = Seal::new(SealKey::Rsa3072)?;
@@ -184,7 +247,7 @@ async fn without_a_trc_the_discovery_token_reaches_no_patient_data() -> TestResu
 
     let bound_gateway = gateway().await?;
     let request = bound(by_subject(PATIENT)?, &token)?;
-    assert_refused_as(&bound_gateway, request, "contact-point-attributes-required").await
+    assert_refused_as(&bound_gateway, request, "trc-missing").await
 }
 
 /// A full exchange: the token carries the field set of both assertions and

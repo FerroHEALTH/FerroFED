@@ -131,7 +131,7 @@ demographic_clients = []
 
 | Key | Default | Meaning |
 |---|---|---|
-| `auth.issuer[].issuer` | none | The issuer identifier its tokens carry in `iss`: `https`, or `http` to a loopback host (RFC 8414 §2). Each `auth.issuer[]` key below is the issuer's own; no `[auth]` key stands in for one an issuer leaves out. |
+| `auth.issuer[].issuer` | none | The issuer identifier its tokens carry in `iss`: `https`, or `http` to a loopback host (RFC 8414 §2). An issuer URL that carries a user name or password refuses the start (OpenID Connect Core 1.0 §1.2). Each `auth.issuer[]` key below is the issuer's own; no `[auth]` key stands in for one an issuer leaves out. |
 | `auth.issuer[].kind` | none | Whose tokens the issuer signs: `persons`, `patients`, `machines` or `federation` ([Who the caller is](#who-the-caller-is)). Required. |
 | `auth.issuer[].profile` | `rfc9068` | The preset the issuer's tokens are read under: `rfc9068`, a standards-only authorization server; `entra`, `keycloak` and `okta`, each that product's token shape; `nl`, the Dutch harmonised authentication of Annex B. Any profile key set on the table, such as `token_types`, `required_claims` or `scope_claim`, is set over the preset. |
 | `auth.issuer[].first_party_clients` | `[]` | The `client_id`s of your own applications, the clients a `persons` token of the issuer is admitted through. |
@@ -141,7 +141,7 @@ demographic_clients = []
 | `auth.issuer[].clock_skew_seconds` | `60` | The leeway on `exp`, `nbf` and `iat`, at most `300` (RFC 7519 §4.1.4). |
 | `auth.issuer[].jwks_max_age_seconds` | `600` | How long a key set is used before it is read again. |
 | `auth.issuer[].jwks_refresh_interval_seconds` | `60` | The least time between two reads of one key set, after an unknown `kid` or a failed read. |
-| `auth.issuer[].jwks_file` | none | A JWK Set file handed over out of band, read in place of the `jwks_uri` the issuer's metadata names. |
+| `auth.issuer[].jwks_file` | none | A JWK Set file handed over out of band, read in place of the `jwks_uri` the issuer's metadata names. A file holding a symmetric key or private key material refuses the start, naming the key's index and `kid` and never a value. |
 | `auth.issuer[].timeout_ms` | `10000` | How long one call to the authorization server may take: its metadata, its key set, or an introspection. |
 | `auth.issuer[].role_claims` | `["roles", "groups", "entitlements"]` | The claims `ferrohealth-smart` reads a token's roles from, each a dotted path. The gateway grants nothing by these roles: the professional's roles it conveys come from the IUA `subject_role`. |
 | `auth.issuer[].mode` | `jwt` | `jwt`: the token is a JWT checked against the key set. `introspection`: the token is checked at the issuer's RFC 7662 endpoint, under `[auth.issuer.introspection]`. One issuer at most is introspected. |

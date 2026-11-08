@@ -10,17 +10,25 @@
 //! token exchange whose `subject_token` is the HP Identity Assertion,
 //! base64url, of type `urn:ietf:params:oauth:token-type:saml2`, and whose
 //! extension parameter `trc_token`, of the same type, is the Treatment
-//! Relationship Confirmation; a discovery-phase exchange sends none. Both
-//! assertions are checked by `ferrohealth-smart`'s
-//! [`Validator`]: the enveloped signature by a trusted seal at or above the
-//! eHDSI Cryptographic Algorithms 9.0.0 §2 floor, and the eHDSI SAML Profile
-//! 10.0.0 §2 and §4 checks with the TRC's link to the identity assertion. The
-//! token it issues carries the `ehdsi` claim of [`ehdsi_claim`], is bound to
-//! the connector's certificate (RFC 8705 §3.1), and lives no longer than
-//! either assertion. A refusal is RFC 6749 §5.2 `invalid_grant` whose
-//! description leads with the MyHealth@EU Requirements Catalogue 10.0.0 §1.25
-//! code. The parameter names `trc_token` and `trc_token_type` are FerroFED's
-//! own design; RFC 6749 §8.2 lets a profile define them.
+//! Relationship Confirmation; a discovery-phase exchange sends none.
+//!
+//! The assertions are `sender-vouches` and name no presenter (SAML Profile
+//! 10.0.0 §2.1), so the server first authenticates the national connector
+//! ([`CLIENT_ID`] with [`CONNECTOR_SECRET`], `client_secret_basic`, RFC 6749
+//! §2.3.1) and refuses any other client `invalid_client` (§5.2). Both
+//! assertions are then checked by `ferrohealth-smart`'s
+//! [`Validator::exchange`]: the enveloped signature by a trusted seal at or
+//! above the eHDSI Cryptographic Algorithms 9.0.0 §2 floor, the eHDSI SAML
+//! Profile 10.0.0 §2 and §4 checks with the TRC's link to the identity
+//! assertion, and the replay guard, which admits each exchange once inside
+//! its window. The token it issues carries the `ehdsi` claim of
+//! [`Exchange::claim`](ferrohealth_smart::federation::assertion::Exchange::claim),
+//! is bound to the connector's certificate (RFC 8705 §3.1), and lives no
+//! longer than [`Exchange::ends`](ferrohealth_smart::federation::assertion::Exchange::ends).
+//! An assertion refusal is RFC 6749 §5.2 `invalid_grant` whose description
+//! leads with the MyHealth@EU Requirements Catalogue 10.0.0 §1.25 code. The
+//! parameter names `trc_token` and `trc_token_type` are FerroFED's own
+//! design; RFC 6749 §8.2 lets a profile define them.
 //!
 //! The assertions are built from the SAML Profile 10.0.0 §2.1, §2.3 and §4
 //! tables with invented values ([`Assertion`]) and signed at run time by a
@@ -32,16 +40,19 @@
 )]
 
 use std::fmt;
+use std::future::Future as _;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Waker};
 
 use aws_lc_rs::digest;
 use aws_lc_rs::rand::SystemRandom;
 use aws_lc_rs::signature::{RSA_PKCS1_SHA256, RsaKeyPair};
 use base64::Engine as _;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-use ferrohealth_smart::federation::assertion::identity::{IdentityAssertion, ehdsi_claim};
+use ferrohealth_smart::federation::assertion::replay::MemoryReplayGuard;
 use ferrohealth_smart::federation::assertion::signer::{SignerError, TrustedSigner};
-use ferrohealth_smart::federation::assertion::treatment::TreatmentAssertion;
-use ferrohealth_smart::federation::assertion::{AssertionError, Validator};
+use ferrohealth_smart::federation::assertion::{self, ExchangeError, Validator};
 use jiff::Timestamp;
 use rcgen::{
     CertificateParams, DnType, IsCa, KeyPair, KeyUsagePurpose, PKCS_RSA_SHA256, RsaKeySize,
@@ -78,6 +89,10 @@ pub const HP_NAME: &str = "Qz9-exchange-subject-name";
 /// The provider's `organization-id`, a `urn:oid:` identifier as SAML Profile
 /// 10.0.0 §2.3 requires.
 pub const ORGANIZATION_ID: &str = "urn:oid:2.999.9.82";
+
+/// The client secret the harness authenticates the national connector by
+/// (`client_secret_basic`, RFC 6749 §2.3.1), an invented value.
+pub const CONNECTOR_SECRET: &str = "synthetic-connector-secret";
 
 /// The longest a token the harness issues lives when neither assertion ends
 /// sooner, in seconds (no specification governs this: our own design).
@@ -370,12 +385,12 @@ pub fn token_of(xml: &str) -> String {
     URL_SAFE_NO_PAD.encode(xml)
 }
 
-/// What the harness authorization server issues for: the validator it
-/// checks with, the issuer that signs its tokens, and the connector the
-/// tokens are bound to.
+/// What the harness authorization server issues for: the seals it trusts,
+/// the issuer that signs its tokens, and the connector the tokens are bound
+/// to.
 pub struct Exchange {
-    /// The check of both assertions.
-    pub validator: Validator,
+    /// NCP-B's seals, which the server's [`Validator`] trusts.
+    pub seals: Vec<TrustedSigner>,
     /// The key the tokens are signed with, whose key set the gateway trusts.
     pub signer: &'static Issuer,
     /// The tokens' `iss`: the contact point's issuer the gateway declares.
@@ -403,12 +418,21 @@ pub struct ExchangeServer {
 }
 
 impl ExchangeServer {
-    /// Starts a server issuing for `exchange`.
+    /// Starts a server issuing for `exchange`, its validator recording every
+    /// admitted exchange in a replay guard of its own.
     pub async fn start(exchange: Exchange) -> Self {
         let server = Server::start().await;
+        let validator = Validator::new(
+            exchange.seals.clone(),
+            vec![X_BORDER.to_owned()],
+            Arc::new(MemoryReplayGuard::default()),
+        );
         Mock::given(method("POST"))
             .and(path("/token"))
-            .respond_with(Answer(exchange))
+            .respond_with(Answer {
+                exchange,
+                validator,
+            })
             .mount(&server)
             .await;
         Self { server }
@@ -421,11 +445,36 @@ impl ExchangeServer {
     }
 }
 
+/// The `Authorization` value the national connector authenticates with
+/// (RFC 6749 §2.3.1, RFC 7617 §2).
+#[must_use]
+pub fn connector_authorization() -> String {
+    format!(
+        "Basic {}",
+        STANDARD.encode(format!("{CLIENT_ID}:{CONNECTOR_SECRET}"))
+    )
+}
+
 /// The responder of the token endpoint.
-struct Answer(Exchange);
+struct Answer {
+    /// What the server issues for.
+    exchange: Exchange,
+    /// The check of both assertions, with the server's replay guard.
+    validator: Validator,
+}
 
 impl Respond for Answer {
     fn respond(&self, request: &Request) -> ResponseTemplate {
+        let authenticated = request
+            .headers
+            .get(http::header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value == connector_authorization());
+        if !authenticated {
+            return ResponseTemplate::new(401)
+                .insert_header("WWW-Authenticate", "Basic realm=\"ehdsi-exchange\"")
+                .set_body_json(Refused::Client.body());
+        }
         match self.exchanged(&request.body, Timestamp::now()) {
             Ok(token) => ResponseTemplate::new(200).set_body_json(json!({
                 "access_token": token.access_token,
@@ -433,6 +482,9 @@ impl Respond for Answer {
                 "token_type": "Bearer",
                 "expires_in": token.expires_in,
             })),
+            Err(Refused::Server) => {
+                ResponseTemplate::new(500).set_body_json(Refused::Server.body())
+            }
             Err(refusal) => ResponseTemplate::new(400).set_body_json(refusal.body()),
         }
     }
@@ -446,11 +498,14 @@ struct Issued {
 
 /// Why the exchange issued nothing (RFC 6749 §5.2, RFC 8693 §2.2.2).
 enum Refused {
+    /// The client is not the national connector.
+    Client,
     /// A parameter is missing, repeated or not one the profile names.
     Request(&'static str),
-    /// An assertion is refused, with its §1.25 code.
-    Grant(AssertionError),
-    /// The token could not be signed.
+    /// An assertion is refused, or the exchange was admitted before, with
+    /// its §1.25 code.
+    Grant(ExchangeError),
+    /// The replay guard could not answer, or the token could not be signed.
     Server,
 }
 
@@ -458,6 +513,7 @@ impl Refused {
     /// The RFC 6749 §5.2 error body.
     fn body(&self) -> Value {
         match self {
+            Self::Client => json!({ "error": "invalid_client" }),
             Self::Request(why) => json!({ "error": "invalid_request", "error_description": why }),
             Self::Grant(refused) => json!({
                 "error": "invalid_grant",
@@ -486,58 +542,53 @@ impl Answer {
         if one("subject_token_type")? != Some(SAML2) {
             return Err(Refused::Request("subject_token_type is no saml2"));
         }
-        let subject = one("subject_token")?.ok_or(Refused::Request("no subject_token"))?;
-        let identity = self
-            .0
-            .validator
-            .identity(&decoded(subject)?, now)
-            .map_err(Refused::Grant)?;
+        let identity = decoded(one("subject_token")?.ok_or(Refused::Request("no subject_token"))?)?;
         let treatment = match one("trc_token")? {
             None => None,
             Some(trc) => {
                 if one("trc_token_type")? != Some(SAML2) {
                     return Err(Refused::Request("trc_token_type is no saml2"));
                 }
-                Some(
-                    self.0
-                        .validator
-                        .treatment(&decoded(trc)?, &identity, now)
-                        .map_err(Refused::Grant)?,
-                )
+                Some(decoded(trc)?)
             }
         };
-        self.issue(&identity, treatment.as_ref(), now)
+        let checked = self
+            .validator
+            .exchange(&identity, treatment.as_deref(), now);
+        // NOTE: no specification governs this: our own design; the harness's guard is
+        // in memory and answers at once, so the check completes on its first poll.
+        let Poll::Ready(outcome) = pin!(checked).poll(&mut Context::from_waker(Waker::noop()))
+        else {
+            return Err(Refused::Server);
+        };
+        match outcome {
+            Ok(admitted) => self.issue(&admitted, now),
+            Err(ExchangeError::Guard(_)) => Err(Refused::Server),
+            Err(refused) => Err(Refused::Grant(refused)),
+        }
     }
 
-    /// The token for `identity` and, past the discovery phase, `treatment`:
-    /// living no longer than [`LIFETIME`] or either assertion.
-    fn issue(
-        &self,
-        identity: &IdentityAssertion,
-        treatment: Option<&TreatmentAssertion>,
-        now: Timestamp,
-    ) -> Result<Issued, Refused> {
+    /// The token for the `admitted` exchange: living no longer than
+    /// [`LIFETIME`] or the exchange's windows.
+    fn issue(&self, admitted: &assertion::Exchange, now: Timestamp) -> Result<Issued, Refused> {
         let now = now.as_second();
-        let mut exp = now
+        let exp = now
             .saturating_add(LIFETIME)
-            .min(identity.not_on_or_after().as_second());
-        if let Some(treatment) = treatment {
-            exp = exp.min(treatment.not_on_or_after().as_second());
-        }
-        let mut claims = Claims::new(&self.0.issuer, &self.0.audience);
+            .min(admitted.ends().as_second());
+        let mut claims = Claims::new(&self.exchange.issuer, &self.exchange.audience);
         CLIENT_ID.clone_into(&mut claims.client_id);
         CLIENT_ID.clone_into(&mut claims.sub);
         claims.iat = now;
         claims.exp = exp;
-        claims.cnf = Some(cnf(&self.0.certificate));
+        claims.cnf = Some(cnf(&self.exchange.certificate));
         let mut payload = serde_json::to_value(&claims).map_err(|_unwritten| Refused::Server)?;
         if let Some(object) = payload.as_object_mut() {
-            object.insert(String::from("ehdsi"), ehdsi_claim(identity, treatment));
+            object.insert(String::from("ehdsi"), admitted.claim());
         }
         let access_token = self
-            .0
+            .exchange
             .signer
-            .sign(&self.0.signer.header(), &payload.to_string())
+            .sign(&self.exchange.signer.header(), &payload.to_string())
             .map_err(|_unsigned| Refused::Server)?;
         Ok(Issued {
             access_token,

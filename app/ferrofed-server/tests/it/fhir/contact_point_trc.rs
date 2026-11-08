@@ -91,6 +91,17 @@ fn untreated() -> Claims {
     crate::contact_point::without("patient.id")
 }
 
+/// The claims of the discovery-phase token: the identity assertion's
+/// fields alone, no TRC and no patient (eHDSI SAML Profile 10.0.0 §4: the
+/// TRC follows patient identification).
+fn discovery() -> Claims {
+    let mut claims = untreated();
+    for field in ["trc.id", "trc.not_before", "trc.not_on_or_after"] {
+        claims.ehdsi.remove(field);
+    }
+    claims
+}
+
 /// `system`|`value` percent-encoded for a query.
 fn encoded(system: &str, value: &str) -> String {
     format!("{}%7C{value}", system.replace(':', "%3A"))
@@ -307,6 +318,35 @@ async fn the_identification_lookup_needs_no_trc_patient() -> TestResult {
         StatusCode::OK,
         status,
         "XCPD identification precedes the TRC: {text}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_discovery_phase_token_reaches_the_lookup_and_no_patient_data() -> TestResult {
+    let (a, b, pdq) = servers().await;
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), (&a, &b, &pdq))?;
+    let token = minted(&discovery())?;
+    let (status, text) = call(app.clone(), bound(summary("")?, &token)?).await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
+    let outcome: Value = serde_json::from_str(&text)?;
+    let diagnostics = outcome
+        .pointer("/issue/0/diagnostics")
+        .and_then(Value::as_str)
+        .ok_or("diagnostics")?;
+    assert!(diagnostics.starts_with("trc-missing"), "{diagnostics}");
+    assert!(nobody_asked(&a, &b, &pdq).await?);
+    let lookup = Request::get(format!(
+        "{FHIR}/Patient?identifier={}",
+        encoded(NAMESPACE, PATIENT)
+    ))
+    .body(Body::empty())?;
+    let (status, text) = call(app, bound(lookup, &token)?).await?;
+    assert_eq!(
+        StatusCode::OK,
+        status,
+        "the discovery phase identifies the patient: {text}"
     );
     Ok(())
 }
