@@ -15,13 +15,14 @@
 
 pub(super) mod dispense;
 mod dispensed;
+pub(crate) mod dispenser;
 mod mapped;
 mod mapped_dispense;
 mod paging;
 mod read;
 mod resolution;
 mod restricted;
-mod trc;
+pub(super) mod trc;
 mod version;
 mod vread;
 pub(super) mod withdraw;

@@ -86,6 +86,11 @@ pub struct Received {
     /// Its `status`, a code of the FHIR R4 `medicationdispense-status`
     /// value set.
     pub status: Option<String>,
+    /// The identifier of the facility that dispensed it: the first
+    /// identifier with a system and a value of an `Organization` a
+    /// `performer.actor` names, by a contained `Organization` or by its
+    /// logical identifier on a reference typed `Organization`.
+    pub dispenser: Option<(String, String)>,
 }
 
 impl std::fmt::Debug for Received {
@@ -97,6 +102,7 @@ impl std::fmt::Debug for Received {
             .field("unevaluated", &self.unevaluated.len())
             .field("id", &self.id.is_some())
             .field("status", &self.status)
+            .field("dispenser", &self.dispenser.is_some())
             .finish()
     }
 }
@@ -228,6 +234,7 @@ pub fn read(text: &str, mpd: &Mpd) -> Result<Received, Unread> {
         unevaluated: conformance.unevaluated().to_vec(),
         id: dispense.id.clone(),
         status: dispense.status.value.clone(),
+        dispenser: dispenser(&dispense),
     })
 }
 
@@ -332,6 +339,42 @@ fn patient(subject: &Reference, contained: &[Resource]) -> Vec<(String, String)>
         .and_then(pair)
         .into_iter()
         .collect()
+}
+
+/// The identifier of the organisation that dispensed `dispense`, when a
+/// `performer.actor` names an `Organization` with one.
+fn dispenser(dispense: &MedicationDispense) -> Option<(String, String)> {
+    // NOTE: HL7 Europe MPD 1.0.0 `MedicationDispense-eu-mpd`: `performer.actor` "should be
+    // assumed" the dispenser, the element RC 07.01's facility identifier is read from.
+    dispense.performer.iter().find_map(|performer| {
+        let actor = &performer.actor;
+        let local = actor
+            .reference
+            .as_ref()
+            .and_then(|text| text.value.as_deref())
+            .and_then(|text| text.strip_prefix('#'));
+        if let Some(local) = local {
+            return dispense
+                .contained
+                .iter()
+                .find_map(|resource| match resource {
+                    Resource::Organization(organization)
+                        if organization.id.as_deref() == Some(local) =>
+                    {
+                        organization.identifier.iter().find_map(pair)
+                    }
+                    _ => None,
+                });
+        }
+        let typed = actor
+            .r#type
+            .as_ref()
+            .and_then(|uri| uri.value.as_deref())
+            .is_some_and(|uri| uri == "Organization");
+        typed
+            .then(|| actor.identifier.as_deref().and_then(pair))
+            .flatten()
+    })
 }
 
 /// The system and the value of `identifier`, when it has both.
@@ -473,6 +516,37 @@ mod tests {
         let received = read(&text, &mpd()).unwrap();
         assert_eq!(received.id.as_deref(), Some("face-id"));
         assert_eq!(received.status.as_deref(), Some("completed"));
+    }
+
+    #[test]
+    fn the_dispenser_is_the_organization_a_performer_names() {
+        assert_eq!(read(DISPENSE, &mpd()).unwrap().dispenser, None);
+        let contained = DISPENSE
+            .replace(
+                r#""contained":[{"resourceType":"Patient","#,
+                r#""contained":[{"resourceType":"Organization","id":"pharmacy","identifier":[{"system":"urn:oid:2.999.8","value":"SYNTHETIC-PHARMACY-1"}]},{"resourceType":"Patient","#,
+            )
+            .replace(
+                r#"{"actor":{"display":"Synthetic pharmacist"}}"#,
+                r##"{"actor":{"display":"Synthetic pharmacist"}},{"actor":{"reference":"#pharmacy"}}"##,
+            );
+        let expected = Some((
+            "urn:oid:2.999.8".to_owned(),
+            "SYNTHETIC-PHARMACY-1".to_owned(),
+        ));
+        let received = read(&contained, &mpd()).unwrap();
+        assert_eq!(received.dispenser, expected);
+        assert!(!format!("{received:?}").contains("PHARMACY"));
+        let logical = DISPENSE.replace(
+            r#"{"actor":{"display":"Synthetic pharmacist"}}"#,
+            r#"{"actor":{"type":"Organization","identifier":{"system":"urn:oid:2.999.8","value":"SYNTHETIC-PHARMACY-1"}}}"#,
+        );
+        assert_eq!(read(&logical, &mpd()).unwrap().dispenser, expected);
+        let practitioner = DISPENSE.replace(
+            r#"{"actor":{"display":"Synthetic pharmacist"}}"#,
+            r#"{"actor":{"type":"Practitioner","identifier":{"system":"urn:oid:2.999.8","value":"SYNTHETIC-PHARMACIST-1"}}}"#,
+        );
+        assert_eq!(read(&practitioner, &mpd()).unwrap().dispenser, None);
     }
 
     #[test]

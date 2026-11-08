@@ -94,6 +94,8 @@ mod commit;
 mod conformance_run;
 mod crossref;
 mod differential;
+#[cfg(feature = "binding-ihe")]
+mod discard;
 mod dpop_replay;
 mod emergency;
 mod keycloak;

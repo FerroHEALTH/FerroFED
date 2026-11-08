@@ -219,6 +219,23 @@ pub fn purposes(external: &External) -> Vec<PurposeOfUse> {
     purposes
 }
 
+/// Whether a contact point's token that asserts `external` carries the
+/// permission `code`, as the whole value or its last `:`-separated part,
+/// or `None` when it asserts no permission at all.
+///
+/// eHDSI SAML Profile 10.0.0 §2.5 lists the permissions an identity
+/// assertion may carry and the least each operation needs.
+#[must_use]
+pub fn permits(external: &External, code: &str) -> Option<bool> {
+    let permissions = codes(external, Field::ProfessionalPermissions);
+    if permissions.is_empty() {
+        return None;
+    }
+    Some(permissions.iter().any(|permission| {
+        permission.code == code || permission.code.rsplit(':').next() == Some(code)
+    }))
+}
+
 /// The patient a contact point's token binds, its `patient.id` in the
 /// `system|value` form, when it names one.
 #[must_use]

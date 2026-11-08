@@ -47,6 +47,15 @@ const UNKNOWN: &str = "SENTINEL-UNKNOWN-9t2k";
 /// the test patient known at both and [`OTHER`] at node A, trusting the
 /// test contact point.
 fn gateway(members: &Members, dir: &Path) -> Result<Router, Box<dyn Error>> {
+    gateway_with(members, dir, "")
+}
+
+/// [`gateway`], its configuration followed by the tables `tables`.
+pub(super) fn gateway_with(
+    members: &Members,
+    dir: &Path,
+    tables: &str,
+) -> Result<Router, Box<dyn Error>> {
     let own = format!(
         "{}{}",
         own_endpoint("node-a-mpd", ("node-a", "org-a"), members.proxy_a.origin()),
@@ -60,9 +69,17 @@ fn gateway(members: &Members, dir: &Path) -> Result<Router, Box<dyn Error>> {
         &own,
         ("", &format!("{SERVED_BOTH}{others}")),
     )?;
+    let text = format!("{text}{tables}");
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
-    let state = Arc::new(AppState::build(&settings)?);
+    // A store opens its connections blocking, which a multi-threaded runtime takes off
+    // its worker; the gateway without one is built in place, under any runtime.
+    let build = || AppState::build(&settings);
+    let state = Arc::new(if tables.is_empty() {
+        build()?
+    } else {
+        tokio::task::block_in_place(build)?
+    });
     let mut server = settings_with_room();
     server.auth = crate::contact_point::declared();
     Ok(ferrofed_server::router(state, &server))

@@ -32,6 +32,10 @@ impl NcpError {
     /// answer, here a member node or a service it needs.
     pub const REGISTRY_NOT_AVAILABLE: Self = Self("ERROR_REGISTRY_NOT_AVAILABLE");
 
+    /// `ERROR_ED_DISCARD_FAILED`: a discard of a dispensation that is not
+    /// admitted (RC 10.0.0 §1.25 requirement 07.04).
+    pub const ED_DISCARD_FAILED: Self = Self("ERROR_ED_DISCARD_FAILED");
+
     /// The code `ferrohealth-smart` gives a refused contact-point token.
     #[must_use]
     pub const fn shared(code: EhdsiCode) -> Self {
