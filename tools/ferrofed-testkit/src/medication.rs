@@ -254,8 +254,9 @@ fn coded(value: &str, code: &str) -> String {
     )
 }
 
-/// A synthetic medication order of the medicine `code`.
-pub(crate) fn summary_order(code: &str) -> String {
+/// A synthetic medication order whose activity's description holds
+/// `items`, given each morning.
+pub(crate) fn order(items: &[String]) -> String {
     format!(
         r#"{{
   "_type": "INSTRUCTION",
@@ -271,13 +272,7 @@ pub(crate) fn summary_order(code: &str) -> String {
       "_type": "ITEM_TREE",
       "name": {{ "_type": "DV_TEXT", "value": "Tree" }},
       "archetype_node_id": "at0002",
-      "items": [
-        {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Medication item" }}, "archetype_node_id": "at0070", "value": {medicine} }},
-        {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Overall directions description" }}, "archetype_node_id": "at0009", "value": {{ "_type": "DV_TEXT", "value": "One synthetic tablet each morning" }} }},
-        {{ "_type": "CLUSTER", "name": {{ "_type": "DV_TEXT", "value": "Order details" }}, "archetype_node_id": "at0113", "items": [
-          {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Order start date/time" }}, "archetype_node_id": "at0012", "value": {{ "_type": "DV_DATE_TIME", "value": "2026-10-01T08:00:00Z" }} }}
-        ] }}
-      ]
+      "items": [{items}]
     }},
     "timing": {{ "_type": "DV_PARSABLE", "value": "R/2026-10-01T08:00:00Z/P1D", "formalism": "ISO8601" }},
     "action_archetype_id": "openEHR-EHR-ACTION\\.medication\\.v1"
@@ -285,8 +280,26 @@ pub(crate) fn summary_order(code: &str) -> String {
   "protocol": {{ "_type": "ITEM_TREE", "name": {{ "_type": "DV_TEXT", "value": "Tree" }}, "archetype_node_id": "at0005", "items": [] }}
 }}"#,
         details = details("openEHR-EHR-INSTRUCTION.medication_order.v3"),
-        medicine = coded("Synthetic tablet 500 mg", code),
+        items = items.join(","),
     )
+}
+
+/// A synthetic medication order of the medicine `code`.
+pub(crate) fn summary_order(code: &str) -> String {
+    order(&[
+        format!(
+            r#"{{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Medication item" }}, "archetype_node_id": "at0070", "value": {medicine} }}"#,
+            medicine = coded("Synthetic tablet 500 mg", code),
+        ),
+        String::from(
+            r#"{ "_type": "ELEMENT", "name": { "_type": "DV_TEXT", "value": "Overall directions description" }, "archetype_node_id": "at0009", "value": { "_type": "DV_TEXT", "value": "One synthetic tablet each morning" } }"#,
+        ),
+        String::from(
+            r#"{ "_type": "CLUSTER", "name": { "_type": "DV_TEXT", "value": "Order details" }, "archetype_node_id": "at0113", "items": [
+          { "_type": "ELEMENT", "name": { "_type": "DV_TEXT", "value": "Order start date/time" }, "archetype_node_id": "at0012", "value": { "_type": "DV_DATE_TIME", "value": "2026-10-01T08:00:00Z" } }
+        ] }"#,
+        ),
+    ])
 }
 
 /// A synthetic medication action recording a dose of the vaccine `code`

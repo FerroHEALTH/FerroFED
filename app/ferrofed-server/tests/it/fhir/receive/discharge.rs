@@ -180,6 +180,157 @@ async fn a_members_discharge_composition_is_listed_and_read_as_a_discharge_repor
     Ok(())
 }
 
+/// The document the gateway serves from node A's `composition`, listed
+/// and read through the signed URL.
+async fn served(dir: &Path, composition: &str) -> Result<Value, Box<dyn Error>> {
+    let row = format!(r#"[{composition},"{VERSION}","{}"]"#, discharge::TEMPLATE);
+    let (a, b) = (
+        holding(&row, Some(composition)).await,
+        holding("", None).await,
+    );
+    let app = gateway(dir, &a, &b)?;
+    let (status, text) = call(app.clone(), list("&type=18842-5")?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let bundle: Value = serde_json::from_str(&text)?;
+    let url = entries(&bundle, "match")
+        .first()
+        .and_then(|reference| reference.pointer("/content/0/attachment/url"))
+        .and_then(Value::as_str)
+        .ok_or("an attachment url")?
+        .to_owned();
+    let (status, text) = call(app, binary(&url)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    Ok(serde_json::from_str(&text)?)
+}
+
+/// The resources the section of `document`'s `Composition` coded `code`
+/// lists, each found by its `fullUrl`.
+fn listed<'a>(document: &'a Value, code: &str) -> Result<Vec<&'a Value>, Box<dyn Error>> {
+    let entries = document["entry"].as_array().ok_or("entries")?;
+    let composition = entries
+        .first()
+        .and_then(|entry| entry.get("resource"))
+        .ok_or("the Composition")?;
+    let section = composition["section"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|section| section.pointer("/code/coding/0/code") == Some(&Value::from(code)))
+        .ok_or_else(|| format!("the section {code}: {composition}"))?;
+    section["entry"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|reference| {
+            let url = reference["reference"].as_str().ok_or("a reference")?;
+            entries
+                .iter()
+                .find(|entry| entry["fullUrl"] == url)
+                .and_then(|entry| entry.get("resource"))
+                .ok_or_else(|| format!("{url} is in the document").into())
+        })
+        .collect()
+}
+
+/// The resource of `resources` whose `code` (or `medicationCodeableConcept`
+/// at `pointer`) carries the coding `code`.
+fn coded<'a>(
+    resources: &[&'a Value],
+    pointer: &str,
+    code: &str,
+) -> Result<&'a Value, Box<dyn Error>> {
+    resources
+        .iter()
+        .copied()
+        .find(|resource| resource.pointer(pointer) == Some(&Value::from(code)))
+        .ok_or_else(|| format!("{code} is listed: {resources:?}").into())
+}
+
+#[tokio::test]
+async fn a_full_discharge_composition_is_served_with_every_section_and_entry() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let document = served(dir.path(), &discharge::full_composition(VERSION)).await?;
+    let diagnoses = listed(&document, "11535-2")?;
+    assert_eq!(discharge::DIAGNOSES.len(), diagnoses.len(), "{document}");
+    for expected in discharge::DIAGNOSES {
+        let condition = coded(&diagnoses, "/code/coding/0/code", expected.code)?;
+        assert_eq!(condition["resourceType"], "Condition", "{condition}");
+        assert_eq!(condition["onsetDateTime"], expected.onset, "{condition}");
+        assert_eq!(
+            condition.pointer("/extension/0/valueDateTime"),
+            Some(&Value::from(expected.recognised)),
+            "the date recognised: {condition}"
+        );
+        assert_eq!(
+            condition.pointer("/bodySite/0/text"),
+            Some(&Value::from(expected.body_site)),
+            "{condition}"
+        );
+        assert_eq!(
+            condition.pointer("/note/0/text"),
+            Some(&Value::from(expected.comment)),
+            "{condition}"
+        );
+    }
+    let procedures = listed(&document, "10185-7")?;
+    assert_eq!(discharge::PROCEDURES.len(), procedures.len(), "{document}");
+    for expected in discharge::PROCEDURES {
+        let procedure = coded(&procedures, "/code/coding/0/code", expected.code)?;
+        assert_eq!(procedure["resourceType"], "Procedure", "{procedure}");
+        assert_eq!(procedure["status"], "completed", "{procedure}");
+        assert_eq!(
+            procedure["performedDateTime"], expected.performed,
+            "{procedure}"
+        );
+        assert_eq!(
+            procedure.pointer("/bodySite/0/text"),
+            Some(&Value::from(expected.body_site)),
+            "{procedure}"
+        );
+        assert_eq!(
+            procedure.pointer("/note/0/text"),
+            Some(&Value::from(expected.comment)),
+            "{procedure}"
+        );
+    }
+    let medicines = listed(&document, "75311-1")?;
+    assert_eq!(discharge::MEDICINES.len(), medicines.len(), "{document}");
+    for expected in discharge::MEDICINES {
+        let request = coded(
+            &medicines,
+            "/medicationCodeableConcept/coding/0/code",
+            expected.code,
+        )?;
+        assert_eq!(request["resourceType"], "MedicationRequest", "{request}");
+        assert_eq!(
+            request.pointer("/dosageInstruction/0/text"),
+            Some(&Value::from(expected.directions)),
+            "{request}"
+        );
+        assert_eq!(
+            request.pointer("/note/0/text"),
+            Some(&Value::from(expected.comment)),
+            "{request}"
+        );
+    }
+    let stay = document["entry"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get("resource"))
+        .find(|resource| resource["resourceType"] == "Encounter")
+        .ok_or("the stay")?;
+    assert_eq!(
+        stay.pointer("/period/start"),
+        Some(&Value::from(discharge::ADMITTED))
+    );
+    assert_eq!(
+        stay.pointer("/period/end"),
+        Some(&Value::from(discharge::DISCHARGED))
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_member_silent_at_the_discharge_query_fails_the_list_and_is_named() -> TestResult {
     let a = Server::start().await;

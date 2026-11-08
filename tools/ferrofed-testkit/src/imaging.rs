@@ -36,6 +36,27 @@ const ARCHETYPES: [&str; 2] = [
 /// The conclusion the synthetic report states.
 pub const CONCLUSION: &str = "A synthetic impression.";
 
+/// The business identifier of the synthetic report.
+pub const REPORT_IDENTIFIER: &str = "synthetic-imaging-report-0001";
+
+/// The system of [`REPORT_IDENTIFIER`].
+pub const REPORT_SYSTEM: &str = "http://example.org/fhir/sid/synthetic-imaging-reports";
+
+/// The LOINC code of the synthetic examination, an MR of the knee.
+pub const EXAMINATION: &str = "24802-1";
+
+/// When the synthetic report's findings were observed.
+pub const OBSERVED: &str = "2026-03-02T08:30:00+01:00";
+
+/// When the synthetic study started.
+pub const STARTED: &str = "2026-03-02T08:00:00+01:00";
+
+/// The DICOM modality of the synthetic study.
+pub const MODALITY: &str = "MR";
+
+/// The description of the synthetic study.
+pub const DESCRIPTION: &str = "Synthetic MR study";
+
 /// The synthetic study's DICOM study instance UID.
 pub const STUDY_UID: &str = "urn:oid:2.25.110239581749205781493301578934620193847";
 
@@ -80,8 +101,9 @@ pub fn template() -> Result<Written, Box<dyn Error>> {
     })
 }
 
-/// A synthetic `collection` of one `DiagnosticReportEuImaging`, the study
-/// it names and the department that performed it.
+/// A synthetic `collection` of one `DiagnosticReportEuImaging` with each
+/// element the shipped imaging mapping carries, the study it names and the
+/// department that performed it.
 fn collection() -> String {
     serde_json::json!({
         "resourceType": "Bundle",
@@ -93,10 +115,11 @@ fn collection() -> String {
                     "resourceType": "DiagnosticReport",
                     "id": "synthetic-report",
                     "meta": {"profile": ["http://hl7.eu/fhir/imaging/StructureDefinition/DiagnosticReportEuImaging"]},
+                    "identifier": [{"system": REPORT_SYSTEM, "value": REPORT_IDENTIFIER}],
                     "status": "final",
-                    "code": {"coding": [{"system": "http://loinc.org", "code": "24802-1", "display": "MR Knee"}]},
+                    "code": {"coding": [{"system": "http://loinc.org", "code": EXAMINATION, "display": "MR Knee"}]},
                     "subject": {"reference": "Patient/synthetic-patient"},
-                    "effectiveDateTime": "2026-03-02T08:30:00+01:00",
+                    "effectiveDateTime": OBSERVED,
                     "performer": [{"reference": "Organization/synthetic-radiology"}],
                     "imagingStudy": [{"reference": "ImagingStudy/synthetic-study"}],
                     "conclusion": CONCLUSION
@@ -114,10 +137,10 @@ fn collection() -> String {
                         "value": STUDY_UID
                     }],
                     "status": "available",
-                    "modality": [{"system": "http://dicom.nema.org/resources/ontology/DCM", "code": "MR", "display": "Magnetic Resonance"}],
+                    "modality": [{"system": "http://dicom.nema.org/resources/ontology/DCM", "code": MODALITY, "display": "Magnetic Resonance"}],
                     "subject": {"reference": "Patient/synthetic-patient"},
-                    "started": "2026-03-02T08:00:00+01:00",
-                    "description": "Synthetic MR study"
+                    "started": STARTED,
+                    "description": DESCRIPTION
                 }
             },
             {
