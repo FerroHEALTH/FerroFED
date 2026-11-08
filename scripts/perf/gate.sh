@@ -22,7 +22,8 @@
 #       store's PostgreSQL over TLS and both gateways, the head on 8080 with
 #       perf/ferrofed.toml and the base on 8070 with the base's own
 #       perf/ferrofed.toml, renders perf/plan.toml with the quickstart's
-#       development token, and runs `ferrohealth-perf ab`: the head's idle
+#       development token and the synthetic contact point's DPoP-bound
+#       tokens, and runs `ferrohealth-perf ab`: the head's idle
 #       phase, then pairs of load phases in turn. Then it plants a poller of
 #       the head's store that never waits and runs the idle phase of
 #       perf/busy-loop.toml beside it, which must fail on idle transactions.
@@ -30,8 +31,8 @@
 #       passes, 2 when the run cannot be judged or set up.
 #   scripts/perf/gate.sh --self-test
 #       Proves the pin reader, the plan rendering, the registry rewrite, the
-#       base resolution and the agreement of the two plans' idle limits
-#       offline.
+#       base resolution, the agreement of the two plans' idle limits and the
+#       contact point's keys and tokens offline.
 #
 # Needs Docker with Compose, curl, git, openssl and ferrohealth-perf on PATH,
 # on Linux, where the tool reads the servers' CPU and memory from /proc. No
@@ -51,6 +52,20 @@ readonly STORE_NAME=ferrofed-perf-store
 readonly STORE_PORT=5433
 readonly STORE_PASSWORD=perf
 readonly SERVICES=(ferroehr-a ferroehr-b ferroehr-c ferroehr-d ferropix)
+# The synthetic national contact point of perf/ferrofed.toml, its constants
+# those of tools/ferrofed-testkit/src/national_connector.rs. NCP_DIR holds its
+# signing key and the DPoP key its tokens are bound to, which the plan's
+# dpop_key_file names.
+readonly NCP_ISSUER=https://perf-ncp.ferrofed.invalid
+readonly NCP_AUDIENCE=ferrofed-perf
+readonly NCP_DIR=$WORK/ncp
+readonly NCP_JWKS=$WORK/ncp-jwks.json
+readonly NCP_CLIENT=synthetic-national-connector
+# The TRC patient (eHDSI SAML Profile 10.0.0 §4.3), as the gateway reads it.
+readonly NCP_PATIENT='urn:oid:2.999.1.1|ffd-test-0001'
+# The eHDSI PurposeOfUse system (SAML Profile 10.0.0 §2.3) and HL7 ActReason.
+readonly EHDSI_PURPOSE=urn:uuid:3bc18518-d305-46c2-a8d6-94bd59856e9e
+readonly ACT_REASON=http://terminology.hl7.org/CodeSystem/v3-ActReason
 # admin_url DB: the superuser on DB, which the gate counts transactions as.
 admin_url() { printf 'postgresql://postgres:%s@127.0.0.1:%s/%s?sslmode=disable' "$STORE_PASSWORD" "$STORE_PORT" "$1"; }
 
@@ -71,12 +86,14 @@ pin() {
     $2 == item { v = $3; gsub(/[[:space:]`]/, "", v); print v; exit }' "$matrix"
 }
 
-# render PLAN OUT TOKEN: PLAN with its token placeholder replaced, refused
-# when a placeholder is left.
+# render PLAN OUT TOKEN [NCP_TOKEN NCP_EMERGENCY_TOKEN]: PLAN with its
+# token placeholders replaced, refused when a placeholder is left.
 render() {
   local text
   text="$(< "$1")"
   text="${text//\{token\}/$3}"
+  [[ $# -lt 4 ]] || text="${text//\{ncp_token\}/$4}"
+  [[ $# -lt 5 ]] || text="${text//\{ncp_emergency_token\}/$5}"
   if grep -qE '\{[a-z_]*token\}' <<< "$text"; then
     echo "perf-gate: $1 holds a placeholder the gate does not fill" >&2
     return 1
@@ -92,6 +109,88 @@ registry() {
     -e 's|http://ferroehr-b:8080/|http://127.0.0.1:8082/|' \
     -e 's|http://ferroehr-c:8080/|http://127.0.0.1:8083/|' \
     -e 's|http://ferroehr-d:8080/|http://127.0.0.1:8084/|' "$1"
+}
+
+# b64url: standard input as unpadded base64url (RFC 7515 §2).
+b64url() {
+  openssl base64 -A | tr '+/' '-_' | tr -d '='
+}
+
+# unhex: the hexadecimal text on standard input as bytes.
+unhex() {
+  local hex i
+  hex="$(tr -d '\n')"
+  for ((i = 0; i < ${#hex}; i += 2)); do
+    printf '%b' "\\x${hex:i:2}"
+  done
+}
+
+# unb64url: base64url on standard input, padded or not, as bytes.
+unb64url() {
+  local text
+  text="$(tr -d '\n' | tr -- '-_' '+/')"
+  while ((${#text} % 4)); do text="$text="; done
+  printf '%s' "$text" | openssl base64 -d -A
+}
+
+# ec_xy KEY: the base64url x and y of the P-256 key KEY, the last 64 bytes
+# of its public key's DER encoding, the uncompressed point.
+ec_xy() {
+  local der
+  der="$(mktemp)"
+  openssl pkey -in "$1" -pubout -outform DER 2> /dev/null | tail -c 64 > "$der"
+  printf '%s %s\n' "$(head -c 32 "$der" | b64url)" "$(tail -c 32 "$der" | b64url)"
+  rm -f -- "$der"
+}
+
+# thumbprint X Y: the JWK SHA-256 thumbprint of the P-256 public key X, Y
+# (RFC 7638 §3), the cnf.jkt of a token bound to it (RFC 9449 §6.1).
+thumbprint() {
+  printf '{"crv":"P-256","kty":"EC","x":"%s","y":"%s"}' "$1" "$2" |
+    openssl dgst -sha256 -binary | b64url
+}
+
+# kid KEY: the key id of the RSA key KEY, from its modulus.
+kid() {
+  openssl rsa -in "$1" -noout -modulus 2> /dev/null | sed 's/^Modulus=//' |
+    openssl dgst -sha256 | sed 's/^.*= *//' | cut -c1-16
+}
+
+# contact_point_keys DIR JWKS: the contact point's RSA signing key in DIR,
+# its key set at JWKS, and the P-256 DPoP key in PKCS#8 PEM at
+# DIR/dpop-key.pem, all made here so no key is ever committed.
+contact_point_keys() {
+  local dir="$1" n
+  mkdir -p "$dir"
+  chmod 0700 "$dir"
+  openssl genrsa -out "$dir/signing-key.pem" 2048 2> /dev/null || return 1
+  openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 \
+    -pkeyopt ec_param_enc:named_curve -out "$dir/dpop-key.pem" 2> /dev/null || return 1
+  n="$(openssl rsa -in "$dir/signing-key.pem" -noout -modulus 2> /dev/null |
+    sed 's/^Modulus=//' | unhex | b64url)"
+  printf '{"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":"%s","n":"%s","e":"AQAB"}]}\n' \
+    "$(kid "$dir/signing-key.pem")" "$n" > "$2"
+}
+
+# ncp_token DIR PURPOSE: a token of the contact point, signed RS256 with
+# DIR/signing-key.pem and bound to DIR/dpop-key.pem by cnf.jkt (RFC 9449
+# §6.1), relaying a professional for the eHDSI purpose of use PURPOSE with
+# what a conforming identity assertion and TRC provide (eHDSI SAML Profile
+# 10.0.0 §2.1, §2.3, §4), as national_connector::asserted lists it.
+ncp_token() {
+  local dir="$1" purpose="$2" now jti x y jkt header ehdsi payload signature
+  now="$(date +%s)"
+  jti="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+  read -r x y <<< "$(ec_xy "$dir/dpop-key.pem")"
+  jkt="$(thumbprint "$x" "$y")"
+  header="$(printf '{"alg":"RS256","typ":"at+jwt","kid":"%s"}' "$(kid "$dir/signing-key.pem")" | b64url)"
+  ehdsi="$(printf '{"professional":{"hp_identifier":"urn:oid:2.999.9.71","name":"Qz9-ncp-subject-name","hp_professional_role":[{"system":"urn:oid:2.999.9","code":"Qz9-ncp-role"}],"authentication_method":"urn:oasis:names:tc:SAML:2.0:ac:classes:X509"},"provider":{"healthcare_provider_identifier":"urn:oid:2.999.9.72","healthcare_provider_name":"Qz9-ncp-hcp-name","facility_type":"Hospital","home_community_id":"urn:oid:2.999.9.73"},"point_of_care":"Qz9-ncp-point-of-care","purpose_of_use":[{"system":"%s","code":"%s"}],"assertion":{"issuer":"https://ncp-idp.example.test","id":"_Qz9-ncp-ida-1","name_id_format":"urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified","not_before":%s,"not_on_or_after":%s},"trc":{"id":"_Qz9-ncp-trc-1","not_before":%s,"not_on_or_after":%s},"patient":{"id":"%s"}}' \
+    "$EHDSI_PURPOSE" "$purpose" "$((now - 60))" "$((now + 3600))" "$((now - 60))" "$((now + 3600))" "$NCP_PATIENT")"
+  payload="$(printf '{"iss":"%s","sub":"%s","aud":"%s","client_id":"%s","iat":%s,"exp":%s,"jti":"%s","scope":"user/aql-*.cruds user/composition-*.cruds user/template-*.cruds","extensions":{"ihe_iua":{"subject_organization_id":"urn:oid:2.999.7","purpose_of_use":[{"system":"%s","code":"TREAT"}]}},"cnf":{"jkt":"%s"},"ehdsi":%s}' \
+    "$NCP_ISSUER" "$NCP_CLIENT" "$NCP_AUDIENCE" "$NCP_CLIENT" "$now" "$((now + 3600))" "$jti" "$ACT_REASON" "$jkt" "$ehdsi" | b64url)"
+  signature="$(printf '%s.%s' "$header" "$payload" |
+    openssl dgst -sha256 -sign "$dir/signing-key.pem" -binary | b64url)" || return 1
+  printf '%s.%s.%s\n' "$header" "$payload" "$signature"
 }
 
 # idle_table PLAN: the [idle] table of PLAN, comments and blank lines off.
@@ -183,15 +282,26 @@ EOF
   cp "$tls/ca.crt" "$WORK/store-ca.pem"
 }
 
+# own_urls CONFIG PORT: the overrides of the URLs a gateway on PORT is
+# addressed at, each only when CONFIG sets it, so a base without the
+# contact point is given none: the public URL and the DPoP proofs' htu
+# (RFC 9449 §4.3).
+own_urls() {
+  grep -q '^public_url = ' "$1" && echo "FERROFED__GATEWAY__PUBLIC_URL=http://127.0.0.1:$2"
+  grep -q '^\[auth\.dpop\]' "$1" && echo "FERROFED__AUTH__DPOP__EXTERNAL_URL=http://127.0.0.1:$2"
+  return 0
+}
+
 # serve NAME BINARY CONFIG DB PORT: starts one gateway in the background,
 # its store URL under $WORK/NAME, and prints its pid.
 serve() {
-  local binary="$2" config="$3" db="$4" port="$5" dir="$WORK/$1"
+  local binary="$2" config="$3" db="$4" port="$5" dir="$WORK/$1" urls=() url
   mkdir -p "$dir"
   chmod 0700 "$dir"
   printf 'postgres://ferrofed:%s@127.0.0.1:%s/%s?sslmode=require' \
     "$STORE_PASSWORD" "$STORE_PORT" "$db" > "$dir/store-url"
-  FERROFED__USAGE_REPORT__ENABLED=false FERROFED_CONFIG="$config" \
+  while IFS= read -r url; do urls+=("$url"); done < <(own_urls "$config" "$port")
+  env ${urls[@]+"${urls[@]}"} FERROFED__USAGE_REPORT__ENABLED=false FERROFED_CONFIG="$config" \
     FERROFED__SERVER__LISTEN="127.0.0.1:$port" \
     FERROFED__SIGNING__JWKS_URI="http://127.0.0.1:$port/.well-known/jwks.json" \
     FERROFED__STORE__URL_FILE="$dir/store-url" \
@@ -211,6 +321,7 @@ start() {
   chmod 0700 "$WORK"
 
   bash scripts/quickstart/signing-key.sh > /dev/null
+  contact_point_keys "$NCP_DIR" "$NCP_JWKS" || die "the contact point's keys could not be made"
   compose up --detach --wait "${SERVICES[@]}" > "$WORK/compose.log" 2>&1 ||
     die "the quickstart's nodes and FerroPIX did not come up: $(tail -n 20 "$WORK/compose.log")"
   compose run --rm ferropix-seed > "$WORK/seed-ferropix.log" 2>&1 ||
@@ -285,9 +396,11 @@ run() {
   command -v ferrohealth-perf > /dev/null || die "ferrohealth-perf is not on PATH"
   trap cleanup EXIT
   start
-  local token code=0 server
+  local token ncp ncp_emergency code=0 server
   token="$(bash scripts/quickstart/token.sh)" || die "the development token could not be minted"
-  render "$PLAN" "$WORK/plan.toml" "$token" || exit 2
+  ncp="$(ncp_token "$NCP_DIR" TREATMENT)" || die "the contact point's token could not be minted"
+  ncp_emergency="$(ncp_token "$NCP_DIR" EMERGENCY)" || die "the contact point's emergency token could not be minted"
+  render "$PLAN" "$WORK/plan.toml" "$token" "$ncp" "$ncp_emergency" || exit 2
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     printf "The base is \`%s\`.\n\n" "$(< "$BASE_TREE/rev")" >> "$GITHUB_STEP_SUMMARY"
   fi
@@ -362,6 +475,64 @@ self_test() {
   check "with no tag before it the base is the first parent" \
     "$(git -C "$repo" rev-parse v0.0.1~1)" "$(base_rev "" v0.0.1)"
   root="$saved_root"
+  # RFC 9449 §6.1: the thumbprint of the key of the example proof (§4.1).
+  check "a P-256 key's thumbprint is RFC 7638's" "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I" \
+    "$(thumbprint l8tFrhx-34tV3hRICRDY9zCkDlpBhF42UQUfWVAWBFs 9VE4jf_Ok_o64zbTTlcuNJajHmt6v9TDVrU0CdvGRDA)"
+  printf 'a = "Bearer {token}"\nb = "DPoP {ncp_token}"\nc = "DPoP {ncp_emergency_token}"\n' > "$work/plan.toml"
+  render "$work/plan.toml" "$work/out.toml" t1 t2 t3
+  check "the contact point's tokens are filled" \
+    "$(printf 'a = "Bearer t1"\nb = "DPoP t2"\nc = "DPoP t3"')" "$(< "$work/out.toml")"
+  check "a contact point's placeholder left unfilled is refused" 1 \
+    "$(render "$work/plan.toml" "$work/out.toml" t 2> /dev/null && echo 0 || echo 1)"
+  local ncp="$work/ncp" token parts x y
+  contact_point_keys "$ncp" "$work/ncp-jwks.json"
+  # The DER header of a P-256 public key: id-ecPublicKey, prime256v1 and an
+  # uncompressed point (RFC 5480 §2).
+  check "the DPoP key is P-256 in PKCS#8 PEM" \
+    "BEGIN PRIVATE KEY 3059301306072a8648ce3d020106082a8648ce3d03010703420004" \
+    "$(head -n 1 "$ncp/dpop-key.pem" | tr -d -- '-') $(openssl pkey -in "$ncp/dpop-key.pem" -pubout -outform DER 2> /dev/null | head -c 27 | od -An -tx1 | tr -d ' \n')"
+  check "the key set names the signing key's kid" 1 \
+    "$(grep -c "\"kid\":\"$(kid "$ncp/signing-key.pem")\"" "$work/ncp-jwks.json")"
+  token="$(ncp_token "$ncp" TREATMENT)"
+  IFS=. read -r -a parts <<< "$token"
+  check "a token has three parts" 3 "${#parts[@]}"
+  local payload
+  payload="$(unb64url <<< "${parts[1]}")"
+  read -r x y <<< "$(ec_xy "$ncp/dpop-key.pem")"
+  local bound
+  bound="\"cnf\":{\"jkt\":\"$(thumbprint "$x" "$y")\"}"
+  check "the token is bound to the DPoP key" 1 "$(grep -cF "$bound" <<< "$payload")"
+  check "the token is the contact point's" 1 \
+    "$(grep -cF "\"iss\":\"$NCP_ISSUER\",\"sub\":\"$NCP_CLIENT\",\"aud\":\"$NCP_AUDIENCE\"" <<< "$payload")"
+  check "the token names the TRC patient" 1 "$(grep -cF "\"patient\":{\"id\":\"$NCP_PATIENT\"}" <<< "$payload")"
+  local treatment="\"purpose_of_use\":[{\"system\":\"$EHDSI_PURPOSE\",\"code\":\"TREATMENT\"}]"
+  check "the token declares treatment" 1 "$(grep -cF "$treatment" <<< "$payload")"
+  local field missing=""
+  for field in hp_identifier '"name"' hp_professional_role authentication_method \
+    healthcare_provider_identifier healthcare_provider_name facility_type home_community_id \
+    point_of_care '"issuer":"https://ncp-idp' '"id":"_Qz9-ncp-ida-1"' name_id_format \
+    '"id":"_Qz9-ncp-trc-1"' not_before not_on_or_after; do
+    grep -qF "$field" <<< "$payload" || missing="$missing $field"
+  done
+  check "the token carries every attribute national_connector::asserted lists" "" "$missing"
+  printf '%s.%s' "${parts[0]}" "${parts[1]}" > "$work/signed"
+  unb64url <<< "${parts[2]}" > "$work/signature"
+  openssl rsa -in "$ncp/signing-key.pem" -pubout -out "$work/ncp-public.pem" 2> /dev/null
+  check "the signature holds under the signing key" "Verified OK" \
+    "$(openssl dgst -sha256 -verify "$work/ncp-public.pem" -signature "$work/signature" "$work/signed" 2>&1)"
+  check "the emergency token declares EMERGENCY" 1 \
+    "$(ncp_token "$ncp" EMERGENCY | cut -d. -f2 | unb64url | grep -cF "\"code\":\"EMERGENCY\"")"
+  printf 'public_url = "x"\n[auth.dpop]\n' > "$work/head.toml"
+  check "a gateway that sets both URLs is given its own" \
+    "$(printf 'FERROFED__GATEWAY__PUBLIC_URL=http://127.0.0.1:8070\nFERROFED__AUTH__DPOP__EXTERNAL_URL=http://127.0.0.1:8070')" \
+    "$(own_urls "$work/head.toml" 8070)"
+  printf '[gateway]\n' > "$work/base.toml"
+  check "a gateway that sets neither is given none" "" "$(own_urls "$work/base.toml" 8070)"
+  local config="$root/$CONFIG"
+  check "the gateway trusts the contact point the gate mints for" 3 \
+    "$(grep -cxF "issuer = \"$NCP_ISSUER\"" "$config")"
+  check "the gateway reads the contact point's audience and key set" 2 \
+    "$(grep -cxE "audience = \[\"$NCP_AUDIENCE\"\]|jwks_file = \"$NCP_JWKS\"" "$config")"
   [[ "$failed" -eq 0 ]] || exit 1
   echo "perf-gate: self-test OK ($n checks)."
 }
