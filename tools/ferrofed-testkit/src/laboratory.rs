@@ -349,7 +349,7 @@ pub fn composition(
     let now = "2026-03-02T10:00:00Z";
     let settings = fhirconnect::operations::run::Settings::new("Device/ferrofed-testkit", now)
         .with_defaults(
-            fhirconnect::engine::traverse::Defaults::at(now)
+            fhirconnect::engine::traverse::defaults::Defaults::at(now)
                 .with_language("en")
                 .with_territory("NL"),
         );

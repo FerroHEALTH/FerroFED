@@ -28,7 +28,7 @@ use fhir_types::codec::{Json, Value};
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::reference::Reference;
 use fhirconnect::engine::context::CallContext;
-use fhirconnect::engine::traverse::Defaults;
+use fhirconnect::engine::traverse::defaults::Defaults;
 use fhirconnect::operations::run::Settings;
 use openehr_adl::artefact::ArchetypeRepository;
 use openehr_adl::error::SyntaxError;
@@ -324,13 +324,8 @@ fn operational(
     }
     let root = openehr_adl::assemble::parse_artefact(template, Dialect::Adl2)
         .map_err(syntax("the template"))?;
-    let mut built =
+    let built =
         openehr_adl::opt::create_opt(&root, &repository).map_err(MapModeError::Operational)?;
-    // NOTE: openEHR AM 2.4 AOM2 §3.6.6, an operational template is specialised; its root's parent
-    // is the archetype the template specialises, which the built template leaves unstated.
-    if built.parent_archetype_id.is_none() {
-        built.parent_archetype_id = root.parent_archetype_id().map(str::to_owned);
-    }
     // NOTE: openEHR AM 2.4 AOM2 §ARCHETYPE_HRID; the template is named by its full id, namespace
     // and version modifier included, the physical id `Display` writes.
     let resolved_id = built.archetype_id.to_string();

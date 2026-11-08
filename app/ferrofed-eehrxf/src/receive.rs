@@ -36,7 +36,7 @@ use eehrxf::transformation::{Direction, Pin, Report, ReportError};
 use ferrobridge_term::client::Client;
 use ferrobridge_validator::set::{LoadError, PackageSet, ResolveError};
 use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
-use fhirconnect::engine::traverse::Defaults;
+use fhirconnect::engine::traverse::defaults::Defaults;
 use fhirconnect::operations::run::Settings;
 
 use crate::transformation::preferred;
