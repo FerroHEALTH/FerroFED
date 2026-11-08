@@ -228,8 +228,7 @@ fn a_vaccination_and_a_medicine_each_land_in_their_own_section_by_the_vaccine_co
 }
 
 #[test]
-fn a_composition_holding_two_medicines_is_left_out_and_named_never_mixed()
--> Result<(), Box<dyn Error>> {
+fn a_composition_holding_two_medicines_lists_each_in_its_own_entry() -> Result<(), Box<dyn Error>> {
     let two = medication_held(
         "7c4e1d20-0000-4000-8000-0000000013a8::cdr-a.example.org::1",
         &[
@@ -245,26 +244,31 @@ fn a_composition_holding_two_medicines_is_left_out_and_named_never_mixed()
         &medications()?,
     )?;
     let bundle = serde_json::to_value(&assembled.bundle)?;
-    assert!(
-        listed(&bundle, "10160-0").is_empty(),
-        "no entry mixes the two medicines"
+    let listed = listed(&bundle, "10160-0");
+    let mut medicines: Vec<Option<&str>> = listed.iter().copied().map(atc).collect();
+    medicines.sort_unstable();
+    assert_eq!(
+        medicines,
+        [Some("C09AA05"), Some("N02BE01")],
+        "each medicine in an entry of its own, none mixed"
     );
+    for entry in &listed {
+        assert_eq!(
+            entry["medicationCodeableConcept"]["coding"]
+                .as_array()
+                .map(Vec::len),
+            Some(1),
+            "one medicine per entry: {entry}"
+        );
+    }
     let medications = section(&bundle, "10160-0").ok_or("the medication summary")?;
     let div = medications["text"]["div"].as_str().ok_or("a narrative")?;
-    assert!(
-        div.contains("A record from Synthetic org-a holds 2 entries of openEHR-EHR-EVALUATION."),
-        "the record left out is named in the document, never silent: {div}"
-    );
-    assert!(div.contains("leaves the record out"), "{div}");
-    assert_eq!(
-        medications["emptyReason"]["coding"][0]["code"], "unavailable",
-        "the section does not claim the patient takes no medicine"
-    );
+    assert!(!div.contains("leaves the record out"), "{div}");
     Ok(())
 }
 
 #[test]
-fn a_composition_holding_a_vaccine_and_a_medicine_is_named_in_both_sections_never_mixed()
+fn a_composition_holding_a_vaccine_and_a_medicine_lists_each_in_its_own_section_only()
 -> Result<(), Box<dyn Error>> {
     let both = medication_held(
         "7c4e1d20-0000-4000-8000-0000000013a9::cdr-a.example.org::1",
@@ -281,20 +285,24 @@ fn a_composition_holding_a_vaccine_and_a_medicine_is_named_in_both_sections_neve
         &medications()?,
     )?;
     let bundle = serde_json::to_value(&assembled.bundle)?;
+    let medications: Vec<Option<&str>> = listed(&bundle, "10160-0").into_iter().map(atc).collect();
+    let immunisations: Vec<Option<&str>> =
+        listed(&bundle, "11369-6").into_iter().map(atc).collect();
+    assert_eq!(
+        medications,
+        [Some("C09AA05")],
+        "the medicine alone in the medication summary"
+    );
+    assert_eq!(
+        immunisations,
+        [Some(eps::VACCINE)],
+        "the vaccine alone in the immunisations"
+    );
     for code in ["10160-0", "11369-6"] {
-        assert!(
-            listed(&bundle, code).is_empty(),
-            "no entry in {code} mixes the two"
-        );
         let div = section(&bundle, code)
             .and_then(|found| found["text"]["div"].as_str())
             .ok_or("a narrative")?;
-        assert!(
-            div.contains(
-                "A record from Synthetic org-a holds 2 entries of openEHR-EHR-EVALUATION."
-            ),
-            "the record left out is named in {code}: {div}"
-        );
+        assert!(!div.contains("leaves the record out"), "{code}: {div}");
     }
     Ok(())
 }
