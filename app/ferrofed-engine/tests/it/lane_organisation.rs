@@ -277,25 +277,42 @@ async fn an_organisations_write_is_refused_before_any_token_is_asked_for() -> Te
 }
 
 /// A lane with a correlation claim refuses, before the token endpoint is
-/// asked, an opaque token, whose claims the gateway cannot read, and a JWT
-/// that does not carry the claim.
+/// asked, a JWT and an opaque token whose verified claims do not carry the
+/// claim (`ferrohealth-smart`'s onward client).
 #[tokio::test]
 async fn a_chained_lane_refuses_a_token_without_the_correlation_claim() -> TestResult {
     let server = issuing(&issued(true)?).await;
     let lane = lane_of(&server, UPSTREAM, Organisations::ReadOnly, Some(CLAIM))?;
     for conveyance in [
-        organisation_conveyance(true, true)?,
+        organisation_conveyance(false, true)?,
         organisation_conveyance(false, false)?,
     ] {
-        let (refused, account) = refuses(
-            &lane,
-            &conveyance,
-            |error| matches!(error, LaneError::NoCorrelation { claim } if claim == CLAIM),
-        )
+        let (refused, account) = refuses(&lane, &conveyance, |error| {
+            matches!(error, LaneError::Onward(OnwardError::NoCorrelation))
+        })
         .await?;
         assert!(refused, "{account}");
     }
     assert!(exchanges(&server).await?.is_empty(), "nothing was sent");
+    Ok(())
+}
+
+/// An opaque token whose introspected claims carry the correlation claim is
+/// exchanged on a chained route: the claim is attested by its issuer's
+/// introspection answer (RFC 7662 §2.2), which the gateway verified.
+#[tokio::test]
+async fn an_opaque_token_whose_verified_claims_carry_the_correlation_claim_is_exchanged()
+-> TestResult {
+    let carried = issued(true)?;
+    let server = issuing(&carried).await;
+    let lane = lane_of(&server, UPSTREAM, Organisations::ReadOnly, Some(CLAIM))?;
+    let Credentials::Bearer(sent) =
+        credentials(&lane, &organisation_conveyance(true, true)?).await?
+    else {
+        return Err("a bearer token".into());
+    };
+    assert_eq!(carried, sent.expose_secret());
+    assert_eq!(1, exchanges(&server).await?.len(), "one exchange was sent");
     Ok(())
 }
 

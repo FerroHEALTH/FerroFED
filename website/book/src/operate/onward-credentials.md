@@ -235,10 +235,11 @@ Which caller the lane carries depends on `kind`:
   national contact point is never carried as an organisation: its token
   always names a professional.
 - Under a `chained` agreement, set `correlation_claim` to the claim that
-  holds the requester's log correlation id. A caller whose token does not
-  carry it is refused before the token endpoint is asked, and an opaque
-  token is refused too, since the gateway cannot read its claims. The
-  issued token must carry the same value, or that node is `node-error`.
+  holds the requester's log correlation id. A caller whose verified claims
+  do not carry it is refused before the token endpoint is asked. For an
+  opaque token those are the claims its issuer's introspection answer
+  returned. The issued token must carry the same value, or that node is
+  `node-error`.
 - With the Keycloak profile, the caller's token must name the gateway's
   client in `aud`: give the inbound client scope an audience mapper that adds
   it, and list the gateway among the node's delegates. Check this before the

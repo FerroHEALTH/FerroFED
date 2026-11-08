@@ -535,7 +535,8 @@ name, and binds the token to the connector's client certificate
 TLS connection to the gateway. `ferrohealth-smart` holds the token to the
 MyHealth@EU contact-point profile, what a conforming assertion carries
 (eHDSI SAML Profile 10.0.0 §2.1, §2.3): the professional's identifier, the
-assertion's `NameID`, the one-string name, the role with `on-behalf-of` for
+assertion's `NameID`, with its format at `assertion.name_id_format`, one of
+the three §2.1 allows, the one-string name, the role with `on-behalf-of` for
 an ISCO `44` role, the authentication class, the provider's
 `organization-id`, the facility type, the home community, the point of
 care, a purpose of use of `TREATMENT` or `EMERGENCY`, and the assertion and

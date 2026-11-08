@@ -63,6 +63,10 @@ pub const COUNTRY: &str = "LU";
 /// 10.0.0 §2.1), the Annex `hp_identifier`.
 pub const HP_ID: &str = "urn:oid:2.999.9.71";
 
+/// The format of the assertion's `NameID`, one of the three SAML Profile
+/// 10.0.0 §2.1 allows, under which [`HP_ID`] is asserted.
+pub const NAME_ID_FORMAT: &str = "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified";
+
 /// The professional's name, the assertion's `subject-id` (SAML Profile
 /// 10.0.0 §2.3), which the gateway never relays or records.
 pub const HP_NAME: &str = "Qz9-ncp-subject-name";
@@ -127,6 +131,7 @@ pub fn asserted(hp_identifier: &str, purpose: &str, now: i64) -> BTreeMap<String
         ("purpose_of_use", json!(purpose)),
         ("assertion.issuer", json!("https://ncp-idp.example.test")),
         ("assertion.id", json!("_Qz9-ncp-ida-1")),
+        ("assertion.name_id_format", json!(NAME_ID_FORMAT)),
         ("assertion.not_before", json!(start)),
         ("assertion.not_on_or_after", json!(end)),
         ("trc.id", json!("_Qz9-ncp-trc-1")),

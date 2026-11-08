@@ -355,9 +355,11 @@ ferrohealth-ui = "=0.6.8"
 # on its own `[[auth.issuer]]` table, and 0.9.1 refuses a Basic user
 # granted a `system/` scope (GHSA-jhg2-jwjp-hq74, #1682); 0.9.2 carries the
 # MyHealth@EU contact-point profile a `contact_point = true` federation
-# issuer is checked against (#1632). Verified against crates.io on
-# 2026-11-06.
-ferrohealth-smart = { version = "=0.9.2", default-features = false, features = ["fetch", "axum", "openehr"] }
+# issuer is checked against (#1632); 0.9.3 refuses a chained route's
+# subject without its correlation claim before anything is sent, and 0.9.4
+# requires a contact point's NameID format (#1615). Verified against
+# crates.io on 2026-11-08.
+ferrohealth-smart = { version = "=0.9.4", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
