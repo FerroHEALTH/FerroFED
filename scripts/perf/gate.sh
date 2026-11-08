@@ -19,9 +19,10 @@
 #       dependencies build once.
 #   scripts/perf/gate.sh run
 #       Starts the quickstart's nodes and FerroPIX, seeds them, starts the
-#       store's PostgreSQL over TLS and both gateways, the head on 8080 with
-#       perf/ferrofed.toml and the base on 8070 with the base's own
-#       perf/ferrofed.toml, renders perf/plan.toml with the quickstart's
+#       store's PostgreSQL over TLS and both gateways, the head on 8080 and
+#       the base on 8070, each with the head's perf/ferrofed.toml, so both
+#       do the same work; a key of it the base binary does not know stops
+#       the run with exit 2, naming the key. It renders perf/plan.toml with the quickstart's
 #       development token and the synthetic contact point's DPoP-bound
 #       tokens, and runs `ferrohealth-perf ab`: the head's idle
 #       phase, then pairs of load phases in turn. Then it plants a poller of
@@ -283,39 +284,63 @@ EOF
 }
 
 # own_urls CONFIG PORT: the overrides of the URLs a gateway on PORT is
-# addressed at, each only when CONFIG sets it, so a base without the
-# contact point is given none: the public URL and the DPoP proofs' htu
-# (RFC 9449 §4.3).
+# addressed at, each only when CONFIG sets it: the public URL and the DPoP
+# proofs' htu (RFC 9449 §4.3).
 own_urls() {
   grep -q '^public_url = ' "$1" && echo "FERROFED__GATEWAY__PUBLIC_URL=http://127.0.0.1:$2"
   grep -q '^\[auth\.dpop\]' "$1" && echo "FERROFED__AUTH__DPOP__EXTERNAL_URL=http://127.0.0.1:$2"
   return 0
 }
 
-# serve NAME BINARY CONFIG DB PORT: starts one gateway in the background,
-# its store URL under $WORK/NAME, and prints its pid.
-serve() {
-  local binary="$2" config="$3" db="$4" port="$5" dir="$WORK/$1" urls=() url
+# gateway_env NAME CONFIG DB PORT: the environment one gateway runs under,
+# one VAR=value a line, its store URL written under $WORK/NAME.
+gateway_env() {
+  local config="$2" db="$3" port="$4" dir="$WORK/$1"
   mkdir -p "$dir"
   chmod 0700 "$dir"
   printf 'postgres://ferrofed:%s@127.0.0.1:%s/%s?sslmode=require' \
     "$STORE_PASSWORD" "$STORE_PORT" "$db" > "$dir/store-url"
-  while IFS= read -r url; do urls+=("$url"); done < <(own_urls "$config" "$port")
-  env ${urls[@]+"${urls[@]}"} FERROFED__USAGE_REPORT__ENABLED=false FERROFED_CONFIG="$config" \
-    FERROFED__SERVER__LISTEN="127.0.0.1:$port" \
-    FERROFED__SIGNING__JWKS_URI="http://127.0.0.1:$port/.well-known/jwks.json" \
-    FERROFED__STORE__URL_FILE="$dir/store-url" \
-    "$binary" serve > "$dir/server.log" 2>&1 &
+  own_urls "$config" "$port"
+  printf '%s\n' FERROFED__USAGE_REPORT__ENABLED=false "FERROFED_CONFIG=$config" \
+    "FERROFED__SERVER__LISTEN=127.0.0.1:$port" \
+    "FERROFED__SIGNING__JWKS_URI=http://127.0.0.1:$port/.well-known/jwks.json" \
+    "FERROFED__STORE__URL_FILE=$dir/store-url"
+}
+
+# serve NAME BINARY CONFIG DB PORT: starts one gateway in the background
+# and prints its pid.
+serve() {
+  local binary="$2" vars=() var
+  while IFS= read -r var; do vars+=("$var"); done < <(gateway_env "$1" "$3" "$4" "$5")
+  env ${vars[@]+"${vars[@]}"} "$binary" serve > "$WORK/$1/server.log" 2>&1 &
   echo "$!"
 }
 
+# unknown_keys TEXT: each key a configuration refusal in TEXT names as an
+# unknown field, one a line.
+unknown_keys() {
+  # shellcheck disable=SC2016 # the backticks are the refusal's, never expanded
+  grep -oE '`[^`]+` is not valid: unknown field' <<< "$1" | sed -E 's/^`([^`]+)`.*$/\1/' || true
+}
+
+# accepts BINARY CONFIG DB PORT: whether the base gateway BINARY reads CONFIG
+# as the head does; exit 2 naming each key of CONFIG it does not know, so a
+# key newer than the base is never left out of one arm in silence.
+accepts() {
+  local binary="$1" vars=() var refused keys
+  while IFS= read -r var; do vars+=("$var"); done < <(gateway_env base "$2" "$3" "$4")
+  refused="$(env ${vars[@]+"${vars[@]}"} "$binary" config check 2>&1)" && return 0
+  keys="$(unknown_keys "$refused" | paste -sd ' ' -)"
+  [[ -n "$keys" ]] && die "the base at $(< "$BASE_TREE/rev") does not know the key(s) ${keys} of $2, so it cannot do the head's work: the pair is not judged"
+  die "the base at $(< "$BASE_TREE/rev") refuses $2: $refused"
+}
+
 start() {
-  local store_image base_config=$CONFIG db
+  local store_image
   store_image="$(pin "FerroPIX database image")"
   [[ -n "$store_image" ]] || die "docs/VERSIONS.md pins no FerroPIX database image"
   [[ -x target/release/ferrofed ]] || die "target/release/ferrofed is not built"
   [[ -x "$BASE_TREE/ferrofed" ]] || die "$BASE_TREE/ferrofed is not built: run gate.sh build first"
-  [[ -f "$BASE_TREE/src/$CONFIG" ]] && base_config="$BASE_TREE/src/$CONFIG"
   rm -rf "$WORK"
   mkdir -p "$WORK"
   chmod 0700 "$WORK"
@@ -349,8 +374,11 @@ start() {
       --command "GRANT CREATE ON DATABASE ${db} TO ferrofed" > /dev/null
   done
 
+  # NOTE: no specification governs this: our own design; both arms run the head's configuration,
+  # so the pair compares the same work and a key the base does not know stops the run.
+  accepts "$BASE_TREE/ferrofed" "$CONFIG" ferrofed_base 8070
   head_pid="$(serve head target/release/ferrofed "$CONFIG" ferrofed 8080)"
-  base_pid="$(serve base "$BASE_TREE/ferrofed" "$base_config" ferrofed_base 8070)"
+  base_pid="$(serve base "$BASE_TREE/ferrofed" "$CONFIG" ferrofed_base 8070)"
   wait_for "the head gateway" 60 curl --fail --silent "$HEAD_URL/health/readiness"
   wait_for "the base gateway" 60 curl --fail --silent "$BASE_URL/health/readiness"
 }
@@ -528,6 +556,13 @@ self_test() {
     "$(own_urls "$work/head.toml" 8070)"
   printf '[gateway]\n' > "$work/base.toml"
   check "a gateway that sets neither is given none" "" "$(own_urls "$work/base.toml" 8070)"
+  # shellcheck disable=SC2016 # the backticks are the refusal's, never expanded
+  check "every unknown key a refusal names is read" "$(printf 'emergency\nauth.dpop.nonce')" \
+    "$(unknown_keys 'refused: 2 configuration refusals; `emergency` is not valid: unknown field `emergency`, expected one of `a`; `auth.dpop.nonce` is not valid: unknown field `nonce`; `server.listen` is not valid: invalid type')"
+  check "a refusal that names no unknown key reads none" "" "$(unknown_keys 'the file is missing')"
+  # shellcheck disable=SC2016 # the pattern matches the script's own text
+  check "both arms are started with the head's configuration" 2 \
+    "$(grep -cE '^  (head|base)_pid="\$\(serve (head|base) [^ ]+ "\$CONFIG" ' "$root/scripts/perf/gate.sh")"
   local config="$root/$CONFIG"
   check "the gateway trusts the contact point the gate mints for" 3 \
     "$(grep -cxF "issuer = \"$NCP_ISSUER\"" "$config")"

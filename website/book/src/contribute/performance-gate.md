@@ -44,10 +44,10 @@ of the base, from `git archive` of the base commit under
    and seeds both with `docker/quickstart/patients.tsv`;
 2. starts a PostgreSQL server over TLS for FerroFED's own store, with a
    database for each gateway;
-3. starts both gateways over the same nodes and FerroPIX: the head on port
-   8080 with `perf/ferrofed.toml`, the base on port 8070 with the base's own
-   `perf/ferrofed.toml`, each the quickstart's gateway with the stored-query
-   registry on its own store database;
+3. checks with `ferrofed config check` that the base binary reads the
+   head's `perf/ferrofed.toml`, and starts both gateways over the same nodes
+   and FerroPIX with it: the head on port 8080 and the base on port 8070,
+   each with the stored-query registry on its own store database;
 4. runs `ferrohealth-perf ab` over `perf/plan.toml`;
 5. plants a poller of the head's store that never waits, and runs the idle
    phase of `perf/busy-loop.toml` beside it, which must fail on idle
@@ -83,6 +83,32 @@ contact point's signing key, its key set and the P-256 `DPoP` key under
 purposes, which a plan names as `{ncp_token}` and `{ncp_emergency_token}`.
 The request groups follow once a release carries that configuration, since
 the release lane's base is the previous release.
+
+## Both arms run the head's configuration
+
+The pair judges code, so both arms must do the same work. Each arm once
+ran its own `perf/ferrofed.toml`, and when
+[#1741](https://github.com/FerroHEALTH/FerroFED/pull/1741) gave the head
+the contact point, the FHIR face and the PDQm client, the head held them in
+memory and the base did not: on `main` the head's peak memory came out at
+1.24 of the base in all four pairs, over the 20 % tolerance, with no code
+changed. The gate now starts both gateways with the head's
+`perf/ferrofed.toml`, as FerroBRIDGE's gate does
+([FerroHEALTH/FerroBRIDGE#1699](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1699)),
+and the tolerance stays where it is.
+
+The base binary may predate a key of that configuration. Before the
+gateways start, the gate runs `ferrofed config check` with the base binary
+over it, under the base's own environment. A key the base does not know
+stops the run with exit 2 and a line naming each such key and the base
+commit, so the pair is never judged with a key left out of one arm:
+
+```text
+perf-gate: the base at <commit> does not know the key(s) emergency of perf/ferrofed.toml, so it cannot do the head's work: the pair is not judged
+```
+
+A configuration the base refuses for another reason stops the run with
+exit 2 too, with the refusal.
 
 ## Reading the report
 
