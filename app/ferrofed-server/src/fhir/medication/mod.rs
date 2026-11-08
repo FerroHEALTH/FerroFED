@@ -23,6 +23,7 @@
 //! goes to that member alone; a received dispensation is named the same way.
 
 pub(super) mod dispense;
+mod dispenser;
 pub(super) mod read;
 pub(super) mod search;
 pub(super) mod withdraw;

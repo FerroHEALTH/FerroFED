@@ -27,7 +27,7 @@ mod list;
 mod lookup;
 mod native;
 mod patient_grant;
-mod prescriptions;
+pub(crate) mod prescriptions;
 mod receipt;
 mod receive;
 mod refusals;

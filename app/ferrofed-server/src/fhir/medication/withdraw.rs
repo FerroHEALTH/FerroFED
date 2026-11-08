@@ -21,6 +21,7 @@ use crate::fhir::admission::Asked;
 use crate::fhir::{admission, refusal};
 
 use super::dispense::received;
+use super::dispenser;
 use super::read::unread;
 
 /// `PUT {fhir-base}/MedicationDispense/{id}`: the withdrawal of the
@@ -44,6 +45,7 @@ pub(in crate::fhir) async fn withdraw(
         Ok(received) => received,
         Err(refused) => return refused,
     };
+    let state = &asked.state;
     // NOTE: FHIR R4 `http.html` §3.1.0.4: a body with no id, or one that disagrees with the
     // [id] in the URL, SHALL be answered 400.
     if received.id.as_deref() != Some(id.as_str()) {
@@ -92,6 +94,12 @@ pub(in crate::fhir) async fn withdraw(
                     Service::Prescription,
                 ),
                 Ok(read) => {
+                    let asking = (admitted.request_id, admitted.logged.as_str());
+                    let checked =
+                        dispenser::may_discard(state, admitted.caller, (&received, &read), asking);
+                    if let Err(refused) = checked.await {
+                        return refused;
+                    }
                     withdrawal::withdraw(federation, &arrived, (&received, text), &read).await
                 }
                 Err(unfound) => unread(

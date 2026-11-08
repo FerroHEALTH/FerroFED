@@ -25,7 +25,7 @@ use crate::store::connection::backend;
 /// The migrations, in the order they apply: version `n` is the `n`th.
 ///
 /// A released migration never changes; a new one is added at the end.
-pub const MIGRATIONS: [&str; 3] = [
+pub const MIGRATIONS: [&str; 4] = [
     // 1: the stored-query definitions (§12.7, N44), as the `postgres` backend
     // of the stored-query registry created them.
     "CREATE TABLE IF NOT EXISTS ferrofed.stored_query_definition (
@@ -49,10 +49,19 @@ pub const MIGRATIONS: [&str; 3] = [
   proof text PRIMARY KEY,
   expires_at timestamptz NOT NULL
 );",
+    // 4: the dispenser of each dispensation a national contact point wrote, by the SHA-256 of
+    // the face's id of it, kept the 24 hours a discard may follow (MyHealth@EU RC 07.04).
+    "CREATE TABLE ferrofed.contact_point_dispensation (
+  dispensation text PRIMARY KEY,
+  organization text NOT NULL,
+  facility_system text NOT NULL,
+  facility_value text NOT NULL,
+  expires_at timestamptz NOT NULL
+);",
 ];
 
 /// The newest migration this binary has, the length of [`MIGRATIONS`].
-pub const KNOWN: u32 = 3;
+pub const KNOWN: u32 = 4;
 
 /// The table that records each migration applied.
 pub const LEDGER: &str = "ferrofed.store_migration";

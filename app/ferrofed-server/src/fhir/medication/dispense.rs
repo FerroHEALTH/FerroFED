@@ -41,6 +41,7 @@ pub(in crate::fhir) async fn dispense(asked: Asked, body: Bytes) -> Response {
         Ok((received, _text)) => received,
         Err(refused) => return refused,
     };
+    let state = &asked.state;
     admission::served(
         (&asked, started),
         || {
@@ -63,14 +64,25 @@ pub(in crate::fhir) async fn dispense(asked: Asked, body: Bytes) -> Response {
             {
                 return refused;
             }
-            crate::facade::dispensation::dispense(
+            if let Err(refused) = super::dispenser::may_dispense(admitted.caller) {
+                return refused;
+            }
+            let response = crate::facade::dispensation::dispense(
                 &admitted.federation,
                 admitted.fhir,
                 &arrived,
                 (&received, &body),
                 &targeted,
             )
-            .await
+            .await;
+            super::dispenser::record(
+                state,
+                admitted.caller,
+                (&received, response.extensions().get()),
+                &admitted.logged,
+            )
+            .await;
+            response
         },
     )
     .await
