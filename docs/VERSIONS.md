@@ -504,8 +504,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | =0.4.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | =0.4.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | =0.8.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | =0.8.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
@@ -727,7 +727,7 @@ each cut moves this row and every file that repeats it in one pull request.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Product version | 0.0.16 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
+| Product version | 0.0.17 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
 
 `CITATION.cff` tracks this row exactly, and the guard compares the two, and
 the root `Cargo.toml` `[workspace.package]` `version` with both.

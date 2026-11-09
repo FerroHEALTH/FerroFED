@@ -73,9 +73,8 @@ a success.
 
 ## A laboratory report
 
-A release receives four categories as documents: patient summaries,
-medical imaging reports, Art 14(1)(d), laboratory reports, Art 14(1)(e), and
-discharge reports, Art 14(1)(f). A laboratory report is held to the HL7
+A release receives three categories as documents: patient summaries,
+laboratory reports, Art 14(1)(e), and discharge reports, Art 14(1)(f). A laboratory report is held to the HL7
 Europe Laboratory Report 2.0.0 `Bundle-eu-lab` and `Composition-eu-lab`
 profiles, which a document whose `Composition.type` is LOINC `11502-2`
 names, and mapped by the laboratory mapping the component ships over the
@@ -127,8 +126,12 @@ record is not told of those losses, so they still arise in normal use.
 
 ## An imaging or a discharge report
 
-Since `eehrxf` 0.1.170 a medical imaging report, Art 14(1)(d), and a
-discharge report, Art 14(1)(f), are received the same way. An imaging report
+Since `eehrxf` 0.1.170 the component maps a received medical imaging
+report, Art 14(1)(d), and a discharge report, Art 14(1)(f), the same way.
+The gateway receives the discharge report; a `Medical-Imaging`
+`[[fhir.receive]]` entry still refuses the start, because the gateway's
+package set does not hold the imaging package's dependency closure
+([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)). An imaging report
 is held to the HL7 Europe Imaging Report 1.0.0-ballot `BundleReportEuImaging`
 and `CompositionEuImaging` profiles, which a document whose
 `Composition.category` is `Medical-Imaging` names, and mapped by the
@@ -204,7 +207,5 @@ controls include the full validation above
 review of 2026-10-25 closed both at S4, P1
 ([#1327](https://github.com/FerroHEALTH/FerroFED/issues/1327)). A received laboratory report adds I-16 (a result the
 record does not hold whole), open at S4, P3. What a received imaging or
-discharge report can lose of its own content is not yet rated; it is judged
-with the gateway half of each category
-([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405),
-[#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406)).
+discharge report can lose of its own content is not yet rated
+([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)).

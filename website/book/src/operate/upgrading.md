@@ -99,6 +99,162 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
+### To v0.0.17, from v0.0.16
+
+- Have a national contact point's authorization server write the format of
+  the HP Identity Assertion's `NameID` as `ehdsi.assertion.name_id_format`,
+  one of the three formats eHDSI SAML Profile 10.0.0 §2.1 allows.
+  `ferrohealth-smart` 0.9.4 refuses a contact-point token without it, as it
+  refuses one without the `NameID`
+  ([Authentication](../operate/authentication.md), #1615).
+- Run `docker compose down -v` once before you start the quickstart on
+  this release. FerroEHR 5.6.0 starts its audit store empty and refuses one
+  that holds records an earlier release wrote, so the nodes do not start on
+  a `ferroehr-pgdata` volume that FerroEHR 5.5.0 wrote (#1617).
+- The store applies migration 2, which adds `ferrofed.emergency_access`, at
+  the first start. A deployment that declares a national contact point and
+  names its emergency purpose in `[[access_log.emergency_purpose]]` now
+  denies a professional's sixth emergency access in 24 hours; set
+  `[emergency]` to tighten the limit, never to loosen it (#1631).
+- `[trust.issuer.national_contact_point]` is removed, and a configuration
+  that still sets it is refused, naming its successor. Declare the contact
+  point as an `[[auth.issuer]]` of `kind = "federation"` with
+  `sender_constraint = "required"`, an `[[auth.federation]]` table with
+  `contact_point = true`, `mapping = "ehdsi"`, its `countries` and the
+  constant `professional.country_code`,
+  `professional.issuing_authority_name` and
+  `provider.issuing_authority_name`, and a `[[federation.contact_point]]`
+  naming the issuer, with `correlation_header` and `additional_countries`
+  moved there. Have the contact point's authorization server write the
+  assertion's attributes under `ehdsi`, the TRC patient as
+  `ehdsi.patient.id`, and bind the token to the connector's client
+  certificate ([National contact point](../integrate/national-contact-point.md),
+  #1632).
+- With `[stored_queries] backend = "postgres"`, move `url` or `url_file`
+  from `[stored_queries]` to a new `[store]` table, pointed at the database
+  the backend uses now, and set `sslmode=require` in the connection string,
+  with `ca_file` when the database's CA is not one of the platform's roots.
+  This release refuses `[stored_queries] url` and `url_file` at start-up and
+  in `config check`, naming each, and a `[store]` without
+  `sslmode=require` under every profile. The gateway takes over the
+  existing table with every definition it holds
+  ([FerroFED's own store](../operate/store.md#moving-from-stored_queries-url),
+  #1636).
+- A gateway with a national contact point (`[[federation.contact_point]]`)
+  needs `[store]` too: give it a PostgreSQL database and role of its own,
+  never a CDR's. Without it this release refuses to start, naming
+  `federation.contact_point[0]` and `[store]` (#1636).
+- A binary you build yourself no longer takes `--features postgres`; drop
+  the flag (#1636).
+- Write each issuer as an `[[auth.issuer]]` table with its `kind`:
+  `persons` for your professionals, `patients` for an issuer whose
+  `patient/` grants `[trust.issuer.patient]` binds, `machines` for systems
+  under the client credentials grant alone, or `federation` with its
+  `[[auth.federation]]` table. Move `audience`, `algorithms`,
+  `clock_skew_seconds`, `jwks_max_age_seconds`,
+  `jwks_refresh_interval_seconds`, `jwks_file`, `timeout_ms` and
+  `role_claims` from `[auth]` onto every issuer table they held for, and
+  name the issuer's `profile` when it is not a standards-only server
+  (`entra`, `keycloak`, `okta` or `nl`). The start refuses a section-level
+  key and an issuer without `kind`, naming each (#1682).
+- On each `persons` issuer, list your own applications in
+  `first_party_clients`, and a third-party client or an RFC 8693 actor in
+  `delegates`; a person's token through any other client is refused
+  (#1682).
+- Move an introspected issuer from `[[trust.issuer]]` to its own
+  `[[auth.issuer]]` with `mode = "introspection"` and an
+  `[auth.issuer.introspection]` table: `endpoint`, and the client
+  authentication in `[auth.issuer.introspection.client]` (`client_id`,
+  `client_secret` or `client_secret_file`). Keep its `[[trust.issuer]]`
+  policy, without the introspection keys (#1682).
+- Rename `[metrics] scrape_users` to `scrape_clients` and `[pmir]
+  feed_users` to `feed_clients`, naming the client ids of your Prometheus
+  scraper and your PMIR Registry at an `[[auth.issuer]]` the gateway
+  trusts, and remove every `[[auth.basic.users]]` entry: the gateway admits
+  no Basic caller, and a configuration that still writes one refuses to
+  start, naming the user. Give the scraper an `oauth2` client-credentials
+  setup in its scrape job, and the Registry a client-credentials grant at
+  that issuer (#1704).
+- Move `[trust.issuer.assurance]` to the issuer's `[auth.issuer.assurance]`
+  table (`claim`, `minimum`, and a `levels` map from each claim value to
+  `low`, `substantial` or `high`), move `[trust.issuer.requester]` to the
+  `nl.professional_number`, `nl.role`, `nl.ura` and `nl.organisation_type`
+  fields of the caller issuer's `[[auth.federation]]` table, and remove
+  `client_tokens_act_for_professional`. Each removed key refuses the start,
+  naming its replacement (#1704).
+- Remove any user name or password from an `[[auth.issuer]]` URL, and keep
+  only public keys in an issuer's `jwks_file`: `ferrohealth-smart` 0.13.0
+  refuses the start on either (#1748).
+- A national contact point's authorization server that answers the exchange
+  profile authenticates the national connector before it reads an
+  assertion, keeps one record of admitted exchanges that every replica
+  shares, and refuses a replay `invalid_grant`
+  ([National contact points](../integrate/national-contact-point.md), #1748).
+- Move every `[credentials."<id>".oauth2]` and `[credentials."<id>".fapi2]`
+  table to `[credentials."<id>".oauth]`, and the section's
+  `mtls_alias_hosts` into it. This release refuses each removed key at
+  start-up and in `config check`, naming the `oauth` key that replaces it
+  ([Onward credentials](../operate/onward-credentials.md), #1749):
+  - The grant's key moves from `[signing]` to the `oauth` table's own
+    `private_key_file`, with `previous_private_key_file` and
+    `next_private_key_file` for a rotation. The gateway publishes it in its
+    JWK Set beside the `[signing]` keys. Pointing `private_key_file` at
+    the `[signing]` key file keeps the `kid` the node's authorization
+    server knows; a new key needs its `kid` registered there, or the JWK
+    Set fetched again, before you switch.
+  - `grant = "token_exchange"` becomes an `onward` table beside the `oauth`
+    table, with `kind = "persons"`, the exchanged tokens' `issuer`,
+    `audiences` and `indicators` naming the node in place of `resource`,
+    `actor_assertion = true`, and `[onward.keys] max_onward_lifetime`. The
+    node's authorization server must issue a JWT access token that names
+    that issuer, an `aud` among `audiences`, and the gateway as `act` or
+    client; an opaque exchanged token now fails the node.
+  - A `fapi2` table becomes an `oauth` table with
+    `security_profile = "fapi2"`, `client_auth = "private_key_jwt"`,
+    `assertion_audience = "issuer"`, `issuer`, and `client_key_file` and
+    `previous_client_key_file` renamed `private_key_file` and
+    `previous_private_key_file`.
+  - `tls_client_certificate_bound_access_tokens = true` becomes
+    `certificate_bound = true`. A grant that authenticates by, or binds its
+    tokens to, the TLS client certificate presents the node section's
+    `tls` identity; `client_certificate_file`, `client_key_file` and
+    `ca_file` in its `oauth` table are refused.
+- Give every node's `oauth` grant `client_auth = "private_key_jwt"`,
+  `"tls_client_auth"` or `"self_signed_tls_client_auth"`. A node's grant
+  that names `client_secret_basic`, `client_secret_post`, `client_secret`
+  or `client_secret_file`, or leaves `client_auth` unset, is refused,
+  naming the key (§13.1, N25). Identity service grants keep their client
+  secret (#1749).
+- Remove `signing.assertion_lifetime_s`: no `[signing]` key signs a client
+  assertion any more, and every assertion lives 300 seconds. A file that
+  sets it is refused at start-up, naming it. `signing.rotation_overlap_s`
+  must be at least 300 plus `signing.node_jwks_cache_s` (#1749).
+- Move each table's outbound TLS keys, `client_identity`,
+  `client_identity_file` and `trust_roots_file`, into its `tls` sub-table:
+  `[[pixm.manager]]` to `[pixm.manager.tls]`, and likewise `[pdqm.tls]`,
+  `[pmir.tls]`, `[registry.mcsd.tls]`, `[xcpd.tls]`, `[nl_gf.nvi.tls]`,
+  `[nl_gf.mitz.tls]`, `[audit.repository.tls]`, `[eehrxf.terminology.tls]`
+  and `[credentials."<endpoint id>".tls]`. This release refuses a key left
+  on its table at start-up and in `config check`, naming the `tls` key that
+  replaces it
+  ([Mutual TLS to the identity services](../operate/configuration.md#mutual-tls-to-the-identity-services),
+  #1750).
+- The gateway speaks TLS 1.3 alone to every outbound service unless the
+  table's `tls` sub-table lowers it with `min_version = "1.2"`. Set it on
+  `[xcpd.tls]` when a MyHealth@EU responding gateway speaks only TLS 1.2,
+  the minimum eHDSI Section II Security Services 10.0.0 §5.9.1 and eHDSI
+  Cryptographic Algorithms 9.0.0 admit between NCPeH, and on any other
+  table whose service speaks no TLS 1.3
+  ([A MyHealth@EU route](../operate/localization.md#a-myhealtheu-route),
+  #1750).
+- Move `client_identity`, `client_identity_file` and `trust_roots_file`
+  of `[xcpd.audit_repository]` into its `tls` sub-table,
+  `[xcpd.audit_repository.tls]`, as every other outbound table took them
+  with #1750; the sub-table also takes `min_version`, `"1.3"` unless
+  lowered to `"1.2"`. This release refuses a key left on the table at
+  start-up and in `config check`, naming the `tls` key that replaces it
+  ([The audit repository](../operate/localization.md#the-audit-repository), #1766).
+
 ### To v0.0.16, from v0.0.15
 
 - Write `server.public_url`, `server.replica` and
