@@ -767,20 +767,21 @@ the manifest wins. A crate joins a member with `dep.workspace = true`.
 The tier-1 lanes of `.github/workflows/ci.yml` run the analyzers below, each
 pinned to an exact version so a CI result matches the local one. `zizmor` and
 `shellcheck` are fetched by `taiki-e/install-action`, which verifies the
-upstream release checksum; `actionlint`, `hadolint` and `kubeconform` run from
-their official container images, pinned by tag and by digest. `kubeconform`
+upstream release checksum; `actionlint`, `hadolint`, `kubeconform`, `lychee`
+and `promtool` run from their official container images, pinned by tag and by
+digest, so no job fetches a GitHub release on each run (#1773). `kubeconform`
 validates the Kubernetes package under `deploy/kubernetes/`, its base and its
 example overlay as `kustomize` renders them, against the schemas of one
 Kubernetes release, read from `yannh/kubernetes-json-schema` at a pinned
 commit, and the ServiceMonitor and HTTPRoute schemas from
 `datreeio/CRDs-catalog` at a pinned commit, so neither a new schema nor a new
-release moves the result. `kustomize` is its upstream release binary, fetched
-by version and checked against the SHA-256 its release publishes. `lychee`,
-the offline link checker of the `site-links` job, is its upstream release
-binary, fetched by version and checked against the SHA-256 its release
-publishes, which the job carries beside the version. `promtool`, which the
-`observability` job checks the shipped Prometheus rule file with, comes the
-same way from the Prometheus release tarball of its version.
+release moves the result. `kustomize` is the copy the GitHub-hosted runner
+image ships, and `scripts/checks/runner-kustomize.sh` refuses it below the pin,
+which the job states as `KUSTOMIZE_MIN_VERSION`. `lychee`, the offline link
+checker of the `site-links` job, runs from `lycheeverse/lychee` at the pin and
+the digest the job carries beside it. `promtool`, which the `observability` job
+checks the shipped Prometheus rule file with, runs the same way from
+`prom/prometheus` at the pin and its digest.
 `validator_cli`, HL7's FHIR Validator, which the `fhir-validator` job runs
 over the patient summary documents the tests write (#688), is the
 `validator_cli.jar` asset of its `hapifhir/org.hl7.fhir.core` release,
@@ -842,10 +843,10 @@ release without a reviewed change.
 | `syft` | 1.51.1 | `.github/workflows/release-build.yml`, `.github/workflows/release-image.yml`, `.github/workflows/release-console.yml` |
 | `cargo-fuzz` | 0.13.2 | `.github/workflows/fuzz.yml` (the fuzz lane, the one nightly-toolchain job; #134) |
 | `trivy` | 0.73.0 | `.github/workflows/release.yml` (the vulnerability record), `.github/workflows/scan-and-tag.yml` (the image gate), `.github/workflows/image-scan.yml` (the weekly scan), each as `TRIVY_VERSION` for `scripts/release/install-trivy.sh`, which takes the GitHub release tarball checked against the sha256 it pins for that version (#1548) |
-| `yq` | v4.53.3 | `.github/workflows/ci.yml` (the `vex` job, as `YQ_VERSION` with its SHA-256) |
+| `yq` | v4.53.3 | `.github/workflows/ci.yml` (the `vex` job, as `YQ_MIN_VERSION`, the floor `scripts/checks/runner-yq.sh` holds the runner image's yq to) |
 
 `scripts/checks/versions.sh` reads every `tool:` line of the release and fuzz
-workflows, and every `TRIVY_VERSION` and `YQ_VERSION`, back against these rows,
+workflows, and every `TRIVY_VERSION` and `YQ_MIN_VERSION`, back against these rows,
 so a bump moves one row and the workflows follow it; it also fails when
 `scripts/release/install-trivy.sh` pins no sha256 for the `trivy` row, so a
 Trivy bump adds the version's row to the script, read from the release's
