@@ -301,6 +301,9 @@ event, and its frequency is the event's:
 | Keep the PIX Manager fed | continuously: the gateway keeps no patient index of its own, so a patient whose records a member has not fed to the PIX Manager over ITI-104, or whose binding the PIX Manager has dropped, resolves at no member and answers as not found | [Identity resolution](identity.md) |
 | Move the gateway's keys out of `[server]` | before you upgrade to 0.0.16: this release refuses `server.public_url`, `server.replica`, `server.bindings_drain_timeout` and `server.overload_retry_after_s` as unknown keys, so write them as `gateway.public_url`, `gateway.replica`, `gateway.bindings_drain_timeout` and `server.retry_after` | [Upgrading](upgrading.md#to-v0016-from-v0015) |
 | Keep the console's identity provider reachable at its start | when the console's `[oidc]` names `issuer` alone: the console reads the provider's endpoints from its discovery document when it starts and refuses to start without it; name `authorization_endpoint`, `token_endpoint` and `jwks_uri` to start without asking the provider | [Upgrading](upgrading.md#to-v0016-from-v0015) |
+| Move the keys 0.0.17 renamed or removed | before you upgrade to 0.0.17: this release refuses each one at start-up and in `config check`, naming its replacement, among them `[auth]` issuer keys moved onto each `[[auth.issuer]]`, `[[auth.basic.users]]`, `[stored_queries] url`, `[trust.issuer.national_contact_point]`, a node's `oauth2` and `fapi2` tables and every outbound table's TLS keys outside its `tls` sub-table | [Upgrading](upgrading.md#to-v0017-from-v0016) |
+| Back up FerroFED's own store | when `[store]` is set, before every upgrade: dump the `ferrofed` schema of its PostgreSQL database, which holds the stored queries, the emergency access counts, the DPoP proofs and a contact point's dispensations; an older release refuses a store a newer one migrated | [FerroFED's own store](store.md#migrations) |
+| Rotate a node grant's private key | on your key policy's schedule, and at once when it may have leaked: name the next key in the grant's `next_private_key_file`, register its `kid` at the node's authorization server, then move it to `private_key_file` and keep the old one as `previous_private_key_file` until the node no longer holds an assertion signed with it | [Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set) |
 | Re-read this page and the information sheet | at each release | the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md) |
 
 When a release makes maintenance mandatory, the manufacturer says so in its
@@ -315,12 +318,12 @@ system in relation to its intended purpose". The full list is
 [Limitations](../evaluate/what-ferrofed-claims.md#limitations); the ones a
 deployment in the EU must plan for are:
 
-- **The European exchange format covers four of the six categories.** The
-  gateway serves the patient summary on its FHIR R4 face and receives
-  patient summaries there (Annex II, points 2.1 to 2.3). It receives
-  laboratory reports at the member you declare for them and lists each
-  member's, with a member that serves its own reports listed as it holds
-  them and read through the gateway
+- **The European exchange format covers four of the six categories, and
+  receives three.** The gateway serves the patient summary on its FHIR R4
+  face and receives patient summaries there (Annex II, points 2.1 to 2.3).
+  It receives laboratory reports at the member you declare for them and
+  lists each member's, with a member that serves its own reports listed as
+  it holds them and read through the gateway
   ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)).
   The record that member keeps holds a received result's normal and typed
   reference ranges and the order filler's identifier, but a range text,
@@ -336,8 +339,17 @@ deployment in the EU must plan for are:
   its medication orders and its vaccinations from medication actions under
   a vaccination list section; record current medication as orders, since a
   medication action under another section reaches no section (hazard I-03).
-  Imaging and discharge reports are neither produced nor received
-  ([The categories received](../evaluate/information-sheet.md#the-categories-received)).
+  It writes discharge and imaging reports from a member's composition and
+  lists them, with a member's own listed as it holds them; a report it
+  writes carries what the mapping reads, and an element the mapping does
+  not read, such as a diagnosis's severity or an imaging finding, is left
+  out and not declared (hazards I-19 and I-20;
+  [Discharge reports over FHIR](../integrate/discharge-reports.md),
+  [Imaging reports over FHIR](../integrate/imaging-reports.md)). It
+  receives discharge reports, whose loss of content is not yet rated
+  ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)), and no imaging report: a `Medical-Imaging`
+  `[[fhir.receive]]` entry refuses the start
+  ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716); [The categories received](../evaluate/information-sheet.md#the-categories-received)).
   The open hazards of the interoperability component are in the
   [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).
 - **The logging component is read at your Audit Record Repository.** The

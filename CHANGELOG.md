@@ -24,6 +24,718 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.17] - 2026-11-09
+
+Security fixes until 2031-11-09, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- Have a national contact point's authorization server write the format of
+  the HP Identity Assertion's `NameID` as `ehdsi.assertion.name_id_format`,
+  one of the three formats eHDSI SAML Profile 10.0.0 §2.1 allows.
+  `ferrohealth-smart` 0.9.4 refuses a contact-point token without it, as it
+  refuses one without the `NameID`
+  ([Authentication](https://ferrofed.eu/docs/operate/authentication.html), #1615).
+- Run `docker compose down -v` once before you start the quickstart on
+  this release. FerroEHR 5.6.0 starts its audit store empty and refuses one
+  that holds records an earlier release wrote, so the nodes do not start on
+  a `ferroehr-pgdata` volume that FerroEHR 5.5.0 wrote (#1617).
+- The store applies migration 2, which adds `ferrofed.emergency_access`, at
+  the first start. A deployment that declares a national contact point and
+  names its emergency purpose in `[[access_log.emergency_purpose]]` now
+  denies a professional's sixth emergency access in 24 hours; set
+  `[emergency]` to tighten the limit, never to loosen it (#1631).
+- `[trust.issuer.national_contact_point]` is removed, and a configuration
+  that still sets it is refused, naming its successor. Declare the contact
+  point as an `[[auth.issuer]]` of `kind = "federation"` with
+  `sender_constraint = "required"`, an `[[auth.federation]]` table with
+  `contact_point = true`, `mapping = "ehdsi"`, its `countries` and the
+  constant `professional.country_code`,
+  `professional.issuing_authority_name` and
+  `provider.issuing_authority_name`, and a `[[federation.contact_point]]`
+  naming the issuer, with `correlation_header` and `additional_countries`
+  moved there. Have the contact point's authorization server write the
+  assertion's attributes under `ehdsi`, the TRC patient as
+  `ehdsi.patient.id`, and bind the token to the connector's client
+  certificate ([National contact point](https://ferrofed.eu/docs/integrate/national-contact-point.html),
+  #1632).
+- With `[stored_queries] backend = "postgres"`, move `url` or `url_file`
+  from `[stored_queries]` to a new `[store]` table, pointed at the database
+  the backend uses now, and set `sslmode=require` in the connection string,
+  with `ca_file` when the database's CA is not one of the platform's roots.
+  This release refuses `[stored_queries] url` and `url_file` at start-up and
+  in `config check`, naming each, and a `[store]` without
+  `sslmode=require` under every profile. The gateway takes over the
+  existing table with every definition it holds
+  ([FerroFED's own store](https://ferrofed.eu/docs/operate/store.html#moving-from-stored_queries-url),
+  #1636).
+- A gateway with a national contact point (`[[federation.contact_point]]`)
+  needs `[store]` too: give it a PostgreSQL database and role of its own,
+  never a CDR's. Without it this release refuses to start, naming
+  `federation.contact_point[0]` and `[store]` (#1636).
+- A binary you build yourself no longer takes `--features postgres`; drop
+  the flag (#1636).
+- Write each issuer as an `[[auth.issuer]]` table with its `kind`:
+  `persons` for your professionals, `patients` for an issuer whose
+  `patient/` grants `[trust.issuer.patient]` binds, `machines` for systems
+  under the client credentials grant alone, or `federation` with its
+  `[[auth.federation]]` table. Move `audience`, `algorithms`,
+  `clock_skew_seconds`, `jwks_max_age_seconds`,
+  `jwks_refresh_interval_seconds`, `jwks_file`, `timeout_ms` and
+  `role_claims` from `[auth]` onto every issuer table they held for, and
+  name the issuer's `profile` when it is not a standards-only server
+  (`entra`, `keycloak`, `okta` or `nl`). The start refuses a section-level
+  key and an issuer without `kind`, naming each (#1682).
+- On each `persons` issuer, list your own applications in
+  `first_party_clients`, and a third-party client or an RFC 8693 actor in
+  `delegates`; a person's token through any other client is refused
+  (#1682).
+- Move an introspected issuer from `[[trust.issuer]]` to its own
+  `[[auth.issuer]]` with `mode = "introspection"` and an
+  `[auth.issuer.introspection]` table: `endpoint`, and the client
+  authentication in `[auth.issuer.introspection.client]` (`client_id`,
+  `client_secret` or `client_secret_file`). Keep its `[[trust.issuer]]`
+  policy, without the introspection keys (#1682).
+- Rename `[metrics] scrape_users` to `scrape_clients` and `[pmir]
+  feed_users` to `feed_clients`, naming the client ids of your Prometheus
+  scraper and your PMIR Registry at an `[[auth.issuer]]` the gateway
+  trusts, and remove every `[[auth.basic.users]]` entry: the gateway admits
+  no Basic caller, and a configuration that still writes one refuses to
+  start, naming the user. Give the scraper an `oauth2` client-credentials
+  setup in its scrape job, and the Registry a client-credentials grant at
+  that issuer (#1704).
+- Move `[trust.issuer.assurance]` to the issuer's `[auth.issuer.assurance]`
+  table (`claim`, `minimum`, and a `levels` map from each claim value to
+  `low`, `substantial` or `high`), move `[trust.issuer.requester]` to the
+  `nl.professional_number`, `nl.role`, `nl.ura` and `nl.organisation_type`
+  fields of the caller issuer's `[[auth.federation]]` table, and remove
+  `client_tokens_act_for_professional`. Each removed key refuses the start,
+  naming its replacement (#1704).
+- Remove any user name or password from an `[[auth.issuer]]` URL, and keep
+  only public keys in an issuer's `jwks_file`: `ferrohealth-smart` 0.13.0
+  refuses the start on either (#1748).
+- A national contact point's authorization server that answers the exchange
+  profile authenticates the national connector before it reads an
+  assertion, keeps one record of admitted exchanges that every replica
+  shares, and refuses a replay `invalid_grant`
+  ([National contact points](https://ferrofed.eu/docs/integrate/national-contact-point.html), #1748).
+- Move every `[credentials."<id>".oauth2]` and `[credentials."<id>".fapi2]`
+  table to `[credentials."<id>".oauth]`, and the section's
+  `mtls_alias_hosts` into it. This release refuses each removed key at
+  start-up and in `config check`, naming the `oauth` key that replaces it
+  ([Onward credentials](https://ferrofed.eu/docs/operate/onward-credentials.html), #1749):
+  - The grant's key moves from `[signing]` to the `oauth` table's own
+    `private_key_file`, with `previous_private_key_file` and
+    `next_private_key_file` for a rotation. The gateway publishes it in its
+    JWK Set beside the `[signing]` keys. Pointing `private_key_file` at
+    the `[signing]` key file keeps the `kid` the node's authorization
+    server knows; a new key needs its `kid` registered there, or the JWK
+    Set fetched again, before you switch.
+  - `grant = "token_exchange"` becomes an `onward` table beside the `oauth`
+    table, with `kind = "persons"`, the exchanged tokens' `issuer`,
+    `audiences` and `indicators` naming the node in place of `resource`,
+    `actor_assertion = true`, and `[onward.keys] max_onward_lifetime`. The
+    node's authorization server must issue a JWT access token that names
+    that issuer, an `aud` among `audiences`, and the gateway as `act` or
+    client; an opaque exchanged token now fails the node.
+  - A `fapi2` table becomes an `oauth` table with
+    `security_profile = "fapi2"`, `client_auth = "private_key_jwt"`,
+    `assertion_audience = "issuer"`, `issuer`, and `client_key_file` and
+    `previous_client_key_file` renamed `private_key_file` and
+    `previous_private_key_file`.
+  - `tls_client_certificate_bound_access_tokens = true` becomes
+    `certificate_bound = true`. A grant that authenticates by, or binds its
+    tokens to, the TLS client certificate presents the node section's
+    `tls` identity; `client_certificate_file`, `client_key_file` and
+    `ca_file` in its `oauth` table are refused.
+- Give every node's `oauth` grant `client_auth = "private_key_jwt"`,
+  `"tls_client_auth"` or `"self_signed_tls_client_auth"`. A node's grant
+  that names `client_secret_basic`, `client_secret_post`, `client_secret`
+  or `client_secret_file`, or leaves `client_auth` unset, is refused,
+  naming the key (§13.1, N25). Identity service grants keep their client
+  secret (#1749).
+- Remove `signing.assertion_lifetime_s`: no `[signing]` key signs a client
+  assertion any more, and every assertion lives 300 seconds. A file that
+  sets it is refused at start-up, naming it. `signing.rotation_overlap_s`
+  must be at least 300 plus `signing.node_jwks_cache_s` (#1749).
+- Move each table's outbound TLS keys, `client_identity`,
+  `client_identity_file` and `trust_roots_file`, into its `tls` sub-table:
+  `[[pixm.manager]]` to `[pixm.manager.tls]`, and likewise `[pdqm.tls]`,
+  `[pmir.tls]`, `[registry.mcsd.tls]`, `[xcpd.tls]`, `[nl_gf.nvi.tls]`,
+  `[nl_gf.mitz.tls]`, `[audit.repository.tls]`, `[eehrxf.terminology.tls]`
+  and `[credentials."<endpoint id>".tls]`. This release refuses a key left
+  on its table at start-up and in `config check`, naming the `tls` key that
+  replaces it
+  ([Mutual TLS to the identity services](https://ferrofed.eu/docs/operate/configuration.html#mutual-tls-to-the-identity-services),
+  #1750).
+- The gateway speaks TLS 1.3 alone to every outbound service unless the
+  table's `tls` sub-table lowers it with `min_version = "1.2"`. Set it on
+  `[xcpd.tls]` when a MyHealth@EU responding gateway speaks only TLS 1.2,
+  the minimum eHDSI Section II Security Services 10.0.0 §5.9.1 and eHDSI
+  Cryptographic Algorithms 9.0.0 admit between NCPeH, and on any other
+  table whose service speaks no TLS 1.3
+  ([A MyHealth@EU route](https://ferrofed.eu/docs/operate/localization.html#a-myhealtheu-route),
+  #1750).
+- Move `client_identity`, `client_identity_file` and `trust_roots_file`
+  of `[xcpd.audit_repository]` into its `tls` sub-table,
+  `[xcpd.audit_repository.tls]`, as every other outbound table took them
+  with #1750; the sub-table also takes `min_version`, `"1.3"` unless
+  lowered to `"1.2"`. This release refuses a key left on the table at
+  start-up and in `config check`, naming the `tls` key that replaces it
+  ([The audit repository](https://ferrofed.eu/docs/operate/localization.html#the-audit-repository), #1766).
+
+### Added
+
+- The FHIR face writes a discharge report from a member's openEHR
+  composition: a `[[fhir.report]]` entry declares the template of the
+  members' discharge compositions, an OPT 1.4 or an ADL 2 template with its
+  archetypes, and the document list names one discharge report per
+  composition, typed `18842-5`, read as an HL7 Europe Hospital Discharge
+  Report 1.0.0 `bundle-eu-hdr` written by the shipped HDR mapping. The
+  reserved stored query `eu.ferrofed.eehrxf::discharge-report` selects the
+  compositions. A `Laboratory-Reports` entry takes the place of the
+  laboratory template of `[[fhir.receive]]` (#1405).
+- The document list names the discharge reports of a member that serves
+  them itself as an HL7 Europe EU Health Data API Document Access Provider
+  (an `hl7-fhir-rest` endpoint declared for `Discharge-Reports`): the
+  member is asked by its own `ehr_id` alone with `Patient?identifier=` and
+  `DocumentReference?patient=&type=`, the type naming the codes of
+  `eehrxf-document-type-discharge-report-vs` (`18842-5`, `100719-4`) the
+  search admits. Each of its `DocumentReference`s is listed as it holds it,
+  with each attachment URL readdressed to a `Binary/{token}` URL the gateway
+  signs, and the read answers the member's `Binary` unchanged. A member that
+  does not answer fails the list under all-or-nothing, and each list and
+  read is recorded under `Discharge-Reports`.
+- The FHIR face writes an imaging report from a member's openEHR
+  composition: a `Medical-Imaging` `[[fhir.report]]` entry declares the
+  template of the members' imaging compositions, and the document list names
+  one imaging report per composition, typed `85430-7`, read as an HL7 Europe
+  Imaging Report 1.0.0-ballot `BundleReportEuImaging` written by the shipped
+  imaging mapping. The reserved stored query
+  `eu.ferrofed.eehrxf::imaging-report` selects the compositions (#1406).
+- The document list names the imaging documents of a member that serves
+  them itself as an HL7 Europe EU Health Data API Document Access Provider
+  (an `hl7-fhir-rest` endpoint declared for `Medical-Imaging`): the member
+  is asked by its own `ehr_id` alone with `Patient?identifier=` and
+  `DocumentReference?patient=&type=`, the type naming the codes of
+  `eehrxf-document-type-medical-imaging-vs` (`85430-7`, `18748-4`) the
+  search admits. Each of its `DocumentReference`s is listed as it holds it,
+  with each attachment URL readdressed to a `Binary/{token}` URL the gateway
+  signs, and the read answers the member's `Binary` unchanged. A member that
+  does not answer fails the list under all-or-nothing, and each list and
+  read is recorded under `Medical-Imaging`.
+- A national contact point's dispensation and its discard follow the
+  MyHealth@EU rules. A token that lists permissions without `PPD-046` is
+  refused `permission-missing` with `ERROR_SEC_GENERIC` on a dispensation
+  and `discard-refused` with `ERROR_ED_DISCARD_FAILED` on a discard (eHDSI
+  SAML Profile 10.0.0 §2.5). Each dispensation the owner creates is kept
+  for 24 hours in FerroFED's store, in the new table
+  `ferrofed.contact_point_dispensation`, with the identity assertion's
+  `organization-id` and the facility identifier on `performer.actor`. A
+  discard is admitted only within those 24 hours and from that organisation
+  and facility; otherwise it is refused `discard-refused` before the member
+  is asked (Requirements Catalogue 10.0.0 07.04).
+- The national contact point page documents the token exchange the
+  authorization server acting for NCPeH-A answers: the HP Identity
+  Assertion as an RFC 8693 `saml2` `subject_token`, the treatment
+  relationship confirmation in `trc_token`, both checked as
+  `ferrohealth-smart`'s eHDSI validator checks them, and the `ehdsi` token
+  it issues. The test suite's harness authorization server answers that
+  exchange ([A national contact point](https://ferrofed.eu/docs/integrate/national-contact-point.html), #1620).
+- An onward lane takes `cache = false` in its
+  `[credentials."<endpoint id>".onward]` table, so every call exchanges a
+  token at the issuer. It is meant for a performance measurement's
+  self-test, never for production; the cache stays on by default (#1620).
+- On the FHIR face, a national contact point's patient-data request is
+  held to the patient of its treatment relationship confirmation. The
+  patient travels in the token's `ehdsi.patient.id`, as `system|value`. A token without it is `403` `trc-missing`. Another patient,
+  a resource of another patient, and a patient no member holds get one
+  answer: `404` `not-found` with `trc-patient-mismatch` and the service's
+  MyHealth@EU `*_NOT_FOUND` code. A mismatch is logged as a
+  `trc-patient-mismatch` security event that names the professional and
+  both patients by pseudonym only (eHDSI XCA Profile 8.0.1 §4.2.1, §4.2.2)
+  (#1622).
+- A `[[xcpd.gateway]]` can be marked `myhealth_eu = true`, a MyHealth@EU
+  route. Before each discovery, the gateway checks every certificate the
+  responding gateway presents against its CRL or OCSP responder. A revoked
+  certificate, or one whose status no source gives, fails the discovery
+  closed with nothing sent (eHDSI X.509 Certificates Profile 7.0.0 §3.2).
+  Boot refuses a marked gateway beside a fixed `assertion` or
+  `assertion_file`, and one without `https`, `client_identity_file` or
+  `trust_roots_file`, naming the gateway (#1623).
+- A national contact point's emergency access is held to the relayed health
+  professional's limit (eHDSI Section II Security Services 10.0.0 §2.5; NCPeH
+  Architecture Specifications 10.0.0 §5.1.9): five per professional in any
+  24 hours by default, tightened with `[emergency] threshold` and
+  `window_s`, and a looser limit refuses the configuration naming §2.5. Past
+  the limit the request is denied `403 emergency-limit-reached` before any
+  member is asked, with `ERROR_SEC_GENERIC` on the FHIR face, an access
+  record carrying the emergency mark and the warning
+  `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS`, and the security event
+  `emergency-limit-reached`. The count lives in FerroFED's own store, one
+  statement per attempt, so it holds across replicas and restarts; with the
+  store down an emergency access is refused `503 emergency-uncounted`
+  (#1631).
+- Every refusal to a national contact point names its MyHealth@EU
+  Requirements Catalogue 10.0.0 §1.25 exception code: in the ITS-REST error
+  body's `ncp_error`, in the FHIR `OperationOutcome`'s `issue.details`, and
+  at the head of the access record's outcome description. A refused token
+  takes the code `ferrohealth-smart` 0.9.2 gives it, the gateway's own
+  refusals the code of their catalogue row, and no legacy appendix 6.4
+  number is issued (#1633).
+- FerroFED's own PostgreSQL store, `[store]`: one database and login role
+  of FerroFED's own, never a CDR's, for the state that must survive a
+  restart and be one on every replica. Its connection string is `url` or
+  `url_file`, a secret, and must set `sslmode=require` under every profile,
+  verified against `ca_file` or the platform's roots; `max_connections`,
+  `timeout_ms` and `sweep_interval_s` bound it. Its migrations are part of
+  the binary and run at start under an advisory lock, so replicas booting
+  together apply each once, and a database a newer release migrated is
+  refused. The `store` readiness indicator is down while the database does
+  not answer, a request that needs the store is then refused, and a sweep
+  deletes the rows past their window. A configuration that declares a
+  national contact point issuer or sets `[stored_queries] backend =
+  "postgres"` without `[store]` refuses to start, naming both; otherwise the
+  gateway runs with no PostgreSQL database (#1636).
+- The gateway admits `DPoP` requests (RFC 9449) under a new `[auth.dpop]`
+  table: the proof is checked against the request and the token's key, and
+  a proof sent a second time is refused `401` with the `DPoP` challenge
+  `invalid_dpop_proof`. With FerroFED's own store set, every replica records
+  each accepted proof in `ferrofed.dpop_proof` by the SHA-256 of its `jti`,
+  in the one statement that checks it, so a replay to another replica is
+  refused (§11.1), the sweep deletes a proof past its window, and with the
+  store down a `DPoP` request is refused `503` (#1637).
+- On the ITS-REST face, a national contact point's patient-data request is
+  held to the patient of its treatment relationship confirmation, as on the
+  FHIR face. A token without the `trc_patient` claim is `403` `trc-missing`.
+  A query or a read by subject must name the TRC patient, and a request
+  under `{base}/v1/ehr/{ehr_id}` or a query scoped to an `ehr_id` must reach
+  one of that patient's own `{node, ehr_id}` pairs. Another patient, an EHR
+  of another patient, a TRC patient no member holds and one every holder
+  restricts all get the answer an unavailable subject gets: `404`
+  `subject-unavailable`, with nothing sent to any member. A query that names
+  no patient and no EHR, the creation of an EHR and a DEMOGRAPHIC request
+  are `403` `trc-unbound`. Each break of the binding is logged as the
+  `trc-patient-mismatch` security event the FHIR face records (eHDSI XCA
+  Profile 8.0.1 §4.2.1, §4.2.2) (#1640).
+- `OPTIONS {base}/` declares the emergency access limit in effect under
+  `federation.national_contact_point.emergency`, as `threshold` and
+  `window_s`, so a contact point's operator can check what the gateway holds
+  its professionals to (eHDSI Section II Security Services 10.0.0 §2.5). The
+  MyHealth@EU self-assessment rows 11.01.04 and 11.01.04.01 now name the
+  limit as the gateway's share of anomaly detection (#1660).
+- A test now shows that a person's own grant lists and reads their laboratory reports on the FHIR face, and that the same grant is refused another patient's reports (Regulation (EU) 2025/327 Art 3(1)). The rights page and the Annex II checklist name the test.
+- The interoperability component maps a received medical imaging report,
+  Art 14(1)(d), and discharge report, Art 14(1)(f), with the projects
+  `eehrxf` 0.1.170 ships, each held to its HL7 Europe document profiles
+  (Imaging Report 1.0.0-ballot, Hospital Discharge Report 1.0.0). The
+  gateway receives the discharge report (#1714, below); a
+  `Medical-Imaging` `[[fhir.receive]]` entry refuses the start until the
+  gateway's package set holds the imaging package's dependency closure
+  (#1716).
+- `[credentials."<endpoint id>".onward]`, the onward lane of a node: every
+  request a verified caller originates reaches the node under the token the
+  table's issuer exchanges the caller's for (RFC 8693 token exchange, or the
+  RFC 7523 JWT bearer grant under the Entra profile), through
+  `ferrohealth-smart`'s onward client, which checks and caches each issued
+  token. A person is carried at a `persons` issuer, a professional of another
+  domestic party at a `federation` issuer and a patient at a `patients`
+  issuer; every other caller fails that node with nothing sent. A refused
+  exchange fails the node and never falls back to the gateway's own token,
+  which the lane's `oauth` table keeps for the gateway's own requests
+  (#1703).
+- A `CONTRIBUTION` sent through a node's onward lane names, in its `audit`
+  and in every version's `commit_audit`, the committer placeholder FerroEHR
+  takes and discards, naming the `iss` and `sub` of the onward token the node
+  authenticates; a person's attestation takes the same placeholder, and an
+  attestation through a `federation` or `patients` lane is refused `403`
+  before anything is sent. A header commit is forwarded as the client sent
+  it, with no committer of the gateway's (#1705).
+- A node's onward lane of kind `federation` carries another domestic
+  party's organisation, a request with no named person, where its
+  credentials section sets `onward_organisations = true`. The organisation
+  reaches the node read-only: a write is refused `403` before any token is
+  asked for. A lane with `correlation_claim` refuses a caller whose
+  verified claims do not carry the claim before the token endpoint is
+  asked (#1710, #1615).
+- The FHIR face receives a discharge report (Regulation (EU) 2025/327 Art
+  14(1)(f)): a `Discharge-Reports` `[[fhir.receive]]` entry holds each
+  document to the HL7 Europe Hospital Discharge Report 1.0.0 profiles over
+  the package's dependency closure, maps it with the HDR project `eehrxf`
+  ships over FerroBRIDGE's ADL 2 discharge report template, and writes it to
+  the declared member by its own `ehr_id` alone, with its access record. A
+  `[[fhir.receive]]` entry takes an ADL 2 `template` with its `archetypes`
+  beside an OPT 1.4 (#1714).
+- The book has a Chapter III conformity record for Regulation (EU) 2025/327: each obligation Articles 25 to 30, 36 to 41 and 49 place on the manufacturer, and each item of the EU declaration of conformity (Annex IV), with the date Art 105 applies it from, its evidence, its status (met, open, awaiting an act of the Commission, or the manufacturer's) and its issue, and the list of what the manufacturer must still decide or do. It states no conformity, and `scripts/checks/chapter-iii.sh` holds it to the vendored text in CI.
+
+### Changed
+
+- Moved the `openehr-*` crates to 0.0.129, with FerroBRIDGE's
+  `openehr-mapping-core` 0.1.143. A map-mode member's operational template,
+  built from its ADL 2 template and ADL 1.4 archetypes, now writes each 1.4
+  term constraint in its ADL 2 form, so the template prints as ADL 2 that
+  parses back, and the template is named by its full id, namespace and
+  version modifier included.
+- Moved `ferrohealth-telemetry` to 0.2.5 and `ferrohealth-usage-report` to
+  0.2.1. The laboratory report is received and served through the same
+  result context as before, and the gateway's behaviour is otherwise
+  unchanged. The other family crates this release moves are named, at the
+  version it ships, in their own entries.
+- `ferrofed report` writes each part of its archive owner-only (mode 0600), so an
+  unpacked report is readable only by whoever unpacks it.
+- A chained onward lane's correlation claim is checked by
+  `ferrohealth-smart` 0.9.4, which reads it from the caller's verified
+  claims: an opaque token whose introspection answer
+  carries the claim is exchanged, where the gateway's own check refused it
+  (#1615).
+- The compose quickstart and the end-to-end harness run FerroEHR 5.6.3,
+  node and database image alike, pinned by digest, in place of 5.5.0. The
+  harness sets a restriction of processing at a node through
+  `/ferroehr/rest/extensions/v1/admin/restriction`, where FerroEHR 5.6.0
+  moved its own extension routes (#1617).
+- The gateway runs on `ferrohealth-smart` 0.10.1, `ferrohealth-session`
+  0.4.0, `ihe-iti` 0.0.78, `nl-generic-functions` 0.0.45, and `ihe-atna` and
+  `ehds-logging` 0.5.2 (#1620):
+  - The access record of a request a national contact point relays names
+    the professional by the identity assertion's `subject-id`, which
+    Implementing Regulation (EU) 2026/2099 Annex Table 1 makes mandatory,
+    the provider's name and address when the token states them, every
+    further field the token asserts as an `asserted-field`, and the provider
+    acted for as `acts-for`. A node is still told the professional by their
+    identifier alone.
+  - The record of a Dutch requester names its care provider as `acts-for`,
+    by its URA under the URA register's root.
+  - The TRC patient a contact point's token binds is read by
+    `ferrohealth-smart`: a `patient.id` whose system holds whitespace, or
+    whose value holds a control character or an HL7 v2 delimiter, binds no
+    patient, so the request is refused `trc-missing`.
+  - An onward token issued for a contact point's caller that outlives the
+    identity assertion's or the treatment confirmation's window by more
+    than 60 seconds is refused before it is sent (eHDSI SAML Profile 10.0.0
+    §2.1, §4.1).
+- A national contact point's patient-data request whose token names no
+  patient of a treatment relationship confirmation (`trc-missing`) now
+  carries `ERROR_SEC_DATA_INTEGRITY_NOT_ENSURED` (MyHealth@EU Requirements
+  Catalogue 10.0.0 requirement 11.01.02) in its ITS-REST `ncp_error` and
+  its FHIR `issue.details`, where it carried `ERROR_SEC_GENERIC`: the TRC
+  patient is a missing assertion attribute, and the family answers one way
+  (FerroHEALTH/FerroEHR#5102). A national connector that mapped
+  `trc-missing` by its code maps the new one.
+- A node and the access record are told only what the eHDSI assertion
+  carries of a contact point's caller: the professional's identifier,
+  issuing authority, role and `on-behalf-of`, the provider's identifier and
+  issuing authority, and the country. No name and no address is conveyed or
+  recorded; the record names the professional by their identifier and adds
+  the assertion's point of care, facility type, home community,
+  authentication class and assertion ids (#1632).
+- A contact point's token must be bound to the client certificate of its
+  connection (RFC 8705 §3, `sender_constraint = "required"`), and a token
+  that falls short of the profile is refused on every route, the
+  self-description included. `OPTIONS {base}/` names, per contact point,
+  the claim each field is read from by its `ferrohealth-smart` field name
+  (#1632).
+- The `postgres` backend of the stored-query registry keeps its definitions
+  in FerroFED's own store and reads its connection from `[store]`.
+  `[stored_queries] url` and `url_file` are removed: a configuration that
+  sets either refuses to start, naming the key and `[store]`. The
+  definitions' table is the store's first migration, so a database the
+  backend already uses keeps every definition. The PostgreSQL client is part
+  of every build, and the `postgres` feature of `ferrofed-server` is gone
+  (#1636).
+- The revocation check of a MyHealth@EU gateway is the family's shared one,
+  `ferrohealth-server` 0.5.1 feature `revocation`, with the CRL and OCSP
+  rules unchanged. Its TLS 1.2 offers the four ECDHE AES-GCM suites of
+  RFC 9325, as the gateway's own listeners do, and a CRL distribution point
+  that covers only some revocation reasons is no longer read as a source
+  that can clear a certificate (RFC 5280 §6.3.3).
+- The gateway runs on the family's 0.9 identity line: `ferrohealth-smart`
+  0.9.4, `ferrohealth-session` 0.3.1, `ferrohealth-config` 0.2.10, `ferrohealth-ui`
+  0.6.8, `ihe-iti` 0.0.76,
+  `nl-generic-functions` 0.0.43, and `ihe-atna` and `ehds-logging` 0.4.0
+  (#1682). Every token is classified under its issuer's `kind` and profile,
+  and one that names no caller the kind admits is refused as an invalid
+  token, its `check` `no caller kind` in the security log. A `persons`
+  token is admitted only through a client the issuer lists in
+  `first_party_clients` or `delegates`, and an RFC 8693 `act` claim only
+  from a listed delegate. The access record names how a contact point
+  relayed its accessor in `relayed-via` and `relayed-issuer`, and the gate
+  refuses a contact point's token whose provider identifier is no
+  `urn:oid:` or `urn:hl7ii:` identifier, or whose role is ISCO `44` without
+  `on-behalf-of`.
+- Every `[[auth.issuer]]` holds its own `audience`, which takes
+  `gateway.public_url` when unset; a changed `audience` of an issuer the
+  gateway already trusts waits for a restart, named `auth.issuer.audience`
+  (#1682).
+- An `[[auth.issuer]]` can be set from the environment by element index,
+  such as `FERROFED__AUTH__ISSUER__0__KIND=persons`, through
+  `ferrohealth-config` 0.2.10 (#1682).
+- The test harness's revocable mutual-TLS front reads its certificates and
+  writes its CRL and OCSP answers with `der` 0.8.3, `x509-cert` 0.3.0 and
+  `x509-ocsp` 0.3.0-rc.0, in place of 0.7.10, 0.2.5 and 0.2.1. The server
+  binary and both images are unchanged: the gateway still reaches `der` 0.7
+  and `x509-cert` 0.2 through `ferrohealth-server` 0.5.1 and
+  `tokio-postgres-rustls` 0.14.0 (#1690).
+- Moved FerroBRIDGE's `eehrxf` to 0.1.170, `ferrobridge-term` to 0.1.143,
+  `fhirconnect` to 0.1.227 and `ferrobridge-validator` to 0.1.149, so the
+  terminology client runs on the same `ferrohealth-smart` 0.9 line as the
+  gateway. `ferrofed config check` and the `CapabilityStatement` now name
+  `Medical-Imaging` and `Discharge-Reports` among the categories with no
+  receiving member when no `[[fhir.receive]]` declares them.
+- The admin listener's scrape and the PMIR identity feed admit a
+  client-credentials token (RFC 6749 §4.4) of a client `metrics.scrape_clients`
+  or `pmir.feed_clients` names, which `ferrohealth-smart` classifies as a
+  system's, and answer any other request `401` with a `Bearer` challenge, or
+  `403` for another client's or a person's token (#1704).
+- A token `ferrohealth-smart` classifies as a system's, or that only a
+  `system/` scope covers, reaches no patient data whatever professional it
+  names, and the assurance level of every caller is the one
+  `ferrohealth-smart` assessed under its issuer's `[auth.issuer.assurance]`.
+  The Mitz consent pre-filter reads who asks from the NL fields of a
+  domestic `federation` issuer's `[[auth.federation]]` table (#1704).
+- Moved the `openehr-*` crates to 0.0.130, with FerroBRIDGE's `eehrxf`
+  0.1.179, `fhirconnect` 0.1.235, `openehr-mapping-core` 0.1.144,
+  `ferrobridge-validator` 0.1.151 and `ferrobridge-term` 0.1.145. A
+  map-mode member's operational template now names its parent archetype by
+  its full id, `…v1.0.0`, as `openehr-adl` builds it; the gateway no longer
+  sets it to the reference as written.
+- The patient summary lists each entry of a composition that holds a mapped
+  archetype more than once, such as two medicines in one medication list, as
+  its own entry in the section its mapping places it. Such a composition was
+  left out of the section and named in its narrative before.
+- The patient summary the FHIR face writes moves to `eehrxf` 0.1.181 with
+  `fhirconnect` 0.1.236. A medicine a member records as a medication action
+  under the ad hoc Medication Summary section of FerroBRIDGE's patient
+  summary template is now listed as a `MedicationStatement` in the
+  medication summary, where it was left out; a vaccine under the
+  vaccination list stays an immunisation. A `[[fhir.mapping]]` may name the
+  EPS project's root context, `ferrobridge_eu_eps.context`, for each section
+  it feeds: the gateway runs a composition through it once and takes each
+  section's entries from that section's slot, refusing an entry whose
+  profile the section does not take. An element a mapping run leaves
+  unread is counted in the narrative of each section that takes from the
+  record.
+- The gateway runs on `ferrohealth-smart` 0.13.0, `ferrohealth-session`
+  0.7.0, `ihe-atna` and `ehds-logging` 0.8.0, `ihe-iti` 0.0.83 and
+  `nl-generic-functions` 0.0.50 (#1748, #1766):
+  - An `[[auth.issuer]]` URL that carries a user name or password, and a
+    `jwks_file` that holds a symmetric key or private key material, refuse
+    the start.
+  - The published exchange profile of a national contact point's
+    authorization server
+    ([National contact points](https://ferrofed.eu/docs/integrate/national-contact-point.html))
+    names two more obligations: it authenticates the national connector
+    before it reads an assertion, since a `sender-vouches` assertion names
+    no presenter (eHDSI SAML Profile 10.0.0 §2.1), and it admits each
+    exchange once, in one replay record every replica shares. The harness
+    authorization server the test suite runs does both.
+  - A refusal of a JSON document the gateway could not read, such as a
+    key set that is no JWK Set or a malformed token endpoint answer, names
+    the reader's category, line and column, and no longer any part of the
+    document (FerroHEALTH/FerroAUTH#351).
+- Every node grant obtains its token through `ferrohealth-smart`'s client,
+  and FerroFED's own OAuth 2.0 client is gone (#1749):
+  - The token request carries the scope as configured, no longer
+    rewritten into the SMART on openEHR canonical form, and a token
+    endpoint may carry a query (RFC 6749 §3.2). One with a user name,
+    password or fragment is refused.
+  - A token with no stated lifetime is reused until the node refuses it,
+    and a token shorter than twice the refresh margin is reused for half
+    its lifetime. Each send to the token endpoint, the DPoP nonce resend
+    included, has the grant's `timeout_ms` of its own.
+  - A token exchange runs through the node's onward lane. With no `scope`
+    on its `onward` table it asks for the caller's covering scopes and
+    refuses a call none covers before anything is sent; a configured
+    `scope` is asked for as written. An exchanged token bound with DPoP
+    reaches the node under the DPoP scheme, and one the node answers `401`
+    is exchanged again.
+  - The issuer of a node's `oauth` grant is held to the cleartext policy,
+    as its token endpoint is: `https` outside the development profile.
+- Every outbound client reads its TLS material through
+  `ferrohealth-server` 0.6.4's `TlsClient`, from a `tls` sub-table that also
+  takes `min_version`. Material that holds no certificate and key in PEM is
+  refused when the configuration loads, naming
+  `<table>.tls.client_identity`, where the federation refused it before.
+  The RFC 8705 §3.1 thumbprint a node's grant binds its tokens to is taken
+  from the certificate the gateway presents, and a reload compares the
+  certificates, keys and roots it read, so a certificate renewed at the
+  same path rebuilds the client (#1750).
+- The revocation check of a MyHealth@EU route speaks the minimum TLS
+  version of `[xcpd.tls]`, where it always admitted TLS 1.2 (#1750).
+- `ferrofed serve` draws its startup banner with the family's
+  `ferrohealth_server::build_info::banner`: the wordmark, the build line
+  `ferrofed <version>`, and one aligned line per fact. The tagline, the
+  maintainer, the manufacturer and its postal address are now the lines
+  `Product`, `Maintainer`, `Manufacturer` and `Address`, and the facts are
+  no longer split into groups by blank lines. The development notice and
+  the support notification still follow the banner, in red on a terminal
+  with colour (#1751).
+- The id a CDR names in the `ETag` of a new EHR or a new version is read
+  with `openehr-its`'s entity tag, weak or strong, into the typed
+  `HIER_OBJECT_ID` or `OBJECT_VERSION_ID`. A tag that names no such id is
+  passed over for the `Location`, where any non-empty tag was taken before.
+- Moved the `openehr-*` crates to 0.0.135, with FerroBRIDGE's `eehrxf`
+  0.1.187, `fhirconnect` 0.1.241, `openehr-mapping-core` 0.1.148,
+  `ferrobridge-validator` 0.1.154 and `ferrobridge-term` 0.1.148. The
+  shipped laboratory mapping now carries a result's typed reference ranges
+  in both directions, where they were declared lost on receipt and left out
+  when served. The stored-query registry, its routes and the operator
+  console read a qualified query name, a version and a version pattern with
+  `openehr-its`'s ITS-REST types: the names and versions accepted and
+  refused are the same, and the registry still refuses the reserved `aql`
+  wherever a name arrives. The console's query form now refuses a stored
+  query name or version outside the ITS-REST grammar before it asks the
+  gateway, and a gateway answer that names one is reported as unreadable.
+- The FHIR face reads a member's prescription search page through the
+  `fhir-types` value tree. A page whose `entry`, `link`, `fullUrl`,
+  `search.mode`, resource or identifier holds a JSON value of another kind
+  than its FHIR JSON form is still unusable, and the reason now names that
+  element, where it said the answer was no FHIR resource in JSON (#1755).
+- A member's own patient summary is read for its `Bundle.type` and
+  `Bundle.identifier` through the `fhir-types` value tree, and an element
+  FHIR R4 does not define still never refuses it. A success that is no
+  document `Bundle` with an identifier is now logged at `WARN`, naming the
+  member's endpoint and what the answer misses, never a value it carries
+  (#1760).
+- `[xcpd.audit_repository]` reads its TLS material through
+  `ferrohealth-server`'s `TlsClient`, as every other outbound table does,
+  and reaches the ITI-20 syslog repository through the platform's verifier
+  with the extra trust roots, at TLS 1.3 unless `min_version` lowers it
+  ([The audit repository](https://ferrofed.eu/docs/operate/localization.html#the-audit-repository), #1766).
+- `SECURITY.md` names `security@cadasto.com` as the email route for a
+  vulnerability report, in place of `info@cadasto.com`, which stays the
+  single point of contact for complaints and incidents and the address for
+  licensing and other business questions.
+- The technical documentation quotes Art 39(5) and Art 39(6) of Regulation (EU) 2025/327: issuing the EU declaration of conformity is the manufacturer's act, and the generator keeps the order of Annex IV until the Commission publishes its uniform declaration template.
+
+### Removed
+
+- The flat `[auth] issuer = "…"` form and the `[auth]` keys `audience`,
+  `algorithms`, `clock_skew_seconds`, `jwks_max_age_seconds`,
+  `jwks_refresh_interval_seconds`, `jwks_file`, `timeout_ms`, `mode` and
+  `role_claims`, each refused naming the `[[auth.issuer]]` table it moved
+  to (#1682).
+- The `[[trust.issuer]]` keys `introspection_endpoint`, `client_id`,
+  `client_secret` and `client_secret_file`: an introspected issuer is an
+  `[[auth.issuer]]` with `mode = "introspection"` (#1682).
+- `[[auth.basic.users]]`, `[metrics] scrape_users`, `[pmir] feed_users`,
+  `[trust.issuer.requester]`, `[trust.issuer.assurance]` and
+  `[trust.issuer] client_tokens_act_for_professional`, with the gateway's
+  own assurance-level type and claim readers (#1704).
+
+### Fixed
+
+- A national contact point's token that carries what a conforming eHDSI HP
+  Identity Assertion provides is admitted. The gateway no longer asks for
+  the ten Implementing Regulation (EU) 2026/2099 Annex fields, which the
+  assertion does not carry: `ferrohealth-smart` 0.9 holds the token to
+  the MyHealth@EU contact-point profile (eHDSI SAML Profile 10.0.0 §2.1,
+  §2.3), the professional is named by the assertion's `NameID`, and a
+  purpose of use other than `TREATMENT` or `EMERGENCY`, or a token missing
+  the facility type, the home community, the point of care, the
+  authentication class or `on-behalf-of` for an ISCO `44` role, is refused
+  `403 contact-point-attributes-required` (#1632).
+- The store's readiness check no longer logs a warning on every failed
+  probe while the database is down. It logs the change to down once, a
+  reminder at most every five minutes while the store stays down, and one
+  line, with how long the outage lasted, when the store answers again
+  (#1644).
+- `ferrofed report` shows the `[store]` table by name: its connection string
+  as every URL is shown, scheme, host and port, its file paths redacted and
+  its bounds kept, where it hid the whole table before.
+- A key v0.0.16 renamed (`server.public_url`, `server.replica`,
+  `server.bindings_drain_timeout_ms` and `server.overload_retry_after_s`) is
+  now refused at start-up and in `config check` naming the key that replaces
+  it, whether it is set in the file or as a `FERROFED__` override (#1653).
+- A national contact point's TRC patient that the cross-reference cannot
+  resolve is logged as its own security event, `trc-patient-unresolved`,
+  naming the treatment relationship confirmation, on the ITS-REST and FHIR
+  faces; it was logged as `patient-context-unavailable`, the event of a
+  `patient/` grant. The answer stays `424 patient-context-unavailable`. The
+  metrics page lists every security event (#1662).
+- The Annex II checklist page is rendered from `conformance/annex-ii.tsv`, so the two no longer disagree, and every issue it cites is open and tracks its gap. Its notes now say that laboratory reports are served and received, and that hazards I-03, I-16 and I-18 stay open pending their review (#1668). The clinical safety risk file, the receiving page and the rights page record what FerroBRIDGE's closed #1323 and #1481 built and what remains.
+- The regulatory status, claims and category crosswalk pages say that laboratory reports and prescriptions from openEHR medication data are built, and they cite only open issues for discharge reports and imaging. The checks page says why no offline check can catch a closed issue cited as remaining work.
+- On the FHIR face, a national contact point's `404` is the one no-data
+  answer of the treatment relationship binding whichever route answered it:
+  the error layer reads the caller from the mark the gate sets on its answer,
+  where it read a caller its position outside the gate never saw (#1691).
+- A development gateway with no access log (`[audit] destination = "off"`)
+  now counts a national contact point's emergency accesses against
+  `[emergency]` and denies them past the limit (eHDSI Section II Security
+  Services 10.0.0 §2.5), where it granted every one uncounted. Production
+  always keeps an access log and was not affected.
+- A national contact point's discovery-phase token, issued from the HP
+  Identity Assertion alone before the patient is identified (eHDSI SAML
+  Profile 10.0.0 §4), is admitted. It reaches the identification lookup,
+  `GET {fhir-base}/Patient?identifier=`, and a request for patient data
+  under it is refused `403 trc-missing` with nothing sent. It was refused
+  at admission as `contact-point-attributes-required` (#1745).
+- A laboratory or discharge report the FHIR face writes from a member's
+  composition now passes its HL7 Europe document profile. Its `Patient`
+  carries the name and birth date the demographics binding holds, and
+  each one the binding does not hold is written with a `data-absent-reason`
+  of `unknown` (HL7 Europe Base 2.0.1 `patient-eu-core`, `eu-pat-1`). The
+  member the report was read at is a `Composition.author`, so the document
+  rules of FHIR R4 admit its `Organization`. A demographics binding that
+  cannot answer, or names no one patient, refuses the read with an
+  `OperationOutcome` and no document is written (#1777).
+
+- The production guide's example node grant authenticates with
+  `private_key_jwt` and a `private_key_file`, and says how to make that
+  key. The `client_secret_basic` grant it showed is refused by
+  `ferrofed config check` since a node's grant takes no client secret
+  (§13.1, N25).
+
+### Security
+
+Shipped with functional changes because: the `ferrohealth-smart` 0.9.1 fix (GHSA-jhg2-jwjp-hq74) comes only on the 0.9 line, whose breaking configuration and API every family crate the gateway links moves with, so no security-only patch of v0.0.16 can carry it; the 0.8.9 fix (GHSA-pfgx-xq28-2629) is superseded by it, and RUSTSEC-2026-0440 affects no shipped artefact (the VEX statement below records why). The `ferrohealth-smart` 0.13.0 fix (GHSA-r5p6-r9m2-c3pw) comes with the error type change its crate made breaking, so it ships on the same line, and the 0.13.1 patch (GHSA-5qm7-v4fw-p2v9) is taken on that line in the release that carries it.
+
+- RUSTSEC-2026-0440 (`astral-tokio-tar` is unmaintained, with no patched
+  version) does not affect FerroFED: `testcontainers` reaches the crate only
+  in the test harness, and the server binary, the `ferrofed` image and the `ferrofed-console` image do not contain it.
+  `deny.toml` accepts the advisory until a `testcontainers` release drops
+  the crate (`security/vex/rust-advisories.openvex.json`).
+- Role claims hold per issuer (GHSA-pfgx-xq28-2629, CWE-863, CWE-639).
+  Before it, beside several `[[auth.issuer]]` entries, `[auth] role_claims`
+  applied to every trusted issuer's tokens. `ferrohealth-smart` 0.8.9 read
+  an entry written `<issuer>#<path>` from that issuer's tokens alone, and
+  the 0.9 line this release runs on moves the list onto each
+  `[[auth.issuer]]` table as `role_claims`, read from that issuer's tokens
+  alone (#1682). Upgrade step: remove `role_claims` from `[auth]`, which now
+  refuses the start naming its replacement, and set it on an issuer only
+  where that issuer's tokens carry roles (the gateway reads the
+  professional's roles from the IUA `subject_role`). `scopeless_subjects`
+  stays refused as before.
+- A Basic user never holds a `system/` scope, through `ferrohealth-smart`
+  0.9.1 (GHSA-jhg2-jwjp-hq74, CWE-269, CWE-863). Before it, an
+  `[[auth.basic.users]]` entry granted a `system/` scope gave that user
+  every resource of a type, the reach of a backend service. Such an entry
+  now refuses the start, naming the user and the scope. Upgrade step: this
+  release removes `[[auth.basic.users]]` altogether (#1704, under Removed),
+  so move a person on Basic to a `persons` issuer, and a machine to a
+  client credentials client of a `machines` or `persons` issuer (RFC 6749
+  §4.4).
+- A JSON document the gateway could not read no longer reaches its log
+  (GHSA-r5p6-r9m2-c3pw, CWE-532, CWE-209; upstream GHSA-mhv7-3975-6xq3).
+  Before it, `ferrohealth-smart` before 0.13.0 refused such a document
+  with a source error quoting the value the reader stopped at, and the
+  gateway printed that chain when a start failed and logged it at `warn`
+  when a node's grant obtained no token. A `jwks_file` holding a private
+  or symmetric key, or a token endpoint answer of another shape, could put
+  key material or an access token into standard error or the log. This
+  release runs on `ferrohealth-smart` 0.13.0, whose refusals name only the
+  category, line and column (#1748). Upgrade step: none beyond the
+  upgrade; rotate any key or token a log line may have recorded.
+- A refused key set, introspection or metadata answer no longer keeps its
+  body in the error that carries it (GHSA-5qm7-v4fw-p2v9, CWE-532,
+  CWE-209). `ferrohealth-smart` before 0.13.1 kept the body, up to 1 MiB,
+  in `KeySetStatus`, `IntrospectionError::Status` and
+  `DiscoveryError::Status`, and printed it in their `Debug` rendering, so a
+  product that logged one with `{:?}` could write token or key material an
+  upstream put in that body to its log. The gateway logs these errors by
+  their `Display` alone, which never carried the body; this release runs on
+  0.13.1, which keeps the body out of the error. Upgrade step: none beyond
+  the upgrade.
+
 ## [0.0.16] - 2026-11-05
 
 Security fixes until 2031-11-05, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -6395,7 +7107,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.16...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.17...HEAD
+[0.0.17]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.16...v0.0.17
 [0.0.16]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.13...v0.0.14

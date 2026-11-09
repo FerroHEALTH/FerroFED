@@ -69,6 +69,7 @@ as a broken command, is fixed in the same change.
 | v0.0.14 | 2026-10-28 | see below | 64 to 69, below | the v0.0.14 version bump |
 | v0.0.15 | 2026-10-30 | see below | 70 to 74, below | the v0.0.15 version bump |
 | v0.0.16 | 2026-11-05 | see below | 75 to 81, below | the v0.0.16 version bump |
+| v0.0.17 | 2026-11-09 | see below | 82 to 91, below | the v0.0.17 version bump |
 
 ### Findings of 2026-10-06
 
@@ -534,6 +535,65 @@ Against Art 28(b), a limitation left out:
     writes and not the reports a member serves itself, which are listed as
     the member holds them. Their limitations now link the new page
     ([#1404](https://github.com/FerroHEALTH/FerroFED/issues/1404)).
+
+No text suggested a use outside the intended purpose, (c).
+
+### Findings of 2026-11-09
+
+The review at the v0.0.17 cut. Read in full: `README.md`, `llms.txt`,
+`CITATION.cff`, the landing page, the Evaluate pages written by hand, the
+instructions for use, the Upgrading page, the Discharge reports and Imaging
+reports over FHIR pages and the assembled release notes. Every other page of
+the book, `SUPPORT.md`, `SECURITY.md` and the README of each crate was
+searched for "planned", "v0.0.17", "v0.0.18", the discharge and imaging
+reports, the national contact point, the configuration keys the release
+refuses, and the issues the v0.0.17 milestone closed next to a statement
+that the work is still to come.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+82. `README.md` and the landing page named v0.0.16 as current. Both now
+    name v0.0.17, and the landing page has a card for what it ships.
+83. The release notes, the information sheet and the Receiving a document
+    page said the gateway receives imaging reports. The component maps
+    them, but a `Medical-Imaging` `[[fhir.receive]]` entry refuses the start
+    until the gateway's package set holds the imaging package's dependency
+    closure ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)). The notes, the sheet's table of the categories
+    received and the page now say so, and the Annex II checklist's point
+    2.2 no longer counts imaging.
+84. The claims page planned discharge reports and imaging for v0.0.17 and
+    cited their closed issues as remaining work. It now has a v0.0.17
+    section and plans the receipt of an imaging report for v0.0.18.
+85. The regulatory status page, the rights page and the Chapter III record
+    named discharge reports and imaging as a gap with no interface, citing
+    #1405 and #1406, both closed. They now say what is served and received,
+    and cite [#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716) and [#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794).
+86. The MyHealth@EU self-assessment rows 08 and 08.01 said the face serves
+    no laboratory, discharge or imaging document. They are marked
+    `not-assessed` until they are read again against the catalogue
+    ([#1795](https://github.com/FerroHEALTH/FerroFED/issues/1795)).
+87. The pin matrix named `ihe-atna` and `ehds-logging` at 0.4.0, behind the
+    root `Cargo.toml` at 0.8.0. It now names the pins the release builds
+    with, and the information sheet adds the HL7 Europe Imaging Report and
+    Hospital Discharge Report packages.
+88. The Receiving a document page and the clinical safety review of
+    2026-11-06 left the rating of a received discharge or imaging report's
+    lost content to #1405 and #1406, which closed with the served reports
+    rated and the received ones not. The page and the release's review row
+    now say the rating is open ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)).
+
+Against Art 28(b), a limitation left out:
+
+89. The instructions for use said imaging and discharge reports are neither
+    produced nor received. Their limitations now say what the gateway
+    writes, lists and receives of each, with hazards I-19 and I-20 and the
+    imaging receipt that waits.
+90. The instructions for use did not name the keys 0.0.17 refuses. Their
+    maintenance table now does, with the Upgrading page's notes for v0.0.17.
+91. The instructions for use did not name the backup of FerroFED's own
+    store or the rotation of a node grant's private key, both new with this
+    release. Their maintenance table now names both.
 
 No text suggested a use outside the intended purpose, (c).
 

@@ -131,8 +131,8 @@ jwks_uri = "http://127.0.0.1:8080/.well-known/jwks.json"
 [credentials."node-a-query".oauth]
 token_endpoint = "http://127.0.0.1:8095/token"
 client_id = "ferrofed-perf"
-client_auth = "client_secret_post"
-client_secret_file = "target/perf-run/onward-secret"
+client_auth = "private_key_jwt"
+private_key_file = "target/perf-run/onward-client.pem"
 scope = "system/aql-*.s"
 
 [credentials."node-a-query".onward]
