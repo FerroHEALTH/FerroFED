@@ -62,7 +62,21 @@ impl Grant for Shared {
             .and_then(|subject| Ok((subject, Self::detailed(&state, request)?)));
         match outcome {
             Ok((subject, details)) => {
-                let token = issued_token(state.certificate.as_deref());
+                let onward =
+                    subject
+                        .as_deref()
+                        .zip(state.onward_issuer.as_deref())
+                        .map(|(sub, issuer)| OnwardClaims {
+                            iss: issuer,
+                            aud: request.field("resource").unwrap_or_default(),
+                            sub,
+                            client_id: &self.client_id,
+                            lifetime: ledger.expires_in.unwrap_or(300),
+                        });
+                let token = match onward {
+                    Some(claims) => onward_token(&claims),
+                    None => issued_token(state.certificate.as_deref()),
+                };
                 ledger.issue(&token, jkt);
                 if let Some(subject) = &subject {
                     state.subjects.insert(token.clone(), subject.clone());
@@ -261,6 +275,37 @@ impl Shared {
         }
         Ok(())
     }
+}
+
+/// What an exchanged JWT access token states (RFC 9068 §2.2, RFC 8693 §4.1).
+struct OnwardClaims<'a> {
+    iss: &'a str,
+    aud: String,
+    sub: &'a str,
+    client_id: &'a str,
+    lifetime: u64,
+}
+
+/// A fresh exchanged access token: an unsigned JWT stating `claims`, the
+/// client named as the actor, issued now.
+fn onward_token(claims: &OnwardClaims<'_>) -> String {
+    let iat = jiff::Timestamp::now().as_second();
+    let exp = iat.saturating_add(i64::try_from(claims.lifetime).unwrap_or(i64::MAX));
+    let payload = serde_json::json!({
+        "iss": claims.iss,
+        "aud": claims.aud,
+        "sub": claims.sub,
+        "client_id": claims.client_id,
+        "act": {"sub": claims.client_id},
+        "iat": iat,
+        "exp": exp,
+        "jti": uuid::Uuid::new_v4().simple().to_string(),
+    });
+    format!(
+        "{}.{}.c2ln",
+        URL_SAFE_NO_PAD.encode(r#"{"alg":"none","typ":"at+jwt"}"#),
+        URL_SAFE_NO_PAD.encode(payload.to_string())
+    )
 }
 
 /// A fresh access token: a random one, or, bound to the certificate of

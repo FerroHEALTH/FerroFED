@@ -13,34 +13,34 @@
 )]
 
 use std::error::Error;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::conveyance::caller::{Principal, Verification};
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
-use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
-use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
-use ferrofed_engine::onward::{Grant, Scope, SystemClock};
+use ferrofed_engine::onward::grant::lane::{Lane, Organisations};
+use ferrofed_engine::onward::upstream::UpstreamToken;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::dpop::{self, HEADER};
 use ferrofed_testkit::issuance::Verdict;
-use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
-use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::dpop::{DpopKey, DpopKeyError};
 use ferrohealth_smart::client::keys::KeyRing;
+use ferrohealth_smart::client::{ClientCredentials, Endpoint};
+use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{Credentials, CredentialsProvider as _, ReqwestTransport};
-use secrecy::SecretString;
+use url::Url;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::conveyed::{UPSTREAM, caller, conveyance, shared};
+use crate::exchange;
 
 mod nonce;
 
@@ -57,14 +57,6 @@ const NODE_AQL: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHE
 
 /// An empty ITS-REST `RESULT_SET`.
 const EMPTY_RESULT_SET: &str = r##"{"q":"SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c","columns":[{"name":"#0","path":"c/uid/value"}],"rows":[]}"##;
-
-/// The issuer of the callers' tokens, its key generated once per process.
-#[expect(
-    clippy::expect_used,
-    reason = "a test process that cannot generate a key pair cannot test anything"
-)]
-static CALLERS: LazyLock<Issuer> =
-    LazyLock::new(|| Issuer::new(UPSTREAM).expect("a test key pair should generate"));
 
 /// The gateway's signing keys.
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
@@ -91,14 +83,33 @@ async fn endpoint(keys: &KeyRing) -> Result<TokenEndpoint, Box<dyn Error>> {
     Ok(endpoint)
 }
 
-/// The client-credentials grant at `endpoint`, bound to `prover`'s key.
-fn grant(endpoint: &TokenEndpoint, prover: &Arc<DpopKey>) -> Result<Grant, Box<dyn Error>> {
-    Ok(Grant::new(
-        &SecretUrl::new(endpoint.token_url()),
-        CLIENT_ID,
-        Scope::parse(SCOPE)?,
-    )?
-    .with_dpop(Arc::clone(prover)))
+/// The client-credentials grant at `url` over `keys`, binding nothing.
+fn plain_at(url: &str, keys: Arc<KeyRing>) -> Result<ClientCredentials, Box<dyn Error>> {
+    let mut grant =
+        ClientCredentials::with_key_ring(Endpoint::Token(Url::parse(url)?), CLIENT_ID.into(), keys);
+    grant.scope = Some(SCOPE.to_owned());
+    grant.timeout = Duration::from_secs(5);
+    Ok(grant)
+}
+
+/// The client-credentials grant at `url` over `keys`, bound to `prover`'s
+/// key.
+fn grant_at(
+    url: &str,
+    keys: Arc<KeyRing>,
+    prover: &Arc<DpopKey>,
+) -> Result<ClientCredentials, Box<dyn Error>> {
+    Ok(plain_at(url, keys)?.with_dpop(Arc::clone(prover)))
+}
+
+/// The client-credentials grant at `endpoint` over `keys`, bound to
+/// `prover`'s key.
+fn grant(
+    endpoint: &TokenEndpoint,
+    keys: Arc<KeyRing>,
+    prover: &Arc<DpopKey>,
+) -> Result<ClientCredentials, Box<dyn Error>> {
+    grant_at(&endpoint.token_url(), keys, prover)
 }
 
 /// The engine every node request and token request is sent through.
@@ -122,20 +133,9 @@ fn client(
     Ok(NodeClient::new(endpoint, transport)?)
 }
 
-/// The client-credentials provider of `grant` over `transport`.
-fn provider(
-    grant: Grant,
-    keys: Arc<KeyRing>,
-    transport: ReqwestTransport,
-) -> Result<Arc<ClientCredentials<ReqwestTransport>>, Box<dyn Error>> {
-    Ok(Arc::new(ClientCredentials::new(
-        EndpointId::new("node-a-pub")?,
-        grant,
-        keys,
-        (Duration::from_secs(300), Duration::from_secs(5)),
-        transport,
-        Arc::new(SystemClock),
-    )))
+/// The client-credentials provider of `grant`.
+fn provider(grant: ClientCredentials) -> Result<Arc<UpstreamToken>, Box<dyn Error>> {
+    Ok(UpstreamToken::provider(grant)?)
 }
 
 /// Mounts the query answer on `server` for a request `matcher` admits, and
@@ -202,7 +202,7 @@ async fn a_dpop_bound_token_reaches_the_node_with_a_proof_of_its_key() -> TestRe
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;
-    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+    let provider = provider(grant(&endpoint, keys, &prover)?)?;
     let client = client(&node, "openehr", transport()?)?
         .with_credentials_provider(provider)
         .with_dpop(&prover);
@@ -244,7 +244,7 @@ async fn a_dpop_bound_token_is_never_a_bearer_credential() -> TestResult {
     let keys = keys()?;
     let endpoint = endpoint(&keys).await?;
     let prover = prover()?;
-    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+    let provider = provider(grant(&endpoint, keys, &prover)?)?;
 
     let credentials = provider.credentials().await?;
     assert!(
@@ -268,7 +268,7 @@ async fn the_token_endpoints_nonce_is_answered_once() -> TestResult {
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;
-    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+    let provider = provider(grant(&endpoint, keys, &prover)?)?;
     let client = client(&node, "openehr", transport()?)?
         .with_credentials_provider(provider)
         .with_dpop(&prover);
@@ -313,13 +313,7 @@ async fn the_token_endpoints_nonce_is_answered_no_more_than_once() -> TestResult
     let token_url = format!("{}/token", authority.uri());
     let node = Server::start().await;
     let prover = prover()?;
-    let grant = Grant::new(
-        &SecretUrl::new(token_url.clone()),
-        CLIENT_ID,
-        Scope::parse(SCOPE)?,
-    )?
-    .with_dpop(Arc::clone(&prover));
-    let provider = provider(grant, keys, transport()?)?;
+    let provider = provider(grant_at(&token_url, keys, &prover)?)?;
     let client = client(&node, "openehr", transport()?)?
         .with_credentials_provider(provider)
         .with_dpop(&prover);
@@ -367,7 +361,7 @@ async fn the_nodes_nonce_is_answered_once() -> TestResult {
     )
     .await;
     let prover = prover()?;
-    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+    let provider = provider(grant(&endpoint, keys, &prover)?)?;
     let client = client(&node, "openehr", transport()?)?
         .with_credentials_provider(provider)
         .with_dpop(&prover);
@@ -408,40 +402,24 @@ async fn the_nodes_nonce_is_answered_once() -> TestResult {
     Ok(())
 }
 
-/// A token exchanged for a verified caller is bound with `DPoP` like any
-/// other (RFC 8693, RFC 9449).
+/// A token exchanged for a verified caller through the node's onward lane is
+/// bound with `DPoP` like any other, and reaches the node under the `DPoP`
+/// scheme (RFC 8693, RFC 9449 §7.1).
 // conformance: CP-17
 #[tokio::test]
 async fn an_exchanged_token_is_dpop_bound() -> TestResult {
     let keys = keys()?;
     let endpoint = endpoint(&keys).await?;
-    endpoint.accept_exchange(CALLERS.jwks(), UPSTREAM);
+    endpoint.accept_exchange(exchange::CALLERS.jwks(), UPSTREAM);
+    endpoint.issue_onward_tokens(exchange::ONWARD_ISSUER);
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;
-    let grant = grant(&endpoint, &prover)?
-        .with_resource("https://cdr-a.example.org/openehr")?
-        .with_token_exchange();
-    let exchange = Arc::new(Exchange::new(
-        EndpointId::new("node-a-pub")?,
-        grant,
-        keys,
-        (Duration::from_secs(300), Duration::from_secs(5)),
-        transport()?,
-        Arc::new(SystemClock),
-    ));
     let client = client(&node, "openehr", transport()?)?
-        .with_on_behalf(exchange)
+        .with_on_behalf(dpop_lane(&endpoint, keys, &prover)?)
         .with_dpop(&prover);
-    let mut claims = Claims::new(UPSTREAM, "urn:example:ferrofed-under-test");
-    crate::conveyed::SUBJECT.clone_into(&mut claims.sub);
-    let token = CALLERS.mint(&claims)?;
-    let mut verified = caller();
-    verified.verified_by = Verification::Signature;
-    let conveyed = Conveyance::new(shared(), Principal::Caller(verified))
-        .with_subject(SubjectToken::new(SecretString::from(token), "user/aql-*.s"));
 
-    let reply = query(&client, conveyed).await?;
+    let reply = query(&client, exchanged_call("clinician-0042")?).await?;
     assert_eq!(
         EndpointStatus::Active,
         reply.status(),
@@ -449,7 +427,46 @@ async fn an_exchanged_token_is_dpop_bound() -> TestResult {
         reply.outcome()
     );
     assert_eq!(1, endpoint.exchanges().len());
+    let requests = node.received_requests().await.ok_or("recording is on")?;
+    let [request] = requests.as_slice() else {
+        return Err(format!("expected one node request, got {}", requests.len()).into());
+    };
+    let (sent, _proof) = credential_and_proof(request)?;
+    assert!(sent.starts_with("DPoP "), "the DPoP scheme: {sent}");
     Ok(())
+}
+
+/// The onward lane at `endpoint` whose grant over `keys` binds its tokens to
+/// `prover`'s key and names the gateway as the actor.
+fn dpop_lane(
+    endpoint: &TokenEndpoint,
+    keys: Arc<KeyRing>,
+    prover: &Arc<DpopKey>,
+) -> Result<Arc<Lane>, Box<dyn Error>> {
+    let grant = grant(endpoint, keys, prover)?;
+    let gateway = UpstreamToken::provider(grant.clone())?;
+    let resolved = exchange::section(endpoint, serde_json::json!({}))?.resolve(grant)?;
+    Ok(Arc::new(Lane::new(
+        EndpointId::new("node-a-pub")?,
+        (resolved.onward, resolved.target),
+        (IssuerKind::Persons, Organisations::Refused),
+        gateway,
+    )))
+}
+
+/// The call of the verified person `subject`, its token signed by the
+/// callers' issuer.
+fn exchanged_call(subject: &str) -> Result<Conveyance, Box<dyn Error>> {
+    let token = exchange::caller_token(subject)?;
+    let mut verified = caller();
+    verified.verified_by = Verification::Signature;
+    Ok(
+        Conveyance::new(shared(), Principal::Caller(verified)).with_subject(exchange::subject_of(
+            &token,
+            subject,
+            "user/aql-*.s",
+        )?),
+    )
 }
 
 /// A token endpoint that answers a bearer token to a grant that asked for a
@@ -463,7 +480,7 @@ async fn a_bearer_token_where_dpop_was_asked_fails_the_node() -> TestResult {
     let node = Server::start().await;
     answer_when(&node, endpoint.bearer(), ResponseTemplate::new(401)).await;
     let prover = prover()?;
-    let provider = provider(grant(&endpoint, &prover)?, keys, transport()?)?;
+    let provider = provider(grant(&endpoint, keys, &prover)?)?;
     let client = client(&node, "openehr", transport()?)?
         .with_credentials_provider(provider)
         .with_dpop(&prover);
@@ -493,12 +510,7 @@ async fn a_request_without_a_bound_token_carries_no_proof() -> TestResult {
         )
         .mount(&node)
         .await;
-    let plain = Grant::new(
-        &SecretUrl::new(endpoint.token_url()),
-        CLIENT_ID,
-        Scope::parse(SCOPE)?,
-    )?;
-    let provider = provider(plain, keys, transport()?)?;
+    let provider = provider(plain_at(&endpoint.token_url(), keys)?)?;
     let client = client(&node, "openehr", transport()?)?
         .with_credentials_provider(provider)
         .with_dpop(&prover()?);

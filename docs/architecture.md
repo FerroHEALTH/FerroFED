@@ -85,7 +85,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `fhirconnect`, `openehr-mapping-core` | =0.1.241 and =0.1.148 (FerroBRIDGE, BUSL-1.1) | the FHIRconnect 1.0.0 engine `eehrxf` runs in process under `openehr` (#730), pinned exactly because FerroBRIDGE's crate line moves by patch (decision A61, #684) |
 | `ferrobridge-term` | =0.1.148 (FerroBRIDGE, BUSL-1.1) | the FHIR terminology client the interoperability component asks its optional terminology server through (decision A63, #925): `$translate`, `$lookup` and `$validate-code` in R4, over the HTTP client the gateway builds with its credential and TLS material |
 | `ferrohealth-smart` | =0.9.4 (`fetch`, `axum`, `openehr`; BUSL-1.1) | the SMART and OAuth 2.0 resource-server crate every FerroHEALTH product runs on (#1174): it checks tokens and never issues them, verifies each issuer's tokens from its RFC 8414 metadata and key set, decides the SMART on openEHR grants through `ferrohealth_smart::openehr`, and obtains the gateway's own token with the client credentials grant of `[<section>.oauth]` |
-| `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for the outbound assertions of the `oauth2`, Nuts and FAPI 2.0 grants and the caller token |
+| `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for the Nuts grant's presentations and the caller token; the `oauth` grants' assertions are signed by `ferrohealth-smart` |
 | `jsonschema` | 0.60.2 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
@@ -125,7 +125,7 @@ gateway.
 | `openehr-its` (`rest`, `json`) | the `AdhocQueryExecute`, `ResultSet`, `ResultSetMetadata` and `ResultSetColumn` DTOs, with `ResultSetMetadata.additional_properties` as the extension point `meta.federation` occupies (N17), and canonical JSON of the RM |
 | `openehr-base` | `ObjectVersionId` (`object_id()`, `creating_system_id()`, `version_tree_id()`), `HierObjectId` for `ehr_id`, the lexical rule for `system_id`, and `PartialOrd` on the ISO 8601 types |
 | `openehr-rm` | `DV_ORDERED`'s `less_than` and `is_strictly_comparable_to`, for cross-node ordering of data values |
-| `ferrohealth-smart` (`openehr::smart_scopes`) | `SmartScope::parse` and `parse_all` for the SMART on openEHR scope grammar (section 7), which `openehr-sdt` carried until 0.0.116 (#1432): onward OAuth 2.0 (#81) checks that each `oauth2` scope is a `system/` resource scope, and client authentication (#80) reads each caller's scopes |
+| `ferrohealth-smart` (`openehr::smart_scopes`) | `SmartScope::parse` and `parse_all` for the SMART on openEHR scope grammar (section 7), which `openehr-sdt` carried until 0.0.116 (#1432): onward OAuth 2.0 (#81) checks that each scope of a node's `oauth` grant is a `system/` resource scope, and client authentication (#80) reads each caller's scopes |
 
 The research found eight gaps between these crates and what an intermediary
 needs, filed as FerroEHR #3505 to #3512, and the work found a ninth (#3513, a
@@ -787,8 +787,9 @@ FHIR-free trait a data user implements to authenticate each request to a
 Generic Function, which `nvi` turns on and the engine's Nuts grant implements
 (#730). The RFC 8414 checks the
 OAuth 2.0 issuer audience, the FAPI 2.0 grant and the Nuts grant share come
-from the family's `ferrohealth-smart`, with the issuer and the mutual-TLS
-alias hosts in the engine's `onward::issuer` (decision A108). The adapters that turn
+from the family's `ferrohealth-smart`, the issuer and the mutual-TLS alias
+hosts included since the node grants moved onto its client (#1749,
+amending decision A108). The adapters that turn
 those clients into the seams sit beside the traits in `app/ferrofed-identity`
 (section 11, #106).
 The gateway core depends only on the traits. When FerroPIX exists, it can use
@@ -1024,7 +1025,7 @@ supplement under `docs/specs/ihe-iua/`.
 
 Scopes are read with `ferrohealth_smart::openehr::smart_scopes::SmartScope::parse_all`,
 never a FerroFED parser: onward OAuth 2.0 (#81) checks each scope an
-endpoint's `oauth2` grant requests with it, and this work reads the caller's
+endpoint's `oauth` grant requests with it, and this work reads the caller's
 scopes with it (`openehr-sdt` carried the grammar until 0.0.116, #1432). A
 query needs an `aql-…` search scope in the `user/` or `system/` compartment,
 and a routed follow-up needs the matching `composition-` or `template-`
@@ -1155,22 +1156,34 @@ the transport and is never an organisation's identity (§13.4; the VWS memo,
 only where a grant declares RFC 8705 client authentication (below).
 
 **Nodes** (#81). FerroFED authenticates to each node as itself, with OAuth 2.0
-client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
+client credentials (§13.1, N25). Every node grant runs on
+`ferrohealth-smart`'s client, the `[credentials."<id>".oauth]` table every
+FerroHEALTH product reads for an upstream it calls as itself; FerroFED holds
+no OAuth 2.0 client of its own (#1749):
 
-- **keys:** ES384, loaded from a `_file` secret; the JWKS is served at
-  `{base}/.well-known/jwks.json` and declared as `federation.auth.jwks_uri`
-  (N30), or an external `jwks_uri` is configured;
+- **client authentication:** an RFC 7523 §2.2 assertion signed with the
+  table's `private_key_file`, or RFC 8705 authentication by the node
+  section's TLS client certificate (below). A node's grant takes no client
+  secret, and a section that names one is refused at load (N25);
+- **keys:** the grant's key and the `[signing]` keys are held in the crate's
+  `KeyRing`; the JWKS is served at `{base}/.well-known/jwks.json` and
+  declared as `federation.auth.jwks_uri` (N30), or an external `jwks_uri` is
+  configured. `[signing]` stays FerroFED's table, with its own P-256 and
+  P-384 rule;
 - **rotation:** the JWKS publishes the current and the previous `kid` for one
-  overlap window of at least the assertion lifetime plus the nodes' JWKS cache
-  time;
-- **assertions:** `exp` of 300 s or less, a unique `jti`, `aud` the node's
-  token endpoint, or, with `assertion_audience = "issuer"` (built with
-  #497), the authorization server's configured issuer identifier as one
-  string, the other value RFC 7523 §3 admits and the only one the FAPI 2.0
-  Security Profile accepts (§5.3.2.1);
-- **tokens:** cached per endpoint until `exp` minus 30 s and handed to the
-  node's `rest-client` through its `CredentialsProvider`; a `401` drops the
-  token;
+  overlap window of at least the 300 s assertion lifetime plus the nodes'
+  JWKS cache time;
+- **assertions:** `exp` of 300 s, fixed by the crate, a unique `jti`, `aud`
+  the node's token endpoint, or, with `assertion_audience = "issuer"`, the
+  authorization server's issuer identifier as one string, the other value
+  RFC 7523 §3 admits and the only one the FAPI 2.0 Security Profile accepts
+  (§5.3.2.1);
+- **tokens:** fetched and cached by the crate's `TokenSource` until its
+  `refresh_margin_ms` before the stated `exp`, or for half a lifetime
+  shorter than twice the margin, and reused until a `401` when none is
+  stated; handed to the node's `rest-client` through
+  `ferrofed_engine::onward::upstream::UpstreamToken`, its
+  `CredentialsProvider`, which drops the token on a `401`;
 - **the onward lane** (built with #1703, of #1615): a node's
   `[credentials."<id>".onward]` table, `ferrohealth-smart`'s
   `[<lane>.credentials.onward]`, authenticated by the section's `oauth`
@@ -1201,73 +1214,83 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   and `sub` (`ferrofed_engine::single_node::committer`, #1705); through any
   other lane an attestation is refused `403` before sending; a header commit
   is forwarded as sent, with no committer of the gateway's;
-- **token exchange** (built with #439): where a node's authorization server
-  supports RFC 8693, the endpoint's `oauth2` grant is `token_exchange`. The
-  `subject_token` is the caller's verified access token, the `actor_token` an
-  assertion of the gateway with its own `jti`, the request still
-  authenticates with a client assertion, and `resource` names the node (RFC
-  8707), which a token-exchange grant must set. The issued token must be an
-  access token (`issued_token_type`, RFC 8693 §2.2.1), is audience-restricted
-  and carries the caller as the delegating subject in `act`. It is cached per
-  endpoint by the SHA-256 of the caller's token and the scope, at most 1024
-  tokens, until 30 s before it expires, and dropped on a `401`
-  (`ferrofed_engine::onward::grant::exchange`). Only a caller verified by signature
-  or introspection has a token to exchange: a caller the edge asserted is
-  refused for that node, `node-error` with nothing sent. The gateway's own
-  requests, the admission check and the stored-query redistribution, use the
-  client-credentials grant at the same token endpoint. The caller's token
-  reaches that authorization server alone, never a node; one whose text or
-  JWS payload carries a withheld identifier is not sent (N33). It is
-  preferred where available. The deployment's own authorization server
-  issues it, because each FerroHEALTH product is its own resource server and
-  no central service holds the signing key every product's access depends on
-  (owner decision, 2026-10-19);
-- **DPoP** (built with #439, moved onto the client with #448): an `oauth2`
-  grant with a `dpop_key_file` (a P-256 or P-384 key) binds its tokens to
-  that key (RFC 9449). A bound token is `openehr-its`'s `Credentials::Dpop`,
-  which the node client writes under the `DPoP` scheme and never under
-  `Bearer` (RFC 9449 §7.1). The client asks the endpoint's
-  `ferrofed_engine::onward::dpop::NodeProver`, its `DpopProver`, for the
-  proof of every request over the final method and URL with the token's
-  hash in `ath`, and answers a node's `401` with a `DPoP` `use_dpop_nonce`
-  challenge by sending the request once more, as the crate's `Transport`
-  contract documents (§9). The token request is composed by the gateway, so
-  it proves itself and answers a `400 use_dpop_nonce` once more within the
-  token request's budget (§8), with a client assertion, and under token
-  exchange an actor token, signed anew so no `jti` repeats (RFC 7523 §3).
-  Every nonce a server sends is kept per origin and per role for the next
-  proof, so the token endpoint's and the node's never mix even on one
-  origin (§9), and a token endpoint that answers a bearer token to such a
-  grant fails the node. A deadline that passes before the nonce re-send is
-  the node's `time-out` with the node counted as asked (`Contact::Silent`),
-  and a re-send no proof could be made for is the node's `node-error`,
-  counted as asked the same way, never as a request never sent (#470): both
-  are read from the `sent` of the client's `DeadlineElapsed` and
-  `DpopProof` (`openehr-its` 0.0.83 and 0.0.84, #566, #574);
-- **mutual TLS** (built with #492, RFC 8705): a node's `[credentials]`
-  section takes a `tls` table, `ferrohealth-server`'s
+- **token exchange** (built with #439, onto the lane with #1749): where a
+  node's authorization server supports RFC 8693, the node's `onward` table
+  sets `actor_assertion = true`. The `subject_token` is the caller's
+  verified access token, the `actor_token` an assertion of the gateway with
+  its own `jti`, signed with the `oauth` table's `private_key_file` whatever
+  the client authentication, and `indicators` name the node as `resource`
+  (RFC 8707). The issued token must pass the lane's onward check: a JWT
+  naming the table's `issuer`, an `aud` among its `audiences`, the gateway
+  as `act` or client, and a lifetime within `max_onward_lifetime`; an opaque
+  exchanged token fails the node. It is cached per caller and target, and a
+  node's `401` drops it through `Onward::invalidate`. Only a caller verified
+  by signature or introspection has a token to exchange: a caller the edge
+  asserted is refused for that node, `node-error` with nothing sent. The
+  gateway's own requests, the admission check and the stored-query
+  redistribution, use the `oauth` table's client-credentials token. The
+  caller's token reaches that authorization server alone, never a node; one
+  whose text or JWS payload carries a withheld identifier is not sent
+  (N33, `ferrofed_engine::onward::grant::on_behalf`). It is preferred where
+  available. The deployment's own authorization server issues it, because
+  each FerroHEALTH product is its own resource server and no central service
+  holds the signing key every product's access depends on (owner decision,
+  2026-10-19);
+- **DPoP** (built with #439, moved onto the client with #448, onto the crate
+  with #1749): an `oauth` grant with a `dpop_key_file` (a P-256 or P-384
+  key, the crate's `DpopKey`) binds its tokens to that key (RFC 9449), the
+  tokens its `onward` table exchanges included. A bound token is
+  `openehr-its`'s `Credentials::Dpop`, which the node client writes under
+  the `DPoP` scheme and never under `Bearer` (RFC 9449 §7.1). The client
+  asks the endpoint's `ferrofed_engine::dispatch::dpop::NodeProver`, a thin
+  `DpopProver` over the `DpopKey`, for the proof of every request over the
+  final method and URL with the token's hash in `ath`, and answers a node's
+  `401` with a `DPoP` `use_dpop_nonce` challenge by sending the request once
+  more, as the crate's `Transport` contract documents (§9). The crate
+  proves the token request and answers a `400 use_dpop_nonce` once more,
+  each send within the grant's `timeout_ms`, with a newly signed client
+  assertion and, under token exchange, a new actor token, so no `jti`
+  repeats (RFC 7523 §3). Every nonce a server sends is kept per origin and
+  per role for the next proof, so the token endpoint's and the node's never
+  mix even on one origin (§9), and a token endpoint that answers a bearer
+  token to such a grant fails the node. A deadline that passes before the
+  nonce re-send is the node's `time-out` with the node counted as asked
+  (`Contact::Silent`), and a re-send no proof could be made for is the
+  node's `node-error`, counted as asked the same way, never as a request
+  never sent (#470): both are read from the `sent` of the client's
+  `DeadlineElapsed` and `DpopProof` (`openehr-its` 0.0.83 and 0.0.84, #566,
+  #574);
+- **mutual TLS** (built with #492, RFC 8705, onto the crate with #1749): a
+  node's `[credentials]` section takes a `tls` table, `ferrohealth-server`'s
   `TlsClientSection` read into the `TlsClient` every outbound client takes
   (#507, #1750), and the node and its token endpoint are reached over one
   transport of the endpoint's own built with them
-  (`NodeClients::from_snapshot_over`), `https` under every profile. An
-  `oauth2` grant may then authenticate with `tls_client_auth` or
-  `self_signed_tls_client_auth` (§2): the token request carries
-  `client_id` and no client assertion, and a token exchange still names the
-  gateway as the actor with an assertion. With
-  `tls_client_certificate_bound_access_tokens` its tokens are bound to the
-  certificate (§3): the grant holds the certificate's `x5t#S256`
-  thumbprint (§3.1), takes `Bearer` tokens, and refuses one whose stated
-  binding, a `cnf` in the token response or the `cnf` claim of a JWT access
-  token, names another certificate or another method, before it is cached
-  or sent (`ferrofed_engine::onward::mtls`). An opaque token states no
-  binding; the gateway has no introspection client of its own toward a
-  node's authorization server. A grant holds one `SenderConstraint`, `DPoP`
-  or the certificate, and a section that configures both is refused at
-  load.
+  (`NodeClients::from_snapshot_over`), `https` under every profile. The
+  `oauth` grant presents that identity (`resolve_with_tls`) and may then
+  authenticate with `tls_client_auth` or `self_signed_tls_client_auth`
+  (§2): the token request carries `client_id` and no client assertion, and
+  an `onward` table with `actor_assertion = true` still names the gateway as
+  the actor with an assertion. With `certificate_bound = true` its tokens
+  are bound to the certificate (§3): the crate holds the certificate's
+  `x5t#S256` thumbprint (§3.1), takes `Bearer` tokens, and refuses one whose
+  stated binding, a `cnf` in the token response or the `cnf` claim of a JWT
+  access token, names another certificate, before it is cached or sent. An
+  opaque token states no binding; the gateway has no introspection client
+  of its own toward a node's authorization server. A grant is bound one
+  way, by `DPoP` or by the certificate, and a section that configures both
+  is refused at load, as is an `oauth` table naming a certificate of its
+  own in a section with TLS material.
+
+The `oauth2` and `fapi2` tables of FerroFED's own client, and the section's
+`mtls_alias_hosts`, are refused at load, each naming the key of the `oauth`
+or `onward` table that replaces it, and so is `signing.assertion_lifetime_s`
+(#1749). Mapping them silently would hide that the grant's key now comes
+from `private_key_file` instead of `[signing]`; a released key keeps its
+named refusal, with the upgrade step in the release notes.
 
 **The Nuts track** (built with #88; Annex B §B.4, §13.3). An endpoint whose
 `[credentials]` name a `nuts` grant authenticates on the Dutch Generic
-Functions' GF-Authentication track instead of `oauth2`. The gateway is the
+Functions' GF-Authentication track instead of `oauth`. The gateway is the
 holder: its `did:web` identifier, a P-256 or P-384 key its DID document
 publishes under a DID URL, and the JWT Verifiable Credentials its
 authoritative sources issued it, each configured with the input descriptor it
@@ -1282,7 +1305,7 @@ the DID, `aud` the issuer, `nbf` to `exp` five seconds, a fresh `nonce`
 (RFC021 §4.2); and `grant_type=vp_token-bearer` with the presentation, the
 submission and the scope. The token is always `DPoP`-bound (GFI-005): the
 crate takes a `DpopProver` trait, which the engine implements over the
-endpoint's `Prover` in the authorization server's role
+endpoint's `ferrohealth-smart` `DpopKey` in the authorization server's role
 (`ferrofed_engine::onward::grant::nl::nuts::AuthorizationProver`), so the same key and
 the same `DPoP` code prove the token request and every node request through
 the endpoint's `NodeProver`. A demanded nonce is answered once with a new
@@ -1298,64 +1321,55 @@ user (built with #539; the IG's Localization page, GFI-005): the engine's
 authorizer of `nl-generic-functions`' NVI client, which asks it for the
 `Authorization` and `DPoP` headers of each search, handing it the URL
 without the query that holds the pseudonym, and tells it every answer, so a
-`401` drops the token and a demanded nonce is answered once. An `oauth2` or
-`fapi2` grant for the NVI is refused: the IG defines none for the
-Localization Service.
+`401` drops the token and a demanded nonce is answered once. An `oauth`
+grant for the NVI is refused: the IG defines none for the Localization
+Service.
 
-**The FAPI 2.0 grant** (built with #497; Annex B §B.4a, §13.3, §13.4). An
-endpoint whose `[credentials]` name a `fapi2` grant authenticates to an
-authorization server under the FAPI 2.0 Security Profile, the harmonised
-BgZ/eOverdracht track's choice (the VWS memo, concept v0.9, §B.4a.2). The
-grant is generic FAPI 2.0 in `ferrofed_engine::onward::grant::fapi2`; the track is
-a configuration of it, with no branch for a region:
+**The FAPI 2.0 grant** (built with #497, onto the crate with #1749; Annex B
+§B.4a, §13.3, §13.4). A node whose `oauth` table sets
+`security_profile = "fapi2"` authenticates to an authorization server under
+the FAPI 2.0 Security Profile, the harmonised BgZ/eOverdracht track's choice
+(the VWS memo, concept v0.9, §B.4a.2). The grant is generic FAPI 2.0 in
+`ferrohealth-smart`'s `client::fapi2`; the track is a configuration of it,
+with no branch for a region:
 
-- **discovery:** at the first token request the metadata is read once from
-  the issuer's RFC 8414 §3.1 well-known URL over the node transport and kept
-  for the provider's life; a failed read is not kept. It is held to the
-  issuer with the checks the Nuts grant built, held for both tracks in the
-  engine's `onward::issuer` (`Issuer`:
-  the canonical issuer, the identical-`issuer` check of RFC 8414 §3.3, the
-  same-origin endpoint check, and the refusal of a repeated name), and it
-  must list the grant's client authentication method (`private_key_jwt`
-  with `ES256`, or the RFC 8705 method), `client_credentials` and, for an
-  exchanging grant, token exchange, every configured
-  `authorization_details` type (RFC 9396 §10), `ES256` for `DPoP` when it
-  lists `DPoP` algorithms and the grant uses `DPoP`, and
+- **discovery:** at the first token request the crate reads the metadata
+  once from the issuer's RFC 8414 §3.1 well-known URL over the node
+  transport and keeps it; a failed read is not kept. It is held to the
+  issuer (the identical-`issuer` check of RFC 8414 §3.3, the same-origin
+  endpoint check, and the refusal of a repeated name), and it must list the
+  grant's client authentication method and signing algorithm,
+  `client_credentials` and, for an `onward` table, token exchange, every
+  configured `authorization_details` type (RFC 9396 §10), the `DPoP` key's
+  algorithm when it lists `DPoP` algorithms, and
   `tls_client_certificate_bound_access_tokens` as `true` for a grant bound
   to its certificate (RFC 8705 §3.3). A grant that uses mutual TLS takes
   the `token_endpoint` of `mtls_endpoint_aliases` in preference (RFC 8705
   §5), held to the issuer's origin as the other endpoint is, or to an
-  `https` host the endpoint's `mtls_alias_hosts` names (#560; our own
-  design, since RFC 8705 §5 places an alias on any host). RFC 8414 §2
-  defaults read strictly: an omitted method list is `client_secret_basic`,
-  an omitted grant list `authorization_code` and `implicit`;
-- **client authentication:** `private_key_jwt` (FAPI 2.0 §5.3.2.1), the
-  same RFC 7523 assertion as `oauth2` with `aud` the issuer as one string
-  (§5.3.3.1), signed ES256 with a P-256 key of the grant's own, since
-  §5.4.1 admits PS256, ES256 and EdDSA and the `[signing]` key is ES384.
-  The key's public half is published in the gateway's JWK Set beside the
-  `[signing]` keys (§5.4.2; §B.4a.2), so a `fapi2` grant requires
-  `[signing]`. MTLS, the profile's other method, is built with #492:
-  `client_auth = "tls_client_auth"` or `"self_signed_tls_client_auth"`
-  with the node section's certificate, and then a client key is needed
-  only to sign a token exchange's actor token (`Fapi2Security`);
-- **sender-constraining:** `DPoP` with a P-256 key, through the engine's
-  `Prover` as for `oauth2`, or, with #492, the node section's certificate
-  (`tls_client_certificate_bound_access_tokens`, RFC 8705 §3), never both
-  (§5.3.2.1 requires MTLS or `DPoP`);
+  `https` host the table's `mtls_alias_hosts` names (#560; our own design,
+  since RFC 8705 §5 places an alias on any host). RFC 8414 §2 defaults read
+  strictly: an omitted method list is `client_secret_basic`, an omitted
+  grant list `authorization_code` and `implicit`;
+- **client authentication:** `private_key_jwt` (FAPI 2.0 §5.3.2.1) with
+  `assertion_audience = "issuer"` (§5.3.3.1), signed PS256, ES256 or EdDSA
+  (§5.4.1), so a P-384 key is refused. The key's public half is published
+  in the gateway's JWK Set beside the `[signing]` keys (§5.4.2; §B.4a.2).
+  MTLS, the profile's other method, is `client_auth = "tls_client_auth"` or
+  `"self_signed_tls_client_auth"` with the node section's certificate;
+- **sender-constraining:** `dpop_key_file` or `certificate_bound = true`,
+  one of them required (§5.3.2.1 requires MTLS or `DPoP`);
 - **authorization details:** an optional RFC 9396 `authorization_details`
-  value per endpoint, configured as JSON text, held to the §2 shape and sent
-  as written in every token request (§6); a grant that asks for some takes
-  only a token response that states the details granted (§7), and a
-  refusal with `invalid_authorization_details` names that code. A grant
-  asks for a scope, details, or both, never neither (FAPI 2.0 §5.3.3.1,
-  least privilege);
-- **token exchange:** per verified caller where the endpoint's `grant` is
-  `token_exchange`, through `onward::grant::exchange` at the discovered token
-  endpoint, with the same caching, scope narrowing and withheld-identifier
-  refusal.
+  value, configured as JSON text and sent as written in every token request
+  (§6); a grant that asks for some takes only a token response that states
+  the details granted (§7), and a refusal with
+  `invalid_authorization_details` names that code. A grant asks for a
+  scope, details, or both, never neither (FAPI 2.0 §5.3.3.1, least
+  privilege);
+- **token exchange:** per verified caller through the node's `onward` table
+  at the discovered token endpoint, with the same caching, scope narrowing
+  and withheld-identifier refusal.
 
-The authorization code grant is refused at load: it needs a user agent to
+The authorization code grant is not offered: it needs a user agent to
 redirect, with PAR (RFC 9126) and PKCE (FAPI 2.0 §5.3.2.2, §5.3.3.2). The
 purpose of use and organisation type travel as the endpoint's configured
 `authorization_details`, a declaration of the gateway's organisation the
@@ -1470,10 +1484,11 @@ section per obligation:
    node, and is required by default.
 4. **What the token is bound to.** Bearer by default at both hops, and
    sender-constrained toward a node where the deployment configures it: an
-   `oauth2` grant with a `dpop_key_file` binds its tokens with DPoP (#439,
-   on the client since #448), and the Nuts grant (#88) and the FAPI 2.0
-   grant (#497) always do; an `oauth2` or `fapi2` grant may bind them to the
-   gateway's TLS client certificate instead (RFC 8705 §3, #492). A
+   `oauth` grant with a `dpop_key_file` binds its tokens with DPoP (#439,
+   on the client since #448, on `ferrohealth-smart` since #1749), and the
+   Nuts grant (#88) and the FAPI 2.0 profile (#497) always do; an `oauth`
+   grant may bind them to the gateway's TLS client certificate instead (RFC
+   8705 §3, #492). A
    transport identity is never read as a caller's organisation identity.
    The gateway's own certificate is read as its organisation identity
    toward a node only where the deployment declares it, by giving that
@@ -2429,7 +2444,7 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, and the `DefinitionStore` trait; a leaf | `openehr-base` | the operator documents, the engine, identity, any storage implementation |
 | `app/ferrofed-operator-api` | the wire documents the gateway writes and the operator console reads (#1489): the reports of the read-only operator surface (`operator`), the dependency report (`health`), the console's members and resources (`console`, `resource`), the configuration revisions (`revision`), the running configuration (`running`) and the manufacturer record (`manufacturer`) | `ferrofed-registry` (the ids, the snapshot, the incidents and the replica the documents name) | the engine, identity, the server, any storage implementation |
 | `app/ferrofed-identity` | the role traits of section 6 and `PatientRef` (`role`), the adapters that plug `ihe-iti` (`ihe`, feature `ihe`) and `nl-generic-functions` (`nl`, feature `nl`) into the seams, the resolution bindings of a client session (`session`), the one HTTP client and TLS type of the identity services (`fhir`), and the deployment profile (`profile`) | `ferrofed-registry` (the ids and the snapshot the seams name), the binding crates a deployment enables | the engine, any storage implementation |
-| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, the calls to one node (`single_node`: forwarding on `Client::forward`, the admission check's EHR calls and the ask-all probe), the budgets, the completeness decision, follow-up routing on `creating_system_id`, the onward grants (`onward::grant`: client credentials, token exchange, FAPI 2.0 and, under feature `nl`, the Nuts grant) beside the token request, keys and sender constraints they share, and the signed caller token (`conveyance`) (#81, #82); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `jsonwebtoken`, `ferrohealth-smart` (with the `oauth2` scopes) | any storage implementation (#40), the server |
+| `app/ferrofed-engine` | dispatch and fan-out on `rest-client`, the calls to one node (`single_node`: forwarding on `Client::forward`, the admission check's EHR calls and the ask-all probe), the budgets, the completeness decision, follow-up routing on `creating_system_id`, the onward grants (`onward::upstream`, the `ferrohealth-smart` client-credentials token as a node's credentials provider; `onward::grant`: the onward lane, the per-caller subject token and, under feature `nl`, the Nuts grant), the node's `DPoP` prover (`dispatch::dpop`), and the signed caller token (`conveyance`, on the crate's `KeyRing`) (#81, #82, #1749); reads the registry through the snapshot only | `openehr-federation` (`aql`, `merge`), `ferrofed-registry`, `ferrofed-identity`, `openehr-its` (`rest-client`), `jsonwebtoken`, `ferrohealth-smart` (the OAuth 2.0 client, its key ring and the scopes) | any storage implementation (#40), the server |
 | `app/ferrofed-eehrxf` | the interoperability component's federation half (decision A59): the reserved namespace of the gateway's own stored queries (`reserved`), the patient summary's section queries (`patient_summary`), one per crosswalk section openEHR content feeds, each an AQL syntax tree printed with `printer::to_aql` (decision A74, #776), the patient summary document assembled from the members' answers with the deployment's FHIRconnect mappings (`summary`), and the requests, `CapabilityStatement` and `OperationOutcome` of the Annex II 2.1 FHIR face (`face`, #809), and the terminology server the component asks, through `ferrobridge-term` (`terminology`, #925) | `eehrxf` (`patient-summary`, `openehr`), `fhir-types` (`r4`, `resources`), `fhirconnect`, `ferrobridge-term`, `ferrofed-registry` (the stored definition), `openehr-query`, `jiff` | `ehds-logging`, any storage implementation, the server |
 | `app/ferrofed-server` (binary `ferrofed`) | configuration, the axum façade on `rest-server`, client authentication (`ferrohealth-smart` with its `openehr` grants, #80, #1174), the read-only operator surface under `{base}/operator/` behind `auth.product_scope` (#276), the Annex II 2.1 FHIR face on its own `{fhir-base}` (`fhir`, `facade::summary`, #809), telemetry, health, the storage implementations, the bindings (`src/binding/`, one module and one feature each), wiring | everything | is never depended on |
 | `app/ferrofed-console` (binary `ferrofed-console`) | the operator console (decisions A55, A104, A111 and A112): every page one document its server draws whole with FerroUI, the OpenID Connect sign-in with its code exchange, ID Token check and server-side session, the operator views (#276), and the client of the gateway's public surface on `rest-client` | `openehr-federation` (the `OPTIONS {base}/` body), `openehr-its` (`rest-client`), `ferrofed-operator-api` (the operator reports and configuration resources), `ferrofed-registry` (the ids and snapshot types the documents name), `jsonwebtoken`, `ferrohealth-ui`, `axum` | the engine, the identity crate, the server, any storage implementation |
@@ -3055,6 +3070,7 @@ R4 is #23, #25 and #27).
 | A118 | No Basic caller and no per-issuer caller policy of FerroFED's own [#1704, of #1615, amending A103 and A117] | the gateway admits no HTTP Basic caller: `[[auth.basic.users]]` refuses the start naming the user, and the two machine lanes name client-credentials clients of an `[[auth.issuer]]` (`metrics.scrape_clients`, `pmir.feed_clients`), admitted only for a token the crate classifies as a system's; `[trust.issuer.requester]`, `[trust.issuer.assurance]` and `client_tokens_act_for_professional` refuse the start naming their replacements: the requester is read from the NL fields of an `[[auth.federation]]` table, the level from the crate's `[auth.issuer.assurance]`, and a system's token reaches no patient data whatever it names; the engine keeps no assurance type of its own | FerroAUTH#215: a Basic credential is a person's and a machine uses the client-credentials grant (RFC 6749 §4.4); the family's one classification lives in FerroAUTH; Regulation (EU) 2025/327 Annex II 3.1; the owner ruled on #1643 that FerroFED has no 1.0, so no key is kept for compatibility | decided on #1615 (2026-11-07) |
 | A119 | Writing the discharge report on the FHIR face [#1405, extending A114] | a `[[fhir.report]]` entry names a category the gateway writes reports of from the members' compositions (`Laboratory-Reports` or `Discharge-Reports`) with the operational template they are of, an OPT 1.4 or an ADL 2 template with its archetypes, compiled at start; a `Laboratory-Reports` entry takes the place of its `[[fhir.receive]]` template; with a `Discharge-Reports` entry the document list runs the reserved `eu.ferrofed.eehrxf::discharge-report`, every whole composition of `openEHR-EHR-COMPOSITION.transfer_summary.v1` with its uid and template id, on every member the patient resolves at that does not serve the category itself, under A114's completeness, listing and signed read, each composition one `EehrxfMhdDocumentReference` typed `18842-5` in `Discharge-Reports` whose read writes a `bundle-eu-hdr` through the shipped HDR mapping in the composition's language, with a hospital course section saying the record holds none the gateway writes; a search admitting only `100719-4` asks no member the query; a discharge report is received under A84 through a `Discharge-Reports` `[[fhir.receive]]` entry, whose template may be ADL 2 with its archetypes, over the HDR closure with the Xt-EHR models package (FHIR 5.0.0) held unread by FerroBRIDGE's validator (#1714); the configuration, the query by composition archetype, the listed type and the course text are our own design (no specification governs them) | HL7 Europe Hospital Discharge Report 1.0.0 `composition-eu-hdr` fixes `Composition.type` to LOINC `34105-7` and requires a discharge summary or a hospital course section (`cmp-hdr-2`), and `bundle-eu-hdr` requires `Bundle.language`; the EU Health Data API 1.0.0-ballot `eehrxf-document-type-discharge-report-vs` holds `18842-5` and `100719-4` and not `34105-7`; the template's entries are those other records hold, so only its composition archetype tells a discharge report; openEHR AM 2.4 AOM2 §3.6.6 has an operational template specialise its parent, which the mapping reads its root by | decided on #1405 (2026-11-07, by the worker under the orchestrator's standing delegation); the content-loss rating of I-19 is the owner's (#1668) |
 | A120 | Writing the imaging report on the FHIR face [#1406, extending A119] | a `Medical-Imaging` `[[fhir.report]]` entry declares the template of the members' imaging compositions; the document list runs the reserved `eu.ferrofed.eehrxf::imaging-report`, every whole composition containing `openEHR-EHR-OBSERVATION.imaging_exam_result.v1`, under A119's rules, each composition one `EehrxfMhdDocumentReference` typed `85430-7` in `Medical-Imaging` whose read writes a `BundleReportEuImaging` through the shipped imaging mapping, the imaging study section listing the mapped study and the order, history and procedure sections empty as `unavailable`; a search admitting only `18748-4` asks no member the query; receiving an imaging report waits on the imaging package's dependency closure (#1716); the three written categories share one `Writes` mapping per category and one `ServedError`; the query by entry archetype, the listed type and the empty reasons are our own design (no specification governs them) | HL7 Europe Imaging Report 1.0.0-ballot `CompositionEuImaging` requires its first four sections and, by `eu-imaging-composition-1`, an entry or an `emptyReason` in each; the EU Health Data API 1.0.0-ballot `eehrxf-document-type-medical-imaging-vs` holds `85430-7` and `18748-4`; `openEHR-EHR-COMPOSITION.report-result.v1` roots laboratory reports too, so only the entry tells an imaging report | decided on #1406 (2026-11-07, by the worker under the orchestrator's standing delegation); the content-loss rating of I-20 is the owner's (#1668) |
+| A121 | Every onward grant on `ferrohealth-smart`'s client [#1749, amending A103 and A108] | FerroFED holds no OAuth 2.0 client of its own: every node grant is the `[credentials."<id>".oauth]` table, fetched and cached by the crate's `ClientCredentials` and `TokenSource`, with `DPoP` on its `DpopKey`, RFC 8705 client authentication and certificate binding by the node section's `tls` identity, the FAPI 2.0 profile as `security_profile = "fapi2"`, and RFC 9396 `authorization_details`; per-caller token exchange is the node's `onward` table with `actor_assertion = true`; `[signing]`, the conveyance signer and the JWK Set run on the crate's `KeyRing`; the `oauth2` and `fapi2` tables, the section's `mtls_alias_hosts` and `signing.assertion_lifetime_s` are refused at load, each naming its replacement, and a node's grant takes no client secret | one client for the product family, so a fix lands once (A103); a silent mapping would hide that the grant's key moves from `[signing]` to `private_key_file`, so a released key keeps a named refusal; N25 for the gateway authenticating to a node by its own key or certificate | decided (#1749, 2026-11-09) |
 
 ## 16. Regulatory status
 

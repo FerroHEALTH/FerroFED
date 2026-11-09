@@ -20,7 +20,7 @@ use axum::response::Response;
 use ferrofed_engine::conveyance::caller::{Principal, Purpose, Verification};
 use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::conveyance::{self, Conveyance};
-use ferrofed_engine::onward::grant::exchange::SubjectToken;
+use ferrofed_engine::onward::grant::on_behalf::SubjectToken;
 use openehr_federation::id::FederationId;
 
 use crate::auth::caller::{Caller, VerifiedBy};
@@ -61,17 +61,8 @@ pub(crate) fn signer(settings: &Settings, id: &FederationId) -> Option<Signer> {
     let signing = settings.signing.as_ref()?;
     let mut signer = Signer::new(Arc::clone(&signing.keys), id.as_str());
     for (endpoint, scheme) in &settings.credentials {
-        match scheme {
-            Scheme::OAuth2(grant) => {
-                signer = signer.with_issuer_at(endpoint.clone(), grant.client_id());
-            }
-            Scheme::Fapi2(grant) => {
-                signer = signer.with_issuer_at(endpoint.clone(), grant.client_id());
-            }
-            Scheme::Oauth { grant, .. } => {
-                signer = signer.with_issuer_at(endpoint.clone(), &grant.client_id);
-            }
-            _ => {}
+        if let Scheme::Oauth { grant, .. } = scheme {
+            signer = signer.with_issuer_at(endpoint.clone(), &grant.client_id);
         }
     }
     Some(signer)

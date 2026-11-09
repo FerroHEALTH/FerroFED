@@ -313,11 +313,12 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   reserved namespace `eu.ferrofed.eehrxf`, which the server's registry
   holds beside a deployment's own, #776) and
   `ferrofed-engine` (dispatch, fan-out, budgets, follow-up routing, the calls
-  to one node in `single_node`, the onward grants in `onward::grant`
-  (client credentials, token exchange, FAPI 2.0, the onward lane over
+  to one node in `single_node`, the gateway's own token in
+  `onward::upstream` over `ferrohealth-smart`'s client-credentials client,
+  the onward grants in `onward::grant` (the onward lane over
   `ferrohealth-smart`'s onward client, #1703, and the Nuts grant under
-  `nl`) beside the DPoP and mutual TLS sender constraints, the signed caller
-  token in `conveyance`, and the outbound identifier-hygiene gate every
+  `nl`), the node's DPoP prover in `dispatch::dpop`, with no OAuth 2.0
+  client of its own (#1749), the signed caller token in `conveyance`, and the outbound identifier-hygiene gate every
   request to a node passes, #45).
 - `app/ferrofed-server`: the `ferrofed` binary, a thin `main.rs` over the
   library run path; never published. It carries the server shape (#29):

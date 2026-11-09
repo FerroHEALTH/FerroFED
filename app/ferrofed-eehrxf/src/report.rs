@@ -9,10 +9,11 @@
 //! ([`crate::imaging`]).
 //!
 //! Each is a document the gateway authors with its `Device` and the
-//! operator's `Organization`, about the `Patient` an identifier names, whose
-//! mapped content one `Provenance` traces to the member it was read at.
-//! The authorship and the provenance are our own design: no specification
-//! governs them.
+//! operator's `Organization`, about the `Patient` an identifier names and
+//! the identity binding describes, whose mapped content one `Provenance`
+//! traces to the member it was read at, which the `Composition` names an
+//! author too. The authorship and the provenance are our own design: no
+//! specification governs them.
 
 use eehrxf::category::Category;
 use eehrxf::document::discharge::HDR_BUNDLE;
@@ -21,10 +22,11 @@ use eehrxf::document::laboratory::LAB_BUNDLE;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::{Project, UnknownContext};
+use ferrofed_identity::role::header::{PatientHeader, PersonName};
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::device::{Device, DeviceDeviceName};
-use fhir_types::r4::identifier::Identifier;
+use fhir_types::r4::human_name::HumanName;
 use fhir_types::r4::patient::Patient;
 use fhir_types::r4::provenance::{Provenance, ProvenanceAgent};
 use fhir_types::r4::resource::Resource;
@@ -35,13 +37,14 @@ use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 
 use crate::prescriptions::mapped::{MapModeError, Template};
 use crate::summary::Organisation;
-use crate::summary::resources::{organization, reference};
+use crate::summary::resources::{absent, header_patient, human_name, organization, reference};
 
 /// What one served report names beside its composition.
 ///
 /// It is the gateway's absolute FHIR base, the document's identifier, a
 /// `urn:uuid:` URN, when it is written, a FHIR `instant`, the patient by an
-/// identifier, the operator and the member it was read at.
+/// identifier with what the identity binding holds of them, the operator
+/// and the member it was read at.
 #[derive(Debug, Clone, Copy)]
 pub struct Report<'a> {
     /// The absolute FHIR base the entries are named under.
@@ -52,6 +55,9 @@ pub struct Report<'a> {
     pub timestamp: &'a str,
     /// The patient, as a system and a value.
     pub patient: (&'a str, &'a str),
+    /// What the identity binding holds of the patient; an element it does
+    /// not hold is written with a `data-absent-reason` of `unknown`.
+    pub header: &'a PatientHeader,
     /// The operator, the document's author beside the gateway.
     pub operator: &'a Organisation,
     /// The member the composition was read at.
@@ -109,17 +115,8 @@ pub(crate) fn authored(
     software: &str,
     (mapping, composition): (&Mapping, &str),
 ) -> Result<ToFhirResponse, ServedError> {
-    let (system, value) = report.patient;
     let subject = document
-        .with_patient(Patient {
-            id: Some(String::from("patient")),
-            identifier: vec![Identifier {
-                system: Some(system.into()),
-                value: Some(value.into()),
-                ..Identifier::default()
-            }],
-            ..Patient::default()
-        })
+        .with_patient(patient(report))
         .map_err(ServedError::Document)?;
     let operator = document.full_url("Organization", "operator");
     let device = document
@@ -153,9 +150,34 @@ pub(crate) fn authored(
         .map_err(ServedError::Run)
 }
 
-/// Adds to `document` the member `report` names as an `Organization`, and
-/// one `Provenance` naming it as the source of `targets`, the `fullUrl`s of
-/// what the run mapped.
+/// The `Patient` of `report`: the identifier it is named by and every
+/// element the identity binding holds, as the patient summary writes them.
+///
+/// A name or a birth date the binding does not hold is written with a
+/// `data-absent-reason` of `unknown` in place of a value, never filled in.
+fn patient(report: Report<'_>) -> Patient {
+    let mut patient = header_patient("patient", report.patient, report.header);
+    // NOTE: HL7 Europe Base 2.0.1 patient-eu-core Patient.name 1..*, eu-pat-1: a name with no
+    // family, given or text SHALL carry a data-absent-reason extension instead.
+    patient.name = report
+        .header
+        .names
+        .iter()
+        .filter(|name| name.names())
+        .map(human_name)
+        .collect();
+    if patient.name.is_empty() {
+        patient.name.push(HumanName {
+            extension: vec![absent()],
+            ..human_name(&PersonName::default())
+        });
+    }
+    patient
+}
+
+/// Adds to `document` the member `report` names as an `Organization` the
+/// `Composition` names an author, and one `Provenance` naming it as the
+/// source of `targets`, the `fullUrl`s of what the run mapped.
 ///
 /// # Errors
 ///
@@ -165,21 +187,21 @@ pub(crate) fn sourced(
     report: Report<'_>,
     targets: &[String],
 ) -> Result<(), DocumentError> {
-    let member = document.add(&[Resource::Organization(Box::new(organization(
+    // NOTE: FHIR R4 documents.html §3.3.1 admits only what the Composition references; HL7
+    // Europe HDR 1.0.0 composition-eu-hdr Composition.author names who answers for the content.
+    let member = document.with_author(&Resource::Organization(Box::new(organization(
         "member",
         report.member,
-    )))])?;
-    if let Some(member) = member.first() {
-        document.add(&[Resource::Provenance(Box::new(Provenance {
-            target: targets.iter().map(|url| reference(url)).collect(),
-            recorded: report.timestamp.into(),
-            agent: vec![ProvenanceAgent {
-                who: reference(member),
-                ..ProvenanceAgent::default()
-            }],
-            ..Provenance::default()
-        }))])?;
-    }
+    ))))?;
+    document.add(&[Resource::Provenance(Box::new(Provenance {
+        target: targets.iter().map(|url| reference(url)).collect(),
+        recorded: report.timestamp.into(),
+        agent: vec![ProvenanceAgent {
+            who: reference(&member),
+            ..ProvenanceAgent::default()
+        }],
+        ..Provenance::default()
+    }))])?;
     Ok(())
 }
 

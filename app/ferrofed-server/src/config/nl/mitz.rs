@@ -161,8 +161,8 @@ impl fmt::Debug for MitzSettings {
 /// [`BindingFault::Mitz`] for a purpose other than `TREAT` or `COC` or the
 /// pseudonymised BSN listed in `namespaces`, [`Error::Url`],
 /// [`Error::UrlCredentials`] and [`Error::Cleartext`] for the URL and the
-/// token endpoint, [`CredentialsFault::ServiceGrantNotHere`] for an
-/// `oauth2`, Nuts or FAPI 2.0 grant,
+/// token endpoint, [`CredentialsFault::ServiceGrantNotHere`] for a Nuts
+/// grant,
 /// [`BindingFault::PrefilterBudget`] for a budget that, with the demographics
 /// step's and the localizer's, leaves no time to resolve, and the errors of a
 /// secret or a file that cannot be read.

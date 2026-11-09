@@ -320,27 +320,28 @@ file = "/run/secrets/nuts-organization-credential.jwt"
 # A FAPI 2.0 authorization server, the BgZ/eOverdracht track (Annex B
 # §B.4a): an ES256 private_key_jwt assertion naming the issuer, a DPoP-bound
 # token, and RFC 9396 authorization_details.
-[credentials."cdr-e".fapi2]
+[credentials."cdr-e".oauth]
 issuer = "https://as.cdr-e.example.org"
-grant = "client_credentials"
+security_profile = "fapi2"
 client_id = "urn:oid:2.16.528.1.1007.3.3.<URA>"
-client_key_file = "/run/secrets/fapi2-client.pem"
+client_auth = "private_key_jwt"
+assertion_audience = "issuer"
+private_key_file = "/run/secrets/fapi2-client.pem"
 dpop_key_file = "/run/secrets/cdr-e-dpop.pem"
 authorization_details = '''[{"type": "nl-gis-v1", "purpose_of_use": "http://terminology.hl7.org/CodeSystem/v3-ActReason|TREAT"}]'''
 
 # The gateway's signing keys, which sign the caller's identity on every
-# request to a node and every client assertion, and are published as a JWK
-# Set. Required whenever a registry is configured, by registry.document or
-# by [registry.mcsd].
+# request to a node, and are published as a JWK Set beside every oauth
+# grant's client key. Required whenever a registry is configured, by
+# registry.document or by [registry.mcsd].
 [signing]
 key_file = "/run/secrets/ferrofed-signing-key.pem"
 # previous_key_file = "/run/secrets/ferrofed-signing-key-previous.pem"
 # next_key_file = "/run/secrets/ferrofed-signing-key-next.pem"   # published ahead, never signs
 # next_key_algorithm = "ES256"   # unset, the current key's algorithm
 jwks_uri = "https://gateway.example.org/.well-known/jwks.json"
-assertion_lifetime_s = 300    # at most 300
 node_jwks_cache_s = 3600      # how long the nodes cache the JWK Set
-rotation_overlap_s = 3900     # at least assertion_lifetime_s + node_jwks_cache_s
+rotation_overlap_s = 3900     # at least 300 + node_jwks_cache_s
 ```
 
 ### Secrets, inline or from a file
@@ -369,8 +370,8 @@ password in it is refused naming the key, as an endpoint URL in the registry
 document is. Its credentials go in `[pixm.manager.credentials]`, which takes
 a user and a password, or the `oauth` client-credentials grant
 authenticated by a client secret or a client assertion
-([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)), never an
-`oauth2`, `nuts` or `fapi2` grant. The credentials of `[pdqm]`, `[pmir]` and
+([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)), never a
+`nuts` grant. The credentials of `[pdqm]`, `[pmir]` and
 `[registry.mcsd]` take the same. Each grant a node's section can name is
 described in [Onward credentials](onward-credentials.md). The credentials of
 `[nl_gf.mitz]` take the same: a user and a password, or the `oauth` grant,
@@ -378,7 +379,7 @@ whose token each question carries as a bearer token. A grant
 a section does not take is refused at load, naming it, and never read as no
 credential.
 `[nl_gf.nvi.credentials]` takes the `nuts` grant as well, and refuses
-`oauth`, `oauth2` and `fapi2`
+`oauth`
 ([Dutch localization](localization.md#dutch-localization-nl_gfnvi)).
 
 ### A PIX Manager asked by `GET` or `POST`
@@ -465,14 +466,14 @@ code 78 and one line naming the URL's key and what would travel over it,
 never a value. The rule covers:
 
 - the URL of a registry endpoint that has a `[credentials."<id>"]` section,
-  which receives its basic credentials or the access token its `oauth` or
-  `oauth2` grant obtains;
-- the `token_endpoint` of an `oauth` or `oauth2` section, which receives the
-  client secret or the client assertion;
+  which receives its basic credentials or the access token its `oauth`
+  grant obtains;
+- the `token_endpoint` of an `oauth` section, which receives the client
+  secret or the client assertion;
 - the `authorization_server` of a `nuts` section, which receives the
   gateway's credentials in a Verifiable Presentation;
-- the `issuer` of a `fapi2` section, whose token endpoint receives the
-  client assertion and, under token exchange, the callers' tokens;
+- the `issuer` of a node's `oauth` section, whose token endpoint receives
+  the client assertion and, under an `onward` table, the callers' tokens;
 - the `url` of every PIX Manager, which is asked for patient identifiers
   with or without `[pixm.manager.credentials]`;
 - the `url` of `[pdqm]`, the PDQm Supplier, which is sent the patient

@@ -40,12 +40,19 @@ or `504` naming it, and is named in an `outcome` entry under `partial`
 Reading that URL asks the member alone for the composition
 (`GET {base}/ehr/{ehr_id}/composition/{uid}`) and writes it as an HL7
 Europe Laboratory Report 2.0.0 `Bundle-eu-lab` document: the gateway's
-`Device` and the operator author it, its `DiagnosticReport-eu-lab` and
-results are the mapping's, its results are listed in a `Laboratory
-studies` section, one `Provenance` names the member, and its `Patient` is
-the identifier the identity binding names behind the `ehr_id` in
-`fhir.receive_namespaces` (`424` when it names none). The report is
-written on each read and kept nowhere. Each list and read is recorded
+`Device`, the operator and the member author it, its
+`DiagnosticReport-eu-lab` and results are the mapping's, its results are
+listed in a `Laboratory studies` section, one `Provenance` names the
+member, and its `Patient` is the identifier the identity binding names
+behind the `ehr_id` in `fhir.receive_namespaces` (`424` when it names
+none). The `Patient` carries the header the demographics binding holds, as
+the patient summary's does: its names, birth date, gender, addresses and
+telecoms. A name or a birth date the binding does not hold is written with
+a `data-absent-reason` of `unknown`, which HL7 Europe Base
+`patient-eu-core` admits in place of each (`eu-pat-1`); a binding that
+cannot answer answers `502` or `504`, and one whose answer names no one
+patient `422`, with no report written. The report is written on each read
+and kept nowhere. Each list and read is recorded
 under `Laboratory-Reports` in the access log.
 
 The component work behind these reports is FerroBRIDGE's, through the

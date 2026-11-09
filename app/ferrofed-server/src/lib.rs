@@ -105,7 +105,6 @@ pub mod state;
 pub mod store;
 pub mod stored;
 pub mod support;
-pub mod upstream;
 pub mod usage_report;
 
 use std::sync::Arc;

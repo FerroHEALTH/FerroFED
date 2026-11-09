@@ -13,18 +13,19 @@
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use ferrohealth_smart::client::cache::TokenSource;
+use ferrohealth_smart::client::binding::IssuedToken;
+use ferrohealth_smart::client::cache::{Clock, TokenSource};
 use ferrohealth_smart::client::{ClientCredentials, TokenError};
 use http::HeaderValue;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider};
-use secrecy::SecretString;
-
-/// The scheme of an RFC 6750 §2.1 bearer credential, with its separator.
-const BEARER: &str = "Bearer ";
 
 /// One upstream's token, cheap to share: every client of the upstream reads
 /// one cache.
+///
+/// `Debug` names the client, never a token or a secret.
 pub struct UpstreamToken {
+    /// The client the grant authenticates as.
+    client_id: String,
     /// The cache the client credentials grant fills.
     source: TokenSource,
     /// The `Authorization` value last handed out, which a `401` drops.
@@ -41,7 +42,25 @@ impl UpstreamToken {
     /// be built.
     pub fn new(credentials: ClientCredentials) -> Result<Self, TokenError> {
         Ok(Self {
+            client_id: credentials.client_id.clone(),
             source: TokenSource::new(credentials)?,
+            last: Mutex::new(None),
+        })
+    }
+
+    /// Returns the token of the grant `credentials` describe, its cache
+    /// read by `clock`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TokenError`] as [`UpstreamToken::new`] does.
+    pub fn with_clock(
+        credentials: ClientCredentials,
+        clock: Arc<dyn Clock>,
+    ) -> Result<Self, TokenError> {
+        Ok(Self {
+            client_id: credentials.client_id.clone(),
+            source: TokenSource::with_clock(credentials, clock)?,
             last: Mutex::new(None),
         })
     }
@@ -58,7 +77,9 @@ impl UpstreamToken {
 
 impl fmt::Debug for UpstreamToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("UpstreamToken").finish_non_exhaustive()
+        f.debug_struct("UpstreamToken")
+            .field("client_id", &self.client_id)
+            .finish_non_exhaustive()
     }
 }
 
@@ -66,17 +87,17 @@ impl fmt::Debug for UpstreamToken {
 impl CredentialsProvider for UpstreamToken {
     async fn credentials(&self) -> Result<Credentials, CredentialsError> {
         let token = self.source.token().await.map_err(CredentialsError::new)?;
-        let header = token.header().clone();
-        // NOTE: RFC 6750 §2.1, the cache renders the token as `Bearer <token>`, and the
-        // client takes the token alone, which it renders the same way.
-        let bare = header
-            .to_str()
-            .ok()
-            .and_then(|value| value.strip_prefix(BEARER))
-            .map(|value| SecretString::from(value.to_owned()))
-            .ok_or_else(|| CredentialsError::new(TokenError::Unusable))?;
-        *self.last.lock().unwrap_or_else(PoisonError::into_inner) = Some(header);
-        Ok(Credentials::bearer(bare))
+        let issued: &IssuedToken = (*token).as_ref();
+        let access = issued.access_token().clone();
+        // NOTE: RFC 9449 §7.1, a DPoP-bound token is sent under the DPoP scheme, each
+        // request proven by the node client's prover; any other under Bearer (RFC 6750 §2.1).
+        let credentials = if issued.dpop_key().is_some() {
+            Credentials::dpop(access)
+        } else {
+            Credentials::bearer(access)
+        };
+        *self.last.lock().unwrap_or_else(PoisonError::into_inner) = Some(token.header().clone());
+        Ok(credentials)
     }
 
     fn refused(&self) {

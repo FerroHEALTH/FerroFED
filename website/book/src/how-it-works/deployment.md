@@ -122,12 +122,13 @@ flowchart TB
   you read the registry from one instead of a document, is asked with ITI-90
   at start and with ITI-91 every refresh interval, off the clinical path
   ([The registry](../operate/registry.md#the-registry-read-from-an-mcsd-directory)).
-- **Each member's token endpoint**, where its `oauth2` section names one,
-  issues the gateway an access token for a client assertion the signing key
+- **Each member's token endpoint**, where its `oauth` section names one,
+  issues the gateway an access token for a client assertion its client key
   signs, and checks that assertion against `{base}/.well-known/jwks.json`.
-  Under token exchange the token is issued per verified caller, and with a
-  DPoP key it is bound to the gateway's key. A `nuts` or `fapi2` section
-  obtains the token on a track of the Dutch binding instead. A member
+  With an `onward` table beside it the token is issued per verified caller,
+  and with a DPoP key it is bound to the gateway's key. A `nuts` section, or
+  an `oauth` section under the FAPI 2.0 profile, obtains the token on a
+  track of the Dutch binding instead. A member
   without one is sent its static credential, if it has one
   ([Trust and keys](trust-and-keys.md),
   [Onward credentials](../operate/onward-credentials.md)).

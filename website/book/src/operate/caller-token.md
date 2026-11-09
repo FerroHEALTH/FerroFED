@@ -24,7 +24,7 @@ key's `kid` and `typ` `openehr-federation-client+jwt`. Its claims:
 
 | Claim | Value |
 |---|---|
-| `iss` | the gateway: the `client_id` of the endpoint's `oauth2` grant, the `iss` of its client assertions there, or else `federation.id` |
+| `iss` | the gateway: the `client_id` of the endpoint's `oauth` grant, the `iss` of its client assertions there, or else `federation.id` |
 | `aud` | the node's endpoint id in the registry |
 | `iat`, `exp` | seconds since the epoch; `exp` is 60 seconds after `iat` |
 | `jti` | a fresh version 4 UUID per token |

@@ -251,17 +251,16 @@ spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # default onward mechanism of the Federation Tier (§13.1), or a user and a
 # password. Leave an endpoint out when it needs none.
 # https://ferrofed.eu/docs/operate/onward-credentials.html#oauth-20-to-a-node
+# A node's grant authenticates by a private_key_jwt client assertion (RFC
+# 7523 §2.2), its public key published in the gateway's JWK Set, or by the
+# TLS client certificate of the section's tls table (RFC 8705 §2), never by
+# a client secret.
 [credentials."node-a-query".oauth]
 issuer = "https://auth.node-a.example.org"
 client_id = "ferrofed-gateway"
-client_auth = "client_secret_basic"
-client_secret_file = "/run/secrets/ferrofed/node-a-client-secret"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/ferrofed/node-a-client.pem"
 scope = "system/aql-*.s"
-# Or a private_key_jwt client assertion (RFC 7523 §2.2), its public key
-# published in the gateway's JWK Set:
-# client_auth = "private_key_jwt"
-# private_key_file = "/run/secrets/ferrofed/node-a-client.pem"
-# assertion_alg = "ES384"
 
 [credentials."node-b-query"]
 user = "ferrofed"

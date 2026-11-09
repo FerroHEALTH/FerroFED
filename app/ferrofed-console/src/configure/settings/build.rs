@@ -430,28 +430,28 @@ mod tests {
     fn a_credential_keeps_what_its_form_does_not_show_and_drops_the_other_grants()
     -> Result<(), Refused> {
         let held = held(Some(
-            r#"{ user = "old", tls = { trust_roots_file = "/run/roots.pem" }, oauth2 = { client_id = "a", extra = 1 } }"#,
+            r#"{ user = "old", tls = { trust_roots_file = "/run/roots.pem" }, oauth = { client_id = "a", extra = 1 } }"#,
         ))?;
-        assert_eq!(Grant::OAuth2, Grant::held(&held, &[]));
+        assert_eq!(Grant::Oauth, Grant::held(&held, &[]));
         let text = credentials(
             &held,
-            Grant::OAuth2,
+            Grant::Oauth,
             &[
-                row("oauth2.client_id", "gateway"),
-                row("oauth2.scope", "system/aql-*.s"),
-                row("oauth2.tls_client_certificate_bound_access_tokens", ""),
+                row("oauth.client_id", "gateway"),
+                row("oauth.scope", "system/aql-*.s"),
+                row("oauth.certificate_bound", ""),
                 row("tls.trust_roots_file", ""),
             ],
         )?;
         let built = super::held(Some(&text))?;
-        assert_eq!("gateway", shown(&built, "oauth2.client_id"));
-        assert_eq!("system/aql-*.s", shown(&built, "oauth2.scope"));
-        assert_eq!("1", shown(&built, "oauth2.extra"));
+        assert_eq!("gateway", shown(&built, "oauth.client_id"));
+        assert_eq!("system/aql-*.s", shown(&built, "oauth.scope"));
+        assert_eq!("1", shown(&built, "oauth.extra"));
         assert!(lookup(&built, "user").is_none(), "{text}");
         assert!(lookup(&built, "tls.trust_roots_file").is_none(), "{text}");
         assert!(lookup(&built, "tls").is_none(), "{text}");
         assert!(
-            lookup(&built, "oauth2.tls_client_certificate_bound_access_tokens").is_none(),
+            lookup(&built, "oauth.certificate_bound").is_none(),
             "{text}"
         );
         Ok(())
@@ -460,24 +460,21 @@ mod tests {
     #[test]
     #[expect(clippy::panic_in_result_fn, reason = "test assertions")]
     fn a_list_and_a_switch_are_written_as_their_types() -> Result<(), Refused> {
-        let mut hosts = row("mtls_alias_hosts", "");
+        let mut hosts = row("oauth.mtls_alias_hosts", "");
         hosts.values = vec![String::from("mtls.example.org"), String::new()];
         let text = credentials(
             &toml::Table::new(),
-            Grant::Fapi2,
-            &[
-                hosts,
-                row("fapi2.tls_client_certificate_bound_access_tokens", "true"),
-            ],
+            Grant::Oauth,
+            &[hosts, row("oauth.certificate_bound", "true")],
         )?;
         let built = held(Some(&text))?;
         assert_eq!(
             vec![String::from("mtls.example.org")],
-            listed(&built, "mtls_alias_hosts")
+            listed(&built, "oauth.mtls_alias_hosts")
         );
         assert_eq!(
             Some(&toml::Value::Boolean(true)),
-            lookup(&built, "fapi2.tls_client_certificate_bound_access_tokens")
+            lookup(&built, "oauth.certificate_bound")
         );
         Ok(())
     }

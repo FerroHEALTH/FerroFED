@@ -20,16 +20,16 @@ use std::time::Duration;
 use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::conveyance::caller::Principal;
 use ferrofed_engine::conveyance::signer::Signer;
-use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
-use ferrofed_engine::onward::{Grant, Scope, SystemClock};
+use ferrofed_engine::onward::upstream::UpstreamToken;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
-use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::client::assertion::{AssertionError, AssertionKey};
 use ferrohealth_smart::client::keys::{KeyRing, KeyRingError};
+use ferrohealth_smart::client::{ClientCredentials, Endpoint};
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::jwk::{Jwk, JwkSet, KeyAlgorithm};
-use openehr_its::rest::client::{CredentialsProvider, ReqwestTransport};
+use openehr_its::rest::client::CredentialsProvider;
+use url::Url;
 
 use crate::conveyed;
 
@@ -90,7 +90,7 @@ fn a_key_on_neither_curve_is_refused_and_quotes_nothing() -> TestResult {
     Ok(())
 }
 
-/// A P-256 `[signing]` key signs the client assertion ES256, and the token
+/// A P-256 key signs the client assertion ES256, and the token
 /// endpoint verifies it against the published set (RFC 7523 §3).
 // conformance: CP-17
 #[tokio::test]
@@ -99,20 +99,13 @@ async fn an_es256_signing_key_signs_the_client_assertion_es256() -> TestResult {
     let keys = ring(read(&oauth::Curve::P256.pem()?)?);
     endpoint.trust(serde_json::from_value(keys.published())?);
     endpoint.expect_assertion(Algorithm::ES256, &endpoint.token_url());
-    let grant = Grant::new(
-        &SecretUrl::new(endpoint.token_url()),
-        CLIENT_ID,
-        Scope::parse("system/aql-*.s")?,
-    )?;
-    let provider = ClientCredentials::new(
-        EndpointId::new(NODE)?,
-        grant,
+    let mut grant = ClientCredentials::with_key_ring(
+        Endpoint::Token(Url::parse(&endpoint.token_url())?),
+        CLIENT_ID.to_owned(),
         Arc::clone(&keys),
-        (Duration::from_secs(300), Duration::from_secs(5)),
-        ReqwestTransport::with_timeout(Duration::from_secs(10))?,
-        Arc::new(SystemClock),
     );
-    provider.credentials().await?;
+    grant.scope = Some("system/aql-*.s".to_owned());
+    UpstreamToken::new(grant)?.credentials().await?;
     let [assertion] = endpoint
         .assertions()
         .try_into()

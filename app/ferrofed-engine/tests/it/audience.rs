@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The `aud` of the `oauth2` grant's client assertion: the token endpoint
+//! The `aud` of the `oauth` grant's client assertion: the token endpoint
 //! by default, or the authorization server's issuer identifier, the two
 //! values RFC 7523 §3 admits, the second the one the FAPI 2.0 Security
 //! Profile requires (§5.3.2.1).
@@ -14,32 +14,24 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
-use ferrofed_engine::onward::issuer::Issuer;
-use ferrofed_engine::onward::{AssertionAudience, Grant, Scope, SystemClock};
-use ferrofed_registry::id::EndpointId;
+use ferrofed_engine::onward::upstream::UpstreamToken;
+use ferrofed_testkit::fapi::AuthorizationServer;
 use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
-use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::keys::KeyRing;
+use ferrohealth_smart::client::{AssertionAudience, ClientCredentials, Endpoint};
 use jsonwebtoken::Algorithm;
-use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
+use openehr_its::rest::client::CredentialsProvider as _;
+use url::Url;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The client the node's authorization server registered the gateway as.
 const CLIENT_ID: &str = "ferrofed-test-gateway";
 
-/// The issuer identifier of the node's authorization server.
-const ISSUER: &str = "https://as.cdr-a.example.org";
-
-/// A token endpoint trusting a fresh ES384 ring, and the provider of
-/// `grant` signing with it.
-async fn provider_of(
-    grant: impl FnOnce(&TokenEndpoint) -> Result<Grant, Box<dyn Error>>,
-) -> Result<(TokenEndpoint, ClientCredentials<ReqwestTransport>), Box<dyn Error>> {
-    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
+/// A fresh ES384 ring that `endpoint` trusts.
+fn trusted_ring(endpoint: &TokenEndpoint) -> Result<Arc<KeyRing>, Box<dyn Error>> {
     let key = AssertionKey::from_pem(
         oauth::Curve::P384.pem()?.as_bytes(),
         Some(Algorithm::ES384),
@@ -47,36 +39,27 @@ async fn provider_of(
     )?;
     let keys = Arc::new(KeyRing::new(key));
     endpoint.trust(serde_json::from_value(keys.published())?);
-    let provider = ClientCredentials::new(
-        EndpointId::new("node-a-pub")?,
-        grant(&endpoint)?,
-        keys,
-        (Duration::from_secs(300), Duration::from_secs(5)),
-        ReqwestTransport::with_timeout(Duration::from_secs(10))?,
-        Arc::new(SystemClock),
-    );
-    Ok((endpoint, provider))
+    Ok(keys)
 }
 
-/// The grant at `endpoint`'s token URL.
-fn grant(endpoint: &TokenEndpoint) -> Result<Grant, Box<dyn Error>> {
-    Ok(Grant::new(
-        &SecretUrl::new(endpoint.token_url()),
-        CLIENT_ID,
-        Scope::parse("system/aql-*.s")?,
-    )?)
+/// The `private_key_jwt` grant at `endpoint` over `keys`.
+fn grant(endpoint: Endpoint, keys: Arc<KeyRing>) -> ClientCredentials {
+    let mut grant = ClientCredentials::with_key_ring(endpoint, CLIENT_ID.to_owned(), keys);
+    grant.scope = Some("system/aql-*.s".to_owned());
+    grant.timeout = Duration::from_secs(5);
+    grant
 }
 
 /// By default every assertion names the token endpoint (RFC 7523 §3).
 // conformance: CP-17
 #[tokio::test]
 async fn the_token_endpoint_is_the_default_audience() -> TestResult {
-    let (endpoint, provider) = provider_of(grant).await?;
-    assert_eq!(
-        &AssertionAudience::TokenEndpoint,
-        provider.grant().assertion_audience()
-    );
-    provider.credentials().await?;
+    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
+    let keys = trusted_ring(&endpoint)?;
+    let grant = grant(Endpoint::Token(Url::parse(&endpoint.token_url())?), keys);
+    assert_eq!(AssertionAudience::TokenEndpoint, grant.assertion_audience);
+    endpoint.expect_assertion(Algorithm::ES384, &endpoint.token_url());
+    UpstreamToken::new(grant)?.credentials().await?;
     assert_eq!(vec![Verdict::Issued], endpoint.issuance().verdicts());
     Ok(())
 }
@@ -87,13 +70,14 @@ async fn the_token_endpoint_is_the_default_audience() -> TestResult {
 // conformance: CP-17
 #[tokio::test]
 async fn the_issuer_audience_names_the_issuer() -> TestResult {
-    let (endpoint, provider) =
-        provider_of(|endpoint| Ok(grant(endpoint)?.with_issuer_audience(Issuer::parse(ISSUER)?)))
-            .await?;
-    endpoint.expect_assertion(Algorithm::ES384, ISSUER);
-    provider.credentials().await?;
+    let server = AuthorizationServer::plain(CLIENT_ID, Some(300)).await;
+    let endpoint = server.endpoint();
+    let keys = trusted_ring(endpoint)?;
+    endpoint.expect_assertion(Algorithm::ES384, &server.issuer());
+    let mut grant = grant(Endpoint::Issuer(server.issuer()), keys);
+    grant.assertion_audience = AssertionAudience::Issuer;
+    UpstreamToken::new(grant)?.credentials().await?;
     assert_eq!(vec![Verdict::Issued], endpoint.issuance().verdicts());
-    assert_eq!(ISSUER, provider.grant().assertion_aud());
     Ok(())
 }
 
@@ -101,9 +85,12 @@ async fn the_issuer_audience_names_the_issuer() -> TestResult {
 /// token endpoint, and the gateway reports the refusal.
 #[tokio::test]
 async fn a_server_taking_only_its_issuer_refuses_the_token_endpoint() -> TestResult {
-    let (endpoint, provider) = provider_of(grant).await?;
-    endpoint.expect_assertion(Algorithm::ES384, ISSUER);
-    assert!(provider.credentials().await.is_err());
+    let server = AuthorizationServer::plain(CLIENT_ID, Some(300)).await;
+    let endpoint = server.endpoint();
+    let keys = trusted_ring(endpoint)?;
+    endpoint.expect_assertion(Algorithm::ES384, &server.issuer());
+    let grant = grant(Endpoint::Issuer(server.issuer()), keys);
+    assert!(UpstreamToken::new(grant)?.credentials().await.is_err());
     assert_eq!(1, endpoint.issuance().verdicts().len());
     assert_eq!(0, endpoint.issuance().issued());
     Ok(())

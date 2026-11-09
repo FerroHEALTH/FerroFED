@@ -150,14 +150,9 @@ impl NviSettings {
 fn credentials(table: &Credentials) -> Result<NviCredentials, Error> {
     // NOTE: the IG's Localization page (Authentication and Authorization) and GF-Authentication
     // define the Nuts profile for the data user and no other grant, so every other grant is refused.
-    let other_grant = [
-        ("oauth", table.oauth.is_some()),
-        ("oauth2", table.oauth2.is_some()),
-        ("fapi2", table.fapi2.is_some()),
-    ];
-    if let Some((grant, _)) = other_grant.into_iter().find(|(_, set)| *set) {
+    if table.oauth.is_some() {
         return Err(Error::Binding(BindingFault::NviGrant {
-            key: format!("{CREDENTIALS_KEY}.{grant}"),
+            key: format!("{CREDENTIALS_KEY}.oauth"),
         }));
     }
     if let Some(grant) = &table.nuts {

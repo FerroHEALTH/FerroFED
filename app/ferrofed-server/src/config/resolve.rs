@@ -23,7 +23,6 @@ use crate::config::error::Error;
 use crate::config::error::credentials::CredentialsFault;
 use crate::config::error::federation::FederationFault;
 use crate::config::error::server::ServerFault;
-use crate::config::grant::GrantFault;
 use crate::config::public_url::PublicUrl;
 use crate::config::secrets::{resolve_node_credentials, resolve_signing};
 use crate::config::server::{ListenerTlsSettings, METRICS_TLS, Metrics, resolve_tls};
@@ -68,12 +67,9 @@ impl Config {
     /// collector that is no `http://` or `https://` URL ([`ServerFault::OtlpScheme`]) and a
     /// logged query parameter ([`ServerFault::LoggedQueryParameters`]). An OAuth 2.0 grant refuses a missing key, a
     /// scope outside the SMART on openEHR `system` grammar ([`CredentialsFault::Scope`]),
-    /// an unusable endpoint or resource ([`CredentialsFault::Grant`]), a PIX Manager
-    /// section ([`CredentialsFault::GrantNotHere`]) and a missing `[signing]`
-    /// ([`CredentialsFault::GrantWithoutSigning`]); `[signing]` refuses a key that is no
-    /// P-256 or P-384 key ([`CredentialsFault::SigningKey`]), an assertion lifetime past five
-    /// minutes ([`CredentialsFault::AssertionLifetime`]), an overlap window shorter than
-    /// that lifetime plus the nodes' cache time ([`CredentialsFault::RotationOverlap`]),
+    /// and a PIX Manager section ([`CredentialsFault::GrantNotHere`]); `[signing]` refuses a key that is no
+    /// P-256 or P-384 key ([`CredentialsFault::SigningKey`]), an overlap window shorter than
+    /// five minutes plus the nodes' cache time ([`CredentialsFault::RotationOverlap`]),
     /// a next key on another curve than it is meant for
     /// ([`CredentialsFault::NextKeyAlgorithm`]), and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
     /// `[auth]` is refused as
@@ -104,7 +100,7 @@ impl Config {
         }
         let telemetry = resolve_telemetry(&self.telemetry)?;
         let (credentials, onward_tls) = self.resolve_credentials()?;
-        let signing = self.resolve_signing_keys(public_url.as_ref(), &credentials)?;
+        let signing = self.resolve_signing_keys(public_url.as_ref())?;
         let federation = self.resolve_federation(request_timeout)?;
         let stored_queries = stored_queries::resolve(self)?;
         let store = crate::config::store::resolve(self)?;
@@ -352,52 +348,16 @@ impl Config {
 }
 
 impl Config {
-    /// Resolves `[signing]`, refusing an OAuth 2.0 grant in `credentials`
-    /// when it is unset.
+    /// Resolves `[signing]`.
     fn resolve_signing_keys(
         &self,
         public: Option<&PublicUrl>,
-        credentials: &BTreeMap<EndpointId, Scheme>,
     ) -> Result<Option<SigningSettings>, Error> {
-        let signing = self
-            .signing
+        self.signing
             .as_ref()
             .map(|signing| resolve_signing(signing, public))
-            .transpose()?;
-        signed_grants(signing.as_ref(), credentials)?;
-        Ok(signing)
+            .transpose()
     }
-}
-
-/// Refuses an OAuth 2.0 grant in `credentials` when `signing` is unset.
-fn signed_grants(
-    signing: Option<&SigningSettings>,
-    credentials: &BTreeMap<EndpointId, Scheme>,
-) -> Result<(), Error> {
-    // NOTE: §13.1, N25: the client assertion of every grant is signed with the
-    // gateway's key, so a grant without one is refused at load.
-    if signing.is_some() {
-        return Ok(());
-    }
-    for (endpoint, scheme) in credentials {
-        match scheme {
-            Scheme::OAuth2(_) => {
-                return Err(Error::Credentials(CredentialsFault::GrantWithoutSigning {
-                    section: format!("credentials.{endpoint}.oauth2"),
-                }));
-            }
-            // NOTE: FAPI 2.0 Security Profile §5.4.2, the client key is published as a JWK
-            // Set, which the gateway serves only beside its [signing] keys.
-            Scheme::Fapi2(_) => {
-                return Err(GrantFault::WithoutSigning {
-                    section: format!("credentials.{endpoint}.fapi2"),
-                }
-                .into());
-            }
-            _ => {}
-        }
-    }
-    Ok(())
 }
 
 /// Returns `auth`, refusing `[metrics] scrape_clients` when `auth` trusts no

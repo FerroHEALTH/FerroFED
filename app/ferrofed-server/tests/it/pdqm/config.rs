@@ -124,7 +124,8 @@ fn a_fapi2_grant_in_its_section_is_refused() -> TestResult {
     assert!(
         matches!(
             &error,
-            error::Error::Credentials(error::credentials::CredentialsFault::ServiceGrantNotHere { section }) if section == "pdqm.credentials"
+            error::Error::Replaced { old, new }
+                if old == "pdqm.credentials.fapi2" && new == "pdqm.credentials.oauth"
         ),
         "{error:?}"
     );
