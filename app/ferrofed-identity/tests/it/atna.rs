@@ -23,9 +23,12 @@ use ferrofed_testkit::atna::{AuditRepository, Ending};
 use ferrofed_testkit::xcpd::RespondingGateway;
 use ihe_atna::atna::forwarder::Forwarder;
 use ihe_atna::atna::message::AuditSource;
-use ihe_atna::atna::repository::{Repository, Timeouts, TlsSettings};
+use ihe_atna::atna::repository::{Repository, Timeouts};
 use ihe_atna::atna::spool::{Bounds, Spool};
 use ihe_atna::atna::syslog::Sender;
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::pem::PemObject as _;
+use rustls::{ClientConfig, RootCertStore};
 use url::Url;
 
 use crate::support::{CALLER_AUDIENCE, CALLER_ISSUER, CALLER_SUBJECT, PATIENT_VALUE, caller};
@@ -105,15 +108,26 @@ async fn retried(audit: &RepositoryAudit, retries: u64) -> Result<(), Box<dyn Er
         })
 }
 
+/// The TLS configuration that trusts `repository`'s CA alone.
+fn trusting(repository: &AuditRepository) -> Result<Arc<ClientConfig>, Box<dyn Error>> {
+    let mut roots = RootCertStore::empty();
+    for certificate in CertificateDer::pem_slice_iter(repository.trust_roots().as_bytes()) {
+        roots.add(certificate?)?;
+    }
+    let config = ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::aws_lc_rs::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()?
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    Ok(Arc::new(config))
+}
+
 /// The recorder sending to `repository` over TLS, trusting its CA, through
 /// `spool`.
 fn recorder(repository: &AuditRepository, spool: Spool) -> Result<RepositoryAudit, Box<dyn Error>> {
-    let tls = TlsSettings {
-        roots: Some(repository.trust_roots().as_bytes().to_vec()),
-        identity: None,
-    };
     let address = Url::parse(&repository.url())?;
-    let connection = Repository::tls(&address, &tls, TIMEOUTS)?;
+    let connection = Repository::tls(&address, trusting(repository)?, TIMEOUTS)?;
     let sender = Sender::new("gateway.example.org", "ferrofed", "4242")?;
     let source = AuditSource {
         id: "gateway.example.org".to_owned(),
@@ -346,11 +360,11 @@ async fn a_full_spool_fails_the_discovery_closed() -> TestResult {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_forwarder_whose_runtime_ended_is_started_again() -> TestResult {
     let repository = AuditRepository::start().await?;
-    let tls = TlsSettings {
-        roots: Some(repository.trust_roots().as_bytes().to_vec()),
-        identity: None,
-    };
-    let connection = Repository::tls(&Url::parse(&repository.url())?, &tls, TIMEOUTS)?;
+    let connection = Repository::tls(
+        &Url::parse(&repository.url())?,
+        trusting(&repository)?,
+        TIMEOUTS,
+    )?;
     let sender = Sender::new("gateway.example.org", "ferrofed", "4242")?;
     let forwarder = Forwarder::new(Spool::in_memory(ROOMY), connection, RETRY_MAX);
     let audit = Arc::new(RepositoryAudit::new(

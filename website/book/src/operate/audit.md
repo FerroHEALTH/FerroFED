@@ -124,7 +124,9 @@ spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # spool_write_timeout_ms = 2000        # storing one record in the spool
 # timeout_ms = 5000                    # each delivery
 # retry_max_ms = 60000                 # the longest wait between two attempts
-client_identity_file = "/run/secrets/atna-client.pem"  # when the repository asks
+
+[audit.repository.tls]                 # when the repository asks for a client certificate
+client_identity_file = "/run/secrets/atna-client.pem"
 trust_roots_file = "/etc/ferrofed/atna-roots.pem"      # optional
 ```
 

@@ -348,8 +348,23 @@ mod tests {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut files = Vec::new();
         sources(&root, &mut files);
+        // NOTE: no specification governs this: our own design; a family crate's
+        // section embedded as a sub-table reads its secrets through files of its own.
+        let embedded: [(&str, &[&str]); 1] = [("TlsClientSection", &["client_identity"])];
         let mut seen = std::collections::BTreeSet::new();
         for (path, text) in &files {
+            for (section, names) in embedded {
+                if text.contains(section) {
+                    for name in names {
+                        assert!(
+                            super::SECRETS.contains(name),
+                            "{name} of {section}, embedded in {}, is missing from SECRETS",
+                            path.display()
+                        );
+                        seen.insert(*name);
+                    }
+                }
+            }
             for name in read_through_file(text, "Secret") {
                 assert!(
                     super::SECRETS.contains(&name),

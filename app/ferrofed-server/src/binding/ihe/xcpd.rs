@@ -16,14 +16,12 @@ use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_server::revocation::{RevocationCheck, RevocationSetupError};
-use ferrohealth_server::section::TlsVersion;
 
 use crate::binding::ihe::audit::{RepositoryTrail, trail};
 use crate::binding::seam::LocalizationError;
 use crate::binding::seam::LocalizerSeam;
 use crate::config::audit::AuditDestination;
 use crate::config::ihe::xcpd::XcpdSettings;
-use crate::config::service;
 use crate::health::dependencies::Indicator;
 
 /// The XCPD localizer `xcpd` describes over the members of `snapshot`, which
@@ -81,12 +79,7 @@ pub(super) fn localizer(
         } else {
             Transport::Encrypted
         },
-        tls: service::tls(
-            "xcpd",
-            xcpd.client_identity.as_ref(),
-            xcpd.trust_roots.as_deref(),
-        )
-        .map_err(LocalizationError::Tls)?,
+        tls: Arc::clone(&xcpd.tls),
         revocation: revocation(xcpd)?,
     };
     let localizer =
@@ -115,25 +108,18 @@ pub(super) fn localizer(
 }
 
 /// The revocation check of the gateways `xcpd` marks as MyHealth@EU routes,
-/// over its client identity and trust roots, which configuration load
-/// requires of such a gateway; none when no gateway is marked.
+/// over the client identity, trust roots and minimum version of
+/// `[xcpd.tls]`, which configuration load requires of such a gateway; none when no gateway is marked.
 fn revocation(xcpd: &XcpdSettings) -> Result<Option<RevocationCheck>, LocalizationError> {
     if !xcpd.gateways.iter().any(|gateway| gateway.myhealth_eu) {
         return Ok(None);
     }
-    let identity = xcpd
-        .client_identity
-        .as_ref()
-        .ok_or(LocalizationError::XcpdRevocation(
+    if !xcpd.tls.has_identity() {
+        return Err(LocalizationError::XcpdRevocation(
             RevocationSetupError::NoClientCertificate,
-        ))?;
-    let roots = xcpd
-        .trust_roots
-        .as_deref()
-        .ok_or(LocalizationError::XcpdRevocation(
-            RevocationSetupError::NoRoots,
-        ))?;
-    RevocationCheck::from_pem(roots, Some(identity), TlsVersion::Tls12)
+        ));
+    }
+    RevocationCheck::from_tls_client(&xcpd.tls)
         .map(Some)
         .map_err(LocalizationError::XcpdRevocation)
 }

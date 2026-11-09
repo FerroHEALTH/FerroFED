@@ -37,13 +37,13 @@ use ferrofed_identity::ihe::audit::balp::{
     FeedAudit, FeedConfigError, LogFeedAudit, feed_repository,
 };
 use ferrofed_operator_api::health::{Indication, Observed};
+use ferrohealth_server::tls_client::TlsClientError;
 use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::RepositoryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
 use ihe_atna::balp::{AuditRecorder, NetworkAddress};
 
 use crate::config::audit::{AuditDestination, AuditSettings, FeedRepositorySettings};
-use crate::config::service::{self, TlsRefused};
 use crate::config::settings::Settings;
 use crate::health::dependencies::Indicator;
 
@@ -293,12 +293,13 @@ pub enum AuditTrailError {
     /// The repository address or its TLS settings were refused.
     #[error("the audit repository cannot be reached as configured")]
     Repository(#[source] RepositoryError),
+    /// The repository's TLS material was refused by the platform verifier
+    /// or by rustls.
+    #[error("the audit repository's TLS material cannot be used")]
+    Tls(#[source] TlsClientError),
     /// The FHIR Feed repository was refused.
     #[error("the audit repository cannot be reached as configured")]
     Feed(#[source] FeedConfigError),
-    /// The FHIR Feed repository's TLS material does not read.
-    #[error("the audit repository TLS material cannot be used")]
-    Tls(#[source] TlsRefused),
     /// The spool could not be opened, or, in a check, would not open.
     #[error("{key} names an audit spool that cannot be used")]
     Spool {
@@ -334,16 +335,10 @@ pub fn feed_trail(settings: &FeedRepositorySettings) -> Result<Arc<FeedAudit>, A
         |directory| directory.display().to_string(),
     );
     started(key, settings, || {
-        let tls = service::tls(
-            "audit.repository",
-            settings.client_identity.as_ref(),
-            settings.trust_roots.as_deref(),
-        )
-        .map_err(AuditTrailError::Tls)?;
         let repository = feed_repository(
             settings.url.clone(),
             settings.cleartext,
-            &tls,
+            &settings.tls,
             settings.timeout,
         )
         .map_err(AuditTrailError::Feed)?;

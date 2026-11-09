@@ -297,7 +297,6 @@ pub fn read(settings: &DirectorySettings) -> Result<RegistrySnapshot, BindingErr
 
 /// The source `settings` name.
 fn source(settings: &DirectorySettings) -> Result<DirectorySource, BindingError> {
-    let tls = service::tls_of("registry.mcsd", &settings.tls).map_err(BindingError::Tls)?;
     let credentials = service::service_authentication(
         "registry.mcsd.credentials",
         settings.credentials.as_ref(),
@@ -305,7 +304,7 @@ fn source(settings: &DirectorySettings) -> Result<DirectorySource, BindingError>
     let source = DirectorySource::new(DirectoryConfig {
         base: settings.url.clone(),
         credentials,
-        tls,
+        tls: Arc::clone(&settings.tls),
         deadline: settings.deadline,
         pages: settings.max_pages,
         bytes: settings.max_bytes,

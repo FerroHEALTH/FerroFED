@@ -116,8 +116,7 @@ profile = "production"
 
 [nl_gf.mitz]
 url = "https://mitz.example.org/geslotenautorisatievraag"
-client_identity_file = "/run/secrets/mitz-client.pem"   # mutual TLS
-trust_roots_file = "/etc/ferrofed/mitz-roots.pem"       # optional
+tls = { client_identity_file = "/run/secrets/mitz-client.pem", trust_roots_file = "/etc/ferrofed/mitz-roots.pem" }  # mutual TLS; the roots are optional
 credentials = { user = "ferrofed", password_file = "/run/secrets/mitz-password" }  # optional
 namespaces = ["urn:oid:2.999.1"]  # client namespaces that stand for the BSN
 purpose = "TREAT"                 # TREAT or COC

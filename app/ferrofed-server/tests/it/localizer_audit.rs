@@ -20,7 +20,6 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Tls;
 use ferrofed_identity::ihe::xcpd::{GatewayConfig, Transport, XcpdConfig, XcpdLocalizer};
 use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_server::binding::ihe::XCPD;
@@ -101,7 +100,7 @@ async fn a_discovery_still_recording_its_audit_at_the_budget_fails_closed_under_
             ]),
             namespaces: BTreeMap::new(),
             transport: Transport::UnencryptedForDevelopment,
-            tls: Tls::default(),
+            tls: ferrofed_testkit::tls::platform(),
             revocation: None,
         },
         None,

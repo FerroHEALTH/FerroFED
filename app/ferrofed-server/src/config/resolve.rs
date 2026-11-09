@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::num::{NonZeroU32, NonZeroUsize};
+use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
@@ -30,11 +31,11 @@ use crate::config::settings::{
     ConsentDisclosure, FederationSettings, LocalizationSettings, MetricsSettings, Scheme,
     ServerSettings, Settings, SigningSettings,
 };
-use crate::config::tls::TlsSettings;
 use crate::config::{
     COMBINING_MARGIN_MS, Config, EmergencyConsent, Federation, Localization, NodeSelection,
     OffsetPaging, stored_queries,
 };
+use ferrohealth_server::tls_client::TlsClient;
 use ferrohealth_telemetry::section::TelemetrySection;
 
 impl Config {
@@ -501,7 +502,7 @@ pub(crate) fn positive(key: &str, count: usize) -> Result<usize, Error> {
 /// is reached with.
 type OnwardCredentials = (
     BTreeMap<EndpointId, Scheme>,
-    BTreeMap<EndpointId, TlsSettings>,
+    BTreeMap<EndpointId, Arc<TlsClient>>,
 );
 
 /// Refuses the stored-query fan-out `federation` asks for unless

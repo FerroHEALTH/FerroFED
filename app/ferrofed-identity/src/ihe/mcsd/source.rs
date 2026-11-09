@@ -43,8 +43,9 @@ use url::Url;
 
 use super::error::FhirFormError;
 use super::{ENDPOINT_ID_SYSTEM, Listings, ORGANISATION_ID_SYSTEM, document};
-use crate::fhir::{Authentication, ClientError, Tls};
+use crate::fhir::{Authentication, ClientError};
 use crate::ihe::iua;
+use ferrohealth_server::tls_client::TlsClient;
 
 /// The directory a registry is read from, as the configuration names it.
 #[derive(Debug)]
@@ -57,7 +58,7 @@ pub struct DirectoryConfig {
     pub credentials: Authentication,
     /// The TLS material the directory is reached with: a client identity for
     /// mutual TLS and trust roots beside the platform's.
-    pub tls: Tls,
+    pub tls: std::sync::Arc<TlsClient>,
     /// How long one whole read or refresh may take, over every page of both
     /// resource types.
     pub deadline: Duration,
@@ -86,6 +87,9 @@ pub enum DirectoryConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for the directory could not be built")]
     Client(#[source] reqwest::Error),
+    /// The HTTP client refused the TLS material.
+    #[error(transparent)]
+    Tls(ferrohealth_server::tls_client::TlsClientError),
     /// The credential is a grant the client was built to send in a default
     /// header, where its token cannot ride.
     #[error("the grant of the directory cannot ride in a default header")]
@@ -97,6 +101,7 @@ impl From<ClientError> for DirectoryConfigError {
         match error {
             ClientError::Credentials(source) => Self::Credentials(source),
             ClientError::Build(source) => Self::Client(source),
+            ClientError::Tls(source) => Self::Tls(source),
             ClientError::Grant => Self::Grant,
         }
     }

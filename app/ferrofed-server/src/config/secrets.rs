@@ -29,8 +29,9 @@ use crate::config::grant;
 use crate::config::oauth::Onward;
 use crate::config::public_url::PublicUrl;
 use crate::config::settings::{JWKS_PATH, Scheme, SigningSettings};
-use crate::config::tls::{self, TlsFault, TlsSettings};
+use crate::config::tls::{self, TlsFault};
 use crate::config::{Credentials, GrantKind, OAuth2, Signing, SigningAlgorithm};
+use ferrohealth_server::tls_client::TlsClient;
 
 /// Returns the scheme a service's `credentials` describe, once it is known
 /// to fit the `Authorization` header it is sent in.
@@ -65,33 +66,17 @@ pub(crate) fn resolve_credentials(
 pub(crate) fn resolve_node_credentials(
     section: &str,
     credentials: &Credentials,
-) -> Result<(Option<Scheme>, Option<TlsSettings>), Error> {
-    if !credentials.names_tls() {
+) -> Result<(Option<Scheme>, Option<Arc<TlsClient>>), Error> {
+    let Some(table) = &credentials.tls else {
         let scheme = node_scope(section, scheme(section, credentials, None)?)?;
         return Ok((Some(scheme), None));
-    }
-    let material = tls::resolve(
-        section,
-        credentials.client_identity.as_ref(),
-        credentials.client_identity_file.as_deref(),
-        credentials.trust_roots_file.as_ref(),
-    )?;
+    };
+    let material = tls::read(&format!("{section}.tls"), table)?;
+    // NOTE: RFC 8705 §3.1: the thumbprint is taken from the certificate the
+    // gateway presents, the one `TlsClient` read, never from a second read.
     let thumbprint = material
-        .client_identity
-        .as_ref()
-        .map(|identity| {
-            Thumbprint::of_identity(&identity.to_secret_string()).map_err(|source| {
-                TlsFault::Identity {
-                    key: source_key(
-                        section,
-                        "client_identity",
-                        credentials.client_identity_file.is_some(),
-                    ),
-                    source,
-                }
-            })
-        })
-        .transpose()?;
+        .certificate()
+        .map(|certificate| Thumbprint::of_certificate(certificate.as_ref()));
     match scheme(section, credentials, thumbprint.as_ref()) {
         Ok(scheme) => Ok((Some(node_scope(section, scheme)?), Some(material))),
         Err(Error::Credentials(CredentialsFault::NoScheme { .. })) => Ok((None, Some(material))),

@@ -165,12 +165,12 @@ pub enum MyHealthEuNeed {
     Https,
     /// A client certificate for mutual TLS.
     #[error(
-        "needs xcpd.client_identity_file for mutual TLS (eHDSI Section II Security Services 10.0.0 §5.9.2)"
+        "needs xcpd.tls.client_identity_file for mutual TLS (eHDSI Section II Security Services 10.0.0 §5.9.2)"
     )]
     ClientIdentity,
     /// The trust roots of the eHDSI PKI.
     #[error(
-        "needs xcpd.trust_roots_file, the eHDSI PKI or national CA the link alone trusts (eHDSI Section II Security Services 10.0.0 §5.9.2)"
+        "needs xcpd.tls.trust_roots_file, the eHDSI PKI or national CA the link alone trusts (eHDSI Section II Security Services 10.0.0 §5.9.2)"
     )]
     TrustRoots,
 }

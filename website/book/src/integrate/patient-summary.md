@@ -646,8 +646,9 @@ user = "ferrofed"
 password_file = "/run/secrets/terminology-password"
 ```
 
-`client_identity`, `client_identity_file` and `trust_roots_file` give the
-mutual TLS the server asks for, as for the identity services. Outside
+An `[eehrxf.terminology.tls]` table gives the mutual TLS the server asks
+for, as for the identity services: `client_identity` or
+`client_identity_file`, `trust_roots_file` and `min_version`. Outside
 `profile = "development"` the URL must be `https`, because the server is sent
 the codes of the documents you receive.
 

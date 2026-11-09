@@ -4,8 +4,8 @@
 //! Mutual TLS to the identity services `[[pixm.manager]]`, `[pdqm]`,
 //! `[pmir]` and `[registry.mcsd]` name (#507): each harness server sits
 //! behind the testkit's mutual-TLS front, the gateway presents the client
-//! identity of `client_identity_file` and trusts the front by
-//! `trust_roots_file`, and a gateway without the identity is refused at the
+//! identity of `tls.client_identity_file` and trusts the front by
+//! `tls.trust_roots_file`, and a gateway without the identity is refused at the
 //! handshake and fails closed.
 #![allow(
     clippy::panic_in_result_fn,
@@ -18,15 +18,13 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use ferrofed_operator_api::health::Observed;
-use ferrofed_server::binding::error::BindingError;
 use ferrofed_server::config::{self, Config};
-use ferrofed_server::federation::Federation;
-use ferrofed_server::federation::error::FederationError;
 use ferrofed_testkit::mcsd::HarnessDirectory;
 use ferrofed_testkit::pdqm_stub;
 use ferrofed_testkit::pmir::PatientIdentityRegistry;
 use ferrofed_testkit::tls::MutualTls;
 use ferrohealth_secret::file::SecretError;
+use ferrohealth_server::tls_client::TlsClientError;
 use http::StatusCode;
 use url::Url;
 
@@ -60,7 +58,7 @@ fn tls_keys(dir: &Path, name: &str, front: &MutualTls) -> Result<String, Box<dyn
     std::fs::write(&identity, front.client_identity())?;
     std::fs::write(&roots, front.trust_roots())?;
     Ok(format!(
-        "client_identity_file = {}\ntrust_roots_file = {}\n",
+        "tls = {{ client_identity_file = {}, trust_roots_file = {} }}\n",
         toml::Value::String(identity.display().to_string()),
         toml::Value::String(roots.display().to_string())
     ))
@@ -71,7 +69,7 @@ fn roots_only(dir: &Path, name: &str, front: &MutualTls) -> Result<String, Box<d
     let roots = dir.join(format!("{name}-roots.pem"));
     std::fs::write(&roots, front.trust_roots())?;
     Ok(format!(
-        "trust_roots_file = {}\n",
+        "tls = {{ trust_roots_file = {} }}\n",
         toml::Value::String(roots.display().to_string())
     ))
 }
@@ -218,33 +216,33 @@ fn refusal(text: &str) -> Result<config::error::Error, Box<dyn Error>> {
 
 #[test]
 fn a_tls_file_that_cannot_be_read_is_refused_naming_its_key() -> TestResult {
-    let missing = "trust_roots_file = \"/nonexistent/ferrofed-roots.pem\"\n";
+    let missing = "tls = { trust_roots_file = \"/nonexistent/ferrofed-roots.pem\" }\n";
     for (table, key) in [
         (
             format!("[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n{missing}"),
-            "pixm.manager[0].trust_roots_file",
+            "pixm.manager[0].tls.trust_roots_file",
         ),
         (
             format!(
                 "[pdqm]\nurl = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\n{missing}\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n"
             ),
-            "pdqm.trust_roots_file",
+            "pdqm.tls.trust_roots_file",
         ),
         (
             format!(
                 "{}\n[registry]\ndocument = \"registry.toml\"\n\n[pmir]\nurl = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_clients = [\"pmir-registry\"]\n{missing}",
                 crate::support::caller::auth_toml()
             ),
-            "pmir.trust_roots_file",
+            "pmir.tls.trust_roots_file",
         ),
         (
             format!("[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n{missing}"),
-            "registry.mcsd.trust_roots_file",
+            "registry.mcsd.tls.trust_roots_file",
         ),
     ] {
         let error = refusal(&table)?;
         assert!(
-            matches!(&error, config::error::Error::Secret { key: named, .. } if named == key),
+            matches!(&error, config::error::Error::TlsClient(TlsClientError::Read { key: named, .. }) if named == key),
             "{key}: {error:?}"
         );
     }
@@ -254,42 +252,107 @@ fn a_tls_file_that_cannot_be_read_is_refused_naming_its_key() -> TestResult {
 #[test]
 fn an_identity_given_inline_and_as_a_file_is_refused() -> TestResult {
     let error = refusal(
-        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\nclient_identity = \"Qz7inline\"\nclient_identity_file = \"/nonexistent/ferrofed-client.pem\"\n",
+        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\ntls = { client_identity = \"Qz7inline\", client_identity_file = \"/nonexistent/ferrofed-client.pem\" }\n",
     )?;
     assert!(
-        matches!(&error, config::error::Error::SecretFile(SecretError::Both { key }) if key == "pixm.manager[0].client_identity"),
+        matches!(&error, config::error::Error::TlsClient(TlsClientError::Identity(SecretError::Both { key })) if key == "pixm.manager[0].tls.client_identity"),
         "{error:?}"
     );
     assert!(!format!("{error} {error:?}").contains("Qz7inline"));
     Ok(())
 }
 
-#[tokio::test]
-async fn a_client_identity_that_is_no_pem_is_refused_without_its_content() -> TestResult {
+#[test]
+fn a_client_identity_that_is_no_pem_is_refused_at_load_without_its_content() -> TestResult {
     let dir = tempfile::tempdir()?;
     let identity = dir.path().join("client.pem");
     std::fs::write(&identity, "Qz7notpem")?;
-    let tables = format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\nclient_identity_file = {}\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
+    let error = refusal(&format!(
+        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\ntls = {{ client_identity_file = {} }}\n",
         toml::Value::String(identity.display().to_string()),
-        crate::pdqm::DOMAIN_A,
-        crate::pdqm::DOMAIN_B,
-    );
-    let settings = crate::pdqm::settings(
-        dir.path(),
-        &registry("https://cdr-a.example.org", "https://cdr-b.example.org", ""),
-        ASK_ALL,
-        &tables,
-    )?;
-    let built = Federation::load(&settings);
-    let Err(error) = built else {
-        return Err("a client identity that is no PEM is refused".into());
-    };
+    ))?;
     assert!(
-        matches!(error, FederationError::Binding(BindingError::Tls(_))),
+        matches!(
+            &error,
+            config::error::Error::TlsClient(TlsClientError::Pem { key, .. })
+                if key == "pixm.manager[0].tls.client_identity"
+        ),
         "{error:?}"
     );
     assert!(!ferrofed_chain(&error).contains("Qz7notpem"));
+    Ok(())
+}
+
+/// A TLS key left on its table after it moved into the table's `tls`
+/// sub-table is refused, naming the key that replaces it (#1750).
+#[test]
+fn a_tls_key_left_on_its_table_is_refused_naming_its_replacement() -> TestResult {
+    for (table, old, new) in [
+        (
+            "[pdqm]\nurl = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\ntrust_roots_file = \"/etc/roots.pem\"\n",
+            "pdqm.trust_roots_file",
+            "pdqm.tls.trust_roots_file",
+        ),
+        (
+            "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\nclient_identity_file = \"/run/client.pem\"\n",
+            "registry.mcsd.client_identity_file",
+            "registry.mcsd.tls.client_identity_file",
+        ),
+        (
+            "[credentials.\"node-a\"]\nclient_identity = \"Qz7inline\"\n",
+            "credentials.node-a.client_identity",
+            "credentials.node-a.tls.client_identity",
+        ),
+    ] {
+        let error = refusal(table)?;
+        assert!(
+            matches!(
+                &error,
+                config::error::Error::Renamed { old: was, new: now } if was == old && now == new
+            ),
+            "{old}: {error:?}"
+        );
+        assert!(!format!("{error} {error:?}").contains("Qz7inline"));
+    }
+    Ok(())
+}
+
+/// The settings `text` resolves to under the development profile.
+fn resolved(text: &str) -> Result<config::settings::Settings, Box<dyn Error>> {
+    let text = format!("profile = \"development\"\n[audit]\ndestination = \"log\"\n\n{text}");
+    Ok(Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?)
+}
+
+/// A reload compares the material it read, so a client identity renewed at
+/// the same path rebuilds the directory's client and an unchanged one keeps
+/// it (FerroHEALTH/FerroSYS#305).
+#[test]
+fn a_directory_identity_renewed_at_the_same_path_is_a_change() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let first = MutualTls::front("http://127.0.0.1:9")?;
+    let table = format!(
+        "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n{}",
+        tls_keys(dir.path(), "mcsd", &first)?
+    );
+    let directory = |settings: config::settings::Settings| {
+        settings
+            .registry_directory
+            .ok_or("the directory is configured")
+    };
+    let was = directory(resolved(&table)?)?;
+    assert!(
+        was.same_as(&directory(resolved(&table)?)?),
+        "nothing changed"
+    );
+    let renewed = MutualTls::front("http://127.0.0.1:9")?;
+    std::fs::write(
+        dir.path().join("mcsd-client.pem"),
+        renewed.client_identity(),
+    )?;
+    assert!(
+        !was.same_as(&directory(resolved(&table)?)?),
+        "the identity at the same path changed"
+    );
     Ok(())
 }
 
