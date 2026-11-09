@@ -65,24 +65,15 @@ impl Eq for Oauth {}
 
 impl Oauth {
     /// Resolves the grant the table at `key` describes, every secret and the
-    /// assertion key read.
+    /// assertion key read, reaching its token endpoint over `presented`,
+    /// the TLS material of a node the gateway already read, when one is
+    /// given: the table then names no client certificate, key or trust roots
+    /// of its own (RFC 8705 §2, §3).
     ///
     /// # Errors
     /// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
     /// refuses.
-    pub fn resolve(&self, key: &str) -> Result<ClientCredentials, Error> {
-        self.resolve_presenting(key, None)
-    }
-
-    /// Resolves the grant as [`Oauth::resolve`] does, reaching its token
-    /// endpoint over `presented`, the TLS material of a node the gateway
-    /// already read, when one is given: the table then names no client
-    /// certificate, key or trust roots of its own (RFC 8705 §2, §3).
-    ///
-    /// # Errors
-    /// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
-    /// refuses.
-    pub fn resolve_presenting(
+    pub fn resolve(
         &self,
         key: &str,
         presented: Option<ferrohealth_smart::client::PresentedTls>,

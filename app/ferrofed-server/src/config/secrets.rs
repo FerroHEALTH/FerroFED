@@ -281,7 +281,7 @@ fn oauth_scheme(
     credentials: &Credentials,
     presented: Option<PresentedTls>,
 ) -> Result<Scheme, Error> {
-    let grant = oauth.resolve_presenting(&format!("{section}.oauth"), presented)?;
+    let grant = oauth.resolve(&format!("{section}.oauth"), presented)?;
     let onward = credentials
         .onward
         .as_ref()
