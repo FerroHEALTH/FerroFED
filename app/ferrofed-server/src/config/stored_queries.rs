@@ -108,8 +108,7 @@ impl Store {
 ///
 /// # Errors
 ///
-/// [`StoreFault::UrlMoved`] for the removed `stored_queries.url` or
-/// `stored_queries.url_file`; [`Error::Missing`] naming `stored_queries.path`
+/// [`Error::Missing`] naming `stored_queries.path`
 /// when the backend needs it and it is unset or empty, and naming
 /// `registry.document` when the registry is offered with neither a registry
 /// document nor a directory, and so without the federation that executes
