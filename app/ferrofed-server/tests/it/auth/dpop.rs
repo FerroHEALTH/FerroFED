@@ -118,7 +118,7 @@ async fn without_the_table_no_dpop_request_is_admitted() -> TestResult {
 #[test]
 fn the_table_is_read_from_the_configuration() -> TestResult {
     let text = format!(
-        "{}\n[auth.dpop]\nexternal_url = \"{EXTERNAL}\"\nmax_age_seconds = 30\n",
+        "{}\n[auth.dpop]\nexternal_url = \"{EXTERNAL}\"\nmax_age = '30s'\n",
         crate::support::caller::auth_toml()
     );
     let settings = ferrofed_server::config::Config::from_sources(

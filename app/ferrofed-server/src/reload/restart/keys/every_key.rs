@@ -213,10 +213,10 @@ issuer = "https://idp.example.org"
 kind = "persons"
 profile = "rfc9068"
 audience = ["https://gateway.example.org/fed"]
-clock_skew_seconds = 60
-jwks_max_age_seconds = 300
-jwks_refresh_interval_seconds = 30
-timeout_ms = 2000
+clock_skew = '1min'
+jwks_max_age = '5min'
+jwks_refresh_interval = '30s'
+timeout = '2s'
 first_party_clients = ["ferrofed-console"]
 
 [trust.purpose_of_use]

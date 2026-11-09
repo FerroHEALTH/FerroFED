@@ -106,7 +106,7 @@ audience = ["https://gateway.example.org/fed"]
 # person's token of this issuer is admitted through.
 first_party_clients = ["example-clinical-app"]
 # The clock skew allowed on exp, nbf and iat, at most 300 seconds.
-clock_skew_seconds = 60
+clock_skew = "1min"
 
 # A token with no purpose of use is refused (§13.4). Set false only with the
 # reason recorded in your deployment's security decisions.

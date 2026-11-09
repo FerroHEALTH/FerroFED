@@ -124,7 +124,7 @@ fn a_disabled_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
 // RFC 7519 §4.1.4: "some small leeway, usually no more than a few minutes".
 #[test]
 fn a_clock_skew_past_five_minutes_is_refused() -> Result<(), Box<dyn Error>> {
-    refused_by_the_crate(&issuer_table("clock_skew_seconds = 301"), "clock skew")
+    refused_by_the_crate(&issuer_table("clock_skew = '301s'"), "clock skew")
 }
 
 // RFC 9068 §4: the resource server validates that `aud` names it.
@@ -182,9 +182,9 @@ fn a_section_level_issuer_key_is_refused_naming_the_issuer_table() -> Result<(),
     for written in [
         "audience = [\"urn:example:gateway\"]",
         "algorithms = [\"ES256\"]",
-        "clock_skew_seconds = 60",
-        "jwks_max_age_seconds = 600",
-        "jwks_refresh_interval_seconds = 30",
+        "clock_skew = '1min'",
+        "jwks_max_age = '10min'",
+        "jwks_refresh_interval = '30s'",
         "jwks_file = \"jwks.json\"",
         "timeout_ms = 5000",
         "mode = \"jwt\"",
