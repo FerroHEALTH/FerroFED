@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::{Authentication, Tls};
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::mcsd;
 use ferrofed_identity::nl::nvi::{NviConfig, NviConfigError, NviLocalizer};
 use ferrofed_identity::role::behalf::OnBehalfOf;
@@ -70,7 +70,7 @@ fn config(base: &str, custodians: &[(&str, &str)]) -> Result<NviConfig, Box<dyn 
         authorizer: None,
         custodians: written,
         namespaces: BTreeSet::new(),
-        tls: Tls::default(),
+        tls: ferrofed_testkit::tls::platform(),
     })
 }
 

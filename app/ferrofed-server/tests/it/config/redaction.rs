@@ -164,7 +164,7 @@ fn no_configuration_type_renders_a_credential_as_written() -> TestResult {
     shows_placeholder("TelemetrySection", &config.telemetry);
     shows_placeholder("Store", &config.store);
     let composed = ManagerConfig {
-        tls: ferrofed_identity::fhir::Tls::default(),
+        tls: ferrofed_testkit::tls::platform(),
         base: SecretUrl::new(pix_url_with_userinfo()),
         auth: Authentication::Basic {
             user: String::from("gateway"),
@@ -220,7 +220,7 @@ fn no_resolved_settings_type_renders_a_credential() -> TestResult {
             _ => return Err("the PIX Manager resolves to its basic credentials".into()),
         };
         let composed = ManagerConfig {
-            tls: ferrofed_identity::fhir::Tls::default(),
+            tls: ferrofed_testkit::tls::platform(),
             base: manager.url.clone(),
             auth,
             members: BTreeMap::new(),

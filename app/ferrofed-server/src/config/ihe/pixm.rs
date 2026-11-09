@@ -11,10 +11,10 @@
 //! assigning authority when the namespace is not itself an absolute URI. No
 //! specification governs the shape of the table: our own design.
 
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::sync::Arc;
 
-use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
@@ -22,7 +22,6 @@ use crate::config::Credentials;
 use crate::config::error::Error;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
-use crate::config::tls::TlsSettings;
 use crate::config::transport;
 
 /// The PIXm resolver: the identity binding of N3 over ITI-83 (Annex A.1).
@@ -52,14 +51,9 @@ pub struct PixManager {
     /// How the gateway authenticates to the Manager, when the transport does
     /// not.
     pub credentials: Option<Credentials>,
-    /// The gateway's client certificate chain and private key, PEM, for
-    /// mutual TLS, inline or through `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots the Manager's certificate chains to, beside
-    /// the platform's.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the service is reached with: the table's `tls`
+    /// sub-table.
+    pub tls: TlsClientSection,
     /// How the gateway asks the Manager: `"get"` or `"post"`.
     pub method: PixmMethod,
 }
@@ -99,7 +93,7 @@ pub struct PixManagerSettings {
     /// How the gateway authenticates to it.
     pub credentials: Option<Scheme>,
     /// The TLS material it is reached with.
-    pub tls: TlsSettings,
+    pub tls: Arc<TlsClient>,
     /// How the gateway asks it.
     pub method: PixmMethod,
 }
@@ -137,12 +131,7 @@ pub(crate) fn resolve(pixm: &Pixm, context: ServiceContext) -> Result<PixmSettin
             manager.url.expose(),
             transport::identity_site(&key, carried),
         )?;
-        let tls = crate::config::tls::resolve(
-            &key,
-            manager.client_identity.as_ref(),
-            manager.client_identity_file.as_deref(),
-            manager.trust_roots_file.as_ref(),
-        )?;
+        let tls = crate::config::tls::read(&format!("{key}.tls"), &manager.tls)?;
         managers.push(PixManagerSettings {
             url: manager.url.clone(),
             members: manager.members.clone(),

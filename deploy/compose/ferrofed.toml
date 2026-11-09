@@ -198,6 +198,7 @@ url = "https://arr.example.org/fhir"          # EDIT
 hostname = "gateway.example.org"              # EDIT
 spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # When the repository asks for a client certificate:
+# [audit.repository.tls]
 # client_identity_file = "/run/secrets/ferrofed/atna-client.pem"
 # trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
 

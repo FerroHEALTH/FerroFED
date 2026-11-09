@@ -1453,6 +1453,7 @@ dependencies = [
  "ferrofed-identity",
  "ferrofed-registry",
  "ferrofed-testkit",
+ "ferrohealth-server",
  "fhir-types",
  "fhirconnect",
  "http",
@@ -1658,6 +1659,7 @@ dependencies = [
  "ferrofed-registry",
  "ferrofed-server",
  "ferrohealth-health",
+ "ferrohealth-secret",
  "ferrohealth-server",
  "ferrohealth-session",
  "ferrohealth-smart",
@@ -1698,7 +1700,7 @@ dependencies = [
  "uuid",
  "wiremock",
  "x509-cert 0.3.0",
- "x509-ocsp 0.3.0-rc.0",
+ "x509-ocsp",
 ]
 
 [[package]]
@@ -1739,14 +1741,14 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-server"
-version = "0.5.1"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86bd2ac04c00ff5697e78615cc674222f393707d4c63839a292c920d2c3b63a8"
+checksum = "ac282bdaaa52b13dffae03e9614b804ece736b713e728501020b76bd761ba641"
 dependencies = [
  "aws-lc-rs",
  "axum",
  "clap",
- "der 0.7.10",
+ "der 0.8.3",
  "ferrohealth-health",
  "ferrohealth-secret",
  "ferrohealth-telemetry",
@@ -1769,8 +1771,8 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
- "x509-cert 0.2.5",
- "x509-ocsp 0.2.1",
+ "x509-cert 0.3.0",
+ "x509-ocsp",
 ]
 
 [[package]]
@@ -6110,18 +6112,6 @@ dependencies = [
  "der 0.8.3",
  "spki 0.8.1",
  "tls_codec",
-]
-
-[[package]]
-name = "x509-ocsp"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e54e695a31f0fecb826cf59ae2093c941d7ef932a1f8508185dd23b29ce2e2e"
-dependencies = [
- "const-oid 0.9.6",
- "der 0.7.10",
- "spki 0.7.3",
- "x509-cert 0.2.5",
 ]
 
 [[package]]

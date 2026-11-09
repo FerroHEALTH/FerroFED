@@ -32,8 +32,8 @@ use ferrobridge_term::outcome::{
 };
 use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::fhir::ClientError;
-use ferrofed_identity::fhir::Tls;
 use ferrofed_identity::fhir::http_client;
+use ferrohealth_server::tls_client::TlsClient;
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::primitives::{Code, String as FhirString, Uri};
 use url::Url;
@@ -85,7 +85,7 @@ impl BridgeTerminology {
     pub fn new(
         base: &str,
         auth: &Authentication,
-        tls: &Tls,
+        tls: &TlsClient,
         timeout: Duration,
     ) -> Result<Self, BridgeTerminologyError> {
         let base = Url::parse(base).map_err(BridgeTerminologyError::Base)?;

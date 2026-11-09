@@ -5,10 +5,10 @@
 //! the table and its resolution, from which the IHE binding keeps the
 //! registry in step with the directory.
 
-use std::path::PathBuf;
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use std::sync::Arc;
 use std::time::Duration;
 
-use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
@@ -18,7 +18,6 @@ use crate::config::error::Error;
 use crate::config::resolve::{positive, positive_ms};
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
-use crate::config::tls::TlsSettings;
 use crate::config::transport;
 
 /// The key of the directory's URL.
@@ -42,15 +41,9 @@ pub struct McsdDirectory {
     /// How the gateway authenticates to the directory, when the transport
     /// does not: basic credentials or the client credentials grant of `oauth`.
     pub credentials: Option<Credentials>,
-    /// The gateway's client certificate chain and private key, PEM, for
-    /// mutual TLS with the directory, inline or through
-    /// `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots the directory's certificate chains to,
-    /// beside the platform's.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the service is reached with: the table's `tls`
+    /// sub-table.
+    pub tls: TlsClientSection,
     /// How often the changes are asked for, in seconds.
     pub refresh_interval_s: u64,
     /// How long one whole read or refresh may take, every page of both
@@ -69,9 +62,7 @@ impl Default for McsdDirectory {
         Self {
             url: SecretUrl::default(),
             credentials: None,
-            client_identity: None,
-            client_identity_file: None,
-            trust_roots_file: None,
+            tls: TlsClientSection::default(),
             refresh_interval_s: 300,
             deadline_ms: 30_000,
             max_pages: 200,
@@ -91,7 +82,7 @@ pub struct DirectorySettings {
     /// credentials grant of `oauth`.
     pub credentials: Option<Scheme>,
     /// The TLS material the directory is reached with.
-    pub tls: TlsSettings,
+    pub tls: Arc<TlsClient>,
     /// How often the changes are asked for.
     pub refresh_interval: Duration,
     /// How long one whole read or refresh may take.
@@ -184,12 +175,7 @@ pub(crate) fn resolve(
             key: String::from("registry.mcsd.refresh_interval_s"),
         });
     }
-    let tls = crate::config::tls::resolve(
-        "registry.mcsd",
-        directory.client_identity.as_ref(),
-        directory.client_identity_file.as_deref(),
-        directory.trust_roots_file.as_ref(),
-    )?;
+    let tls = crate::config::tls::read("registry.mcsd.tls", &directory.tls)?;
     Ok(DirectorySettings {
         url: directory.url.clone(),
         credentials,

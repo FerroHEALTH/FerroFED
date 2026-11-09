@@ -166,10 +166,7 @@ pub(crate) fn with_pairs(
 /// names it itself.
 fn refused(file: Option<&Path>, source: ConfigError) -> Error {
     if let Some((old, new)) = renamed(&source) {
-        return Error::Renamed {
-            old: old.to_owned(),
-            new: new.to_owned(),
-        };
+        return Error::Renamed { old, new };
     }
     let file = match source {
         ConfigError::Read { .. } => None,
@@ -194,16 +191,34 @@ const RENAMED: [(&str, &str); 4] = [
     ("server.overload_retry_after_s", "server.retry_after_s"),
 ];
 
+/// The outbound TLS keys a table took before they moved into its `tls`
+/// sub-table (#1750).
+const MOVED_TO_TLS: [&str; 3] = [
+    "client_identity",
+    "client_identity_file",
+    "trust_roots_file",
+];
+
 /// The renamed key `source` refuses and its replacement, when it refuses
 /// one, alone or among other refusals.
-fn renamed(source: &ConfigError) -> Option<(&'static str, &'static str)> {
+fn renamed(source: &ConfigError) -> Option<(String, String)> {
     match source {
-        ConfigError::Invalid { key: Some(key), .. } => {
-            RENAMED.into_iter().find(|(old, _)| old == key)
-        }
+        ConfigError::Invalid { key: Some(key), .. } => RENAMED
+            .into_iter()
+            .find(|(old, _)| old == key)
+            .map(|(old, new)| (old.to_owned(), new.to_owned()))
+            .or_else(|| moved_to_tls(key)),
         ConfigError::Refusals { refusals } => refusals.iter().find_map(renamed),
         _ => None,
     }
+}
+
+/// `key`, an outbound TLS key refused on its table, and the key of its
+/// table's `tls` sub-table that replaces it.
+fn moved_to_tls(key: &str) -> Option<(String, String)> {
+    let (table, leaf) = key.rsplit_once('.')?;
+    (MOVED_TO_TLS.contains(&leaf) && !table.ends_with("tls"))
+        .then(|| (key.to_owned(), format!("{table}.tls.{leaf}")))
 }
 
 /// Refuses the removed `[dev]` table, which the shared loader reads as any

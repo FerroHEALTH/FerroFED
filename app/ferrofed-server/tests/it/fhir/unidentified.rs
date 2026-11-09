@@ -38,6 +38,13 @@ const NOT_DOCUMENTS: [&[u8]; 3] = [
     b"{\"resourceType\":\"Bundle\",\"identifier\":{\"system\":\"urn:oid:2.999.4.3\",\"value\":\"synthetic-doc-x\"},\"type\":\"collection\",\"entry\":[]}",
 ];
 
+/// Answers whose element the face reads holds the wrong kind of JSON value:
+/// an array for the resource, and an array for `Bundle.identifier`.
+const WRONG_KINDS: [&[u8]; 2] = [
+    b"[]",
+    b"{\"resourceType\":\"Bundle\",\"identifier\":[{\"system\":\"urn:oid:2.999.4.3\",\"value\":\"synthetic-doc-x\"}],\"type\":\"document\",\"entry\":[]}",
+];
+
 /// Holds the outcome `outcome` to name node `endpoint` in `node-error`, its
 /// diagnostics saying `why`.
 fn names_the_member(outcome: &Value, endpoint: &str, why: &str) -> TestResult {
@@ -137,6 +144,14 @@ async fn an_answer_that_is_no_fhir_document_fails_the_list() -> TestResult {
     }
     fails_the_list(ResponseTemplate::new(200).set_body_raw(NOT_DOCUMENTS[0].to_vec(), "text/plain"))
         .await
+}
+
+#[tokio::test]
+async fn an_answer_whose_read_element_is_of_the_wrong_kind_fails_the_list() -> TestResult {
+    for answer in WRONG_KINDS {
+        fails_the_list(fhir_document(answer)).await?;
+    }
+    Ok(())
 }
 
 #[tokio::test]

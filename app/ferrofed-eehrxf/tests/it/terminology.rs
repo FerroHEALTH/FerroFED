@@ -17,7 +17,6 @@ use eehrxf::terminology::Terminology;
 use eehrxf::terminology::TerminologyError;
 use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_identity::fhir::Authentication;
-use ferrofed_identity::fhir::Tls;
 use ferrofed_testkit::mock::Server;
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::primitives::Code;
@@ -46,7 +45,7 @@ fn terminology(server: &Server, timeout: Duration) -> Result<Terminology, Box<dy
             user: String::from("ferrofed"),
             password: SecretString::from("synthetic-token"),
         },
-        &Tls::default(),
+        &ferrofed_testkit::tls::platform(),
         timeout,
     )?;
     Ok(Terminology::server(Arc::new(client)))

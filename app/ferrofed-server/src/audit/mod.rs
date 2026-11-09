@@ -43,7 +43,6 @@ use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
 use ihe_atna::balp::{AuditRecorder, NetworkAddress};
 
 use crate::config::audit::{AuditDestination, AuditSettings, FeedRepositorySettings};
-use crate::config::service::{self, TlsRefused};
 use crate::config::settings::Settings;
 use crate::health::dependencies::Indicator;
 
@@ -296,9 +295,6 @@ pub enum AuditTrailError {
     /// The FHIR Feed repository was refused.
     #[error("the audit repository cannot be reached as configured")]
     Feed(#[source] FeedConfigError),
-    /// The FHIR Feed repository's TLS material does not read.
-    #[error("the audit repository TLS material cannot be used")]
-    Tls(#[source] TlsRefused),
     /// The spool could not be opened, or, in a check, would not open.
     #[error("{key} names an audit spool that cannot be used")]
     Spool {
@@ -334,16 +330,10 @@ pub fn feed_trail(settings: &FeedRepositorySettings) -> Result<Arc<FeedAudit>, A
         |directory| directory.display().to_string(),
     );
     started(key, settings, || {
-        let tls = service::tls(
-            "audit.repository",
-            settings.client_identity.as_ref(),
-            settings.trust_roots.as_deref(),
-        )
-        .map_err(AuditTrailError::Tls)?;
         let repository = feed_repository(
             settings.url.clone(),
             settings.cleartext,
-            &tls,
+            &settings.tls,
             settings.timeout,
         )
         .map_err(AuditTrailError::Feed)?;

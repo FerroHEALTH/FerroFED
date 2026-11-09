@@ -43,6 +43,8 @@ use x509_ocsp::{
 };
 
 use crate::mock::{RecordingOff, Server, recorded};
+use ferrohealth_server::tls_client::TlsClient;
+
 use crate::pki::{self, Authority, PkiError};
 use crate::tls::{Material, MutualTls, TlsHarnessError, thumbprint};
 use crate::unreachable;
@@ -208,6 +210,20 @@ impl RevocationFront {
     #[must_use]
     pub fn client_identity(&self) -> &str {
         self.front.client_identity()
+    }
+
+    /// Returns the gateway's TLS material for the front, read as the table
+    /// at `key` reads it.
+    ///
+    /// # Errors
+    ///
+    /// [`RevocationHarnessError::Front`] when the material does not read.
+    pub fn tls_client(&self, key: &str) -> Result<Arc<TlsClient>, RevocationHarnessError> {
+        Ok(crate::tls::read_material(
+            key,
+            self.client_identity(),
+            self.trust_roots(),
+        )?)
     }
 
     /// Returns how many connections completed the handshake.

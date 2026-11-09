@@ -40,7 +40,7 @@ use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::fanout::Completion;
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::single_node::forward::Forwarded;
-use ferrofed_engine::single_node::native::Answer;
+use ferrofed_engine::single_node::native as engine;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use http::{HeaderValue, StatusCode, header};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
@@ -54,7 +54,7 @@ use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::conveyed;
 use crate::error::Code;
-use crate::facade::native::{self, Chosen, Native};
+use crate::facade::native::{self, Answer, Chosen, Native};
 use crate::facade::summary::own::Kind;
 use crate::federation::Federation;
 
@@ -435,12 +435,12 @@ fn answered(native: &Native) -> Response {
                 ferrofed_eehrxf::list::unidentified(native.chosen.native.as_str())
             ),
         ),
-        Answer::Absent => outcome(
+        Answer::Unread(engine::Answer::Absent) => outcome(
             StatusCode::NOT_FOUND,
             "not-found",
             "the member holds this document no longer; list the documents again",
         ),
-        silent => {
+        silent @ Answer::Unread(_) => {
             let status = native::settled(
                 std::slice::from_ref(native),
                 StatusCode::OK,
