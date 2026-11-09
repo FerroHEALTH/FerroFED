@@ -24,7 +24,6 @@ use std::time::{Duration, Instant};
 
 use http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use http::{HeaderValue, Method, StatusCode};
-use jsonwebtoken::Header;
 use openehr_its::rest::client::{
     Credentials, InvalidCredentials, RequestTimeout, Transport, TransportError,
 };
@@ -36,9 +35,9 @@ use url::form_urlencoded;
 use crate::dispatch::reported::MESSAGE_LIMIT;
 use crate::onward::authorization_details::{self, AuthorizationDetailsError};
 use crate::onward::dpop::{self, Prover, Role};
-use crate::onward::keys::SigningKey;
 use crate::onward::mtls::{self, Binding, Confirmation};
 use crate::onward::{ClientAuthentication, Grant, SecretMethod};
+use ferrohealth_smart::client::assertion::AssertionKey;
 
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 §2.2).
 pub const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -90,7 +89,7 @@ pub struct Issued {
 pub enum TokenError {
     /// The client assertion could not be signed.
     #[error("the client assertion could not be signed")]
-    Sign(#[source] jsonwebtoken::errors::Error),
+    Sign(#[source] ferrohealth_smart::client::assertion::AssertionError),
     /// The request needs an assertion of the gateway, and the grant holds
     /// no key to sign one; nothing was sent.
     #[error("the token request needs an assertion of the gateway, and no key signs one")]
@@ -320,7 +319,7 @@ struct ErrorResponse {
 /// Returns [`TokenError::Sign`] when the key cannot sign.
 pub fn assertion(
     grant: &Grant,
-    key: &SigningKey,
+    key: &AssertionKey,
     lifetime: Duration,
 ) -> Result<String, TokenError> {
     let iat = jiff::Timestamp::now().as_second();
@@ -333,9 +332,7 @@ pub fn assertion(
         iat,
         jti: uuid::Uuid::new_v4().to_string(),
     };
-    let mut header = Header::new(key.algorithm());
-    header.kid = Some(key.kid().to_owned());
-    jsonwebtoken::encode(&header, &claims, key.private()).map_err(TokenError::Sign)
+    key.sign("JWT", &claims).map_err(TokenError::Sign)
 }
 
 /// Requests a token for `grant` with the client-credentials grant (RFC
@@ -360,7 +357,7 @@ pub fn assertion(
 /// to another certificate than the grant's.
 pub async fn request<T: Transport>(
     grant: &Grant,
-    signer: Option<(&SigningKey, Duration)>,
+    signer: Option<(&AssertionKey, Duration)>,
     transport: &T,
     timeout: Duration,
 ) -> Result<Issued, TokenError> {
@@ -396,7 +393,7 @@ pub async fn request<T: Transport>(
 pub async fn exchange<T: Transport>(
     grant: &Grant,
     subject: Subject<'_>,
-    (key, lifetime): (&SigningKey, Duration),
+    (key, lifetime): (&AssertionKey, Duration),
     transport: &T,
     timeout: Duration,
 ) -> Result<Issued, TokenError> {
@@ -425,7 +422,7 @@ pub async fn exchange<T: Transport>(
 /// client certificate (RFC 8705 §2) or its client secret (RFC 6749 §2.3.1).
 fn client_assertion(
     grant: &Grant,
-    signer: Option<(&SigningKey, Duration)>,
+    signer: Option<(&AssertionKey, Duration)>,
 ) -> Result<Option<String>, TokenError> {
     match grant.client_authentication() {
         ClientAuthentication::Tls(_) => Ok(None),

@@ -670,15 +670,10 @@ pub(crate) fn store_table() -> String {
 pub(crate) fn signer(
     federation: &str,
 ) -> Result<Arc<ferrofed_engine::conveyance::signer::Signer>, Box<dyn StdError>> {
-    use ferrofed_engine::onward::SystemClock;
-    use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
-    let pem = secrecy::SecretString::from(ferrofed_testkit::oauth::Curve::P384.pem()?);
-    let keys = KeyRing::new(
-        SigningKey::from_pem(&pem, Curve::P384)?,
-        None,
-        Duration::ZERO,
-        Arc::new(SystemClock),
-    )?;
+    use ferrohealth_smart::client::assertion::AssertionKey;
+    use ferrohealth_smart::client::keys::KeyRing;
+    let pem = ferrofed_testkit::oauth::Curve::P384.pem()?;
+    let keys = KeyRing::new(AssertionKey::from_pem(pem.as_bytes(), None, None)?);
     Ok(Arc::new(ferrofed_engine::conveyance::signer::Signer::new(
         Arc::new(keys),
         federation,

@@ -19,7 +19,6 @@ use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
-use ferrofed_engine::onward::keys::{Curve, KeyError, KeyRing, SigningKey};
 use ferrofed_engine::onward::token::REFRESH_MARGIN;
 use ferrofed_engine::onward::token::{CLIENT_ASSERTION_TYPE, GRANT_TYPE};
 use ferrofed_engine::onward::{Clock, Grant, Scope, ScopeError};
@@ -30,6 +29,10 @@ use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::unreachable;
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::assertion::{AssertionError, AssertionKey};
+use ferrohealth_smart::client::keys::{KeyRing, KeyRingError};
+use jsonwebtoken::Algorithm;
+use jsonwebtoken::jwk::JwkSet;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{Credentials, CredentialsProvider, ReqwestTransport};
@@ -77,21 +80,17 @@ impl Clock for ManualClock {
 }
 
 /// A fresh synthetic ES384 key.
-fn key() -> Result<SigningKey, Box<dyn Error>> {
-    Ok(SigningKey::from_pem(
-        &SecretString::from(oauth::Curve::P384.pem()?),
-        Curve::P384,
+fn key() -> Result<AssertionKey, Box<dyn Error>> {
+    Ok(AssertionKey::from_pem(
+        oauth::Curve::P384.pem()?.as_bytes(),
+        Some(Algorithm::ES384),
+        None,
     )?)
 }
 
 /// A ring of `current` alone.
-fn ring(current: SigningKey, clock: Arc<dyn Clock>) -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    Ok(Arc::new(KeyRing::new(
-        current,
-        None,
-        Duration::from_mins(65),
-        clock,
-    )?))
+fn ring(current: AssertionKey) -> Arc<KeyRing> {
+    Arc::new(KeyRing::new(current))
 }
 
 /// The grant at `endpoint`'s token URL.
@@ -204,8 +203,8 @@ async fn the_assertion_verifies_against_the_published_jwks_and_the_token_reaches
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     endpoint.expect_scope(SCOPE);
     let clock: Arc<dyn Clock> = ManualClock::new();
-    let keys = ring(key()?, Arc::clone(&clock))?;
-    endpoint.trust(keys.published());
+    let keys = ring(key()?);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let node = node_requiring(&endpoint).await;
     let client = client(&node, provider(grant(&endpoint)?, keys, clock)?)?;
 
@@ -228,8 +227,8 @@ async fn the_assertion_verifies_against_the_published_jwks_and_the_token_reaches
 async fn the_token_request_carries_the_rfc_7523_parameters() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     let clock: Arc<dyn Clock> = ManualClock::new();
-    let keys = ring(key()?, Arc::clone(&clock))?;
-    endpoint.trust(keys.published());
+    let keys = ring(key()?);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let grant = grant(&endpoint)?
         .with_resource("https://cdr-a.example.org/openehr")?
         .with_audience("cdr-a")?;
@@ -275,8 +274,8 @@ async fn the_assertion_carries_the_rfc_7523_claims() -> TestResult {
     let clock: Arc<dyn Clock> = ManualClock::new();
     let current = key()?;
     let kid = current.kid().to_owned();
-    let keys = ring(current, Arc::clone(&clock))?;
-    endpoint.trust(keys.published());
+    let keys = ring(current);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let provider = provider(grant(&endpoint)?, Arc::clone(&keys), clock)?;
     provider.credentials().await?;
     provider.credentials().await?;
@@ -290,11 +289,11 @@ async fn the_assertion_carries_the_rfc_7523_claims() -> TestResult {
     let mut seen = Vec::new();
     for assertion in &assertions {
         let header = jsonwebtoken::decode_header(assertion)?;
-        assert_eq!(jsonwebtoken::Algorithm::ES384, header.alg);
+        assert_eq!(Algorithm::ES384, header.alg);
         assert_eq!(Some(kid.as_str()), header.kid.as_deref());
         let claims = oauth::verify(
             assertion,
-            &keys.published(),
+            &serde_json::from_value(keys.published())?,
             CLIENT_ID,
             &endpoint.token_url(),
         )?;
@@ -314,44 +313,49 @@ async fn the_assertion_carries_the_rfc_7523_claims() -> TestResult {
 #[test]
 fn the_kid_is_the_rfc_7638_thumbprint_of_the_key() -> TestResult {
     let pem = oauth::Curve::P384.pem()?;
-    let once = SigningKey::from_pem(&SecretString::from(pem.clone()), Curve::P384)?;
-    let again = SigningKey::from_pem(&SecretString::from(pem), Curve::P384)?;
+    let once = AssertionKey::from_pem(pem.clone().as_bytes(), Some(Algorithm::ES384), None)?;
+    let again = AssertionKey::from_pem(pem.as_bytes(), Some(Algorithm::ES384), None)?;
     assert_eq!(once.kid(), again.kid());
-    let thumbprint = once
-        .public()
-        .thumbprint(jsonwebtoken::jwk::ThumbprintHash::SHA256)?;
+    let public: jsonwebtoken::jwk::Jwk = serde_json::from_value(once.public_jwk())?;
+    let thumbprint = public.thumbprint(jsonwebtoken::jwk::ThumbprintHash::SHA256)?;
     assert_eq!(thumbprint, once.kid());
-    assert_eq!(Some(once.kid()), once.public().common.key_id.as_deref());
+    assert_eq!(Some(once.kid()), public.common.key_id.as_deref());
     assert_eq!(
         Some(jsonwebtoken::jwk::PublicKeyUse::Signature),
-        once.public().common.public_key_use
+        public.common.public_key_use
     );
+    assert_eq!(serde_json::json!("ES384"), once.public_jwk()["alg"]);
     assert_ne!(key()?.kid(), once.kid());
     Ok(())
 }
 
 #[test]
 fn a_key_that_is_no_es384_key_is_refused() -> TestResult {
-    let p256 = SigningKey::from_pem(&SecretString::from(oauth::Curve::P256.pem()?), Curve::P384);
-    assert!(matches!(p256, Err(KeyError::Curve(_))), "{p256:?}");
-    let garbage = SigningKey::from_pem(&SecretString::from("not a key"), Curve::P384);
-    assert!(matches!(garbage, Err(KeyError::Pem(_))), "{garbage:?}");
+    let p256 = AssertionKey::from_pem(
+        oauth::Curve::P256.pem()?.as_bytes(),
+        Some(Algorithm::ES384),
+        None,
+    );
+    assert!(
+        matches!(p256, Err(AssertionError::Public { .. })),
+        "a P-256 key derives no ES384 public key: {p256:?}"
+    );
+    let garbage = AssertionKey::from_pem("not a key".as_bytes(), Some(Algorithm::ES384), None);
+    assert!(
+        matches!(garbage, Err(AssertionError::Key { .. })),
+        "{garbage:?}"
+    );
     Ok(())
 }
 
 #[test]
 fn a_previous_key_that_is_the_current_key_is_refused() -> TestResult {
     let pem = oauth::Curve::P384.pem()?;
-    let current = SigningKey::from_pem(&SecretString::from(pem.clone()), Curve::P384)?;
-    let previous = SigningKey::from_pem(&SecretString::from(pem), Curve::P384)?;
-    let refused = KeyRing::new(
-        current,
-        Some(previous),
-        Duration::from_mins(65),
-        ManualClock::new(),
-    );
+    let current = AssertionKey::from_pem(pem.clone().as_bytes(), Some(Algorithm::ES384), None)?;
+    let previous = AssertionKey::from_pem(pem.as_bytes(), Some(Algorithm::ES384), None)?;
+    let refused = KeyRing::new(current).with_previous_for(previous, Duration::from_mins(65));
     assert!(
-        matches!(refused, Err(KeyError::SameKey { .. })),
+        matches!(refused, Err(KeyRingError::SameKey { .. })),
         "{refused:?}"
     );
     Ok(())
@@ -367,8 +371,8 @@ async fn a_rotation_publishes_both_keys_for_the_overlap_window() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, None).await;
     let clock = ManualClock::new();
     let old = key()?;
-    let before = ring(old.clone(), clock.clone())?;
-    endpoint.trust(before.published());
+    let before = ring(old.clone());
+    endpoint.trust(serde_json::from_value(before.published())?);
     provider(grant(&endpoint)?, before, clock.clone())?
         .credentials()
         .await?;
@@ -379,9 +383,11 @@ async fn a_rotation_publishes_both_keys_for_the_overlap_window() -> TestResult {
 
     let new = key()?;
     let overlap = Duration::from_mins(65);
-    let rotated = KeyRing::new(new.clone(), Some(old.clone()), overlap, clock.clone())?;
-    let published: Vec<Option<String>> = rotated
-        .published()
+    let rotated = KeyRing::new(new.clone()).with_previous_for(old.clone(), overlap)?;
+    let published_at = |now| -> Result<JwkSet, serde_json::Error> {
+        serde_json::from_value(rotated.published_at(now))
+    };
+    let published: Vec<Option<String>> = published_at(clock.now())?
         .keys
         .iter()
         .map(|jwk| jwk.common.key_id.clone())
@@ -392,15 +398,16 @@ async fn a_rotation_publishes_both_keys_for_the_overlap_window() -> TestResult {
     );
     oauth::verify(
         &signed_by_old,
-        &rotated.published(),
+        &published_at(clock.now())?,
         CLIENT_ID,
         &endpoint.token_url(),
     )?;
     assert_eq!(new.kid(), rotated.current().kid(), "the new key signs");
 
-    clock.advance(overlap)?;
-    let published: Vec<Option<String>> = rotated
-        .published()
+    // NOTE: the crate's ring counts its window from the real instant it was built,
+    // a moment after the manual clock's start, so the clock moves one second past it.
+    clock.advance(overlap.saturating_add(Duration::from_secs(1)))?;
+    let published: Vec<Option<String>> = published_at(clock.now())?
         .keys
         .iter()
         .map(|jwk| jwk.common.key_id.clone())
@@ -409,7 +416,7 @@ async fn a_rotation_publishes_both_keys_for_the_overlap_window() -> TestResult {
     assert!(
         oauth::verify(
             &signed_by_old,
-            &rotated.published(),
+            &published_at(clock.now())?,
             CLIENT_ID,
             &endpoint.token_url()
         )
@@ -425,8 +432,8 @@ async fn a_rotation_publishes_both_keys_for_the_overlap_window() -> TestResult {
 async fn a_token_is_cached_until_thirty_seconds_before_it_expires() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(120)).await;
     let clock = ManualClock::new();
-    let keys = ring(key()?, clock.clone())?;
-    endpoint.trust(keys.published());
+    let keys = ring(key()?);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let provider = provider(grant(&endpoint)?, keys, clock.clone())?;
 
     let first = bearer(&provider.credentials().await?)?;
@@ -456,8 +463,8 @@ async fn a_token_is_cached_until_thirty_seconds_before_it_expires() -> TestResul
 async fn a_token_shorter_than_the_margin_is_not_cached() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(20)).await;
     let clock = ManualClock::new();
-    let keys = ring(key()?, clock.clone())?;
-    endpoint.trust(keys.published());
+    let keys = ring(key()?);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let provider = provider(grant(&endpoint)?, keys, clock)?;
     provider.credentials().await?;
     provider.credentials().await?;
@@ -472,8 +479,8 @@ async fn concurrent_requests_share_one_token_request() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     endpoint.issuance().delay(Duration::from_millis(200));
     let clock = ManualClock::new();
-    let keys = ring(key()?, clock.clone())?;
-    endpoint.trust(keys.published());
+    let keys = ring(key()?);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let provider = provider(grant(&endpoint)?, keys, clock)?;
 
     let mut tasks = Vec::new();
@@ -507,8 +514,8 @@ async fn concurrent_requests_share_one_token_request() -> TestResult {
 async fn a_401_drops_the_token_and_the_next_request_obtains_a_new_one() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     let clock: Arc<dyn Clock> = ManualClock::new();
-    let keys = ring(key()?, Arc::clone(&clock))?;
-    endpoint.trust(keys.published());
+    let keys = ring(key()?);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let node = node_requiring(&endpoint).await;
     let client = client(&node, provider(grant(&endpoint)?, keys, clock)?)?;
 
@@ -573,8 +580,8 @@ fn a_scope_is_requested_in_its_canonical_form() -> TestResult {
 async fn the_token_request_carries_the_canonical_scope() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     let clock: Arc<dyn Clock> = ManualClock::new();
-    let keys = ring(key()?, Arc::clone(&clock))?;
-    endpoint.trust(keys.published());
+    let keys = ring(key()?);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let grant = Grant::new(
         &SecretUrl::new(endpoint.token_url()),
         CLIENT_ID,
@@ -599,8 +606,8 @@ async fn the_token_request_carries_the_canonical_scope() -> TestResult {
 async fn a_provider_shows_no_token() -> TestResult {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     let clock: Arc<dyn Clock> = ManualClock::new();
-    let keys = ring(key()?, Arc::clone(&clock))?;
-    endpoint.trust(keys.published());
+    let keys = ring(key()?);
+    endpoint.trust(serde_json::from_value(keys.published())?);
     let provider = provider(grant(&endpoint)?, keys, clock)?;
     let token = bearer(&provider.credentials().await?)?;
     let shown = format!("{provider:?}");
@@ -620,7 +627,7 @@ async fn refused_with(
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     endpoint.issuance().refuse(status, error, description);
     let clock: Arc<dyn Clock> = ManualClock::new();
-    let keys = ring(key()?, Arc::clone(&clock))?;
+    let keys = ring(key()?);
     let node = node_requiring(&endpoint).await;
     let client = client(&node, provider(grant(&endpoint)?, keys, clock)?)?;
     let reply = query(&client).await?;
@@ -693,7 +700,7 @@ async fn an_unreachable_token_endpoint_is_a_node_error_and_nothing_reaches_the_n
 {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
     let clock: Arc<dyn Clock> = ManualClock::new();
-    let keys = ring(key()?, Arc::clone(&clock))?;
+    let keys = ring(key()?);
     let node = node_requiring(&endpoint).await;
     let down = Grant::new(
         &SecretUrl::new(format!("{}{}", unreachable::BASE, oauth::TOKEN_PATH)),

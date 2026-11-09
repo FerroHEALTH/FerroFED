@@ -49,13 +49,12 @@ pub mod metadata;
 
 use std::fmt;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::onward::issuer::{AliasHost, Issuer};
 use ferrofed_registry::id::EndpointId;
 use ferrohealth_secret::secret_url::SecretUrl;
 use jsonwebtoken::Algorithm;
-use jsonwebtoken::jwk::JwkSet;
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider, Transport};
 use url::Url;
 
@@ -67,11 +66,12 @@ use crate::onward::dpop::Prover;
 use crate::onward::grant::client_credentials::ClientCredentials;
 use crate::onward::grant::exchange::{Exchange, OnBehalf};
 use crate::onward::grant::fapi2::metadata::DiscoveryError;
-use crate::onward::keys::{KeyError, KeyRing, SigningKey};
 use crate::onward::mtls::Thumbprint;
 use crate::onward::{
-    ClientAuthentication, Clock, Grant, GrantError, GrantKind, Scope, SenderConstraint, SystemClock,
+    ClientAuthentication, Clock, Grant, GrantError, GrantKind, Scope, SenderConstraint,
 };
+use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::keys::{KeyRing, KeyRingError};
 
 /// The JWS algorithm every assertion and proof of the grant is signed with.
 ///
@@ -119,7 +119,7 @@ pub struct Fapi2Security {
     /// assertion under `private_key_jwt`, and the actor token of a token
     /// exchange. A grant authenticated by mutual TLS that exchanges no token
     /// needs none.
-    pub client_key: Option<SigningKey>,
+    pub client_key: Option<AssertionKey>,
 }
 
 /// A FAPI 2.0 grant that cannot be built.
@@ -144,7 +144,7 @@ pub enum Fapi2GrantError {
     PreviousWithoutClientKey,
     /// The client key cannot be held: the previous key is the current one.
     #[error("the client key cannot be held")]
-    Keys(#[source] KeyError),
+    Keys(#[source] KeyRingError),
     /// The `DPoP` key does not sign `ES256` (FAPI 2.0 Security Profile
     /// §5.4.1).
     #[error("the DPoP key does not sign ES256, which FAPI 2.0 §5.4.1 requires of it")]
@@ -192,7 +192,7 @@ impl Fapi2Grant {
     pub fn new(
         issuer: Issuer,
         client_id: impl Into<String>,
-        (client_key, dpop): (SigningKey, Arc<Prover>),
+        (client_key, dpop): (AssertionKey, Arc<Prover>),
         request: (Option<Scope>, Option<AuthorizationDetails>),
     ) -> Result<Self, Fapi2GrantError> {
         let security = Fapi2Security {
@@ -245,14 +245,7 @@ impl Fapi2Grant {
         if scope.is_none() && authorization_details.is_none() {
             return Err(Fapi2GrantError::Unrequested);
         }
-        let client_key = security
-            .client_key
-            .map(|key| {
-                let clock: Arc<dyn Clock> = Arc::new(SystemClock);
-                KeyRing::new(key, None, Duration::ZERO, clock).map(Arc::new)
-            })
-            .transpose()
-            .map_err(Fapi2GrantError::Keys)?;
+        let client_key = security.client_key.map(|key| Arc::new(KeyRing::new(key)));
         Ok(Self {
             issuer,
             client_id,
@@ -305,7 +298,7 @@ impl Fapi2Grant {
     /// `previous` is the current client key.
     pub fn with_previous_client_key(
         mut self,
-        previous: SigningKey,
+        previous: AssertionKey,
     ) -> Result<Self, Fapi2GrantError> {
         if previous.algorithm() != ALGORITHM {
             return Err(Fapi2GrantError::PreviousClientKey);
@@ -315,7 +308,8 @@ impl Fapi2Grant {
             .as_deref()
             .map(KeyRing::current)
             .ok_or(Fapi2GrantError::PreviousWithoutClientKey)?;
-        let ring = KeyRing::until_removed(current.clone(), previous, Arc::new(SystemClock))
+        let ring = KeyRing::new(current.clone())
+            .with_previous_until_removed(previous)
             .map_err(Fapi2GrantError::Keys)?;
         self.client_key = Some(Arc::new(ring));
         Ok(self)
@@ -400,26 +394,26 @@ impl Fapi2Grant {
     /// half the gateway publishes in its JWK Set (FAPI 2.0 Security Profile
     /// §5.4.2), when the grant has one.
     #[must_use]
-    pub fn client_key(&self) -> Option<&SigningKey> {
+    pub fn client_key(&self) -> Option<&AssertionKey> {
         self.client_key.as_deref().map(KeyRing::current)
     }
 
     /// The previous client key while the grant is rotated, published and
     /// never signing.
     #[must_use]
-    pub fn previous_client_key(&self) -> Option<&SigningKey> {
-        self.client_key.as_deref().and_then(KeyRing::previous)
-    }
-
-    /// The public halves the gateway publishes for the grant in its JWK
-    /// Set: the client key, then the previous one while the grant is
-    /// rotated, and none for a grant with no client key (RFC 7517 §5; FAPI
-    /// 2.0 Security Profile §5.4.2).
-    #[must_use]
-    pub fn published_client_keys(&self) -> JwkSet {
+    pub fn previous_client_key(&self) -> Option<&AssertionKey> {
         self.client_key
             .as_deref()
-            .map_or_else(|| JwkSet { keys: Vec::new() }, KeyRing::published)
+            .and_then(|ring| ring.previous_at(Instant::now()))
+    }
+
+    /// The ring the gateway publishes for the grant in its JWK Set: the
+    /// client key, then the previous one while the grant is rotated, and
+    /// none for a grant with no client key (RFC 7517 §5; FAPI 2.0 Security
+    /// Profile §5.4.2).
+    #[must_use]
+    pub fn client_key_ring(&self) -> Option<&KeyRing> {
+        self.client_key.as_deref()
     }
 
     /// How the grant authenticates the gateway at the token endpoint.

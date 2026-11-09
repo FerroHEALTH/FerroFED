@@ -8,6 +8,24 @@ use openehr_its::rest::client::InvalidCredentials;
 
 use crate::config::error::basic::BasicFault;
 
+/// Why a `[signing]` key is refused; no variant quotes any part of a key.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum SigningKeyError {
+    /// The file holds no private key in PEM that `ferrohealth-smart` reads,
+    /// or an EC key on another curve than P-256 or P-384.
+    #[error("the key cannot be read as a signing key")]
+    Key(#[source] ferrohealth_smart::client::assertion::AssertionError),
+    /// The key is no EC key: the `[signing]` ring signs with ES256 or ES384
+    /// alone (RFC 7518 §3.4).
+    #[error("the key is no P-256 or P-384 key, the curves ES256 and ES384 sign with")]
+    NotEc,
+    /// The previous key is the current key, or the next key is the current
+    /// or the previous key.
+    #[error("the key is already in the ring")]
+    Ring(#[source] ferrohealth_smart::client::keys::KeyRingError),
+}
+
 /// A credential, a signing key or a grant the server refuses to start on.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -85,7 +103,7 @@ pub enum CredentialsFault {
         key: String,
         /// Why the key is refused; it quotes no part of the key.
         #[source]
-        source: ferrofed_engine::onward::keys::KeyError,
+        source: SigningKeyError,
     },
     /// The next signing key is on another curve than the algorithm it is
     /// meant to sign with: `signing.next_key_algorithm`, or the current key's

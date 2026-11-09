@@ -10,12 +10,13 @@ use std::time::Duration;
 
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::lane::Organisations;
-use ferrofed_engine::onward::keys::{KeyRing, SigningKey};
 use ferrofed_engine::onward::mtls::Thumbprint;
 use ferrofed_engine::onward::token::MAX_ASSERTION_LIFETIME;
-use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
+use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope};
 use ferrohealth_secret::file::read_secret;
 use ferrohealth_secret::secret::Secret;
+use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
@@ -23,7 +24,7 @@ use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 
 use crate::config::error::Error;
 use crate::config::error::basic::BasicFault;
-use crate::config::error::credentials::CredentialsFault;
+use crate::config::error::credentials::{CredentialsFault, SigningKeyError};
 use crate::config::grant;
 use crate::config::oauth::Onward;
 use crate::config::public_url::PublicUrl;
@@ -474,20 +475,25 @@ pub(crate) fn resolve_signing(
         });
     }
     let overlap = Duration::from_secs(signing.rotation_overlap_s);
-    let mut keys =
-        KeyRing::new(current, previous, overlap, Arc::new(SystemClock)).map_err(|source| {
+    let ring_refused = |key: &str| {
+        let key = key.to_owned();
+        move |source| {
             Error::Credentials(CredentialsFault::SigningKey {
-                key: String::from("signing.previous_key_file"),
-                source,
+                key,
+                source: SigningKeyError::Ring(source),
             })
-        })?;
+        }
+    };
+    let mut keys = KeyRing::new(current);
+    if let Some(previous) = previous {
+        keys = keys
+            .with_previous_for(previous, overlap)
+            .map_err(ring_refused("signing.previous_key_file"))?;
+    }
     if let Some(next) = next {
-        keys = keys.with_next(next).map_err(|source| {
-            Error::Credentials(CredentialsFault::SigningKey {
-                key: String::from("signing.next_key_file"),
-                source,
-            })
-        })?;
+        keys = keys
+            .with_next(next)
+            .map_err(ring_refused("signing.next_key_file"))?;
     }
     Ok(SigningSettings {
         keys: Arc::new(keys),
@@ -523,7 +529,7 @@ fn jwks_uri(text: Option<&str>, public: Option<&PublicUrl>) -> Result<Uri, Error
 
 /// Reads the next signing key from `path`, refused when its curve signs
 /// another algorithm than `intended` (RFC 7518 §3.4).
-fn next_key(path: &Path, intended: Algorithm) -> Result<SigningKey, Error> {
+fn next_key(path: &Path, intended: Algorithm) -> Result<AssertionKey, Error> {
     let next = signing_key("signing.next_key", path)?;
     if next.algorithm() != intended {
         return Err(Error::Credentials(CredentialsFault::NextKeyAlgorithm {
@@ -546,14 +552,20 @@ fn algorithm_name(algorithm: Algorithm) -> &'static str {
 }
 
 /// Reads the signing key the `_file` sibling of `key` names.
-fn signing_key(key: &str, path: &Path) -> Result<SigningKey, Error> {
+fn signing_key(key: &str, path: &Path) -> Result<AssertionKey, Error> {
     let pem = read_secret::<Secret>(key, None, Some(path))?.ok_or_else(|| Error::Missing {
         key: format!("{key}_file"),
     })?;
-    SigningKey::from_ec_pem(&pem.to_secret_string()).map_err(|source| {
+    let refused = |source| {
         Error::Credentials(CredentialsFault::SigningKey {
             key: format!("{key}_file"),
             source,
         })
-    })
+    };
+    let read = AssertionKey::from_pem(pem.expose().as_bytes(), None, None)
+        .map_err(|source| refused(SigningKeyError::Key(source)))?;
+    if !matches!(read.algorithm(), Algorithm::ES256 | Algorithm::ES384) {
+        return Err(refused(SigningKeyError::NotEc));
+    }
+    Ok(read)
 }

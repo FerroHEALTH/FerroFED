@@ -18,12 +18,15 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use ferrofed_engine::onward::keys::JWK_SET_MEDIA_TYPE;
 use http::{HeaderMap, HeaderValue, StatusCode, header};
+use jsonwebtoken::jwk::JwkSet;
 
 use crate::error::{self, Code};
 use crate::request_id;
 use crate::state::AppState;
+
+/// The media type of a JWK Set (RFC 7517 §8.5.1).
+const JWK_SET_MEDIA_TYPE: &str = "application/jwk-set+json";
 
 /// `GET {base}/.well-known/jwks.json`: the keys the gateway publishes now.
 pub async fn jwks(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
@@ -32,11 +35,17 @@ pub async fn jwks(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Res
         return error::fixed(Code::NotFound, request_id);
     };
     let mut published = match federation.signing() {
-        Some(signing) => signing.keys.published(),
+        Some(signing) => match serde_json::from_value::<JwkSet>(signing.keys.published()) {
+            Ok(published) => published,
+            Err(failure) => {
+                tracing::error!(error = %failure, "the signing keys' JWK Set could not be read");
+                return error::fixed(Code::Internal, request_id);
+            }
+        },
         None if federation.client_keys().is_empty() => {
             return error::fixed(Code::NotFound, request_id);
         }
-        None => jsonwebtoken::jwk::JwkSet { keys: Vec::new() },
+        None => JwkSet { keys: Vec::new() },
     };
     for client_key in federation.client_keys() {
         if !published

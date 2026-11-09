@@ -18,16 +18,17 @@ use std::path::Path;
 use std::sync::Arc;
 
 use axum::body::Body;
-use ferrofed_engine::onward::keys::{KeyError, SigningKey};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::credentials::CredentialsFault;
+use ferrofed_server::config::error::credentials::SigningKeyError;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::oauth;
+use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::keys::KeyRingError;
 use http::{Request, StatusCode};
 use jsonwebtoken::jwk::JwkSet;
-use secrecy::SecretString;
 
 use crate::facade::{crossref, registry, settings_with_room};
 use crate::support::injected;
@@ -42,7 +43,7 @@ const JWKS_URI: &str = "https://gw.example.org/.well-known/jwks.json";
 fn key_file(dir: &Path, name: &str, pem: &str) -> Result<(toml::Value, String), Box<dyn Error>> {
     let file = dir.join(name);
     std::fs::write(&file, pem)?;
-    let kid = SigningKey::from_ec_pem(&SecretString::from(pem.to_owned()))?
+    let kid = AssertionKey::from_pem(pem.as_bytes(), None, None)?
         .kid()
         .to_owned();
     Ok((toml::Value::String(file.display().to_string()), kid))
@@ -209,7 +210,7 @@ fn a_reused_or_missing_next_key_is_refused() -> TestResult {
     assert!(
         matches!(
             &error,
-            ConfigError::Credentials(CredentialsFault::SigningKey { key, source: KeyError::NextReused { .. } })
+            ConfigError::Credentials(CredentialsFault::SigningKey { key, source: SigningKeyError::Ring(KeyRingError::NextReused { .. }) })
                 if key == "signing.next_key_file"
         ),
         "{error:?}"

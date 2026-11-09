@@ -23,7 +23,6 @@ use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
-use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
 use ferrofed_engine::onward::token::{ACCESS_TOKEN_TYPE, JWT_TOKEN_TYPE, TOKEN_EXCHANGE};
 use ferrofed_engine::onward::{Grant, Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
@@ -33,6 +32,9 @@ use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, Exchanged, TokenEndpoint};
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::keys::KeyRing;
+use jsonwebtoken::Algorithm;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::ReqwestTransport;
@@ -85,22 +87,21 @@ fn caller_token(subject: &str) -> Result<String, Box<dyn Error>> {
 
 /// The gateway's keys, the ones the token endpoint trusts.
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
-    Ok(Arc::new(KeyRing::new(
-        key,
+    let key = AssertionKey::from_pem(
+        oauth::Curve::P384.pem()?.as_bytes(),
+        Some(Algorithm::ES384),
         None,
-        Duration::ZERO,
-        Arc::new(SystemClock),
-    )?))
+    )?;
+    Ok(Arc::new(KeyRing::new(key)))
 }
 
 /// The token endpoint, exchanging the callers' tokens and trusting `keys`.
-async fn endpoint(keys: &KeyRing) -> TokenEndpoint {
+async fn endpoint(keys: &KeyRing) -> Result<TokenEndpoint, Box<dyn Error>> {
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.trust(keys.published());
+    endpoint.trust(serde_json::from_value(keys.published())?);
     endpoint.accept_exchange(CALLERS.jwks(), UPSTREAM);
     endpoint.expect_resource(RESOURCE);
-    endpoint
+    Ok(endpoint)
 }
 
 /// The token-exchange grant at `endpoint`.
@@ -229,7 +230,7 @@ fn error_text(reply: &NodeReply) -> Result<String, Box<dyn Error>> {
 #[tokio::test]
 async fn the_node_receives_a_token_exchanged_for_the_verified_caller() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, Some(crate::conveyed::SUBJECT)).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
     let token = caller_token(crate::conveyed::SUBJECT)?;
@@ -288,7 +289,7 @@ async fn the_node_receives_a_token_exchanged_for_the_verified_caller() -> TestRe
 #[tokio::test]
 async fn an_exchanged_token_is_cached_per_caller() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, None).await;
     let exchange = exchange(grant(&endpoint)?, keys)?;
     let client = client(&node, Arc::clone(&exchange))?;
@@ -315,7 +316,7 @@ async fn an_exchanged_token_is_cached_per_caller() -> TestResult {
 #[tokio::test]
 async fn a_node_401_drops_the_exchanged_token() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, None).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
     let token = caller_token("clinician-0042")?;
@@ -348,7 +349,7 @@ async fn a_node_401_drops_the_exchanged_token() -> TestResult {
 #[tokio::test]
 async fn an_edge_asserted_caller_is_refused_with_nothing_sent() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, None).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
     let token = caller_token("clinician-0042")?;
@@ -371,7 +372,7 @@ async fn an_edge_asserted_caller_is_refused_with_nothing_sent() -> TestResult {
 #[tokio::test]
 async fn a_caller_without_its_token_is_refused_with_nothing_sent() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, None).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
 
@@ -393,7 +394,7 @@ async fn a_caller_without_its_token_is_refused_with_nothing_sent() -> TestResult
 #[tokio::test]
 async fn a_caller_token_carrying_the_withheld_identifier_is_never_exchanged() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, None).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
     let token = caller_token(WITHHELD)?;
@@ -421,7 +422,7 @@ async fn a_caller_token_carrying_the_withheld_identifier_is_never_exchanged() ->
 #[tokio::test]
 async fn an_operation_no_scope_covers_is_never_exchanged() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, None).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
     let token = caller_token("clinician-0042")?;
@@ -450,7 +451,7 @@ async fn an_operation_no_scope_covers_is_never_exchanged() -> TestResult {
 #[tokio::test]
 async fn an_exchange_naming_no_resource_is_never_sent() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, None).await;
     let untargeted = Grant::new(
         &SecretUrl::new(endpoint.token_url()),
@@ -480,7 +481,7 @@ async fn an_exchange_naming_no_resource_is_never_sent() -> TestResult {
 #[tokio::test]
 async fn every_exchange_carries_its_scope_and_resource() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, None).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
     for subject in ["clinician-0042", "clinician-0043"] {
@@ -506,7 +507,7 @@ async fn every_exchange_carries_its_scope_and_resource() -> TestResult {
 #[tokio::test]
 async fn the_gateways_own_request_uses_client_credentials() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     let node = node(&endpoint, None).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;
 
@@ -533,7 +534,7 @@ async fn the_gateways_own_request_uses_client_credentials() -> TestResult {
 #[tokio::test]
 async fn a_refused_exchange_names_the_token_endpoints_code() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     endpoint
         .issuance()
         .refuse(400, "invalid_grant", "synthetic: the subject is unknown");
@@ -566,7 +567,7 @@ async fn a_refused_exchange_names_the_token_endpoints_code() -> TestResult {
 #[tokio::test]
 async fn an_exchange_answer_without_its_issued_token_type_fails_the_node() -> TestResult {
     let keys = keys()?;
-    let endpoint = endpoint(&keys).await;
+    let endpoint = endpoint(&keys).await?;
     endpoint.omit_issued_token_type();
     let node = node(&endpoint, None).await;
     let client = client(&node, exchange(grant(&endpoint)?, keys)?)?;

@@ -26,7 +26,6 @@ use ferrofed_engine::onward::authorization_details::AuthorizationDetails;
 use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::exchange::SubjectToken;
 use ferrofed_engine::onward::grant::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
-use ferrofed_engine::onward::keys::{Curve, SigningKey};
 use ferrofed_engine::onward::token::{CLIENT_ASSERTION_TYPE, GRANT_TYPE};
 use ferrofed_engine::onward::{Scope, SystemClock};
 use ferrofed_registry::id::EndpointId;
@@ -38,6 +37,7 @@ use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::leak;
 use ferrofed_testkit::mock::{self, Server};
 use ferrofed_testkit::oauth;
+use ferrohealth_smart::client::assertion::AssertionKey;
 use jsonwebtoken::Algorithm;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
@@ -87,10 +87,11 @@ static CALLERS: LazyLock<Issuer> =
     LazyLock::new(|| Issuer::new(UPSTREAM).expect("a test key pair should generate"));
 
 /// A fresh P-256 client key.
-fn client_key() -> Result<SigningKey, Box<dyn Error>> {
-    Ok(SigningKey::from_pem(
-        &SecretString::from(oauth::Curve::P256.pem()?),
-        Curve::P256,
+fn client_key() -> Result<AssertionKey, Box<dyn Error>> {
+    Ok(AssertionKey::from_pem(
+        oauth::Curve::P256.pem()?.as_bytes(),
+        Some(Algorithm::ES256),
+        None,
     )?)
 }
 
@@ -102,22 +103,22 @@ fn prover() -> Result<Arc<Prover>, Box<dyn Error>> {
 }
 
 /// A harness server trusting `key`, requiring the [`DETAILS_TYPE`] details.
-async fn server(key: &SigningKey) -> AuthorizationServer {
+async fn server(key: &AssertionKey) -> Result<AuthorizationServer, Box<dyn Error>> {
     let server = AuthorizationServer::start(CLIENT_ID, Some(300)).await;
     server.endpoint().trust(jsonwebtoken::jwk::JwkSet {
-        keys: vec![key.public().clone()],
+        keys: vec![serde_json::from_value(key.public_jwk())?],
     });
     server
         .endpoint()
         .require_authorization_details([DETAILS_TYPE]);
-    server
+    Ok(server)
 }
 
 /// The grant at `server`, with `key` and `prover`, asking for [`SCOPE`] and
 /// [`DETAILS`].
 fn grant(
     server: &AuthorizationServer,
-    key: SigningKey,
+    key: AssertionKey,
     prover: &Arc<Prover>,
 ) -> Result<Fapi2Grant, Box<dyn Error>> {
     Ok(Fapi2Grant::new(
@@ -250,7 +251,7 @@ fn verified_caller(subject: &str) -> Result<Conveyance, Box<dyn Error>> {
 #[tokio::test]
 async fn a_dpop_bound_token_reaches_the_node() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let node = node(&server).await;
     let prover = prover()?;
     let client =
@@ -296,7 +297,7 @@ async fn a_dpop_bound_token_reaches_the_node() -> TestResult {
 #[tokio::test]
 async fn the_token_request_names_the_issuer_and_carries_the_details() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let prover = prover()?;
     provider(grant(&server, key, &prover)?)?
         .credentials()
@@ -332,7 +333,7 @@ async fn the_token_request_names_the_issuer_and_carries_the_details() -> TestRes
 #[tokio::test]
 async fn a_token_without_its_granted_details_fails_the_node() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     server.endpoint().omit_authorization_details();
     let node = node(&server).await;
     let prover = prover()?;
@@ -357,7 +358,7 @@ async fn a_token_without_its_granted_details_fails_the_node() -> TestResult {
 #[tokio::test]
 async fn refused_details_fail_the_node_naming_the_code() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     server
         .endpoint()
         .require_authorization_details(["another-type"]);
@@ -387,7 +388,7 @@ async fn refused_details_fail_the_node_naming_the_code() -> TestResult {
 #[tokio::test]
 async fn a_refused_grant_fails_the_node_and_shows_no_credential() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     server
         .endpoint()
         .issuance()
@@ -416,7 +417,7 @@ async fn a_refused_grant_fails_the_node_and_shows_no_credential() -> TestResult 
 #[tokio::test]
 async fn a_token_endpoint_past_the_timeout_fails_the_node() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     server.endpoint().issuance().delay(Duration::from_secs(8));
     let node = node(&server).await;
     let prover = prover()?;
@@ -439,7 +440,7 @@ async fn a_token_endpoint_past_the_timeout_fails_the_node() -> TestResult {
 #[tokio::test]
 async fn the_metadata_is_read_once() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let node = node(&server).await;
     let prover = prover()?;
     let client =
@@ -468,7 +469,7 @@ async fn the_metadata_is_read_once() -> TestResult {
 #[tokio::test]
 async fn a_failed_discovery_is_tried_again() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let mut wrong = server.metadata();
     wrong.issuer = Some(format!("{}/other", server.issuer()));
     server.publish(&wrong);
@@ -497,7 +498,7 @@ async fn a_failed_discovery_is_tried_again() -> TestResult {
 #[tokio::test]
 async fn a_verified_callers_token_is_exchanged() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     server.endpoint().accept_exchange(CALLERS.jwks(), UPSTREAM);
     server.endpoint().expect_resource(RESOURCE);
     let node = node(&server).await;
@@ -533,7 +534,7 @@ async fn a_verified_callers_token_is_exchanged() -> TestResult {
 #[tokio::test]
 async fn a_callers_token_carrying_the_patient_is_never_sent() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     server.endpoint().accept_exchange(CALLERS.jwks(), UPSTREAM);
     let node = node(&server).await;
     let prover = prover()?;
@@ -568,7 +569,7 @@ async fn a_callers_token_carrying_the_patient_is_never_sent() -> TestResult {
 #[tokio::test]
 async fn no_carrier_to_the_server_or_the_node_names_the_patient() -> TestResult {
     let key = client_key()?;
-    let server = server(&key).await;
+    let server = server(&key).await?;
     let node = node(&server).await;
     let prover = prover()?;
     let client =

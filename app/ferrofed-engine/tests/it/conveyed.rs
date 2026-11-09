@@ -7,7 +7,6 @@
 
 use std::error::Error;
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
 
 use ferrofed_engine::conveyance::caller::{
     Acting, Caller, Principal, Professional, Purpose, Verification,
@@ -15,12 +14,11 @@ use ferrofed_engine::conveyance::caller::{
 use ferrofed_engine::conveyance::relayed::{HealthProfessional, HealthcareProvider, Relayed, Role};
 use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::conveyance::{Conveyance, TYPE};
-use ferrofed_engine::onward::SystemClock;
-use ferrofed_engine::onward::keys::{Curve, KeyRing, SigningKey};
 use ferrofed_testkit::oauth;
 use ferrohealth_smart::assurance::AssuranceLevel;
+use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::keys::KeyRing;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
-use secrecy::SecretString;
 use serde::Deserialize;
 
 /// The `iss` the test gateway names itself by.
@@ -67,8 +65,12 @@ static SIGNER: LazyLock<Arc<Signer>> =
 
 /// A signer over a fresh ES384 key, naming the gateway [`GATEWAY`].
 pub(crate) fn signer() -> Result<Signer, Box<dyn Error>> {
-    let key = SigningKey::from_pem(&SecretString::from(oauth::Curve::P384.pem()?), Curve::P384)?;
-    let keys = KeyRing::new(key, None, Duration::ZERO, Arc::new(SystemClock))?;
+    let key = AssertionKey::from_pem(
+        oauth::Curve::P384.pem()?.as_bytes(),
+        Some(Algorithm::ES384),
+        None,
+    )?;
+    let keys = KeyRing::new(key);
     Ok(Signer::new(Arc::new(keys), GATEWAY))
 }
 
@@ -219,7 +221,7 @@ pub(crate) fn verified(
 ) -> Result<Read, Box<dyn Error>> {
     let header = jsonwebtoken::decode_header(token)?;
     let kid = header.kid.ok_or("the token names its key")?;
-    let published = keys.published();
+    let published: jsonwebtoken::jwk::JwkSet = serde_json::from_value(keys.published())?;
     let jwk = published.find(&kid).ok_or("the key is published")?;
     let algorithm = Algorithm::try_from(
         jwk.common
