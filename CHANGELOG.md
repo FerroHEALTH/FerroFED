@@ -681,7 +681,7 @@ Security fixes until 2031-11-09, 5 years from this release (Regulation (EU) 2024
 
 ### Security
 
-Shipped with functional changes because: the `ferrohealth-smart` 0.9.1 fix (GHSA-jhg2-jwjp-hq74) comes only on the 0.9 line, whose breaking configuration and API every family crate the gateway links moves with, so no security-only patch of v0.0.16 can carry it; the 0.8.9 fix (GHSA-pfgx-xq28-2629) is superseded by it, and RUSTSEC-2026-0440 affects no shipped artefact (the VEX statement below records why). The `ferrohealth-smart` 0.13.0 fix (GHSA-r5p6-r9m2-c3pw) comes with the error type change its crate made breaking, so it ships on the same line.
+Shipped with functional changes because: the `ferrohealth-smart` 0.9.1 fix (GHSA-jhg2-jwjp-hq74) comes only on the 0.9 line, whose breaking configuration and API every family crate the gateway links moves with, so no security-only patch of v0.0.16 can carry it; the 0.8.9 fix (GHSA-pfgx-xq28-2629) is superseded by it, and RUSTSEC-2026-0440 affects no shipped artefact (the VEX statement below records why). The `ferrohealth-smart` 0.13.0 fix (GHSA-r5p6-r9m2-c3pw) comes with the error type change its crate made breaking, so it ships on the same line, and the 0.13.1 patch (GHSA-5qm7-v4fw-p2v9) is taken on that line in the release that carries it.
 
 - RUSTSEC-2026-0440 (`astral-tokio-tar` is unmaintained, with no patched
   version) does not affect FerroFED: `testcontainers` reaches the crate only
@@ -719,6 +719,16 @@ Shipped with functional changes because: the `ferrohealth-smart` 0.9.1 fix (GHSA
   release runs on `ferrohealth-smart` 0.13.0, whose refusals name only the
   category, line and column (#1748). Upgrade step: none beyond the
   upgrade; rotate any key or token a log line may have recorded.
+- A refused key set, introspection or metadata answer no longer keeps its
+  body in the error that carries it (GHSA-5qm7-v4fw-p2v9, CWE-532,
+  CWE-209). `ferrohealth-smart` before 0.13.1 kept the body, up to 1 MiB,
+  in `KeySetStatus`, `IntrospectionError::Status` and
+  `DiscoveryError::Status`, and printed it in their `Debug` rendering, so a
+  product that logged one with `{:?}` could write token or key material an
+  upstream put in that body to its log. The gateway logs these errors by
+  their `Display` alone, which never carried the body; this release runs on
+  0.13.1, which keeps the body out of the error. Upgrade step: none beyond
+  the upgrade.
 
 ## [0.0.16] - 2026-11-05
 

@@ -383,9 +383,10 @@ ferrohealth-ui = "=0.6.8"
 # 0.12.0 signs the gateway's own claims with a key-ring key and asks for the
 # onward actor assertion from the onward table (#1749), and 0.13.0 refuses a
 # JSON document without quoting it and presents a node's TLS identity to its
-# grant (#1748, #1749).
+# grant (#1748, #1749); 0.13.1 keeps a refused key set, introspection or
+# metadata body out of its errors (GHSA-5qm7-v4fw-p2v9).
 # Verified against crates.io on 2026-11-09.
-ferrohealth-smart = { version = "=0.13.0", default-features = false, features = ["fetch", "axum", "openehr"] }
+ferrohealth-smart = { version = "=0.13.1", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
