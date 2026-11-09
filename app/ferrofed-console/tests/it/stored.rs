@@ -516,19 +516,10 @@ async fn hostile_values_in_a_stored_query_render_escaped() -> Result<(), Box<dyn
     ] {
         assert!(!list.contains(raw), "{raw}: {list}");
     }
-    // A quote in a text node is escaped too, so it ends no attribute.
+    // NOTE: ITS-REST `Qualified_query_name.md` and `version.yaml`; a name or version outside
+    // the grammar is refused when the answer is read, so none of it reaches the page.
     assert!(
-        list.contains(
-            "<code>org.example&#34;&#62;&#60;i&#62;ns&#60;/i&#62;::q&#34; onclick=&#34;x&#60;b&#62;</code>"
-        ),
-        "{list}"
-    );
-    assert!(
-        list.contains(">1.0.0&#34;&#62;&#60;u&#62;v&#60;/u&#62;</span>"),
-        "{list}"
-    );
-    assert!(
-        list.contains(r#"href="/stored-queries/org.example%22%3E%3Ci%3Ens%3C%2Fi%3E::q%22%20onclick%3D%22x%3Cb%3E""#),
+        list.contains("The gateway answered with something this console cannot read."),
         "{list}"
     );
     Ok(())

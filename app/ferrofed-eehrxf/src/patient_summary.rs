@@ -23,7 +23,8 @@
 //! The crosswalk sections no query feeds are listed in [`UNSELECTED`], each
 //! with the reason, for the clinical safety review.
 
-use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::ast::SelectQuery;
 use openehr_query::printer;
 
@@ -347,10 +348,10 @@ impl Section {
     ///
     /// # Errors
     ///
-    /// The [`QueryNameError`] of [`QueryName::new`], which no section's name
+    /// The [`QueryNameError`] of [`QualifiedQueryName::new`], which no section's name
     /// meets.
-    pub fn name(self) -> Result<QueryName, QueryNameError> {
-        QueryName::new(&format!("{NAMESPACE}::{STEM}{}", self.slug()))
+    pub fn name(self) -> Result<QualifiedQueryName, QueryNameError> {
+        query_name(&format!("{NAMESPACE}::{STEM}{}", self.slug()))
     }
 
     /// Returns the section query as an AQL syntax tree.

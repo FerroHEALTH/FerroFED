@@ -27,9 +27,8 @@ use ferrobridge_term::client::Client;
 use ferrobridge_term::concept::Concept;
 use ferrobridge_term::config::{Config, RetryPolicy, WireVersion};
 use ferrobridge_term::error::Error as TermError;
-use ferrobridge_term::outcome::{
-    Coded, LookupOutcome, TranslateOutcome, Translation, ValidateOutcome, Validation,
-};
+use ferrobridge_term::outcome::{LookupOutcome, TranslateOutcome, ValidateOutcome};
+use ferrobridge_term::request::{Coded, Translation, Validation};
 use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::fhir::ClientError;
 use ferrofed_identity::fhir::http_client;
@@ -167,12 +166,7 @@ impl TerminologyServer for BridgeTerminology {
             },
             _ => return Err(unknown(Operation::ValidateCode)),
         };
-        let validation = Validation {
-            value_set_url: value_set.to_owned(),
-            value_set_version: None,
-            date: None,
-            coded,
-        };
+        let validation = Validation::new(value_set, coded);
         let outcome = self
             .client
             .validate(&validation)

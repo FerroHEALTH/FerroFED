@@ -319,8 +319,8 @@ async fn store(
         (replica.name.as_str(), &tr(Msg::StoredQueryStore)),
         stored,
         |stored| StoredLine {
-            name: stored.name,
-            version: stored.version,
+            name: stored.name.to_string(),
+            version: stored.version.to_string(),
         },
     ))
 }

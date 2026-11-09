@@ -14,8 +14,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use ferrofed_registry::definition::store::{
     ASSIGNMENT_ATTEMPTS, Assignment, DefinitionStore, Definitions, Insertion, StoreError,
 };
-use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, assigned_after};
 use jiff::Timestamp;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -146,13 +147,13 @@ fn a_new_name_is_assigned_one_zero_zero_and_a_held_one_the_next_patch_by_number(
     ] {
         assert_eq!(
             Some(assigned.parse()?),
-            QueryVersion::assigned_after(newest(held)?),
+            assigned_after(newest(held)?),
             "§12.7: after {held:?}"
         );
     }
     assert_eq!(
         None,
-        QueryVersion::assigned_after(Some(QueryVersion::new(1, 0, u64::MAX))),
+        assigned_after(Some(QueryVersion::new(1, 0, u64::MAX))),
         "no patch past the largest"
     );
     Ok(())
@@ -170,7 +171,7 @@ fn an_unversioned_insert_stores_at_the_next_version_and_never_replaces_one() -> 
         holding(&memory, "ns::q", held)?;
         holding(&memory, "ns::other", &["7.0.0"])?;
         let before = memory.rows();
-        let name: QueryName = "ns::q".parse()?;
+        let name: QualifiedQueryName = "ns::q".parse()?;
         let stored = memory.insert_assigned(&name, "SELECT 'new'", Timestamp::UNIX_EPOCH)?;
         assert_eq!(Ok(assigned.to_owned()), stored_at(stored), "after {held:?}");
         let rows = memory.rows();
@@ -190,7 +191,7 @@ fn a_version_a_rival_stores_first_is_never_replaced_and_the_next_is_assigned() -
         memory: Memory::default(),
         rivals: Mutex::new(2),
     };
-    let name: QueryName = "ns::q".parse()?;
+    let name: QualifiedQueryName = "ns::q".parse()?;
     let stored = store.insert_assigned(&name, "SELECT 'mine'", Timestamp::UNIX_EPOCH)?;
     assert_eq!(Ok("1.0.2".to_owned()), stored_at(stored));
     let rows: Vec<(String, String)> = store
@@ -217,7 +218,7 @@ fn a_writer_that_loses_every_attempt_is_refused_and_stores_nothing() -> TestResu
         memory: Memory::default(),
         rivals: Mutex::new(ASSIGNMENT_ATTEMPTS),
     };
-    let name: QueryName = "ns::q".parse()?;
+    let name: QualifiedQueryName = "ns::q".parse()?;
     let assignment = store.insert_assigned(&name, "SELECT 'mine'", Timestamp::UNIX_EPOCH)?;
     assert_eq!(
         Assignment::Contended,
@@ -236,7 +237,7 @@ fn a_writer_that_loses_every_attempt_is_refused_and_stores_nothing() -> TestResu
 #[test]
 fn writers_racing_on_one_name_store_distinct_versions_or_are_refused() -> TestResult {
     let memory = Memory::default();
-    let name: QueryName = "ns::raced".parse()?;
+    let name: QualifiedQueryName = "ns::raced".parse()?;
     let writers = 16;
     let assignments: Vec<Result<Assignment, StoreError>> = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..writers)
@@ -295,7 +296,7 @@ fn the_view_serves_the_assigned_version_at_once() -> TestResult {
     let memory = Memory::default();
     holding(&memory, "q", &["1.9.0", "1.10.0"])?;
     let view = Definitions::open(Box::new(memory))?;
-    let name: QueryName = "q".parse()?;
+    let name: QualifiedQueryName = "q".parse()?;
     let stored = view.insert_assigned(&name, "SELECT 'new'", Timestamp::UNIX_EPOCH)?;
     assert_eq!(Ok("1.10.1".to_owned()), stored_at(stored));
     let found = view.find(&name, None).ok_or("held")?;

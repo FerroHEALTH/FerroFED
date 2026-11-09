@@ -328,10 +328,11 @@ fn operational(
         openehr_adl::opt::create_opt(&root, &repository).map_err(MapModeError::Operational)?;
     // NOTE: openEHR AM 2.4 AOM2 §ARCHETYPE_HRID; the template is named by its full id, namespace
     // and version modifier included, the physical id `Display` writes.
-    let resolved_id = built.archetype_id.to_string();
+    let resolved_id = built.template.archetype_id.to_string();
     Ok(TemplateSource::Opt2 {
-        template: Box::new(built),
+        template: Box::new(built.template),
         resolved_id,
+        prohibited_attributes: built.prohibited_attributes,
     })
 }
 

@@ -186,7 +186,7 @@ async fn duplicated(
         federation,
         arrived,
         located,
-        (patient, (name.as_str(), Medication::Actions.aql())),
+        (patient, (&name, Medication::Actions.aql())),
         &members,
     )
     .await

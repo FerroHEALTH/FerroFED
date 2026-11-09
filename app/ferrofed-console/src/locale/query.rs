@@ -28,6 +28,8 @@ messages! {
     QueryNameHelp = "query-name-help",
     /// `Stored query`
     QueryNameLabel = "query-name-label",
+    /// `A stored query name is [namespace::]name over the characters a-z, …`
+    QueryNameMalformed = "query-name-malformed",
     /// `Name the stored query to run.`
     QueryNameStored = "query-name-stored",
     /// `Every asked endpoint answered and none holds a row.`
@@ -82,6 +84,8 @@ messages! {
     QueryVersionHelp = "query-version-help",
     /// `Version`
     QueryVersionLabel = "query-version-label",
+    /// `A stored query version is major, major.minor or major.minor.patch, …`
+    QueryVersionMalformed = "query-version-malformed",
     /// `… is a whole number from 0.`
     QueryWholeNumber = "query-whole-number",
     /// `{ $count ->`

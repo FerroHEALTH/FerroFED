@@ -34,6 +34,7 @@ use ferrohealth_smart::kind::{CallerKind, IssuerKind};
 use ferrohealth_smart::resource::Caller as SmartCaller;
 use http::{HeaderMap, Method};
 use openehr_its::rest::client::{Credentials, ReqwestTransport};
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion};
 use secrecy::{ExposeSecret as _, SecretString};
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -254,9 +255,10 @@ async fn an_organisations_write_is_refused_before_any_token_is_asked_for() -> Te
         matches!(forwarded, Err(ForwardError::ReadOnly(_))),
         "{forwarded:?}"
     );
+    let name: QualifiedQueryName = "org.example::synthetic".parse()?;
     let at = DefinitionAt {
-        name: "org.example::synthetic",
-        version: "1.0.0",
+        name: &name,
+        version: QueryVersion::new(1, 0, 0),
     };
     let stored = client
         .store_definition(

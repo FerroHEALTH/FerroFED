@@ -71,7 +71,7 @@ fn line(distribution: Distribution) -> RepairLine {
                 }),
             })
             .collect(),
-        version: distribution.definition.version.clone(),
+        version: distribution.definition.version.to_string(),
         registry: distribution.registry,
     }
 }

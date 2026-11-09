@@ -28,7 +28,8 @@ use std::sync::{Arc, PoisonError, RwLock};
 
 use jiff::Timestamp;
 
-use crate::definition::{QueryName, QueryVersion, StoredDefinition, VersionPattern};
+use crate::definition::{StoredDefinition, assigned_after};
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion, VersionPattern};
 
 /// How many versions [`DefinitionStore::insert_assigned`] assigns, each
 /// after another writer stored the one before, before it answers
@@ -165,7 +166,7 @@ pub trait DefinitionStore: fmt::Debug + Send + Sync {
 
     /// Stores `aql` under `name`, saved at `saved`, at the version the store
     /// assigns: `1.0.0` for a name it holds no version of, else the next
-    /// patch of the newest it holds ([`QueryVersion::assigned_after`];
+    /// patch of the newest it holds ([`assigned_after`];
     /// §12.7 stored-query-versioning). It never replaces a held version.
     ///
     /// The default reads the versions of `name` and inserts at the next one
@@ -181,7 +182,7 @@ pub trait DefinitionStore: fmt::Debug + Send + Sync {
     /// [`DefinitionStore::insert_if_absent`]; nothing is stored then.
     fn insert_assigned(
         &self,
-        name: &QueryName,
+        name: &QualifiedQueryName,
         aql: &str,
         saved: Timestamp,
     ) -> Result<Assignment, StoreError> {
@@ -191,7 +192,7 @@ pub trait DefinitionStore: fmt::Debug + Send + Sync {
                 .iter()
                 .map(StoredDefinition::version)
                 .max();
-            let Some(version) = QueryVersion::assigned_after(newest) else {
+            let Some(version) = assigned_after(newest) else {
                 return Ok(Assignment::Exhausted);
             };
             let definition = StoredDefinition::new(name.clone(), version, aql.to_owned(), saved);
@@ -219,7 +220,7 @@ pub trait DefinitionStore: fmt::Debug + Send + Sync {
     /// # Errors
     ///
     /// The [`StoreError`] of [`DefinitionStore::load`].
-    fn load_named(&self, name: &QueryName) -> Result<Vec<StoredDefinition>, StoreError> {
+    fn load_named(&self, name: &QualifiedQueryName) -> Result<Vec<StoredDefinition>, StoreError> {
         let mut definitions = self.load()?;
         definitions.retain(|definition| definition.name() == name);
         Ok(definitions)
@@ -238,7 +239,7 @@ pub trait DefinitionStore: fmt::Debug + Send + Sync {
 }
 
 /// Every held definition, by name and then by version.
-type Held = BTreeMap<QueryName, BTreeMap<QueryVersion, Arc<StoredDefinition>>>;
+type Held = BTreeMap<QualifiedQueryName, BTreeMap<QueryVersion, Arc<StoredDefinition>>>;
 
 /// The stored-query definitions: the durable store, and the in-memory view
 /// every read is answered from.
@@ -303,7 +304,7 @@ impl Definitions {
     ///
     /// The [`StoreError`] of [`DefinitionStore::load_named`]; the view stays
     /// as it was.
-    pub fn refresh_named(&self, name: &QueryName) -> Result<(), StoreError> {
+    pub fn refresh_named(&self, name: &QualifiedQueryName) -> Result<(), StoreError> {
         if self.is_shared() {
             let loaded = self.store.load_named(name)?;
             add(&mut self.write(), loaded);
@@ -344,7 +345,7 @@ impl Definitions {
     /// The [`StoreError`] of [`DefinitionStore::insert_assigned`].
     pub fn insert_assigned(
         &self,
-        name: &QueryName,
+        name: &QualifiedQueryName,
         aql: &str,
         saved: Timestamp,
     ) -> Result<Assignment, StoreError> {
@@ -364,7 +365,7 @@ impl Definitions {
     #[must_use]
     pub fn find(
         &self,
-        name: &QueryName,
+        name: &QualifiedQueryName,
         version: Option<&VersionPattern>,
     ) -> Option<Arc<StoredDefinition>> {
         let held = self.read();
@@ -383,7 +384,7 @@ impl Definitions {
     pub fn list(&self, pattern: &str) -> Vec<Arc<StoredDefinition>> {
         self.read()
             .iter()
-            .filter(|(name, _)| name.as_str().starts_with(pattern))
+            .filter(|(name, _)| name.to_string().starts_with(pattern))
             .flat_map(|(_, versions)| versions.values().map(Arc::clone))
             .collect()
     }
@@ -391,7 +392,7 @@ impl Definitions {
     /// Every version of the definition named `name` exactly, lowest first;
     /// empty when none is held.
     #[must_use]
-    pub fn versions(&self, name: &QueryName) -> Vec<Arc<StoredDefinition>> {
+    pub fn versions(&self, name: &QualifiedQueryName) -> Vec<Arc<StoredDefinition>> {
         self.read()
             .get(name)
             .map(|versions| versions.values().map(Arc::clone).collect())

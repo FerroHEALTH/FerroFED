@@ -122,7 +122,7 @@ async fn reports(
         federation,
         arrived,
         located,
-        ((system, value), (name.as_str(), category.aql())),
+        ((system, value), (&name, category.aql())),
         &members,
     )
     .await

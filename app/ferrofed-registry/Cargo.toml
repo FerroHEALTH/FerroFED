@@ -19,6 +19,7 @@ publish = false
 ferrohealth-secret.workspace = true
 jiff.workspace = true
 openehr-base.workspace = true
+openehr-its = { workspace = true, features = ["rest"] }
 serde.workspace = true
 thiserror.workspace = true
 toml.workspace = true

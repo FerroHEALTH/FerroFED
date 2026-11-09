@@ -337,7 +337,7 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is 0.0.130 since 2026-11-08, the line the published `eehrxf`,
+pin is 0.0.135 since 2026-11-09, the line the published `eehrxf`,
 `fhirconnect` and `openehr-mapping-core` require exactly, so the lock holds
 one copy of each member (#1181, #813).
 `openehr-sdt` left the group with 0.0.116, which no longer carries the
@@ -348,10 +348,10 @@ module client authentication (#80) already read every caller's scopes with
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.130 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.130 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.130 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.130 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.135 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.135 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.135 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.135 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -439,6 +439,10 @@ template by (FerroEHR #4942).
 0.0.130 is taken with `eehrxf` 0.1.179 (#1722): the OPT2 builder states the
 operational template's parent archetype by its full id (FerroEHR #5148),
 so the gateway no longer sets it after `create_opt`.
+0.0.135 is taken with `eehrxf` 0.1.187 (#1753, #1754): `openehr-its` reads a
+CDR's `ETag` into the typed `openehr-base` id (FerroEHR #5191) and types the
+stored-query name, version and version pattern (FerroEHR #5207), so the
+gateway's own parsers of both are removed.
 `ferrohealth-smart` 0.8.5 and later carry the SMART on openEHR scope grammar
 as their own module and no longer depend on `openehr-sdt`, so the lock holds
 one `openehr-sdt` (#1390).
@@ -483,11 +487,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | =0.1.181 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | =0.1.236 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | =0.1.144 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | =0.1.145 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | =0.1.151 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | =0.1.187 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | =0.1.241 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | =0.1.148 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | =0.1.148 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | =0.1.154 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 

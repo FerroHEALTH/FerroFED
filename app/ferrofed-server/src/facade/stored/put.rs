@@ -12,14 +12,15 @@ use std::time::Instant;
 use axum::response::{IntoResponse, Response};
 use ferrofed_eehrxf::reserved;
 use ferrofed_engine::declared::query;
+use ferrofed_registry::definition::StoredDefinition;
 use ferrofed_registry::definition::store::{Assignment, Definitions, Insertion, StoreError};
-use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use http::{HeaderMap, StatusCode, header};
 use jiff::Timestamp;
 use openehr_its::rest::generated::definition::{
     DefinitionQueryStoreYamlParams, DefinitionQueryVersionStoreYamlParams,
 };
 use openehr_its::rest::routes::RouteMatch;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion};
 
 use crate::config::public_url::PublicUrl;
 use crate::error::Code;
@@ -183,7 +184,7 @@ enum Kept {
 /// (§12.7, N44; ITS-REST `409_StoredQuery_version`).
 async fn kept(
     definitions: &Arc<Definitions>,
-    (name, version): (QueryName, Option<QueryVersion>),
+    (name, version): (QualifiedQueryName, Option<QueryVersion>),
     aql: &str,
     logged: &str,
 ) -> Result<StoredDefinition, Refused> {

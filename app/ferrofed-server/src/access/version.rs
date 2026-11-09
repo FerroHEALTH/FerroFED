@@ -26,7 +26,7 @@
 //! governs that choice: our own design.
 
 use ehds_logging::record::{CreatedEhr, WrittenVersion};
-use ferrofed_engine::single_node::ehr::{from_etag, from_location};
+use ferrofed_engine::single_node::ehr::{ehr_id_in_etag, from_location, version_in_etag};
 use ferrofed_registry::id::EhrId;
 use http::{HeaderMap, HeaderName, header};
 use openehr_base::prelude::ObjectVersionId;
@@ -52,7 +52,9 @@ pub(crate) fn answered(operation: &str, headers: &HeaderMap) -> WrittenVersion {
     if NO_VERSION.contains(&operation) || operation.contains("_tags_") {
         return WrittenVersion::Unnamed;
     }
-    let tagged = carried(headers, header::ETAG, from_etag);
+    let tagged = carried(headers, header::ETAG, |etag| {
+        version_in_etag(etag).map(|version| version.value().to_owned())
+    });
     let located = carried(headers, header::LOCATION, from_location);
     match (tagged, located) {
         (None, None) => WrittenVersion::Unnamed,
@@ -97,7 +99,9 @@ fn carried(
 /// [`CreatedEhr::Unnamed`]; one whose headers hold no `ehr_id`, or two that
 /// differ, is [`CreatedEhr::Malformed`].
 pub(crate) fn created(headers: &HeaderMap) -> CreatedEhr {
-    let tagged = held(headers, header::ETAG, from_etag);
+    let tagged = held(headers, header::ETAG, |etag| {
+        ehr_id_in_etag(etag).map(|ehr_id| ehr_id.value().to_owned())
+    });
     let located = held(headers, header::LOCATION, in_collection);
     match (tagged, located) {
         (Held::Absent, Held::Absent) => CreatedEhr::Unnamed,

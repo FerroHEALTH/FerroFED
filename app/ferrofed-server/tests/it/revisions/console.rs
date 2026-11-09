@@ -147,7 +147,10 @@ async fn the_console_owner_and_the_operator_read_only_flag_agree() -> TestResult
         .into_iter()
         .map(|entry| {
             (
-                (entry.definition.name, entry.definition.version),
+                (
+                    entry.definition.name.to_string(),
+                    entry.definition.version.to_string(),
+                ),
                 entry.read_only,
             )
         })

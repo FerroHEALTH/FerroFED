@@ -22,7 +22,7 @@ use openehr_its::rest::generated::ehr::client::{CompositionCreateOutcome, EhrCli
 use openehr_rm::v1_2::composition::composition::Composition;
 
 use crate::dispatch::{Contact, DispatchOptions, NodeClient};
-use crate::single_node::ehr::{EhrCallError, from_etag, from_location};
+use crate::single_node::ehr::{EhrCallError, from_location, version_in_etag};
 use crate::trace_context;
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
@@ -123,7 +123,8 @@ impl<T: Transport + Clone> NodeClient<T> {
             }
         };
         etag.as_deref()
-            .and_then(from_etag)
+            .and_then(version_in_etag)
+            .map(|version| version.value().to_owned())
             .or_else(|| location.as_deref().and_then(from_location))
             .ok_or_else(|| EhrCallError::Unversioned {
                 endpoint: self.endpoint().clone(),
