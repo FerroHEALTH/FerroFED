@@ -1,5 +1,6 @@
 - The gateway runs on `ferrohealth-smart` 0.12.0, `ferrohealth-session`
-  0.6.0, `ihe-iti` 0.0.80 and `nl-generic-functions` 0.0.47 (#1748):
+  0.6.0, `ihe-atna` and `ehds-logging` 0.7.1, `ihe-iti` 0.0.82 and
+  `nl-generic-functions` 0.0.49 (#1748, #1766):
   - An `[[auth.issuer]]` URL that carries a user name or password, and a
     `jwks_file` that holds a symmetric key or private key material, refuse
     the start.

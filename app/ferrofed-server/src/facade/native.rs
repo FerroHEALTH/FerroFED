@@ -20,10 +20,13 @@ use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{EhrAt, PatientLookup};
 use ferrofed_eehrxf::face::EPS_COMPOSITION;
+use ferrofed_eehrxf::summary::document::{self, Unusable};
+use ferrofed_engine::dispatch::Contact;
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::fanout::{Completion, FanOutError};
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::single_node::native::{Answer, SummaryAsked};
+use ferrofed_engine::single_node::forward::Forwarded;
+use ferrofed_engine::single_node::native::{self as engine, SummaryAsked};
 use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
 use ferrofed_registry::native::NativeEndpoint;
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -50,6 +53,101 @@ pub(crate) struct Chosen {
     pub(crate) native: EndpointId,
     /// Its own `ehr_id` for the patient.
     pub(crate) ehr_id: EhrId,
+}
+
+/// A member's own document: its bytes as it sent them, and the
+/// `Bundle.identifier` they carry (FHIR R4 `bdl-9`).
+///
+/// `Debug` shows the answer's status and sizes and the identifier's system,
+/// never the body or the identifier's value.
+pub(crate) struct Document {
+    forwarded: Forwarded,
+    system: String,
+    value: String,
+}
+
+impl std::fmt::Debug for Document {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Document")
+            .field("forwarded", &self.forwarded)
+            .field("system", &self.system)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Document {
+    /// Returns the member's answer, its bytes unchanged.
+    pub(crate) fn forwarded(&self) -> &Forwarded {
+        &self.forwarded
+    }
+
+    /// Returns the system and the value of the document's
+    /// `Bundle.identifier`.
+    pub(crate) fn identifier(&self) -> (&str, &str) {
+        (&self.system, &self.value)
+    }
+}
+
+/// What a member answered the request for its own patient summary, its
+/// success read as a FHIR document `Bundle` with an identifier.
+#[derive(Debug)]
+pub(crate) enum Answer {
+    /// A success that is a FHIR document `Bundle` with an identifier: the
+    /// member's document, as it sent it.
+    Document(Document),
+    /// A success, of the status `status`, that is no FHIR document `Bundle`
+    /// whose identifier has a system and a value (FHIR R4 `bdl-9`), so it
+    /// says nothing about the patient.
+    Unusable {
+        /// The member's status.
+        status: StatusCode,
+        /// What the answer misses.
+        reason: Unusable,
+    },
+    /// Every other answer, as the engine reports it: none, another status,
+    /// or no answer at all.
+    Unread(engine::Answer),
+}
+
+impl From<engine::Answer> for Answer {
+    fn from(answer: engine::Answer) -> Self {
+        let engine::Answer::Success(forwarded) = answer else {
+            return Self::Unread(answer);
+        };
+        match document::identifier(forwarded.body()) {
+            Ok((system, value)) => Self::Document(Document {
+                forwarded,
+                system,
+                value,
+            }),
+            Err(reason) => Self::Unusable {
+                status: forwarded.status(),
+                reason,
+            },
+        }
+    }
+}
+
+impl Answer {
+    /// The §11.1 status of the member: `active` for its document or `404`,
+    /// `node-error` for a success that is no document, and the engine's
+    /// status otherwise.
+    pub(crate) fn status(&self) -> EndpointStatus {
+        match self {
+            Self::Document(_) => EndpointStatus::Active,
+            Self::Unusable { .. } => EndpointStatus::NodeError,
+            Self::Unread(answer) => answer.status(),
+        }
+    }
+
+    /// What the request showed of the member.
+    pub(crate) fn contact(&self) -> Contact {
+        match self {
+            Self::Document(document) => Contact::Answered(document.forwarded().status()),
+            Self::Unusable { status, .. } => Contact::Answered(*status),
+            Self::Unread(answer) => answer.contact(),
+        }
+    }
 }
 
 /// What one such member answered.
@@ -155,7 +253,14 @@ pub(crate) async fn asked(
                 ehr_id: &member.ehr_id,
                 profile: EPS_COMPOSITION,
             };
-            let answer = client.native_summary(asked, &options, until).await;
+            let answer = Answer::from(client.native_summary(asked, &options, until).await);
+            if let Answer::Unusable { reason, .. } = &answer {
+                tracing::warn!(
+                    endpoint = member.native.as_str(),
+                    %reason,
+                    "a member's own summary is no document Bundle with an identifier (bdl-9)"
+                );
+            }
             Ok((
                 position,
                 Native {

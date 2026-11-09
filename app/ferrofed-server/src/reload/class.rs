@@ -44,8 +44,6 @@ pub(super) fn federation(error: &FederationError) -> &'static str {
         FederationError::Onward(OnwardError::Provide(ProvideError::NutsClient { .. })) => {
             "http-client"
         }
-        FederationError::Binding(BindingError::Tls(_))
-        | FederationError::Onward(OnwardError::Tls(_)) => "tls",
         FederationError::Clients(_) => "node-clients",
         FederationError::Transport(_) => "http-client",
         FederationError::Unsigned => "signing",

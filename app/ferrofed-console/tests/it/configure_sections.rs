@@ -248,7 +248,7 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
         "/configuration/credentials/node-c-pub",
         save_credentials(&[
             ("password", "set", VALUE, ""),
-            ("client_identity", "keep", "", ""),
+            ("tls.client_identity", "keep", "", ""),
         ]),
     )
     .await?;

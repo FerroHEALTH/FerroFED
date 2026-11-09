@@ -67,6 +67,7 @@
 //! our own design, against the eHealth Network guideline's header elements
 //! and the EPS composition's author, section and empty-reason elements.
 
+pub mod document;
 pub mod duplicates;
 pub mod error;
 pub mod mappings;

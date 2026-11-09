@@ -66,19 +66,13 @@ pub(super) fn localizer(
             (Authentication::None, Some(authorizer))
         }
     };
-    let tls = service::tls(
-        NVI_KEY,
-        nvi.client_identity.as_ref(),
-        nvi.trust_roots.as_deref(),
-    )
-    .map_err(LocalizationError::Tls)?;
     let config = NviConfig {
         base: nvi.url.clone(),
         auth,
         authorizer,
         custodians,
         namespaces,
-        tls,
+        tls: Arc::clone(&nvi.tls),
     };
     let localizer = NviLocalizer::from_config(config, snapshot).map_err(LocalizationError::Nvi)?;
     Ok(LocalizerSeam {

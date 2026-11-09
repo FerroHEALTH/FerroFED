@@ -23,7 +23,7 @@
 //! scope = "*"
 //! ```
 //!
-//! `client_identity_file` and `trust_roots_file` give the mutual TLS the
+//! `[pmir.tls]` gives the mutual TLS the
 //! Registry asks for, as `[xcpd]` does ([`tls`](crate::config::tls)).
 //!
 //! The Registry sends the feed with a client-credentials token (RFC 6749
@@ -35,11 +35,11 @@
 //! is held to the protected-payload policy of [`transport`]. No specification
 //! governs the shape of the table: our own design.
 
-use std::path::PathBuf;
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::profile::Profile;
-use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 use url::Url;
@@ -50,7 +50,6 @@ use crate::config::error::binding::BindingFault;
 use crate::config::public_url::PublicUrl;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
-use crate::config::tls::TlsSettings;
 use crate::config::transport::{self, Encryption, ProtectedSite};
 use crate::config::{Config, Credentials};
 
@@ -65,14 +64,9 @@ pub struct Pmir {
     /// authorizes the subscription (§2:3.94.5): basic credentials or the
     /// client credentials grant of `oauth`.
     pub credentials: Option<Credentials>,
-    /// The gateway's client certificate chain and private key, PEM, for
-    /// mutual TLS with the Registry, inline or through `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots the Registry's certificate chains to, beside
-    /// the platform's.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the service is reached with: the table's `tls`
+    /// sub-table.
+    pub tls: TlsClientSection,
     /// The absolute URL the Registry sends the feed to: the gateway's public
     /// address followed by `{base}` and `path`, the `channel.endpoint` of the
     /// subscription. Empty, it is `path` under `gateway.public_url`, which
@@ -125,9 +119,7 @@ impl Default for Pmir {
         Self {
             url: SecretUrl::default(),
             credentials: None,
-            client_identity: None,
-            client_identity_file: None,
-            trust_roots_file: None,
+            tls: TlsClientSection::default(),
             callback_url: String::new(),
             path: String::from("/pmir/feed"),
             feed_clients: Vec::new(),
@@ -148,7 +140,7 @@ pub struct PmirSettings {
     /// How the gateway authenticates to the Registry.
     pub credentials: Option<Scheme>,
     /// The TLS material the Registry is reached with.
-    pub tls: TlsSettings,
+    pub tls: Arc<TlsClient>,
     /// Where the Registry sends the feed.
     pub callback_url: Url,
     /// The path under `{base}` the feed is served at.
@@ -317,12 +309,7 @@ pub(crate) fn resolve(
             source,
         })?;
     }
-    let tls = crate::config::tls::resolve(
-        "pmir",
-        pmir.client_identity.as_ref(),
-        pmir.client_identity_file.as_deref(),
-        pmir.trust_roots_file.as_ref(),
-    )?;
+    let tls = crate::config::tls::read("pmir.tls", &pmir.tls)?;
     let settings = PmirSettings {
         url: pmir.url.clone(),
         credentials,

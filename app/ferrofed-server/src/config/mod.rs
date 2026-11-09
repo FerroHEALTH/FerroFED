@@ -13,6 +13,7 @@ use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_server::tls_client::TlsClientSection;
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -543,16 +544,11 @@ pub struct Credentials {
     /// (`[credentials."<endpoint id>".fapi2]`), the BgZ/eOverdracht track of
     /// Annex B §B.4a.
     pub fapi2: Option<grant::Fapi2>,
-    /// The gateway's TLS client certificate chain and private key, PEM,
-    /// which it presents to the node and to its authorization server (RFC
-    /// 8705); a node's section alone takes it, and the node is then reached
-    /// over `https` alone.
-    pub client_identity: Option<Secret>,
-    /// A file holding `client_identity`, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A PEM bundle of trust roots, beside the platform's, the node and its
-    /// authorization server are trusted by; a node's section alone takes it.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the node and its authorization server are reached
+    /// with, `[credentials."<endpoint id>".tls]` (RFC 8705); a node's section
+    /// alone takes it, and the node is then reached over `https` alone when
+    /// it names a client identity.
+    pub tls: Option<TlsClientSection>,
     /// The hosts, each a host name with an optional port, beside the
     /// issuer's origin, on which the `fapi2` grant takes a `token_endpoint`
     /// of `mtls_endpoint_aliases` (RFC 8705 §5), always over `https`; only a
@@ -565,9 +561,7 @@ impl Credentials {
     /// takes.
     #[must_use]
     pub fn names_tls(&self) -> bool {
-        self.client_identity.is_some()
-            || self.client_identity_file.is_some()
-            || self.trust_roots_file.is_some()
+        self.tls.is_some()
     }
 }
 

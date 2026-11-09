@@ -310,13 +310,14 @@ P-384 key refuses the configuration, naming `dpop_key_file`.
 
 ## Mutual TLS to a node (RFC 8705)
 
-A node's `[credentials."<id>"]` section can name the TLS material the
+A node's `[credentials."<id>".tls]` table names the TLS material the
 gateway reaches that node with, by the keys the identity services take:
 
 | Key | What it is |
 |---|---|
 | `client_identity_file` | The gateway's client certificate chain and its private key, PEM, the end-entity certificate first. `client_identity` takes the same inline, as a secret. |
 | `trust_roots_file` | A PEM bundle of trust roots, beside the platform's, the node and its authorization server are trusted by. |
+| `min_version` | The oldest TLS version the gateway speaks to the node and its authorization server: `"1.3"` unless lowered to `"1.2"`. |
 
 The node and its authorization server are reached over one transport built
 with that material, so every request to either presents the same
@@ -330,7 +331,7 @@ With that material, an `oauth2` section can authenticate by the certificate
 in place of an assertion, and bind its tokens to it:
 
 ```toml
-[credentials."cdr-f"]
+[credentials."cdr-f".tls]
 client_identity_file = "/run/secrets/cdr-f-client.pem"
 trust_roots_file = "/etc/ferrofed/cdr-f-roots.pem"
 
@@ -360,8 +361,9 @@ tls_client_certificate_bound_access_tokens = true
   cached or sent, and the node is `node-error` with nothing sent. An opaque
   token states no binding, and the node's authorization server and the node
   check it.
-- Either key without `client_identity_file` refuses the configuration, and
-  so does an identity file with no certificate in it. A section with both
+- Either key without `tls.client_identity_file` refuses the configuration,
+  and so does an identity file without a certificate and its key, naming
+  `credentials."<id>".tls.client_identity`. A section with both
   `tls_client_certificate_bound_access_tokens` and `dpop_key_file` refuses
   the configuration: a token is bound one way.
 
@@ -546,7 +548,7 @@ authorization_details = '''[{"type": "nl-gis-v1",
    ([Tokens bound to a key](#tokens-bound-to-a-key-dpop)).
 
 The profile admits mutual TLS for both choices (§5.3.2.1), with the node
-section's `client_identity_file`
+section's `tls.client_identity_file`
 ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)). With `client_auth
 = "tls_client_auth"` or `"self_signed_tls_client_auth"` the metadata must
 list that method in place of `private_key_jwt`, and the token request
@@ -565,7 +567,7 @@ name the host in the node's `[credentials."<id>"]` section:
 
 ```toml
 [credentials."cdr-e"]
-client_identity_file = "/run/secrets/cdr-e-client.pem"
+tls = { client_identity_file = "/run/secrets/cdr-e-client.pem" }
 mtls_alias_hosts = ["mtls.cdr-e.example.org"]   # or "mtls.cdr-e.example.org:8443"
 
 [credentials."cdr-e".fapi2]

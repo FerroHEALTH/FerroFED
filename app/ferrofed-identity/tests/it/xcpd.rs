@@ -10,7 +10,6 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Tls;
 use ferrofed_identity::ihe::xcpd::{
     FixedAssertion, GatewayConfig, Transport, XcpdConfig, XcpdConfigError, XcpdLocalizer,
 };
@@ -22,7 +21,6 @@ use ferrofed_testkit::tls::MutualTls;
 use ferrofed_testkit::xcpd::{Answer, Community, RespondingGateway};
 use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::xcpd::security::XuaAssertion;
-use secrecy::SecretString;
 
 use crate::support::{PATIENT_VALUE, registry};
 
@@ -70,7 +68,7 @@ fn config(gateways: &[String], transport: Transport) -> Result<XcpdConfig, Box<d
         ]),
         namespaces: BTreeMap::new(),
         transport,
-        tls: Tls::default(),
+        tls: ferrofed_testkit::tls::platform(),
         revocation: None,
     })
 }
@@ -301,8 +299,7 @@ fn assert_refused(config: XcpdConfig, expected: impl Fn(&XcpdConfigError) -> boo
 #[test]
 fn no_rendering_shows_the_tls_identity() -> TestResult {
     let front = MutualTls::front("http://127.0.0.1:9")?;
-    let identity = SecretString::from(front.client_identity());
-    let tls = Tls::from_pem(Some(&identity), Some(front.trust_roots()))?;
+    let tls = front.tls_client("xcpd.tls")?;
     let rendered = format!("{tls:?}");
     if rendered.contains("PRIVATE KEY") || rendered.contains("CERTIFICATE") {
         return Err(format!("the key shows: {rendered}").into());

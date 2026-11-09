@@ -59,7 +59,7 @@
 //!   scoped to the client session;
 //! - [`fhir`]: the one HTTP client build every outbound client of this crate
 //!   uses, with its [`Authentication`](fhir::Authentication) and its one
-//!   [`Tls`](fhir::Tls) type;
+//!   `ferrohealth_server::tls_client::TlsClient`;
 //! - [`profile`]: the deployment profile a server configuration declares.
 //!
 //! How the gateway authenticates to each node as itself (§13.1, N25) is the

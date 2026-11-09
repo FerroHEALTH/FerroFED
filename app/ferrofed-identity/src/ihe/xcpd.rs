@@ -53,12 +53,13 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::fhir::{self, Authentication, ClientError};
 use crate::ihe::audit::AUDIT_TARGET;
 use crate::ihe::audit::balp::{audited_as, logged_as};
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
+use ferrohealth_server::tls_client::TlsClient;
 
 /// The audit recorder that writes each ITI-55 audit message as a structured
 /// `tracing` event at [`AUDIT_TARGET`], for a deployment that routes its log
@@ -203,7 +204,7 @@ pub struct XcpdConfig {
     pub transport: Transport,
     /// The TLS material of the ATNA secure channel (ITI TF-1 Table
     /// 27.1.3-1).
-    pub tls: Tls,
+    pub tls: Arc<TlsClient>,
     /// The TLS of the gateways marked as MyHealth@EU routes, which checks
     /// each one's chain for revocation before a discovery is sent; required
     /// when one is marked.

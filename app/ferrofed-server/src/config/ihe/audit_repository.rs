@@ -13,6 +13,8 @@
 //! url = "tls://arr.example.org:6514"
 //! hostname = "gateway.example.org"
 //! spool_dir = "/var/lib/ferrofed/audit-spool"
+//!
+//! [xcpd.audit_repository.tls]
 //! client_identity_file = "/run/secrets/atna-client.pem"
 //! trust_roots_file = "/etc/ferrofed/atna-roots.pem"
 //! ```
@@ -22,14 +24,18 @@
 //! through the protected-payload policy of [`transport`]: every message names
 //! the patient. A message is stored in the spool before it is delivered;
 //! outside development the spool is a directory, which survives a restart,
-//! and under development without `spool_dir` it is held in memory. No
-//! specification governs the shape of the table: our own design.
+//! and under development without `spool_dir` it is held in memory. The
+//! `tls` sub-table is the one every outbound table takes
+//! ([`crate::config::tls`]), and the repository is reached through the
+//! platform's verifier with its extra roots. No specification governs the
+//! shape of the table: our own design.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::profile::Profile;
-use ferrohealth_secret::secret::Secret;
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 use ihe_atna::atna::message::AuditSource;
 use ihe_atna::atna::repository::Timeouts;
 use ihe_atna::atna::spool::Bounds;
@@ -40,7 +46,6 @@ use url::Url;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::transport;
-use ferrohealth_secret::file::read_secret;
 
 /// The repository, as the configuration writes it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -75,14 +80,9 @@ pub struct AuditRepository {
     pub send_timeout_ms: u64,
     /// The longest wait between two delivery attempts.
     pub retry_max_ms: u64,
-    /// The gateway's client certificate chain and private key, PEM, inline
-    /// or through `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots the repository's certificate chains to,
-    /// beside the platform's.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the repository is reached with: the table's `tls`
+    /// sub-table.
+    pub tls: TlsClientSection,
 }
 
 impl Default for AuditRepository {
@@ -100,9 +100,7 @@ impl Default for AuditRepository {
             connect_timeout_ms: 5_000,
             send_timeout_ms: 5_000,
             retry_max_ms: 60_000,
-            client_identity: None,
-            client_identity_file: None,
-            trust_roots_file: None,
+            tls: TlsClientSection::default(),
         }
     }
 }
@@ -126,10 +124,8 @@ pub struct AuditRepositorySettings {
     pub timeouts: Timeouts,
     /// The longest wait between two delivery attempts.
     pub retry_max: Duration,
-    /// The client certificate chain and key.
-    pub client_identity: Option<Secret>,
-    /// The PEM trust roots.
-    pub trust_roots: Option<String>,
+    /// The TLS material it is reached with, every file read.
+    pub tls: Arc<TlsClient>,
 }
 
 /// Resolves `[xcpd.audit_repository]` under `profile`.
@@ -206,22 +202,7 @@ pub(crate) fn resolve(
             });
         }
     }
-    let client_identity = read_secret(
-        "xcpd.audit_repository.client_identity",
-        table.client_identity.clone(),
-        table.client_identity_file.as_deref(),
-    )?;
-    let trust_roots = table
-        .trust_roots_file
-        .as_ref()
-        .map(|path| {
-            std::fs::read_to_string(path).map_err(|source| Error::Secret {
-                key: format!("{KEY}.trust_roots_file"),
-                path: path.clone(),
-                source,
-            })
-        })
-        .transpose()?;
+    let tls = crate::config::tls::read(&format!("{KEY}.tls"), &table.tls)?;
     Ok(AuditRepositorySettings {
         unencrypted: url.scheme() != "tls",
         url,
@@ -245,7 +226,6 @@ pub(crate) fn resolve(
             send: Duration::from_millis(table.send_timeout_ms),
         },
         retry_max: Duration::from_millis(table.retry_max_ms),
-        client_identity,
-        trust_roots,
+        tls,
     })
 }

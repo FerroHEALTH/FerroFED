@@ -17,7 +17,7 @@
 //! password_file = "/run/secrets/terminology-password"
 //! ```
 //!
-//! `client_identity`, `client_identity_file` and `trust_roots_file` give the
+//! `[eehrxf.terminology.tls]` gives the
 //! mutual TLS the server asks for, as `[pdqm]` does
 //! ([`tls`](crate::config::tls)). The server is sent the codes of the
 //! documents the face receives, which are health data, so its URL is held to
@@ -28,21 +28,19 @@
 //! `[fhir]` face, so it is refused without one. No specification governs the
 //! shape of the table: our own design.
 
-use std::path::PathBuf;
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 use std::sync::Arc;
 use std::time::Duration;
 
 use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::terminology::{BridgeTerminology, BridgeTerminologyError};
-use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
 use crate::config::error::Error;
 use crate::config::secrets::resolve_credentials;
-use crate::config::service::{GrantRefused, TlsRefused};
+use crate::config::service::GrantRefused;
 use crate::config::settings::Scheme;
-use crate::config::tls::TlsSettings;
 use crate::config::transport::{self, Encryption, ProtectedSite};
 use crate::config::{Config, Credentials};
 
@@ -66,14 +64,9 @@ pub struct TerminologyServer {
     /// How the gateway authenticates to the server, when the transport does
     /// not.
     pub credentials: Option<Credentials>,
-    /// The gateway's client certificate chain and private key, PEM, for
-    /// mutual TLS with the server, inline or through `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots the server's certificate chains to, beside
-    /// the platform's.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the service is reached with: the table's `tls`
+    /// sub-table.
+    pub tls: TlsClientSection,
     /// How long one operation may take, in milliseconds.
     pub timeout_ms: u64,
 }
@@ -83,9 +76,7 @@ impl Default for TerminologyServer {
         Self {
             url: SecretUrl::default(),
             credentials: None,
-            client_identity: None,
-            client_identity_file: None,
-            trust_roots_file: None,
+            tls: TlsClientSection::default(),
             timeout_ms: 2_000,
         }
     }
@@ -99,7 +90,7 @@ pub struct TerminologySettings {
     /// How the gateway authenticates to it: basic credentials.
     pub credentials: Option<Scheme>,
     /// The TLS material it is reached with.
-    pub tls: TlsSettings,
+    pub tls: Arc<TlsClient>,
     /// How long one operation may take.
     pub timeout: Duration,
 }
@@ -114,9 +105,6 @@ pub enum TerminologyFault {
     /// The credentials name a grant the server does not take.
     #[error(transparent)]
     Grant(#[from] GrantRefused),
-    /// The TLS material does not read.
-    #[error(transparent)]
-    Tls(#[from] TlsRefused),
     /// The client cannot be built.
     #[error("the client of [eehrxf.terminology] cannot be built")]
     Client(#[source] BridgeTerminologyError),
@@ -180,12 +168,7 @@ impl Config {
                 requires: Encryption::Https,
             },
         )?;
-        let tls = crate::config::tls::resolve(
-            KEY,
-            table.client_identity.as_ref(),
-            table.client_identity_file.as_deref(),
-            table.trust_roots_file.as_ref(),
-        )?;
+        let tls = crate::config::tls::read(&format!("{KEY}.tls"), &table.tls)?;
         Ok(Some(TerminologySettings {
             url: table.url.clone(),
             credentials,
@@ -207,12 +190,16 @@ pub fn terminology(
     let Some(settings) = settings else {
         return Ok((Terminology::none(), None));
     };
-    let tls = crate::config::service::tls_of(KEY, &settings.tls)?;
     let auth = crate::config::service::authentication(
         &format!("{KEY}.credentials"),
         settings.credentials.as_ref(),
     )?;
-    let client = BridgeTerminology::new(settings.url.expose(), &auth, &tls, settings.timeout)
-        .map_err(TerminologyFault::Client)?;
+    let client = BridgeTerminology::new(
+        settings.url.expose(),
+        &auth,
+        &settings.tls,
+        settings.timeout,
+    )
+    .map_err(TerminologyFault::Client)?;
     Ok((Terminology::server(Arc::new(client.clone())), Some(client)))
 }

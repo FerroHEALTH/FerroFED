@@ -37,7 +37,6 @@ pub(super) fn resolver(
             members.insert(member, domain.clone());
         }
         let key = format!("pixm.manager[{index}]");
-        let tls = service::tls_of(&key, &manager.tls).map_err(BindingError::Tls)?;
         let auth = service::service_authentication(
             &format!("{key}.credentials"),
             manager.credentials.as_ref(),
@@ -45,7 +44,7 @@ pub(super) fn resolver(
         managers.push(ManagerConfig {
             base: manager.url.clone(),
             auth,
-            tls,
+            tls: Arc::clone(&manager.tls),
             members,
             invocation: match manager.method {
                 PixmMethod::Get => Invocation::Get,

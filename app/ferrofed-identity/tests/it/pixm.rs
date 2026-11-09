@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::{Authentication, Tls};
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmConfigError, PixmResolver};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
@@ -82,7 +82,7 @@ fn namespaces() -> BTreeMap<IdentifierNamespace, String> {
 
 fn manager(server: &Server, auth: Authentication, pairs: &[(&str, &str)]) -> ManagerConfig {
     ManagerConfig {
-        tls: Tls::default(),
+        tls: ferrofed_testkit::tls::platform(),
         base: SecretUrl::new(format!("{}/fhir/", server.uri())),
         auth,
         members: members(pairs),
@@ -627,7 +627,7 @@ async fn a_manager_configured_to_post_is_asked_in_the_body_and_never_in_the_url(
 fn every_member_must_have_exactly_one_domain() {
     let server_uri = "http://127.0.0.1:9";
     let config = |pairs: &[(&str, &str)]| ManagerConfig {
-        tls: Tls::default(),
+        tls: ferrofed_testkit::tls::platform(),
         base: SecretUrl::new(format!("{server_uri}/fhir/")),
         auth: Authentication::None,
         members: members(pairs),
@@ -667,7 +667,7 @@ fn every_member_must_have_exactly_one_domain() {
 fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
     let refused = |auth| {
         let config = ManagerConfig {
-            tls: Tls::default(),
+            tls: ferrofed_testkit::tls::platform(),
             base: SecretUrl::new("http://127.0.0.1:9/fhir/"),
             auth,
             members: members(&[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)]),

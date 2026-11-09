@@ -33,9 +33,9 @@ use crate::config::public_url::PublicUrl;
 use crate::config::registry::RegistryFormat;
 use crate::config::server::ListenerTlsSettings;
 use crate::config::stored_queries::Store;
-use crate::config::tls::TlsSettings;
 use crate::config::transport::ProtectedSite;
 use crate::config::{EmergencyConsent, NodeSelection};
+use ferrohealth_server::tls_client::TlsClient;
 use ferrohealth_telemetry::section::TelemetrySection;
 
 /// The settings the run path holds, with every secret already read.
@@ -68,7 +68,7 @@ pub struct Settings {
     /// The TLS material each node and its authorization server are reached
     /// with, by endpoint id: the client certificate the gateway presents
     /// (RFC 8705) and the roots it trusts them by.
-    pub onward_tls: BTreeMap<EndpointId, TlsSettings>,
+    pub onward_tls: BTreeMap<EndpointId, Arc<TlsClient>>,
     /// The PIXm resolver, with every secret read.
     #[cfg(feature = "binding-ihe")]
     pub pixm: Option<crate::config::ihe::pixm::PixmSettings>,

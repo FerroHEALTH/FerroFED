@@ -20,7 +20,7 @@ use ferrofed_registry::error::IdError;
 
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
-use crate::config::service::{GrantRefused, TlsRefused};
+use crate::config::service::GrantRefused;
 
 /// What a binding cannot build.
 #[derive(Debug, thiserror::Error)]
@@ -125,10 +125,6 @@ pub enum BindingError {
         #[source]
         source: Box<ferrohealth_smart::client::TokenError>,
     },
-    /// The TLS material of an identity, localization, consent or audit
-    /// service does not read.
-    #[error("the TLS material of a service cannot be used")]
-    Tls(#[source] TlsRefused),
     /// The DID document of a Nuts grant's holder cannot be built from the
     /// holder keys of the grants that present as it (Nuts RFC021 §4.2).
     #[error("the DID document of {did} cannot be built from its Nuts grants' keys")]

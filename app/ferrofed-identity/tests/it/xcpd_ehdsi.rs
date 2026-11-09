@@ -11,7 +11,6 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Tls;
 use ferrofed_identity::ihe::xcpd::{
     GatewayConfig, Transport, XcpdConfig, XcpdConfigError, XcpdLocalizer,
 };
@@ -23,7 +22,6 @@ use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_server::revocation::RevocationCheck;
 use ferrohealth_server::section::TlsVersion;
-use secrecy::SecretString;
 
 use crate::support::registry;
 use crate::xcpd::{COMMUNITY_A, holds, members, node, patient};
@@ -53,7 +51,6 @@ fn localizer(
     myhealth_eu: bool,
     revocation: Option<RevocationCheck>,
 ) -> Result<XcpdLocalizer, Box<dyn Error>> {
-    let identity = SecretString::from(front.client_identity());
     let config = XcpdConfig {
         sender_device: "2.999.40.1".to_owned(),
         home_community: Some("2.999.40".to_owned()),
@@ -69,7 +66,7 @@ fn localizer(
         ]),
         namespaces: BTreeMap::new(),
         transport: Transport::Encrypted,
-        tls: Tls::from_pem(Some(&identity), Some(front.trust_roots()))?,
+        tls: front.tls_client("xcpd.tls")?,
         revocation,
     };
     Ok(XcpdLocalizer::from_config(config, None, &registry())?)

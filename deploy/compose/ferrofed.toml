@@ -198,6 +198,7 @@ url = "https://arr.example.org/fhir"          # EDIT
 hostname = "gateway.example.org"              # EDIT
 spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # When the repository asks for a client certificate:
+# [audit.repository.tls]
 # client_identity_file = "/run/secrets/ferrofed/atna-client.pem"
 # trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
 
@@ -225,7 +226,7 @@ spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # url = "tls://arr.example.org:6514"            # EDIT
 # hostname = "gateway.example.org"              # EDIT
 # spool_dir = "/var/lib/ferrofed/audit-spool"
-# trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
+# tls = { trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem" }
 
 # Optionally, hear of identity merges as they happen: subscribe at your IHE
 # PMIR Patient Identity Registry, which sends each change to callback_url

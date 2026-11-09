@@ -36,7 +36,7 @@ use ferrofed_eehrxf::list::{
 };
 use ferrofed_eehrxf::report::Written;
 use ferrofed_engine::single_node::forward::Forwarded;
-use ferrofed_engine::single_node::native::Answer;
+use ferrofed_engine::single_node::native as engine;
 use http::{StatusCode, Uri, header};
 use openehr_federation::status::EndpointStatus;
 
@@ -47,7 +47,7 @@ use super::{UNADMITTED, attach, outcome};
 use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
-use crate::facade::native::Native;
+use crate::facade::native::{Answer, Native};
 use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
@@ -261,12 +261,12 @@ fn listed(
                     ))),
                 ));
             }
-            Answer::Absent => {}
+            Answer::Unread(engine::Answer::Absent) => {}
             Answer::Unusable { .. } => outcomes.push((
                 format!("urn:uuid:{}", minted()),
                 list::unusable(native.chosen.native.as_str()),
             )),
-            silent => outcomes.push((
+            silent @ Answer::Unread(_) => outcomes.push((
                 format!("urn:uuid:{}", minted()),
                 list::silent(native.chosen.native.as_str(), silent.status().as_str()),
             )),

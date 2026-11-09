@@ -37,6 +37,9 @@ use tokio_rustls::TlsAcceptor;
 use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::rustls::pki_types::CertificateDer;
 
+use ferrohealth_secret::secret::Secret;
+use ferrohealth_server::tls_client::{TlsClient, TlsClientError, TlsClientSection};
+
 use crate::pki::{self, Authority, PkiError};
 
 /// Why the front could not start.
@@ -55,6 +58,51 @@ pub enum TlsHarnessError {
     /// The origin is no `http://<host>:<port>` address.
     #[error("the origin is no http://<host>:<port> address")]
     Origin,
+    /// The gateway's TLS material for the front could not be read.
+    #[error("the harness TLS material could not be read")]
+    Material(#[from] TlsClientError),
+}
+
+/// The TLS material of the table at `key` that presents `identity`, PEM,
+/// inline and trusts `roots`, PEM, as its trust roots file, written to a
+/// directory removed once read.
+///
+/// # Errors
+///
+/// [`TlsHarnessError::Listen`] when the roots file cannot be written and
+/// [`TlsHarnessError::Material`] when the material does not read.
+pub fn read_material(
+    key: &str,
+    identity: &str,
+    roots: &str,
+) -> Result<Arc<TlsClient>, TlsHarnessError> {
+    let dir = tempfile::tempdir()?;
+    let roots_file = dir.path().join("roots.pem");
+    std::fs::write(&roots_file, roots)?;
+    let section = TlsClientSection {
+        client_identity: Some(Secret::new(identity.to_owned())),
+        trust_roots_file: Some(roots_file),
+        ..TlsClientSection::default()
+    };
+    Ok(Arc::new(TlsClient::read(key, &section)?))
+}
+
+/// The TLS material of a table that names none: the platform's roots alone
+/// and no client identity.
+///
+/// # Panics
+///
+/// Never: a table that names no file reads nothing.
+#[must_use]
+pub fn platform() -> Arc<TlsClient> {
+    #[expect(
+        clippy::expect_used,
+        reason = "TlsClient::read fails only on a file it reads, and the default table names none"
+    )]
+    Arc::new(
+        TlsClient::read("tls", &TlsClientSection::default())
+            .expect("a table that names no file should read"),
+    )
 }
 
 /// A running mutual-TLS front, stopped when it is dropped.
@@ -178,6 +226,16 @@ impl MutualTls {
     #[must_use]
     pub fn client_identity(&self) -> &str {
         &self.client_identity
+    }
+
+    /// Returns the gateway's TLS material for the front, read as the table
+    /// at `key` reads it.
+    ///
+    /// # Errors
+    ///
+    /// The [`TlsHarnessError`] [`read_material`] returns.
+    pub fn tls_client(&self, key: &str) -> Result<Arc<TlsClient>, TlsHarnessError> {
+        read_material(key, &self.client_identity, &self.trust_roots)
     }
 
     /// Returns how many connections completed the handshake with a client

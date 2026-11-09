@@ -45,7 +45,7 @@ ferrofed-registry.workspace = true
 # The revocation-checking TLS of an eHDSI link (eHDSI X.509 Certificates
 # Profile 7.0.0 §3.2): every certificate a MyHealth@EU gateway presents is
 # checked by CRL, then OCSP, before the discovery is sent (#1623, #1646).
-ferrohealth-server = { workspace = true, features = ["revocation"] }
+ferrohealth-server = { workspace = true, features = ["reqwest", "revocation"] }
 # The OAuth 2.0 client-credentials token an IHE FHIR client and Mitz send,
 # fetched, cached and renewed by the family's client (IUA ITI-71).
 ferrohealth-smart.workspace = true
