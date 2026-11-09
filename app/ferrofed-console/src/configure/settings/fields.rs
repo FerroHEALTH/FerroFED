@@ -72,16 +72,6 @@ pub(crate) const OAUTH: &[Field] = &[
         kind: Kind::Path,
     },
     Field {
-        key: "oauth.client_certificate_file",
-        label: Msg::TlsClientCertificateFile,
-        kind: Kind::Path,
-    },
-    Field {
-        key: "oauth.client_key_file",
-        label: Msg::TlsClientKeyFile,
-        kind: Kind::Path,
-    },
-    Field {
         key: "oauth.dpop_key_file",
         label: Msg::DpopKeyFile,
         kind: Kind::Path,

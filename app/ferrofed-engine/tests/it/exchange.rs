@@ -546,7 +546,14 @@ async fn an_exchange_naming_no_resource_is_never_sent() -> TestResult {
         &endpoint,
         serde_json::json!({"audiences": [], "indicators": []}),
     )?;
-    assert!(untargeted.resolve(grant(&endpoint, keys)?).is_err());
+    assert!(
+        matches!(
+            untargeted.resolve(grant(&endpoint, keys)?),
+            Err(ferrohealth_smart::config::ConfigError::Missing { key })
+                if key == "credentials.onward.audiences"
+        ),
+        "an exchange names its target"
+    );
     assert!(
         endpoint.issuance().forms().is_empty(),
         "no exchange was sent"

@@ -35,13 +35,13 @@
 //! caller is exchanged at which issuer kind is our own design.
 
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use ferrofed_registry::id::EndpointId;
 use ferrohealth_smart::client::onward::exchange::Onward;
 use ferrohealth_smart::client::onward::{OnwardError, SubjectToken as OnwardSubject, Target};
 use ferrohealth_smart::kind::{CallerKind, IssuerKind};
-use http::Method;
+use http::{HeaderValue, Method};
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider};
 use openehr_its::rest::routes::RouteMatch;
 use secrecy::SecretString;
@@ -223,6 +223,7 @@ impl OnBehalf for Lane {
             Some(call) => Arc::new(ForCaller {
                 inner: Arc::clone(&self.0),
                 call,
+                last: Mutex::new(None),
             }),
         }
     }
@@ -253,6 +254,8 @@ impl fmt::Debug for Lane {
 struct ForCaller {
     inner: Arc<Inner>,
     call: ForCall,
+    /// The `Authorization` value last handed out, which a `401` drops.
+    last: Mutex<Option<HeaderValue>>,
 }
 
 impl ForCaller {
@@ -305,6 +308,7 @@ impl ForCaller {
             endpoint = %self.inner.endpoint,
             "an onward token was obtained for a caller"
         );
+        *self.last.lock().unwrap_or_else(PoisonError::into_inner) = Some(issued.header().clone());
         // NOTE: RFC 9110 §11.1, a field value that is no visible ASCII names no
         // scheme the node client can send, which is the NotBearer refusal.
         let value = issued.header().to_str().ok().ok_or(LaneError::NotBearer)?;
@@ -326,9 +330,18 @@ impl CredentialsProvider for ForCaller {
         self.token().await.map_err(CredentialsError::new)
     }
 
-    // NOTE: no specification governs this: our own design; the library checks a cached
-    // token again on every use, and a 401 is never renewed with the gateway's own.
-    fn refused(&self) {}
+    // NOTE: RFC 6750 §3.1, a refused token may be replaced, so the next call
+    // exchanges again; it is never renewed with the gateway's own.
+    fn refused(&self) {
+        let stale = self
+            .last
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let (Some(stale), Ok((subject, target))) = (stale, self.subject()) {
+            self.inner.onward.invalidate(subject, None, &target, &stale);
+        }
+    }
 }
 
 impl fmt::Debug for ForCaller {

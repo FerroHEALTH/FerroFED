@@ -71,7 +71,27 @@ impl Oauth {
     /// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
     /// refuses.
     pub fn resolve(&self, key: &str) -> Result<ClientCredentials, Error> {
-        self.0.resolve().map_err(|source| Error::Smart {
+        self.resolve_presenting(key, None)
+    }
+
+    /// Resolves the grant as [`Oauth::resolve`] does, reaching its token
+    /// endpoint over `presented`, the TLS material of a node the gateway
+    /// already read, when one is given: the table then names no client
+    /// certificate, key or trust roots of its own (RFC 8705 §2, §3).
+    ///
+    /// # Errors
+    /// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
+    /// refuses.
+    pub fn resolve_presenting(
+        &self,
+        key: &str,
+        presented: Option<ferrohealth_smart::client::PresentedTls>,
+    ) -> Result<ClientCredentials, Error> {
+        match presented {
+            Some(presented) => self.0.resolve_with_tls(presented),
+            None => self.0.resolve(),
+        }
+        .map_err(|source| Error::Smart {
             section: key.to_owned(),
             source: Box::new(source),
         })

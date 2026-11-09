@@ -406,12 +406,16 @@ async fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
             "profile": "rfc9068",
             "audiences": [],
             "indicators": [RESOURCE],
+            "keys": {"max_onward_lifetime": 3600},
             "actor_assertion": true,
         }))?;
     assert!(
-        untargeted
-            .resolve(grant(&server, client_key()?, &prover()?)?)
-            .is_err()
+        matches!(
+            untargeted.resolve(grant(&server, client_key()?, &prover()?)?),
+            Err(ferrohealth_smart::config::ConfigError::Missing { key })
+                if key == "credentials.onward.audiences"
+        ),
+        "an exchange names its target"
     );
     Ok(())
 }

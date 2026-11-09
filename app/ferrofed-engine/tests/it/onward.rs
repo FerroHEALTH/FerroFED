@@ -721,3 +721,26 @@ async fn an_unreachable_token_endpoint_is_a_node_error_and_nothing_reaches_the_n
     );
     Ok(())
 }
+
+/// A token endpoint URL that could carry a secret is refused before
+/// anything is sent: one with a user name, a password or a fragment (RFC
+/// 6749 §3.2, RFC 9110 §4.2.4). A query is admitted (RFC 6749 §3.2).
+#[test]
+fn a_token_endpoint_that_could_carry_a_secret_is_refused() -> TestResult {
+    for url in [
+        "https://gateway:Qz7secret@idp.example.org/token",
+        "https://gateway@idp.example.org/token",
+        "https://idp.example.org/token#Qz7secret",
+    ] {
+        let refused = grant_at(url, ring(key()?))?.validate();
+        let Err(error) = refused else {
+            return Err(format!("{url} was accepted").into());
+        };
+        assert!(
+            !format!("{error} {error:?}").contains("Qz7secret"),
+            "{error:?}"
+        );
+    }
+    grant_at("https://idp.example.org/token?tenant=a", ring(key()?))?.validate()?;
+    Ok(())
+}

@@ -25,13 +25,14 @@ use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::oauth;
 use ferrofed_testkit::tls::MutualTls;
 use ferrohealth_smart::client::fapi2::{AliasHost, Fapi2, Fapi2Error, SecurityProfile};
+use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::client::{
-    AssertionAudience as Audience, ClientAuth, ClientCredentials, Endpoint, TokenError,
+    AssertionAudience as Audience, ClientAuth, ClientCredentials, Endpoint, PresentedTls,
+    TokenError,
 };
 use ferrohealth_smart::config::onward::OnwardSection;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
-use secrecy::SecretSlice;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -109,17 +110,18 @@ impl Harness {
     /// certificate, with no key of its own, trusting the fronts and taking
     /// an alias on `hosts`.
     fn grant_on(&self, hosts: &[AliasHost]) -> Result<ClientCredentials, Box<dyn Error>> {
-        let identity = Arc::new(SecretSlice::from(
-            self.front.client_identity().as_bytes().to_vec(),
-        ));
-        let mut grant = ClientCredentials::with_mutual_tls(
+        let material = self.front.tls_client("credentials.node-a-pub.tls")?;
+        let presented = PresentedTls::new(
+            Arc::new(material.client_config(rustls::RootCertStore::empty())?),
+            material.certificate().cloned(),
+        );
+        let mut grant = ClientCredentials::with_presented_tls(
             Endpoint::Issuer(self.front.origin()),
             CLIENT_ID.to_owned(),
-            identity,
+            presented,
             false,
         )
         .with_certificate_binding();
-        grant.tls.root_certificates = Some(self.front.trust_roots().as_bytes().to_vec());
         grant.scope = Some(SCOPE.to_owned());
         grant.timeout = Duration::from_secs(5);
         let mut profile = Fapi2::new();
@@ -403,11 +405,23 @@ async fn a_grant_without_the_key_it_signs_with_cannot_be_built() -> TestResult {
         "profile": "rfc9068",
         "audiences": [RESOURCE],
         "indicators": [RESOURCE],
+        "keys": {"max_onward_lifetime": 3600},
         "actor_assertion": true,
     }))?;
     assert!(
-        exchanging.resolve(by_certificate).is_err(),
+        matches!(
+            exchanging.clone().resolve(by_certificate),
+            Err(ferrohealth_smart::config::ConfigError::OnwardActor { .. })
+        ),
         "no key signs the actor token"
+    );
+
+    let mut signed = harness.grant()?;
+    signed.assertion_keys = Some(Arc::new(KeyRing::new(client_key()?)));
+    assert!(signed.client_auth.is_mutual_tls());
+    assert!(
+        exchanging.resolve(signed).is_ok(),
+        "a key of its own signs the actor token beside the certificate"
     );
     Ok(())
 }

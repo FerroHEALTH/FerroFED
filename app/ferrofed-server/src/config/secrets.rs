@@ -13,9 +13,8 @@ use ferrofed_engine::onward::grant::lane::Organisations;
 use ferrohealth_secret::file::read_secret;
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::client::assertion::AssertionKey;
-use ferrohealth_smart::client::binding::TokenBinding;
 use ferrohealth_smart::client::keys::KeyRing;
-use ferrohealth_smart::client::{ClientAuth, ClientCredentials};
+use ferrohealth_smart::client::{ClientAuth, PresentedTls};
 use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
@@ -30,9 +29,6 @@ use crate::config::settings::{JWKS_PATH, Scheme, SigningSettings};
 use crate::config::tls::{self, TlsFault};
 use crate::config::{Credentials, Signing, SigningAlgorithm};
 use ferrohealth_server::tls_client::TlsClient;
-use rustls::pki_types::CertificateDer;
-use rustls::pki_types::pem::PemObject as _;
-use secrecy::ExposeSecret as _;
 
 /// The longest lifetime a JWT the gateway signs with its `[signing]` key may
 /// have.
@@ -60,7 +56,7 @@ pub(crate) fn resolve_credentials(
         }
         .into());
     }
-    scheme(section, credentials)
+    scheme(section, credentials, None)
 }
 
 /// Returns what a node's `credentials` describe: the scheme, when the
@@ -68,9 +64,10 @@ pub(crate) fn resolve_credentials(
 /// server are reached with, when it names any.
 ///
 /// A section may name TLS material alone, when the transport authenticates
-/// the gateway. An `oauth` grant that authenticates by, or binds its tokens
+/// the gateway. An `oauth` grant reaches its token endpoint with the same
+/// material, read once, so one that authenticates by, or binds its tokens
 /// to, a TLS client certificate presents the one the node is reached with
-/// (RFC 8705 §3).
+/// (RFC 8705 §2, §3).
 pub(crate) fn resolve_node_credentials(
     section: &str,
     credentials: &Credentials,
@@ -80,60 +77,68 @@ pub(crate) fn resolve_node_credentials(
         .as_ref()
         .map(|table| tls::read(&format!("{section}.tls"), table))
         .transpose()?;
-    let scheme = match scheme(section, credentials) {
+    presents_certificate(section, credentials, material.as_deref())?;
+    let presented = material
+        .as_deref()
+        .map(|tls| -> Result<PresentedTls, Error> {
+            Ok(PresentedTls::new(
+                Arc::new(tls.platform_config()?),
+                tls.certificate().cloned(),
+            ))
+        })
+        .transpose()?;
+    let scheme = match scheme(section, credentials, presented) {
         Ok(scheme) => node_secretless(section, node_scope(section, scheme)?)?,
         Err(Error::Credentials(CredentialsFault::NoScheme { .. })) if material.is_some() => {
             return Ok((None, material));
         }
         Err(refused) => return Err(refused),
     };
-    if let Scheme::Oauth { grant, .. } = &scheme {
-        same_certificate(section, grant, material.as_deref())?;
-    }
     Ok((Some(scheme), material))
 }
 
-/// Refuses `grant`, the `oauth` grant of the node at `section`, when it
-/// authenticates by or binds its tokens to a TLS client certificate other
-/// than the one `material` presents to the node, or when the node is
-/// reached with none.
+/// Refuses the `oauth` table of the node at `section` when it
+/// authenticates by, or binds its tokens to, a TLS client certificate and
+/// `material` presents none to the node, and when `material` presents one
+/// to a token endpoint or issuer that is not `https`.
 ///
 /// # Errors
 ///
-/// Returns [`TlsFault::WithoutClientIdentity`] for a node reached without a
-/// client certificate, and [`TlsFault::OtherCertificate`] for one reached
-/// with another.
-fn same_certificate(
+/// Returns [`TlsFault::WithoutClientIdentity`] naming the table, and
+/// [`TlsFault::Cleartext`] naming the URL's key.
+fn presents_certificate(
     section: &str,
-    grant: &ClientCredentials,
+    credentials: &Credentials,
     material: Option<&TlsClient>,
 ) -> Result<(), Error> {
-    let mutual = matches!(
-        grant.client_auth,
-        ClientAuth::TlsClientAuth | ClientAuth::SelfSignedTlsClientAuth
-    ) || matches!(grant.token_binding, Some(TokenBinding::Certificate));
-    if !mutual {
+    let Some(table) = credentials.oauth.as_ref().map(|oauth| &oauth.0) else {
         return Ok(());
-    }
+    };
     // NOTE: RFC 8705 §3, a token bound to a certificate is used only over
-    // connections that present it, so the node's transport presents the same one.
-    let Some(presented) = material.and_then(TlsClient::certificate) else {
+    // connections that present it, so the node's own identity is the one.
+    let mutual = table.client_auth.is_mutual_tls() || table.certificate_bound;
+    let presents = material.and_then(TlsClient::certificate).is_some();
+    if mutual && !presents {
         return Err(TlsFault::WithoutClientIdentity {
             section: format!("{section}.oauth"),
         }
         .into());
-    };
-    let leaf = grant.tls.identity.as_ref().and_then(|identity| {
-        CertificateDer::pem_slice_iter(identity.expose_secret())
-            .next()
-            .and_then(Result::ok)
-    });
-    if leaf.as_ref() != Some(presented) {
-        return Err(TlsFault::OtherCertificate {
-            section: format!("{section}.oauth"),
-            tls: format!("{section}.tls"),
+    }
+    // NOTE: no specification governs this: our own design; a client certificate
+    // travels in the handshake, so it is presented over TLS under every profile.
+    if presents {
+        for (key, url) in [
+            ("token_endpoint", &table.token_endpoint),
+            ("issuer", &table.issuer),
+        ] {
+            let tls = url::Url::parse(url).is_ok_and(|parsed| parsed.scheme() == "https");
+            if !url.is_empty() && !tls {
+                return Err(TlsFault::Cleartext {
+                    key: format!("{section}.oauth.{key}"),
+                }
+                .into());
+            }
         }
-        .into());
     }
     Ok(())
 }
@@ -194,7 +199,11 @@ fn node_scope(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
 }
 
 /// Returns the scheme `credentials` describe.
-fn scheme(section: &str, credentials: &Credentials) -> Result<Scheme, Error> {
+fn scheme(
+    section: &str,
+    credentials: &Credentials,
+    presented: Option<PresentedTls>,
+) -> Result<Scheme, Error> {
     let password = read_secret(
         &format!("{section}.password"),
         credentials.password.clone(),
@@ -237,7 +246,7 @@ fn scheme(section: &str, credentials: &Credentials) -> Result<Scheme, Error> {
         if basic {
             return Err(refused());
         }
-        return oauth_scheme(section, oauth, credentials);
+        return oauth_scheme(section, oauth, credentials, presented);
     }
     match (credentials.user.as_deref(), password) {
         (Some(user), Some(password)) => {
@@ -270,8 +279,9 @@ fn oauth_scheme(
     section: &str,
     oauth: &crate::config::oauth::Oauth,
     credentials: &Credentials,
+    presented: Option<PresentedTls>,
 ) -> Result<Scheme, Error> {
-    let grant = oauth.resolve(&format!("{section}.oauth"))?;
+    let grant = oauth.resolve_presenting(&format!("{section}.oauth"), presented)?;
     let onward = credentials
         .onward
         .as_ref()

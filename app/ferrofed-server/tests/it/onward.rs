@@ -566,3 +566,32 @@ fn config_check_refuses_a_bad_key_naming_its_key() -> TestResult {
     assert!(!stderr.contains("Qz7"), "{stderr}");
     Ok(())
 }
+
+/// A token endpoint with a user name, a password or a fragment is refused at
+/// load, naming the grant and quoting no part of the URL (RFC 6749 §3.2,
+/// RFC 9110 §4.2.4).
+#[test]
+fn a_token_endpoint_that_could_carry_a_secret_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("current.pem"), oauth::Curve::P384.pem()?)?;
+    for url in [
+        "https://gateway:Qz7secret@idp.example.org/token",
+        "https://idp.example.org/token#Qz7secret",
+    ] {
+        let text = oauth(dir.path(), url);
+        let refused =
+            match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
+                Ok(_) => return Err(format!("{url} was accepted").into()),
+                Err(error) => error,
+            };
+        assert!(
+            matches!(&refused, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.oauth"),
+            "{refused:?}"
+        );
+        assert!(
+            !format!("{refused} {refused:?}").contains("Qz7secret"),
+            "{refused:?}"
+        );
+    }
+    Ok(())
+}
