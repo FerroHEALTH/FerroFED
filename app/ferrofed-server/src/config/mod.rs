@@ -12,7 +12,7 @@
 use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
 use ferrohealth_secret::secret::Secret;
-use ferrohealth_server::tls_client::TlsClientSection;
+use ferrohealth_config::tls::TlsClientSection;
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -168,7 +168,7 @@ pub struct Config {
     /// ([`Error::DevRemoved`](error::Error::DevRemoved)); its rows are never
     /// kept, since one held a patient identifier.
     pub dev: Option<serde::de::IgnoredAny>,
-    /// Whether a source set `server.shutdown_timeout_ms`; unset, the drain
+    /// Whether a source set `server.shutdown_timeout`; unset, the drain
     /// lasts `server.request_timeout_ms` ([`Config::load`] and
     /// [`Config::from_sources`] read it from the provenance).
     #[serde(skip)]

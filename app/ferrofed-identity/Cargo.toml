@@ -86,6 +86,8 @@ tracing.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+# The outbound TLS table and version the tests build a client from.
+ferrohealth-config.workspace = true
 # The mock server that drops off the runtime.
 ferrofed-testkit.workspace = true
 fhir-types = { workspace = true, features = ["r4", "resources"] }

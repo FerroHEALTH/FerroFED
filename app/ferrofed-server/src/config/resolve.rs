@@ -90,12 +90,11 @@ impl Config {
         let listen = self.server.listen;
         let base_path = crate::config::server::resolve_base_path(&self.server)?;
         let public_url = self.gateway.resolve_public_url(&base_path)?;
-        let request_timeout =
-            positive_ms("server.request_timeout_ms", self.server.request_timeout_ms)?;
+        let request_timeout = positive_span("server.request_timeout", self.server.request_timeout)?;
         let (shutdown_timeout, bindings_drain) = self.resolve_drain(request_timeout)?;
-        if self.server.body_limit_bytes == 0 {
+        if self.server.body_limit.is_zero() {
             return Err(Error::Zero {
-                key: String::from("server.body_limit_bytes"),
+                key: String::from("server.body_limit"),
             });
         }
         let telemetry = resolve_telemetry(&self.telemetry)?;
@@ -126,12 +125,12 @@ impl Config {
                 listen,
                 base_path,
                 request_timeout,
-                header_read_timeout_ms: self.server.header_read_timeout_ms,
-                idle_timeout_ms: self.server.idle_timeout_ms,
-                drain_delay: Duration::from_millis(self.server.drain_delay_ms),
+                header_read_timeout: self.server.header_read_timeout.get(),
+                idle_timeout: self.server.idle_timeout.get(),
+                drain_delay: self.server.drain_delay.get(),
                 shutdown_timeout,
                 bindings_drain,
-                body_limit: self.server.body_limit_bytes,
+                body_limit: self.server.body_limit_bytes(),
                 auth,
                 public_url,
                 trusted_proxies: self.server.trusted_proxies.clone(),
@@ -222,7 +221,7 @@ impl Config {
         Ok((credentials, onward_tls))
     }
 
-    /// Resolves `server.shutdown_timeout_ms`: `request_timeout` when no
+    /// Resolves `server.shutdown_timeout`: `request_timeout` when no
     /// source sets it, and refused when it is shorter, so the drain never
     /// cuts a request the server accepted before its listener closed; and
     /// beside it `gateway.bindings_drain_timeout_ms`, refused at zero.
@@ -231,14 +230,13 @@ impl Config {
         if !self.shutdown_timeout_written {
             return Ok((request_timeout, bindings_drain));
         }
-        let shutdown_ms = self.server.shutdown_timeout_ms;
-        let shutdown_timeout = positive_ms("server.shutdown_timeout_ms", shutdown_ms)?;
+        let shutdown_timeout = positive_span("server.shutdown_timeout", self.server.shutdown_timeout)?;
         // NOTE: no specification governs this: our own design; a request accepted
         // just before the listener closes may run its whole request timeout.
         if shutdown_timeout < request_timeout {
             return Err(Error::Server(ServerFault::Drain {
-                shutdown_ms,
-                request_ms: self.server.request_timeout_ms,
+                shutdown: self.server.shutdown_timeout,
+                request: self.server.request_timeout,
             }));
         }
         Ok((shutdown_timeout, bindings_drain))
@@ -264,7 +262,7 @@ impl Config {
             return Err(Error::Server(ServerFault::Budget {
                 overall_ms: self.federation.overall_timeout_ms,
                 margin_ms: COMBINING_MARGIN_MS,
-                request_ms: self.server.request_timeout_ms,
+                request: self.server.request_timeout,
             }));
         }
         let budget = Budget::new(per_node, overall).map_err(|_zero| Error::Zero {
@@ -494,6 +492,20 @@ fn stored_query_fan_out(
         }
     }
     Ok(())
+}
+
+/// Returns `span` as a [`Duration`], refused at zero as [`Error::Zero`]
+/// naming `key`.
+pub(crate) fn positive_span(
+    key: &str,
+    span: ferrohealth_config::units::Duration,
+) -> Result<Duration, Error> {
+    if span.is_zero() {
+        return Err(Error::Zero {
+            key: key.to_owned(),
+        });
+    }
+    Ok(span.get())
 }
 
 /// Returns the duration `millis` names, refusing zero under `key`.

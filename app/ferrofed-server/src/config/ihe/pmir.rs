@@ -35,7 +35,8 @@
 //! is held to the protected-payload policy of [`transport`]. No specification
 //! governs the shape of the table: our own design.
 
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_server::tls_client::TlsClient;
 use std::sync::Arc;
 use std::time::Duration;
 

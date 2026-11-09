@@ -29,6 +29,7 @@ use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::serve::Listener;
 use ferrohealth_server::tls::ReloadableTls;
 use ferrohealth_telemetry::section::Filter;
+use ferrohealth_server::telemetry::TelemetryBuildError;
 use ferrohealth_telemetry::telemetry::{Console, InitError, Service, Telemetry};
 
 /// Runs `serve`: the banner on a terminal, the runtime, the telemetry with
@@ -340,16 +341,16 @@ fn console(stdout_is_terminal: bool) -> Result<Console, InitError> {
 ///
 /// # Errors
 ///
-/// Returns the [`InitError`] an exporter or a collector TLS file could not
-/// be built or read with.
+/// Returns the [`TelemetryBuildError`] of `telemetry.otlp.tls` or of an
+/// exporter that could not be built.
 fn telemetry(
     settings: &Settings,
     runtime: &tokio::runtime::Runtime,
-) -> Result<Telemetry, InitError> {
+) -> Result<Telemetry, TelemetryBuildError> {
     // NOTE: no specification governs this: our own design; the OTLP export is a tonic
     // client, which is built inside the runtime it will run on.
     let _entered = runtime.enter();
-    Telemetry::new(
+    ferrohealth_server::telemetry::build(
         &settings.telemetry,
         Service::new(metrics::SCOPE, body::VERSION),
     )

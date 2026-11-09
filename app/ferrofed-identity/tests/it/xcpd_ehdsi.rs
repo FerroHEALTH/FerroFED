@@ -21,7 +21,7 @@ use ferrofed_testkit::xcpd::{PATH, RespondingGateway};
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_server::revocation::RevocationCheck;
-use ferrohealth_server::section::TlsVersion;
+use ferrohealth_config::tls::TlsVersion;
 
 use crate::support::registry;
 use crate::xcpd::{COMMUNITY_A, holds, members, node, patient};

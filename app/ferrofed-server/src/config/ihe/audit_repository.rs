@@ -35,7 +35,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::profile::Profile;
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_server::tls_client::TlsClient;
 use ihe_atna::atna::message::AuditSource;
 use ihe_atna::atna::repository::Timeouts;
 use ihe_atna::atna::spool::Bounds;

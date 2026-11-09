@@ -40,7 +40,7 @@ pub fn loader() -> Result<Loader, Error> {
 
 /// The dotted key whose source decides whether the drain follows the
 /// request timeout ([`Config::shutdown_timeout_written`]).
-const SHUTDOWN_TIMEOUT: &str = "server.shutdown_timeout_ms";
+const SHUTDOWN_TIMEOUT: &str = "server.shutdown_timeout";
 
 impl Config {
     /// Reads the configuration of the running process: the file `sources`
@@ -108,7 +108,7 @@ impl Config {
     }
 
     /// Resolves the configuration `loaded` holds, knowing which of its
-    /// sources set `server.shutdown_timeout_ms`.
+    /// sources set `server.shutdown_timeout`.
     ///
     /// # Errors
     /// Every error [`Config::resolve`] returns.
@@ -119,7 +119,7 @@ impl Config {
     }
 }
 
-/// Whether a source of `loaded` set `server.shutdown_timeout_ms`.
+/// Whether a source of `loaded` set `server.shutdown_timeout`.
 fn shutdown_written(loaded: &Loaded<Config>) -> bool {
     loaded.provenance().source(SHUTDOWN_TIMEOUT) != Source::Default
 }

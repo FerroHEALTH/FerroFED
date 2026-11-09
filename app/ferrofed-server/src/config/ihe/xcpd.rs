@@ -38,7 +38,8 @@
 //! binding, and SAML Profile 10.0.0 §2.1 bounds the identity assertion to 4
 //! hours, `sender-vouches`.
 
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_server::tls_client::TlsClient;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;

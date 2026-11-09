@@ -28,16 +28,16 @@ listen = "127.0.0.1:8080"
 base_path = "/fed"
 trusted_proxies = ["10.0.0.1"]
 forwarded_header = "x-forwarded-for"
-request_timeout_ms = 30000
-header_read_timeout_ms = 20000
-idle_timeout_ms = 95000
-drain_delay_ms = 10
-shutdown_timeout_ms = 40000
-body_limit_bytes = 1048576
+request_timeout = "30s"
+header_read_timeout = "20s"
+idle_timeout = "95s"
+drain_delay = "10ms"
+shutdown_timeout = "40s"
+body_limit = "1MiB"
 max_concurrent_requests = 512
-retry_after_s = 2
+retry_after = "2s"
 compression = true
-compression_min_bytes = 1024
+compression_min_size = "1KiB"
 
 [gateway]
 public_url = "https://gateway.example.org/fed"
@@ -53,7 +53,7 @@ certificate_file = "@DIR@/listener.crt"
 key_file = "@DIR@/listener.key"
 client_auth = "required"
 client_ca_file = "@DIR@/client-ca.pem"
-reload_interval_s = 3600
+reload_interval = "1h"
 min_version = "1.2"
 healthcheck_identity_file = "@DIR@/client.pem"
 
@@ -67,6 +67,8 @@ endpoint = "https://otel.example.org:4317"
 traces = true
 metrics = true
 sample_ratio = 0.5
+
+[telemetry.otlp.tls]
 client_identity_file = "@DIR@/collector-client.pem"
 trust_roots_file = "@DIR@/collector-ca.pem"
 

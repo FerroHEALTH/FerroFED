@@ -5,7 +5,8 @@
 //! the table and its resolution, from which the IHE binding keeps the
 //! registry in step with the directory.
 
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_server::tls_client::TlsClient;
 use std::sync::Arc;
 use std::time::Duration;
 
