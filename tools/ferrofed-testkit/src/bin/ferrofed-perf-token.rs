@@ -6,7 +6,7 @@
 //!
 //! Every setting is one `--name value` argument, all of them required:
 //! `--listen`, `--persons-issuer`, `--persons-jwks`, `--machines-issuer`,
-//! `--machines-jwks`, `--audience`, `--client-id`, `--client-secret-file`,
+//! `--machines-jwks`, `--audience`, `--client-id`, `--client-key`,
 //! `--caller-issuer`, `--caller-jwks` and `--lifetime-s`. It prints its
 //! token URL once it listens and serves until it is stopped.
 #![allow(
@@ -41,11 +41,6 @@ fn settings() -> Result<Settings, String> {
     };
     let listen = take("listen")?;
     let lifetime = take("lifetime-s")?;
-    let secret_file = take("client-secret-file")?;
-    let client_secret = std::fs::read_to_string(&secret_file)
-        .map_err(|error| format!("--client-secret-file {secret_file}: {error}"))?
-        .trim()
-        .to_owned();
     let settings = Settings {
         listen: listen
             .parse()
@@ -56,7 +51,7 @@ fn settings() -> Result<Settings, String> {
         machines_jwks: PathBuf::from(take("machines-jwks")?),
         audience: take("audience")?,
         client_id: take("client-id")?,
-        client_secret,
+        client_key: PathBuf::from(take("client-key")?),
         caller_issuer: take("caller-issuer")?,
         caller_jwks: PathBuf::from(take("caller-jwks")?),
         lifetime_s: lifetime

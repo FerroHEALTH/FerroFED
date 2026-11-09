@@ -64,10 +64,11 @@ readonly STORE_PASSWORD=perf
 readonly SERVICES=(ferroehr-a ferroehr-b ferroehr-c ferroehr-d ferropix)
 # The onward lane of node A (perf/ferrofed.toml, perf/ferroehr-onward.toml):
 # the token endpoint's address, the key sets it writes for node A, the
-# client secret, and the third gateway that runs the lane uncached.
+# client key it writes for the gateway's private_key_jwt, and the third
+# gateway that runs the lane uncached.
 readonly ONWARD_URL=http://127.0.0.1:8095
 readonly ONWARD_DIR=$WORK/onward
-readonly ONWARD_SECRET=$WORK/onward-secret
+readonly ONWARD_KEY=$WORK/onward-client.pem
 readonly ONWARD_LANE='[credentials."node-a-query".onward]'
 readonly UNCACHED_CONFIG=$WORK/ferrofed-uncached.toml
 readonly UNCACHED_URL=http://127.0.0.1:8060
@@ -426,12 +427,11 @@ accepts() {
 onward_start() {
   mkdir -p "$ONWARD_DIR"
   chmod 0755 "$ONWARD_DIR"
-  (umask 077 && od -An -N16 -tx1 /dev/urandom | tr -d ' \n' > "$ONWARD_SECRET")
   target/release/ferrofed-perf-token --listen 127.0.0.1:8095 \
     --persons-issuer "$QUICKSTART_ISSUER" --persons-jwks "$ONWARD_DIR/persons.json" \
     --machines-issuer https://perf-onward.ferrofed.invalid/machines --machines-jwks "$ONWARD_DIR/machines.json" \
     --audience https://node-a.perf.ferrofed.invalid --client-id ferrofed-perf \
-    --client-secret-file "$ONWARD_SECRET" --caller-issuer "$QUICKSTART_ISSUER" \
+    --client-key "$ONWARD_KEY" --caller-issuer "$QUICKSTART_ISSUER" \
     --caller-jwks docker/quickstart/issuer/jwks.json --lifetime-s 3600 > "$WORK/onward.log" 2>&1 &
   token_pid=$!
   wait_for "the onward token endpoint" 30 curl --fail --silent "$ONWARD_URL/calls"

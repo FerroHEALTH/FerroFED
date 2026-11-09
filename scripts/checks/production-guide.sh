@@ -202,7 +202,8 @@ fi
 mkdir "$work/secrets" "$work/tls"
 # A synthetic value for every secret file the configuration names, the
 # Argon2id PHC string of a synthetic password for each password hash, and a
-# synthetic ES384 key for each signing key, which is read as one.
+# synthetic EC key for each signing key and each node grant's client key,
+# which are read as keys.
 # shellcheck disable=SC2016 # a PHC string, whose dollars are literal
 readonly SYNTHETIC_HASH='$argon2id$v=19$m=19456,t=2,p=1$c3ludGhldGljLXNhbHQtMTY$4es9c3W3V1fKeaFNam0B7dB/9kjZXP6/+9VB3yhq8ZA'
 while IFS= read -r secret; do
@@ -215,7 +216,7 @@ while IFS= read -r key; do
   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \
     -out "$work/secrets/$key" 2> /dev/null ||
     bad "a synthetic signing key could not be generated for $key"
-done < <(sed -nE 's|^key_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)".*$|\1|p' "$work/ferrofed.toml")
+done < <(sed -nE 's|^(private_)?key_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)".*$|\2|p' "$work/ferrofed.toml")
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 \
   -subj /CN=gateway.example.org -addext subjectAltName=DNS:gateway.example.org \
   -keyout "$work/tls/gateway.example.org.key" -out "$work/tls/gateway.example.org.crt" 2> /dev/null ||

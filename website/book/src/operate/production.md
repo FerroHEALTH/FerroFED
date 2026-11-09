@@ -372,7 +372,9 @@ each endpoint with that endpoint's own credential, one section per
 endpoint id, and signs the caller's identity onto every request with its
 own key ([Onward credentials](onward-credentials.md)). Here `cdr-a` takes a
 user and a password and `cdr-b` registers the gateway as an OAuth 2.0
-client, which obtains its token with the client credentials grant:
+client, which obtains its token with the client credentials grant and
+authenticates with a JWT signed by its own key (`private_key_jwt`). A
+node's grant takes no client secret (§13.1, N25):
 
 ```toml
 # ferrofed.toml
@@ -383,19 +385,20 @@ password_file = "/run/secrets/ferrofed/cdr-a-password"
 [credentials."cdr-b-query".oauth]
 token_endpoint = "https://auth.cdr-b.example.org/oauth2/token"
 client_id = "ferrofed-gateway"
-client_auth = "client_secret_basic"
-client_secret_file = "/run/secrets/ferrofed/cdr-b-client-secret"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/ferrofed/cdr-b-client-key.pem"
 scope = "system/aql-*.s system/composition-*.r"
 
 [signing]
 key_file = "/run/secrets/ferrofed/signing-key.pem"
 ```
 
-Make the signing key, and give every secret file to the gateway's user
-alone:
+Make the signing key and `cdr-b`'s client key, and give every secret file
+to the gateway's user alone:
 
 ```sh
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out secrets/signing-key.pem
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out secrets/cdr-b-client-key.pem
 sudo chown -R 65532:65532 secrets && sudo chmod 0400 secrets/*
 ```
 

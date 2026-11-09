@@ -9,8 +9,8 @@
 //! count the exchanges it causes.
 //!
 //! **This is a test device, not an authorization server.** It answers
-//! `POST /token` for one client, authenticated by `client_secret_post`
-//! (RFC 6749 §2.3.1), with two grants. The client-credentials grant (RFC
+//! `POST /token` for one client, authenticated by `private_key_jwt` (RFC
+//! 7523 §2.2, the assertion checked as RFC 7523 §3 asks), with two grants. The client-credentials grant (RFC
 //! 6749 §4.4) issues the gateway's own token, from the machines issuer. RFC
 //! 8693 token exchange verifies the `subject_token` against the caller
 //! issuer's key set (its signature, `iss` and `exp`) and issues a token of
@@ -21,7 +21,9 @@
 //! live [`Settings::lifetime_s`]. `GET /calls` answers how many requests
 //! of each grant it answered and how many it refused, which the gate reads
 //! to judge the onward cache. Each issuer's key is generated at start and
-//! its key set written to a file for the node that verifies the tokens. No
+//! its key set written to a file for the node that verifies the tokens, and
+//! so is the client's P-256 key, written as PKCS#8 PEM for the gateway that
+//! signs its assertions with it under the RFC 7638 thumbprint as `kid`. No
 //! specification governs the device: our own design.
 
 use std::io;
@@ -34,13 +36,14 @@ use bytes::Bytes;
 use http::request::Parts;
 use http::{HeaderValue, Method, Response, StatusCode, header};
 use http_body_util::Full;
-use jsonwebtoken::jwk::JwkSet;
-use jsonwebtoken::{DecodingKey, Validation};
+use jsonwebtoken::jwk::{Jwk, JwkSet, ThumbprintHash};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 
 use crate::issuer::{Claims, Issuer, IssuerError};
+use crate::oauth::{Curve, JWT_BEARER, KeyGenError};
 
 /// The path the token endpoint answers on.
 pub const TOKEN_PATH: &str = "/token";
@@ -71,8 +74,9 @@ pub struct Settings {
     pub audience: String,
     /// The one client it authenticates.
     pub client_id: String,
-    /// That client's secret.
-    pub client_secret: String,
+    /// Where that client's private key is written, for the gateway's
+    /// `private_key_file`.
+    pub client_key: PathBuf,
     /// The `iss` a `subject_token` must carry.
     pub caller_issuer: String,
     /// The key set a `subject_token` is verified against.
@@ -104,6 +108,21 @@ pub enum PerfTokenError {
         /// Why it is none.
         #[source]
         source: serde_json::Error,
+    },
+    /// The client's key could not be generated.
+    #[error("the client's key could not be generated")]
+    ClientKey(#[source] KeyGenError),
+    /// The client's key could not be read as a JWK.
+    #[error("the client's key could not be read as a JWK")]
+    ClientJwk(#[source] jsonwebtoken::errors::Error),
+    /// The client's key could not be written.
+    #[error("the client's key {path} could not be written")]
+    ClientKeyWrite {
+        /// The file that was written.
+        path: PathBuf,
+        /// Why it could not be.
+        #[source]
+        source: io::Error,
     },
     /// The listen address could not be bound.
     #[error("the token endpoint could not listen")]
@@ -157,8 +176,9 @@ impl Drop for PerfTokenEndpoint {
 }
 
 impl PerfTokenEndpoint {
-    /// Generates both issuers' keys, writes their key sets, reads the caller
-    /// issuer's, and listens on [`Settings::listen`].
+    /// Generates both issuers' keys, writes their key sets, generates and
+    /// writes the client's key, reads the caller issuer's key set, and
+    /// listens on [`Settings::listen`].
     ///
     /// # Errors
     ///
@@ -185,15 +205,18 @@ impl PerfTokenEndpoint {
                 path: settings.caller_jwks.clone(),
                 source,
             })?;
+        let client = client_key(&settings.client_key)?;
         let listener = TcpListener::bind(settings.listen)
             .await
             .map_err(PerfTokenError::Bind)?;
         let address = listener.local_addr().map_err(PerfTokenError::Bind)?;
         let shared = Arc::new(Shared {
+            token_url: token_url(address),
             settings,
             persons,
             machines,
             caller,
+            client,
             client_credentials: AtomicU64::new(0),
             token_exchange: AtomicU64::new(0),
             refused: AtomicU64::new(0),
@@ -219,7 +242,7 @@ impl PerfTokenEndpoint {
     /// Returns the token endpoint's URL.
     #[must_use]
     pub fn token_url(&self) -> String {
-        format!("http://{}{TOKEN_PATH}", self.address)
+        token_url(self.address)
     }
 
     /// Returns how many requests of each kind it answered so far.
@@ -238,12 +261,49 @@ impl PerfTokenEndpoint {
     }
 }
 
+/// The token endpoint's URL at `address`, the `aud` of a client assertion.
+fn token_url(address: SocketAddr) -> String {
+    format!("http://{address}{TOKEN_PATH}")
+}
+
+/// Generates the client's P-256 key, writes it to `path` readable by its
+/// owner alone, and returns its public half as a key set under its RFC 7638
+/// thumbprint.
+fn client_key(path: &std::path::Path) -> Result<JwkSet, PerfTokenError> {
+    let pem = Curve::P256.pem().map_err(PerfTokenError::ClientKey)?;
+    let key = EncodingKey::from_ec_pem(pem.as_bytes()).map_err(PerfTokenError::ClientJwk)?;
+    let mut jwk =
+        Jwk::from_encoding_key(&key, Algorithm::ES256).map_err(PerfTokenError::ClientJwk)?;
+    jwk.common.key_id = Some(
+        jwk.thumbprint(ThumbprintHash::SHA256)
+            .map_err(PerfTokenError::ClientJwk)?,
+    );
+    write_private(path, &pem).map_err(|source| PerfTokenError::ClientKeyWrite {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(JwkSet { keys: vec![jwk] })
+}
+
+/// Writes `text` to `path`, readable by its owner alone where the platform
+/// has modes.
+fn write_private(path: &std::path::Path, text: &str) -> io::Result<()> {
+    use std::io::Write as _;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(path)?.write_all(text.as_bytes())
+}
+
 /// What every connection shares.
 struct Shared {
+    token_url: String,
     settings: Settings,
     persons: Issuer,
     machines: Issuer,
     caller: JwkSet,
+    client: JwkSet,
     client_credentials: AtomicU64,
     token_exchange: AtomicU64,
     refused: AtomicU64,
@@ -304,9 +364,19 @@ fn token(shared: &Shared, body: &[u8]) -> Response<Full<Bytes>> {
             .map(|(_, value)| value.as_str())
     };
     let settings = &shared.settings;
-    if field("client_id") != Some(settings.client_id.as_str())
-        || field("client_secret") != Some(settings.client_secret.as_str())
-    {
+    // NOTE: RFC 7521 §4.2: `client_id` is optional beside an assertion and names the client when sent.
+    let named = field("client_id").is_none_or(|id| id == settings.client_id);
+    let asserted = field("client_assertion_type") == Some(JWT_BEARER)
+        && field("client_assertion").is_some_and(|assertion| {
+            crate::oauth::verify_signed(
+                assertion,
+                &shared.client,
+                (settings.client_id.as_str(), shared.token_url.as_str()),
+                Some(Algorithm::ES256),
+            )
+            .is_ok()
+        });
+    if !named || !asserted || field("client_secret").is_some() {
         return refuse(shared, "invalid_client");
     }
     let scope = field("scope").map(str::to_owned);
