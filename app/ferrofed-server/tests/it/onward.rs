@@ -445,17 +445,12 @@ fn the_removed_grant_tables_are_refused_naming_the_oauth_table() -> TestResult {
         let refused = Config::from_sources(Some(&injected(table)), &BTreeMap::new())
             .err()
             .ok_or("the removed key is refused at load")?;
-        assert!(
-            matches!(
-                &refused,
-                ConfigError::Replaced { old, new: named }
-                    if *old == format!("credentials.node-a-pub.{removed}")
-                        && *named == format!("credentials.node-a-pub.{new}")
-            ),
-            "{removed}: {refused:?}"
+        assert_eq!(
+            Some(format!("credentials.node-a-pub.{removed}").as_str()),
+            crate::support::refused_key(&refused),
+            "{removed} is an unknown key since 0.0.18: {refused:?}"
         );
-        let shown = refused.to_string();
-        assert!(shown.contains("upgrade notes"), "{shown}");
+        assert!(!refused.to_string().contains(new), "{refused}");
     }
     Ok(())
 }

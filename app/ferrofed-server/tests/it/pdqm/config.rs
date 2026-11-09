@@ -121,13 +121,10 @@ fn a_fapi2_grant_in_its_section_is_refused() -> TestResult {
         "profile = \"development\"\n{}\n[pdqm.credentials.fapi2]\nissuer = \"https://as.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"gateway\"\nclient_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\n",
         pdqm(BASE, "iti-78")
     ))?;
-    assert!(
-        matches!(
-            &error,
-            error::Error::Replaced { old, new }
-                if old == "pdqm.credentials.fapi2" && new == "pdqm.credentials.oauth"
-        ),
-        "{error:?}"
+    assert_eq!(
+        Some("pdqm.credentials.fapi2"),
+        crate::support::refused_key(&error),
+        "an unknown key since 0.0.18: {error:?}"
     );
     Ok(())
 }

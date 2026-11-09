@@ -69,11 +69,10 @@ configuration, and these rules bound how.
   reading the old one. It refuses the old key at start-up and in `config
   check`, in the file and as a `FERROFED__` override: a renamed or moved
   key naming the key that replaces it, and a key removed with nothing in its
-  place by its name. Its upgrade notes give the step.
-  The renames of v0.0.16 are refused naming their new keys (for example
-  `server.public_url was renamed to gateway.public_url`), and `[stored_queries]
-  url` and `url_file`, removed in favour of `[store]`, are refused naming
-  `[store]`.
+  place by its name. Its upgrade notes give the step. That refusal lives
+  for the one release that renames or removes the key; from the next
+  release on, the key is refused as any unknown key is, and the upgrade
+  notes of the release that removed it stay the record.
 - **A new key is optional, or the Upgrade notes say otherwise.** A release
   that adds a key gives it a default that keeps the behaviour of the
   release before, unless the change is a security fix that cannot keep it.
