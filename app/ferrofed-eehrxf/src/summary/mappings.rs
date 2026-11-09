@@ -232,14 +232,7 @@ impl Mappings {
 /// [`MappingsError::Compile`] for a context mapping that does not compile.
 fn compile_one(source: &Source) -> Result<Mapping, MappingsError> {
     let section = source.section;
-    let written = if source.archetypes.is_empty() {
-        Template::Opt14(&source.opt)
-    } else {
-        Template::Adl2 {
-            template: &source.opt,
-            archetypes: &source.archetypes,
-        }
-    };
+    let written = Template::of(&source.opt, &source.archetypes);
     let refused = |error| MappingsError::Template {
         section: section.slug(),
         source: Box::new(error),

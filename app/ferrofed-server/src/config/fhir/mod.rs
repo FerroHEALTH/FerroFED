@@ -113,8 +113,12 @@ pub struct ReceiveEntry {
     /// unpacked directory, with any package of the value sets its profiles
     /// bind: the validator refuses a set that lacks one a manifest names.
     pub dependencies: Vec<PathBuf>,
-    /// The OPT 1.4 operational template the composition is of.
+    /// The operational template the composition is of: an OPT 1.4 `.opt`,
+    /// or an ADL 2 template beside `archetypes`.
     pub template: PathBuf,
+    /// The archetypes an ADL 2 `template` specialises or fills a slot with,
+    /// each an ADL file.
+    pub archetypes: Vec<PathBuf>,
     /// The model and context mapping files.
     pub files: Vec<PathBuf>,
     /// The `metadata.name` of the context mapping.
@@ -329,8 +333,8 @@ pub enum FhirError {
     /// not take.
     #[error("a [[fhir.mapping]] is refused")]
     Mapping(#[from] MappingsError),
-    /// A receive entry's template cannot be read.
-    #[error("fhir.receive[{position}].template {} cannot be read", path.display())]
+    /// A receive entry's template or one of its archetypes cannot be read.
+    #[error("fhir.receive[{position}] cannot read its template or archetype {}", path.display())]
     ReceiveTemplate {
         /// The position of the entry.
         position: usize,
@@ -546,19 +550,13 @@ impl Fhir {
                     path: entry.template.clone(),
                     source,
                 })?;
-            let mut archetypes = Vec::with_capacity(entry.archetypes.len());
-            for path in &entry.archetypes {
-                let text = std::fs::read_to_string(path).map_err(|source| FhirError::Template {
+            let archetypes = archetypes(&entry.archetypes, |path| {
+                std::fs::read_to_string(path).map_err(|source| FhirError::Template {
                     position,
                     path: path.clone(),
                     source,
-                })?;
-                let name = path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                archetypes.push((name, text));
-            }
+                })
+            })?;
             sources.push(Source {
                 section,
                 opt,
@@ -608,13 +606,15 @@ impl Fhir {
     fn receivers(&self) -> Result<Receivers, FhirError> {
         let mut sources = Vec::with_capacity(self.receive.len());
         for (position, entry) in self.receive.iter().enumerate() {
-            let opt = std::fs::read_to_string(&entry.template).map_err(|source| {
-                FhirError::ReceiveTemplate {
+            let read = |path: &PathBuf| {
+                std::fs::read_to_string(path).map_err(|source| FhirError::ReceiveTemplate {
                     position,
-                    path: entry.template.clone(),
+                    path: path.clone(),
                     source,
-                }
-            })?;
+                })
+            };
+            let opt = read(&entry.template)?;
+            let archetypes = archetypes(&entry.archetypes, read)?;
             for (key, value) in [
                 ("language", &entry.language),
                 ("territory", &entry.territory),
@@ -629,6 +629,7 @@ impl Fhir {
                 package: entry.package.clone(),
                 dependencies: entry.dependencies.clone(),
                 opt,
+                archetypes,
                 files: entry.files.clone(),
                 context: entry.context.clone(),
                 language: entry.language.clone(),
@@ -710,6 +711,28 @@ fn overlaps(base: &BasePath, server_base: &BasePath) -> bool {
     base.as_str()
         .strip_prefix(server_base.as_str())
         .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// Reads each of `paths` with `read`, as its file name and its text, the
+/// archetypes an ADL 2 template is built with.
+///
+/// # Errors
+///
+/// The first error `read` returns.
+fn archetypes<E>(
+    paths: &[PathBuf],
+    read: impl Fn(&PathBuf) -> Result<String, E>,
+) -> Result<Vec<(String, String)>, E> {
+    paths
+        .iter()
+        .map(|path| {
+            let name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            Ok((name, read(path)?))
+        })
+        .collect()
 }
 
 #[cfg(test)]
