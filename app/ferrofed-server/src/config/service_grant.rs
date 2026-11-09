@@ -68,8 +68,7 @@ pub fn site(key: &str) -> ProtectedSite {
 /// # Errors
 ///
 /// The refusals of [`resolve_credentials`],
-/// [`CredentialsFault::ServiceGrantNotHere`] for an `oauth2`, Nuts or FAPI
-/// 2.0 grant, and [`Error::Cleartext`] for a token endpoint that is not
+/// [`CredentialsFault::ServiceGrantNotHere`] for a Nuts grant, and [`Error::Cleartext`] for a token endpoint that is not
 /// `https` outside the development profile.
 pub(crate) fn resolve_service(
     section: &str,
@@ -81,9 +80,6 @@ pub(crate) fn resolve_service(
             section: section.to_owned(),
         })
     };
-    if credentials.oauth2.is_some() || credentials.fapi2.is_some() {
-        return Err(refused());
-    }
     let scheme = resolve_credentials(section, credentials)?;
     match &scheme {
         Scheme::Basic { .. } => Ok(scheme),

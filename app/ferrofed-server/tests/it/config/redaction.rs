@@ -110,14 +110,15 @@ fn configuration(
     let path = toml::Value::String(password_file.to_owned());
     let otlp = otlp_url();
     let audit = crate::support::audit_toml();
+    let key = toml::Value::String(crate::support::signing_key_file().to_owned());
     let text = format!(
-        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{CLIENT_SECRET}\"\n\n\
+        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\n\
          [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
          [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n\n\
          [telemetry.otlp]\nendpoint = \"{otlp}\"\n{audit}\n\
          [[pixm.manager]]\nurl = \"{pix_url}\"\n\
          members = {{ \"node-a\" = \"urn:oid:2.999.1\" }}\n\n\
-         [pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n{extra}"
+         [pixm.manager.credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{CLIENT_SECRET}\"\n\n{extra}"
     );
     let env = BTreeMap::from([
         (
@@ -212,12 +213,12 @@ fn no_resolved_settings_type_renders_a_credential() -> TestResult {
     redacted("PixmSettings", pixm);
     for manager in &pixm.managers {
         redacted("PixManagerSettings", manager);
-        let auth = match &manager.credentials {
-            Some(Scheme::Basic { user, password }) => Authentication::Basic {
-                user: user.clone(),
-                password: password.to_secret_string(),
-            },
-            _ => return Err("the PIX Manager resolves to its basic credentials".into()),
+        if let Some(scheme) = &manager.credentials {
+            redacted("PIX Manager credentials", scheme);
+        }
+        let auth = Authentication::Basic {
+            user: String::from("gateway"),
+            password: secrecy::SecretString::from(PASSWORD),
         };
         let composed = ManagerConfig {
             tls: ferrofed_testkit::tls::platform(),
@@ -236,29 +237,50 @@ fn every_secret_still_resolves_to_its_value() -> TestResult {
     let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
     let settings = configuration(&file.path().display().to_string(), PIX_URL, "")?.resolve()?;
     let mut tokens = BTreeMap::new();
-    for (endpoint, scheme) in &settings.credentials {
-        let value = match scheme {
-            Scheme::Oauth { written, .. } => written
+    let client_secret = |scheme: &Scheme| -> Result<String, Box<dyn Error>> {
+        match scheme {
+            Scheme::Oauth { written, .. } => Ok(written
                 .0
                 .client_secret
                 .as_ref()
                 .map(secrecy::ExposeSecret::expose_secret)
-                .ok_or("the oauth grant holds its secret")?,
+                .ok_or("the oauth grant holds its secret")?
+                .to_owned()),
+            _ => Err("an oauth grant".into()),
+        }
+    };
+    for (endpoint, scheme) in &settings.credentials {
+        let value = match scheme {
+            // NOTE: §13.1 N25, a node's grant holds no client secret; the PIX
+            // Manager's grant below carries the one this test resolves.
+            Scheme::Oauth { written, .. } if written.0.client_secret.is_none() => continue,
             Scheme::Basic { password, .. } => password.expose(),
             _ => return Err("a scheme this test does not know".into()),
         };
         tokens.insert(endpoint.as_str(), value);
     }
     let expected = BTreeMap::from([
-        ("node-a-pub", CLIENT_SECRET),
         ("node-b-pub", PASSWORD),
         ("node-c-pub", ENV_PASSWORD),
         ("node-d-pub", FILE_PASSWORD),
     ]);
     assert_eq!(expected, tokens, "each endpoint holds its own secret");
     let pixm = settings.pixm.as_ref().ok_or("the PIXm settings resolve")?;
-    let url = pixm.managers.first().ok_or("one Manager")?.url.expose();
-    assert_eq!(PIX_URL, url, "the Manager URL is kept as written");
+    let manager = pixm.managers.first().ok_or("one Manager")?;
+    assert_eq!(
+        PIX_URL,
+        manager.url.expose(),
+        "the Manager URL is kept as written"
+    );
+    let held = manager
+        .credentials
+        .as_ref()
+        .ok_or("the Manager holds a grant")?;
+    assert_eq!(
+        CLIENT_SECRET,
+        client_secret(held)?,
+        "the Manager holds its secret"
+    );
     let otlp = settings.telemetry.otlp.as_ref().ok_or("an OTLP push")?;
     assert_eq!(
         otlp_url(),
@@ -383,8 +405,9 @@ fn a_connection_url_and_a_secret_render_and_serialize_redacted() -> TestResult {
 fn config_check_prints_no_credential() -> TestResult {
     let file = secret_file(&format!("{FILE_PASSWORD}\n"))?;
     let path = toml::Value::String(file.path().display().to_string());
+    let key = toml::Value::String(crate::support::signing_key_file().to_owned());
     let text = format!(
-        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{CLIENT_SECRET}\"\n\n\
+        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\n\
          [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
          [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n"
     );

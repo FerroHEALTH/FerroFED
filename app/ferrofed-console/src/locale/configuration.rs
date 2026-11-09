@@ -84,8 +84,6 @@ messages! {
     ChooseTheBindingSection = "choose-the-binding-section",
     /// `Clear`
     Clear = "clear",
-    /// `Client assertion audience`
-    ClientAssertionAudience = "client-assertion-audience",
     /// `Client authentication`
     ClientAuthentication = "client-authentication",
     /// `Client credentials`
@@ -94,12 +92,6 @@ messages! {
     ClientId = "client-id",
     /// `Client key file`
     ClientKeyFile = "client-key-file",
-    /// `Client secret`
-    ClientSecret = "client-secret",
-    /// `Client secret, Basic scheme`
-    ClientSecretBasicScheme = "client-secret-basic-scheme",
-    /// `Client secret, in the body`
-    ClientSecretBody = "client-secret-body",
     /// `Close the comparison`
     CloseTheComparison = "close-the-comparison",
     /// `Compare with running`
@@ -216,8 +208,6 @@ messages! {
     GiveAqlStore = "give-aql-store",
     /// `Give the reason for the change.`
     GiveReasonChange = "give-reason-change",
-    /// `Grant`
-    Grant = "grant",
     /// `Grant settings`
     GrantSettings = "grant-settings",
     /// `Grant type`
@@ -392,6 +382,8 @@ messages! {
     RemoveThisNewSecret = "remove-this-new-secret",
     /// `Remove this value`
     RemoveThisValue = "remove-this-value",
+    /// `Security profile`
+    SecurityProfile = "security-profile",
     /// `Show the value while held`
     ShowSecretWhileHeld = "show-secret-while-held",
     /// `Replica …: …`
@@ -574,8 +566,6 @@ messages! {
     TlsClientCertificateTlsClientAuth = "tls-client-certificate-tls-client-auth",
     /// `Token endpoint`
     TokenEndpoint = "token-endpoint",
-    /// `Token exchange`
-    TokenExchange = "token-exchange",
     /// `TOML`
     Toml = "toml",
     /// `The TOML is larger than … bytes.`

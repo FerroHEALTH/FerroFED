@@ -18,7 +18,6 @@ pub const KNOWN_KEYS: &[&str] = &[
     "assertion_alg",
     "assertion_audience",
     "assertion_file",
-    "assertion_lifetime_s",
     "audience",
     "audit",
     "audit_repository",
@@ -250,7 +249,6 @@ pub const KEPT: &[&str] = &[
 /// The number-valued keys whose value is kept: timeouts, intervals, limits,
 /// capacities, sizes and a sampling ratio.
 pub const NUMBERS: &[&str] = &[
-    "assertion_lifetime_s",
     "binding_capacity",
     "binding_ttl_ms",
     "bindings_drain_timeout_ms",

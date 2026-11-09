@@ -165,6 +165,9 @@ pub(crate) fn with_pairs(
 /// `file` unless the refusal is that the file could not be read, which
 /// names it itself.
 fn refused(file: Option<&Path>, source: ConfigError) -> Error {
+    if let Some((old, new)) = replaced(&source) {
+        return Error::Replaced { old, new };
+    }
     if let Some((old, new)) = renamed(&source) {
         return Error::Renamed { old, new };
     }
@@ -209,6 +212,31 @@ fn renamed(source: &ConfigError) -> Option<(String, String)> {
             .map(|(old, new)| (old.to_owned(), new.to_owned()))
             .or_else(|| moved_to_tls(key)),
         ConfigError::Refusals { refusals } => refusals.iter().find_map(renamed),
+        _ => None,
+    }
+}
+
+/// The grant tables of a credentials section the `oauth` table replaced
+/// (#1749), with the key each moved to inside it.
+const REPLACED_BY_OAUTH: [(&str, &str); 3] = [
+    ("oauth2", "oauth"),
+    ("fapi2", "oauth"),
+    ("mtls_alias_hosts", "oauth.mtls_alias_hosts"),
+];
+
+/// The removed grant key `source` refuses and the key that replaces it,
+/// when it refuses one, alone or among other refusals.
+fn replaced(source: &ConfigError) -> Option<(String, String)> {
+    match source {
+        ConfigError::Invalid { key: Some(key), .. } => {
+            let (table, leaf) = key.rsplit_once('.')?;
+            REPLACED_BY_OAUTH
+                .into_iter()
+                .find(|(old, _)| *old == leaf)
+                .filter(|_| table.starts_with("credentials.") || table.ends_with(".credentials"))
+                .map(|(_, new)| (key.clone(), format!("{table}.{new}")))
+        }
+        ConfigError::Refusals { refusals } => refusals.iter().find_map(replaced),
         _ => None,
     }
 }

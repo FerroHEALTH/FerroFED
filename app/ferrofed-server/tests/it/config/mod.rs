@@ -20,7 +20,16 @@ use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::io::Write;
 
-/// A file with every section set, so a test can override one key at a time.
+/// A file with every section set, so a test can override one key at a time,
+/// its node grant's key the suite's signing key file.
+fn full() -> String {
+    FULL.replace(
+        "@KEY@",
+        &toml::Value::String(crate::support::signing_key_file().to_owned()).to_string(),
+    )
+}
+
+/// [`full`] before the key file is named.
 const FULL: &str = r#"
 [server]
 listen = "0.0.0.0:9000"
@@ -35,7 +44,8 @@ filter = "debug"
 [credentials."hospital-a".oauth]
 token_endpoint = "https://as.hospital-a.example.org/token"
 client_id = "ferrofed"
-client_secret = "synthetic-token"
+client_auth = "private_key_jwt"
+private_key_file = @KEY@
 
 [credentials."clinic-b"]
 user = "gateway"

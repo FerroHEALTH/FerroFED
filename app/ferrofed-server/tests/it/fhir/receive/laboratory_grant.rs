@@ -13,6 +13,7 @@ use std::path::Path;
 
 use ferrofed_testkit::laboratory;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pdqm_stub;
 use http::StatusCode;
 use serde_json::Value;
 
@@ -31,8 +32,12 @@ const OTHER_B: &str = "6666ffff-6666-4666-8666-666666666666";
 /// The gateway receiving laboratory reports at node A, its issuer's
 /// patient tokens bound to node A, the cross-reference knowing both
 /// patients at both members and the token's `ehrId` in node A's `ehr_id`
-/// system.
-fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<axum::Router, Box<dyn Error>> {
+/// system, the header asked of the PDQm Supplier `pdq`.
+fn gateway(
+    dir: &Path,
+    (a, b): (&Server, &Server),
+    pdq: &Server,
+) -> Result<axum::Router, Box<dyn Error>> {
     let crossref = rows(&[
         (EHR_SYSTEM, EHR_A, "node-a", EHR_A),
         (EHR_SYSTEM, EHR_A, "node-b", EHR_B),
@@ -41,7 +46,12 @@ fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<axum::Router, Box<dyn E
         (OTHER_NAMESPACE, OTHER, "node-a", OTHER_A),
         (OTHER_NAMESPACE, OTHER, "node-b", OTHER_B),
     ]);
-    gateway_with(dir, (a, b), (&crossref, &receiving(dir)?), &bound()?)
+    gateway_with(
+        dir,
+        (a, b),
+        (&crossref, &receiving(dir, &pdqm_stub::base_url(pdq))?),
+        &bound()?,
+    )
 }
 
 /// The list of [`OTHER`]'s laboratory reports.
@@ -67,7 +77,8 @@ async fn a_persons_own_grant_lists_and_reads_their_laboratory_report() -> TestRe
         holding(&row, Some(&composition)).await,
         holding("", None).await,
     );
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = crate::fhir::supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let token = minted(&own_grant())?;
     let (status, text) = call(app.clone(), bearing(list("&type=11502-2")?, &token)?).await?;
     assert_eq!(StatusCode::OK, status, "Art 3(1): {text}");
@@ -106,7 +117,8 @@ async fn a_persons_own_grant_asking_for_another_patients_laboratory_reports_is_r
 -> TestResult {
     let dir = tempfile::tempdir()?;
     let (a, b) = (holding("", None).await, holding("", None).await);
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = crate::fhir::supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let token = minted(&own_grant())?;
     let (status, text) = call(app, bearing(others_list()?, &token)?).await?;
     assert_eq!(StatusCode::FORBIDDEN, status, "Art 3(1), §5.2: {text}");

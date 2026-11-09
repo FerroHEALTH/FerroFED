@@ -18,26 +18,28 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::dispatch::NodeClient;
-use ferrofed_engine::onward::grant::fapi2::metadata::DiscoveryError;
-use ferrofed_engine::onward::grant::fapi2::{
-    Fapi2Credentials, Fapi2Error, Fapi2Grant, Fapi2GrantError, Fapi2Security,
-};
-use ferrofed_engine::onward::issuer::{AliasHost, EndpointError, Issuer};
-use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
-use ferrofed_engine::onward::{ClientAuthentication, Scope, SenderConstraint, SystemClock};
-use ferrofed_registry::id::EndpointId;
+use ferrofed_engine::onward::upstream::UpstreamToken;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
 use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::oauth;
 use ferrofed_testkit::tls::MutualTls;
+use ferrohealth_smart::client::fapi2::{AliasHost, Fapi2, Fapi2Error, SecurityProfile};
+use ferrohealth_smart::client::keys::KeyRing;
+use ferrohealth_smart::client::{
+    AssertionAudience as Audience, ClientAuth, ClientCredentials, Endpoint, PresentedTls,
+    TokenError,
+};
+use ferrohealth_smart::config::onward::OnwardSection;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
-use secrecy::SecretString;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use super::{CLIENT_ID, EMPTY_RESULT_SET, SCOPE, TestResult, client_key, field, prover, query};
+use super::{
+    CLIENT_ID, EMPTY_RESULT_SET, RESOURCE, SCOPE, TestResult, client_key, field, prover, provider,
+    query,
+};
 use crate::conveyed::conveyance;
 
 /// A FAPI 2.0 server that authenticates by certificate, with a node beside
@@ -104,27 +106,37 @@ impl Harness {
         self.server.publish(&metadata);
     }
 
-    /// The thumbprint of the certificate the gateway presents.
-    fn thumbprint(&self) -> Result<Thumbprint, Box<dyn Error>> {
-        Ok(Thumbprint::of_identity(&SecretString::from(
-            self.front.client_identity(),
-        ))?)
+    /// The grant authenticating by, and binding its tokens to, the
+    /// certificate, with no key of its own, trusting the fronts and taking
+    /// an alias on `hosts`.
+    fn grant_on(&self, hosts: &[AliasHost]) -> Result<ClientCredentials, Box<dyn Error>> {
+        let material = self.front.tls_client("credentials.node-a-pub.tls")?;
+        let presented = PresentedTls::new(
+            Arc::new(material.client_config(rustls::RootCertStore::empty())?),
+            material.certificate().cloned(),
+        );
+        let mut grant = ClientCredentials::with_presented_tls(
+            Endpoint::Issuer(self.front.origin()),
+            CLIENT_ID.to_owned(),
+            presented,
+            false,
+        )
+        .with_certificate_binding();
+        grant.scope = Some(SCOPE.to_owned());
+        grant.timeout = Duration::from_secs(5);
+        let mut profile = Fapi2::new();
+        for host in hosts {
+            profile = profile.with_alias_host(host.clone());
+        }
+        grant.profile = SecurityProfile::Fapi2(profile);
+        grant.validate()?;
+        Ok(grant)
     }
 
     /// The grant authenticating by, and binding its tokens to, the
-    /// certificate, with no key of its own.
-    fn grant(&self) -> Result<Fapi2Grant, Box<dyn Error>> {
-        let security = Fapi2Security {
-            client_auth: ClientAuthentication::Tls(TlsClientAuth::Pki),
-            sender: SenderConstraint::Certificate(self.thumbprint()?),
-            client_key: None,
-        };
-        Ok(Fapi2Grant::secured(
-            Issuer::parse(&self.front.origin())?,
-            CLIENT_ID,
-            security,
-            (Some(Scope::parse(SCOPE)?), None),
-        )?)
+    /// certificate, taking no alias off the issuer's origin.
+    fn grant(&self) -> Result<ClientCredentials, Box<dyn Error>> {
+        self.grant_on(&[])
     }
 
     /// An engine trusting the front and presenting the client certificate.
@@ -142,24 +154,10 @@ impl Harness {
         )?)
     }
 
-    /// The provider of `grant` over the certificate-presenting engine.
-    fn provider(
-        &self,
-        grant: Fapi2Grant,
-    ) -> Result<Arc<Fapi2Credentials<ReqwestTransport>>, Box<dyn Error>> {
-        Ok(Arc::new(Fapi2Credentials::new(
-            EndpointId::new("node-a-pub")?,
-            grant,
-            (Duration::from_secs(300), Duration::from_secs(5)),
-            self.transport()?,
-            Arc::new(SystemClock),
-        )))
-    }
-
     /// The node client behind the front, sending what `provider` gives it.
     fn client(
         &self,
-        provider: Arc<Fapi2Credentials<ReqwestTransport>>,
+        provider: Arc<UpstreamToken>,
     ) -> Result<NodeClient<ReqwestTransport>, Box<dyn Error>> {
         let document = format!(
             "[[organisation]]\nid = \"org-a\"\n\n[[node]]\nid = \"node-a\"\norganisation = \"org-a\"\nsystem_id = \"cdr-a.example.org\"\n\n[[endpoint]]\nid = \"node-a-pub\"\nnode = \"node-a\"\nurl = \"{}/openehr\"\nconnection_type = \"openehr-rest-query\"\nmanaging_organisation = \"org-a\"\n",
@@ -179,7 +177,7 @@ impl Harness {
 #[tokio::test]
 async fn a_fapi2_grant_authenticates_and_binds_its_tokens_by_certificate() -> TestResult {
     let harness = Harness::start().await?;
-    let client = harness.client(harness.provider(harness.grant()?)?)?;
+    let client = harness.client(provider(harness.grant()?)?)?;
 
     let reply = query(&client, conveyance()).await?;
     assert_eq!(
@@ -212,11 +210,10 @@ async fn a_fapi2_grant_authenticates_and_binds_its_tokens_by_certificate() -> Te
 /// with no token request sent.
 async fn refused_after(
     edit: impl FnOnce(&mut Metadata),
-) -> Result<Option<DiscoveryError>, Box<dyn Error>> {
+) -> Result<Option<Fapi2Error>, Box<dyn Error>> {
     let harness = Harness::start().await?;
     harness.publish(edit);
-    let error = harness
-        .provider(harness.grant()?)?
+    let error = provider(harness.grant()?)?
         .credentials()
         .await
         .err()
@@ -226,13 +223,11 @@ async fn refused_after(
         "a refused discovery sends no token request"
     );
     Ok(
-        match Error::source(&error).and_then(<dyn Error>::downcast_ref::<Fapi2Error>) {
-            Some(Fapi2Error::Discovery(DiscoveryError::CertificateBinding)) => {
-                Some(DiscoveryError::CertificateBinding)
-            }
-            Some(Fapi2Error::Discovery(DiscoveryError::ClientAuthentication)) => {
-                Some(DiscoveryError::ClientAuthentication)
-            }
+        match Error::source(&error)
+            .and_then(<dyn Error>::downcast_ref::<Arc<TokenError>>)
+            .map(AsRef::as_ref)
+        {
+            Some(TokenError::Fapi2 { source }) => Some(source.clone()),
             _ => None,
         },
     )
@@ -249,7 +244,7 @@ async fn a_server_without_certificate_bound_tokens_is_refused() -> TestResult {
         })
         .await?;
         assert!(
-            matches!(met, Some(DiscoveryError::CertificateBinding)),
+            matches!(met, Some(Fapi2Error::CertificateBinding)),
             "{met:?}"
         );
     }
@@ -266,7 +261,12 @@ async fn a_server_without_tls_client_auth_is_refused() -> TestResult {
     })
     .await?;
     assert!(
-        matches!(met, Some(DiscoveryError::ClientAuthentication)),
+        matches!(
+            met,
+            Some(Fapi2Error::AuthenticationMethod {
+                method: "tls_client_auth"
+            })
+        ),
         "{met:?}"
     );
     Ok(())
@@ -296,10 +296,8 @@ fn alias_on_the_door(harness: &Harness) -> Result<String, Box<dyn Error>> {
 async fn an_alias_on_a_host_the_grant_names_is_taken() -> TestResult {
     let harness = Harness::start().await?;
     let host = alias_on_the_door(&harness)?;
-    let grant = harness
-        .grant()?
-        .with_mtls_alias_hosts(vec![AliasHost::parse(&host)?])?;
-    let client = harness.client(harness.provider(grant)?)?;
+    let grant = harness.grant_on(&[AliasHost::parse(&host)?])?;
+    let client = harness.client(provider(grant)?)?;
 
     let reply = query(&client, conveyance()).await?;
     assert_eq!(
@@ -328,24 +326,23 @@ async fn an_alias_on_a_host_the_grant_does_not_name_is_refused() -> TestResult {
     for named in [vec![], vec![AliasHost::parse("mtls.cdr-a.example.org")?]] {
         let harness = Harness::start().await?;
         alias_on_the_door(&harness)?;
-        let grant = if named.is_empty() {
-            harness.grant()?
-        } else {
-            harness.grant()?.with_mtls_alias_hosts(named.clone())?
-        };
-        let error = harness
-            .provider(grant)?
+        let grant = harness.grant_on(&named)?;
+        let error = provider(grant)?
             .credentials()
             .await
             .err()
             .ok_or("the alias is refused")?;
-        let met = Error::source(&error).and_then(<dyn Error>::downcast_ref::<Fapi2Error>);
+        let met = Error::source(&error)
+            .and_then(<dyn Error>::downcast_ref::<Arc<TokenError>>)
+            .map(AsRef::as_ref);
         assert!(
             matches!(
                 met,
-                Some(Fapi2Error::Discovery(DiscoveryError::Endpoint(
-                    EndpointError::OtherOrigin
-                )))
+                Some(TokenError::Fapi2 {
+                    source: Fapi2Error::Endpoint {
+                        member: "mtls_endpoint_aliases.token_endpoint"
+                    }
+                })
             ),
             "{named:?}: {met:?}"
         );
@@ -366,70 +363,65 @@ async fn an_alias_on_a_host_the_grant_does_not_name_is_refused() -> TestResult {
 /// alias host.
 #[test]
 fn a_grant_without_mutual_tls_takes_no_alias_host() -> TestResult {
-    let grant = Fapi2Grant::new(
-        Issuer::parse("https://as.cdr-a.example.org")?,
-        CLIENT_ID,
-        (client_key()?, prover()?),
-        (Some(Scope::parse(SCOPE)?), None),
-    )?;
+    let mut grant = ClientCredentials::with_private_key_jwt(
+        Endpoint::Issuer("https://as.cdr-a.example.org".to_owned()),
+        CLIENT_ID.to_owned(),
+        client_key()?,
+    )
+    .with_dpop(prover()?);
+    grant.assertion_audience = Audience::Issuer;
+    grant.scope = Some(SCOPE.to_owned());
+    grant.profile = SecurityProfile::Fapi2(
+        Fapi2::new().with_alias_host(AliasHost::parse("mtls.cdr-a.example.org")?),
+    );
     assert!(matches!(
-        grant.with_mtls_alias_hosts(vec![AliasHost::parse("mtls.cdr-a.example.org")?]),
-        Err(Fapi2GrantError::AliasHostsUnused)
+        grant.validate(),
+        Err(TokenError::Fapi2 {
+            source: Fapi2Error::AliasHostsUnused
+        })
     ));
     Ok(())
 }
 
 /// `private_key_jwt` needs a client key, and a token exchange needs one to
 /// sign its actor token with; a grant without one cannot be built.
-#[test]
-fn a_grant_without_the_key_it_signs_with_cannot_be_built() -> TestResult {
-    let issuer = || Issuer::parse("https://as.cdr-a.example.org");
-    let request = || -> Result<_, Box<dyn Error>> { Ok((Some(Scope::parse(SCOPE)?), None)) };
-    let thumbprint = Thumbprint::of_certificate(b"synthetic certificate");
-    let unsigned = Fapi2Grant::secured(
-        issuer()?,
-        CLIENT_ID,
-        Fapi2Security {
-            client_auth: ClientAuthentication::PrivateKeyJwt,
-            sender: SenderConstraint::Certificate(thumbprint.clone()),
-            client_key: None,
-        },
-        request()?,
-    );
-    assert!(matches!(unsigned, Err(Fapi2GrantError::NoClientKey)));
-
-    let by_certificate = Fapi2Grant::secured(
-        issuer()?,
-        CLIENT_ID,
-        Fapi2Security {
-            client_auth: ClientAuthentication::Tls(TlsClientAuth::SelfSigned),
-            sender: SenderConstraint::Dpop(prover()?),
-            client_key: None,
-        },
-        request()?,
-    )?
-    .with_resource("https://cdr-a.example.org/openehr")?;
-    assert!(by_certificate.dpop().is_some());
-    assert!(by_certificate.uses_mutual_tls());
+#[tokio::test]
+async fn a_grant_without_the_key_it_signs_with_cannot_be_built() -> TestResult {
+    let harness = Harness::start().await?;
+    let mut unsigned = harness.grant()?;
+    unsigned.client_auth = ClientAuth::PrivateKeyJwt;
+    unsigned.assertion_audience = Audience::Issuer;
     assert!(matches!(
-        by_certificate.with_token_exchange(),
-        Err(Fapi2GrantError::NoActorKey)
+        unsigned.validate(),
+        Err(TokenError::Credential { .. })
     ));
 
-    let signed = Fapi2Grant::secured(
-        issuer()?,
-        CLIENT_ID,
-        Fapi2Security {
-            client_auth: ClientAuthentication::Tls(TlsClientAuth::Pki),
-            sender: SenderConstraint::Certificate(thumbprint),
-            client_key: Some(client_key()?),
-        },
-        request()?,
-    )?
-    .with_resource("https://cdr-a.example.org/openehr")?
-    .with_token_exchange()?;
-    assert!(signed.client_key().is_some());
-    assert!(signed.certificate().is_some());
-    assert!(signed.dpop().is_none());
+    let by_certificate = harness.grant()?;
+    assert!(by_certificate.client_auth.is_mutual_tls());
+    assert!(by_certificate.assertion_keys.is_none());
+    let exchanging: OnwardSection = serde_json::from_value(serde_json::json!({
+        "issuer": harness.front.origin(),
+        "kind": "persons",
+        "profile": "rfc9068",
+        "audiences": [RESOURCE],
+        "indicators": [RESOURCE],
+        "keys": {"max_onward_lifetime": 3600},
+        "actor_assertion": true,
+    }))?;
+    assert!(
+        matches!(
+            exchanging.clone().resolve(by_certificate),
+            Err(ferrohealth_smart::config::ConfigError::OnwardActor { .. })
+        ),
+        "no key signs the actor token"
+    );
+
+    let mut signed = harness.grant()?;
+    signed.assertion_keys = Some(Arc::new(KeyRing::new(client_key()?)));
+    assert!(signed.client_auth.is_mutual_tls());
+    assert!(
+        exchanging.resolve(signed).is_ok(),
+        "a key of its own signs the actor token beside the certificate"
+    );
     Ok(())
 }

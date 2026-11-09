@@ -18,7 +18,6 @@ use std::error::Error;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::binding::BindingFault;
-use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::ihe::pmir::OnDrain;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::settings::Settings;
@@ -155,12 +154,15 @@ fn a_client_credentials_grant_is_taken_and_an_oauth2_grant_is_refused() -> TestR
     );
     let oauth2 = "\n[pmir.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"http://127.0.0.1:9/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n";
     let (_dir, text) = development(oauth2)?;
-    let error = resolve(&text)?.err().ok_or("refused")?;
+    let error = match resolve(&text) {
+        Err(error) => error,
+        Ok(resolved) => return Err(format!("accepted: {resolved:?}").into()),
+    };
     assert!(
         matches!(
-            &error,
-            ConfigError::Credentials(CredentialsFault::ServiceGrantNotHere { section })
-                if section == "pmir.credentials"
+            error.downcast_ref::<ConfigError>(),
+            Some(ConfigError::Replaced { old, new })
+                if old == "pmir.credentials.oauth2" && new == "pmir.credentials.oauth"
         ),
         "{error}"
     );

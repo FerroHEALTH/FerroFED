@@ -154,39 +154,19 @@ pub enum CredentialsFault {
         #[source]
         source: nl_generic_functions::nuts_auth::holder::HolderError,
     },
-    /// `signing.assertion_lifetime_s` is zero or longer than the five minutes
-    /// a client assertion may live.
+    /// The rotation overlap is shorter than the longest lifetime of a token
+    /// the keys sign plus the time a node caches the JWK Set, so a node could
+    /// meet a token signed by a key the set no longer publishes.
     #[error(
-        "signing.assertion_lifetime_s is {seconds}; a client assertion lives 1 to {max} seconds"
-    )]
-    AssertionLifetime {
-        /// The lifetime given.
-        seconds: u64,
-        /// The longest lifetime allowed.
-        max: u64,
-    },
-    /// The rotation overlap is shorter than an assertion's lifetime plus the
-    /// time a node caches the JWK Set, so a node could meet an assertion signed
-    /// by a key the set no longer publishes.
-    #[error(
-        "signing.rotation_overlap_s ({overlap_s}) must be at least signing.assertion_lifetime_s ({lifetime_s}) plus signing.node_jwks_cache_s ({cache_s})"
+        "signing.rotation_overlap_s ({overlap_s}) must be at least {lifetime_s} seconds plus signing.node_jwks_cache_s ({cache_s})"
     )]
     RotationOverlap {
         /// The overlap window.
         overlap_s: u64,
-        /// The assertion lifetime.
+        /// The longest lifetime of a token the keys sign.
         lifetime_s: u64,
         /// How long a node caches the JWK Set.
         cache_s: u64,
-    },
-    /// An OAuth 2.0 grant cannot be built from its section.
-    #[error("{section} is not a usable OAuth 2.0 client-credentials grant")]
-    Grant {
-        /// The section.
-        section: String,
-        /// What the grant refused.
-        #[source]
-        source: ferrofed_engine::onward::GrantError,
     },
     /// A scope is not one the gateway may request onward.
     #[error("{key} is not a SMART on openEHR system scope")]
@@ -197,25 +177,26 @@ pub enum CredentialsFault {
         #[source]
         source: ferrofed_engine::onward::ScopeError,
     },
-    /// An OAuth 2.0 grant is configured, but no signing key signs its client
-    /// assertion.
-    #[error("{section} needs [signing], whose key signs its client assertion (RFC 7523 §2.2)")]
-    GrantWithoutSigning {
-        /// The section.
-        section: String,
-    },
-    /// An identity service's credentials section names an `oauth2`, Nuts
-    /// or FAPI 2.0 grant.
+    /// An identity service's credentials section names a Nuts grant.
     #[error(
-        "{section} takes basic credentials or the oauth client credentials grant, not an oauth2, nuts or fapi2 grant"
+        "{section} takes basic credentials or the oauth client credentials grant, not a nuts grant"
     )]
     ServiceGrantNotHere {
         /// The section.
         section: String,
     },
+    /// A node's `oauth` grant names a client secret, which an identity
+    /// service's grant alone takes.
+    #[error(
+        "{key} applies to an identity service's grant alone; a node's grant authenticates with private_key_jwt or its TLS client certificate (§13.1, N25)"
+    )]
+    SecretForNode {
+        /// The key that names it.
+        key: String,
+    },
     /// A credentials section that takes basic credentials names an OAuth
     /// 2.0 grant, a Nuts grant or a FAPI 2.0 grant.
-    #[error("{section} takes basic credentials, not an oauth, oauth2, nuts or fapi2 grant")]
+    #[error("{section} takes basic credentials, not an oauth or nuts grant")]
     GrantNotHere {
         /// The section.
         section: String,

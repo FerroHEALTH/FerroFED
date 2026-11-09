@@ -327,7 +327,7 @@ What a deployment must provide:
   its key, as is a URL that carries a user name or a password.
   `credentials` takes basic credentials or the Nuts grant of
   GF-Authentication ([The NVI's Nuts grant](onward-credentials.md#the-nvis-nuts-grant)),
-  one of them; an `oauth`, `oauth2` or `fapi2` table is refused, naming its key, as
+  one of them; an `oauth` table is refused, naming its key, as
   the IG defines no such grant for the Localization Service. The IG asks a
   requester for authorization attributes (its organization, practitioner and
   role); the gateway sends only the credentials configured here.

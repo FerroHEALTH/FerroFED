@@ -269,39 +269,28 @@ fn credential_sites(
                 ),
             ));
         }
-        if let Scheme::OAuth2(grant) = scheme {
-            sites.push((
-                grant.token_endpoint().as_str().to_owned(),
-                site(
-                    format!("{section}.oauth2.token_endpoint"),
-                    format!("{section}.oauth2"),
-                ),
-            ));
-        }
-        if let Scheme::Oauth { grant, .. } = scheme
-            && let Some(endpoint) = crate::config::oauth::token_endpoint(grant)
-        {
-            sites.push((
-                endpoint.as_str().to_owned(),
-                site(
-                    format!("{section}.oauth.token_endpoint"),
-                    format!("{section}.oauth"),
-                ),
-            ));
+        if let Scheme::Oauth { grant, .. } = scheme {
+            if let Some(endpoint) = crate::config::oauth::token_endpoint(grant) {
+                sites.push((
+                    endpoint.as_str().to_owned(),
+                    site(
+                        format!("{section}.oauth.token_endpoint"),
+                        format!("{section}.oauth"),
+                    ),
+                ));
+            }
+            if let Some(issuer) = crate::config::oauth::issuer(grant) {
+                sites.push((
+                    issuer.to_owned(),
+                    site(
+                        format!("{section}.oauth.issuer"),
+                        format!("{section}.oauth"),
+                    ),
+                ));
+            }
         }
         if let Scheme::Binding(grant) = scheme {
             sites.push(grant.site(&section));
-        }
-        // NOTE: FAPI 2.0 Security Profile §5.2.1, every endpoint is TLS-protected; the
-        // token endpoint the metadata names is held to the issuer's origin.
-        if let Scheme::Fapi2(grant) = scheme {
-            sites.push((
-                grant.issuer().as_str().to_owned(),
-                site(
-                    format!("{section}.fapi2.issuer"),
-                    format!("{section}.fapi2 client assertion and caller tokens"),
-                ),
-            ));
         }
     }
     sites

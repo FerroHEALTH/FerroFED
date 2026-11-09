@@ -248,7 +248,6 @@ async fn a_credential_from_a_file_reaches_its_node_as_written() -> TestResult {
 #[test]
 fn an_inline_secret_is_accepted_under_the_production_profile() -> TestResult {
     let toml = "profile = \"production\"\n\n[server]\nlisten = \"127.0.0.1:1\"\n\n\
-                [credentials.\"hospital-a\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-inline-token\"\n\n\
                 [credentials.\"clinic-b\"]\nuser = \"gateway\"\npassword = \"synthetic-inline-pw\"\n";
     let output = binary(&["config", "check"], toml)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -263,13 +262,6 @@ fn an_inline_secret_is_accepted_under_the_production_profile() -> TestResult {
     );
 
     let settings = Config::from_sources(Some(toml), &BTreeMap::new())?.resolve()?;
-    assert!(
-        matches!(
-            settings.credentials.get(&EndpointId::new("hospital-a")?),
-            Some(Scheme::Oauth { grant, .. }) if grant.client_id == "ferrofed"
-        ),
-        "the inline client secret resolves"
-    );
     assert!(
         matches!(
             settings.credentials.get(&EndpointId::new("clinic-b")?),

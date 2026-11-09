@@ -107,9 +107,9 @@ pub enum BindingError {
     #[error("the [audit] trail cannot start")]
     Audit(#[source] crate::audit::AuditTrailError),
     /// A grant that cannot be used: one in the credentials of a service that
-    /// takes none, or a node's with no `[signing]` key (§13.1, N25).
+    /// takes none (§13.1, N25).
     #[error(
-        "{section} names a grant it cannot use: a node takes one with [signing], an IHE FHIR service an oauth2 client-credentials grant"
+        "{section} names a grant it cannot use: an IHE FHIR service takes the oauth client-credentials grant"
     )]
     Grant {
         /// The credentials section.

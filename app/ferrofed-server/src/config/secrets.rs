@@ -8,15 +8,13 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ferrofed_engine::onward::Scope;
 use ferrofed_engine::onward::grant::lane::Organisations;
-use ferrofed_engine::onward::mtls::Thumbprint;
-use ferrofed_engine::onward::token::MAX_ASSERTION_LIFETIME;
-use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope};
 use ferrohealth_secret::file::read_secret;
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::client::assertion::AssertionKey;
-use ferrohealth_smart::client::dpop::DpopKey;
 use ferrohealth_smart::client::keys::KeyRing;
+use ferrohealth_smart::client::{ClientAuth, PresentedTls};
 use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
@@ -25,13 +23,18 @@ use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use crate::config::error::Error;
 use crate::config::error::basic::BasicFault;
 use crate::config::error::credentials::{CredentialsFault, SigningKeyError};
-use crate::config::grant;
 use crate::config::oauth::Onward;
 use crate::config::public_url::PublicUrl;
 use crate::config::settings::{JWKS_PATH, Scheme, SigningSettings};
 use crate::config::tls::{self, TlsFault};
-use crate::config::{Credentials, GrantKind, OAuth2, Signing, SigningAlgorithm};
+use crate::config::{Credentials, Signing, SigningAlgorithm};
 use ferrohealth_server::tls_client::TlsClient;
+
+/// The longest lifetime a JWT the gateway signs with its `[signing]` key may
+/// have.
+// NOTE: no specification governs this bound: our own design, the five minutes
+// a client assertion was held to before every grant moved to ferrohealth-smart.
+const MAX_ASSERTION_LIFETIME: Duration = Duration::from_secs(300);
 
 /// Returns the scheme a service's `credentials` describe, once it is known
 /// to fit the `Authorization` header it is sent in.
@@ -61,27 +64,117 @@ pub(crate) fn resolve_credentials(
 /// server are reached with, when it names any.
 ///
 /// A section may name TLS material alone, when the transport authenticates
-/// the gateway. A grant that uses mutual TLS reads the thumbprint of the
-/// client certificate (RFC 8705 §3.1).
+/// the gateway. An `oauth` grant reaches its token endpoint with the same
+/// material, read once, so one that authenticates by, or binds its tokens
+/// to, a TLS client certificate presents the one the node is reached with
+/// (RFC 8705 §2, §3).
 pub(crate) fn resolve_node_credentials(
     section: &str,
     credentials: &Credentials,
 ) -> Result<(Option<Scheme>, Option<Arc<TlsClient>>), Error> {
-    let Some(table) = &credentials.tls else {
-        let scheme = node_scope(section, scheme(section, credentials, None)?)?;
-        return Ok((Some(scheme), None));
+    let material = credentials
+        .tls
+        .as_ref()
+        .map(|table| tls::read(&format!("{section}.tls"), table))
+        .transpose()?;
+    presents_certificate(section, credentials, material.as_deref())?;
+    let presented = material
+        .as_deref()
+        .map(|tls| -> Result<PresentedTls, Error> {
+            Ok(PresentedTls::new(
+                Arc::new(tls.platform_config()?),
+                tls.certificate().cloned(),
+            ))
+        })
+        .transpose()?;
+    let scheme = match scheme(section, credentials, presented) {
+        Ok(scheme) => node_secretless(section, node_scope(section, scheme)?)?,
+        Err(Error::Credentials(CredentialsFault::NoScheme { .. })) if material.is_some() => {
+            return Ok((None, material));
+        }
+        Err(refused) => return Err(refused),
     };
-    let material = tls::read(&format!("{section}.tls"), table)?;
-    // NOTE: RFC 8705 §3.1: the thumbprint is taken from the certificate the
-    // gateway presents, the one `TlsClient` read, never from a second read.
-    let thumbprint = material
-        .certificate()
-        .map(|certificate| Thumbprint::of_certificate(certificate.as_ref()));
-    match scheme(section, credentials, thumbprint.as_ref()) {
-        Ok(scheme) => Ok((Some(node_scope(section, scheme)?), Some(material))),
-        Err(Error::Credentials(CredentialsFault::NoScheme { .. })) => Ok((None, Some(material))),
-        Err(refused) => Err(refused),
+    Ok((Some(scheme), material))
+}
+
+/// Refuses the `oauth` table of the node at `section` when it
+/// authenticates by, or binds its tokens to, a TLS client certificate and
+/// `material` presents none to the node, and when `material` presents one
+/// to a token endpoint or issuer that is not `https`.
+///
+/// # Errors
+///
+/// Returns [`TlsFault::WithoutClientIdentity`] naming the table, and
+/// [`TlsFault::Cleartext`] naming the URL's key.
+fn presents_certificate(
+    section: &str,
+    credentials: &Credentials,
+    material: Option<&TlsClient>,
+) -> Result<(), Error> {
+    let Some(table) = credentials.oauth.as_ref().map(|oauth| &oauth.0) else {
+        return Ok(());
+    };
+    // NOTE: RFC 8705 §3, a token bound to a certificate is used only over
+    // connections that present it, so the node's own identity is the one.
+    let mutual = table.client_auth.is_mutual_tls() || table.certificate_bound;
+    let presents = material.and_then(TlsClient::certificate).is_some();
+    if mutual && !presents {
+        return Err(TlsFault::WithoutClientIdentity {
+            section: format!("{section}.oauth"),
+        }
+        .into());
     }
+    // NOTE: no specification governs this: our own design; a client certificate
+    // travels in the handshake, so it is presented over TLS under every profile.
+    if presents {
+        for (key, url) in [
+            ("token_endpoint", &table.token_endpoint),
+            ("issuer", &table.issuer),
+        ] {
+            let tls = url::Url::parse(url).is_ok_and(|parsed| parsed.scheme() == "https");
+            if !url.is_empty() && !tls {
+                return Err(TlsFault::Cleartext {
+                    key: format!("{section}.oauth.{key}"),
+                }
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Returns `scheme`, a node's, once its `oauth` grant names no client secret:
+/// a node's grant authenticates with `private_key_jwt` or its TLS client
+/// certificate (§13.1, N25; FAPI 2.0 Security Profile §5.3.2.1 for a grant
+/// under that profile).
+///
+/// # Errors
+///
+/// Returns [`CredentialsFault::SecretForNode`] naming the key.
+fn node_secretless(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
+    if let Scheme::Oauth { written, .. } = &scheme {
+        let table = &written.0;
+        // NOTE: §13.1 N25; a node's grant carries the gateway's own identity, which a
+        // secret shared with the node's authorization server does not prove.
+        let key = if matches!(
+            table.client_auth,
+            ClientAuth::ClientSecretBasic | ClientAuth::ClientSecretPost
+        ) {
+            Some("client_auth")
+        } else if table.client_secret.is_some() {
+            Some("client_secret")
+        } else if table.client_secret_file.is_some() {
+            Some("client_secret_file")
+        } else {
+            None
+        };
+        if let Some(key) = key {
+            return Err(Error::Credentials(CredentialsFault::SecretForNode {
+                key: format!("{section}.oauth.{key}"),
+            }));
+        }
+    }
+    Ok(scheme)
 }
 
 /// Returns `scheme`, a node's, once the scope of its `oauth` grant reads as
@@ -105,12 +198,11 @@ fn node_scope(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
     Ok(scheme)
 }
 
-/// Returns the scheme `credentials` describe, with `certificate` the
-/// thumbprint of the node's TLS client certificate when it has one.
+/// Returns the scheme `credentials` describe.
 fn scheme(
     section: &str,
     credentials: &Credentials,
-    certificate: Option<&Thumbprint>,
+    presented: Option<PresentedTls>,
 ) -> Result<Scheme, Error> {
     let password = read_secret(
         &format!("{section}.password"),
@@ -127,9 +219,7 @@ fn scheme(
         })
     };
     let basic = credentials.user.is_some() || password.is_some();
-    if credentials.onward.is_some()
-        && (basic || credentials.oauth2.is_some() || credentials.fapi2.is_some() || bound)
-    {
+    if credentials.onward.is_some() && (basic || bound) {
         return Err(refused());
     }
     if credentials.onward_organisations && credentials.onward.is_none() {
@@ -143,22 +233,8 @@ fn scheme(
             key: format!("{section}.oauth"),
         });
     }
-    if let Some(fapi2) = &credentials.fapi2 {
-        if basic || credentials.oauth.is_some() || credentials.oauth2.is_some() || bound {
-            return Err(refused());
-        }
-        let resolved = grant::resolve_fapi2(&format!("{section}.fapi2"), fapi2, certificate)?;
-        return grant::with_mtls_alias_hosts(section, &credentials.mtls_alias_hosts, resolved)
-            .map(|grant| Scheme::Fapi2(Box::new(grant)));
-    }
-    if !credentials.mtls_alias_hosts.is_empty() {
-        return Err(grant::GrantFault::AliasHostsUnused {
-            key: format!("{section}.mtls_alias_hosts"),
-        }
-        .into());
-    }
     if bound {
-        if basic || credentials.oauth.is_some() || credentials.oauth2.is_some() {
+        if basic || credentials.oauth.is_some() {
             return Err(refused());
         }
         #[cfg(feature = "binding-nl")]
@@ -167,17 +243,10 @@ fn scheme(
         }
     }
     if let Some(oauth) = &credentials.oauth {
-        if basic || credentials.oauth2.is_some() {
-            return Err(refused());
-        }
-        return oauth_scheme(section, oauth, credentials);
-    }
-    if let Some(oauth2) = &credentials.oauth2 {
         if basic {
             return Err(refused());
         }
-        return resolve_grant(&format!("{section}.oauth2"), oauth2, certificate)
-            .map(|grant| Scheme::OAuth2(Box::new(grant)));
+        return oauth_scheme(section, oauth, credentials, presented);
     }
     match (credentials.user.as_deref(), password) {
         (Some(user), Some(password)) => {
@@ -210,8 +279,9 @@ fn oauth_scheme(
     section: &str,
     oauth: &crate::config::oauth::Oauth,
     credentials: &Credentials,
+    presented: Option<PresentedTls>,
 ) -> Result<Scheme, Error> {
-    let grant = oauth.resolve(&format!("{section}.oauth"))?;
+    let grant = oauth.resolve(&format!("{section}.oauth"), presented)?;
     let onward = credentials
         .onward
         .as_ref()
@@ -283,147 +353,11 @@ fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials)
     }
 }
 
-/// Refuses the `oauth2` grant at `section` when it asks for a plain client
-/// credentials token: `unconstrained`, no exchange, no binding to the TLS
-/// client certificate and no authentication by it, and no `DPoP` key and an
-/// assertion naming the token endpoint either.
-///
-/// # Errors
-///
-/// Returns [`grant::GrantFault::Plain`] for such a grant.
-fn refuse_plain(section: &str, oauth2: &OAuth2, unconstrained: bool) -> Result<(), Error> {
-    // NOTE: no specification governs this: our own design; the client credentials
-    // grant ferrohealth-smart carries (`oauth`) is the one way to ask for a plain token.
-    if unconstrained
-        && oauth2.dpop_key_file.is_none()
-        && oauth2.assertion_audience == grant::AssertionAudience::TokenEndpoint
-    {
-        return Err(grant::GrantFault::Plain {
-            section: section.to_owned(),
-        }
-        .into());
-    }
-    Ok(())
-}
-
-/// Returns the grant the `oauth2` table at `section` describes, every key
-/// set and each value held to its rule: the scope to the SMART on openEHR
-/// grammar, the token endpoint to an `http` or `https` URL with no userinfo,
-/// the `resource` to an absolute URI (RFC 8707 §2). A grant that authenticates
-/// by, or binds its tokens to, the TLS client certificate of `certificate`
-/// reaches an `https` token endpoint alone (RFC 8705).
-fn resolve_grant(
-    section: &str,
-    oauth2: &OAuth2,
-    certificate: Option<&Thumbprint>,
-) -> Result<Grant, Error> {
-    let missing = |name: &str| Error::Missing {
-        key: format!("{section}.{name}"),
-    };
-    let exchange = match oauth2.grant {
-        Some(GrantKind::ClientCredentials) => false,
-        Some(GrantKind::TokenExchange) => true,
-        None => return Err(missing("grant")),
-    };
-    if oauth2.client_secret.is_some() || oauth2.client_secret_file.is_some() {
-        return Err(grant::GrantFault::SecretForNode {
-            key: source_key(
-                section,
-                "client_secret",
-                oauth2.client_secret_file.is_some(),
-            ),
-        }
-        .into());
-    }
-    let client_auth = grant::client_authentication(
-        section,
-        oauth2.client_auth.ok_or_else(|| missing("client_auth"))?,
-        certificate,
-    )?;
-    let bound = grant::certificate_binding(
-        section,
-        (
-            oauth2.tls_client_certificate_bound_access_tokens,
-            oauth2.dpop_key_file.is_some(),
-        ),
-        certificate,
-    )?;
-    refuse_plain(
-        section,
-        oauth2,
-        !exchange && bound.is_none() && !matches!(client_auth, ClientAuthentication::Tls(_)),
-    )?;
-    let token_endpoint = oauth2
-        .token_endpoint
-        .as_ref()
-        .ok_or_else(|| missing("token_endpoint"))?;
-    if oauth2.client_id.is_empty() {
-        return Err(missing("client_id"));
-    }
-    if oauth2.scope.trim().is_empty() {
-        return Err(missing("scope"));
-    }
-    let scope = Scope::parse(&oauth2.scope).map_err(|source| {
-        Error::Credentials(CredentialsFault::Scope {
-            key: format!("{section}.scope"),
-            source,
-        })
-    })?;
-    let refused = |source| {
-        Error::Credentials(CredentialsFault::Grant {
-            section: section.to_owned(),
-            source,
-        })
-    };
-    if matches!(client_auth, ClientAuthentication::Tls(_)) || bound.is_some() {
-        grant::mutual_tls_url(
-            &format!("{section}.token_endpoint"),
-            token_endpoint.expose(),
-        )?;
-    }
-    let mut grant = Grant::new(token_endpoint, oauth2.client_id.clone(), scope).map_err(refused)?;
-    if let ClientAuthentication::Tls(method) = client_auth {
-        grant = grant.with_tls_client_auth(method);
-    }
-    if let Some(thumbprint) = bound {
-        grant = grant.with_certificate_binding(thumbprint);
-    }
-    grant = grant::with_assertion_audience(section, oauth2, grant)?;
-    if let Some(resource) = &oauth2.resource {
-        grant = grant.with_resource(resource).map_err(refused)?;
-    }
-    if let Some(audience) = &oauth2.audience {
-        grant = grant.with_audience(audience.clone()).map_err(refused)?;
-    }
-    if exchange {
-        // NOTE: RFC 8707 §2, RFC 8693 §2.1: an exchanged token names the node it
-        // is for, so a token-exchange grant without a resource is refused.
-        if oauth2.resource.is_none() {
-            return Err(missing("resource"));
-        }
-        grant = grant.with_token_exchange();
-    }
-    if let Some(path) = &oauth2.dpop_key_file {
-        let key = format!("{section}.dpop_key");
-        let pem = read_secret::<Secret>(&key, None, Some(path))?.ok_or_else(|| Error::Missing {
-            key: format!("{key}_file"),
-        })?;
-        let prover = DpopKey::from_pem(pem.expose().as_bytes()).map_err(|source| {
-            Error::Credentials(CredentialsFault::DpopKey {
-                key: format!("{key}_file"),
-                source,
-            })
-        })?;
-        grant = grant.with_dpop(Arc::new(prover));
-    }
-    Ok(grant)
-}
-
 /// Returns the signing keys and their publication `[signing]` describes:
 /// every key read from its file, each a P-256 (ES256) or a P-384 (ES384)
 /// key, the next key on the curve of the algorithm it is meant for, the
-/// assertion lifetime at most [`MAX_ASSERTION_LIFETIME`], the overlap window at least
-/// that lifetime plus the nodes' JWK Set cache time, and `jwks_uri` an
+/// overlap window at least [`MAX_ASSERTION_LIFETIME`] plus the nodes' JWK Set
+/// cache time, and `jwks_uri` an
 /// absolute `http` or `https` URL (§13.1, N25). With `public` set,
 /// `jwks_uri` defaults to the route the gateway serves the JWK Set at under
 /// it, and must name that route when set.
@@ -432,22 +366,12 @@ pub(crate) fn resolve_signing(
     public: Option<&PublicUrl>,
 ) -> Result<SigningSettings, Error> {
     let max = MAX_ASSERTION_LIFETIME.as_secs();
-    if signing.assertion_lifetime_s == 0 || signing.assertion_lifetime_s > max {
-        return Err(Error::Credentials(CredentialsFault::AssertionLifetime {
-            seconds: signing.assertion_lifetime_s,
-            max,
-        }));
-    }
     // NOTE: no specification governs this: our own design; a node holding the
-    // previous set still meets an assertion the previous key signed.
-    if signing.rotation_overlap_s
-        < signing
-            .assertion_lifetime_s
-            .saturating_add(signing.node_jwks_cache_s)
-    {
+    // previous set still meets a token the previous key signed.
+    if signing.rotation_overlap_s < max.saturating_add(signing.node_jwks_cache_s) {
         return Err(Error::Credentials(CredentialsFault::RotationOverlap {
             overlap_s: signing.rotation_overlap_s,
-            lifetime_s: signing.assertion_lifetime_s,
+            lifetime_s: max,
             cache_s: signing.node_jwks_cache_s,
         }));
     }
@@ -498,7 +422,6 @@ pub(crate) fn resolve_signing(
     Ok(SigningSettings {
         keys: Arc::new(keys),
         jwks_uri,
-        assertion_lifetime: Duration::from_secs(signing.assertion_lifetime_s),
         rotation_overlap: overlap,
     })
 }

@@ -24,7 +24,7 @@ use crate::config::settings::Scheme;
 /// A credential section that names a grant the service does not take.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
-    "{section} names an oauth, oauth2, nuts or fapi2 grant this service does not take; give it basic credentials"
+    "{section} names an oauth or nuts grant this service does not take; give it basic credentials"
 )]
 pub struct GrantRefused {
     /// The credentials section, such as `pixm.manager[0].credentials`.
@@ -83,7 +83,7 @@ pub enum ServiceAuthError {
 ///
 /// # Errors
 ///
-/// [`ServiceAuthError::Refused`] for an `oauth2`, Nuts or FAPI 2.0 grant, and
+/// [`ServiceAuthError::Refused`] for an `oauth` or Nuts grant, and
 /// [`ServiceAuthError::TokenTransport`] for a token client that cannot be
 /// built.
 #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]

@@ -461,12 +461,23 @@ fn an_oauth2_or_fapi2_grant_for_the_nvi_is_refused() -> TestResult {
         ),
     ] {
         let tables = format!("\n[nl_gf.nvi.credentials.{grant}]\n{table}");
-        match resolve(dir.path(), "development", &tables)? {
-            Err(ConfigError::Binding(BindingFault::NviGrant { key })) => {
-                assert_eq!(format!("nl_gf.nvi.credentials.{grant}"), key);
-            }
-            other => return Err(format!("{grant} for the NVI: {other:?}").into()),
+        match resolve(dir.path(), "development", &tables) {
+            Err(error) => match error.downcast_ref::<ConfigError>() {
+                Some(ConfigError::Replaced { old, new }) => {
+                    assert_eq!(format!("nl_gf.nvi.credentials.{grant}"), *old);
+                    assert_eq!("nl_gf.nvi.credentials.oauth", new);
+                }
+                other => return Err(format!("{grant} for the NVI: {other:?}").into()),
+            },
+            Ok(other) => return Err(format!("{grant} for the NVI: {other:?}").into()),
         }
+    }
+    let tables = "\n[nl_gf.nvi.credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"x\"\nclient_secret = \"synthetic\"\n";
+    match resolve(dir.path(), "development", tables)? {
+        Err(ConfigError::Binding(BindingFault::NviGrant { key })) => {
+            assert_eq!("nl_gf.nvi.credentials.oauth", key);
+        }
+        other => return Err(format!("oauth for the NVI: {other:?}").into()),
     }
     Ok(())
 }

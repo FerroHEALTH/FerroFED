@@ -61,10 +61,11 @@ const ENDPOINT_URL: &str = "the url of endpoint node-a-pub in registry.document"
 const SECTION: &str = "credentials.node-a-pub";
 
 /// The client credentials grant of `ferrohealth-smart` for node A, its
-/// client secret [`SECRET`].
+/// `private_key_jwt` assertion signed by the suite's signing key.
 fn oauth() -> String {
     format!(
-        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed-test-gateway\"\nclient_secret = \"{SECRET}\"\n"
+        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed-test-gateway\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {}\n",
+        toml::Value::String(crate::support::signing_key_file().to_owned())
     )
 }
 

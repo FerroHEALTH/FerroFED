@@ -4,16 +4,24 @@
 //! The laboratory report's stored query: the entry archetypes of the
 //! vendored CKM laboratory test result template, in the shared section
 //! query shape, under its reserved name, feeding a row of the laboratory
-//! report crosswalk.
+//! report crosswalk; and the report the gateway writes from one member's
+//! composition, held to `Bundle-eu-lab` over the Laboratory Report 2.0.0
+//! package closure by FerroBRIDGE's validator.
 
 use std::collections::BTreeSet;
 use std::error::Error;
 
 use eehrxf::crosswalk::laboratory::LABORATORY;
-use ferrofed_eehrxf::laboratory::{self, ARCHETYPES, ELEMENT, SLUG};
+use eehrxf::document::laboratory::LAB_BUNDLE;
+use ferrofed_eehrxf::laboratory::{self, ARCHETYPES, ELEMENT, SLUG, Served};
+use ferrofed_eehrxf::prescriptions::mapped::Template;
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, SAVED, VERSION};
 use ferrofed_eehrxf::section_query::{ISSUER, PATIENT};
+use ferrofed_identity::role::header::{PatientHeader, PersonName};
+use ferrofed_testkit::{fhir_packages, laboratory as fixture};
 use openehr_query::parser;
+
+use crate::conforming;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -135,4 +143,63 @@ fn the_gateway_and_the_testkit_name_one_result_context() {
             .contains(&laboratory::RESULT_CONTEXT),
         "the shipped project lists the result context"
     );
+}
+
+/// The laboratory report the gateway writes from the testkit's synthetic
+/// composition, about the patient the identity binding describes with
+/// `header`, as JSON text.
+fn written(header: &PatientHeader) -> Result<String, Box<dyn Error>> {
+    let dir = tempfile::tempdir()?;
+    let composition = fixture::composition(
+        dir.path(),
+        &[("urn:oid:2.999.1", "synthetic-patient-0001")],
+        (
+            "7c4e1d20-0000-4000-8000-0000000008b1::cdr-a.example.org::1",
+            &[],
+        ),
+    )?;
+    let opt = std::fs::read_to_string(fixture::opt())?;
+    let bundle = conforming::written(
+        &Served::compile(Template::of(&opt, &[]))?,
+        (
+            &composition,
+            "urn:uuid:7c4e1d20-0000-4000-8000-0000000008b1",
+        ),
+        header,
+    )?;
+    Ok(serde_json::to_string(&bundle)?)
+}
+
+/// Every error FerroBRIDGE's validator finds in `document` against
+/// `Bundle-eu-lab`, over the Laboratory Report package and its dependency
+/// closure.
+async fn breaks(document: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    conforming::breaks(
+        document,
+        LAB_BUNDLE,
+        (fixture::package(), fhir_packages::dependencies()?),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn a_written_laboratory_report_conforms_to_bundle_eu_lab() -> TestResult {
+    let header = PatientHeader {
+        names: vec![PersonName {
+            family: Some(String::from("SENTINEL-FAMILY-l4b2")),
+            ..PersonName::default()
+        }],
+        birth_date: Some(String::from("1970-01-01")),
+        ..PatientHeader::default()
+    };
+    let breaks = breaks(&written(&header)?).await?;
+    assert!(breaks.is_empty(), "{breaks:#?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_laboratory_report_of_a_patient_the_binding_holds_nothing_of_conforms() -> TestResult {
+    let breaks = breaks(&written(&PatientHeader::default())?).await?;
+    assert!(breaks.is_empty(), "{breaks:#?}");
+    Ok(())
 }
