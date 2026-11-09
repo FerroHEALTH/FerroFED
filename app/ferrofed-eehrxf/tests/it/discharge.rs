@@ -4,7 +4,8 @@
 //! The discharge report's stored query, under its reserved name, and the
 //! report the gateway writes from one member's discharge composition through
 //! the shipped HDR project, compiled against FerroBRIDGE's vendored ADL 2
-//! discharge report template.
+//! discharge report template, held to `bundle-eu-hdr` over the HDR 1.0.0
+//! package closure by FerroBRIDGE's validator.
 #![expect(
     clippy::disallowed_types,
     reason = "a test reads the document it wrote as JSON"
@@ -14,13 +15,18 @@ use std::error::Error;
 
 use eehrxf::crosswalk::discharge::{DISCHARGE, HDR_COMPOSITION};
 use eehrxf::document::discharge::{HDR_BUNDLE, HDR_ENCOUNTER};
+use eehrxf::receive::ReceivedDocument;
+use eehrxf::receive::validation::ValidationError;
+use ferrobridge_validator::set::PackageSet;
 use ferrofed_eehrxf::discharge::{self, COMPOSITION, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
 use ferrofed_eehrxf::report::{Report, ServedError, Writes as _};
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, SAVED, VERSION};
 use ferrofed_eehrxf::section_query::{self, ISSUER, PATIENT};
 use ferrofed_eehrxf::summary::Organisation;
+use ferrofed_identity::role::header::{PatientHeader, PersonName};
 use ferrofed_testkit::discharge as fixture;
+use ferrofed_testkit::fhir_packages;
 use openehr_query::parser;
 use serde_json::Value;
 
@@ -102,8 +108,36 @@ fn organisation(name: &str) -> Organisation {
     }
 }
 
+/// The synthetic family name the identity binding holds.
+const FAMILY: &str = "SENTINEL-FAMILY-d1h7";
+
+/// The synthetic birth date the identity binding holds.
+const BIRTH_DATE: &str = "1970-01-01";
+
+/// The `data-absent-reason` extension.
+const DATA_ABSENT_REASON: &str = "http://hl7.org/fhir/StructureDefinition/data-absent-reason";
+
+/// The header the identity binding holds of the synthetic patient: a family
+/// name and a birth date.
+fn header() -> PatientHeader {
+    PatientHeader {
+        names: vec![PersonName {
+            family: Some(FAMILY.to_owned()),
+            ..PersonName::default()
+        }],
+        birth_date: Some(BIRTH_DATE.to_owned()),
+        ..PatientHeader::default()
+    }
+}
+
 /// The document the gateway writes from the synthetic composition, as JSON.
 fn written() -> Result<Value, Box<dyn Error>> {
+    written_with(&header())
+}
+
+/// The document the gateway writes from the synthetic composition about the
+/// patient the identity binding describes with `header`, as JSON.
+fn written_with(header: &PatientHeader) -> Result<Value, Box<dyn Error>> {
     let (operator, member) = (
         organisation("Synthetic operator"),
         organisation("Synthetic member"),
@@ -115,6 +149,7 @@ fn written() -> Result<Value, Box<dyn Error>> {
             identifier: "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d101",
             timestamp: "2026-10-21T08:00:00Z",
             patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
+            header,
             operator: &operator,
             member: &member,
         },
@@ -171,13 +206,14 @@ fn a_discharge_composition_is_written_as_a_hospital_discharge_report() -> TestRe
 }
 
 #[test]
-fn the_patient_is_named_by_identifier_and_the_member_by_provenance() -> TestResult {
+fn the_patient_is_named_by_identifier_and_header_and_the_member_by_provenance() -> TestResult {
     let bundle = written()?;
     let [patient] = of_type(&bundle, "Patient")[..] else {
         return Err("one Patient".into());
     };
     assert_eq!(patient["identifier"][0]["value"], "synthetic-patient-0001");
-    assert!(patient.get("name").is_none(), "no name is written");
+    assert_eq!(patient["name"][0]["family"], FAMILY, "{patient}");
+    assert_eq!(patient["birthDate"], BIRTH_DATE, "{patient}");
     let [provenance] = of_type(&bundle, "Provenance")
         .into_iter()
         .filter(|provenance| provenance["agent"][0]["who"]["reference"].is_string())
@@ -200,6 +236,77 @@ fn the_patient_is_named_by_identifier_and_the_member_by_provenance() -> TestResu
                 && member.ends_with(organization["id"].as_str().unwrap_or("-"))),
         "{member}"
     );
+    let [composition] = of_type(&bundle, "Composition")[..] else {
+        return Err("one Composition".into());
+    };
+    assert!(
+        composition["author"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|author| author["reference"] == member),
+        "documents.html §3.3.1: the Composition references the member: {composition}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_name_and_birth_date_the_binding_does_not_hold_are_written_absent() -> TestResult {
+    let bundle = written_with(&PatientHeader::default())?;
+    let [patient] = of_type(&bundle, "Patient")[..] else {
+        return Err("one Patient".into());
+    };
+    let [name] = patient["name"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+    else {
+        return Err(format!("one name: {patient}").into());
+    };
+    assert_eq!(name["extension"][0]["url"], DATA_ABSENT_REASON, "{patient}");
+    assert_eq!(name["extension"][0]["valueCode"], "unknown", "{patient}");
+    assert!(name.get("family").is_none(), "nothing filled in: {patient}");
+    assert!(
+        patient.get("birthDate").is_none(),
+        "nothing filled in: {patient}"
+    );
+    assert_eq!(
+        patient["_birthDate"]["extension"][0]["url"], DATA_ABSENT_REASON,
+        "{patient}"
+    );
+    Ok(())
+}
+
+/// Every error FerroBRIDGE's validator finds in `document` against
+/// `bundle-eu-hdr`, over the HDR 1.0.0 package and its dependency closure.
+async fn breaks(document: &Value) -> Result<Vec<String>, Box<dyn Error>> {
+    let mut paths = vec![fixture::package()];
+    paths.extend(fhir_packages::discharge_dependencies()?);
+    let set = PackageSet::load(paths.iter())?;
+    let validated = ReceivedDocument::read(&document.to_string())?
+        .validate(&set, HDR_BUNDLE, None::<&ferrobridge_term::client::Client>)
+        .await;
+    match validated {
+        Ok(_) => Ok(Vec::new()),
+        Err(ValidationError::NonConformant { findings }) => {
+            Ok(findings.iter().map(ToString::to_string).collect())
+        }
+        Err(other) => Err(other.into()),
+    }
+}
+
+#[tokio::test]
+async fn a_written_discharge_report_conforms_to_bundle_eu_hdr() -> TestResult {
+    let breaks = breaks(&written()?).await?;
+    assert!(breaks.is_empty(), "{breaks:#?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_report_of_a_patient_the_binding_holds_nothing_of_conforms_to_bundle_eu_hdr() -> TestResult
+{
+    let breaks = breaks(&written_with(&PatientHeader::default())?).await?;
+    assert!(breaks.is_empty(), "{breaks:#?}");
     Ok(())
 }
 
@@ -215,6 +322,7 @@ fn a_composition_with_no_language_is_refused() -> TestResult {
             identifier: "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d102",
             timestamp: "2026-10-21T08:00:00Z",
             patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
+            header: &header(),
             operator: &operator,
             member: &member,
         },

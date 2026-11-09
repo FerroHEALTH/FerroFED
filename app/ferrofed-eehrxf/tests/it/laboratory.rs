@@ -4,15 +4,26 @@
 //! The laboratory report's stored query: the entry archetypes of the
 //! vendored CKM laboratory test result template, in the shared section
 //! query shape, under its reserved name, feeding a row of the laboratory
-//! report crosswalk.
+//! report crosswalk; and the report the gateway writes from one member's
+//! composition, held to `Bundle-eu-lab` over the Laboratory Report 2.0.0
+//! package closure by FerroBRIDGE's validator.
 
 use std::collections::BTreeSet;
 use std::error::Error;
 
 use eehrxf::crosswalk::laboratory::LABORATORY;
-use ferrofed_eehrxf::laboratory::{self, ARCHETYPES, ELEMENT, SLUG};
+use eehrxf::document::laboratory::LAB_BUNDLE;
+use eehrxf::receive::ReceivedDocument;
+use eehrxf::receive::validation::ValidationError;
+use ferrobridge_validator::set::PackageSet;
+use ferrofed_eehrxf::laboratory::{self, ARCHETYPES, ELEMENT, SLUG, Served};
+use ferrofed_eehrxf::prescriptions::mapped::Template;
+use ferrofed_eehrxf::report::{Report, Writes as _};
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, SAVED, VERSION};
 use ferrofed_eehrxf::section_query::{ISSUER, PATIENT};
+use ferrofed_eehrxf::summary::Organisation;
+use ferrofed_identity::role::header::{PatientHeader, PersonName};
+use ferrofed_testkit::{fhir_packages, laboratory as fixture};
 use openehr_query::parser;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -135,4 +146,84 @@ fn the_gateway_and_the_testkit_name_one_result_context() {
             .contains(&laboratory::RESULT_CONTEXT),
         "the shipped project lists the result context"
     );
+}
+
+/// The laboratory report the gateway writes from the testkit's synthetic
+/// composition, about the patient the identity binding describes with
+/// `header`, as JSON text.
+fn written(header: &PatientHeader) -> Result<String, Box<dyn Error>> {
+    let dir = tempfile::tempdir()?;
+    let identifier = ("urn:oid:2.999.1", "synthetic-patient-0001");
+    let composition = fixture::composition(
+        dir.path(),
+        &[identifier],
+        (
+            "7c4e1d20-0000-4000-8000-0000000008b1::cdr-a.example.org::1",
+            &[],
+        ),
+    )?;
+    let opt = std::fs::read_to_string(fixture::opt())?;
+    let organisation = |name: &str| Organisation {
+        id: name.to_lowercase().replace(' ', "-"),
+        name: Some(name.to_owned()),
+        identifiers: Vec::new(),
+    };
+    let (operator, member) = (
+        organisation("Synthetic operator"),
+        organisation("Synthetic member"),
+    );
+    let bundle = Served::compile(Template::of(&opt, &[]))?.document(
+        &composition,
+        Report {
+            base: "https://gateway.example.org/fhir",
+            identifier: "urn:uuid:7c4e1d20-0000-4000-8000-0000000008b1",
+            timestamp: "2026-10-21T08:00:00Z",
+            patient: identifier,
+            header,
+            operator: &operator,
+            member: &member,
+        },
+    )?;
+    Ok(serde_json::to_string(&bundle)?)
+}
+
+/// Every error FerroBRIDGE's validator finds in `document` against
+/// `Bundle-eu-lab`, over the Laboratory Report package and its dependency
+/// closure.
+async fn breaks(document: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    let mut paths = vec![fixture::package()];
+    paths.extend(fhir_packages::dependencies()?);
+    let set = PackageSet::load(paths.iter())?;
+    let validated = ReceivedDocument::read(document)?
+        .validate(&set, LAB_BUNDLE, None::<&ferrobridge_term::client::Client>)
+        .await;
+    match validated {
+        Ok(_) => Ok(Vec::new()),
+        Err(ValidationError::NonConformant { findings }) => {
+            Ok(findings.iter().map(ToString::to_string).collect())
+        }
+        Err(other) => Err(other.into()),
+    }
+}
+
+#[tokio::test]
+async fn a_written_laboratory_report_conforms_to_bundle_eu_lab() -> TestResult {
+    let header = PatientHeader {
+        names: vec![PersonName {
+            family: Some(String::from("SENTINEL-FAMILY-l4b2")),
+            ..PersonName::default()
+        }],
+        birth_date: Some(String::from("1970-01-01")),
+        ..PatientHeader::default()
+    };
+    let breaks = breaks(&written(&header)?).await?;
+    assert!(breaks.is_empty(), "{breaks:#?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_laboratory_report_of_a_patient_the_binding_holds_nothing_of_conforms() -> TestResult {
+    let breaks = breaks(&written(&PatientHeader::default())?).await?;
+    assert!(breaks.is_empty(), "{breaks:#?}");
+    Ok(())
 }

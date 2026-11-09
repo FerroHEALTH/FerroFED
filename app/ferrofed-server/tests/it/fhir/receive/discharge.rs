@@ -16,12 +16,13 @@ use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::receive::ReceivedDocument;
 use ferrofed_testkit::discharge;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pdqm_stub;
 use http::StatusCode;
 use serde_json::Value;
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use super::super::{UNREACHED_SUPPLIER, fhir_tables_with};
+use super::super::{BIRTH_DATE, FAMILY, GIVEN, UNREACHED_SUPPLIER, fhir_tables_with, supplier};
 use super::{gateway_with, rows};
 use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room, wire,
@@ -37,10 +38,11 @@ const VERSION: &str = "5b0c3f7e-0000-4000-8000-00000000d1a1::cdr-a.example.org::
 const OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000d1a1";
 
 /// The `[fhir]` tables of a face that writes discharge reports with
-/// `report`, the `[[fhir.report]]` entry.
-fn writing(report: &str) -> String {
+/// `report`, the `[[fhir.report]]` entry, the header asked of the PDQm
+/// Supplier at `pdq`.
+fn writing(pdq: &str, report: &str) -> String {
     fhir_tables_with(
-        UNREACHED_SUPPLIER,
+        pdq,
         &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
         report,
     )
@@ -61,8 +63,12 @@ fn declared() -> String {
 }
 
 /// The gateway writing discharge reports, the patient known at both
-/// nodes.
-fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<axum::Router, Box<dyn Error>> {
+/// nodes, the header asked of the PDQm Supplier `pdq`.
+fn gateway(
+    dir: &Path,
+    (a, b): (&Server, &Server),
+    pdq: &Server,
+) -> Result<axum::Router, Box<dyn Error>> {
     let crossref = rows(&[
         (NAMESPACE, PATIENT, "node-a", EHR_A),
         (NAMESPACE, PATIENT, "node-b", EHR_B),
@@ -70,7 +76,7 @@ fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<axum::Router, Box<dyn E
     gateway_with(
         dir,
         (a, b),
-        (&crossref, &writing(&declared())),
+        (&crossref, &writing(&pdqm_stub::base_url(pdq), &declared())),
         &settings_with_room(),
     )
 }
@@ -122,7 +128,8 @@ async fn a_members_discharge_composition_is_listed_and_read_as_a_discharge_repor
         holding("", None).await,
     );
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app.clone(), list("&type=18842-5")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
@@ -183,12 +190,34 @@ async fn a_members_discharge_composition_is_listed_and_read_as_a_discharge_repor
 /// The document the gateway serves from node A's `composition`, listed
 /// and read through the signed URL.
 async fn served(dir: &Path, composition: &str) -> Result<Value, Box<dyn Error>> {
+    let pdq = supplier().await;
+    let (status, text) = read_with(dir, composition, &pdqm_stub::base_url(&pdq)).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    Ok(serde_json::from_str(&text)?)
+}
+
+/// The answer to the read of node A's `composition`, listed and read
+/// through the signed URL, the header asked of the PDQm Supplier at `pdq`.
+async fn read_with(
+    dir: &Path,
+    composition: &str,
+    pdq: &str,
+) -> Result<(StatusCode, String), Box<dyn Error>> {
     let row = format!(r#"[{composition},"{VERSION}","{}"]"#, discharge::TEMPLATE);
     let (a, b) = (
         holding(&row, Some(composition)).await,
         holding("", None).await,
     );
-    let app = gateway(dir, &a, &b)?;
+    let crossref = rows(&[
+        (NAMESPACE, PATIENT, "node-a", EHR_A),
+        (NAMESPACE, PATIENT, "node-b", EHR_B),
+    ]);
+    let app = gateway_with(
+        dir,
+        (&a, &b),
+        (&crossref, &writing(pdq, &declared())),
+        &settings_with_room(),
+    )?;
     let (status, text) = call(app.clone(), list("&type=18842-5")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
@@ -198,9 +227,7 @@ async fn served(dir: &Path, composition: &str) -> Result<Value, Box<dyn Error>> 
         .and_then(Value::as_str)
         .ok_or("an attachment url")?
         .to_owned();
-    let (status, text) = call(app, binary(&url)?).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
-    Ok(serde_json::from_str(&text)?)
+    call(app, binary(&url)?).await
 }
 
 /// The resources the section of `document`'s `Composition` coded `code`
@@ -332,6 +359,49 @@ async fn a_full_discharge_composition_is_served_with_every_section_and_entry() -
 }
 
 #[tokio::test]
+async fn the_served_patient_carries_the_header_the_demographics_binding_holds() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let document = served(dir.path(), &discharge::composition(VERSION)).await?;
+    let patient = document["entry"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get("resource"))
+        .find(|resource| resource["resourceType"] == "Patient")
+        .ok_or("the Patient")?;
+    // NOTE: HL7 Europe Base 2.0.1 patient-eu-core sets Patient.name and Patient.birthDate 1..1.
+    assert_eq!(
+        patient.pointer("/name/0/family"),
+        Some(&Value::from(FAMILY))
+    );
+    assert_eq!(
+        patient.pointer("/name/0/given/0"),
+        Some(&Value::from(GIVEN))
+    );
+    assert_eq!(patient["birthDate"], BIRTH_DATE, "{patient}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_report_whose_demographics_binding_does_not_answer_is_refused_and_not_written()
+-> TestResult {
+    let dir = tempfile::tempdir()?;
+    let (status, text) = read_with(
+        dir.path(),
+        &discharge::composition(VERSION),
+        UNREACHED_SUPPLIER,
+    )
+    .await?;
+    assert_eq!(StatusCode::BAD_GATEWAY, status, "{text}");
+    assert!(text.contains("OperationOutcome"), "{text}");
+    assert!(
+        !text.contains("\"Patient\""),
+        "no document is written: {text}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_member_silent_at_the_discharge_query_fails_the_list_and_is_named() -> TestResult {
     let a = Server::start().await;
     Mock::given(method("POST"))
@@ -341,7 +411,8 @@ async fn a_member_silent_at_the_discharge_query_fails_the_list_and_is_named() ->
         .await;
     let b = holding("", None).await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, list("&type=18842-5")?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
     assert!(text.contains("node-a-pub"), "§11.4: {text}");
@@ -352,7 +423,8 @@ async fn a_member_silent_at_the_discharge_query_fails_the_list_and_is_named() ->
 async fn a_list_of_another_type_asks_no_discharge_query() -> TestResult {
     let (a, b) = (holding("", None).await, holding("", None).await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, list("&type=100719-4")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let queried = received(&a)
@@ -376,7 +448,7 @@ async fn refused(report: &str) -> Result<String, Box<dyn Error>> {
     match gateway_with(
         dir.path(),
         (&a, &b),
-        (&crossref, &writing(report)),
+        (&crossref, &writing(UNREACHED_SUPPLIER, report)),
         &settings_with_room(),
     ) {
         Ok(_) => Err(format!("accepted: {report}").into()),
@@ -420,9 +492,10 @@ async fn the_written_discharge_list_and_read_are_recorded_under_the_category() -
         (NAMESPACE, PATIENT, "node-a", EHR_A),
         (NAMESPACE, PATIENT, "node-b", EHR_B),
     ]);
+    let pdq = supplier().await;
     let tables = format!(
         "{}\n{}",
-        writing(&declared()),
+        writing(&pdqm_stub::base_url(&pdq), &declared()),
         audit_tables(&repository, "")
     );
     let app = gateway_with(
@@ -442,7 +515,8 @@ async fn the_written_discharge_list_and_read_are_recorded_under_the_category() -
     let (status, _) = call(app, binary(&url)?).await?;
     assert_eq!(StatusCode::OK, status);
     let records: Vec<String> = repository
-        .wait_for(2, SETTLE)
+        // NOTE: PDQm §2:3.78.5.1; the header's ITI-78 exchange the read asks is audited too.
+        .wait_for(3, SETTLE)
         .await
         .into_iter()
         .filter(|record| record.contains("ehds-categories"))
