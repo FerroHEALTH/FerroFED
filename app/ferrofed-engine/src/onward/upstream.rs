@@ -21,7 +21,11 @@ use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvid
 
 /// One upstream's token, cheap to share: every client of the upstream reads
 /// one cache.
+///
+/// `Debug` names the client, never a token or a secret.
 pub struct UpstreamToken {
+    /// The client the grant authenticates as.
+    client_id: String,
     /// The cache the client credentials grant fills.
     source: TokenSource,
     /// The `Authorization` value last handed out, which a `401` drops.
@@ -38,6 +42,7 @@ impl UpstreamToken {
     /// be built.
     pub fn new(credentials: ClientCredentials) -> Result<Self, TokenError> {
         Ok(Self {
+            client_id: credentials.client_id.clone(),
             source: TokenSource::new(credentials)?,
             last: Mutex::new(None),
         })
@@ -54,6 +59,7 @@ impl UpstreamToken {
         clock: Arc<dyn Clock>,
     ) -> Result<Self, TokenError> {
         Ok(Self {
+            client_id: credentials.client_id.clone(),
             source: TokenSource::with_clock(credentials, clock)?,
             last: Mutex::new(None),
         })
@@ -71,7 +77,9 @@ impl UpstreamToken {
 
 impl fmt::Debug for UpstreamToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("UpstreamToken").finish_non_exhaustive()
+        f.debug_struct("UpstreamToken")
+            .field("client_id", &self.client_id)
+            .finish_non_exhaustive()
     }
 }
 

@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! What a call made for a verified caller hands the onward credentials of
-//! its node (§13.1, N25, N26): the caller's verified token, the source of
+//! What a call made for a verified caller hands its node's onward credentials.
+//!
+//! That is the caller's verified token (§13.1, N25, N26), the source of
 //! credentials that depend on whom a call is made for, and the check that
 //! no withheld identifier leaves in the caller's token (§5.4.1, N33).
 //!

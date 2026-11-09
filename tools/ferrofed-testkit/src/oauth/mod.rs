@@ -274,6 +274,7 @@ struct State {
     secret_methods: Vec<&'static str>,
     certificate: Option<String>,
     subjects: BTreeMap<String, String>,
+    onward_issuer: Option<String>,
     assertions: Vec<String>,
     exchanges: Vec<Exchanged>,
 }
@@ -355,6 +356,16 @@ impl TokenEndpoint {
             jwks,
             issuer: issuer.to_owned(),
         });
+    }
+
+    /// Issues every later exchanged token as a JWT access token of `issuer`
+    /// (RFC 9068 §2.2): `iss` the issuer, `aud` the `resource` the exchange
+    /// named, `sub` the caller, `client_id` the client, `act` naming the
+    /// client as the actor (RFC 8693 §4.1), and `iat` and `exp` for the
+    /// endpoint's lifetime. The harness signs nothing: an onward client
+    /// decodes the claims, and the node matches the token whole.
+    pub fn issue_onward_tokens(&self, issuer: &str) {
+        self.shared.lock().onward_issuer = Some(issuer.to_owned());
     }
 
     /// Requires a `DPoP` proof on every later token request, and binds every

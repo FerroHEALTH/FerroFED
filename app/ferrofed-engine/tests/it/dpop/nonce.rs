@@ -12,34 +12,27 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use ferrofed_engine::conveyance::Conveyance;
-use ferrofed_engine::conveyance::caller::{Principal, Verification};
 use ferrofed_engine::dispatch::{
     Contact, DispatchOptions, NodeClient, NodeQuery, SharedCredentials,
 };
-use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
-use ferrofed_engine::onward::{Grant, Scope, SystemClock};
-use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::dpop::{self, HEADER};
 use ferrofed_testkit::issuance::Verdict;
-use ferrofed_testkit::issuer::Claims;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
-use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::client::keys::KeyRing;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{Credentials, CredentialsProvider as _, Transport, TransportError};
-use secrecy::SecretString;
 use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, ResponseTemplate};
 
 use super::{
-    CALLERS, CLIENT_ID, SCOPE, TestResult, answer_when, client, endpoint, grant, keys, prover,
-    provider, query, transport,
+    CLIENT_ID, TestResult, answer_when, client, dpop_lane, endpoint, exchanged_call, grant,
+    grant_at, keys, prover, provider, query, transport,
 };
-use crate::conveyed::{UPSTREAM, caller, shared};
+use crate::conveyed::UPSTREAM;
+use crate::exchange;
 
 /// The `jti` of the assertion each token request carried in `field`,
 /// verified against `keys` (RFC 7523 §3).
@@ -77,7 +70,7 @@ async fn a_nonce_resend_signs_a_new_client_assertion() -> TestResult {
     let endpoint = endpoint(&keys).await?;
     endpoint.issuance().require_nonce("synthetic-as-nonce-4");
     let prover = prover()?;
-    let provider = provider(grant(&endpoint, &prover)?, Arc::clone(&keys), transport()?)?;
+    let provider = provider(grant(&endpoint, Arc::clone(&keys), &prover)?)?;
 
     provider.credentials().await?;
     assert_eq!(
@@ -103,34 +96,17 @@ async fn a_nonce_resend_signs_a_new_client_assertion() -> TestResult {
 async fn a_nonce_resend_of_an_exchange_signs_new_assertions() -> TestResult {
     let keys = keys()?;
     let endpoint = endpoint(&keys).await?;
-    endpoint.accept_exchange(CALLERS.jwks(), UPSTREAM);
+    endpoint.accept_exchange(exchange::CALLERS.jwks(), UPSTREAM);
+    endpoint.issue_onward_tokens(exchange::ONWARD_ISSUER);
     endpoint.issuance().require_nonce("synthetic-as-nonce-5");
     let node = Server::start().await;
     answer_when(&node, endpoint.dpop_bound(None), ResponseTemplate::new(401)).await;
     let prover = prover()?;
-    let grant = grant(&endpoint, &prover)?
-        .with_resource("https://cdr-a.example.org/openehr")?
-        .with_token_exchange();
-    let exchange = Arc::new(Exchange::new(
-        EndpointId::new("node-a-pub")?,
-        grant,
-        Arc::clone(&keys),
-        (Duration::from_secs(300), Duration::from_secs(5)),
-        transport()?,
-        Arc::new(SystemClock),
-    ));
     let client = client(&node, "openehr", transport()?)?
-        .with_on_behalf(exchange)
+        .with_on_behalf(dpop_lane(&endpoint, Arc::clone(&keys), &prover)?)
         .with_dpop(&prover);
-    let mut claims = Claims::new(UPSTREAM, "urn:example:ferrofed-under-test");
-    crate::conveyed::SUBJECT.clone_into(&mut claims.sub);
-    let mut verified = caller();
-    verified.verified_by = Verification::Signature;
-    let conveyed = Conveyance::new(shared(), Principal::Caller(verified)).with_subject(
-        SubjectToken::new(SecretString::from(CALLERS.mint(&claims)?), "user/aql-*.s"),
-    );
 
-    let reply = query(&client, conveyed).await?;
+    let reply = query(&client, exchanged_call("clinician-0042")?).await?;
     assert_eq!(
         EndpointStatus::Active,
         reply.status(),
@@ -229,13 +205,7 @@ async fn the_token_endpoint_and_the_node_keep_their_own_nonces() -> TestResult {
     )
     .await;
     let prover = prover()?;
-    let grant = Grant::new(
-        &SecretUrl::new(token_url.clone()),
-        CLIENT_ID,
-        Scope::parse(SCOPE)?,
-    )?
-    .with_dpop(Arc::clone(&prover));
-    let provider = provider(grant, keys, transport()?)?;
+    let provider = provider(grant_at(&token_url, keys, &prover)?)?;
     let client = client(&server, "openehr", transport()?)?
         .with_credentials_provider(provider)
         .with_dpop(&prover);
@@ -259,8 +229,10 @@ async fn the_token_endpoint_and_the_node_keep_their_own_nonces() -> TestResult {
         }
     }
     let named = |nonce: &str| Some(nonce.to_owned());
+    // NOTE: the token states no lifetime, so ferrohealth-smart's cache serves both
+    // queries with it, and only the first query asks the token endpoint.
     assert_eq!(
-        vec![None, named(AS_NONCE), named(AS_NONCE)],
+        vec![None, named(AS_NONCE)],
         token_nonces,
         "the token endpoint is sent its own nonce, never the node's"
     );

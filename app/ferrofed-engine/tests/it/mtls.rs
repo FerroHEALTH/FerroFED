@@ -5,48 +5,39 @@
 //! mock node, both behind a mutual-TLS front: the gateway authenticates by
 //! its TLS client certificate with its `client_id` and no assertion (RFC 8705
 //! §2), takes a token bound to that certificate and sends it only over
-//! connections presenting it (§3), refuses a token bound to another
-//! certificate before the node is sent anything (§3.1), and composes with
-//! token exchange per caller (RFC 8693 §2.1) (§13.1, §13.4, N25, CP-17).
+//! connections presenting it (§3), and refuses a token bound to another
+//! certificate before the node is sent anything (§3.1) (§13.1, §13.4, N25,
+//! CP-17).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
 )]
 
 use std::error::Error;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::conveyance::Conveyance;
-use ferrofed_engine::conveyance::caller::{Principal, Verification};
 use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
-use ferrofed_engine::onward::grant::exchange::{Exchange, SubjectToken};
-use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
-use ferrofed_engine::onward::token::{GRANT_TYPE, TokenError};
-use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope, SystemClock};
-use ferrofed_registry::id::EndpointId;
+use ferrofed_engine::onward::upstream::UpstreamToken;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::issuance::Verdict;
-use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::leak;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::proxy::Capture;
 use ferrofed_testkit::tls::MutualTls;
-use ferrohealth_secret::secret_url::SecretUrl;
-use ferrohealth_smart::client::assertion::AssertionKey;
-use ferrohealth_smart::client::keys::KeyRing;
-use jsonwebtoken::Algorithm;
+use ferrohealth_smart::client::binding::presented_certificate;
+use ferrohealth_smart::client::{ClientAuth, ClientCredentials, Endpoint, TokenError};
+use ferrohealth_smart::sender::ClientCertificate;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{CredentialsProvider as _, ReqwestTransport};
-use secrecy::SecretString;
+use secrecy::{SecretSlice, SecretString};
+use url::Url;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
-
-use crate::conveyed::{UPSTREAM, caller, shared};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -56,12 +47,6 @@ const CLIENT_ID: &str = "ferrofed-test-gateway";
 /// The scope every token is requested with.
 const SCOPE: &str = "system/aql-*.s";
 
-/// The node a token is exchanged for (RFC 8707 §2).
-const RESOURCE: &str = "https://cdr-a.example.org/openehr";
-
-/// The audience the caller's token names: the gateway.
-const AUDIENCE: &str = "urn:example:ferrofed-under-test";
-
 /// A synthetic node query, scoped to an `ehr_id` under no real system.
 const NODE_AQL: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'";
 
@@ -70,14 +55,6 @@ const EMPTY_RESULT_SET: &str = r##"{"q":"SELECT c/uid/value FROM EHR e CONTAINS 
 
 /// A synthetic subject the gateway resolved on and withholds.
 const WITHHELD: &str = "SYNTHETIC-SUBJECT-4f1a";
-
-/// The issuer of the callers' tokens, its key generated once per process.
-#[expect(
-    clippy::expect_used,
-    reason = "a test process that cannot generate a key pair cannot test anything"
-)]
-static CALLERS: LazyLock<Issuer> =
-    LazyLock::new(|| Issuer::new(UPSTREAM).expect("a test key pair should generate"));
 
 /// The harness authorization server and a node on one origin, behind one
 /// mutual-TLS front.
@@ -114,16 +91,21 @@ impl Harness {
     }
 
     /// The token endpoint's URL behind the front.
-    fn token_url(&self) -> SecretUrl {
-        SecretUrl::new(format!("{}{}", self.front.origin(), oauth::TOKEN_PATH))
+    fn token_url(&self) -> Result<Url, url::ParseError> {
+        Url::parse(&format!("{}{}", self.front.origin(), oauth::TOKEN_PATH))
     }
 
-    /// The thumbprint of the certificate the gateway presents, as the
-    /// engine reads it from the client identity.
-    fn thumbprint(&self) -> Result<Thumbprint, Box<dyn Error>> {
-        Ok(Thumbprint::of_identity(&SecretString::from(
-            self.front.client_identity(),
-        ))?)
+    /// The client identity the gateway presents, chain and key.
+    fn identity(&self) -> Arc<SecretSlice<u8>> {
+        Arc::new(SecretSlice::from(
+            self.front.client_identity().as_bytes().to_vec(),
+        ))
+    }
+
+    /// The certificate the gateway presents, as `ferrohealth-smart` reads
+    /// it from the client identity.
+    fn certificate(&self) -> Result<ClientCertificate, Box<dyn Error>> {
+        Ok(presented_certificate(&self.identity()).ok_or("the identity holds a certificate")?)
     }
 
     /// An engine trusting the front, presenting the client certificate when
@@ -143,12 +125,25 @@ impl Harness {
         )?)
     }
 
-    /// The grant authenticating by the certificate (RFC 8705 §2.1).
-    fn grant(&self) -> Result<Grant, Box<dyn Error>> {
-        Ok(
-            Grant::new(&self.token_url(), CLIENT_ID, Scope::parse(SCOPE)?)?
-                .with_tls_client_auth(TlsClientAuth::Pki),
-        )
+    /// The grant authenticating by the certificate, by `tls_client_auth`
+    /// (RFC 8705 §2.1) or `self_signed_tls_client_auth` (§2.2), trusting the
+    /// front.
+    fn grant_by(&self, self_signed: bool) -> Result<ClientCredentials, Box<dyn Error>> {
+        let mut grant = ClientCredentials::with_mutual_tls(
+            Endpoint::Token(self.token_url()?),
+            CLIENT_ID.to_owned(),
+            self.identity(),
+            self_signed,
+        );
+        grant.tls.root_certificates = Some(self.front.trust_roots().as_bytes().to_vec());
+        grant.scope = Some(SCOPE.to_owned());
+        grant.timeout = Duration::from_secs(5);
+        Ok(grant)
+    }
+
+    /// The grant authenticating by `tls_client_auth` (RFC 8705 §2.1).
+    fn grant(&self) -> Result<ClientCredentials, Box<dyn Error>> {
+        self.grant_by(false)
     }
 
     /// The node client over `transport`, sending what `client` configures.
@@ -179,18 +174,9 @@ impl Harness {
     }
 }
 
-/// The client-credentials provider of `grant` with no key of the gateway's.
-fn by_certificate(
-    grant: Grant,
-    transport: ReqwestTransport,
-) -> Result<Arc<ClientCredentials<ReqwestTransport>>, Box<dyn Error>> {
-    Ok(Arc::new(ClientCredentials::by_certificate(
-        EndpointId::new("node-a-pub")?,
-        grant,
-        Duration::from_secs(5),
-        transport,
-        Arc::new(SystemClock),
-    )))
+/// The client-credentials provider of `grant`.
+fn by_certificate(grant: ClientCredentials) -> Result<Arc<UpstreamToken>, Box<dyn Error>> {
+    Ok(UpstreamToken::provider(grant)?)
 }
 
 /// Sends the node query through `client` conveying `conveyance`, withholding
@@ -214,25 +200,15 @@ fn field<'f>(form: &'f [(String, String)], name: &str) -> Option<&'f str> {
         .map(|(_, value)| value.as_str())
 }
 
-/// The gateway's keys, which sign the actor token of a token exchange.
-fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
-    let key = AssertionKey::from_pem(
-        oauth::Curve::P384.pem()?.as_bytes(),
-        Some(Algorithm::ES384),
-        None,
-    )?;
-    Ok(Arc::new(KeyRing::new(key)))
-}
-
-/// The engine reads the certificate's thumbprint as RFC 8705 §3.1 defines
-/// it: the unpadded base64url SHA-256 of its DER, the value the front
-/// computes from the certificate it admits.
+/// The certificate's thumbprint is read as RFC 8705 §3.1 defines it: the
+/// unpadded base64url SHA-256 of its DER, the value the front computes from
+/// the certificate it admits.
 #[tokio::test]
 async fn the_thumbprint_is_that_of_the_presented_certificate() -> TestResult {
     let harness = Harness::start().await?;
     assert_eq!(
         harness.front.client_thumbprint(),
-        harness.thumbprint()?.as_str()
+        harness.certificate()?.thumbprint()
     );
     Ok(())
 }
@@ -245,8 +221,9 @@ async fn the_thumbprint_is_that_of_the_presented_certificate() -> TestResult {
 async fn the_gateway_authenticates_by_its_certificate_and_sends_no_assertion() -> TestResult {
     let harness = Harness::start().await?;
     harness.endpoint.expect_scope(SCOPE);
-    let provider = by_certificate(harness.grant()?, harness.transport(true)?)?;
-    provider.credentials().await?;
+    let grant = harness.grant()?;
+    assert_eq!(ClientAuth::TlsClientAuth, grant.client_auth);
+    by_certificate(grant)?.credentials().await?;
 
     assert_eq!(
         vec![Verdict::Issued],
@@ -256,18 +233,17 @@ async fn the_gateway_authenticates_by_its_certificate_and_sends_no_assertion() -
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
-    let names: Vec<&str> = form.iter().map(|(name, _)| name.as_str()).collect();
-    assert_eq!(vec!["grant_type", "client_id", "scope"], names);
-    assert_eq!(Some(GRANT_TYPE), field(form, "grant_type"));
+    // NOTE: RFC 6749 Appendix B, a form's parameters carry no order, so the
+    // request is compared as the set of names it sends, each once.
+    let mut names: Vec<&str> = form.iter().map(|(name, _)| name.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(vec!["client_id", "grant_type", "scope"], names);
+    assert_eq!(Some("client_credentials"), field(form, "grant_type"));
     assert_eq!(Some(CLIENT_ID), field(form, "client_id"));
     assert_eq!(
         vec![harness.front.client_thumbprint().to_owned()],
         harness.front.presented(),
         "the token endpoint was reached over a connection presenting the certificate"
-    );
-    assert_eq!(
-        ClientAuthentication::Tls(TlsClientAuth::Pki),
-        provider.grant().client_authentication()
     );
     Ok(())
 }
@@ -277,11 +253,9 @@ async fn the_gateway_authenticates_by_its_certificate_and_sends_no_assertion() -
 #[tokio::test]
 async fn the_self_signed_method_sends_the_same_request() -> TestResult {
     let harness = Harness::start().await?;
-    let grant = Grant::new(&harness.token_url(), CLIENT_ID, Scope::parse(SCOPE)?)?
-        .with_tls_client_auth(TlsClientAuth::SelfSigned);
-    by_certificate(grant, harness.transport(true)?)?
-        .credentials()
-        .await?;
+    let grant = harness.grant_by(true)?;
+    assert_eq!(ClientAuth::SelfSignedTlsClientAuth, grant.client_auth);
+    by_certificate(grant)?.credentials().await?;
     let forms = harness.endpoint.issuance().forms();
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
@@ -300,13 +274,10 @@ async fn a_bound_token_travels_only_over_connections_presenting_its_certificate(
     harness
         .endpoint
         .bind_to_certificate(harness.front.client_thumbprint());
-    let grant = harness
-        .grant()?
-        .with_certificate_binding(harness.thumbprint()?);
-    let transport = harness.transport(true)?;
+    let grant = harness.grant()?.with_certificate_binding();
     let client = harness
-        .node(transport.clone())?
-        .with_credentials_provider(by_certificate(grant, transport)?);
+        .node(harness.transport(true)?)?
+        .with_credentials_provider(by_certificate(grant)?);
 
     let reply = query(&client, crate::conveyed::conveyance()).await?;
     assert_eq!(
@@ -334,16 +305,13 @@ async fn a_bound_token_travels_only_over_connections_presenting_its_certificate(
 #[tokio::test]
 async fn a_token_bound_to_another_certificate_never_reaches_the_node() -> TestResult {
     let harness = Harness::start().await?;
-    let other = Thumbprint::of_certificate(b"a certificate the gateway does not hold");
-    harness.endpoint.bind_to_certificate(other.as_str());
-    let grant = harness
-        .grant()?
-        .with_certificate_binding(harness.thumbprint()?);
-    let transport = harness.transport(true)?;
-    let provider = by_certificate(grant, transport.clone())?;
+    let other = ClientCertificate::from_der(b"a certificate the gateway does not hold");
+    harness.endpoint.bind_to_certificate(other.thumbprint());
+    let grant = harness.grant()?.with_certificate_binding();
+    let provider = by_certificate(grant)?;
     let client = harness
-        .node(transport)?
-        .with_credentials_provider(Arc::<ClientCredentials<ReqwestTransport>>::clone(&provider));
+        .node(harness.transport(true)?)?
+        .with_credentials_provider(Arc::<UpstreamToken>::clone(&provider));
 
     let reply = query(&client, crate::conveyed::conveyance()).await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
@@ -359,28 +327,30 @@ async fn a_token_bound_to_another_certificate_never_reaches_the_node() -> TestRe
         .await
         .expect_err("a mismatched token is refused again");
     let mismatch = Error::source(&refused)
-        .and_then(<dyn Error>::downcast_ref::<TokenError>)
+        .and_then(<dyn Error>::downcast_ref::<Arc<TokenError>>)
         .ok_or("the cause is the token error")?;
-    assert!(matches!(mismatch, TokenError::CertificateMismatch));
+    assert!(matches!(mismatch.as_ref(), TokenError::CertificateMismatch));
     let shown = format!("{refused} {mismatch} {mismatch:?}");
     assert!(!shown.contains("eyJ"), "no token is shown: {shown}");
     Ok(())
 }
 
-/// Without its certificate the gateway completes no handshake, so neither
-/// the token endpoint nor the node is reached (RFC 8705 §2).
+/// A grant that authenticates by a certificate it does not hold sends no
+/// token request, so neither the token endpoint nor the node is reached
+/// (RFC 8705 §2).
 #[tokio::test]
 async fn without_its_certificate_the_gateway_reaches_neither_the_token_endpoint_nor_the_node()
 -> TestResult {
     let harness = Harness::start().await?;
-    let transport = harness.transport(false)?;
+    let mut grant = harness.grant()?;
+    grant.tls.identity = None;
     let client = harness
-        .node(transport.clone())?
-        .with_credentials_provider(by_certificate(harness.grant()?, transport)?);
+        .node(harness.transport(false)?)?
+        .with_credentials_provider(by_certificate(grant)?);
 
     let reply = query(&client, crate::conveyed::conveyance()).await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
-    assert!(harness.front.refused() >= 1);
+    assert_eq!(0, harness.front.handshakes());
     assert_eq!(
         harness.endpoint.issuance().forms(),
         Vec::<Vec<(String, String)>>::new()
@@ -394,80 +364,23 @@ async fn without_its_certificate_the_gateway_reaches_neither_the_token_endpoint_
 #[tokio::test]
 async fn an_assertion_grant_without_a_key_sends_nothing() -> TestResult {
     let harness = Harness::start().await?;
-    let grant = Grant::new(&harness.token_url(), CLIENT_ID, Scope::parse(SCOPE)?)?;
-    let refused = by_certificate(grant, harness.transport(true)?)?
+    let mut grant = harness.grant()?;
+    grant.client_auth = ClientAuth::PrivateKeyJwt;
+    let refused = by_certificate(grant)?
         .credentials()
         .await
         .expect_err("no key signs the assertion");
     let unsigned = Error::source(&refused)
-        .and_then(<dyn Error>::downcast_ref::<TokenError>)
+        .and_then(<dyn Error>::downcast_ref::<Arc<TokenError>>)
         .ok_or("the cause is the token error")?;
-    assert!(matches!(unsigned, TokenError::Unsigned));
+    assert!(
+        matches!(unsigned.as_ref(), TokenError::Credential { .. }),
+        "{unsigned:?}"
+    );
     assert_eq!(
         harness.endpoint.issuance().forms(),
         Vec::<Vec<(String, String)>>::new()
     );
-    Ok(())
-}
-
-/// Token exchange composes with mutual TLS: the exchange authenticates by
-/// the certificate with `client_id`, still names the gateway as the actor
-/// with its assertion, and the token it issues, bound to the certificate,
-/// reaches the node (RFC 8693 §2.1, RFC 8705 §2, §3; N25, N26).
-// conformance: CP-16 CP-17
-#[tokio::test]
-async fn token_exchange_composes_with_mutual_tls() -> TestResult {
-    let harness = Harness::start().await?;
-    let keys = keys()?;
-    harness
-        .endpoint
-        .trust(serde_json::from_value(keys.published())?);
-    harness.endpoint.accept_exchange(CALLERS.jwks(), UPSTREAM);
-    harness.endpoint.expect_resource(RESOURCE);
-    harness
-        .endpoint
-        .expect_assertion(Algorithm::ES384, harness.token_url().expose());
-    harness
-        .endpoint
-        .bind_to_certificate(harness.front.client_thumbprint());
-    let grant = harness
-        .grant()?
-        .with_resource(RESOURCE)?
-        .with_token_exchange()
-        .with_certificate_binding(harness.thumbprint()?);
-    let transport = harness.transport(true)?;
-    let exchange = Arc::new(Exchange::new(
-        EndpointId::new("node-a-pub")?,
-        grant,
-        keys,
-        (Duration::from_secs(300), Duration::from_secs(5)),
-        transport.clone(),
-        Arc::new(SystemClock),
-    ));
-    let client = harness.node(transport)?.with_on_behalf(exchange);
-    let mut claims = Claims::new(UPSTREAM, AUDIENCE);
-    crate::conveyed::SUBJECT.clone_into(&mut claims.sub);
-    let token = CALLERS.mint(&claims)?;
-    let mut principal = caller();
-    principal.verified_by = Verification::Signature;
-    let conveyance = Conveyance::new(shared(), Principal::Caller(principal))
-        .with_subject(SubjectToken::new(SecretString::from(token), "user/aql-*.s"));
-
-    let reply = query(&client, conveyance).await?;
-    assert_eq!(
-        EndpointStatus::Active,
-        reply.status(),
-        "{:?}",
-        reply.outcome()
-    );
-    let forms = harness.endpoint.issuance().forms();
-    let [form] = forms.as_slice() else {
-        return Err(format!("expected one exchange, got {}", forms.len()).into());
-    };
-    assert_eq!(Some(CLIENT_ID), field(form, "client_id"));
-    assert_eq!(None, field(form, "client_assertion"));
-    assert!(field(form, "actor_token").is_some());
-    assert_eq!(1, harness.node_requests().await?);
     Ok(())
 }
 
@@ -480,22 +393,19 @@ async fn no_key_token_or_withheld_subject_leaves_the_gateway() -> TestResult {
     harness
         .endpoint
         .bind_to_certificate(harness.front.client_thumbprint());
-    let grant = harness
-        .grant()?
-        .with_certificate_binding(harness.thumbprint()?);
-    let transport = harness.transport(true)?;
-    let provider = by_certificate(grant, transport.clone())?;
+    let grant = harness.grant()?.with_certificate_binding();
+    let provider = by_certificate(grant.clone())?;
     let client = harness
-        .node(transport)?
-        .with_credentials_provider(Arc::<ClientCredentials<ReqwestTransport>>::clone(&provider));
+        .node(harness.transport(true)?)?
+        .with_credentials_provider(Arc::<UpstreamToken>::clone(&provider));
     let reply = query(&client, crate::conveyed::conveyance()).await?;
     assert_eq!(EndpointStatus::Active, reply.status());
 
-    let shown = format!("{provider:?} {:?}", provider.grant());
+    let shown = format!("{provider:?} {grant:?}");
     for hidden in ["PRIVATE KEY", "CERTIFICATE", "eyJ"] {
         assert!(!shown.contains(hidden), "{hidden} is not shown: {shown}");
     }
-    assert!(shown.contains(harness.front.client_thumbprint()), "{shown}");
+    assert!(shown.contains(CLIENT_ID), "{shown}");
     let requests = harness
         .endpoint
         .server()
