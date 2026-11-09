@@ -2,29 +2,19 @@
 # SPDX-License-Identifier: BUSL-1.1
 name: One attempt of the performance gate
 description: >-
-  Installs ferrohealth-perf, builds the release gateway of the commit and of
-  its base, runs scripts/perf/gate.sh once and uploads its reports. The step
+  Unpacks the arms the perf workflow's build job built once (the release
+  gateway of the commit and of its base, the token endpoint and
+  ferrohealth-perf), runs scripts/perf/gate.sh once and uploads its reports. The step
   never fails on the gate's verdict: it reports the exit code, the runner's CPU model and whether a
   retry on a fresh runner may help, and the perf workflow's verdict job
   decides. A retry may help when the gate ended with exit 2, a run that
   could not be judged, on any CPU model, or with exit 1, a breach, on a CPU
   model the workflow lists as stall-prone. The calling job checks out
-  the repository and installs the Rust toolchain first. No specification
+  the repository first; nothing is built here (#1807). No specification
   governs this: our own design.
 inputs:
   attempt:
     description: The attempt, 1 for the first run and 2 and 3 for the retries.
-    required: true
-  base:
-    description: The commit or ref the base is the merge base with; empty takes the previous release.
-    required: false
-    default: ""
-  fallback:
-    description: '"true" falls back to the first parent when the previous release cannot read the configuration.'
-    required: false
-    default: "false"
-  version:
-    description: The ferrohealth-perf version to install, exactly.
     required: true
   stall-prone:
     description: The CPU models whose runners stall the gate, one per line.
@@ -42,22 +32,13 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install ferrohealth-perf
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: perf-arms
+        path: target
+    - name: Unpack the arms
       shell: bash
-      env:
-        VERSION: ${{ inputs.version }}
-      run: cargo install ferrohealth-perf --version "=${VERSION}" --locked
-    - name: Build the base and the head
-      shell: bash
-      env:
-        BASE: ${{ inputs.base }}
-        FALLBACK: ${{ inputs.fallback }}
-      run: |
-        if [ "$FALLBACK" = true ]; then
-          bash scripts/perf/gate.sh build --fallback
-        else
-          bash scripts/perf/gate.sh build "$BASE"
-        fi
+      run: bash scripts/perf/gate.sh unpack target/perf-arms.tar
     - name: Gate the performance
       id: gate
       shell: bash
@@ -67,7 +48,7 @@ runs:
       run: |
         set -uo pipefail
         code=0
-        bash scripts/perf/gate.sh run || code=$?
+        PATH="$PWD/target/perf-tools:$PATH" bash scripts/perf/gate.sh run || code=$?
         latest="$(find target/perf -name latest.json -not -path '*busy-loop*' -print -quit 2>/dev/null || true)"
         model=""
         if [ -n "$latest" ]; then

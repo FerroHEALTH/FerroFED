@@ -21,6 +21,14 @@
 #       perf/ferrofed.toml it does not know gives way to HEAD's first
 #       parent, and target/perf-base/base.md names the refused release and
 #       its keys. Without it such a base stops `run` with exit 2.
+#   scripts/perf/gate.sh pack FILE
+#       Packs what `run` reads into the tar FILE: the head's release
+#       gateway and token endpoint, the base's gateway, its rev and base.md,
+#       and the ferrohealth-perf on PATH as target/perf-tools/. The perf
+#       workflow's build job writes it once for every attempt (#1807).
+#   scripts/perf/gate.sh unpack FILE
+#       Unpacks FILE into the checkout, so `run` measures with nothing built;
+#       put target/perf-tools on PATH for the tool.
 #   scripts/perf/gate.sh run
 #       Starts the quickstart's nodes and FerroPIX, seeds them, starts the
 #       store's PostgreSQL over TLS and both gateways, the head on 8080 and
@@ -56,6 +64,7 @@ readonly CONFIG=perf/ferrofed.toml
 readonly OVERRIDE=perf/compose.yaml
 readonly WORK=target/perf-run
 readonly BASE_TREE=target/perf-base
+readonly TOOLS=target/perf-tools
 readonly HEAD_URL=http://127.0.0.1:8080
 readonly BASE_URL=http://127.0.0.1:8070
 readonly STORE_NAME=ferrofed-perf-store
@@ -306,6 +315,33 @@ build() {
   echo "perf-gate: $(< "$BASE_TREE/base.md")"
   cargo build --release --locked -p ferrofed-server --bin ferrofed
   cargo build --release --locked -p ferrofed-testkit --bin ferrofed-perf-token
+}
+
+# pack FILE: what `run` reads, built by `build`, into the tar FILE.
+pack() {
+  [[ $# -eq 1 ]] || die "usage: gate.sh pack FILE"
+  local file="$1" tool
+  cd "$root"
+  [[ -x target/release/ferrofed && -x target/release/ferrofed-perf-token ]] ||
+    die "the head is not built: run gate.sh build first"
+  [[ -x "$BASE_TREE/ferrofed" && -s "$BASE_TREE/rev" && -f "$BASE_TREE/base.md" ]] ||
+    die "the base is not built: run gate.sh build first"
+  tool="$(command -v ferrohealth-perf)" || die "ferrohealth-perf is not on PATH"
+  mkdir -p "$TOOLS"
+  [[ "$tool" -ef "$TOOLS/ferrohealth-perf" ]] || cp "$tool" "$TOOLS/ferrohealth-perf"
+  tar -cf "$file" target/release/ferrofed target/release/ferrofed-perf-token \
+    "$BASE_TREE/ferrofed" "$BASE_TREE/rev" "$BASE_TREE/base.md" "$TOOLS/ferrohealth-perf"
+}
+
+# unpack FILE: the tar `pack` wrote, into the checkout.
+unpack() {
+  [[ $# -eq 1 ]] || die "usage: gate.sh unpack FILE"
+  local file
+  file="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+  cd "$root"
+  tar -xf "$file"
+  [[ -x target/release/ferrofed && -x "$BASE_TREE/ferrofed" && -s "$BASE_TREE/rev" ]] ||
+    die "$file holds no built arms"
 }
 
 compose() {
@@ -715,6 +751,24 @@ self_test() {
   code=0
   out="$(cd "$lane" && accepts "$bin/refuses" perf/ferrofed.toml ferrofed_base 8070 2>&1)" || code=$?
   check "a pull request's base refusing a key stops the run with exit 2" 2 "$code"
+  # The arms the build job packs are the ones an attempt unpacks.
+  mkdir -p "$work/arms/target/release" "$work/arms/$BASE_TREE" "$work/tool" "$work/attempt"
+  printf '#!/bin/sh\necho head\n' > "$work/arms/target/release/ferrofed"
+  printf '#!/bin/sh\necho token\n' > "$work/arms/target/release/ferrofed-perf-token"
+  printf '#!/bin/sh\necho base\n' > "$work/arms/$BASE_TREE/ferrofed"
+  printf '#!/bin/sh\necho perf\n' > "$work/tool/ferrohealth-perf"
+  chmod +x "$work/arms/target/release/"* "$work/arms/$BASE_TREE/ferrofed" "$work/tool/ferrohealth-perf"
+  printf 'abc123\n' > "$work/arms/$BASE_TREE/rev"
+  printf 'The base is abc123.\n' > "$work/arms/$BASE_TREE/base.md"
+  check "the build job packs both arms and the tool" 0 \
+    "$( (root="$work/arms" PATH="$work/tool:$PATH" pack "$work/arms.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
+  check "an attempt unpacks them with nothing built" 0 \
+    "$( (root="$work/attempt" unpack "$work/arms.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
+  check "the unpacked base is the packed one" "abc123 base perf" \
+    "$(printf '%s %s %s' "$(< "$work/attempt/$BASE_TREE/rev")" "$("$work/attempt/$BASE_TREE/ferrofed")" "$("$work/attempt/$TOOLS/ferrohealth-perf")")"
+  rm -f -- "$work/arms/$BASE_TREE/rev"
+  check "an unbuilt base is not packed" 1 \
+    "$( (root="$work/arms" PATH="$work/tool:$PATH" pack "$work/none.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
   check "the refusal names each key and the base" 1 \
     "$(grep -cF "the base at $(git -C "$repo" rev-parse v0.0.1) does not know the key(s) emergency auth.federation[0] of perf/ferrofed.toml" <<< "$out")"
   code=0
@@ -813,6 +867,14 @@ case "${1:-}" in
     shift
     run "$@"
     ;;
+  pack)
+    shift
+    pack "$@"
+    ;;
+  unpack)
+    shift
+    unpack "$@"
+    ;;
   --self-test) self_test ;;
-  *) die "usage: gate.sh build [--fallback | BASE] | run | --self-test" ;;
+  *) die "usage: gate.sh build [--fallback | BASE] | pack FILE | unpack FILE | run | --self-test" ;;
 esac
