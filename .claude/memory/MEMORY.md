@@ -11,6 +11,11 @@
 
 ## FerroFED decisions
 
+- [CI under 20 minutes](ci-under-20-minutes.md): every pull-request and
+  merge-group run of `ci.yml` under 20 minutes, queue included; long
+  non-functional gates run on the pull request and on `main`, never in the
+  merge queue; owner 2026-11-09
+
 - [Product scope](product-scope.md): the owner's product statement is the
   ceiling on what this repository may claim; a transparent ITS-REST gateway
   on the Federation Tier specification; everything structural was decided by
