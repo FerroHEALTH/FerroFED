@@ -94,7 +94,7 @@ impl fmt::Debug for PublicDocument {
 pub enum ProvideError {
     /// A grant no compiled binding added (§13.1, N25).
     #[error(
-        "{section} names a grant it cannot use: a node takes one with [signing], an IHE FHIR service an oauth2 client-credentials grant"
+        "{section} names a grant no compiled binding adds: a node takes basic credentials, the oauth grant or a binding's grant"
     )]
     Unclaimed {
         /// The credentials section.

@@ -24,7 +24,6 @@ use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::credentials::CredentialsFault;
-use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_testkit::atna_feed::FeedRepository;
 use ferrofed_testkit::mock::Server;
@@ -358,10 +357,13 @@ fn a_service_grant_holds_each_key_to_its_rule() -> TestResult {
     let oauth2 = format!(
         "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"system/aql-*.s\"\nresource = \"https://pix.example.org/fhir\"\n"
     );
-    let error = refusal(&oauth2)?;
+    let error = Config::from_sources(Some(&oauth2), &BTreeMap::new())
+        .err()
+        .ok_or("the removed oauth2 table is refused at load")?;
     assert!(
-        matches!(&error, ConfigError::Credentials(CredentialsFault::ServiceGrantNotHere { section })
-            if section == "pixm.manager[0].credentials"),
+        matches!(&error, ConfigError::Replaced { old, new }
+            if old == "pixm.manager[0].credentials.oauth2"
+                && new == "pixm.manager[0].credentials.oauth"),
         "a service takes no oauth2 grant: {error:?}"
     );
     Ok(())
@@ -389,33 +391,43 @@ fn a_service_grant_resolves_and_shows_no_secret() -> TestResult {
     Ok(())
 }
 
+/// A node's `oauth` grant takes no client secret: it authenticates with
+/// `private_key_jwt` or its TLS client certificate (§13.1, N25), and the
+/// refusal names the key and quotes no secret.
 #[test]
 fn a_node_grant_takes_no_client_secret() -> TestResult {
     let node = |table: &str| {
         format!(
-            "[credentials.\"node-a-pub\".oauth2]\ngrant = \"client_credentials\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n{table}"
+            "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n{table}"
         )
     };
-    let error = refusal(&node("client_auth = \"client_secret_basic\"\n"))?;
-    assert!(
-        matches!(
-            &error,
-            ConfigError::GrantFault(GrantFault::SecretForNode { key })
-                if key == "credentials.node-a-pub.oauth2.client_auth"
+    for (table, key) in [
+        (
+            format!("client_auth = \"client_secret_basic\"\nclient_secret = \"{SECRET}\"\n"),
+            "credentials.node-a-pub.oauth.client_auth",
         ),
-        "{error:?}"
-    );
-    let error = refusal(&node(&format!(
-        "client_auth = \"private_key_jwt\"\nclient_secret = \"{SECRET}\"\n"
-    )))?;
-    assert!(
-        matches!(
-            &error,
-            ConfigError::GrantFault(GrantFault::SecretForNode { key })
-                if key == "credentials.node-a-pub.oauth2.client_secret"
+        (
+            format!("client_auth = \"client_secret_post\"\nclient_secret = \"{SECRET}\"\n"),
+            "credentials.node-a-pub.oauth.client_auth",
         ),
-        "{error:?}"
-    );
-    assert!(!format!("{error} {error:?}").contains(SECRET));
+        (
+            format!(
+                "client_auth = \"private_key_jwt\"\nprivate_key_file = {}\nclient_secret = \"{SECRET}\"\n",
+                toml::Value::String(crate::support::signing_key_file().to_owned())
+            ),
+            "credentials.node-a-pub.oauth.client_secret",
+        ),
+    ] {
+        let error = refusal(&node(&table))?;
+        assert!(
+            matches!(
+                &error,
+                ConfigError::Credentials(CredentialsFault::SecretForNode { key: named })
+                    if named == key
+            ),
+            "{key}: {error:?}"
+        );
+        assert!(!format!("{error} {error:?}").contains(SECRET), "{error}");
+    }
     Ok(())
 }

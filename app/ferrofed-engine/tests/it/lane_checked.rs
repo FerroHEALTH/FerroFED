@@ -23,8 +23,8 @@ use ferrofed_engine::conveyance::Conveyance;
 use ferrofed_engine::conveyance::caller::Principal;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::onward::grant::exchange::{OnBehalf as _, SubjectToken};
 use ferrofed_engine::onward::grant::lane::{Lane, LaneError, Organisations};
+use ferrofed_engine::onward::grant::on_behalf::{OnBehalf as _, SubjectToken};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_testkit::mock::Server;
 use ferrohealth_smart::client::onward::{

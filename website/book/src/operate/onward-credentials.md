@@ -10,19 +10,20 @@ the grants on this page, which obtain a token at the node's authorization
 server before the request:
 
 - `oauth`: the client-credentials grant of `ferrohealth-smart`, the table
-  every FerroHEALTH product reads for an upstream it calls as itself, with
-  an optional `onward` table beside it that carries each caller to the
-  node ([The onward lane of a node](#the-onward-lane-of-a-node));
-- `oauth2`: token exchange, or a client-credentials token bound to a key or
-  a certificate, authenticated by an ES256 or ES384 assertion signed with
-  the `[signing]` key;
-- `nuts`: the Nuts track of the Dutch Generic Functions (Annex B §B.4);
-- `fapi2`: an authorization server under the FAPI 2.0 Security Profile,
-  such as the BgZ/eOverdracht track (Annex B §B.4a).
+  every FerroHEALTH product reads for an upstream it calls as itself. It
+  binds its tokens to a key or to the TLS client certificate where you ask
+  for it, holds to the FAPI 2.0 Security Profile with
+  `security_profile = "fapi2"`, and takes an optional `onward` table beside
+  it that exchanges each caller's token for one of the node's own
+  ([The onward lane of a node](#the-onward-lane-of-a-node));
+- `nuts`: the Nuts track of the Dutch Generic Functions (Annex B §B.4).
 
 A section names one of them; two in one section refuse the configuration.
-A node's section may also name the TLS client certificate the gateway
-presents to that node and to its authorization server
+The `oauth2` and `fapi2` tables of earlier releases, and the section's
+`mtls_alias_hosts` key, are refused at load, naming the key of the `oauth`
+table that replaces each (see the upgrade notes). A node's section may also
+name the TLS client certificate the gateway presents to that node and to
+its authorization server
 ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)). No log line,
 error or rendering carries a credential, an assertion, a key, a proof or a
 token.
@@ -38,11 +39,12 @@ the token as `Authorization: Bearer` (RFC 6750 §2.1):
 [credentials."cdr-c".oauth]
 token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"   # or issuer, read from its RFC 8414 metadata
 client_id = "ferrofed-gateway"
-client_auth = "private_key_jwt"                 # or client_secret_basic, client_secret_post
+client_auth = "private_key_jwt"                 # or tls_client_auth, self_signed_tls_client_auth
 private_key_file = "/run/secrets/cdr-c-client.pem"
 # assertion_alg = "ES256"                       # by the key type when unset
 scope = "system/aql-*.s system/composition-*.cru"
 # resource = "https://cdr-c.example.org/openehr"   # RFC 8707
+# audience = "cdr-c"
 ```
 
 - `client_auth = "private_key_jwt"`, the default mechanism of §13.1, signs
@@ -50,67 +52,44 @@ scope = "system/aql-*.s system/composition-*.cru"
   `private_key_file`; the gateway publishes its public half in its JWK Set
   ([Signing keys and the JWK Set](#signing-keys-and-the-jwk-set)), under the
   RFC 7638 thumbprint as its `kid` unless `kid` names another. The
-  assertion names `client_id` as its `iss` and `sub` and the token endpoint
-  as its `aud`. `client_secret_basic` and `client_secret_post` send
-  `client_secret` or `client_secret_file` instead (RFC 6749 §2.3.1).
-- `scope` is held to the system compartment of the SMART on openEHR
-  grammar, as for `oauth2` below.
-- `token_endpoint` is `https` outside `profile = "development"`; one read
-  from `issuer` is always `https`.
+  assertion names `client_id` as its `iss` and `sub`, carries a fresh `jti`
+  and lives 300 seconds. `tls_client_auth` and
+  `self_signed_tls_client_auth` authenticate by the TLS client certificate
+  instead ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)).
+- A node's grant takes no client secret: `client_secret_basic`,
+  `client_secret_post`, `client_secret` and `client_secret_file` refuse the
+  configuration, naming the key. The gateway authenticates to a node by its
+  own key or certificate (§13.1, N25); a client secret is for an identity
+  service's grant
+  ([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)).
+  `client_auth` has no default a node takes, so set it.
+- `scope` is space-separated SMART on openEHR scopes, each a resource scope
+  of the `system` compartment (`system/aql-*.s`, `system/composition-*.cru`);
+  anything else is refused at load. The token request carries it as written
+  (RFC 6749 §3.3).
+- `token_endpoint` is an `https` URL with no user name, password or
+  fragment (RFC 6749 §3.2; RFC 9110 §4.2.4); `http` is accepted only under
+  `profile = "development"`
+  ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
+  With `issuer` in its place, the token endpoint is read from the issuer's
+  RFC 8414 metadata, and `issuer` is held to the same rule.
+- `assertion_audience` is `token_endpoint`, the default, or `issuer`. RFC
+  7523 §3 admits either as the assertion's `aud`. An authorization server
+  under the FAPI 2.0 Security Profile accepts only its issuer identifier,
+  as one string (§5.3.2.1). `issuer` needs the table's `issuer` set, which
+  then replaces `token_endpoint`: the two exclude each other.
 - `refresh_margin_ms`, 30 seconds by default, is how long before the token
   expires a new one is fetched; `timeout_ms` bounds each call to the
   authorization server.
 
+`ferrohealth-smart` caches the token until `refresh_margin_ms` before the
+end of the lifetime its `expires_in` states, or for half that lifetime when
+it is shorter than twice the margin, with one token request per endpoint at
+a time. A token with no stated lifetime is reused until a node refuses it.
 A node that answers `401` drops the cached token, and the next request
 obtains a new one. When no token can be obtained, that node is reported
-`node-error` and is sent nothing.
-
-An `oauth2` section does what `oauth` does not: token exchange, a token
-bound to a `DPoP` key or the TLS client certificate, authentication by that
-certificate, or an assertion naming the authorization server's issuer. An
-`oauth2` section that asks for none of these, a plain client-credentials
-token, is refused at load, naming the section, and points at `oauth`. It
-authenticates with a JWT client assertion (RFC 7523 §2.2), signed
-with the `[signing]` key, ES256 or ES384 as its curve says. The assertion
-names `client_id` as its `iss` and `sub` and the token endpoint as its
-`aud`, lives
-`assertion_lifetime_s` seconds, and carries a fresh `jti`. The token request
-carries `scope` and, when set, `resource` and `audience`. A node's section
-refuses `client_secret_basic`, `client_secret_post` and `client_secret`,
-naming the key: a client secret is for an identity service's grant
-([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)). Every key
-of the section is required except those two and the assertion audience
-below:
-
-- `scope` is space-separated SMART on openEHR scopes, each a resource scope
-  of the `system` compartment (`system/aql-*.s`, `system/composition-*.cru`);
-  anything else is refused at load. The token request carries each scope in
-  the canonical form of the grammar, its permissions in `c`, `r`, `u`, `d`,
-  `s` order and one space between scopes: `system/aql-*.sr` is requested as
-  `system/aql-*.rs`.
-- `token_endpoint` is an `https` URL with no user name, password, query or
-  fragment; `http` is accepted only under `profile = "development"`
-  ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
-- `assertion_audience` is `token_endpoint`, the default, or `issuer`. RFC
-  7523 §3 admits either as the assertion's `aud`. An authorization server
-  under the FAPI 2.0 Security Profile accepts only its issuer identifier,
-  as one string (§5.3.2.1). With `issuer`, set `issuer` to that identifier,
-  an `http` or `https` URL with no query or fragment in its canonical form
-  (RFC 8414 §2); `issuer` beside the default refuses the configuration.
-
-```toml
-[credentials."cdr-c".oauth2]
-# ...
-assertion_audience = "issuer"
-issuer = "https://auth.cdr-c.example.org"
-```
-
-The gateway caches a token until 30 seconds before the end of the lifetime
-its `expires_in` states, with one token request per endpoint at a time. A
-token with no stated lifetime serves one request. A node that answers `401`
-drops the cached token, and the next request obtains a new one. When no
-token can be obtained, that node is reported `node-error` and is sent
-nothing: the gateway never dispatches unauthenticated. The answer says only
+`node-error` and is sent nothing: the gateway never dispatches
+unauthenticated. The answer says only
 `no onward credential could be obtained, so nothing was sent`, followed by
 the token endpoint's RFC 6749 §5.2 `error` code when it refused with a
 registered one. The full account, the token endpoint's description
@@ -121,49 +100,77 @@ The caller's own `Authorization` header never reaches a node.
 
 ## A token per caller: token exchange
 
-`grant = "token_exchange"` gives each verified caller a token of its own at
-that node, where the node's authorization server supports RFC 8693:
+An `onward` table beside the node's `oauth` table gives each verified
+caller a token of its own at that node, where the node's authorization
+server supports RFC 8693. Set `actor_assertion = true` to name the gateway
+as the actor, as the `oauth2` token exchange of earlier releases always
+did:
 
 ```toml
-[credentials."cdr-c".oauth2]
-grant = "token_exchange"
-client_auth = "private_key_jwt"
+[credentials."cdr-c".oauth]
 token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"
 client_id = "ferrofed-gateway"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/cdr-c-client.pem"
 scope = "system/aql-*.s"                         # the gateway's own requests
-resource = "https://cdr-c.example.org/openehr"   # required: the node (RFC 8707)
+
+[credentials."cdr-c".onward]
+issuer = "https://auth.cdr-c.example.org"        # the issuer of the exchanged tokens
+kind = "persons"
+profile = "rfc9068"
+token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"
+audiences = ["https://cdr-c.example.org/openehr"]
+indicators = ["https://cdr-c.example.org/openehr"]   # sent as resource (RFC 8707)
+actor_assertion = true
+
+[credentials."cdr-c".onward.keys]
+max_onward_lifetime = 3600
 ```
 
 For a request on behalf of a caller, the gateway sends the token endpoint
 the caller's verified access token as `subject_token`, an assertion of its
-own as `actor_token`, with its own `jti`, and the client assertion as
-above. It asks for the caller's granted scopes that cover the operation,
-and never the rest (N26), each in the canonical form, and names the node
-with `resource`. The answer must issue an access token
-(`issued_token_type`, RFC 8693 §2.2.1). The token is cached per caller's
-token and scope, at most 1024 per endpoint,
-until 30 seconds before it expires, and dropped when the node answers
-`401`. The cache keys on a SHA-256 of the caller's token, never the token.
+own as `actor_token`, with its own `jti`, and its client authentication as
+above. The actor assertion is signed with the `oauth` table's
+`private_key_file` whatever `client_auth` says, so a grant that
+authenticates by its certificate still names itself as the actor. The
+exchange names the node with each of `indicators`.
 
+- Where the `onward` table sets no `scope`, the exchange asks for the
+  caller's granted scopes that cover the operation, and never the rest
+  (N26). A request that no granted scope of the caller covers, such as one
+  with no SMART on openEHR family or a demographic request, is never
+  exchanged: the node is `node-error` and is sent nothing. Without `scope`
+  the authorization server would choose the scope itself (RFC 8693 §2.1).
+  A `scope` set on the `onward` table, such as the node scope an Entra
+  issuer needs, is asked for as written instead.
+- The answer must issue an access token or a JWT (`issued_token_type`,
+  RFC 8693 §2.2.1) that `ferrohealth-smart`'s onward check accepts: a JWT
+  naming `issuer` as its `iss`, an `aud` inside `audiences`, a lifetime
+  within `max_onward_lifetime`, the gateway as its `act` or client, and the
+  caller's person. An opaque exchanged token, or an answer that carries a
+  refresh token, fails the node with nothing sent.
+- A token bound with `DPoP` reaches the node under the `DPoP` scheme, its
+  requests proven with the `oauth` table's `dpop_key_file`
+  ([Tokens bound to a key](#tokens-bound-to-a-key-dpop)).
+- The exchanged token is cached per caller and target until shortly before
+  it or the caller's token expires, at most 4096 per endpoint, and dropped
+  when the node answers `401`, so the next request exchanges again.
 - Only a caller verified by its token's signature or by introspection has a
   token to exchange. A caller the edge mode asserted has none, so that node
   is `node-error` and is sent nothing.
-- A request that no granted scope of the caller covers, such as one with no
-  SMART on openEHR family or a demographic request, is never exchanged: the
-  node is `node-error` and is sent nothing. Without `scope` the
-  authorization server would choose the scope itself (RFC 8693 §2.1).
-- The gateway keeps the caller's token only while some node's grant is
-  `token_exchange`, and never writes it to a log, a span, a metric or the
+- The gateway keeps the caller's token only while some node has an
+  `onward` table, and never writes it to a log, a span, a metric or the
   `openEHR-federation-client` token.
 - A caller's token whose text or claims carry the patient identifier the
   query was resolved on is not sent to the token endpoint, and that node is
   `node-error` (§5.4.1, N33).
 - The gateway's own requests, the admission check and the redistribution of
-  a held stored query, have no caller: they use the client-credentials
-  grant at the same token endpoint, with `scope`.
+  a held stored query, have no caller: they use the `oauth` table's
+  client-credentials token, with its `scope`.
 
 The caller's token reaches the node's authorization server, which must
-trust the caller's issuer, and never the node itself.
+trust the caller's issuer, and never the node itself. Which callers an
+`onward` table carries, and the other profiles it runs, follow.
 
 ## The onward lane of a node
 
@@ -280,9 +287,9 @@ no `max_onward_lifetime`, a `federation` issuer without `exchanges_from` or
 
 ## Tokens bound to a key: DPoP
 
-`dpop_key_file` in an `oauth2` section binds that node's tokens to a key of
-the gateway's (RFC 9449), for a deployment that requires sender-constrained
-tokens. The file holds a P-256 key, which signs ES256, or a P-384 key, which
+`dpop_key_file` in a node's `oauth` section binds that node's tokens to a
+key of the gateway's (RFC 9449), for a deployment that requires
+sender-constrained tokens, the tokens its `onward` table exchanges included. The file holds a P-256 key, which signs ES256, or a P-384 key, which
 signs ES384, in PKCS#8 PEM:
 
 ```text
@@ -297,16 +304,19 @@ under the `DPoP` scheme. The token endpoint must answer `token_type`
 `DPoP`; a bearer token is refused and the node is `node-error`. A token
 endpoint that answers `400 use_dpop_nonce`, or a node that answers `401`
 with a `DPoP` challenge naming `use_dpop_nonce`, is sent the request once
-more with the nonce it gave, within the request's budget, and every later
-proof to that server carries the latest nonce it sent (RFC 9449 §8, §9).
+more with the nonce it gave, and every later proof to that server carries
+the latest nonce it sent (RFC 9449 §8, §9). Each send to the token endpoint
+has `timeout_ms` of its own.
 The token endpoint's nonce and the node's are kept apart even when both
 live on one host. A token request sent once more carries a newly signed
 client assertion, and under token exchange a new actor token, so the
 token endpoint never sees a `jti` twice. A node whose deadline passes
-before that second send is `time-out`, and it counts as a node that was
+before its second send is `time-out`, and it counts as a node that was
 asked.
 The key is read at start and on each reload; a key that is no P-256 or
-P-384 key refuses the configuration, naming `dpop_key_file`.
+P-384 key refuses the configuration, naming the `oauth` section, and a
+section with both `dpop_key_file` and `certificate_bound = true` refuses it
+too: a token is bound one way.
 
 ## Mutual TLS to a node (RFC 8705)
 
@@ -327,21 +337,22 @@ token endpoint or issuer refuses the configuration. A section may name the
 TLS material alone, with no scheme, when the node authenticates the gateway
 by the certificate and asks for no `Authorization` header.
 
-With that material, an `oauth2` section can authenticate by the certificate
-in place of an assertion, and bind its tokens to it:
+With that material, the section's `oauth` table can authenticate by the
+certificate in place of an assertion, and bind its tokens to it. The grant
+presents the certificate the `tls` table names, read once: the `oauth`
+table names no certificate of its own.
 
 ```toml
 [credentials."cdr-f".tls]
 client_identity_file = "/run/secrets/cdr-f-client.pem"
 trust_roots_file = "/etc/ferrofed/cdr-f-roots.pem"
 
-[credentials."cdr-f".oauth2]
-grant = "client_credentials"                 # or token_exchange
+[credentials."cdr-f".oauth]
 client_auth = "tls_client_auth"              # or self_signed_tls_client_auth
 token_endpoint = "https://auth.cdr-f.example.org/oauth2/token"
 client_id = "ferrofed-gateway"
 scope = "system/aql-*.s"
-tls_client_certificate_bound_access_tokens = true
+certificate_bound = true
 ```
 
 - `client_auth = "tls_client_auth"` authenticates the gateway by the
@@ -349,27 +360,28 @@ tls_client_certificate_bound_access_tokens = true
   matches to the subject it registered for `client_id` (RFC 8705 §2.1);
   `"self_signed_tls_client_auth"` has it matched to the certificate it
   registered instead (§2.2). The token request then carries `client_id` and
-  no client assertion. A token exchange still names the gateway as the
-  actor with an assertion the `[signing]` key signs (RFC 8693 §2.1).
-- `tls_client_certificate_bound_access_tokens = true` takes only tokens
-  bound to the certificate (§3). The token is sent under `Bearer` (RFC
-  6750), and only over the endpoint's transport, which presents the
-  certificate it is bound to. Where the token states its binding, as a
-  `cnf` member of the token response or the `cnf` claim of a JWT access
-  token, its `x5t#S256` must be the SHA-256 thumbprint of the configured
-  certificate (§3.1, §3.2); a token bound to another certificate is never
-  cached or sent, and the node is `node-error` with nothing sent. An opaque
-  token states no binding, and the node's authorization server and the node
-  check it.
+  no client assertion. An `onward` table with `actor_assertion = true`
+  still names the gateway as the actor, with an assertion of the `oauth`
+  table's `private_key_file` (RFC 8693 §2.1).
+- `certificate_bound = true` takes only tokens bound to the certificate
+  (§3). The token is sent under `Bearer` (RFC 6750), and only over the
+  endpoint's transport, which presents the certificate it is bound to.
+  Where the token states its binding, as a `cnf` member of the token
+  response or the `cnf` claim of a JWT access token, its `x5t#S256` must be
+  the SHA-256 thumbprint of the `tls` table's certificate (§3.1, §3.2); a
+  token bound to another certificate is never cached or sent, and the node
+  is `node-error` with nothing sent. An opaque token states no binding, and
+  the node's authorization server and the node check it.
 - Either key without `tls.client_identity_file` refuses the configuration,
   and so does an identity file without a certificate and its key, naming
-  `credentials."<id>".tls.client_identity`. A section with both
-  `tls_client_certificate_bound_access_tokens` and `dpop_key_file` refuses
-  the configuration: a token is bound one way.
+  `credentials."<id>".tls.client_identity`. `client_certificate_file`,
+  `client_key_file` and `ca_file` in the `oauth` table of a section that
+  names TLS material refuse the configuration, naming the key: one identity
+  comes from one place.
 
 The client identity is a secret no rendering shows; the settings and the
-start-up log name the endpoints that present a certificate and the
-thumbprint a grant binds to, never the certificate or its key. A service's
+start-up log name the endpoints that present a certificate, never the
+certificate or its key. A service's
 own `credentials` section, under `[[pixm.manager]]` or `[pdqm]` for
 example, takes no TLS material: name it on the service's table.
 
@@ -412,7 +424,7 @@ gateway's `DPoP` key. The wire is Nuts RFC021, the VP Token Grant Type:
    refuses a presentation nonce seen before.
 5. It takes the token only when its `token_type` is `DPoP`. The token is
    kept until 30 seconds before it expires and dropped when the node answers
-   `401`, as an `oauth2` token is, and every request to the node carries it
+   `401`, and every request to the node carries it
    under the `DPoP` scheme with a proof of the same key
    ([Tokens bound to a key](#tokens-bound-to-a-key-dpop)).
 
@@ -424,7 +436,7 @@ gateway's `DPoP` key. The wire is Nuts RFC021, the VP Token Grant Type:
 | `did` | The gateway's `did:web` identifier, the holder of the credentials. |
 | `kid` | The DID URL of the holder's key, `<did>#<fragment>`. |
 | `key_file` | The holder's key, a P-256 (ES256) or P-384 (ES384) private key in PKCS#8 PEM. |
-| `dpop_key_file` | The key the tokens are bound to, as in an `oauth2` section. Required: GF-Authentication sender-constrains every token (GFI-005). |
+| `dpop_key_file` | The key the tokens are bound to, as in an `oauth` section. Required: GF-Authentication sender-constrains every token (GFI-005). |
 | `[[credential]]` | One per credential: `input_descriptor`, the descriptor it answers, and `file`, the JWT-encoded credential, issued to `did`. |
 
 The gateway serves its DID document, so the authorization server can
@@ -455,7 +467,7 @@ that each is a JWT credential, with a `vc` claim, whose `sub` is `did`.
 
 No log line, error or rendering carries a credential, the presentation, a
 key, a proof or the token: a refusal names the authorization server's
-`error` code and at most 256 characters of its description. An `oauth2`
+`error` code and at most 256 characters of its description. An `oauth`
 section and a `nuts` section for the same endpoint refuse the configuration.
 
 ### The NVI's Nuts grant
@@ -488,13 +500,13 @@ demands is answered once (RFC 9449 §9). A grant the authorization server
 refuses leaves the localization unavailable, so the query fails closed
 (§14.1). The token goes to the NVI alone, never to a node, a log line or an
 error. `authorization_server` must be `https` outside development, or boot
-is refused, naming its key. The NVI's credentials take no `oauth2` or
-`fapi2` grant: the IG defines none for the Localization Service.
+is refused, naming its key. The NVI's credentials take no `oauth` grant:
+the IG defines none for the Localization Service.
 
 ## The FAPI 2.0 grant (Annex B §B.4a)
 
-A `fapi2` section makes the gateway authenticate to a node whose
-authorization server follows the FAPI 2.0 Security Profile, as the
+`security_profile = "fapi2"` holds a node's `oauth` grant to the FAPI 2.0
+Security Profile, for a node whose authorization server follows it, as the
 BgZ/eOverdracht track of the Dutch binding does (Annex B §B.4a, a VWS memo
 at concept v0.9). The track uses OAuth 2.0 client credentials with
 `private_key_jwt` client authentication, sender-constrained tokens, and the
@@ -502,44 +514,49 @@ healthcare attributes in an RFC 9396 `authorization_details` object of type
 `nl-gis-v1` (§B.4a.2, §B.4a.3):
 
 ```toml
-[credentials."cdr-e".fapi2]
+[credentials."cdr-e".oauth]
 issuer = "https://as.cdr-e.example.org"
-grant = "client_credentials"            # or token_exchange
+security_profile = "fapi2"
 client_id = "urn:oid:2.16.528.1.1007.3.3.<URA>"
-client_key_file = "/run/secrets/fapi2-client.pem"
+client_auth = "private_key_jwt"
+assertion_audience = "issuer"
+private_key_file = "/run/secrets/fapi2-client.pem"
 dpop_key_file = "/run/secrets/cdr-e-dpop.pem"
 scope = "system/aql-*.s"                # optional when authorization_details is set
 authorization_details = '''[{"type": "nl-gis-v1",
   "purpose_of_use": "http://terminology.hl7.org/CodeSystem/v3-ActReason|TREAT",
   "locations": ["https://cdr-e.example.org/openehr"],
   "locations_organization_id": "urn:oid:2.16.528.1.1007.3.3.<URA of the node>"}]'''
-# resource = "https://cdr-e.example.org/openehr"   # required by token_exchange
-# audience = "cdr-e"                               # optional
 ```
 
-1. At the first request to the node, the gateway reads the authorization
-   server's metadata at the RFC 8414 well-known URL of `issuer`, once, and
-   keeps it; a read that fails is tried again on the next request. The
-   metadata must name that issuer exactly, with a `token_endpoint` on the
-   issuer's origin, and an answer whose objects repeat a name is refused,
-   as for the Nuts grant. It must also list:
-   - `private_key_jwt` in `token_endpoint_auth_methods_supported`, and
-     `ES256` in `token_endpoint_auth_signing_alg_values_supported` (RFC 8414
-     §2: an omitted method list means `client_secret_basic` alone);
+A token per caller adds an `onward` table beside it, as
+[A token per caller](#a-token-per-caller-token-exchange) shows, with the
+issuer as its `issuer` and no `token_endpoint`, so the token endpoint is
+discovered the same way.
+
+1. At the first request to the node, `ferrohealth-smart` reads the
+   authorization server's metadata from `issuer`, once, and keeps it; a
+   read that fails is tried again on the next request. The metadata must be
+   `application/json`, name that issuer exactly, and name a
+   `token_endpoint` on the issuer's origin; an answer whose objects repeat a
+   name, or that is longer than 1 MiB, is refused. It must also list:
+   - `private_key_jwt` in `token_endpoint_auth_methods_supported`, and the
+     key's algorithm in `token_endpoint_auth_signing_alg_values_supported`
+     (RFC 8414 §2: an omitted method list means `client_secret_basic`
+     alone);
    - `client_credentials` in `grant_types_supported`, and token exchange
-     under `grant = "token_exchange"` (an omitted list means
-     `authorization_code` and `implicit` alone);
+     for an `onward` table (an omitted list means `authorization_code` and
+     `implicit` alone);
    - every `type` of `authorization_details` in
      `authorization_details_types_supported` (RFC 9396 §10);
-   - `ES256` in `dpop_signing_alg_values_supported`, when the list is there
-     (RFC 9449 §5.1).
+   - the `DPoP` key's algorithm in `dpop_signing_alg_values_supported`,
+     when the list is there (RFC 9449 §5.1).
 2. It asks the token endpoint for a token with the client-credentials
-   grant, or exchanges each verified caller's token as an `oauth2` grant
-   does ([A token per caller](#a-token-per-caller-token-exchange)). The
-   client assertion is signed ES256 with `client_key_file`'s key, and names
-   the issuer, as one string, as its `aud` (FAPI 2.0 §5.3.3.1); the actor
-   token of an exchange is signed the same way. The request carries `scope`
-   when set and `authorization_details` as written.
+   grant, or the `onward` table exchanges each verified caller's token. The
+   client assertion is signed with `private_key_file`'s key, and names the
+   issuer, as one string, as its `aud` (FAPI 2.0 §5.3.3.1); the actor token
+   of an exchange is signed the same way. The request carries `scope` when
+   set and `authorization_details` as written.
 3. It takes the token only when its `token_type` is `DPoP` and, under
    `authorization_details`, when the answer states the details it granted
    (RFC 9396 §7). A refusal with `invalid_authorization_details` is
@@ -547,33 +564,45 @@ authorization_details = '''[{"type": "nl-gis-v1",
    under the `DPoP` scheme with a proof of `dpop_key_file`'s key
    ([Tokens bound to a key](#tokens-bound-to-a-key-dpop)).
 
-The profile admits mutual TLS for both choices (§5.3.2.1), with the node
-section's `tls.client_identity_file`
-([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)). With `client_auth
-= "tls_client_auth"` or `"self_signed_tls_client_auth"` the metadata must
-list that method in place of `private_key_jwt`, and the token request
-carries `client_id` and no assertion. With
-`tls_client_certificate_bound_access_tokens = true` the metadata must state
-`tls_client_certificate_bound_access_tokens` as `true` (RFC 8705 §3.3), the
-token is taken as `Bearer` and held to the certificate as an `oauth2`
-grant's is, and no `DPoP` key is used. A grant that uses mutual TLS sends
-its token requests to the `token_endpoint` of `mtls_endpoint_aliases` where
-the metadata names one (RFC 8705 §5), held to the issuer's origin like the
-other endpoint, and its `issuer` must be `https`.
+The keys every grant takes, held to the profile:
+
+- `client_auth` is `private_key_jwt`, or `tls_client_auth` or
+  `self_signed_tls_client_auth` by the node section's certificate
+  ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)); under
+  `private_key_jwt`, `assertion_audience = "issuer"` is required.
+- Every key signs PS256, ES256 or EdDSA, the algorithms §5.4.1 admits, so a
+  P-384 key cannot sign here: a P-256 key, an RSA key with
+  `assertion_alg = "PS256"`, or an Ed25519 key.
+- Every token is sender-constrained (§5.3.2.1): `dpop_key_file`, or
+  `certificate_bound = true` with the node section's certificate.
+- `scope` and `authorization_details` are each optional, and one of them is
+  required, so the server never chooses what a token may do (§5.3.3.1:
+  least privilege).
+
+The profile admits mutual TLS for both choices (§5.3.2.1). With
+`tls_client_auth` or `self_signed_tls_client_auth` the metadata must list
+that method in place of `private_key_jwt`, and the token request carries
+`client_id` and no assertion. With `certificate_bound = true` the metadata
+must state `tls_client_certificate_bound_access_tokens` as `true` (RFC 8705
+§3.3), and the token is taken as `Bearer` and held to the certificate. A
+grant that uses mutual TLS sends its token requests to the
+`token_endpoint` of `mtls_endpoint_aliases` where the metadata names one
+(RFC 8705 §5), held to the issuer's origin like the other endpoint.
 
 RFC 8705 §5 lets a server put that alias on another host, as its own
 example does with `mtls.example.com`. The gateway sends there only when you
-name the host in the node's `[credentials."<id>"]` section:
+name the host in the `oauth` table:
 
 ```toml
 [credentials."cdr-e"]
 tls = { client_identity_file = "/run/secrets/cdr-e-client.pem" }
-mtls_alias_hosts = ["mtls.cdr-e.example.org"]   # or "mtls.cdr-e.example.org:8443"
 
-[credentials."cdr-e".fapi2]
+[credentials."cdr-e".oauth]
 issuer = "https://as.cdr-e.example.org"
+security_profile = "fapi2"
 client_auth = "tls_client_auth"
-tls_client_certificate_bound_access_tokens = true
+certificate_bound = true
+mtls_alias_hosts = ["mtls.cdr-e.example.org"]   # or "mtls.cdr-e.example.org:8443"
 # ... as above
 ```
 
@@ -582,31 +611,14 @@ without a scheme or a path; port `443` is left out. An alias on a named
 host is taken over `https` alone, without userinfo or a fragment. An alias
 on any other host is refused before a token request is sent, as the
 top-level `token_endpoint` on another origin always is. The key is refused
-for a section without a `fapi2` grant that uses mutual TLS, since no other
-grant reads `mtls_endpoint_aliases`. Which hosts to trust is FerroFED's own
-design: no specification names them.
+for a grant without `security_profile = "fapi2"`, and for one that does not
+use mutual TLS, since no other grant reads `mtls_endpoint_aliases`. Which
+hosts to trust is FerroFED's own design: no specification names them.
 
-| Key | What it is |
-|---|---|
-| `issuer` | The issuer identifier of the node's authorization server (RFC 8414 §2), in its canonical form. `https` outside the development profile. |
-| `grant` | `client_credentials` or `token_exchange`. `authorization_code` refuses the configuration. |
-| `client_id` | The client the server registered the gateway as, the assertion's `iss` and `sub`. On the §B.4a track, the organisation's URA-based identifier. |
-| `client_auth` | `private_key_jwt`, when unset, or `tls_client_auth` or `self_signed_tls_client_auth`, the node section's certificate ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)). |
-| `client_key_file` | The key every assertion is signed with: a P-256 private key in PKCS#8 PEM. The profile admits PS256, ES256 and EdDSA for a JWT (§5.4.1), so a P-384 key cannot sign here. Required with `private_key_jwt`, and with `token_exchange` for the actor token. |
-| `previous_client_key_file` | Optional, while the client key is rotated: the previous client key, a P-256 private key in PKCS#8 PEM. It is published beside the current key until you remove it, and it never signs. |
-| `dpop_key_file` | A P-256 private key in PKCS#8 PEM. Required unless the tokens are bound to the certificate: the profile issues only sender-constrained tokens (§5.3.2.1). |
-| `tls_client_certificate_bound_access_tokens` | `true` binds the tokens to the node section's certificate in place of `DPoP` (§5.3.2.1; RFC 8705 §3). Never beside `dpop_key_file`. |
-| `scope` | Optional SMART on openEHR `system` scopes, as in an `oauth2` section. |
-| `authorization_details` | Optional JSON text: an array of RFC 9396 §2 objects, each with a `type`. It is sent as written. |
-| `resource`, `audience` | As in an `oauth2` section; `resource` is required by `token_exchange`. |
-
-`scope` and `authorization_details` are each optional, and one of them is
-required, so the server never chooses what a token may do (FAPI 2.0
-§5.3.3.1: least privilege). A `fapi2` section needs `[signing]`: the
-gateway publishes the public half of `client_key_file`'s key in its JWK Set,
-beside the `[signing]` keys, and the authorization server verifies the
-assertion against it (§5.4.2; Annex B §B.4a.2), and `assertion_lifetime_s`
-sets how long each assertion lives. To make the two keys:
+The gateway publishes the public half of `private_key_file`'s key in its
+JWK Set, beside the `[signing]` keys, and the authorization server
+verifies the assertion against it (§5.4.2; Annex B §B.4a.2). To make the
+two keys:
 
 ```text
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out fapi2-client.pem
@@ -614,7 +626,7 @@ openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out cdr-e-dpop.p
 ```
 
 To rotate the client key, make a new P-256 key, set it as
-`client_key_file`, move the old one to `previous_client_key_file`, and
+`private_key_file`, move the old one to `previous_private_key_file`, and
 reload or restart. The new key signs every assertion from then on, and the
 JWK Set publishes both keys, the new one first. An authorization server
 that still holds the JWK Set from before the rotation does not know the
@@ -622,12 +634,14 @@ new key, so it refuses the new assertions until it fetches the set again;
 the set it fetches then still holds the old key, so an assertion the old
 key signed before the rotation verifies too. Once every authorization
 server that verifies the grant has fetched the new set, remove
-`previous_client_key_file`. A previous key that is no P-256 key, or that
-is the current key, refuses the configuration, naming the key.
+`previous_private_key_file`, or set `previous_key_overlap_ms` to have the
+old key withdrawn on its own. `next_private_key_file` publishes a key
+ahead of the rotation that never signs. A previous key the profile does
+not admit, or that is the current key, refuses the configuration.
 
 ```toml
-client_key_file = "/run/secrets/fapi2-client-2026-10.pem"
-previous_client_key_file = "/run/secrets/fapi2-client.pem"
+private_key_file = "/run/secrets/fapi2-client-2026-10.pem"
+previous_private_key_file = "/run/secrets/fapi2-client.pem"
 ```
 
 What the gateway does not do on this track:
@@ -635,8 +649,8 @@ What the gateway does not do on this track:
 - **An authorization-endpoint flow.** The authorization code grant needs a
   user agent to redirect, with pushed authorization requests (RFC 9126) and
   PKCE, which FAPI 2.0 requires of those flows (§5.3.2.2, §5.3.3.2). A
-  server-to-server gateway has no user agent, so `grant =
-  "authorization_code"` refuses the configuration. The client-credentials
+  server-to-server gateway has no user agent, and the `oauth` table runs the
+  client-credentials grant alone. The client-credentials
   grant is admitted under the profile's general requirements (§5.3.2.1
   Note 2).
 - **Purpose of use per caller.** `purpose_of_use` and
@@ -659,9 +673,9 @@ request to a node carries the caller's identity in an
 `openEHR-federation-client` token signed with the current key
 ([What a node is told about the caller](caller-token.md);
 §13.1, N24), and a federating gateway without the key refuses to start,
-naming it. The current key signs every client assertion of an `oauth2`
-grant too. A key on another curve refuses the configuration, naming the
-key. To make a key:
+naming it. A grant's client assertions are signed with the `oauth` table's
+own `private_key_file`, never with `[signing]`. A key on another curve
+refuses the configuration, naming the key. To make a key:
 
 ```text
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out ferrofed-signing-key.pem
@@ -682,9 +696,9 @@ declares `jwks_uri` as `federation.auth.jwks_uri` in `OPTIONS {base}/`
 (§13.1, N30). Point `jwks_uri` at that route on the gateway's public
 address, or at wherever your deployment publishes the keys. Each key's `kid`
 is its RFC 7638 thumbprint, so the same key always has the same `kid`. The
-set also publishes the ES256 client key of every `fapi2` section, and its
-previous client key while it is rotated, after the `[signing]` keys; a
-reload that changes a `fapi2` key publishes the new one.
+set also publishes the `private_key_file` key of every `oauth` grant, with
+its previous and next keys, after the `[signing]` keys; a reload that
+changes one publishes the new key.
 
 ### Rotating the signing key
 
@@ -700,16 +714,16 @@ own `kid`:
 A node verifies a token by its `kid` (RFC 7515 §4.1.4) against the JWK Set
 it fetched (RFC 7517 §5), and may hold that set for its cache time. A key
 must therefore be in the set a node holds before any gateway signs with it,
-and stay there until every token it signed has expired. The tokens the
-gateway signs live at most `assertion_lifetime_s` (the client assertion,
-300 s at most) or 60 s (the `openEHR-federation-client` token), whichever
-is longer.
+and stay there until every token it signed has expired. The gateway gives
+a token its `[signing]` keys sign at most 300 seconds; the
+`openEHR-federation-client` token lives 60.
 
 The procedure assumes that no node caches the JWK Set longer than
 `node_jwks_cache_s` (3600 s by default). Set it to the longest cache time of
 your nodes and their authorization servers; `config check` refuses a
-`rotation_overlap_s` shorter than `assertion_lifetime_s` plus
-`node_jwks_cache_s`. The three steps hold for one gateway and for any
+`rotation_overlap_s` shorter than 300 seconds plus `node_jwks_cache_s`.
+`assertion_lifetime_s`, which earlier releases took here, is refused at
+load: no `[signing]` key signs a client assertion any more. The three steps hold for one gateway and for any
 number of replicas behind one address:
 
 1. **Publish the new key.** Make the new key, copy it to every replica, set

@@ -100,13 +100,13 @@ your records of processing
 ## 5. Retire the keys
 
 The gateway signs the `openEHR-federation-client` token of every request
-to a node and the client assertions of its `oauth2` grants with the key of
-`[signing]`, a FAPI 2.0 grant's assertions with its `client_key_file`, and
-publishes the public keys at `{base}/.well-known/jwks.json`
+to a node with the key of `[signing]`, each `oauth` grant's client
+assertions with its `private_key_file`, and publishes the public keys at
+`{base}/.well-known/jwks.json`
 ([Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set)).
 
 1. Once the last replica has stopped, no token is signed. A token it signed
-   lives at most `assertion_lifetime_s` or 60 s, whichever is longer. Where
+   lives at most 300 s. Where
    `jwks_uri` points somewhere other than the gateway, remove the gateway's
    keys there once that time has passed.
 2. Ask each member to remove what it recorded when it admitted the gateway:
@@ -115,7 +115,7 @@ publishes the public keys at `{base}/.well-known/jwks.json`
    A member that still trusts the keys would accept a token signed with a
    copy of them.
 3. Ask each party that issued the gateway a credential to revoke it: the
-   client each member's authorization server registered for an `oauth2`
+   client each member's authorization server registered for an `oauth`
    grant, the client certificate of mutual TLS
    ([Onward credentials](onward-credentials.md)), the credentials of the
    identity services, the PMIR feed token
@@ -123,8 +123,9 @@ publishes the public keys at `{base}/.well-known/jwks.json`
    and the client the operator console is registered as at its OpenID
    Connect provider ([The operator console](operator-console.md)).
 4. Destroy the private keys and the secret files: every `[signing]` key
-   file, each `client_identity_file`, each `client_key_file`,
-   `previous_client_key_file` and `dpop_key_file`, and the files under
+   file, each `client_identity_file`, each `private_key_file`,
+   `previous_private_key_file`, `next_private_key_file` and
+   `dpop_key_file`, and the files under
    `config.secrets_dir`.
 
 ## 6. Remove the stores and the volumes

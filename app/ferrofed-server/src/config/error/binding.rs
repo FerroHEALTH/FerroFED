@@ -63,7 +63,7 @@ pub enum BindingFault {
     #[cfg(feature = "binding-nl")]
     NviGrant {
         /// The key of the refused table, such as
-        /// `nl_gf.nvi.credentials.oauth2`.
+        /// `nl_gf.nvi.credentials.oauth`.
         key: String,
     },
     /// A `[nl_gf.mitz]` value the closed authorization question does not

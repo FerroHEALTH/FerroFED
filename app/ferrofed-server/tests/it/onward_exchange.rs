@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! Token exchange and `DPoP` through the real configuration path: a node
-//! whose grant is `token_exchange` receives a token exchanged for the caller
-//! the gate verified, asked for the caller's scopes that cover the
-//! operation and naming the node as its resource; a caller the edge
-//! asserted fails that node with nothing sent; a grant with a `DPoP` key
-//! proves every request to its node and token endpoint (§13.1, N25, N26,
-//! CP-17; RFC 8693 §2, RFC 8707 §2, RFC 9449).
+//! whose `oauth` table has an onward table beside it, naming the gateway as
+//! the actor, receives a token exchanged for the caller the gate verified,
+//! asked for the caller's scopes that cover the operation and naming the
+//! node as its resource; a caller the edge asserted fails that node with
+//! nothing sent; a grant with a `DPoP` key proves every request to its node
+//! and token endpoint (§13.1, N25, N26, CP-17; RFC 8693 §2, RFC 8707 §2,
+//! RFC 9449).
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -24,12 +25,12 @@ use axum::body::Body;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::auth::{AuthMode, AuthSettings, IssuerSettings};
 use ferrofed_server::config::error::Error as ConfigError;
-use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, Exchanged, TokenEndpoint};
 use ferrofed_testkit::unreachable;
+use ferrohealth_smart::config::ConfigError as SmartError;
 use ferrohealth_telemetry::section::Rendering;
 use http::{HeaderName, Request, StatusCode, header};
 use jsonwebtoken::jwk::JwkSet;
@@ -63,12 +64,44 @@ const COVERING: &str = "user/aql-*.cruds";
 const ONE_ROW: &str =
     r##"{"q":"node","columns":[{"name":"#0","path":"c/uid/value"}],"rows":[["uid-at-a"]]}"##;
 
-/// The `[credentials]` table of node A's token-exchange grant at
-/// `token_url`, with `extra` keys.
-fn exchange_grant(token_url: &str, extra: &str) -> String {
-    format!(
-        "[credentials.\"node-a-pub\".oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n{extra}"
-    )
+/// A fresh P-384 key written to `dir/name`, as a TOML string of its path.
+fn key_file(dir: &Path, name: &str) -> Result<toml::Value, Box<dyn Error>> {
+    let path = dir.join(name);
+    std::fs::write(&path, oauth::Curve::P384.pem()?)?;
+    Ok(toml::Value::String(path.display().to_string()))
+}
+
+/// Node A's `private_key_jwt` grant at `token_url`, its key written under
+/// `dir`, with `extra` keys.
+fn own_grant(dir: &Path, token_url: &str, extra: &str) -> Result<String, Box<dyn Error>> {
+    let key = key_file(dir, "client.pem")?;
+    Ok(format!(
+        "[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\nprivate_key_file = {key}\nassertion_alg = \"ES384\"\n{extra}"
+    ))
+}
+
+/// Node A's grant at `token_url` and the onward table beside it, which
+/// exchanges a person's token at the suite's issuer for [`RESOURCE`] and
+/// names the gateway as the actor, with `onward` keys.
+fn exchange_grant(dir: &Path, token_url: &str, onward: &str) -> Result<String, Box<dyn Error>> {
+    Ok(format!(
+        "{}\n[credentials.\"node-a-pub\".onward]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\nprofile = \"rfc9068\"\ntoken_endpoint = \"{token_url}\"\nactor_assertion = true\n{onward}\n[credentials.\"node-a-pub\".onward.keys]\nmax_onward_lifetime = 3600\n",
+        own_grant(dir, token_url, "")?
+    ))
+}
+
+/// The onward keys that name node A as the audience and the resource.
+fn targeted() -> String {
+    format!("audiences = [\"{RESOURCE}\"]\nindicators = [\"{RESOURCE}\"]\n")
+}
+
+/// The harness token endpoint exchanging the callers of `issuer` at `name`
+/// for tokens of the suite's issuer.
+async fn exchanging(name: &str, jwks: JwkSet) -> TokenEndpoint {
+    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
+    endpoint.accept_exchange(jwks, name);
+    endpoint.issue_onward_tokens(ISSUER);
+    endpoint
 }
 
 /// The gateway over node A at `a` and an unreachable node B, the patient
@@ -153,15 +186,11 @@ fn patient_post(authorization: &str) -> Result<Request<Body>, Box<dyn Error>> {
 // conformance: CP-17
 #[tokio::test]
 async fn node_a_receives_a_token_exchanged_for_the_verified_caller() -> TestResult {
-    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.accept_exchange(issuer().jwks(), ISSUER);
+    let endpoint = exchanging(ISSUER, issuer().jwks()).await;
     endpoint.expect_resource(RESOURCE);
     let a = node(endpoint.bearer_for(CALLER)).await;
     let dir = tempfile::tempdir()?;
-    let tables = exchange_grant(
-        &endpoint.token_url(),
-        &format!("resource = \"{RESOURCE}\"\n"),
-    );
+    let tables = exchange_grant(dir.path(), &endpoint.token_url(), &targeted())?;
     let app = gateway(
         dir.path(),
         &a.uri(),
@@ -199,14 +228,10 @@ async fn node_a_receives_a_token_exchanged_for_the_verified_caller() -> TestResu
 // conformance: CP-17
 #[tokio::test]
 async fn the_exchange_asks_for_the_covering_scope_in_canonical_form() -> TestResult {
-    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.accept_exchange(issuer().jwks(), ISSUER);
+    let endpoint = exchanging(ISSUER, issuer().jwks()).await;
     let a = node(endpoint.bearer_for(CALLER)).await;
     let dir = tempfile::tempdir()?;
-    let tables = exchange_grant(
-        &endpoint.token_url(),
-        &format!("resource = \"{RESOURCE}\"\n"),
-    );
+    let tables = exchange_grant(dir.path(), &endpoint.token_url(), &targeted())?;
     let app = gateway(
         dir.path(),
         &a.uri(),
@@ -241,14 +266,10 @@ async fn the_exchange_asks_for_the_covering_scope_in_canonical_form() -> TestRes
 // conformance: CP-16 CP-17
 #[tokio::test]
 async fn the_callers_token_reaches_no_log_span_metric_or_conveyed_claim() -> TestResult {
-    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.accept_exchange(issuer().jwks(), ISSUER);
+    let endpoint = exchanging(ISSUER, issuer().jwks()).await;
     let a = node(endpoint.bearer_for(CALLER)).await;
     let dir = tempfile::tempdir()?;
-    let tables = exchange_grant(
-        &endpoint.token_url(),
-        &format!("resource = \"{RESOURCE}\"\n"),
-    );
+    let tables = exchange_grant(dir.path(), &endpoint.token_url(), &targeted())?;
     let (app, state) = served(
         dir.path(),
         &a.uri(),
@@ -320,14 +341,10 @@ const EDGE: &str = "https://edge.example.test";
 #[tokio::test]
 async fn an_edge_asserted_caller_fails_an_exchanging_node_with_nothing_sent() -> TestResult {
     let edge = Issuer::new(EDGE)?;
-    let endpoint = TokenEndpoint::start(CLIENT_ID, Some(300)).await;
-    endpoint.accept_exchange(edge.jwks(), EDGE);
+    let endpoint = exchanging(EDGE, edge.jwks()).await;
     let a = node(endpoint.bearer()).await;
     let dir = tempfile::tempdir()?;
-    let tables = exchange_grant(
-        &endpoint.token_url(),
-        &format!("resource = \"{RESOURCE}\"\n"),
-    );
+    let tables = exchange_grant(dir.path(), &endpoint.token_url(), &targeted())?;
     let auth = AuthSettings {
         mode: AuthMode::Edge(HeaderName::from_static(EDGE_HEADER)),
         issuers: vec![IssuerSettings::new(
@@ -374,10 +391,11 @@ async fn a_dpop_bound_grant_proves_every_request_to_its_node() -> TestResult {
     let key = dir.path().join("dpop.pem");
     std::fs::write(&key, oauth::Curve::P256.pem()?)?;
     let key = toml::Value::String(key.display().to_string());
-    let tables = format!(
-        "[credentials.\"node-a-pub\".oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\ndpop_key_file = {key}\n",
-        endpoint.token_url()
-    );
+    let tables = own_grant(
+        dir.path(),
+        &endpoint.token_url(),
+        &format!("dpop_key_file = {key}\n"),
+    )?;
     let app = gateway(
         dir.path(),
         &a.uri(),
@@ -392,8 +410,8 @@ async fn a_dpop_bound_grant_proves_every_request_to_its_node() -> TestResult {
     Ok(())
 }
 
-/// The configuration refuses a token-exchange grant that names no node as
-/// its resource, and a `DPoP` key that is no EC key, naming each key and
+/// The configuration refuses an onward table that names no node as its
+/// audience, and a `DPoP` key that is no EC key, naming each table and
 /// quoting no part of the file (RFC 8707 §2, RFC 9449).
 #[test]
 fn the_configuration_refuses_an_exchange_without_a_resource_and_a_bad_dpop_key() -> TestResult {
@@ -404,22 +422,37 @@ fn the_configuration_refuses_an_exchange_without_a_resource_and_a_bad_dpop_key()
             Err(error) => Ok(error),
         }
     };
-    let error = resolve(&exchange_grant("https://idp.example.org/token", ""))?;
+    let error = resolve(&exchange_grant(
+        dir.path(),
+        "https://idp.example.org/token",
+        "",
+    )?)?;
     assert!(
-        matches!(&error, ConfigError::Missing { key } if key == "credentials.node-a-pub.oauth2.resource"),
+        matches!(
+            &error,
+            ConfigError::Smart { section, source }
+                if section == "credentials.node-a-pub.onward"
+                    && matches!(source.as_ref(), SmartError::Missing { key } if *key == "credentials.onward.audiences")
+        ),
         "{error:?}"
     );
     let bad = dir.path().join("bad.pem");
     std::fs::write(&bad, "Qz7-not-a-key\n")?;
     let bad = toml::Value::String(bad.display().to_string());
-    let error = resolve(&exchange_grant(
+    let error = resolve(&own_grant(
+        dir.path(),
         "https://idp.example.org/token",
-        &format!("resource = \"{RESOURCE}\"\ndpop_key_file = {bad}\n"),
-    ))?;
+        &format!("dpop_key_file = {bad}\n"),
+    )?)?;
     assert!(
-        matches!(&error, ConfigError::Credentials(CredentialsFault::DpopKey { key, .. }) if key == "credentials.node-a-pub.oauth2.dpop_key_file"),
+        matches!(
+            &error,
+            ConfigError::Smart { section, source }
+                if section == "credentials.node-a-pub.oauth"
+                    && matches!(source.as_ref(), SmartError::DpopKey { .. })
+        ),
         "{error:?}"
     );
-    assert!(!format!("{error}").contains("Qz7"), "{error}");
+    assert!(!format!("{error} {error:?}").contains("Qz7"), "{error}");
     Ok(())
 }

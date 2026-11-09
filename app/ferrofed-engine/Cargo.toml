@@ -97,6 +97,9 @@ ihe-iti = { workspace = true, features = ["authorizer"] }
 nl-generic-functions = { workspace = true, features = ["nuts-auth", "nvi"] }
 # The HTTP client the Nuts grant's tests hand its client (#88).
 reqwest.workspace = true
+# The TLS configuration the mutual-TLS tests hand a grant as the material a
+# node's section presents (#1749).
+rustls.workspace = true
 # The federation caller an onward lane test exchanges (#1703).
 ferrohealth-smart = { workspace = true, features = ["test-support"] }
 serde_json.workspace = true

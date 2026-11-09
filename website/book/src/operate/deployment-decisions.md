@@ -38,7 +38,7 @@ organisation register: whether the issuer may speak for that organisation is
 the trust you place in the issuer when you list it.
 
 **From the gateway to each node.** The gateway authenticates as itself. With
-an `oauth2` section for the endpoint, it signs an RFC 7523 client assertion
+an `oauth` section for the endpoint, it signs an RFC 7523 client assertion
 naming the `client_id` the node's authorization server registered for it,
 and the node's authorization server verifies it against the gateway's
 published JWK Set and its own client registry. With `client_auth =
@@ -54,7 +54,7 @@ presents its certificate. Every request also carries the
 **What changes the answer:** `[auth]` issuers and `[[trust.issuer]]` (the
 trust list, by key set or introspection, with each issuer's `kind` and
 `audience`), `trust.mode`,
-`[credentials."<endpoint id>"]` and its `oauth2` section, and `[signing]`.
+`[credentials."<endpoint id>"]` and its `oauth` section, and `[signing]`.
 
 ## 2. Who authenticates the end user, and where that trust stops
 
@@ -114,7 +114,8 @@ The gateway relays every purpose the token declares to each node in the
 `purpose_of_use` claim of `openEHR-federation-client`, so the node makes its
 release and consent decision against it (N26, N27).
 
-A `fapi2` section states a purpose to that node's authorization server as
+An `oauth` section under `security_profile = "fapi2"` states a purpose to
+that node's authorization server as
 well: the `purpose_of_use`, and for the query use case the
 `subject_organisation_type`, of its configured `authorization_details`
 (Annex B §B.4a.3). They are configured per endpoint and are the same for
@@ -139,15 +140,15 @@ is a bearer token whose audience is the gateway, and it reaches no node, so
 it cannot be replayed at one; under token exchange it reaches the node's
 authorization server as the subject of the exchange. The token the gateway
 obtains from a node's authorization server is a bearer token, kept until 30
-seconds before it expires and audience-restricted when the `oauth2` section
+seconds before it expires and audience-restricted when the `oauth` section
 names a `resource` (RFC 8707) or an `audience`, unless the section names a
 `dpop_key_file`: the token is then bound to that key with DPoP (RFC 9449),
 and a node can refuse it from anyone who does not hold the key
 ([Tokens bound to a key](onward-credentials.md#tokens-bound-to-a-key-dpop)). The
 `openEHR-federation-client` token lives 60 seconds, names one node as its
 `aud`, and carries a fresh `jti`, so a node that records `jti` values can
-refuse a replay within that window. An `oauth2` or `fapi2` section with
-`tls_client_certificate_bound_access_tokens = true` takes only tokens bound
+refuse a replay within that window. An `oauth` section with
+`certificate_bound = true` takes only tokens bound
 to the gateway's TLS client certificate (RFC 8705 §3), sends them only over
 connections that present it, and refuses one whose stated binding names
 another certificate
@@ -155,7 +156,8 @@ another certificate
 A `nuts` section binds every token with DPoP, as the Dutch
 binding's Nuts track requires
 ([The Nuts grant](onward-credentials.md#the-nuts-grant-annex-b-b4)), and so
-does a `fapi2` section, with DPoP or with the certificate, since the FAPI
+does an `oauth` section under the FAPI 2.0 profile, with DPoP or with the
+certificate, since the FAPI
 2.0 Security Profile issues only sender-constrained tokens
 ([The FAPI 2.0 grant](onward-credentials.md#the-fapi-20-grant-annex-b-b4a)).
 
@@ -173,9 +175,9 @@ Otherwise a certificate the gateway presents to a node, and the XCPD
 binding's mutual TLS to a responding gateway, authenticate the connection
 alone. Record here, per node, which of the two you chose.
 
-**What changes the answer:** the `resource`, `audience`, `client_auth` and
-`tls_client_certificate_bound_access_tokens` keys of an `oauth2` or `fapi2`
-section, `tls.client_identity_file` in a node's section, and your reverse
+**What changes the answer:** the `resource`, `audience`, `client_auth`,
+`dpop_key_file`, `certificate_bound` and `security_profile` keys of an
+`oauth` section, `tls.client_identity_file` in a node's section, and your reverse
 proxy's TLS settings.
 
 ## 5. What the technique does not cover

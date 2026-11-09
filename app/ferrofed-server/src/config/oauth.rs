@@ -65,13 +65,24 @@ impl Eq for Oauth {}
 
 impl Oauth {
     /// Resolves the grant the table at `key` describes, every secret and the
-    /// assertion key read.
+    /// assertion key read, reaching its token endpoint over `presented`,
+    /// the TLS material of a node the gateway already read, when one is
+    /// given: the table then names no client certificate, key or trust roots
+    /// of its own (RFC 8705 §2, §3).
     ///
     /// # Errors
     /// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
     /// refuses.
-    pub fn resolve(&self, key: &str) -> Result<ClientCredentials, Error> {
-        self.0.resolve().map_err(|source| Error::Smart {
+    pub fn resolve(
+        &self,
+        key: &str,
+        presented: Option<ferrohealth_smart::client::PresentedTls>,
+    ) -> Result<ClientCredentials, Error> {
+        match presented {
+            Some(presented) => self.0.resolve_with_tls(presented),
+            None => self.0.resolve(),
+        }
+        .map_err(|source| Error::Smart {
             section: key.to_owned(),
             source: Box::new(source),
         })
@@ -127,12 +138,22 @@ impl Onward {
 }
 
 /// The token endpoint `grant` names outright, which the gateway's
-/// cleartext policy holds; `None` for one discovered from the issuer, which
-/// `ferrohealth-smart` holds to `https`.
+/// cleartext policy holds; `None` for one discovered from the issuer.
 #[must_use]
 pub fn token_endpoint(grant: &ClientCredentials) -> Option<&url::Url> {
     match &grant.endpoint {
         Endpoint::Token(url) => Some(url),
         Endpoint::Issuer(_) => None,
+    }
+}
+
+/// The issuer `grant` discovers its token endpoint from, which the
+/// gateway's cleartext policy holds as it holds a token endpoint:
+/// `ferrohealth-smart` admits a loopback `http` issuer under any profile.
+#[must_use]
+pub fn issuer(grant: &ClientCredentials) -> Option<&str> {
+    match &grant.endpoint {
+        Endpoint::Issuer(issuer) => Some(issuer),
+        Endpoint::Token(_) => None,
     }
 }

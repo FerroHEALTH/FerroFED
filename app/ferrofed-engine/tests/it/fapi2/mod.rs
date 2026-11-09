@@ -14,7 +14,7 @@
 )]
 
 use std::error::Error;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ferrofed_engine::conveyance::Conveyance;
@@ -22,22 +22,23 @@ use ferrofed_engine::conveyance::caller::{Principal, Verification};
 use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_engine::dispatch::{DispatchOptions, NodeClient, NodeQuery, NodeReply};
 use ferrofed_engine::hygiene::Withheld;
-use ferrofed_engine::onward::authorization_details::AuthorizationDetails;
-use ferrofed_engine::onward::grant::exchange::SubjectToken;
-use ferrofed_engine::onward::grant::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
-use ferrofed_engine::onward::token::{CLIENT_ASSERTION_TYPE, GRANT_TYPE};
-use ferrofed_engine::onward::{Scope, SystemClock};
+use ferrofed_engine::onward::grant::lane::{Lane, Organisations};
+use ferrofed_engine::onward::upstream::UpstreamToken;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::dpop::{self, HEADER};
 use ferrofed_testkit::fapi::{AuthorizationServer, DETAILS_TYPE, METADATA_PATH};
 use ferrofed_testkit::issuance::Verdict;
-use ferrofed_testkit::issuer::{Claims, Issuer};
 use ferrofed_testkit::leak;
 use ferrofed_testkit::mock::{self, Server};
 use ferrofed_testkit::oauth;
-use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::assertion::{ASSERTION_TYPE, AssertionKey};
+use ferrohealth_smart::client::authorization_details::AuthorizationDetails;
 use ferrohealth_smart::client::dpop::DpopKey;
+use ferrohealth_smart::client::fapi2::{Fapi2, SecurityProfile};
+use ferrohealth_smart::client::{AssertionAudience as Audience, ClientCredentials, Endpoint};
+use ferrohealth_smart::config::onward::OnwardSection;
+use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
@@ -48,6 +49,7 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use crate::conveyed::{UPSTREAM, caller, conveyance, shared};
+use crate::exchange;
 
 mod metadata;
 mod mtls;
@@ -78,14 +80,6 @@ const EMPTY_RESULT_SET: &str = r##"{"q":"SELECT c/uid/value FROM EHR e CONTAINS 
 /// A synthetic patient identifier the gateway resolved on and withholds.
 const PATIENT: &str = "SYNTHETIC-SUBJECT-9c2e";
 
-/// The issuer of the callers' tokens, its key generated once per process.
-#[expect(
-    clippy::expect_used,
-    reason = "a test process that cannot generate a key pair cannot test anything"
-)]
-static CALLERS: LazyLock<Issuer> =
-    LazyLock::new(|| Issuer::new(UPSTREAM).expect("a test key pair should generate"));
-
 /// A fresh P-256 client key.
 fn client_key() -> Result<AssertionKey, Box<dyn Error>> {
     Ok(AssertionKey::from_pem(
@@ -114,22 +108,27 @@ async fn server(key: &AssertionKey) -> Result<AuthorizationServer, Box<dyn Error
     Ok(server)
 }
 
-/// The grant at `server`, with `key` and `prover`, asking for [`SCOPE`] and
-/// [`DETAILS`].
+/// The FAPI 2.0 grant at `server`'s issuer, authenticating with a
+/// `private_key_jwt` assertion of `key` naming the issuer, binding its
+/// tokens to `prover`'s key, and asking for [`SCOPE`] and [`DETAILS`].
 fn grant(
     server: &AuthorizationServer,
     key: AssertionKey,
     prover: &Arc<DpopKey>,
-) -> Result<Fapi2Grant, Box<dyn Error>> {
-    Ok(Fapi2Grant::new(
-        ferrofed_engine::onward::issuer::Issuer::parse(&server.issuer())?,
-        CLIENT_ID,
-        (key, Arc::clone(prover)),
-        (
-            Some(Scope::parse(SCOPE)?),
-            Some(AuthorizationDetails::parse(DETAILS)?),
-        ),
-    )?)
+) -> Result<ClientCredentials, Box<dyn Error>> {
+    let mut grant = ClientCredentials::with_private_key_jwt(
+        Endpoint::Issuer(server.issuer()),
+        CLIENT_ID.to_owned(),
+        key,
+    )
+    .with_dpop(Arc::clone(prover));
+    grant.assertion_audience = Audience::Issuer;
+    grant.scope = Some(SCOPE.to_owned());
+    grant.authorization_details = Some(AuthorizationDetails::parse(DETAILS)?);
+    grant.profile = SecurityProfile::Fapi2(Fapi2::new());
+    grant.timeout = Duration::from_secs(5);
+    grant.validate()?;
+    Ok(grant)
 }
 
 /// The engine every request is sent through.
@@ -138,24 +137,34 @@ fn transport() -> Result<ReqwestTransport, Box<dyn Error>> {
 }
 
 /// The client-credentials provider of `grant`.
-fn provider(grant: Fapi2Grant) -> Result<Arc<Fapi2Credentials<ReqwestTransport>>, Box<dyn Error>> {
-    Ok(Arc::new(Fapi2Credentials::new(
-        EndpointId::new("node-a-pub")?,
-        grant,
-        (Duration::from_secs(300), Duration::from_secs(5)),
-        transport()?,
-        Arc::new(SystemClock),
-    )))
+fn provider(grant: ClientCredentials) -> Result<Arc<UpstreamToken>, Box<dyn Error>> {
+    Ok(UpstreamToken::provider(grant)?)
 }
 
-/// The exchange of `grant`.
-fn exchange(grant: Fapi2Grant) -> Result<Arc<Fapi2Exchange<ReqwestTransport>>, Box<dyn Error>> {
-    Ok(Arc::new(Fapi2Exchange::new(
+/// The onward lane of `grant` at `server`'s issuer, which signs the
+/// exchanged tokens, the gateway named as the actor and [`RESOURCE`] the
+/// target.
+fn exchange(
+    server: &AuthorizationServer,
+    grant: ClientCredentials,
+) -> Result<Arc<Lane>, Box<dyn Error>> {
+    server.endpoint().issue_onward_tokens(&server.issuer());
+    let section: OnwardSection = serde_json::from_value(serde_json::json!({
+        "issuer": server.issuer(),
+        "kind": "persons",
+        "profile": "rfc9068",
+        "audiences": [RESOURCE],
+        "indicators": [RESOURCE],
+        "keys": {"max_onward_lifetime": 3600, "person_equality": ["sub"]},
+        "actor_assertion": true,
+    }))?;
+    let gateway = UpstreamToken::provider(grant.clone())?;
+    let resolved = section.resolve(grant)?;
+    Ok(Arc::new(Lane::new(
         EndpointId::new("node-a-pub")?,
-        grant,
-        (Duration::from_secs(300), Duration::from_secs(5)),
-        transport()?,
-        Arc::new(SystemClock),
+        (resolved.onward, resolved.target),
+        (IssuerKind::Persons, Organisations::Refused),
+        gateway,
     )))
 }
 
@@ -234,13 +243,16 @@ struct AssertionAudience {
 
 /// A caller verified by signature, carrying a token whose `sub` is `subject`.
 fn verified_caller(subject: &str) -> Result<Conveyance, Box<dyn Error>> {
-    let mut claims = Claims::new(UPSTREAM, "urn:example:ferrofed-under-test");
-    subject.clone_into(&mut claims.sub);
-    let token = CALLERS.mint(&claims)?;
+    let token = exchange::caller_token(subject)?;
     let mut verified = caller();
     verified.verified_by = Verification::Signature;
-    Ok(Conveyance::new(shared(), Principal::Caller(verified))
-        .with_subject(SubjectToken::new(SecretString::from(token), "user/aql-*.s")))
+    Ok(
+        Conveyance::new(shared(), Principal::Caller(verified)).with_subject(exchange::subject_of(
+            &token,
+            subject,
+            "user/aql-*.s",
+        )?),
+    )
 }
 
 /// The metadata is discovered from the issuer, the token is issued for an
@@ -307,11 +319,8 @@ async fn the_token_request_names_the_issuer_and_carries_the_details() -> TestRes
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
-    assert_eq!(Some(GRANT_TYPE), field(form, "grant_type"));
-    assert_eq!(
-        Some(CLIENT_ASSERTION_TYPE),
-        field(form, "client_assertion_type")
-    );
+    assert_eq!(Some("client_credentials"), field(form, "grant_type"));
+    assert_eq!(Some(ASSERTION_TYPE), field(form, "client_assertion_type"));
     assert_eq!(Some(SCOPE), field(form, "scope"));
     assert_eq!(Some(DETAILS), field(form, "authorization_details"));
     assert_eq!(None, field(form, "client_secret"));
@@ -499,14 +508,14 @@ async fn a_failed_discovery_is_tried_again() -> TestResult {
 async fn a_verified_callers_token_is_exchanged() -> TestResult {
     let key = client_key()?;
     let server = server(&key).await?;
-    server.endpoint().accept_exchange(CALLERS.jwks(), UPSTREAM);
+    server
+        .endpoint()
+        .accept_exchange(exchange::CALLERS.jwks(), UPSTREAM);
     server.endpoint().expect_resource(RESOURCE);
     let node = node(&server).await;
     let prover = prover()?;
-    let grant = grant(&server, key, &prover)?
-        .with_resource(RESOURCE)?
-        .with_token_exchange()?;
-    let client = client(&node, &prover)?.with_on_behalf(exchange(grant)?);
+    let grant = grant(&server, key, &prover)?;
+    let client = client(&node, &prover)?.with_on_behalf(exchange(&server, grant)?);
 
     let reply = query(&client, verified_caller("clinician-0042")?).await?;
     assert_eq!(
@@ -535,13 +544,13 @@ async fn a_verified_callers_token_is_exchanged() -> TestResult {
 async fn a_callers_token_carrying_the_patient_is_never_sent() -> TestResult {
     let key = client_key()?;
     let server = server(&key).await?;
-    server.endpoint().accept_exchange(CALLERS.jwks(), UPSTREAM);
+    server
+        .endpoint()
+        .accept_exchange(exchange::CALLERS.jwks(), UPSTREAM);
     let node = node(&server).await;
     let prover = prover()?;
-    let grant = grant(&server, key, &prover)?
-        .with_resource(RESOURCE)?
-        .with_token_exchange()?;
-    let client = client(&node, &prover)?.with_on_behalf(exchange(grant)?);
+    let grant = grant(&server, key, &prover)?;
+    let client = client(&node, &prover)?.with_on_behalf(exchange(&server, grant)?);
 
     let reply = query(&client, verified_caller(PATIENT)?).await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());

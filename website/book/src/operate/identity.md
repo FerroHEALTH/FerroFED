@@ -144,8 +144,10 @@ scope = "*"                             # the scopes the Manager's server define
 - `token_endpoint` is `https` outside the development profile: the client
   secret or assertion travels to it. One discovered from `issuer` is always
   `https`.
-- An `oauth2` table, the grant of a node
-  ([Onward credentials](onward-credentials.md)), is refused here.
+- The `oauth2` and `fapi2` tables of earlier releases are refused here,
+  naming the `oauth` table that replaces them, and so is an `onward`
+  table, which only a node takes
+  ([Onward credentials](onward-credentials.md)).
   `config check` names every key it refuses, and never a secret.
 
 The gateway caches the token until `refresh_margin_ms`, 30 seconds by
