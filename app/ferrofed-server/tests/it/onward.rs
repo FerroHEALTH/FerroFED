@@ -579,11 +579,11 @@ fn a_token_endpoint_that_could_carry_a_secret_is_refused() -> TestResult {
         "https://idp.example.org/token#Qz7secret",
     ] {
         let text = oauth(dir.path(), url);
-        let refused =
-            match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
-                Ok(_) => return Err(format!("{url} was accepted").into()),
-                Err(error) => error,
-            };
+        let Err(refused) =
+            Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve()
+        else {
+            return Err(format!("{url} was accepted").into());
+        };
         assert!(
             matches!(&refused, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.oauth"),
             "{refused:?}"
