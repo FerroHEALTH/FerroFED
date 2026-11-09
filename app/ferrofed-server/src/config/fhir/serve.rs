@@ -153,14 +153,7 @@ impl Fhir {
                     })
                 };
                 let text = read(template)?;
-                let mut archetypes = Vec::with_capacity(declared.archetypes.len());
-                for path in &declared.archetypes {
-                    let name = path
-                        .file_name()
-                        .map(|name| name.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    archetypes.push((name, read(path)?));
-                }
+                let archetypes = super::archetypes(&declared.archetypes, |path| read(path))?;
                 // NOTE: no specification governs this: our own design; an OPT 1.4 is named `.opt`,
                 // and any other template is read as ADL 2 with its archetypes.
                 let written = if template

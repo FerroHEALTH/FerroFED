@@ -136,7 +136,10 @@ LOINC `34105-7` names, and mapped by the `mappings::HDR` project (context
 `ferrobridge_eu_hdr.context`). Declare each category's member with its own
 `[[fhir.receive]]`, as the laboratory example above shows: the category's
 package and its dependency closure, the template the project maps over and
-every file of the project in its order.
+every file of the project in its order. The discharge project maps
+FerroBRIDGE's ADL 2 template, so its entry names the `.adlt` template with
+every archetype it holds in `archetypes`
+([Discharge reports the gateway receives](../integrate/discharge-reports.md#discharge-reports-the-gateway-receives)).
 
 ## Inserted by the person
 

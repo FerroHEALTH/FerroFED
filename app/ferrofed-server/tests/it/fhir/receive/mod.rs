@@ -12,6 +12,7 @@
 mod audit;
 mod check;
 mod discharge;
+mod discharge_received;
 mod display;
 mod imaging;
 mod inserted;

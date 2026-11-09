@@ -12,9 +12,9 @@ you ([Reading a member's document](patient-summary.md#reading-a-members-document
 The gateway also writes a discharge report from a member's openEHR
 composition when you declare the template those compositions are of
 ([Discharge reports the gateway writes](#discharge-reports-the-gateway-writes)).
-It receives no discharge report yet: holding a received report to its
-profiles needs the HL7 Europe Hospital Discharge Report package's
-dependency closure, which the gateway cannot load yet.
+It also receives a discharge report and writes it to the member you
+declare for the category
+([Discharge reports the gateway receives](#discharge-reports-the-gateway-receives)).
 
 ## Discharge reports in the list
 
@@ -82,6 +82,52 @@ mapped entry. A composition that does not map answers `424`, and a member
 whose binding names no patient in `fhir.receive_namespaces` answers `424`.
 Completeness and the access record follow the laboratory report's
 ([Laboratory reports the gateway writes](laboratory-reports.md)).
+
+## Discharge reports the gateway receives
+
+Declare the member that stores received discharge reports in a
+`[[fhir.receive]]` entry, with the HL7 Europe Hospital Discharge Report
+1.0.0 package, its dependency closure, FerroBRIDGE's ADL 2 discharge report
+template with its archetypes, and the HDR project `eehrxf` ships:
+
+```toml
+[[fhir.receive]]
+category = "Discharge-Reports"
+member = "node-a"
+package = "/etc/ferrofed/packages/hl7.fhir.eu.hdr-1.0.0.tgz"
+dependencies = [
+  # the Patient Summary's closure, as in the patient summary example, and:
+  "/etc/ferrofed/packages/hl7.fhir.uv.ips-2.0.1.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-7.2.0.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-7.4.0.tgz",
+  "/etc/ferrofed/packages/xtehr.eu.ehds.models-1.0.0.tgz",
+]
+template = "/etc/ferrofed/templates/ferrobridge_discharge_report.adlt"
+archetypes = [
+  "/etc/ferrofed/archetypes/openEHR-EHR-COMPOSITION.transfer_summary.v1.adl",
+  # and every archetype the template specialises or fills a slot with
+]
+files = [
+  "/etc/ferrofed/mappings/hdr/ferrobridge_eu_hdr.context.yml",
+  # and every other file of the HDR project, in its order
+]
+context = "ferrobridge_eu_hdr.context"
+language = "en"
+territory = "NL"
+```
+
+- The Xt-EHR models package `xtehr.eu.ehds.models` 1.0.0, which the HDR
+  package names, declares FHIR 5.0.0. FerroBRIDGE's validator holds it in
+  the set unread, so none of its own R5 dependencies is needed.
+- A document whose `Composition.type` is LOINC `34105-7` is held to every
+  constraint of `bundle-eu-hdr` and `composition-eu-hdr`, and of the
+  profiles its entries claim, before anything reaches a member. A document
+  that breaks one is refused `422` and no member is asked.
+- The document is mapped into one composition of the template, the report
+  kept byte for byte in its `FEEDER_AUDIT.original_content`, and written to
+  the declared member by its own `ehr_id` alone, as a
+  [received patient summary](../evaluate/receiving-documents.md) is. Each
+  receipt is recorded once under `Discharge-Reports` in the access log.
 
 ## A member's own discharge reports
 

@@ -121,7 +121,21 @@ pub enum MapModeError {
     Resource(#[source] fhir_types::codec::EncodeError),
 }
 
-impl Template<'_> {
+impl<'a> Template<'a> {
+    /// Returns the template `text` is: an OPT 1.4 when `archetypes` is
+    /// empty, an ADL 2 template over `archetypes` otherwise.
+    #[must_use]
+    pub fn of(text: &'a str, archetypes: &'a [(String, String)]) -> Self {
+        if archetypes.is_empty() {
+            Self::Opt14(text)
+        } else {
+            Self::Adl2 {
+                template: text,
+                archetypes,
+            }
+        }
+    }
+
     /// Returns the operational template, read from an OPT 1.4 or built from an
     /// ADL 2 template and its archetypes.
     ///

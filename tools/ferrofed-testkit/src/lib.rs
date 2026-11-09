@@ -136,6 +136,7 @@ pub mod proxy;
 pub mod reference;
 pub mod revocation;
 pub mod seed;
+mod sender;
 pub mod tls;
 pub mod unreachable;
 pub mod xcpd;
