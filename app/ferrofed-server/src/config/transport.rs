@@ -269,16 +269,25 @@ fn credential_sites(
                 ),
             ));
         }
-        if let Scheme::Oauth { grant, .. } = scheme
-            && let Some(endpoint) = crate::config::oauth::token_endpoint(grant)
-        {
-            sites.push((
-                endpoint.as_str().to_owned(),
-                site(
-                    format!("{section}.oauth.token_endpoint"),
-                    format!("{section}.oauth"),
-                ),
-            ));
+        if let Scheme::Oauth { grant, .. } = scheme {
+            if let Some(endpoint) = crate::config::oauth::token_endpoint(grant) {
+                sites.push((
+                    endpoint.as_str().to_owned(),
+                    site(
+                        format!("{section}.oauth.token_endpoint"),
+                        format!("{section}.oauth"),
+                    ),
+                ));
+            }
+            if let Some(issuer) = crate::config::oauth::issuer(grant) {
+                sites.push((
+                    issuer.to_owned(),
+                    site(
+                        format!("{section}.oauth.issuer"),
+                        format!("{section}.oauth"),
+                    ),
+                ));
+            }
         }
         if let Scheme::Binding(grant) = scheme {
             sites.push(grant.site(&section));

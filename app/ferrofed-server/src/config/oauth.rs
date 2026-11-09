@@ -127,12 +127,22 @@ impl Onward {
 }
 
 /// The token endpoint `grant` names outright, which the gateway's
-/// cleartext policy holds; `None` for one discovered from the issuer, which
-/// `ferrohealth-smart` holds to `https`.
+/// cleartext policy holds; `None` for one discovered from the issuer.
 #[must_use]
 pub fn token_endpoint(grant: &ClientCredentials) -> Option<&url::Url> {
     match &grant.endpoint {
         Endpoint::Token(url) => Some(url),
         Endpoint::Issuer(_) => None,
+    }
+}
+
+/// The issuer `grant` discovers its token endpoint from, which the
+/// gateway's cleartext policy holds as it holds a token endpoint:
+/// `ferrohealth-smart` admits a loopback `http` issuer under any profile.
+#[must_use]
+pub fn issuer(grant: &ClientCredentials) -> Option<&str> {
+    match &grant.endpoint {
+        Endpoint::Issuer(issuer) => Some(issuer),
+        Endpoint::Token(_) => None,
     }
 }

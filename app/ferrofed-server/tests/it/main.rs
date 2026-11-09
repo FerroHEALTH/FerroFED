@@ -79,7 +79,7 @@ mod node_profile;
 mod nvi_nuts;
 mod onward;
 mod onward_exchange;
-// mod onward_fapi2;
+mod onward_fapi2;
 mod onward_lane;
 // mod onward_mtls;
 #[cfg(feature = "binding-nl")]

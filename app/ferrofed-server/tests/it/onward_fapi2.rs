@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The FAPI 2.0 grant through the real configuration path: node A, whose
-//! `[credentials]` name a `fapi2` grant, receives a `DPoP`-bound token the
-//! harness FAPI 2.0 authorization server issued for an ES256 assertion it
-//! verified against the client key the gateway publishes in its JWK Set; a
-//! refused grant fails node A with nothing sent to it and no log, metric or
-//! answer carrying an assertion or a key; and the configuration refuses a
-//! grant it cannot use, the `oauth2` assertion audience included (§13.1,
+//! `oauth` table sets `security_profile = "fapi2"`, receives a `DPoP`-bound
+//! token the harness FAPI 2.0 authorization server issued for an ES256
+//! assertion it verified against the client key the gateway publishes in its
+//! JWK Set; a refused grant fails node A with nothing sent to it and no log,
+//! metric or answer carrying an assertion or a key; and the configuration
+//! refuses a grant it cannot use, the assertion audience included (§13.1,
 //! §13.3, N25, CP-17; Annex B §B.4a; FAPI 2.0 Security Profile §5.3.2.1,
 //! §5.3.3.1, §5.4.1, §5.4.2; RFC 9396; RFC 9449). Every identifier and key
 //! is synthetic.
@@ -24,12 +24,9 @@ use std::sync::Arc;
 use crate::support::console::traced;
 use axum::Router;
 use axum::body::Body;
-use ferrofed_engine::onward::AssertionAudience;
-use ferrofed_engine::onward::grant::fapi2::Fapi2GrantError;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::credentials::CredentialsFault;
-use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_server::config::transport;
 use ferrofed_server::state::AppState;
@@ -38,6 +35,9 @@ use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth;
 use ferrofed_testkit::unreachable;
 use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::fapi2::Fapi2Error;
+use ferrohealth_smart::client::{AssertionAudience, Endpoint, TokenError};
+use ferrohealth_smart::config::ConfigError as SmartError;
 use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
 use jsonwebtoken::Algorithm;
@@ -86,7 +86,7 @@ async fn material(dir: &Path) -> Result<(AuthorizationServer, Material), Box<dyn
     let client = file("fapi2-client.pem", &client_pem)?;
     let dpop = file("fapi2-dpop.pem", &oauth::Curve::P256.pem()?)?;
     let tables = format!(
-        "[credentials.\"node-a-pub\".fapi2]\nissuer = \"{}\"\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\nclient_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\nauthorization_details = '''{DETAILS}'''\n",
+        "[credentials.\"node-a-pub\".oauth]\nissuer = \"{}\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nassertion_audience = \"issuer\"\nprivate_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\nauthorization_details = '''{DETAILS}'''\n",
         authority.issuer()
     );
     Ok((authority, Material { tables, client_pem }))
@@ -262,17 +262,33 @@ fn with_line(tables: &str, key: &str, line: &str) -> String {
     text
 }
 
+/// Whether `error` is the crate's refusal of node A's `oauth` table that
+/// `expected` admits.
+fn smart(error: &ConfigError, expected: impl Fn(&SmartError) -> bool) -> bool {
+    matches!(error, ConfigError::Smart { section, source }
+        if section == "credentials.node-a-pub.oauth" && expected(source))
+}
+
+/// Whether `error` is the crate's FAPI 2.0 refusal `expected` admits.
+fn fapi2(error: &ConfigError, expected: impl Fn(&Fapi2Error) -> bool) -> bool {
+    smart(error, |refused| {
+        matches!(refused, SmartError::Grant { source }
+            if matches!(source.as_ref(), TokenError::Fapi2 { source } if expected(source)))
+    })
+}
+
 /// The configuration refuses a FAPI 2.0 grant it cannot use: beside another
-/// scheme, the authorization code grant, keys that do not sign ES256, no
-/// `DPoP` key, details outside RFC 9396 §2, nothing asked for, an exchange
-/// without a resource, and an issuer outside RFC 8414 §2.
+/// scheme, a grant other than the client credentials one, keys that do not
+/// sign an algorithm the profile admits, no `DPoP` key, details outside RFC
+/// 9396 §2, nothing asked for, an exchange without a target, and an issuer
+/// outside RFC 8414 §2.
 #[tokio::test]
 async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
     let dir = tempfile::tempdir()?;
     let (_authority, material) = material(dir.path()).await?;
     let tables = &material.tables;
 
-    let both = format!("{tables}\n[credentials.\"node-a-pub\".oauth2]\nclient_id = \"x\"\n");
+    let both = format!("{tables}\n[credentials.\"node-a-pub\"]\nuser = \"x\"\npassword = \"y\"\n");
     let error = refused(&both)?;
     assert!(
         matches!(
@@ -282,17 +298,13 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
         "{error:?}"
     );
 
-    let error = refused(&with_line(
-        tables,
-        "grant",
-        "grant = \"authorization_code\"",
-    ))?;
+    let flow = format!("{tables}grant = \"authorization_code\"\n");
+    let refused_flow = Config::from_sources(Some(&signed(&flow)), &BTreeMap::new())
+        .err()
+        .ok_or("a user-agent grant is refused at load")?;
     assert!(
-        matches!(
-            error,
-            ConfigError::GrantFault(GrantFault::UserAgentFlow { .. })
-        ),
-        "{error:?}"
+        format!("{refused_flow:?}").contains("grant"),
+        "{refused_flow:?}"
     );
 
     let p384 = dir.path().join("p384.pem");
@@ -300,11 +312,17 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
     let p384 = toml::Value::String(p384.display().to_string());
     let error = refused(&with_line(
         tables,
-        "client_key_file",
-        &format!("client_key_file = {p384}"),
+        "private_key_file",
+        &format!("private_key_file = {p384}"),
     ))?;
     assert!(
-        matches!(error, ConfigError::GrantFault(GrantFault::ClientKey { .. })),
+        fapi2(&error, |refused| matches!(
+            refused,
+            Fapi2Error::Algorithm {
+                role: "assertion",
+                ..
+            }
+        )),
         "{error:?}"
     );
     let error = refused(&with_line(
@@ -313,19 +331,16 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
         &format!("dpop_key_file = {p384}"),
     ))?;
     assert!(
-        matches!(
-            error,
-            ConfigError::GrantFault(GrantFault::Fapi2 {
-                source: Fapi2GrantError::DpopKey,
-                ..
-            })
-        ),
+        fapi2(&error, |refused| matches!(
+            refused,
+            Fapi2Error::Algorithm { role: "DPoP", .. }
+        )),
         "{error:?}"
     );
 
     let error = refused(&with_line(tables, "dpop_key_file", ""))?;
     assert!(
-        matches!(&error, ConfigError::Missing { key } if key == "credentials.node-a-pub.fapi2.dpop_key_file"),
+        fapi2(&error, |refused| matches!(refused, Fapi2Error::Unbound)),
         "{error:?}"
     );
 
@@ -335,29 +350,28 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
         "authorization_details = '[{\"actions\": [\"read\"]}]'",
     ))?;
     assert!(
-        matches!(
-            error,
-            ConfigError::GrantFault(GrantFault::AuthorizationDetails { .. })
-        ),
+        smart(&error, |refused| matches!(
+            refused,
+            SmartError::AuthorizationDetails { .. }
+        )),
         "{error:?}"
     );
 
     let unrequested = with_line(&with_line(tables, "scope", ""), "authorization_details", "");
     let error = refused(&unrequested)?;
     assert!(
-        matches!(
-            error,
-            ConfigError::GrantFault(GrantFault::Fapi2 {
-                source: Fapi2GrantError::Unrequested,
-                ..
-            })
-        ),
+        fapi2(&error, |refused| matches!(refused, Fapi2Error::Unrequested)),
         "{error:?}"
     );
 
-    let error = refused(&with_line(tables, "grant", "grant = \"token_exchange\""))?;
+    let untargeted = format!(
+        "{tables}\n[credentials.\"node-a-pub\".onward]\nissuer = \"https://as.example.org\"\nkind = \"persons\"\nprofile = \"rfc9068\"\nactor_assertion = true\n\n[credentials.\"node-a-pub\".onward.keys]\nmax_onward_lifetime = 3600\n"
+    );
+    let error = refused(&untargeted)?;
     assert!(
-        matches!(&error, ConfigError::Missing { key } if key == "credentials.node-a-pub.fapi2.resource"),
+        matches!(&error, ConfigError::Smart { section, source }
+            if section == "credentials.node-a-pub.onward"
+                && matches!(source.as_ref(), SmartError::Missing { key } if *key == "credentials.onward.audiences")),
         "{error:?}"
     );
 
@@ -367,25 +381,41 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
         "issuer = \"https://AS.example.org/tenant?x=1\"",
     ))?;
     assert!(
-        matches!(error, ConfigError::GrantFault(GrantFault::Issuer { .. })),
+        smart(&error, |refused| matches!(
+            refused,
+            SmartError::OauthIssuer { .. }
+        )),
         "{error:?}"
     );
     Ok(())
 }
 
-/// A FAPI 2.0 grant needs `[signing]`, whose JWK Set publishes its client
-/// key (FAPI 2.0 §5.4.2).
+/// A FAPI 2.0 grant on a gateway without `[signing]` is refused: every
+/// federating gateway signs with its keys, and its JWK Set publishes the
+/// grant's client key beside them (FAPI 2.0 §5.4.2; §13.1, N24).
 #[tokio::test]
 async fn a_fapi2_grant_without_signing_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let (_authority, material) = material(dir.path()).await?;
-    let error = refused(&material.tables)?;
+    let (authority, material) = material(dir.path()).await?;
+    let a = node(authority.endpoint().dpop_bound(None)).await;
+    let document = dir.path().join("registry.toml");
+    std::fs::write(&document, registry(&a.uri(), unreachable::BASE, ""))?;
+    let document = toml::Value::String(document.display().to_string());
+    let text = format!(
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}\n{}{}",
+        crossref(&[("node-a", "2222aaaa-2222-4222-8222-222222222222")]),
+        material.tables,
+        crate::support::DEVELOPMENT_AUDIT_TOML
+    );
+    let settings = Config::from_sources(Some(&crate::support::injected(&text)), &BTreeMap::new())?
+        .resolve()?;
+    assert!(settings.signing.is_none(), "no [signing] is set");
+    let refused = AppState::build(&settings)
+        .err()
+        .ok_or("a federating gateway without [signing] is refused")?;
     assert!(
-        matches!(
-            error,
-            ConfigError::GrantFault(GrantFault::WithoutSigning { .. })
-        ),
-        "{error:?}"
+        format!("{refused}").contains("set [signing] when a registry is configured"),
+        "{refused}"
     );
     Ok(())
 }
@@ -405,51 +435,61 @@ async fn a_cleartext_issuer_is_refused_outside_development() -> TestResult {
     let Err(refused) = transport::check(&settings, None) else {
         return Err("a plain http issuer passed the transport check".into());
     };
-    assert_eq!("credentials.node-a-pub.fapi2.issuer", refused.site.url_key);
+    assert_eq!("credentials.node-a-pub.oauth.issuer", refused.site.url_key);
     Ok(())
 }
 
-/// The `oauth2` grant names the token endpoint as its assertions' `aud` by
+/// The `oauth` grant names the token endpoint as its assertions' `aud` by
 /// default, and the issuer with `assertion_audience = "issuer"`, which then
-/// needs `issuer`; an `issuer` beside the default is refused (RFC 7523 §3;
-/// FAPI 2.0 §5.3.2.1).
+/// needs `issuer`; an `issuer` beside a token endpoint is refused (RFC 7523
+/// §3; FAPI 2.0 §5.3.2.1).
 #[test]
-fn the_oauth2_assertion_audience_is_configured() -> TestResult {
-    let oauth2 = |extra: &str| {
+fn the_assertion_audience_is_configured() -> TestResult {
+    let key = toml::Value::String(crate::support::signing_key_file().to_owned());
+    let oauth = |endpoint: &str, extra: &str| {
         format!(
-            "[credentials.\"node-a-pub\".oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\nresource = \"https://node-a.example.org/openehr\"\n{extra}{}",
+            "[credentials.\"node-a-pub\".oauth]\n{endpoint}client_auth = \"private_key_jwt\"\nprivate_key_file = {key}\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n{extra}{}",
             crate::support::signing_toml()
         )
     };
-    let aud = |text: &str| -> Result<(AssertionAudience, String), Box<dyn Error>> {
+    let aud = |text: &str| -> Result<(AssertionAudience, Endpoint), Box<dyn Error>> {
         let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
         match settings.credentials.values().next() {
-            Some(Scheme::OAuth2(grant)) => Ok((
-                grant.assertion_audience().clone(),
-                grant.assertion_aud().to_owned(),
-            )),
-            other => Err(format!("an oauth2 grant, got {other:?}").into()),
+            Some(Scheme::Oauth { grant, .. }) => {
+                Ok((grant.assertion_audience, grant.endpoint.clone()))
+            }
+            other => Err(format!("an oauth grant, got {other:?}").into()),
         }
     };
-    let (audience, written) = aud(&oauth2(""))?;
+    let token = "token_endpoint = \"https://as.example.org/token\"\n";
+    let (audience, endpoint) = aud(&oauth(token, ""))?;
     assert_eq!(AssertionAudience::TokenEndpoint, audience);
-    assert_eq!("https://as.example.org/token", written);
-    let (_, written) = aud(&oauth2(
-        "assertion_audience = \"issuer\"\nissuer = \"https://as.example.org\"\n",
-    ))?;
-    assert_eq!("https://as.example.org", written);
-
-    let error = refused(&oauth2("assertion_audience = \"issuer\"\n"))?;
     assert!(
-        matches!(&error, ConfigError::Missing { key } if key == "credentials.node-a-pub.oauth2.issuer"),
+        matches!(&endpoint, Endpoint::Token(url) if url.as_str() == "https://as.example.org/token"),
+        "{endpoint:?}"
+    );
+    let issuer = "issuer = \"https://as.example.org\"\n";
+    let (audience, endpoint) = aud(&oauth(issuer, "assertion_audience = \"issuer\"\n"))?;
+    assert_eq!(AssertionAudience::Issuer, audience);
+    assert_eq!(
+        Endpoint::Issuer("https://as.example.org".to_owned()),
+        endpoint
+    );
+
+    let error = refused(&oauth(token, "assertion_audience = \"issuer\"\n"))?;
+    assert!(
+        smart(&error, |refused| matches!(
+            refused,
+            SmartError::Missing { .. }
+        )),
         "{error:?}"
     );
-    let error = refused(&oauth2("issuer = \"https://as.example.org\"\n"))?;
+    let error = refused(&oauth(token, issuer))?;
     assert!(
-        matches!(
-            error,
-            ConfigError::GrantFault(GrantFault::IssuerUnused { .. })
-        ),
+        smart(&error, |refused| matches!(
+            refused,
+            SmartError::Exclusive { .. }
+        )),
         "{error:?}"
     );
     Ok(())
@@ -501,8 +541,8 @@ async fn a_rotated_client_key_is_published_beside_the_previous_one_and_alone_sig
     std::fs::write(&new_file, &new_pem)?;
     let new_file = toml::Value::String(new_file.display().to_string());
     let rotated = material.tables.replace(
-        "client_key_file = ",
-        &format!("client_key_file = {new_file}\nprevious_client_key_file = "),
+        "private_key_file = ",
+        &format!("private_key_file = {new_file}\nprevious_private_key_file = "),
     );
     let (after, _state) = gateway(dir.path(), &a.uri(), &rotated)?;
     let rotated_set = published(&after).await?;
@@ -559,8 +599,8 @@ async fn a_rotated_client_key_is_published_beside_the_previous_one_and_alone_sig
     Ok(())
 }
 
-/// The previous client key is held to the client key's rule, a P-256 key
-/// (FAPI 2.0 §5.4.1), and is never the current key itself; the refusal
+/// The previous client key is held to the client key's rule, an algorithm
+/// FAPI 2.0 §5.4.1 admits, and is never the current key itself; the refusal
 /// quotes no part of either key.
 #[tokio::test]
 async fn the_configuration_refuses_a_previous_client_key_it_cannot_publish() -> TestResult {
@@ -570,34 +610,33 @@ async fn the_configuration_refuses_a_previous_client_key_it_cannot_publish() -> 
     std::fs::write(&p384, oauth::Curve::P384.pem()?)?;
     let p384 = toml::Value::String(p384.display().to_string());
     let error = refused(&format!(
-        "{}previous_client_key_file = {p384}\n",
+        "{}previous_private_key_file = {p384}\n",
         material.tables
     ))?;
     assert!(
-        matches!(
-            &error,
-            ConfigError::GrantFault(GrantFault::ClientKey { key, .. })
-                if key == "credentials.node-a-pub.fapi2.previous_client_key_file"
-        ),
+        fapi2(&error, |refused| matches!(
+            refused,
+            Fapi2Error::Algorithm {
+                role: "previous assertion",
+                ..
+            }
+        )),
         "{error:?}"
     );
     let current = material
         .tables
         .lines()
-        .find_map(|line| line.strip_prefix("client_key_file = "))
+        .find_map(|line| line.strip_prefix("private_key_file = "))
         .ok_or("the client key file")?;
     let error = refused(&format!(
-        "{}previous_client_key_file = {current}\n",
+        "{}previous_private_key_file = {current}\n",
         material.tables
     ))?;
     assert!(
-        matches!(
-            error,
-            ConfigError::GrantFault(GrantFault::Fapi2 {
-                source: Fapi2GrantError::Keys(_),
-                ..
-            })
-        ),
+        smart(&error, |refused| matches!(
+            refused,
+            SmartError::KeyRing { .. }
+        )),
         "{error:?}"
     );
     let shown = format!("{error:?} {error}");
