@@ -70,8 +70,8 @@ pub struct AuditRepository {
     pub spool_dir: Option<PathBuf>,
     /// The most bytes the spool holds.
     pub spool_max_size: units::ByteSize,
-    /// The retired `spool_max_bytes`, which `spool_max_size` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `spool_max_bytes`, which `spool_max_size` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub spool_max_bytes: Removed,
     /// The most messages the spool holds.
@@ -80,27 +80,27 @@ pub struct AuditRepository {
     /// stored by then, or by the end of its discovery's time if that comes
     /// first, is an audit failure.
     pub spool_write_timeout: units::Duration,
-    /// The retired `spool_write_timeout_ms`, which `spool_write_timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `spool_write_timeout_ms`, which `spool_write_timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub spool_write_timeout_ms: Removed,
     /// How long the repository may take to accept a connection.
     pub connect_timeout: units::Duration,
-    /// The retired `connect_timeout_ms`, which `connect_timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `connect_timeout_ms`, which `connect_timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub connect_timeout_ms: Removed,
     /// How long the TLS handshake, and each write and flush of a message,
     /// may take.
     pub send_timeout: units::Duration,
-    /// The retired `send_timeout_ms`, which `send_timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `send_timeout_ms`, which `send_timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub send_timeout_ms: Removed,
     /// The longest wait between two delivery attempts.
     pub retry_max: units::Duration,
-    /// The retired `retry_max_ms`, which `retry_max` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `retry_max_ms`, which `retry_max` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub retry_max_ms: Removed,
     /// The TLS material the repository is reached with: the table's `tls`

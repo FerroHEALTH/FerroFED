@@ -116,7 +116,7 @@ pub(crate) fn pixm(pix: &str) -> String {
 /// The `[pdqm]` table of the Supplier whose FHIR base is `base`.
 pub(crate) fn pdqm(base: &str, transaction: &str) -> String {
     format!(
-        "[pdqm]\nurl = \"{base}\"\ntransaction = \"{transaction}\"\nmaster = \"{MASTER}\"\ntimeout_ms = 1000\n\n[pdqm.namespaces]\n\"{LOCAL}\" = \"{LOCAL}\"\n"
+        "[pdqm]\nurl = \"{base}\"\ntransaction = \"{transaction}\"\nmaster = \"{MASTER}\"\ntimeout = '1s'\n\n[pdqm.namespaces]\n\"{LOCAL}\" = \"{LOCAL}\"\n"
     )
 }
 

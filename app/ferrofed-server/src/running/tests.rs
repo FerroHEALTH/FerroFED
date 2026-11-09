@@ -55,7 +55,7 @@ fn a_value_names_the_file_or_the_override_it_comes_from() {
         &BTreeMap::from([
             (
                 String::from("FERROFED__FEDERATION__OVERALL_TIMEOUT"),
-                String::from("4000"),
+                String::from("4s"),
             ),
             (String::from("PATH"), String::from("/usr/bin")),
         ]),
@@ -74,12 +74,15 @@ fn a_value_names_the_file_or_the_override_it_comes_from() {
     let per_node = document
         .setting("federation.per_node_timeout")
         .expect("listed");
-    assert_eq!(Some(toml::Value::Integer(2500)), per_node.value);
+    assert_eq!(
+        Some(toml::Value::String(String::from("2500ms"))),
+        per_node.value
+    );
     assert_eq!(Source::File, per_node.source);
     let overall = document
         .setting("federation.overall_timeout")
         .expect("listed");
-    assert_eq!(Some(toml::Value::Integer(4000)), overall.value);
+    assert_eq!(Some(toml::Value::String(String::from("4s"))), overall.value);
     assert_eq!(Source::Environment, overall.source);
 }
 
@@ -98,8 +101,11 @@ fn a_restart_setting_runs_the_boot_value_and_names_the_next_while_a_live_one_run
     let per_node = document
         .setting("federation.per_node_timeout")
         .expect("listed");
-    assert_eq!(Some(toml::Value::Integer(2500)), per_node.value);
-    assert_eq!(Some(toml::Value::Integer(3000)), per_node.next);
+    assert_eq!(
+        Some(toml::Value::String(String::from("2500ms"))),
+        per_node.value
+    );
+    assert_eq!(Some(toml::Value::String(String::from("3s"))), per_node.next);
     let disclose = document
         .setting("federation.consent.disclose")
         .expect("listed");

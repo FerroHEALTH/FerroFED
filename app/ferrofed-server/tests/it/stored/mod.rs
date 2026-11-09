@@ -73,7 +73,7 @@ fn settings_text(document: &Path, store: &Path, rows: &[(&str, &str)]) -> String
     format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout = '2s'\noverall_timeout_ms = 3000\n\n\
+         per_node_timeout = '2s'\noverall_timeout = '3s'\n\n\
          [stored_queries]\npath = {store}\n{}",
         crossref(rows)
     )

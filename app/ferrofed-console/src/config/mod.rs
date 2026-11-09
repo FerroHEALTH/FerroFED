@@ -118,10 +118,10 @@ pub struct Gateway {
     /// The gateway's `{base}`: its self-description is `OPTIONS {base}/` and
     /// its ITS-REST surface is under `{base}/v1`.
     pub base_url: String,
-    /// How long one call to the gateway may take, in milliseconds.
+    /// How long one call to the gateway may take.
     pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
 }

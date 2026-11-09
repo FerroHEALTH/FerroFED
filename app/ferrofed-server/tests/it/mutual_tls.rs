@@ -84,7 +84,7 @@ async fn pixm_and_pdqm_resolve_over_mutual_tls() -> TestResult {
     let pdq_front = MutualTls::front(&pdq.uri())?;
     let dir = tempfile::tempdir()?;
     let tables = format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n{}\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pdqm]\nurl = \"{}\"\nmaster = \"{}\"\ntimeout_ms = 4000\n{}\n[pdqm.namespaces]\n\"{}\" = \"{}\"\n",
+        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n{}\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pdqm]\nurl = \"{}\"\nmaster = \"{}\"\ntimeout = '4s'\n{}\n[pdqm.namespaces]\n\"{}\" = \"{}\"\n",
         pix_front.origin(),
         tls_keys(dir.path(), "pix", &pix_front)?,
         crate::pdqm::DOMAIN_A,

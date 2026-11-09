@@ -171,7 +171,6 @@ messages! {
     /// `{ $count } ids mapped`
     SettingsMapped = "settings-mapped",
     /// `{ $value } ms`
-    SettingsMs = "settings-ms",
     /// `{ $value } at the next start`
     SettingsNextValue = "settings-next-value",
     /// `Not set`
@@ -185,7 +184,6 @@ messages! {
     /// `{ $value } rows`
     SettingsRows = "settings-rows",
     /// `{ $value } s`
-    SettingsSeconds = "settings-seconds",
     /// `Set, read from`
     SettingsSecretSetFile = "settings-secret-set-file",
     /// `Set in the file`

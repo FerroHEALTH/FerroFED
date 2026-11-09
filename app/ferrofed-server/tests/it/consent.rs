@@ -268,7 +268,7 @@ fn localized_gateway(
     let document = toml::Value::String(document.display().to_string());
     let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 500\n\n{rows}{consent}"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout = '500ms'\n\n{rows}{consent}"
     );
     let settings = ferrofed_server::config::Config::from_sources(
         Some(&crate::support::signed(&text)),

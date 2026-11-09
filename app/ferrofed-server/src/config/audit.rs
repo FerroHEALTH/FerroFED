@@ -119,8 +119,8 @@ pub struct FeedRepository {
     pub spool_dir: Option<PathBuf>,
     /// The most bytes the spool holds.
     pub spool_max_size: units::ByteSize,
-    /// The retired `spool_max_bytes`, which `spool_max_size` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `spool_max_bytes`, which `spool_max_size` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub spool_max_bytes: Removed,
     /// The most records the spool holds.
@@ -129,20 +129,20 @@ pub struct FeedRepository {
     /// stored by then, or by the end of its exchange's time if that comes
     /// first, is an audit failure.
     pub spool_write_timeout: units::Duration,
-    /// The retired `spool_write_timeout_ms`, which `spool_write_timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `spool_write_timeout_ms`, which `spool_write_timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub spool_write_timeout_ms: Removed,
     /// How long one delivery may take.
     pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
     /// The longest wait between two delivery attempts.
     pub retry_max: units::Duration,
-    /// The retired `retry_max_ms`, which `retry_max` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `retry_max_ms`, which `retry_max` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub retry_max_ms: Removed,
     /// The TLS material the service is reached with: the table's `tls`

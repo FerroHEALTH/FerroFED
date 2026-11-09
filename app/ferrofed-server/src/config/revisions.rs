@@ -109,21 +109,21 @@ pub struct Revisions {
     pub url: Option<SecretUrl>,
     /// A file holding [`Revisions::url`], read at boot.
     pub url_file: Option<PathBuf>,
-    /// How often, in milliseconds, the gateway reads the store's running
+    /// How often, the gateway reads the store's running
     /// mark, to apply a revision another replica marked running; 5000 when
     /// the table sets none.
     pub poll: Option<units::Duration>,
-    /// The retired `poll_ms`, which `poll` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `poll_ms`, which `poll` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub poll_ms: Removed,
-    /// How long, in milliseconds, an applied revision that changed an
+    /// How long, an applied revision that changed an
     /// onward credential or a binding section awaits an operator's
     /// confirmation before the gateway rolls it back; 120000 when the
     /// table sets none.
     pub confirm: Option<units::Duration>,
-    /// The retired `confirm_ms`, which `confirm` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `confirm_ms`, which `confirm` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub confirm_ms: Removed,
     /// The resource kinds and resources a revision changes only once an

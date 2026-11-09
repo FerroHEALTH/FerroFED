@@ -45,8 +45,8 @@ pub struct Gateway {
     /// has ended, such as deleting the PMIR subscription; a process still
     /// running when it elapses is abandoned with a warning. Zero is refused.
     pub bindings_drain_timeout: units::Duration,
-    /// The retired `bindings_drain_timeout_ms`, which `bindings_drain_timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `bindings_drain_timeout_ms`, which `bindings_drain_timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub bindings_drain_timeout_ms: Removed,
 }

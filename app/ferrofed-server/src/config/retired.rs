@@ -78,6 +78,11 @@ const EMERGENCY_WINDOW: Retired =
 const CONFIG_POLL: Retired = Retired::replaced("config.poll_ms", span!("config.poll"), UNITS);
 const CONFIG_CONFIRM: Retired =
     Retired::replaced("config.confirm_ms", span!("config.confirm"), UNITS);
+const URL_LIFETIME: Retired = Retired::replaced(
+    "fhir.document_url_lifetime_secs",
+    span!("fhir.document_url_lifetime"),
+    UNITS,
+);
 const STORE_TIMEOUT: Retired = Retired::replaced("store.timeout_ms", span!("store.timeout"), UNITS);
 const STORE_SWEEP: Retired = Retired::replaced(
     "store.sweep_interval_s",
@@ -179,6 +184,7 @@ const ALL: &[Retired] = &[
     EMERGENCY_WINDOW,
     CONFIG_POLL,
     CONFIG_CONFIRM,
+    URL_LIFETIME,
     STORE_TIMEOUT,
     STORE_SWEEP,
     TERMINOLOGY_TIMEOUT,
@@ -234,6 +240,9 @@ pub fn check(config: &Config) -> Result<(), RemovedKeys> {
     found(config.emergency.window_s, &EMERGENCY_WINDOW);
     found(config.revisions.poll_ms, &CONFIG_POLL);
     found(config.revisions.confirm_ms, &CONFIG_CONFIRM);
+    if let Some(fhir) = &config.fhir {
+        found(fhir.document_url_lifetime_secs, &URL_LIFETIME);
+    }
     if let Some(store) = &config.store {
         found(store.timeout_ms, &STORE_TIMEOUT);
         found(store.sweep_interval_s, &STORE_SWEEP);

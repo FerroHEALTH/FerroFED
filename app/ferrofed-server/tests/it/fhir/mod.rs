@@ -153,7 +153,7 @@ pub(crate) fn text_registered(
     Ok(format!(
         "profile = \"development\"\n\n[gateway]\npublic_url = \"{PUBLIC}\"\n\n\
          [registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\n\
-         node_selection = \"ask-all\"\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\
+         node_selection = \"ask-all\"\nper_node_timeout = '2s'\noverall_timeout = '3s'\n\
          {federation}\n{}{}{tables}",
         crossref(rows),
         fhir_tables(pdq)

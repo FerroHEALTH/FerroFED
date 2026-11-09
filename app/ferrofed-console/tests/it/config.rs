@@ -188,13 +188,12 @@ fn a_replica_url_that_is_not_http_or_carries_userinfo_is_refused() {
 
 #[test]
 fn a_value_refusal_names_the_key_and_never_the_value() {
-    let error =
-        refused("[server]\nlisten = \"127.0.0.1:3000\"\n\n[gateway]\ntimeout_ms = \"soon\"\n");
+    let error = refused("[server]\nlisten = \"127.0.0.1:3000\"\n\n[gateway]\ntimeout = \"soon\"\n");
     let error::Error::Load { source } = &error else {
         panic!("a refused load: {error:?}");
     };
     assert!(
-        matches!(source, ConfigError::Invalid { key: Some(key), .. } if key == "gateway.timeout_ms"),
+        matches!(source, ConfigError::Invalid { key: Some(key), .. } if key == "gateway.timeout"),
         "{source:?}"
     );
     let shown = format!("{error} {source} {error:?}");
@@ -351,7 +350,7 @@ fn a_gateway_url_that_is_not_http_or_carries_userinfo_is_refused() {
 #[test]
 fn a_zero_timeout_or_session_bound_is_refused() {
     for (text, key) in [
-        ("[gateway]\ntimeout_ms = 0\n", "gateway.timeout_ms"),
+        ("[gateway]\ntimeout = '0ms'\n", "gateway.timeout"),
         ("[session]\nidle_timeout_s = 0\n", "session.idle_timeout_s"),
         ("[session]\nmax_sessions = 0\n", "session.max_sessions"),
     ] {

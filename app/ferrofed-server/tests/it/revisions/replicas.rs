@@ -236,7 +236,7 @@ fn the_poll_interval_is_read_within_its_bounds() -> TestResult {
         resolve("poll = '100ms'\n")?.revision_poll
     );
     for value in [0_u64, 99, 600_001] {
-        let refused = resolve(&format!("poll = {value}\n"));
+        let refused = resolve(&format!("poll = '{value}ms'\n"));
         assert!(
             matches!(
                 refused,
@@ -249,9 +249,7 @@ fn the_poll_interval_is_read_within_its_bounds() -> TestResult {
     assert!(
         matches!(
             off,
-            Err(Error::Revisions(RevisionsFault::Off {
-                key: "config.poll"
-            }))
+            Err(Error::Revisions(RevisionsFault::Off { key: "config.poll" }))
         ),
         "{off:?}"
     );

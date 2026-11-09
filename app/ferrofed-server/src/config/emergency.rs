@@ -46,10 +46,10 @@ pub struct Emergency {
     /// How many emergency accesses one professional is granted in one
     /// window, 1 to [`MAX_THRESHOLD`].
     pub threshold: u32,
-    /// The window, in seconds, 1 to [`MAX_WINDOW_S`].
+    /// The window, 1 to [`MAX_WINDOW_S`].
     pub window: units::Duration,
-    /// The retired `window_s`, which `window` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `window_s`, which `window` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub window_s: Removed,
 }

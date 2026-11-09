@@ -137,7 +137,7 @@ async fn gateway_with(auth: AuthSettings, rows: &str) -> Result<Bound, Box<dyn E
     let text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout = '2s'\noverall_timeout_ms = 3000\n\
+         per_node_timeout = '2s'\noverall_timeout = '3s'\n\
          demographic_endpoint = \"node-a-pub\"\n\n\
          [stored_queries]\npath = {store}\n{rows}"
     );

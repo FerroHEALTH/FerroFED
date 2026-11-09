@@ -64,7 +64,7 @@ fn an_environment_override_wins_over_the_file_and_keeps_its_type() -> Result<(),
     assert_eq!("127.0.0.1:7777", settings.server.listen.to_string());
     let settings = Config::from_sources(
         Some(full.as_str()),
-        &env("FERROFED__SERVER__BODY_LIMIT", "512"),
+        &env("FERROFED__SERVER__BODY_LIMIT", "512B"),
     )?
     .resolve()?;
     assert_eq!(512, settings.server.body_limit);
@@ -257,10 +257,7 @@ fn a_key_from_the_old_server_table_is_refused_by_its_name() -> Result<(), Box<dy
     for (line, key) in [
         ("public_url = \"https://gateway.example.org\"", "public_url"),
         ("replica = \"gateway-eu-1\"", "replica"),
-        (
-            "bindings_drain_timeout = '8s'",
-            "bindings_drain_timeout",
-        ),
+        ("bindings_drain_timeout = '8s'", "bindings_drain_timeout"),
         ("overload_retry_after_s = 3", "overload_retry_after_s"),
     ] {
         let error = refusal(&format!("[server]\n{line}\n"))?;

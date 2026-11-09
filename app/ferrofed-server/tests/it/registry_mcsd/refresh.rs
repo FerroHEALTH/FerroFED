@@ -471,8 +471,10 @@ async fn a_refresh_past_a_cap_is_refused_counted_and_shown() -> TestResult {
         "https://cdr-a.example.org/openehr",
         "https://cdr-b.example.org/openehr",
     ))?;
-    let text = super::config(&harness.base(), 5_000)
-        .replace("deadline = '5s'", "deadline = '5s'\nmax_entries = 4");
+    let text = super::config(&harness.base(), 5_000).replace(
+        "deadline = '5000ms'",
+        "deadline = '5000ms'\nmax_entries = 4",
+    );
     let gateway = Gateway::boot_from(&text)?;
     let before = gateway.addresses()?;
     for round in 0..5 {

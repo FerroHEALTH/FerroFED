@@ -12,7 +12,7 @@
 //! url = "https://pdq.example.org/fhir/"
 //! transaction = "iti-78"
 //! master = "urn:oid:2.999.1"
-//! timeout_ms = 1000
+//! timeout = '1s'
 //!
 //! [pdqm.namespaces]
 //! "2.999.7" = "urn:oid:2.999.7"
@@ -78,10 +78,10 @@ pub struct Pdqm {
     /// Each client namespace taken to the Supplier, mapped to the identifier
     /// system the identifier is sent in.
     pub namespaces: BTreeMap<String, String>,
-    /// How long one exchange with the Supplier may take, in milliseconds.
+    /// How long one exchange with the Supplier may take.
     pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
 }

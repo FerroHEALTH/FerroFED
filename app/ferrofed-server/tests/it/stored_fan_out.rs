@@ -135,7 +135,7 @@ pub(crate) fn state_serving(
     let text = format!(
         "profile = \"development\"\n\n[gateway]\n{gateway}\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout = '2s'\noverall_timeout_ms = 3000\n{federation}\n\n\
+         per_node_timeout = '2s'\noverall_timeout = '3s'\n{federation}\n\n\
          [stored_queries]\npath = {store}\n{}",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
     );

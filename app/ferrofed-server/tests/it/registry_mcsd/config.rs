@@ -230,9 +230,14 @@ fn directory_credentials_over_plain_http_are_refused_outside_development() -> Te
 
 #[test]
 fn a_zero_deadline_or_cap_is_refused_and_the_defaults_hold() -> TestResult {
-    for key in ["deadline", "max_pages", "max_bytes", "max_entries"] {
+    for (key, zero) in [
+        ("deadline", "'0s'"),
+        ("max_pages", "0"),
+        ("max_size", "'0B'"),
+        ("max_entries", "0"),
+    ] {
         let refused = settings(&format!(
-            "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n{key} = 0\n"
+            "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n{key} = {zero}\n"
         ));
         let full = format!("registry.mcsd.{key}");
         assert!(

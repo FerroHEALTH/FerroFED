@@ -315,7 +315,7 @@ async fn a_supplier_outage_under_ask_all_leaves_every_member_not_resolved() -> T
     let (app, _state) = gateway(
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
-        "node_selection = \"localized\"\n\n[federation.localization]\ntimeout_ms = 1000\non_failure = \"ask-all\"",
+        "node_selection = \"localized\"\n\n[federation.localization]\ntimeout = '1s'\non_failure = \"ask-all\"",
         &format!(
             "[audit]\ndestination = \"log\"\n\n{}\n{}",
             pixm(&pix.uri()),

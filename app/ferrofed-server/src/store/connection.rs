@@ -410,7 +410,7 @@ mod tests {
     #[test]
     fn a_pool_whose_database_cannot_be_reached_refuses_the_open() {
         let url = SecretUrl::new(String::from(
-            "postgres://ferrofed@127.0.0.1:1/ferrofed?sslmode=require&connect_timeout='1ms'",
+            "postgres://ferrofed@127.0.0.1:1/ferrofed?sslmode=require&connect_timeout=1",
         ));
         let target = Target::new(&url, None, Duration::from_secs(2)).unwrap();
         let size = NonZeroUsize::new(3).unwrap();

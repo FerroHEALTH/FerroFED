@@ -217,7 +217,7 @@ fn a_holder_naming_no_member_refuses_to_boot() -> TestResult {
 fn a_prefilter_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
     let tables = format!(
-        "overall_timeout = '3s'\n\n[federation.localization]\ntimeout_ms = 1500\n\n[pdqm]\nurl = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\ntimeout_ms = 500\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{}",
+        "overall_timeout = '3s'\n\n[federation.localization]\ntimeout = '1500ms'\n\n[pdqm]\nurl = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\ntimeout = '500ms'\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{}",
         mitz_table("https://mitz.example.org/vraag", &holders())
     );
     match resolved(&configuration(dir.path(), "production", &tables)?) {
@@ -231,9 +231,9 @@ fn a_prefilter_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult 
         ) => {
             let text = refused.to_string();
             for key in [
-                "nl_gf.mitz.timeout_ms",
-                "pdqm.timeout_ms",
-                "federation.localization.timeout_ms",
+                "nl_gf.mitz.timeout",
+                "pdqm.timeout",
+                "federation.localization.timeout",
                 "federation.overall_timeout",
             ] {
                 assert!(text.contains(key), "{text}");
@@ -248,7 +248,7 @@ fn a_prefilter_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult 
 
 #[test]
 fn a_prefilter_budget_alone_past_the_overall_budget_is_refused() -> TestResult {
-    let (_dir, text) = edited(|table| table.replace("timeout_ms = 1000", "timeout_ms = 25000"))?;
+    let (_dir, text) = edited(|table| table.replace("timeout = '1s'", "timeout = '25s'"))?;
     match resolved(&text) {
         Err(error::Error::Binding(error::binding::BindingFault::PrefilterBudget {
             timeout_ms: 25_000,

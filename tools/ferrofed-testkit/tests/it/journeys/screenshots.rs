@@ -160,7 +160,7 @@ const HISTORY: &str = r#"{"items":[
 
 /// What revision 2 changes against revision 1.
 const DIFF_2: &str = r#"{"from":1,"to":2,"changes":[
-    {"key":"federation.per_node_timeout","change":"changed","from":"2000","to":"2500"}]}"#;
+    {"key":"federation.per_node_timeout","change":"changed","from":"2s","to":"2500ms"}]}"#;
 
 /// The synthetic `ehr_id` the integrity history names, a bare UUID.
 const COLLIDING: &str = "3333cccc-3333-4333-8333-333333333333";

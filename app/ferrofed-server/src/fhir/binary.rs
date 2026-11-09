@@ -10,7 +10,7 @@
 //! compact JWS the gateway signs with its own `[signing]` key, of the JOSE
 //! type [`TYPE`] (RFC 8725 §3.11), so it is taken for no other token the
 //! gateway reads. Its `aud` and `iss` are the gateway's FHIR base, its
-//! lifetime `fhir.document_url_lifetime_secs`, and it carries the member's
+//! lifetime `fhir.document_url_lifetime`, and it carries the member's
 //! endpoints, its own `ehr_id`, the category and profile the document was
 //! asked in, and the verified caller it was listed for; never a patient
 //! identifier (§5.4.1, N33). A read verifies the token, holds the caller to

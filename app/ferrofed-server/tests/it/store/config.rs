@@ -253,8 +253,8 @@ fn the_bounds_and_the_ca_file_are_held_to_their_rules() -> TestResult {
             "{refused:?}"
         );
     }
-    for key in ["timeout_ms", "sweep_interval"] {
-        let refused = store(&format!("{base}\n{key} = 0"))?
+    for key in ["timeout", "sweep_interval"] {
+        let refused = store(&format!("{base}\n{key} = '0s'"))?
             .err()
             .ok_or("refused")?;
         assert!(
@@ -289,7 +289,7 @@ fn the_bounds_and_the_ca_file_are_held_to_their_rules() -> TestResult {
     let ca = dir.path().join("ca.pem");
     std::fs::write(&ca, certificates.ca())?;
     let settings = store(&format!(
-        "{base}\nca_file = {}\nmax_connections = {MAX_CONNECTIONS}\ntimeout_ms = 2500\nsweep_interval = '5s'",
+        "{base}\nca_file = {}\nmax_connections = {MAX_CONNECTIONS}\ntimeout = '2500ms'\nsweep_interval = '5s'",
         toml::Value::String(ca.display().to_string())
     ))??;
     let held = settings.store.ok_or("resolved")?;

@@ -22,8 +22,8 @@ use crate::support::{get_as, send};
 /// start changes, a node selection, the store's connection by its file and
 /// a category map.
 const RUNNING: &str = r#"{"ui":"managed","revision":1,"settings":[
-    {"key":"federation.per_node_timeout","section":"federation","value":5000,"source":"revision",
-     "default":10000,"restart":true,"next":5500,"editable":true},
+    {"key":"federation.per_node_timeout","section":"federation","value":"5s","source":"revision",
+     "default":"10s","restart":true,"next":"5500ms","editable":true},
     {"key":"federation.node_selection","section":"federation","value":"localized","source":"revision",
      "restart":true,"editable":true},
     {"key":"federation.best_effort","section":"federation","value":true,"source":"default",
@@ -72,8 +72,8 @@ async fn each_tab_draws_its_settings_with_their_values_sources_keys_and_next_sta
     let body = page(&service, &session, "/configuration").await?;
     assert!(body.contains("Federation behaviour"), "{body}");
     assert!(body.contains("Per-node timeout"), "{body}");
-    assert!(body.contains("5,000 ms"), "{body}");
-    assert!(body.contains("5,500 ms at the next start"), "{body}");
+    assert!(body.contains("5s"), "{body}");
+    assert!(body.contains("5500ms at the next start"), "{body}");
     assert_eq!(
         1,
         body.matches(r#"class="fui-setting-source""#).count(),
@@ -131,7 +131,7 @@ async fn the_edit_is_a_plain_form_with_a_control_for_each_editable_setting()
         "{body}"
     );
     assert!(body.contains(r#"name="form[base]" value="2""#), "{body}");
-    assert!(body.contains(r#"value="5000""#), "{body}");
+    assert!(body.contains(r#"value="5s""#), "{body}");
     assert!(
         body.contains(r#"<option value="localized" selected"#),
         "{body}"

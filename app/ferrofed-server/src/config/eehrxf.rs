@@ -10,7 +10,7 @@
 //! ```toml
 //! [eehrxf.terminology]
 //! url = "https://terminology.example.org/fhir/"
-//! timeout_ms = 2000
+//! timeout = '2s'
 //!
 //! [eehrxf.terminology.credentials]
 //! user = "ferrofed"
@@ -70,10 +70,10 @@ pub struct TerminologyServer {
     /// The TLS material the service is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,
-    /// How long one operation may take, in milliseconds.
+    /// How long one operation may take.
     pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
 }

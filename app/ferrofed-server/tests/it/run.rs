@@ -141,10 +141,7 @@ fn config_check_refuses_a_key_from_the_old_server_table_by_its_name()
     for (line, key) in [
         ("public_url = \"https://gateway.example.org\"", "public_url"),
         ("replica = \"gateway-eu-1\"", "replica"),
-        (
-            "bindings_drain_timeout = '8s'",
-            "bindings_drain_timeout",
-        ),
+        ("bindings_drain_timeout = '8s'", "bindings_drain_timeout"),
         ("overload_retry_after_s = 3", "overload_retry_after_s"),
     ] {
         let output = binary(&["config", "check"], &format!("[server]\n{line}\n"))?;
@@ -168,7 +165,7 @@ fn config_check_refuses_a_key_from_the_old_server_table_by_its_name()
 )]
 fn the_binary_refuses_a_request_timeout_inside_the_fan_out_budget() -> Result<(), Box<dyn StdError>>
 {
-    let toml = "[server]\nlisten = \"127.0.0.1:1\"\nrequest_timeout_ms = 25000\n\n\
+    let toml = "[server]\nlisten = \"127.0.0.1:1\"\nrequest_timeout = '25s'\n\n\
                 [registry]\ndocument = \"/nonexistent/registry.toml\"\n";
     for job in [&["serve"][..], &["config", "check"][..]] {
         let output = binary(job, toml)?;

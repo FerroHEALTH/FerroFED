@@ -65,7 +65,7 @@ fn no_load_refusal_shows_a_secret() -> Result<(), Box<dyn Error>> {
         ),
         (
             "the secret as a value of the wrong type",
-            format!("[gateway]\ntimeout_ms = \"{SENTINEL}\"\n"),
+            format!("[gateway]\ntimeout = \"{SENTINEL}\"\n"),
             vec![],
         ),
         (

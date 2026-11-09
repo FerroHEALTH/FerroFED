@@ -4,6 +4,7 @@
 //! The test that holds every key of a maximal configuration to being
 //! applied by a reload or named as needing a restart.
 
+use ferrohealth_config::units;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::path::Path;
@@ -401,6 +402,28 @@ fn alternatives(key: &str, value: &Value, from: &str, to: &str) -> Vec<Value> {
             .map(Value::Integer)
             .collect(),
         Value::Float(number) => vec![Value::Float(number / 2.0)],
+        Value::String(text) if text.parse::<units::Duration>().is_ok() => {
+            let millis = text
+                .parse::<units::Duration>()
+                .map_or(0, units::Duration::as_millis);
+            [
+                millis * 2,
+                millis + 1000,
+                millis.saturating_sub(1000).max(1),
+            ]
+            .into_iter()
+            .map(|millis| Value::String(units::Duration::from_millis(millis).to_string()))
+            .collect()
+        }
+        Value::String(text) if text.parse::<units::ByteSize>().is_ok() => {
+            let bytes = text
+                .parse::<units::ByteSize>()
+                .map_or(0, units::ByteSize::bytes);
+            [bytes * 2, bytes + 1024, bytes.saturating_sub(1024).max(1)]
+                .into_iter()
+                .map(|bytes| Value::String(units::ByteSize::from_bytes(bytes).to_string()))
+                .collect()
+        }
         Value::String(text) if text.starts_with(from) => {
             vec![Value::String(text.replacen(from, to, 1))]
         }

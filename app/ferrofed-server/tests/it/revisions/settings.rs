@@ -50,7 +50,10 @@ async fn the_running_configuration_names_the_revision_each_setting_comes_from() 
     let per_node = document
         .setting("federation.per_node_timeout")
         .ok_or("listed")?;
-    assert_eq!(Some(toml::Value::Integer(5000)), per_node.value);
+    assert_eq!(
+        Some(toml::Value::String(String::from("5s"))),
+        per_node.value
+    );
     assert_eq!(Source::Revision, per_node.source);
     assert!(per_node.restart);
     assert!(per_node.editable);
@@ -75,7 +78,7 @@ async fn a_saved_setting_applies_as_a_revision_and_a_restart_setting_names_the_n
         &gateway,
         1,
         &[
-            ("federation.per_node_timeout", "5500"),
+            ("federation.per_node_timeout", "5500ms"),
             ("federation.consent.disclose", "false"),
         ],
     )
@@ -100,11 +103,14 @@ async fn a_saved_setting_applies_as_a_revision_and_a_restart_setting_names_the_n
         .setting("federation.per_node_timeout")
         .ok_or("listed")?;
     assert_eq!(
-        Some(toml::Value::Integer(5000)),
+        Some(toml::Value::String(String::from("5s"))),
         per_node.value,
         "the replica runs the boot value until it restarts"
     );
-    assert_eq!(Some(toml::Value::Integer(5500)), per_node.next);
+    assert_eq!(
+        Some(toml::Value::String(String::from("5500ms"))),
+        per_node.next
+    );
     let disclose = after
         .setting("federation.consent.disclose")
         .ok_or("listed")?;

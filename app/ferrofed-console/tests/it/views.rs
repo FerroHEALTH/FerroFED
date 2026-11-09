@@ -160,7 +160,7 @@ async fn a_page_the_gateway_refuses_shows_the_status_and_the_code() -> Result<()
 #[tokio::test]
 async fn a_page_the_gateway_cannot_answer_says_so() -> Result<(), Box<dyn Error>> {
     let (state, service) = console(
-        "[gateway]\nbase_url = \"http://127.0.0.1:9/\"\ntimeout_ms = 2000\n\n[session]\nsecure_cookie = false\n",
+        "[gateway]\nbase_url = \"http://127.0.0.1:9/\"\ntimeout = '2s'\n\n[session]\nsecure_cookie = false\n",
     ).await?;
     let session = crate::support::establish(&state, signed_in().await?)?;
     let (_response, body) = send(&service, get_as("/integrity", &session)?).await?;

@@ -93,7 +93,7 @@ fn the_drain_delay_is_read_from_the_file_and_the_environment() -> Result<(), Box
     assert_eq!(Duration::from_secs(5), server.drain_delay);
     let server = Config::from_sources(
         Some("[server]\ndrain_delay = '5s'\n"),
-        &env("FERROFED__SERVER__DRAIN_DELAY", "7000"),
+        &env("FERROFED__SERVER__DRAIN_DELAY", "7s"),
     )?
     .resolve()?
     .server;

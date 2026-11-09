@@ -277,7 +277,7 @@ password_file = "/run/secrets/ferrofed/node-b-password"
 # url_file = "/run/secrets/ferrofed/store-url"   # postgres://ferrofed@db.example.org:5432/ferrofed?sslmode=require
 # ca_file = "/run/secrets/ferrofed/store-ca.pem"  # optional; the platform's roots otherwise
 # max_connections = 4
-# timeout_ms = 10000
+# timeout = "10s"
 # sweep_interval = "1min"
 
 # The gateway's signing key, a P-384 (ES384) or P-256 (ES256) key in PKCS#8

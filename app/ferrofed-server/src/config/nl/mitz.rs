@@ -84,10 +84,10 @@ pub struct Mitz {
     pub purpose: String,
     /// The Mitz data categories asked about.
     pub data_categories: Vec<String>,
-    /// How long one round of questions may take, in milliseconds.
+    /// How long one round of questions may take.
     pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in 0.0.18: set, it
-    /// refuses the configuration.
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.18: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
     /// Each member's data holder, by member id.

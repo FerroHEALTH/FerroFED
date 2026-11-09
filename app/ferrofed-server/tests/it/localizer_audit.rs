@@ -73,7 +73,7 @@ async fn a_discovery_still_recording_its_audit_at_the_budget_fails_closed_under_
     let document = dir.path().join("registry.toml");
     std::fs::write(&document, registry(&node_a.uri(), &node_b.uri(), ""))?;
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = {budget}\n\n{rows}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout = '{budget}ms'\n\n{rows}",
         document = toml::Value::String(document.display().to_string()),
         budget = BUDGET.as_millis(),
         rows = crossref(&[

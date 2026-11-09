@@ -39,7 +39,7 @@ const SECRET: &str = "synthetic-stored-secret-58";
 /// set inline.
 fn file() -> String {
     format!(
-        "[federation]\nper_node_timeout_ms = 2500\n\n[stored_queries]\nbackend = \"postgres\"\n\n\
+        "[federation]\nper_node_timeout = '2500ms'\n\n[stored_queries]\nbackend = \"postgres\"\n\n\
          [store]\nurl = \"postgres://ferrofed:{SECRET}@db.example.org/stored?sslmode=require\"\n"
     )
 }
@@ -95,7 +95,10 @@ async fn the_running_configuration_names_the_file_and_never_a_secret() -> TestRe
     let per_node = document
         .setting("federation.per_node_timeout")
         .ok_or("listed")?;
-    assert_eq!(Some(toml::Value::Integer(2500)), per_node.value);
+    assert_eq!(
+        Some(toml::Value::String(String::from("2500ms"))),
+        per_node.value
+    );
     assert_eq!(Source::File, per_node.source);
     assert!(document.settings.iter().all(|setting| !setting.editable));
     let url = document.setting("store.url").ok_or("listed")?;
@@ -161,8 +164,11 @@ fn a_reload_of_the_file_changes_a_live_setting_and_names_the_next_start_of_a_res
     let per_node = document
         .setting("federation.per_node_timeout")
         .ok_or("listed")?;
-    assert_eq!(Some(toml::Value::Integer(2500)), per_node.value);
-    assert_eq!(Some(toml::Value::Integer(3000)), per_node.next);
+    assert_eq!(
+        Some(toml::Value::String(String::from("2500ms"))),
+        per_node.value
+    );
+    assert_eq!(Some(toml::Value::String(String::from("3s"))), per_node.next);
     let disclose = document
         .setting("federation.consent.disclose")
         .ok_or("listed")?;

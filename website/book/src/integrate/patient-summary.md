@@ -316,7 +316,7 @@ and the `Binary` read.
 sends it, with the member's media type. The token is a compact JWS the
 gateway signs with its `[signing]` key, of its own JOSE type, so the gateway
 takes no other token it signs for one. It is valid for
-`fhir.document_url_lifetime_secs`, 300 seconds unless set, names the
+`fhir.document_url_lifetime`, 300 seconds unless set, names the
 gateway's FHIR base as its audience, and carries the member's endpoints,
 the member's own `ehr_id`, the category and profile, and the caller it was
 listed for. It carries no patient identifier (§5.4.1, N33).

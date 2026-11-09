@@ -27,7 +27,7 @@ use std::net::SocketAddr;
 
 use ferrohealth_secret::REDACTED;
 
-use crate::report::redact::keys::{DATA_KEYED, KEPT, KNOWN_KEYS, NUMBERS, URLS};
+use crate::report::redact::keys::{DATA_KEYED, KEPT, KNOWN_KEYS, NUMBERS, SPANS, URLS};
 
 pub mod keys;
 
@@ -107,6 +107,13 @@ fn redact_value(key: &str, value: &toml::Value) -> toml::Value {
             stripped_url(text).map_or_else(redacted, toml::Value::String)
         }
         toml::Value::String(text) if KEPT.contains(&key) && shaped(key, text) => value.clone(),
+        toml::Value::String(text)
+            if SPANS.contains(&key)
+                && (text.parse::<ferrohealth_config::units::Duration>().is_ok()
+                    || text.parse::<ferrohealth_config::units::ByteSize>().is_ok()) =>
+        {
+            value.clone()
+        }
         toml::Value::String(_)
         | toml::Value::Integer(_)
         | toml::Value::Float(_)
@@ -389,9 +396,9 @@ count = 7
             redacted["server"]["base_path"].as_str().expect("kept")
         );
         assert_eq!(
-            30_000,
+            "30s",
             redacted["server"]["request_timeout"]
-                .as_integer()
+                .as_str()
                 .expect("kept")
         );
         assert_eq!(
@@ -440,7 +447,7 @@ count = 7
         let tree: toml::Table = toml::from_str(&format!(
             "[store]\nurl = \"{url}\"\nurl_file = \"/home/CANARY-PERSON/store-url\"\n\
              ca_file = \"/home/CANARY-PERSON/store-ca.pem\"\nmax_connections = 8\n\
-             timeout_ms = 2500\nsweep_interval_s = 30\n"
+             timeout = '2500ms'\nsweep_interval = '30s'\n"
         ))
         .expect("the fixture parses");
         let written =
@@ -460,8 +467,8 @@ count = 7
             assert_eq!("***", store[path].as_str().expect("a path is redacted"));
         }
         assert_eq!(8, store["max_connections"].as_integer().expect("kept"));
-        assert_eq!(2500, store["timeout_ms"].as_integer().expect("kept"));
-        assert_eq!(30, store["sweep_interval"].as_integer().expect("kept"));
+        assert_eq!("2500ms", store["timeout"].as_str().expect("kept"));
+        assert_eq!("30s", store["sweep_interval"].as_str().expect("kept"));
     }
 
     /// Every shape a value could slip past a key-based redactor in, each
@@ -485,7 +492,7 @@ base_path = "/fed?CANARY-QUERY"
 ehr_id = "7d44b88c-4199-4bad-97dc-d78268e01398"
 header = "CANARY-HEADER-VALUE"
 document = "/home/canary-person/registry.toml"
-request_timeout_ms = "CANARY-STRING-IN-A-NUMBER"
+request_timeout = "CANARY-STRING-IN-A-SPAN"
 nested = [["CANARY-ARRAY"], [{ password = "CANARY-INLINE_example" }]]
 inline = { url = "https://canary-user2:canary-pass2@h.example.org/p?q#f" }
 

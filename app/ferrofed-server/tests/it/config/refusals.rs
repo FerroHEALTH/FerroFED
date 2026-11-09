@@ -82,12 +82,12 @@ fn a_bad_value_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>>
         crate::support::refused_key(&error),
         "{error:?}"
     );
-    for key in [
-        "request_timeout",
-        "shutdown_timeout",
-        "body_limit",
+    for (key, zero) in [
+        ("request_timeout", "0s"),
+        ("shutdown_timeout", "0s"),
+        ("body_limit", "0B"),
     ] {
-        let error = refusal(&format!("[server]\n{key} = 0\n"))?;
+        let error = refusal(&format!("[server]\n{key} = '{zero}'\n"))?;
         assert!(
             matches!(&error, Error::Zero { key: named } if named == &format!("server.{key}")),
             "{error:?}"

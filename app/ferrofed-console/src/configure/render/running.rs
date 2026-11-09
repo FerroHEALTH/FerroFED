@@ -62,7 +62,7 @@ fn words(key: &str) -> (Msg, Msg) {
         "federation.localization.on_failure" => {
             (Msg::SettingLocalizerFails, Msg::SettingLocalizerFailsDesc)
         }
-        "federation.localization.timeout_ms" => {
+        "federation.localization.timeout" => {
             (Msg::SettingLocalizerBudget, Msg::SettingLocalizerBudgetDesc)
         }
         "federation.fan_out_stored_queries" => {
@@ -87,7 +87,7 @@ fn words(key: &str) -> (Msg, Msg) {
         "access_log.templates" => (Msg::SettingTemplateMap, Msg::SettingTemplateMapDesc),
         "access_log.archetypes" => (Msg::SettingArchetypeMap, Msg::SettingArchetypeMapDesc),
         "fhir.base" => (Msg::SettingFhirBase, Msg::SettingFhirBaseDesc),
-        "fhir.document_url_lifetime_secs" => (Msg::SettingUrlLifetime, Msg::SettingUrlLifetimeDesc),
+        "fhir.document_url_lifetime" => (Msg::SettingUrlLifetime, Msg::SettingUrlLifetimeDesc),
         "fhir.receive" => (Msg::SettingReceived, Msg::SettingReceivedDesc),
         "auth.product_scope" => (Msg::SettingProductScope, Msg::SettingProductScopeDesc),
         "auth.issuer" | "auth.issuer[].issuer" => {
@@ -151,11 +151,7 @@ pub fn edit_href(section: Section) -> String {
 
 /// The unit a number of the setting `key` is written with.
 fn unit(key: &str) -> Option<Msg> {
-    if key.ends_with("_ms") {
-        Some(Msg::SettingsMs)
-    } else if key.ends_with("_secs") {
-        Some(Msg::SettingsSeconds)
-    } else if key == "access_log.retention.years" {
+    if key == "access_log.retention.years" {
         Some(Msg::SettingsYears)
     } else if key.ends_with("_rows") || key.ends_with("_window") {
         Some(Msg::SettingsRows)

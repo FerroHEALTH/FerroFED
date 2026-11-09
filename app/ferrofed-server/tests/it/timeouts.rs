@@ -557,7 +557,7 @@ async fn the_overall_budget_fires_before_the_tightest_accepted_request_timeout()
         dir.path(),
         &a,
         &b,
-        &format!("request_timeout = {request_ms}"),
+        &format!("request_timeout = '{request_ms}ms'"),
         &format!("per_node_timeout = '5s'\noverall_timeout = '{overall_ms}ms'"),
     )?;
 
