@@ -8,7 +8,7 @@
 //! inline, or `client_identity_file`, the gateway's client certificate chain
 //! and private key in PEM for mutual TLS, held as a secret;
 //! `trust_roots_file`, a PEM bundle of trust roots beside the platform's;
-//! and `min_version`, `"1.3"` unless lowered to `"1.2"`. [`read`] reads
+//! and `min_version`, `"1.3"` unless lowered to `"1.2"`. `read` reads
 //! every file once, at load. A node's material serves the node and its
 //! authorization server alike, so a token bound to the certificate travels
 //! only over connections that present it (RFC 8705 §3). No specification
