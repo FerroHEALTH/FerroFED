@@ -524,7 +524,12 @@ them:
   ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
   It lists, reads and receives laboratory reports in the HL7 Europe
   Laboratory Report profiles
-  ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)).
+  ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)),
+  lists, reads and receives discharge reports in the Hospital Discharge
+  Report profiles
+  ([Discharge reports over FHIR](../integrate/discharge-reports.md)), and
+  lists and reads imaging reports in the Imaging Report profiles
+  ([Imaging reports over FHIR](../integrate/imaging-reports.md)).
 
 Seven of the manufacturer's obligations have a first answer:
 
@@ -571,13 +576,13 @@ before the Regulation applies on 26 March 2027:
   ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)), and is
   re-checked against the Art 15(1) implementing act once it is adopted.
   None is adopted.
-- [#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405) and [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406): the gateway half of the interoperability
-  component for discharge reports and for imaging, beside the component
-  work in FerroBRIDGE ([FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
-  [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)). The component moved to FerroBRIDGE
-  ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)), where prescriptions from openEHR medication data and
-  laboratory reports were built (issues [FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321),
-  [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322) and [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), now closed).
+- [#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716): the receipt of an imaging report, which waits on the
+  imaging package's dependency closure in the gateway's package set, and
+  [#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794): the rating of what a received discharge or imaging
+  report can lose. The component moved to FerroBRIDGE
+  ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)), where prescriptions from openEHR medication data,
+  laboratory reports, discharge reports and imaging were built (issues [FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321),
+  [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322), [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325) and [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326), now closed).
 - [#525](https://github.com/FerroHEALTH/FerroFED/issues/525): the rest of
   the conformity work: the points the [Annex II checklist](annex-ii.md)
   leaves open, the EU declaration of conformity, which each release writes

@@ -1401,7 +1401,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-console"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "aws-lc-rs",
  "axum",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-server"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1647,7 +1647,7 @@ dependencies = [
 
 [[package]]
 name = "ferrofed-testkit"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
@@ -1805,9 +1805,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-smart"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfe7a2900512b6ffdc66ce45bb9b545262d3ac7e997ebc35155378d9fe8cc805"
+checksum = "7b3e32cbe2888a09fda90a076ba4f0cd6944cb9dd0f32d76860e33db717af184"
 dependencies = [
  "argon2",
  "aws-lc-rs",
@@ -2085,7 +2085,7 @@ dependencies = [
 
 [[package]]
 name = "forwarders"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "anyhow",
  "proc-macro2",
@@ -3148,7 +3148,7 @@ dependencies = [
 
 [[package]]
 name = "module-cycles"
-version = "0.0.16"
+version = "0.0.17"
 dependencies = [
  "anyhow",
  "proc-macro2",

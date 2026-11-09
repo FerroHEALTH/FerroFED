@@ -42,8 +42,8 @@ The running gateway names the same details in `GET {base}/`,
 Art 38(2)(b): "the name and version of the EHR system and date of its
 release".
 
-The EHR system is **FerroFED**. This sheet describes FerroFED 0.0.16,
-released on 2026-11-05. It ships as these forms:
+The EHR system is **FerroFED**. This sheet describes FerroFED 0.0.17,
+released on 2026-11-09. It ships as these forms:
 
 - the gateway image `ghcr.io/ferrohealth/ferrofed`, for Linux on `x86_64`
   and `aarch64`;
@@ -82,6 +82,7 @@ says what it holds and what it waits on.
 
 | Release | Date |
 |---|---|
+| 0.0.17 | 2026-11-09 |
 | 0.0.16 | 2026-11-05 |
 | 0.0.15 | 2026-10-30 |
 | 0.0.14 | 2026-10-28 |
@@ -148,16 +149,21 @@ exchange format". A client sends such a document to
 `POST {fhir-base}/Bundle`, and FerroFED writes it to the one member the
 deployment declares for its category
 ([Receiving a document](receiving-documents.md)). This release can receive
-documents of four categories:
+documents of three categories:
 
 | Art 14(1) | Code | Received in the exchange format |
 |---|---|---|
 | (a) | `Patient-Summaries` | yes |
 | (b) | `Electronic-Prescriptions` | no |
 | (c) | `Electronic-Dispensations` | no |
-| (d) | `Medical-Imaging` | yes |
+| (d) | `Medical-Imaging` | no |
 | (e) | `Laboratory-Reports` | yes |
 | (f) | `Discharge-Reports` | yes |
+
+An imaging report is not received yet: a `Medical-Imaging`
+`[[fhir.receive]]` entry refuses the start until the gateway's package set
+holds the HL7 Europe Imaging Report package's dependency closure
+([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
 
 An electronic dispensation, Art 14(1)(c), is received as one resource,
 which the table above does not count: a client sends one
@@ -197,7 +203,7 @@ Item names its row in the matrix exactly.
 
 | Item | Pin | What FerroFED does with it |
 |---|---|---|
-| Product version | 0.0.16 | the FerroFED version this sheet describes |
+| Product version | 0.0.17 | the FerroFED version this sheet describes |
 | Federation Tier with AQL | 1.0.1 | the federation it implements: the façade, the rewrite per node, the merged answer with `meta.federation`, follow-up routing; the release the openEHR SEC approved, with its 1.0.1 erratum to the routing of EHR-scoped version requests |
 | openEHR ITS-REST | 1.1.0 | the API a client calls and the API it calls at each member |
 | openEHR AQL | 1.1.0 | the query language a client sends and each member answers |
@@ -215,8 +221,10 @@ Item names its row in the matrix exactly.
 | HL7 Europe Patient Summary | `hl7.fhir.eu.eps` 1.0.0-ballot | the patient summary document the FHIR face writes and receives, Annex II, points 2.1 to 2.3 |
 | HL7 Europe Medication Prescription and Dispense | `hl7.fhir.eu.mpd` 1.0.0 | the `MedicationRequest` and `MedicationDispense` profiles the FHIR face serves prescriptions in and holds a received dispensation to, Art 14(1)(b) and (c) |
 | HL7 Europe Laboratory Report | `hl7.fhir.eu.laboratory` 2.1.0 | with 2.0.0 beside it, the version the interoperability component reads: the laboratory report document the FHIR face receives, writes from a member's composition and lists, Art 14(1)(e) |
+| HL7 Europe Imaging Report | `hl7.fhir.eu.imaging` 1.0.0-ballot | the medical imaging report document the FHIR face writes from a member's composition and lists, Art 14(1)(d) |
+| HL7 Europe Hospital Discharge Report | `hl7.fhir.eu.hdr` 1.0.0 | the discharge report document the FHIR face receives, writes from a member's composition and lists, Art 14(1)(f) |
 | HL7 Europe Base and Core | `hl7.fhir.eu.base` 2.0.1 | the EU core profiles each mapped entry of the patient summary is written to |
-| HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, the Document Access Provider interactions it asks a member that serves its own laboratory reports, and the category codes of the access record |
+| HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, the Document Access Provider interactions it asks a member that serves its own laboratory, imaging or discharge reports, and the category codes of the access record |
 | `eehrxf` | =0.1.187 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
 
 Beside them:
@@ -241,10 +249,13 @@ Beside them:
 
 The European electronic health record exchange format of Art 15 has no
 adopted implementing act. The gateway serves the patient summary and
-laboratory reports in the FHIR R4 form of HL7 Europe's packages and
-receives both in the same form
+laboratory, medical imaging and discharge reports in the FHIR R4 form of
+HL7 Europe's packages and receives each but the imaging report in the same
+form
 ([The categories received](#the-categories-received),
-[Laboratory reports over FHIR](../integrate/laboratory-reports.md)). It
+[Laboratory reports over FHIR](../integrate/laboratory-reports.md),
+[Imaging reports over FHIR](../integrate/imaging-reports.md),
+[Discharge reports over FHIR](../integrate/discharge-reports.md)). It
 serves electronic prescriptions and receives electronic dispensations in the
 HL7 Europe MPD profiles, through members that serve them or, in the map
 mode, from their openEHR medication orders
@@ -273,8 +284,8 @@ the minimum of Art 13(8), and ships them only in the newest release
 (Art 13(10)), with the end date published.
 [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
 lists every release with the date until which fixes are published, five
-years from its release date. For FerroFED 0.0.16 that date is 2031-11-05;
-0.0.16 itself is supported while it is the newest release.
+years from its release date. For FerroFED 0.0.17 that date is 2031-11-09;
+0.0.17 itself is supported while it is the newest release.
 The rest of the information the Cyber Resilience Act's Annex II asks for is
 on [CRA information to the user](cra-user-information.md).
 

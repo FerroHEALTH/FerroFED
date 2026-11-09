@@ -544,6 +544,33 @@ Released on 2026-11-05.
 - The `[server]` keys 0.0.15 still read under their old names refused, as
   any unknown key ([#1490](https://github.com/FerroHEALTH/FerroFED/issues/1490)).
 
+### v0.0.17: discharge and imaging reports, and the national contact point
+
+Released on 2026-11-09.
+
+- The discharge report, Art 14(1)(f), and the medical imaging report, Art
+  14(1)(d), on the FHIR face: written from a member's composition as an HL7
+  Europe Hospital Discharge Report and Imaging Report and listed, a
+  member's own passed through the document list with only their attachment
+  URL readdressed, and the discharge report received at a
+  `[[fhir.receive]]` member ([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405), [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406), [#1714](https://github.com/FerroHEALTH/FerroFED/issues/1714), [#1777](https://github.com/FerroHEALTH/FerroFED/issues/1777)).
+- A national contact point held to the MyHealth@EU profile: its token
+  bound to the connector's certificate and checked by
+  `ferrohealth-smart`'s eHDSI validator, each patient-data request held to
+  the patient of its treatment relationship confirmation on both faces,
+  the emergency access limit of eHDSI Section II §2.5 counted across
+  replicas, a dispensation and its discard under the catalogue's rules, and
+  every refusal naming its catalogue exception code
+  ([#1620](https://github.com/FerroHEALTH/FerroFED/issues/1620), [#1622](https://github.com/FerroHEALTH/FerroFED/issues/1622), [#1623](https://github.com/FerroHEALTH/FerroFED/issues/1623), [#1631](https://github.com/FerroHEALTH/FerroFED/issues/1631), [#1632](https://github.com/FerroHEALTH/FerroFED/issues/1632), [#1633](https://github.com/FerroHEALTH/FerroFED/issues/1633), [#1640](https://github.com/FerroHEALTH/FerroFED/issues/1640)).
+- FerroFED's own PostgreSQL store, `[store]`, for the state every replica
+  shares: the stored queries, the emergency counts, the `DPoP` proofs and
+  a contact point's dispensations ([#1636](https://github.com/FerroHEALTH/FerroFED/issues/1636), [#1637](https://github.com/FerroHEALTH/FerroFED/issues/1637)).
+- Every issuer an `[[auth.issuer]]` of its own `kind` on `ferrohealth-smart`
+  0.13.0, no Basic caller, and each node request a caller originates sent
+  under a token exchanged for that caller ([#1682](https://github.com/FerroHEALTH/FerroFED/issues/1682), [#1703](https://github.com/FerroHEALTH/FerroFED/issues/1703), [#1704](https://github.com/FerroHEALTH/FerroFED/issues/1704), [#1705](https://github.com/FerroHEALTH/FerroFED/issues/1705), [#1749](https://github.com/FerroHEALTH/FerroFED/issues/1749)).
+- Every outbound client on the family's `TlsClient`, at TLS 1.3 unless its
+  `tls` sub-table lowers it ([#1750](https://github.com/FerroHEALTH/FerroFED/issues/1750), [#1766](https://github.com/FerroHEALTH/FerroFED/issues/1766)).
+
 ## Planned
 
 Each milestone on the
@@ -553,13 +580,15 @@ release, and every issue in it names the sections it answers.
 The European interoperability software component, `eehrxf` and every
 document it builds in the exchange format, moves to FerroBRIDGE
 ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)). Prescriptions from openEHR medication data through a
-FHIRconnect mapping and laboratory reports were built there (issues
-[FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321), [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322) and [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), now closed), and discharge
-reports and imaging are being built there ([FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325), [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
+FHIRconnect mapping, laboratory reports, discharge reports and imaging
+were built there (issues
+[FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321), [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322), [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325) and [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326), now closed).
 FerroFED keeps the gateway half: the federation queries, the FHIR face
 routes and the access record, which v0.0.16 carries for prescriptions from
-openEHR medication data and test results ([#1403](https://github.com/FerroHEALTH/FerroFED/issues/1403), [#1404](https://github.com/FerroHEALTH/FerroFED/issues/1404)) and v0.0.17 for
-discharge reports and imaging ([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405), [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406)), with the rest of the
+openEHR medication data and test results and v0.0.17 for discharge
+reports and imaging. v0.0.18 plans the receipt of an imaging report
+([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)), the rating of what a received discharge or imaging
+report can lose ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)), and the rest of the
 manufacturer's conformity work
 ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [#940](https://github.com/FerroHEALTH/FerroFED/issues/940), [Regulatory status](regulatory-status.md)). The
 changelog fragments in
@@ -614,10 +643,13 @@ These are the ones to know before you deploy FerroFED; the
   It lists, reads and receives laboratory reports
   ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)),
   with hazard I-16 of the [clinical safety risk file](clinical-safety.md)
-  open and I-18 closed at S4, P1. Imaging and discharge reports are planned
-  ([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405), [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406),
-  [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
-  [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)). No EU
+  open and I-18 closed at S4, P1. It lists and reads discharge and
+  imaging reports and receives discharge reports
+  ([Discharge reports over FHIR](../integrate/discharge-reports.md),
+  [Imaging reports over FHIR](../integrate/imaging-reports.md)), with
+  hazards I-19 and I-20 open at S4, P3 and the loss of a received
+  discharge report not yet rated ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)). No imaging report is
+  received yet ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)). No EU
   declaration of conformity has been drawn up, and no release carries the
   CE marking
   ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).

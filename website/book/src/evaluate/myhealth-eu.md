@@ -60,7 +60,7 @@ decisions it rests on (#1425).
 <!-- myhealth-eu:begin -->
 <!-- Rendered from conformance/myhealth-eu.tsv by scripts/conformance/myhealth-eu.sh --write. Do not edit between the markers. -->
 
-Of the 73 rows, 31 bind the gateway: 18 met, 3 partly met, 0 waiting on the Art 15(1) act, 10 not met and 0 not assessed. The other 42 do not apply to the gateway.
+Of the 73 rows, 31 bind the gateway: 18 met, 3 partly met, 0 waiting on the Art 15(1) act, 8 not met and 2 not assessed. The other 42 do not apply to the gateway.
 
 | Id | Section | Status | FerroFED's conclusion | Evidence | Issue |
 |---|---|---|---|---|---|
@@ -95,8 +95,8 @@ Of the 73 rows, 31 bind the gateway: 18 met, 3 partly met, 0 waiting on the Art 
 | 07.02 | §1.15.2 | not-applicable | Transcoding the dispensation belongs to the contact point of the country of treatment. | `website/book/src/integrate/national-contact-point.md::What stays with the contact point` | - |
 | 07.03 | §1.15.3 | met | The gateway confirms only after the owner created the dispensation and never sends it twice; updating the available prescriptions is the owner's. | `app/ferrofed-server/tests/it/fhir/prescriptions/dispense.rs::an_owner_that_does_not_answer_is_asked_once_and_the_outcome_is_unknown`<br>`website/book/src/integrate/prescriptions.md::The member contract` | - |
 | 07.04 | §1.15.4 | met | The face takes a discard as an update with status entered-in-error by its own id, held to its profile and written once to the member that holds the dispensation; one sent again as a new dispensation is refused as a duplicate. | `website/book/src/integrate/prescriptions.md::Withdrawing a dispensation`<br>`app/ferrofed-server/tests/it/fhir/prescriptions/withdraw.rs::a_withdrawal_reaches_its_member_alone_with_its_body_unchanged_but_for_its_id`<br>`app/ferrofed-server/tests/it/fhir/prescriptions/dispense/duplicate.rs::a_withdrawal_sent_again_is_refused_as_a_duplicate_with_nothing_written` | - |
-| 08 | §1.16 | not-met | The face serves no laboratory, discharge or imaging document yet. | `website/book/src/evaluate/information-sheet.md::The categories received` | #1404 #1405 #1406 |
-| 08.01 | §1.16.1 | not-met | As 08. | `website/book/src/evaluate/information-sheet.md::The categories received` | #1404 #1405 #1406 |
+| 08 | §1.16 | not-assessed | The face now serves laboratory, discharge and imaging documents; the row is read again. | `website/book/src/evaluate/information-sheet.md::The categories received` | #1795 |
+| 08.01 | §1.16.1 | not-assessed | As 08. | `website/book/src/evaluate/information-sheet.md::The categories received` | #1795 |
 | 08.02 | §1.16.2 | not-applicable | The cross-border exchange belongs to the contact points. | `website/book/src/integrate/national-contact-point.md::What stays with the contact point` | - |
 | 08.03 | §1.16.3 | not-applicable | Display to the professional is the country of treatment's. | `website/book/src/integrate/national-contact-point.md::What stays with the contact point` | - |
 | 09 | §1.17 | not-applicable | Patient access is the Member State's access service, which FerroFED is not. | `website/book/src/evaluate/natural-person-rights.md::Summary` | - |

@@ -98,12 +98,11 @@ any member is asked
 `a_persons_own_grant_lists_and_reads_their_laboratory_report`,
 `a_persons_own_grant_asking_for_another_patients_laboratory_reports_is_refused`).
 
-**The gap.** Imaging and discharge reports have no interface in the
-exchange format (Annex II, point 2.1:
-[#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405),
-[#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406),
-[FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
-[FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
+The document list also names discharge and imaging reports, from a
+member's composition or its own FHIR endpoint, read through the same
+signed `Binary/{token}` reads
+([Discharge reports over FHIR](../integrate/discharge-reports.md),
+[Imaging reports over FHIR](../integrate/imaging-reports.md)).
 
 ## Art 4(2): proxies and legal representatives
 
@@ -290,12 +289,11 @@ writes it to the member that owns its prescription
 ([Receiving a dispensation](../integrate/prescriptions.md#receiving-a-dispensation);
 `fhir/prescriptions/dispense.rs`:
 `a_dispensation_reaches_the_owner_alone_by_its_ehr_id_with_its_body_unchanged`).
-A prescription is served, never received. Imaging and discharge reports
-are the gap of point 2.2
-([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405),
-[#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406),
-[FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
-[FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)).
+A prescription is served, never received. A discharge report is received
+at the member a `[[fhir.receive]]` declares for it
+([Discharge reports the gateway receives](../integrate/discharge-reports.md#discharge-reports-the-gateway-receives)).
+The imaging report is the gap of point 2.2
+([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
 
 ## Art 8: restricting access
 
