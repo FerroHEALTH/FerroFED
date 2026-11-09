@@ -9,10 +9,11 @@ use std::error::Error;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ferrofed_registry::definition::store::{DefinitionStore, Definitions, Insertion, StoreError};
-use ferrofed_registry::definition::{
-    QueryName, QueryNameError, QueryVersion, QueryVersionError, StoredDefinition, VersionPattern,
-};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use jiff::Timestamp;
+use openehr_its::rest::stored_query::{
+    QualifiedQueryName, QueryNameError, QueryVersion, QueryVersionError, VersionPattern,
+};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -59,13 +60,13 @@ fn a_qualified_name_takes_an_optional_namespace() -> TestResult {
         "ehr::all_influenza_vacc_candidates",
         "a-b.c_9",
     ] {
-        assert_eq!(valid, QueryName::new(valid)?.as_str(), "ITS-REST examples");
+        assert_eq!(valid, query_name(valid)?.to_string(), "ITS-REST examples");
     }
     assert_eq!(
         Some("org.openehr"),
-        QueryName::new("org.openehr::q")?.namespace()
+        query_name("org.openehr::q")?.namespace()
     );
-    assert_eq!(None, QueryName::new("q")?.namespace());
+    assert_eq!(None, query_name("q")?.namespace());
     Ok(())
 }
 
@@ -85,7 +86,7 @@ fn a_name_outside_the_its_rest_form_is_refused() {
         (".", QueryNameError::DotSegment),
         ("..", QueryNameError::DotSegment),
     ] {
-        assert_eq!(Err(error), QueryName::new(refused), "{refused:?}");
+        assert_eq!(Err(error), query_name(refused), "{refused:?}");
     }
 }
 
@@ -94,7 +95,7 @@ fn only_a_whole_name_that_is_a_dot_segment_is_refused() -> TestResult {
     // A path segment of three dots, or one that holds `::`, is no dot-segment
     // (RFC 3986 §3.3), so ITS-REST's `[a-zA-Z0-9_.-]` admits these.
     for admitted in ["...", "..::q", ".::q", "ns::..", "ns::.", ".q", "q.."] {
-        assert_eq!(admitted, QueryName::new(admitted)?.as_str(), "{admitted:?}");
+        assert_eq!(admitted, query_name(admitted)?.to_string(), "{admitted:?}");
     }
     Ok(())
 }
@@ -168,7 +169,7 @@ fn a_held_name_and_version_is_refused_and_stands_unchanged() -> TestResult {
     assert_eq!(Insertion::Stored, definitions.insert(first.clone())?);
     let second = definition("ns::q", "1.0.0", "SELECT 2")?;
     assert_eq!(Insertion::Held, definitions.insert(second)?, "§12.7, N44");
-    let name: QueryName = "ns::q".parse()?;
+    let name: QualifiedQueryName = "ns::q".parse()?;
     let found = definitions.find(&name, None).ok_or("held")?;
     assert_eq!("SELECT 1", found.aql(), "the stored version is immutable");
     assert_eq!(
@@ -186,7 +187,7 @@ fn a_lookup_selects_the_highest_version_its_pattern_matches() -> TestResult {
         let inserted = definitions.insert(definition("q", version, version)?)?;
         assert_eq!(Insertion::Stored, inserted);
     }
-    let name: QueryName = "q".parse()?;
+    let name: QualifiedQueryName = "q".parse()?;
     let at = |pattern: Option<&str>| -> Result<Option<String>, Box<dyn Error>> {
         let pattern = pattern.map(str::parse::<VersionPattern>).transpose()?;
         Ok(definitions
@@ -297,7 +298,7 @@ fn a_view_over_a_shared_store_learns_another_writers_versions_on_a_refresh() -> 
     let here = Definitions::open(Box::new(shared.clone()))?;
     let there = Definitions::open(Box::new(shared))?;
     assert!(here.is_shared());
-    let name: QueryName = "ns::q".parse()?;
+    let name: QualifiedQueryName = "ns::q".parse()?;
     assert_eq!(
         Insertion::Stored,
         there.insert(definition("ns::q", "1.1.0", "SELECT 2")?)?

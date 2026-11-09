@@ -51,6 +51,7 @@ use openehr_its::rest::generated::query::{
     AdhocQueryExecute, Query, QueryExecuteAdhocQueryBodyParams, QueryExecuteStoredQueryBodyParams,
     QueryExecuteStoredQueryVersionBodyParams, QueryParameters, ResultSet,
 };
+use openehr_its::rest::stored_query::{QualifiedQueryName, VersionPattern};
 use secrecy::SecretString;
 use url::Url;
 
@@ -191,9 +192,9 @@ pub enum QueryTarget {
     /// `POST {base}/v1/query/{name}` or `/v1/query/{name}/{version}`.
     Stored {
         /// The qualified query name.
-        name: String,
-        /// The version, when the operator named one.
-        version: Option<String>,
+        name: QualifiedQueryName,
+        /// The version, exact or a prefix, when the operator named one.
+        version: Option<VersionPattern>,
     },
 }
 
@@ -601,11 +602,11 @@ impl Listed for StoredVersion<StoredQuery> {
 /// Runs the stored query `name` at its latest version.
 async fn stored(
     group: &QueryClient<'_, ReqwestTransport>,
-    name: &str,
+    name: &QualifiedQueryName,
     body: &Query,
 ) -> Result<ResultSet, Unanswered> {
     let params = QueryExecuteStoredQueryBodyParams {
-        qualified_query_name: name.to_owned(),
+        qualified_query_name: name.clone(),
         accept: Some(JSON.to_owned()),
         content_type: Some(JSON.to_owned()),
     };
@@ -627,13 +628,13 @@ async fn stored(
 /// Runs the stored query `name` at `version`.
 async fn stored_version(
     group: &QueryClient<'_, ReqwestTransport>,
-    name: &str,
-    version: &str,
+    name: &QualifiedQueryName,
+    version: &VersionPattern,
     body: &Query,
 ) -> Result<ResultSet, Unanswered> {
     let params = QueryExecuteStoredQueryVersionBodyParams {
-        qualified_query_name: name.to_owned(),
-        version: version.to_owned(),
+        qualified_query_name: name.clone(),
+        version: *version,
         accept: Some(JSON.to_owned()),
         content_type: Some(JSON.to_owned()),
     };

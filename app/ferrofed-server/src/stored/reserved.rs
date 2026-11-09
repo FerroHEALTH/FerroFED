@@ -16,9 +16,10 @@
 use std::fmt;
 
 use ferrofed_eehrxf::reserved;
+use ferrofed_registry::definition::StoredDefinition;
 use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertion, StoreError};
-use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use jiff::Timestamp;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion};
 
 use crate::security::logged;
 
@@ -31,7 +32,7 @@ use crate::security::logged;
 )]
 pub struct Shadowing {
     /// The qualified name the store holds the definition under.
-    pub name: QueryName,
+    pub name: QualifiedQueryName,
     /// The version it holds it at.
     pub version: QueryVersion,
 }
@@ -85,7 +86,7 @@ impl DefinitionStore for Reserved {
 
     fn insert_assigned(
         &self,
-        name: &QueryName,
+        name: &QualifiedQueryName,
         aql: &str,
         saved: Timestamp,
     ) -> Result<Assignment, StoreError> {
@@ -101,7 +102,7 @@ impl DefinitionStore for Reserved {
         Ok(loaded)
     }
 
-    fn load_named(&self, name: &QueryName) -> Result<Vec<StoredDefinition>, StoreError> {
+    fn load_named(&self, name: &QualifiedQueryName) -> Result<Vec<StoredDefinition>, StoreError> {
         let mut loaded = Self::unshadowed(self.store.load_named(name)?)?;
         loaded.extend(
             self.held
@@ -137,7 +138,8 @@ mod tests {
     use ferrofed_eehrxf::patient_summary::Section;
     use ferrofed_eehrxf::reserved::{SAVED, VERSION};
     use ferrofed_registry::definition::store::{DefinitionStore, Insertion, StoreError};
-    use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
+    use ferrofed_registry::definition::{StoredDefinition, query_name};
+    use openehr_its::rest::stored_query::QueryVersion;
 
     use super::{Reserved, Shadowing};
 
@@ -158,7 +160,7 @@ mod tests {
 
     fn held(name: &str) -> StoredDefinition {
         StoredDefinition::new(
-            QueryName::new(name).unwrap(),
+            query_name(name).unwrap(),
             QueryVersion::new(1, 0, 0),
             "SELECT c FROM EHR e CONTAINS COMPOSITION c".to_owned(),
             SAVED,
@@ -197,8 +199,8 @@ mod tests {
                 panic!("{name}: {refused:?}");
             };
             let shadowing = source.downcast_ref::<Shadowing>().unwrap();
-            assert_eq!(name, shadowing.name.as_str());
-            let named = QueryName::new(name).unwrap();
+            assert_eq!(name, shadowing.name.to_string());
+            let named = query_name(name).unwrap();
             assert!(reserved.load_named(&named).is_err(), "{name}");
         }
     }

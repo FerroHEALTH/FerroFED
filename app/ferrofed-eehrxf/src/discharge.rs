@@ -28,8 +28,9 @@ use eehrxf::document::section::Section;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::Mapping;
 use eehrxf::mappings::HDR;
-use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use fhir_types::r4::bundle::Bundle;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::printer;
 use serde::Deserialize;
 
@@ -61,10 +62,10 @@ const COURSE_TEXT: &str = "The member's record holds no hospital course in a for
 ///
 /// # Errors
 ///
-/// The [`QueryNameError`] of [`QueryName::new`], which the name does not
+/// The [`QueryNameError`] of [`QualifiedQueryName::new`], which the name does not
 /// meet.
-pub fn name() -> Result<QueryName, QueryNameError> {
-    QueryName::new(&format!("{NAMESPACE}::{SLUG}"))
+pub fn name() -> Result<QualifiedQueryName, QueryNameError> {
+    query_name(&format!("{NAMESPACE}::{SLUG}"))
 }
 
 /// Returns the query as AQL text, [`section_query::composed`] of

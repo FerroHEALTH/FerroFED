@@ -23,8 +23,9 @@ use std::path::{Path, PathBuf};
 use ferrofed_registry::definition::store::{
     Assignment, DefinitionStore, Field, FieldFault, Insertion, StoreError,
 };
-use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, assigned_after};
 use jiff::Timestamp;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, WriteTransaction};
 
 use crate::stored::schema::{self, SchemaError};
@@ -78,7 +79,8 @@ impl RedbStore {
 
 impl DefinitionStore for RedbStore {
     fn insert_if_absent(&self, definition: &StoredDefinition) -> Result<Insertion, StoreError> {
-        let name = definition.name().as_str();
+        let name = definition.name().to_string();
+        let name = name.as_str();
         let version = definition.version().to_string();
         let saved = definition.saved().to_string();
         let write = self.database.begin_write().map_err(backend)?;
@@ -108,22 +110,23 @@ impl DefinitionStore for RedbStore {
     // next one written in one write transaction, so no writer stores it first.
     fn insert_assigned(
         &self,
-        name: &QueryName,
+        named: &QualifiedQueryName,
         aql: &str,
         saved: Timestamp,
     ) -> Result<Assignment, StoreError> {
+        let name = named.to_string();
         let write = self.database.begin_write().map_err(backend)?;
         let assigned = {
             let mut table = write.open_table(DEFINITIONS).map_err(backend)?;
             let newest = newest(&table, name.as_str())?;
-            match QueryVersion::assigned_after(newest) {
+            match assigned_after(newest) {
                 Some(version) => {
                     let (text, instant) = (version.to_string(), saved.to_string());
                     table
                         .insert((name.as_str(), text.as_str()), (instant.as_str(), aql))
                         .map_err(backend)?;
                     let definition =
-                        StoredDefinition::new(name.clone(), version, aql.to_owned(), saved);
+                        StoredDefinition::new(named.clone(), version, aql.to_owned(), saved);
                     Assignment::Stored(definition)
                 }
                 None => Assignment::Exhausted,

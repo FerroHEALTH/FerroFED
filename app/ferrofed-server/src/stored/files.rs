@@ -22,12 +22,13 @@ use std::path::{Path, PathBuf};
 use std::str::Utf8Error;
 
 use ferrofed_registry::definition::store::{DefinitionStore, Insertion, StoreError};
-use ferrofed_registry::definition::{
-    QueryName, QueryNameError, QueryVersion, QueryVersionError, StoredDefinition,
-};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use jiff::Timestamp;
 use openehr_federation::aql::Context;
 use openehr_federation::aql::refusal::Refusal;
+use openehr_its::rest::stored_query::{
+    QualifiedQueryName, QueryNameError, QueryVersion, QueryVersionError,
+};
 
 use crate::stored::{Inadmissible, admit};
 
@@ -160,7 +161,7 @@ fn load(path: &Path, context: &Context) -> Result<Vec<StoredDefinition>, FilesEr
             return Err(FilesError::Layout { file: directory });
         }
         let name = file_name(&directory)?;
-        let name = QueryName::new(&name).map_err(|source| FilesError::Name {
+        let name = query_name(&name).map_err(|source| FilesError::Name {
             file: directory.clone(),
             source,
         })?;
@@ -209,7 +210,7 @@ fn file_name(path: &Path) -> Result<String, FilesError> {
 /// The definition of `name` the file `file` holds.
 fn definition(
     file: &Path,
-    name: &QueryName,
+    name: &QualifiedQueryName,
     context: &Context,
 ) -> Result<StoredDefinition, FilesError> {
     let layout = || FilesError::Layout {

@@ -19,12 +19,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_registry::definition::store::{DefinitionStore as _, Insertion};
-use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use ferrofed_server::state::AppState;
 use ferrofed_server::stored::embedded::RedbStore;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pixm_stub;
 use ferrofed_testkit::seed::{CrossReferenceSeed, EhrDomain, PatientId};
+use openehr_its::rest::stored_query::QueryVersion;
 use tokio::net::TcpListener;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -267,11 +268,11 @@ fn stored_queries(definitions: &Path) -> Result<(), Box<dyn Error>> {
     let first: QueryVersion = "1.0.0".parse()?;
     let mut held = Vec::new();
     for number in 1..=STORED {
-        let name = QueryName::new(&format!("org.example::journey_{number:03}"))?;
+        let name = query_name(&format!("org.example::journey_{number:03}"))?;
         held.push(StoredDefinition::new(name, first, patient_query(), saved));
     }
     held.push(StoredDefinition::new(
-        QueryName::new(VERSIONED)?,
+        query_name(VERSIONED)?,
         SECOND_VERSION.parse()?,
         SECOND_TEXT.to_owned(),
         saved,

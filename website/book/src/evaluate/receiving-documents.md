@@ -112,9 +112,13 @@ them; the example shows the first. The composition carries each result's
 value with its unit, the report's code, status, time and conclusion and
 each specimen. Since `eehrxf` 0.1.149 it also carries a result's normal
 reference range, as the `normal_range` of its quantity, and the order
-filler's identifier, as the order the template holds. A typed range, a
-range text, `Observation.basedOn` and an order named by reference alone are
-declared lost, and the answer's `OperationOutcome` names each loss
+filler's identifier, as the order the template holds. Since `eehrxf`
+0.1.183 a typed range, one whose `Observation.referenceRange.type` is set,
+is carried as one of the quantity's `other_reference_ranges`, with its type
+as the range's meaning
+([FerroHEALTH/FerroBRIDGE#1694](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1694)).
+A range text, `Observation.basedOn` and an order named by reference alone
+are declared lost, and the answer's `OperationOutcome` names each loss
 ([FerroHEALTH/FerroBRIDGE#1481](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1481)).
 The member's record holds those only in the original document the
 composition keeps. Hazard I-16 of the [clinical safety risk

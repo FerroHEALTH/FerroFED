@@ -321,10 +321,12 @@ deployment in the EU must plan for are:
   laboratory reports at the member you declare for them and lists each
   member's, with a member that serves its own reports listed as it holds
   them and read through the gateway
-  ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)), and
-  neither the record that member keeps nor the report the gateway writes
-  carries a result's reference range or the order it
-  answers in structured form (hazards I-16 and I-18). It serves
+  ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)).
+  The record that member keeps holds a received result's normal and typed
+  reference ranges and the order filler's identifier, but a range text,
+  `Observation.basedOn` and an order named by reference alone only in the
+  original document (hazard I-16); the report the gateway writes carries
+  each range the member records and the order (hazard I-18). It serves
   prescriptions, and receives dispensations, through members that serve
   both in the HL7 Europe MPD profiles themselves or, in the map mode, from
   their openEHR medication orders, and computes no dispensability,

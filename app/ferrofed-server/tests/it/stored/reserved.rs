@@ -13,12 +13,13 @@ use axum::Router;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::reserved;
 use ferrofed_registry::definition::store::{DefinitionStore, Insertion};
-use ferrofed_registry::definition::{QueryName, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use ferrofed_server::stored::embedded::RedbStore;
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use jiff::Timestamp;
 use openehr_its::rest::generated::definition::StoredQuery;
+use openehr_its::rest::stored_query::QualifiedQueryName;
 use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -29,7 +30,7 @@ use crate::support::{call, chain, error_body};
 use super::{TestResult, get, invoke, parameterised, put, store_file, two_members};
 
 /// The name of the problems section's query.
-fn problems() -> Result<QueryName, Box<dyn Error>> {
+fn problems() -> Result<QualifiedQueryName, Box<dyn Error>> {
     Ok(Section::Problems.name()?)
 }
 
@@ -111,17 +112,20 @@ async fn the_section_queries_are_listed_and_read_at_their_immutable_version() ->
     assert!(
         listed
             .iter()
-            .any(|held| held.name == laboratory.as_str()
-                && held.q == ferrofed_eehrxf::laboratory::aql()),
+            .any(|held| held.name == laboratory && held.q == ferrofed_eehrxf::laboratory::aql()),
         "{laboratory} is listed with its text"
     );
     for section in Section::ALL {
         let name = section.name()?;
         let held = listed
             .iter()
-            .find(|held| held.name == name.as_str())
+            .find(|held| held.name == name)
             .ok_or_else(|| format!("{name} is listed"))?;
-        assert_eq!("1.0.0", held.version, "N44: the one immutable version");
+        assert_eq!(
+            "1.0.0",
+            held.version.to_string(),
+            "N44: the one immutable version"
+        );
         assert_eq!(section.aql(), held.q);
         assert_eq!("AQL", held.r#type);
     }
@@ -155,14 +159,14 @@ async fn a_put_into_the_reserved_namespace_is_refused_and_the_held_text_stands()
     let (app, _a, _b) = gateway(dir.path()).await?;
     let problems = problems()?;
     for (name, version) in [
-        (problems.as_str().to_owned(), "1.0.0"),
-        (problems.as_str().to_owned(), "1.0.1"),
-        (problems.as_str().to_owned(), "2.0.0"),
+        (problems.to_string(), "1.0.0"),
+        (problems.to_string(), "1.0.1"),
+        (problems.to_string(), "2.0.0"),
         (
             format!("{}::patient-summary-alerts", reserved::NAMESPACE),
             "1.0.0",
         ),
-        (problems.as_str().to_uppercase(), "1.0.0"),
+        (problems.to_string().to_uppercase(), "1.0.0"),
         (format!("{}.nested::anything", reserved::NAMESPACE), "1.0.0"),
     ] {
         let (status, text) = call(app.clone(), put(&name, version, &parameterised())?).await?;
@@ -201,7 +205,7 @@ async fn a_store_holding_a_definition_in_the_reserved_namespace_refuses_the_star
         {
             let store = RedbStore::open(&store_file(dir.path()))?;
             let shadow = StoredDefinition::new(
-                QueryName::new(&name)?,
+                query_name(&name)?,
                 "1.0.0".parse()?,
                 parameterised(),
                 Timestamp::UNIX_EPOCH,
@@ -228,7 +232,7 @@ async fn each_section_query_runs_by_name_and_no_patient_identifier_reaches_a_nod
         let dir = tempfile::tempdir()?;
         let (app, a, b) = gateway(dir.path()).await?;
         let name = section.name()?;
-        let (status, text) = call(app, invoke(name.as_str(), &bound(), &[])?).await?;
+        let (status, text) = call(app, invoke(&name.to_string(), &bound(), &[])?).await?;
         assert_eq!(StatusCode::OK, status, "{section:?}: {text}");
         let answer: Selected = serde_json::from_str(&text)?;
         assert_eq!(

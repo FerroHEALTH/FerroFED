@@ -44,6 +44,8 @@ query-window = { $count ->
 } in { $ms } ms
 query-write-aql = Write the AQL query to run.
 query-name-stored = Name the stored query to run.
+query-name-malformed = A stored query name is [namespace::]name over the characters a-z, A-Z, 0-9, _, . and -.
+query-version-malformed = A stored query version is major, major.minor or major.minor.patch, each a number without a leading zero.
 query-header-illegal = A chosen endpoint, organisation or mode cannot be sent as a header.
 query-whole-number = { $field } is a whole number from 0.
 query-parameter-name = Parameter { $number } needs a name of letters, digits and underscores.

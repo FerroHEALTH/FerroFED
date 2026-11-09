@@ -21,7 +21,6 @@ use eehrxf::document::laboratory::LAB_BUNDLE;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::{Project, UnknownContext};
-use ferrofed_registry::definition::{QueryName, QueryNameError};
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::device::{Device, DeviceDeviceName};
@@ -32,6 +31,7 @@ use fhir_types::r4::resource::Resource;
 use fhirconnect::engine::context::CallContext;
 use fhirconnect::operations::contract::ToFhirResponse;
 use fhirconnect::operations::run::Settings;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 
 use crate::prescriptions::mapped::{MapModeError, Template};
 use crate::summary::Organisation;
@@ -221,7 +221,7 @@ impl Written {
     /// # Errors
     ///
     /// The [`QueryNameError`] of the name, which no query meets.
-    pub fn name(self) -> Result<QueryName, QueryNameError> {
+    pub fn name(self) -> Result<QualifiedQueryName, QueryNameError> {
         match self {
             Self::Laboratory => crate::laboratory::name(),
             Self::Discharge => crate::discharge::name(),

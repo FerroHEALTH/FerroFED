@@ -143,6 +143,7 @@ fn the_operational_template_prints_as_adl2_that_parses_back() -> TestResult {
     let TemplateSource::Opt2 {
         template: built,
         resolved_id,
+        ..
     } = source
     else {
         return Err("an ADL 2 template built no OPT2".into());

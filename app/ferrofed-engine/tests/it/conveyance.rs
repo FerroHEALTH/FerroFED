@@ -38,6 +38,7 @@ use ferrofed_testkit::mock::Server;
 use http::{HeaderMap, Method};
 use openehr_its::json::from_canonical_json;
 use openehr_its::rest::client::ReqwestTransport;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion};
 use openehr_rm::v1_2::ehr::ehr_status::EhrStatus;
 use secrecy::SecretString;
 use wiremock::matchers::{method, path};
@@ -437,9 +438,10 @@ async fn a_stored_query_definition_conveys_the_caller() -> TestResult {
         ResponseTemplate::new(200),
     )
     .await;
+    let name: QualifiedQueryName = "org.example::conveyed".parse()?;
     let at = DefinitionAt {
-        name: "org.example::conveyed",
-        version: "1.0.0",
+        name: &name,
+        version: QueryVersion::new(1, 0, 0),
     };
     client(&server.uri())?
         .store_definition(at, NODE_AQL, &options(conveyed::conveyance())?)
@@ -674,9 +676,10 @@ async fn a_caller_claim_carrying_the_withheld_identifier_stops_an_ehr_call_and_a
         ),
         "{created:?}"
     );
+    let name: QualifiedQueryName = "org.example::conveyed".parse()?;
     let at = DefinitionAt {
-        name: "org.example::conveyed",
-        version: "1.0.0",
+        name: &name,
+        version: QueryVersion::new(1, 0, 0),
     };
     let stored = client
         .store_definition(at, NODE_AQL, &options(conveyed::conveyance_of(caller))?)
