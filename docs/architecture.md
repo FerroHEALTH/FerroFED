@@ -1245,9 +1245,9 @@ client credentials and an RFC 7523 §2.2 assertion (§13.1, N25):
   are read from the `sent` of the client's `DeadlineElapsed` and
   `DpopProof` (`openehr-its` 0.0.83 and 0.0.84, #566, #574);
 - **mutual TLS** (built with #492, RFC 8705): a node's `[credentials]`
-  section takes `client_identity_file` and `trust_roots_file`, the keys
-  and the `ferrofed_identity::fhir::Tls` type every outbound client takes
-  (#507), and the node and its token endpoint are reached over one
+  section takes a `tls` table, `ferrohealth-server`'s
+  `TlsClientSection` read into the `TlsClient` every outbound client takes
+  (#507, #1750), and the node and its token endpoint are reached over one
   transport of the endpoint's own built with them
   (`NodeClients::from_snapshot_over`), `https` under every profile. An
   `oauth2` grant may then authenticate with `tls_client_auth` or

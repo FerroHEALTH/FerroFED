@@ -46,7 +46,7 @@ use url::Url;
 use crate::auth::Gate;
 use crate::auth::refusal::MachineRefusal;
 use crate::config::ihe::pmir::{OnDrain, PmirSettings};
-use crate::config::service::{self, ServiceAuthError, TlsRefused};
+use crate::config::service::{self, ServiceAuthError};
 use ferrofed_operator_api::health::Observed;
 use subscription::{RegistryFault, Watch};
 
@@ -67,9 +67,6 @@ pub enum IdentityFeedError {
     /// whose token requests have no HTTP client.
     #[error("the PMIR credentials cannot be used")]
     Grant(#[source] ServiceAuthError),
-    /// The TLS material of `[pmir]` does not read.
-    #[error("the PMIR TLS material cannot be used")]
-    Tls(#[source] TlsRefused),
 }
 
 /// The identity feed a running gateway keeps: its subscription and the
@@ -116,11 +113,10 @@ impl IdentityFeed {
         domains: BTreeSet<String>,
         audit: Option<Arc<dyn AuditRecorder>>,
     ) -> Result<Self, IdentityFeedError> {
-        let tls = service::tls_of("pmir", &settings.tls).map_err(IdentityFeedError::Tls)?;
         let auth =
             service::service_authentication("pmir.credentials", settings.credentials.as_ref())
                 .map_err(IdentityFeedError::Grant)?;
-        let subscriber = pmir::subscriber(&settings.url, &auth, &tls)?;
+        let subscriber = pmir::subscriber(&settings.url, &auth, &settings.tls)?;
         // NOTE: PMIR §2:3.94.5.1: each ITI-94 exchange is audited, and one whose
         // record is refused fails like a Registry that did not answer.
         let subscriber = match &audit {

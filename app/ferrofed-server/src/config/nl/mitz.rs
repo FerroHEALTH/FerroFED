@@ -16,8 +16,7 @@
 //! ```toml
 //! [nl_gf.mitz]
 //! url = "https://mitz.example.org/geslotenautorisatievraag"
-//! client_identity_file = "/run/secrets/mitz-client.pem"
-//! trust_roots_file = "/etc/ferrofed/mitz-roots.pem"
+//! tls = { client_identity_file = "/run/secrets/mitz-client.pem", trust_roots_file = "/etc/ferrofed/mitz-roots.pem" }
 //! namespaces = ["urn:oid:2.999.1"]
 //! purpose = "TREAT"
 //! data_categories = ["GGC002"]
@@ -44,13 +43,13 @@
 //! of [`transport`]. No specification governs the shape of the table: our
 //! own design.
 
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 use std::collections::BTreeMap;
 use std::fmt;
-use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::nl::mitz::is_purpose;
-use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use nl_generic_functions::identification::PSEUDO_BSN_SYSTEM;
 use serde::Deserialize;
@@ -61,7 +60,6 @@ use crate::config::resolve::localization_budget_ms;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::{Config, Credentials, transport};
-use ferrohealth_secret::file::read_secret;
 
 /// The key of the Mitz table.
 pub const MITZ_KEY: &str = "nl_gf.mitz";
@@ -74,13 +72,9 @@ pub struct Mitz {
     pub url: SecretUrl,
     /// How the gateway authenticates to Mitz beside mutual TLS, if at all.
     pub credentials: Option<Credentials>,
-    /// The gateway's client certificate chain and private key, PEM, for
-    /// mutual TLS, inline or through `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots Mitz's certificate chains to.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the service is reached with: the table's `tls`
+    /// sub-table.
+    pub tls: TlsClientSection,
     /// The client namespaces that stand for the BSN, beside the BSN systems.
     pub namespaces: Vec<String>,
     /// The purpose of use: `TREAT` or `COC`.
@@ -98,9 +92,7 @@ impl Default for Mitz {
         Self {
             url: SecretUrl::default(),
             credentials: None,
-            client_identity: None,
-            client_identity_file: None,
-            trust_roots_file: None,
+            tls: TlsClientSection::default(),
             namespaces: Vec::new(),
             purpose: String::new(),
             data_categories: Vec::new(),
@@ -128,10 +120,8 @@ pub struct MitzSettings {
     pub url: SecretUrl,
     /// How the gateway authenticates to it.
     pub credentials: Option<Scheme>,
-    /// The client certificate chain and key.
-    pub client_identity: Option<Secret>,
-    /// The PEM trust roots.
-    pub trust_roots: Option<String>,
+    /// The TLS material it is reached with, every file read.
+    pub tls: Arc<TlsClient>,
     /// The namespaces that stand for the BSN, as written.
     pub namespaces: Vec<String>,
     /// The purpose, `TREAT` or `COC`.
@@ -149,8 +139,7 @@ impl fmt::Debug for MitzSettings {
         f.debug_struct("MitzSettings")
             .field("url", &self.url)
             .field("credentials", &self.credentials.is_some())
-            .field("client_identity", &self.client_identity.is_some())
-            .field("trust_roots", &self.trust_roots.is_some())
+            .field("tls", &self.tls)
             .field("namespaces", &self.namespaces)
             .field("purpose", &self.purpose)
             .field("data_categories", &self.data_categories)
@@ -222,27 +211,11 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
         mitz.url.expose(),
         transport::identity_site(MITZ_KEY, credentials.is_some().then_some(section.as_str())),
     )?;
-    let client_identity = read_secret(
-        "nl_gf.mitz.client_identity",
-        mitz.client_identity.clone(),
-        mitz.client_identity_file.as_deref(),
-    )?;
-    let trust_roots = mitz
-        .trust_roots_file
-        .as_ref()
-        .map(|path| {
-            std::fs::read_to_string(path).map_err(|source| Error::Secret {
-                key: String::from("nl_gf.mitz.trust_roots_file"),
-                path: path.clone(),
-                source,
-            })
-        })
-        .transpose()?;
+    let tls = crate::config::tls::read("nl_gf.mitz.tls", &mitz.tls)?;
     Ok(MitzSettings {
         url: mitz.url.clone(),
         credentials,
-        client_identity,
-        trust_roots,
+        tls,
         namespaces: mitz.namespaces.clone(),
         purpose: mitz.purpose.clone(),
         data_categories: mitz.data_categories.clone(),

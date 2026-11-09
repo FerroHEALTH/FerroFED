@@ -11,7 +11,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::{Authentication, Tls};
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::nl::nvi::{NviConfig, NviConfigError, NviLocalizer};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError};
@@ -59,7 +59,7 @@ fn config(base: &str) -> Result<NviConfig, Box<dyn Error>> {
             ("ura-test-0003".to_owned(), node("node-b")?),
         ]),
         namespaces: BTreeSet::from([IdentifierNamespace::new("pseudo-bsn")?]),
-        tls: Tls::default(),
+        tls: ferrofed_testkit::tls::platform(),
     })
 }
 

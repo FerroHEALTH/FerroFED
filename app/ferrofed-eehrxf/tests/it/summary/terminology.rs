@@ -181,7 +181,7 @@ fn stub_terminology(
     let client = ferrofed_eehrxf::terminology::BridgeTerminology::new(
         &format!("{}/fhir", server.uri()),
         &ferrofed_identity::fhir::Authentication::None,
-        &ferrofed_identity::fhir::Tls::default(),
+        &ferrofed_testkit::tls::platform(),
         std::time::Duration::from_secs(5),
     )?;
     Ok(Terminology::server(std::sync::Arc::new(client)))

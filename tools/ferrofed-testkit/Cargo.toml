@@ -71,6 +71,7 @@ opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
 tonic = { workspace = true, features = ["server", "router", "tls-aws-lc"] }
 # The TLS configuration of every harness server, built as a listener's is
 # from the certificate files written to a temporary directory (#1486).
+ferrohealth-secret.workspace = true
 ferrohealth-server.workspace = true
 # A console session as a real sign-in leaves it (#1504): the relying party of
 # ferrohealth-smart completes a code exchange at a test provider, and the

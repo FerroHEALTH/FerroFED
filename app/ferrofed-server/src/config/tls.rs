@@ -3,24 +3,22 @@
 
 //! The TLS material a table names for the service or the node it reaches.
 //!
-//! `[[pixm.manager]]`, `[pdqm]`, `[pmir]`, `[registry.mcsd]` and a node's
-//! `[credentials."<endpoint id>"]` take the keys `[xcpd]` takes:
-//! `client_identity`, inline, or `client_identity_file`, the gateway's client
-//! certificate chain and private key in PEM for mutual TLS, held as a
-//! secret; and `trust_roots_file`, a PEM bundle of trust roots beside the
-//! platform's. Every file is read once, at load. A node's material serves
-//! the node and its authorization server alike, so a token bound to the
-//! certificate travels only over connections that present it (RFC 8705 §3).
-//! No specification governs the keys: our own design, as `[xcpd]` names
-//! them.
+//! Every outbound table takes a `tls` sub-table, the family's
+//! `ferrohealth_server::tls_client::TlsClientSection`: `client_identity`,
+//! inline, or `client_identity_file`, the gateway's client certificate chain
+//! and private key in PEM for mutual TLS, held as a secret;
+//! `trust_roots_file`, a PEM bundle of trust roots beside the platform's;
+//! and `min_version`, `"1.3"` unless lowered to `"1.2"`. `read` reads
+//! every file once, at load. A node's material serves the node and its
+//! authorization server alike, so a token bound to the certificate travels
+//! only over connections that present it (RFC 8705 §3). No specification
+//! governs the keys: our own design.
 
-use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use ferrofed_engine::onward::mtls::ThumbprintError;
-use ferrohealth_secret::secret::Secret;
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 
 use crate::config::error::Error;
-use ferrohealth_secret::file::read_secret;
 
 /// TLS material, or a use of mutual TLS, the gateway cannot take.
 ///
@@ -31,7 +29,7 @@ pub enum TlsFault {
     /// A service's credentials section names TLS material, which that
     /// service's own table takes.
     #[error(
-        "{section} names client_identity or trust_roots_file, which only a node's [credentials] section takes; set them on the service's own table"
+        "{section} names a tls table, which only a node's [credentials] section takes; set it on the service's own table"
     )]
     OnService {
         /// The credentials section.
@@ -40,21 +38,11 @@ pub enum TlsFault {
     /// A grant uses mutual TLS, and its endpoint's section names no client
     /// identity to present.
     #[error(
-        "{section} authenticates or binds its tokens by a TLS client certificate (RFC 8705), and its credentials section sets no client_identity"
+        "{section} authenticates or binds its tokens by a TLS client certificate (RFC 8705), and its credentials section sets no tls.client_identity"
     )]
     WithoutClientIdentity {
         /// The grant's section.
         section: String,
-    },
-    /// The client identity holds no certificate whose thumbprint the
-    /// gateway can take (RFC 8705 §3.1).
-    #[error("{key} holds no certificate a token can be bound to (RFC 8705 §3.1)")]
-    Identity {
-        /// The key the identity was read from.
-        key: String,
-        /// Why it does not read; it quotes no part of the PEM.
-        #[source]
-        source: ThumbprintError,
     },
     /// A URL the gateway presents its client certificate to is not
     /// `https`.
@@ -67,47 +55,13 @@ pub enum TlsFault {
     },
 }
 
-/// The TLS material of one service, with every file read.
-///
-/// `Debug` shows the client identity as `***`, because [`Secret`] does.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TlsSettings {
-    /// The gateway's client certificate chain and private key, PEM.
-    pub client_identity: Option<Secret>,
-    /// The PEM trust roots beside the platform's.
-    pub trust_roots: Option<String>,
-}
-
-/// Reads the TLS material of the table at `key`: the client identity, inline
-/// or from `identity_file`, and the trust roots from `roots_file`.
+/// Reads the TLS material `section` names for the table at `key`, such as
+/// `xcpd.tls`, so a refusal names `xcpd.tls.client_identity`.
 ///
 /// # Errors
 ///
-/// [`Error::SecretFile`] for an identity given inline and as a file, or a
-/// file that cannot be read or is empty, and [`Error::Secret`] for trust
-/// roots that cannot be read.
-pub(crate) fn resolve(
-    key: &str,
-    identity: Option<&Secret>,
-    identity_file: Option<&Path>,
-    roots_file: Option<&PathBuf>,
-) -> Result<TlsSettings, Error> {
-    let client_identity = read_secret(
-        &format!("{key}.client_identity"),
-        identity.cloned(),
-        identity_file,
-    )?;
-    let trust_roots = roots_file
-        .map(|path| {
-            std::fs::read_to_string(path).map_err(|source| Error::Secret {
-                key: format!("{key}.trust_roots_file"),
-                path: path.clone(),
-                source,
-            })
-        })
-        .transpose()?;
-    Ok(TlsSettings {
-        client_identity,
-        trust_roots,
-    })
+/// [`Error::TlsClient`] for material that cannot be read or holds no PEM of
+/// the kind its key takes.
+pub(crate) fn read(key: &str, section: &TlsClientSection) -> Result<Arc<TlsClient>, Error> {
+    Ok(Arc::new(TlsClient::read(key, section)?))
 }
