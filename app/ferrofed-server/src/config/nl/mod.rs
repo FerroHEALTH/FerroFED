@@ -58,9 +58,8 @@ pub struct NlGfSettings {
 /// that does not parse, [`Error::UrlCredentials`] for one that carries a
 /// user name or a password, [`Error::Cleartext`] for one that is not
 /// `https` outside the development profile, [`BindingFault::NviGrant`] for an
-/// OAuth 2.0 or FAPI 2.0 grant for the NVI,
-/// [`CredentialsFault::ServiceGrantNotHere`] for an `oauth2`, Nuts or FAPI
-/// 2.0 grant for Mitz, the errors of a Nuts grant that cannot be built, and
+/// `oauth` grant for the NVI,
+/// [`CredentialsFault::ServiceGrantNotHere`] for a Nuts grant for Mitz, the errors of a Nuts grant that cannot be built, and
 /// the errors of a secret or a file that cannot be read.
 ///
 /// [`BindingFault::BsnAsPseudonym`]: crate::config::error::binding::BindingFault::BsnAsPseudonym

@@ -84,8 +84,6 @@ messages! {
     ChooseTheBindingSection = "choose-the-binding-section",
     /// `Clear`
     Clear = "clear",
-    /// `Client assertion audience`
-    ClientAssertionAudience = "client-assertion-audience",
     /// `Client authentication`
     ClientAuthentication = "client-authentication",
     /// `Client credentials`
@@ -216,8 +214,6 @@ messages! {
     GiveAqlStore = "give-aql-store",
     /// `Give the reason for the change.`
     GiveReasonChange = "give-reason-change",
-    /// `Grant`
-    Grant = "grant",
     /// `Grant settings`
     GrantSettings = "grant-settings",
     /// `Grant type`
@@ -392,6 +388,8 @@ messages! {
     RemoveThisNewSecret = "remove-this-new-secret",
     /// `Remove this value`
     RemoveThisValue = "remove-this-value",
+    /// `Security profile`
+    SecurityProfile = "security-profile",
     /// `Show the value while held`
     ShowSecretWhileHeld = "show-secret-while-held",
     /// `Replica …: …`
@@ -566,16 +564,18 @@ messages! {
     ThisNewSetting = "this-new-setting",
     /// `TLS`
     Tls = "tls",
+    /// `TLS client certificate file`
+    TlsClientCertificateFile = "tls-client-certificate-file",
     /// `TLS client certificate and key (PEM)`
     TlsClientCertificateKeyPem = "tls-client-certificate-key-pem",
     /// `TLS client certificate only`
     TlsClientCertificateOnly = "tls-client-certificate-only",
     /// `TLS client certificate (tls_client_auth)`
     TlsClientCertificateTlsClientAuth = "tls-client-certificate-tls-client-auth",
+    /// `TLS client key file`
+    TlsClientKeyFile = "tls-client-key-file",
     /// `Token endpoint`
     TokenEndpoint = "token-endpoint",
-    /// `Token exchange`
-    TokenExchange = "token-exchange",
     /// `TOML`
     Toml = "toml",
     /// `The TOML is larger than … bytes.`

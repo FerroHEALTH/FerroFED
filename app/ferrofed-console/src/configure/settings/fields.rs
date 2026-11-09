@@ -17,25 +17,25 @@ pub(crate) const BASIC: &[Field] = &[Field {
 /// How the gateway authenticates at a token endpoint.
 pub(crate) const CLIENT_AUTH: &[(&str, Msg)] = &[
     ("", Msg::NotSet3),
+    ("client_secret_basic", Msg::ClientSecretBasicScheme),
+    ("client_secret_post", Msg::ClientSecretBody),
     ("private_key_jwt", Msg::SignedClientAssertionPrivateKeyJwt),
     ("tls_client_auth", Msg::TlsClientCertificateTlsClientAuth),
     (
         "self_signed_tls_client_auth",
         Msg::SelfSignedTlsClientCertificate,
     ),
-    ("client_secret_basic", Msg::ClientSecretBasicScheme),
-    ("client_secret_post", Msg::ClientSecretBody),
 ];
 
-/// How the gateway authenticates under the client credentials grant.
-pub(crate) const OAUTH_CLIENT_AUTH: &[(&str, Msg)] = &[
+/// The security profiles the client credentials grant is held to.
+pub(crate) const SECURITY_PROFILE: &[(&str, Msg)] = &[
     ("", Msg::NotSet3),
-    ("client_secret_basic", Msg::ClientSecretBasicScheme),
-    ("client_secret_post", Msg::ClientSecretBody),
-    ("private_key_jwt", Msg::SignedClientAssertionPrivateKeyJwt),
+    ("oauth2", Msg::Oauth20),
+    ("fapi2", Msg::Fapi20),
 ];
 
-/// The settings of the client credentials grant, the `oauth` table.
+/// The settings of the client credentials grant, the `oauth` table, with
+/// its sender constraint and its security profile.
 pub(crate) const OAUTH: &[Field] = &[
     Field {
         key: "oauth.issuer",
@@ -55,7 +55,12 @@ pub(crate) const OAUTH: &[Field] = &[
     Field {
         key: "oauth.client_auth",
         label: Msg::ClientAuthentication,
-        kind: Kind::Choice(OAUTH_CLIENT_AUTH),
+        kind: Kind::Choice(CLIENT_AUTH),
+    },
+    Field {
+        key: "oauth.security_profile",
+        label: Msg::SecurityProfile,
+        kind: Kind::Choice(SECURITY_PROFILE),
     },
     Field {
         key: "oauth.private_key_file",
@@ -63,8 +68,43 @@ pub(crate) const OAUTH: &[Field] = &[
         kind: Kind::Path,
     },
     Field {
+        key: "oauth.previous_private_key_file",
+        label: Msg::PreviousClientKeyFile,
+        kind: Kind::Path,
+    },
+    Field {
+        key: "oauth.client_certificate_file",
+        label: Msg::TlsClientCertificateFile,
+        kind: Kind::Path,
+    },
+    Field {
+        key: "oauth.client_key_file",
+        label: Msg::TlsClientKeyFile,
+        kind: Kind::Path,
+    },
+    Field {
+        key: "oauth.dpop_key_file",
+        label: Msg::DpopKeyFile,
+        kind: Kind::Path,
+    },
+    Field {
+        key: "oauth.certificate_bound",
+        label: Msg::BindTokensTlsClientCertificate,
+        kind: Kind::Switch,
+    },
+    Field {
+        key: "oauth.mtls_alias_hosts",
+        label: Msg::MutualTlsAliasHosts,
+        kind: Kind::List,
+    },
+    Field {
         key: "oauth.scope",
         label: Msg::Scope,
+        kind: Kind::Text,
+    },
+    Field {
+        key: "oauth.authorization_details",
+        label: Msg::AuthorizationDetailsJson,
         kind: Kind::Text,
     },
     Field {
@@ -72,145 +112,8 @@ pub(crate) const OAUTH: &[Field] = &[
         label: Msg::Resource,
         kind: Kind::Text,
     },
-];
-
-/// The OAuth 2.0 grants a node takes.
-pub(crate) const OAUTH2_GRANT: &[(&str, Msg)] = &[
-    ("", Msg::NotSet3),
-    ("client_credentials", Msg::ClientCredentials),
-    ("token_exchange", Msg::TokenExchange),
-];
-
-/// The settings of an OAuth 2.0 grant.
-pub(crate) const OAUTH2: &[Field] = &[
     Field {
-        key: "oauth2.grant",
-        label: Msg::Grant,
-        kind: Kind::Choice(OAUTH2_GRANT),
-    },
-    Field {
-        key: "oauth2.client_auth",
-        label: Msg::ClientAuthentication,
-        kind: Kind::Choice(CLIENT_AUTH),
-    },
-    Field {
-        key: "oauth2.token_endpoint",
-        label: Msg::TokenEndpoint,
-        kind: Kind::Url,
-    },
-    Field {
-        key: "oauth2.client_id",
-        label: Msg::ClientId,
-        kind: Kind::Text,
-    },
-    Field {
-        key: "oauth2.scope",
-        label: Msg::Scope,
-        kind: Kind::Text,
-    },
-    Field {
-        key: "oauth2.assertion_audience",
-        label: Msg::ClientAssertionAudience,
-        kind: Kind::Choice(&[
-            ("", Msg::NotSet3),
-            ("token_endpoint", Msg::TheTokenEndpoint),
-            ("issuer", Msg::TheIssuer),
-        ]),
-    },
-    Field {
-        key: "oauth2.issuer",
-        label: Msg::Issuer,
-        kind: Kind::Text,
-    },
-    Field {
-        key: "oauth2.resource",
-        label: Msg::Resource,
-        kind: Kind::Text,
-    },
-    Field {
-        key: "oauth2.audience",
-        label: Msg::Audience,
-        kind: Kind::Text,
-    },
-    Field {
-        key: "oauth2.dpop_key_file",
-        label: Msg::DpopKeyFile,
-        kind: Kind::Path,
-    },
-    Field {
-        key: "oauth2.tls_client_certificate_bound_access_tokens",
-        label: Msg::BindTokensTlsClientCertificate,
-        kind: Kind::Switch,
-    },
-];
-
-/// The settings of a FAPI 2.0 grant.
-pub(crate) const FAPI2: &[Field] = &[
-    Field {
-        key: "fapi2.issuer",
-        label: Msg::Issuer,
-        kind: Kind::Url,
-    },
-    Field {
-        key: "fapi2.grant",
-        label: Msg::Grant,
-        kind: Kind::Choice(OAUTH2_GRANT),
-    },
-    Field {
-        key: "fapi2.client_id",
-        label: Msg::ClientId,
-        kind: Kind::Text,
-    },
-    Field {
-        key: "fapi2.client_auth",
-        label: Msg::ClientAuthentication,
-        kind: Kind::Choice(&[
-            ("", Msg::NotSetPrivateKeyJwt),
-            ("private_key_jwt", Msg::SignedClientAssertionPrivateKeyJwt),
-            ("tls_client_auth", Msg::TlsClientCertificateTlsClientAuth),
-            (
-                "self_signed_tls_client_auth",
-                Msg::SelfSignedTlsClientCertificate,
-            ),
-        ]),
-    },
-    Field {
-        key: "fapi2.client_key_file",
-        label: Msg::ClientKeyFile,
-        kind: Kind::Path,
-    },
-    Field {
-        key: "fapi2.previous_client_key_file",
-        label: Msg::PreviousClientKeyFile,
-        kind: Kind::Path,
-    },
-    Field {
-        key: "fapi2.dpop_key_file",
-        label: Msg::DpopKeyFile,
-        kind: Kind::Path,
-    },
-    Field {
-        key: "fapi2.tls_client_certificate_bound_access_tokens",
-        label: Msg::BindTokensTlsClientCertificate,
-        kind: Kind::Switch,
-    },
-    Field {
-        key: "fapi2.scope",
-        label: Msg::Scope,
-        kind: Kind::Text,
-    },
-    Field {
-        key: "fapi2.authorization_details",
-        label: Msg::AuthorizationDetailsJson,
-        kind: Kind::Text,
-    },
-    Field {
-        key: "fapi2.resource",
-        label: Msg::Resource,
-        kind: Kind::Text,
-    },
-    Field {
-        key: "fapi2.audience",
+        key: "oauth.audience",
         label: Msg::Audience,
         kind: Kind::Text,
     },
@@ -256,15 +159,8 @@ pub(crate) const NUTS: &[Field] = &[
 ];
 
 /// The TLS settings a node's credential takes beside any grant.
-pub const TLS: &[Field] = &[
-    Field {
-        key: "tls.trust_roots_file",
-        label: Msg::TrustRootsFile,
-        kind: Kind::Path,
-    },
-    Field {
-        key: "mtls_alias_hosts",
-        label: Msg::MutualTlsAliasHosts,
-        kind: Kind::List,
-    },
-];
+pub const TLS: &[Field] = &[Field {
+    key: "tls.trust_roots_file",
+    label: Msg::TrustRootsFile,
+    kind: Kind::Path,
+}];

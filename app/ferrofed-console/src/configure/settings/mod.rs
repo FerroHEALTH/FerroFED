@@ -5,9 +5,9 @@
 //! forms show them and as the gateway takes them.
 //!
 //! A credential's form shows the fields of the grant the operator chooses:
-//! the client credentials grant, basic authentication, an OAuth 2.0 grant
-//! for token exchange or a sender constraint, a FAPI 2.0 grant or the Nuts
-//! grant, beside the TLS material a node takes (§13.1, N25). A binding section's form shows each setting it holds as a field
+//! the client credentials grant, with its sender constraint and its
+//! security profile, basic authentication or the Nuts grant, beside the TLS
+//! material a node takes (§13.1, N25). A binding section's form shows each setting it holds as a field
 //! of its own, and takes new ones a row each. Either is sent as the one
 //! TOML inline table the gateway takes, built here from the held settings,
 //! so a key the form does not show is kept. A secret is never a setting:
@@ -27,29 +27,17 @@ pub enum Grant {
     /// The TLS client certificate alone, or nothing.
     Transport,
     /// The OAuth 2.0 client credentials grant (RFC 6749 §4.4), the `oauth`
-    /// table.
+    /// table, under the FAPI 2.0 Security Profile where it says so.
     Oauth,
     /// RFC 7617 basic authentication.
     Basic,
-    /// An OAuth 2.0 grant at the node's token endpoint for token exchange
-    /// or a sender constraint, the `oauth2` table.
-    OAuth2,
-    /// A grant under the FAPI 2.0 Security Profile.
-    Fapi2,
     /// The Nuts grant of the Dutch Generic Functions.
     Nuts,
 }
 
 impl Grant {
     /// Every grant, in the order the select lists them.
-    pub const ALL: [Self; 6] = [
-        Self::Oauth,
-        Self::OAuth2,
-        Self::Fapi2,
-        Self::Nuts,
-        Self::Basic,
-        Self::Transport,
-    ];
+    pub const ALL: [Self; 4] = [Self::Oauth, Self::Nuts, Self::Basic, Self::Transport];
 
     /// The grant as the form names it.
     #[must_use]
@@ -58,8 +46,6 @@ impl Grant {
             Self::Transport => "transport",
             Self::Oauth => "oauth",
             Self::Basic => "basic",
-            Self::OAuth2 => "oauth2",
-            Self::Fapi2 => "fapi2",
             Self::Nuts => "nuts",
         }
     }
@@ -71,8 +57,6 @@ impl Grant {
             Self::Transport => Msg::TlsClientCertificateOnly,
             Self::Oauth => Msg::ClientCredentials,
             Self::Basic => Msg::BasicAuthentication,
-            Self::OAuth2 => Msg::Oauth20,
-            Self::Fapi2 => Msg::Fapi20,
             Self::Nuts => Msg::Nuts,
         }
     }
@@ -89,10 +73,6 @@ impl Grant {
         let secret = |key: &str| slots.iter().any(|slot| slot.key == key);
         if table.contains_key("oauth") {
             Self::Oauth
-        } else if table.contains_key("oauth2") {
-            Self::OAuth2
-        } else if table.contains_key("fapi2") {
-            Self::Fapi2
         } else if table.contains_key("nuts") {
             Self::Nuts
         } else if table.contains_key("user") || secret("password") {
@@ -110,8 +90,6 @@ impl Grant {
             Self::Transport => &[],
             Self::Oauth => &["oauth"],
             Self::Basic => &["user"],
-            Self::OAuth2 => &["oauth2"],
-            Self::Fapi2 => &["fapi2"],
             Self::Nuts => &["nuts"],
         }
     }
@@ -128,11 +106,7 @@ impl Grant {
                 key: "password",
                 label: Msg::Password,
             }],
-            Self::OAuth2 => &[Secret {
-                key: "oauth2.client_secret",
-                label: Msg::ClientSecret,
-            }],
-            Self::Transport | Self::Fapi2 | Self::Nuts => &[],
+            Self::Transport | Self::Nuts => &[],
         }
     }
 
@@ -143,8 +117,6 @@ impl Grant {
             Self::Transport => &[],
             Self::Oauth => fields::OAUTH,
             Self::Basic => fields::BASIC,
-            Self::OAuth2 => fields::OAUTH2,
-            Self::Fapi2 => fields::FAPI2,
             Self::Nuts => fields::NUTS,
         }
     }

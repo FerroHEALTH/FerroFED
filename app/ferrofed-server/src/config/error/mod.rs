@@ -55,6 +55,18 @@ pub enum Error {
         /// The dotted key that replaces it.
         new: String,
     },
+    /// A grant table a release removed is still set; the grant moved to the
+    /// `oauth` table beside it, and the upgrade notes of that release give
+    /// the step.
+    #[error(
+        "{old} is removed; configure the grant in {new}, and a token exchange in the onward table beside it (see the upgrade notes)"
+    )]
+    Replaced {
+        /// The removed dotted key.
+        old: String,
+        /// The dotted key of the table that replaces it.
+        new: String,
+    },
     /// A secret and its `_file` sibling are both set, or the file cannot be
     /// read or holds nothing.
     #[error(transparent)]
@@ -147,10 +159,6 @@ pub enum Error {
     /// `https`, outside a configuration marked for development.
     #[error(transparent)]
     Cleartext(#[from] CleartextError),
-    /// A FAPI 2.0 grant, or an `oauth2` grant's assertion audience, is
-    /// refused.
-    #[error(transparent)]
-    GrantFault(#[from] crate::config::grant::GrantFault),
     /// TLS material, or a use of mutual TLS, is refused (RFC 8705).
     #[error(transparent)]
     TlsFault(#[from] crate::config::tls::TlsFault),

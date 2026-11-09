@@ -12,7 +12,6 @@
 use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
 use ferrohealth_secret::secret::Secret;
-use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_server::tls_client::TlsClientSection;
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;
@@ -31,7 +30,6 @@ pub mod emergency;
 pub mod error;
 pub mod fhir;
 pub mod gateway;
-pub mod grant;
 #[cfg(feature = "binding-ihe")]
 pub mod ihe;
 pub mod limits;
@@ -491,10 +489,10 @@ impl Default for Federation {
 /// The credentials one endpoint expects.
 ///
 /// A section names basic credentials, the OAuth 2.0 client credentials grant
-/// of `ferrohealth-smart` (`oauth`), FerroFED's own OAuth 2.0 grant for what
-/// that one does not carry (`oauth2`), a Nuts grant or a FAPI 2.0 grant, and
-/// for a node the TLS client certificate the gateway presents to it and to
-/// its authorization server. Machine-to-machine authentication is HTTP
+/// of `ferrohealth-smart` (`oauth`), under the FAPI 2.0 Security Profile
+/// where it says so, or a Nuts grant, and for a node its onward lane and the
+/// TLS client certificate the gateway presents to it and to its
+/// authorization server. Machine-to-machine authentication is HTTP
 /// Basic or an OAuth 2.0 grant, never a static bearer token.
 /// Every secret is reachable inline or through its `_file` sibling; setting
 /// both is a boot error, and so is naming two schemes. A node's section may
@@ -529,31 +527,16 @@ pub struct Credentials {
     /// agreement, `false` by default. Only an `onward` table of kind
     /// `federation` takes it.
     pub onward_organisations: bool,
-    /// FerroFED's own OAuth 2.0 grant at the node's token endpoint
-    /// (`[credentials."<endpoint id>".oauth2]`), for what `oauth` does not
-    /// carry: token exchange, tokens bound with `DPoP` or to the TLS client
-    /// certificate, authentication by that certificate, and an assertion
-    /// naming the issuer.
-    pub oauth2: Option<OAuth2>,
     /// The Nuts grant of the Dutch Generic Functions
     /// (`[credentials."<endpoint id>".nuts]`), the regional realisation of
     /// §13.3 (Annex B §B.4).
     #[cfg(feature = "binding-nl")]
     pub nuts: Option<nl::nuts::Nuts>,
-    /// A grant under the FAPI 2.0 Security Profile
-    /// (`[credentials."<endpoint id>".fapi2]`), the BgZ/eOverdracht track of
-    /// Annex B §B.4a.
-    pub fapi2: Option<grant::Fapi2>,
     /// The TLS material the node and its authorization server are reached
     /// with, `[credentials."<endpoint id>".tls]` (RFC 8705); a node's section
     /// alone takes it, and the node is then reached over `https` alone when
     /// it names a client identity.
     pub tls: Option<TlsClientSection>,
-    /// The hosts, each a host name with an optional port, beside the
-    /// issuer's origin, on which the `fapi2` grant takes a `token_endpoint`
-    /// of `mtls_endpoint_aliases` (RFC 8705 §5), always over `https`; only a
-    /// `fapi2` grant that uses mutual TLS takes it.
-    pub mtls_alias_hosts: Vec<String>,
 }
 
 impl Credentials {
@@ -563,96 +546,6 @@ impl Credentials {
     pub fn names_tls(&self) -> bool {
         self.tls.is_some()
     }
-}
-
-/// An OAuth 2.0 grant at the token endpoint of a node or an IHE FHIR service.
-///
-/// A service's grant is the client-credentials grant of IHE IUA ITI-71.
-/// Every token is requested with `scope`. No field has a default.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct OAuth2 {
-    /// The grant: `client_credentials` (RFC 6749 §4.4), or `token_exchange`
-    /// (RFC 8693), a token per verified caller.
-    pub grant: Option<GrantKind>,
-    /// How the gateway authenticates at the token endpoint:
-    /// `private_key_jwt`, a JWT client assertion (RFC 7523 §2.2),
-    /// `tls_client_auth` or `self_signed_tls_client_auth`, the section's
-    /// TLS client certificate (RFC 8705 §2), for a node, or
-    /// `client_secret_basic` or `client_secret_post`, the client secret (RFC
-    /// 6749 §2.3.1), for an identity service.
-    pub client_auth: Option<ClientAuth>,
-    /// The token endpoint, an `http` or `https` URL with no userinfo; by
-    /// default also the `aud` of every client assertion (RFC 7523 §3).
-    pub token_endpoint: Option<SecretUrl>,
-    /// What every client assertion names as its `aud`: `token_endpoint`,
-    /// the default, or `issuer` (RFC 7523 §3; FAPI 2.0 §5.3.2.1).
-    pub assertion_audience: grant::AssertionAudience,
-    /// The authorization server's issuer identifier (RFC 8414 §2), set with
-    /// `assertion_audience = "issuer"` and never without it.
-    pub issuer: Option<String>,
-    /// The client the authorization server registered the gateway as, the
-    /// `iss` and `sub` of every client assertion (RFC 7523 §3).
-    pub client_id: String,
-    /// The client secret of `client_secret_basic` or `client_secret_post`.
-    pub client_secret: Option<Secret>,
-    /// A file holding `client_secret`, read at boot.
-    pub client_secret_file: Option<PathBuf>,
-    /// The scope every token is requested with, space-delimited (RFC 6749
-    /// §3.3): for a node each a SMART on openEHR resource scope of the
-    /// `system` compartment, such as `system/aql-*.s`; for an identity
-    /// service the scopes its authorization server defines.
-    pub scope: String,
-    /// The target service the token is for (RFC 8707 §2), when the
-    /// authorization server takes one.
-    pub resource: Option<String>,
-    /// The audience the token is asked for, when the authorization server
-    /// takes one.
-    pub audience: Option<String>,
-    /// A file holding the private key the tokens are bound to with `DPoP`
-    /// (RFC 9449), a P-256 or P-384 key in PKCS#8 PEM, read at boot. Unset,
-    /// the tokens are bearer tokens.
-    pub dpop_key_file: Option<PathBuf>,
-    /// Whether the tokens are bound to the section's TLS client certificate
-    /// (RFC 8705 §3, named as the client metadata of §3.4 names it): a
-    /// token whose stated binding names another certificate is refused.
-    /// Never set with `dpop_key_file`.
-    pub tls_client_certificate_bound_access_tokens: bool,
-}
-
-/// The OAuth 2.0 grant the gateway uses at a node's token endpoint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[non_exhaustive]
-pub enum GrantKind {
-    /// The client-credentials grant (RFC 6749 §4.4).
-    ClientCredentials,
-    /// Token exchange (RFC 8693): the verified caller's token exchanged for
-    /// a token of the node, the gateway as the actor. The gateway's own
-    /// requests use the client-credentials grant.
-    TokenExchange,
-}
-
-/// How the gateway authenticates at a node's token endpoint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[non_exhaustive]
-pub enum ClientAuth {
-    /// A JWT client assertion signed with the gateway's key (RFC 7523 §2.2,
-    /// RFC 7521 §4.2).
-    PrivateKeyJwt,
-    /// The section's TLS client certificate, validated against the
-    /// authorization server's PKI (RFC 8705 §2.1).
-    #[serde(rename = "tls_client_auth")]
-    Tls,
-    /// The section's TLS client certificate, matched against the one the
-    /// authorization server registered for the client (RFC 8705 §2.2).
-    #[serde(rename = "self_signed_tls_client_auth")]
-    SelfSignedTls,
-    /// A service's client secret in the Basic scheme (RFC 6749 §2.3.1).
-    ClientSecretBasic,
-    /// A service's client secret in the request body (RFC 6749 §2.3.1).
-    ClientSecretPost,
 }
 
 /// The gateway's signing keys and their publication (§13.1, N25).

@@ -179,15 +179,6 @@ pub enum CredentialsFault {
         /// How long a node caches the JWK Set.
         cache_s: u64,
     },
-    /// An OAuth 2.0 grant cannot be built from its section.
-    #[error("{section} is not a usable OAuth 2.0 client-credentials grant")]
-    Grant {
-        /// The section.
-        section: String,
-        /// What the grant refused.
-        #[source]
-        source: ferrofed_engine::onward::GrantError,
-    },
     /// A scope is not one the gateway may request onward.
     #[error("{key} is not a SMART on openEHR system scope")]
     Scope {
@@ -197,17 +188,9 @@ pub enum CredentialsFault {
         #[source]
         source: ferrofed_engine::onward::ScopeError,
     },
-    /// An OAuth 2.0 grant is configured, but no signing key signs its client
-    /// assertion.
-    #[error("{section} needs [signing], whose key signs its client assertion (RFC 7523 §2.2)")]
-    GrantWithoutSigning {
-        /// The section.
-        section: String,
-    },
-    /// An identity service's credentials section names an `oauth2`, Nuts
-    /// or FAPI 2.0 grant.
+    /// An identity service's credentials section names a Nuts grant.
     #[error(
-        "{section} takes basic credentials or the oauth client credentials grant, not an oauth2, nuts or fapi2 grant"
+        "{section} takes basic credentials or the oauth client credentials grant, not a nuts grant"
     )]
     ServiceGrantNotHere {
         /// The section.
@@ -215,7 +198,7 @@ pub enum CredentialsFault {
     },
     /// A credentials section that takes basic credentials names an OAuth
     /// 2.0 grant, a Nuts grant or a FAPI 2.0 grant.
-    #[error("{section} takes basic credentials, not an oauth, oauth2, nuts or fapi2 grant")]
+    #[error("{section} takes basic credentials, not an oauth or nuts grant")]
     GrantNotHere {
         /// The section.
         section: String,

@@ -37,9 +37,9 @@ pub(super) fn federation(error: &FederationError) -> &'static str {
         FederationError::Describe(_) => "self-description",
         FederationError::Clients(SetupError::UnknownEndpoint { .. })
         | FederationError::Binding(BindingError::Grant { .. })
-        | FederationError::Onward(
-            OnwardError::Grant { .. } | OnwardError::Provide(ProvideError::Unclaimed { .. }),
-        ) => "credentials",
+        | FederationError::Onward(OnwardError::Provide(ProvideError::Unclaimed { .. })) => {
+            "credentials"
+        }
         #[cfg(feature = "binding-nl")]
         FederationError::Onward(OnwardError::Provide(ProvideError::NutsClient { .. })) => {
             "http-client"

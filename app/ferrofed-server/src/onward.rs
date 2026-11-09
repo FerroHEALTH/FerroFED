@@ -4,30 +4,27 @@
 //! The onward credentials each node client sends, and the transports it
 //! sends them over.
 //!
-//! The credentials are a configured bearer token or basic credentials, a provider that obtains a token with the OAuth 2.0
-//! client-credentials grant, or one that exchanges each verified caller's
-//! token (RFC 8693), each authenticated by a signed JWT client assertion
-//! (§13.1, N25), one that obtains it under the FAPI 2.0 Security Profile, as
-//! the track of Annex B §B.4a does, the provider a binding's grant builds,
-//! such as the Nuts grant of Annex B §B.4, and the `DPoP` key of a grant
-//! whose tokens are bound to one (RFC 9449).
+//! The credentials are basic credentials, `ferrohealth-smart`'s
+//! client-credentials grant (§13.1, N25), under the FAPI 2.0 Security
+//! Profile where its table says so, as the track of Annex B §B.4a does, with
+//! the node's onward lane that exchanges each verified caller's token (RFC
+//! 8693), the provider a binding's grant builds, such as the Nuts grant of
+//! Annex B §B.4, and the `DPoP` key of a grant whose tokens are bound to one
+//! (RFC 9449).
 //!
 //! A node whose `[credentials]` section names TLS material is reached over a
 //! transport of its own, which presents the gateway's client certificate and
-//! trusts the section's roots, and its token endpoint over the same
-//! transport: a token bound to that certificate travels only over
-//! connections that present it (RFC 8705 §3). Such a node is reached over
-//! `https` alone.
+//! trusts the section's roots. A grant that uses mutual TLS presents the
+//! same certificate to its token endpoint, so a token bound to it travels
+//! only over connections that present it (RFC 8705 §3). Such a node is
+//! reached over `https` alone.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ferrofed_engine::dispatch::SharedCredentials;
-use ferrofed_engine::onward::grant::client_credentials::ClientCredentials;
-use ferrofed_engine::onward::grant::exchange::{Exchange, SharedOnBehalf};
-use ferrofed_engine::onward::grant::fapi2::{Fapi2Credentials, Fapi2Exchange, Fapi2Grant};
 use ferrofed_engine::onward::grant::lane::Lane;
-use ferrofed_engine::onward::{Grant, GrantKind, SystemClock};
+use ferrofed_engine::onward::grant::on_behalf::SharedOnBehalf;
 use ferrofed_identity::fhir::{self, Authentication};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
@@ -44,15 +41,6 @@ use openehr_its::rest::client::ReqwestTransport;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum OnwardError {
-    /// A node's grant with no `[signing]` key to sign its assertion (§13.1,
-    /// N25).
-    #[error(
-        "{section} names a grant it cannot use: a node takes one with [signing], an IHE FHIR service an oauth2 client-credentials grant"
-    )]
-    Grant {
-        /// The credentials section.
-        section: String,
-    },
     /// The HTTP client a node's `oauth` grant sends its token requests
     /// through could not be built.
     #[error("the HTTP client of the token endpoint of {section} could not be built")]
@@ -152,21 +140,18 @@ pub(crate) struct Onward {
 ///
 /// Basic credentials are sent as configured. An `oauth` table becomes the
 /// token `ferrohealth-smart` obtains with the client credentials grant, one
-/// for every caller (§13.1, N25). An `oauth2` grant becomes a provider that
-/// obtains its token with an assertion the `[signing]` key signs, waiting at
-/// most the per-node timeout for the token endpoint: one per verified caller
-/// under token exchange, or one bound to the gateway's key. A grant with a
+/// for every caller (§13.1, N25), and a node's `onward` table the lane that
+/// gives each verified caller a token of its own (RFC 8693). A grant with a
 /// `DPoP` key proves every request to its token endpoint, and its node's
 /// client proves every request to the node with the same key.
 ///
-/// An endpoint with TLS material of its own is reached, at its node and its
-/// token endpoint, over an engine built with that material, its timeout the
-/// overall budget as `engine`'s is.
+/// An endpoint with TLS material of its own is reached over an engine built
+/// with that material, its timeout the overall budget as `engine`'s is.
 ///
 /// # Errors
 ///
-/// Returns [`OnwardError::Grant`] for a grant with no `[signing]` key to
-/// sign its assertion, [`OnwardError::ClientCertificateOverHttp`] for a
+/// Returns [`OnwardError::TokenTransport`] for a token endpoint client that
+/// cannot be built, [`OnwardError::ClientCertificateOverHttp`] for a
 /// node `registry` declares at an `http` URL that would be presented a client
 /// certificate, and [`OnwardError::NodeTransport`] for TLS material no engine can be
 /// built with.
@@ -180,9 +165,11 @@ pub(crate) fn onward(
     let mut dpop = BTreeMap::new();
     let transports = transports(settings, registry)?;
     for (endpoint, scheme) in &settings.credentials {
-        let engine = transports.get(endpoint).unwrap_or(&engine);
-        let grant = match scheme {
+        match scheme {
             Scheme::Oauth { grant, onward, .. } => {
+                if let Some(key) = grant.dpop_key() {
+                    dpop.insert(endpoint.clone(), Arc::clone(key));
+                }
                 let shared: SharedCredentials = UpstreamToken::provider(
                     ferrohealth_smart::client::ClientCredentials::clone(grant),
                 )
@@ -202,7 +189,6 @@ pub(crate) fn onward(
                     on_behalf.insert(endpoint.clone(), lane);
                 }
                 credentials.insert(endpoint.clone(), shared);
-                continue;
             }
             Scheme::Basic { user, password } => {
                 let shared: SharedCredentials = Arc::new(Credentials::Basic {
@@ -210,22 +196,6 @@ pub(crate) fn onward(
                     password: password.to_secret_string(),
                 });
                 credentials.insert(endpoint.clone(), shared);
-                continue;
-            }
-            Scheme::OAuth2(grant) => grant,
-            Scheme::Fapi2(grant) => {
-                if let Some(prover) = grant.dpop() {
-                    dpop.insert(endpoint.clone(), Arc::clone(prover));
-                }
-                match fapi2(settings, endpoint, grant, engine)? {
-                    Provided::Same(provider) => {
-                        credentials.insert(endpoint.clone(), provider);
-                    }
-                    Provided::PerCaller(exchange) => {
-                        on_behalf.insert(endpoint.clone(), exchange);
-                    }
-                }
-                continue;
             }
             Scheme::Binding(grant) => {
                 let provided = crate::binding::provide(grant.as_ref(), endpoint, settings)?;
@@ -233,41 +203,7 @@ pub(crate) fn onward(
                     dpop.insert(endpoint.clone(), prover);
                 }
                 credentials.insert(endpoint.clone(), provided.credentials);
-                continue;
             }
-        };
-        let Some(signing) = &settings.signing else {
-            return Err(OnwardError::Grant {
-                section: format!("credentials.{endpoint}.oauth2"),
-            });
-        };
-        if let Some(prover) = grant.dpop() {
-            dpop.insert(endpoint.clone(), Arc::clone(prover));
-        }
-        let timing = (
-            signing.assertion_lifetime,
-            settings.federation.budget.per_node(),
-        );
-        if grant.kind() == GrantKind::TokenExchange {
-            let exchange: SharedOnBehalf = Arc::new(Exchange::new(
-                endpoint.clone(),
-                Grant::clone(grant),
-                Arc::clone(&signing.keys),
-                timing,
-                engine.clone(),
-                Arc::new(SystemClock),
-            ));
-            on_behalf.insert(endpoint.clone(), exchange);
-        } else {
-            let provider: SharedCredentials = Arc::new(ClientCredentials::new(
-                endpoint.clone(),
-                Grant::clone(grant),
-                Arc::clone(&signing.keys),
-                timing,
-                engine.clone(),
-                Arc::new(SystemClock),
-            ));
-            credentials.insert(endpoint.clone(), provider);
         }
     }
     Ok(Onward {
@@ -317,55 +253,6 @@ fn transport(
     let builder = fhir::http_client_builder(&Authentication::None, tls)
         .map_err(|source| failed(Box::new(source)))?;
     node_transport(builder, settings).map_err(|source| failed(Box::new(source)))
-}
-
-/// What one endpoint's grant provides its node client.
-enum Provided {
-    /// The same credentials for every caller.
-    Same(SharedCredentials),
-    /// Credentials per verified caller (RFC 8693).
-    PerCaller(SharedOnBehalf),
-}
-
-/// The provider of `endpoint`'s FAPI 2.0 `grant`, discovering its
-/// authorization server over `engine` and signing each assertion valid for
-/// the `[signing]` lifetime.
-///
-/// # Errors
-///
-/// Returns [`OnwardError::Grant`] without `[signing]`.
-fn fapi2(
-    settings: &Settings,
-    endpoint: &EndpointId,
-    grant: &Fapi2Grant,
-    engine: &NodeTransport,
-) -> Result<Provided, OnwardError> {
-    let Some(signing) = &settings.signing else {
-        return Err(OnwardError::Grant {
-            section: format!("credentials.{endpoint}.fapi2"),
-        });
-    };
-    let timing = (
-        signing.assertion_lifetime,
-        settings.federation.budget.per_node(),
-    );
-    Ok(if grant.kind() == GrantKind::TokenExchange {
-        Provided::PerCaller(Arc::new(Fapi2Exchange::new(
-            endpoint.clone(),
-            grant.clone(),
-            timing,
-            engine.clone(),
-            Arc::new(SystemClock),
-        )))
-    } else {
-        Provided::Same(Arc::new(Fapi2Credentials::new(
-            endpoint.clone(),
-            grant.clone(),
-            timing,
-            engine.clone(),
-            Arc::new(SystemClock),
-        )))
-    })
 }
 
 #[cfg(test)]

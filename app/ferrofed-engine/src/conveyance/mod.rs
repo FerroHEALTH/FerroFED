@@ -59,7 +59,7 @@ use crate::conveyance::caller::{Principal, Purpose};
 use crate::conveyance::confinement::Confinement;
 use crate::conveyance::relayed::{Relayed, Role};
 use crate::conveyance::signer::Signer;
-use crate::onward::grant::exchange::SubjectToken;
+use crate::onward::grant::on_behalf::SubjectToken;
 use ferrohealth_smart::assurance::AssuranceLevel;
 
 /// The header every request to a node carries the caller's identity in.

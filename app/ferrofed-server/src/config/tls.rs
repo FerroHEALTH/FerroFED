@@ -44,6 +44,18 @@ pub enum TlsFault {
         /// The grant's section.
         section: String,
     },
+    /// A grant uses mutual TLS with another client certificate than the
+    /// one the node is reached with, so its tokens would travel over
+    /// connections that do not present it (RFC 8705 §3).
+    #[error(
+        "{section} authenticates or binds its tokens by a TLS client certificate (RFC 8705) other than the one {tls}.client_identity presents to the node; name the same certificate in both"
+    )]
+    OtherCertificate {
+        /// The grant's section.
+        section: String,
+        /// The node's TLS sub-table.
+        tls: String,
+    },
     /// A URL the gateway presents its client certificate to is not
     /// `https`.
     #[error(

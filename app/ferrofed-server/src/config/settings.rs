@@ -13,8 +13,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_engine::fanout::Budget;
-use ferrofed_engine::onward::Grant;
-use ferrofed_engine::onward::grant::fapi2::Fapi2Grant;
 use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
@@ -373,7 +371,9 @@ pub enum Scheme {
         password: Secret,
     },
     /// The OAuth 2.0 client credentials grant of `ferrohealth-smart` (RFC
-    /// 6749 §4.4), its token obtained, cached and renewed by the crate.
+    /// 6749 §4.4), its token obtained, cached and renewed by the crate, and
+    /// bound with `DPoP` or to the TLS client certificate, under the FAPI 2.0
+    /// Security Profile, where the table says so.
     Oauth {
         /// The grant.
         grant: Box<ferrohealth_smart::client::ClientCredentials>,
@@ -383,15 +383,6 @@ pub enum Scheme {
         /// own token then carries only the gateway's own requests.
         onward: Option<Box<crate::config::oauth::Onward>>,
     },
-    /// FerroFED's own OAuth 2.0 grant with a JWT client assertion (RFC 6749
-    /// §4.4, RFC 7523 §2.2), for what `Oauth` does not carry: token
-    /// exchange, a sender constraint, or authentication by the TLS client
-    /// certificate.
-    OAuth2(Box<Grant>),
-    /// A grant under the FAPI 2.0 Security Profile, the track of Annex B
-    /// §B.4a: a `DPoP`-bound token for an ES256 `private_key_jwt` assertion,
-    /// with RFC 9396 `authorization_details` where configured.
-    Fapi2(Box<Fapi2Grant>),
     /// A grant a binding adds, such as the Nuts grant of Annex B §B.4.
     Binding(Box<dyn OnwardGrant>),
 }

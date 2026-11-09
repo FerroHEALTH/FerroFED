@@ -40,7 +40,7 @@ use secrecy::SecretString;
 use crate::conveyance::Conveyance;
 use crate::dispatch::SharedCredentials;
 use crate::hygiene::Withheld;
-use crate::onward::grant::exchange::{ForCall, OnBehalf, SubjectToken, carries_withheld};
+use crate::onward::grant::on_behalf::{ForCall, OnBehalf, SubjectToken, carries_withheld};
 
 /// The scheme of an RFC 6750 §2.1 bearer credential.
 const BEARER: &str = "bearer";
