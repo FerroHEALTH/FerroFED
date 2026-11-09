@@ -97,10 +97,7 @@ async fn tls_material_beside_an_http_collector_or_none_is_refused() -> TestResul
     .err()
     .ok_or("TLS material beside an http:// collector is refused")?;
     assert!(
-        matches!(
-            error,
-            TelemetryBuildError::Init(InitError::TlsWithoutHttps { .. })
-        ),
+        matches!(error, TelemetryBuildError::Init(InitError::TlsWithoutHttps)),
         "{error}"
     );
     let error = built(&format!("[telemetry.otlp]\n{table}"))?

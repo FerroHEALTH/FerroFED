@@ -37,7 +37,10 @@ fn a_setting_nothing_sets_runs_its_default() {
     let timeout = document
         .setting("federation.per_node_timeout")
         .expect("listed");
-    assert_eq!(Some(toml::Value::Integer(10_000)), timeout.value);
+    assert_eq!(
+        Some(toml::Value::String(String::from("10s"))),
+        timeout.value
+    );
     assert_eq!(timeout.default, timeout.value);
     assert_eq!(Source::Default, timeout.source);
     assert!(timeout.restart);
