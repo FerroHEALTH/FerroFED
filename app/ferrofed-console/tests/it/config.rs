@@ -351,7 +351,7 @@ fn a_gateway_url_that_is_not_http_or_carries_userinfo_is_refused() {
 fn a_zero_timeout_or_session_bound_is_refused() {
     for (text, key) in [
         ("[gateway]\ntimeout = '0ms'\n", "gateway.timeout"),
-        ("[session]\nidle_timeout = '0ms'\n", "session.idle_timeout_s"),
+        ("[session]\nidle_timeout = '0ms'\n", "session.idle_timeout"),
         ("[session]\nmax_sessions = 0\n", "session.max_sessions"),
     ] {
         let error = refused(text);

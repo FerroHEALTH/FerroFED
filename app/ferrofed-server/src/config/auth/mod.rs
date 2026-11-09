@@ -24,7 +24,7 @@ use std::fmt;
 
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
-use ferrohealth_smart::config::{AuthSection, IssuerKey};
+use ferrohealth_smart::config::AuthSection;
 use ferrohealth_smart::federation::FederationSection;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 use ferrohealth_smart::resource::introspection::IntrospectionSettings;
@@ -170,9 +170,6 @@ pub struct PatientBinding {
     /// The identifier system of that member's `ehr_id`s at the
     /// cross-reference.
     pub ehr_id_system: IdentifierNamespace,
-    /// Whether the `act` claim of this issuer's patient tokens names a
-    /// representative who acts for the patient.
-    pub act_is_representative: bool,
 }
 
 /// How an issuer's tokens are verified.
@@ -367,14 +364,14 @@ impl Auth {
                 return Err(fault(key, AuthFault::Unread));
             }
         }
-        if let (IssuerKey::List(entries), Some(public)) = (&mut section.issuer, public) {
-            for entry in entries {
+        if let Some(public) = public {
+            for entry in &mut section.issuer {
                 if entry.audience.iter().all(String::is_empty) {
                     entry.audience = vec![public.as_str().to_owned()];
                 }
             }
         }
-        let no_issuer = matches!(&section.issuer, IssuerKey::List(entries) if entries.is_empty());
+        let no_issuer = section.issuer.is_empty();
         let mut keyed = Vec::new();
         let mut introspected = Vec::new();
         let mut realm = None;

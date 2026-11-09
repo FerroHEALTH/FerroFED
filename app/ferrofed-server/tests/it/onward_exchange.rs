@@ -85,7 +85,7 @@ fn own_grant(dir: &Path, token_url: &str, extra: &str) -> Result<String, Box<dyn
 /// names the gateway as the actor, with `onward` keys.
 fn exchange_grant(dir: &Path, token_url: &str, onward: &str) -> Result<String, Box<dyn Error>> {
     Ok(format!(
-        "{}\n[credentials.\"node-a-pub\".onward]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\nprofile = \"rfc9068\"\ntoken_endpoint = \"{token_url}\"\nactor_assertion = true\n{onward}\n[credentials.\"node-a-pub\".onward.keys]\nmax_onward_lifetime = 3600\n",
+        "{}\n[credentials.\"node-a-pub\".onward]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\nprofile = \"rfc9068\"\ntoken_endpoint = \"{token_url}\"\nactor_assertion = true\n{onward}\n[credentials.\"node-a-pub\".onward.keys]\nmax_onward_lifetime = '1h'\n",
         own_grant(dir, token_url, "")?
     ))
 }

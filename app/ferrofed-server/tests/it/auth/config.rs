@@ -178,19 +178,29 @@ fn an_introspection_key_on_a_trust_entry_is_refused() -> Result<(), Box<dyn Erro
 /// `[[auth.issuer]]` table, and refuses each key `[auth]` held for every
 /// issuer, naming the table.
 #[test]
-fn a_section_level_issuer_key_is_refused_naming_the_issuer_table() -> Result<(), Box<dyn Error>> {
-    for written in [
-        "audience = [\"urn:example:gateway\"]",
-        "algorithms = [\"ES256\"]",
-        "clock_skew = '1min'",
-        "jwks_max_age = '10min'",
-        "jwks_refresh_interval = '30s'",
-        "jwks_file = \"jwks.json\"",
-        "timeout_ms = 5000",
-        "mode = \"jwt\"",
-        "role_claims = []",
+fn a_section_level_issuer_key_is_an_unknown_key() -> Result<(), Box<dyn Error>> {
+    // NOTE: no specification governs this: the family's one-release rule; `ferrohealth-smart`
+    // 0.15 deleted the named refusals of the keys 0.9 moved onto [[auth.issuer]].
+    for key in [
+        "audience",
+        "algorithms",
+        "clock_skew",
+        "jwks_max_age",
+        "jwks_refresh_interval",
+        "jwks_file",
+        "timeout",
+        "mode",
+        "role_claims",
     ] {
-        refused_by_the_crate(&issuer(written, ISSUER), "[[auth.issuer]]")?;
+        let text = issuer(&format!("{key} = \"x\""), ISSUER);
+        let refused = Config::from_sources(Some(&text), &BTreeMap::new())
+            .err()
+            .ok_or_else(|| format!("auth.{key} is refused"))?;
+        assert_eq!(
+            Some(format!("auth.{key}").as_str()),
+            crate::support::refused_key(&refused),
+            "{refused:?}"
+        );
     }
     Ok(())
 }
@@ -275,7 +285,10 @@ fn a_product_scope_in_neither_extension_form_is_refused() -> Result<(), Box<dyn 
 #[test]
 fn a_key_the_gateway_reads_nowhere_is_refused() -> Result<(), Box<dyn Error>> {
     for (key, value) in [
-        ("scopeless_subjects", "[\"synthetic-service\"]"),
+        (
+            "scopeless_subjects",
+            "[{ issuer = \"https://issuer.example.test\", sub = \"synthetic-service\" }]",
+        ),
         ("capabilities", "[\"permission-v1\"]"),
         ("scopes_supported", "[\"user/aql-*.s\"]"),
     ] {

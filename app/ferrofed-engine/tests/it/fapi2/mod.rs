@@ -155,7 +155,7 @@ fn exchange(
         "profile": "rfc9068",
         "audiences": [RESOURCE],
         "indicators": [RESOURCE],
-        "keys": {"max_onward_lifetime": 3600, "person_equality": ["sub"]},
+        "keys": {"max_onward_lifetime": "1h", "person_equality": ["sub"]},
         "actor_assertion": true,
     }))?;
     let gateway = UpstreamToken::provider(grant.clone())?;

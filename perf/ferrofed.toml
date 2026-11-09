@@ -144,7 +144,7 @@ audiences = ["https://node-a.perf.ferrofed.invalid"]
 indicators = ["https://node-a.perf.ferrofed.invalid"]
 
 [credentials."node-a-query".onward.keys]
-max_onward_lifetime = 3600
+max_onward_lifetime = "1h"
 
 [credentials."node-b-query"]
 user = "ferroehr"

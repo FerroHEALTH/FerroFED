@@ -82,7 +82,7 @@ use ferrohealth_smart::sender::replay::{MemoryReplayStore, ReplayStore};
 use http::HeaderMap;
 use secrecy::SecretString;
 
-use crate::auth::caller::{Caller, PatientContext, Professional, Stated, VerifiedBy};
+use crate::auth::caller::{Actor, Caller, PatientContext, Professional, Stated, VerifiedBy};
 use crate::auth::claims::Claims;
 use crate::auth::contact_point::ContactPoints;
 use crate::auth::introspection::Introspected;
@@ -469,7 +469,7 @@ impl Gate {
             )
             .with_assurance(assurance)
             .with_acting(acting)
-            .with_representative(claims.representative(trusted));
+            .with_representative(representative(smart.kind()));
         Ok(caller)
     }
 
@@ -536,6 +536,19 @@ impl Gate {
     #[must_use]
     pub fn presents_credential(&self, headers: &HeaderMap) -> bool {
         headers.contains_key(self.smart.credential_header().name())
+    }
+}
+
+/// The representative a caller of `kind` is, when `ferrohealth-smart`
+/// classified a patient token of an issuer declaring `act_represents_patient`
+/// as one: the current actor of its RFC 8693 §4.1 `act` claim.
+fn representative(kind: &CallerKind) -> Option<Actor> {
+    match kind {
+        CallerKind::PatientRepresentative { actor } => Some(Actor {
+            issuer: Some(actor.issuer.clone()).filter(|issuer| !issuer.is_empty()),
+            subject: Some(actor.sub.clone()).filter(|sub| !sub.is_empty()),
+        }),
+        _ => None,
     }
 }
 
@@ -745,4 +758,33 @@ fn requester(kind: &CallerKind) -> Option<Requester> {
         text(Field::NlUra)?,
         text(Field::NlOrganisationType)?,
     )
+}
+
+#[cfg(test)]
+mod representative_tests {
+    use ferrohealth_smart::kind::{Actor as SmartActor, CallerKind};
+
+    use super::representative;
+    use crate::auth::caller::Actor;
+
+    // NOTE: Regulation (EU) 2025/327 Art 4(2), RFC 8693 §4.1: only the issuer's declaration,
+    // which ferrohealth-smart reads, makes the current actor a representative.
+    #[test]
+    fn a_representative_is_the_actor_ferrohealth_smart_classified_and_no_other_kind_is_one() {
+        let kind = CallerKind::PatientRepresentative {
+            actor: SmartActor {
+                issuer: String::from("https://actor.example.test"),
+                sub: String::from("synthetic-actor"),
+            },
+        };
+        assert_eq!(
+            Some(Actor {
+                issuer: Some(String::from("https://actor.example.test")),
+                subject: Some(String::from("synthetic-actor")),
+            }),
+            representative(&kind)
+        );
+        assert_eq!(None, representative(&CallerKind::Patient));
+        assert_eq!(None, representative(&CallerKind::Person));
+    }
 }

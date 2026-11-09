@@ -283,7 +283,7 @@ fn located_by_ehr_id(
         "{case}: the ITS-REST query and nothing else"
     );
     assert!(
-        holds(&sent.body, &format!("e/ehr_id/value='{}'", member.ehr_id)),
+        holds(&sent.body, &format!("e/ehr_id/value = '{}'", member.ehr_id)),
         "{case}: {} is keyed on its own ehr_id (N7, N34): {body}",
         member.endpoint
     );

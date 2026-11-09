@@ -287,7 +287,7 @@ fn onward_lane(endpoint: &str, extra: &str) -> String {
          indicators = [\"https://cdr-a.example.org/openehr\"]\n\
          {extra}\n\
          [credentials.\"{endpoint}\".onward.keys]\n\
-         max_onward_lifetime = 3600\n\n",
+         max_onward_lifetime = '1h'\n\n",
         key = toml::Value::String(crate::support::signing_key_file().to_owned())
     )
 }

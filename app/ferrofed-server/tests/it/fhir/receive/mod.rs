@@ -236,7 +236,6 @@ pub(super) fn bound() -> Result<ServerSettings, Box<dyn Error>> {
     let binding = PatientBinding {
         endpoint: EndpointId::new("node-a-pub")?,
         ehr_id_system: IdentifierNamespace::new(EHR_SYSTEM)?,
-        act_is_representative: false,
     };
     for issuer in &mut server.auth.issuers {
         issuer.patient = Some(binding.clone());

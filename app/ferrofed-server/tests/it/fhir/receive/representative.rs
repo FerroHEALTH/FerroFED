@@ -56,8 +56,10 @@ pub(super) fn acted_for(act: &[(&str, &str)]) -> Claims {
 fn declaring() -> Result<ServerSettings, Box<dyn Error>> {
     let mut server = bound()?;
     for issuer in &mut server.auth.issuers {
-        if let Some(patient) = issuer.patient.as_mut() {
-            patient.act_is_representative = true;
+        if let Verification::KeySet(settings) = &mut issuer.verification
+            && settings.kind == IssuerKind::Patients
+        {
+            settings.profile.act_represents_patient = true;
         }
         if let Verification::KeySet(settings) = &mut issuer.verification
             && settings.kind == IssuerKind::Persons
@@ -127,26 +129,19 @@ async fn a_representatives_document_names_them_as_every_entrys_provider() -> Tes
     Ok(())
 }
 
+// NOTE: RFC 8693 §4.1: ferrohealth-smart 0.14 refuses a token whose current actor its
+// issuer declares neither a delegate nor the patient's representative (FerroHEALTH/FerroAUTH#377).
 #[tokio::test]
-async fn an_act_the_issuer_does_not_declare_leaves_the_persons_own_mark() -> TestResult {
+async fn an_act_the_issuer_does_not_declare_is_refused_with_nothing_written() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
     let app = person_gateway(dir.path(), (&a, &b), "")?;
     let token = minted(&acted_for(&[("sub", REPRESENTATIVE)]))?;
     let (status, text) = call(app, bearing(post(&document())?, &token)?).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
-    let body = written(&a).await?;
-    let providers = providers(&body)?;
-    assert!(!providers.is_empty(), "the composition holds an entry");
+    assert_eq!(StatusCode::UNAUTHORIZED, status, "{text}");
     assert!(
-        providers
-            .iter()
-            .all(|provider| provider == &serde_json::json!({ "_type": "PARTY_SELF" })),
-        "an actor the issuer does not declare a representative is not read as one: {body}"
-    );
-    assert!(
-        !body.contains(REPRESENTATIVE),
-        "the undeclared actor is written nowhere: {body}"
+        untouched(&a, &b).await?,
+        "nothing is sent for an actor the issuer does not declare"
     );
     Ok(())
 }
@@ -201,7 +196,9 @@ async fn a_representative_named_by_nothing_is_refused() -> TestResult {
     let app = representing_gateway(dir.path(), (&a, &b), "")?;
     let token = minted(&acted_for(&[("iss", "https://proxy.example.test")]))?;
     let (status, text) = call(app, bearing(post(&document())?, &token)?).await?;
-    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
+    // NOTE: RFC 8693 §4.1: an actor with no `sub` names no one, which ferrohealth-smart
+    // refuses as an invalid token before the gateway reads it.
+    assert_eq!(StatusCode::UNAUTHORIZED, status, "{text}");
     assert!(
         untouched(&a, &b).await?,
         "nothing is sent when the token names its representative by nothing"

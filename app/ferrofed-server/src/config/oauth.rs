@@ -80,13 +80,38 @@ impl Oauth {
         presented: Option<ferrohealth_smart::client::PresentedTls>,
     ) -> Result<ClientCredentials, Error> {
         match presented {
-            Some(presented) => self.0.resolve_with_tls(presented),
+            // NOTE: RFC 8705 §2: the grant presents the node section's identity, so a TLS
+            // table of its own beside it would never be read, and is refused.
+            Some(_) if self.0.tls.names_material() => {
+                Err(ferrohealth_smart::config::ConfigError::Exclusive {
+                    left: "credentials.oauth.tls",
+                    right: "credentials.tls",
+                })
+            }
+            Some(presented) => self.0.resolve_with_tls(&Presenting(presented)),
             None => self.0.resolve(),
         }
         .map_err(|source| Error::Smart {
             section: key.to_owned(),
             source: Box::new(source),
         })
+    }
+}
+
+/// The TLS a node's grant presents: the node section's `tls` identity the
+/// gateway already read, never a `tls` table of the grant's own, which the
+/// gateway refuses (RFC 8705 §2, §3).
+// TODO(#1806): build it from the shared section once `[credentials."<id>"]` holds it.
+struct Presenting(ferrohealth_smart::client::PresentedTls);
+
+impl ferrohealth_smart::config::TlsBuilder for Presenting {
+    fn build(
+        &self,
+        _key: &str,
+        _section: &ferrohealth_config::tls::TlsClientSection,
+    ) -> Result<ferrohealth_smart::client::PresentedTls, Box<dyn std::error::Error + Send + Sync>>
+    {
+        Ok(self.0.clone())
     }
 }
 
