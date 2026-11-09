@@ -7,21 +7,24 @@
 //!
 //! A gateway that offers the registry is authoritative for each definition
 //! and versions it with ITS-REST's own semver path segment, and a stored
-//! version is immutable (§12.7, N44). The names and versions follow the
-//! ITS-REST Query API's "Qualified query name" rules: a name is
-//! `[{namespace}::]{query-name}`, and a version is `major.minor.patch`, or,
-//! where a version is looked up, a `{major}` or `{major}.{minor}` prefix that
-//! selects the highest version it matches.
+//! version is immutable (§12.7, N44). The names, versions and version
+//! patterns are `openehr-its`'s ITS-REST Query API types
+//! (`rest::stored_query`); the registry adds what is its own: a name it
+//! stores is never the reserved `aql`, and the version it assigns a
+//! definition stored with none.
 //!
 //! ```
-//! use ferrofed_registry::definition::{QueryName, QueryVersion, VersionPattern};
+//! use ferrofed_registry::definition::{assigned_after, query_name};
+//! use openehr_its::rest::stored_query::{QueryVersion, VersionPattern};
 //!
-//! let name: QueryName = "org.example::compositions".parse()?;
+//! let name = query_name("org.example::compositions")?;
 //! assert_eq!(Some("org.example"), name.namespace());
+//! assert!(query_name("aql").is_err());
 //! let version: QueryVersion = "1.10.0".parse()?;
 //! assert!(version > "1.9.3".parse()?);
 //! let pattern: VersionPattern = "1".parse()?;
 //! assert!(pattern.matches(&version));
+//! assert_eq!(Some(QueryVersion::new(1, 10, 1)), assigned_after(Some(version)));
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
@@ -33,259 +36,46 @@
 
 pub mod store;
 
-use std::fmt;
-use std::str::FromStr;
-
 use jiff::Timestamp;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError, QueryVersion};
 
-/// The ITS-REST separator between a query's namespace and its name.
-const NAMESPACE_SEPARATOR: &str = "::";
-
-/// The query name ITS-REST reserves for ad hoc AQL (`/query/aql`).
-const RESERVED: &str = "aql";
-
-/// A stored query's qualified name, `[{namespace}::]{query-name}` (ITS-REST
-/// Query API, "Qualified query name").
+/// Reads `text` as the qualified name of a query the registry stores or
+/// addresses, `[{namespace}::]{query-name}` (ITS-REST Query API, "Qualified
+/// query name").
 ///
-/// The query name is one or more of `[a-zA-Z0-9_.-]` and is never `aql` in
-/// any case, which ITS-REST reserves; the namespace, "a reverse domain name",
-/// takes the same characters. A name without a namespace is never `.` or
-/// `..`, the two RFC 3986 dot-segments, because no request path carries one. The type has no `Display` of a refused value:
-/// a refusal never quotes what was sent.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct QueryName(String);
-
-/// Why a text is no qualified query name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[non_exhaustive]
-pub enum QueryNameError {
-    /// The name, or its namespace, is empty.
-    #[error("a stored query name and its namespace are not empty")]
-    Empty,
-    /// A character outside `[a-zA-Z0-9_.-]`, or more than one `::`.
-    #[error(
-        "a stored query name is [{{namespace}}::]{{query-name}} over the characters a-z, A-Z, 0-9, _, . and -"
-    )]
-    Malformed,
-    /// The query name is `aql`, which ITS-REST reserves.
-    #[error("the query name aql is reserved for ad hoc queries")]
-    Reserved,
-    /// The whole name is `.` or `..`, a dot-segment no request path carries
-    /// (RFC 3986 §3.3).
-    #[error("a stored query name without a namespace is not . or ..")]
-    DotSegment,
-}
-
-impl QueryName {
-    /// Builds the name from its text.
-    ///
-    /// # Errors
-    ///
-    /// [`QueryNameError`] when `value` is not `[{namespace}::]{query-name}`
-    /// over the ITS-REST characters, names the reserved `aql`, or is a
-    /// dot-segment.
-    pub fn new(value: &str) -> Result<Self, QueryNameError> {
-        let (namespace, name) = match value.split_once(NAMESPACE_SEPARATOR) {
-            Some((namespace, name)) => (Some(namespace), name),
-            None => (None, value),
-        };
-        for part in namespace.into_iter().chain([name]) {
-            if part.is_empty() {
-                return Err(QueryNameError::Empty);
-            }
-            if !part.chars().all(is_name_char) {
-                return Err(QueryNameError::Malformed);
-            }
-        }
-        if name.eq_ignore_ascii_case(RESERVED) {
-            return Err(QueryNameError::Reserved);
-        }
-        // NOTE: ITS-REST expands `{qualified_query_name}` with `style: simple` (RFC 6570 §3.2.2),
-        // which keeps `.`, so `.` and `..` become dot-segments that RFC 3986 §5.2.4 removes, and
-        // §2.3 says a producer should not encode `.`: no URL names such a query.
-        if matches!(value, "." | "..") {
-            return Err(QueryNameError::DotSegment);
-        }
-        Ok(Self(value.to_owned()))
-    }
-
-    /// The name as ITS-REST spells it, namespace included.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    /// The namespace, when the name has one.
-    #[must_use]
-    pub fn namespace(&self) -> Option<&str> {
-        self.0
-            .split_once(NAMESPACE_SEPARATOR)
-            .map(|(namespace, _)| namespace)
-    }
-}
-
-impl FromStr for QueryName {
-    type Err = QueryNameError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value)
-    }
-}
-
-impl fmt::Display for QueryName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-/// Whether `c` may appear in a query name or a namespace (ITS-REST,
-/// "Qualified query name": `[a-zA-Z0-9_.-]`).
-fn is_name_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')
-}
-
-/// A stored query's version, `major.minor.patch` (ITS-REST Query API,
-/// "Qualified query name": "SEMVER style (i.e. `major.minor.patch`)").
+/// The registry refuses the reserved `aql` in any case wherever a name
+/// arrives, a read included, so a request that names it is answered as an
+/// invalid name. A refusal never quotes what was sent.
 ///
-/// Each part is a decimal number without a leading zero, as Semantic
-/// Versioning 2.0.0 §2 (<https://semver.org/>)
-/// writes it, so a version has one spelling. Versions order by major, then
-/// minor, then patch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct QueryVersion {
-    major: u64,
-    minor: u64,
-    patch: u64,
+/// # Errors
+///
+/// [`QueryNameError`] when `text` is not `[{namespace}::]{query-name}` over
+/// the ITS-REST characters, is `.` or `..` without a namespace, or names the
+/// reserved `aql`.
+pub fn query_name(text: &str) -> Result<QualifiedQueryName, QueryNameError> {
+    let name: QualifiedQueryName = text.parse()?;
+    name.check_registrable()?;
+    Ok(name)
 }
 
-/// Why a text is no version, or no version prefix.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[non_exhaustive]
-pub enum QueryVersionError {
-    /// The text is not `major.minor.patch` over numbers without a leading
-    /// zero.
-    #[error("a stored query version is major.minor.patch, each a number without a leading zero")]
-    Malformed,
-    /// The text is not `{major}`, `{major}.{minor}` or
-    /// `major.minor.patch`.
-    #[error("a stored query version is {{major}}, {{major}}.{{minor}} or major.minor.patch")]
-    Pattern,
-}
-
-impl QueryVersion {
-    /// The version `major.minor.patch`.
-    #[must_use]
-    pub const fn new(major: u64, minor: u64, patch: u64) -> Self {
-        Self {
-            major,
-            minor,
-            patch,
-        }
-    }
-
-    /// Returns the version the registry assigns a definition stored with no
-    /// version, when `newest` is the newest version of its name it holds:
-    /// `1.0.0` for a name it holds no version of, else the next patch of
-    /// `newest` (§12.7 stored-query-versioning).
-    ///
-    /// The newest is the highest by [`Ord`], which compares the numbers, so
-    /// `1.10.0` is newer than `1.9.0`. Returns `None` when the patch of
-    /// `newest` is the largest a version holds, so it has no next patch.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use ferrofed_registry::definition::QueryVersion;
-    ///
-    /// assert_eq!(Some(QueryVersion::new(1, 0, 0)), QueryVersion::assigned_after(None));
-    /// let newest = QueryVersion::new(1, 10, 0).max(QueryVersion::new(1, 9, 0));
-    /// assert_eq!(Some(QueryVersion::new(1, 10, 1)), QueryVersion::assigned_after(Some(newest)));
-    /// ```
-    #[must_use]
-    pub fn assigned_after(newest: Option<Self>) -> Option<Self> {
-        match newest {
-            None => Some(Self::new(1, 0, 0)),
-            Some(newest) => newest
-                .patch
-                .checked_add(1)
-                .map(|patch| Self { patch, ..newest }),
-        }
-    }
-}
-
-impl FromStr for QueryVersion {
-    type Err = QueryVersionError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match numbers(value)
-            .ok_or(QueryVersionError::Malformed)?
-            .as_slice()
-        {
-            [major, minor, patch] => Ok(Self::new(*major, *minor, *patch)),
-            _ => Err(QueryVersionError::Malformed),
-        }
-    }
-}
-
-impl fmt::Display for QueryVersion {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
-    }
-}
-
-/// The dot-separated decimal numbers of `value`, or `None` when a part is
-/// empty, holds anything but digits, has a leading zero or exceeds `u64`.
-fn numbers(value: &str) -> Option<Vec<u64>> {
-    value
-        .split('.')
-        .map(|part| {
-            let digits = !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit());
-            let leading_zero = part.len() > 1 && part.starts_with('0');
-            // NOTE: no specification governs this: our own design; a part past
-            // `u64` is refused as malformed, the answer the parse failure gives.
-            (digits && !leading_zero)
-                .then(|| part.parse::<u64>().ok())
-                .flatten()
-        })
-        .collect()
-}
-
-/// The version a stored query is looked up at: exact, or a `{major}` or
-/// `{major}.{minor}` prefix that selects the highest version it matches
-/// (ITS-REST Query API, the `version` path parameter).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum VersionPattern {
-    /// `major.minor.patch`: that version only.
-    Exact(QueryVersion),
-    /// `{major}`: every version with that major number.
-    Major(u64),
-    /// `{major}.{minor}`: every version with those numbers.
-    MajorMinor(u64, u64),
-}
-
-impl VersionPattern {
-    /// Whether `version` is one this pattern selects.
-    #[must_use]
-    pub fn matches(&self, version: &QueryVersion) -> bool {
-        match *self {
-            Self::Exact(exact) => exact == *version,
-            Self::Major(major) => version.major == major,
-            Self::MajorMinor(major, minor) => version.major == major && version.minor == minor,
-        }
-    }
-}
-
-impl FromStr for VersionPattern {
-    type Err = QueryVersionError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match numbers(value).ok_or(QueryVersionError::Pattern)?.as_slice() {
-            [major] => Ok(Self::Major(*major)),
-            [major, minor] => Ok(Self::MajorMinor(*major, *minor)),
-            [major, minor, patch] => Ok(Self::Exact(QueryVersion::new(*major, *minor, *patch))),
-            _ => Err(QueryVersionError::Pattern),
-        }
+/// Returns the version the registry assigns a definition stored with no
+/// version (§12.7 stored-query-versioning).
+///
+/// With `newest` the newest version of its name the registry holds, that is
+/// `1.0.0` for a name it holds no version of, else the next patch of
+/// `newest`.
+///
+/// The newest is the highest by [`Ord`], which compares the numbers, so
+/// `1.10.0` is newer than `1.9.0`. Returns `None` when the patch of `newest`
+/// is the largest a version holds, so it has no next patch.
+#[must_use]
+pub fn assigned_after(newest: Option<QueryVersion>) -> Option<QueryVersion> {
+    match newest {
+        None => Some(QueryVersion::new(1, 0, 0)),
+        Some(newest) => newest
+            .patch()
+            .checked_add(1)
+            .map(|patch| QueryVersion::new(newest.major(), newest.minor(), patch)),
     }
 }
 
@@ -296,7 +86,7 @@ impl FromStr for VersionPattern {
 /// (§5.4.1, N33).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredDefinition {
-    name: QueryName,
+    name: QualifiedQueryName,
     version: QueryVersion,
     aql: String,
     saved: Timestamp,
@@ -306,7 +96,12 @@ impl StoredDefinition {
     /// The definition of `name` at `version`, holding `aql`, stored at
     /// `saved`.
     #[must_use]
-    pub fn new(name: QueryName, version: QueryVersion, aql: String, saved: Timestamp) -> Self {
+    pub fn new(
+        name: QualifiedQueryName,
+        version: QueryVersion,
+        aql: String,
+        saved: Timestamp,
+    ) -> Self {
         Self {
             name,
             version,
@@ -317,7 +112,7 @@ impl StoredDefinition {
 
     /// The qualified name.
     #[must_use]
-    pub fn name(&self) -> &QueryName {
+    pub fn name(&self) -> &QualifiedQueryName {
         &self.name
     }
 

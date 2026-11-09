@@ -51,6 +51,9 @@ openehr-adl.workspace = true
 # The reference to the medication order a received dispensation's ACTION names
 # (#1561).
 openehr-base.workspace = true
+# The ITS-REST qualified query name and version of each reserved query
+# (#1754).
+openehr-its = { workspace = true, features = ["rest"] }
 openehr-mapping-core.workspace = true
 # Every query is built as an AQL syntax tree and printed with
 # printer::to_aql, never spliced.

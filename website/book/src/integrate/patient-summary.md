@@ -616,7 +616,7 @@ dependencies = [                             # the package's dependency closure,
   "/etc/ferrofed/packages/ihe.pharm.mpd.r4-1.0.0-comment-2.tgz",
   "/etc/ferrofed/packages/myhealth.eu.fhir.mvc-package-9.1.0.tgz",
 ]
-template = "/etc/ferrofed/mappings/received-summary.opt"
+template = "/etc/ferrofed/mappings/received-summary.opt"   # an OPT 1.4, or an ADL 2 template with archetypes
 files = [
   "/etc/ferrofed/mappings/received-summary.yml",
   "/etc/ferrofed/mappings/received-summary.context.yml",
@@ -691,8 +691,9 @@ load refuses either without it.
   (`https://packages.fhir.org/<name>/<version>`) or an unpacked directory;
   the list above is the closure of `hl7.fhir.eu.eps` 1.0.0-ballot, which
   `scripts/vendor/eehrxf.sh` and `scripts/vendor/fhir-packages.sh` fetch,
-  each pinned by sha256. The mapping compiles when the configuration is
-  read.
+  each pinned by sha256. `template` is an OPT 1.4 `.opt`, or an ADL 2
+  template beside `archetypes`, every archetype it specialises or fills a
+  slot with. The mapping compiles when the configuration is read.
 - Each `[[fhir.serve]]` declares one category, once, with at least one
   member, each named once. Configuration load refuses any other category and
   a member of `Electronic-Dispensations` that is not also declared for

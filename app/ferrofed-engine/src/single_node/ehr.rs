@@ -16,7 +16,10 @@
 //! An error names the endpoint and the node's status, never the node's body,
 //! which may echo the `EHR_STATUS` it was sent.
 
+use openehr_base::v1_3::base_types::identification::hier_object_id::HierObjectId;
+use openehr_base::v1_3::base_types::identification::object_version_id::ObjectVersionId;
 use openehr_its::rest::client::{ClientError, ErrorBody, Transport, TransportError};
+use openehr_its::rest::etag::EntityTag;
 use openehr_its::rest::generated::ehr::client::{EhrClient, EhrCreateOutcome, EhrGetByIdOutcome};
 use openehr_its::rest::generated::ehr::{EhrCreateParams, EhrGetByIdParams};
 use openehr_rm::v1_2::ehr::ehr::Ehr;
@@ -210,7 +213,8 @@ impl<T: Transport + Clone> NodeClient<T> {
             }
         };
         etag.as_deref()
-            .and_then(from_etag)
+            .and_then(ehr_id_in_etag)
+            .map(|ehr_id| ehr_id.value().to_owned())
             .or_else(|| location.as_deref().and_then(from_location))
             .ok_or_else(|| EhrCallError::Unnamed {
                 endpoint: self.endpoint().clone(),
@@ -363,19 +367,28 @@ impl<T: Transport + Clone> NodeClient<T> {
     }
 }
 
-/// The identifier an `ETag` carries, or `None` for an empty or malformed tag.
-///
-/// The identifier is the value in double quotes, weak or strong (RFC 9110
-/// §8.8.3), such as the `ehr_id` of a new EHR or the `version_uid` of a new
-/// version.
+/// The `ehr_id` an `ETag` names, weak or strong, or `None` when the field is
+/// no entity tag or its tag no `HIER_OBJECT_ID` (ITS-REST 1.1.0 `ETag_EHR`,
+/// RFC 9110 §8.8.3).
 #[must_use]
-pub fn from_etag(etag: &str) -> Option<String> {
-    let tag = etag.trim();
-    let tag = tag.strip_prefix("W/").unwrap_or(tag);
-    tag.strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('"'))
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned)
+pub fn ehr_id_in_etag(etag: &str) -> Option<HierObjectId> {
+    // NOTE: no specification governs this: our own design; a tag that names no id is
+    // legitimately no answer here, and the caller falls back to the `Location`.
+    etag.trim().parse::<EntityTag>().ok()?.hier_object_id().ok()
+}
+
+/// The `version_uid` an `ETag` names, weak or strong, or `None` when the field
+/// is no entity tag or its tag no `OBJECT_VERSION_ID` (ITS-REST 1.1.0
+/// `ETag_VERSION`, RFC 9110 §8.8.3).
+#[must_use]
+pub fn version_in_etag(etag: &str) -> Option<ObjectVersionId> {
+    // NOTE: no specification governs this: our own design; a tag that names no id is
+    // legitimately no answer here, and the caller falls back to the `Location`.
+    etag.trim()
+        .parse::<EntityTag>()
+        .ok()?
+        .object_version_id()
+        .ok()
 }
 
 /// The identifier a `Location` names, or `None` when it has none.
@@ -392,15 +405,26 @@ pub fn from_location(location: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{from_etag, from_location};
+    use super::{ehr_id_in_etag, from_location, version_in_etag};
 
     #[test]
     fn an_etag_names_the_ehr_id_weak_or_strong() {
         let id = "7d44b88c-4199-4bad-97dc-d78268e01398";
-        assert_eq!(Some(id.to_owned()), from_etag(&format!("\"{id}\"")));
-        assert_eq!(Some(id.to_owned()), from_etag(&format!("W/\"{id}\"")));
-        assert_eq!(None, from_etag(id), "an unquoted tag is malformed");
-        assert_eq!(None, from_etag("\"\""), "an empty tag names nothing");
+        let named = |etag: &str| ehr_id_in_etag(etag).map(|ehr_id| ehr_id.value().to_owned());
+        assert_eq!(Some(id.to_owned()), named(&format!("\"{id}\"")));
+        assert_eq!(Some(id.to_owned()), named(&format!("W/\"{id}\"")));
+        assert_eq!(None, named(id), "an unquoted tag is malformed");
+        assert_eq!(None, named("\"\""), "an empty tag names nothing");
+    }
+
+    #[test]
+    fn an_etag_names_the_version_uid_weak_or_strong() {
+        let uid = "7d44b88c-4199-4bad-97dc-d78268e01398::cdr-a.example.org::1";
+        let named = |etag: &str| version_in_etag(etag).map(|version| version.value().to_owned());
+        assert_eq!(Some(uid.to_owned()), named(&format!("\"{uid}\"")));
+        assert_eq!(Some(uid.to_owned()), named(&format!("W/\"{uid}\"")));
+        assert_eq!(None, named(uid), "an unquoted tag is malformed");
+        assert_eq!(None, named("\"\""), "an empty tag names nothing");
     }
 
     #[test]

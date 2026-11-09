@@ -24,6 +24,7 @@ use http::HeaderMap;
 use openehr_federation::aql::Analysis;
 use openehr_federation::dedup::DedupMode;
 use openehr_its::rest::generated::query::AdhocQueryExecute;
+use openehr_its::rest::stored_query::QualifiedQueryName;
 
 use crate::facade::answer::{self, Failure};
 use crate::facade::request::{self, Arrived, Submitted};
@@ -124,7 +125,7 @@ fn analysed(
             federation,
             completion,
             (system, value),
-            (name.as_str(), section.aql(), logged),
+            (&name, section.aql(), logged),
         )?;
         analyses.push((section, parsed));
     }
@@ -137,7 +138,7 @@ pub(crate) fn stored(
     federation: &Federation,
     completion: Completion,
     (system, value): (&str, &str),
-    (name, aql, logged): (&str, String, &str),
+    (name, aql, logged): (&QualifiedQueryName, String, &str),
 ) -> Result<Analysis, Unsummarised> {
     // NOTE: §8.4; the FHIR face names no endpoint, so no targeting header is read.
     let undirected = HeaderMap::new();

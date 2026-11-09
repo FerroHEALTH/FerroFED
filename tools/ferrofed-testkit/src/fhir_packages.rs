@@ -11,6 +11,10 @@
 //! `hl7.fhir.r4.core` 4.0.1, `hl7.terminology.r4` 7.1.0,
 //! `hl7.fhir.uv.extensions.r4` 5.2.0, `hl7.fhir.uv.xver-r5.r4` 0.1.0 and
 //! `hl7.fhir.eu.base` 2.0.0, the versions its manifest names, with theirs.
+//! [`discharge_dependencies`] adds what the HL7 Europe Hospital Discharge
+//! Report 1.0.0 package names beyond it (#1714): the committed
+//! `hl7.fhir.uv.ips` 2.0.1 and `xtehr.eu.ehds.models` 1.0.0, and
+//! `hl7.terminology.r4` 7.2.0 and 7.4.0 of the MyHealth@EU closure's cache.
 //!
 //! FerroBRIDGE's validator refuses a package set that lacks a package a
 //! manifest names. The closure's committed packages sit under `docs/specs/`;
@@ -37,6 +41,21 @@ const PROVENANCE: &str = "docs/specs/fhir-packages/PROVENANCE.md";
 
 /// The cache directory the packages are fetched into.
 const CACHE: &str = ".vendor-cache/fhir-packages";
+
+/// The provenance that pins the cached packages of the MyHealth@EU closure,
+/// which holds the terminology versions the discharge report closure names.
+const MYHEALTH_PROVENANCE: &str = "docs/specs/fhir-packages-myhealth-eu/PROVENANCE.md";
+
+/// The cache directory of the MyHealth@EU closure.
+const MYHEALTH_CACHE: &str = ".vendor-cache/fhir-packages-myhealth-eu";
+
+/// The committed packages the discharge report closure names beyond the
+/// Patient Summary's. The Xt-EHR models declare FHIR 5.0.0, so the
+/// validator holds them unread and requires none of their dependencies.
+const DISCHARGE_COMMITTED: [&str; 2] = [
+    "docs/specs/hl7-ips/hl7.fhir.uv.ips-2.0.1.tgz",
+    "docs/specs/eu-xtehr-models/xtehr.eu.ehds.models-1.0.0.tgz",
+];
 
 /// How long a test process waits for another's fetch before it takes the
 /// lock over.
@@ -87,8 +106,10 @@ pub enum FhirPackagesError {
         source: std::io::Error,
     },
     /// The provenance names an artefact without its source or sha256.
-    #[error("{PROVENANCE} names {file} without its source or sha256")]
+    #[error("{} names {file} without its source or sha256", provenance.display())]
     Provenance {
+        /// The provenance.
+        provenance: PathBuf,
         /// The artefact.
         file: String,
     },
@@ -148,16 +169,38 @@ pub fn patient_summary() -> PathBuf {
 pub fn dependencies() -> Result<Vec<PathBuf>, FhirPackagesError> {
     let root = Path::new(ROOT);
     let mut paths: Vec<PathBuf> = COMMITTED.iter().map(|path| root.join(path)).collect();
-    let cache = root.join(CACHE);
-    let pins = pins(&root.join(PROVENANCE))?;
+    paths.extend(cached(PROVENANCE, CACHE)?);
+    Ok(paths)
+}
+
+/// Returns every package of the HL7 Europe Hospital Discharge Report 1.0.0
+/// package's dependency closure: the Patient Summary's, with the packages
+/// the discharge report names beyond it.
+///
+/// # Errors
+///
+/// The errors of [`dependencies`].
+pub fn discharge_dependencies() -> Result<Vec<PathBuf>, FhirPackagesError> {
+    let root = Path::new(ROOT);
+    let mut paths = dependencies()?;
+    paths.extend(DISCHARGE_COMMITTED.iter().map(|path| root.join(path)));
+    paths.extend(cached(MYHEALTH_PROVENANCE, MYHEALTH_CACHE)?);
+    Ok(paths)
+}
+
+/// Returns the path of every package `provenance` pins in `cache`, under
+/// the repository root, each fetched first when the cache lacks it.
+fn cached(provenance: &str, cache: &str) -> Result<Vec<PathBuf>, FhirPackagesError> {
+    let root = Path::new(ROOT);
+    let cache = root.join(cache);
+    let pins = pins(&root.join(provenance))?;
     if pins
         .iter()
         .any(|pinned| !cache.join(&pinned.file).is_file())
     {
         fetch_missing(&pins, &cache)?;
     }
-    paths.extend(pins.iter().map(|pinned| cache.join(&pinned.file)));
-    Ok(paths)
+    Ok(pins.iter().map(|pinned| cache.join(&pinned.file)).collect())
 }
 
 /// Fetches every one of `pins` that `cache` lacks, one test process at a
@@ -215,7 +258,10 @@ fn pins(provenance: &Path) -> Result<Vec<Pinned>, FhirPackagesError> {
             pins.push(Pinned { file, url, sha256 });
             Ok(())
         }
-        Some((file, _, _)) => Err(FhirPackagesError::Provenance { file }),
+        Some((file, _, _)) => Err(FhirPackagesError::Provenance {
+            provenance: provenance.to_owned(),
+            file,
+        }),
     };
     for line in text.lines() {
         if let Some(heading) = line.strip_prefix("### `") {

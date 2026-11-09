@@ -28,12 +28,13 @@ use ferrofed_operator_api::console::{
     ConsoleMember, ConsoleState, MemberResource, Owner, QueryRegistry, QueryResource, Resources,
 };
 use ferrofed_registry::definition::store::Insertion;
-use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use ferrofed_registry::error::document::DocumentFault;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{HeaderMap, StatusCode};
 use jiff::Timestamp;
+use openehr_its::rest::stored_query::QueryVersion;
 use serde::Deserialize;
 
 use super::{ActionBody, Answer, Managed, Shaped, answered, held, record, refused};
@@ -339,7 +340,7 @@ fn queries(managed: &Managed) -> Result<Vec<QueryResource>, RevisionError> {
         .list("")
         .iter()
         .map(|definition| QueryResource {
-            name: definition.name().as_str().to_owned(),
+            name: definition.name().to_string(),
             version: definition.version().to_string(),
             owner: stored::owner(definition.name(), read_only),
         })
@@ -564,7 +565,7 @@ pub(super) async fn store_query(
     let (Some(definitions), Some(federation)) = (state.definitions(), state.federation()) else {
         return error::fixed(Code::NotImplemented, &request_id);
     };
-    let name = match QueryName::new(&name) {
+    let name = match query_name(&name) {
         Ok(name) => name,
         Err(refused) => {
             return error::response(Code::QueryNameInvalid, refused.to_string(), &request_id);
@@ -613,7 +614,7 @@ pub(super) async fn store_query(
             tracing::info!(
                 target: crate::security::TARGET,
                 event = STORED,
-                name = definition.name().as_str(),
+                name = %definition.name(),
                 version = %definition.version(),
                 issuer = operator.issuer(),
                 subject = operator.subject(),

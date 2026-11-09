@@ -22,11 +22,12 @@
 
 use std::sync::Arc;
 
+use ferrofed_registry::definition::StoredDefinition;
 use ferrofed_registry::definition::store::{
     DefinitionStore, Field, FieldFault, Insertion, StoreError,
 };
-use ferrofed_registry::definition::{QueryName, StoredDefinition};
 use jiff::Timestamp;
+use openehr_its::rest::stored_query::QualifiedQueryName;
 use tokio_postgres::{Client, Row};
 
 use crate::store::Store;
@@ -80,7 +81,7 @@ impl DefinitionStore for PostgresStore {
         self.store.call(move |client| Box::pin(load(client, None)))
     }
 
-    fn load_named(&self, name: &QueryName) -> Result<Vec<StoredDefinition>, StoreError> {
+    fn load_named(&self, name: &QualifiedQueryName) -> Result<Vec<StoredDefinition>, StoreError> {
         let name = Some(name.clone());
         self.store.call(move |client| Box::pin(load(client, name)))
     }
@@ -92,13 +93,14 @@ impl DefinitionStore for PostgresStore {
 
 /// Inserts `definition` unless its name and version are held.
 async fn insert(client: &Client, definition: StoredDefinition) -> Result<Insertion, StoreError> {
+    let name = definition.name().to_string();
     let version = definition.version().to_string();
     let saved = definition.saved().to_string();
     let rows = client
         .execute(
             INSERT,
             &[
-                &definition.name().as_str(),
+                &name.as_str(),
                 &version.as_str(),
                 &saved.as_str(),
                 &definition.aql(),
@@ -116,10 +118,10 @@ async fn insert(client: &Client, definition: StoredDefinition) -> Result<Inserti
 /// Every definition, or every version of `name`.
 async fn load(
     client: &Client,
-    name: Option<QueryName>,
+    name: Option<QualifiedQueryName>,
 ) -> Result<Vec<StoredDefinition>, StoreError> {
     let rows = match &name {
-        Some(name) => client.query(SELECT_NAMED, &[&name.as_str()]).await,
+        Some(name) => client.query(SELECT_NAMED, &[&name.to_string()]).await,
         None => client.query(SELECT_ALL, &[]).await,
     }
     .map_err(backend)?;

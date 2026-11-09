@@ -134,14 +134,7 @@ impl Fhir {
                 source,
             })
         };
-        let mut archetypes = Vec::with_capacity(entry.archetypes.len());
-        for path in &entry.archetypes {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            archetypes.push((name, read(path)?));
-        }
+        let archetypes = super::archetypes(&entry.archetypes, read)?;
         // NOTE: no specification governs this: our own design; an OPT 1.4 is named `.opt`, and any
         // other template is read as ADL 2 with its archetypes, as `[[fhir.serve]]` reads one.
         let opt14 = entry

@@ -225,9 +225,9 @@ pub(crate) async fn storing(status: u16) -> Server {
 async fn holding(aql: &str) -> Result<Server, Box<dyn Error>> {
     let server = Server::start().await;
     let copy = StoredQuery {
-        name: NAME.to_owned(),
+        name: NAME.parse()?,
         r#type: "AQL".to_owned(),
-        version: VERSION.to_owned(),
+        version: VERSION.parse()?,
         saved: "2026-10-03T00:00:00Z".to_owned(),
         q: aql.to_owned(),
         additional_properties: BTreeMap::new(),
@@ -404,8 +404,8 @@ async fn with_one_member_failing_the_distribution_is_partial_and_the_registry_ho
     assert_eq!(
         (NAME, VERSION),
         (
-            answer.definition.name.as_str(),
-            answer.definition.version.as_str()
+            answer.definition.name.to_string().as_str(),
+            answer.definition.version.to_string().as_str()
         ),
         "the answer names the registry's definition"
     );
@@ -472,7 +472,8 @@ async fn with_every_member_failing_the_registry_still_holds_the_definition() -> 
     );
     let answer: Reported = serde_json::from_str(&text)?;
     assert_eq!(
-        NAME, answer.definition.name,
+        NAME,
+        answer.definition.name.to_string(),
         "the registry's definition: {text}"
     );
     let (status, _) = call(app, get(None)?).await?;
@@ -592,7 +593,8 @@ async fn the_drift_report_names_matching_differing_and_missing_members() -> Test
     );
     let answer: Reported = serde_json::from_str(&text)?;
     assert_eq!(
-        VERSION, answer.definition.version,
+        VERSION,
+        answer.definition.version.to_string(),
         "the registry's definition"
     );
     assert_eq!(None, answer.meta.registry, "a drift report stores nothing");

@@ -180,7 +180,7 @@ async fn concurrent_unversioned_puts_each_store_a_version_of_their_own() -> Test
     let (status, text) = call(app, get(NAME)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let listed: Vec<StoredQuery> = serde_json::from_str(&text)?;
-    let mut versions: Vec<String> = listed.iter().map(|held| held.version.clone()).collect();
+    let mut versions: Vec<String> = listed.iter().map(|held| held.version.to_string()).collect();
     versions.sort();
     let mut expected: Vec<String> = (0..writers).map(|patch| format!("1.0.{patch}")).collect();
     expected.sort();
@@ -227,7 +227,7 @@ async fn a_distribution_sends_the_version_the_registry_assigned() -> TestResult 
         let text = String::from_utf8(body)?;
         assert_eq!(StatusCode::OK, status, "{assigned}: {text}");
         let answer: stored_fan_out::Reported = serde_json::from_str(&text)?;
-        assert_eq!(assigned, answer.definition.version, "{text}");
+        assert_eq!(assigned, answer.definition.version.to_string(), "{text}");
         assert_eq!(Some("stored"), answer.meta.registry.as_deref());
         assert_eq!(
             Some(format!("./{}/{assigned}", stored_fan_out::NAME).as_str()),

@@ -10,7 +10,7 @@ use std::error::Error;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ferrofed_registry::definition::store::{DefinitionStore, Definitions, Insertion, StoreError};
-use ferrofed_registry::definition::{QueryName, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use ferrofed_server::stored::embedded::RedbStore;
 use ferrofed_server::stored::{Admitted, HeldRefused, Inadmissible};
 use jiff::Timestamp;
@@ -32,7 +32,7 @@ fn literal() -> String {
 /// The definition of `name` at 1.0.0 holding `aql`.
 fn held(name: &str, aql: &str) -> Result<StoredDefinition, Box<dyn Error>> {
     Ok(StoredDefinition::new(
-        QueryName::new(name)?,
+        query_name(name)?,
         "1.0.0".parse()?,
         aql.to_owned(),
         Timestamp::UNIX_EPOCH,
@@ -120,7 +120,7 @@ fn a_literal_a_shared_store_gains_after_the_start_is_never_served() -> TestResul
     rows.lock()
         .unwrap_or_else(PoisonError::into_inner)
         .push(held(NAME, &literal())?);
-    let name = QueryName::new(NAME)?;
+    let name = query_name(NAME)?;
     let refused = refusal(definitions.refresh_named(&name))?;
     assert_eq!(name, refused.name);
     assert!(
@@ -137,7 +137,7 @@ fn a_literal_a_shared_store_gains_after_the_start_is_never_served() -> TestResul
         "§5.4.1, N33: the literal is never held, so never run"
     );
 
-    let admitted = QueryName::new(ADMITTED)?;
+    let admitted = query_name(ADMITTED)?;
     definitions.refresh_named(&admitted)?;
     assert!(
         definitions.find(&admitted, None).is_some(),

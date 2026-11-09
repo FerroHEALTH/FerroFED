@@ -25,6 +25,7 @@ use openehr_its::rest::generated::definition::client::{
 use openehr_its::rest::generated::definition::{
     DefinitionQueryVersionGetParams, DefinitionQueryVersionStoreYamlParams,
 };
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion, VersionPattern};
 
 use super::gate::Told;
 use super::oversized::Oversized;
@@ -40,9 +41,9 @@ const AQL: &str = "AQL";
 #[derive(Debug, Clone, Copy)]
 pub struct DefinitionAt<'a> {
     /// The qualified name, `[{namespace}::]{query-name}`.
-    pub name: &'a str,
+    pub name: &'a QualifiedQueryName,
     /// The version, `major.minor.patch`.
-    pub version: &'a str,
+    pub version: QueryVersion,
 }
 
 /// What a node holds at a definition's name and version.
@@ -131,8 +132,8 @@ impl<T: Transport + Clone> NodeClient<T> {
         self.admit_write(options, false)?;
         self.gate_definition(definition, aql, options)?;
         let params = DefinitionQueryVersionStoreYamlParams {
-            qualified_query_name: definition.name.to_owned(),
-            version: definition.version.to_owned(),
+            qualified_query_name: definition.name.clone(),
+            version: VersionPattern::Exact(definition.version),
             query_type: Some(AQL.to_owned()),
             accept: None,
         };
@@ -199,8 +200,8 @@ impl<T: Transport + Clone> NodeClient<T> {
     ) -> Result<NodeCopy, DispatchError> {
         self.gate_definition(definition, "", options)?;
         let params = DefinitionQueryVersionGetParams {
-            qualified_query_name: definition.name.to_owned(),
-            version: definition.version.to_owned(),
+            qualified_query_name: definition.name.clone(),
+            version: VersionPattern::Exact(definition.version),
             accept: None,
         };
         let started = Instant::now();
@@ -353,8 +354,8 @@ impl<T: Transport + Clone> NodeClient<T> {
             format!(
                 "{}/definition/query/{}/{}",
                 base.trim_end_matches('/'),
-                path_segment(&definition.name),
-                path_segment(&definition.version)
+                path_segment(&definition.name.to_string()),
+                path_segment(&definition.version.to_string())
             )
         };
         let told = Told {

@@ -187,3 +187,39 @@ fn an_element_the_run_leaves_unread_is_counted_and_named() -> Result<(), Box<dyn
     }
     Ok(())
 }
+
+/// The stack of a thread the standard library spawns when none is named
+/// (`std::thread`, "Stack size": 2 MiB), the stack of a runtime worker too.
+const DEFAULT_STACK: usize = 2 * 1024 * 1024;
+
+/// FerroHEALTH/FerroFED#1774: the shipped EPS project builds over the
+/// patient summary template, compiles and maps a composition on a thread
+/// with the default stack, with no thread of its own, since the
+/// `openehr-lang` lexer no longer overflows it (FerroHEALTH/FerroEHR#4961).
+#[test]
+fn the_patient_summary_project_builds_and_maps_on_a_default_stack() -> Result<(), Box<dyn Error>> {
+    let run = || -> Result<Vec<String>, String> {
+        let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let uid = "5a1c3e20-0000-4000-8000-000000001774::cdr-a.example.org::1";
+        let held = Held {
+            uid: uid.to_owned(),
+            template: medication::PATIENT_SUMMARY_TEMPLATE.to_owned(),
+            composition: medication::summary_composition(uid, (MEDICINE, VACCINE)),
+        };
+        let mappings = mappings(dir.path()).map_err(|error| error.to_string())?;
+        let assembled = document_mapped(&answers(&held), header(), &[], &mappings)
+            .map_err(|error| error.to_string())?;
+        let bundle = serde_json::to_value(&assembled.bundle).map_err(|error| error.to_string())?;
+        Ok(listed(&bundle, "10160-0")
+            .into_iter()
+            .map(str::to_owned)
+            .collect())
+    };
+    let listed = std::thread::Builder::new()
+        .stack_size(DEFAULT_STACK)
+        .spawn(run)?
+        .join()
+        .map_err(|_panicked| "the mapping panicked on a default stack")??;
+    assert_eq!(vec!["MedicationStatement"], listed, "the medicine, mapped");
+    Ok(())
+}

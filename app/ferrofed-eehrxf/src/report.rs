@@ -21,7 +21,6 @@ use eehrxf::document::laboratory::LAB_BUNDLE;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::{Project, UnknownContext};
-use ferrofed_registry::definition::{QueryName, QueryNameError};
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
 use fhir_types::r4::device::{Device, DeviceDeviceName};
@@ -32,9 +31,9 @@ use fhir_types::r4::resource::Resource;
 use fhirconnect::engine::context::CallContext;
 use fhirconnect::operations::contract::ToFhirResponse;
 use fhirconnect::operations::run::Settings;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 
 use crate::prescriptions::mapped::{MapModeError, Template};
-use crate::stack::{Deep, deep};
 use crate::summary::Organisation;
 use crate::summary::resources::{organization, reference};
 
@@ -74,9 +73,6 @@ pub enum ServedError {
     /// The shipped mapping does not compile against the template.
     #[error("the shipped mapping does not compile against the template")]
     Compile(#[source] MappingError),
-    /// The mapping did not run on its thread.
-    #[error(transparent)]
-    Deep(#[from] Deep),
     /// The composition is no canonical JSON composition with a language.
     #[error("the composition names no language")]
     Language(#[source] serde_json::Error),
@@ -96,7 +92,7 @@ pub enum ServedError {
 /// [`ServedError::Compile`] when the project does not compile against it.
 pub(crate) fn compiled(template: Template<'_>, project: &Project) -> Result<Mapping, ServedError> {
     let source = template.source().map_err(ServedError::Template)?;
-    deep(|| Mapping::compile_project(&source, project))?.map_err(ServedError::Compile)
+    Mapping::compile_project(&source, project).map_err(ServedError::Compile)
 }
 
 /// Names in `document` the patient `report` names and the authors, the
@@ -152,7 +148,9 @@ pub(crate) fn authored(
     let context = CallContext::new()
         .with_patient(reference(&subject))
         .with_who(reference(&device));
-    deep(|| mapping.to_fhir_with(composition, &settings, context))?.map_err(ServedError::Run)
+    mapping
+        .to_fhir_with(composition, &settings, context)
+        .map_err(ServedError::Run)
 }
 
 /// Adds to `document` the member `report` names as an `Organization`, and
@@ -223,7 +221,7 @@ impl Written {
     /// # Errors
     ///
     /// The [`QueryNameError`] of the name, which no query meets.
-    pub fn name(self) -> Result<QueryName, QueryNameError> {
+    pub fn name(self) -> Result<QualifiedQueryName, QueryNameError> {
         match self {
             Self::Laboratory => crate::laboratory::name(),
             Self::Discharge => crate::discharge::name(),

@@ -39,13 +39,20 @@ async fn an_operator_lists_every_held_version_with_its_text() -> TestResult {
         report.items.iter().partition(|entry| {
             entry
                 .name
+                .to_string()
                 .starts_with(&format!("{}::", reserved::NAMESPACE))
         });
-    let versions: Vec<(&str, &str)> = deployment
+    let versions: Vec<(String, String)> = deployment
         .iter()
-        .map(|entry| (entry.name.as_str(), entry.version.as_str()))
+        .map(|entry| (entry.name.to_string(), entry.version.to_string()))
         .collect();
-    assert_eq!(vec![(NAME, "1.0.0"), (NAME, "1.1.0")], versions);
+    assert_eq!(
+        vec![
+            (NAME.to_owned(), "1.0.0".to_owned()),
+            (NAME.to_owned(), "1.1.0".to_owned())
+        ],
+        versions
+    );
     assert_eq!(
         reserved::definitions()?.len(),
         own.len(),
@@ -104,6 +111,7 @@ async fn the_listing_marks_the_gateways_own_versions_read_only_and_a_stored_one_
             entry
                 .definition
                 .name
+                .to_string()
                 .starts_with(&format!("{}::", reserved::NAMESPACE))
         })
         .collect();
@@ -112,7 +120,7 @@ async fn the_listing_marks_the_gateways_own_versions_read_only_and_a_stored_one_
     let held: Vec<&Listed> = page
         .items
         .iter()
-        .filter(|entry| entry.definition.name == NAME)
+        .filter(|entry| entry.definition.name.to_string() == NAME)
         .collect();
     assert_eq!(2, held.len(), "{text}");
     assert!(held.iter().all(|entry| !entry.read_only), "{text}");
@@ -136,19 +144,22 @@ async fn one_name_answers_its_versions_lowest_first_naming_the_replica() -> Test
         .map(ToOwned::to_owned);
     let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024).await?;
     let page: Page<Listed> = serde_json::from_slice(&bytes)?;
-    let versions: Vec<(&str, &str, bool)> = page
+    let versions: Vec<(String, String, bool)> = page
         .items
         .iter()
         .map(|entry| {
             (
-                entry.definition.name.as_str(),
-                entry.definition.version.as_str(),
+                entry.definition.name.to_string(),
+                entry.definition.version.to_string(),
                 entry.read_only,
             )
         })
         .collect();
     assert_eq!(
-        vec![(NAME, "1.0.0", false), (NAME, "1.1.0", false)],
+        vec![
+            (NAME.to_owned(), "1.0.0".to_owned(), false),
+            (NAME.to_owned(), "1.1.0".to_owned(), false)
+        ],
         versions
     );
     assert_eq!(2, page.total);
@@ -166,7 +177,7 @@ async fn one_of_the_gateways_own_names_answers_read_only() -> TestResult {
     let app = holding_two_versions(dir.path()).await?;
     let section = Section::ALL.first().ok_or("a section")?.name()?;
     let request = operator_get(
-        &format!("/operator/stored-queries/{}", section.as_str()),
+        &format!("/operator/stored-queries/{section}"),
         &operator_bearer()?,
     )?;
     let (status, text) = call(app, request).await?;

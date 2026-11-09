@@ -119,7 +119,7 @@ pub enum Resource {
 pub fn sections() -> Option<Vec<String>> {
     ferrofed_eehrxf::patient_summary::Section::ALL
         .into_iter()
-        .map(|section| section.name().ok().map(|name| name.as_str().to_owned()))
+        .map(|section| section.name().ok().map(|name| name.to_string()))
         .collect()
 }
 

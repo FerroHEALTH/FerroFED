@@ -23,7 +23,8 @@
 //! `FEEDER_AUDIT.original_content` keeps the received dispense, so the
 //! filter would hide every dispensation received through the gateway.
 
-use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::ast::{IdentifiedExpr, SelectQuery, WhereExpr};
 use openehr_query::printer;
 
@@ -79,10 +80,10 @@ impl Medication {
     ///
     /// # Errors
     ///
-    /// The [`QueryNameError`] of [`QueryName::new`], which the name does
+    /// The [`QueryNameError`] of [`QualifiedQueryName::new`], which the name does
     /// not meet.
-    pub fn name(self) -> Result<QueryName, QueryNameError> {
-        QueryName::new(&format!("{NAMESPACE}::{}", self.slug()))
+    pub fn name(self) -> Result<QualifiedQueryName, QueryNameError> {
+        query_name(&format!("{NAMESPACE}::{}", self.slug()))
     }
 
     /// Returns the query as an AQL syntax tree.

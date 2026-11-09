@@ -12,7 +12,7 @@ use std::error::Error;
 use std::path::Path;
 
 use ferrofed_testkit::fhir_packages;
-use ferrofed_testkit::laboratory;
+use ferrofed_testkit::laboratory::{self, TypedRange};
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use serde_json::Value;
@@ -75,7 +75,7 @@ fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<axum::Router, Box<dyn E
 
 /// The synthetic laboratory report of [`PATIENT`].
 fn report() -> Result<String, Box<dyn Error>> {
-    laboratory::received_document(&[(NAMESPACE, PATIENT)])
+    laboratory::received_document(&[(NAMESPACE, PATIENT)], &[])
 }
 
 #[tokio::test]
@@ -189,6 +189,66 @@ async fn a_received_normal_range_and_order_reach_the_members_composition() -> Te
     Ok(())
 }
 
+/// The treatment range the typed-range cases add to the synthetic result.
+const TREATMENT: TypedRange<'static> = TypedRange {
+    meaning: "treatment",
+    low: None,
+    high: Some(160.0),
+};
+
+// NOTE: openEHR RM data_types §DV_ORDERED `other_reference_ranges`; hazard I-16 of the clinical
+// safety risk file: a received typed range reaches the member's structured record with its type.
+#[tokio::test]
+async fn a_received_typed_reference_range_reaches_the_members_composition() -> TestResult {
+    let (a, b) = (creating().await, Server::start().await);
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), &a, &b)?;
+    let sent = laboratory::received_document(&[(NAMESPACE, PATIENT)], &[TREATMENT])?;
+    let (status, text) = call(app, post(&sent)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert!(
+        !text.contains("no structured element"),
+        "nothing is declared lost: {text}"
+    );
+    let requests = a.received_requests().await.ok_or("recording is on")?;
+    let write = requests.first().ok_or("the write")?;
+    let composition: Value = serde_json::from_slice(&write.body)?;
+    let measured = quantity_of(&composition, 182.0).ok_or("the result's quantity")?;
+    let others = measured["other_reference_ranges"]
+        .as_array()
+        .ok_or_else(|| format!("the quantity's other reference ranges: {measured}"))?;
+    let [treatment] = others.as_slice() else {
+        return Err(format!("one other reference range: {measured}").into());
+    };
+    let coded = &treatment["meaning"]["mappings"][0]["target"];
+    assert_eq!(coded["code_string"], "treatment", "{treatment}");
+    assert_eq!(
+        coded["terminology_id"]["value"],
+        laboratory::REFERENCE_RANGE_MEANING,
+        "{treatment}"
+    );
+    assert_eq!(
+        treatment["range"]["upper"]["magnitude"].as_f64(),
+        TREATMENT.high,
+        "{treatment}"
+    );
+    assert_eq!(treatment["range"]["upper"]["units"], "mg/dL", "{treatment}");
+    assert!(
+        treatment["range"].get("lower").is_none_or(Value::is_null),
+        "the treatment range has no lower bound: {treatment}"
+    );
+    let (lower, upper) = laboratory::NORMAL_RANGE;
+    assert_eq!(
+        (
+            measured["normal_range"]["lower"]["magnitude"].as_f64(),
+            measured["normal_range"]["upper"]["magnitude"].as_f64()
+        ),
+        (Some(lower), Some(upper)),
+        "the normal range stays the normal range: {measured}"
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn a_laboratory_report_that_breaks_its_profiles_reaches_no_member() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
@@ -212,7 +272,7 @@ async fn a_laboratory_report_of_a_patient_no_member_holds_is_refused() -> TestRe
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), &a, &b)?;
-    let other = laboratory::received_document(&[(NAMESPACE, "SENTINEL-NOBODY-3k9q")])?;
+    let other = laboratory::received_document(&[(NAMESPACE, "SENTINEL-NOBODY-3k9q")], &[])?;
     let (status, text) = call(app, post(&other)?).await?;
     assert_eq!(
         StatusCode::UNPROCESSABLE_ENTITY,
@@ -241,7 +301,7 @@ const LAB_ARCHETYPE: &str = "openEHR-EHR-OBSERVATION.laboratory_test_result.v1";
 
 /// The synthetic report as node A serves it, under [`LAB_VERSION`].
 pub(super) fn lab_composition(dir: &Path) -> Result<String, Box<dyn Error>> {
-    laboratory::composition(dir, &[(NAMESPACE, PATIENT)], LAB_VERSION)
+    laboratory::composition(dir, &[(NAMESPACE, PATIENT)], (LAB_VERSION, &[]))
 }
 
 /// A node answering the laboratory report query with `rows` and every other
@@ -283,14 +343,23 @@ pub(super) async fn holding(rows: &str, composition: Option<&str>) -> Server {
 /// Lists node A's laboratory composition and reads it through its
 /// attachment, returning the list's reference, the served document and
 /// node A.
-async fn served(dir: &Path) -> Result<(Value, Value, Server), Box<dyn Error>> {
-    let composition = lab_composition(dir)?;
+async fn served(
+    dir: &Path,
+    typed: &[TypedRange<'_>],
+) -> Result<(Value, Value, Server), Box<dyn Error>> {
+    let composition = laboratory::composition(dir, &[(NAMESPACE, PATIENT)], (LAB_VERSION, typed))?;
+    serving(dir, &composition).await
+}
+
+/// Lists `composition`, node A's laboratory composition, and reads it
+/// through its attachment, as [`served`] does.
+async fn serving(dir: &Path, composition: &str) -> Result<(Value, Value, Server), Box<dyn Error>> {
     let row = format!(
         r#"[{composition},"{LAB_VERSION}","{}"]"#,
         laboratory::TEMPLATE
     );
     let (a, b) = (
-        holding(&row, Some(&composition)).await,
+        holding(&row, Some(composition)).await,
         holding("", None).await,
     );
     let app = gateway(dir, &a, &b)?;
@@ -336,7 +405,7 @@ fn only<'a>(document: &'a Value, kind: &str) -> Result<&'a Value, Box<dyn Error>
 async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_report() -> TestResult
 {
     let dir = tempfile::tempdir()?;
-    let (reference, document, a) = served(dir.path()).await?;
+    let (reference, document, a) = served(dir.path(), &[]).await?;
     assert_eq!(
         reference.pointer("/type/coding/0/code"),
         Some(&Value::from("11502-2"))
@@ -381,7 +450,7 @@ async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_rep
 #[tokio::test]
 async fn a_served_laboratory_report_carries_the_normal_range_and_the_order() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let (_, document, _) = served(dir.path()).await?;
+    let (_, document, _) = served(dir.path(), &[]).await?;
     let result = only(&document, "Observation")?;
     let (low, high) = laboratory::NORMAL_RANGE;
     for (bound, value) in [("low", low), ("high", high)] {
@@ -398,6 +467,96 @@ async fn a_served_laboratory_report_carries_the_normal_range_and_the_order() -> 
         "the order the report answers: {report}"
     );
     Ok(())
+}
+
+// NOTE: R4 Observation.referenceRange.type; hazard I-18 of the clinical safety risk file: a
+// served report writes each of the member's other reference ranges with its type.
+#[tokio::test]
+async fn a_served_laboratory_report_carries_each_typed_reference_range_with_its_type() -> TestResult
+{
+    let dir = tempfile::tempdir()?;
+    let (_, document, _) = served(dir.path(), &[TREATMENT]).await?;
+    let result = only(&document, "Observation")?;
+    let ranges = result["referenceRange"]
+        .as_array()
+        .ok_or_else(|| format!("the served ranges: {result}"))?;
+    let [normal, treatment] = ranges.as_slice() else {
+        return Err(format!("the normal range and the treatment range: {result}").into());
+    };
+    assert!(normal.get("type").is_none(), "the normal range: {normal}");
+    assert_eq!(
+        treatment.pointer("/type/coding/0/system"),
+        Some(&Value::from(laboratory::REFERENCE_RANGE_MEANING)),
+        "{treatment}"
+    );
+    assert_eq!(
+        treatment.pointer("/type/coding/0/code"),
+        Some(&Value::from("treatment")),
+        "{treatment}"
+    );
+    assert_eq!(
+        treatment["high"]["value"].as_f64(),
+        TREATMENT.high,
+        "{treatment}"
+    );
+    assert_eq!(treatment["high"]["code"], "mg/dL", "{treatment}");
+    assert!(
+        treatment.get("low").is_none(),
+        "no lower bound: {treatment}"
+    );
+    Ok(())
+}
+
+// NOTE: openEHR RM data_types §REFERENCE_RANGE `meaning` is a DV_TEXT, and R4 CodeableConcept.text
+// holds it; hazard I-18: a range a member names by text alone is served with that text.
+#[tokio::test]
+async fn a_served_reference_range_named_by_text_alone_keeps_its_text() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let mut composition: Value = serde_json::from_str(&laboratory::composition(
+        dir.path(),
+        &[(NAMESPACE, PATIENT)],
+        (LAB_VERSION, &[TREATMENT]),
+    )?)?;
+    let mut stripped = 0_usize;
+    strip_meaning_codes(&mut composition, &mut stripped);
+    assert_eq!(1, stripped, "the treatment range's coded meaning");
+    let (_, document, _) = serving(dir.path(), &composition.to_string()).await?;
+    let result = only(&document, "Observation")?;
+    let treatment = result
+        .pointer("/referenceRange/1")
+        .ok_or_else(|| format!("the treatment range: {result}"))?;
+    assert_eq!(
+        treatment.pointer("/type/text"),
+        Some(&Value::from("Treatment Range")),
+        "{treatment}"
+    );
+    assert_eq!(
+        treatment["high"]["value"].as_f64(),
+        TREATMENT.high,
+        "{treatment}"
+    );
+    Ok(())
+}
+
+/// Removes the term mappings of every `REFERENCE_RANGE.meaning` in `value`,
+/// counting each in `stripped`, so the meaning is named by its text alone.
+fn strip_meaning_codes(value: &mut Value, stripped: &mut usize) {
+    match value {
+        Value::Object(object) => {
+            if let Some(Value::Object(meaning)) = object.get_mut("meaning")
+                && meaning.remove("mappings").is_some()
+            {
+                *stripped = stripped.saturating_add(1);
+            }
+            object
+                .values_mut()
+                .for_each(|member| strip_meaning_codes(member, stripped));
+        }
+        Value::Array(items) => items
+            .iter_mut()
+            .for_each(|item| strip_meaning_codes(item, stripped)),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
 }
 
 #[tokio::test]

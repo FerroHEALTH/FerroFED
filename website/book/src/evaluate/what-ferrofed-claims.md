@@ -613,8 +613,8 @@ These are the ones to know before you deploy FerroFED; the
   ([Prescriptions and dispensations over FHIR](../integrate/prescriptions.md)).
   It lists, reads and receives laboratory reports
   ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)),
-  with hazards I-16 and I-18 of the [clinical safety risk
-  file](clinical-safety.md) open. Imaging and discharge reports are planned
+  with hazard I-16 of the [clinical safety risk file](clinical-safety.md)
+  open and I-18 closed at S4, P1. Imaging and discharge reports are planned
   ([#1405](https://github.com/FerroHEALTH/FerroFED/issues/1405), [#1406](https://github.com/FerroHEALTH/FerroFED/issues/1406),
   [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325),
   [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326)). No EU

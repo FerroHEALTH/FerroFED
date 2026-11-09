@@ -15,9 +15,20 @@
 use std::error::Error;
 use std::path::PathBuf;
 
+use eehrxf::document::Document;
+use eehrxf::document::discharge::{DISCHARGE_REPORT_FORM, HDR_SLOTS};
+use eehrxf::document::section::Section;
+use eehrxf::mapping::Mapping;
+use eehrxf::mappings::HDR;
+use fhir_types::r4::reference::Reference;
+use fhirconnect::engine::context::CallContext;
+use fhirconnect::operations::run::Settings;
+use openehr_mapping_core::template::TemplateSource;
+
 use crate::medication::{
     ENTRY, OTHER_CARE, Written, details, held, order, patient_summary_template, summary_order,
 };
+use crate::sender::{BASE, authored, displayed};
 
 /// The workspace root, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -412,5 +423,120 @@ pub fn package() -> PathBuf {
 ///
 /// When a file cannot be written.
 pub fn mapping_files(directory: &std::path::Path) -> std::io::Result<Vec<PathBuf>> {
-    eehrxf::mappings::HDR.write_to(directory)
+    HDR.write_to(directory)
+}
+
+/// The instant the synthetic sender writes its report at.
+const SENT_AT: &str = "2026-10-21T08:00:00Z";
+
+/// The synthetic diagnoses' code system.
+const DIAGNOSES_SYSTEM: &str = "http://example.org/fhir/CodeSystem/ferrofed-diagnoses";
+
+/// The synthetic procedures' code system.
+const PROCEDURES_SYSTEM: &str = "http://example.org/fhir/CodeSystem/ferrofed-procedures";
+
+/// The synthetic products' code system.
+const PRODUCTS_SYSTEM: &str = "http://example.org/fhir/CodeSystem/ferrofed-products";
+
+/// The displays a sender that names its codes writes for the codes the
+/// component writes with none, each `(system, code, display)`.
+const DISPLAYS: [(&str, &str, &str); 11] = [
+    (DIAGNOSES_SYSTEM, DIAGNOSIS, "Synthetic diagnosis"),
+    (
+        DIAGNOSES_SYSTEM,
+        "SYN-DIAGNOSIS-0002",
+        "Synthetic diagnosis",
+    ),
+    (PROCEDURES_SYSTEM, PROCEDURE, "Synthetic procedure"),
+    (
+        PROCEDURES_SYSTEM,
+        "SYN-PROCEDURE-0002",
+        "Synthetic procedure",
+    ),
+    (PRODUCTS_SYSTEM, MEDICINE, "Synthetic tablet"),
+    (PRODUCTS_SYSTEM, "SYN-MEDICINE-0002", "Synthetic tablet"),
+    ("http://loinc.org", "34105-7", "Hospital Discharge summary"),
+    ("http://loinc.org", "8648-8", "Hospital course Narrative"),
+    (
+        "http://loinc.org",
+        "11535-2",
+        "Hospital discharge Dx Narrative",
+    ),
+    (
+        "http://loinc.org",
+        "10185-7",
+        "Hospital discharge procedures Narrative",
+    ),
+    (
+        "http://loinc.org",
+        "75311-1",
+        "Discharge medications Narrative",
+    ),
+];
+
+/// A reference to `url`.
+fn reference(url: &str) -> Reference {
+    Reference {
+        reference: Some(url.into()),
+        ..Reference::default()
+    }
+}
+
+/// A synthetic discharge report of the patient `identifiers`, as another
+/// system sends it.
+///
+/// Each identifier is a `(system, value)`. The document is in the HL7
+/// Europe Hospital Discharge Report 1.0.0 form, written by the shipped HDR
+/// project from [`full_composition`] over `source`, the operational
+/// template of [`TEMPLATE`], with a named `Patient`, the sender's `Device`
+/// and `Organization` as its authors, and a hospital course.
+///
+/// # Errors
+///
+/// When the shipped project does not compile against `source`, refuses the
+/// synthetic composition, or the component's builder refuses a resource.
+pub fn received_document(
+    source: &TemplateSource,
+    identifiers: &[(&str, &str)],
+) -> Result<String, Box<dyn Error>> {
+    let mut document = Document::of(
+        &DISCHARGE_REPORT_FORM,
+        BASE,
+        String::from("urn:uuid:5b0c3f7e-0000-4000-8000-00000000d1c1"),
+        String::from(SENT_AT),
+        String::from("Discharge report"),
+    );
+    let (subject, device) = authored(
+        &mut document,
+        identifiers,
+        (
+            "Synthetic hospital system",
+            ("hospital", "Synthetic hospital"),
+        ),
+    )?;
+    document.with_language(String::from("en"));
+    let run = Mapping::compile_project(source, &HDR)?.to_fhir_with(
+        &full_composition("5b0c3f7e-0000-4000-8000-00000000d1c2::hospital.example.org::1"),
+        &Settings::new(device.clone(), SENT_AT),
+        CallContext::new()
+            .with_patient(reference(&subject))
+            .with_who(reference(&device)),
+    )?;
+    // NOTE: HL7 Europe HDR 1.0.0 composition-eu-hdr cmp-hdr-2 requires the discharge summary or
+    // the hospital course, which the sending system writes.
+    let course = HDR_SLOTS
+        .iter()
+        .find(|slot| slot.slice == "sectionHospitalCourse")
+        .ok_or("the hospital course slot")?;
+    document.with_section(Section::new(
+        course,
+        vec![String::from("A synthetic hospital course.")],
+    ))?;
+    for section in document.with_mapped_composition(run.bundle())? {
+        let paragraph = format!("{}.", section.slot.title);
+        document.with_section(section.into_section(vec![paragraph]))?;
+    }
+    let mut bundle = serde_json::to_value(document.into_bundle()?)?;
+    displayed(&mut bundle, &DISPLAYS);
+    Ok(bundle.to_string())
 }
