@@ -1054,7 +1054,7 @@ if [[ -f "$ci" ]]; then
       sed -nE 's|.*datreeio/CRDs-catalog/([0-9a-f]{40})/.*|\1|p' "$ci" | sort -u
       ;;
     kustomize)
-      sed -nE 's|^[[:space:]]*KUSTOMIZE_VERSION:[[:space:]]*([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
+      sed -nE 's|^[[:space:]]*KUSTOMIZE_MIN_VERSION:[[:space:]]*([0-9][^[:space:]]*).*|\1|p' "$ci" | sort -u
       ;;
     *) ;;
     esac
@@ -1140,7 +1140,7 @@ env_pins() {
   done | sort -u
 }
 for pair in "trivy|TRIVY_VERSION|.github/workflows/release.yml .github/workflows/scan-and-tag.yml .github/workflows/image-scan.yml" \
-  "yq|YQ_VERSION|.github/workflows/ci.yml"; do
+  "yq|YQ_MIN_VERSION|.github/workflows/ci.yml"; do
   tool="${pair%%|*}"
   rest="${pair#*|}"
   key="${rest%%|*}"

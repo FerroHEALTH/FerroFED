@@ -219,19 +219,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the pinned kustomize
-        # The upstream release tarball, checked against the SHA-256 its
-        # release publishes before it runs.
+      - name: The runner's kustomize is new enough
+        # The kustomize the runner image ships, held to a floor, so a
+        # release-host outage cannot fail the job (#1773).
         env:
-          KUSTOMIZE_VERSION: 5.8.3
-          KUSTOMIZE_SHA256: cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61
-        run: |
-          set -euo pipefail
-          curl -sSfL -o "$RUNNER_TEMP/kustomize.tar.gz" \
-            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
-          echo "${KUSTOMIZE_SHA256}  $RUNNER_TEMP/kustomize.tar.gz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/kustomize.tar.gz" -C "$RUNNER_TEMP" kustomize
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          KUSTOMIZE_MIN_VERSION: 5.8.3
+        run: bash scripts/checks/runner-kustomize.sh
       - name: The base and the example overlay pass kubeconform
         # The official image, digest-pinned, for the same reason as hadolint:
         # no checksum-verified installer for it is in the pinned tool set.
@@ -263,21 +256,24 @@ jobs:
         with:
           persist-credentials: false
       - name: The dashboard and the alert rules hold
-        # promtool from the Prometheus release tarball, checked against the
-        # SHA-256 its release publishes before it runs.
+        # promtool from the official Prometheus image, pinned by tag and
+        # digest, so no GitHub release is fetched on each run (#1773). The
+        # checkout is mounted at its own path, so the rule path resolves.
         env:
           PROMETHEUS_VERSION: 3.15.1
-          PROMETHEUS_SHA256: 6a726885328ad9efebbf36e876ce2fb6225468a71fd1e7ce3ba666d5f4d97a84
+          PROMETHEUS_DIGEST: sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
         run: |
           set -euo pipefail
-          tarball="prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
-          curl -sSfL -o "$RUNNER_TEMP/$tarball" \
-            "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/$tarball"
-          echo "${PROMETHEUS_SHA256}  $RUNNER_TEMP/$tarball" | sha256sum --check --strict
-          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP"
+          bin="$RUNNER_TEMP/promtool-bin"
+          mkdir -p "$bin"
+          cat > "$bin/promtool" <<WRAPPER
+          #!/usr/bin/env bash
+          exec docker run --rm --user "\$(id -u):\$(id -g)" -v "\$PWD:\$PWD:ro" -w "\$PWD" \\
+            --entrypoint /bin/promtool "prom/prometheus:v${PROMETHEUS_VERSION}@${PROMETHEUS_DIGEST}" "\$@"
+          WRAPPER
+          chmod +x "$bin/promtool"
           bash scripts/checks/observability.sh --self-test
-          PROMTOOL="$RUNNER_TEMP/prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" \
-            bash scripts/checks/observability.sh
+          PROMTOOL="$bin/promtool" bash scripts/checks/observability.sh
 
   # The stray-literal guard: a string the operator console draws belongs in
   # its catalog under app/ferrofed-console/locales/, and a file holds no more
@@ -800,22 +796,26 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/docs-toolchain
-      # lychee's upstream release binary, pinned by version and by the
-      # SHA-256 its release publishes beside the tarball; the install-action
-      # manifest carries no lychee, so the checksum is checked here.
-      - name: Install lychee
+      # lychee from its official image, pinned by tag and digest, so no
+      # GitHub release is fetched on each run (#1773). The checkout and the
+      # temporary directory the script assembles the site in are mounted at
+      # their own paths, so every path it passes resolves.
+      - name: Put the lychee image on PATH
         env:
           LYCHEE_VERSION: 0.24.2
-          LYCHEE_SHA256: 1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a
+          LYCHEE_DIGEST: sha256:e2d19e57cf6ab037026f20b8e449a1f30d9d7f81eef4194763aab2eab20bd28d
         run: |
           set -euo pipefail
-          name=lychee-x86_64-unknown-linux-gnu
           dir="$RUNNER_TEMP/lychee"
           mkdir -p "$dir"
-          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 -o "$dir/$name.tar.gz" \
-            "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/$name.tar.gz"
-          echo "${LYCHEE_SHA256}  $dir/$name.tar.gz" | sha256sum --check --strict
-          tar -xzf "$dir/$name.tar.gz" -C "$dir" --strip-components=1 "$name/lychee"
+          tmp="$(dirname "$(mktemp -u)")"
+          cat > "$dir/lychee" <<WRAPPER
+          #!/usr/bin/env bash
+          exec docker run --rm --user "\$(id -u):\$(id -g)" -v "\$PWD:\$PWD:ro" -v "$tmp:$tmp:ro" -w "\$PWD" \\
+            "lycheeverse/lychee:${LYCHEE_VERSION}@${LYCHEE_DIGEST}" "\$@"
+          WRAPPER
+          chmod +x "$dir/lychee"
+          docker pull -q "lycheeverse/lychee:${LYCHEE_VERSION}@${LYCHEE_DIGEST}"
           echo "$dir" >> "$GITHUB_PATH"
       - run: |
           set -euo pipefail
@@ -1451,19 +1451,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # deny.toml and the prose file are TOML, which jq cannot read. Pinned by
-      # version and verified by checksum: this binary decides whether the gate
-      # passes.
-      - name: Install yq
+      # deny.toml and the prose file are TOML, which jq cannot read. The yq
+      # the runner image ships, held to a floor, so a release-host outage
+      # cannot fail the gate (#1773).
+      - name: The runner's yq is new enough
         env:
-          YQ_VERSION: v4.53.3
-          YQ_SHA256: fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4
-        run: |
-          set -euo pipefail
-          curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors -o "$RUNNER_TEMP/yq" "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
-          echo "${YQ_SHA256}  $RUNNER_TEMP/yq" | sha256sum -c -
-          sudo install -m 0755 "$RUNNER_TEMP/yq" /usr/local/bin/yq
-          yq --version
+          YQ_MIN_VERSION: v4.53.3
+        run: bash scripts/checks/runner-yq.sh
       - name: Every accepted advisory has a published VEX justification
         run: bash scripts/checks/vex-advisories.sh
       - name: The vulnerability-record detector refuses what it claims to
