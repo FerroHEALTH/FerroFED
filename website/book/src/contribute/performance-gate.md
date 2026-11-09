@@ -37,10 +37,14 @@ The base is:
 
 ## What runs
 
-The `perf` workflow installs `ferrohealth-perf` at its pin in
-`docs/VERSIONS.md`. `scripts/perf/gate.sh build` builds the release gateway
-of the base, from `git archive` of the base commit under
-`target/perf-base/`, and of the head. `scripts/perf/gate.sh run` then:
+The `perf` workflow's build job installs `ferrohealth-perf` at its pin in
+`docs/VERSIONS.md`, and `scripts/perf/gate.sh build` builds the release
+gateway of the base, from `git archive` of the base commit under
+`target/perf-base/`, and of the head. `scripts/perf/gate.sh pack` hands all
+of them to the attempt jobs as one artifact, so an attempt builds nothing
+and a retry measures at once (#1807). In each attempt,
+`scripts/perf/gate.sh unpack` restores them and `scripts/perf/gate.sh run`
+then:
 
 1. starts the quickstart's four FerroEHR nodes and FerroPIX from
    `compose.yaml`, with `perf/compose.yaml` publishing FerroPIX on loopback,
@@ -196,9 +200,13 @@ tails reach 100 to 300 ms while the p50 holds
 attempt that ends with exit 2 runs again on a fresh runner on any CPU model,
 since a run that cannot be judged says nothing about the code. An attempt
 that ends with exit 1 runs again only on a CPU model the perf workflow lists
-in `STALL_PRONE`. At most two retries run, and the gate passes when the last
-attempt passed. A breach on any other model fails at once. The job summary
-names each attempt's CPU model, its verdict and why a retry ran.
+in `STALL_PRONE`. An attempt job cancelled while the run itself goes on, by
+a runner that shut down or a job that reached its time limit, has no exit
+code and says nothing about the code either, so the next attempt runs. At
+most two retries run, and `scripts/perf/verdict.sh` passes the gate when the
+last attempt that ran passed. A breach on any other model fails at once, and
+a run cancelled by its concurrency group or by a person retries nothing. The
+job summary names each attempt's CPU model, its verdict and why a retry ran.
 
 ## Changing the plan or the tolerances
 
