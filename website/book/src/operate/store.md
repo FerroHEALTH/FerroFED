@@ -145,8 +145,8 @@ no window and are never swept.
 
 The `postgres` backend of the stored-query registry used to read its own
 connection string, `[stored_queries] url` or `url_file`. Those keys are
-gone since 0.0.17, and a configuration that still sets either refuses to
-start with an unknown key. Move the connection string to `[store]`, point it at
+gone, and a configuration that still sets either refuses to start, naming
+the key and `[store]`. Move the connection string to `[store]`, point it at
 the database the backend already uses, and set `sslmode=require`:
 
 ```toml

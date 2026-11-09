@@ -305,10 +305,12 @@ fn a_tls_key_left_on_its_table_is_refused_naming_its_replacement() -> TestResult
         ),
     ] {
         let error = refusal(table)?;
-        assert_eq!(
-            Some(old),
-            crate::support::refused_key(&error),
-            "an unknown key since 0.0.18, never {new}: {error:?}"
+        assert!(
+            matches!(
+                &error,
+                config::error::Error::Renamed { old: was, new: now } if was == old && now == new
+            ),
+            "{old}: {error:?}"
         );
         assert!(!format!("{error} {error:?}").contains("Qz7inline"));
     }

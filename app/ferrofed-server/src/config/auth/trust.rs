@@ -19,6 +19,7 @@ use ferrohealth_smart::resource::Settings as KeySetSettings;
 use ferrohealth_smart::resource::introspection::IntrospectionSettings;
 use http::HeaderName;
 use serde::Deserialize;
+use serde::de::IgnoredAny;
 
 use crate::config::auth::{
     AuthFault, AuthMode, IssuerSettings, PatientBinding, Verification, fault,
@@ -95,12 +96,39 @@ pub struct TrustedIssuer {
     /// (`[trust.issuer.patient]`); absent by default, and then a `patient/`
     /// grant of this issuer admits nothing.
     pub patient: Option<PatientIssuer>,
+    /// The removed `[trust.issuer.requester]`, refused by name
+    /// ([`AuthFault::RequesterMoved`]).
+    pub requester: Option<Removed>,
+    /// The removed `[trust.issuer.assurance]`, refused by name
+    /// ([`AuthFault::AssuranceMoved`]).
+    pub assurance: Option<Removed>,
+    /// The removed `client_tokens_act_for_professional`, refused by name
+    /// ([`AuthFault::ActsForRemoved`]).
+    pub client_tokens_act_for_professional: Option<Removed>,
     /// The name of the string claim of this issuer's tokens that carries
     /// the name of the agency that issued the professional's
     /// `national_provider_identifier`, the `issuing_authority_name` of
     /// Implementing Regulation (EU) 2026/2099 Annex Table 1; absent by
     /// default, and then none is read or conveyed.
     pub professional_issuing_authority: Option<String>,
+    /// The removed `[trust.issuer.national_contact_point]`, read only so that
+    /// a configuration still setting it is refused by name
+    /// ([`AuthFault::ContactPointMoved`]); its value is never kept.
+    pub national_contact_point: Option<Removed>,
+}
+
+/// A table removed in 0.0.17, read only so that a configuration still setting it is
+/// refused by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Removed;
+
+impl<'de> Deserialize<'de> for Removed {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        IgnoredAny::deserialize(deserializer).map(|_ignored| Self)
+    }
 }
 
 /// `[trust.issuer.patient]`: the one member endpoint whose platform issues
@@ -227,10 +255,29 @@ fn policy(
         .as_ref()
         .map(|patient| resolve_patient(&format!("{key}.patient"), patient))
         .transpose()?;
+    for (removed, name, refusal) in [
+        (written.requester, "requester", AuthFault::RequesterMoved),
+        (written.assurance, "assurance", AuthFault::AssuranceMoved),
+        (
+            written.client_tokens_act_for_professional,
+            "client_tokens_act_for_professional",
+            AuthFault::ActsForRemoved,
+        ),
+    ] {
+        if removed.is_some() {
+            return Err(fault(&format!("{key}.{name}"), refusal));
+        }
+    }
     let professional_issuing_authority = claim_name(
         &format!("{key}.professional_issuing_authority"),
         written.professional_issuing_authority.as_ref(),
     )?;
+    if written.national_contact_point.is_some() {
+        return Err(fault(
+            &format!("{key}.national_contact_point"),
+            AuthFault::ContactPointMoved,
+        ));
+    }
     Ok(IssuerSettings {
         backend_clients: written.backend_clients.iter().cloned().collect(),
         demographic_clients: written.demographic_clients.iter().cloned().collect(),
