@@ -21,7 +21,7 @@ of `[server]` and `[federation]`.
 ```toml
 [server]
 max_concurrent_requests = 512   # one more at once answers 503 overloaded
-retry_after = "1s"      # the Retry-After of that 503, in seconds
+retry_after = "1s"      # the Retry-After of that 503, in whole seconds
 
 [server.caller_rate]            # unset, no caller is rate limited
 requests_per_second = 10        # sustained, per caller

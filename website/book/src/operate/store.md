@@ -73,7 +73,7 @@ sweep_interval = "1min"                          # how often expired rows are de
 | `ca_file` | the platform's trusted roots | a PEM file of the CA certificates the database's certificate is verified by, in place of the platform's roots |
 | `max_connections` | `4` | how many connections the gateway opens, 1 to 64 |
 | `timeout_ms` | `10000` | how long one connection, or one statement, may take; zero is refused |
-| `sweep_interval` | `60` | how often the rows past their window are deleted; zero is refused |
+| `sweep_interval` | `1min` | how often the rows past their window are deleted; zero is refused |
 
 Give the credentials with `url_file`: write the whole connection string,
 password included, to a secret file only the gateway's user reads, and

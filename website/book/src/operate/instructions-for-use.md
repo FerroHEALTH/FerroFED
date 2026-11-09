@@ -217,9 +217,9 @@ member holds the clinician's answer. Size them from what you measure:
 
 | Setting | Default | How to size it |
 |---|---|---|
-| `federation.per_node_timeout` | `10000` | above the slowest member's 99th percentile on `ferrofed_node_request_duration_seconds`, measured under your load ([Metrics](metrics.md#the-metrics)) |
-| `federation.overall_timeout` | `25000` | above `per_node_timeout` plus the resolver's and the localizer's time on their duration histograms ([Timeouts](queries-and-areas.md#timeouts)) |
-| `server.request_timeout` | `30000` | more than one second above `overall_timeout`; `config check` refuses less |
+| `federation.per_node_timeout` | `10s` | above the slowest member's 99th percentile on `ferrofed_node_request_duration_seconds`, measured under your load ([Metrics](metrics.md#the-metrics)) |
+| `federation.overall_timeout` | `25s` | above `per_node_timeout` plus the resolver's and the localizer's time on their duration histograms ([Timeouts](queries-and-areas.md#timeouts)) |
+| `server.request_timeout` | `30s` | more than one second above `overall_timeout`; `config check` refuses less |
 | `server.max_concurrent_requests` | `512` | the queries your members can take at once divided by the number of members each query asks ([The concurrency limit](overload.md#the-concurrency-limit)) |
 | `federation.max_in_flight_per_node` | `64` | the requests the smallest member can serve at once; past it a member is reported `time-out` ([The per-member cap](overload.md#the-per-member-cap)) |
 | `[server.caller_rate]` | off | set only where one caller can crowd out others ([The per-caller rate](overload.md#the-per-caller-rate)) |

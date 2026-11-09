@@ -167,7 +167,7 @@ start), each `[[trust.issuer]]` by its `issuer`, and each
 is not listed.
 
 `PUT /admin/config/settings` takes `{"base": <newest>, "reason": "…",
-"settings": {"federation.per_node_timeout": "3000"}}` and saves a
+"settings": {"federation.per_node_timeout": "3s"}}` and saves a
 revision on `base` with each setting changed, `201` with the revision. Each
 value is read as an environment override is: TOML syntax, such as `3000` or
 `true`, or the string it is. The revision is checked as `config check`

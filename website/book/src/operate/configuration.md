@@ -241,7 +241,7 @@ header_read_timeout = "30s"  # a client that sends no request head within this, 
 idle_timeout = "2min"      # a kept-alive connection with no next request within this is closed
 body_limit = "1MiB"    # a body past this answers 413
 max_concurrent_requests = 512 # one more at once answers 503 overloaded; see Overload protection
-retry_after = "1s"             # the Retry-After of that 503, in seconds
+retry_after = "1s"             # the Retry-After of that 503, in whole seconds
 compression = true            # gzip or brotli for a client that accepts it; false leaves every answer as written
 compression_min_size = "1KiB"  # an answer shorter than this is never compressed
 

@@ -338,13 +338,13 @@ code = "EMERGENCY"
 
 [emergency]
 threshold = 5        # 1 to 5: emergency accesses one professional is granted in one window
-window = "1d"     # 1 to 86400: the window, in seconds
+window = "1d"     # up to 24 hours: the window
 ```
 
 | Key | Default | What it sets |
 |---|---|---|
 | `threshold` | `5` | how many emergency accesses one professional is granted in any window, 1 to 5 |
-| `window` | `86400` | the window, in seconds, 1 to 86400 (24 hours) |
+| `window` | `1d` | the window, at most 24 hours (`1d`) and at least one second |
 
 The defaults are the §2.5 baseline. A country may only tighten it, so
 `config check`, the start and a reload refuse a `threshold` above 5 or a
