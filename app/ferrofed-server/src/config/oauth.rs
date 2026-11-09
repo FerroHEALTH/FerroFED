@@ -47,6 +47,7 @@ pub struct Oauth(pub OauthSection);
 
 impl PartialEq for Oauth {
     fn eq(&self, other: &Self) -> bool {
+        // TODO(#1805): compare by the section's own PartialEq once smart 0.16.1 derives it.
         // NOTE: no specification governs this: our own design; the table renders its
         // secret redacted, so the inline secrets are compared besides.
         let secret = |table: &Self| {
