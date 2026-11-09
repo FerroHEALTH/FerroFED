@@ -67,8 +67,10 @@ pem.workspace = true
 # server, and the async trait the generated service is.
 async-trait.workspace = true
 opentelemetry-proto = { workspace = true, features = ["gen-tonic", "trace"] }
-# `tls-aws-lc` serves the collector over TLS with a client certificate (#644).
-tonic = { workspace = true, features = ["server", "router", "tls-aws-lc"] }
+# The collector's TLS is terminated by the kit with tokio-rustls, so tonic's own
+# TLS stays off in every build (#644, #1799).
+tonic = { workspace = true, features = ["server", "router"] }
+tokio-stream.workspace = true
 # The TLS configuration of every harness server, built as a listener's is
 # from the certificate files written to a temporary directory (#1486).
 # The outbound TLS table and version of ferrohealth-config, which the harness

@@ -53,8 +53,8 @@ impl Config {
     ///
     /// # Errors
     /// Returns [`Error::Load`] with every refusal of the loader, naming the
-    /// file a refusal of its content sits in, [`Error::DevRemoved`] for the
-    /// removed `[dev]` table, and [`RevisionsFault::ConsoleKeyInFile`] when
+    /// file a refusal of its content sits in, and
+    /// [`RevisionsFault::ConsoleKeyInFile`] when
     /// a source sets a resource the operator console owns.
     pub fn load(sources: &ConfigArgs) -> Result<Loaded<Self>, Error> {
         let loader = loader()?;
@@ -165,12 +165,6 @@ pub(crate) fn with_pairs(
 /// `file` unless the refusal is that the file could not be read, which
 /// names it itself.
 fn refused(file: Option<&Path>, source: ConfigError) -> Error {
-    if let Some((old, new)) = replaced(&source) {
-        return Error::Replaced { old, new };
-    }
-    if let Some((old, new)) = renamed(&source) {
-        return Error::Renamed { old, new };
-    }
     let file = match source {
         ConfigError::Read { .. } => None,
         _ => file.map(Path::to_path_buf),
@@ -181,80 +175,9 @@ fn refused(file: Option<&Path>, source: ConfigError) -> Error {
     }
 }
 
-/// Each key a release renamed, with the key that replaces it.
-// NOTE: no specification governs this: our own design; before 1.0 a key is renamed
-// with no deprecation release, so the refusal names the replacement (#1643).
-const RENAMED: [(&str, &str); 4] = [
-    ("server.public_url", "gateway.public_url"),
-    ("server.replica", "gateway.replica"),
-    (
-        "server.bindings_drain_timeout",
-        "gateway.bindings_drain_timeout",
-    ),
-    ("server.overload_retry_after_s", "server.retry_after"),
-];
-
-/// The outbound TLS keys a table took before they moved into its `tls`
-/// sub-table (#1750).
-const MOVED_TO_TLS: [&str; 3] = [
-    "client_identity",
-    "client_identity_file",
-    "trust_roots_file",
-];
-
-/// The renamed key `source` refuses and its replacement, when it refuses
-/// one, alone or among other refusals.
-fn renamed(source: &ConfigError) -> Option<(String, String)> {
-    match source {
-        ConfigError::Invalid { key: Some(key), .. } => RENAMED
-            .into_iter()
-            .find(|(old, _)| old == key)
-            .map(|(old, new)| (old.to_owned(), new.to_owned()))
-            .or_else(|| moved_to_tls(key)),
-        ConfigError::Refusals { refusals } => refusals.iter().find_map(renamed),
-        _ => None,
-    }
-}
-
-/// The grant tables of a credentials section the `oauth` table replaced
-/// (#1749), with the key each moved to inside it.
-const REPLACED_BY_OAUTH: [(&str, &str); 3] = [
-    ("oauth2", "oauth"),
-    ("fapi2", "oauth"),
-    ("mtls_alias_hosts", "oauth.mtls_alias_hosts"),
-];
-
-/// The removed grant key `source` refuses and the key that replaces it,
-/// when it refuses one, alone or among other refusals.
-fn replaced(source: &ConfigError) -> Option<(String, String)> {
-    match source {
-        ConfigError::Invalid { key: Some(key), .. } => {
-            let (table, leaf) = key.rsplit_once('.')?;
-            REPLACED_BY_OAUTH
-                .into_iter()
-                .find(|(old, _)| *old == leaf)
-                .filter(|_| table.starts_with("credentials.") || table.ends_with(".credentials"))
-                .map(|(_, new)| (key.clone(), format!("{table}.{new}")))
-        }
-        ConfigError::Refusals { refusals } => refusals.iter().find_map(replaced),
-        _ => None,
-    }
-}
-
-/// `key`, an outbound TLS key refused on its table, and the key of its
-/// table's `tls` sub-table that replaces it.
-fn moved_to_tls(key: &str) -> Option<(String, String)> {
-    let (table, leaf) = key.rsplit_once('.')?;
-    (MOVED_TO_TLS.contains(&leaf) && !table.ends_with("tls"))
-        .then(|| (key.to_owned(), format!("{table}.tls.{leaf}")))
-}
-
-/// Refuses the removed `[dev]` table, which the shared loader reads as any
-/// other table.
+/// Refuses every key a release retired that the sources set
+/// (`config::retired`).
 fn checked(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
-    if loaded.settings().dev.is_some() {
-        return Err(Error::DevRemoved);
-    }
     crate::config::retired::check(loaded.settings())?;
     Ok(loaded)
 }

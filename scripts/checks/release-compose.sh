@@ -172,13 +172,26 @@ else
 fi
 
 echo "== the stop grace period covers the drain delay, the drain and the bindings' drain"
-# server_ms FILE KEY: KEY's value in the [server] or [gateway] table of FILE,
-# empty when it is unset.
+# server_ms FILE KEY: KEY's duration in the [server] or [gateway] table of
+# FILE in milliseconds, as `"30s"` reads (ms, s, min, h or d); empty when it
+# is unset, and the duration as written when it takes no such unit.
 server_ms() {
   local file="$1" key="$2"
   awk -v key="$key" '
     /^\[/ { inside = ($0 == "[server]" || $0 == "[gateway]"); next }
-    inside && $1 == key && $2 == "=" { print $3; exit }
+    inside && $1 == key && $2 == "=" {
+      value = $3
+      gsub(/"/, "", value)
+      if (match(value, /^[0-9]+/)) {
+        amount = substr(value, 1, RLENGTH)
+        unit = substr(value, RLENGTH + 1)
+        factor["ms"] = 1; factor["s"] = 1000; factor["min"] = 60000
+        factor["h"] = 3600000; factor["d"] = 86400000
+        if (unit in factor) { printf "%d\n", amount * factor[unit]; exit }
+      }
+      print value
+      exit
+    }
   ' "$file"
 }
 # grace_covers FILE GRACE: whether a grace period of GRACE seconds outlasts

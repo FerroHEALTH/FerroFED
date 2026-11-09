@@ -114,16 +114,19 @@ const FEED_RETRY: Retired = Retired::replaced(
     span!("audit.repository.retry_max"),
     UNITS,
 );
+#[cfg(feature = "binding-ihe")]
 const MCSD_REFRESH: Retired = Retired::replaced(
     "registry.mcsd.refresh_interval_s",
     span!("registry.mcsd.refresh_interval"),
     UNITS,
 );
+#[cfg(feature = "binding-ihe")]
 const MCSD_DEADLINE: Retired = Retired::replaced(
     "registry.mcsd.deadline_ms",
     span!("registry.mcsd.deadline"),
     UNITS,
 );
+#[cfg(feature = "binding-ihe")]
 const MCSD_SIZE: Retired = Retired::replaced(
     "registry.mcsd.max_bytes",
     size!("registry.mcsd.max_size"),
@@ -192,8 +195,11 @@ const ALL: &[Retired] = &[
     FEED_SPOOL_WRITE,
     FEED_TIMEOUT,
     FEED_RETRY,
+    #[cfg(feature = "binding-ihe")]
     MCSD_REFRESH,
+    #[cfg(feature = "binding-ihe")]
     MCSD_DEADLINE,
+    #[cfg(feature = "binding-ihe")]
     MCSD_SIZE,
     #[cfg(feature = "binding-ihe")]
     PDQM_TIMEOUT,
@@ -256,6 +262,7 @@ pub fn check(config: &Config) -> Result<(), RemovedKeys> {
         found(repository.timeout_ms, &FEED_TIMEOUT);
         found(repository.retry_max_ms, &FEED_RETRY);
     }
+    #[cfg(feature = "binding-ihe")]
     if let Some(mcsd) = &config.registry.mcsd {
         found(mcsd.refresh_interval_s, &MCSD_REFRESH);
         found(mcsd.deadline_ms, &MCSD_DEADLINE);

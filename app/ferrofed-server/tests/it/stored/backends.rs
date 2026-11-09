@@ -21,7 +21,6 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::config::settings::Settings;
-use ferrofed_server::config::store::StoreFault;
 use ferrofed_server::config::stored_queries::{Backend, Store};
 use ferrohealth_telemetry::section::{DEFAULT_FILTER, Rendering};
 
@@ -139,9 +138,9 @@ fn each_backend_refuses_a_key_it_does_not_read_and_needs_its_own() -> TestResult
 }
 
 // NOTE: no specification governs this: our own design; the connection string moved
-// to `[store]`, so the removed keys are refused by name, never ignored.
+// to `[store]` in 0.0.17, so from 0.0.18 its keys are unknown keys, never ignored (#1787).
 #[test]
-fn the_removed_connection_string_is_refused_naming_the_store_and_never_shown() -> TestResult {
+fn the_removed_connection_string_is_an_unknown_key_and_never_shown() -> TestResult {
     let dir = tempfile::tempdir()?;
     let url = format!("postgres://ferrofed:{PASSWORD}@db.example.org/ferrofed?sslmode=require");
     for (table, key) in [
@@ -158,18 +157,21 @@ fn the_removed_connection_string_is_refused_naming_the_store_and_never_shown() -
             "stored_queries.url",
         ),
     ] {
-        let refused = resolved(
-            dir.path(),
-            &format!("{table}\n{}", crate::support::store_table()),
-        )?
+        let refused = Config::from_sources(
+            Some(&text(
+                dir.path(),
+                &format!("{table}\n{}", crate::support::store_table()),
+            )?),
+            &BTreeMap::new(),
+        )
         .err()
         .ok_or("refused")?;
-        assert!(
-            matches!(&refused, ConfigError::Store(StoreFault::UrlMoved { key: named }) if named == key),
-            "{table}: {refused:?}"
+        assert_eq!(
+            Some(key),
+            crate::support::refused_key(&refused),
+            "an unknown key since 0.0.18: {refused:?}"
         );
         let text = refused.to_string();
-        assert!(text.contains(key) && text.contains("[store]"), "{text}");
         assert!(!text.contains(PASSWORD), "{text}");
         assert!(!format!("{refused:?}").contains(PASSWORD), "{refused:?}");
     }
