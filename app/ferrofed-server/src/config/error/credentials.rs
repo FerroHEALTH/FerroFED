@@ -127,7 +127,7 @@ pub enum CredentialsFault {
         key: String,
         /// Why the key is refused; it quotes no part of the key.
         #[source]
-        source: ferrofed_engine::onward::dpop::DpopKeyError,
+        source: ferrohealth_smart::client::dpop::DpopKeyError,
     },
     /// A Nuts grant cannot be built: its authorization server is no issuer
     /// URL without userinfo, query or fragment, its scope holds a character

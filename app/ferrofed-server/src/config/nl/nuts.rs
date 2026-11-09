@@ -15,10 +15,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::nl::nuts::NutsGrant;
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::dpop::DpopKey;
 use nl_generic_functions::nuts_auth::error::InvalidInput;
 use nl_generic_functions::nuts_auth::holder::{Did, Holder, HolderKey};
 use serde::Deserialize;
@@ -183,7 +183,7 @@ pub(super) fn resolve(section: &str, nuts: &Nuts) -> Result<NutsOnward, Error> {
     let dpop_key = format!("{section}.dpop_key");
     let dpop_pem = read_secret::<Secret>(&dpop_key, None, Some(dpop_file))?
         .ok_or_else(|| missing("dpop_key_file"))?;
-    let prover = Prover::from_pem(&dpop_pem.to_secret_string()).map_err(|source| {
+    let prover = DpopKey::from_pem(dpop_pem.expose().as_bytes()).map_err(|source| {
         Error::Credentials(CredentialsFault::DpopKey {
             key: format!("{dpop_key}_file"),
             source,

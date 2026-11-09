@@ -17,7 +17,7 @@
 //! The request is composed here and sent through the same HTTP engine as
 //! the node requests. The token endpoint is no ITS-REST resource, so no
 //! `openehr-its` operation describes it. A grant whose tokens are bound with
-//! `DPoP` proves each token request with its [`Prover`], and answers a
+//! `DPoP` proves each token request with its [`DpopKey`], and answers a
 //! demanded nonce by sending the request once more (RFC 9449 §8).
 
 use std::time::{Duration, Instant};
@@ -34,10 +34,10 @@ use url::form_urlencoded;
 
 use crate::dispatch::reported::MESSAGE_LIMIT;
 use crate::onward::authorization_details::{self, AuthorizationDetailsError};
-use crate::onward::dpop::{self, Prover, Role};
 use crate::onward::mtls::{self, Binding, Confirmation};
 use crate::onward::{ClientAuthentication, Grant, SecretMethod};
 use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::dpop::{self, DpopKey, Role};
 
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 §2.2).
 pub const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -109,7 +109,7 @@ pub enum TokenError {
     /// The `DPoP` proof of the token request could not be signed (RFC 9449
     /// §4.2); nothing was sent.
     #[error("the DPoP proof of the token request could not be signed")]
-    Proof(#[source] jsonwebtoken::errors::Error),
+    Proof(#[source] dpop::DpopError),
     /// The token endpoint did not answer before the timeout.
     #[error("the token endpoint did not answer in time")]
     TimeOut(#[source] TransportError),
@@ -598,10 +598,11 @@ async fn post<T: Transport>(
 
 /// The `DPoP` proof of a token request to `grant`'s token endpoint, which
 /// carries no access token, so no `ath` (RFC 9449 §4.2).
-fn proof(prover: &Prover, grant: &Grant) -> Result<String, TokenError> {
+fn proof(prover: &DpopKey, grant: &Grant) -> Result<String, TokenError> {
     prover
-        .prove(
-            (&Method::POST, grant.token_endpoint()),
+        .proof(
+            &Method::POST,
+            grant.token_endpoint(),
             Role::Authorization,
             None,
         )

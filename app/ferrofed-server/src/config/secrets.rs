@@ -8,7 +8,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_engine::onward::dpop::Prover;
 use ferrofed_engine::onward::grant::lane::Organisations;
 use ferrofed_engine::onward::mtls::Thumbprint;
 use ferrofed_engine::onward::token::MAX_ASSERTION_LIFETIME;
@@ -16,6 +15,7 @@ use ferrofed_engine::onward::{ClientAuthentication, Grant, Scope};
 use ferrohealth_secret::file::read_secret;
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::dpop::DpopKey;
 use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
@@ -408,7 +408,7 @@ fn resolve_grant(
         let pem = read_secret::<Secret>(&key, None, Some(path))?.ok_or_else(|| Error::Missing {
             key: format!("{key}_file"),
         })?;
-        let prover = Prover::from_pem(&pem.to_secret_string()).map_err(|source| {
+        let prover = DpopKey::from_pem(pem.expose().as_bytes()).map_err(|source| {
             Error::Credentials(CredentialsFault::DpopKey {
                 key: format!("{key}_file"),
                 source,

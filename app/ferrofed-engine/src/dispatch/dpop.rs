@@ -16,9 +16,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ferrofed_registry::id::EndpointId;
-use openehr_its::rest::client::{ClientError, Transport};
-
-use crate::onward::dpop::{NodeProver, Prover};
+use ferrohealth_smart::client::dpop::{DpopKey, Role};
+use openehr_its::rest::client::{
+    ClientError, CredentialsError, DpopProofRequest, DpopProver, Transport,
+};
+use secrecy::ExposeSecret as _;
+use url::Url;
 
 use super::{NodeClient, NodeClients, SetupError};
 
@@ -30,7 +33,7 @@ impl<T: Transport + Clone> NodeClient<T> {
     /// node's `401` with a `DPoP` challenge naming `use_dpop_nonce` is
     /// answered by sending the request once more with the nonce (§9).
     #[must_use]
-    pub fn with_dpop(mut self, prover: &Arc<Prover>) -> Self {
+    pub fn with_dpop(mut self, prover: &Arc<DpopKey>) -> Self {
         let base = self.client.base().clone();
         self.dpop = Some(NodeProver::new(Arc::clone(prover), base));
         self
@@ -47,7 +50,7 @@ impl<T: Transport + Clone> NodeClients<T> {
     /// endpoint these clients do not hold.
     pub fn with_dpop(
         mut self,
-        provers: &BTreeMap<EndpointId, Arc<Prover>>,
+        provers: &BTreeMap<EndpointId, Arc<DpopKey>>,
     ) -> Result<Self, SetupError> {
         for (endpoint, prover) in provers {
             let client =
@@ -60,6 +63,52 @@ impl<T: Transport + Clone> NodeClients<T> {
                 .insert(endpoint.clone(), client.with_dpop(prover));
         }
         Ok(self)
+    }
+}
+
+/// The proofs of one node's requests: a `DPoP` key for the node at one base
+/// URL, as the `DpopProver` of the node's `openehr-its` client.
+///
+/// The client asks it for the proof of every request it sends under a bound
+/// token, over the request's final method and URL and the token (RFC 9449
+/// §4.2, §7.1), and hands it every nonce the node sends, which the key keeps
+/// for the node's origin as a resource's (§9).
+#[derive(Debug, Clone)]
+pub(crate) struct NodeProver {
+    key: Arc<DpopKey>,
+    base: Url,
+}
+
+impl NodeProver {
+    /// The proofs of `key` for the node at `base`.
+    #[must_use]
+    pub(crate) fn new(key: Arc<DpopKey>, base: Url) -> Self {
+        Self { key, base }
+    }
+}
+
+/// A request URI no proof can name.
+#[derive(Debug, thiserror::Error)]
+#[error("the request URI is not an absolute URL a DPoP proof can name")]
+struct Unnamed(#[source] url::ParseError);
+
+#[async_trait::async_trait]
+impl DpopProver for NodeProver {
+    async fn proof(&self, request: &DpopProofRequest<'_>) -> Result<String, CredentialsError> {
+        let url = Url::parse(&request.uri().to_string())
+            .map_err(|source| CredentialsError::new(Unnamed(source)))?;
+        self.key
+            .proof(
+                request.method(),
+                &url,
+                Role::Resource,
+                Some(request.access_token().expose_secret()),
+            )
+            .map_err(CredentialsError::new)
+    }
+
+    fn nonce(&self, nonce: &str) {
+        self.key.remember(Role::Resource, &self.base, nonce);
     }
 }
 

@@ -42,8 +42,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::conveyance::{self, Conveyance, ConveyanceError};
+use crate::dispatch::dpop::NodeProver;
 use crate::hygiene::{Part, Withheld};
-use crate::onward::dpop::NodeProver;
 use crate::onward::grant::exchange::SharedOnBehalf;
 use crate::outbound_id::OutboundId;
 use crate::single_node::ehr::EhrCallError;

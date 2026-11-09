@@ -62,7 +62,6 @@ use crate::conveyance::Conveyance;
 use crate::dispatch::SharedCredentials;
 use crate::hygiene::Withheld;
 use crate::onward::authorization_details::AuthorizationDetails;
-use crate::onward::dpop::Prover;
 use crate::onward::grant::client_credentials::ClientCredentials;
 use crate::onward::grant::exchange::{Exchange, OnBehalf};
 use crate::onward::grant::fapi2::metadata::DiscoveryError;
@@ -71,6 +70,7 @@ use crate::onward::{
     ClientAuthentication, Clock, Grant, GrantError, GrantKind, Scope, SenderConstraint,
 };
 use ferrohealth_smart::client::assertion::AssertionKey;
+use ferrohealth_smart::client::dpop::DpopKey;
 use ferrohealth_smart::client::keys::{KeyRing, KeyRingError};
 
 /// The JWS algorithm every assertion and proof of the grant is signed with.
@@ -192,7 +192,7 @@ impl Fapi2Grant {
     pub fn new(
         issuer: Issuer,
         client_id: impl Into<String>,
-        (client_key, dpop): (AssertionKey, Arc<Prover>),
+        (client_key, dpop): (AssertionKey, Arc<DpopKey>),
         request: (Option<Scope>, Option<AuthorizationDetails>),
     ) -> Result<Self, Fapi2GrantError> {
         let security = Fapi2Security {
@@ -425,7 +425,7 @@ impl Fapi2Grant {
     /// The `DPoP` key the tokens are bound to, which proves every request to
     /// the node, when they are bound with `DPoP`.
     #[must_use]
-    pub fn dpop(&self) -> Option<&Arc<Prover>> {
+    pub fn dpop(&self) -> Option<&Arc<DpopKey>> {
         match &self.sender {
             SenderConstraint::Dpop(prover) => Some(prover),
             SenderConstraint::Certificate(_) => None,

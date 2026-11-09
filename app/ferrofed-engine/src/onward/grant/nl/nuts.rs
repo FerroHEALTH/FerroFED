@@ -10,9 +10,9 @@
 //! For an endpoint configured with a [`NutsGrant`], [`NutsCredentials`] asks
 //! the node's authorization server for a token through
 //! `nl-generic-functions`' `NutsClient`, presenting the holder's credentials.
-//! The token is bound to the grant's [`Prover`]: the token request carries a
+//! The token is bound to the grant's [`DpopKey`]: the token request carries a
 //! proof of it, through [`AuthorizationProver`], and every request to the
-//! node carries one through the endpoint's [`NodeProver`](crate::onward::dpop::NodeProver),
+//! node carries one through the endpoint's `NodeProver` in `dispatch::dpop`,
 //! so one key and one `DPoP` implementation serve both (RFC 9449 §5, §7).
 //!
 //! A Generic Functions service the gateway is a data user of, such as the
@@ -46,8 +46,8 @@ use secrecy::{ExposeSecret, SecretString};
 use url::Url;
 
 use crate::onward::Clock;
-use crate::onward::dpop::{self, Prover, Role};
 use crate::onward::grant::cache::TokenCache;
+use ferrohealth_smart::client::dpop::{self, DpopKey, Role};
 
 /// What a Nuts grant at one node's authorization server asks for, as whom,
 /// and the key its tokens are bound to.
@@ -58,14 +58,14 @@ use crate::onward::grant::cache::TokenCache;
 pub struct NutsGrant {
     grant: Grant,
     holder: Arc<Holder>,
-    dpop: Arc<Prover>,
+    dpop: Arc<DpopKey>,
 }
 
 impl NutsGrant {
     /// The grant `grant`, presenting `holder`'s credentials, its tokens
     /// bound to `dpop`'s key.
     #[must_use]
-    pub fn new(grant: Grant, holder: Arc<Holder>, dpop: Arc<Prover>) -> Self {
+    pub fn new(grant: Grant, holder: Arc<Holder>, dpop: Arc<DpopKey>) -> Self {
         Self {
             grant,
             holder,
@@ -88,21 +88,21 @@ impl NutsGrant {
     /// The key the tokens are bound to, which proves every request to the
     /// node.
     #[must_use]
-    pub fn dpop(&self) -> &Arc<Prover> {
+    pub fn dpop(&self) -> &Arc<DpopKey> {
         &self.dpop
     }
 }
 
-/// The proofs of the token request, from the grant's [`Prover`] in the
+/// The proofs of the token request, from the grant's [`DpopKey`] in the
 /// authorization server's role (RFC 9449 §4.2, §8), as
 /// `nl-generic-functions`' [`DpopProver`].
 #[derive(Debug)]
-pub struct AuthorizationProver<'a>(pub &'a Prover);
+pub struct AuthorizationProver<'a>(pub &'a DpopKey);
 
 /// A proof the grant's key could not sign.
 #[derive(Debug, thiserror::Error)]
 #[error("the DPoP proof of the Nuts token request could not be signed")]
-struct Unsigned(#[source] jsonwebtoken::errors::Error);
+struct Unsigned(#[source] dpop::DpopError);
 
 impl DpopProver for AuthorizationProver<'_> {
     fn algorithm(&self) -> &'static str {
@@ -115,7 +115,7 @@ impl DpopProver for AuthorizationProver<'_> {
 
     fn proof(&self, method: &Method, url: &Url) -> Result<String, ProofError> {
         self.0
-            .prove((method, url), Role::Authorization, None)
+            .proof(method, url, Role::Authorization, None)
             .map_err(|error| ProofError::new(Unsigned(error)))
     }
 
@@ -309,7 +309,7 @@ impl NutsAuthorizer {
             .credentials
             .grant
             .dpop
-            .prove((method, url), Role::Resource, Some(token.expose_secret()))
+            .proof(method, url, Role::Resource, Some(token.expose_secret()))
             .map_err(|source| AuthorizerError::new(Unproven::Signed(source)))?;
         let mut proof = HeaderValue::from_str(&proof)
             .map_err(|source| AuthorizerError::new(Unproven::Header(source)))?;
@@ -326,7 +326,7 @@ impl NutsAuthorizer {
 enum Unproven {
     /// The grant's key could not sign the proof.
     #[error("the DPoP proof of the request could not be signed")]
-    Signed(#[source] jsonwebtoken::errors::Error),
+    Signed(#[source] dpop::DpopError),
     /// The signed proof is not a header value.
     #[error("the DPoP proof of the request is not a header value")]
     Header(#[source] http::header::InvalidHeaderValue),
