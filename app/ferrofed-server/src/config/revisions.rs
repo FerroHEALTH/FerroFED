@@ -15,10 +15,10 @@
 //!   connection string `url` or `url_file` holds, a secret. It is never
 //!   FerroFED's own store of `[store]`, which holds no configuration.
 //!
-//! Under `managed`, `poll_ms` sets how often each gateway reads the running
+//! Under `managed`, `poll` sets how often each gateway reads the running
 //! mark, to apply a revision another replica marked running ([`poll`]), and
 //! [`policy`] reads what a revision that changes an onward credential or a
-//! binding section takes: its confirmation window `confirm_ms`, the
+//! binding section takes: its confirmation window `confirm`, the
 //! resources `approval` names for a second operator's approval, and the
 //! directory `secrets_dir` a secret value is written to.
 //!
@@ -26,6 +26,8 @@
 //! ([`crate::config::tree::CORE`]). No specification governs this: our own
 //! design.
 
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
 use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -110,12 +112,20 @@ pub struct Revisions {
     /// How often, in milliseconds, the gateway reads the store's running
     /// mark, to apply a revision another replica marked running; 5000 when
     /// the table sets none.
-    pub poll_ms: Option<u64>,
+    pub poll: Option<units::Duration>,
+    /// The retired `poll_ms`, which `poll` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub poll_ms: Removed,
     /// How long, in milliseconds, an applied revision that changed an
     /// onward credential or a binding section awaits an operator's
     /// confirmation before the gateway rolls it back; 120000 when the
     /// table sets none.
-    pub confirm_ms: Option<u64>,
+    pub confirm: Option<units::Duration>,
+    /// The retired `confirm_ms`, which `confirm` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub confirm_ms: Removed,
     /// The resource kinds and resources a revision changes only once an
     /// operator other than its author approved it.
     pub approval: Vec<String>,
@@ -178,9 +188,9 @@ pub enum RevisionsFault {
         /// The backend chosen.
         backend: Backend,
     },
-    /// `config.poll_ms` is outside the bounds it is read within.
+    /// `config.poll` is outside the bounds it is read within.
     #[error(
-        "config.poll_ms is {value}; it must be from {POLL_MIN_MS} to {POLL_MAX_MS} milliseconds"
+        "config.poll is {value} ms; it must be from {POLL_MIN_MS} to {POLL_MAX_MS} milliseconds"
     )]
     Poll {
         /// The value set.
@@ -224,9 +234,9 @@ pub enum RevisionsFault {
         "registry.members joins the members of registry.document, which is unset; a care services directory is the whole registry"
     )]
     MembersWithoutDocument,
-    /// `config.confirm_ms` is outside the bounds it is read within.
+    /// `config.confirm` is outside the bounds it is read within.
     #[error(
-        "config.confirm_ms is {value}; it must be from {CONFIRM_MIN_MS} to {CONFIRM_MAX_MS} milliseconds"
+        "config.confirm is {value} ms; it must be from {CONFIRM_MIN_MS} to {CONFIRM_MAX_MS} milliseconds"
     )]
     Confirm {
         /// The value set.
@@ -265,8 +275,8 @@ pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
         return match keys.iter().find(|(_, set)| *set) {
             Some((key, _)) => Err(RevisionsFault::Off { key }.into()),
             None => match [
-                ("config.poll_ms", section.poll_ms.is_some()),
-                ("config.confirm_ms", section.confirm_ms.is_some()),
+                ("config.poll", section.poll.is_some()),
+                ("config.confirm", section.confirm.is_some()),
                 ("config.approval", !section.approval.is_empty()),
                 ("config.secrets_dir", section.secrets_dir.is_some()),
             ]
@@ -302,13 +312,13 @@ pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
     Ok(Some(store))
 }
 
-/// The shortest `config.poll_ms` read, in milliseconds.
+/// The shortest `config.poll` read, in milliseconds.
 pub const POLL_MIN_MS: u64 = 100;
 
-/// The longest `config.poll_ms` read, in milliseconds: ten minutes.
+/// The longest `config.poll` read, in milliseconds: ten minutes.
 pub const POLL_MAX_MS: u64 = 600_000;
 
-/// How often the gateway reads the store's running mark, `config.poll_ms`:
+/// How often the gateway reads the store's running mark, `config.poll`:
 /// 5000 ms when the table sets none.
 ///
 /// # Errors
@@ -318,7 +328,7 @@ pub const POLL_MAX_MS: u64 = 600_000;
 pub fn poll(section: &Revisions) -> Result<Duration, Error> {
     // NOTE: no specification governs this: our own design; five seconds keeps a
     // replica out of step briefly at one small read of the mark per replica.
-    let value = section.poll_ms.unwrap_or(5_000);
+    let value = section.poll.map_or(5_000, units::Duration::as_millis);
     if !(POLL_MIN_MS..=POLL_MAX_MS).contains(&value) {
         return Err(RevisionsFault::Poll { value }.into());
     }
@@ -373,10 +383,10 @@ pub fn check_tree(store: Option<&Store>, tree: &toml::Table) -> Result<(), Error
     }
 }
 
-/// The shortest `config.confirm_ms` read, in milliseconds.
+/// The shortest `config.confirm` read, in milliseconds.
 pub const CONFIRM_MIN_MS: u64 = 1_000;
 
-/// The longest `config.confirm_ms` read, in milliseconds: one hour.
+/// The longest `config.confirm` read, in milliseconds: one hour.
 pub const CONFIRM_MAX_MS: u64 = 3_600_000;
 
 /// Reads what a revision that changes a credential or a binding section
@@ -387,14 +397,14 @@ pub const CONFIRM_MAX_MS: u64 = 3_600_000;
 ///
 /// # Errors
 ///
-/// [`RevisionsFault::Confirm`] for a `confirm_ms` outside
+/// [`RevisionsFault::Confirm`] for a `confirm` outside
 /// [`CONFIRM_MIN_MS`] to [`CONFIRM_MAX_MS`], [`RevisionsFault::Approval`]
 /// for an entry of `approval` that names nothing, and
 /// [`RevisionsFault::SecretsDir`] for a `secrets_dir` that is no absolute
 /// path to a directory.
 pub fn policy(section: &Revisions) -> Result<Policy, Error> {
     let defaults = Policy::default();
-    let confirm = match section.confirm_ms {
+    let confirm = match section.confirm.map(units::Duration::as_millis) {
         None => defaults.confirm,
         Some(value) if (CONFIRM_MIN_MS..=CONFIRM_MAX_MS).contains(&value) => {
             Duration::from_millis(value)

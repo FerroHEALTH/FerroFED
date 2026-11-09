@@ -132,12 +132,12 @@ server_ms() {
 # must set all three.
 grace_covers() {
   local file="$1" grace="$2" prestop="${3:-0}" key unset_keys="" delay shutdown bindings
-  for key in drain_delay_ms shutdown_timeout_ms bindings_drain_timeout_ms; do
+  for key in drain_delay shutdown_timeout bindings_drain_timeout; do
     [[ -n "$(server_ms "$file" "$key")" ]] || unset_keys="$unset_keys $key"
   done
-  delay="$(server_ms "$file" drain_delay_ms)"
-  shutdown="$(server_ms "$file" shutdown_timeout_ms)"
-  bindings="$(server_ms "$file" bindings_drain_timeout_ms)"
+  delay="$(server_ms "$file" drain_delay)"
+  shutdown="$(server_ms "$file" shutdown_timeout)"
+  bindings="$(server_ms "$file" bindings_drain_timeout)"
   if [[ -n "$unset_keys" ]]; then
     echo "the configuration leaves$unset_keys unset in [server] and [gateway]; this guard reads each from the configuration and copies no default from the code"
     return 1
@@ -145,7 +145,7 @@ grace_covers() {
     echo "the drain timeouts, the preStop sleep or the grace period are not whole numbers"
     return 1
   elif ((grace * 1000 <= prestop * 1000 + delay + shutdown + bindings)); then
-    echo "a grace period of $grace s does not outlast the preStop sleep ($prestop s) plus drain_delay_ms ($delay) plus shutdown_timeout_ms ($shutdown) plus bindings_drain_timeout_ms ($bindings)"
+    echo "a grace period of $grace s does not outlast the preStop sleep ($prestop s) plus drain_delay ($delay) plus shutdown_timeout ($shutdown) plus bindings_drain_timeout ($bindings)"
     return 1
   fi
   echo "a grace period of $grace s outlasts the $prestop s preStop sleep, the $delay ms delay, the $shutdown ms drain and the $bindings ms bindings' drain"
@@ -155,13 +155,13 @@ prestop="$(awk '
   /^[[:space:]]+preStop:$/ { pre = 1; next }
   pre && /^[[:space:]]+seconds:/ { print $2; exit }
 ' "$EXAMPLE/statefulset.yaml")"
-delay="$(server_ms "$work/ferrofed.toml" drain_delay_ms)"
+delay="$(server_ms "$work/ferrofed.toml" drain_delay)"
 if ! [[ "$prestop" =~ ^[0-9]+$ ]]; then
   bad "statefulset.yaml holds SIGTERM with no preStop sleep"
 elif ! [[ "$delay" =~ ^[0-9]+$ ]] || ((prestop * 1000 != delay)); then
-  bad "statefulset.yaml's preStop sleep ($prestop s) does not match drain_delay_ms (${delay:-unset})"
+  bad "statefulset.yaml's preStop sleep ($prestop s) does not match drain_delay (${delay:-unset})"
 else
-  echo "OK: the preStop sleep of $prestop s matches drain_delay_ms"
+  echo "OK: the preStop sleep of $prestop s matches drain_delay"
 fi
 if out="$(grace_covers "$work/ferrofed.toml" "$grace" "${prestop:-0}")"; then
   echo "OK: terminationGracePeriodSeconds: $out"
@@ -170,15 +170,15 @@ else
 fi
 # The check has teeth: a grace period of one second, and the example without
 # its bindings' drain budget, each fail it.
-grep -v '^bindings_drain_timeout_ms[[:space:]]' "$work/ferrofed.toml" > "$work/unbudgeted.toml" || true
+grep -v '^bindings_drain_timeout[[:space:]]' "$work/ferrofed.toml" > "$work/unbudgeted.toml" || true
 if grace_covers "$work/ferrofed.toml" 1 > /dev/null; then
   bad "the grace check accepts a grace period of one second"
 elif cmp -s "$work/ferrofed.toml" "$work/unbudgeted.toml"; then
-  bad "configmap.yaml sets no [gateway] bindings_drain_timeout_ms to remove"
+  bad "configmap.yaml sets no [gateway] bindings_drain_timeout to remove"
 elif grace_covers "$work/ferrofed.toml" "$((grace - 5))" "${prestop:-0}" > /dev/null; then
   bad "the grace check leaves out the preStop sleep"
 elif grace_covers "$work/unbudgeted.toml" "$grace" > /dev/null; then
-  bad "the grace check accepts a configuration that leaves bindings_drain_timeout_ms unset"
+  bad "the grace check accepts a configuration that leaves bindings_drain_timeout unset"
 else
   echo "OK: a short grace period and an unset budget each fail the grace check"
 fi

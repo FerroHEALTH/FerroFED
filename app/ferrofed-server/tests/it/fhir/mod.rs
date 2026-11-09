@@ -117,7 +117,7 @@ fn fhir_tables_with(pdq: &str, keys: &str, tables: &str) -> String {
          [[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\ntemplate = {}\n\
          files = [{}, {}]\ncontext = \"{}\"\n\n\
          [pdqm]\nurl = \"{pdq}\"\ntransaction = \"iti-78\"\nmaster = \"{NAMESPACE}\"\n\
-         timeout_ms = 1000\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{tables}",
+         timeout = '1s'\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{tables}",
         path(&eps::opt()),
         path(&model),
         path(&context),

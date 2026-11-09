@@ -63,8 +63,8 @@ release adds meets the same rule.
 url_file = "/run/secrets/ferrofed/store-url"   # or url = "...": the connection string, a secret
 ca_file = "/etc/ferrofed/store-ca.pem"         # optional: the CA the database's certificate is verified by
 max_connections = 4                            # 1 to 64
-timeout_ms = 10000                             # one connection, or one statement
-sweep_interval_s = 60                          # how often expired rows are deleted
+timeout = "10s"                             # one connection, or one statement
+sweep_interval = "1min"                          # how often expired rows are deleted
 ```
 
 | Key | Default | What it sets |
@@ -73,7 +73,7 @@ sweep_interval_s = 60                          # how often expired rows are dele
 | `ca_file` | the platform's trusted roots | a PEM file of the CA certificates the database's certificate is verified by, in place of the platform's roots |
 | `max_connections` | `4` | how many connections the gateway opens, 1 to 64 |
 | `timeout_ms` | `10000` | how long one connection, or one statement, may take; zero is refused |
-| `sweep_interval_s` | `60` | how often the rows past their window are deleted; zero is refused |
+| `sweep_interval` | `60` | how often the rows past their window are deleted; zero is refused |
 
 Give the credentials with `url_file`: write the whole connection string,
 password included, to a secret file only the gateway's user reads, and
@@ -136,7 +136,7 @@ names the failure.
 ## Expired rows
 
 A table whose rows expire carries the end of each row's window in a column
-`expires_at`. Every `sweep_interval_s`, the gateway deletes each row past
+`expires_at`. Every `sweep_interval`, the gateway deletes each row past
 its window from every such table of the schema `ferrofed`, so the store
 keeps a row no longer than its rule needs. The stored-query definitions have
 no window and are never swept.

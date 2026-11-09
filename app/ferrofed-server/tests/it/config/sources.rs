@@ -64,7 +64,7 @@ fn an_environment_override_wins_over_the_file_and_keeps_its_type() -> Result<(),
     assert_eq!("127.0.0.1:7777", settings.server.listen.to_string());
     let settings = Config::from_sources(
         Some(full.as_str()),
-        &env("FERROFED__SERVER__BODY_LIMIT_BYTES", "512"),
+        &env("FERROFED__SERVER__BODY_LIMIT", "512"),
     )?
     .resolve()?;
     assert_eq!(512, settings.server.body_limit);
@@ -206,8 +206,8 @@ fn a_request_timeout_not_past_the_budget_and_the_margin_refuses_to_boot()
         );
         let message = error.to_string();
         assert!(
-            message.contains("server.request_timeout_ms")
-                && message.contains("federation.overall_timeout_ms"),
+            message.contains("server.request_timeout")
+                && message.contains("federation.overall_timeout"),
             "the refusal names both keys: {message}"
         );
     }
@@ -258,8 +258,8 @@ fn a_key_from_the_old_server_table_is_refused_by_its_name() -> Result<(), Box<dy
         ("public_url = \"https://gateway.example.org\"", "public_url"),
         ("replica = \"gateway-eu-1\"", "replica"),
         (
-            "bindings_drain_timeout_ms = 8000",
-            "bindings_drain_timeout_ms",
+            "bindings_drain_timeout = '8s'",
+            "bindings_drain_timeout",
         ),
         ("overload_retry_after_s = 3", "overload_retry_after_s"),
     ] {

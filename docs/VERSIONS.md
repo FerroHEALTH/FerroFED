@@ -716,7 +716,7 @@ No specification governs the choice: our own design.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| ferrohealth-perf | `0.5.2` | `.github/workflows/perf.yml` |
+| ferrohealth-perf | `0.8.0` | `.github/workflows/perf.yml` |
 
 ## Product and citation version
 

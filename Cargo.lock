@@ -1416,7 +1416,7 @@ dependencies = [
  "ferrohealth-server",
  "ferrohealth-session",
  "ferrohealth-smart",
- "ferrohealth-telemetry 0.4.0",
+ "ferrohealth-telemetry",
  "ferrohealth-ui",
  "fluent-templates",
  "http",
@@ -1603,7 +1603,7 @@ dependencies = [
  "ferrohealth-secret",
  "ferrohealth-server",
  "ferrohealth-smart",
- "ferrohealth-telemetry 0.4.0",
+ "ferrohealth-telemetry",
  "ferrohealth-usage-report",
  "fhir-types",
  "http",
@@ -1757,7 +1757,7 @@ dependencies = [
  "ferrohealth-config",
  "ferrohealth-health",
  "ferrohealth-secret",
- "ferrohealth-telemetry 0.4.0",
+ "ferrohealth-telemetry",
  "http",
  "hyper",
  "hyper-util",
@@ -1837,27 +1837,6 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-telemetry"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edfb01663a1a976dfa637065df3f82f1a68d5bc0e3de4225979f729dea92a8f1"
-dependencies = [
- "axum",
- "ferrohealth-secret",
- "http",
- "opentelemetry",
- "opentelemetry_sdk",
- "pin-project-lite",
- "secrecy",
- "serde",
- "thiserror",
- "tower",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "ferrohealth-telemetry"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "796c92508539000485f0d59584f1555448b8eab6b64ed09bb273dbc29093a8d8"
@@ -1904,11 +1883,11 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-usage-report"
-version = "0.2.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0fcadf75b67e4d4782862c29f92ad56da989efdbfcd558108f54fd94c9e4606"
+checksum = "a1a70f3bd128a6114b226689826dba79d038bed7fbdedc78c60a8ece012d1a0a"
 dependencies = [
- "ferrohealth-telemetry 0.2.5",
+ "ferrohealth-telemetry",
  "http",
  "jiff",
  "reqwest",

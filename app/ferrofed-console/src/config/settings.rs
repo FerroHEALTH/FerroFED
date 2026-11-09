@@ -4,6 +4,7 @@
 //! The checked settings the console runs on, resolved from the written
 //! [`Config`] with every `_file` secret read.
 
+use ferrohealth_config::removed::{Removals, Retired};
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -63,6 +64,14 @@ pub struct OidcSettings {
     redirect_uri: Url,
 }
 
+/// `gateway.timeout_ms`, retired in 0.0.18 for `gateway.timeout`; the
+/// release after it refuses the key as unknown.
+const GATEWAY_TIMEOUT: Retired = Retired::replaced(
+    "gateway.timeout_ms",
+    "gateway.timeout, a duration such as `30s`",
+    "0.0.18",
+);
+
 impl OidcSettings {
     /// The console's own origin, `scheme://host:port`: the origin of its
     /// redirection endpoint, which an unsafe request must come from.
@@ -90,8 +99,11 @@ impl Config {
     /// [`Error::Scope`] for `offline_access` listed in `oidc.scopes`,
     /// [`Error::InsecureCookie`] for `secure_cookie = false` on a console
     /// whose `redirect_uri` is not `http` on loopback, and the secret errors
-    /// of a `_file`.
+    /// of a `_file`, and [`Error::Retired`] for a key a release retired.
     pub fn resolve(&self) -> Result<Settings, Error> {
+        let mut removals = Removals::new();
+        removals.check(self.gateway.timeout_ms, &GATEWAY_TIMEOUT);
+        removals.finish()?;
         let listen = self
             .server
             .listen
@@ -106,8 +118,8 @@ impl Config {
                 source,
             })?;
         let base = web_url("gateway.base_url", &self.gateway.base_url)?;
-        let timeout =
-            positive("gateway.timeout_ms", self.gateway.timeout_ms).map(Duration::from_millis)?;
+        let timeout = positive("gateway.timeout", self.gateway.timeout.as_millis())
+            .map(Duration::from_millis)?;
         let oidc = self.oidc.as_ref().map(resolve_oidc).transpose()?;
         let session = match &oidc {
             Some(oidc) => self.session.check(&oidc.checked)?,

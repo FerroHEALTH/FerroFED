@@ -51,10 +51,10 @@ fn generic(key: &str) -> String {
 /// The label and the one line of the setting `key`.
 fn words(key: &str) -> (Msg, Msg) {
     match generic(key).as_str() {
-        "federation.per_node_timeout_ms" => {
+        "federation.per_node_timeout" => {
             (Msg::SettingPerNodeTimeout, Msg::SettingPerNodeTimeoutDesc)
         }
-        "federation.overall_timeout_ms" => {
+        "federation.overall_timeout" => {
             (Msg::SettingOverallTimeout, Msg::SettingOverallTimeoutDesc)
         }
         "federation.node_selection" => (Msg::SettingNodeSelection, Msg::SettingNodeSelectionDesc),

@@ -157,10 +157,10 @@ fn the_spool_write_timeout_bounds_each_record_and_is_never_zero() -> TestResult 
     let message = refusal(&text(
         dir.path(),
         "production",
-        &table("spool_write_timeout_ms = 0\n"),
+        &table("spool_write_timeout = '0ms'\n"),
     )?)?;
     assert!(
-        message.contains("audit.repository.spool_write_timeout_ms"),
+        message.contains("audit.repository.spool_write_timeout"),
         "{message}"
     );
     Ok(())

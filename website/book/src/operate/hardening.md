@@ -131,8 +131,8 @@ page: our own design.
 - [ ] **Generate the signing key for the nodes you serve.** P-384 signs
   ES384; choose P-256 when a node holds to the FAPI 2.0 Security Profile
   ([Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set)).
-- [ ] **Set `node_jwks_cache_s` to the longest time a node caches the JWK
-  Set.** `config check` then refuses a `rotation_overlap_s` too short for a
+- [ ] **Set `node_jwks_cache` to the longest time a node caches the JWK
+  Set.** `config check` then refuses a `rotation_overlap` too short for a
   safe rotation.
 - [ ] **Rotate in three rolling restarts:** publish the new key as
   `next_key_file`, sign with it as `key_file` with the old one as
@@ -206,7 +206,7 @@ page: our own design.
   `[[auth.issuer]]`, name it in `pmir.feed_clients`, and agree the client
   with the Registry's operator; a message without its token changes
   nothing.
-- [ ] **Set `federation.binding_ttl_ms`** no longer than you would accept a
+- [ ] **Set `federation.binding_ttl`** no longer than you would accept a
   follow-up routed on a superseded identity
   ([Resolution bindings](registry.md#resolution-bindings)).
 
@@ -215,10 +215,10 @@ page: our own design.
 - [ ] **Size the overload limits from what the members can take.**
   `server.max_concurrent_requests` (512), `[server.caller_rate]` (off by
   default), `federation.max_in_flight_per_node` (64) and
-  `federation.max_node_answer_bytes` (16 MiB)
+  `federation.max_node_answer_size` (16 MiB)
   ([Overload protection](overload.md)). Turn the per-caller rate on.
-- [ ] **Keep the request limits.** `server.body_limit_bytes` (1 MiB) and
-  `server.request_timeout_ms` (30 s), with the proxy's own timeout longer,
+- [ ] **Keep the request limits.** `server.body_limit` (1 MiB) and
+  `server.request_timeout` (30 s), with the proxy's own timeout longer,
   so the client sees the gateway's answer.
 - [ ] **Rate-limit `/login` on the console at the edge.** The console bounds
   its pending sign-ins and sessions and cannot tell clients apart behind a
@@ -226,8 +226,8 @@ page: our own design.
 - [ ] **Set container limits.** CPU, memory and ephemeral storage, as the
   release `compose.yaml` and the Kubernetes example do.
 - [ ] **Let the drain finish.** Keep the runtime's grace period above
-  `server.drain_delay_ms` plus `server.shutdown_timeout_ms` plus
-  `gateway.bindings_drain_timeout_ms`
+  `server.drain_delay` plus `server.shutdown_timeout` plus
+  `gateway.bindings_drain_timeout`
   ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
 
 ## Logs, metrics and traces

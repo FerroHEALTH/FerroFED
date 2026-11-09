@@ -137,7 +137,7 @@ impl Gateway {
 fn configuration(document: &Path, top: &str, tables: &str) -> String {
     let document = toml::Value::String(document.display().to_string());
     crate::support::signed(&format!(
-        "profile = \"development\"\n{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 5000\noverall_timeout_ms = 6000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{tables}"
+        "profile = \"development\"\n{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '5s'\noverall_timeout = '6s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{tables}"
     ))
 }
 

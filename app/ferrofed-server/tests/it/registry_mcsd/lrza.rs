@@ -52,7 +52,7 @@ fn config(directory: &str, nvi: &str, custodians: &str) -> String {
 /// the patient at the members of `rows`.
 fn config_resolving(directory: &str, nvi: &str, custodians: &str, rows: &[(&str, &str)]) -> String {
     format!(
-        "profile = \"development\"\n\n[registry.mcsd]\nurl = \"{directory}\"\nrefresh_interval_s = 3600\ndeadline_ms = 5000\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[nl_gf.nvi]\nurl = \"{nvi}\"\nnamespaces = [\"{NAMESPACE}\"]\n{custodians}\n{}",
+        "profile = \"development\"\n\n[registry.mcsd]\nurl = \"{directory}\"\nrefresh_interval = '1h'\ndeadline = '5s'\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[nl_gf.nvi]\nurl = \"{nvi}\"\nnamespaces = [\"{NAMESPACE}\"]\n{custodians}\n{}",
         crossref(rows)
     )
 }

@@ -134,7 +134,7 @@ async fn a_declared_contact_point_is_described_with_how_its_requests_are_served(
 async fn a_tightened_emergency_limit_is_declared_as_the_one_in_effect() -> TestResult {
     let gateway = Gateway::with_rows(
         declared(),
-        "\n[emergency]\nthreshold = 2\nwindow_s = 3600\n",
+        "\n[emergency]\nthreshold = 2\nwindow = '1h'\n",
     )
     .await?;
     let member = described(&gateway)

@@ -44,6 +44,8 @@ pub mod load;
 pub mod settings;
 
 use ferrohealth_config::loader::Loader;
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
 use ferrohealth_session::config::{OidcSection, SessionSection};
 use ferrohealth_telemetry::section::TelemetrySection;
 use serde::{Deserialize, Serialize};
@@ -117,14 +119,19 @@ pub struct Gateway {
     /// its ITS-REST surface is under `{base}/v1`.
     pub base_url: String,
     /// How long one call to the gateway may take, in milliseconds.
-    pub timeout_ms: u64,
+    pub timeout: units::Duration,
+    /// The retired `timeout_ms`, which `timeout` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub timeout_ms: Removed,
 }
 
 impl Default for Gateway {
     fn default() -> Self {
         Self {
             base_url: String::from("http://127.0.0.1:8080/"),
-            timeout_ms: 30_000,
+            timeout: units::Duration::from_secs(30),
+            timeout_ms: Removed::default(),
         }
     }
 }

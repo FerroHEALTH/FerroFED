@@ -93,7 +93,7 @@ fn gateway(dir: &Path, registry: &str, federation: &str) -> Result<Router, Box<d
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{federation}\n"
+        "[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{federation}\n"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;

@@ -92,8 +92,8 @@ the `digest` of the image you verified
 
 Behind either proxy, list the proxy's addresses in `server.trusted_proxies`
 so the access record names the client's own address, and give the proxy a
-body limit and a timeout at least `server.body_limit_bytes` and
-`server.request_timeout_ms` ([A production deployment](production.md)).
+body limit and a timeout at least `server.body_limit` and
+`server.request_timeout` ([A production deployment](production.md)).
 
 ## Network policies
 
@@ -129,7 +129,7 @@ still schedules both. The PodDisruptionBudget keeps one replica serving
 through a node drain.
 
 A pod's stop has two holds before the drain. The `preStop` hook sleeps for 5
-seconds, matching `server.drain_delay_ms`, while the endpoint controllers and
+seconds, matching `server.drain_delay`, while the endpoint controllers and
 the proxies stop sending the pod new requests; the gateway then turns
 readiness to `503`, keeps accepting for the drain delay, and drains
 ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).

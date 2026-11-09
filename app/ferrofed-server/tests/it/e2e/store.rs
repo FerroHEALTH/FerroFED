@@ -117,7 +117,7 @@ fn gateway(dir: &Path, store: &str) -> Result<(Arc<AppState>, Router), Box<dyn E
     let text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\n\
+         per_node_timeout = '2s'\noverall_timeout_ms = 3000\n\n\
          [stored_queries]\nbackend = \"postgres\"\n{store}{rows}"
     );
     let settings =

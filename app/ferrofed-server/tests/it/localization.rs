@@ -151,7 +151,7 @@ fn crossref(at: &[&str]) -> String {
 fn config(dir: &Path, urls: [&str; 3], localization: &str, rows: &str) -> TestConfig {
     let document = dir.join("registry.toml");
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = {LOCALIZATION_TIMEOUT_MS}\n{localization}\n\n{rows}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = {LOCALIZATION_TIMEOUT_MS}\n{localization}\n\n{rows}",
         document = toml::Value::String(document.display().to_string()),
     );
     TestConfig {
@@ -686,7 +686,7 @@ fn a_localization_table_under_ask_all_refuses_to_boot() -> TestResult {
 
 #[test]
 fn a_localization_budget_past_the_overall_budget_refuses_to_boot() -> TestResult {
-    let text = "[federation]\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\n\n[federation.localization]\ntimeout_ms = 3000\n";
+    let text = "[federation]\noverall_timeout = '3s'\nnode_selection = \"localized\"\n\n[federation.localization]\ntimeout_ms = 3000\n";
     match Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve() {
         Err(ferrofed_server::config::error::Error::Federation(
             ferrofed_server::config::error::federation::FederationFault::LocalizationBudget {

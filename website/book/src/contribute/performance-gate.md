@@ -212,7 +212,7 @@ The gate reads each gateway's CPU and memory from `/proc`, so it runs on
 Linux with Docker, Compose, `curl`, `git` and `openssl`:
 
 ```sh
-cargo install ferrohealth-perf --version =0.5.0 --locked
+cargo install ferrohealth-perf --version =0.8.0 --locked
 bash scripts/perf/gate.sh build origin/main
 bash scripts/perf/gate.sh run
 ```

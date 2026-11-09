@@ -42,7 +42,7 @@ compression_min_size = "1KiB"
 [gateway]
 public_url = "https://gateway.example.org/fed"
 replica = "replica-a"
-bindings_drain_timeout_ms = 5000
+bindings_drain_timeout = '5s'
 
 [server.caller_rate]
 requests_per_second = 10
@@ -78,10 +78,10 @@ format = "toml"
 
 [federation]
 id = "example-federation"
-per_node_timeout_ms = 10000
-overall_timeout_ms = 20000
+per_node_timeout = '10s'
+overall_timeout = '20s'
 default_namespace = "urn:oid:2.999.1"
-binding_ttl_ms = 900000
+binding_ttl = '15min'
 binding_capacity = 1000
 ehr_index_capacity = 1000
 node_selection = "localized"
@@ -94,11 +94,11 @@ demographic_endpoint = "node-a-query"
 fan_out_template_upload = true
 fan_out_stored_queries = true
 max_in_flight_per_node = 16
-max_node_answer_bytes = 1048576
+max_node_answer_size = '1MiB'
 
 [federation.localization]
 on_failure = "closed"
-timeout_ms = 1000
+timeout = '1s'
 
 [federation.consent]
 disclose = true
@@ -136,7 +136,7 @@ password_file = "@DIR@/token"
 url = "https://pdq.example.org/fhir/"
 transaction = "iti-78"
 master = "urn:oid:2.999.1"
-timeout_ms = 2000
+timeout = '2s'
 
 [pdqm.namespaces]
 "urn:oid:2.999.7" = "urn:oid:2.999.7"
@@ -158,8 +158,8 @@ url = "https://pmir.example.org/fhir/"
 callback_url = "https://gateway.example.org/fed/pmir/feed"
 path = "/pmir/feed"
 feed_clients = ["synthetic-scraper"]
-timeout_ms = 2000
-check_interval_s = 60
+timeout = '2s'
+check_interval = '1min'
 on_drain = "keep"
 
 [nl_gf.nvi]
@@ -174,7 +174,7 @@ url = "https://mitz.example.org/fhir/"
 namespaces = ["urn:oid:2.999.1"]
 purpose = "TREAT"
 data_categories = ["GGC002"]
-timeout_ms = 1000
+timeout = '1s'
 
 [nl_gf.mitz.holders]
 "node-a" = { type = "V6", ura = "90000001" }
@@ -187,8 +187,8 @@ path = "@DIR@/stored.redb"
 url_file = "@DIR@/store-url"
 ca_file = "@DIR@/collector-ca.pem"
 max_connections = 4
-timeout_ms = 10000
-sweep_interval_s = 60
+timeout = '10s'
+sweep_interval = '1min'
 
 [metrics]
 listen = "127.0.0.1:9090"
@@ -201,8 +201,8 @@ key_file = "@DIR@/listener.key"
 [signing]
 key_file = "@DIR@/signing.pem"
 jwks_uri = "https://gateway.example.org/fed/.well-known/jwks.json"
-node_jwks_cache_s = 300
-rotation_overlap_s = 600
+node_jwks_cache = '5min'
+rotation_overlap = '10min'
 
 [auth]
 product_scope = "__ferrofed.operator"
@@ -242,8 +242,8 @@ deployment = "compose"
 ui = "managed"
 backend = "redb"
 path = "@DIR@/revisions.redb"
-poll_ms = 2000
-confirm_ms = 120000
+poll = '2s'
+confirm = '2min'
 approval = ["consent"]
 secrets_dir = "@DIR@/secrets"
 "#;
@@ -444,7 +444,7 @@ const REFUSED: &[&str] = &["profile"];
 
 /// The keys that only bound another key at load and set nothing the
 /// gateway runs on.
-const CHECKED_ONLY: &[&str] = &["signing.node_jwks_cache_s"];
+const CHECKED_ONLY: &[&str] = &["signing.node_jwks_cache"];
 
 /// The keys another key of the maximal configuration holds to the one
 /// value it has, so no change of the key alone loads: an issuer that

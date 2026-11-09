@@ -27,7 +27,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 /// The `[registry.mcsd]` section over `base`, with the federation it needs.
 fn section(base: &str, extra: &str) -> String {
     format!(
-        "[server]\nlisten = \"127.0.0.1:1\"\n\n[registry.mcsd]\nurl = \"{base}\"\ndeadline_ms = 2000\n{extra}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
+        "[server]\nlisten = \"127.0.0.1:1\"\n\n[registry.mcsd]\nurl = \"{base}\"\ndeadline = '2s'\n{extra}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     )
 }
 
@@ -185,12 +185,12 @@ fn a_grant_is_taken_and_a_node_method_or_a_zero_interval_is_refused() {
         "a node's grant is refused"
     );
     let zero = settings(
-        "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\nrefresh_interval_s = 0\n",
+        "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\nrefresh_interval = '0ms'\n",
     );
     assert!(
         matches!(
             zero.err().as_deref().and_then(|error| error.downcast_ref::<ConfigError>()),
-            Some(ConfigError::Zero { key }) if key == "registry.mcsd.refresh_interval_s"
+            Some(ConfigError::Zero { key }) if key == "registry.mcsd.refresh_interval"
         ),
         "a zero interval is refused"
     );
@@ -230,7 +230,7 @@ fn directory_credentials_over_plain_http_are_refused_outside_development() -> Te
 
 #[test]
 fn a_zero_deadline_or_cap_is_refused_and_the_defaults_hold() -> TestResult {
-    for key in ["deadline_ms", "max_pages", "max_bytes", "max_entries"] {
+    for key in ["deadline", "max_pages", "max_bytes", "max_entries"] {
         let refused = settings(&format!(
             "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n{key} = 0\n"
         ));

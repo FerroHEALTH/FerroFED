@@ -142,8 +142,8 @@ fn config_check_refuses_a_key_from_the_old_server_table_by_its_name()
         ("public_url = \"https://gateway.example.org\"", "public_url"),
         ("replica = \"gateway-eu-1\"", "replica"),
         (
-            "bindings_drain_timeout_ms = 8000",
-            "bindings_drain_timeout_ms",
+            "bindings_drain_timeout = '8s'",
+            "bindings_drain_timeout",
         ),
         ("overload_retry_after_s = 3", "overload_retry_after_s"),
     ] {
@@ -179,8 +179,8 @@ fn the_binary_refuses_a_request_timeout_inside_the_fan_out_budget() -> Result<()
         );
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
-            stderr.contains("server.request_timeout_ms")
-                && stderr.contains("federation.overall_timeout_ms"),
+            stderr.contains("server.request_timeout")
+                && stderr.contains("federation.overall_timeout"),
             "{job:?} names both keys: {stderr}"
         );
     }

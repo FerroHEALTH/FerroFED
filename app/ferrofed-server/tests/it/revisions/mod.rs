@@ -102,7 +102,7 @@ pub(crate) fn rest(document: &Path, extra: &str) -> String {
     let document = toml::Value::String(document.display().to_string());
     format!(
         "[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 5000\n\
-         overall_timeout_ms = 6000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\
+         overall_timeout = '6s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\
          {}{}{extra}",
         support::signing_toml(),
         support::DEVELOPMENT_AUDIT_TOML

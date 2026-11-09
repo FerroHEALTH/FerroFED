@@ -7,6 +7,8 @@
 //! bindings may take to stop. No specification governs the configuration:
 //! our own design.
 
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
 use std::num::NonZeroU64;
 
 use ferrofed_registry::replica::Replica;
@@ -42,7 +44,11 @@ pub struct Gateway {
     /// How long the bindings may take to stop their processes once the drain
     /// has ended, such as deleting the PMIR subscription; a process still
     /// running when it elapses is abandoned with a warning. Zero is refused.
-    pub bindings_drain_timeout_ms: u64,
+    pub bindings_drain_timeout: units::Duration,
+    /// The retired `bindings_drain_timeout_ms`, which `bindings_drain_timeout` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub bindings_drain_timeout_ms: Removed,
 }
 
 impl Default for Gateway {
@@ -50,7 +56,8 @@ impl Default for Gateway {
         Self {
             public_url: None,
             replica: None,
-            bindings_drain_timeout_ms: 5_000,
+            bindings_drain_timeout: units::Duration::from_secs(5),
+            bindings_drain_timeout_ms: Removed::default(),
         }
     }
 }
@@ -103,14 +110,14 @@ impl Gateway {
         }
     }
 
-    /// Resolves `gateway.bindings_drain_timeout_ms`.
+    /// Resolves `gateway.bindings_drain_timeout`.
     ///
     /// # Errors
     ///
     /// [`Error::Zero`] for a bound of zero.
     pub fn resolve_bindings_drain(&self) -> Result<NonZeroU64, Error> {
-        NonZeroU64::new(self.bindings_drain_timeout_ms).ok_or_else(|| Error::Zero {
-            key: String::from("gateway.bindings_drain_timeout_ms"),
+        NonZeroU64::new(self.bindings_drain_timeout.as_millis()).ok_or_else(|| Error::Zero {
+            key: String::from("gateway.bindings_drain_timeout"),
         })
     }
 }

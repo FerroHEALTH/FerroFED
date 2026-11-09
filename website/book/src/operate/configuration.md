@@ -189,7 +189,7 @@ The sections, and the page that covers each:
 |---|---|---|
 | `profile` | `production`, the default, or `development`, which relaxes the transport rules below | [What must travel encrypted](#what-must-travel-encrypted) |
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
-| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_bytes` | the overload limits and the answer bound | [Overload protection](overload.md) |
+| `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_size` | the overload limits and the answer bound | [Overload protection](overload.md) |
 | `federation.offset_strategy`, `federation.max_offset_window`, `federation.max_node_rows` | paging across nodes, and the most rows read of one node for a query with no `LIMIT`, 9999 by default (a node is asked for one row more, so set it one under the largest page your nodes serve) | [Queries and API areas](queries-and-areas.md#paging-with-offset) |
 | `[telemetry.otlp]` | the trace export and the metrics push to one OTLP collector | [Tracing](tracing.md), [Metrics](metrics.md) |
 | `[metrics]`, `[config]` | the admin listener; `config.ui`, `off` by default, and the store of the configuration revisions the admin listener serves under `managed` | [Metrics](metrics.md), [Configuration revisions](configuration-revisions.md) |
@@ -205,7 +205,7 @@ The sections, and the page that covers each:
 | `[federation]` | the federation id, node selection, budgets, completeness, paging, aggregates and the optional facilities | [The registry](registry.md), [Queries and API areas](queries-and-areas.md) |
 | `[stored_queries]` | the stored-query registry and its backend | [Queries and API areas](queries-and-areas.md#stored-queries) |
 | `[store]` | FerroFED's own PostgreSQL database, which a contact-point issuer and the `postgres` stored-query backend need: its connection string, a secret that requires TLS, the CA it is verified by, and its bounds | [FerroFED's own store](store.md) |
-| `[emergency]` | the limit of the emergency accesses a national contact point relays for one health professional: `threshold`, 5 unless set, and `window_s`, 86400 unless set; a looser limit is refused (eHDSI Section II Security Services 10.0.0 §2.5) | [The emergency access limit](../integrate/national-contact-point.md#the-emergency-access-limit) |
+| `[emergency]` | the limit of the emergency accesses a national contact point relays for one health professional: `threshold`, 5 unless set, and `window`, 86400 unless set; a looser limit is refused (eHDSI Section II Security Services 10.0.0 §2.5) | [The emergency access limit](../integrate/national-contact-point.md#the-emergency-access-limit) |
 | `[fhir]` | the FHIR R4 face of the European exchange format: its base, the operator, the FHIRconnect mappings, the categories it receives (`[[fhir.receive]]`), the members that serve prescriptions and dispensations (`[[fhir.serve]]`), `receive_namespaces`, the identifier systems a received document's or dispensation's patient is resolved in, and `document_url_lifetime_secs`, how long a document URL of the document list stays valid (300 seconds unless set); it needs `[pdqm]`, which the summary header is asked of; `[eehrxf.terminology]`, the optional FHIR terminology server the face asks for `$translate`, `$lookup` and `$validate-code`, over `https` outside development | [The patient summary over FHIR](../integrate/patient-summary.md), [Terminology](../integrate/terminology.md), [Prescriptions and dispensations over FHIR](../integrate/prescriptions.md#declaring-the-serving-members) |
 | `[usage_report]` | the installation report to FerroPULSE, on by default: `enabled`, `state_dir`, the writable directory the instance id lives in and without which nothing is sent, `deployment` (`helm`, `compose`, `binary` or `unknown`) and `endpoint`, the collector | [The usage report](usage-report.md) |
 
@@ -234,16 +234,16 @@ listen = "127.0.0.1:8080"     # the socket address to bind
 base_path = ""                # the path of the base URL every route sits under, empty for the root; see The base path
 trusted_proxies = []          # the proxies whose forwarded client address is taken; see The public address
 forwarded_header = "forwarded"   # or "x-forwarded-for": the header those proxies name the client in
-request_timeout_ms = 30000    # a request past this answers 408; see Timeouts
-drain_delay_ms = 0            # after SIGTERM, readiness is 503 and the listener accepts this long; see Health probes
-shutdown_timeout_ms = 30000   # then the drain is bounded by this; unset, the request timeout, and never shorter
-header_read_timeout_ms = 30000  # a client that sends no request head within this, counted from its first byte, is closed
-idle_timeout_ms = 120000      # a kept-alive connection with no next request within this is closed
-body_limit_bytes = 1048576    # a body past this answers 413
+request_timeout = "30s"    # a request past this answers 408; see Timeouts
+drain_delay = "0ms"            # after SIGTERM, readiness is 503 and the listener accepts this long; see Health probes
+shutdown_timeout = "30s"   # then the drain is bounded by this; unset, the request timeout, and never shorter
+header_read_timeout = "30s"  # a client that sends no request head within this, counted from its first byte, is closed
+idle_timeout = "2min"      # a kept-alive connection with no next request within this is closed
+body_limit = "1MiB"    # a body past this answers 413
 max_concurrent_requests = 512 # one more at once answers 503 overloaded; see Overload protection
-retry_after_s = 1             # the Retry-After of that 503, in seconds
+retry_after = "1s"             # the Retry-After of that 503, in seconds
 compression = true            # gzip or brotli for a client that accepts it; false leaves every answer as written
-compression_min_bytes = 1024  # an answer shorter than this is never compressed
+compression_min_size = "1KiB"  # an answer shorter than this is never compressed
 
 # A per-caller rate, off unless set; see Overload protection.
 [server.caller_rate]
@@ -258,13 +258,13 @@ burst = 20                    # at once after a quiet spell; one more answers 42
 # client_auth = "required"      # none (the default), optional or required: ask a client certificate
 # client_ca_file = "/run/secrets/ferrofed/proxy-ca.pem"     # the CA it must chain to: set with client_auth, refused without it
 # min_version = "1.3"           # the default; "1.2" keeps TLS 1.2 clients
-# reload_interval_s = 3600      # optional: read the files again on this period, beside SIGHUP
+# reload_interval = "1h"      # optional: read the files again on this period, beside SIGHUP
 # healthcheck_identity_file = "/run/secrets/ferrofed/healthcheck.pem"   # what ferrofed healthcheck presents then
 
 # The gateway's own keys beside [server].
 [gateway]
 # public_url = "https://gateway.example.org"   # the base URL clients reach; see The public address
-bindings_drain_timeout_ms = 5000  # after the drain, the bindings stop their processes within this; see Health probes
+bindings_drain_timeout = "5s"  # after the drain, the bindings stop their processes within this; see Health probes
 # replica = "gateway-eu-1"    # the name every operator report carries; unset, HOSTNAME, else "unnamed"; see The replica name
 
 [telemetry]
@@ -284,7 +284,7 @@ sample_ratio = 1.0     # the share of requests whose spans are exported, 0.0 to 
 [metrics]
 listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-query distribution; loopback unless allow_remote
 # scrape_clients = ["prometheus"]   # the clients whose client-credentials token GET /metrics admits; needed off loopback outside development, unless [metrics.tls] requires a client certificate
-# [metrics.tls] takes certificate_file, key_file, client_auth, client_ca_file, min_version and reload_interval_s, as [server.tls] does.
+# [metrics.tls] takes certificate_file, key_file, client_auth, client_ca_file, min_version and reload_interval, as [server.tls] does.
 
 # Outbound credentials, one section per endpoint id. Each section names one
 # scheme: a user and a password, or a grant; see Onward credentials.
@@ -340,8 +340,8 @@ key_file = "/run/secrets/ferrofed-signing-key.pem"
 # next_key_file = "/run/secrets/ferrofed-signing-key-next.pem"   # published ahead, never signs
 # next_key_algorithm = "ES256"   # unset, the current key's algorithm
 jwks_uri = "https://gateway.example.org/.well-known/jwks.json"
-node_jwks_cache_s = 3600      # how long the nodes cache the JWK Set
-rotation_overlap_s = 3900     # at least 300 + node_jwks_cache_s
+node_jwks_cache = "1h"      # how long the nodes cache the JWK Set
+rotation_overlap = "65min"     # at least 300 + node_jwks_cache
 ```
 
 ### Secrets, inline or from a file
@@ -676,7 +676,7 @@ healthcheck_identity_file = "/run/secrets/ferrofed/healthcheck.pem"
 - `min_version` is the oldest TLS version the listener speaks: `"1.3"`, the
   default, or `"1.2"` to keep a TLS 1.2 client. `"1.1"` and `"1.0"` are
   refused (RFC 8996).
-- `reload_interval_s`, optional, reads the files again on that period, beside
+- `reload_interval`, optional, reads the files again on that period, beside
   `SIGHUP` and an applied configuration revision.
 - `healthcheck_identity_file`, `[server.tls]` only, holds a client
   certificate chain and its key, PEM, which `ferrofed healthcheck` presents
@@ -688,10 +688,10 @@ it, as BCP 195 asks (RFC 9325 §3.1.1); its TLS 1.2 cipher suites are then the
 four ECDHE AES-GCM suites RFC 9325 §4.2 recommends, each with forward
 secrecy. It offers HTTP/2 and HTTP/1.1 in ALPN. A client that does not
 finish its handshake within 10 seconds is dropped, and one that does not
-send a request head within `server.header_read_timeout_ms` (30 seconds by
+send a request head within `server.header_read_timeout` (30 seconds by
 default, counted from the head's first byte) is disconnected. A kept-alive
 HTTP/1.1 connection that sends no next request within
-`server.idle_timeout_ms` (120 seconds by default) is closed with a clean end
+`server.idle_timeout` (120 seconds by default) is closed with a clean end
 of stream; keep it longer than the idle timeout of the clients and proxies in
 front, so they close an idle connection first.
 

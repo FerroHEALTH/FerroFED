@@ -52,7 +52,7 @@ pub(crate) const DIFF: &str = r#"{"from":1,"to":2,"changes":[
 
 /// The running configuration revision 1 sets: one setting of the first tab.
 pub(crate) const RUNNING_ONE: &str = r#"{"ui":"managed","revision":1,"settings":[
-    {"key":"federation.per_node_timeout_ms","section":"federation","value":5000,"source":"revision",
+    {"key":"federation.per_node_timeout","section":"federation","value":5000,"source":"revision",
      "default":10000,"restart":true,"editable":true}]}"#;
 
 /// Revision 2 as a save answers it.

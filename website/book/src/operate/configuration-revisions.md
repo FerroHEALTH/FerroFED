@@ -146,7 +146,7 @@ carries:
 
 | Member | What it says |
 |---|---|
-| `key` | the dotted key, such as `federation.per_node_timeout_ms` |
+| `key` | the dotted key, such as `federation.per_node_timeout` |
 | `section` | the tab it belongs to: `federation`, `fan-out`, `consent`, `stored-queries`, `access-log`, `fhir` or `authentication` |
 | `value` | the value this replica runs with; absent for a secret, and for a setting nothing sets that has no default |
 | `source` | where the value comes from: `file`, `environment` (a `FERROFED__` override), `revision` (the revision this replica runs, under `managed`) or `default` |
@@ -167,7 +167,7 @@ start), each `[[trust.issuer]]` by its `issuer`, and each
 is not listed.
 
 `PUT /admin/config/settings` takes `{"base": <newest>, "reason": "…",
-"settings": {"federation.per_node_timeout_ms": "3000"}}` and saves a
+"settings": {"federation.per_node_timeout": "3000"}}` and saves a
 revision on `base` with each setting changed, `201` with the revision. Each
 value is read as an environment override is: TOML syntax, such as `3000` or
 `true`, or the string it is. The revision is checked as `config check`
@@ -358,7 +358,7 @@ secrets_dir = "/var/lib/ferrofed/secrets"   # an existing directory, on a volume
 An operator's apply of a revision that changes an onward credential or a
 binding section runs it awaiting a confirmation. `GET /admin/config`
 shows the deadline and the resources it changed under `current.awaiting`.
-Confirm it within `config.confirm_ms`, 120000 ms by default, once the
+Confirm it within `config.confirm`, 120000 ms by default, once the
 gateway works with it:
 
 | Route | Answer |
@@ -370,7 +370,7 @@ it saves the revision that ran before as a new revision, made by the
 gateway with the reason `revision N was not confirmed by its deadline`,
 applies it, and records `config-unconfirmed-rolled-back` under
 `ferrofed::security`. Each replica reads the deadline from the store's
-running mark with every `config.poll_ms` read, so the first replica past
+running mark with every `config.poll` read, so the first replica past
 the deadline rolls it back and the others follow the rollback as any
 applied revision. A gateway that starts with a revision past its deadline
 rolls it back before it runs, and one that starts within the deadline keeps
@@ -417,7 +417,7 @@ are logged under `ferrofed::security` (`config-revision-approved`).
 
 | Key | Default | What it sets |
 |---|---|---|
-| `config.confirm_ms` | `120000` | how long an applied change to a credential or a binding section awaits its confirmation, from 1000 to 3600000 ms |
+| `config.confirm` | `120000` | how long an applied change to a credential or a binding section awaits its confirmation, from 1000 to 3600000 ms |
 | `config.approval` | none | the resource kinds and resources a revision changes only with a second operator's approval |
 | `config.secrets_dir` | none | the existing directory a secret value is written to; without it the console sets a secret by a reference alone |
 
@@ -512,11 +512,11 @@ With `backend = "postgres"`, the replicas share the history and the
 running mark, and a save or an apply on one replica is checked against
 what every other replica wrote.
 
-Each replica reads the running mark every `config.poll_ms`, 5000 ms by
+Each replica reads the running mark every `config.poll`, 5000 ms by
 default. When the mark names a revision the replica does not run, because
 another replica applied or rolled back a revision, or recorded its changed
 file at a `SIGHUP`, the replica applies that revision through the same
-reload path an apply takes. Within one `poll_ms` of an apply, every replica
+reload path an apply takes. Within one `poll` of an apply, every replica
 runs the revision. The watch reads the mark with an ordinary query; it does
 not use PostgreSQL `LISTEN`/`NOTIFY`.
 
@@ -542,7 +542,7 @@ current revision and `0` while it does not, and the alert
 
 | Key | Default | What it sets |
 |---|---|---|
-| `config.poll_ms` | `5000` | how often each replica reads the running mark, from 100 to 600000 ms; read only under `managed`, and a change takes a restart |
+| `config.poll` | `5000` | how often each replica reads the running mark, from 100 to 600000 ms; read only under `managed`, and a change takes a restart |
 
 Under `config.ui = "off"` nothing is read: no store, no watch.
 

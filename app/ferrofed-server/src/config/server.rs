@@ -8,10 +8,8 @@
 //! surface, and `[server.tls]` and `[metrics.tls]` their TLS. No
 //! specification governs the configuration: our own design.
 
-use std::num::{NonZeroU64, NonZeroUsize};
-use std::path::PathBuf;
+use std::num::NonZeroUsize;
 
-use ferrohealth_config::tls::TlsVersion;
 use ferrohealth_server::section::{ClientAuth, ServerSection, TlsSection};
 use ferrohealth_server::tls::{HealthcheckTls, TlsKeys, server_config_of};
 use serde::Deserialize;
@@ -160,7 +158,8 @@ pub(crate) fn resolve_tls(
     tls: Option<&TlsSection>,
     table: &'static str,
 ) -> Result<Option<ListenerTlsSettings>, Error> {
-    tls.map(|tls| resolve_section(tls.clone(), table)).transpose()
+    tls.map(|tls| resolve_section(tls.clone(), table))
+        .transpose()
 }
 
 /// The table of the client listener's TLS.

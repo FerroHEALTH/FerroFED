@@ -511,7 +511,7 @@ listen = "0.0.0.0:3000"
 
 [gateway]
 base_url = "https://gateway.example.org/"
-timeout_ms = 30000
+timeout = "30s"
 
 [session]
 secure_cookie = true

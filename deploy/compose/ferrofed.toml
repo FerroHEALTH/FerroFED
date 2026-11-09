@@ -25,21 +25,21 @@ profile = "production"
 # The image sets FERROFED__SERVER__LISTEN to this same address, which takes
 # precedence; compose.yaml publishes port 8080.
 listen = "0.0.0.0:8080"
-request_timeout_ms = 30000
+request_timeout = "30s"
 # On SIGTERM readiness turns 503 at once. Behind a load balancer that polls
-# readiness, set drain_delay_ms to the time it takes to stop routing here,
+# readiness, set drain_delay to the time it takes to stop routing here,
 # such as 5000, and the listener keeps accepting for that long; 0 closes it
 # at once.
-drain_delay_ms = 0
+drain_delay = "0ms"
 # Then the requests in flight get this long to finish: at least
-# request_timeout_ms, which config check enforces.
-shutdown_timeout_ms = 30000
+# request_timeout, which config check enforces.
+shutdown_timeout = "30s"
 
 [gateway]
 # Then the bindings get this long to stop their processes, such as deleting
 # the PMIR subscription. compose.yaml's stop_grace_period outlasts the delay,
 # the drain and this budget.
-bindings_drain_timeout_ms = 5000
+bindings_drain_timeout = "5s"
 
 [telemetry]
 # auto renders pretty output on a terminal and JSON otherwise.
@@ -56,8 +56,8 @@ format = "toml"
 # registry ids as the FHIR form of the registry does.
 # [registry.mcsd]
 # url = "https://directory.example.org/fhir"   # EDIT
-# refresh_interval_s = 300
-# deadline_ms = 30000   # one read or refresh, every page
+# refresh_interval = "5min"
+# deadline = "30s"   # one read or refresh, every page
 # max_pages = 200
 # max_bytes = 67108864
 # max_entries = 50000
@@ -70,8 +70,8 @@ format = "toml"
 # EDIT: your federation's identifier, which OPTIONS / names.
 id = "example-federation"
 node_selection = "ask-all"
-per_node_timeout_ms = 10000
-overall_timeout_ms = 25000
+per_node_timeout = "10s"
+overall_timeout = "25s"
 # The namespace a patient identifier without one resolves in; without it,
 # such a query is refused with a 400.
 # default_namespace = "urn:oid:2.999.1"
@@ -278,7 +278,7 @@ password_file = "/run/secrets/ferrofed/node-b-password"
 # ca_file = "/run/secrets/ferrofed/store-ca.pem"  # optional; the platform's roots otherwise
 # max_connections = 4
 # timeout_ms = 10000
-# sweep_interval_s = 60
+# sweep_interval = "1min"
 
 # The gateway's signing key, a P-384 (ES384) or P-256 (ES256) key in PKCS#8
 # PEM, required: it signs the caller's identity onto every request to a

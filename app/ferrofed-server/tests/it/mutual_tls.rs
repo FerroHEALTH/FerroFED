@@ -167,9 +167,9 @@ async fn the_registry_is_read_from_a_directory_over_mutual_tls() -> TestResult {
     let front = MutualTls::front(&origin(&directory.base())?)?;
     let dir = tempfile::tempdir()?;
     let text = crate::registry_mcsd::config(&behind(&front, &directory.base())?, 5_000).replace(
-        "refresh_interval_s = 3600\n",
+        "refresh_interval = '1h'\n",
         &format!(
-            "refresh_interval_s = 3600\n{}",
+            "refresh_interval = '1h'\n{}",
             tls_keys(dir.path(), "mcsd", &front)?
         ),
     );

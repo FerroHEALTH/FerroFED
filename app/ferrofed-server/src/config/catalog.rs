@@ -110,13 +110,13 @@ const FHIR: Option<&str> = Some("fhir");
 /// shows them.
 pub(crate) const ENTRIES: &[Entry] = &[
     scalar(
-        "federation.per_node_timeout_ms",
+        "federation.per_node_timeout",
         Section::Federation,
         Some("10000"),
         TIMEOUTS,
     ),
     scalar(
-        "federation.overall_timeout_ms",
+        "federation.overall_timeout",
         Section::Federation,
         Some("25000"),
         TIMEOUTS,

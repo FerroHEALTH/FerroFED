@@ -83,9 +83,9 @@ fn a_bad_value_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>>
         "{error:?}"
     );
     for key in [
-        "request_timeout_ms",
-        "shutdown_timeout_ms",
-        "body_limit_bytes",
+        "request_timeout",
+        "shutdown_timeout",
+        "body_limit",
     ] {
         let error = refusal(&format!("[server]\n{key} = 0\n"))?;
         assert!(
@@ -93,7 +93,7 @@ fn a_bad_value_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>>
             "{error:?}"
         );
     }
-    let error = refusal("[server]\nrequest_timeout_ms = \"thirty\"\n")?;
+    let error = refusal("[server]\nrequest_timeout = \"thirty\"\n")?;
     assert!(matches!(error, Error::Load { .. }), "{error:?}");
     let error = refusal("[telemetry]\nformat = \"xml\"\n")?;
     assert!(matches!(error, Error::Load { .. }), "{error:?}");
@@ -158,7 +158,7 @@ fn a_dev_table_is_refused_naming_the_key() -> Result<(), Box<dyn StdError>> {
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_malformed_line_outside_dev_names_its_key_and_position() -> Result<(), Box<dyn StdError>> {
-    let error = refusal("[server]\nlisten = \"127.0.0.1:8080\nshutdown_timeout_ms = 10\n")?;
+    let error = refusal("[server]\nlisten = \"127.0.0.1:8080\nshutdown_timeout = '10ms'\n")?;
     let message = crate::support::chain(&error);
     assert!(
         message.contains("line 2"),

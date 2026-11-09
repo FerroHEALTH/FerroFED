@@ -97,7 +97,7 @@ fn deployment(dir: &Path, a: &Server, b: &Server, top: &str) -> Result<String, B
     let document = dir.join("registry.toml");
     std::fs::write(&document, crate::facade::registry(&a.uri(), &b.uri(), ""))?;
     let text = format!(
-        "{top}\n\n[registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n{}",
+        "{top}\n\n[registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\nper_node_timeout = '2s'\noverall_timeout = '3s'\n{}",
         toml::Value::String(document.display().to_string()),
         auth_toml()
     );

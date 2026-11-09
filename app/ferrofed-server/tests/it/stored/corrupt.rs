@@ -38,7 +38,7 @@ fn served(dir: &Path, stored_queries: &str) -> Result<String, Box<dyn std::error
         "profile = \"development\"\n\n[server]\nlisten = \"{listen}\"\n\n\
          [telemetry]\nformat = \"json\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\n\
+         per_node_timeout = '2s'\noverall_timeout_ms = 3000\n\n\
          [stored_queries]\n{stored_queries}\n{rows}"
     );
     let output = binary(&["serve"], &config)?;

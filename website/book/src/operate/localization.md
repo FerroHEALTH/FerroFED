@@ -29,7 +29,7 @@ node_selection = "localized"
 
 [federation.localization]
 on_failure = "closed"   # the default (§14.1)
-timeout_ms = 5000
+timeout = "5s"
 
 [xcpd]
 sender_device = "2.999.40.1"           # the gateway's device OID
@@ -188,12 +188,12 @@ spool_dir = "/var/lib/ferrofed/audit-spool"
 # app_name = "ferrofed"                # syslog APP-NAME
 # source_id = "gateway.example.org"    # AuditSourceID, the hostname by default
 # enterprise_site = "2.999.40"         # AuditEnterpriseSiteID
-# spool_max_bytes = 67108864
+# spool_max_size = "64MiB"
 # spool_max_events = 100000
-# spool_write_timeout_ms = 2000       # storing one message in the spool
-# connect_timeout_ms = 5000           # opening the TCP connection
-# send_timeout_ms = 5000              # the TLS handshake, each write and flush
-# retry_max_ms = 60000                # the longest wait between two attempts
+# spool_write_timeout = "2s"       # storing one message in the spool
+# connect_timeout = "5s"           # opening the TCP connection
+# send_timeout = "5s"              # the TLS handshake, each write and flush
+# retry_max = "1min"                # the longest wait between two attempts
 
 [xcpd.audit_repository.tls]
 client_identity_file = "/run/secrets/atna-client.pem"  # when the repository asks
@@ -207,7 +207,7 @@ on disk. ITI-20 has a sender that cannot reach its repository store the
 record and send it when it can (ITI TF-2 §3.20.4.1.1): while the repository
 is down, discovery goes on and the messages wait in the spool, and a restart
 keeps them. Only a message the gateway can neither deliver nor store is an
-audit failure: a full spool (`spool_max_events` or `spool_max_bytes`), one
+audit failure: a full spool (`spool_max_events` or `spool_max_size`), one
 that cannot be written, or one that does not store the message in time
 fails the discovery closed, as any audit failure does above. Recording an
 exchange only ever writes to the spool, so a slow or hung repository never
@@ -215,16 +215,16 @@ holds a query, and a slow disk holds it for a bounded time
 ([A slow disk](audit.md#a-slow-disk)).
 
 Delivery is bounded at every step: the TCP connection by
-`connect_timeout_ms`, and the TLS handshake, each write and each flush by
-`send_timeout_ms`, so a repository that accepts a connection and then stops
+`connect_timeout`, and the TLS handshake, each write and each flush by
+`send_timeout`, so a repository that accepts a connection and then stops
 answering cannot hold the sender. After any timeout or transport failure the
 gateway drops the connection, keeps the message in the spool, and tries
-again after a wait that doubles from 250 ms up to `retry_max_ms`, with
+again after a wait that doubles from 250 ms up to `retry_max`, with
 jitter. A spooled message that cannot be read, or is no whole syslog frame,
 is moved to the `quarantine` subdirectory, logged at error level with its
 sequence number and never its content, and the drain goes on with the next
 one; a quarantined message stays counted under `spool_max_events` and
-`spool_max_bytes` until you remove it. Syslog over TLS has no
+`spool_max_size` until you remove it. Syslog over TLS has no
 acknowledgement (RFC 5425), so only a transport failure is retried, and a
 message written to a connection the repository has just closed can be lost;
 the gateway checks the connection before each write to keep that window
@@ -273,7 +273,7 @@ node_selection = "localized"
 
 [federation.localization]
 on_failure = "closed"   # the default (§14.1)
-timeout_ms = 5000
+timeout = "5s"
 
 [nl_gf.nvi]
 url = "https://nvi.example.org/fhir"

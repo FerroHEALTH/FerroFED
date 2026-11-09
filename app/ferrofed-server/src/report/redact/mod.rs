@@ -234,7 +234,7 @@ profile = "development"
 [server]
 listen = "0.0.0.0:8080"
 base_path = "/fed"
-request_timeout_ms = 30000
+request_timeout = '30s'
 
 [telemetry]
 format = "json"
@@ -390,7 +390,7 @@ count = 7
         );
         assert_eq!(
             30_000,
-            redacted["server"]["request_timeout_ms"]
+            redacted["server"]["request_timeout"]
                 .as_integer()
                 .expect("kept")
         );
@@ -461,7 +461,7 @@ count = 7
         }
         assert_eq!(8, store["max_connections"].as_integer().expect("kept"));
         assert_eq!(2500, store["timeout_ms"].as_integer().expect("kept"));
-        assert_eq!(30, store["sweep_interval_s"].as_integer().expect("kept"));
+        assert_eq!(30, store["sweep_interval"].as_integer().expect("kept"));
     }
 
     /// Every shape a value could slip past a key-based redactor in, each
@@ -562,6 +562,6 @@ client_secret = 333333330
             assert!(credential_key(key), "{key}");
         }
         assert_eq!(vec!["client", "secret", "file"], words("clientSecret_FILE"));
-        assert!(!credential_key("request_timeout_ms"));
+        assert!(!credential_key("request_timeout"));
     }
 }

@@ -17,11 +17,13 @@
 //! the deployment's national implementation, our own design.
 //!
 //! `threshold` is how many emergency accesses one professional is granted in
-//! any `window_s` seconds. The defaults are the §2.5 baseline, and a value
+//! any `window`. The defaults are the §2.5 baseline, and a value
 //! that loosens it is refused: a country may only tighten the limit. A
 //! threshold of zero is refused too, because §2.5 has every country provide
 //! emergency access.
 
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
 use std::num::NonZeroU32;
 use std::time::Duration;
 
@@ -45,14 +47,19 @@ pub struct Emergency {
     /// window, 1 to [`MAX_THRESHOLD`].
     pub threshold: u32,
     /// The window, in seconds, 1 to [`MAX_WINDOW_S`].
-    pub window_s: u64,
+    pub window: units::Duration,
+    /// The retired `window_s`, which `window` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub window_s: Removed,
 }
 
 impl Default for Emergency {
     fn default() -> Self {
         Self {
             threshold: MAX_THRESHOLD,
-            window_s: MAX_WINDOW_S,
+            window: units::Duration::from_secs(MAX_WINDOW_S),
+            window_s: Removed::default(),
         }
     }
 }
@@ -90,9 +97,9 @@ pub enum EmergencyFault {
         /// The value written.
         value: u32,
     },
-    /// `window_s` is longer than the baseline's 24 hours.
+    /// `window` is longer than the baseline's 24 hours.
     #[error(
-        "emergency.window_s is {value}, longer than the 24-hour period ({MAX_WINDOW_S} s) of eHDSI Section II Security Services 10.0.0 §2.5, which a country may only tighten"
+        "emergency.window is {value} s, longer than the 24-hour period ({MAX_WINDOW_S} s) of eHDSI Section II Security Services 10.0.0 §2.5, which a country may only tighten"
     )]
     Window {
         /// The value written.
@@ -114,9 +121,9 @@ pub fn resolve(table: &Emergency) -> Result<EmergencyLimit, Error> {
         }
         .into());
     }
-    if table.window_s > MAX_WINDOW_S {
+    if table.window.as_secs() > MAX_WINDOW_S {
         return Err(EmergencyFault::Window {
-            value: table.window_s,
+            value: table.window.as_secs(),
         }
         .into());
     }
@@ -125,14 +132,14 @@ pub fn resolve(table: &Emergency) -> Result<EmergencyLimit, Error> {
     let threshold = NonZeroU32::new(table.threshold).ok_or_else(|| Error::Zero {
         key: String::from("emergency.threshold"),
     })?;
-    if table.window_s == 0 {
+    if table.window.as_secs() == 0 {
         return Err(Error::Zero {
-            key: String::from("emergency.window_s"),
+            key: String::from("emergency.window"),
         });
     }
     Ok(EmergencyLimit {
         threshold,
-        window: Duration::from_secs(table.window_s),
+        window: Duration::from_secs(table.window.as_secs()),
     })
 }
 

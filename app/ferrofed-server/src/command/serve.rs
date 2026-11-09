@@ -27,9 +27,9 @@ use crate::{
 use ferrohealth_config::loader::Loaded;
 use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::serve::Listener;
+use ferrohealth_server::telemetry::TelemetryBuildError;
 use ferrohealth_server::tls::ReloadableTls;
 use ferrohealth_telemetry::section::Filter;
-use ferrohealth_server::telemetry::TelemetryBuildError;
 use ferrohealth_telemetry::telemetry::{Console, InitError, Service, Telemetry};
 
 /// Runs `serve`: the banner on a terminal, the runtime, the telemetry with
@@ -289,13 +289,13 @@ async fn drain_bindings(running: binding::process::Running, budget: std::time::D
     if running.drain(budget).await == Drained::Abandoned {
         tracing::warn!(
             budget_ms = budget.as_millis(),
-            "the bindings did not stop within gateway.bindings_drain_timeout_ms; what they hold at a remote service may be left there"
+            "the bindings did not stop within gateway.bindings_drain_timeout; what they hold at a remote service may be left there"
         );
     }
     if !crate::audit::stop_trails(budget).await {
         tracing::warn!(
             budget_ms = budget.as_millis(),
-            "the audit trails did not stop within gateway.bindings_drain_timeout_ms; the frames a forwarder wrote last may be lost to a reset"
+            "the audit trails did not stop within gateway.bindings_drain_timeout; the frames a forwarder wrote last may be lost to a reset"
         );
     }
 }

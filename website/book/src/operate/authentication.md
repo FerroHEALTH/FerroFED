@@ -581,7 +581,7 @@ byte outside visible ASCII is refused `400 correlation-invalid`.
 `OPTIONS {base}/` declares every contact point under
 `federation.national_contact_point`: `disclose: false`, `professional:
 "asserted-by-contact-point"`, `purpose_of_use: "required"`, the emergency
-access limit in effect as `emergency` with its `threshold` and `window_s`,
+access limit in effect as `emergency` with its `threshold` and `window`,
 and per issuer the claim each field is read from, by its field name, and
 the correlation header. The eHDSI profile defines no token carrier for its
 attributes, so the claim names, the member and the header are FerroFED's

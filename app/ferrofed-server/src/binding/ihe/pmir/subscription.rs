@@ -26,7 +26,7 @@
 //!   is created again. A delete the Registry answers `404` or `410` found the
 //!   subscription already gone, removed by another replica.
 //! - Each failed check doubles the wait before the next, from
-//!   `check_interval_s` to 32 times it, and a check that succeeds resets it.
+//!   `check_interval` to 32 times it, and a check that succeeds resets it.
 //! - At a drain the loop is stopped first, letting the check in flight end.
 //!   With `on_drain = "keep"`, the default, the subscription stays for the
 //!   other replicas and the next start. With `on_drain = "unsubscribe"` it is
@@ -53,7 +53,7 @@ use crate::config::ihe::pmir::OnDrain;
 use ferrofed_operator_api::health::Observed;
 
 /// How many doublings the wait between two failed checks grows by at most:
-/// 32 times `check_interval_s`.
+/// 32 times `check_interval`.
 const MAX_DOUBLINGS: u32 = 5;
 
 /// How many exchanges with the Registry one check may make at most, which

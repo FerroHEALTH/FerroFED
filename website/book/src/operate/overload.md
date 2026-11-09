@@ -12,7 +12,7 @@ it reads in memory. Four limits keep that in bounds:
 | Requests the gateway serves at once | `server.max_concurrent_requests` | `512` | `503 overloaded`, with `Retry-After` |
 | Requests one verified caller sends | `[server.caller_rate]` | off | `429 rate-limited`, with `Retry-After` |
 | Requests the gateway sends one member endpoint at once | `federation.max_in_flight_per_node` | `64` | the request waits; past its per-node deadline the member is `time-out` |
-| Bytes the gateway reads of one answer from a member or its token endpoint | `federation.max_node_answer_bytes` | `16777216` (16 MiB) | the answer is dropped unread and the member is `node-error` |
+| Bytes the gateway reads of one answer from a member or its token endpoint | `federation.max_node_answer_size` | `16777216` (16 MiB) | the answer is dropped unread and the member is `node-error` |
 
 `serve`, `config check` and a reload refuse a zero in any of them, naming the
 key. A reload that changes one logs it as needing a restart, like the rest
@@ -21,7 +21,7 @@ of `[server]` and `[federation]`.
 ```toml
 [server]
 max_concurrent_requests = 512   # one more at once answers 503 overloaded
-retry_after_s = 1      # the Retry-After of that 503, in seconds
+retry_after = "1s"      # the Retry-After of that 503, in seconds
 
 [server.caller_rate]            # unset, no caller is rate limited
 requests_per_second = 10        # sustained, per caller
@@ -29,14 +29,14 @@ burst = 20                      # at once, after a quiet spell
 
 [federation]
 max_in_flight_per_node = 64     # per member endpoint, never shared between endpoints
-max_node_answer_bytes = 16777216  # of one answer; a longer one makes its member node-error
+max_node_answer_size = "16MiB"  # of one answer; a longer one makes its member node-error
 ```
 
 ## The concurrency limit
 
 A request that arrives while the gateway serves `max_concurrent_requests`
 others is answered `503` with the code `overloaded` and a `Retry-After` of
-`retry_after_s` seconds (RFC 9110 §15.6.4, §10.2.3). The gateway
+`retry_after` seconds (RFC 9110 §15.6.4, §10.2.3). The gateway
 refuses it before it reads anything else of it: the caller is not verified,
 and no resolver, localizer or member is asked. The health family,
 `{base}/health` and `{base}/health/readiness`, is never refused, so an
@@ -71,7 +71,7 @@ The gateway sends at most `max_in_flight_per_node` requests to one member
 endpoint at once, whatever sent them: federated queries, routed reads and
 writes, the ask-all probe, template uploads and stored-query distribution.
 A request past the cap waits for a slot until its per-node deadline
-(`federation.per_node_timeout_ms`, or the shorter budget a client asked for
+(`federation.per_node_timeout`, or the shorter budget a client asked for
 with `Prefer: wait`). One still waiting then was abandoned at the per-node
 timeout, so the member is `time-out` in `meta.federation.endpoints[]` with
 an `error` saying the cap was full and nothing was sent (§11.1, §11.5,
@@ -87,7 +87,7 @@ finish under theirs.
 
 ## The answer bound
 
-The gateway reads at most `max_node_answer_bytes` of one answer, from a
+The gateway reads at most `max_node_answer_size` of one answer, from a
 member or from its token endpoint, whatever sent the request. An answer
 whose `Content-Length` is past the bound is dropped unread, and one sent
 without a length is read until it passes the bound and dropped then, so a

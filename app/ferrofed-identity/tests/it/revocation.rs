@@ -13,9 +13,9 @@ use std::time::Duration;
 
 use ferrofed_testkit::mock::{Server, recorded};
 use ferrofed_testkit::revocation::{RevocationFront, Source, Standing};
+use ferrohealth_config::tls::TlsVersion;
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_server::revocation::{RevocationCheck, RevocationError};
-use ferrohealth_config::tls::TlsVersion;
 use url::Url;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};

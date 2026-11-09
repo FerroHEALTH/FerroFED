@@ -37,8 +37,8 @@ use tokio_rustls::TlsAcceptor;
 use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::rustls::pki_types::CertificateDer;
 
-use ferrohealth_secret::secret::Secret;
 use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_secret::secret::Secret;
 use ferrohealth_server::tls_client::{TlsClient, TlsClientError};
 
 use crate::pki::{self, Authority, PkiError};

@@ -401,7 +401,7 @@ async fn a_console_member_survives_a_file_reload_until_the_file_provides_it() ->
         &gateway.config,
         text.replace(
             "id = \"example-federation\"",
-            "id = \"example-federation\"\nbinding_ttl_ms = 600000",
+            "id = \"example-federation\"\nbinding_ttl = '10min'",
         ),
     )?;
     gateway.reloader.reload()?;

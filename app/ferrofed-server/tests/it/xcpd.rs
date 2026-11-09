@@ -95,7 +95,7 @@ pub(crate) fn config(
         )?;
     }
     Ok(format!(
-        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[xcpd]\nsender_device = \"2.999.40.1\"\n{audit}{extra}\n{gateway_tables}\n[xcpd.communities]\n{communities}\n{rows}",
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[xcpd]\nsender_device = \"2.999.40.1\"\n{audit}{extra}\n{gateway_tables}\n[xcpd.communities]\n{communities}\n{rows}",
         document = toml::Value::String(document.display().to_string()),
         audit = if extra.contains("audit =") {
             ""

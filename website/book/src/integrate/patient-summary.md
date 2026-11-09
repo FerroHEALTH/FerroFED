@@ -639,7 +639,7 @@ The terminology server, when you configure one:
 ```toml
 [eehrxf.terminology]
 url = "https://terminology.example.org/fhir/"   # the server's FHIR base
-timeout_ms = 2000                               # one operation's budget; 2000 unless set
+timeout = "2s"                               # one operation's budget; 2000 unless set
 
 [eehrxf.terminology.credentials]
 user = "ferrofed"

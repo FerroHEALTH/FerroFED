@@ -169,7 +169,7 @@ fn text(dir: &Path, (a, b): (&str, &str), tables: &str) -> Result<String, Box<dy
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
     Ok(format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = false\n\n{}\n{}\n{tables}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = false\n\n{}\n{}\n{tables}",
         crossref(&[("node-a", "2222aaaa-2222-4222-8222-222222222222")]),
         signing(dir)?
     ))

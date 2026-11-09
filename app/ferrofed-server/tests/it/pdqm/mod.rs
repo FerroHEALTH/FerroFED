@@ -146,7 +146,7 @@ pub(crate) fn settings(
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nid = \"example-federation\"\n{federation}\n\n{tables}"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nid = \"example-federation\"\n{federation}\n\n{tables}"
     );
     Ok(Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?)
 }

@@ -116,7 +116,7 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("server.shutdown_timeout", |boot, fresh| {
         boot.server.shutdown_timeout != fresh.server.shutdown_timeout
     }),
-    ("gateway.bindings_drain_timeout_ms", |boot, fresh| {
+    ("gateway.bindings_drain_timeout", |boot, fresh| {
         boot.server.bindings_drain != fresh.server.bindings_drain
     }),
     ("server.body_limit", |boot, fresh| {
@@ -149,7 +149,7 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("federation.default_namespace", |boot, fresh| {
         boot.federation.default_namespace != fresh.federation.default_namespace
     }),
-    ("federation.binding_ttl_ms", |boot, fresh| {
+    ("federation.binding_ttl", |boot, fresh| {
         boot.federation.binding_ttl != fresh.federation.binding_ttl
     }),
     ("federation.binding_capacity", |boot, fresh| {
@@ -167,7 +167,7 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("federation.max_in_flight_per_node", |boot, fresh| {
         boot.federation.max_in_flight_per_node != fresh.federation.max_in_flight_per_node
     }),
-    ("federation.max_node_answer_bytes", |boot, fresh| {
+    ("federation.max_node_answer_size", |boot, fresh| {
         boot.federation.max_node_answer_bytes != fresh.federation.max_node_answer_bytes
     }),
     ("federation.fan_out_template_upload", |boot, fresh| {

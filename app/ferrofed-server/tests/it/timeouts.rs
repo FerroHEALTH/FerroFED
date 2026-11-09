@@ -102,7 +102,7 @@ fn gateway(
     let document = toml::Value::String(document.display().to_string());
     let rows = crossref(&[("node-a", EHR_A), ("node-b", EHR_B)]);
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {per_node_ms}\noverall_timeout_ms = {overall_ms}\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = true\n\n{rows}"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '{per_node_ms}ms'\noverall_timeout = '{overall_ms}ms'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = true\n\n{rows}"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
@@ -557,8 +557,8 @@ async fn the_overall_budget_fires_before_the_tightest_accepted_request_timeout()
         dir.path(),
         &a,
         &b,
-        &format!("request_timeout_ms = {request_ms}"),
-        &format!("per_node_timeout_ms = 5000\noverall_timeout_ms = {overall_ms}"),
+        &format!("request_timeout = {request_ms}"),
+        &format!("per_node_timeout = '5s'\noverall_timeout = '{overall_ms}ms'"),
     )?;
 
     let reply = timed(app, post(&[], false)?).await?;

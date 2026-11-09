@@ -65,8 +65,8 @@ spec:
     spec:
       # The gateway calls no Kubernetes API.
       automountServiceAccountToken: false
-      # Covers the preStop sleep (5 s) below, server.drain_delay_ms (5 s),
-      # server.shutdown_timeout_ms (30 s) and gateway.bindings_drain_timeout_ms
+      # Covers the preStop sleep (5 s) below, server.drain_delay (5 s),
+      # server.shutdown_timeout (30 s) and gateway.bindings_drain_timeout
       # (5 s) of configmap.yaml, with 5 s for the export flush, so the kubelet
       # never kills a drain in progress. The grace period counts from the
       # moment the pod is deleted.
@@ -145,7 +145,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 1
-          # Holds SIGTERM for as long as server.drain_delay_ms, while the
+          # Holds SIGTERM for as long as server.drain_delay, while the
           # endpoint controllers and the proxies in front stop sending this
           # pod new requests; the gateway then turns readiness to 503 and
           # drains (https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/).
@@ -201,7 +201,7 @@ spec:
   # own spool and delivers what it still holds. The spool holds audit records
   # that name a patient until the repository takes them, so the claim's
   # storage class encrypts at rest. The size holds the default spool bounds
-  # (64 MiB in spool_max_bytes, 100000 messages of at least one 4 KiB block
+  # (64 MiB in spool_max_size, 100000 messages of at least one 4 KiB block
   # each, for each of the two spools) with headroom; raise it with either
   # bound.
   volumeClaimTemplates:

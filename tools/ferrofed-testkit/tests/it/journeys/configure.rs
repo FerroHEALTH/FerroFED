@@ -55,7 +55,7 @@ pub(crate) const HISTORY: &str = r#"{"items":[
 
 /// What revision 2 changes against revision 1.
 pub(crate) const DIFF_2: &str = r#"{"from":1,"to":2,"changes":[
-    {"key":"federation.per_node_timeout_ms","change":"changed","from":"2000","to":"2500"}]}"#;
+    {"key":"federation.per_node_timeout","change":"changed","from":"2000","to":"2500"}]}"#;
 
 /// The running configuration revision 1 sets, every setting the gateway
 /// lists.

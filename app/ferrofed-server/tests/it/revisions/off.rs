@@ -55,7 +55,7 @@ fn a_store_key_under_off_is_refused() -> TestResult {
         "backend = \"redb\"",
         "path = \"revisions.redb\"",
         "url_file = \"/run/secrets/url\"",
-        "confirm_ms = 60000",
+        "confirm = '1min'",
         "approval = [\"consent\"]",
         "secrets_dir = \"/run/ferrofed/secrets\"",
     ] {

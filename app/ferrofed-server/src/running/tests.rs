@@ -35,7 +35,7 @@ fn a_setting_nothing_sets_runs_its_default() {
     assert_eq!("off", document.ui);
     assert_eq!(None, document.revision);
     let timeout = document
-        .setting("federation.per_node_timeout_ms")
+        .setting("federation.per_node_timeout")
         .expect("listed");
     assert_eq!(Some(toml::Value::Integer(10_000)), timeout.value);
     assert_eq!(timeout.default, timeout.value);
@@ -51,10 +51,10 @@ fn a_setting_nothing_sets_runs_its_default() {
 #[test]
 fn a_value_names_the_file_or_the_override_it_comes_from() {
     let loaded = Config::loaded_from_sources(
-        Some("[federation]\nper_node_timeout_ms = 2500\noverall_timeout_ms = 3000\n"),
+        Some("[federation]\nper_node_timeout = '2500ms'\noverall_timeout = '3s'\n"),
         &BTreeMap::from([
             (
-                String::from("FERROFED__FEDERATION__OVERALL_TIMEOUT_MS"),
+                String::from("FERROFED__FEDERATION__OVERALL_TIMEOUT"),
                 String::from("4000"),
             ),
             (String::from("PATH"), String::from("/usr/bin")),
@@ -72,12 +72,12 @@ fn a_value_names_the_file_or_the_override_it_comes_from() {
     };
     let document = of(&layers);
     let per_node = document
-        .setting("federation.per_node_timeout_ms")
+        .setting("federation.per_node_timeout")
         .expect("listed");
     assert_eq!(Some(toml::Value::Integer(2500)), per_node.value);
     assert_eq!(Source::File, per_node.source);
     let overall = document
-        .setting("federation.overall_timeout_ms")
+        .setting("federation.overall_timeout")
         .expect("listed");
     assert_eq!(Some(toml::Value::Integer(4000)), overall.value);
     assert_eq!(Source::Environment, overall.source);
@@ -87,16 +87,16 @@ fn a_value_names_the_file_or_the_override_it_comes_from() {
 fn a_restart_setting_runs_the_boot_value_and_names_the_next_while_a_live_one_runs_the_new() {
     let layers = Layers {
         boot: tree(
-            "[federation]\nper_node_timeout_ms = 2500\n\n[federation.consent]\ndisclose = true\n",
+            "[federation]\nper_node_timeout = '2500ms'\n\n[federation.consent]\ndisclose = true\n",
         ),
         now: tree(
-            "[federation]\nper_node_timeout_ms = 3000\n\n[federation.consent]\ndisclose = false\n",
+            "[federation]\nper_node_timeout = '3s'\n\n[federation.consent]\ndisclose = false\n",
         ),
         ..Layers::default()
     };
     let document = of(&layers);
     let per_node = document
-        .setting("federation.per_node_timeout_ms")
+        .setting("federation.per_node_timeout")
         .expect("listed");
     assert_eq!(Some(toml::Value::Integer(2500)), per_node.value);
     assert_eq!(Some(toml::Value::Integer(3000)), per_node.next);

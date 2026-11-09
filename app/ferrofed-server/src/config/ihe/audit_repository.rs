@@ -30,6 +30,8 @@
 //! platform's verifier with its extra roots. No specification governs the
 //! shape of the table: our own design.
 
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -67,20 +69,40 @@ pub struct AuditRepository {
     /// The spool directory; required outside development.
     pub spool_dir: Option<PathBuf>,
     /// The most bytes the spool holds.
-    pub spool_max_bytes: u64,
+    pub spool_max_size: units::ByteSize,
+    /// The retired `spool_max_bytes`, which `spool_max_size` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub spool_max_bytes: Removed,
     /// The most messages the spool holds.
     pub spool_max_events: usize,
     /// The longest storing one message in the spool may take; a message not
     /// stored by then, or by the end of its discovery's time if that comes
     /// first, is an audit failure.
-    pub spool_write_timeout_ms: u64,
+    pub spool_write_timeout: units::Duration,
+    /// The retired `spool_write_timeout_ms`, which `spool_write_timeout` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub spool_write_timeout_ms: Removed,
     /// How long the repository may take to accept a connection.
-    pub connect_timeout_ms: u64,
+    pub connect_timeout: units::Duration,
+    /// The retired `connect_timeout_ms`, which `connect_timeout` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub connect_timeout_ms: Removed,
     /// How long the TLS handshake, and each write and flush of a message,
     /// may take.
-    pub send_timeout_ms: u64,
+    pub send_timeout: units::Duration,
+    /// The retired `send_timeout_ms`, which `send_timeout` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub send_timeout_ms: Removed,
     /// The longest wait between two delivery attempts.
-    pub retry_max_ms: u64,
+    pub retry_max: units::Duration,
+    /// The retired `retry_max_ms`, which `retry_max` replaced in 0.0.18: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub retry_max_ms: Removed,
     /// The TLS material the repository is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,
@@ -95,12 +117,17 @@ impl Default for AuditRepository {
             source_id: None,
             enterprise_site: None,
             spool_dir: None,
-            spool_max_bytes: 64 * 1024 * 1024,
+            spool_max_size: units::ByteSize::from_mib(64),
+            spool_max_bytes: Removed::default(),
             spool_max_events: 100_000,
-            spool_write_timeout_ms: 2_000,
-            connect_timeout_ms: 5_000,
-            send_timeout_ms: 5_000,
-            retry_max_ms: 60_000,
+            spool_write_timeout: units::Duration::from_secs(2),
+            spool_write_timeout_ms: Removed::default(),
+            connect_timeout: units::Duration::from_secs(5),
+            connect_timeout_ms: Removed::default(),
+            send_timeout: units::Duration::from_secs(5),
+            send_timeout_ms: Removed::default(),
+            retry_max: units::Duration::from_mins(1),
+            retry_max_ms: Removed::default(),
             tls: TlsClientSection::default(),
         }
     }
@@ -190,12 +217,12 @@ pub(crate) fn resolve(
         return Err(missing("spool_dir"));
     }
     for (key, zero) in [
-        ("spool_max_bytes", table.spool_max_bytes == 0),
+        ("spool_max_size", table.spool_max_size.is_zero()),
         ("spool_max_events", table.spool_max_events == 0),
-        ("spool_write_timeout_ms", table.spool_write_timeout_ms == 0),
-        ("connect_timeout_ms", table.connect_timeout_ms == 0),
-        ("send_timeout_ms", table.send_timeout_ms == 0),
-        ("retry_max_ms", table.retry_max_ms == 0),
+        ("spool_write_timeout", table.spool_write_timeout.is_zero()),
+        ("connect_timeout", table.connect_timeout.is_zero()),
+        ("send_timeout", table.send_timeout.is_zero()),
+        ("retry_max", table.retry_max.is_zero()),
     ] {
         if zero {
             return Err(Error::Zero {
@@ -219,14 +246,14 @@ pub(crate) fn resolve(
         spool_dir: table.spool_dir.clone(),
         bounds: Bounds {
             max_messages: table.spool_max_events,
-            max_bytes: table.spool_max_bytes,
-            write_timeout: Duration::from_millis(table.spool_write_timeout_ms),
+            max_bytes: table.spool_max_size.bytes(),
+            write_timeout: table.spool_write_timeout.get(),
         },
         timeouts: Timeouts {
-            connect: Duration::from_millis(table.connect_timeout_ms),
-            send: Duration::from_millis(table.send_timeout_ms),
+            connect: table.connect_timeout.get(),
+            send: table.send_timeout.get(),
         },
-        retry_max: Duration::from_millis(table.retry_max_ms),
+        retry_max: table.retry_max.get(),
         tls,
     })
 }

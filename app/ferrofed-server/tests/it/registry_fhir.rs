@@ -114,7 +114,7 @@ fn federation(dir: &Path, document: &str, format: &str) -> Result<Federation, Bo
     std::fs::write(&path, document)?;
     let path = toml::Value::String(path.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {path}\nformat = \"{format}\"\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
+        "profile = \"development\"\n\n[registry]\ndocument = {path}\nformat = \"{format}\"\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
     );
     let settings =

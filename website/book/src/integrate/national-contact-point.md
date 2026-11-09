@@ -338,27 +338,27 @@ code = "EMERGENCY"
 
 [emergency]
 threshold = 5        # 1 to 5: emergency accesses one professional is granted in one window
-window_s = 86400     # 1 to 86400: the window, in seconds
+window = "1d"     # 1 to 86400: the window, in seconds
 ```
 
 | Key | Default | What it sets |
 |---|---|---|
 | `threshold` | `5` | how many emergency accesses one professional is granted in any window, 1 to 5 |
-| `window_s` | `86400` | the window, in seconds, 1 to 86400 (24 hours) |
+| `window` | `86400` | the window, in seconds, 1 to 86400 (24 hours) |
 
 The defaults are the §2.5 baseline. A country may only tighten it, so
 `config check`, the start and a reload refuse a `threshold` above 5 or a
-`window_s` above 86400, naming §2.5:
+`window` above 86400, naming §2.5:
 
 ```text
 emergency.threshold is 6, above the baseline of 5 emergency access attempts per health professional per 24-hour period of eHDSI Section II Security Services 10.0.0 §2.5, which a country may only tighten
 ```
 
-A `threshold` or a `window_s` of zero is refused too: §2.5 has every country
+A `threshold` or a `window` of zero is refused too: §2.5 has every country
 provide emergency access, so FerroFED never refuses it by default. A reload
 applies a changed limit. `OPTIONS {base}/` declares the limit in effect
 under `federation.national_contact_point.emergency`, as `threshold` and
-`window_s`, so the contact point's operator can check what the gateway
+`window`, so the contact point's operator can check what the gateway
 holds its professionals to.
 
 How the gateway counts:
@@ -371,7 +371,7 @@ How the gateway counts:
   list, a document, a prescription search and read, and a dispensation each
   count once. The patient lookup is the identification step and is never
   counted.
-- **In any window.** The window slides: any span of `window_s` seconds holds
+- **In any window.** The window slides: any span of `window` seconds holds
   at most `threshold` granted accesses of one professional. A denied
   attempt is not counted, so the professional is granted again once the
   oldest access leaves the window.

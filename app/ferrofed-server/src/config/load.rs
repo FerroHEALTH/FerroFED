@@ -188,10 +188,10 @@ const RENAMED: [(&str, &str); 4] = [
     ("server.public_url", "gateway.public_url"),
     ("server.replica", "gateway.replica"),
     (
-        "server.bindings_drain_timeout_ms",
-        "gateway.bindings_drain_timeout_ms",
+        "server.bindings_drain_timeout",
+        "gateway.bindings_drain_timeout",
     ),
-    ("server.overload_retry_after_s", "server.retry_after_s"),
+    ("server.overload_retry_after_s", "server.retry_after"),
 ];
 
 /// The outbound TLS keys a table took before they moved into its `tls`
@@ -255,6 +255,7 @@ fn checked(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
     if loaded.settings().dev.is_some() {
         return Err(Error::DevRemoved);
     }
+    crate::config::retired::check(loaded.settings())?;
     Ok(loaded)
 }
 
@@ -282,8 +283,8 @@ mod tests {
         let config = Config::from_sources(None, &BTreeMap::new()).expect("the defaults parse");
         assert_eq!(Config::default(), config);
         assert_eq!("127.0.0.1:8080", config.server.listen.to_string());
-        assert_eq!(1024 * 1024, config.server.body_limit_bytes);
-        assert_eq!(0, config.server.drain_delay_ms);
+        assert_eq!(1024 * 1024, config.server.body_limit.bytes());
+        assert!(config.server.drain_delay.is_zero());
         assert!(!config.shutdown_timeout_written);
         assert_eq!(
             Some(512),

@@ -46,6 +46,10 @@ pub enum Error {
         "[dev] is no longer read: FerroFED keeps no patient index, so it resolves every patient through a PIX Manager; remove [dev] and configure [[pixm.manager]]"
     )]
     DevRemoved,
+    /// The sources set keys a release retired, each named with its
+    /// replacement (`config::retired`).
+    #[error(transparent)]
+    Retired(#[from] ferrohealth_config::removed::RemovedKeys),
     /// A key a release renamed is still set under its old name, in the file
     /// or as an override; the upgrade notes of that release give the step.
     #[error("{old} was renamed to {new}; set {new} instead (see the upgrade notes)")]
