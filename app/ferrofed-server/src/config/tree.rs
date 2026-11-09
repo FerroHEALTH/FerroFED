@@ -350,7 +350,10 @@ mod tests {
         sources(&root, &mut files);
         // NOTE: no specification governs this: our own design; a family crate's
         // section embedded as a sub-table reads its secrets through files of its own.
-        let embedded: [(&str, &[&str]); 1] = [("TlsClientSection", &["client_identity"])];
+        let embedded: [(&str, &[&str]); 2] = [
+            ("TlsClientSection", &["client_identity"]),
+            ("OauthSection", &["client_secret"]),
+        ];
         let mut seen = std::collections::BTreeSet::new();
         for (path, text) in &files {
             for (section, names) in embedded {

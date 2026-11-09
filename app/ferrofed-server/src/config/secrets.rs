@@ -81,7 +81,7 @@ pub(crate) fn resolve_node_credentials(
         .map(|table| tls::read(&format!("{section}.tls"), table))
         .transpose()?;
     let scheme = match scheme(section, credentials) {
-        Ok(scheme) => node_scope(section, scheme)?,
+        Ok(scheme) => node_secretless(section, node_scope(section, scheme)?)?,
         Err(Error::Credentials(CredentialsFault::NoScheme { .. })) if material.is_some() => {
             return Ok((None, material));
         }
@@ -136,6 +136,40 @@ fn same_certificate(
         .into());
     }
     Ok(())
+}
+
+/// Returns `scheme`, a node's, once its `oauth` grant names no client secret:
+/// a node's grant authenticates with `private_key_jwt` or its TLS client
+/// certificate (§13.1, N25; FAPI 2.0 Security Profile §5.3.2.1 for a grant
+/// under that profile).
+///
+/// # Errors
+///
+/// Returns [`CredentialsFault::SecretForNode`] naming the key.
+fn node_secretless(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
+    if let Scheme::Oauth { written, .. } = &scheme {
+        let table = &written.0;
+        // NOTE: §13.1 N25; a node's grant carries the gateway's own identity, which a
+        // secret shared with the node's authorization server does not prove.
+        let key = if matches!(
+            table.client_auth,
+            ClientAuth::ClientSecretBasic | ClientAuth::ClientSecretPost
+        ) {
+            Some("client_auth")
+        } else if table.client_secret.is_some() {
+            Some("client_secret")
+        } else if table.client_secret_file.is_some() {
+            Some("client_secret_file")
+        } else {
+            None
+        };
+        if let Some(key) = key {
+            return Err(Error::Credentials(CredentialsFault::SecretForNode {
+                key: format!("{section}.oauth.{key}"),
+            }));
+        }
+    }
+    Ok(scheme)
 }
 
 /// Returns `scheme`, a node's, once the scope of its `oauth` grant reads as
@@ -312,8 +346,8 @@ fn basic_refusal(section: &str, password_file: bool, source: InvalidCredentials)
 /// Returns the signing keys and their publication `[signing]` describes:
 /// every key read from its file, each a P-256 (ES256) or a P-384 (ES384)
 /// key, the next key on the curve of the algorithm it is meant for, the
-/// assertion lifetime at most [`MAX_ASSERTION_LIFETIME`], the overlap window at least
-/// that lifetime plus the nodes' JWK Set cache time, and `jwks_uri` an
+/// overlap window at least [`MAX_ASSERTION_LIFETIME`] plus the nodes' JWK Set
+/// cache time, and `jwks_uri` an
 /// absolute `http` or `https` URL (§13.1, N25). With `public` set,
 /// `jwks_uri` defaults to the route the gateway serves the JWK Set at under
 /// it, and must name that route when set.
@@ -322,22 +356,12 @@ pub(crate) fn resolve_signing(
     public: Option<&PublicUrl>,
 ) -> Result<SigningSettings, Error> {
     let max = MAX_ASSERTION_LIFETIME.as_secs();
-    if signing.assertion_lifetime_s == 0 || signing.assertion_lifetime_s > max {
-        return Err(Error::Credentials(CredentialsFault::AssertionLifetime {
-            seconds: signing.assertion_lifetime_s,
-            max,
-        }));
-    }
     // NOTE: no specification governs this: our own design; a node holding the
-    // previous set still meets an assertion the previous key signed.
-    if signing.rotation_overlap_s
-        < signing
-            .assertion_lifetime_s
-            .saturating_add(signing.node_jwks_cache_s)
-    {
+    // previous set still meets a token the previous key signed.
+    if signing.rotation_overlap_s < max.saturating_add(signing.node_jwks_cache_s) {
         return Err(Error::Credentials(CredentialsFault::RotationOverlap {
             overlap_s: signing.rotation_overlap_s,
-            lifetime_s: signing.assertion_lifetime_s,
+            lifetime_s: max,
             cache_s: signing.node_jwks_cache_s,
         }));
     }
@@ -388,7 +412,6 @@ pub(crate) fn resolve_signing(
     Ok(SigningSettings {
         keys: Arc::new(keys),
         jwks_uri,
-        assertion_lifetime: Duration::from_secs(signing.assertion_lifetime_s),
         rotation_overlap: overlap,
     })
 }

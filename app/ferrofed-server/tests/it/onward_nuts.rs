@@ -272,7 +272,7 @@ async fn the_configuration_refuses_a_nuts_grant_it_cannot_use() -> TestResult {
     };
     let both = material.tables.replace(
         "[[credentials.",
-        "\n[credentials.\"node-a-pub\".oauth2]\nclient_id = \"x\"\n\n[[credentials.",
+        "\n[credentials.\"node-a-pub\".oauth]\nclient_id = \"x\"\n\n[[credentials.",
     );
     let error = resolve(&both)?;
     assert!(

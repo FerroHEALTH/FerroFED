@@ -124,8 +124,6 @@ pub struct SigningSettings {
     pub keys: Arc<KeyRing>,
     /// The absolute URL `OPTIONS {base}/` declares for the JWK Set.
     pub jwks_uri: Uri,
-    /// How long a client assertion is valid.
-    pub assertion_lifetime: Duration,
     /// How long the previous key is published after the process starts.
     pub rotation_overlap: Duration,
 }

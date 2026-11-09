@@ -25,7 +25,6 @@ use ferrofed_engine::dispatch::reported::UNAUTHENTICATED;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrofed_server::config::error::credentials::CredentialsFault;
-use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::federation::{Federation, error::FederationError};
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::issuance::Verdict;
@@ -90,14 +89,6 @@ fn oauth(dir: &Path, token_url: &str) -> String {
     let key = toml::Value::String(dir.join("current.pem").display().to_string());
     format!(
         "[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n"
-    )
-}
-
-/// The `[credentials]` table of node A's token-exchange grant at
-/// `token_url`, the gateway's own grant the `[signing]` key signs.
-fn exchange(token_url: &str) -> String {
-    format!(
-        "[credentials.\"node-a-pub\".oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\nresource = \"https://node-a.example.org/openehr\"\n"
     )
 }
 
@@ -429,13 +420,51 @@ async fn a_refusal_description_reaches_the_log_and_never_the_answer() -> TestRes
     Ok(())
 }
 
+/// The removed `oauth2` and `fapi2` tables and the `mtls_alias_hosts` key
+/// are refused at load, each naming the key of the `oauth` table that
+/// replaces it and pointing at the upgrade notes (#1749).
+#[test]
+fn the_removed_grant_tables_are_refused_naming_the_oauth_table() -> TestResult {
+    for (removed, table, new) in [
+        (
+            "oauth2",
+            "[credentials.\"node-a-pub\".oauth2]\nclient_id = \"x\"\n",
+            "oauth",
+        ),
+        (
+            "fapi2",
+            "[credentials.\"node-a-pub\".fapi2]\nissuer = \"https://as.example.org\"\n",
+            "oauth",
+        ),
+        (
+            "mtls_alias_hosts",
+            "[credentials.\"node-a-pub\"]\nmtls_alias_hosts = [\"mtls.example.org\"]\n",
+            "oauth.mtls_alias_hosts",
+        ),
+    ] {
+        let refused = Config::from_sources(Some(&injected(table)), &BTreeMap::new())
+            .err()
+            .ok_or("the removed key is refused at load")?;
+        assert!(
+            matches!(
+                &refused,
+                ConfigError::Replaced { old, new: named }
+                    if *old == format!("credentials.node-a-pub.{removed}")
+                        && *named == format!("credentials.node-a-pub.{new}")
+            ),
+            "{removed}: {refused:?}"
+        );
+        let shown = refused.to_string();
+        assert!(shown.contains("upgrade notes"), "{shown}");
+    }
+    Ok(())
+}
+
 /// `config check` refuses an OAuth 2.0 grant it cannot use, naming the key:
 /// a signing key on neither P-256 nor P-384 (a P-521 key), a client
 /// credentials grant without its `client_id` or its assertion key, a scope
-/// outside the `system` grammar, a token-exchange grant without
-/// `[signing]` or with a token endpoint carrying a query, a plain
-/// `oauth2` grant the `oauth` table carries, a lifetime past 300 s, an
-/// overlap shorter than the lifetime plus the nodes' cache time, and a
+/// outside the `system` grammar, the removed `assertion_lifetime_s`, an
+/// overlap shorter than five minutes plus the nodes' cache time, and a
 /// `jwks_uri` that is no URL.
 #[test]
 fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
@@ -478,23 +507,6 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
             "{missing}: {error:?}"
         );
     }
-    let error = resolve(&exchange("https://idp.example.org/token"))?;
-    assert!(
-        matches!(
-            error,
-            ConfigError::Credentials(CredentialsFault::GrantWithoutSigning { .. })
-        ),
-        "{error:?}"
-    );
-    let plain = exchange("https://idp.example.org/token").replace(
-        "grant = \"token_exchange\"",
-        "grant = \"client_credentials\"",
-    );
-    let error = resolve(&format!("{}{plain}", signing_with("", &good_key)))?;
-    assert!(
-        matches!(&error, ConfigError::GrantFault(GrantFault::Plain { section }) if section == "credentials.node-a-pub.oauth2"),
-        "{error:?}"
-    );
     let error = resolve(&format!(
         "{}{}",
         signing_with("", &good_key),
@@ -507,31 +519,24 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
         ),
         "{error:?}"
     );
-    let error = resolve(&signing_with("assertion_lifetime_s = 301", &good_key))?;
+    let refused = Config::from_sources(
+        Some(&injected(&signing_with(
+            "assertion_lifetime_s = 300",
+            &good_key,
+        ))),
+        &BTreeMap::new(),
+    )
+    .err()
+    .ok_or("the removed assertion lifetime is refused at load")?;
     assert!(
-        matches!(
-            error,
-            ConfigError::Credentials(CredentialsFault::AssertionLifetime { .. })
-        ),
-        "{error:?}"
+        format!("{refused} {refused:?}").contains("assertion_lifetime_s"),
+        "{refused:?}"
     );
     let error = resolve(&signing_with("rotation_overlap_s = 3899", &good_key))?;
     assert!(
         matches!(
             error,
             ConfigError::Credentials(CredentialsFault::RotationOverlap { .. })
-        ),
-        "{error:?}"
-    );
-    let error = resolve(&format!(
-        "{}{}",
-        signing_with("", &good_key),
-        exchange("https://idp.example.org/token?secret=x")
-    ))?;
-    assert!(
-        matches!(
-            error,
-            ConfigError::Credentials(CredentialsFault::Grant { .. })
         ),
         "{error:?}"
     );

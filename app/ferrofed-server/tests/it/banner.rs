@@ -496,11 +496,14 @@ fn no_secret_from_the_configuration_reaches_the_banner() -> TestResult {
         ),
     )?;
     let document = toml::Value::String(document.display().to_string());
+    let key = toml::Value::String(crate::support::signing_key_file().to_owned());
     let text = format!(
         "profile = \"development\"\n\n\
          [registry]\ndocument = {document}\n\n\
          [federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n\
-         [credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{SECRET}-client-secret\"\n\n\
+         [credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\n\
+         [[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\n\
+         [pixm.manager.credentials.oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{SECRET}-client-secret\"\n\n\
          [credentials.\"node-b-pub\"]\nuser = \"{SECRET}-user\"\npassword = \"{SECRET}-password\"\n\n\
          [[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n"
     );

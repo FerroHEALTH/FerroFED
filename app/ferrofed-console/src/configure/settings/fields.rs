@@ -14,11 +14,10 @@ pub(crate) const BASIC: &[Field] = &[Field {
     kind: Kind::Text,
 }];
 
-/// How the gateway authenticates at a token endpoint.
+/// How the gateway authenticates at a node's token endpoint: with an
+/// assertion or its TLS client certificate, never a client secret (§13.1,
+/// N25).
 pub(crate) const CLIENT_AUTH: &[(&str, Msg)] = &[
-    ("", Msg::NotSet3),
-    ("client_secret_basic", Msg::ClientSecretBasicScheme),
-    ("client_secret_post", Msg::ClientSecretBody),
     ("private_key_jwt", Msg::SignedClientAssertionPrivateKeyJwt),
     ("tls_client_auth", Msg::TlsClientCertificateTlsClientAuth),
     (

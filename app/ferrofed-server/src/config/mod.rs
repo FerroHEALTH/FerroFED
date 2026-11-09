@@ -577,12 +577,10 @@ pub struct Signing {
     /// `{base}/.well-known/jwks.json` at its public address, or wherever the
     /// deployment publishes the keys (§13.1).
     pub jwks_uri: Option<String>,
-    /// How long a client assertion is valid, in seconds: at most 300.
-    pub assertion_lifetime_s: u64,
     /// How long the nodes cache the JWK Set, in seconds.
     pub node_jwks_cache_s: u64,
-    /// How long the previous key stays published, in seconds: at least
-    /// `assertion_lifetime_s` plus `node_jwks_cache_s`.
+    /// How long the previous key stays published, in seconds: at least 300
+    /// plus `node_jwks_cache_s`.
     pub rotation_overlap_s: u64,
 }
 
@@ -594,7 +592,6 @@ impl Default for Signing {
             next_key_file: None,
             next_key_algorithm: None,
             jwks_uri: None,
-            assertion_lifetime_s: 300,
             node_jwks_cache_s: 3600,
             rotation_overlap_s: 3900,
         }

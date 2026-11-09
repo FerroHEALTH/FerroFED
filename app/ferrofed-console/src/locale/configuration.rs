@@ -92,12 +92,6 @@ messages! {
     ClientId = "client-id",
     /// `Client key file`
     ClientKeyFile = "client-key-file",
-    /// `Client secret`
-    ClientSecret = "client-secret",
-    /// `Client secret, Basic scheme`
-    ClientSecretBasicScheme = "client-secret-basic-scheme",
-    /// `Client secret, in the body`
-    ClientSecretBody = "client-secret-body",
     /// `Close the comparison`
     CloseTheComparison = "close-the-comparison",
     /// `Compare with running`

@@ -68,9 +68,8 @@ impl Config {
     /// logged query parameter ([`ServerFault::LoggedQueryParameters`]). An OAuth 2.0 grant refuses a missing key, a
     /// scope outside the SMART on openEHR `system` grammar ([`CredentialsFault::Scope`]),
     /// and a PIX Manager section ([`CredentialsFault::GrantNotHere`]); `[signing]` refuses a key that is no
-    /// P-256 or P-384 key ([`CredentialsFault::SigningKey`]), an assertion lifetime past five
-    /// minutes ([`CredentialsFault::AssertionLifetime`]), an overlap window shorter than
-    /// that lifetime plus the nodes' cache time ([`CredentialsFault::RotationOverlap`]),
+    /// P-256 or P-384 key ([`CredentialsFault::SigningKey`]), an overlap window shorter than
+    /// five minutes plus the nodes' cache time ([`CredentialsFault::RotationOverlap`]),
     /// a next key on another curve than it is meant for
     /// ([`CredentialsFault::NextKeyAlgorithm`]), and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
     /// `[auth]` is refused as

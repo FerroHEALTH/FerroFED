@@ -98,15 +98,11 @@ impl Grant {
     #[must_use]
     pub const fn secrets(self) -> &'static [Secret] {
         match self {
-            Self::Oauth => &[Secret {
-                key: "oauth.client_secret",
-                label: Msg::ClientSecret,
-            }],
             Self::Basic => &[Secret {
                 key: "password",
                 label: Msg::Password,
             }],
-            Self::Transport | Self::Nuts => &[],
+            Self::Transport | Self::Oauth | Self::Nuts => &[],
         }
     }
 

@@ -15,7 +15,7 @@ use std::error::Error as StdError;
 use std::num::NonZeroU32;
 use std::time::Duration;
 
-use super::{FULL, env, everything, federating, refusal};
+use super::{env, everything, federating, full, refusal};
 
 #[test]
 #[expect(
@@ -23,7 +23,8 @@ use super::{FULL, env, everything, federating, refusal};
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_file_states_every_section_and_the_resolver_reads_it() -> Result<(), Box<dyn StdError>> {
-    let settings = Config::from_sources(Some(FULL), &BTreeMap::new())?.resolve()?;
+    let full = full();
+    let settings = Config::from_sources(Some(full.as_str()), &BTreeMap::new())?.resolve()?;
     assert_eq!("0.0.0.0:9000", settings.server.listen.to_string());
     assert_eq!(Duration::from_millis(1000), settings.server.request_timeout);
     assert_eq!(
@@ -54,14 +55,15 @@ fn a_file_states_every_section_and_the_resolver_reads_it() -> Result<(), Box<dyn
 )]
 fn an_environment_override_wins_over_the_file_and_keeps_its_type() -> Result<(), Box<dyn StdError>>
 {
+    let full = full();
     let settings = Config::from_sources(
-        Some(FULL),
+        Some(full.as_str()),
         &env("FERROFED__SERVER__LISTEN", "127.0.0.1:7777"),
     )?
     .resolve()?;
     assert_eq!("127.0.0.1:7777", settings.server.listen.to_string());
     let settings = Config::from_sources(
-        Some(FULL),
+        Some(full.as_str()),
         &env("FERROFED__SERVER__BODY_LIMIT_BYTES", "512"),
     )?
     .resolve()?;
@@ -75,16 +77,17 @@ fn an_environment_override_wins_over_the_file_and_keeps_its_type() -> Result<(),
     reason = "a test asserts, and returns its setup errors"
 )]
 fn best_effort_is_offered_by_default_and_can_be_withdrawn() -> Result<(), Box<dyn StdError>> {
-    let settings = Config::from_sources(Some(FULL), &BTreeMap::new())?.resolve()?;
+    let full = full();
+    let settings = Config::from_sources(Some(full.as_str()), &BTreeMap::new())?.resolve()?;
     assert!(
         settings.federation.best_effort,
         "offered, and opt-in per request"
     );
-    let withdrawn = format!("{FULL}\n[federation]\nbest_effort = false\n");
+    let withdrawn = format!("{full}\n[federation]\nbest_effort = false\n");
     let settings = Config::from_sources(Some(&withdrawn), &BTreeMap::new())?.resolve()?;
     assert!(!settings.federation.best_effort);
     let settings = Config::from_sources(
-        Some(FULL),
+        Some(full.as_str()),
         &env("FERROFED__FEDERATION__BEST_EFFORT", "false"),
     )?
     .resolve()?;
@@ -98,7 +101,8 @@ fn best_effort_is_offered_by_default_and_can_be_withdrawn() -> Result<(), Box<dy
     reason = "a test asserts, and returns its setup errors"
 )]
 fn offset_paging_is_bounded_at_1000_rows_per_node_by_default() -> Result<(), Box<dyn StdError>> {
-    let settings = Config::from_sources(Some(FULL), &BTreeMap::new())?.resolve()?;
+    let full = full();
+    let settings = Config::from_sources(Some(full.as_str()), &BTreeMap::new())?.resolve()?;
     assert_eq!(
         settings.federation.offset,
         OffsetStrategy::Bounded {
@@ -106,14 +110,14 @@ fn offset_paging_is_bounded_at_1000_rows_per_node_by_default() -> Result<(), Box
         },
         "§11.6.2 option 2, with its bound"
     );
-    let narrowed = format!("{FULL}\n[federation]\nmax_offset_window = 50\n");
+    let narrowed = format!("{full}\n[federation]\nmax_offset_window = 50\n");
     let settings = Config::from_sources(Some(&narrowed), &BTreeMap::new())?.resolve()?;
     assert_eq!(
         settings.federation.offset.max_window().map(NonZeroU32::get),
         Some(50)
     );
     let settings = Config::from_sources(
-        Some(FULL),
+        Some(full.as_str()),
         &env("FERROFED__FEDERATION__OFFSET_STRATEGY", "reject"),
     )?
     .resolve()?;
@@ -129,6 +133,7 @@ fn offset_paging_is_bounded_at_1000_rows_per_node_by_default() -> Result<(), Box
 )]
 fn every_aggregate_is_decomposable_by_default_and_the_list_can_narrow()
 -> Result<(), Box<dyn StdError>> {
+    let full = full();
     let names = |settings: &ferrofed_server::config::settings::Settings| -> Vec<&'static str> {
         settings
             .federation
@@ -137,21 +142,21 @@ fn every_aggregate_is_decomposable_by_default_and_the_list_can_narrow()
             .map(|function| function.name())
             .collect()
     };
-    let settings = Config::from_sources(Some(FULL), &BTreeMap::new())?.resolve()?;
+    let settings = Config::from_sources(Some(full.as_str()), &BTreeMap::new())?.resolve()?;
     assert_eq!(
         names(&settings),
         ["COUNT", "SUM", "MIN", "MAX", "AVG"],
         "§11.6.3"
     );
     let narrowed =
-        format!("{FULL}\n[federation]\ndecomposable_aggregates = [\"MAX\", \"COUNT\"]\n");
+        format!("{full}\n[federation]\ndecomposable_aggregates = [\"MAX\", \"COUNT\"]\n");
     let settings = Config::from_sources(Some(&narrowed), &BTreeMap::new())?.resolve()?;
     assert_eq!(names(&settings), ["COUNT", "MAX"], "in declaration order");
-    let none = format!("{FULL}\n[federation]\ndecomposable_aggregates = []\n");
+    let none = format!("{full}\n[federation]\ndecomposable_aggregates = []\n");
     let settings = Config::from_sources(Some(&none), &BTreeMap::new())?.resolve()?;
     assert!(names(&settings).is_empty(), "an empty list declares none");
     let unknown = refusal(&format!(
-        "{FULL}\n[federation]\ndecomposable_aggregates = [\"MEDIAN\"]\n"
+        "{full}\n[federation]\ndecomposable_aggregates = [\"MEDIAN\"]\n"
     ))?;
     assert!(matches!(unknown, Error::Load { .. }), "{unknown:?}");
     Ok(())
@@ -163,13 +168,14 @@ fn every_aggregate_is_decomposable_by_default_and_the_list_can_narrow()
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_zero_offset_window_or_an_unknown_strategy_refuses_to_boot() -> Result<(), Box<dyn StdError>> {
-    let zero = refusal(&format!("{FULL}\n[federation]\nmax_offset_window = 0\n"))?;
+    let full = full();
+    let zero = refusal(&format!("{full}\n[federation]\nmax_offset_window = 0\n"))?;
     assert!(
         matches!(&zero, Error::Zero { key } if key == "federation.max_offset_window"),
         "{zero:?}"
     );
     let unknown = refusal(&format!(
-        "{FULL}\n[federation]\noffset_strategy = \"cursor\"\n"
+        "{full}\n[federation]\noffset_strategy = \"cursor\"\n"
     ))?;
     assert!(matches!(unknown, Error::Load { .. }), "{unknown:?}");
     Ok(())
@@ -274,7 +280,8 @@ fn onward_lane(endpoint: &str, extra: &str) -> String {
         "[credentials.\"{endpoint}\".oauth]\n\
          token_endpoint = \"https://as.example.org/token\"\n\
          client_id = \"ferrofed\"\n\
-         client_secret = \"synthetic-inline-token\"\n\n\
+         client_auth = \"private_key_jwt\"\n\
+         private_key_file = {key}\n\n\
          [credentials.\"{endpoint}\".onward]\n\
          issuer = \"https://federation.cdr-a.example.org\"\n\
          kind = \"persons\"\n\
@@ -283,7 +290,8 @@ fn onward_lane(endpoint: &str, extra: &str) -> String {
          indicators = [\"https://cdr-a.example.org/openehr\"]\n\
          {extra}\n\
          [credentials.\"{endpoint}\".onward.keys]\n\
-         max_onward_lifetime = 3600\n\n"
+         max_onward_lifetime = 3600\n\n",
+        key = toml::Value::String(crate::support::signing_key_file().to_owned())
     )
 }
 
