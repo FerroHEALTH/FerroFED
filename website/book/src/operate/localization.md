@@ -194,8 +194,11 @@ spool_dir = "/var/lib/ferrofed/audit-spool"
 # connect_timeout_ms = 5000           # opening the TCP connection
 # send_timeout_ms = 5000              # the TLS handshake, each write and flush
 # retry_max_ms = 60000                # the longest wait between two attempts
+
+[xcpd.audit_repository.tls]
 client_identity_file = "/run/secrets/atna-client.pem"  # when the repository asks
 trust_roots_file = "/etc/ferrofed/atna-roots.pem"      # optional
+# min_version = "1.2"                                   # "1.3" by default
 ```
 
 Every message is written to the spool first, flushed to disk, and
