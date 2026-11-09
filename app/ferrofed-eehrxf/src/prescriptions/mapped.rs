@@ -39,8 +39,6 @@ use openehr_base::v1_3::base_types::identification::object_version_id::ObjectVer
 use openehr_base::v1_3::base_types::identification::uid_based_id::UidBasedId;
 use openehr_mapping_core::template::{PathError, TemplateSource};
 
-use crate::stack::{Deep, deep};
-
 use super::RESOURCE;
 use super::page::{Kept, Page, Prescription};
 
@@ -113,9 +111,6 @@ pub enum MapModeError {
     /// The composition holds no `ACTION` to name the order on.
     #[error("the composition of the received dispensation names no order")]
     Instructed(#[source] InstructionError),
-    /// The mapping did not run on its thread.
-    #[error(transparent)]
-    Deep(#[from] Deep),
     /// A mapped resource cannot be read back as JSON.
     #[error("a mapped resource cannot be read as JSON")]
     Resource(#[source] fhir_types::codec::EncodeError),
@@ -159,12 +154,6 @@ impl MapMode {
     /// The [`MapModeError`] that says why the template does not read or the
     /// context does not compile against it.
     pub fn compile(template: Template<'_>) -> Result<Self, MapModeError> {
-        deep(|| Self::compiled(template))?
-    }
-
-    /// Compiles the MPD project's request context against `template` on the
-    /// calling thread.
-    fn compiled(template: Template<'_>) -> Result<Self, MapModeError> {
         let source = template.source()?;
         // NOTE: no specification governs this: our own design; the project's two contexts map one
         // template, so only the request context is compiled and a run selects it alone.
@@ -230,7 +219,9 @@ impl MapMode {
                 .with_language(language.as_str())
                 .with_territory(territory.as_str()),
         );
-        let composed = deep(|| self.project.resources_to_openehr(&received, &settings))?
+        let composed = self
+            .project
+            .resources_to_openehr(&received, &settings)
             .map_err(MapModeError::Composed)?;
         composed
             .instructed_by(order, activity)
@@ -263,14 +254,14 @@ impl MapMode {
             })),
             ..Reference::default()
         };
-        let answer = deep(|| {
-            self.mapping.to_fhir_with(
+        let answer = self
+            .mapping
+            .to_fhir_with(
                 composition,
                 &Settings::new(DEVICE, now),
                 CallContext::new().with_patient(patient),
             )
-        })?
-        .map_err(MapModeError::Run)?;
+            .map_err(MapModeError::Run)?;
         let mut page = Page::default();
         for resource in answer
             .bundle()
