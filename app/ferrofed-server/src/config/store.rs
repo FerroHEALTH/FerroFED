@@ -119,15 +119,6 @@ pub enum StoreFault {
         /// The key that needs the store.
         key: String,
     },
-    /// `[stored_queries]` still sets its own connection string, which the
-    /// `postgres` backend no longer reads.
-    #[error(
-        "{key} is no longer read: the postgres backend of the stored-query registry uses FerroFED's own store; move the connection string to [store] url or url_file"
-    )]
-    UrlMoved {
-        /// The removed key that is set.
-        key: String,
-    },
     /// The connection string does not require TLS.
     #[error(
         "{key} does not require TLS: FerroFED's store is reached over TLS under every profile; set sslmode=require"

@@ -163,11 +163,6 @@ pub struct Config {
     /// The installation report to `FerroPULSE` (`[usage_report]`), on by
     /// default.
     pub usage_report: ferrohealth_usage_report::section::UsageReportSection,
-    /// The removed `[dev]` table (#1377), read only so that a configuration
-    /// still setting it is refused by name
-    /// ([`Error::DevRemoved`](error::Error::DevRemoved)); its rows are never
-    /// kept, since one held a patient identifier.
-    pub dev: Option<serde::de::IgnoredAny>,
     /// Whether a source set `server.shutdown_timeout_ms`; unset, the drain
     /// lasts `server.request_timeout_ms` ([`Config::load`] and
     /// [`Config::from_sources`] read it from the provenance).
@@ -208,7 +203,6 @@ impl Default for Config {
             audit: audit::Audit::default(),
             revisions: revisions::Revisions::default(),
             usage_report: ferrohealth_usage_report::section::UsageReportSection::default(),
-            dev: None,
             shutdown_timeout_written: false,
         }
     }

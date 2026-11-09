@@ -514,8 +514,7 @@ contact point with no `[[federation.contact_point]]`, a
 `[[federation.contact_point]]` that names no contact point, a `countries`
 code that is neither a Member State nor one of its `additional_countries`,
 and an `[[auth.federation]]` table that names no source of
-`provider.issuing_authority_name`. The removed
-`[trust.issuer.national_contact_point]` is refused, naming its successor.
+`provider.issuing_authority_name`.
 
 **Who authenticates the professional.** The contact point's side does. The
 gateway verifies the contact point's token, as it verifies every caller's,
