@@ -6,7 +6,7 @@
 //! N24, N25, §12.4, CP-16).
 //!
 //! The token is signed with the current key of the gateway's
-//! [`KeyRing`](crate::onward::keys::KeyRing), the key whose public half the
+//! [`KeyRing`](ferrohealth_smart::client::keys::KeyRing), the key whose public half the
 //! gateway publishes as its JWK Set and declares as
 //! `federation.auth.jwks_uri` (N30), so a node verifies
 //! it the way it verifies the gateway's client assertions. Its JOSE header

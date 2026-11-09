@@ -12,7 +12,7 @@
 //! `nl-generic-functions`' `NutsClient`, presenting the holder's credentials.
 //! The token is bound to the grant's [`DpopKey`]: the token request carries a
 //! proof of it, through [`AuthorizationProver`], and every request to the
-//! node carries one through the endpoint's [`NodeProver`](crate::dispatch::dpop::NodeProver),
+//! node carries one through the endpoint's `NodeProver` in `dispatch::dpop`,
 //! so one key and one `DPoP` implementation serve both (RFC 9449 §5, §7).
 //!
 //! A Generic Functions service the gateway is a data user of, such as the
