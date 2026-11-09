@@ -6,7 +6,7 @@
 - [Family architecture](family-architecture.md): five separate servers that
   reach each other only over published protocols, shared crates for
   cross-cutting work, nothing hand-written that a shared crate covers,
-  reactive consoles; FerroFORMS, the umbrella and Veredictum out of scope;
+  server-rendered consoles; FerroFORMS and Veredictum out of scope, the umbrella active again;
   owner 2026-10-25
 
 ## FerroFED decisions
@@ -61,13 +61,14 @@
 - [Milestone autonomy](milestone-autonomy.md): work a milestone to zero
   without asking the order, then cut the release
 - [Release tag is mine](release-tag-is-mine.md): the session pushes every
-  release and pre-release tag; never hand it to the owner
+  release and pre-release tag; never hand it to the owner; it also merges the release PR and approves crates-io
 - [PR auto-merge](pr-auto-merge.md): arm auto-merge on open; prune merged
   branches; branch from `origin/HEAD`
 - [Auto-merge follow-ups](auto-merge-follow-ups.md): never push more to an
   armed PR unless it is still BLOCKED
-- [Merge queue with signed commits](merge-queue-signed.md): rebase locally,
-  merge one at a time, never `gh pr update-branch --rebase`
+- [Merge queue with signed commits](merge-queue-signed.md): a conflict takes a
+  local signed merge, never `gh pr update-branch --rebase`; no commit-message
+  line starts with "-" or a git header word (2026-11-09)
 - [Upstream reports stay here](upstream-reports-stay-here.md): one standing
   issue (#212), one comment per report, written to the upstream's contributing
   rules: the problem and a proposed resolution with its rationale, never how
@@ -104,7 +105,30 @@
 - [Cut releases promptly](cut-releases-promptly.md): cut when the milestone's code is done; move owner-side or upstream-blocked stragglers to the next milestone, never hold the cut; owner 2026-10-02
 - [No personal data in requests](no-personal-data-in-requests.md): no worker sends the owner's email or contact to an external service, User-Agent included; a neutral agent string, and a slip is reported
 - [Native issue types and fields](native-issue-types-and-priority.md): type, priority and effort are the native issue type and the FerroHEALTH Priority and Effort fields, set with scripts/gh/fields.sh; bug, enhancement and P0 to P3 retired; owner 2026-10-02 (#154)
-- [FerroUI](ferroui.md): every console draws in FerroUI; uniform design, shared components, reactive, every console moves in lockstep with each FerroUI release; owner 2026-10-18
+- [FerroUI](ferroui.md): every console draws in FerroUI; uniform design, shared components, server-rendered since FerroUI 0.6, every console moves in lockstep with each FerroUI release; owner 2026-10-18
 - [Release closes milestone](release-closes-milestone.md): release.yml refuses a tag whose milestone is missing or not empty and closes it after every leg; check it after a manual or recovery release; owner 2026-10-19 (#1170)
 - [Helm and Kubernetes in Podman](helm-kubernetes-in-podman.md): owner 2026-10-25, test charts locally on kind over Podman; install helm when missing; never build images locally
 - [Reactive console UI](reactive-console-ui.md): owner 2026-10-29 (FerroUI #510), server-rendered consoles on FerroUI 0.6: in-page state kept by a module, a navigation one document; supersedes the 2026-10-25 client-navigation ruling
+
+## Family rules (carried in every FerroHEALTH repository, 2026-11-09)
+
+- [No compatibility shims](no-compat-shims.md): refactors break APIs freely and leave no deprecated item, alias, re-export or stub; a removal refusal lives ONE release, then is deleted fully; no legacy support ever; owner 2026-11-01, 2026-11-09
+- [No half solutions](no-half-solutions.md): build what the issue asks the proper way and validate the need against its consumer first; a breaking change moves the minor version, never shape a design to dodge semver; owner 2026-11-08
+- [EHDS above openEHR](ehds-above-openehr.md): where Regulation (EU) 2025/327 conflicts with a standard's text the Regulation wins; never revert EHDS behaviour to pass a conformance row; owner 2026-11-09
+- [Terminology via the server](terminology-via-server.md): every production value map goes through a FHIR terminology server over ferrobridge-term; embedded or offline maps are test-only; owner 2026-11-09
+- [Workers on Opus only](workers-on-opus-only.md): every subagent is model opus; never Fable, Sonnet or Haiku as a worker; owner 2026-10-30
+- [Ten worker slots](worker-cap-ten.md): up to 10 implementation workers at once across the family since 2026-11-03, replacing the cap of 5
+- [No workflows for workers](no-workflows-for-workers.md): start workers with the Agent tool only, since a workflow agent cannot be messaged; owner 2026-11-01
+- [Worker scratch subfolders](worker-scratch-subfolders.md): scratch files under the worker's own scratchpad subfolder, never the root; check a file is yours before --body-file and re-read the PR body; 2026-10-20
+- [Worker wait loops](worker-wait-loops.md): no self-matching pgrep waits, one wait per output, push a finished branch, stop a process by PID and never pkill; 2026-10-16
+- [Workers never idle on the merge queue](workers-never-idle-on-merge-queue.md): start the next independent issue in a fresh worktree while a PR waits in the queue; owner 2026-11-03
+- [Workers own every open PR](workers-own-every-open-pr.md): drive every PR you opened to merge; the orchestrator sweeps every open PR after each merge, red main first; owner 2026-11-01, 2026-11-03
+- [PR backlog discipline](pr-backlog-discipline.md): several open PRs are fine if each merges cleanly; disjoint files, no stacked PRs, every PR tracked to its merge; owner 2026-10-17
+- [Worktrees in the repo](worktrees-in-repo.md): every worktree at <repo>/.claude/worktrees/<name>, never a sibling folder or the scratchpad; owner 2026-10-21
+- [Admin bypass stays](admin-bypass-stays.md): the org-admin bypass on main stays in every family repo; nobody merges through it; owner 2026-10-21
+- [Decide, do not ask](decide-dont-ask.md): make tracker, design and release calls yourself and act; ask the owner only when a tool is refused; owner 2026-11-03
+- [Autonomous loop](autonomous-loop.md): never stop and never wait idle; keep working the issues while PRs drain; owner 2026-10-17
+- [Always a next milestone](next-milestone-always.md): every repo keeps a milestone with a due date after the active one; owner 2026-11-03
+- [One milestone at a time](one-milestone-at-a-time.md): every worker on the current milestone until it is cut; en-route issues join it and are fixed first; owner 2026-10-19
+- [Shared-crate blockers](shared-crate-blockers.md): every filed issue gets a milestone; a shared-crate defect goes in the owner repo's current milestone with a worker at once; no consumer workaround; owner 2026-11-07
+- [Family toolchain](family-toolchain.md): newest stable Rust as toolchain, the toolchain minus one as MSRV; never lower an MSRV; owner 2026-10-21

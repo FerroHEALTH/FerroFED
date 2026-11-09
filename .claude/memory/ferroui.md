@@ -1,6 +1,6 @@
 ---
 name: ferroui
-description: "Every console draws in FerroUI, pinned exactly; one uniform design, shared components, reactive, every console moves in lockstep with every FerroUI release, screenshots read and reviewed; owner 2026-10-18"
+description: "Every console draws in FerroUI, pinned exactly; one uniform design, shared components, server-rendered, every console moves in lockstep with every FerroUI release, screenshots read and reviewed; owner 2026-10-18"
 metadata:
   type: project
 ---
@@ -21,9 +21,10 @@ submodule or a path dependency (owner, 2026-10-18).
 - **Shared, never single use.** A component this console needs and FerroUI
   lacks is filed on FerroUI (label `component`) and built there, never as a
   local one-off.
-- **Every console is reactive** (owner, 2026-10-25,
-  [[reactive-console-ui]], [[family-architecture]]): a link, a form or an
-  action never reloads the whole document; WebAssembly is the normal path.
+- **Every console is server-rendered** (owner, 2026-10-29, FerroUI #510,
+  [[reactive-console-ui]], [[family-architecture]]): a navigation is one
+  document, an in-page change a FerroUI module, and no console carries
+  WebAssembly.
 - **Every console moves in lockstep.** Every FerroUI release is rolled out to
   every console at once: a pin-bump pull request in each repository, merged
   together, so no console runs an older FerroUI than the others. The

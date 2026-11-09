@@ -33,3 +33,5 @@ it on top of the ones ahead of it, so the serial drain above is no longer
 needed and a branch is rebased locally only when it conflicts. Signatures
 are still required, so that rebase is still local and signed, and
 `gh pr update-branch --rebase` is still never used.
+
+**Commit-message lines (2026-11-09):** no line of a commit message may start with `-` or with a git header word (`tree`, `parent`, `author`, `committer`, `gpgsig`). The queue's squash commit then fails its signature check and the queue removes the PR with `branch_protection_failure` after a green run (FerroEHR #5233 and #5245). The serial drain with `--force-with-lease` above is history: a conflicting branch now takes a local, signed merge of `origin/main` and a plain push, never a force-push. Never `--admin` ([[admin-bypass-stays]]).

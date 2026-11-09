@@ -37,3 +37,5 @@ step of a milestone; a hand-back is unfinished work.
 A change to the release lane is rehearsed with a `-rc.N` tag first, also
 pushed from here. Docs and PR bodies never say "the owner runs" for a tag.
 See [[milestone-autonomy]].
+
+**Nothing in a cut waits on the owner (owner, 2026-10-27, 2026-10-28, 2026-11-03):** the session also merges the release PR through the queue (auto-merge armed like any PR) and approves every pending `crates-io` environment deployment itself ("you can approve crates.io and also tag releases fully autonomously, without me asking anything"). Check the merge commit before tagging, and never move or delete a pushed tag.
