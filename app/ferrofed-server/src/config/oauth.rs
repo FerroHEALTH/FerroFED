@@ -29,7 +29,7 @@
 
 use ferrofed_engine::onward::grant::lane::Organisations;
 use ferrohealth_smart::client::{ClientCredentials, Endpoint};
-use ferrohealth_smart::config::OauthSection;
+use ferrohealth_smart::config::credentials::OauthSection;
 use ferrohealth_smart::config::onward::{OnwardLane, OnwardSection};
 use ferrohealth_smart::kind::IssuerKind;
 use secrecy::ExposeSecret as _;

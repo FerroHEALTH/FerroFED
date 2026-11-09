@@ -101,7 +101,7 @@ pub enum DiscoveryError {
     /// The metadata is no JSON object of the RFC 8414 §2 members, or an
     /// object in it repeats a name.
     #[error("the authorization server metadata is not an RFC 8414 §2 document")]
-    Body(#[source] serde_json::Error),
+    Body(#[source] ferrohealth_smart::json::JsonError),
     /// The metadata names another issuer than the grant asked of (RFC 8414
     /// §3.3; FAPI 2.0 Security Profile §5.3.3.1).
     #[error("the metadata names another issuer (RFC 8414 §3.3)")]
@@ -222,7 +222,8 @@ pub(crate) async fn discover<T: Transport>(
 /// Reads `body`, the metadata of `grant`'s issuer, as [`discover`] holds it.
 fn read(body: &[u8], grant: &Fapi2Grant) -> Result<Url, DiscoveryError> {
     ferrohealth_smart::metadata::repeats_no_name(body).map_err(DiscoveryError::Body)?;
-    let raw: Raw = serde_json::from_slice(body).map_err(DiscoveryError::Body)?;
+    let raw: Raw =
+        serde_json::from_slice(body).map_err(|source| DiscoveryError::Body(source.into()))?;
     let issuer = grant.issuer();
     if !raw
         .issuer

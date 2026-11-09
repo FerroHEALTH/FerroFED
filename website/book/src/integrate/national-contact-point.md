@@ -108,20 +108,36 @@ that answers it the same way:
   `trc_token_type` are FerroFED's own design. RFC 6749 §8.2 lets a profile
   define them, and RFC 8693 has no parameter for a second subject
   assertion.
+- **The presenter.** Both assertions are `sender-vouches` and name no
+  presenter (SAML Profile 10.0.0 §2.1). Your server authenticates the
+  national connector of NCPeH-A before it reads either assertion, for
+  instance by its client certificate (RFC 8705 §2), and refuses any other
+  client `invalid_client` (RFC 6749 §5.2). NCPeH-A has verified NCP-B's
+  message signature over the assertions before it hands them over
+  (Messaging Profile 10.0.0 §5.5.2).
 - **The checks.** Your server checks both assertions as
-  `ferrohealth-smart`'s `federation::assertion::Validator` does:
+  `ferrohealth-smart`'s `federation::assertion::Validator::exchange` does:
   - the enveloped signature by NCP-B's trusted seal, at or above the
     Cryptographic Algorithms 9.0.0 §2 floor (an RSA key of at least 3000
     bits, SHA-256 or above, no elliptic curve);
-  - the SAML Profile 10.0.0 §2 and §4 checks;
+  - the SAML Profile 10.0.0 §2 and §4 checks, with `IssueInstant`,
+    `AuthnInstant` and `SessionNotOnOrAfter` held to the clock;
   - a TRC whose `Advice/AssertionIDRef` names the identity assertion's
-    `@ID`.
+    `@ID`;
+  - each exchange admitted once while its assertions are valid (RFC 7522
+    §3). The record of admitted exchanges is one store every replica of
+    your server shares, keyed by a digest of the assertions' issuers and
+    `@ID`s and kept until the earliest window ends, as the crate's
+    `replay::ReplayGuard` describes. A replica that keeps its own record
+    admits a replay another replica refused.
 
-  It refuses with RFC 6749 §5.2 `invalid_grant`, naming the Requirements
-  Catalogue 10.0.0 §1.25 code.
-- **The token.** It carries the `ehdsi` claim `identity::ehdsi_claim`
-  writes, is bound to the connector's certificate, and lives no longer than
-  the identity assertion or the TRC.
+  It refuses an assertion or a replay with RFC 6749 §5.2 `invalid_grant`,
+  naming the Requirements Catalogue 10.0.0 §1.25 code, and answers
+  `server_error` when the replay record cannot be read.
+- **The token.** It carries the `ehdsi` claim `Exchange::claim` writes, is
+  bound to the connector's certificate, and lives no longer than
+  `Exchange::ends`, the earliest end of either assertion's window and
+  session.
 
 `ferrofed config check` reads the tables, and `OPTIONS {base}/` declares the
 contact point under `federation.national_contact_point`, so the connector's

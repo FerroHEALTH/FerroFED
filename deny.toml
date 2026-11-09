@@ -77,6 +77,9 @@ exceptions = [
   { allow = ["BUSL-1.1"], crate = "nl-generic-functions" },
   { allow = ["BUSL-1.1"], crate = "ehds-logging" },
   { allow = ["BUSL-1.1"], crate = "ihe-atna" },
+  # The family's FHIR R4 search value grammar, published from
+  # FerroHEALTH/FerroBRIDGE, which ihe-iti's `rest` feature reads through.
+  { allow = ["BUSL-1.1"], crate = "fhir-search" },
   # The interoperability component, published from FerroHEALTH/FerroBRIDGE
   # (#813).
   { allow = ["BUSL-1.1"], crate = "eehrxf" },

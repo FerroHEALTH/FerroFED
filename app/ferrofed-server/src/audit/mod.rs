@@ -37,6 +37,7 @@ use ferrofed_identity::ihe::audit::balp::{
     FeedAudit, FeedConfigError, LogFeedAudit, feed_repository,
 };
 use ferrofed_operator_api::health::{Indication, Observed};
+use ferrohealth_server::tls_client::TlsClientError;
 use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::RepositoryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
@@ -292,6 +293,10 @@ pub enum AuditTrailError {
     /// The repository address or its TLS settings were refused.
     #[error("the audit repository cannot be reached as configured")]
     Repository(#[source] RepositoryError),
+    /// The repository's TLS material was refused by the platform verifier
+    /// or by rustls.
+    #[error("the audit repository's TLS material cannot be used")]
+    Tls(#[source] TlsClientError),
     /// The FHIR Feed repository was refused.
     #[error("the audit repository cannot be reached as configured")]
     Feed(#[source] FeedConfigError),
