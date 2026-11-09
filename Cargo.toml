@@ -378,7 +378,7 @@ ferrohealth-ui = "=0.6.8"
 # 0.12.0 signs the gateway's own claims with a key-ring key and asks for the
 # onward actor assertion from the onward table (#1749).
 # Verified against crates.io on 2026-11-08.
-ferrohealth-smart = { version = "=0.12.0", default-features = false, features = ["fetch", "axum", "openehr"] }
+ferrohealth-smart = { version = "=0.13.0", default-features = false, features = ["fetch", "axum", "openehr"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
@@ -395,7 +395,7 @@ ferrohealth-secret = "=0.2.0"
 # (#1620), 0.5.0 the release on ferrohealth-smart 0.11 (#1748), and 0.6.0 the
 # release on ferrohealth-smart 0.12 (#1749).
 # Verified against crates.io on 2026-11-08.
-ferrohealth-session = { version = "=0.6.0", default-features = false }
+ferrohealth-session = { version = "=0.7.0", default-features = false }
 # The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
 # defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
 # into one typed tree, with where each key came from and the merged table the
