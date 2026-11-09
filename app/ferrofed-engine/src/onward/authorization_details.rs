@@ -37,7 +37,7 @@ pub struct AuthorizationDetails {
 pub enum AuthorizationDetailsError {
     /// The text is no JSON, or an object of it repeats a name.
     #[error("the authorization_details is not JSON whose objects repeat no name")]
-    Json(#[source] serde_json::Error),
+    Json(#[source] ferrohealth_smart::json::JsonError),
     /// The JSON is not an array of objects, or a common data field is not
     /// of the type RFC 9396 §2.2 gives it.
     #[error(
@@ -90,7 +90,7 @@ impl AuthorizationDetails {
             .map_err(AuthorizationDetailsError::Json)?;
         let types = types_of(text)?;
         let text = serde_json::from_str::<Box<RawValue>>(text.trim())
-            .map_err(AuthorizationDetailsError::Json)?;
+            .map_err(|source| AuthorizationDetailsError::Json(source.into()))?;
         Ok(Self { text, types })
     }
 
