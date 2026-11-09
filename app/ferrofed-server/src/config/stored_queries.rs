@@ -21,10 +21,12 @@ use std::fmt;
 use std::path::PathBuf;
 
 use serde::Deserialize;
+use serde::de::IgnoredAny;
 
 use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::error::federation::FederationFault;
+use crate::config::store::StoreFault;
 
 /// The backend of the stored-query registry.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
@@ -66,6 +68,13 @@ pub struct StoredQueries {
     /// The `redb` store file, created when it does not exist, or the
     /// directory the `files` backend reads.
     pub path: Option<PathBuf>,
+    /// The removed connection string of the `postgres` backend, read only
+    /// so that a configuration still setting it is refused naming `[store]`
+    /// ([`StoreFault::UrlMoved`]); its value is never kept.
+    pub url: Option<IgnoredAny>,
+    /// The removed file of the connection string, refused as
+    /// [`StoredQueries::url`] is.
+    pub url_file: Option<IgnoredAny>,
 }
 
 /// The store the stored-query registry is opened over, resolved.
@@ -108,7 +117,8 @@ impl Store {
 ///
 /// # Errors
 ///
-/// [`Error::Missing`] naming `stored_queries.path`
+/// [`StoreFault::UrlMoved`] for the removed `stored_queries.url` or
+/// `stored_queries.url_file`; [`Error::Missing`] naming `stored_queries.path`
 /// when the backend needs it and it is unset or empty, and naming
 /// `registry.document` when the registry is offered with neither a registry
 /// document nor a directory, and so without the federation that executes
@@ -117,6 +127,17 @@ impl Store {
 /// [`crate::config::store::resolve`].
 pub fn resolve(config: &Config) -> Result<Option<Store>, Error> {
     let section = &config.stored_queries;
+    for (key, set) in [
+        ("stored_queries.url", section.url.is_some()),
+        ("stored_queries.url_file", section.url_file.is_some()),
+    ] {
+        if set {
+            return Err(StoreFault::UrlMoved {
+                key: String::from(key),
+            }
+            .into());
+        }
+    }
     if section.backend.is_none() && section.path.is_none() {
         return Ok(None);
     }

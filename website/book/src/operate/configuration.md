@@ -444,8 +444,10 @@ trust_roots_file = "/etc/ferrofed/pix-roots.pem"      # optional
 - Every file is read at boot and on each reload of a reloadable table. A
   file that cannot be read, or material that holds no certificate and key
   in PEM, is refused naming its key, without quoting the file.
-- The keys sat on the table itself before release 0.0.17; set there, they
-  are refused as unknown keys ([Upgrading](upgrading.md#to-v0017-from-v0016)).
+- The keys sat on the table itself before release 0.0.17. A configuration
+  that still sets `client_identity`, `client_identity_file` or
+  `trust_roots_file` there is refused, naming the `tls` key that replaces
+  it ([Upgrading](upgrading.md)).
 
 Each of these services is reached through one client build, with no
 redirect followed, the credential sent as a sensitive default header, and
