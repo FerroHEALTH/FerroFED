@@ -17,7 +17,7 @@ use ferrohealth_config::removed::{Removals, Removed, RemovedKeys, Retired};
 use crate::config::Config;
 
 /// The release that retired the unit-suffixed keys (#1800).
-const UNITS: &str = "0.0.18";
+const UNITS: &str = "0.0.19";
 
 /// A duration such as `30s`.
 macro_rules! span {

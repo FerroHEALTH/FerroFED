@@ -49,7 +49,7 @@ pub struct Emergency {
     /// The window, 1 to [`MAX_WINDOW_S`].
     pub window: units::Duration,
     /// The retired `window_s`, which `window` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub window_s: Removed,
 }

@@ -88,14 +88,14 @@ pub struct Pmir {
     /// How long one exchange with the Registry may take.
     pub timeout: units::Duration,
     /// The retired `timeout_ms`, which `timeout` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
     /// How often the gateway checks its subscription and subscribes again
     /// when the Registry no longer holds it.
     pub check_interval: units::Duration,
     /// The retired `check_interval_s`, which `check_interval` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub check_interval_s: Removed,
     /// What a drain does with the subscription: `keep` it at the Registry,

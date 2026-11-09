@@ -50,14 +50,14 @@ pub struct McsdDirectory {
     /// How often the changes are asked for.
     pub refresh_interval: units::Duration,
     /// The retired `refresh_interval_s`, which `refresh_interval` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub refresh_interval_s: Removed,
     /// How long one whole read or refresh may take, every page of both
     /// resource types included.
     pub deadline: units::Duration,
     /// The retired `deadline_ms`, which `deadline` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub deadline_ms: Removed,
     /// The most pages one read or refresh may read.
@@ -65,7 +65,7 @@ pub struct McsdDirectory {
     /// The most bytes of answer bodies one read or refresh may read.
     pub max_size: units::ByteSize,
     /// The retired `max_bytes`, which `max_size` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub max_bytes: Removed,
     /// The most Bundle entries one read or refresh may read.

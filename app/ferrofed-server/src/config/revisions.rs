@@ -114,7 +114,7 @@ pub struct Revisions {
     /// the table sets none.
     pub poll: Option<units::Duration>,
     /// The retired `poll_ms`, which `poll` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub poll_ms: Removed,
     /// How long, an applied revision that changed an
@@ -123,7 +123,7 @@ pub struct Revisions {
     /// table sets none.
     pub confirm: Option<units::Duration>,
     /// The retired `confirm_ms`, which `confirm` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub confirm_ms: Removed,
     /// The resource kinds and resources a revision changes only once an

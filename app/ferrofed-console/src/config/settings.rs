@@ -64,12 +64,12 @@ pub struct OidcSettings {
     redirect_uri: Url,
 }
 
-/// `gateway.timeout_ms`, retired in 0.0.18 for `gateway.timeout`; the
+/// `gateway.timeout_ms`, retired in 0.0.19 for `gateway.timeout`; the
 /// release after it refuses the key as unknown.
 const GATEWAY_TIMEOUT: Retired = Retired::replaced(
     "gateway.timeout_ms",
     "gateway.timeout, a duration such as `30s`",
-    "0.0.18",
+    "0.0.19",
 );
 
 impl OidcSettings {

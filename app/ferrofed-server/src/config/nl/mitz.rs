@@ -87,7 +87,7 @@ pub struct Mitz {
     /// How long one round of questions may take.
     pub timeout: units::Duration,
     /// The retired `timeout_ms`, which `timeout` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
     /// Each member's data holder, by member id.

@@ -82,7 +82,7 @@ pub struct Fhir {
     /// document list stays valid.
     pub document_url_lifetime: units::Duration,
     /// The retired `document_url_lifetime_secs`, which `document_url_lifetime` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub document_url_lifetime_secs: Removed,
 }

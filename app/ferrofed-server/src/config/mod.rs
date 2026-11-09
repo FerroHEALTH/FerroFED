@@ -222,7 +222,7 @@ pub struct Federation {
     /// How long one node's request may take (§11.5, N38).
     pub per_node_timeout: units::Duration,
     /// The retired `per_node_timeout_ms`, which `per_node_timeout` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub per_node_timeout_ms: Removed,
     /// How long the whole fan-out may take (§11.5, N38). With a registry
@@ -231,7 +231,7 @@ pub struct Federation {
     /// before the request timeout cuts the connection.
     pub overall_timeout: units::Duration,
     /// The retired `overall_timeout_ms`, which `overall_timeout` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub overall_timeout_ms: Removed,
     /// The issuing namespace an unqualified patient identifier resolves in
@@ -243,7 +243,7 @@ pub struct Federation {
     /// bound, past which the binding is never routed on.
     pub binding_ttl: units::Duration,
     /// The retired `binding_ttl_ms`, which `binding_ttl` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub binding_ttl_ms: Removed,
     /// How many `ehr_id` bindings the resolution bindings of every caller
@@ -314,7 +314,7 @@ pub struct Federation {
     /// The most bytes read of one member answer, past which it is `node-error` (§11.1).
     pub max_node_answer_size: units::ByteSize,
     /// The retired `max_node_answer_bytes`, which `max_node_answer_size` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub max_node_answer_bytes: Removed,
     /// What the gateway needs of each national contact point, one
@@ -453,7 +453,7 @@ pub struct Localization {
     /// end before (§11.5); zero is refused.
     pub timeout: units::Duration,
     /// The retired `timeout_ms`, which `timeout` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
 }
@@ -602,14 +602,14 @@ pub struct Signing {
     /// How long the nodes cache the JWK Set.
     pub node_jwks_cache: units::Duration,
     /// The retired `node_jwks_cache_s`, which `node_jwks_cache` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub node_jwks_cache_s: Removed,
     /// How long the previous key stays published, in seconds: at least 300
     /// plus `node_jwks_cache`.
     pub rotation_overlap: units::Duration,
     /// The retired `rotation_overlap_s`, which `rotation_overlap` replaced in
-    /// 0.0.18: set, it refuses the configuration.
+    /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub rotation_overlap_s: Removed,
 }
