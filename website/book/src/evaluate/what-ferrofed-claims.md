@@ -544,9 +544,10 @@ Released on 2026-11-05.
 - The `[server]` keys 0.0.15 still read under their old names refused, as
   any unknown key ([#1490](https://github.com/FerroHEALTH/FerroFED/issues/1490)).
 
-### v0.0.17: discharge and imaging reports, and the national contact point
+### v0.0.18: discharge and imaging reports, and the national contact point
 
-Released on 2026-11-09.
+Released on 2026-11-10. v0.0.17 was tagged and never released, so v0.0.18
+ships what it holds.
 
 - The discharge report, Art 14(1)(f), and the medical imaging report, Art
   14(1)(d), on the FHIR face: written from a member's composition as an HL7
@@ -585,8 +586,8 @@ were built there (issues
 [FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321), [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322), [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325) and [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326), now closed).
 FerroFED keeps the gateway half: the federation queries, the FHIR face
 routes and the access record, which v0.0.16 carries for prescriptions from
-openEHR medication data and test results and v0.0.17 for discharge
-reports and imaging. v0.0.18 plans the receipt of an imaging report
+openEHR medication data and test results and v0.0.18 for discharge
+reports and imaging. v0.0.19 plans the receipt of an imaging report
 ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)), the rating of what a received discharge or imaging
 report can lose ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)), and the rest of the
 manufacturer's conformity work
