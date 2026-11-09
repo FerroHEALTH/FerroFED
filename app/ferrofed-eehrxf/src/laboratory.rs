@@ -40,7 +40,6 @@ use crate::prescriptions::mapped::Template;
 use crate::report::{self, Report, ServedError, Writes};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query::{self, Archetype};
-use crate::stack::deep;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "laboratory-report";
@@ -131,8 +130,7 @@ impl Served {
         let result = LABORATORY
             .with_context(RESULT_CONTEXT)
             .map_err(ServedError::Context)?;
-        let mapping =
-            deep(|| Mapping::compile_project(&source, &result))?.map_err(ServedError::Compile)?;
+        let mapping = Mapping::compile_project(&source, &result).map_err(ServedError::Compile)?;
         Ok(Self { mapping })
     }
 }

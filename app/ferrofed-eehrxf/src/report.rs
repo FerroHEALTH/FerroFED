@@ -34,7 +34,6 @@ use fhirconnect::operations::contract::ToFhirResponse;
 use fhirconnect::operations::run::Settings;
 
 use crate::prescriptions::mapped::{MapModeError, Template};
-use crate::stack::{Deep, deep};
 use crate::summary::Organisation;
 use crate::summary::resources::{organization, reference};
 
@@ -74,9 +73,6 @@ pub enum ServedError {
     /// The shipped mapping does not compile against the template.
     #[error("the shipped mapping does not compile against the template")]
     Compile(#[source] MappingError),
-    /// The mapping did not run on its thread.
-    #[error(transparent)]
-    Deep(#[from] Deep),
     /// The composition is no canonical JSON composition with a language.
     #[error("the composition names no language")]
     Language(#[source] serde_json::Error),
@@ -96,7 +92,7 @@ pub enum ServedError {
 /// [`ServedError::Compile`] when the project does not compile against it.
 pub(crate) fn compiled(template: Template<'_>, project: &Project) -> Result<Mapping, ServedError> {
     let source = template.source().map_err(ServedError::Template)?;
-    deep(|| Mapping::compile_project(&source, project))?.map_err(ServedError::Compile)
+    Mapping::compile_project(&source, project).map_err(ServedError::Compile)
 }
 
 /// Names in `document` the patient `report` names and the authors, the
@@ -152,7 +148,9 @@ pub(crate) fn authored(
     let context = CallContext::new()
         .with_patient(reference(&subject))
         .with_who(reference(&device));
-    deep(|| mapping.to_fhir_with(composition, &settings, context))?.map_err(ServedError::Run)
+    mapping
+        .to_fhir_with(composition, &settings, context)
+        .map_err(ServedError::Run)
 }
 
 /// Adds to `document` the member `report` names as an `Organization`, and
