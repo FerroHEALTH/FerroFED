@@ -679,6 +679,12 @@ Security fixes until 2031-11-09, 5 years from this release (Regulation (EU) 2024
   cannot answer, or names no one patient, refuses the read with an
   `OperationOutcome` and no document is written (#1777).
 
+- The production guide's example node grant authenticates with
+  `private_key_jwt` and a `private_key_file`, and says how to make that
+  key. The `client_secret_basic` grant it showed is refused by
+  `ferrofed config check` since a node's grant takes no client secret
+  (§13.1, N25).
+
 ### Security
 
 Shipped with functional changes because: the `ferrohealth-smart` 0.9.1 fix (GHSA-jhg2-jwjp-hq74) comes only on the 0.9 line, whose breaking configuration and API every family crate the gateway links moves with, so no security-only patch of v0.0.16 can carry it; the 0.8.9 fix (GHSA-pfgx-xq28-2629) is superseded by it, and RUSTSEC-2026-0440 affects no shipped artefact (the VEX statement below records why). The `ferrohealth-smart` 0.13.0 fix (GHSA-r5p6-r9m2-c3pw) comes with the error type change its crate made breaking, so it ships on the same line, and the 0.13.1 patch (GHSA-5qm7-v4fw-p2v9) is taken on that line in the release that carries it.
