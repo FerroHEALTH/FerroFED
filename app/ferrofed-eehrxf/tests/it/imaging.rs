@@ -20,6 +20,7 @@ use ferrofed_eehrxf::report::{Report, Writes as _};
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, VERSION};
 use ferrofed_eehrxf::section_query::{self, ISSUER, PATIENT};
 use ferrofed_eehrxf::summary::Organisation;
+use ferrofed_identity::role::header::PatientHeader;
 use ferrofed_testkit::imaging as fixture;
 use openehr_query::parser;
 use serde_json::Value;
@@ -84,6 +85,7 @@ fn written() -> Result<Value, Box<dyn Error>> {
             identifier: "urn:uuid:5b0c3f7e-0000-4000-8000-00000000e101",
             timestamp: "2026-10-21T08:00:00Z",
             patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
+            header: &PatientHeader::default(),
             operator: &operator,
             member: &member,
         },
