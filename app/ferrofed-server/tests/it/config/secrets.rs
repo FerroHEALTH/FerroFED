@@ -14,7 +14,7 @@ use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 
-use super::{FULL, env, everything, refusal, secret_file};
+use super::{env, everything, full, refusal, secret_file};
 
 /// An `oauth` table beside a credentials section `[credentials."a"]`.
 const OAUTH: &str = "[credentials.\"a\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-client-secret\"\n";
@@ -25,7 +25,8 @@ const OAUTH: &str = "[credentials.\"a\".oauth]\ntoken_endpoint = \"https://as.ex
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_resolved_secret_never_reaches_debug_output() -> Result<(), Box<dyn StdError>> {
-    let settings = Config::from_sources(Some(FULL), &BTreeMap::new())?.resolve()?;
+    let full = full();
+    let settings = Config::from_sources(Some(full.as_str()), &BTreeMap::new())?.resolve()?;
     let rendered = format!("{settings:?}");
     // NOTE: a failure message never echoes the rendering, which would put the
     // leaked secret into the test log it is meant to keep it out of.

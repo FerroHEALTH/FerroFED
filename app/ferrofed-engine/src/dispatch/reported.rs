@@ -26,7 +26,6 @@ use openehr_its::rest::client::{CredentialsError, ErrorBody};
 use crate::hygiene::Withheld;
 use crate::hygiene::mask::MASK;
 use crate::onward::grant::lane::LaneError;
-use crate::onward::token::{ErrorCode, TokenError};
 use crate::outbound_id::OutboundId;
 
 /// The longest excerpt of a node's own message an `error` carries, in
@@ -120,13 +119,8 @@ pub fn unauthenticated(
         "no onward credential could be obtained, so nothing was sent to the node"
     );
     let code = cause
-        .and_then(<dyn std::error::Error>::downcast_ref::<TokenError>)
-        .and_then(TokenError::code)
-        .or_else(|| {
-            cause
-                .and_then(<dyn std::error::Error>::downcast_ref::<Arc<SmartTokenError>>)
-                .and_then(|error| refused_code(error))
-        })
+        .and_then(<dyn std::error::Error>::downcast_ref::<Arc<SmartTokenError>>)
+        .and_then(|error| refused_code(error))
         .or_else(|| {
             cause
                 .and_then(<dyn std::error::Error>::downcast_ref::<LaneError>)
@@ -153,6 +147,59 @@ fn refused_code(error: &SmartTokenError) -> Option<ErrorCode> {
             ..
         } => ErrorCode::registered(&refused.error),
         _ => None,
+    }
+}
+
+/// An `error` code RFC 6749 §5.2 registers for a token endpoint's refusal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ErrorCode {
+    /// `invalid_request`.
+    InvalidRequest,
+    /// `invalid_client`.
+    InvalidClient,
+    /// `invalid_grant`.
+    InvalidGrant,
+    /// `unauthorized_client`.
+    UnauthorizedClient,
+    /// `unsupported_grant_type`.
+    UnsupportedGrantType,
+    /// `invalid_scope`.
+    InvalidScope,
+    /// `invalid_authorization_details`, which RFC 9396 §5 and §6 add for
+    /// details the server refuses (§14.6).
+    InvalidAuthorizationDetails,
+}
+
+impl ErrorCode {
+    /// The code `text` names, or `None` for a code RFC 6749 §5.2 does not
+    /// register.
+    #[must_use]
+    pub fn registered(text: &str) -> Option<Self> {
+        match text {
+            "invalid_request" => Some(Self::InvalidRequest),
+            "invalid_client" => Some(Self::InvalidClient),
+            "invalid_grant" => Some(Self::InvalidGrant),
+            "unauthorized_client" => Some(Self::UnauthorizedClient),
+            "unsupported_grant_type" => Some(Self::UnsupportedGrantType),
+            "invalid_scope" => Some(Self::InvalidScope),
+            "invalid_authorization_details" => Some(Self::InvalidAuthorizationDetails),
+            _ => None,
+        }
+    }
+
+    /// The code as RFC 6749 §5.2 writes it.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidRequest => "invalid_request",
+            Self::InvalidClient => "invalid_client",
+            Self::InvalidGrant => "invalid_grant",
+            Self::UnauthorizedClient => "unauthorized_client",
+            Self::UnsupportedGrantType => "unsupported_grant_type",
+            Self::InvalidScope => "invalid_scope",
+            Self::InvalidAuthorizationDetails => "invalid_authorization_details",
+        }
     }
 }
 

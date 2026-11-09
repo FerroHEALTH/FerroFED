@@ -21,9 +21,9 @@
 //! obtains its token, and every request to the service carries the token
 //! with a proof of the grant's key over the request (GFI-005).
 //!
-//! A token is cached as the client-credentials provider caches one: until
-//! [`REFRESH_MARGIN`](crate::onward::token::REFRESH_MARGIN) before the end of the lifetime its `expires_in`
-//! stated, one token request per endpoint or service at a time, and dropped
+//! A token is cached until `REFRESH_MARGIN` of `onward::grant::cache` before
+//! the end of the lifetime its `expires_in` stated, one token request per
+//! endpoint or service at a time, and dropped
 //! when the node or the service answers `401`. A token that cannot be
 //! obtained fails that node or that request; the gateway never sends either
 //! unauthenticated. A grant's token reaches its own node or service alone.

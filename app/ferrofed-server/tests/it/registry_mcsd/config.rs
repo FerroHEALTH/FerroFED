@@ -14,7 +14,6 @@ use std::error::Error;
 
 use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::error::Error as ConfigError;
-use ferrofed_server::config::error::credentials::CredentialsFault;
 use ferrofed_server::config::error::federation::FederationFault;
 use ferrofed_server::config::settings::Scheme;
 use ferrofed_testkit::mcsd::HarnessDirectory;
@@ -179,8 +178,9 @@ fn a_grant_is_taken_and_a_node_method_or_a_zero_interval_is_refused() {
     assert!(
         matches!(
             mutual.err().as_deref().and_then(|error| error.downcast_ref::<ConfigError>()),
-            Some(ConfigError::Credentials(CredentialsFault::ServiceGrantNotHere { section }))
-                if section == "registry.mcsd.credentials"
+            Some(ConfigError::Replaced { old, new })
+                if old == "registry.mcsd.credentials.oauth2"
+                    && new == "registry.mcsd.credentials.oauth"
         ),
         "a node's grant is refused"
     );

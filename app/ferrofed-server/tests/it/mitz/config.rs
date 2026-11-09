@@ -296,9 +296,11 @@ fn an_oauth_grant_resolves_and_an_oauth2_grant_is_refused() -> TestResult {
         )
     })?;
     match resolved(&text) {
-        Err(error::Error::Credentials(
-            error::credentials::CredentialsFault::ServiceGrantNotHere { section },
-        )) if section == "nl_gf.mitz.credentials" => Ok(()),
+        Err(error::Error::Replaced { old, new })
+            if old == "nl_gf.mitz.credentials.oauth2" && new == "nl_gf.mitz.credentials.oauth" =>
+        {
+            Ok(())
+        }
         other => Err(format!("Mitz takes the oauth grant alone: {other:?}").into()),
     }
 }

@@ -67,7 +67,7 @@ pub fn header_patient(id: &str, (system, value): (&str, &str), header: &PatientH
 }
 
 /// The FHIR name `name` is written as.
-pub(super) fn human_name(name: &PersonName) -> HumanName {
+pub(crate) fn human_name(name: &PersonName) -> HumanName {
     HumanName {
         r#use: name.purpose.as_deref().map(Code::from),
         text: name
@@ -137,7 +137,7 @@ pub(super) fn strings(values: &[String]) -> Vec<fhir_types::r4::primitives::Stri
 }
 
 /// The `data-absent-reason` extension stating `unknown`.
-pub(super) fn absent() -> Extension {
+pub(crate) fn absent() -> Extension {
     Extension {
         url: DATA_ABSENT_REASON.to_owned(),
         value: Some(ExtensionValue::Code("unknown".into())),

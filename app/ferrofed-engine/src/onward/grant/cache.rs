@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The one token a grant holds for every request, which the
-//! client-credentials grant and the Nuts grant share.
+//! The one token the Nuts grant holds for every request.
 //!
 //! A token is kept until [`REFRESH_MARGIN`] before the end of the lifetime
 //! its token response states (RFC 6749 §5.1 `expires_in`); one with no
@@ -15,7 +14,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use crate::onward::Clock;
-use crate::onward::token::REFRESH_MARGIN;
+
+/// How long before the end of its stated lifetime a cached token is
+/// replaced.
+pub(crate) const REFRESH_MARGIN: Duration = Duration::from_secs(30);
 
 /// A token in the cache, and when it is replaced.
 struct Cached<V> {

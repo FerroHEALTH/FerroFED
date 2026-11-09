@@ -16,13 +16,15 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrofed_engine::onward::grant::client_credentials::{ClientCredentials, Recipient};
-use ferrofed_engine::onward::token::{ErrorCode, REFRESH_MARGIN, TokenError};
-use ferrofed_engine::onward::{Clock, Grant, Scope, ScopeError, SecretMethod, SystemClock};
+use ferrofed_engine::dispatch::reported::ErrorCode;
+use ferrofed_engine::onward::upstream::UpstreamToken;
 use ferrofed_testkit::oauth::TokenEndpoint;
-use ferrohealth_secret::secret_url::SecretUrl;
-use openehr_its::rest::client::{Credentials, CredentialsProvider, ReqwestTransport};
+use ferrohealth_smart::client::cache::{Clock, SystemClock};
+use ferrohealth_smart::client::{ClientAuth, ClientCredentials, Endpoint, TokenError};
+use ferrohealth_smart::config::credentials::OauthSection;
+use openehr_its::rest::client::{Credentials, CredentialsProvider};
 use secrecy::SecretString;
+use url::Url;
 
 use crate::onward::ManualClock;
 
@@ -38,28 +40,37 @@ const SECRET: &str = "synthetic:s3cret+&%/ x";
 /// The scope, held to RFC 6749 §3.3 alone.
 const SCOPE: &str = "* urn:example:pix";
 
-/// The grant at `endpoint` authenticated by [`SECRET`] sent by `method`.
-fn grant(endpoint: &TokenEndpoint, method: SecretMethod) -> Result<Grant, Box<dyn Error>> {
-    Ok(Grant::new(
-        &SecretUrl::new(endpoint.token_url()),
-        CLIENT_ID,
-        Scope::tokens(SCOPE)?,
-    )?
-    .with_client_secret(method, SecretString::from(SECRET)))
+/// The margin before the end of a token's stated lifetime at which it is
+/// replaced, `ferrohealth-smart`'s default `refresh_margin`.
+const REFRESH_MARGIN: Duration = Duration::from_secs(30);
+
+/// The grant at `url` authenticated by [`SECRET`] sent by `method`.
+fn grant_at(url: &str, method: ClientAuth) -> Result<ClientCredentials, Box<dyn Error>> {
+    let mut grant = ClientCredentials::new(
+        Endpoint::Token(Url::parse(url)?),
+        CLIENT_ID.to_owned(),
+        SecretString::from(SECRET),
+    );
+    grant.client_auth = method;
+    grant.scope = Some(SCOPE.to_owned());
+    grant.timeout = Duration::from_secs(5);
+    Ok(grant)
 }
 
-/// The provider of `grant` for the PIX Manager, read by `clock`.
+/// The grant at `endpoint` authenticated by [`SECRET`] sent by `method`.
+fn grant(
+    endpoint: &TokenEndpoint,
+    method: ClientAuth,
+) -> Result<ClientCredentials, Box<dyn Error>> {
+    grant_at(&endpoint.token_url(), method)
+}
+
+/// The provider of `grant`, its cache read by `clock`.
 fn provider(
-    grant: Grant,
+    grant: ClientCredentials,
     clock: Arc<dyn Clock>,
-) -> Result<ClientCredentials<ReqwestTransport>, Box<dyn Error>> {
-    Ok(ClientCredentials::by_secret(
-        Recipient::Service("pixm.manager[0]".to_owned()),
-        grant,
-        Duration::from_secs(5),
-        ReqwestTransport::with_timeout(Duration::from_secs(10))?,
-        clock,
-    ))
+) -> Result<UpstreamToken, Box<dyn Error>> {
+    Ok(UpstreamToken::with_clock(grant, clock)?)
 }
 
 /// The endpoint for [`CLIENT_ID`] that takes [`SECRET`], issuing tokens that
@@ -84,7 +95,7 @@ fn sent(endpoint: &TokenEndpoint, index: usize, name: &str) -> Option<String> {
 async fn the_secret_travels_in_the_basic_scheme_each_part_form_encoded() -> TestResult {
     let endpoint = endpoint(Some(3600)).await;
     let provider = provider(
-        grant(&endpoint, SecretMethod::Basic)?,
+        grant(&endpoint, ClientAuth::ClientSecretBasic)?,
         Arc::new(SystemClock),
     )?;
     let credentials = provider.credentials().await?;
@@ -110,7 +121,10 @@ async fn the_secret_travels_in_the_basic_scheme_each_part_form_encoded() -> Test
 #[tokio::test]
 async fn the_secret_travels_in_the_body_for_a_server_that_takes_it_there() -> TestResult {
     let endpoint = endpoint(Some(3600)).await;
-    let provider = provider(grant(&endpoint, SecretMethod::Post)?, Arc::new(SystemClock))?;
+    let provider = provider(
+        grant(&endpoint, ClientAuth::ClientSecretPost)?,
+        Arc::new(SystemClock),
+    )?;
     provider.credentials().await?;
     assert_eq!(vec!["client_secret_post"], endpoint.secret_methods());
     assert_eq!(Some(CLIENT_ID.to_owned()), sent(&endpoint, 0, "client_id"));
@@ -123,7 +137,7 @@ async fn a_wrong_secret_is_a_typed_refusal_and_never_a_credential() -> TestResul
     let endpoint = TokenEndpoint::start(CLIENT_ID, Some(3600)).await;
     endpoint.accept_client_secret("another synthetic secret");
     let provider = provider(
-        grant(&endpoint, SecretMethod::Basic)?,
+        grant(&endpoint, ClientAuth::ClientSecretBasic)?,
         Arc::new(SystemClock),
     )?;
     let refused = provider
@@ -132,9 +146,19 @@ async fn a_wrong_secret_is_a_typed_refusal_and_never_a_credential() -> TestResul
         .err()
         .ok_or("a wrong secret obtains no token")?;
     let token = Error::source(&refused)
-        .and_then(<dyn Error>::downcast_ref::<TokenError>)
+        .and_then(<dyn Error>::downcast_ref::<Arc<TokenError>>)
         .ok_or("the cause is the token request's refusal")?;
-    assert_eq!(Some(ErrorCode::InvalidClient), token.code(), "{token}");
+    let TokenError::Refused {
+        error: Some(code), ..
+    } = token.as_ref()
+    else {
+        return Err(format!("not an RFC 6749 §5.2 refusal: {token}").into());
+    };
+    assert_eq!(
+        Some(ErrorCode::InvalidClient),
+        ErrorCode::registered(&code.error),
+        "{token}"
+    );
     assert!(!format!("{refused:?} {token}").contains(SECRET));
     Ok(())
 }
@@ -143,7 +167,10 @@ async fn a_wrong_secret_is_a_typed_refusal_and_never_a_credential() -> TestResul
 async fn the_token_is_refreshed_before_it_expires() -> TestResult {
     let endpoint = endpoint(Some(120)).await;
     let clock = ManualClock::new();
-    let provider = provider(grant(&endpoint, SecretMethod::Basic)?, clock.clone())?;
+    let provider = provider(
+        grant(&endpoint, ClientAuth::ClientSecretBasic)?,
+        clock.clone(),
+    )?;
     let first = provider.credentials().await?;
     let cached = provider.credentials().await?;
     assert_eq!(1, endpoint.issuance().issued(), "a fresh token is reused");
@@ -166,7 +193,7 @@ async fn the_token_is_refreshed_before_it_expires() -> TestResult {
 async fn a_refusal_of_the_service_drops_the_cached_token() -> TestResult {
     let endpoint = endpoint(Some(3600)).await;
     let provider = provider(
-        grant(&endpoint, SecretMethod::Basic)?,
+        grant(&endpoint, ClientAuth::ClientSecretBasic)?,
         Arc::new(SystemClock),
     )?;
     let first = provider.credentials().await?;
@@ -178,39 +205,44 @@ async fn a_refusal_of_the_service_drops_the_cached_token() -> TestResult {
 }
 
 #[test]
-fn the_provider_names_its_service_and_never_its_secret() -> TestResult {
-    let grant = Grant::new(
-        &SecretUrl::new("https://as.example.org/token".to_owned()),
-        CLIENT_ID,
-        Scope::tokens(SCOPE)?,
-    )?
-    .with_client_secret(SecretMethod::Basic, SecretString::from(SECRET));
+fn the_provider_names_its_client_and_never_its_secret() -> TestResult {
+    let grant = grant_at(
+        "https://as.example.org/token",
+        ClientAuth::ClientSecretBasic,
+    )?;
     let shown = format!("{:?}", provider(grant, Arc::new(SystemClock))?);
-    assert!(shown.contains("pixm.manager[0]"), "{shown}");
-    assert!(
-        shown.contains("client_secret_basic") || shown.contains("Basic"),
-        "{shown}"
-    );
+    assert!(shown.contains(CLIENT_ID), "{shown}");
     assert!(!shown.contains(SECRET), "{shown}");
     Ok(())
 }
 
+/// An `oauth` table's scope is held to the RFC 6749 §3.3 `scope-token`
+/// grammar alone, one space apart, as an identity service's authorization
+/// server defines its scopes (IHE IUA ITI-71 §3.71.4.1.3).
 #[test]
 fn a_scope_is_held_to_the_scope_token_grammar_alone() -> TestResult {
-    assert!(Scope::tokens("*").is_ok());
+    let resolve = |scope: &str| {
+        serde_json::from_value::<OauthSection>(serde_json::json!({
+            "token_endpoint": "https://as.example.org/token",
+            "client_id": CLIENT_ID,
+            "client_secret": SECRET,
+            "scope": scope,
+        }))
+        .map(|section| section.resolve())
+    };
     assert_eq!(
-        "patient/Patient.read openid",
-        Scope::tokens(" patient/Patient.read \t openid ")?.as_str()
+        Some("*"),
+        resolve("*")?.ok().and_then(|grant| grant.scope).as_deref()
     );
-    assert_eq!(Err(ScopeError::Empty), Scope::tokens("  "));
-    for refused in ["say\"hi\"", "back\\slash", "caf\u{e9}"] {
-        assert_eq!(
-            Err(ScopeError::NotScopeToken {
-                scope: refused.to_owned()
-            }),
-            Scope::tokens(refused),
-            "{refused}"
-        );
+    assert_eq!(
+        Some("patient/Patient.read openid"),
+        resolve("patient/Patient.read openid")?
+            .ok()
+            .and_then(|grant| grant.scope)
+            .as_deref()
+    );
+    for refused in ["say\"hi\"", "back\\slash", "caf\u{e9}", "a\tb"] {
+        assert!(resolve(refused)?.is_err(), "{refused}");
     }
     Ok(())
 }

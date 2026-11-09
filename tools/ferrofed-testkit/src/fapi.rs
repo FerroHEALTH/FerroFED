@@ -118,6 +118,13 @@ impl AuthorizationServer {
     }
 
     /// The server around `endpoint`, publishing its default metadata.
+    /// Starts a server that publishes its metadata in front of a token
+    /// endpoint with no FAPI 2.0 requirement of its own, for a grant under
+    /// plain OAuth 2.0 that discovers its token endpoint from the issuer.
+    pub async fn plain(client_id: &str, expires_in: Option<u64>) -> Self {
+        Self::serving(TokenEndpoint::start(client_id, expires_in).await).await
+    }
+
     async fn serving(endpoint: TokenEndpoint) -> Self {
         let published = Arc::new(Mutex::new(Published {
             body: String::new(),

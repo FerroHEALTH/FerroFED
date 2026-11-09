@@ -17,12 +17,13 @@ use eehrxf::receive::ReceivedDocument;
 use ferrofed_eehrxf::prescriptions::mapped::Template;
 use ferrofed_testkit::imaging;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pdqm_stub;
 use http::StatusCode;
 use serde_json::Value;
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use super::super::{UNREACHED_SUPPLIER, fhir_tables_with};
+use super::super::{UNREACHED_SUPPLIER, fhir_tables_with, supplier};
 use super::{gateway_with, rows};
 use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room, wire,
@@ -38,10 +39,11 @@ const VERSION: &str = "5b0c3f7e-0000-4000-8000-00000000e1a1::cdr-a.example.org::
 const OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000e1a1";
 
 /// The `[fhir]` tables of a face that writes imaging reports with
-/// `report`, the `[[fhir.report]]` entry.
-fn writing(report: &str) -> String {
+/// `report`, the `[[fhir.report]]` entry, the header asked of the PDQm
+/// Supplier at `pdq`.
+fn writing(pdq: &str, report: &str) -> String {
     fhir_tables_with(
-        UNREACHED_SUPPLIER,
+        pdq,
         &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
         report,
     )
@@ -62,8 +64,12 @@ fn declared() -> String {
 }
 
 /// The gateway writing imaging reports, the patient known at both
-/// nodes.
-fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<axum::Router, Box<dyn Error>> {
+/// nodes, the header asked of the PDQm Supplier `pdq`.
+fn gateway(
+    dir: &Path,
+    (a, b): (&Server, &Server),
+    pdq: &Server,
+) -> Result<axum::Router, Box<dyn Error>> {
     let crossref = rows(&[
         (NAMESPACE, PATIENT, "node-a", EHR_A),
         (NAMESPACE, PATIENT, "node-b", EHR_B),
@@ -71,7 +77,7 @@ fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<axum::Router, Box<dyn E
     gateway_with(
         dir,
         (a, b),
-        (&crossref, &writing(&declared())),
+        (&crossref, &writing(&pdqm_stub::base_url(pdq), &declared())),
         &settings_with_room(),
     )
 }
@@ -121,7 +127,8 @@ async fn a_members_imaging_composition_is_listed_and_read_as_an_imaging_report()
         holding("", None).await,
     );
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app.clone(), list("&type=85430-7")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
@@ -186,7 +193,8 @@ async fn an_imaging_composition_is_served_with_the_report_its_study_and_impressi
         holding("", None).await,
     );
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app.clone(), list("&type=85430-7")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
@@ -278,7 +286,8 @@ async fn a_member_silent_at_the_imaging_query_fails_the_list_and_is_named() -> T
         .await;
     let b = holding("", None).await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, list("&type=85430-7")?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
     assert!(text.contains("node-a-pub"), "§11.4: {text}");
@@ -289,7 +298,8 @@ async fn a_member_silent_at_the_imaging_query_fails_the_list_and_is_named() -> T
 async fn a_list_of_another_type_asks_no_imaging_query() -> TestResult {
     let (a, b) = (holding("", None).await, holding("", None).await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, list("&type=18748-4")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let queried = received(&a)
@@ -324,7 +334,7 @@ async fn refused(report: &str) -> Result<String, Box<dyn Error>> {
     match gateway_with(
         dir.path(),
         (&a, &b),
-        (&crossref, &writing(report)),
+        (&crossref, &writing(UNREACHED_SUPPLIER, report)),
         &settings_with_room(),
     ) {
         Ok(_) => Err(format!("accepted: {report}").into()),
@@ -368,9 +378,10 @@ async fn the_written_imaging_list_and_read_are_recorded_under_the_category() -> 
         (NAMESPACE, PATIENT, "node-a", EHR_A),
         (NAMESPACE, PATIENT, "node-b", EHR_B),
     ]);
+    let pdq = supplier().await;
     let tables = format!(
         "{}\n{}",
-        writing(&declared()),
+        writing(&pdqm_stub::base_url(&pdq), &declared()),
         audit_tables(&repository, "")
     );
     let app = gateway_with(
@@ -390,7 +401,8 @@ async fn the_written_imaging_list_and_read_are_recorded_under_the_category() -> 
     let (status, _) = call(app, binary(&url)?).await?;
     assert_eq!(StatusCode::OK, status);
     let records: Vec<String> = repository
-        .wait_for(2, SETTLE)
+        // NOTE: PDQm §2:3.78.5.1; the header's ITI-78 exchange the read asks is audited too.
+        .wait_for(3, SETTLE)
         .await
         .into_iter()
         .filter(|record| record.contains("ehds-categories"))

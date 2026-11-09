@@ -20,19 +20,28 @@
 //! gateway's own work, which no caller originates, and never stands in for a
 //! failed exchange.
 //!
+//! Where the lane's `[onward]` table names no scope, each call asks for the
+//! caller's granted scopes that cover the operation and no more, and a call
+//! no scope covers is refused before the token endpoint is asked: without
+//! `scope` the authorization server would choose one (RFC 8693 §2.1). A
+//! configured scope, such as an on-behalf-of grant's `.default`, is asked
+//! for as configured. A token bound with `DPoP` (RFC 9449) is handed to the
+//! node client under the `DPoP` scheme, which proves each request with the
+//! key the lane's `oauth` table names.
+//!
 //! The library runs the grant the issuer's profile picks, checks every
 //! issued token (the issuer, the audience, the lifetime, the actor and the
 //! person) and caches it under the caller's token and the target. Which
 //! caller is exchanged at which issuer kind is our own design.
 
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use ferrofed_registry::id::EndpointId;
 use ferrohealth_smart::client::onward::exchange::Onward;
 use ferrohealth_smart::client::onward::{OnwardError, SubjectToken as OnwardSubject, Target};
 use ferrohealth_smart::kind::{CallerKind, IssuerKind};
-use http::Method;
+use http::{HeaderValue, Method};
 use openehr_its::rest::client::{Credentials, CredentialsError, CredentialsProvider};
 use openehr_its::rest::routes::RouteMatch;
 use secrecy::SecretString;
@@ -40,10 +49,13 @@ use secrecy::SecretString;
 use crate::conveyance::Conveyance;
 use crate::dispatch::SharedCredentials;
 use crate::hygiene::Withheld;
-use crate::onward::grant::exchange::{ForCall, OnBehalf, SubjectToken, carries_withheld};
+use crate::onward::grant::on_behalf::{ForCall, OnBehalf, SubjectToken, carries_withheld};
 
 /// The scheme of an RFC 6750 §2.1 bearer credential.
 const BEARER: &str = "bearer";
+
+/// The scheme of an RFC 9449 §7.1 `DPoP`-bound credential.
+const DPOP: &str = "dpop";
 
 /// How a caller of one kind reaches a node through a lane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,6 +131,11 @@ pub enum LaneError {
     /// The call conveys a verified caller but carries no token of it.
     #[error("the call carries no verified token of its caller to exchange")]
     NoSubject,
+    /// No granted scope of the caller covers the operation and the lane
+    /// names no scope of its own, so an exchange would let the authorization
+    /// server choose one (RFC 8693 §2.1); nothing was sent.
+    #[error("no scope of the caller covers the operation, so its token was not exchanged")]
+    NoScope,
     /// The caller is of a kind the lane's issuer does not carry.
     #[error("a {caller} caller is never exchanged at a {issuer} issuer")]
     NotCarried {
@@ -133,7 +150,9 @@ pub enum LaneError {
     Withheld,
     /// The issuer issued a token that is no bearer token, which the node
     /// client cannot send.
-    #[error("the onward issuer issued a token the node client cannot send as a bearer token")]
+    #[error(
+        "the onward issuer issued a token the node client can send neither as a bearer nor as a DPoP-bound token"
+    )]
     NotBearer,
     /// The exchange was refused, the caller's token lacks the correlation
     /// claim of a chained route, or the issued token failed the onward
@@ -204,6 +223,7 @@ impl OnBehalf for Lane {
             Some(call) => Arc::new(ForCaller {
                 inner: Arc::clone(&self.0),
                 call,
+                last: Mutex::new(None),
             }),
         }
     }
@@ -234,11 +254,14 @@ impl fmt::Debug for Lane {
 struct ForCaller {
     inner: Arc<Inner>,
     call: ForCall,
+    /// The `Authorization` value last handed out, which a `401` drops.
+    last: Mutex<Option<HeaderValue>>,
 }
 
 impl ForCaller {
-    /// The subject the lane exchanges, or why it exchanges none.
-    fn subject(&self) -> Result<&OnwardSubject, LaneError> {
+    /// The subject the lane exchanges and the target it asks for, or why it
+    /// exchanges none.
+    fn subject(&self) -> Result<(&OnwardSubject, Target), LaneError> {
         if self.call.edge {
             return Err(LaneError::Edge);
         }
@@ -253,42 +276,72 @@ impl ForCaller {
         if carries_withheld(subject, &self.call.withheld) {
             return Err(LaneError::Withheld);
         }
-        Ok(onward)
+        let target = &self.inner.target;
+        if target.scope().is_some() {
+            return Ok((onward, target.clone()));
+        }
+        // NOTE: RFC 8693 §2.1, a request without scope lets the authorization server
+        // choose one, so the lane asks for the caller's covering scopes or nothing.
+        let scope = subject
+            .scope()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        if scope.is_empty() {
+            return Err(LaneError::NoScope);
+        }
+        Ok((onward, target.clone().with_scope(scope)))
     }
 
-    /// The bearer token the lane's issuer exchanges the caller's for.
-    async fn token(&self) -> Result<SecretString, LaneError> {
-        let subject = self.subject()?;
+    /// The credential the lane's issuer exchanges the caller's token for:
+    /// a bearer token (RFC 6750 §2.1), or a `DPoP`-bound one the node client
+    /// proves (RFC 9449 §7.1).
+    async fn token(&self) -> Result<Credentials, LaneError> {
+        let (subject, target) = self.subject()?;
         let issued = self
             .inner
             .onward
-            .token(subject, None, &self.inner.target)
+            .token(subject, None, &target)
             .await
             .map_err(LaneError::Onward)?;
         tracing::debug!(
             endpoint = %self.inner.endpoint,
             "an onward token was obtained for a caller"
         );
-        issued
-            .header()
-            .to_str()
-            .ok()
-            .and_then(|value| credential(value, BEARER))
-            .map(|token| SecretString::from(token.to_owned()))
-            .ok_or(LaneError::NotBearer)
+        *self.last.lock().unwrap_or_else(PoisonError::into_inner) = Some(issued.header().clone());
+        // NOTE: RFC 9110 §11.1, a field value that is no visible ASCII names no
+        // scheme the node client can send, which is the NotBearer refusal.
+        let value = issued.header().to_str().ok().ok_or(LaneError::NotBearer)?;
+        if issued.as_ref().dpop_key().is_some() {
+            credential(value, DPOP)
+                .map(|token| Credentials::dpop(token.to_owned()))
+                .ok_or(LaneError::NotBearer)
+        } else {
+            credential(value, BEARER)
+                .map(|token| Credentials::Bearer(SecretString::from(token.to_owned())))
+                .ok_or(LaneError::NotBearer)
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl CredentialsProvider for ForCaller {
     async fn credentials(&self) -> Result<Credentials, CredentialsError> {
-        let token = self.token().await.map_err(CredentialsError::new)?;
-        Ok(Credentials::Bearer(token))
+        self.token().await.map_err(CredentialsError::new)
     }
 
-    // NOTE: no specification governs this: our own design; the library checks a cached
-    // token again on every use, and a 401 is never renewed with the gateway's own.
-    fn refused(&self) {}
+    // NOTE: RFC 6750 §3.1, a refused token may be replaced, so the next call
+    // exchanges again; it is never renewed with the gateway's own.
+    fn refused(&self) {
+        let stale = self
+            .last
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let (Some(stale), Ok((subject, target))) = (stale, self.subject()) {
+            self.inner.onward.invalidate(subject, None, &target, &stale);
+        }
+    }
 }
 
 impl fmt::Debug for ForCaller {

@@ -20,9 +20,10 @@
 //! ([`ferrofed_eehrxf::laboratory::Served`]) or an HL7 Europe Hospital
 //! Discharge Report 1.0.0 `bundle-eu-hdr`
 //! ([`ferrofed_eehrxf::discharge::Served`]), its patient named as the
-//! identity binding names it behind the `ehr_id`. Writing the report on
-//! read, and naming it by its composition, are our own design: no
-//! specification governs them.
+//! identity binding names it behind the `ehr_id`, with the header the
+//! demographics binding holds of them, as the patient summary is. Writing
+//! the report on read, and naming it by its composition, are our own
+//! design: no specification governs them.
 //!
 //! A member that serves its reports itself has them listed as it holds them
 //! ([`super::own`]).
@@ -35,6 +36,7 @@ use ehds_logging::category::Category;
 use ferrofed_eehrxf::list::{self, Listing, Match};
 use ferrofed_eehrxf::report::{Report, Writes, Written};
 use ferrofed_eehrxf::summary::Held;
+use ferrofed_identity::role::header::PatientHeader;
 use ferrofed_registry::id::EndpointId;
 use fhir_types::r4::operation_outcome::OperationOutcome;
 use http::StatusCode;
@@ -47,6 +49,7 @@ use super::admission::Admitted;
 use super::{attach, outcome};
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
+use crate::facade::demographics::Unheaded;
 use crate::facade::mapped::{self, Answered, Composition};
 use crate::facade::native::Chosen;
 use crate::facade::provenance::Provenance;
@@ -279,6 +282,12 @@ async fn document(
             ),
         );
     };
+    let header = match header(admitted, arrived, (&system, &value)).await {
+        Ok(header) => header,
+        Err(unheaded) => {
+            return super::patient_summary::unheaded_outcome(unheaded, written.named());
+        }
+    };
     let object = ObjectVersionId::new(composition).map_or_else(
         |_| composition.to_owned(),
         |version| version.object_id().value().into_owned(),
@@ -294,6 +303,7 @@ async fn document(
         identifier: &identifier,
         timestamp: &timestamp,
         patient: (&system, &value),
+        header: &header,
         operator: &fhir.operator,
         member: &custodian,
     };
@@ -319,5 +329,35 @@ async fn document(
                 ),
             )
         }
+    }
+}
+
+/// The header the demographics binding holds of the patient
+/// `system`|`value` for a request that `arrived`: what it holds, named or
+/// not, and an empty header when it holds no one for the identifier or is
+/// not asked about its namespace. The report states every element the header
+/// lacks absent.
+///
+/// A binding whose answer names no one patient, or that could not answer,
+/// is the [`Unheaded`] that refuses the report.
+async fn header(
+    admitted: &Admitted<'_>,
+    arrived: &Arrived<'_>,
+    patient: (&str, &str),
+) -> Result<PatientHeader, Unheaded> {
+    let named = super::patient_summary::named(patient)?;
+    let headed = super::patient_summary::headed(
+        &admitted.federation,
+        (&named, arrived.on_behalf),
+        arrived.started,
+    )
+    .await;
+    // NOTE: HL7 Europe Base 2.0.1 patient-eu-core eu-pat-1 and Patient.birthDate: an element the
+    // binding does not hold is written with a data-absent-reason, so no value is filled in.
+    match headed {
+        Ok(held) => Ok(held),
+        Err(Unheaded::Unnamed(unnamed)) => Ok(*unnamed),
+        Err(Unheaded::NoBinding | Unheaded::NoMatch) => Ok(PatientHeader::default()),
+        Err(refused @ (Unheaded::Ambiguous(_) | Unheaded::Unavailable { .. })) => Err(refused),
     }
 }

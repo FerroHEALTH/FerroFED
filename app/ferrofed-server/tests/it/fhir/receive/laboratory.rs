@@ -14,10 +14,11 @@ use std::path::Path;
 use ferrofed_testkit::fhir_packages;
 use ferrofed_testkit::laboratory::{self, TypedRange};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::pdqm_stub;
 use http::StatusCode;
 use serde_json::Value;
 
-use super::super::{UNREACHED_SUPPLIER, fhir_tables_with};
+use super::super::{UNREACHED_SUPPLIER, fhir_tables_with, supplier};
 use super::{VERSION_A, creating, gateway_listing, gateway_with, issue, post, rows, untouched};
 use crate::facade::{
     EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room, wire,
@@ -29,8 +30,9 @@ use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 /// The `[fhir]` tables of a face that receives laboratory reports at node
-/// A, the mapping written into `dir`.
-pub(super) fn receiving(dir: &Path) -> Result<String, Box<dyn Error>> {
+/// A, the mapping written into `dir`, the header asked of the PDQm Supplier
+/// at `pdq`.
+pub(super) fn receiving(dir: &Path, pdq: &str) -> Result<String, Box<dyn Error>> {
     let path = |value: &Path| toml::Value::String(value.display().to_string()).to_string();
     let mapping = dir.join("laboratory");
     std::fs::create_dir_all(&mapping)?;
@@ -45,7 +47,7 @@ pub(super) fn receiving(dir: &Path) -> Result<String, Box<dyn Error>> {
         .collect::<Vec<_>>()
         .join(", ");
     Ok(fhir_tables_with(
-        UNREACHED_SUPPLIER,
+        pdq,
         &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
         &format!(
             "\n[[fhir.receive]]\ncategory = \"Laboratory-Reports\"\nmember = \"node-a\"\n\
@@ -59,8 +61,12 @@ pub(super) fn receiving(dir: &Path) -> Result<String, Box<dyn Error>> {
 }
 
 /// The gateway receiving laboratory reports at node A, the patient known at
-/// both nodes.
-fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<axum::Router, Box<dyn Error>> {
+/// both nodes, the header asked of the PDQm Supplier `pdq`.
+fn gateway(
+    dir: &Path,
+    (a, b): (&Server, &Server),
+    pdq: &Server,
+) -> Result<axum::Router, Box<dyn Error>> {
     let crossref = rows(&[
         (NAMESPACE, PATIENT, "node-a", EHR_A),
         (NAMESPACE, PATIENT, "node-b", EHR_B),
@@ -68,7 +74,7 @@ fn gateway(dir: &Path, a: &Server, b: &Server) -> Result<axum::Router, Box<dyn E
     gateway_with(
         dir,
         (a, b),
-        (&crossref, &receiving(dir)?),
+        (&crossref, &receiving(dir, &pdqm_stub::base_url(pdq))?),
         &settings_with_room(),
     )
 }
@@ -82,7 +88,8 @@ fn report() -> Result<String, Box<dyn Error>> {
 async fn a_laboratory_report_is_written_to_its_member_by_its_ehr_id_alone() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let sent = report()?;
     let (status, text) = call(app, post(&sent)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -156,7 +163,8 @@ fn quantity_of(value: &Value, magnitude: f64) -> Option<&Value> {
 async fn a_received_normal_range_and_order_reach_the_members_composition() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, post(&report()?)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     assert!(
@@ -202,7 +210,8 @@ const TREATMENT: TypedRange<'static> = TypedRange {
 async fn a_received_typed_reference_range_reaches_the_members_composition() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let sent = laboratory::received_document(&[(NAMESPACE, PATIENT)], &[TREATMENT])?;
     let (status, text) = call(app, post(&sent)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
@@ -253,7 +262,8 @@ async fn a_received_typed_reference_range_reaches_the_members_composition() -> T
 async fn a_laboratory_report_that_breaks_its_profiles_reaches_no_member() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     // NOTE: FHIR R4 Composition.status binds composition-status as required, and the
     // composition is the document's first entry, so an unknown code breaks its profile.
     let broken = report()?.replacen("\"status\":\"final\"", "\"status\":\"synthetic\"", 1);
@@ -271,7 +281,8 @@ async fn a_laboratory_report_that_breaks_its_profiles_reaches_no_member() -> Tes
 async fn a_laboratory_report_of_a_patient_no_member_holds_is_refused() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let other = laboratory::received_document(&[(NAMESPACE, "SENTINEL-NOBODY-3k9q")], &[])?;
     let (status, text) = call(app, post(&other)?).await?;
     assert_eq!(
@@ -362,7 +373,8 @@ async fn serving(dir: &Path, composition: &str) -> Result<(Value, Value, Server)
         holding(&row, Some(composition)).await,
         holding("", None).await,
     );
-    let app = gateway(dir, &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir, (&a, &b), &pdq)?;
     let (status, text) = call(app.clone(), list("&type=11502-2")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
@@ -569,7 +581,8 @@ async fn a_member_silent_at_the_laboratory_query_fails_the_list_and_is_named() -
         .await;
     let b = holding("", None).await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a, &b)?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
     let (status, text) = call(app, list("&type=11502-2")?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
     assert!(text.contains("node-a-pub"), "§11.4: {text}");
@@ -605,7 +618,7 @@ async fn a_member_serving_its_own_reports_is_left_out_of_the_laboratory_query() 
         dir.path(),
         (&a, &b),
         &members,
-        (&crossref, &receiving(dir.path())?),
+        (&crossref, &receiving(dir.path(), UNREACHED_SUPPLIER)?),
         &settings_with_room(),
     )?;
     let (status, text) = call(app, list("&type=11502-2")?).await?;

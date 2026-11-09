@@ -20,12 +20,8 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use ferrofed_engine::onward::ClientAuthentication;
-use ferrofed_engine::onward::issuer::AliasHost;
-use ferrofed_engine::onward::mtls::{Thumbprint, TlsClientAuth};
 use ferrofed_server::config::Config;
 use ferrofed_server::config::error::Error as ConfigError;
-use ferrofed_server::config::grant::GrantFault;
 use ferrofed_server::config::settings::{Scheme, Settings};
 use ferrofed_server::config::tls::TlsFault;
 use ferrofed_server::federation::Federation;
@@ -37,6 +33,10 @@ use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::tls::MutualTls;
 use ferrofed_testkit::unreachable;
 use ferrohealth_server::tls_client::TlsClientError;
+use ferrohealth_smart::client::ClientAuth;
+use ferrohealth_smart::client::fapi2::{AliasHost, SecurityProfile};
+use ferrohealth_smart::config::ConfigError as SmartError;
+use ferrohealth_smart::sender::ClientCertificate;
 use http::{Request, StatusCode, header};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -147,12 +147,19 @@ fn tls_keys(dir: &Path, front: &MutualTls) -> Result<String, Box<dyn Error>> {
     ))
 }
 
-/// Node A's `[credentials]` section: `tls` and an `oauth2` grant at
+/// Node A's `[credentials]` section: `tls` and an `oauth` grant at
 /// `token_url` authenticating by certificate, with `extra` keys.
 fn credentials(tls: &str, token_url: &str, extra: &str) -> String {
     format!(
-        "[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"tls_client_auth\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n{extra}"
+        "[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".oauth]\nclient_auth = \"tls_client_auth\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n{extra}"
     )
+}
+
+/// Whether `error` is the crate's refusal of node A's `oauth` table that
+/// `expected` admits.
+fn smart(error: &ConfigError, expected: impl Fn(&SmartError) -> bool) -> bool {
+    matches!(error, ConfigError::Smart { section, source }
+        if section == "credentials.node-a-pub.oauth" && expected(source))
 }
 
 /// The configuration text of a gateway over node A at `a` and node B at
@@ -215,7 +222,7 @@ async fn a_node_is_reached_with_a_token_bound_to_the_certificate_its_section_nam
     let tables = credentials(
         &tls_keys(dir.path(), &a.front)?,
         &a.token_url(),
-        "tls_client_certificate_bound_access_tokens = true\n",
+        "certificate_bound = true\n",
     );
     let app = gateway(&text(dir.path(), (&a.base(), unreachable::BASE), &tables)?)?;
 
@@ -226,8 +233,11 @@ async fn a_node_is_reached_with_a_token_bound_to_the_certificate_its_section_nam
     let [form] = forms.as_slice() else {
         return Err(format!("expected one token request, got {}", forms.len()).into());
     };
-    let names: Vec<&str> = form.iter().map(|(name, _)| name.as_str()).collect();
-    assert_eq!(vec!["grant_type", "client_id", "scope"], names);
+    // NOTE: RFC 6749 Appendix B, a form's parameters carry no order, so the
+    // request is compared as the set of names it sends, each once.
+    let mut names: Vec<&str> = form.iter().map(|(name, _)| name.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(vec!["client_id", "grant_type", "scope"], names);
     for (name, value) in form {
         assert!(!value.contains(CLIENT_TOKEN.as_str()), "{name}");
         assert!(!value.contains(PATIENT), "{name} carries the patient (N33)");
@@ -260,13 +270,13 @@ async fn a_node_is_reached_with_a_token_bound_to_the_certificate_its_section_nam
 #[tokio::test]
 async fn a_token_bound_to_another_certificate_never_reaches_the_node() -> TestResult {
     let a = NodeA::start(false).await?;
-    let other = Thumbprint::of_certificate(b"a certificate the gateway does not hold");
-    a.endpoint.bind_to_certificate(other.as_str());
+    let other = ClientCertificate::from_der(b"a certificate the gateway does not hold");
+    a.endpoint.bind_to_certificate(other.thumbprint());
     let dir = tempfile::tempdir()?;
     let tables = credentials(
         &tls_keys(dir.path(), &a.front)?,
         &a.token_url(),
-        "tls_client_certificate_bound_access_tokens = true\n",
+        "certificate_bound = true\n",
     );
     let app = gateway(&text(dir.path(), (&a.base(), unreachable::BASE), &tables)?)?;
 
@@ -322,7 +332,7 @@ fn dpop_and_certificate_binding_on_one_grant_are_refused() -> TestResult {
         toml::Value::String(identity.display().to_string())
     );
     let both = format!(
-        "tls_client_certificate_bound_access_tokens = true\ndpop_key_file = {}\n",
+        "certificate_bound = true\ndpop_key_file = {}\n",
         toml::Value::String(dpop.display().to_string())
     );
     let base = text(
@@ -334,27 +344,20 @@ fn dpop_and_certificate_binding_on_one_grant_are_refused() -> TestResult {
         "{base}{}",
         credentials(&tls, "https://idp.example.org/token", &both)
     ))?;
-    assert!(
-        matches!(
-            &error,
-            ConfigError::GrantFault(GrantFault::TwoBindings { section })
-                if section == "credentials.node-a-pub.oauth2"
-        ),
-        "{error:?}"
-    );
+    let two_bindings = |error: &ConfigError| {
+        smart(error, |refused| {
+            matches!(refused, SmartError::Exclusive { left, right }
+                if *left == "credentials.oauth.dpop_key_file"
+                    && *right == "credentials.oauth.certificate_bound")
+        })
+    };
+    assert!(two_bindings(&error), "{error:?}");
 
     let fapi2 = format!(
-        "{base}[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".fapi2]\nissuer = \"https://as.cdr-a.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"tls_client_auth\"\nscope = \"{SCOPE}\"\n{both}"
+        "{base}[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"tls_client_auth\"\nscope = \"{SCOPE}\"\n{both}"
     );
     let error = refused(&fapi2)?;
-    assert!(
-        matches!(
-            &error,
-            ConfigError::GrantFault(GrantFault::TwoBindings { section })
-                if section == "credentials.node-a-pub.fapi2"
-        ),
-        "{error:?}"
-    );
+    assert!(two_bindings(&error), "{error:?}");
     Ok(())
 }
 
@@ -373,7 +376,7 @@ fn mutual_tls_without_a_certificate_or_over_http_is_refused() -> TestResult {
     let front = MutualTls::front("http://127.0.0.1:9")?;
     let tls = tls_keys(dir.path(), &front)?;
 
-    for extra in ["", "tls_client_certificate_bound_access_tokens = true\n"] {
+    for extra in ["", "certificate_bound = true\n"] {
         let error = refused(&format!(
             "{base}{}",
             credentials("", "https://idp.example.org/token", extra)
@@ -395,7 +398,7 @@ fn mutual_tls_without_a_certificate_or_over_http_is_refused() -> TestResult {
         matches!(
             &error,
             ConfigError::TlsFault(TlsFault::Cleartext { key })
-                if key == "credentials.node-a-pub.oauth2.token_endpoint"
+                if key == "credentials.node-a-pub.oauth.token_endpoint"
         ),
         "{error:?}"
     );
@@ -463,7 +466,7 @@ fn a_fapi2_grant_by_certificate_needs_no_key_of_its_own() -> TestResult {
     let dir = tempfile::tempdir()?;
     let front = MutualTls::front("http://127.0.0.1:9")?;
     let tables = format!(
-        "[credentials.\"node-a-pub\"]\n{}\n[credentials.\"node-a-pub\".fapi2]\nissuer = \"https://as.cdr-a.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"self_signed_tls_client_auth\"\nscope = \"{SCOPE}\"\ntls_client_certificate_bound_access_tokens = true\n",
+        "[credentials.\"node-a-pub\"]\n{}\n[credentials.\"node-a-pub\".oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"self_signed_tls_client_auth\"\nscope = \"{SCOPE}\"\ncertificate_bound = true\n",
         tls_keys(dir.path(), &front)?
     );
     let settings = settings(&text(
@@ -471,19 +474,21 @@ fn a_fapi2_grant_by_certificate_needs_no_key_of_its_own() -> TestResult {
         ("https://cdr-a.example.org/openehr", unreachable::BASE),
         &tables,
     )?)?;
-    let Some(Scheme::Fapi2(grant)) = settings.credentials.values().next() else {
-        return Err("node A has a FAPI 2.0 grant".into());
+    let Some(Scheme::Oauth { grant, .. }) = settings.credentials.values().next() else {
+        return Err("node A has an oauth grant".into());
     };
-    assert!(grant.client_key().is_none());
-    assert!(grant.dpop().is_none());
+    assert!(matches!(grant.profile, SecurityProfile::Fapi2(_)));
+    assert!(grant.assertion_keys.is_none());
+    assert!(grant.dpop_key().is_none());
     assert_eq!(
         Some(front.client_thumbprint()),
-        grant.certificate().map(Thumbprint::as_str)
+        grant
+            .tls
+            .presented_certificate()
+            .as_ref()
+            .map(ClientCertificate::thumbprint)
     );
-    assert_eq!(
-        ClientAuthentication::Tls(TlsClientAuth::SelfSigned),
-        grant.client_authentication()
-    );
+    assert_eq!(ClientAuth::SelfSignedTlsClientAuth, grant.client_auth);
     Ok(())
 }
 
@@ -495,7 +500,7 @@ fn no_rendering_shows_the_client_identity() -> TestResult {
     let tables = credentials(
         &tls_keys(dir.path(), &front)?,
         "https://idp.example.org/token",
-        "tls_client_certificate_bound_access_tokens = true\n",
+        "certificate_bound = true\n",
     );
     let settings = settings(&text(
         dir.path(),
@@ -514,18 +519,18 @@ fn no_rendering_shows_the_client_identity() -> TestResult {
         "the client certificate is not shown"
     );
     assert!(
-        shown.contains(front.client_thumbprint()),
-        "the binding is shown"
+        shown.contains(CLIENT_ID),
+        "the grant is shown by its client"
     );
     Ok(())
 }
 
-/// Node A's section with `tls` and `hosts` as its `mtls_alias_hosts`, and a
-/// FAPI 2.0 grant that authenticates by, and binds its tokens to, the
-/// certificate.
+/// Node A's section with `tls`, and a FAPI 2.0 grant that authenticates by,
+/// and binds its tokens to, the certificate, with `hosts` as its
+/// `mtls_alias_hosts`.
 fn fapi2_by_certificate(tls: &str, hosts: &str) -> String {
     format!(
-        "[credentials.\"node-a-pub\"]\n{tls}mtls_alias_hosts = {hosts}\n\n[credentials.\"node-a-pub\".fapi2]\nissuer = \"https://as.cdr-a.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"tls_client_auth\"\nscope = \"{SCOPE}\"\ntls_client_certificate_bound_access_tokens = true\n"
+        "[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"tls_client_auth\"\nscope = \"{SCOPE}\"\ncertificate_bound = true\nmtls_alias_hosts = {hosts}\n"
     )
 }
 
@@ -550,13 +555,16 @@ fn a_fapi2_grant_takes_the_alias_hosts_its_section_names() -> TestResult {
         r#"["mtls.cdr-a.example.org", "mtls2.cdr-a.example.org:8443"]"#,
     );
     let settings = settings(&over_node_a(dir.path(), &tables)?)?;
-    let Some(Scheme::Fapi2(grant)) = settings.credentials.values().next() else {
-        return Err("node A has a FAPI 2.0 grant".into());
+    let Some(Scheme::Oauth { grant, .. }) = settings.credentials.values().next() else {
+        return Err("node A has an oauth grant".into());
+    };
+    let SecurityProfile::Fapi2(profile) = &grant.profile else {
+        return Err("the grant holds to FAPI 2.0".into());
     };
     assert_eq!(
         vec!["mtls.cdr-a.example.org", "mtls2.cdr-a.example.org:8443"],
-        grant
-            .mtls_alias_hosts()
+        profile
+            .alias_hosts()
             .iter()
             .map(AliasHost::as_str)
             .collect::<Vec<_>>()
@@ -582,50 +590,83 @@ fn an_alias_host_that_is_no_host_is_refused_naming_the_key() -> TestResult {
         let tables = fapi2_by_certificate(&tls, &format!("[\"{entry}\"]"));
         let error = refused(&over_node_a(dir.path(), &tables)?)?;
         assert!(
-            matches!(
-                &error,
-                ConfigError::GrantFault(GrantFault::AliasHost { key, .. })
-                    if key == "credentials.node-a-pub.mtls_alias_hosts"
-            ),
+            smart(&error, |refused| matches!(
+                refused,
+                SmartError::AliasHost { .. }
+            )),
             "{entry}: {error:?}"
         );
     }
     Ok(())
 }
 
-/// Alias hosts are refused in a section whose grant never reads
-/// `mtls_endpoint_aliases`: an `oauth2` grant, and a FAPI 2.0 grant that
-/// does not use mutual TLS.
+/// Alias hosts are refused in a grant that never reads
+/// `mtls_endpoint_aliases`: one under plain OAuth 2.0, and a FAPI 2.0 grant
+/// that does not use mutual TLS (RFC 8705 §5).
 #[test]
 fn alias_hosts_without_a_mutual_tls_fapi2_grant_are_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
     let front = MutualTls::front("http://127.0.0.1:9")?;
     let tls = tls_keys(dir.path(), &front)?;
     let hosts = "mtls_alias_hosts = [\"mtls.cdr-a.example.org\"]\n";
-    let oauth2 = credentials(
-        &format!("{tls}{hosts}"),
-        "https://idp.example.org/token",
-        "",
-    );
+    let plain = credentials(&tls, "https://idp.example.org/token", hosts);
     let client_key = dir.path().join("client.pem");
     let dpop = dir.path().join("dpop.pem");
     std::fs::write(&client_key, oauth::Curve::P256.pem()?)?;
     std::fs::write(&dpop, oauth::Curve::P256.pem()?)?;
     let by_key = format!(
-        "[credentials.\"node-a-pub\"]\n{hosts}\n[credentials.\"node-a-pub\".fapi2]\nissuer = \"https://as.cdr-a.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"{CLIENT_ID}\"\nclient_key_file = {}\ndpop_key_file = {}\nscope = \"{SCOPE}\"\n",
+        "[credentials.\"node-a-pub\".oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nassertion_audience = \"issuer\"\nprivate_key_file = {}\ndpop_key_file = {}\nscope = \"{SCOPE}\"\n{hosts}",
         toml::Value::String(client_key.display().to_string()),
         toml::Value::String(dpop.display().to_string())
     );
-    for tables in [oauth2, by_key] {
+    let error = refused(&over_node_a(dir.path(), &plain)?)?;
+    assert!(
+        smart(&error, |refused| matches!(
+            refused,
+            SmartError::Missing { key } if key.contains("mtls_alias_hosts")
+        )),
+        "{error:?}"
+    );
+    let error = refused(&over_node_a(dir.path(), &by_key)?)?;
+    assert!(
+        smart(&error, |refused| matches!(
+            refused,
+            SmartError::Grant { source } if matches!(
+                source.as_ref(),
+                ferrohealth_smart::client::TokenError::Fapi2 {
+                    source: ferrohealth_smart::client::fapi2::Fapi2Error::AliasHostsUnused
+                }
+            )
+        )),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+/// The `oauth` table of a section that names TLS material names no client
+/// certificate, key or trust roots of its own: the grant presents the
+/// section's identity, read once (RFC 8705 §2, §3).
+#[test]
+fn a_grant_beside_tls_material_names_no_certificate_of_its_own() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let front = MutualTls::front("http://127.0.0.1:9")?;
+    let tls = tls_keys(dir.path(), &front)?;
+    let identity = toml::Value::String(dir.path().join("node-a-client.pem").display().to_string());
+    for extra in [
+        format!("client_certificate_file = {identity}\nclient_key_file = {identity}\n"),
+        format!("ca_file = {identity}\n"),
+    ] {
+        let tables = credentials(&tls, "https://idp.example.org/token", &extra);
         let error = refused(&over_node_a(dir.path(), &tables)?)?;
         assert!(
-            matches!(
-                &error,
-                ConfigError::GrantFault(GrantFault::AliasHostsUnused { key })
-                    if key == "credentials.node-a-pub.mtls_alias_hosts"
-            ),
-            "{tables}: {error:?}"
+            smart(&error, |refused| matches!(
+                refused,
+                SmartError::Exclusive { .. }
+            )),
+            "{extra}: {error:?}"
         );
+        let shown = format!("{error} {error:?}");
+        assert!(!shown.contains("PRIVATE KEY"), "{shown}");
     }
     Ok(())
 }

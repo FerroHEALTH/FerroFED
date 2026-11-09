@@ -44,7 +44,7 @@ use std::time::Instant;
 use crate::conveyance::{self, Conveyance, ConveyanceError};
 use crate::dispatch::dpop::NodeProver;
 use crate::hygiene::{Part, Withheld};
-use crate::onward::grant::exchange::SharedOnBehalf;
+use crate::onward::grant::on_behalf::SharedOnBehalf;
 use crate::outbound_id::OutboundId;
 use crate::single_node::ehr::EhrCallError;
 use crate::single_node::forward::{ForwardError, Forwarded};

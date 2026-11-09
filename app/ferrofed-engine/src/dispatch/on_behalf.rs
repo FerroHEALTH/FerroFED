@@ -15,8 +15,8 @@ use ferrohealth_smart::kind::IssuerKind;
 use openehr_its::rest::client::{Client, ClientError, Transport};
 use url::Url;
 
-use crate::onward::grant::exchange::SharedOnBehalf;
 use crate::onward::grant::lane::ReadOnly;
+use crate::onward::grant::on_behalf::SharedOnBehalf;
 
 use super::{DispatchOptions, NodeClient, NodeClients, SetupError, SharedCredentials};
 

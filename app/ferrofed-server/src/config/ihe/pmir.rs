@@ -245,7 +245,7 @@ pub fn sites(
 /// route than the feed's under `public`; [`Error::Cleartext`] for one
 /// that is not `https` outside the development profile;
 /// [`BindingFault::FeedPath`]; [`CredentialsFault::ServiceGrantNotHere`](crate::config::error::credentials::CredentialsFault::ServiceGrantNotHere)
-/// for an `oauth2` or FAPI 2.0 grant; [`Error::Zero`]; and the errors of a secret that
+/// for a Nuts grant; [`Error::Zero`]; and the errors of a secret that
 /// cannot be read.
 ///
 /// [`ServerFault::PublicUrlDisagrees`]: crate::config::error::server::ServerFault::PublicUrlDisagrees

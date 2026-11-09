@@ -105,7 +105,8 @@ emergency = "apply"
 [credentials."node-a-query".oauth]
 token_endpoint = "https://as.example.org/token"
 client_id = "ferrofed"
-client_secret_file = "@DIR@/token"
+client_auth = "private_key_jwt"
+private_key_file = "@DIR@/signing.pem"
 
 [credentials."node-b-query"]
 user = "ferrofed"
@@ -198,7 +199,6 @@ key_file = "@DIR@/listener.key"
 [signing]
 key_file = "@DIR@/signing.pem"
 jwks_uri = "https://gateway.example.org/fed/.well-known/jwks.json"
-assertion_lifetime_s = 60
 node_jwks_cache_s = 300
 rotation_overlap_s = 600
 
@@ -446,14 +446,17 @@ const CHECKED_ONLY: &[&str] = &["signing.node_jwks_cache_s"];
 
 /// The keys another key of the maximal configuration holds to the one
 /// value it has, so no change of the key alone loads: an issuer that
-/// `[[trust.issuer]]` and `[[auth.issuer]]` both name, and an issuer's
-/// `kind` and `profile`, each one of a closed set of names.
+/// `[[trust.issuer]]` and `[[auth.issuer]]` both name, an issuer's `kind`
+/// and `profile`, each one of a closed set of names, and a node grant's
+/// `client_auth`, which takes no client secret and presents a certificate
+/// only with one configured.
 const HELD: &[&str] = &[
     "auth.issuer[0].issuer",
     "auth.issuer[0].kind",
     "auth.issuer[0].profile",
     "config.backend",
     "config.ui",
+    "credentials.node-a-query.oauth.client_auth",
     "stored_queries.backend",
     "trust.issuer[0].issuer",
 ];
