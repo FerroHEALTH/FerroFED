@@ -56,7 +56,7 @@ pub struct Report<'a> {
     /// The patient, as a system and a value.
     pub patient: (&'a str, &'a str),
     /// What the identity binding holds of the patient; an element it does
-    /// not hold is written absent ([`patient`]).
+    /// not hold is written with a `data-absent-reason` of `unknown`.
     pub header: &'a PatientHeader,
     /// The operator, the document's author beside the gateway.
     pub operator: &'a Organisation,
