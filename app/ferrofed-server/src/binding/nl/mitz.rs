@@ -50,12 +50,7 @@ pub(super) fn prefilter(
             &format!("{MITZ_KEY}.credentials"),
             mitz.credentials.as_ref(),
         )?,
-        tls: service::tls(
-            MITZ_KEY,
-            mitz.client_identity.as_ref(),
-            mitz.trust_roots.as_deref(),
-        )
-        .map_err(BindingError::Tls)?,
+        tls: Arc::clone(&mitz.tls),
         namespaces: namespaces(mitz)?,
         categories: mitz.data_categories.clone(),
         purpose: mitz.purpose.clone(),

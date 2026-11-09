@@ -19,6 +19,8 @@
 //! url = "https://arr.example.org/fhir"
 //! hostname = "gateway.example.org"
 //! spool_dir = "/var/lib/ferrofed/audit-feed-spool"
+//!
+//! [audit.repository.tls]
 //! client_identity_file = "/run/secrets/atna-client.pem"
 //! trust_roots_file = "/etc/ferrofed/atna-roots.pem"
 //! ```
@@ -38,11 +40,12 @@
 //! development the spool is a directory, which survives a restart. No
 //! specification governs the shape of the table: our own design.
 
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::profile::Profile;
-use ferrohealth_secret::secret::Secret;
 use ihe_atna::atna::spool::Bounds;
 use ihe_atna::balp::{NetworkAddress, Observer};
 use serde::Deserialize;
@@ -53,7 +56,6 @@ use crate::config::error::Error;
 use crate::config::error::access_log::AccessLogFault;
 use crate::config::settings::Settings;
 use crate::config::transport::{self, CleartextError, ProtectedSite};
-use ferrohealth_secret::file::read_secret;
 
 /// Where audit records go: the `destination` of `[audit]`, and the `audit`
 /// of the IHE binding's `[xcpd]`.
@@ -124,14 +126,9 @@ pub struct FeedRepository {
     pub timeout_ms: u64,
     /// The longest wait between two delivery attempts.
     pub retry_max_ms: u64,
-    /// The gateway's client certificate chain and private key, PEM, inline
-    /// or through `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots the repository's certificate chains to,
-    /// beside the platform's.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the service is reached with: the table's `tls`
+    /// sub-table.
+    pub tls: TlsClientSection,
 }
 
 impl Default for FeedRepository {
@@ -147,9 +144,7 @@ impl Default for FeedRepository {
             spool_write_timeout_ms: 2_000,
             timeout_ms: 5_000,
             retry_max_ms: 60_000,
-            client_identity: None,
-            client_identity_file: None,
-            trust_roots_file: None,
+            tls: TlsClientSection::default(),
         }
     }
 }
@@ -189,10 +184,8 @@ pub struct FeedRepositorySettings {
     pub timeout: Duration,
     /// The longest wait between two delivery attempts.
     pub retry_max: Duration,
-    /// The client certificate chain and key.
-    pub client_identity: Option<Secret>,
-    /// The PEM trust roots.
-    pub trust_roots: Option<String>,
+    /// The TLS material it is reached with, every file read.
+    pub tls: Arc<TlsClient>,
 }
 
 /// The key of the table.
@@ -296,22 +289,7 @@ fn resolve_repository(
             return Err(Error::Zero { key: key(field) });
         }
     }
-    let client_identity = read_secret(
-        &key("client_identity"),
-        table.client_identity.clone(),
-        table.client_identity_file.as_deref(),
-    )?;
-    let trust_roots = table
-        .trust_roots_file
-        .as_ref()
-        .map(|path| {
-            std::fs::read_to_string(path).map_err(|source| Error::Secret {
-                key: key("trust_roots_file"),
-                path: path.clone(),
-                source,
-            })
-        })
-        .transpose()?;
+    let tls = crate::config::tls::read(&key("tls"), &table.tls)?;
     Ok(FeedRepositorySettings {
         cleartext: url.scheme() != "https",
         url,
@@ -332,8 +310,7 @@ fn resolve_repository(
         },
         timeout: Duration::from_millis(table.timeout_ms),
         retry_max: Duration::from_millis(table.retry_max_ms),
-        client_identity,
-        trust_roots,
+        tls,
     })
 }
 

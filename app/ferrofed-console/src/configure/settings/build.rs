@@ -430,7 +430,7 @@ mod tests {
     fn a_credential_keeps_what_its_form_does_not_show_and_drops_the_other_grants()
     -> Result<(), Refused> {
         let held = held(Some(
-            r#"{ user = "old", trust_roots_file = "/run/roots.pem", oauth2 = { client_id = "a", extra = 1 } }"#,
+            r#"{ user = "old", tls = { trust_roots_file = "/run/roots.pem" }, oauth2 = { client_id = "a", extra = 1 } }"#,
         ))?;
         assert_eq!(Grant::OAuth2, Grant::held(&held, &[]));
         let text = credentials(
@@ -440,7 +440,7 @@ mod tests {
                 row("oauth2.client_id", "gateway"),
                 row("oauth2.scope", "system/aql-*.s"),
                 row("oauth2.tls_client_certificate_bound_access_tokens", ""),
-                row("trust_roots_file", ""),
+                row("tls.trust_roots_file", ""),
             ],
         )?;
         let built = super::held(Some(&text))?;
@@ -448,7 +448,8 @@ mod tests {
         assert_eq!("system/aql-*.s", shown(&built, "oauth2.scope"));
         assert_eq!("1", shown(&built, "oauth2.extra"));
         assert!(lookup(&built, "user").is_none(), "{text}");
-        assert!(lookup(&built, "trust_roots_file").is_none(), "{text}");
+        assert!(lookup(&built, "tls.trust_roots_file").is_none(), "{text}");
+        assert!(lookup(&built, "tls").is_none(), "{text}");
         assert!(
             lookup(&built, "oauth2.tls_client_certificate_bound_access_tokens").is_none(),
             "{text}"
@@ -541,7 +542,7 @@ mod tests {
     fn each_secret_choice_becomes_its_change_and_a_kept_one_none() {
         let mut set = secret("oauth2.client_secret", "set");
         set.value = WriteOnly::new(String::from("synthetic-value"));
-        let mut file = secret("client_identity", "file");
+        let mut file = secret("tls.client_identity", "file");
         file.file = String::from("/run/secrets/id.pem");
         let mut inputs = [
             secret("oauth.client_secret", "keep"),
@@ -567,7 +568,7 @@ mod tests {
         assert_eq!(
             vec![
                 ("oauth2.client_secret", true, false, false),
-                ("client_identity", false, true, false),
+                ("tls.client_identity", false, true, false),
                 ("password", false, false, true),
                 ("oauth.client_secret", false, false, true),
             ],

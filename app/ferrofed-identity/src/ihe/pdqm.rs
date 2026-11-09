@@ -49,13 +49,14 @@ use serde::Deserialize;
 use thiserror::Error;
 use url::Url;
 
-use crate::fhir::{Authentication, ClientError, Tls};
+use crate::fhir::{Authentication, ClientError};
 use crate::ihe::audit::balp::audited_as;
 use crate::ihe::iua;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
 use crate::role::header::{HeaderAnswer, PatientHeader, PersonName, PostalAddress, Telecom};
 use crate::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
+use ferrohealth_server::tls_client::TlsClient;
 
 /// The PDQm transaction the gateway asks the Supplier with.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -98,7 +99,7 @@ pub struct PdqmConfig {
     pub auth: Authentication,
     /// The TLS material it is reached with: a client identity for mutual TLS
     /// and trust roots beside the platform's.
-    pub tls: Tls,
+    pub tls: Arc<TlsClient>,
     /// The transaction the Supplier is asked with.
     pub transaction: Transaction,
     /// The identifier system of the master domain: the identifier the matched

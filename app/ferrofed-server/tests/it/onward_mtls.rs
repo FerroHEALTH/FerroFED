@@ -36,6 +36,7 @@ use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::tls::MutualTls;
 use ferrofed_testkit::unreachable;
+use ferrohealth_server::tls_client::TlsClientError;
 use http::{Request, StatusCode, header};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -140,7 +141,7 @@ fn tls_keys(dir: &Path, front: &MutualTls) -> Result<String, Box<dyn Error>> {
     std::fs::write(&identity, front.client_identity())?;
     std::fs::write(&roots, front.trust_roots())?;
     Ok(format!(
-        "client_identity_file = {}\ntrust_roots_file = {}\n",
+        "tls = {{ client_identity_file = {}, trust_roots_file = {} }}\n",
         toml::Value::String(identity.display().to_string()),
         toml::Value::String(roots.display().to_string())
     ))
@@ -317,7 +318,7 @@ fn dpop_and_certificate_binding_on_one_grant_are_refused() -> TestResult {
     let front = MutualTls::front("http://127.0.0.1:9")?;
     std::fs::write(&identity, front.client_identity())?;
     let tls = format!(
-        "client_identity_file = {}\n",
+        "tls = {{ client_identity_file = {} }}\n",
         toml::Value::String(identity.display().to_string())
     );
     let both = format!(
@@ -405,7 +406,7 @@ fn mutual_tls_without_a_certificate_or_over_http_is_refused() -> TestResult {
         "{base}{}",
         credentials(
             &format!(
-                "client_identity_file = {}\n",
+                "tls = {{ client_identity_file = {} }}\n",
                 toml::Value::String(keyless.display().to_string())
             ),
             "https://idp.example.org/token",
@@ -415,8 +416,8 @@ fn mutual_tls_without_a_certificate_or_over_http_is_refused() -> TestResult {
     assert!(
         matches!(
             &error,
-            ConfigError::TlsFault(TlsFault::Identity { key, .. })
-                if key == "credentials.node-a-pub.client_identity_file"
+            ConfigError::TlsClient(TlsClientError::Pem { key, .. })
+                if key == "credentials.node-a-pub.tls.client_identity"
         ),
         "{error:?}"
     );
@@ -638,7 +639,7 @@ fn a_service_credentials_section_takes_no_tls_material() -> TestResult {
     let identity = dir.path().join("client.pem");
     std::fs::write(&identity, "unused")?;
     let text = format!(
-        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"Qz7synthetic\"\nclient_identity_file = {}\n",
+        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"Qz7synthetic\"\ntls = {{ client_identity_file = {} }}\n",
         toml::Value::String(identity.display().to_string())
     );
     let error = refused(&text)?;

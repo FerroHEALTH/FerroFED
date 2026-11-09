@@ -65,8 +65,8 @@ page: our own design.
   ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
 - [ ] **Use `https` for every node that receives a credential**, and mutual
   TLS where a node or a national service asks for it: `client_identity_file`
-  and `trust_roots_file` on the endpoint's credentials or the service's
-  table ([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705),
+  and `trust_roots_file` in the `tls` table of the endpoint's credentials or
+  of the service's table ([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705),
   [Mutual TLS to the identity services](configuration.md#mutual-tls-to-the-identity-services)).
 - [ ] **Send the IHE audit over TLS.** The FHIR Feed URL is `https` and the
   ITI-55 syslog repository is TLS outside development

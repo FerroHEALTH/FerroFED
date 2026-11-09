@@ -44,11 +44,12 @@ use secrecy::SecretString;
 use thiserror::Error;
 use url::Url;
 
-use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::fhir::{self, Authentication, ClientError};
 use crate::nl::{DirectoryUraError, directory_custodians};
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
+use ferrohealth_server::tls_client::TlsClient;
 
 /// The NVI localizer as the configuration names it.
 pub struct NviConfig {
@@ -69,7 +70,7 @@ pub struct NviConfig {
     pub namespaces: BTreeSet<IdentifierNamespace>,
     /// The TLS material: a client identity for mutual TLS and trust roots
     /// beside the platform's.
-    pub tls: Tls,
+    pub tls: Arc<TlsClient>,
 }
 
 impl fmt::Debug for NviConfig {

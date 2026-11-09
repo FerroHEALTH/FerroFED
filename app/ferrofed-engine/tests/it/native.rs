@@ -23,7 +23,7 @@ use ferrofed_engine::dispatch::{DispatchOptions, NodeClients, SharedCredentials}
 use ferrofed_engine::hygiene::{Part, Withheld};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_engine::single_node::forward::ForwardError;
-use ferrofed_engine::single_node::native::{Answer, SummaryAsked, Unusable};
+use ferrofed_engine::single_node::native::{Answer, SummaryAsked};
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::leak::{self, Scope};
@@ -120,19 +120,10 @@ async fn the_member_is_asked_by_its_ehr_id_alone_and_its_document_comes_back_unc
         member(ResponseTemplate::new(200).set_body_raw(DOCUMENT.to_vec(), "application/fhir+json"))
             .await;
     let answer = asked(&native.uri(), Duration::from_secs(5), PATIENT).await?;
-    let Answer::Document(document) = &answer else {
+    let Answer::Success(forwarded) = &answer else {
         return Err(format!("expected the member's document, got {answer:?}").into());
     };
-    assert_eq!(
-        document.forwarded().body(),
-        DOCUMENT,
-        "the member's bytes, unchanged"
-    );
-    assert_eq!(
-        document.identifier(),
-        ("urn:oid:2.999.4.2", "synthetic-doc-a"),
-        "bdl-9: the document's own identifier"
-    );
+    assert_eq!(forwarded.body(), DOCUMENT, "the member's bytes, unchanged");
     assert_eq!(answer.status(), EndpointStatus::Active);
     let requests = native.received_requests().await.ok_or("recording is on")?;
     let [request] = requests.as_slice() else {
@@ -281,11 +272,11 @@ async fn the_query_names_the_identifier_and_the_profile() -> TestResult {
         .mount(&native)
         .await;
     let answer = asked(&native.uri(), Duration::from_secs(5), PATIENT).await?;
-    assert!(matches!(answer, Answer::Document(_)), "{answer:?}");
+    assert!(matches!(answer, Answer::Success(_)), "{answer:?}");
     Ok(())
 }
 
-/// What a member's success `body` is read as.
+/// What a member's success `body` is answered as.
 async fn read_as(body: &[u8]) -> Result<Answer, Box<dyn Error>> {
     let native =
         member(ResponseTemplate::new(200).set_body_raw(body.to_vec(), "application/fhir+json"))
@@ -293,72 +284,29 @@ async fn read_as(body: &[u8]) -> Result<Answer, Box<dyn Error>> {
     asked(&native.uri(), Duration::from_secs(5), PATIENT).await
 }
 
-/// Holds `answer` to be a success that is no document, for a reason
-/// `expected` accepts: a node error, never a document (FHIR R4 `bdl-9`).
-fn unusable(answer: &Answer, expected: fn(&Unusable) -> bool) {
-    assert!(
-        matches!(answer, Answer::Unusable { status, reason } if status.is_success() && expected(reason)),
-        "{answer:?}"
-    );
-    assert!(!answer.answered(), "§11.2: {answer:?}");
-    assert_eq!(
-        answer.status(),
-        EndpointStatus::NodeError,
-        "§11.1: {answer:?}"
-    );
-    assert_eq!(
-        answer.contact(),
-        Contact::Answered(http::StatusCode::OK),
-        "the member answered"
-    );
-}
-
+/// The engine compiles no FHIR model: any success, a document or not, is
+/// passed up as the member sent it, and the face reads whether it is a
+/// document `Bundle` with an identifier (FHIR R4 `bdl-9`).
 #[tokio::test]
-async fn a_document_with_no_identifier_is_a_node_error() -> TestResult {
-    let answer =
-        read_as(b"{\"resourceType\":\"Bundle\",\"type\":\"document\",\"entry\":[]}").await?;
-    unusable(&answer, |reason| matches!(reason, Unusable::NoIdentifier));
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_document_whose_identifier_lacks_a_system_or_a_value_is_a_node_error() -> TestResult {
-    let bodies: [&[u8]; 3] = [
-        b"{\"resourceType\":\"Bundle\",\"type\":\"document\",\"identifier\":{\"value\":\"synthetic-doc-x\"}}",
-        b"{\"resourceType\":\"Bundle\",\"type\":\"document\",\"identifier\":{\"system\":\"urn:oid:2.999.4.3\"}}",
-        b"{\"resourceType\":\"Bundle\",\"type\":\"document\",\"identifier\":{\"system\":\"\",\"value\":\"synthetic-doc-x\"}}",
-    ];
-    for body in bodies {
-        let answer = read_as(body).await?;
-        unusable(&answer, |reason| matches!(reason, Unusable::NoIdentifier));
-    }
-    Ok(())
-}
-
-#[tokio::test]
-async fn an_answer_that_is_no_fhir_resource_is_a_node_error() -> TestResult {
-    let bodies: [&[u8]; 3] = [
+async fn every_success_is_passed_up_unread() -> TestResult {
+    let bodies: [&[u8]; 5] = [
+        b"{\"resourceType\":\"Bundle\",\"type\":\"document\",\"entry\":[]}",
         b"synthetic text that is no FHIR resource",
         b"[]",
-        b"{\"resourceType\":\"Bundle\",\"type\":\"document\",\"identifier\":[]}",
+        b"{\"resourceType\":\"Patient\"}",
+        b"{\"resourceType\":\"Bundle\",\"type\":\"collection\"}",
     ];
     for body in bodies {
         let answer = read_as(body).await?;
-        unusable(&answer, |reason| matches!(reason, Unusable::Unreadable(_)));
+        let Answer::Success(forwarded) = &answer else {
+            return Err(format!("expected the member's answer, got {answer:?}").into());
+        };
+        assert_eq!(forwarded.body(), body, "the member's bytes, unchanged");
+        assert_eq!(
+            answer.contact(),
+            Contact::Answered(http::StatusCode::OK),
+            "the member answered"
+        );
     }
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_resource_other_than_a_document_bundle_is_a_node_error() -> TestResult {
-    let identified =
-        "\"identifier\":{\"system\":\"urn:oid:2.999.4.3\",\"value\":\"synthetic-doc-x\"}";
-    let patient = format!("{{\"resourceType\":\"Patient\",{identified}}}");
-    let answer = read_as(patient.as_bytes()).await?;
-    unusable(&answer, |reason| matches!(reason, Unusable::NotBundle));
-    let collection =
-        format!("{{\"resourceType\":\"Bundle\",\"type\":\"collection\",{identified}}}");
-    let answer = read_as(collection.as_bytes()).await?;
-    unusable(&answer, |reason| matches!(reason, Unusable::NotDocument));
     Ok(())
 }

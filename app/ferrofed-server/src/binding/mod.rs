@@ -530,7 +530,7 @@ pub fn log_summary(settings: &Settings) {
     let mutual: Vec<&str> = settings
         .onward_tls
         .iter()
-        .filter(|(_, tls)| tls.client_identity.is_some())
+        .filter(|(_, tls)| tls.has_identity())
         .map(|(endpoint, _)| endpoint.as_str())
         .collect();
     let decomposable: Vec<&str> = settings

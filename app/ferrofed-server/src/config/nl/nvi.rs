@@ -14,8 +14,7 @@
 //! [nl_gf.nvi]
 //! url = "https://nvi.example.org/fhir"
 //! credentials = { user = "ferrofed", password_file = "/run/secrets/nvi-password" }
-//! client_identity_file = "/run/secrets/nvi-client.pem"
-//! trust_roots_file = "/etc/ferrofed/nvi-roots.pem"
+//! tls = { client_identity_file = "/run/secrets/nvi-client.pem", trust_roots_file = "/etc/ferrofed/nvi-roots.pem" }
 //! namespaces = ["pseudo-bsn"]
 //!
 //! [nl_gf.nvi.custodians]
@@ -48,11 +47,11 @@
 //! file = "/run/secrets/organization.jwt"
 //! ```
 
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 use std::collections::BTreeMap;
 use std::fmt;
-use std::path::PathBuf;
+use std::sync::Arc;
 
-use ferrohealth_secret::secret::Secret;
 use ferrohealth_secret::secret_url::SecretUrl;
 use nl_generic_functions::identification::is_bsn_system;
 use serde::Deserialize;
@@ -66,7 +65,6 @@ use crate::config::settings::OnwardGrant;
 use crate::config::settings::Scheme;
 use crate::config::transport::ProtectedSite;
 use crate::config::{Config, Credentials, transport};
-use ferrohealth_secret::file::read_secret;
 
 /// The NVI localizer, as the configuration writes it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -86,14 +84,9 @@ pub struct Nvi {
     /// `http://fhir.nl/fhir/NamingSystem/pseudo-bsn` itself; a BSN system is
     /// refused.
     pub namespaces: Vec<String>,
-    /// The gateway's client certificate chain and private key, PEM, for
-    /// mutual TLS, inline or through `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots the service's certificate chains to, beside
-    /// the platform's.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the service is reached with: the table's `tls`
+    /// sub-table.
+    pub tls: TlsClientSection,
 }
 
 /// How the gateway authenticates to the Localization Service, resolved.
@@ -117,10 +110,8 @@ pub struct NviSettings {
     pub custodians: BTreeMap<String, String>,
     /// The namespaces that stand for the pseudonymised BSN, as written.
     pub namespaces: Vec<String>,
-    /// The client certificate chain and key.
-    pub client_identity: Option<Secret>,
-    /// The PEM trust roots.
-    pub trust_roots: Option<String>,
+    /// The TLS material it is reached with, every file read.
+    pub tls: Arc<TlsClient>,
 }
 
 impl fmt::Debug for NviSettings {
@@ -130,8 +121,7 @@ impl fmt::Debug for NviSettings {
             .field("credentials", &self.credentials)
             .field("custodians", &self.custodians)
             .field("namespaces", &self.namespaces)
-            .field("client_identity", &self.client_identity.is_some())
-            .field("trust_roots", &self.trust_roots.is_some())
+            .field("tls", &self.tls)
             .finish()
     }
 }
@@ -234,28 +224,12 @@ pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> 
         nvi.url.expose(),
         transport::identity_site(NVI_KEY, credentials.is_some().then_some(CREDENTIALS_KEY)),
     )?;
-    let client_identity = read_secret(
-        "nl_gf.nvi.client_identity",
-        nvi.client_identity.clone(),
-        nvi.client_identity_file.as_deref(),
-    )?;
-    let trust_roots = nvi
-        .trust_roots_file
-        .as_ref()
-        .map(|path| {
-            std::fs::read_to_string(path).map_err(|source| Error::Secret {
-                key: String::from("nl_gf.nvi.trust_roots_file"),
-                path: path.clone(),
-                source,
-            })
-        })
-        .transpose()?;
+    let tls = crate::config::tls::read("nl_gf.nvi.tls", &nvi.tls)?;
     Ok(NviSettings {
         url: nvi.url.clone(),
         credentials,
         custodians: nvi.custodians.clone(),
         namespaces: nvi.namespaces.clone(),
-        client_identity,
-        trust_roots,
+        tls,
     })
 }

@@ -161,7 +161,7 @@ pub struct Secret {
 
 /// The secret every node's credential may take beside its grant's.
 pub const TLS_SECRET: Secret = Secret {
-    key: "client_identity",
+    key: "tls.client_identity",
     label: Msg::TlsClientCertificateKeyPem,
 };
 

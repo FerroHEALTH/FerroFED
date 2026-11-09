@@ -36,8 +36,11 @@ sender_device = "2.999.40.1"           # the gateway's device OID
 home_community = "2.999.40"            # optional: the gateway's own community
 audit = "log"                          # required: "log", or "off" in development
 assertion_file = "/run/secrets/xua.xml"            # optional
+
+[xcpd.tls]
 client_identity_file = "/run/secrets/xcpd-client.pem"
 trust_roots_file = "/etc/ferrofed/xcpd-roots.pem"  # optional
+# min_version = "1.2"                  # only for a MyHealth@EU route, below
 
 [[xcpd.gateway]]
 url = "https://xcpd.region.example.org/RespondingGateway"
@@ -70,10 +73,12 @@ What a deployment must provide:
   community a gateway answers that the map does not name belongs to no
   member and adds no candidate.
 - **TLS.** Every XCPD actor is an ATNA Secure Node or Secure Application
-  (ITI TF-1 Table 27.1.3-1), so a gateway URL must be `https`;
-  `client_identity` (or `client_identity_file`) holds the PEM client
-  certificate chain and private key for mutual TLS, and `trust_roots_file`
-  adds the network's roots to the platform's. A plain `http` URL is refused
+  (ITI TF-1 Table 27.1.3-1), so a gateway URL must be `https`. In
+  `[xcpd.tls]`, `client_identity` (or `client_identity_file`) holds the PEM
+  client certificate chain and private key for mutual TLS,
+  `trust_roots_file` adds the network's roots to the platform's, and
+  `min_version` is the oldest TLS version the gateway speaks, `"1.3"`
+  unless you lower it to `"1.2"`. A plain `http` URL is refused
   at boot, naming its key, unless the configuration is
   `profile = "development"`.
 - **The XUA assertion, where the network requires one.** ITI-55 requires
@@ -124,9 +129,16 @@ refuses a configuration that breaks one, naming the gateway as
   identity assertion lives at most 4 hours and is `sender-vouches` (SAML
   Profile 10.0.0 §2.1). A marked gateway beside either key is refused.
 - **Mutual TLS under the eHDSI PKI.** The URL is `https` in every profile,
-  development included, and `client_identity_file` and `trust_roots_file`
-  are required (Section II Security Services 10.0.0 §5.9.1 and §5.9.2). The
-  link trusts those roots alone, never the platform's.
+  development included, and `[xcpd.tls]` must name `client_identity_file`
+  and `trust_roots_file` (Section II Security Services 10.0.0 §5.9.1 and
+  §5.9.2). The link trusts those roots alone, never the platform's.
+- **TLS 1.2 for a peer that speaks no TLS 1.3.** eHDSI Section II Security
+  Services 10.0.0 §5.9.1 makes TLS 1.2 the minimum between NCPeH, with TLS
+  1.3 recommended and TLS 1.0 and 1.1 prohibited, and eHDSI Cryptographic
+  Algorithms 9.0.0 says "at least TLS 1.2 SHALL be used. TLS 1.3 is
+  RECOMMENDED." The gateway speaks TLS 1.3 alone by default, so set
+  `min_version = "1.2"` in `[xcpd.tls]` when a responding NCPeH speaks only
+  TLS 1.2. The revocation check speaks the same versions.
 - **Revocation checked before any data is sent.** Before each discovery,
   the gateway opens a TLS connection to the responding gateway and sends
   nothing over it. It checks every certificate the peer presents, up to the
@@ -182,8 +194,11 @@ spool_dir = "/var/lib/ferrofed/audit-spool"
 # connect_timeout_ms = 5000           # opening the TCP connection
 # send_timeout_ms = 5000              # the TLS handshake, each write and flush
 # retry_max_ms = 60000                # the longest wait between two attempts
+
+[xcpd.audit_repository.tls]
 client_identity_file = "/run/secrets/atna-client.pem"  # when the repository asks
 trust_roots_file = "/etc/ferrofed/atna-roots.pem"      # optional
+# min_version = "1.2"                                   # "1.3" by default
 ```
 
 Every message is written to the spool first, flushed to disk, and
@@ -263,8 +278,7 @@ timeout_ms = 5000
 [nl_gf.nvi]
 url = "https://nvi.example.org/fhir"
 credentials = { user = "ferrofed", password_file = "/run/secrets/nvi-password" }  # optional, or the Nuts grant
-client_identity_file = "/run/secrets/nvi-client.pem"            # optional, mutual TLS
-trust_roots_file = "/etc/ferrofed/nvi-roots.pem"                # optional
+tls = { client_identity_file = "/run/secrets/nvi-client.pem", trust_roots_file = "/etc/ferrofed/nvi-roots.pem" }  # optional, mutual TLS
 namespaces = ["pseudo-bsn"]   # client namespaces that stand for the pseudonym
 
 [nl_gf.nvi.custodians]        # optional with a directory that publishes URAs

@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::{Authentication, Tls};
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmResolver};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::patient::IdentifierNamespace;
@@ -58,7 +58,7 @@ fn namespace(value: &str) -> IdentifierNamespace {
 fn resolver(server: &Server) -> PixmResolver {
     PixmResolver::from_config(
         vec![ManagerConfig {
-            tls: Tls::default(),
+            tls: ferrofed_testkit::tls::platform(),
             base: SecretUrl::new(format!("{}/fhir/", server.uri())),
             auth: Authentication::None,
             members: BTreeMap::from([

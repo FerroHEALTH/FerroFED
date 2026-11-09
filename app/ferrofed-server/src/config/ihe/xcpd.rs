@@ -10,6 +10,8 @@
 //! sender_device = "2.999.40.1"
 //! home_community = "2.999.40"
 //! assertion_file = "/run/secrets/xua-assertion.xml"
+//!
+//! [xcpd.tls]
 //! client_identity_file = "/run/secrets/xcpd-client.pem"
 //! trust_roots_file = "/etc/ferrofed/xcpd-roots.pem"
 //!
@@ -28,17 +30,19 @@
 //! shape of the table: our own design.
 //!
 //! A gateway marked `myhealth_eu = true` is a MyHealth@EU route, an eHDSI
-//! link. It is `https` in every profile, needs `client_identity_file` and
-//! `trust_roots_file` (Section II Security Services 10.0.0 §5.9.1 and
+//! link. It is `https` in every profile, needs `tls.client_identity_file` and
+//! `tls.trust_roots_file` (Section II Security Services 10.0.0 §5.9.1 and
 //! §5.9.2), and has its certificate chain checked for revocation before each
 //! discovery (X.509 Certificates Profile 7.0.0 §3.2). A fixed `assertion`
 //! never serves it: Messaging Profile 10.0.0 §1.5 admits no alternative
 //! binding, and SAML Profile 10.0.0 §2.1 bounds the identity assertion to 4
 //! hours, `sender-vouches`.
 
+use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use ferrofed_identity::profile::Profile;
 use ferrohealth_secret::secret::Secret;
@@ -75,15 +79,9 @@ pub struct Xcpd {
     pub assertion: Option<Secret>,
     /// A file holding the assertion, read at boot.
     pub assertion_file: Option<PathBuf>,
-    /// The gateway's client certificate chain and private key, PEM, for the
-    /// mutual TLS of the ATNA secure channel, inline or through
-    /// `client_identity_file`.
-    pub client_identity: Option<Secret>,
-    /// A file holding the client identity, read at boot.
-    pub client_identity_file: Option<PathBuf>,
-    /// A file of PEM trust roots the responding gateways' certificates chain
-    /// to, beside the platform's.
-    pub trust_roots_file: Option<PathBuf>,
+    /// The TLS material the service is reached with: the table's `tls`
+    /// sub-table.
+    pub tls: TlsClientSection,
     /// Where the ITI-55 audit message of every exchange goes: `repository`,
     /// `log`, or `off`, which only `profile = "development"` admits. It has
     /// no default.
@@ -125,10 +123,8 @@ pub struct XcpdSettings {
     pub assertion: Option<Secret>,
     /// The key the assertion was read from, for an error that names it.
     pub assertion_key: &'static str,
-    /// The client certificate chain and key.
-    pub client_identity: Option<Secret>,
-    /// The PEM trust roots.
-    pub trust_roots: Option<String>,
+    /// The TLS material it is reached with, every file read.
+    pub tls: Arc<TlsClient>,
     /// Where the audit messages go.
     pub audit: AuditDestination,
     /// The repository, under [`AuditDestination::Repository`].
@@ -142,8 +138,7 @@ impl fmt::Debug for XcpdSettings {
             .field("gateways", &self.gateways)
             .field("communities", &self.communities)
             .field("assertion", &self.assertion.is_some())
-            .field("client_identity", &self.client_identity.is_some())
-            .field("trust_roots", &self.trust_roots.is_some())
+            .field("tls", &self.tls)
             .field("audit", &self.audit)
             .field("audit_repository", &self.audit_repository)
             .finish_non_exhaustive()
@@ -215,22 +210,7 @@ pub(crate) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         xcpd.assertion.clone(),
         xcpd.assertion_file.as_deref(),
     )?;
-    let client_identity = read_secret(
-        "xcpd.client_identity",
-        xcpd.client_identity.clone(),
-        xcpd.client_identity_file.as_deref(),
-    )?;
-    let trust_roots = xcpd
-        .trust_roots_file
-        .as_ref()
-        .map(|path| {
-            std::fs::read_to_string(path).map_err(|source| Error::Secret {
-                key: String::from("xcpd.trust_roots_file"),
-                path: path.clone(),
-                source,
-            })
-        })
-        .transpose()?;
+    let tls = crate::config::tls::read("xcpd.tls", &xcpd.tls)?;
     Ok(Some(XcpdSettings {
         sender_device: xcpd.sender_device.clone(),
         home_community: xcpd.home_community.clone(),
@@ -239,8 +219,7 @@ pub(crate) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         namespaces: xcpd.namespaces.clone(),
         assertion_key,
         assertion,
-        client_identity,
-        trust_roots,
+        tls,
         audit,
         audit_repository,
     }))
@@ -265,10 +244,10 @@ fn myhealth_eu(xcpd: &Xcpd, gateway: &XcpdGateway, key: &str) -> Result<(), Erro
     if !url::Url::parse(gateway.url.expose()).is_ok_and(|url| url.scheme() == "https") {
         return refused(MyHealthEuNeed::Https);
     }
-    if xcpd.client_identity.is_none() && xcpd.client_identity_file.is_none() {
+    if xcpd.tls.client_identity.is_none() && xcpd.tls.client_identity_file.is_none() {
         return refused(MyHealthEuNeed::ClientIdentity);
     }
-    if xcpd.trust_roots_file.is_none() {
+    if xcpd.tls.trust_roots_file.is_none() {
         return refused(MyHealthEuNeed::TrustRoots);
     }
     Ok(())

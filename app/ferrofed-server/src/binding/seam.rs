@@ -13,7 +13,7 @@ use std::time::Duration;
 
 #[cfg(feature = "binding-ihe")]
 use crate::audit::AuditTrailError;
-use crate::config::service::{GrantRefused, TlsRefused};
+use crate::config::service::GrantRefused;
 use crate::health::dependencies::Indicator;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_identity::role::demographics::Demographics;
@@ -166,9 +166,6 @@ pub enum LocalizationError {
     /// A credentials section names a grant, which only a node takes.
     #[error("the localizer's credentials cannot be used")]
     Grant(#[source] GrantRefused),
-    /// The localizer's TLS material does not read.
-    #[error("the localizer's TLS material cannot be used")]
-    Tls(#[source] TlsRefused),
     /// The NVI localizer refuses its configuration.
     #[error("the [nl_gf.nvi] localizer cannot be enabled")]
     #[cfg(feature = "binding-nl")]

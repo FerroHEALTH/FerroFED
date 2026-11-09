@@ -13,7 +13,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::{Authentication, Tls};
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmResolver, SHARED_CAPACITY};
 use ferrofed_identity::role::behalf::{Caller, OnBehalfOf};
 use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError};
@@ -61,7 +61,7 @@ fn soon() -> Instant {
 fn pixm(server: &Server) -> PixmResolver {
     PixmResolver::from_config(
         vec![ManagerConfig {
-            tls: Tls::default(),
+            tls: ferrofed_testkit::tls::platform(),
             base: SecretUrl::new(format!("{}/fhir/", server.uri())),
             auth: Authentication::None,
             members: BTreeMap::from([

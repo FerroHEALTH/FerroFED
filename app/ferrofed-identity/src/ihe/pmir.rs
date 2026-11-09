@@ -27,9 +27,10 @@ use secrecy::ExposeSecret;
 use thiserror::Error;
 use url::Url;
 
-use crate::fhir::{Authentication, ClientError, Tls};
+use crate::fhir::{Authentication, ClientError};
 use crate::ihe::iua;
 use crate::session::IdentityChange;
+use ferrohealth_server::tls_client::TlsClient;
 
 /// What one change touches.
 enum Touched {
@@ -122,6 +123,9 @@ pub enum PmirConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for the Patient Identity Registry could not be built")]
     Client(#[source] reqwest::Error),
+    /// The HTTP client refused the TLS material.
+    #[error(transparent)]
+    Tls(ferrohealth_server::tls_client::TlsClientError),
     /// The credential is a grant the client was built to send in a default
     /// header, where its token cannot ride.
     #[error("the grant of the Patient Identity Registry cannot ride in a default header")]
@@ -133,6 +137,7 @@ impl From<ClientError> for PmirConfigError {
         match error {
             ClientError::Credentials(source) => Self::Credentials(source),
             ClientError::Build(source) => Self::Client(source),
+            ClientError::Tls(source) => Self::Tls(source),
             ClientError::Grant => Self::Grant,
         }
     }
@@ -151,7 +156,7 @@ impl From<ClientError> for PmirConfigError {
 pub fn subscriber(
     base: &SecretUrl,
     auth: &Authentication,
-    tls: &Tls,
+    tls: &TlsClient,
 ) -> Result<PmirSubscriber, PmirConfigError> {
     let base = Url::parse(base.expose()).map_err(PmirConfigError::BaseUrl)?;
     let (http, authorizer) = iua::client(auth, tls)?;

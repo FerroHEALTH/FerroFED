@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
 use ihe_atna::atna::forwarder::{Forwarder, Status};
-use ihe_atna::atna::repository::{Repository, TlsSettings};
+use ihe_atna::atna::repository::Repository;
 use ihe_atna::atna::spool::Content;
 
 use crate::audit::{AuditTrailError, Forwarding, Stopping, observed, spool, started};
@@ -67,17 +67,11 @@ pub fn trail(settings: &AuditRepositorySettings) -> Result<Arc<RepositoryAudit>,
         let repository = if settings.unencrypted {
             Repository::unencrypted_for_development(&settings.url, settings.timeouts)
         } else {
-            let tls = TlsSettings {
-                roots: settings
-                    .trust_roots
-                    .as_ref()
-                    .map(|pem| pem.as_bytes().to_vec()),
-                identity: settings
-                    .client_identity
-                    .as_ref()
-                    .map(ferrohealth_secret::secret::Secret::to_secret_string),
-            };
-            Repository::tls(&settings.url, &tls, settings.timeouts)
+            let tls = settings
+                .tls
+                .platform_config()
+                .map_err(AuditTrailError::Tls)?;
+            Repository::tls(&settings.url, Arc::new(tls), settings.timeouts)
         }
         .map_err(AuditTrailError::Repository)?;
         let spool = spool(

@@ -11,7 +11,7 @@
 use std::error::Error;
 use std::time::Duration;
 
-use ferrofed_identity::fhir::{Authentication, Tls};
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::mcsd::error::{FhirFormError, IdentifierFault};
 use ferrofed_identity::ihe::mcsd::source::{DirectoryConfig, DirectorySource, Refreshed};
 use ferrofed_identity::ihe::mcsd::{
@@ -355,7 +355,7 @@ fn eps() -> Native<'static> {
 
 fn source(harness: &HarnessDirectory) -> Result<DirectorySource, Box<dyn Error>> {
     Ok(DirectorySource::new(DirectoryConfig {
-        tls: Tls::default(),
+        tls: ferrofed_testkit::tls::platform(),
         base: SecretUrl::new(harness.base()),
         credentials: Authentication::None,
         deadline: Duration::from_secs(5),

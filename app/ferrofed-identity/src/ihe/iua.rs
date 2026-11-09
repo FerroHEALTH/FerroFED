@@ -17,7 +17,8 @@ use std::sync::Arc;
 use ihe_iti::authorizer::Authorizer;
 use ihe_iti::authorizer::smart::TokenAuthorizer;
 
-use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::fhir::{self, Authentication, ClientError};
+use ferrohealth_server::tls_client::TlsClient;
 
 /// Builds the HTTP client an IHE FHIR client is asked through, and the
 /// authorizer that incorporates a grant's token in each of its requests.
@@ -32,7 +33,7 @@ use crate::fhir::{self, Authentication, ClientError, Tls};
 /// or a client that cannot be built.
 pub(crate) fn client(
     auth: &Authentication,
-    tls: &Tls,
+    tls: &TlsClient,
 ) -> Result<(reqwest::Client, Option<Arc<dyn Authorizer>>), ClientError> {
     match auth {
         Authentication::Grant(source) => {

@@ -175,7 +175,7 @@ alone. Record here, per node, which of the two you chose.
 
 **What changes the answer:** the `resource`, `audience`, `client_auth` and
 `tls_client_certificate_bound_access_tokens` keys of an `oauth2` or `fapi2`
-section, `client_identity_file` in a node's section, and your reverse
+section, `tls.client_identity_file` in a node's section, and your reverse
 proxy's TLS settings.
 
 ## 5. What the technique does not cover
