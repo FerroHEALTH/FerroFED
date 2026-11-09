@@ -9,8 +9,8 @@
 # runs `ferrofed config check`, built from this tree, over the example
 # configuration the last release attached (deploy/compose/ferrofed.toml and
 # registry.toml at that tag), with a synthetic file for each `_file` secret
-# and a synthetic ES384 key for each `key_file`, the mount paths rewritten to
-# a temporary directory. When the check refuses it, at least one upgrade
+# and a synthetic ES384 key for each `key_file` and `private_key_file`, the
+# mount paths rewritten to a temporary directory. When the check refuses it, at least one upgrade
 # fragment must be pending, or, on a version bump whose `--assemble` has moved
 # the fragments, a CHANGELOG.md section newer than that tag must hold an
 # "Upgrade notes" entry.
@@ -89,7 +89,7 @@ check() {
       echo "upgrade-notes: a synthetic signing key could not be generated for $key" >&2
       return 1
     }
-  done < <(sed -nE 's|^key_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)"[[:space:]]*$|\1|p' "$work/ferrofed.toml")
+  done < <(sed -nE 's|^(private_)?key_file[[:space:]]*=[[:space:]]*"/run/secrets/ferrofed/([^"]+)"[[:space:]]*$|\2|p' "$work/ferrofed.toml")
   sed -i.orig -e "s|/run/secrets/ferrofed/|$work/secrets/|g" \
     -e "s|/etc/ferrofed/|$work/|g" -e "s|/var/lib/ferrofed|$work/var|g" "$work/ferrofed.toml"
 
