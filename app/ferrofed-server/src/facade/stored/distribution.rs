@@ -61,6 +61,7 @@ use openehr_federation::object::Extra;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::generated::definition::StoredQuery;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion};
 use openehr_query::federation::{parse_federated, to_federated_aql};
 use serde::Serialize;
 use tracing::Instrument as _;
@@ -169,11 +170,8 @@ struct ReportedMeta {
 }
 
 /// The name and version of `definition` as a node request carries them.
-fn at(definition: &StoredDefinition) -> (String, String) {
-    (
-        definition.name().as_str().to_owned(),
-        definition.version().to_string(),
-    )
+fn at(definition: &StoredDefinition) -> (QualifiedQueryName, QueryVersion) {
+    (definition.name().clone(), definition.version())
 }
 
 /// The deadlines of a request to `federation` that arrived at `started`.
@@ -229,11 +227,11 @@ pub(super) async fn distribute(
         (&budget, outbound, conveyance),
         &logged,
         |client, options| {
-            let (name, version, aql) = (name.clone(), version.clone(), aql.clone());
+            let (name, aql) = (name.clone(), aql.clone());
             async move {
                 let at = DefinitionAt {
                     name: &name,
-                    version: &version,
+                    version,
                 };
                 client.store_definition(at, &aql, &options).await
             }
@@ -296,11 +294,11 @@ pub(super) async fn drift(
         (&budget, arrived.outbound, &arrived.conveyance),
         &logged,
         |client, options| {
-            let (name, version) = (name.clone(), version.clone());
+            let name = name.clone();
             async move {
                 let at = DefinitionAt {
                     name: &name,
-                    version: &version,
+                    version,
                 };
                 client.read_definition(at, &options).await
             }

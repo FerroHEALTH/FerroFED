@@ -39,6 +39,7 @@ use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue}
 use fhirconnect::engine::traverse::defaults::Defaults;
 use fhirconnect::operations::run::Settings;
 
+use crate::prescriptions::mapped::{MapModeError, Template};
 use crate::transformation::preferred;
 
 /// One category the deployment receives, as it names it.
@@ -56,8 +57,12 @@ pub struct Source {
     /// archive or an unpacked directory, and any package of value sets its
     /// profiles bind.
     pub dependencies: Vec<PathBuf>,
-    /// The OPT 1.4 operational template the composition is of, as text.
+    /// The template the composition is of, as text: an OPT 1.4 when
+    /// `archetypes` is empty, an ADL 2 template otherwise.
     pub opt: String,
+    /// The archetypes an ADL 2 template specialises or fills a slot with,
+    /// each a file name and its text; empty for an OPT 1.4.
+    pub archetypes: Vec<(String, String)>,
     /// The model and context mapping files.
     pub files: Vec<PathBuf>,
     /// The `metadata.name` of the context mapping to compile.
@@ -104,6 +109,16 @@ pub enum ReceiversError {
         /// Why.
         #[source]
         source: Box<ResolveError>,
+    },
+    /// The template does not read, or its operational template cannot be
+    /// built.
+    #[error("the template of the category {category} does not read")]
+    Template {
+        /// The category's code.
+        category: &'static str,
+        /// Why.
+        #[source]
+        source: Box<MapModeError>,
     },
     /// The context mapping does not compile.
     #[error("the context mapping {context} of the category {category} does not compile")]
@@ -153,8 +168,9 @@ impl Receivers {
     /// [`ReceiversError::Unreceived`] for one this build does not receive,
     /// [`ReceiversError::Packages`] for packages that cannot be read or lack
     /// a package a manifest names, [`ReceiversError::Profile`] for packages
-    /// that give no profile the category names, and
-    /// [`ReceiversError::Compile`] for a mapping that does not compile.
+    /// that give no profile the category names, [`ReceiversError::Template`]
+    /// for a template that does not read, and [`ReceiversError::Compile`]
+    /// for a mapping that does not compile.
     pub fn compile(sources: &[Source]) -> Result<Self, ReceiversError> {
         let mut by = BTreeMap::new();
         for source in sources {
@@ -180,12 +196,19 @@ impl Receivers {
                         source: Box::new(error),
                     })?;
             }
-            let mapping = Mapping::compile(&source.opt, &source.files, &[source.context.as_str()])
-                .map_err(|error| ReceiversError::Compile {
+            let template = Template::of(&source.opt, &source.archetypes)
+                .source()
+                .map_err(|error| ReceiversError::Template {
                     category,
-                    context: source.context.clone(),
-                    source: error,
+                    source: Box::new(error),
                 })?;
+            let mapping =
+                Mapping::compile_template(&template, &source.files, &[source.context.as_str()])
+                    .map_err(|error| ReceiversError::Compile {
+                        category,
+                        context: source.context.clone(),
+                        source: error,
+                    })?;
             by.insert(
                 kind,
                 Receiver {

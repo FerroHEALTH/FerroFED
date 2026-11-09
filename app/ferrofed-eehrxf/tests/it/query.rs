@@ -122,7 +122,7 @@ fn every_query_sits_under_its_reserved_name_at_the_immutable_version() -> TestRe
     for (section, definition) in Section::ALL.into_iter().zip(&held) {
         assert_eq!(
             format!("{NAMESPACE}::patient-summary-{}", section.slug()),
-            definition.name().as_str()
+            definition.name().to_string()
         );
         assert_eq!(Some(NAMESPACE), definition.name().namespace());
         assert!(reserved::reserves(definition.name()));

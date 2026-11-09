@@ -25,12 +25,13 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use ferrofed_operator_api::console::Owner;
+use ferrofed_registry::definition::StoredDefinition;
 use ferrofed_registry::definition::store::{Assignment, DefinitionStore, Insertion, StoreError};
-use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition};
 use jiff::Timestamp;
 use openehr_federation::aql::Context;
 use openehr_federation::aql::definition::{Definition, SubjectOrigin};
 use openehr_federation::aql::refusal::Refusal;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion};
 
 use crate::config::stored_queries::Store;
 use crate::security::logged;
@@ -66,7 +67,7 @@ pub enum Inadmissible {
 #[error("the held definition {name} at {version} is refused")]
 pub struct HeldRefused {
     /// The qualified name the definition is held under.
-    pub name: QueryName,
+    pub name: QualifiedQueryName,
     /// The version it is held at.
     pub version: QueryVersion,
     /// Why it is refused.
@@ -131,7 +132,7 @@ impl DefinitionStore for Admitted {
 
     fn insert_assigned(
         &self,
-        name: &QueryName,
+        name: &QualifiedQueryName,
         aql: &str,
         saved: Timestamp,
     ) -> Result<Assignment, StoreError> {
@@ -142,7 +143,7 @@ impl DefinitionStore for Admitted {
         self.checked(self.store.load()?)
     }
 
-    fn load_named(&self, name: &QueryName) -> Result<Vec<StoredDefinition>, StoreError> {
+    fn load_named(&self, name: &QualifiedQueryName) -> Result<Vec<StoredDefinition>, StoreError> {
         self.checked(self.store.load_named(name)?)
     }
 
@@ -171,7 +172,7 @@ impl fmt::Debug for Admitted {
 // NOTE: no specification governs this: our own design; the operator listing and
 // the console report both read this one rule, so they never disagree.
 #[must_use]
-pub fn owner(name: &QueryName, store_read_only: bool) -> Owner {
+pub fn owner(name: &QualifiedQueryName, store_read_only: bool) -> Owner {
     if ferrofed_eehrxf::reserved::reserves(name) {
         Owner::Gateway
     } else if store_read_only {
@@ -184,7 +185,7 @@ pub fn owner(name: &QueryName, store_read_only: bool) -> Owner {
 /// Whether the gateway refuses a write under `name`, by [`owner`]: every
 /// holder but the store is read-only.
 #[must_use]
-pub fn is_read_only(name: &QueryName, store_read_only: bool) -> bool {
+pub fn is_read_only(name: &QualifiedQueryName, store_read_only: bool) -> bool {
     owner(name, store_read_only) != Owner::Store
 }
 
@@ -230,14 +231,14 @@ mod tests {
     use openehr_federation::aql::{Context, Targeting};
 
     use ferrofed_operator_api::console::Owner;
-    use ferrofed_registry::definition::QueryName;
+    use ferrofed_registry::definition::query_name;
 
     use super::{admit, is_read_only, owner};
 
     #[test]
     fn the_reserved_namespace_outranks_the_store_and_only_the_store_is_writable() {
-        let reserved = QueryName::new("eu.ferrofed.eehrxf::patient-summary-problems").unwrap();
-        let own = QueryName::new("org.example::compositions").unwrap();
+        let reserved = query_name("eu.ferrofed.eehrxf::patient-summary-problems").unwrap();
+        let own = query_name("org.example::compositions").unwrap();
         for (name, store_read_only, holder) in [
             (&reserved, false, Owner::Gateway),
             (&reserved, true, Owner::Gateway),

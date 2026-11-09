@@ -29,6 +29,7 @@ use openehr_federation::aql::{Analysis, Paging, Targeting};
 use openehr_federation::dedup::DedupMode;
 use openehr_its::rest::generated::query::{AdhocQueryExecute, QueryExecuteAdhocQueryParams};
 use openehr_its::rest::routes::RouteMatch;
+use openehr_its::rest::stored_query::QualifiedQueryName;
 
 use crate::facade::answer::Failure;
 use crate::facade::{intake, route, target};
@@ -85,13 +86,13 @@ pub(crate) enum Submitted<'a> {
         /// The expanded request.
         request: AdhocQueryExecute,
         /// The qualified name of the gateway's definition.
-        name: &'a str,
+        name: &'a QualifiedQueryName,
     },
 }
 
 impl Submitted<'_> {
     /// The qualified name of the stored query invoked, for a stored query.
-    pub(crate) fn stored_name(&self) -> Option<&str> {
+    pub(crate) fn stored_name(&self) -> Option<&QualifiedQueryName> {
         match self {
             Self::Stored { name, .. } => Some(name),
             Self::Body(_) | Self::Query { .. } => None,

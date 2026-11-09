@@ -30,6 +30,7 @@ use openehr_federation::headers::{
 use openehr_federation::options::OptionsRoot;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_its::rest::generated::query::QueryParameters;
+use openehr_its::rest::stored_query::{QueryNameError, QueryVersionError};
 use serde::{Deserialize, Serialize};
 
 /// One parameter row of the form: its key on the page, its name and its
@@ -349,8 +350,11 @@ pub fn call(locale: &Locale, form: &QueryForm) -> Result<QueryCall, Refusal> {
         "stored" => QueryTarget::Stored {
             name: given(&form.name)
                 .ok_or_else(|| invalid(says(Msg::QueryNameStored)))?
-                .to_owned(),
-            version: given(&form.version).map(str::to_owned),
+                .parse()
+                .map_err(|_malformed: QueryNameError| invalid(says(Msg::QueryNameMalformed)))?,
+            version: given(&form.version).map(str::parse).transpose().map_err(
+                |_malformed: QueryVersionError| invalid(says(Msg::QueryVersionMalformed)),
+            )?,
         },
         _ => QueryTarget::Aql(
             given(&form.aql)

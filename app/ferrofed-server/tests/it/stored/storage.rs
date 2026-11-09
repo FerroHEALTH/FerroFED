@@ -145,9 +145,9 @@ async fn a_stored_definition_reads_back_as_an_its_rest_stored_query_and_lists() 
     let (status, text) = call(app.clone(), get(&format!("{NAME}/1.0.0"))?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let held: StoredQuery = serde_json::from_str(&text)?;
-    assert_eq!(NAME, held.name);
+    assert_eq!(NAME, held.name.to_string());
     assert_eq!("AQL", held.r#type);
-    assert_eq!("1.0.0", held.version);
+    assert_eq!("1.0.0", held.version.to_string());
     assert!(
         held.saved.parse::<jiff::Timestamp>().is_ok(),
         "{}",
@@ -158,12 +158,19 @@ async fn a_stored_definition_reads_back_as_an_its_rest_stored_query_and_lists() 
     let (status, text) = call(app.clone(), get(&format!("{NAME}/1"))?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let latest: StoredQuery = serde_json::from_str(&text)?;
-    assert_eq!("1.1.0", latest.version, "ITS-REST: the highest 1.x");
+    assert_eq!(
+        "1.1.0",
+        latest.version.to_string(),
+        "ITS-REST: the highest 1.x"
+    );
 
     let (status, text) = call(app, get("org.example")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let listed: Vec<StoredQuery> = serde_json::from_str(&text)?;
-    let versions: Vec<&str> = listed.iter().map(|query| query.version.as_str()).collect();
+    let versions: Vec<String> = listed
+        .iter()
+        .map(|query| query.version.to_string())
+        .collect();
     assert_eq!(
         vec!["1.0.0", "1.1.0"],
         versions,

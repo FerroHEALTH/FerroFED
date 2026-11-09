@@ -47,13 +47,14 @@ use axum::Json;
 use axum::response::{IntoResponse, Response};
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::definition::store::Definitions;
-use ferrofed_registry::definition::{QueryName, QueryVersion, StoredDefinition, VersionPattern};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 use openehr_its::rest::generated::definition::StoredQuery;
 use openehr_its::rest::generated::query::{
     AdhocQueryExecute, Query, QueryExecuteStoredQueryParams, QueryExecuteStoredQueryVersionParams,
 };
 use openehr_its::rest::routes::RouteMatch;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion, VersionPattern};
 
 use crate::config::public_url::PublicUrl;
 use crate::error::{self, Code};
@@ -206,7 +207,7 @@ fn read_only(request_id: &str) -> Response {
 /// each replica answers what any of them stored (§12.7, N44).
 async fn refreshed(
     definitions: &Arc<Definitions>,
-    name: Option<&QueryName>,
+    name: Option<&QualifiedQueryName>,
     outbound: &OutboundId,
 ) -> Result<(), Refused> {
     if !definitions.is_shared() {
@@ -284,9 +285,9 @@ fn segment(matched: &RouteMatch, param: &str) -> Option<String> {
 }
 
 /// The stored query's qualified name in `matched`.
-fn name(matched: &RouteMatch) -> Result<QueryName, Refused> {
+fn name(matched: &RouteMatch) -> Result<QualifiedQueryName, Refused> {
     let text = segment(matched, NAME_PARAM).unwrap_or_default();
-    QueryName::new(&text).map_err(|refused| Refused::with(Code::QueryNameInvalid, &refused))
+    query_name(&text).map_err(|refused| Refused::with(Code::QueryNameInvalid, &refused))
 }
 
 /// The version pattern in `matched`, `None` when the path names none.
@@ -396,7 +397,7 @@ async fn redistributed(
         return Err(Refused::with(Code::BodyInvalid, &HELD_TAKES_NO_BODY));
     }
     let name =
-        QueryName::new(name).map_err(|refused| Refused::with(Code::QueryNameInvalid, &refused))?;
+        query_name(name).map_err(|refused| Refused::with(Code::QueryNameInvalid, &refused))?;
     let version = version
         .parse::<QueryVersion>()
         .map_err(|refused| Refused::with(Code::QueryVersionInvalid, &refused))?;
@@ -431,9 +432,9 @@ async fn redistributed(
 /// The ITS-REST `StoredQuery` of `definition`.
 pub(crate) fn its_rest(definition: &StoredDefinition) -> StoredQuery {
     StoredQuery {
-        name: definition.name().as_str().to_owned(),
+        name: definition.name().clone(),
         r#type: AQL.to_owned(),
-        version: definition.version().to_string(),
+        version: definition.version(),
         saved: definition.saved().to_string(),
         q: definition.aql().to_owned(),
         additional_properties: BTreeMap::new(),
@@ -536,7 +537,7 @@ async fn execute(
     };
     let submitted = Submitted::Stored {
         request,
-        name: definition.name().as_str(),
+        name: definition.name(),
     };
     Ok(answer::answer(federation, query, submitted).await)
 }

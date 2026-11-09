@@ -27,9 +27,10 @@ use eehrxf::document::imaging::{IMAGING_REPORT_FORM, IMAGING_SLOTS};
 use eehrxf::document::section::{EmptyReason, Section};
 use eehrxf::mapping::Mapping;
 use eehrxf::mappings::IMAGING;
-use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::resource::Resource;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::printer;
 
 use crate::prescriptions::mapped::Template;
@@ -61,10 +62,10 @@ const REQUIRED: usize = 4;
 ///
 /// # Errors
 ///
-/// The [`QueryNameError`] of [`QueryName::new`], which the name does not
+/// The [`QueryNameError`] of [`QualifiedQueryName::new`], which the name does not
 /// meet.
-pub fn name() -> Result<QueryName, QueryNameError> {
-    QueryName::new(&format!("{NAMESPACE}::{SLUG}"))
+pub fn name() -> Result<QualifiedQueryName, QueryNameError> {
+    query_name(&format!("{NAMESPACE}::{SLUG}"))
 }
 
 /// Returns the query as AQL text, [`section_query::containing`] of

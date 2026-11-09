@@ -133,7 +133,13 @@ async fn a_definition_file_is_read_listed_and_run_by_name() -> TestResult {
     let (status, text) = call(app.clone(), bare(Method::GET, &format!("{NAME}/1"))?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let held: StoredQuery = serde_json::from_str(&text)?;
-    assert_eq!((NAME, "1.0.0"), (held.name.as_str(), held.version.as_str()));
+    assert_eq!(
+        (NAME, "1.0.0"),
+        (
+            held.name.to_string().as_str(),
+            held.version.to_string().as_str()
+        )
+    );
     assert!(held.q.contains("$patient"), "the admitted text: {}", held.q);
 
     let (status, text) = call(app.clone(), bare(Method::GET, "org.example")?).await?;
@@ -236,7 +242,7 @@ async fn the_operator_surface_marks_a_definition_file_read_only() -> TestResult 
         let file = page
             .items
             .iter()
-            .find(|entry| entry.definition.name == NAME)
+            .find(|entry| entry.definition.name.to_string() == NAME)
             .ok_or("the definition file is listed")?;
         assert!(file.read_only, "{path}: {text}");
         assert!(page.items.iter().all(|entry| entry.read_only), "{path}");

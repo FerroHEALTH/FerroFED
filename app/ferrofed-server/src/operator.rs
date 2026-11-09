@@ -29,10 +29,11 @@ use ferrofed_operator_api::operator::{
     DeploymentReport, IncidentReport, MAX_PAGE, Page, PageRequest, StoredVersion, routing_table,
 };
 use ferrofed_registry::creating_system::LearnedMap;
-use ferrofed_registry::definition::QueryName;
+use ferrofed_registry::definition::query_name;
 use ferrofed_registry::replica::{HEADER, Replica};
 use http::{HeaderMap, HeaderName, HeaderValue};
 use openehr_its::rest::generated::definition::StoredQuery;
+use openehr_its::rest::stored_query::QualifiedQueryName;
 
 use crate::config::base_path::BasePath;
 use crate::error::{self, Code};
@@ -197,7 +198,7 @@ async fn stored_query(
     if !page.is_valid() {
         return page_refused(&headers);
     }
-    let name = match QueryName::new(&name) {
+    let name = match query_name(&name) {
         Ok(name) => name,
         Err(refused) => {
             return error::response(
@@ -234,7 +235,7 @@ fn unread(headers: &HeaderMap) -> Response {
 /// # Errors
 ///
 /// [`Unread`] when the store cannot be read, which is logged here.
-async fn held(state: &AppState, name: Option<QueryName>) -> Result<Vec<Listed>, Unread> {
+async fn held(state: &AppState, name: Option<QualifiedQueryName>) -> Result<Vec<Listed>, Unread> {
     let Some(definitions) = state.definitions().map(Arc::clone) else {
         return Ok(Vec::new());
     };

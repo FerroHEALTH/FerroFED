@@ -14,8 +14,9 @@
 //! deployment can never shadow one. No specification governs the
 //! reservation: our own design.
 
-use ferrofed_registry::definition::{QueryName, QueryNameError, QueryVersion, StoredDefinition};
+use ferrofed_registry::definition::StoredDefinition;
 use jiff::Timestamp;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError, QueryVersion};
 
 /// The reserved namespace, a reverse domain name under `ferrofed.eu`.
 pub const NAMESPACE: &str = "eu.ferrofed.eehrxf";
@@ -50,7 +51,7 @@ pub fn definitions() -> Result<Vec<StoredDefinition>, QueryNameError> {
 /// ASCII case ignored, so no spelling of it can be stored beside the
 /// gateway's own.
 #[must_use]
-pub fn reserves(name: &QueryName) -> bool {
+pub fn reserves(name: &QualifiedQueryName) -> bool {
     name.namespace().is_some_and(|namespace| {
         namespace
             .to_ascii_lowercase()
@@ -61,12 +62,13 @@ pub fn reserves(name: &QueryName) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use ferrofed_registry::definition::QueryName;
+    use ferrofed_registry::definition::query_name;
+    use openehr_its::rest::stored_query::QualifiedQueryName;
 
     use super::reserves;
 
-    fn name(text: &str) -> QueryName {
-        QueryName::new(text).unwrap()
+    fn name(text: &str) -> QualifiedQueryName {
+        query_name(text).unwrap()
     }
 
     #[test]

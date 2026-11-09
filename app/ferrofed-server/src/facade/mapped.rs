@@ -45,6 +45,7 @@ use openehr_federation::outcome::EndpointOutcome;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::path_segment;
 use openehr_its::rest::generated::query::ResultSetRow;
+use openehr_its::rest::stored_query::QualifiedQueryName;
 use secrecy::ExposeSecret;
 use uuid::Uuid;
 
@@ -93,7 +94,7 @@ pub(crate) async fn asked(
         federation,
         arrived,
         located,
-        (patient, (name.as_str(), Medication::Orders.aql())),
+        (patient, (&name, Medication::Orders.aql())),
         &members,
     )
     .await?;
@@ -146,7 +147,7 @@ pub(crate) async fn queried(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
     located: &Located,
-    (patient, (name, aql)): ((&str, &str), (&str, String)),
+    (patient, (name, aql)): ((&str, &str), (&QualifiedQueryName, String)),
     members: &BTreeSet<EndpointId>,
 ) -> Result<Vec<(EndpointId, Answered)>, Unprescribed> {
     let snapshot = federation.snapshot();

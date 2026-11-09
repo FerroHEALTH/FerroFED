@@ -31,8 +31,9 @@ use eehrxf::document::section::Section;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::Mapping;
 use eehrxf::mappings::LABORATORY;
-use ferrofed_registry::definition::{QueryName, QueryNameError, StoredDefinition};
+use ferrofed_registry::definition::{StoredDefinition, query_name};
 use fhir_types::r4::bundle::Bundle;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::ast::SelectQuery;
 use openehr_query::printer;
 
@@ -40,7 +41,6 @@ use crate::prescriptions::mapped::Template;
 use crate::report::{self, Report, ServedError, Writes};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query::{self, Archetype};
-use crate::stack::deep;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "laboratory-report";
@@ -61,10 +61,10 @@ pub const ARCHETYPES: &[Archetype] = &[Archetype {
 ///
 /// # Errors
 ///
-/// The [`QueryNameError`] of [`QueryName::new`], which the name does not
+/// The [`QueryNameError`] of [`QualifiedQueryName::new`], which the name does not
 /// meet.
-pub fn name() -> Result<QueryName, QueryNameError> {
-    QueryName::new(&format!("{NAMESPACE}::{SLUG}"))
+pub fn name() -> Result<QualifiedQueryName, QueryNameError> {
+    query_name(&format!("{NAMESPACE}::{SLUG}"))
 }
 
 /// Returns the query as an AQL syntax tree.
@@ -131,8 +131,7 @@ impl Served {
         let result = LABORATORY
             .with_context(RESULT_CONTEXT)
             .map_err(ServedError::Context)?;
-        let mapping =
-            deep(|| Mapping::compile_project(&source, &result))?.map_err(ServedError::Compile)?;
+        let mapping = Mapping::compile_project(&source, &result).map_err(ServedError::Compile)?;
         Ok(Self { mapping })
     }
 }

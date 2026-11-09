@@ -73,7 +73,7 @@ pub(crate) async fn answer(
     let budget = wait.map_or(configured, |wait| configured.shortened_to(wait));
     let name = match &submitted {
         Submitted::Body(_) | Submitted::Query { .. } => None,
-        Submitted::Stored { name, .. } => Some((*name).to_owned()),
+        Submitted::Stored { name, .. } => Some((*name).clone()),
     };
     let query = Query {
         sent: submitted,
@@ -323,7 +323,7 @@ async fn federate(
     } = query;
     let logged = outbound.to_string();
     let request_id = logged.as_str();
-    let stored = sent.stored_name().map(str::to_owned);
+    let stored = sent.stored_name().map(ToString::to_string);
     let (request, named, analysis) =
         read(federation, (sent, headers), (completion, dedup), request_id)?;
     let deadline = started

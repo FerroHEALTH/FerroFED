@@ -24,11 +24,10 @@ use eehrxf::document::Document;
 use eehrxf::document::laboratory::{LAB_SLOTS, LABORATORY_REPORT_FORM};
 use eehrxf::document::section::Section;
 use eehrxf::mappings::LABORATORY;
-use fhir_types::codec::{Json, Path as CodecPath, Value as CodecValue};
-use fhir_types::r4::device::{Device, DeviceDeviceName};
-use fhir_types::r4::organization::Organization;
 use fhir_types::r4::resource::Resource;
 use serde_json::Value;
+
+use crate::sender::{BASE, authored, displayed, resource};
 
 /// The workspace root, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -55,6 +54,22 @@ pub const ORDER_SYSTEM: &str = "http://example.org/fhir/sid/synthetic-lab-orders
 /// range.
 pub const NORMAL_RANGE: (f64, f64) = (120.0, 200.0);
 
+/// The R4 code system of `Observation.referenceRange.type`.
+pub const REFERENCE_RANGE_MEANING: &str =
+    "http://terminology.hl7.org/CodeSystem/referencerange-meaning";
+
+/// A reference range of the synthetic result other than its normal range,
+/// typed by its code in [`REFERENCE_RANGE_MEANING`].
+#[derive(Debug, Clone, Copy)]
+pub struct TypedRange<'a> {
+    /// The `referencerange-meaning` code, such as `treatment`.
+    pub meaning: &'a str,
+    /// The lower bound in mg/dL, when the range has one.
+    pub low: Option<f64>,
+    /// The upper bound in mg/dL, when the range has one.
+    pub high: Option<f64>,
+}
+
 /// The canonical URL of the laboratory result profile.
 const RESULT_PROFILE: &str =
     "http://hl7.eu/fhir/laboratory/StructureDefinition/Observation-resultslab-eu-lab";
@@ -65,10 +80,6 @@ const REPORT_PROFILE: &str =
 
 /// The canonical URL of the laboratory specimen profile.
 const SPECIMEN_PROFILE: &str = "http://hl7.eu/fhir/laboratory/StructureDefinition/Specimen-eu-lab";
-
-/// The base the document names its entries under, in the `example.org`
-/// domain RFC 6761 §6.5 reserves.
-const BASE: &str = "https://sender.example.org/fhir";
 
 /// Returns the path of the vendored HL7 Europe Laboratory Report 2.0.0
 /// package.
@@ -113,25 +124,20 @@ pub fn context() -> Result<&'static str, Box<dyn Error>> {
         .ok_or_else(|| "the laboratory project names no result context".into())
 }
 
-/// Decodes the FHIR JSON `value` as the R4 resource of `kind`.
-fn resource(kind: &str, value: &Value) -> Result<Resource, Box<dyn Error>> {
-    let CodecValue::Object(object) = serde_json::from_str::<CodecValue>(&value.to_string())? else {
-        return Err(format!("the synthetic {kind} is no JSON object").into());
-    };
-    Ok(Resource::from_json(&object, &mut CodecPath::root(kind))?)
-}
-
 /// A synthetic laboratory report of the patient `identifiers`.
 ///
 /// Each identifier is a `(system, value)`. The document is in the HL7
 /// Europe Laboratory Report 2.0.0 form: one serum cholesterol result of
-/// 182 mg/dL with its normal range and specimen, and the report that names
-/// both and the order it answers.
+/// 182 mg/dL with its normal range, each of `typed` after it, and its
+/// specimen, and the report that names both and the order it answers.
 ///
 /// # Errors
 ///
 /// When the component's builder refuses a synthetic resource.
-pub fn received_document(identifiers: &[(&str, &str)]) -> Result<String, Box<dyn Error>> {
+pub fn received_document(
+    identifiers: &[(&str, &str)],
+    typed: &[TypedRange<'_>],
+) -> Result<String, Box<dyn Error>> {
     let mut document = Document::of(
         &LABORATORY_REPORT_FORM,
         BASE,
@@ -139,40 +145,16 @@ pub fn received_document(identifiers: &[(&str, &str)]) -> Result<String, Box<dyn
         String::from("2026-03-02T10:00:00Z"),
         String::from("Laboratory report"),
     );
-    let identifier: Vec<Value> = identifiers
-        .iter()
-        .map(|(system, value)| serde_json::json!({ "system": system, "value": value }))
-        .collect();
-    let Resource::Patient(patient) = resource(
-        "Patient",
-        &serde_json::json!({
-            "resourceType": "Patient",
-            "id": "synthetic-patient",
-            "identifier": identifier,
-            "name": [{ "family": "Synthetic" }],
-            "birthDate": "1970-01-01"
-        }),
-    )?
-    else {
-        return Err("the synthetic patient is no Patient".into());
-    };
-    document.with_patient(*patient)?;
-    document.with_author(&Resource::Device(Box::new(Device {
-        id: Some(String::from("sender")),
-        device_name: vec![DeviceDeviceName {
-            name: "Synthetic laboratory system".into(),
-            r#type: "user-friendly-name".into(),
-            ..DeviceDeviceName::default()
-        }],
-        ..Device::default()
-    })))?;
-    document.with_author(&Resource::Organization(Box::new(Organization {
-        id: Some(String::from("laboratory")),
-        name: Some("Synthetic laboratory".into()),
-        ..Organization::default()
-    })))?;
+    authored(
+        &mut document,
+        identifiers,
+        (
+            "Synthetic laboratory system",
+            ("laboratory", "Synthetic laboratory"),
+        ),
+    )?;
     let urls = document.add(&[
-        resource("Observation", &result())?,
+        resource("Observation", &result(typed))?,
         resource("Specimen", &specimen())?,
     ])?;
     let slot = LAB_SLOTS
@@ -189,13 +171,13 @@ pub fn received_document(identifiers: &[(&str, &str)]) -> Result<String, Box<dyn
     };
     document.with_report(*report)?;
     let mut bundle = serde_json::to_value(document.into_bundle()?)?;
-    displayed(&mut bundle);
+    displayed(&mut bundle, &DISPLAYS);
     Ok(bundle.to_string())
 }
 
 /// The displays a sender that names its codes writes for the codes the
 /// component writes with none, each `(system, code, display)`.
-const DISPLAYS: [(&str, &str, &str); 3] = [
+const DISPLAYS: [(&str, &str, &str); 4] = [
     ("http://loinc.org", "11502-2", "Laboratory report"),
     ("http://loinc.org", "18719-5", "Chemistry studies"),
     (
@@ -203,31 +185,8 @@ const DISPLAYS: [(&str, &str, &str); 3] = [
         "laboratory",
         "Laboratory",
     ),
+    (REFERENCE_RANGE_MEANING, "treatment", "Treatment Range"),
 ];
-
-/// Gives every coding in `value` that names no display the one
-/// [`DISPLAYS`] holds for it, as a sender that names its codes does: the
-/// component's builder writes some codings with no display, and the
-/// receive path refuses a coding with none when no terminology server can
-/// look one up.
-fn displayed(value: &mut Value) {
-    match value {
-        Value::Object(object) => {
-            let named = |key: &str| object.get(key).and_then(Value::as_str).map(str::to_owned);
-            if let (Some(system), Some(code), None) =
-                (named("system"), named("code"), object.get("display"))
-                && let Some((_, _, display)) = DISPLAYS
-                    .iter()
-                    .find(|(known, held, _)| *known == system && *held == code)
-            {
-                object.insert(String::from("display"), Value::from(*display));
-            }
-            object.values_mut().for_each(displayed);
-        }
-        Value::Array(items) => items.iter_mut().for_each(displayed),
-        _ => {}
-    }
-}
 
 /// A synthetic serum specimen in the shape `Specimen-eu-lab` constrains.
 fn specimen() -> Value {
@@ -251,8 +210,29 @@ fn specimen() -> Value {
 }
 
 /// A synthetic quantitative result in the shape
-/// `Observation-resultslab-eu-lab` constrains.
-fn result() -> Value {
+/// `Observation-resultslab-eu-lab` constrains, with its normal range and
+/// each of `typed`.
+fn result(typed: &[TypedRange<'_>]) -> Value {
+    let mut ranges = vec![serde_json::json!({
+        "low": milligrams(NORMAL_RANGE.0),
+        "high": milligrams(NORMAL_RANGE.1)
+    })];
+    for range in typed {
+        let mut held = serde_json::Map::new();
+        held.insert(
+            String::from("type"),
+            serde_json::json!({ "coding": [{
+                "system": REFERENCE_RANGE_MEANING,
+                "code": range.meaning
+            }] }),
+        );
+        for (bound, value) in [("low", range.low), ("high", range.high)] {
+            if let Some(value) = value {
+                held.insert(String::from(bound), milligrams(value));
+            }
+        }
+        ranges.push(Value::Object(held));
+    }
     serde_json::json!({
         "resourceType": "Observation",
         "id": "synthetic-cholesterol",
@@ -276,10 +256,7 @@ fn result() -> Value {
             "system": "http://unitsofmeasure.org",
             "code": "mg/dL"
         },
-        "referenceRange": [{
-            "low": milligrams(NORMAL_RANGE.0),
-            "high": milligrams(NORMAL_RANGE.1)
-        }]
+        "referenceRange": ranges
     })
 }
 
@@ -323,8 +300,8 @@ fn report() -> Value {
     })
 }
 
-/// Returns the synthetic report of the patient `identifiers` as a member
-/// serves it.
+/// Returns the synthetic report of the patient `identifiers`, with the
+/// further ranges `typed`, as a member serves it.
 ///
 /// The report is written into one `KDS_Laborbericht` composition by the
 /// shipped mapping, its files written under `directory`, which must exist,
@@ -336,7 +313,7 @@ fn report() -> Value {
 pub fn composition(
     directory: &Path,
     identifiers: &[(&str, &str)],
-    uid: &str,
+    (uid, typed): (&str, &[TypedRange<'_>]),
 ) -> Result<String, Box<dyn Error>> {
     let files = directory.join("composition-mapping");
     std::fs::create_dir_all(&files)?;
@@ -345,7 +322,8 @@ pub fn composition(
         &mapping_files(&files)?,
         &[context()?],
     )?;
-    let document = eehrxf::receive::ReceivedDocument::read(&received_document(identifiers)?)?;
+    let document =
+        eehrxf::receive::ReceivedDocument::read(&received_document(identifiers, typed)?)?;
     let now = "2026-03-02T10:00:00Z";
     let settings = fhirconnect::operations::run::Settings::new("Device/ferrofed-testkit", now)
         .with_defaults(

@@ -124,18 +124,22 @@ pub async fn held_now() -> Result<Vec<Held>, Stop> {
 /// As [`held_now`].
 pub async fn versions_now(name: String, version: Option<String>) -> Result<Vec<Held>, Stop> {
     let mut versions = versions_of(&name).await?;
-    versions.sort_by_key(|held| std::cmp::Reverse(version_key(&held.definition.version)));
+    versions.sort_by_key(|held| std::cmp::Reverse(held.definition.version));
     let shown = version
         .filter(|asked| {
             versions
                 .iter()
-                .any(|held| held.definition.version == *asked)
+                .any(|held| held.definition.version.to_string() == *asked)
         })
-        .or_else(|| versions.first().map(|held| held.definition.version.clone()));
+        .or_else(|| {
+            versions
+                .first()
+                .map(|held| held.definition.version.to_string())
+        });
     // NOTE: no specification governs this: our own design; the page draws one version's
     // AQL, so no other is held while it draws.
     for held in &mut versions {
-        if Some(&held.definition.version) != shown.as_ref() {
+        if Some(held.definition.version.to_string()) != shown {
             held.definition.q.clear();
         }
     }
@@ -198,30 +202,12 @@ async fn versions_of(name: &str) -> Result<Vec<Held>, Stop> {
 pub async fn names() -> Result<Vec<(String, u32)>, Stop> {
     let mut counted: BTreeMap<String, u32> = BTreeMap::new();
     for version in held().await? {
-        let entry = counted.entry(version.definition.name.clone()).or_default();
+        let entry = counted
+            .entry(version.definition.name.to_string())
+            .or_default();
         *entry = entry.saturating_add(1);
     }
     Ok(counted.into_iter().collect())
-}
-
-/// The order of the version `version`: its numbers, a part that is no
-/// number after every number.
-fn version_key(version: &str) -> Vec<(u64, String)> {
-    version
-        .split(['.', '-', '+'])
-        .map(|part| {
-            part.parse::<u64>()
-                .map_or((u64::MAX, part.to_owned()), |number| {
-                    (number, String::new())
-                })
-        })
-        .collect()
-}
-
-/// The namespace of the qualified name `name`: what comes before its `::`.
-fn namespace(name: &str) -> &str {
-    name.split_once("::")
-        .map_or(name, |(namespace, _)| namespace)
 }
 
 /// The versions `held` grouped by namespace and name, each name's versions
@@ -229,18 +215,20 @@ fn namespace(name: &str) -> &str {
 fn grouped(held: &[Held]) -> BTreeMap<String, BTreeMap<String, Vec<&Held>>> {
     let mut groups: BTreeMap<String, BTreeMap<String, Vec<&Held>>> = BTreeMap::new();
     for version in held {
-        let name = version.definition.name.clone();
+        let name = &version.definition.name;
+        // NOTE: no specification governs this: our own design; a name with no namespace is
+        // grouped under itself.
+        let namespace = name.namespace().unwrap_or_else(|| name.name());
         groups
-            .entry(namespace(&name).to_owned())
+            .entry(namespace.to_owned())
             .or_default()
-            .entry(name)
+            .entry(name.to_string())
             .or_default()
             .push(version);
     }
     for names in groups.values_mut() {
         for versions in names.values_mut() {
-            versions
-                .sort_by_key(|version| std::cmp::Reverse(version_key(&version.definition.version)));
+            versions.sort_by_key(|version| std::cmp::Reverse(version.definition.version));
         }
     }
     groups
@@ -318,11 +306,11 @@ fn namespace_card(namespace: &str, names: &BTreeMap<String, Vec<&Held>>) -> Html
         Column::text("versions", tr(Msg::ColumnVersions)),
     ];
     let rows = Html::join(names.iter().map(|(name, versions)| {
-        let shown = Html::join(
-            versions
-                .iter()
-                .map(|version| Tag::new(version.definition.version.clone()).mono().view()),
-        );
+        let shown = Html::join(versions.iter().map(|version| {
+            Tag::new(version.definition.version.to_string())
+                .mono()
+                .view()
+        }));
         Html::raw(format!(
             "<tr>{}{}</tr>",
             title_cell(
@@ -374,8 +362,7 @@ pub async fn page(posted: Option<Fields>) -> Html {
         }
         Err(stop) => opt(repaired.map(repair_answer)).then(stopped(&stop)),
         Ok(mut versions) => {
-            versions
-                .sort_by_key(|version| std::cmp::Reverse(version_key(&version.definition.version)));
+            versions.sort_by_key(|version| std::cmp::Reverse(version.definition.version));
             detail(
                 &name,
                 &versions,
@@ -401,13 +388,13 @@ fn detail(
         .and_then(|asked| {
             versions
                 .iter()
-                .find(|version| version.definition.version.clone() == asked)
+                .find(|version| version.definition.version.to_string() == asked)
         })
         .or_else(|| versions.first());
     let Some(shown) = shown else {
         return crate::pages::errors::not_found();
     };
-    let version = shown.definition.version.clone();
+    let version = shown.definition.version.to_string();
     let missing = asked.filter(|asked| *asked != version).map(|asked| {
         notice(
             Tone::Warn,
@@ -487,7 +474,7 @@ fn aql(shown: &Held) -> Html {
         CodeHead {
             title: tr_with(
                 Msg::StoredAqlOf,
-                &[("version", shown.definition.version.clone().into())],
+                &[("version", shown.definition.version.to_string().into())],
             ),
             tags: vec![String::from("AQL")],
             digest: None,
@@ -516,7 +503,7 @@ fn versions_table(name: &str, versions: &[Held]) -> Html {
         Column::text("owner", tr(Msg::ColumnOwner)),
     ];
     let rows = Html::join(versions.iter().map(|version| {
-        let number = version.definition.version.clone();
+        let number = version.definition.version.to_string();
         let link = format!("{}?version={}", href(name), encoded(&number));
         let owner = if version.read_only {
             Tag::new(tr(Msg::StoredReadOnly))

@@ -25,7 +25,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::prescriptions::mapped::{MapModeError, Template};
-use crate::stack::deep;
 use eehrxf::crosswalk::patient_summary::PATIENT_SUMMARY;
 use eehrxf::document::form::{self, PATIENT_SUMMARY_FORM, Slot};
 use eehrxf::mapping::{Mapping, MappingError};
@@ -233,27 +232,19 @@ impl Mappings {
 /// [`MappingsError::Compile`] for a context mapping that does not compile.
 fn compile_one(source: &Source) -> Result<Mapping, MappingsError> {
     let section = source.section;
-    let written = if source.archetypes.is_empty() {
-        Template::Opt14(&source.opt)
-    } else {
-        Template::Adl2 {
-            template: &source.opt,
-            archetypes: &source.archetypes,
-        }
-    };
+    let written = Template::of(&source.opt, &source.archetypes);
     let refused = |error| MappingsError::Template {
         section: section.slug(),
         source: Box::new(error),
     };
     let template = written.source().map_err(refused)?;
-    let compiled =
-        deep(|| Mapping::compile_template(&template, &source.files, &[source.context.as_str()]))
-            .map_err(|error| refused(MapModeError::Deep(error)))?;
-    compiled.map_err(|error| MappingsError::Compile {
-        section: section.slug(),
-        context: source.context.clone(),
-        source: error,
-    })
+    Mapping::compile_template(&template, &source.files, &[source.context.as_str()]).map_err(
+        |error| MappingsError::Compile {
+            section: section.slug(),
+            context: source.context.clone(),
+            source: error,
+        },
+    )
 }
 
 /// Returns the EPS section slot the crosswalk carries `section` in.

@@ -24,16 +24,24 @@ use http::StatusCode;
 use openehr_federation::outcome::{ErrorDetail, Outcome};
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::ReqwestTransport;
+use openehr_its::rest::stored_query::{QualifiedQueryName, QueryVersion};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-/// The definition every case addresses.
-const AT: DefinitionAt<'static> = DefinitionAt {
-    name: "org.example::fanned",
-    version: "1.0.0",
-};
+/// The name of the definition every case addresses.
+fn fanned() -> Result<QualifiedQueryName, Box<dyn Error>> {
+    Ok("org.example::fanned".parse()?)
+}
+
+/// The definition every case addresses, named `name`.
+fn at(name: &QualifiedQueryName) -> DefinitionAt<'_> {
+    DefinitionAt {
+        name,
+        version: QueryVersion::new(1, 0, 0),
+    }
+}
 
 /// Its path at a node.
 const NODE_PATH: &str = "/v1/definition/query/org.example::fanned/1.0.0";
@@ -95,9 +103,10 @@ fn error_text(outcome: &Outcome) -> Result<&str, Box<dyn Error>> {
 
 #[tokio::test]
 async fn a_stored_definition_is_active_and_the_node_receives_the_aql_as_text() -> TestResult {
+    let name = fanned()?;
     let server = node("PUT", 200, "").await;
     let stored = client_at(&server.uri())?
-        .store_definition(AT, AQL, &options()?)
+        .store_definition(at(&name), AQL, &options()?)
         .await?;
     assert_eq!(EndpointStatus::Active, stored.outcome.status());
     assert_eq!(Contact::Answered(StatusCode::OK), stored.contact);
@@ -118,6 +127,7 @@ async fn a_stored_definition_is_active_and_the_node_receives_the_aql_as_text() -
 
 #[tokio::test]
 async fn a_refused_store_is_a_node_error_with_the_status_and_the_nodes_message() -> TestResult {
+    let name = fanned()?;
     for (status, named) in [
         (409, "409 Conflict"),
         (400, "400 Bad Request"),
@@ -126,7 +136,7 @@ async fn a_refused_store_is_a_node_error_with_the_status_and_the_nodes_message()
         let body = format!(r#"{{"message":"{NODE_BODY}"}}"#);
         let server = node("PUT", status, &body).await;
         let stored = client_at(&server.uri())?
-            .store_definition(AT, AQL, &options()?)
+            .store_definition(at(&name), AQL, &options()?)
             .await?;
         assert_eq!(
             EndpointStatus::NodeError,
@@ -149,13 +159,15 @@ async fn a_refused_store_is_a_node_error_with_the_status_and_the_nodes_message()
 
 #[tokio::test]
 async fn a_node_copy_is_read_back_or_reported_missing() -> TestResult {
+    let name = fanned()?;
     let copy = format!(
         r#"{{"name":"{}","type":"AQL","version":"{}","saved":"2026-10-03T00:00:00Z","q":"{AQL}"}}"#,
-        AT.name, AT.version
+        at(&name).name,
+        at(&name).version
     );
     let server = node("GET", 200, &copy).await;
     let read = client_at(&server.uri())?
-        .read_definition(AT, &options()?)
+        .read_definition(at(&name), &options()?)
         .await?;
     let NodeCopy::Held { aql, .. } = read else {
         return Err(format!("a held copy, not {read:?}").into());
@@ -164,7 +176,7 @@ async fn a_node_copy_is_read_back_or_reported_missing() -> TestResult {
 
     let server = node("GET", 404, &format!(r#"{{"message":"{NODE_BODY}"}}"#)).await;
     let read = client_at(&server.uri())?
-        .read_definition(AT, &options()?)
+        .read_definition(at(&name), &options()?)
         .await?;
     assert!(matches!(read, NodeCopy::Missing { .. }), "{read:?}");
     Ok(())
@@ -172,9 +184,10 @@ async fn a_node_copy_is_read_back_or_reported_missing() -> TestResult {
 
 #[tokio::test]
 async fn a_copy_that_is_no_stored_query_or_a_node_out_of_reach_is_failed() -> TestResult {
+    let name = fanned()?;
     let server = node("GET", 200, NODE_BODY).await;
     let read = client_at(&server.uri())?
-        .read_definition(AT, &options()?)
+        .read_definition(at(&name), &options()?)
         .await?;
     let NodeCopy::Failed { outcome, contact } = read else {
         return Err(format!("a failed read, not {read:?}").into());
@@ -188,7 +201,7 @@ async fn a_copy_that_is_no_stored_query_or_a_node_out_of_reach_is_failed() -> Te
     assert!(!error_text(&outcome)?.contains(NODE_BODY), "no node body");
 
     let read = client_at(&format!("{}/openehr", unreachable::BASE))?
-        .read_definition(AT, &options()?)
+        .read_definition(at(&name), &options()?)
         .await?;
     let NodeCopy::Failed { outcome, contact } = read else {
         return Err(format!("a failed read, not {read:?}").into());

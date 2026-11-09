@@ -16,12 +16,13 @@
 
 use std::error::Error;
 
+use ferrofed_registry::definition::StoredDefinition;
 use ferrofed_registry::definition::store::{
     Assignment, DefinitionStore, Definitions, Insertion, StoreError,
 };
-use ferrofed_registry::definition::{QueryName, StoredDefinition, VersionPattern};
 use ferrofed_server::stored::embedded::RedbStore;
 use jiff::Timestamp;
+use openehr_its::rest::stored_query::{QualifiedQueryName, VersionPattern};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -132,7 +133,7 @@ fn a_lookup_selects_the_highest_version_its_pattern_matches(open: Open<'_>) -> T
     }
     drop(definitions);
     let definitions = Definitions::open(open()?)?;
-    let name: QueryName = "q".parse()?;
+    let name: QualifiedQueryName = "q".parse()?;
     let at = |pattern: Option<&str>| -> Result<Option<String>, Box<dyn Error>> {
         let pattern = pattern.map(str::parse::<VersionPattern>).transpose()?;
         Ok(definitions
@@ -212,7 +213,7 @@ fn an_unversioned_insert_takes_the_next_version_by_number(open: Open<'_>) -> Tes
         let inserted = store.insert_if_absent(&definition(name, version, "SELECT 0")?)?;
         assert_eq!(Insertion::Stored, inserted, "a neighbouring name");
     }
-    let name: QueryName = "q".parse()?;
+    let name: QualifiedQueryName = "q".parse()?;
     let saved = Timestamp::new(1_790_000_000, 123_456_789)?;
     let next = |aql: &str| assigned(store.insert_assigned(&name, aql, saved)?);
     assert_eq!("1.0.0", next("SELECT 1")?, "§12.7: a new name");
@@ -260,7 +261,7 @@ fn an_unversioned_insert_takes_the_next_version_by_number(open: Open<'_>) -> Tes
 
 fn unversioned_inserts_racing_on_one_name_never_share_a_version(open: Open<'_>) -> TestResult {
     let store = open()?;
-    let name: QueryName = "org.example::raced".parse()?;
+    let name: QualifiedQueryName = "org.example::raced".parse()?;
     let saved = Timestamp::new(1_790_000_000, 0)?;
     let writers = 8;
     let answers: Vec<Result<Assignment, StoreError>> = std::thread::scope(|scope| {
