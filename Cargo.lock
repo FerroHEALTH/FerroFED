@@ -1711,9 +1711,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-config"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17c97163b43a0d4211ee76c83601b19b2d67fc162afdff0f07359e6317a51d91"
+checksum = "3d18951fc3a4752fabbe4363a82f965e90893dcdc0ace12bb2f4371c7b3f25f1"
 dependencies = [
  "ferrohealth-secret",
  "percent-encoding",

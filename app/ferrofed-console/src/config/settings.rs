@@ -69,8 +69,15 @@ pub struct OidcSettings {
 const GATEWAY_TIMEOUT: Retired = Retired::replaced(
     "gateway.timeout_ms",
     "gateway.timeout, a duration such as `30s`",
-    "0.0.19",
+    PREPARING,
 );
+
+/// The release the console is preparing.
+///
+/// `removed::stale` holds [`GATEWAY_TIMEOUT`] to it
+/// (FerroHEALTH/FerroSYS#339); the first pull request after each cut moves
+/// it on.
+const PREPARING: &str = "0.0.19";
 
 impl OidcSettings {
     /// The console's own origin, `scheme://host:port`: the origin of its
@@ -260,5 +267,17 @@ fn is_loopback(url: &Url) -> bool {
         Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
         Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
         None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ferrohealth_config::removed::stale;
+
+    use super::{GATEWAY_TIMEOUT, PREPARING};
+
+    #[test]
+    fn the_retired_gateway_timeout_lives_for_the_one_release_that_retires_it() {
+        assert_eq!(0, stale(&[GATEWAY_TIMEOUT], PREPARING).len());
     }
 }

@@ -16,8 +16,15 @@ use ferrohealth_config::removed::{Removals, Removed, RemovedKeys, Retired};
 
 use crate::config::Config;
 
+/// The release the workspace is preparing.
+///
+/// `removed::stale` holds every declaration to it
+/// (FerroHEALTH/FerroSYS#339). The workspace version moves only at the cut,
+/// so the first pull request after each cut moves this on.
+pub const PREPARING: &str = "0.0.19";
+
 /// The release that retired the unit-suffixed keys (#1800).
-const UNITS: &str = "0.0.19";
+const UNITS: &str = PREPARING;
 
 /// A duration such as `30s`.
 macro_rules! span {
@@ -298,34 +305,14 @@ pub fn check(config: &Config) -> Result<(), RemovedKeys> {
 
 #[cfg(test)]
 mod tests {
-    use super::ALL;
+    use ferrohealth_config::removed::stale;
 
-    /// The release the workspace is cut as next: the version a declaration
-    /// of this module may name besides the workspace's own.
-    fn next(version: &str) -> String {
-        let mut parts: Vec<u64> = version
-            .split('.')
-            .map(|part| part.parse().expect("a release version is numeric"))
-            .collect();
-        if let Some(patch) = parts.last_mut() {
-            *patch += 1;
-        }
-        parts
-            .iter()
-            .map(u64::to_string)
-            .collect::<Vec<_>>()
-            .join(".")
-    }
+    use super::{ALL, PREPARING};
 
     #[test]
     fn every_refusal_lives_for_the_one_release_that_retires_it() {
-        // NOTE: no specification governs this: our own design; the workspace version is
-        // the last release's until the bump, so a refusal being built names the next one.
-        let version = env!("CARGO_PKG_VERSION");
-        let upcoming = next(version);
-        let stale: Vec<_> = ALL
-            .iter()
-            .filter(|retired| retired.since() != version && retired.since() != upcoming)
+        let stale: Vec<_> = stale(ALL, PREPARING)
+            .into_iter()
             .map(|retired| (retired.key(), retired.since()))
             .collect();
         assert!(stale.is_empty(), "delete these refusals: {stale:?}");
