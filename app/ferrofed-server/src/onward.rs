@@ -33,7 +33,7 @@ use openehr_its::rest::client::Credentials;
 
 use crate::binding::seam::ProvideError;
 use crate::config::settings::{Scheme, Settings};
-use crate::upstream::UpstreamToken;
+use ferrofed_engine::onward::upstream::UpstreamToken;
 use ferrohealth_server::tls_client::TlsClient;
 use openehr_its::rest::client::ReqwestTransport;
 

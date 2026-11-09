@@ -31,6 +31,7 @@ use std::time::Instant;
 use ferrohealth_smart::openehr::smart_scopes::{Compartment, SmartScope};
 
 pub mod grant;
+pub mod upstream;
 
 /// The monotonic clock the Nuts token cache reads.
 ///
