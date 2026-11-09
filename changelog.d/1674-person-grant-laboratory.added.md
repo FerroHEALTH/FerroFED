@@ -1,1 +1,0 @@
-- A test now shows that a person's own grant lists and reads their laboratory reports on the FHIR face, and that the same grant is refused another patient's reports (Regulation (EU) 2025/327 Art 3(1)). The rights page and the Annex II checklist name the test.
