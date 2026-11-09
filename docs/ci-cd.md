@@ -51,9 +51,19 @@ under the pins below.
 `ci.yml` splits on whether a check needs Rust.
 
 **Tier 1 needs no Rust toolchain**, but for the `manifests` guard, which
-reads the manifests with `cargo metadata` and compiles nothing.
+reads the manifests with `cargo metadata` and compiles nothing, and the
+`forwarders` and `module-cycles` ratchets, which build their own small tools.
 
-| Job | Runs |
+Tier 1 is two jobs (#1790). `lint` runs the first six rows below, the
+workflow, shell, container and manifest linters; `guards` runs every other
+row. Each row is a step named after it, and each step runs under
+`!cancelled()`, so one failing check still lets every later check report and
+the job fails when any step failed. Hosted runners are shared across the
+organisation, and each job waits for a runner of its own: the 38 jobs these
+rows used to be took 10 minutes of queue before the last of them started,
+which delayed every Rust job behind them.
+
+| Step | Runs |
 |---|---|
 | `zizmor` | `zizmor --min-severity=low .github/`, with `GH_TOKEN` so the online audits work |
 | `actionlint` | the official image, pinned by tag and digest |
@@ -88,7 +98,7 @@ reads the manifests with `cargo metadata` and compiles nothing.
 | `crate-version-guard-self-test` | `scripts/checks/crate-version-guard.sh --self-test`, the guard over a stub repository whose `main` bumped a crate after the branch forked: an untouched crate passes, and packaged content changed without a bump fails |
 | `changelog` | `scripts/release/changelog.sh --self-test` and `scripts/checks/changelog-guard.sh --self-test`, each over a stub repository, then `scripts/release/changelog.sh --check`: every fragment under `changelog.d/` is named `<issue>-<kebab-slug>.<section>.md` with a Keep a Changelog 1.1.0 section and holds Markdown list items alone (`changelog.d/README.md`); `scripts/release/plan.sh --self-test` and `scripts/checks/changelog-security.sh --self-test`; then `scripts/checks/changelog-unreleased.sh`, the structure check (Keep a Changelog types and "Upgrade notes", each once per section) and the Security rules (every entry names a `GHSA-` id or `security/vex/` path, a Security section beside other changes opens with its reason) over the fragments assembled under `[Unreleased]` |
 | `vex` | `scripts/checks/vex-advisories.sh`: `security/vex/rust-advisories.openvex.json` is exactly what `deny.toml` and `security/vex/rust-advisories.toml` generate, and every OpenVEX document is well formed; then `scripts/checks/vex-coverage.sh --self-test`, the release's vulnerability-record detector (`security/vex/README.md`) |
-| `manifests` | `scripts/checks/manifests.sh --self-test`, then `scripts/checks/manifests.sh`: `cargo metadata --locked --format-version 1 --no-deps` over the root `Cargo.toml` and `fuzz/Cargo.toml`, so a manifest that does not parse (a dependency written twice by a merge) fails here with Cargo's own message; the self-test proves a manifest with a key written twice fails. It is the one tier-1 job that installs the pinned toolchain, with no build cache, and `detect` needs it, so a broken manifest starts no Rust job |
+| `manifests` | `scripts/checks/manifests.sh --self-test`, then `scripts/checks/manifests.sh`: `cargo metadata --locked --format-version 1 --no-deps` over the root `Cargo.toml` and `fuzz/Cargo.toml`, so a manifest that does not parse (a dependency written twice by a merge) fails here with Cargo's own message; the self-test proves a manifest with a key written twice fails. It installs the pinned toolchain, with no build cache. `detect` does not wait for it: a broken manifest fails this step and every cargo job at once, and `conclusion` with them |
 
 The vendored trees are excluded from shellcheck and hadolint on purpose. The
 reference implementation ships its own shell scripts, Dockerfile and

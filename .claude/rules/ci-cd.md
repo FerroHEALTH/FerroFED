@@ -48,10 +48,11 @@ Fifteen workflows:
   (`scripts/release/changelog.sh --check`, in the `changelog` job with the
   EU declaration of conformity's self-test and its `status` read of
   `conformance/eu-declaration-of-conformity.toml`), plus the manifest
-  guard, the one tier-1 job with a toolchain, which reads every Cargo
+  guard, the tier-1 check with a toolchain, which reads every Cargo
   manifest with `cargo metadata --no-deps` and compiles nothing; tier 2 is the
-  Rust set, gated behind a `detect` job that needs the manifest guard and looks
-  for the root `Cargo.toml`, so it runs on every change. The
+  Rust set, gated behind a `detect` job that looks for the root
+  `Cargo.toml`, so it runs on every change. Tier 1 runs as two jobs,
+  `lint` and `guards`, one step per check under `!cancelled()` (#1790). The
   `conclusion` job is the single required status check on `main`. The design
   is `docs/ci-cd.md`.
 - `.github/workflows/label-guards.yml`: when the `no-changelog` or
