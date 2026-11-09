@@ -40,6 +40,9 @@ ferrofed-registry.workspace = true
 # The patient header the identity binding holds, which the document's
 # Patient is written from; the role seam alone, with no binding.
 ferrofed-identity.workspace = true
+# The TLS material of the terminology server the face asks, read once by the
+# family type (#1750).
+ferrohealth-server = { workspace = true, features = ["reqwest"] }
 # The `saved` instant of a reserved definition.
 jiff.workspace = true
 # The operational template of a map-mode member, built from its ADL 2 template

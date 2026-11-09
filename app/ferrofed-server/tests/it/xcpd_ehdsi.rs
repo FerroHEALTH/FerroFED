@@ -48,7 +48,7 @@ fn link_keys(dir: &Path, identity: &str, roots: &str) -> Result<String, Box<dyn 
     std::fs::write(&identity_file, identity)?;
     std::fs::write(&roots_file, roots)?;
     Ok(format!(
-        "client_identity_file = {}\ntrust_roots_file = {}\n",
+        "tls = {{ client_identity_file = {}, trust_roots_file = {} }}\n",
         toml::Value::String(identity_file.display().to_string()),
         toml::Value::String(roots_file.display().to_string()),
     ))
@@ -112,7 +112,7 @@ fn a_myhealth_eu_gateway_without_a_client_identity_refuses_to_boot() -> TestResu
     let roots = dir.path().join("roots.pem");
     std::fs::write(&roots, "roots")?;
     let extra = format!(
-        "trust_roots_file = {}\n",
+        "tls = {{ trust_roots_file = {} }}\n",
         toml::Value::String(roots.display().to_string())
     );
     match resolved(dir.path(), HTTPS, "production", &extra)? {
@@ -131,7 +131,7 @@ fn a_myhealth_eu_gateway_without_trust_roots_refuses_to_boot() -> TestResult {
     let identity = dir.path().join("client.pem");
     std::fs::write(&identity, "identity")?;
     let extra = format!(
-        "client_identity_file = {}\n",
+        "tls = {{ client_identity_file = {} }}\n",
         toml::Value::String(identity.display().to_string())
     );
     match resolved(dir.path(), HTTPS, "production", &extra)? {

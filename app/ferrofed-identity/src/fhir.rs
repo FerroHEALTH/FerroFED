@@ -11,7 +11,8 @@
 //! the NVI Localization Service and Mitz of the Dutch Generic Functions, and
 //! the FHIR Feed audit repository (ITI-20). [`http_client`] sends the
 //! [`Authentication`] as a sensitive default header, composed as the node
-//! client composes it, presents and trusts the [`Tls`] material, and follows
+//! client composes it, presents and trusts the material a
+//! `ferrohealth_server::tls_client::TlsClient` read, and follows
 //! no redirect: a request can carry a patient identifier and always carries
 //! the credential, and neither goes anywhere the configured base does not
 //! name. [`http_client_builder`] is the same build left open, for a client
@@ -21,12 +22,11 @@
 //! client builds its client per token (RFC 6750 §2.1), and every other
 //! client refuses it.
 
-use std::fmt;
-
+use ferrohealth_server::tls_client::{TlsClient, TlsClientError};
 use ferrohealth_smart::client::cache::TokenSource;
 use http::header::{AUTHORIZATION, HeaderMap};
 use openehr_its::rest::client::{Credentials, InvalidCredentials};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use thiserror::Error;
 
 /// How the gateway authenticates to an IHE FHIR server (ITI TF-2 Appendix
@@ -67,63 +67,6 @@ impl Authentication {
     }
 }
 
-/// The TLS material the gateway presents to an IHE FHIR server and trusts
-/// it by, read once.
-///
-/// The default presents no client certificate and trusts the platform's
-/// roots alone. `Debug` shows only which parts are present.
-#[derive(Clone, Default)]
-pub struct Tls {
-    identity: Option<reqwest::Identity>,
-    roots: Vec<reqwest::Certificate>,
-}
-
-impl Tls {
-    /// Reads `identity`, the gateway's client certificate chain and private
-    /// key in PEM for mutual TLS, and `roots`, a PEM bundle of trust roots
-    /// beside the platform's.
-    ///
-    /// # Errors
-    /// A [`TlsError`] naming the part that does not read as PEM; it never
-    /// carries the key.
-    pub fn from_pem(
-        identity: Option<&SecretString>,
-        roots: Option<&str>,
-    ) -> Result<Self, TlsError> {
-        let identity = identity
-            .map(|pem| reqwest::Identity::from_pem(pem.expose_secret().as_bytes()))
-            .transpose()
-            .map_err(TlsError::Identity)?;
-        let roots = roots
-            .map(|pem| reqwest::Certificate::from_pem_bundle(pem.as_bytes()))
-            .transpose()
-            .map_err(TlsError::Roots)?
-            .unwrap_or_default();
-        Ok(Self { identity, roots })
-    }
-}
-
-impl fmt::Debug for Tls {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Tls")
-            .field("identity", &self.identity.is_some())
-            .field("roots", &self.roots.len())
-            .finish()
-    }
-}
-
-/// TLS material that does not read.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum TlsError {
-    /// The client certificate chain and key do not read as PEM.
-    #[error("the client certificate and key for an IHE FHIR server do not read as PEM")]
-    Identity(#[source] reqwest::Error),
-    /// The trust roots do not read as a PEM bundle.
-    #[error("the trust roots for an IHE FHIR server do not read as a PEM bundle")]
-    Roots(#[source] reqwest::Error),
-}
-
 /// An HTTP client for an IHE FHIR server that cannot be built.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -139,6 +82,9 @@ pub enum ClientError {
         "an OAuth 2.0 grant cannot be a default header of the HTTP client for an IHE FHIR server"
     )]
     Grant,
+    /// The HTTP client refused the TLS material.
+    #[error(transparent)]
+    Tls(#[from] TlsClientError),
     /// The HTTP client could not be built.
     #[error("the HTTP client for an IHE FHIR server could not be built")]
     Build(#[source] reqwest::Error),
@@ -150,7 +96,7 @@ pub enum ClientError {
 /// # Errors
 /// A [`ClientError`] for a credential that forms no `Authorization` value or
 /// is a grant, or a client that cannot be built.
-pub fn http_client(auth: &Authentication, tls: &Tls) -> Result<reqwest::Client, ClientError> {
+pub fn http_client(auth: &Authentication, tls: &TlsClient) -> Result<reqwest::Client, ClientError> {
     http_client_builder(auth, tls)?
         .build()
         .map_err(ClientError::Build)
@@ -161,10 +107,11 @@ pub fn http_client(auth: &Authentication, tls: &Tls) -> Result<reqwest::Client, 
 ///
 /// # Errors
 /// [`ClientError::Credentials`] for a credential that forms no
-/// `Authorization` value, and [`ClientError::Grant`] for a grant.
+/// `Authorization` value, [`ClientError::Grant`] for a grant, and
+/// [`ClientError::Tls`] for TLS material the HTTP client refuses.
 pub fn http_client_builder(
     auth: &Authentication,
-    tls: &Tls,
+    tls: &TlsClient,
 ) -> Result<reqwest::ClientBuilder, ClientError> {
     if matches!(auth, Authentication::Grant(_)) {
         return Err(ClientError::Grant);
@@ -176,39 +123,22 @@ pub fn http_client_builder(
             .map_err(ClientError::Credentials)?;
         headers.insert(AUTHORIZATION, header);
     }
-    let mut builder = reqwest::Client::builder()
+    let builder = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .default_headers(headers)
-        .tls_certs_merge(tls.roots.iter().cloned());
-    if let Some(identity) = &tls.identity {
-        builder = builder.identity(identity.clone());
-    }
-    Ok(builder)
+        .default_headers(headers);
+    Ok(tls.apply(builder)?)
 }
 
 #[cfg(test)]
 mod tests {
-    use secrecy::SecretString;
+    use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
 
-    use super::{Authentication, Tls, TlsError, http_client};
-
-    #[test]
-    fn material_that_does_not_read_names_its_part() {
-        let key = SecretString::from("not a PEM key");
-        assert!(matches!(
-            Tls::from_pem(Some(&key), None),
-            Err(TlsError::Identity(_))
-        ));
-        assert!(matches!(
-            Tls::from_pem(None, Some("-----BEGIN CERTIFICATE-----\nQz7\n")),
-            Err(TlsError::Roots(_))
-        ));
-    }
+    use super::{Authentication, http_client};
 
     #[test]
     fn no_material_builds_the_client_the_platform_roots_serve() {
-        let tls = Tls::from_pem(None, None).expect("no material reads");
-        assert_eq!("Tls { identity: false, roots: 0 }", format!("{tls:?}"));
+        let tls = TlsClient::read("pixm", &TlsClientSection::default()).expect("no material reads");
+        assert!(!tls.has_identity());
         http_client(&Authentication::None, &tls).expect("the client builds");
     }
 }

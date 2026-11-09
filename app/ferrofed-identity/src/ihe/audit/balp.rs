@@ -43,11 +43,12 @@ use ihe_atna::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Obs
 use ihe_atna::user::{PurposeOfUse, User};
 use url::Url;
 
-use crate::fhir::{self, Authentication, ClientError, Tls};
+use crate::fhir::{self, Authentication, ClientError};
 use crate::ihe::audit::AUDIT_TARGET;
 use crate::ihe::audit::delivery::Delivery;
 #[cfg(feature = "ihe")]
 use crate::role::behalf::OnBehalfOf;
+use ferrohealth_server::tls_client::TlsClient;
 
 /// Returns `on_behalf` as `ihe_iti`'s audited clients take it: a verified
 /// caller is the user of the exchange, and the gateway its own system.
@@ -112,7 +113,7 @@ pub enum FeedConfigError {
 pub fn feed_repository(
     base: Url,
     cleartext: bool,
-    tls: &Tls,
+    tls: &TlsClient,
     timeout: Duration,
 ) -> Result<FeedRepository, FeedConfigError> {
     let http = fhir::http_client(&Authentication::None, tls).map_err(FeedConfigError::Client)?;

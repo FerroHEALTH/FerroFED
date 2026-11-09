@@ -330,9 +330,10 @@ rcgen = { version = "0.14.10", default-features = false, features = ["aws_lc_rs"
 # its certificates and writes its OCSP answers with the X.509 certificate
 # and CRL model and the DER codec, and the RFC 6960 OCSP request and
 # response types over them, on the 0.3 line that shares that x509-cert
-# (#1690). ferrohealth-server 0.5.1 and tokio-postgres-rustls 0.14.0 still
-# hold der 0.7 and x509-cert 0.2 for the gateway, so the lock carries both
-# lines until they move. Verified against crates.io on 2026-11-06.
+# (#1690), the line ferrohealth-server's revocation check shares since 0.6.0.
+# tokio-postgres-rustls 0.14.0 still holds der 0.7 and x509-cert 0.2 for the
+# gateway, so the lock carries both lines until it moves. Verified against
+# crates.io on 2026-11-08.
 der = { version = "0.8.3", default-features = false, features = ["std", "oid"] }
 x509-cert = { version = "0.3.0", default-features = false, features = ["std"] }
 x509-ocsp = { version = "0.3.0-rc.0", default-features = false }
@@ -412,8 +413,13 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # with the API unchanged; 0.5.0 removes five forwarders, whose replacements
 # the gateway calls (FerroSYS #231); 0.5.1 carries the revocation check of an
 # eHDSI link, feature `revocation`, which moved there from ferrofed-identity
-# (#1646, FerroHEALTH/FerroSYS#243). Verified against crates.io on 2026-11-05.
-ferrohealth-server = { version = "=0.5.1", default-features = false }
+# (#1646, FerroHEALTH/FerroSYS#243); 0.6.0 builds that check on der 0.8 and
+# x509-cert 0.3; 0.6.3 reads the outbound TLS material of every table and
+# returns the client certificate a grant binds its tokens to (#1750,
+# FerroHEALTH/FerroSYS#300); 0.6.4 compares two reads of that material and
+# builds the revocation check from it (FerroHEALTH/FerroSYS#305, #307).
+# Verified against crates.io on 2026-11-09.
+ferrohealth-server = { version = "=0.6.4", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.

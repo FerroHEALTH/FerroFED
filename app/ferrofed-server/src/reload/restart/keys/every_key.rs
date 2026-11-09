@@ -110,6 +110,8 @@ client_secret_file = "@DIR@/token"
 [credentials."node-b-query"]
 user = "ferrofed"
 password_file = "@DIR@/password"
+
+[credentials."node-b-query".tls]
 client_identity_file = "@DIR@/client.pem"
 trust_roots_file = "@DIR@/client-ca.pem"
 

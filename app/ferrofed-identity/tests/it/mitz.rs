@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::{Authentication, Tls};
+use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::nl::mitz::{
     HolderConfig, MITZ_MODE, MitzConfig, MitzConfigError, MitzPrefilter,
 };
@@ -51,7 +51,7 @@ fn config(endpoint: &str, holders: &[(&str, Option<&str>)]) -> Result<MitzConfig
         endpoint: SecretUrl::new(endpoint),
         development: true,
         auth: Authentication::None,
-        tls: Tls::default(),
+        tls: ferrofed_testkit::tls::platform(),
         namespaces: BTreeSet::from([IdentifierNamespace::new(BSN_ALIAS)?]),
         categories: vec![String::from("GGC002")],
         purpose: String::from("TREAT"),

@@ -57,10 +57,11 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::fhir::{self, Authentication, Tls};
+use crate::fhir::{self, Authentication};
 use crate::nl::{DirectoryUraError, directory_custodians};
 use crate::role::consent::{ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
+use ferrohealth_server::tls_client::TlsClient;
 
 /// The name `OPTIONS {base}/` declares the Mitz pre-filter under.
 pub const MITZ_MODE: &str = "nl-gf-mitz";
@@ -95,7 +96,7 @@ pub struct MitzConfig {
     pub auth: Authentication,
     /// The TLS material: a client identity for mutual TLS and trust roots
     /// beside the platform's.
-    pub tls: Tls,
+    pub tls: Arc<TlsClient>,
     /// The client namespaces that stand for the BSN, beside the BSN systems.
     pub namespaces: BTreeSet<IdentifierNamespace>,
     /// The Mitz data categories asked about.
@@ -553,7 +554,7 @@ impl fmt::Debug for Asker {
 struct TokenAsker {
     endpoint: SecretUrl,
     development: bool,
-    tls: Tls,
+    tls: Arc<TlsClient>,
     source: TokenSource,
     current: Mutex<Option<(HeaderValue, MitzClient)>>,
 }
@@ -640,7 +641,7 @@ fn build(
     endpoint: &SecretUrl,
     development: bool,
     auth: &Authentication,
-    tls: &Tls,
+    tls: &TlsClient,
     token: Option<HeaderValue>,
 ) -> Result<MitzClient, MitzConfigError> {
     let endpoint = Url::parse(endpoint.expose()).map_err(MitzConfigError::EndpointUrl)?;

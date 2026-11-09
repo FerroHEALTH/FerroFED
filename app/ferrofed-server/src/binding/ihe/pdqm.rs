@@ -21,7 +21,6 @@ pub(super) fn step(
     pdqm: &PdqmSettings,
     audit: &AuditSettings,
 ) -> Result<DemographicsStep, BindingError> {
-    let tls = service::tls_of("pdqm", &pdqm.tls).map_err(BindingError::Tls)?;
     let auth = service::service_authentication("pdqm.credentials", pdqm.credentials.as_ref())?;
     let mut namespaces = BTreeMap::new();
     for (namespace, system) in &pdqm.namespaces {
@@ -32,7 +31,7 @@ pub(super) fn step(
     let step = PdqmDemographics::from_config(PdqmConfig {
         base: pdqm.url.clone(),
         auth,
-        tls,
+        tls: Arc::clone(&pdqm.tls),
         transaction: pdqm.transaction,
         master: pdqm.master.clone(),
         namespaces,

@@ -154,6 +154,10 @@ pub enum Error {
     /// TLS material, or a use of mutual TLS, is refused (RFC 8705).
     #[error(transparent)]
     TlsFault(#[from] crate::config::tls::TlsFault),
+    /// The TLS material of an outbound table could not be read; the error
+    /// names its key and carries no part of a certificate or a key.
+    #[error(transparent)]
+    TlsClient(#[from] ferrohealth_server::tls_client::TlsClientError),
     /// The certificate, the key or the client CA of a listener's TLS cannot
     /// be served with.
     #[error("{table} cannot be served with")]

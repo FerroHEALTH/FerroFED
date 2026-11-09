@@ -413,27 +413,40 @@ as sent: the URL of a `GET`, or the request line, media type and body of a
 ### Mutual TLS to the identity services
 
 A national identity service often authenticates the gateway by its client
-certificate instead of, or beside, a password or a token. `[[pixm.manager]]`,
-`[pdqm]`, `[pmir]` and `[registry.mcsd]` take the keys `[xcpd]`,
-`[nl_gf.nvi]`, `[nl_gf.mitz]` and `[audit.repository]` already take:
+certificate instead of, or beside, a password or a token. Every table that
+names an outbound service takes its TLS material in a `tls` sub-table:
+`[[pixm.manager]]`, `[pdqm]`, `[pmir]`, `[registry.mcsd]`, `[xcpd]`,
+`[nl_gf.nvi]`, `[nl_gf.mitz]`, `[audit.repository]`,
+`[eehrxf.terminology]` and a node's `[credentials."<endpoint id>"]`:
 
 ```toml
 [[pixm.manager]]
 url = "https://pix.example.org/fhir/"
+
+[pixm.manager.tls]
 client_identity_file = "/run/secrets/pix-client.pem"  # mutual TLS
 trust_roots_file = "/etc/ferrofed/pix-roots.pem"      # optional
+# min_version = "1.2"                                 # "1.3" unless lowered
 ```
 
 - `client_identity`, or its `client_identity_file` sibling, holds the PEM
   client certificate chain and its private key, which the gateway presents
   in the TLS handshake. It is a secret: it shows as `***` wherever the
   configuration is rendered, and setting both forms is refused naming
-  `client_identity`.
+  `<table>.tls.client_identity`.
 - `trust_roots_file` names a PEM bundle of trust roots the service's
   certificate chains to, added to the platform's roots.
+- `min_version` is the oldest TLS version the gateway speaks to the
+  service: `"1.3"` unless lowered to `"1.2"`. Lower it only for a service
+  that speaks no TLS 1.3, such as a MyHealth@EU responding gateway
+  ([Localization](localization.md#a-myhealtheu-route)).
 - Every file is read at boot and on each reload of a reloadable table. A
-  file that cannot be read is refused naming its key, and material that does
-  not read as PEM refuses the federation without quoting the file.
+  file that cannot be read, or material that holds no certificate and key
+  in PEM, is refused naming its key, without quoting the file.
+- The keys sat on the table itself before release 0.0.17. A configuration
+  that still sets `client_identity`, `client_identity_file` or
+  `trust_roots_file` there is refused, naming the `tls` key that replaces
+  it ([Upgrading](upgrading.md)).
 
 Each of these services is reached through one client build, with no
 redirect followed, the credential sent as a sensitive default header, and

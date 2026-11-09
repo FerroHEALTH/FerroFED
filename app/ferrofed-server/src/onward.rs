@@ -35,10 +35,9 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use openehr_its::rest::client::Credentials;
 
 use crate::binding::seam::ProvideError;
-use crate::config::service::TlsRefused;
 use crate::config::settings::{Scheme, Settings};
-use crate::config::tls::TlsSettings;
 use crate::upstream::UpstreamToken;
+use ferrohealth_server::tls_client::TlsClient;
 use openehr_its::rest::client::ReqwestTransport;
 
 /// Why the onward clients of the nodes cannot be built.
@@ -64,9 +63,6 @@ pub enum OnwardError {
         #[source]
         source: Box<ferrohealth_smart::client::TokenError>,
     },
-    /// The TLS material of a node does not read.
-    #[error("the TLS material of a service cannot be used")]
-    Tls(#[source] TlsRefused),
     /// A node the gateway presents its TLS client certificate to is not
     /// reached over `https` (RFC 8705).
     #[error(
@@ -172,8 +168,7 @@ pub(crate) struct Onward {
 /// Returns [`OnwardError::Grant`] for a grant with no `[signing]` key to
 /// sign its assertion, [`OnwardError::ClientCertificateOverHttp`] for a
 /// node `registry` declares at an `http` URL that would be presented a client
-/// certificate, and [`OnwardError::Tls`] and
-/// [`OnwardError::NodeTransport`] for TLS material no engine can be
+/// certificate, and [`OnwardError::NodeTransport`] for TLS material no engine can be
 /// built with.
 pub(crate) fn onward(
     settings: &Settings,
@@ -295,7 +290,7 @@ fn transports(
     for (endpoint, tls) in &settings.onward_tls {
         // NOTE: no specification governs this: our own design; an endpoint the
         // registry lacks is legitimately absent here, and the client build refuses it.
-        if tls.client_identity.is_some()
+        if tls.has_identity()
             && let Some(declared) = registry.endpoint(endpoint)
             && !crate::config::transport::client_certificate(declared.url().as_str())
         {
@@ -313,15 +308,13 @@ fn transports(
 fn transport(
     settings: &Settings,
     endpoint: &EndpointId,
-    tls: &TlsSettings,
+    tls: &TlsClient,
 ) -> Result<NodeTransport, OnwardError> {
-    let material = crate::config::service::tls_of(&format!("credentials.{endpoint}"), tls)
-        .map_err(OnwardError::Tls)?;
     let failed = |source: Box<dyn std::error::Error + Send + Sync>| OnwardError::NodeTransport {
         endpoint: endpoint.clone(),
         source,
     };
-    let builder = fhir::http_client_builder(&Authentication::None, &material)
+    let builder = fhir::http_client_builder(&Authentication::None, tls)
         .map_err(|source| failed(Box::new(source)))?;
     node_transport(builder, settings).map_err(|source| failed(Box::new(source)))
 }

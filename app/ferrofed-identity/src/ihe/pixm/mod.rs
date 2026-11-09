@@ -41,13 +41,14 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::fhir::{Authentication, ClientError, Tls};
+use crate::fhir::{Authentication, ClientError};
 use crate::ihe::audit::balp::audited_as;
 use crate::ihe::iua;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
 use crate::role::resolver::{Identification, Resolution, Resolver, ResolverError};
+use ferrohealth_server::tls_client::TlsClient;
 
 mod identify;
 
@@ -60,7 +61,7 @@ pub struct ManagerConfig {
     pub auth: Authentication,
     /// The TLS material it is reached with: a client identity for mutual TLS
     /// and trust roots beside the platform's.
-    pub tls: Tls,
+    pub tls: Arc<TlsClient>,
     /// The members this Manager resolves, each with its `ehr_id` domain: the
     /// assigning authority whose identifiers are that member's `ehr_id`s.
     pub members: BTreeMap<NodeId, String>,
@@ -113,6 +114,9 @@ pub enum PixmConfigError {
     /// The HTTP client could not be built.
     #[error("the HTTP client for a PIX Manager could not be built")]
     Client(#[source] reqwest::Error),
+    /// The HTTP client refused the TLS material.
+    #[error(transparent)]
+    Tls(ferrohealth_server::tls_client::TlsClientError),
     /// The credential is a grant the client was built to send in a default
     /// header, where its token cannot ride.
     #[error("the grant of a PIX Manager cannot ride in a default header")]
@@ -124,6 +128,7 @@ impl From<ClientError> for PixmConfigError {
         match error {
             ClientError::Credentials(source) => Self::Credentials(source),
             ClientError::Build(source) => Self::Client(source),
+            ClientError::Tls(source) => Self::Tls(source),
             ClientError::Grant => Self::Grant,
         }
     }
