@@ -13,18 +13,15 @@ use std::error::Error;
 
 use eehrxf::crosswalk::laboratory::LABORATORY;
 use eehrxf::document::laboratory::LAB_BUNDLE;
-use eehrxf::receive::ReceivedDocument;
-use eehrxf::receive::validation::ValidationError;
-use ferrobridge_validator::set::PackageSet;
 use ferrofed_eehrxf::laboratory::{self, ARCHETYPES, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
-use ferrofed_eehrxf::report::{Report, Writes as _};
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, SAVED, VERSION};
 use ferrofed_eehrxf::section_query::{ISSUER, PATIENT};
-use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_identity::role::header::{PatientHeader, PersonName};
 use ferrofed_testkit::{fhir_packages, laboratory as fixture};
 use openehr_query::parser;
+
+use crate::conforming;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -153,36 +150,22 @@ fn the_gateway_and_the_testkit_name_one_result_context() {
 /// `header`, as JSON text.
 fn written(header: &PatientHeader) -> Result<String, Box<dyn Error>> {
     let dir = tempfile::tempdir()?;
-    let identifier = ("urn:oid:2.999.1", "synthetic-patient-0001");
     let composition = fixture::composition(
         dir.path(),
-        &[identifier],
+        &[("urn:oid:2.999.1", "synthetic-patient-0001")],
         (
             "7c4e1d20-0000-4000-8000-0000000008b1::cdr-a.example.org::1",
             &[],
         ),
     )?;
     let opt = std::fs::read_to_string(fixture::opt())?;
-    let organisation = |name: &str| Organisation {
-        id: name.to_lowercase().replace(' ', "-"),
-        name: Some(name.to_owned()),
-        identifiers: Vec::new(),
-    };
-    let (operator, member) = (
-        organisation("Synthetic operator"),
-        organisation("Synthetic member"),
-    );
-    let bundle = Served::compile(Template::of(&opt, &[]))?.document(
-        &composition,
-        Report {
-            base: "https://gateway.example.org/fhir",
-            identifier: "urn:uuid:7c4e1d20-0000-4000-8000-0000000008b1",
-            timestamp: "2026-10-21T08:00:00Z",
-            patient: identifier,
-            header,
-            operator: &operator,
-            member: &member,
-        },
+    let bundle = conforming::written(
+        &Served::compile(Template::of(&opt, &[]))?,
+        (
+            &composition,
+            "urn:uuid:7c4e1d20-0000-4000-8000-0000000008b1",
+        ),
+        header,
     )?;
     Ok(serde_json::to_string(&bundle)?)
 }
@@ -191,19 +174,12 @@ fn written(header: &PatientHeader) -> Result<String, Box<dyn Error>> {
 /// `Bundle-eu-lab`, over the Laboratory Report package and its dependency
 /// closure.
 async fn breaks(document: &str) -> Result<Vec<String>, Box<dyn Error>> {
-    let mut paths = vec![fixture::package()];
-    paths.extend(fhir_packages::dependencies()?);
-    let set = PackageSet::load(paths.iter())?;
-    let validated = ReceivedDocument::read(document)?
-        .validate(&set, LAB_BUNDLE, None::<&ferrobridge_term::client::Client>)
-        .await;
-    match validated {
-        Ok(_) => Ok(Vec::new()),
-        Err(ValidationError::NonConformant { findings }) => {
-            Ok(findings.iter().map(ToString::to_string).collect())
-        }
-        Err(other) => Err(other.into()),
-    }
+    conforming::breaks(
+        document,
+        LAB_BUNDLE,
+        (fixture::package(), fhir_packages::dependencies()?),
+    )
+    .await
 }
 
 #[tokio::test]

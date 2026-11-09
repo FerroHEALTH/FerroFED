@@ -15,9 +15,6 @@ use std::error::Error;
 
 use eehrxf::crosswalk::discharge::{DISCHARGE, HDR_COMPOSITION};
 use eehrxf::document::discharge::{HDR_BUNDLE, HDR_ENCOUNTER};
-use eehrxf::receive::ReceivedDocument;
-use eehrxf::receive::validation::ValidationError;
-use ferrobridge_validator::set::PackageSet;
 use ferrofed_eehrxf::discharge::{self, COMPOSITION, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
 use ferrofed_eehrxf::report::{Report, ServedError, Writes as _};
@@ -28,6 +25,8 @@ use ferrofed_identity::role::header::{PatientHeader, PersonName};
 use ferrofed_testkit::discharge as fixture;
 use ferrofed_testkit::fhir_packages;
 use openehr_query::parser;
+
+use crate::conforming;
 use serde_json::Value;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -138,21 +137,13 @@ fn written() -> Result<Value, Box<dyn Error>> {
 /// The document the gateway writes from the synthetic composition about the
 /// patient the identity binding describes with `header`, as JSON.
 fn written_with(header: &PatientHeader) -> Result<Value, Box<dyn Error>> {
-    let (operator, member) = (
-        organisation("Synthetic operator"),
-        organisation("Synthetic member"),
-    );
-    let bundle = served()?.document(
-        &fixture::composition(UID),
-        Report {
-            base: "https://gateway.example.org/fhir",
-            identifier: "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d101",
-            timestamp: "2026-10-21T08:00:00Z",
-            patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
-            header,
-            operator: &operator,
-            member: &member,
-        },
+    let bundle = conforming::written(
+        &served()?,
+        (
+            &fixture::composition(UID),
+            "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d101",
+        ),
+        header,
     )?;
     Ok(serde_json::to_value(&bundle)?)
 }
@@ -280,19 +271,12 @@ fn a_name_and_birth_date_the_binding_does_not_hold_are_written_absent() -> TestR
 /// Every error FerroBRIDGE's validator finds in `document` against
 /// `bundle-eu-hdr`, over the HDR 1.0.0 package and its dependency closure.
 async fn breaks(document: &Value) -> Result<Vec<String>, Box<dyn Error>> {
-    let mut paths = vec![fixture::package()];
-    paths.extend(fhir_packages::discharge_dependencies()?);
-    let set = PackageSet::load(paths.iter())?;
-    let validated = ReceivedDocument::read(&document.to_string())?
-        .validate(&set, HDR_BUNDLE, None::<&ferrobridge_term::client::Client>)
-        .await;
-    match validated {
-        Ok(_) => Ok(Vec::new()),
-        Err(ValidationError::NonConformant { findings }) => {
-            Ok(findings.iter().map(ToString::to_string).collect())
-        }
-        Err(other) => Err(other.into()),
-    }
+    conforming::breaks(
+        &document.to_string(),
+        HDR_BUNDLE,
+        (fixture::package(), fhir_packages::discharge_dependencies()?),
+    )
+    .await
 }
 
 #[tokio::test]
