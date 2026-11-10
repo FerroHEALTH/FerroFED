@@ -74,9 +74,8 @@ correlation_header = "ncp-correlation-id"
 
 # The eHDSI EMERGENCY purpose (SAML Profile 10.0.0 §2.3). The load sends one
 # professional at a fixed rate, so the window is one second: five accesses a
-# second keep the group admitted. No [audit] is set, so the existing groups
-# do the base's work; the gateway counts in the store without it once #1737
-# lands.
+# second keep the group admitted. No [audit] is set: the gateway counts each
+# emergency access in the store without an access log (#1737).
 [[access_log.emergency_purpose]]
 system = "urn:uuid:3bc18518-d305-46c2-a8d6-94bd59856e9e"
 code = "EMERGENCY"
