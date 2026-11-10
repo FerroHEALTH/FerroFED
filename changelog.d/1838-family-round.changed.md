@@ -5,5 +5,5 @@
   `ehds-logging` 0.11.1, `ihe-iti` and `nl-generic-functions` 0.3.0, and
   `eehrxf` 0.4.2 with `fhirconnect` 0.1.252, `ferrobridge-term` and
   `ferrobridge-validator` 0.4.0, with no configuration key changed. A
-  token endpoint a configuration names is now masked in every rendering of
-  the running configuration (#1838).
+  password in the userinfo of a token endpoint the configuration names no
+  longer reaches any rendering of the running configuration (#1838).
