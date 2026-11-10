@@ -263,38 +263,6 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
 .prose { max-width: 68ch; margin: 1.75rem auto 0; color: var(--fb-muted); }
 .prose p { margin: 0 0 0.9rem; }
 
-/* Status panel */
-.status-panel {
-  max-width: 720px;
-  margin: 0 auto;
-  text-align: center;
-  background: var(--fb-bg);
-  border: 1px solid var(--fb-border);
-  border-radius: var(--fb-radius);
-  padding: clamp(1.75rem, 5vw, 2.75rem);
-}
-.status-panel h2 { margin: 0 0 0.75rem; font-size: clamp(1.3rem, 3vw, 1.8rem); }
-.status-panel p { color: var(--fb-muted); margin: 0 auto 1rem; max-width: 60ch; }
-.status-panel .hero-cta { margin-top: 1.5rem; }
-
-/* The roadmap rendered from the open milestones by scripts/site/assemble.sh */
-.roadmap {
-  margin: 1.25rem 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.6rem;
-}
-.roadmap li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.85rem;
-  align-items: baseline;
-  justify-content: center;
-}
-.roadmap .tag { margin: 0; }
-.roadmap .due { color: var(--fb-muted); font-size: 0.9rem; }
-
 /* Footer */
 .footer {
   border-top: 1px solid var(--fb-border);
