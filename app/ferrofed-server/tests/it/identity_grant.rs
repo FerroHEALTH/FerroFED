@@ -398,24 +398,24 @@ fn a_service_grant_resolves_and_shows_no_secret() -> TestResult {
 fn a_node_grant_takes_no_client_secret() -> TestResult {
     let node = |table: &str| {
         format!(
-            "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n{table}"
+            "[credentials.\"node-a-pub\".credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n{table}"
         )
     };
     for (table, key) in [
         (
             format!("client_auth = \"client_secret_basic\"\nclient_secret = \"{SECRET}\"\n"),
-            "credentials.node-a-pub.oauth.client_auth",
+            "credentials.node-a-pub.credentials.oauth.client_auth",
         ),
         (
             format!("client_auth = \"client_secret_post\"\nclient_secret = \"{SECRET}\"\n"),
-            "credentials.node-a-pub.oauth.client_auth",
+            "credentials.node-a-pub.credentials.oauth.client_auth",
         ),
         (
             format!(
                 "client_auth = \"private_key_jwt\"\nprivate_key_file = {}\nclient_secret = \"{SECRET}\"\n",
                 toml::Value::String(crate::support::signing_key_file().to_owned())
             ),
-            "credentials.node-a-pub.oauth.client_secret",
+            "credentials.node-a-pub.credentials.oauth.client_secret",
         ),
     ] {
         let error = refusal(&node(&table))?;

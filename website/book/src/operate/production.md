@@ -378,11 +378,11 @@ node's grant takes no client secret (§13.1, N25):
 
 ```toml
 # ferrofed.toml
-[credentials."cdr-a-query"]
+[credentials."cdr-a-query".credentials]
 user = "ferrofed-gateway"
 password_file = "/run/secrets/ferrofed/cdr-a-password"
 
-[credentials."cdr-b-query".oauth]
+[credentials."cdr-b-query".credentials.oauth]
 token_endpoint = "https://auth.cdr-b.example.org/oauth2/token"
 client_id = "ferrofed-gateway"
 client_auth = "private_key_jwt"
@@ -485,9 +485,11 @@ Repository as FHIR `AuditEvent`s, from a spool on the durable volume:
 destination = "repository"
 
 [audit.repository]
-url = "https://arr.example.org/fhir"
 hostname = "gateway.example.org"
 spool_dir = "/var/lib/ferrofed/audit-feed-spool"
+
+[audit.repository.endpoint]
+url = "https://arr.example.org/fhir"
 ```
 
 Outside the development profile, `config check` refuses this configuration

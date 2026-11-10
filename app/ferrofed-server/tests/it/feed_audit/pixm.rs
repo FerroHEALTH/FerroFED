@@ -236,7 +236,7 @@ async fn a_repository_that_never_answers_holds_no_query_and_the_records_are_spoo
         dir.path(),
         [&a.uri(), &b.uri(), &pix.uri()],
         &repository,
-        &format!("{key}\ntimeout = '{NEVER_MS}ms'"),
+        &format!("{key}\nendpoint.timeout = '{NEVER_MS}ms'"),
     )?;
     answered_by_both(
         &app,

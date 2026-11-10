@@ -73,7 +73,7 @@ async fn a_terminology_server_gives_the_missing_display() -> TestResult {
     let dir = tempfile::tempdir()?;
     let crossref = rows(&[(NAMESPACE, PATIENT, "node-a", EHR_A)]);
     let fhir = format!(
-        "{}\n[eehrxf.terminology]\nurl = \"{}/fhir\"\n",
+        "{}\n[eehrxf.terminology]\nendpoint.url = \"{}/fhir\"\n",
         receiving("node-a", &[NAMESPACE]),
         terminology.uri()
     );

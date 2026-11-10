@@ -16,14 +16,21 @@
 //! destination = "repository"
 //!
 //! [audit.repository]
-//! url = "https://arr.example.org/fhir"
 //! hostname = "gateway.example.org"
 //! spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 //!
-//! [audit.repository.tls]
+//! [audit.repository.endpoint]
+//! url = "https://arr.example.org/fhir"
+//!
+//! [audit.repository.endpoint.tls]
 //! client_identity_file = "/run/secrets/atna-client.pem"
 //! trust_roots_file = "/etc/ferrofed/atna-roots.pem"
 //! ```
+//!
+//! The repository is reached through `ferrohealth-smart`'s outbound client,
+//! built from `[audit.repository.endpoint]`: its URL, its timeouts, its TLS,
+//! its credential and its `retry` table, whose `max_backoff` is the wait
+//! between two delivery rounds.
 //!
 //! Each profile defines its records as a BALP `AuditEvent` (PIXm
 //! §2:3.83.5.1, PDQm §2:3.78.5.1 and §2:3.119.5.1, mCSD §2:3.90.5.1 and
@@ -41,12 +48,10 @@
 //! specification governs the shape of the table: our own design.
 
 use ferrohealth_config::removed::Removed;
-use ferrohealth_config::tls::TlsClientSection;
 use ferrohealth_config::units;
-use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_smart::config::TlsBuilder as _;
+use ferrohealth_smart::config::endpoint::{EndpointSection, RetrySection};
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
 
 use ferrofed_identity::profile::Profile;
 use ihe_atna::atna::spool::Bounds;
@@ -105,8 +110,9 @@ pub struct Audit {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct FeedRepository {
-    /// The repository's FHIR base, `https`; `http` under development only.
-    pub url: String,
+    /// The repository's FHIR base and how it is reached: `https`, `http`
+    /// under development only.
+    pub endpoint: EndpointSection,
     /// The machine name or IP address each record names as the gateway's
     /// network address.
     pub hostname: String,
@@ -133,27 +139,35 @@ pub struct FeedRepository {
     /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub spool_write_timeout_ms: Removed,
-    /// How long one delivery may take.
-    pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub url: Removed,
+    /// The retired `timeout_ms`, which `endpoint.timeout` replaced in
     /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
-    /// The longest wait between two delivery attempts.
-    pub retry_max: units::Duration,
-    /// The retired `retry_max_ms`, which `retry_max` replaced in
-    /// 0.0.19: set, it refuses the configuration.
+    /// The retired `retry_max_ms`, which `endpoint.retry.max_backoff`
+    /// replaced in 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub retry_max_ms: Removed,
-    /// The TLS material the service is reached with: the table's `tls`
-    /// sub-table.
-    pub tls: TlsClientSection,
+    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub tls: Removed,
 }
 
 impl Default for FeedRepository {
     fn default() -> Self {
         Self {
-            url: String::new(),
+            endpoint: EndpointSection {
+                timeout: units::Duration::from_secs(5),
+                retry: RetrySection {
+                    max_backoff: units::Duration::from_mins(1),
+                    ..RetrySection::default()
+                },
+                ..EndpointSection::default()
+            },
             hostname: String::new(),
             source_id: None,
             enterprise_site: None,
@@ -165,11 +179,10 @@ impl Default for FeedRepository {
             // other writers' syncs under load (#1812), so it may take a node's answer time.
             spool_write_timeout: units::Duration::from_secs(10),
             spool_write_timeout_ms: Removed::default(),
-            timeout: units::Duration::from_secs(5),
+            url: Removed::default(),
             timeout_ms: Removed::default(),
-            retry_max: units::Duration::from_mins(1),
             retry_max_ms: Removed::default(),
-            tls: TlsClientSection::default(),
+            tls: Removed::default(),
         }
     }
 }
@@ -192,10 +205,10 @@ impl Default for AuditSettings {
     }
 }
 
-/// `[audit.repository]`, with every value checked and every file read.
+/// `[audit.repository]`, with every value checked and its TLS read once.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FeedRepositorySettings {
-    /// The repository's FHIR base.
+    /// The repository's FHIR base, read from `endpoint`.
     pub url: Url,
     /// Whether the base is plain `http`, which development alone admits.
     pub cleartext: bool,
@@ -205,12 +218,9 @@ pub struct FeedRepositorySettings {
     pub spool_dir: Option<PathBuf>,
     /// The spool's bounds.
     pub bounds: Bounds,
-    /// How long one delivery may take.
-    pub timeout: Duration,
-    /// The longest wait between two delivery attempts.
-    pub retry_max: Duration,
-    /// The TLS material it is reached with, every file read.
-    pub tls: Arc<TlsClient>,
+    /// How the repository is reached, as `ferrohealth-smart`'s outbound
+    /// client reads it.
+    pub endpoint: EndpointSection,
 }
 
 /// The key of the table.
@@ -286,18 +296,12 @@ fn resolve_repository(
     table: &FeedRepository,
 ) -> Result<FeedRepositorySettings, Error> {
     let key = |field: &str| format!("{KEY}.repository.{field}");
-    for (field, empty) in [
-        ("url", table.url.is_empty()),
-        ("hostname", table.hostname.is_empty()),
-    ] {
-        if empty {
-            return Err(Error::Missing { key: key(field) });
-        }
+    if table.hostname.is_empty() {
+        return Err(Error::Missing {
+            key: key("hostname"),
+        });
     }
-    let url = Url::parse(&table.url).map_err(|source| Error::Url {
-        key: key("url"),
-        source,
-    })?;
+    let url = crate::config::endpoint::checked(&key("endpoint"), &table.endpoint)?;
     if table.spool_dir.is_none() && profile != Profile::Development {
         return Err(Error::Missing {
             key: key("spool_dir"),
@@ -307,14 +311,26 @@ fn resolve_repository(
         ("spool_max_size", table.spool_max_size.is_zero()),
         ("spool_max_events", table.spool_max_events == 0),
         ("spool_write_timeout", table.spool_write_timeout.is_zero()),
-        ("timeout", table.timeout.is_zero()),
-        ("retry_max", table.retry_max.is_zero()),
+        (
+            "endpoint.retry.max_backoff",
+            table.endpoint.retry.max_backoff.is_zero(),
+        ),
     ] {
         if zero {
             return Err(Error::Zero { key: key(field) });
         }
     }
-    let tls = crate::config::tls::read(&key("tls"), &table.tls)?;
+    // NOTE: no specification governs this: our own design; the TLS is read at load, so a
+    // file that cannot be read stops `config check` before the trail is started.
+    ferrohealth_smart::config::ServerTls
+        .build(&key("endpoint.tls"), &table.endpoint.tls)
+        .map_err(|source| Error::Smart {
+            section: key("endpoint"),
+            source: Box::new(ferrohealth_smart::config::ConfigError::TlsBuild {
+                key: "audit.repository.endpoint.tls",
+                source,
+            }),
+        })?;
     Ok(FeedRepositorySettings {
         cleartext: url.scheme() != "https",
         url,
@@ -333,9 +349,7 @@ fn resolve_repository(
             max_bytes: table.spool_max_size.bytes(),
             write_timeout: table.spool_write_timeout.get(),
         },
-        timeout: table.timeout.get(),
-        retry_max: table.retry_max.get(),
-        tls,
+        endpoint: table.endpoint.clone(),
     })
 }
 
@@ -353,7 +367,7 @@ pub fn sites(settings: &Settings) -> Result<Vec<ProtectedSite>, CleartextError> 
         settings.profile,
         repository.url.as_str(),
         ProtectedSite {
-            url_key: String::from("audit.repository.url"),
+            url_key: String::from("audit.repository.endpoint.url"),
             payload: String::from(
                 "the access records and the IHE transactions' audit records, which name the patient",
             ),

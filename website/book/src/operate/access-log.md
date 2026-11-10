@@ -387,7 +387,7 @@ asks for tools to review and analyse the log data "or" the connection of
 external software for the same purpose: the repository and any ITI-81
 Audit Consumer are that software. Choose a repository that supports the
 Retrieve Audit Message Option (ITI TF-1 §9.2.3) at the FHIR base
-`[audit.repository] url` names.
+`[audit.repository.endpoint] url` names.
 
 Every search names a period with `date` (§3.81.4.1.2.1), matched against
 each record's `recorded`:

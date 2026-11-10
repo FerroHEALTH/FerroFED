@@ -26,7 +26,7 @@ use serde::Deserialize;
 use crate::config::error::Error;
 use crate::config::settings::{OnwardGrant, Settings};
 use crate::config::transport::{self, CleartextError, ProtectedSite};
-use crate::config::{Config, Credentials};
+use crate::config::{Config, NodeCredentials};
 
 /// The Dutch Generic Functions, as the configuration writes them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -93,7 +93,7 @@ pub(crate) fn resolve(config: &Config, settings: &mut Settings) -> Result<(), Er
 }
 
 /// Whether `credentials` sets the Nuts grant, `[credentials."<id>".nuts]`.
-pub(crate) fn sets_onward(credentials: &Credentials) -> bool {
+pub(crate) fn sets_onward(credentials: &NodeCredentials) -> bool {
     credentials.nuts.is_some()
 }
 
@@ -101,7 +101,7 @@ pub(crate) fn sets_onward(credentials: &Credentials) -> bool {
 /// one.
 pub(crate) fn onward(
     section: &str,
-    credentials: &Credentials,
+    credentials: &NodeCredentials,
 ) -> Option<Result<Box<dyn OnwardGrant>, Error>> {
     credentials.nuts.as_ref().map(|table| {
         nuts::resolve(&format!("{section}.{}", nuts::KEY), table)

@@ -88,7 +88,7 @@ fn signing(dir: &Path, rotating: bool) -> Result<String, Box<dyn Error>> {
 fn oauth(dir: &Path, token_url: &str) -> String {
     let key = toml::Value::String(dir.join("current.pem").display().to_string());
     format!(
-        "[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n"
+        "[credentials.\"node-a-pub\".credentials.oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n"
     )
 }
 
@@ -450,7 +450,7 @@ fn the_removed_grant_tables_are_refused_naming_the_oauth_table() -> TestResult {
                 &refused,
                 ConfigError::Replaced { old, new: named }
                     if *old == format!("credentials.node-a-pub.{removed}")
-                        && *named == format!("credentials.node-a-pub.{new}")
+                        && *named == format!("credentials.node-a-pub.credentials.{new}")
             ),
             "{removed}: {refused:?}"
         );
@@ -503,7 +503,7 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
             grant.replace(&missing, "")
         ))?;
         assert!(
-            matches!(&error, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.oauth"),
+            matches!(&error, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.credentials.oauth"),
             "{missing}: {error:?}"
         );
     }
@@ -585,7 +585,7 @@ fn a_token_endpoint_that_could_carry_a_secret_is_refused() -> TestResult {
             return Err(format!("{url} was accepted").into());
         };
         assert!(
-            matches!(&refused, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.oauth"),
+            matches!(&refused, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.credentials.oauth"),
             "{refused:?}"
         );
         assert!(

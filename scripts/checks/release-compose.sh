@@ -318,7 +318,7 @@ elif [[ -n "$rendered" ]]; then
   fi
   # The access records of a registry sent to the log target are refused.
   awk '
-    /^\[audit\.repository\]$/ { skip = 1; next }
+    /^\[audit\.repository(\.[a-z_.]+)?\]$/ { skip = 1; next }
     /^\[/ { skip = 0 }
     skip { next }
     $1 == "destination" && $2 == "=" { print "destination = \"log\""; next }

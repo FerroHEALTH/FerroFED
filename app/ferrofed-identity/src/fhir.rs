@@ -90,6 +90,7 @@ pub enum ClientError {
     Build(#[source] reqwest::Error),
 }
 
+// TODO(#1815): build every service client from ferrohealth-smart's OutboundClient instead.
 /// Builds the HTTP client a service is asked through: `auth` as a sensitive
 /// default `Authorization` header, the `tls` material, and no redirects.
 ///

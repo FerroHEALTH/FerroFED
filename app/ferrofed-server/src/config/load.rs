@@ -231,7 +231,16 @@ fn replaced(source: &ConfigError) -> Option<(String, String)> {
                 .into_iter()
                 .find(|(old, _)| *old == leaf)
                 .filter(|_| table.starts_with("credentials.") || table.ends_with(".credentials"))
-                .map(|(_, new)| (key.clone(), format!("{table}.{new}")))
+                .map(|(_, new)| {
+                    // NOTE: no specification governs this: our own design; a node's grant sits
+                    // in its nested credentials table since 0.0.19 (#1806).
+                    let table = if table.ends_with(".credentials") {
+                        table.to_owned()
+                    } else {
+                        format!("{table}.credentials")
+                    };
+                    (key.clone(), format!("{table}.{new}"))
+                })
         }
         ConfigError::Refusals { refusals } => refusals.iter().find_map(replaced),
         _ => None,

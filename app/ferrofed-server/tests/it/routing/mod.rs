@@ -95,7 +95,7 @@ fn gateway_over(
         &registry(a, b, extra),
         "",
         &format!(
-            "[credentials.\"{ENDPOINT_A}\"]\nuser = \"gateway\"\npassword = \"{ONWARD_TOKEN}\"\n"
+            "[credentials.\"{ENDPOINT_A}\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{ONWARD_TOKEN}\"\n"
         ),
     )
 }

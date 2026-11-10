@@ -105,15 +105,15 @@ timeout = '1s'
 disclose = true
 emergency = "apply"
 
-[credentials."node-a-query".oauth]
+[credentials."node-a-query".credentials.oauth]
 token_endpoint = "https://as.example.org/token"
 client_id = "ferrofed"
 client_auth = "private_key_jwt"
 private_key_file = "@DIR@/signing.pem"
 
 [credentials."node-b-query"]
-user = "ferrofed"
-password_file = "@DIR@/password"
+credentials.user = "ferrofed"
+credentials.password_file = "@DIR@/password"
 
 [credentials."node-b-query".tls]
 client_identity_file = "@DIR@/client.pem"
@@ -481,7 +481,7 @@ const HELD: &[&str] = &[
     "auth.issuer[0].profile",
     "config.backend",
     "config.ui",
-    "credentials.node-a-query.oauth.client_auth",
+    "credentials.node-a-query.credentials.oauth.client_auth",
     "stored_queries.backend",
     "trust.issuer[0].issuer",
 ];

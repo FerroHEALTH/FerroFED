@@ -82,7 +82,7 @@ fn a_configuration_file_that_does_not_exist_exits_seventy_eight() {
 fn config_check_accepts_a_valid_file_and_binds_nothing() -> Result<(), Box<dyn StdError>> {
     let output = binary(
         &["config", "check"],
-        "[server]\nlisten = \"127.0.0.1:1\"\n[credentials.\"a\"]\nuser = \"gateway\"\npassword = \"synthetic\"\n",
+        "[server]\nlisten = \"127.0.0.1:1\"\n[credentials.\"a\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"synthetic\"\n",
     )?;
     assert_eq!(Some(0), output.status.code());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -104,12 +104,12 @@ fn the_binary_refuses_to_boot_on_an_unknown_key_and_on_a_doubly_set_secret()
     let mut secret = tempfile::NamedTempFile::new()?;
     secret.write_all(b"synthetic-from-file")?;
     let doubled = format!(
-        "[credentials.\"a\"]\nuser = \"gateway\"\npassword = \"synthetic-inline\"\npassword_file = {:?}\n",
+        "[credentials.\"a\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"synthetic-inline\"\ncredentials.password_file = {:?}\n",
         secret.path()
     );
     for (toml, names) in [
         ("[server]\nlisten_port = 8080\n", "listen_port"),
-        (doubled.as_str(), "credentials.a.password"),
+        (doubled.as_str(), "credentials.a.credentials.password"),
     ] {
         for job in [&["serve"][..], &["config", "check"][..]] {
             let output = binary(job, toml)?;

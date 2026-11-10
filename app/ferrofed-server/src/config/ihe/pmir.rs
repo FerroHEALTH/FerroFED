@@ -48,13 +48,14 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::ITS_REST_PREFIX;
+use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::public_url::PublicUrl;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::transport::{self, Encryption, ProtectedSite};
-use crate::config::{Config, Credentials};
+use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The PMIR identity feed, as the configuration writes it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -66,7 +67,7 @@ pub struct Pmir {
     /// How the gateway authenticates to the Registry, by which the Registry
     /// authorizes the subscription (§2:3.94.5): basic credentials or the
     /// client credentials grant of `oauth`.
-    pub credentials: Option<Credentials>,
+    pub credentials: Option<CredentialsSection>,
     /// The TLS material the service is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,

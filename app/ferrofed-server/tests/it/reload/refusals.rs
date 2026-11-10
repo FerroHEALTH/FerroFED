@@ -152,7 +152,7 @@ async fn a_configuration_that_does_not_load_is_refused() -> TestResult {
     let gateway = Gateway::start(&member("a", &a.uri()), "", &crossref(&[("node-a", EHR_A)]))?;
     let running = gateway.federation()?;
     let credentials = format!(
-        "[credentials.\"node-a-pub\"]\nuser = \"both\"\npassword = \"{TOKEN_C}\"\noauth = {{ token_endpoint = \"https://idp.example.org/token\", client_id = \"both\", client_secret = \"{TOKEN_C}\" }}\n"
+        "[credentials.\"node-a-pub\"]\ncredentials.user = \"both\"\ncredentials.password = \"{TOKEN_C}\"\noauth = {{ token_endpoint = \"https://idp.example.org/token\", client_id = \"both\", client_secret = \"{TOKEN_C}\" }}\n"
     );
 
     let logs = Logs::default();

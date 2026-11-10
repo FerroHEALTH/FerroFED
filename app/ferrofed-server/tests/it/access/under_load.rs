@@ -36,7 +36,7 @@ async fn concurrent_queries_are_each_answered_once_their_records_are_stored() ->
     let (key, spool) = spool_key(dir.path());
     let tables = format!(
         "\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\n\
-         url = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\n{key}\n",
+         endpoint.url = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\n{key}\n",
         ferrofed_testkit::unreachable::ADDRESS
     );
     let app = gateway(
