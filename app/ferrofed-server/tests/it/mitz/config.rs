@@ -296,7 +296,8 @@ fn an_oauth_grant_resolves_and_an_oauth2_grant_is_refused() -> TestResult {
     })?;
     match resolved(&text) {
         Err(error)
-            if crate::support::refused_key(&error) == Some("nl_gf.mitz.endpoint.credentials.oauth2") =>
+            if crate::support::refused_key(&error)
+                == Some("nl_gf.mitz.endpoint.credentials.oauth2") =>
         {
             Ok(())
         }
