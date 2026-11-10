@@ -13,10 +13,11 @@
 # to absolute limits, then pairs of load phases against the base and the
 # head on the same runner, the head judged over the base, and the planted
 # store poller the idle phase must fail. The base is the merge base of the
-# commit with the `base` input, or with none the previous release; on the
-# release lane, a previous release that does not know a key of
-# perf/ferrofed.toml gives way to the release commit's first parent
-# (#1762). An attempt that ends with exit 2 could not be judged and says
+# commit with the `base` input, or with none the previous release, or the
+# oldest commit after it that carries the gate contract when that release
+# carries none (#1813); each arm boots under its own tree's
+# perf/ferrofed.toml and perf/arm.env, so a change that renames a key
+# reaches the head alone. An attempt that ends with exit 2 could not be judged and says
 # nothing about the code, so it is retried on a fresh runner on any CPU
 # model. Some runners stall the gate for a whole job
 # (FerroHEALTH/FerroPIX#511), so an attempt that ends with exit 1 on a CPU
@@ -46,14 +47,6 @@ on:
         required: false
         default: true
         type: boolean
-      fallback:
-        description: >-
-          When the previous release cannot read the head's perf/ferrofed.toml,
-          judge against the commit's first parent; only the release lane passes
-          true.
-        required: false
-        default: false
-        type: boolean
       skip:
         description: >-
           Build and judge nothing, and pass the verdict with a summary saying
@@ -61,6 +54,13 @@ on:
         required: false
         default: false
         type: boolean
+    outputs:
+      base:
+        description: The commit the base arm was built from; empty when nothing was built.
+        value: ${{ jobs.build.outputs.base }}
+      base-record:
+        description: The record of the base and why, as scripts/perf/gate.sh build writes it.
+        value: ${{ jobs.build.outputs.record }}
 
 permissions: {}
 
@@ -81,6 +81,9 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
+    outputs:
+      base: ${{ steps.arms.outputs.base }}
+      record: ${{ steps.arms.outputs.record }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -96,17 +99,17 @@ jobs:
           VERSION: ${{ env.FERROHEALTH_PERF_VERSION }}
         run: cargo install ferrohealth-perf --version "=${VERSION}" --locked
       - name: Build the base and the head
+        id: arms
         env:
           BASE: ${{ inputs.base }}
-          FALLBACK: ${{ inputs.fallback }}
         run: |
           set -euo pipefail
-          if [ "$FALLBACK" = true ]; then
-            bash scripts/perf/gate.sh build --fallback
-          else
-            bash scripts/perf/gate.sh build "$BASE"
-          fi
+          bash scripts/perf/gate.sh build "$BASE"
           bash scripts/perf/gate.sh pack target/perf-arms.tar
+          {
+            echo "base=$(< target/perf-base/rev)"
+            echo "record=$(head -n 1 target/perf-base/base.md)"
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: perf-arms

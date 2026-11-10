@@ -31,16 +31,17 @@ The base is:
 - for a merge group, its base on `main`;
 - for a push to `main`, the commit before the push;
 - for a manual dispatch, the previous release tag;
-- for the release commit, the previous release tag, or the release commit's
-  first parent on `main` when that release cannot read the head's
-  configuration (see below).
+- for the release commit, the previous release tag, or the oldest commit
+  after it that carries the gate contract when that release carries none
+  (see below).
 
 ## What runs
 
 The `perf` workflow's build job installs `ferrohealth-perf` at its pin in
 `docs/VERSIONS.md`, and `scripts/perf/gate.sh build` builds the release
 gateway of the base, from `git archive` of the base commit under
-`target/perf-base/`, and of the head. `scripts/perf/gate.sh pack` hands all
+`target/perf-base/`, and of the head, and keeps the base tree's
+configuration contract beside its binary. `scripts/perf/gate.sh pack` hands all
 of them to the attempt jobs as one artifact, so an attempt builds nothing
 and a retry measures at once (#1807). In each attempt,
 `scripts/perf/gate.sh unpack` restores them and `scripts/perf/gate.sh run`
@@ -51,10 +52,11 @@ then:
    and seeds both with `docker/quickstart/patients.tsv`;
 2. starts a PostgreSQL server over TLS for FerroFED's own store, with a
    database for each gateway;
-3. checks with `ferrofed config check` that the base binary reads the
-   head's `perf/ferrofed.toml`, and starts both gateways over the same nodes
-   and FerroPIX with it: the head on port 8080 and the base on port 8070,
-   each with the stored-query registry on its own store database;
+3. checks with `ferrofed config check` that the base binary reads its own
+   tree's configuration, and starts both gateways over the same nodes and
+   FerroPIX, each under its own tree's configuration contract: the head on
+   port 8080 and the base on port 8070, each with the stored-query registry
+   on its own store database;
 4. runs `ferrohealth-perf ab` over `perf/plan.toml`;
 5. plants a poller of the head's store that never waits, and runs the idle
    phase of `perf/busy-loop.toml` beside it, which must fail on idle
@@ -116,52 +118,60 @@ node A's onward table, and sends it the same 200 reads; it must fail that
 limit, which proves the count still catches an uncached lane. The job
 summary names both counts.
 
-## Both arms run the head's configuration
+## Each arm runs its own tree's configuration
 
-The pair judges code, so both arms must do the same work. Each arm once
-ran its own `perf/ferrofed.toml`, and when
+Each arm boots under its own tree's configuration contract: the tree's
+`perf/ferrofed.toml` and the `FERROFED__` overrides of its `perf/arm.env`,
+one `NAME=VALUE` a line. The gate fills `@PORT@` with the arm's port and
+`@DIR@` with its work directory, where it writes the store's connection
+string, and sets `FERROFED_CONFIG` and `FERROFED__USAGE_REPORT__ENABLED=false`
+itself. It refuses any other placeholder and any line that sets no
+`FERROFED__` variable, with exit 2. A pull request that renames a key
+changes both files for the head alone, so the base keeps reading the keys
+its binary knows. Both arms start from the checkout, so a relative path in
+either configuration reads the head's tree and the files `run` makes under
+`target/perf-run/`.
+
+An earlier gate started both arms with the head's `perf/ferrofed.toml`, so
+both did the same work: when
 [#1741](https://github.com/FerroHEALTH/FerroFED/pull/1741) gave the head
-the contact point, the FHIR face and the PDQm client, the head held them in
-memory and the base did not: on `main` the head's peak memory came out at
-1.24 of the base in all four pairs, over the 20 % tolerance, with no code
-changed. The gate now starts both gateways with the head's
-`perf/ferrofed.toml`, as FerroBRIDGE's gate does
-([FerroHEALTH/FerroBRIDGE#1699](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1699)),
-and the tolerance stays where it is.
+the contact point, the FHIR face and the PDQm client, its peak memory came
+out at 1.24 of the base. That gate could not judge a change that renamed a
+key, because the base binary refused the head's file at boot
+([#1813](https://github.com/FerroHEALTH/FerroFED/issues/1813)). A change to
+`perf/ferrofed.toml` that enables more work is now measured as part of the
+head, the family rule FerroBRIDGE, FerroTERM and FerroPIX follow.
 
-The base binary may predate a key of that configuration. Before the
-gateways start, the gate runs `ferrofed config check` with the base binary
-over it, under the base's own environment. A key the base does not know
-stops the run with exit 2 and a line naming each such key and the base
-commit, so the pair is never judged with a key left out of one arm:
+A base from before `perf/arm.env` has its overrides derived from its own
+`scripts/perf/gate.sh`: the gate evaluates that script's `gateway_env()`
+with its own `own_urls()` and constants and keeps the `FERROFED__` lines.
+A tree with neither file, or a `gateway_env()` that sets nothing, is
+refused with exit 2.
 
-```text
-perf-gate: the base at <commit> does not know the key(s) emergency of perf/ferrofed.toml, so it cannot do the head's work: the pair is not judged
-```
-
-A configuration the base refuses for another reason stops the run with
-exit 2 too, with the refusal. Pull requests, merge groups, pushes to `main`
-and manual dispatches all stop this way.
-
-The release lane is the one exception. Its base is the previous release,
-which can predate the gate's configuration altogether: v0.0.16 has no
-`store`, `emergency` or `auth.dpop` key, so a v0.0.17 release judged
-against it could never be drafted. The release lane runs
-`scripts/perf/gate.sh build --fallback`, which builds the previous release
-and runs its `ferrofed config check` over the head's `perf/ferrofed.toml`.
-When the check names a key the release does not know, the gate builds the
-release commit's first parent on `main` as the base instead. That commit
-passed its own pairwise gate against its parent when it merged, so the
-chain of judged pairs reaches the release. The job summary and
-`target/perf-base/base.md` in the uploaded report name the base and why:
+Before the gateways start, the gate runs `ferrofed config check` with the
+base binary over the base's own configuration and overrides. A base that
+refuses them stops the run with exit 2, naming each unknown key or quoting
+the refusal:
 
 ```text
-The base is `<commit>`, the release commit's first parent: the previous release `v0.0.16` (`<commit>`) does not know the key(s) `emergency` `store` of `perf/ferrofed.toml`, so it cannot do the head's work.
+perf-gate: the base at <commit> does not know the key(s) emergency of its own perf/ferrofed.toml: the pair is not judged
 ```
 
-A release that reads the configuration stays the base. When the previous
-release is itself the first parent, there is no other base, and the run
-stops with exit 2.
+### The release base
+
+The release lane's base is the previous release. A release that carries no
+gate contract (neither `perf/arm.env` nor a gate whose `gateway_env()` sets
+a gateway's overrides; v0.0.16 has none) cannot be booted as an arm, so the
+base is then the oldest commit after that tag that carries one.
+`scripts/perf/gate.sh build` resolves it and writes the base and why to
+`target/perf-base/base.md`, which the job summary shows, and the release
+workflow adds that line to the release notes:
+
+```text
+Performance: The base is `<commit>`, the oldest commit after v0.0.16 that carries the gate contract, since v0.0.16 carries neither perf/arm.env nor a scripts/perf/gate.sh whose gateway_env() sets a gateway's overrides.
+```
+
+The release workflow refuses to draft a release whose gate named no base.
 
 ## Reading the report
 
@@ -226,6 +236,6 @@ bash scripts/perf/gate.sh run
 ```
 
 `bash scripts/perf/gate.sh --self-test` checks the pin reader, the plan
-rendering, the registry rewrite, the base resolution, the release lane's
-fallback, a pull request's refusal and the two plans' idle limits on any
-machine.
+rendering, the registry rewrite, the base resolution with the release
+base, each arm's overrides from `perf/arm.env` and from an older tree's
+gate, the base's refusals and the two plans' idle limits on any machine.
