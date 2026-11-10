@@ -12,7 +12,7 @@ use std::error::Error;
 use std::time::{Duration, Instant};
 
 use ferrofed_identity::ihe::xcpd::{
-    GatewayConfig, Transport, XcpdConfig, XcpdConfigError, XcpdLocalizer,
+    GatedTls, GatewayConfig, Transport, XcpdConfig, XcpdConfigError, XcpdLocalizer,
 };
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::localizer::{Localization, Localizer, LocalizerError};
@@ -20,8 +20,8 @@ use ferrofed_testkit::revocation::{RevocationFront, Source, Standing};
 use ferrofed_testkit::xcpd::{PATH, RespondingGateway};
 use ferrohealth_config::tls::TlsVersion;
 use ferrohealth_secret::secret::Secret;
-use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_server::revocation::RevocationCheck;
+use ferrohealth_smart::client::outbound::OutboundClient;
 
 use crate::support::registry;
 use crate::xcpd::{COMMUNITY_A, holds, members, node, patient};
@@ -51,14 +51,30 @@ fn localizer(
     myhealth_eu: bool,
     revocation: Option<RevocationCheck>,
 ) -> Result<XcpdLocalizer, Box<dyn Error>> {
+    let url = format!("{}{PATH}", front.origin());
+    let client = match &revocation {
+        Some(check) => {
+            let presented = front.tls_client("xcpd.gateway.endpoint.tls")?;
+            let gated = GatedTls::new(check.clone(), presented.certificate().cloned());
+            let endpoint = ferrofed_testkit::outbound::endpoint(&url);
+            OutboundClient::build(&endpoint, "xcpd.gateway.endpoint", &gated)?
+        }
+        None => ferrofed_testkit::outbound::with_material(
+            &url,
+            front.client_identity(),
+            front.trust_roots(),
+        )
+        .map_err(|error| error.to_string())?,
+    };
     let config = XcpdConfig {
         sender_device: "2.999.40.1".to_owned(),
         home_community: Some("2.999.40".to_owned()),
         gateways: vec![GatewayConfig {
-            endpoint: SecretUrl::new(format!("{}{PATH}", front.origin())),
+            client,
             device: "2.999.50.1".to_owned(),
             community: None,
             myhealth_eu,
+            revocation,
         }],
         communities: BTreeMap::from([
             (COMMUNITY_A.to_owned(), node("node-a")?),
@@ -66,8 +82,6 @@ fn localizer(
         ]),
         namespaces: BTreeMap::new(),
         transport: Transport::Encrypted,
-        tls: front.tls_client("xcpd.tls")?,
-        revocation,
     };
     Ok(XcpdLocalizer::from_config(config, None, &registry())?)
 }

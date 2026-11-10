@@ -52,24 +52,24 @@ pub(crate) fn sites(settings: &Settings) -> Result<Vec<ProtectedSite>, Cleartext
         .iter()
         .flat_map(|pixm| pixm.managers.iter().enumerate())
     {
-        let key = format!("pixm.manager[{index}]");
+        let key = format!("pixm.manager[{index}].endpoint");
         let credentials = manager
             .credentials
             .is_some()
             .then(|| format!("{key}.credentials"));
         hold(
-            manager.url.expose(),
+            manager.url.as_str(),
             transport::identity_site(&key, credentials.as_deref()),
         )?;
     }
     if let Some(pdqm) = &settings.pdqm {
-        let key = pdqm::PDQM_KEY;
+        let key = pdqm::PDQM_ENDPOINT;
         let credentials = pdqm
             .credentials
             .is_some()
             .then(|| format!("{key}.credentials"));
         hold(
-            pdqm.url.expose(),
+            pdqm.url.as_str(),
             transport::identity_site(key, credentials.as_deref()),
         )?;
     }
@@ -77,9 +77,9 @@ pub(crate) fn sites(settings: &Settings) -> Result<Vec<ProtectedSite>, Cleartext
     if let Some(xcpd) = &settings.xcpd {
         let assertion = xcpd.assertion.as_ref().map(|_| xcpd.assertion_key);
         for (index, gateway) in xcpd.gateways.iter().enumerate() {
-            let key = format!("xcpd.gateway[{index}]");
+            let key = format!("xcpd.gateway[{index}].endpoint");
             hold(
-                gateway.url.expose(),
+                gateway.endpoint.url.expose(),
                 transport::identity_site(&key, assertion),
             )?;
         }
@@ -97,7 +97,7 @@ pub(crate) fn sites(settings: &Settings) -> Result<Vec<ProtectedSite>, Cleartext
         .as_ref()
         .filter(|directory| directory.credentials.is_some())
     {
-        hold(directory.url.expose(), mcsd::site())?;
+        hold(directory.url.as_str(), mcsd::site())?;
     }
     for (url, site) in token_endpoints(settings) {
         hold(&url, site)?;
@@ -174,26 +174,28 @@ fn token_endpoints(settings: &Settings) -> Vec<(String, ProtectedSite)> {
         .flat_map(|pixm| pixm.managers.iter().enumerate())
         .map(|(index, manager)| {
             (
-                format!("pixm.manager[{index}].credentials"),
+                format!("pixm.manager[{index}].endpoint.credentials"),
                 manager.credentials.as_ref(),
             )
         });
     let pdqm = settings.pdqm.iter().map(|pdqm| {
         (
-            format!("{}.credentials", pdqm::PDQM_KEY),
+            format!("{}.credentials", pdqm::PDQM_ENDPOINT),
             pdqm.credentials.as_ref(),
         )
     });
     let directory = settings.registry_directory.iter().map(|directory| {
         (
-            String::from("registry.mcsd.credentials"),
+            String::from("registry.mcsd.endpoint.credentials"),
             directory.credentials.as_ref(),
         )
     });
-    let feed = settings
-        .pmir
-        .iter()
-        .map(|pmir| (String::from("pmir.credentials"), pmir.credentials.as_ref()));
+    let feed = settings.pmir.iter().map(|pmir| {
+        (
+            String::from("pmir.endpoint.credentials"),
+            pmir.credentials.as_ref(),
+        )
+    });
     pixm.chain(pdqm)
         .chain(directory)
         .chain(feed)

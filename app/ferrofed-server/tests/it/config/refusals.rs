@@ -213,7 +213,7 @@ fn a_parse_fault_names_the_file_it_is_in() -> Result<(), Box<dyn StdError>> {
 /// is empty.
 #[cfg(feature = "binding-ihe")]
 fn pix_manager(method: &str) -> String {
-    format!("[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n{method}\n")
+    format!("[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n{method}\n")
 }
 
 #[cfg(feature = "binding-ihe")]

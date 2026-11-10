@@ -57,20 +57,18 @@
 //!     question (Annex B §B.6);
 //! - [`session`]: the resolution bindings of §12.5.1 step 2, in memory and
 //!   scoped to the client session;
-//! - [`fhir`]: the one HTTP client build every outbound client of this crate
-//!   uses, with its [`Authentication`](fhir::Authentication) and its one
-//!   `ferrohealth_server::tls_client::TlsClient`;
 //! - [`profile`]: the deployment profile a server configuration declares.
 //!
 //! How the gateway authenticates to each node as itself (§13.1, N25) is the
 //! engine's, in `ferrofed_engine::onward`.
 #![doc(test(attr(deny(warnings))))]
 
-pub mod fhir;
 #[cfg(feature = "balp")]
 pub mod ihe;
 #[cfg(feature = "nl")]
 pub mod nl;
+#[cfg(any(feature = "ihe", feature = "nl"))]
+mod outbound;
 pub mod profile;
 pub mod role;
 pub mod session;

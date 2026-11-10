@@ -119,7 +119,7 @@ mod tests {
     /// to `audit`, with the `[xcpd.audit_repository]` keys `repository`.
     fn settings(audit: &str, repository: &str) -> Settings {
         let text = format!(
-            "profile = \"development\"\n\n[registry]\ndocument = \"registry.toml\"\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"{audit}\"\n\n[[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n{repository}"
+            "profile = \"development\"\n\n[registry]\ndocument = \"registry.toml\"\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"{audit}\"\n\n[[xcpd.gateway]]\nendpoint.url = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n{repository}"
         );
         Config::from_sources(Some(&text), &BTreeMap::new())
             .and_then(|config| config.resolve())
@@ -151,7 +151,7 @@ mod tests {
     /// `url` with `transaction`.
     fn with_pdqm(url: &str, transaction: &str) -> Settings {
         let text = format!(
-            "profile = \"development\"\n\n[audit]\ndestination = \"log\"\n\n[pdqm]\nurl = \"{url}\"\ntransaction = \"{transaction}\"\nmaster = \"urn:oid:2.999.1\"\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n"
+            "profile = \"development\"\n\n[audit]\ndestination = \"log\"\n\n[pdqm]\ntransaction = \"{transaction}\"\nmaster = \"urn:oid:2.999.1\"\n\n[pdqm.endpoint]\nurl = \"{url}\"\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n"
         );
         Config::from_sources(Some(&text), &BTreeMap::new())
             .and_then(|config| config.resolve())
@@ -169,6 +169,6 @@ mod tests {
         let applied = effective(&boot, fresh)
             .pdqm
             .expect("the pdqm section reloads");
-        assert_eq!("https://other.example.org/fhir/", applied.url.expose());
+        assert_eq!("https://other.example.org/fhir/", applied.url.as_str());
     }
 }

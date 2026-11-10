@@ -76,7 +76,7 @@ pub async fn manager(known: &[CrossReferenceSeed]) -> Server {
 }
 
 /// Returns the FHIR base of `server`, with its trailing slash, that a
-/// `[[pixm.manager]] url` names.
+/// `[[pixm.manager]] endpoint.url` names.
 #[must_use]
 pub fn base_url(server: &Server) -> String {
     format!("{}/fhir/", server.uri())

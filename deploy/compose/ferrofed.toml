@@ -160,7 +160,10 @@ issuer = "https://idp.example.org"
 # The identity service: an IHE PIXm PIX Manager.
 # https://ferrofed.eu/docs/operate/identity.html
 [[pixm.manager]]
-# EDIT: the Manager's FHIR base URL.
+
+# EDIT: the Manager's FHIR base URL; ferrohealth-smart's endpoint table, with
+# its timeout, retry and tls keys.
+[pixm.manager.endpoint]
 url = "https://pix.example.org/fhir/"
 
 # EDIT: every node of registry.toml, mapped to its ehr_id domain at the
@@ -171,9 +174,9 @@ url = "https://pix.example.org/fhir/"
 
 # How the gateway authenticates to the Manager: a user with password_file,
 # or the OAuth 2.0 client credentials grant of IUA ITI-71 under
-# [pixm.manager.credentials.oauth]. Remove the section when the transport
-# authenticates the gateway.
-[pixm.manager.credentials]
+# [pixm.manager.endpoint.credentials.oauth]. Remove the section when the
+# transport authenticates the gateway.
+[pixm.manager.endpoint.credentials]
 user = "ferrofed"
 password_file = "/run/secrets/ferrofed/pix-password"
 

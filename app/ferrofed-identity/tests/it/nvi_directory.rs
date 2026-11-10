@@ -14,7 +14,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::mcsd;
 use ferrofed_identity::nl::nvi::{NviConfig, NviConfigError, NviLocalizer};
 use ferrofed_identity::role::behalf::OnBehalfOf;
@@ -23,7 +22,6 @@ use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::nvi::{LocalizationService, PSEUDO_BSN_SYSTEM};
-use ferrohealth_secret::secret_url::SecretUrl;
 use serde_json::json;
 
 use crate::mcsd::{ORG_A, ORG_REGION, fhir, resource};
@@ -65,12 +63,9 @@ fn config(base: &str, custodians: &[(&str, &str)]) -> Result<NviConfig, Box<dyn 
         written.insert((*ura).to_owned(), node(member)?);
     }
     Ok(NviConfig {
-        base: SecretUrl::new(base),
-        auth: Authentication::None,
-        authorizer: None,
+        client: ferrofed_testkit::outbound::client(base)?,
         custodians: written,
         namespaces: BTreeSet::new(),
-        tls: ferrofed_testkit::tls::platform(),
     })
 }
 

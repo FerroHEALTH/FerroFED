@@ -7,8 +7,7 @@
 
 use crate::binding::error::BindingError;
 use crate::config::nl::NlGfSettings;
-use crate::config::nl::mitz::{MITZ_KEY, MitzSettings};
-use crate::config::service;
+use crate::config::nl::mitz::{MITZ_ENDPOINT, MITZ_KEY, MitzSettings};
 use crate::config::settings::Settings;
 use ferrofed_identity::nl::mitz::{HolderConfig, MitzConfig, MitzPrefilter};
 use ferrofed_identity::profile::Profile;
@@ -16,6 +15,8 @@ use ferrofed_identity::role::consent::ConsentPrefilter;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::config::ServerTls;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
@@ -43,14 +44,16 @@ pub(super) fn prefilter(
             node(&format!("nl_gf.nvi.custodians.{ura:?}"), member)?,
         );
     }
+    let client =
+        OutboundClient::build(&mitz.endpoint, MITZ_ENDPOINT, &ServerTls).map_err(|source| {
+            BindingError::Outbound {
+                table: MITZ_ENDPOINT.to_owned(),
+                source: Box::new(source),
+            }
+        })?;
     let config = MitzConfig {
-        endpoint: mitz.url.clone(),
+        client,
         development: settings.profile == Profile::Development,
-        auth: service::service_authentication(
-            &format!("{MITZ_KEY}.credentials"),
-            mitz.credentials.as_ref(),
-        )?,
-        tls: Arc::clone(&mitz.tls),
         namespaces: namespaces(mitz)?,
         categories: mitz.data_categories.clone(),
         purpose: mitz.purpose.clone(),

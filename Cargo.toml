@@ -265,8 +265,7 @@ ferrobridge-validator = "0.3.0"
 openehr-mapping-core = "0.1.151"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by
-# FerroHEALTH/FerroPIX since #367 and pinned exactly, because its crate line
-# moves by patch. 0.0.66 is the release on ferrohealth-smart 0.8 and
+# FerroHEALTH/FerroPIX since #367. 0.0.66 is the release on ferrohealth-smart 0.8 and
 # ihe-atna 0.3 whose `smart` feature carries the TokenAuthorizer the IHE
 # clients send a grant's token with (#1390); 0.0.73 names a directory entry
 # `DirectoryEntry<Endpoint>` and carries the request `authorizer` the NVI
@@ -276,19 +275,22 @@ openehr-mapping-core = "0.1.151"
 # ferrohealth-smart 0.12 and ihe-atna 0.7, whose TokenAuthorizer proves a
 # DPoP-bound source's requests (FerroPIX #530, #536; #1748, #1766); 0.0.83
 # is the release on ferrohealth-smart 0.13 and ihe-atna 0.8 (#1748); 0.1.0
-# is the release on ferrohealth-smart 0.16 and ihe-atna 0.10 (#1805).
+# is the release on ferrohealth-smart 0.16 and ihe-atna 0.10 (#1805); 0.2.0
+# builds every client from ferrohealth-smart's outbound client (#1815) and
+# is required by a caret range, as the FerroBRIDGE crates (#1772).
 # Verified against crates.io on 2026-11-10.
-ihe-iti = "=0.1.0"
+ihe-iti = "0.2.0"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
-# published by FerroHEALTH/FerroPIX since #367 and pinned exactly, because its
-# crate line moves by patch. 0.0.33 is the release on ferrohealth-smart
+# published by FerroHEALTH/FerroPIX since #367. 0.0.33 is the release on ferrohealth-smart
 # 0.8 (#1390); 0.0.40 is the release on ihe-iti 0.0.73, whose `authorizer`
 # it takes (#1516); 0.0.43 is the release on ihe-iti 0.0.76 (#1682); 0.0.45
 # is the release on ihe-iti 0.0.78 (#1620); 0.0.49 is the release on ihe-iti
 # 0.0.82 (#1748); 0.0.50 is the release on ihe-iti 0.0.83 (#1748); 0.1.0
-# is the release on ihe-iti 0.1.0 (#1805).
+# is the release on ihe-iti 0.1.0 (#1805); 0.2.0 builds the NVI and Mitz
+# clients from ferrohealth-smart's outbound client (#1815) and is required
+# by a caret range, as ihe-iti above.
 # Verified against crates.io on 2026-11-10.
-nl-generic-functions = "=0.1.0"
+nl-generic-functions = "0.2.0"
 # The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
 # the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -400,9 +402,11 @@ ferrohealth-ui = "=0.6.8"
 # metadata body out of its errors (GHSA-5qm7-v4fw-p2v9); 0.16.2 carries the
 # outbound client the endpoint tables build, the sections' own equality and
 # the grant that presents its node's TLS (resolve_sharing_tls), with the
-# server-tls reader (#1805, #1806).
+# server-tls reader (#1805, #1806); 0.16.3 lets an outbound client carry
+# the product's own authorization, which the NVI's Nuts grant rides as
+# (#1815). Required by a caret range, as the IHE crates below.
 # Verified against crates.io on 2026-11-10.
-ferrohealth-smart = { version = "=0.16.2", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
+ferrohealth-smart = { version = "0.16.3", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
@@ -453,9 +457,11 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # x509-cert 0.3; 0.6.3 reads the outbound TLS material of every table and
 # returns the client certificate a grant binds its tokens to (#1750,
 # FerroHEALTH/FerroSYS#300); 0.6.4 compares two reads of that material and
-# builds the revocation check from it (FerroHEALTH/FerroSYS#305, #307).
-# Verified against crates.io on 2026-11-09.
-ferrohealth-server = { version = "=0.8.0", default-features = false }
+# builds the revocation check from it (FerroHEALTH/FerroSYS#305, #307);
+# 0.8.2 hands out the check's gated TLS, which a MyHealth@EU gateway's
+# outbound client is built over (#1815, FerroHEALTH/FerroSYS#348).
+# Verified against crates.io on 2026-11-10.
+ferrohealth-server = { version = "=0.8.2", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.

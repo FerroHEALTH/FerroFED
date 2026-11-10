@@ -20,7 +20,6 @@ use ferrofed_registry::error::IdError;
 
 #[cfg(feature = "binding-ihe")]
 use crate::binding::ihe::mcsd::registry::DirectoryFailure;
-use crate::config::service::GrantRefused;
 
 /// What a binding cannot build.
 #[derive(Debug, thiserror::Error)]
@@ -106,24 +105,16 @@ pub enum BindingError {
     /// start.
     #[error("the [audit] trail cannot start")]
     Audit(#[source] crate::audit::AuditTrailError),
-    /// A grant that cannot be used: one in the credentials of a service that
-    /// takes none (§13.1, N25).
-    #[error(
-        "{section} names a grant it cannot use: an IHE FHIR service takes the oauth client-credentials grant"
-    )]
-    Grant {
-        /// The credentials section.
-        section: String,
-    },
-    /// The HTTP client an IHE FHIR service's grant sends its token requests
-    /// through could not be built.
-    #[error("the HTTP client of the token endpoint of {section} could not be built")]
-    TokenTransport {
-        /// The credentials section.
-        section: String,
-        /// Why it could not be built; it names no secret.
+    /// The outbound client of a service's endpoint table cannot be built:
+    /// its TLS, its credential, its token source or its HTTP engine.
+    #[error("the outbound client of [{table}] cannot be built")]
+    #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
+    Outbound {
+        /// The endpoint table's dotted key, such as `pixm.manager[0].endpoint`.
+        table: String,
+        /// What `ferrohealth-smart` reported; it names no secret.
         #[source]
-        source: Box<ferrohealth_smart::client::TokenError>,
+        source: Box<ferrohealth_smart::client::outbound::OutboundError>,
     },
     /// The DID document of a Nuts grant's holder cannot be built from the
     /// holder keys of the grants that present as it (Nuts RFC021 §4.2).
@@ -146,24 +137,4 @@ pub enum BindingError {
         #[source]
         source: serde_json::Error,
     },
-}
-
-impl From<GrantRefused> for BindingError {
-    fn from(refused: GrantRefused) -> Self {
-        Self::Grant {
-            section: refused.section,
-        }
-    }
-}
-
-#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
-impl From<crate::config::service::ServiceAuthError> for BindingError {
-    fn from(error: crate::config::service::ServiceAuthError) -> Self {
-        match error {
-            crate::config::service::ServiceAuthError::Refused(refused) => refused.into(),
-            crate::config::service::ServiceAuthError::TokenTransport { section, source } => {
-                Self::TokenTransport { section, source }
-            }
-        }
-    }
 }

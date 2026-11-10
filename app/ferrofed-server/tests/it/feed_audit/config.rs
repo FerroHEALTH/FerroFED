@@ -37,7 +37,7 @@ fn text(dir: &Path, profile: &str, audit: &str) -> Result<String, Box<dyn Error>
     )?;
     let document = toml::Value::String(document.display().to_string());
     Ok(format!(
-        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n\n{audit}"
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n\n{audit}"
     ))
 }
 
@@ -265,7 +265,7 @@ fn log_is_accepted_under_development_and_without_a_registry() -> TestResult {
         resolve(&text(dir.path(), "development", LOG)?)?.map_err(|error| error.to_string())?;
     assert_eq!(AuditDestination::Log, settings.audit.destination);
     let unregistered = format!(
-        "profile = \"production\"\n\n{LOG}\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n"
+        "profile = \"production\"\n\n{LOG}\n[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n"
     );
     let settings = resolve(&unregistered)?.map_err(|error| error.to_string())?;
     assert_eq!(

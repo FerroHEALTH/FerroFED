@@ -84,7 +84,7 @@ fn feed_clients_with_no_issuer_to_sign_their_tokens_are_refused() -> TestResult 
 #[test]
 fn a_table_without_a_registry_is_refused() -> TestResult {
     let text = format!(
-        "[pmir]\nurl = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_clients = [\"{FEED_CLIENT}\"]\n"
+        "[pmir]\nendpoint.url = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_clients = [\"{FEED_CLIENT}\"]\n"
     );
     let error = resolve(&text)?.err().ok_or("refused")?;
     assert!(
@@ -130,7 +130,7 @@ fn a_url_with_credentials_is_refused() -> TestResult {
     );
     let error = resolve(&text)?.err().ok_or("refused")?;
     assert!(
-        matches!(&error, ConfigError::HttpUrl { key } if key == "pmir.url"),
+        matches!(&error, ConfigError::UrlCredentials { key, .. } if key == "pmir.endpoint.url"),
         "{error}"
     );
     assert!(!error.to_string().contains("Qz7password"));
@@ -139,7 +139,7 @@ fn a_url_with_credentials_is_refused() -> TestResult {
 
 #[test]
 fn a_client_credentials_grant_is_taken_and_an_oauth2_grant_is_refused() -> TestResult {
-    let grant = "\n[pmir.credentials.oauth]\ntoken_endpoint = \"http://127.0.0.1:9/token\"\nclient_id = \"gateway\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"synthetic-secret\"\nscope = \"system/aql-*.s\"\n";
+    let grant = "\n[pmir.endpoint.credentials.oauth]\ntoken_endpoint = \"http://127.0.0.1:9/token\"\nclient_id = \"gateway\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"synthetic-secret\"\nscope = \"system/aql-*.s\"\n";
     let (_dir, text) = development(grant)?;
     let settings = resolve(&text)??;
     assert!(
@@ -152,7 +152,7 @@ fn a_client_credentials_grant_is_taken_and_an_oauth2_grant_is_refused() -> TestR
         ),
         "the client-credentials grant of IUA ITI-71 is taken"
     );
-    let oauth2 = "\n[pmir.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"http://127.0.0.1:9/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n";
+    let oauth2 = "\n[pmir.endpoint.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"http://127.0.0.1:9/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n";
     let (_dir, text) = development(oauth2)?;
     let error = match resolve(&text) {
         Err(error) => error,
@@ -162,7 +162,7 @@ fn a_client_credentials_grant_is_taken_and_an_oauth2_grant_is_refused() -> TestR
         matches!(
             error.downcast_ref::<ConfigError>(),
             Some(ConfigError::Replaced { old, new })
-                if old == "pmir.credentials.oauth2" && new == "pmir.credentials.oauth"
+                if old == "pmir.endpoint.credentials.oauth2" && new == "pmir.endpoint.credentials.oauth"
         ),
         "{error}"
     );
@@ -175,7 +175,7 @@ fn a_registry_or_callback_in_the_clear_is_refused_outside_development() -> TestR
         (
             "http://pmir.example.org/fhir/",
             "https://gateway.example.org/pmir/feed",
-            "pmir.url",
+            "pmir.endpoint.url",
         ),
         (
             "https://pmir.example.org/fhir/",
@@ -189,8 +189,8 @@ fn a_registry_or_callback_in_the_clear_is_refused_outside_development() -> TestR
         let text = text(dir.path(), url, callback, "")?
             .replacen("profile = \"development\"", "profile = \"production\"", 1)
             .replacen(
-                "url = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]",
-                "url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]",
+                "endpoint.url = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]",
+                "endpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]",
                 1,
             );
         let error = resolve(&text)?.err().ok_or("refused")?;

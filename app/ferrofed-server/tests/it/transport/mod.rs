@@ -92,8 +92,8 @@ fn grant(dir: &Path, token_endpoint: &str) -> Result<String, Box<dyn Error>> {
 #[cfg(feature = "binding-ihe")]
 fn pix(url: &str) -> String {
     format!(
-        "[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n\n\
-         [pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"{SECRET}\"\n"
+        "[[pixm.manager]]\nendpoint.url = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n\n\
+         [pixm.manager.endpoint.credentials]\nuser = \"gateway\"\npassword = \"{SECRET}\"\n"
     )
 }
 
@@ -134,8 +134,8 @@ fn site(url_key: &str, payload: &str) -> ProtectedSite {
 #[cfg(feature = "binding-ihe")]
 fn pix_site() -> ProtectedSite {
     site(
-        "pixm.manager[0].url",
-        "pixm.manager[0].credentials and patient identifiers",
+        "pixm.manager[0].endpoint.url",
+        "pixm.manager[0].endpoint.credentials and patient identifiers",
     )
 }
 
@@ -143,7 +143,7 @@ fn pix_site() -> ProtectedSite {
 #[cfg(feature = "binding-ihe")]
 fn bare_pix(url: &str) -> String {
     format!(
-        "[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
+        "[[pixm.manager]]\nendpoint.url = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
     )
 }
 
@@ -252,8 +252,8 @@ fn refused_at_load(dir: &Path, tables: &str, site: &ProtectedSite) -> TestResult
 fn a_pix_manager_without_credentials_still_carries_identifiers_and_needs_https() -> TestResult {
     let dir = tempfile::tempdir()?;
     let identifiers = site(
-        "pixm.manager[0].url",
-        "the patient identifiers asked of pixm.manager[0]",
+        "pixm.manager[0].endpoint.url",
+        "the patient identifiers asked of pixm.manager[0].endpoint",
     );
     let http = bare_pix("http://pix.example.org/fhir/");
     refused_at_load(dir.path(), &http, &identifiers)?;
@@ -290,7 +290,7 @@ fn an_otlp_endpoint_carrying_userinfo_is_refused_outside_development() -> TestRe
 fn xcpd(url: &str) -> String {
     format!(
         "[xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\nassertion = \"{SECRET}\"\n\n\
-         [[xcpd.gateway]]\nurl = \"{url}\"\ndevice = \"2.999.50.1\"\n\n\
+         [[xcpd.gateway]]\nendpoint.url = \"{url}\"\ndevice = \"2.999.50.1\"\n\n\
          [xcpd.communities]\n\"2.999.50\" = \"node-a\"\n\"2.999.60\" = \"node-b\"\n"
     )
 }
@@ -307,7 +307,7 @@ fn an_xcpd_gateway_the_assertion_reaches_over_http_is_named_under_development() 
     )?;
     assert_eq!(
         vec![site(
-            "xcpd.gateway[0].url",
+            "xcpd.gateway[0].endpoint.url",
             "xcpd.assertion and patient identifiers"
         )],
         transport::check(&settings, None)?
@@ -327,8 +327,8 @@ fn an_xcpd_gateway_the_assertion_reaches_over_http_is_named_under_development() 
     let settings = resolved(dir.path(), "development", HTTPS_A, &bare)?;
     assert_eq!(
         vec![site(
-            "xcpd.gateway[0].url",
-            "the patient identifiers asked of xcpd.gateway[0]"
+            "xcpd.gateway[0].endpoint.url",
+            "the patient identifiers asked of xcpd.gateway[0].endpoint"
         )],
         transport::check(&settings, None)?,
         "a gateway is sent the patient identifier with or without an assertion"
@@ -600,7 +600,7 @@ fn xcpd_configuration(profile: &str, document: &Path, url: &str) -> String {
         "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n\
          [xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\n\n\
-         [[xcpd.gateway]]\nurl = \"{url}\"\ndevice = \"2.999.50.1\"\n\n\
+         [[xcpd.gateway]]\nendpoint.url = \"{url}\"\ndevice = \"2.999.50.1\"\n\n\
          [xcpd.communities]\n\"2.999.50\" = \"node-a\"\n\"2.999.60\" = \"node-b\"\n"
     ))
 }
@@ -633,7 +633,7 @@ fn a_reload_never_admits_an_xcpd_gateway_over_plain_http() -> TestResult {
                     text.push_str(&error.to_string());
                     next = error.source();
                 }
-                assert!(text.contains("xcpd.gateway[0].url"), "{text}");
+                assert!(text.contains("xcpd.gateway[0].endpoint.url"), "{text}");
             }
             ("development", ReloadError::Profile) => {}
             _ => {

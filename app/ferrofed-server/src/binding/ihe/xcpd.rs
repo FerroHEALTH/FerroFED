@@ -9,19 +9,23 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use ferrofed_identity::ihe::xcpd::{
-    AssertionSource, FixedAssertion, GatewayConfig, LogAudit, Transport, XcpdConfig, XcpdLocalizer,
+    AssertionSource, FixedAssertion, GatedTls, GatewayConfig, LogAudit, Transport, XcpdConfig,
+    XcpdLocalizer,
 };
 use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_server::revocation::{RevocationCheck, RevocationSetupError};
+use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::config::{ServerTls, TlsBuilder};
 
 use crate::binding::ihe::audit::{RepositoryTrail, trail};
 use crate::binding::seam::LocalizationError;
 use crate::binding::seam::LocalizerSeam;
 use crate::config::audit::AuditDestination;
-use crate::config::ihe::xcpd::XcpdSettings;
+use crate::config::ihe::xcpd::{XcpdGateway, XcpdSettings};
 use crate::health::dependencies::Indicator;
 
 /// The XCPD localizer `xcpd` describes over the members of `snapshot`, which
@@ -65,13 +69,9 @@ pub(super) fn localizer(
         gateways: xcpd
             .gateways
             .iter()
-            .map(|gateway| GatewayConfig {
-                endpoint: gateway.url.clone(),
-                device: gateway.device.clone(),
-                community: gateway.community.clone(),
-                myhealth_eu: gateway.myhealth_eu,
-            })
-            .collect(),
+            .enumerate()
+            .map(|(index, written)| gateway(index, written))
+            .collect::<Result<_, _>>()?,
         communities,
         namespaces,
         transport: if profile == Profile::Development {
@@ -79,8 +79,6 @@ pub(super) fn localizer(
         } else {
             Transport::Encrypted
         },
-        tls: Arc::clone(&xcpd.tls),
-        revocation: revocation(xcpd)?,
     };
     let localizer =
         XcpdLocalizer::from_config(config, assertion, snapshot).map_err(LocalizationError::Xcpd)?;
@@ -107,19 +105,53 @@ pub(super) fn localizer(
     })
 }
 
-/// The revocation check of the gateways `xcpd` marks as MyHealth@EU routes,
-/// over the client identity, trust roots and minimum version of
-/// `[xcpd.tls]`, which configuration load requires of such a gateway; none when no gateway is marked.
-fn revocation(xcpd: &XcpdSettings) -> Result<Option<RevocationCheck>, LocalizationError> {
-    if !xcpd.gateways.iter().any(|gateway| gateway.myhealth_eu) {
-        return Ok(None);
+/// The responding gateway `written` at `index`, asked through the outbound
+/// client its endpoint table builds: over the gated TLS of its revocation
+/// check for a MyHealth@EU route, over the table's own TLS otherwise.
+fn gateway(index: usize, written: &XcpdGateway) -> Result<GatewayConfig, LocalizationError> {
+    let table = format!("xcpd.gateway[{index}].endpoint");
+    let revocation = written
+        .myhealth_eu
+        .then(|| revocation(&table, written))
+        .transpose()?;
+    let tls: &dyn TlsBuilder = match &revocation {
+        Some(gated) => gated,
+        None => &ServerTls,
+    };
+    let client = OutboundClient::build(&written.endpoint, "xcpd.gateway.endpoint", tls).map_err(
+        |source| LocalizationError::Outbound {
+            table: table.clone(),
+            source: Box::new(source),
+        },
+    )?;
+    Ok(GatewayConfig {
+        client,
+        device: written.device.clone(),
+        community: written.community.clone(),
+        myhealth_eu: written.myhealth_eu,
+        revocation: revocation.map(|gated| gated.check().clone()),
+    })
+}
+
+/// The gated TLS of the MyHealth@EU route `written`, whose endpoint table is
+/// at `table`: its revocation check over the client identity, trust roots
+/// and minimum version of its `tls`, which configuration load requires of
+/// such a gateway.
+fn revocation(table: &str, written: &XcpdGateway) -> Result<GatedTls, LocalizationError> {
+    let key = format!("{table}.tls");
+    let tls = TlsClient::read(&key, &written.endpoint.tls).map_err(|source| {
+        LocalizationError::XcpdTls {
+            table: key.clone(),
+            source,
+        }
+    })?;
+    let refused = |source| LocalizationError::XcpdRevocation {
+        table: key.clone(),
+        source,
+    };
+    if !tls.has_identity() {
+        return Err(refused(RevocationSetupError::NoClientCertificate));
     }
-    if !xcpd.tls.has_identity() {
-        return Err(LocalizationError::XcpdRevocation(
-            RevocationSetupError::NoClientCertificate,
-        ));
-    }
-    RevocationCheck::from_tls_client(&xcpd.tls)
-        .map(Some)
-        .map_err(LocalizationError::XcpdRevocation)
+    let check = RevocationCheck::from_tls_client(&tls).map_err(refused)?;
+    Ok(GatedTls::new(check, tls.certificate().cloned()))
 }

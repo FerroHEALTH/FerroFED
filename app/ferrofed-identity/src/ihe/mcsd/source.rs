@@ -29,36 +29,25 @@ use std::fmt;
 use std::time::{Duration, Instant};
 
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ferrohealth_secret::secret_url::SecretUrl;
-use ihe_iti::authorizer::Authorizable;
+use ferrohealth_smart::client::outbound::OutboundClient;
 use ihe_iti::mcsd::budget::{Budget, Limits};
 use ihe_iti::mcsd::client::McsdClient;
 use ihe_iti::mcsd::error::{InvalidBase, McsdError};
 use ihe_iti::mcsd::replica::{Refresh, Replica, Scope};
 use jiff::fmt::rfc2822::DateTimeParser;
 use jiff::{SignedDuration, Timestamp};
-use openehr_its::rest::client::InvalidCredentials;
 use thiserror::Error;
-use url::Url;
 
 use super::error::FhirFormError;
 use super::{ENDPOINT_ID_SYSTEM, Listings, ORGANISATION_ID_SYSTEM, document};
-use crate::fhir::{Authentication, ClientError};
-use crate::ihe::iua;
-use ferrohealth_server::tls_client::TlsClient;
+use crate::outbound::Shown;
 
 /// The directory a registry is read from, as the configuration names it.
-#[derive(Debug)]
 pub struct DirectoryConfig {
-    /// The directory's FHIR base URL, which `Debug` shows without its
-    /// userinfo.
-    pub base: SecretUrl,
-    /// The credentials the gateway sends, when the transport does not
-    /// authenticate it (ITI TF-2 Appendix Z.8).
-    pub credentials: Authentication,
-    /// The TLS material the directory is reached with: a client identity for
-    /// mutual TLS and trust roots beside the platform's.
-    pub tls: std::sync::Arc<TlsClient>,
+    /// The outbound client its endpoint table builds: the directory's FHIR
+    /// base URL, the TLS material, the timeouts, the retry table and the
+    /// credential every request carries (ITI TF-2 Appendix Z.8).
+    pub client: OutboundClient,
     /// How long one whole read or refresh may take, over every page of both
     /// resource types.
     pub deadline: Duration,
@@ -70,41 +59,25 @@ pub struct DirectoryConfig {
     pub entries: usize,
 }
 
+impl fmt::Debug for DirectoryConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DirectoryConfig")
+            .field("client", &Shown(&self.client))
+            .field("deadline", &self.deadline)
+            .field("pages", &self.pages)
+            .field("bytes", &self.bytes)
+            .field("entries", &self.entries)
+            .finish()
+    }
+}
+
 /// A directory source that cannot be built.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum DirectoryConfigError {
-    /// The base URL does not parse as a URL.
-    #[error("the directory base URL is not a URL")]
-    BaseUrl(#[source] url::ParseError),
     /// The base URL is not an `http(s)` URL without a query or a fragment.
     #[error("the directory base URL is not an http(s) URL without a query or a fragment")]
     Base(#[source] InvalidBase),
-    /// A credential does not form an `Authorization` value (RFC 7617 §2,
-    /// RFC 6750 §2.1).
-    #[error("the credentials of the directory cannot be sent in the Authorization header")]
-    Credentials(#[source] InvalidCredentials),
-    /// The HTTP client could not be built.
-    #[error("the HTTP client for the directory could not be built")]
-    Client(#[source] reqwest::Error),
-    /// The HTTP client refused the TLS material.
-    #[error(transparent)]
-    Tls(ferrohealth_server::tls_client::TlsClientError),
-    /// The credential is a grant the client was built to send in a default
-    /// header, where its token cannot ride.
-    #[error("the grant of the directory cannot ride in a default header")]
-    Grant,
-}
-
-impl From<ClientError> for DirectoryConfigError {
-    fn from(error: ClientError) -> Self {
-        match error {
-            ClientError::Credentials(source) => Self::Credentials(source),
-            ClientError::Build(source) => Self::Client(source),
-            ClientError::Tls(source) => Self::Tls(source),
-            ClientError::Grant => Self::Grant,
-        }
-    }
 }
 
 /// Why the directory gave no registry.
@@ -209,8 +182,8 @@ pub enum Refreshed {
 
 /// The care services directory a registry is read from.
 ///
-/// `Debug` shows the base without its userinfo and leaves out the HTTP
-/// client, whose default headers hold the credentials.
+/// `Debug` shows the base without its userinfo and whether a credential is
+/// carried, never the credential.
 pub struct DirectorySource {
     client: McsdClient,
     deadline: Duration,
@@ -221,25 +194,16 @@ impl DirectorySource {
     /// Builds the source `config` names.
     ///
     /// # Errors
-    /// A [`DirectoryConfigError`] for a base URL that does not parse or that
-    /// the client refuses, credentials no header can carry, or an HTTP client
-    /// that cannot be built.
+    /// A [`DirectoryConfigError`] for a base URL the client refuses.
     pub fn new(config: DirectoryConfig) -> Result<Self, DirectoryConfigError> {
         let DirectoryConfig {
-            base,
-            credentials,
-            tls,
+            client,
             deadline,
             pages,
             bytes,
             entries,
         } = config;
-        let (http, authorizer) = iua::client(&credentials, &tls)?;
-        let base = Url::parse(base.expose()).map_err(DirectoryConfigError::BaseUrl)?;
-        let mut client = McsdClient::new(base, http).map_err(DirectoryConfigError::Base)?;
-        if let Some(authorizer) = authorizer {
-            client = client.with_authorizer(authorizer);
-        }
+        let client = McsdClient::new(client).map_err(DirectoryConfigError::Base)?;
         Ok(Self {
             client,
             deadline,

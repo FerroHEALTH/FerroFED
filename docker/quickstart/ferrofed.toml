@@ -96,6 +96,8 @@ password = "ferroehr"
 # docker/quickstart/patients.tsv names it, and the gateway asks as FerroPIX's
 # PIXm Consumer, a development credential, NOT for anything real.
 [[pixm.manager]]
+
+[pixm.manager.endpoint]
 url = "http://ferropix:8080/fhir/"
 
 [pixm.manager.members]
@@ -104,6 +106,6 @@ url = "http://ferropix:8080/fhir/"
 "node-c" = "urn:oid:2.999.2.3"
 "node-d" = "urn:oid:2.999.2.4"
 
-[pixm.manager.credentials]
+[pixm.manager.endpoint.credentials]
 user = "ferrofed"
 password = "ferrofed-consumer-example"

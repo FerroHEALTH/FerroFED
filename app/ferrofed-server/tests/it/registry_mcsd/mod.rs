@@ -49,7 +49,7 @@ pub(crate) fn member(name: &str, address: &str) -> Member {
 /// `base`, with a deadline of `deadline` milliseconds per read, resolving the patient at both nodes.
 pub(crate) fn config(base: &str, deadline_ms: u64) -> String {
     crate::support::signing_only(&format!(
-        "profile = \"development\"\n\n[registry.mcsd]\nurl = \"{base}\"\nrefresh_interval = '1h'\ndeadline = '{deadline_ms}ms'\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
+        "profile = \"development\"\n\n[registry.mcsd]\nendpoint.url = \"{base}\"\nrefresh_interval = '1h'\ndeadline = '{deadline_ms}ms'\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
     ))
 }

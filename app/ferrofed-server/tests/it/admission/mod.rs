@@ -223,7 +223,7 @@ async fn manager(issued: &Issued, shift: usize) -> Server {
 #[cfg(feature = "binding-ihe")]
 fn pixm(pix: &str) -> String {
     format!(
-        "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
+        "[[pixm.manager]]\nendpoint.url = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
     )
 }
 

@@ -9,19 +9,26 @@ use std::sync::Arc;
 
 use ferrofed_identity::ihe::pdqm::{PdqmConfig, PdqmDemographics};
 use ferrofed_identity::role::patient::IdentifierNamespace;
+use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::config::ServerTls;
 
 use crate::binding::error::BindingError;
 use crate::binding::seam::DemographicsStep;
 use crate::config::audit::AuditSettings;
-use crate::config::ihe::pdqm::PdqmSettings;
-use crate::config::service;
+use crate::config::ihe::pdqm::{PDQM_ENDPOINT, PdqmSettings};
 
 /// The demographics step `pdqm` describes, audited through `[audit]`.
 pub(super) fn step(
     pdqm: &PdqmSettings,
     audit: &AuditSettings,
 ) -> Result<DemographicsStep, BindingError> {
-    let auth = service::service_authentication("pdqm.credentials", pdqm.credentials.as_ref())?;
+    let client =
+        OutboundClient::build(&pdqm.endpoint, PDQM_ENDPOINT, &ServerTls).map_err(|source| {
+            BindingError::Outbound {
+                table: PDQM_ENDPOINT.to_owned(),
+                source: Box::new(source),
+            }
+        })?;
     let mut namespaces = BTreeMap::new();
     for (namespace, system) in &pdqm.namespaces {
         let namespace =
@@ -29,9 +36,7 @@ pub(super) fn step(
         namespaces.insert(namespace, system.clone());
     }
     let step = PdqmDemographics::from_config(PdqmConfig {
-        base: pdqm.url.clone(),
-        auth,
-        tls: Arc::clone(&pdqm.tls),
+        client,
         transaction: pdqm.transaction,
         master: pdqm.master.clone(),
         namespaces,

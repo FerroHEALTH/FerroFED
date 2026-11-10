@@ -213,6 +213,17 @@ fn renamed(source: &ConfigError) -> Option<(String, String)> {
     }
 }
 
+/// The service tables whose TLS sits in their `endpoint` table (#1815).
+const ENDPOINT_TABLES: [&str; 7] = [
+    "pixm.manager",
+    "pdqm",
+    "pmir",
+    "registry.mcsd",
+    "nl_gf.nvi",
+    "nl_gf.mitz",
+    "xcpd.gateway",
+];
+
 /// The grant tables of a credentials section the `oauth` table replaced
 /// (#1749), with the key each moved to inside it.
 const REPLACED_BY_OAUTH: [(&str, &str); 3] = [
@@ -251,8 +262,16 @@ fn replaced(source: &ConfigError) -> Option<(String, String)> {
 /// table's `tls` sub-table that replaces it.
 fn moved_to_tls(key: &str) -> Option<(String, String)> {
     let (table, leaf) = key.rsplit_once('.')?;
+    // NOTE: no specification governs this: our own design; a service table's TLS sits in
+    // its endpoint table since 0.0.19 (#1815), so the refusal names the key that is read.
+    let unindexed = table.split_once('[').map_or(table, |(name, _)| name);
+    let tls = if ENDPOINT_TABLES.contains(&unindexed) {
+        format!("{table}.endpoint.tls")
+    } else {
+        format!("{table}.tls")
+    };
     (MOVED_TO_TLS.contains(&leaf) && !table.ends_with("tls"))
-        .then(|| (key.to_owned(), format!("{table}.tls.{leaf}")))
+        .then(|| (key.to_owned(), format!("{tls}.{leaf}")))
 }
 
 /// Refuses a file or an override that sets a resource the operator console

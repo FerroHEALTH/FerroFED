@@ -148,8 +148,8 @@ async fn answered_by(
     let (pix_a, pix_b) = (a_crossref.start().await, b_crossref.start().await);
     let (members, served) = route.served();
     let resolvers = format!(
-        "{served}\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\
-         \"node-a\" = \"{DOMAIN_A}\"\n\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n\
+        "{served}\n[[pixm.manager]]\nendpoint.url = \"{}/fhir/\"\n\n[pixm.manager.members]\n\
+         \"node-a\" = \"{DOMAIN_A}\"\n\n[[pixm.manager]]\nendpoint.url = \"{}/fhir/\"\n\n\
          [pixm.manager.members]\n\"node-b\" = \"{DOMAIN_B}\"\n",
         pix_a.uri(),
         pix_b.uri()

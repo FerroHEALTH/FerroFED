@@ -34,6 +34,17 @@ pub enum BindingFault {
         /// The marked gateway's key, `xcpd.gateway[<index>]`.
         gateway: String,
     },
+    /// A responding gateway's endpoint table names a credential, which no
+    /// gateway is sent: the XUA assertion the request carries is the
+    /// credential (ITI TF-1 §27.4.1).
+    #[error(
+        "{key} names a credential, which no responding gateway is sent: the XUA assertion is the credential; remove it"
+    )]
+    #[cfg(feature = "binding-ihe")]
+    GatewayCredentials {
+        /// The refused table's key, `xcpd.gateway[<index>].endpoint.credentials`.
+        key: String,
+    },
     /// A gateway marked as a MyHealth@EU route lacks what an eHDSI link
     /// needs.
     #[error("{gateway} is a MyHealth@EU route, an eHDSI link, and {needs}")]
@@ -54,16 +65,16 @@ pub enum BindingFault {
         /// The namespace as written, a naming system and never a value.
         namespace: String,
     },
-    /// `nl_gf.nvi.credentials` names an OAuth 2.0 or FAPI 2.0 grant, which
+    /// `nl_gf.nvi.endpoint.credentials` names an OAuth 2.0 or FAPI 2.0 grant, which
     /// the Generic Functions IG defines for no data user of the Localization
     /// Service.
     #[error(
-        "{key} is not a credential the NVI takes: nl_gf.nvi.credentials takes basic credentials or the nuts grant of GF-Authentication"
+        "{key} is not a credential the NVI takes: nl_gf.nvi.endpoint.credentials takes basic credentials, and nl_gf.nvi.nuts the nuts grant of GF-Authentication"
     )]
     #[cfg(feature = "binding-nl")]
     NviGrant {
         /// The key of the refused table, such as
-        /// `nl_gf.nvi.credentials.oauth`.
+        /// `nl_gf.nvi.endpoint.credentials.oauth`.
         key: String,
     },
     /// A `[nl_gf.mitz]` value the closed authorization question does not
@@ -120,7 +131,7 @@ pub enum BindingFault {
     /// no time to resolve and ask the members (§11.5; no specification
     /// governs the step's budget: our own design).
     #[error(
-        "pdqm.timeout ({timeout_ms} ms) plus federation.localization.timeout ({localization_ms} ms) must be below federation.overall_timeout ({overall_ms} ms), of which both are a part (§11.5)"
+        "pdqm.endpoint.timeout ({timeout_ms} ms) plus federation.localization.timeout ({localization_ms} ms) must be below federation.overall_timeout ({overall_ms} ms), of which both are a part (§11.5)"
     )]
     #[cfg(feature = "binding-ihe")]
     DemographicsBudget {
@@ -137,7 +148,7 @@ pub enum BindingFault {
     /// (§11.5; no specification governs the pre-filter's budget: our own
     /// design).
     #[error(
-        "nl_gf.mitz.timeout ({timeout_ms} ms) plus pdqm.timeout ({demographics_ms} ms) plus federation.localization.timeout ({localization_ms} ms) must be below federation.overall_timeout ({overall_ms} ms), of which all three are a part (§11.5)"
+        "nl_gf.mitz.endpoint.timeout ({timeout_ms} ms) plus pdqm.endpoint.timeout ({demographics_ms} ms) plus federation.localization.timeout ({localization_ms} ms) must be below federation.overall_timeout ({overall_ms} ms), of which all three are a part (§11.5)"
     )]
     #[cfg(feature = "binding-nl")]
     PrefilterBudget {
@@ -165,12 +176,12 @@ pub enum MyHealthEuNeed {
     Https,
     /// A client certificate for mutual TLS.
     #[error(
-        "needs xcpd.tls.client_identity_file for mutual TLS (eHDSI Section II Security Services 10.0.0 §5.9.2)"
+        "needs endpoint.tls.client_identity_file for mutual TLS (eHDSI Section II Security Services 10.0.0 §5.9.2)"
     )]
     ClientIdentity,
     /// The trust roots of the eHDSI PKI.
     #[error(
-        "needs xcpd.tls.trust_roots_file, the eHDSI PKI or national CA the link alone trusts (eHDSI Section II Security Services 10.0.0 §5.9.2)"
+        "needs endpoint.tls.trust_roots_file, the eHDSI PKI or national CA the link alone trusts (eHDSI Section II Security Services 10.0.0 §5.9.2)"
     )]
     TrustRoots,
 }

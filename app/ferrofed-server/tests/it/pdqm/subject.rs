@@ -81,7 +81,7 @@ async fn read(
 ) -> Result<(StatusCode, String), Box<dyn Error>> {
     let dir = tempfile::tempdir()?;
     let tables = format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n{}",
+        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nendpoint.url = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n{}",
         pix.uri(),
         pdqm(pdq, "iti-78")
     );

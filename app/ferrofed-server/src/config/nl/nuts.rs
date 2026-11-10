@@ -5,7 +5,7 @@
 //! credential kind of the Dutch binding, the regional realisation of §13.3
 //! (Annex B §B.4).
 //!
-//! The same table under `[nl_gf.nvi.credentials]` authenticates the gateway
+//! The same table under `[nl_gf.nvi.endpoint.credentials]` authenticates the gateway
 //! to the NVI ([`super::nvi`]).
 //!
 //! The gateway presents its Verifiable Credentials, signed as a presentation

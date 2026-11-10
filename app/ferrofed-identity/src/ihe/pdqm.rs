@@ -36,9 +36,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::outbound::OutboundClient;
 use ihe_atna::balp::AuditRecorder;
-use ihe_iti::authorizer::Authorizable;
 use ihe_iti::pdqm::PdqmClient;
 use ihe_iti::pdqm::error::{InvalidInput, PdqmError};
 use ihe_iti::pdqm::input::MatchInput;
@@ -49,14 +48,12 @@ use serde::Deserialize;
 use thiserror::Error;
 use url::Url;
 
-use crate::fhir::{Authentication, ClientError};
 use crate::ihe::audit::balp::audited_as;
-use crate::ihe::iua;
+use crate::outbound::Shown;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::demographics::{Ambiguity, Demographics, DemographicsError, Identification};
 use crate::role::header::{HeaderAnswer, PatientHeader, PersonName, PostalAddress, Telecom};
 use crate::role::patient::{IdentifierNamespace, PatientRef, PatientRefError};
-use ferrohealth_server::tls_client::TlsClient;
 
 /// The PDQm transaction the gateway asks the Supplier with.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -90,16 +87,11 @@ impl fmt::Display for Transaction {
 }
 
 /// The PDQm Supplier as the configuration names it.
-#[derive(Debug)]
 pub struct PdqmConfig {
-    /// The Supplier's FHIR base URL, which `Debug` shows without its
-    /// userinfo.
-    pub base: SecretUrl,
-    /// How the gateway authenticates to it.
-    pub auth: Authentication,
-    /// The TLS material it is reached with: a client identity for mutual TLS
-    /// and trust roots beside the platform's.
-    pub tls: Arc<TlsClient>,
+    /// The outbound client its endpoint table builds: the Supplier's FHIR
+    /// base URL, the TLS material, the timeouts, the retry table and the
+    /// credential every request carries.
+    pub client: OutboundClient,
     /// The transaction the Supplier is asked with.
     pub transaction: Transaction,
     /// The identifier system of the master domain: the identifier the matched
@@ -109,6 +101,17 @@ pub struct PdqmConfig {
     /// Each client namespace the Supplier is asked about, mapped to the
     /// identifier system the identifier is sent in.
     pub namespaces: BTreeMap<IdentifierNamespace, String>,
+}
+
+impl fmt::Debug for PdqmConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PdqmConfig")
+            .field("client", &Shown(&self.client))
+            .field("transaction", &self.transaction)
+            .field("master", &self.master)
+            .field("namespaces", &self.namespaces)
+            .finish()
+    }
 }
 
 /// A PDQm demographics step that cannot be built.
@@ -133,16 +136,9 @@ pub enum PdqmConfigError {
     /// identifiers the cross-reference already resolves.
     #[error("namespace {0} is the PDQm master domain, which the cross-reference resolves")]
     MasterNamespace(IdentifierNamespace),
-    /// The Supplier's base URL does not parse as a URL.
-    #[error("the PDQm Supplier base URL is not a URL")]
-    BaseUrl(#[source] url::ParseError),
     /// The Supplier's base URL is not an `http(s)` URL without a query.
     #[error("the PDQm Supplier base URL is not an http(s) URL without a query or a fragment")]
     Base(#[source] InvalidInput),
-    /// The HTTP client could not be built: a credential that forms no
-    /// `Authorization` value, or a client the platform refuses.
-    #[error("the HTTP client for the PDQm Supplier could not be built")]
-    Client(#[source] ClientError),
 }
 
 /// Why the Supplier's exchange gave no answer the step can use.
@@ -179,8 +175,7 @@ impl PdqmDemographics {
     /// # Errors
     /// A [`PdqmConfigError`] for no namespace, a master domain or a mapped
     /// identifier system that is no absolute URI, a namespace that is the
-    /// master domain, a base URL the client refuses, credentials no header
-    /// can carry, or an HTTP client that cannot be built.
+    /// master domain, or a base URL the client refuses.
     pub fn from_config(config: PdqmConfig) -> Result<Self, PdqmConfigError> {
         if config.namespaces.is_empty() {
             return Err(PdqmConfigError::NoNamespace);
@@ -200,13 +195,7 @@ impl PdqmDemographics {
                 return Err(PdqmConfigError::MasterNamespace(namespace.clone()));
             }
         }
-        let (http, authorizer) =
-            iua::client(&config.auth, &config.tls).map_err(PdqmConfigError::Client)?;
-        let base = Url::parse(config.base.expose()).map_err(PdqmConfigError::BaseUrl)?;
-        let mut client = PdqmClient::new(base, http).map_err(PdqmConfigError::Base)?;
-        if let Some(authorizer) = authorizer {
-            client = client.with_authorizer(authorizer);
-        }
+        let client = PdqmClient::new(config.client).map_err(PdqmConfigError::Base)?;
         Ok(Self {
             client,
             transaction: config.transaction,

@@ -435,13 +435,15 @@ grant with the secret in the request body
 ```toml
 # ferrofed.toml
 [[pixm.manager]]
+
+[pixm.manager.endpoint]
 url = "https://mpi.example.org/fhir/"
 
 [pixm.manager.members]
 "cdr-a" = "urn:oid:2.999.10"
 "cdr-b" = "urn:oid:2.999.20"
 
-[pixm.manager.credentials.oauth]
+[pixm.manager.endpoint.credentials.oauth]
 token_endpoint = "https://mpi.example.org/auth/oauth2_token"
 client_id = "ferrofed-pix-consumer"
 client_auth = "client_secret_post"
@@ -463,8 +465,10 @@ which [step 8](#8-tls-and-the-public-address) opens to the Registry alone
 ```toml
 # ferrofed.toml
 [pmir]
-url = "https://pmir.example.org/fhir"
 feed_clients = ["pmir-registry"]   # the Registry's client at the issuer of step 4
+
+[pmir.endpoint]
+url = "https://pmir.example.org/fhir"
 ```
 
 The Registry sends the feed to `pmir.callback_url`, which is

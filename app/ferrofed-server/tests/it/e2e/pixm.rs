@@ -142,7 +142,7 @@ pub(crate) fn pixm_resolver(pix: &Pix) -> String {
 /// it. The gateway asks as FerroPIX's PIXm Consumer.
 pub(crate) fn pixm_resolver_at(url: &str) -> String {
     format!(
-        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.credentials]\nuser = \"{}\"\npassword = \"{}\"\n",
+        "profile = \"development\"\n\n[[pixm.manager]]\nendpoint.url = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.endpoint.credentials]\nuser = \"{}\"\npassword = \"{}\"\n",
         DOMAIN_A.system(),
         DOMAIN_B.system(),
         CONSUMER.user,

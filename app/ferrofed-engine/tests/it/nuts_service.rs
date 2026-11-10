@@ -7,7 +7,7 @@
 //! proof of the grant's key over the request (the IG's GFI-004 and GFI-005;
 //! RFC 9449 §7.1); the token is cached and replaced as it nears its end; a
 //! refused grant sends the service nothing; a token the service refuses is
-//! dropped; a nonce it demands is answered once (RFC 9449 §9); and the
+//! dropped and the search sent once more with a new one; a nonce it demands is answered once (RFC 9449 §9); and the
 //! pseudonym reaches neither the authorization server nor a proof (Annex B
 //! §B.1, §B.7). Every identifier, key and credential is synthetic.
 #![allow(
@@ -24,14 +24,15 @@ use ferrofed_engine::onward::grant::nl::nuts::{NutsAuthorizer, NutsGrant};
 use ferrofed_engine::onward::{Clock, SystemClock};
 use ferrofed_testkit::dpop;
 use ferrofed_testkit::nvi::LocalizationService;
-use http::StatusCode;
-use ihe_iti::authorizer::Authorizable;
+use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::config::ServerTls;
+use ferrohealth_smart::config::endpoint::EndpointSection;
 use nl_generic_functions::identification::{PseudoBsn, Ura};
 use nl_generic_functions::nuts_auth::NutsClient;
 use nl_generic_functions::nvi::NviClient;
 use nl_generic_functions::nvi::error::NviError;
 use secrecy::SecretString;
-use url::Url;
 
 use crate::nuts::{Setup, setup};
 use crate::onward::ManualClock;
@@ -73,11 +74,14 @@ async fn service(
 ) -> Result<(LocalizationService, NviClient), Box<dyn Error>> {
     let nvi = LocalizationService::start_guarded(setup.authority.dpop_bound()).await;
     nvi.index(PSEUDONYM, URA);
-    let http = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
+    let endpoint = EndpointSection {
+        url: SecretUrl::new(nvi.base()),
+        ..EndpointSection::default()
+    };
+    let outbound = OutboundClient::builder(&endpoint, "nl_gf.nvi.endpoint", &ServerTls)
+        .authorizer(authorizer(setup.grant.clone(), clock)?)
         .build()?;
-    let client = NviClient::new(Url::parse(&nvi.base())?, http)?
-        .with_authorizer(authorizer(setup.grant.clone(), clock)?);
+    let client = NviClient::new(outbound)?;
     Ok((nvi, client))
 }
 
@@ -233,27 +237,25 @@ async fn a_refused_grant_sends_the_service_nothing() -> TestResult {
     Ok(())
 }
 
-/// A token the service no longer accepts fails that search with the
-/// service's `401`, and is dropped, so the next search obtains another.
+/// A token the service no longer accepts is dropped on the service's `401`,
+/// and the search is sent once more with a new one (RFC 6750 §3.1).
 #[tokio::test]
-async fn a_token_the_service_refuses_is_dropped() -> TestResult {
+async fn a_token_the_service_refuses_is_dropped_and_the_search_resent() -> TestResult {
     let setup = setup().await?;
-    let (_nvi, client) = service(&setup, Arc::new(SystemClock)).await?;
+    let (nvi, client) = service(&setup, Arc::new(SystemClock)).await?;
     client.localize(&patient()?, PROMPT).await?;
     setup.authority.issuance().revoke_all();
 
-    let Err(error) = client.localize(&patient()?, PROMPT).await else {
-        return Err("a revoked token localized".into());
-    };
-    assert!(
-        matches!(error, NviError::Rejected { status } if status == StatusCode::UNAUTHORIZED),
-        "{error:?}"
-    );
     client.localize(&patient()?, PROMPT).await?;
     assert_eq!(
         2,
         setup.authority.issuance().issued(),
         "a new token after the 401"
+    );
+    assert_eq!(
+        3,
+        nvi.searches().await?.len(),
+        "the first search, the refused one and its resend"
     );
     Ok(())
 }
