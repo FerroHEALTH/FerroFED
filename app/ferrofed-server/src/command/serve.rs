@@ -27,6 +27,7 @@ use crate::{
 use ferrohealth_config::loader::Loaded;
 use ferrohealth_server::cli::ConfigArgs;
 use ferrohealth_server::serve::Listener;
+use ferrohealth_server::telemetry::TelemetryBuildError;
 use ferrohealth_server::tls::ReloadableTls;
 use ferrohealth_telemetry::section::Filter;
 use ferrohealth_telemetry::telemetry::{Console, InitError, Service, Telemetry};
@@ -288,13 +289,13 @@ async fn drain_bindings(running: binding::process::Running, budget: std::time::D
     if running.drain(budget).await == Drained::Abandoned {
         tracing::warn!(
             budget_ms = budget.as_millis(),
-            "the bindings did not stop within gateway.bindings_drain_timeout_ms; what they hold at a remote service may be left there"
+            "the bindings did not stop within gateway.bindings_drain_timeout; what they hold at a remote service may be left there"
         );
     }
     if !crate::audit::stop_trails(budget).await {
         tracing::warn!(
             budget_ms = budget.as_millis(),
-            "the audit trails did not stop within gateway.bindings_drain_timeout_ms; the frames a forwarder wrote last may be lost to a reset"
+            "the audit trails did not stop within gateway.bindings_drain_timeout; the frames a forwarder wrote last may be lost to a reset"
         );
     }
 }
@@ -340,16 +341,16 @@ fn console(stdout_is_terminal: bool) -> Result<Console, InitError> {
 ///
 /// # Errors
 ///
-/// Returns the [`InitError`] an exporter or a collector TLS file could not
-/// be built or read with.
+/// Returns the [`TelemetryBuildError`] of `telemetry.otlp.tls` or of an
+/// exporter that could not be built.
 fn telemetry(
     settings: &Settings,
     runtime: &tokio::runtime::Runtime,
-) -> Result<Telemetry, InitError> {
+) -> Result<Telemetry, TelemetryBuildError> {
     // NOTE: no specification governs this: our own design; the OTLP export is a tonic
     // client, which is built inside the runtime it will run on.
     let _entered = runtime.enter();
-    Telemetry::new(
+    ferrohealth_server::telemetry::build(
         &settings.telemetry,
         Service::new(metrics::SCOPE, body::VERSION),
     )

@@ -35,7 +35,10 @@
 //! is held to the protected-payload policy of [`transport`]. No specification
 //! governs the shape of the table: our own design.
 
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_config::units;
+use ferrohealth_server::tls_client::TlsClient;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -82,11 +85,19 @@ pub struct Pmir {
     /// (`Patient?identifier=<system>|`, §2:3.94.4.1.2.1.1). Unset, every
     /// Patient change is sent.
     pub identifier_system: Option<String>,
-    /// How long one exchange with the Registry may take, in milliseconds.
-    pub timeout_ms: u64,
+    /// How long one exchange with the Registry may take.
+    pub timeout: units::Duration,
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub timeout_ms: Removed,
     /// How often the gateway checks its subscription and subscribes again
-    /// when the Registry no longer holds it, in seconds.
-    pub check_interval_s: u64,
+    /// when the Registry no longer holds it.
+    pub check_interval: units::Duration,
+    /// The retired `check_interval_s`, which `check_interval` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub check_interval_s: Removed,
     /// What a drain does with the subscription: `keep` it at the Registry,
     /// the default, or `unsubscribe`.
     pub on_drain: OnDrain,
@@ -124,8 +135,10 @@ impl Default for Pmir {
             path: String::from("/pmir/feed"),
             feed_clients: Vec::new(),
             identifier_system: None,
-            timeout_ms: 5_000,
-            check_interval_s: 60,
+            timeout: units::Duration::from_secs(5),
+            timeout_ms: Removed::default(),
+            check_interval: units::Duration::from_mins(1),
+            check_interval_s: Removed::default(),
             on_drain: OnDrain::Keep,
         }
     }
@@ -318,10 +331,13 @@ pub(crate) fn resolve(
         path,
         feed_clients: pmir.feed_clients.clone(),
         identifier_system: pmir.identifier_system.clone(),
-        timeout: positive("pmir.timeout_ms", Duration::from_millis(pmir.timeout_ms))?,
+        timeout: positive(
+            "pmir.timeout",
+            Duration::from_millis(pmir.timeout.as_millis()),
+        )?,
         check_interval: positive(
-            "pmir.check_interval_s",
-            Duration::from_secs(pmir.check_interval_s),
+            "pmir.check_interval",
+            Duration::from_secs(pmir.check_interval.as_secs()),
         )?,
         on_drain: pmir.on_drain,
     };

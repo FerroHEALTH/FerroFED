@@ -79,7 +79,7 @@ one is down, a client sends `openEHR-federation-completeness: partial`, which
 
 **Cause.** The gateway cannot reach the nodes (a wrong URL in the registry
 document, DNS, a firewall, TLS), or they do not answer inside
-`federation.per_node_timeout_ms`, or the gateway already has
+`federation.per_node_timeout`, or the gateway already has
 `federation.max_in_flight_per_node` requests open at each of them.
 
 **Confirm.** The endpoint's `error` reads `the node could not be reached: …`
@@ -92,7 +92,7 @@ Compare `ferrofed_node_request_duration_seconds` with the timeout.
 
 **Fix.** Correct the endpoint `url` in the registry document and reload
 ([The registry document](registry.md#the-registry-document)), open the path
-from the gateway to the node, raise `per_node_timeout_ms` above the node's
+from the gateway to the node, raise `per_node_timeout` above the node's
 99th percentile ([Timeouts](queries-and-areas.md#timeouts)), or size
 `max_in_flight_per_node` to what the node can serve
 ([The per-member cap](overload.md#the-per-member-cap)).
@@ -204,8 +204,8 @@ patient-data operation carried no access, so it is withheld`.
 
 **Fix.** Free the spool by bringing the audit repository back
 ([the next entry](#the-audit-spool-grows)), give the spool room
-(`spool_max_events`, `spool_max_bytes`) or a faster disk
-(`spool_write_timeout_ms`) ([The spool and the failure
+(`spool_max_events`, `spool_max_size`) or a faster disk
+(`spool_write_timeout`) ([The spool and the failure
 policy](audit.md#the-spool-and-the-failure-policy)). A write may have
 reached the node before the record failed, so a client reads before writing
 again ([Failing closed](access-log.md#failing-closed)).
@@ -389,7 +389,7 @@ binding a socket ([Running it](configuration.md#running-it)).
 | `… cannot be sent in the Authorization header`, `… cannot be sent: it holds …` | A basic user or password with a character RFC 7617 forbids ([Running it](configuration.md#running-it)). |
 | `… is not a usable OAuth 2.0 client-credentials grant`, `… is not a SMART on openEHR system scope`, `… needs [signing]`, `… names a grant it cannot use`, the FAPI 2.0 and assertion audience faults | Correct the grant ([OAuth 2.0 to a node](onward-credentials.md#oauth-20-to-a-node)). |
 | `… is not a space-delimited list of RFC 6749 §3.3 scope-tokens` | An identity service's `scope` ([A PIX Manager behind OAuth 2.0](identity.md#a-pix-manager-behind-oauth-20)). |
-| `… is not a usable signing key`, `… holds a key that signs …`, `signing.rotation_overlap_s … must be at least …`, `set [signing] when a registry is configured` | Correct `[signing]` ([Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set)). |
+| `… is not a usable signing key`, `… holds a key that signs …`, `signing.rotation_overlap … must be at least …`, `set [signing] when a registry is configured` | Correct `[signing]` ([Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set)). |
 | `… is not a usable DPoP key` | A P-256 or P-384 PKCS#8 key ([DPoP](onward-credentials.md#tokens-bound-to-a-key-dpop)). |
 | `… is not usable in a Nuts grant`, `… names a holder that cannot present`, the Nuts client and DID document faults | Correct the Nuts grant ([The Nuts grant](onward-credentials.md#the-nuts-grant-annex-b-b4)). |
 | TLS material or mutual TLS faults, `endpoint … is not an https URL, and credentials.… presents a TLS client certificate` | Correct the certificate, key or CA files, and use `https` with a client certificate ([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705)). |
@@ -400,8 +400,8 @@ binding a socket ([Running it](configuration.md#running-it)).
 | `a value the reader refused at telemetry.…`, `telemetry.otlp.endpoint must be an http:// URL …`, `telemetry.otlp.endpoint is not set, and its table is present`, `… is set, and telemetry.otlp.endpoint is not https://`, `telemetry.logged_query_parameters is set` | Correct `[telemetry]` or `[telemetry.otlp]` ([Tracing](tracing.md#turning-it-on)). |
 | `unknown key … telemetry.otlp_endpoint`, `… metrics.otlp_endpoint`, `… trace_sample_ratio`, `… otlp_tls` | Move the key under `[telemetry.otlp]` ([Turning it on](tracing.md#turning-it-on)). |
 | `metrics.listen is …, which is not a loopback address`, `… and nothing authenticates GET /metrics there`, `… the address server.listen binds`, the metrics exporter faults | Correct `[metrics]` ([Turning it on](metrics.md#turning-it-on)). |
-| `server.request_timeout_ms … must exceed federation.overall_timeout_ms …`, `federation.localization.timeout_ms … must be below …`, `pdqm.timeout_ms … plus …`, `nl_gf.mitz.timeout_ms … plus …` | Size the budgets so each part fits inside the overall one ([Timeouts](queries-and-areas.md#timeouts)). |
-| `server.shutdown_timeout_ms … must be at least server.request_timeout_ms …` | Raise the drain, or leave it unset ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)). |
+| `server.request_timeout … must exceed federation.overall_timeout …`, `federation.localization.timeout_ms … must be below …`, `pdqm.timeout_ms … plus …`, `nl_gf.mitz.timeout_ms … plus …` | Size the budgets so each part fits inside the overall one ([Timeouts](queries-and-areas.md#timeouts)). |
+| `server.shutdown_timeout … must be at least server.request_timeout …` | Raise the drain, or leave it unset ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)). |
 | `federation.fan_out_stored_queries distributes …` | Configure `[stored_queries]` with a backend that stores, or turn distribution off ([Distributing stored queries](queries-and-areas.md#distributing-stored-queries-to-the-members)). |
 | `… does not apply to stored_queries.backend = …`, `the … stored-query store … could not be opened` | Correct `[stored_queries]` ([Stored queries](queries-and-areas.md#stored-queries)). |
 | `… needs FerroFED's own PostgreSQL store, and the configuration sets no [store] …`, `stored_queries.url is no longer read …`, `store.url does not require TLS …`, `… is not a PostgreSQL connection string …`, `FerroFED's own PostgreSQL store [store] could not be opened`, `FerroFED's store is at migration …` | Correct `[store]` ([FerroFED's own store](store.md)). |
@@ -449,7 +449,7 @@ which every row has.
 | `target-required` | 400 | A write, a new EHR or a definition request names no node. | The request line alone. | The client names the endpoint in `openEHR-federation-endpoint` ([Gateway codes](../integrate/errors.md#gateway-codes)). |
 | `endpoint-several` | 400 | A request routed to one node selects several endpoints. | The request line alone. | The client names one endpoint ([Gateway codes](../integrate/errors.md#gateway-codes)). |
 | `query-parameter-refused` | 400 | A routed request carries a query parameter its operation does not declare. | `query-parameter-refused` at `WARN` under `ferrofed::security`. | The client drops the parameter ([Declared values](node-requests.md#declared-values)). |
-| `node-timeout` | 504 | The routed node, or a probed member, did not answer in time. | `the routed request failed` at `ERROR`, `code` `node-timeout`; the endpoint's dependency state `down`. | Fix the node, or raise `per_node_timeout_ms` ([Timeouts](queries-and-areas.md#timeouts)). |
+| `node-timeout` | 504 | The routed node, or a probed member, did not answer in time. | `the routed request failed` at `ERROR`, `code` `node-timeout`; the endpoint's dependency state `down`. | Fix the node, or raise `per_node_timeout` ([Timeouts](queries-and-areas.md#timeouts)). |
 | `node-unreachable` | 504 | The routed node, or a probed member, could not be reached. | `the routed request failed` at `ERROR`, `code` `node-unreachable`; the dependency state `down`. | Correct the endpoint `url` or the network path ([Every node is `offline`](#every-node-is-offline-or-time-out)). |
 | `node-refused` | 424 | The routed node refused the gateway's onward credentials with `401`. | The node's own log shows the `401`; the endpoint's dependency state stays `up`. | Correct `[credentials."<endpoint>"]` ([Nodes answer `401`](#nodes-answer-401)). |
 | `targeting-conflict` | 400 | Two targeting mechanisms select different node sets. | The request line alone. | The client uses one mechanism ([Gateway codes](../integrate/errors.md#gateway-codes)). |
@@ -506,7 +506,7 @@ which every row has.
 | `approval-own-revision` | 403 | The revision's author approved it. | The revision's `author` is the approver. | Another operator approves it ([Second-operator approval](configuration-revisions.md#second-operator-approval)). |
 | `approval-not-required` | 409 | The revision changes nothing `config.approval` names. | `review.approval` is empty. | Apply it without an approval ([Second-operator approval](configuration-revisions.md#second-operator-approval)). |
 | `operator-unverified` | 403 | A confirmation or an approval came from a caller with no verified token, such as a development loopback peer. | `config-revision-confirmed` or `config-revision-approved` is absent under `ferrofed::security`. | Send the operator's own token ([Commit-confirm](configuration-revisions.md#commit-confirm)). |
-| `confirmation-unavailable` | 409 | The confirmation names a revision that does not run awaiting one, or its deadline passed. | `GET /admin/config` shows `current.awaiting`, or `config-unconfirmed-rolled-back` under `ferrofed::security`. | Apply the change again and confirm it within `config.confirm_ms` ([Commit-confirm](configuration-revisions.md#commit-confirm)). |
+| `confirmation-unavailable` | 409 | The confirmation names a revision that does not run awaiting one, or its deadline passed. | `GET /admin/config` shows `current.awaiting`, or `config-unconfirmed-rolled-back` under `ferrofed::security`. | Apply the change again and confirm it within `config.confirm` ([Commit-confirm](configuration-revisions.md#commit-confirm)). |
 | `confirmation-pending` | 409 | The running revision awaits its confirmation. | `GET /admin/config` shows `current.awaiting` with its deadline. | Confirm it or roll it back, then apply ([Commit-confirm](configuration-revisions.md#commit-confirm)). |
 | `secret-store-unavailable` | 409 | A secret value was sent and `config.secrets_dir` is unset. | The message names the secret's key. | Set `config.secrets_dir`, or set the secret by a reference to a file ([Secrets are write-only](configuration-revisions.md#secrets-are-write-only)). |
 | `configuration-unmanaged` | 404 | The gateway runs with `config.ui = "off"`. | `GET /admin/config` answers it. | Set `config.ui = "managed"` with a store, or manage the gateway by its file ([Configuration revisions](configuration-revisions.md)). |

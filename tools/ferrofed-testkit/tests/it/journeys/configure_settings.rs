@@ -33,20 +33,20 @@ async fn typed(browser: &Browser, id: &str, text: &str) -> Result<(), Box<dyn Er
 }
 
 /// Changes the per-node timeout on the Federation behaviour tab's edit to
-/// `millis`, saves it, and checks the answer and what the stub received.
+/// `span`, saves it, and checks the answer and what the stub received.
 async fn edit_and_save(
     browser: &Browser,
     admin: &ferrofed_testkit::mock::Server,
-    millis: &str,
+    span: &str,
 ) -> Result<(), Box<dyn Error>> {
-    typed(browser, "cfg-setting-0", millis).await?;
+    typed(browser, "cfg-setting-0", span).await?;
     typed(browser, "cfg-reason", "synthetic longer budget").await?;
     browser.element(submit("Save as")).await?.click().await?;
     browser
         .text("strong", "Replica gateway-0 saved revision 3.")
         .await?;
     let sent = bodies(admin, "/admin/config/settings").await?;
-    let expected = format!(r#""settings":{{"federation.per_node_timeout_ms":"{millis}"}}"#);
+    let expected = format!(r#""settings":{{"federation.per_node_timeout":"{span}"}}"#);
     assert!(sent.iter().any(|body| body.contains(&expected)), "{sent:?}");
     Ok(())
 }
@@ -90,7 +90,7 @@ async fn a_settings_tab_shows_the_running_settings_and_its_edit_saves_a_revision
             .await?;
         browser.console_clean("the settings tabs").await?;
         scripted(browser, &stack, "/configuration/federation/edit").await?;
-        edit_and_save(browser, &admin, "3000").await?;
+        edit_and_save(browser, &admin, "3s").await?;
         browser.console_clean("a saved setting").await
     })
     .await
@@ -112,7 +112,7 @@ async fn a_setting_is_saved_with_no_script() -> Result<(), Box<dyn Error>> {
         browser
             .titled(&format!("Configuration · {PRODUCT}"))
             .await?;
-        edit_and_save(browser, &admin, "3500").await?;
+        edit_and_save(browser, &admin, "3500ms").await?;
         browser.scripts(true).await
     })
     .await

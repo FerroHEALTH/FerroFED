@@ -428,7 +428,7 @@ async fn a_reload_keeps_the_directorys_registry() -> TestResult {
     Ok(())
 }
 
-/// The refresh runs by itself every `refresh_interval_s`, off the clinical
+/// The refresh runs by itself every `refresh_interval`, off the clinical
 /// path, and a change reaches the running registry without a request.
 #[tokio::test]
 async fn the_registry_keeps_in_step_every_interval() -> TestResult {
@@ -438,7 +438,7 @@ async fn the_registry_keeps_in_step_every_interval() -> TestResult {
         "https://cdr-b.example.org/openehr",
     ))?;
     let text = super::config(&harness.base(), 5_000)
-        .replace("refresh_interval_s = 3600", "refresh_interval_s = 1");
+        .replace("refresh_interval = '1h'", "refresh_interval = '1s'");
     let gateway = Gateway::boot_from(&text)?;
     let state = Arc::clone(&gateway.state);
     let stepping =
@@ -471,8 +471,10 @@ async fn a_refresh_past_a_cap_is_refused_counted_and_shown() -> TestResult {
         "https://cdr-a.example.org/openehr",
         "https://cdr-b.example.org/openehr",
     ))?;
-    let text = super::config(&harness.base(), 5_000)
-        .replace("deadline_ms = 5000", "deadline_ms = 5000\nmax_entries = 4");
+    let text = super::config(&harness.base(), 5_000).replace(
+        "deadline = '5000ms'",
+        "deadline = '5000ms'\nmax_entries = 4",
+    );
     let gateway = Gateway::boot_from(&text)?;
     let before = gateway.addresses()?;
     for round in 0..5 {

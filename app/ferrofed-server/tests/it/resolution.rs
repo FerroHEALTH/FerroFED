@@ -483,7 +483,7 @@ fn a_pix_manager_url_that_does_not_parse_refuses_to_boot_naming_its_key() -> Tes
 
 #[test]
 fn a_configured_binding_lifetime_is_the_one_resolved() -> TestResult {
-    let text = "[federation]\nbinding_ttl_ms = 1500\n";
+    let text = "[federation]\nbinding_ttl = '1500ms'\n";
     let settings =
         Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve()?;
     if settings.federation.binding_ttl == std::time::Duration::from_millis(1_500) {
@@ -513,9 +513,9 @@ fn a_binding_capacity_is_configured_and_zero_refuses_to_boot() -> TestResult {
 
 #[test]
 fn a_zero_binding_lifetime_refuses_to_boot() -> TestResult {
-    let text = "[federation]\nbinding_ttl_ms = 0\n";
+    let text = "[federation]\nbinding_ttl = '0ms'\n";
     match Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve() {
-        Err(error::Error::Zero { key }) if key == "federation.binding_ttl_ms" => Ok(()),
+        Err(error::Error::Zero { key }) if key == "federation.binding_ttl" => Ok(()),
         other => Err(format!("refused naming the key: {other:?}").into()),
     }
 }

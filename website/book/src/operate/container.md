@@ -100,8 +100,8 @@ on the Docker host itself as `host.docker.internal`. The stop grace period of
 40 seconds outlasts the gateway's 30-second drain and the bindings' 5-second
 drain
 ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request));
-raise it with `server.drain_delay_ms`, `server.shutdown_timeout_ms` or
-`gateway.bindings_drain_timeout_ms`.
+raise it with `server.drain_delay`, `server.shutdown_timeout` or
+`gateway.bindings_drain_timeout`.
 
 The restart policy is `unless-stopped`. Docker restarts a gateway that exits
 with an error, doubling its wait before each attempt from 100 ms
@@ -142,7 +142,7 @@ The base has no shell and no HTTP client, so the image's `HEALTHCHECK` runs
 the binary itself:
 
 ```dockerfile
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=30s --timeout="5ms"s --start-period=15s --retries=3 \
     CMD ["/usr/local/bin/ferrofed", "healthcheck"]
 ```
 
@@ -235,7 +235,7 @@ own for the console and the scraper; clients reach the replicas through the
   under it with mode `0700`. The claim asks for the storage class
   `encrypted`, a placeholder: replace it with a class of your cluster that
   encrypts the volume at rest, because the spool names patients. Its `1Gi`
-  holds the default bounds of both spools (`spool_max_bytes`,
+  holds the default bounds of both spools (`spool_max_size`,
   `spool_max_events`) with headroom; raise it with either bound;
 - keeps each claim when the StatefulSet is deleted or scaled down
   (`persistentVolumeClaimRetentionPolicy` `Retain`). A replica scaled away
@@ -249,10 +249,10 @@ own for the console and the scraper; clients reach the replicas through the
 - sets resource requests and limits, a starting point to size from your own
   load, ephemeral storage among them (a `256Mi` limit for the container
   log, since the spool is on its claim);
-- sets `server.drain_delay_ms` to 5 seconds in the example configuration, so
+- sets `server.drain_delay` to 5 seconds in the example configuration, so
   a pod keeps accepting while it leaves the Service's endpoints, and
-  `server.shutdown_timeout_ms` to the 30-second request timeout and
-  `gateway.bindings_drain_timeout_ms` to 5 seconds;
+  `server.shutdown_timeout` to the 30-second request timeout and
+  `gateway.bindings_drain_timeout` to 5 seconds;
 - holds `SIGTERM` with a `preStop` sleep of 5 seconds, matching the drain
   delay, while the proxies in front stop sending the pod new requests;
 - gives the pod a `terminationGracePeriodSeconds` of 50, which outlasts the

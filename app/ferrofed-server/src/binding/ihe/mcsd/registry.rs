@@ -6,7 +6,7 @@
 //!
 //! At boot the members are read with ITI-90 and checked as the registry
 //! document in FHIR form is, and a directory that cannot be read, or holds
-//! no valid registry, stops the boot. Every `refresh_interval_s` the changes
+//! no valid registry, stops the boot. Every `refresh_interval` the changes
 //! since the last read are asked for with ITI-91 off the clinical path, and
 //! a changed registry goes through the same checks a reload does
 //! ([`RegistrySink::directory_changed`]): the connection-type rule of §15.2

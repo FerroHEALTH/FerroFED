@@ -106,8 +106,8 @@ fn the_patient_and_its_namespace_are_parameters_and_nothing_else_is_compared() {
         );
         let aql = section.aql();
         assert!(
-            aql.contains("e/ehr_status/subject/external_ref/id/value=$patient")
-                && aql.contains("e/ehr_status/subject/external_ref/namespace=$namespace"),
+            aql.contains("e/ehr_status/subject/external_ref/id/value = $patient")
+                && aql.contains("e/ehr_status/subject/external_ref/namespace = $namespace"),
             "{section:?}: {aql}"
         );
         assert!(!aql.contains('\''), "{section:?}: no literal: {aql}");

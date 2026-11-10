@@ -6,8 +6,8 @@
 # the controller's addresses in server.trusted_proxies so the access record
 # names the client's own address
 # (https://ferrofed.eu/docs/operate/production.html). The controller's
-# request body limit and timeout must be at least server.body_limit_bytes
-# and server.request_timeout_ms.
+# request body limit and timeout must be at least server.body_limit
+# and server.request_timeout.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

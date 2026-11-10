@@ -90,12 +90,11 @@ impl Config {
         let listen = self.server.listen;
         let base_path = crate::config::server::resolve_base_path(&self.server)?;
         let public_url = self.gateway.resolve_public_url(&base_path)?;
-        let request_timeout =
-            positive_ms("server.request_timeout_ms", self.server.request_timeout_ms)?;
+        let request_timeout = positive_span("server.request_timeout", self.server.request_timeout)?;
         let (shutdown_timeout, bindings_drain) = self.resolve_drain(request_timeout)?;
-        if self.server.body_limit_bytes == 0 {
+        if self.server.body_limit.is_zero() {
             return Err(Error::Zero {
-                key: String::from("server.body_limit_bytes"),
+                key: String::from("server.body_limit"),
             });
         }
         let telemetry = resolve_telemetry(&self.telemetry)?;
@@ -126,12 +125,12 @@ impl Config {
                 listen,
                 base_path,
                 request_timeout,
-                header_read_timeout_ms: self.server.header_read_timeout_ms,
-                idle_timeout_ms: self.server.idle_timeout_ms,
-                drain_delay: Duration::from_millis(self.server.drain_delay_ms),
+                header_read_timeout: self.server.header_read_timeout.get(),
+                idle_timeout: self.server.idle_timeout.get(),
+                drain_delay: self.server.drain_delay.get(),
                 shutdown_timeout,
                 bindings_drain,
-                body_limit: self.server.body_limit_bytes,
+                body_limit: self.server.body_limit_bytes(),
                 auth,
                 public_url,
                 trusted_proxies: self.server.trusted_proxies.clone(),
@@ -222,23 +221,23 @@ impl Config {
         Ok((credentials, onward_tls))
     }
 
-    /// Resolves `server.shutdown_timeout_ms`: `request_timeout` when no
+    /// Resolves `server.shutdown_timeout`: `request_timeout` when no
     /// source sets it, and refused when it is shorter, so the drain never
     /// cuts a request the server accepted before its listener closed; and
-    /// beside it `gateway.bindings_drain_timeout_ms`, refused at zero.
+    /// beside it `gateway.bindings_drain_timeout`, refused at zero.
     fn resolve_drain(&self, request_timeout: Duration) -> Result<(Duration, Duration), Error> {
         let bindings_drain = Duration::from_millis(self.gateway.resolve_bindings_drain()?.get());
         if !self.shutdown_timeout_written {
             return Ok((request_timeout, bindings_drain));
         }
-        let shutdown_ms = self.server.shutdown_timeout_ms;
-        let shutdown_timeout = positive_ms("server.shutdown_timeout_ms", shutdown_ms)?;
+        let shutdown_timeout =
+            positive_span("server.shutdown_timeout", self.server.shutdown_timeout)?;
         // NOTE: no specification governs this: our own design; a request accepted
         // just before the listener closes may run its whole request timeout.
         if shutdown_timeout < request_timeout {
             return Err(Error::Server(ServerFault::Drain {
-                shutdown_ms,
-                request_ms: self.server.request_timeout_ms,
+                shutdown_ms: self.server.shutdown_timeout.as_millis(),
+                request_ms: self.server.request_timeout.as_millis(),
             }));
         }
         Ok((shutdown_timeout, bindings_drain))
@@ -249,12 +248,12 @@ impl Config {
     /// registry is configured.
     fn resolve_federation(&self, request_timeout: Duration) -> Result<FederationSettings, Error> {
         let per_node = positive_ms(
-            "federation.per_node_timeout_ms",
-            self.federation.per_node_timeout_ms,
+            "federation.per_node_timeout",
+            self.federation.per_node_timeout.as_millis(),
         )?;
         let overall = positive_ms(
-            "federation.overall_timeout_ms",
-            self.federation.overall_timeout_ms,
+            "federation.overall_timeout",
+            self.federation.overall_timeout.as_millis(),
         )?;
         // NOTE: §11.5, the budget only bounds a fan-out, so it is held below the
         // request timeout, by the combining margin, only when the gateway federates.
@@ -262,9 +261,9 @@ impl Config {
             && request_timeout <= overall.saturating_add(Duration::from_millis(COMBINING_MARGIN_MS))
         {
             return Err(Error::Server(ServerFault::Budget {
-                overall_ms: self.federation.overall_timeout_ms,
+                overall_ms: self.federation.overall_timeout.as_millis(),
                 margin_ms: COMBINING_MARGIN_MS,
-                request_ms: self.server.request_timeout_ms,
+                request_ms: self.server.request_timeout.as_millis(),
             }));
         }
         let budget = Budget::new(per_node, overall).map_err(|_zero| Error::Zero {
@@ -281,7 +280,10 @@ impl Config {
         let id = named.transpose().map_err(|_empty| Error::Missing {
             key: String::from("federation.id"),
         })?;
-        let binding_ttl = positive_ms("federation.binding_ttl_ms", self.federation.binding_ttl_ms)?;
+        let binding_ttl = positive_ms(
+            "federation.binding_ttl",
+            self.federation.binding_ttl.as_millis(),
+        )?;
         let binding_capacity = positive_count(
             "federation.binding_capacity",
             self.federation.binding_capacity,
@@ -294,10 +296,12 @@ impl Config {
             "federation.max_in_flight_per_node",
             self.federation.max_in_flight_per_node,
         )?;
-        let max_node_answer_bytes = NonZeroUsize::new(self.federation.max_node_answer_bytes)
-            .ok_or_else(|| Error::Zero {
-                key: String::from("federation.max_node_answer_bytes"),
-            })?;
+        let max_node_answer_bytes = NonZeroUsize::new(
+            usize::try_from(self.federation.max_node_answer_size.bytes()).unwrap_or(usize::MAX),
+        )
+        .ok_or_else(|| Error::Zero {
+            key: String::from("federation.max_node_answer_size"),
+        })?;
         let (offset, max_node_rows) = resolve_paging(&self.federation)?;
         let demographic_endpoint = self
             .federation
@@ -496,6 +500,20 @@ fn stored_query_fan_out(
     Ok(())
 }
 
+/// Returns `span` as a [`Duration`], refused at zero as [`Error::Zero`]
+/// naming `key`.
+pub(crate) fn positive_span(
+    key: &str,
+    span: ferrohealth_config::units::Duration,
+) -> Result<Duration, Error> {
+    if span.is_zero() {
+        return Err(Error::Zero {
+            key: key.to_owned(),
+        });
+    }
+    Ok(span.get())
+}
+
 /// Returns the duration `millis` names, refusing zero under `key`.
 pub(crate) fn positive_ms(key: &str, millis: u64) -> Result<Duration, Error> {
     if millis == 0 {
@@ -536,8 +554,8 @@ pub(crate) fn localization_budget_ms(config: &Config) -> u64 {
         &config.federation.localization,
         config.federation.node_selection,
     ) {
-        (Some(section), _) => section.timeout_ms,
-        (None, Some(NodeSelection::Localized)) => Localization::default().timeout_ms,
+        (Some(section), _) => section.timeout.as_millis(),
+        (None, Some(NodeSelection::Localized)) => Localization::default().timeout.as_millis(),
         (None, _) => 0,
     }
 }
@@ -548,11 +566,14 @@ fn resolve_localization(
     section: &Localization,
     federation: &Federation,
 ) -> Result<LocalizationSettings, Error> {
-    let timeout = positive_ms("federation.localization.timeout_ms", section.timeout_ms)?;
-    if section.timeout_ms >= federation.overall_timeout_ms {
+    let timeout = positive_ms(
+        "federation.localization.timeout",
+        section.timeout.as_millis(),
+    )?;
+    if section.timeout.as_millis() >= federation.overall_timeout.as_millis() {
         return Err(Error::Federation(FederationFault::LocalizationBudget {
-            timeout_ms: section.timeout_ms,
-            overall_ms: federation.overall_timeout_ms,
+            timeout_ms: section.timeout.as_millis(),
+            overall_ms: federation.overall_timeout.as_millis(),
         }));
     }
     Ok(LocalizationSettings {

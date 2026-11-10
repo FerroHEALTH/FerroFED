@@ -16,6 +16,10 @@ pub enum Error {
         #[source]
         source: ferrohealth_config::error::ConfigError,
     },
+    /// The configuration sets keys a release retired, each named with its
+    /// replacement.
+    #[error(transparent)]
+    Retired(#[from] ferrohealth_config::removed::RemovedKeys),
     /// A required key is absent or empty.
     #[error("{key} is required")]
     Missing {

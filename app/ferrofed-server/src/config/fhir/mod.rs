@@ -24,6 +24,8 @@
 //! face does not need `[stored_queries]`. No specification governs the
 //! configuration: our own design.
 
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -76,9 +78,13 @@ pub struct Fhir {
     /// The categories the gateway writes reports of from the members'
     /// compositions, each with the template they are of.
     pub report: Vec<report::ReportEntry>,
-    /// How long, in seconds, the URL of a member's document in the
+    /// How long the URL of a member's document in the
     /// document list stays valid.
-    pub document_url_lifetime_secs: u64,
+    pub document_url_lifetime: units::Duration,
+    /// The retired `document_url_lifetime_secs`, which `document_url_lifetime` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub document_url_lifetime_secs: Removed,
 }
 
 impl Default for Fhir {
@@ -91,7 +97,8 @@ impl Default for Fhir {
             receive: Vec::new(),
             serve: Vec::new(),
             report: Vec::new(),
-            document_url_lifetime_secs: 300,
+            document_url_lifetime: units::Duration::from_mins(5),
+            document_url_lifetime_secs: Removed::default(),
         }
     }
 }
@@ -451,8 +458,8 @@ pub enum FhirError {
         #[source]
         source: Box<MapModeError>,
     },
-    /// `fhir.document_url_lifetime_secs` is zero.
-    #[error("fhir.document_url_lifetime_secs is at least one second")]
+    /// `fhir.document_url_lifetime` is under one second.
+    #[error("fhir.document_url_lifetime is at least one second")]
     DocumentUrlLifetime,
     /// A route a binding serves lies on the face's base, or the base on it.
     #[error("fhir.base and {key} name overlapping routes; give each a path of its own")]
@@ -571,7 +578,7 @@ impl Fhir {
         if !demographics {
             return Err(FhirError::NoDemographics);
         }
-        if self.document_url_lifetime_secs == 0 {
+        if self.document_url_lifetime.as_secs() == 0 {
             return Err(FhirError::DocumentUrlLifetime);
         }
         Ok(FhirSettings {
@@ -590,7 +597,9 @@ impl Fhir {
             laboratory: self.laboratory()?.map(Arc::new),
             discharge: self.discharge()?.map(Arc::new),
             imaging: self.imaging()?.map(Arc::new),
-            document_url_lifetime: std::time::Duration::from_secs(self.document_url_lifetime_secs),
+            document_url_lifetime: std::time::Duration::from_secs(
+                self.document_url_lifetime.as_secs(),
+            ),
             terminology: Terminology::none(),
             validating: None,
             terminology_written: None,

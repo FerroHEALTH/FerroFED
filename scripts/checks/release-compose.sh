@@ -172,13 +172,26 @@ else
 fi
 
 echo "== the stop grace period covers the drain delay, the drain and the bindings' drain"
-# server_ms FILE KEY: KEY's value in the [server] or [gateway] table of FILE,
-# empty when it is unset.
+# server_ms FILE KEY: KEY's duration in the [server] or [gateway] table of
+# FILE in milliseconds, as `"30s"` reads (ms, s, min, h or d); empty when it
+# is unset, and the duration as written when it takes no such unit.
 server_ms() {
   local file="$1" key="$2"
   awk -v key="$key" '
     /^\[/ { inside = ($0 == "[server]" || $0 == "[gateway]"); next }
-    inside && $1 == key && $2 == "=" { print $3; exit }
+    inside && $1 == key && $2 == "=" {
+      value = $3
+      gsub(/"/, "", value)
+      if (match(value, /^[0-9]+/)) {
+        amount = substr(value, 1, RLENGTH)
+        unit = substr(value, RLENGTH + 1)
+        factor["ms"] = 1; factor["s"] = 1000; factor["min"] = 60000
+        factor["h"] = 3600000; factor["d"] = 86400000
+        if (unit in factor) { printf "%d\n", amount * factor[unit]; exit }
+      }
+      print value
+      exit
+    }
   ' "$file"
 }
 # grace_covers FILE GRACE: whether a grace period of GRACE seconds outlasts
@@ -187,12 +200,12 @@ server_ms() {
 # so FILE must set all three.
 grace_covers() {
   local file="$1" grace="$2" key unset_keys="" delay shutdown bindings
-  for key in drain_delay_ms shutdown_timeout_ms bindings_drain_timeout_ms; do
+  for key in drain_delay shutdown_timeout bindings_drain_timeout; do
     [[ -n "$(server_ms "$file" "$key")" ]] || unset_keys="$unset_keys $key"
   done
-  delay="$(server_ms "$file" drain_delay_ms)"
-  shutdown="$(server_ms "$file" shutdown_timeout_ms)"
-  bindings="$(server_ms "$file" bindings_drain_timeout_ms)"
+  delay="$(server_ms "$file" drain_delay)"
+  shutdown="$(server_ms "$file" shutdown_timeout)"
+  bindings="$(server_ms "$file" bindings_drain_timeout)"
   if [[ -n "$unset_keys" ]]; then
     echo "the configuration leaves$unset_keys unset in [server] and [gateway]; this guard reads each from the configuration and copies no default from the code"
     return 1
@@ -200,7 +213,7 @@ grace_covers() {
     echo "the drain timeouts are not whole numbers, or the grace period is not in whole seconds"
     return 1
   elif ((grace * 1000 <= delay + shutdown + bindings)); then
-    echo "a grace period of $grace s does not outlast drain_delay_ms ($delay) plus shutdown_timeout_ms ($shutdown) plus bindings_drain_timeout_ms ($bindings)"
+    echo "a grace period of $grace s does not outlast drain_delay ($delay) plus shutdown_timeout ($shutdown) plus bindings_drain_timeout ($bindings)"
     return 1
   fi
   echo "a grace period of $grace s outlasts the $delay ms delay, the $shutdown ms drain and the $bindings ms bindings' drain"
@@ -218,13 +231,13 @@ grace_holds() {
   else
     bad "$compose stop_grace_period: $out"
   fi
-  grep -v '^bindings_drain_timeout_ms[[:space:]]' "$config" > "$unbudgeted" || true
+  grep -v '^bindings_drain_timeout[[:space:]]' "$config" > "$unbudgeted" || true
   if grace_covers "$config" 1 > /dev/null; then
     bad "the grace check accepts a grace period of one second over $config"
   elif cmp -s "$config" "$unbudgeted"; then
-    bad "$config sets no [gateway] bindings_drain_timeout_ms to remove"
+    bad "$config sets no [gateway] bindings_drain_timeout to remove"
   elif grace_covers "$unbudgeted" "$grace" > /dev/null; then
-    bad "the grace check accepts $config with bindings_drain_timeout_ms unset"
+    bad "the grace check accepts $config with bindings_drain_timeout unset"
   else
     echo "OK: a short grace period and an unset budget each fail the grace check over $config"
   fi

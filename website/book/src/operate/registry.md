@@ -131,10 +131,10 @@ both is refused.
 ```toml
 [registry.mcsd]
 url = "https://directory.example.org/fhir"   # the directory's FHIR base
-refresh_interval_s = 300                    # the default; 0 is refused
-deadline_ms = 30000                         # one whole read or refresh, the default
+refresh_interval = "5min"                    # the default; 0 is refused
+deadline = "30s"                         # one whole read or refresh, the default
 max_pages = 200                             # the defaults of the three caps
-max_bytes = 67108864                        # 64 MiB of answer bodies
+max_size = "64MiB"                        # 64 MiB of answer bodies
 max_entries = 50000
 
 [registry.mcsd.credentials]                 # when the transport does not authenticate
@@ -169,7 +169,7 @@ native form refuses. A directory that cannot be read within the deadline
 and the caps, or holds a registry that breaks a rule, stops the start; `config check` reads the directory the
 same way and names the fault.
 
-Every `refresh_interval_s` the gateway asks for the changes since the last
+Every `refresh_interval` the gateway asks for the changes since the last
 read with ITI-91, Request Care Services Updates:
 `GET [base]/Organization/_history?_since=…` and the same for `Endpoint`. It
 asks from 60 seconds before the `Date` the directory stamped its previous
@@ -201,7 +201,7 @@ A refresh that changed something goes through the same checks as a reload:
   and the endpoint leaves the registry. The next refresh asks again from
   the same instant, so the registry follows the directory once the
   directory, or the configuration, is put right.
-- When the directory's answer runs past `deadline_ms`, `max_pages`,
+- When the directory's answer runs past `deadline`, `max_pages`,
   `max_bytes` or `max_entries`, the refresh is refused the same way with
   `class = "registry-budget"`; an answer that does not hold to ITI-91 is
   refused with `class = "registry-unreadable"`. Both count as a refused
@@ -296,7 +296,7 @@ node_selection = "localized"
 
 [federation.localization]
 on_failure = "closed"   # the default; "ask-all" widens on failure
-timeout_ms = 5000       # the default; below overall_timeout_ms, 0 is refused
+timeout = "5s"       # the default; below overall_timeout, 0 is refused
 ```
 
 For an undirected patient query, the gateway first asks the localizer which
@@ -355,13 +355,13 @@ Both bounds are settings, checked at boot:
 
 ```toml
 [federation]
-binding_ttl_ms = 900000    # 15 minutes after the last resolution that returned the binding, the default; 0 is refused
+binding_ttl = "15min"    # 15 minutes after the last resolution that returned the binding, the default; 0 is refused
 binding_capacity = 100000  # ehr_id bindings over every caller, the default; 0 is refused
 ```
 
 Each binding has a lifetime of its own. A resolution that returns a
-`{node, ehr_id}` pair holds it, or renews it, for `binding_ttl_ms`; a binding
-the caller's later resolutions no longer return expires `binding_ttl_ms`
+`{node, ehr_id}` pair holds it, or renews it, for `binding_ttl`; a binding
+the caller's later resolutions no longer return expires `binding_ttl`
 after the last one that did, however many other resolutions the caller makes
 meanwhile. One exception holds for as long as the caller has a live binding:
 an `ehr_id` the caller's resolutions placed at two members or more stays a
@@ -380,7 +380,7 @@ that caller's follow-up the next step of §12.5.1, never a wrong node.
 The lifetime is a correctness bound. An identity merge or split at the
 identity source can make a binding stale, and a resolution after the change
 no longer returns it, so a stale binding is routed on for at most
-`binding_ttl_ms` after the last resolution that returned it. Set it no longer
+`binding_ttl` after the last resolution that returned it. Set it no longer
 than you would accept a follow-up being routed on a superseded identity. With `[pmir]`, a merge the
 identity source reports drops the bindings it could have made stale as it
 happens, on the replica that receives it
@@ -439,7 +439,7 @@ Nine sections take effect on a reload:
 | Reloaded | Needs a restart |
 |---|---|
 | `[registry]`: the document's contents, its path and its `format` | `[registry.mcsd]`, the directory the registry is read from |
-| `[credentials]`, each endpoint's onward TLS included | `[server]`, `trusted_proxies` and `forwarded_header` included, `[gateway]`, and `[signing]`, `rotation_overlap_s` included |
+| `[credentials]`, each endpoint's onward TLS included | `[server]`, `trusted_proxies` and `forwarded_header` included, `[gateway]`, and `[signing]`, `rotation_overlap` included |
 | `[pixm]` | `[federation]`, `federation.demographic_endpoint` included, `[stored_queries]` and `[store]` |
 | `[pdqm]` | `[pmir]`, `[telemetry]` and `[metrics]` |
 | `[xcpd]` | `xcpd.audit` and `[xcpd.audit_repository]` |
@@ -489,7 +489,7 @@ The reload logs `registry reloaded` at `INFO` with `members` (how many the
 registry now holds), `endpoints_added`, `endpoints_removed`,
 `members_removed`, `incidents`, `index_dropped` and `bindings_dropped`. A
 changed setting outside the reloaded sections is logged at `WARN` under
-`settings`, by key (`server.listen`, `federation.binding_ttl_ms`), and keeps
+`settings`, by key (`server.listen`, `federation.binding_ttl`), and keeps
 its running value until a restart; the rest of the reload applies.
 
 A configuration that does not load is refused, and the running registry

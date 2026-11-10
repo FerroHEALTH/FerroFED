@@ -7,7 +7,7 @@
 //! a verified caller is `429 rate-limited` with `Retry-After` (RFC 6585 §4),
 //! keyed on the caller and never on a forwarded address; past
 //! `federation.max_in_flight_per_node` a member is `time-out` (§11.5, N38);
-//! and an answer past `federation.max_node_answer_bytes` makes its member
+//! and an answer past `federation.max_node_answer_size` makes its member
 //! `node-error` (§11.1).
 //! Every refusal is counted by its limit. No specification governs the
 //! limits: our own design.
@@ -77,7 +77,7 @@ fn gateway(
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{federation}\n\n{}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n{federation}\n\n{}",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
     );
     let settings =
@@ -306,7 +306,7 @@ async fn a_zero_limit_is_refused_by_its_key() -> TestResult {
             "[server]\nmax_concurrent_requests = 0\n",
             "server.max_concurrent_requests",
         ),
-        ("[server]\nretry_after_s = 0\n", "server.retry_after_s"),
+        ("[server]\nretry_after = '0ms'\n", "server.retry_after"),
         (
             "[server.caller_rate]\nrequests_per_second = 0\nburst = 1\n",
             "server.caller_rate.requests_per_second",
@@ -320,8 +320,8 @@ async fn a_zero_limit_is_refused_by_its_key() -> TestResult {
             "federation.max_in_flight_per_node",
         ),
         (
-            "[federation]\nmax_node_answer_bytes = 0\n",
-            "federation.max_node_answer_bytes",
+            "[federation]\nmax_node_answer_size = '0B'\n",
+            "federation.max_node_answer_size",
         ),
     ] {
         let refused = match Config::from_sources(Some(text), &BTreeMap::new()) {
@@ -357,7 +357,7 @@ async fn a_member_answer_past_the_read_bound_is_node_error_and_fails_the_query_4
     let (app, _state) = gateway(
         dir.path(),
         (&large.uri(), &quick.uri()),
-        "max_node_answer_bytes = 4096",
+        "max_node_answer_size = '4KiB'",
         &roomy(),
     )?;
     let request = Request::post("/v1/query/aql")

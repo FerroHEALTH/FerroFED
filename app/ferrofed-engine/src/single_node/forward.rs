@@ -737,7 +737,7 @@ mod tests {
     fn the_hop_by_hop_fields_go_and_location_and_etag_stay() {
         let mut headers = HeaderMap::new();
         headers.insert("connection", "keep-alive, x-node-hop".parse().unwrap());
-        headers.insert("keep-alive", "timeout=5".parse().unwrap());
+        headers.insert("keep-alive", "timeout='5ms'".parse().unwrap());
         headers.insert("x-node-hop", "1".parse().unwrap());
         headers.insert("transfer-encoding", "chunked".parse().unwrap());
         headers.insert("content-length", "12".parse().unwrap());

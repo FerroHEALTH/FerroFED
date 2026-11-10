@@ -142,7 +142,7 @@ fn configuration(
     std::fs::write(&document, registry_document(&nodes.a, &nodes.b, ""))?;
     let quoted = |path: &Path| toml::Value::String(path.display().to_string());
     let text = format!(
-        "{}\n\n[server]\nrequest_timeout_ms = 60000\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[stored_queries]\npath = {}\n{}{}",
+        "{}\n\n[server]\nrequest_timeout = '1min'\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout = '20s'\noverall_timeout = '25s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[stored_queries]\npath = {}\n{}{}",
         fixed_resolver(),
         quoted(&document),
         quoted(&dir.join("definitions.redb")),

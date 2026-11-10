@@ -48,9 +48,12 @@ async fn the_running_configuration_names_the_revision_each_setting_comes_from() 
     assert_eq!("managed", document.ui);
     assert_eq!(Some(1), document.revision.map(RevisionId::get));
     let per_node = document
-        .setting("federation.per_node_timeout_ms")
+        .setting("federation.per_node_timeout")
         .ok_or("listed")?;
-    assert_eq!(Some(toml::Value::Integer(5000)), per_node.value);
+    assert_eq!(
+        Some(toml::Value::String(String::from("5s"))),
+        per_node.value
+    );
     assert_eq!(Source::Revision, per_node.source);
     assert!(per_node.restart);
     assert!(per_node.editable);
@@ -75,7 +78,7 @@ async fn a_saved_setting_applies_as_a_revision_and_a_restart_setting_names_the_n
         &gateway,
         1,
         &[
-            ("federation.per_node_timeout_ms", "5500"),
+            ("federation.per_node_timeout", "5500ms"),
             ("federation.consent.disclose", "false"),
         ],
     )
@@ -97,14 +100,17 @@ async fn a_saved_setting_applies_as_a_revision_and_a_restart_setting_names_the_n
     let after = running(&gateway).await?;
     assert_eq!(Some(2), after.revision.map(RevisionId::get));
     let per_node = after
-        .setting("federation.per_node_timeout_ms")
+        .setting("federation.per_node_timeout")
         .ok_or("listed")?;
     assert_eq!(
-        Some(toml::Value::Integer(5000)),
+        Some(toml::Value::String(String::from("5s"))),
         per_node.value,
         "the replica runs the boot value until it restarts"
     );
-    assert_eq!(Some(toml::Value::Integer(5500)), per_node.next);
+    assert_eq!(
+        Some(toml::Value::String(String::from("5500ms"))),
+        per_node.next
+    );
     let disclose = after
         .setting("federation.consent.disclose")
         .ok_or("listed")?;
@@ -131,7 +137,7 @@ async fn only_an_editable_setting_is_saved_and_a_refused_value_is_never_echoed()
     let (status, body) = save(
         &gateway,
         1,
-        &[("federation.per_node_timeout_ms", "synthetic-not-a-number")],
+        &[("federation.per_node_timeout", "synthetic-not-a-number")],
     )
     .await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{body}");

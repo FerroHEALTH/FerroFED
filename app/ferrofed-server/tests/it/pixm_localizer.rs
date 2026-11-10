@@ -93,7 +93,7 @@ fn gateway_asking(
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[[pixm.manager]]\nurl = \"{manager}\"\n{method}\n[pixm.manager.members]\n{members}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout = '1s'\n\n[[pixm.manager]]\nurl = \"{manager}\"\n{method}\n[pixm.manager.members]\n{members}",
         document = toml::Value::String(document.display().to_string()),
     );
     let settings =

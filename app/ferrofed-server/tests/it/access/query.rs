@@ -316,7 +316,7 @@ async fn a_member_answer_past_the_read_bound_is_recorded_as_node_error_with_no_r
         dir.path(),
         (&node_a.uri(), &node_b.uri()),
         &repository,
-        ("", "max_node_answer_bytes = 4096\n"),
+        ("", "max_node_answer_size = '4KiB'\n"),
         &settings_with_room(),
     )?;
     let (status, text) = call(app, post(body(&compositions(""))?)?).await?;

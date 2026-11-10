@@ -196,7 +196,7 @@ pub(crate) fn gateway_within_state(
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {per_node_ms}\noverall_timeout_ms = {overall_ms}\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{tables}"
+        "{top}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '{per_node_ms}ms'\noverall_timeout = '{overall_ms}ms'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{tables}"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;

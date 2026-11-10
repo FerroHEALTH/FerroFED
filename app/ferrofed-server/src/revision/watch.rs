@@ -4,7 +4,7 @@
 //! Keeping a replica on the revision the store marks current.
 //!
 //! Under `config.ui = "managed"` each gateway reads the store's current mark
-//! every `config.poll_ms`. When another replica sharing the store applied or
+//! every `config.poll`. When another replica sharing the store applied or
 //! rolled back a revision, the mark names a revision this replica does not
 //! run, and the watch applies it through the same reload path an apply takes
 //! ([`Revisions::follow`]). A revision this replica refuses is logged and

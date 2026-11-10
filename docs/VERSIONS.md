@@ -337,7 +337,7 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is 0.0.135 since 2026-11-09, the line the published `eehrxf`,
+pin is 0.0.136 since 2026-11-10, the line the published `eehrxf`,
 `fhirconnect` and `openehr-mapping-core` require exactly, so the lock holds
 one copy of each member (#1181, #813).
 `openehr-sdt` left the group with 0.0.116, which no longer carries the
@@ -348,10 +348,10 @@ module client authentication (#80) already read every caller's scopes with
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.0.135 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.0.135 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.0.135 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.0.135 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.0.136 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.0.136 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.0.136 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.0.136 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -458,7 +458,7 @@ and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhir-types` | 0.1.128 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhir-types` | 0.1.130 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 
 The `pixm` feature takes `r4` and `terminology`: that root set holds every
 type ITI-83 reads (`Parameters`, `OperationOutcome`, `Identifier`, `Reference`,
@@ -487,11 +487,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | =0.1.187 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | =0.1.241 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | =0.1.148 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | =0.1.148 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | =0.1.154 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | =0.2.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | =0.1.249 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | =0.1.151 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | =0.2.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | =0.2.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -504,8 +504,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | =0.8.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | =0.8.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | =0.9.1 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | =0.9.1 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
@@ -716,7 +716,7 @@ No specification governs the choice: our own design.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| ferrohealth-perf | `0.5.2` | `.github/workflows/perf.yml` |
+| ferrohealth-perf | `0.8.0` | `.github/workflows/perf.yml` |
 
 ## Product and citation version
 

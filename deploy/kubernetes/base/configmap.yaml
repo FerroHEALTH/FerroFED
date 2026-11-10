@@ -35,13 +35,13 @@ data:
     [server]
     # The address the image binds; the probes and the Service use the port.
     listen = "0.0.0.0:8080"
-    request_timeout_ms = 30000
+    request_timeout = "30s"
     # On SIGTERM readiness turns 503 at once, and the listener keeps
     # accepting for this long, while the pod leaves the Service's endpoints.
-    drain_delay_ms = 5000
+    drain_delay = "5s"
     # Then the listener closes, and the requests in flight get this long to
-    # finish: at least request_timeout_ms, which config check enforces.
-    shutdown_timeout_ms = 30000
+    # finish: at least request_timeout, which config check enforces.
+    shutdown_timeout = "30s"
     # Past this many requests at once the gateway answers 503 overloaded
     # with Retry-After, before anything reaches a member.
     max_concurrent_requests = 512
@@ -50,7 +50,7 @@ data:
     # Then the bindings get this long to stop their processes, such as
     # deleting the PMIR subscription. The pod's terminationGracePeriodSeconds
     # covers the delay, the drain and this budget.
-    bindings_drain_timeout_ms = 5000
+    bindings_drain_timeout = "5s"
 
     # Each verified caller may send this many requests a second, after a
     # burst; one more is 429 rate-limited with Retry-After.
@@ -81,14 +81,14 @@ data:
     [federation]
     id = "example-federation"
     node_selection = "ask-all"
-    per_node_timeout_ms = 10000
-    overall_timeout_ms = 25000
+    per_node_timeout = "10s"
+    overall_timeout = "25s"
     # At most this many requests to one member at once; one past it waits
     # for a slot until its per-node deadline, then is time-out.
     max_in_flight_per_node = 64
     # At most this many bytes of one answer from a member; a longer one is
     # dropped unread and the member is node-error.
-    max_node_answer_bytes = 16777216
+    max_node_answer_size = "16MiB"
 
     # Client authentication: every caller presents an RFC 9068 access
     # token from an issuer listed here, which ferrohealth-smart checks. A

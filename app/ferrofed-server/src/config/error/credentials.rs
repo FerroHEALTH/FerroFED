@@ -158,7 +158,7 @@ pub enum CredentialsFault {
     /// the keys sign plus the time a node caches the JWK Set, so a node could
     /// meet a token signed by a key the set no longer publishes.
     #[error(
-        "signing.rotation_overlap_s ({overlap_s}) must be at least {lifetime_s} seconds plus signing.node_jwks_cache_s ({cache_s})"
+        "signing.rotation_overlap ({overlap_s} s) must be at least {lifetime_s} seconds plus signing.node_jwks_cache ({cache_s} s)"
     )]
     RotationOverlap {
         /// The overlap window.

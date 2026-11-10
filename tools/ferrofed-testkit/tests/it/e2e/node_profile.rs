@@ -102,7 +102,7 @@ pub(super) fn member(
         )
     });
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n{credentials}",
+        "profile = \"development\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout = '20s'\noverall_timeout = '25s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n{credentials}",
         quoted(&document),
         quoted(&key)
     );
@@ -368,7 +368,7 @@ fn federation(dir: &Path, registry: &str, pix: &str) -> Result<Federation, Box<d
     std::fs::write(&key, oauth::Curve::P384.pem()?)?;
     let quoted = |path: &Path| toml::Value::String(path.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{pix}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n",
+        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{pix}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout = '20s'\noverall_timeout = '25s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n",
         EhrDomain::new(1).system(),
         EhrDomain::new(2).system(),
         quoted(&document),

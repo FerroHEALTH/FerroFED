@@ -99,7 +99,7 @@ fn bounded(
 }
 
 /// Returns the engine over `builder` that `settings` bound: the overall
-/// budget as its timeout and `max_node_answer_bytes` read of one answer.
+/// budget as its timeout and `max_node_answer_size` read of one answer.
 ///
 /// # Errors
 ///

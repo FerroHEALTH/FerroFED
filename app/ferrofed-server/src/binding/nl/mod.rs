@@ -79,7 +79,7 @@ impl Binding for Nl {
         snapshot: &RegistrySnapshot,
     ) -> Result<Option<LocalizerSeam>, LocalizationError> {
         let timeout = settings.federation.localization.map_or_else(
-            || Duration::from_millis(Localization::default().timeout_ms),
+            || Duration::from_millis(Localization::default().timeout.as_millis()),
             |localization| localization.timeout,
         );
         settings
