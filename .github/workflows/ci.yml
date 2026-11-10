@@ -1239,8 +1239,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The gateway image compose.yaml names is tagged only once its release
+      # is published, after the version bump reached main; until then there
+      # is nothing to pull, and the tour waits for the publish.
       - name: The README's quick start runs as written
-        run: bash scripts/quickstart/tour.sh
+        run: |
+          set -euo pipefail
+          version="$(sed -nE 's|.*ghcr\.io/ferrohealth/ferrofed:\$\{FERROFED_VERSION:-([0-9.]+)\}.*|\1|p' compose.yaml | head -n1)"
+          if ! docker manifest inspect "ghcr.io/ferrohealth/ferrofed:$version" > /dev/null 2>&1; then
+            echo "::notice::ghcr.io/ferrohealth/ferrofed:$version is not published yet; the tour runs once its release is."
+            exit 0
+          fi
+          bash scripts/quickstart/tour.sh
       - name: Stop the quickstart
         if: always()
         run: docker compose down --volumes
