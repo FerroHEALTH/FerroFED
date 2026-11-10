@@ -284,8 +284,20 @@ pub enum AuthFault {
     NotContactPoint,
     /// A contact-point issuer has no `[[federation.contact_point]]`.
     ContactPointUndeclared,
+    /// `[trust.issuer.national_contact_point]`, removed in favour of
+    /// `[[auth.federation]]` and `[[federation.contact_point]]`.
+    ContactPointMoved,
     /// A `[[auth.basic.users]]` entry: the gateway admits no Basic caller.
     BasicRemoved,
+    /// `[trust.issuer.requester]`, removed in favour of the NL fields of an
+    /// `[[auth.federation]]` table.
+    RequesterMoved,
+    /// `[trust.issuer.assurance]`, removed in favour of
+    /// `[auth.issuer.assurance]`.
+    AssuranceMoved,
+    /// `[trust.issuer] client_tokens_act_for_professional`, removed: a
+    /// client acting with no person reaches no patient data.
+    ActsForRemoved,
 }
 
 impl fmt::Display for AuthFault {
@@ -319,8 +331,20 @@ impl fmt::Display for AuthFault {
             Self::ContactPointUndeclared => {
                 "is a contact point, and no [[federation.contact_point]] table names it"
             }
+            Self::RequesterMoved => {
+                "is removed: who asks for the data is read from the nl.professional_number, nl.role, nl.ura and nl.organisation_type field sources of the issuer's [[auth.federation]] table (kind = \"federation\")"
+            }
+            Self::AssuranceMoved => {
+                "is removed: declare the claim, the levels map and the minimum in the issuer's [auth.issuer.assurance] table"
+            }
+            Self::ActsForRemoved => {
+                "is removed: a token ferrohealth-smart classifies as a system's reaches no patient data; a professional acting through a client is a delegated person of a persons issuer"
+            }
             Self::BasicRemoved => {
                 "is refused: the gateway admits no Basic caller; a machine authenticates with a client-credentials token (RFC 6749 §4.4) of an [[auth.issuer]], its client named in metrics.scrape_clients or pmir.feed_clients"
+            }
+            Self::ContactPointMoved => {
+                "is removed: declare a contact point as a kind = \"federation\" [[auth.issuer]] whose [[auth.federation]] table sets contact_point = true, with its correlation_header and additional_countries in [[federation.contact_point]]"
             }
         })
     }

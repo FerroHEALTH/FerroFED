@@ -158,12 +158,13 @@ fn a_client_credentials_grant_is_taken_and_an_oauth2_grant_is_refused() -> TestR
         Err(error) => error,
         Ok(resolved) => return Err(format!("accepted: {resolved:?}").into()),
     };
-    assert_eq!(
-        Some("pmir.credentials.oauth2"),
-        error
-            .downcast_ref::<ConfigError>()
-            .and_then(crate::support::refused_key),
-        "an unknown key since 0.0.19: {error}"
+    assert!(
+        matches!(
+            error.downcast_ref::<ConfigError>(),
+            Some(ConfigError::Replaced { old, new })
+                if old == "pmir.credentials.oauth2" && new == "pmir.credentials.oauth"
+        ),
+        "{error}"
     );
     Ok(())
 }
