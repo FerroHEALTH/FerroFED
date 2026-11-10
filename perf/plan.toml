@@ -93,7 +93,7 @@ headers = { authorization = "Bearer {ncp_token}", ncp-correlation-id = "perf-con
 dpop_key_file = "target/perf-run/ncp/dpop-key.pem"
 
 # The same summary as an emergency access, under the EMERGENCY token, which
-# the store counts against [emergency] threshold = 5 per window_s = 1. The
+# the store counts against [emergency] threshold = 5 per window = "1s". The
 # tool sends the requests in turn, so this group gets one arrival in seven,
 # under three a second at the plan's rate of 20, and is never refused; the
 # gate then holds the head's store to a count of every one (gate.sh

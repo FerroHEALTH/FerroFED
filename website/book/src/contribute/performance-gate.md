@@ -86,7 +86,7 @@ The A/B run has two parts:
 `perf/ferrofed.toml` trusts a synthetic national contact point whose
 tokens are bound to a `DPoP` key (RFC 9449), with the FHIR face for its
 patient summary and the emergency access limit `[emergency] threshold = 5`
-per `window_s = 1`. `gate.sh` makes the contact point's signing key, its
+per `window = "1s"`. `gate.sh` makes the contact point's signing key, its
 key set and the P-256 `DPoP` key under `target/perf-run/`, and mints its
 tokens for the treatment and the emergency purposes, which the plan names
 as `{ncp_token}` and `{ncp_emergency_token}`. Two request groups use them
