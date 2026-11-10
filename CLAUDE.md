@@ -275,7 +275,7 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   `merge`). The interoperability component of Regulation (EU) 2025/327
   (decision A58) is `eehrxf`, published from FerroHEALTH/FerroBRIDGE since
   #813 and required by a caret range, as every FerroBRIDGE crate is since it
-  follows Cargo SemVer (`eehrxf = "0.3.0"`, #1772); FerroFED keeps no copy, and
+  follows Cargo SemVer (`eehrxf = "0.3.2"`, #1772); FerroFED keeps no copy, and
   its own half is `app/ferrofed-eehrxf` below. The logging component,
   `ehds-logging` (the Annex II 3.2 access record, the
   Art 14(1) categories and their map, the sink, and `balp`; #623), and the

@@ -128,8 +128,9 @@ impl Writes for Served {
     /// language.
     ///
     /// The document's `Composition` is authored by the gateway's `Device`
-    /// and the operator's `Organization`, its subject the `Patient` the
-    /// identifier names and its encounter the stay the mapping writes. It
+    /// and the operator's `Organization`, its custodian the member's
+    /// `Organization`, its subject the `Patient` the identifier names and
+    /// its encounter the stay the mapping writes. It
     /// holds each section the mapping writes, with its entries, and a
     /// hospital course that says the record holds none the gateway writes,
     /// which `composition-eu-hdr` `cmp-hdr-2` requires. One `Provenance`
