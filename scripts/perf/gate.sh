@@ -10,21 +10,22 @@
 # PostgreSQL server for FerroFED's store, at the "FerroPIX database image"
 # pin of docs/VERSIONS.md.
 #
-#   scripts/perf/gate.sh build [--fallback | BASE]
+#   scripts/perf/gate.sh build [BASE]
 #       Builds the release gateway of the checkout, the head, and of its
 #       base: the merge base of HEAD with BASE, a commit or ref, or with no
-#       BASE the newest v* tag before HEAD, else HEAD's first parent. The
-#       base is built from `git archive` of that commit under target/, with
-#       its own toolchain pin, into the same target directory, so the
-#       dependencies build once. With --fallback, the release lane's, a
-#       previous release whose `config check` names a key of
-#       perf/ferrofed.toml it does not know gives way to HEAD's first
-#       parent, and target/perf-base/base.md names the refused release and
-#       its keys. Without it such a base stops `run` with exit 2.
+#       BASE the newest v* tag before HEAD (the oldest commit after it that
+#       carries the gate contract when the tag carries none), else HEAD's
+#       first parent. The base is built from `git archive` of that commit
+#       under target/, with its own toolchain pin, into the same target
+#       directory, so the dependencies build once, and its
+#       perf/ferrofed.toml and perf/arm.env (or, from before that file, its
+#       own gate) are kept beside it. target/perf-base/base.md names the
+#       base and why.
 #   scripts/perf/gate.sh pack FILE
 #       Packs what `run` reads into the tar FILE: the head's release
-#       gateway and token endpoint, the base's gateway, its rev and base.md,
-#       and the ferrohealth-perf on PATH as target/perf-tools/. The perf
+#       gateway and token endpoint, the base's gateway, its rev, base.md and
+#       configuration contract, and the ferrohealth-perf on PATH as
+#       target/perf-tools/. The perf
 #       workflow's build job writes it once for every attempt (#1807).
 #   scripts/perf/gate.sh unpack FILE
 #       Unpacks FILE into the checkout, so `run` measures with nothing built;
@@ -32,9 +33,11 @@
 #   scripts/perf/gate.sh run
 #       Starts the quickstart's nodes and FerroPIX, seeds them, starts the
 #       store's PostgreSQL over TLS and both gateways, the head on 8080 and
-#       the base on 8070, each with the head's perf/ferrofed.toml, so both
-#       do the same work; a key of it the base binary does not know stops
-#       the run with exit 2, naming the key. It renders perf/plan.toml with the quickstart's
+#       the base on 8070, each under its own tree's configuration contract:
+#       its perf/ferrofed.toml and the overrides of its perf/arm.env, or for
+#       a tree from before that file the overrides its own gate set. A base
+#       that refuses its own configuration stops the run with exit 2, naming
+#       the refusal. It renders perf/plan.toml with the quickstart's
 #       development token and the synthetic contact point's DPoP-bound
 #       tokens, and runs `ferrohealth-perf ab`: the head's idle
 #       phase, then pairs of load phases in turn. Then it plants a poller of
@@ -49,8 +52,9 @@
 #       passes, 2 when the run cannot be judged or set up.
 #   scripts/perf/gate.sh --self-test
 #       Proves the pin reader, the plan rendering, the registry rewrite, the
-#       base resolution, the agreement of the two plans' idle limits and the
-#       contact point's keys and tokens offline.
+#       base resolution, each arm's overrides from perf/arm.env and from an
+#       older tree's gate, the agreement of the two plans' idle limits and
+#       the contact point's keys and tokens offline.
 #
 # Needs Docker with Compose, curl, git, openssl and ferrohealth-perf on PATH,
 # on Linux, where the tool reads the servers' CPU and memory from /proc. No
@@ -61,6 +65,8 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 readonly PLAN=perf/plan.toml
 readonly BUSY_PLAN=perf/busy-loop.toml
 readonly CONFIG=perf/ferrofed.toml
+readonly ARM_ENV=perf/arm.env
+readonly GATE=scripts/perf/gate.sh
 readonly OVERRIDE=perf/compose.yaml
 readonly WORK=target/perf-run
 readonly BASE_TREE=target/perf-base
@@ -242,95 +248,119 @@ wait_for() {
 }
 
 # base_rev [BASE] [AT]: the commit the base is built from, as `build` names
-# it, resolved from AT (HEAD by default).
+# it, resolved from AT (HEAD by default), with the reason on stderr. A
+# previous release that carries no gate contract gives way to the oldest
+# commit after it that does, the nearest point both arms boot from.
 base_rev() {
-  local base="${1:-}" at="${2:-HEAD}" tag
+  local base="${1:-}" at="${2:-HEAD}" tag tagged rev
   # The commit before the push that created a branch is all zeros.
   [[ "$base" =~ ^0+$ ]] && base=""
   if [[ -n "$base" ]]; then
     git -C "$root" merge-base "$at" "$base"
+    echo "the merge base of $at with $base" >&2
   elif tag="$(git -C "$root" describe --tags --abbrev=0 --match 'v*' "$at^" 2> /dev/null)"; then
-    git -C "$root" rev-parse "$tag^{commit}"
+    tagged="$(git -C "$root" rev-parse "$tag^{commit}")"
+    if has_contract "$tagged"; then
+      echo "$tagged"
+      echo "the previous release $tag" >&2
+      return 0
+    fi
+    while IFS= read -r rev; do
+      if has_contract "$rev"; then
+        echo "$rev"
+        echo "the oldest commit after $tag that carries the gate contract, since $tag carries neither $ARM_ENV nor a $GATE whose gateway_env() sets a gateway's overrides" >&2
+        return 0
+      fi
+    done < <(git -C "$root" rev-list --reverse --first-parent --ancestry-path "$tagged..$at")
+    echo "no commit after $tag up to $at carries the gate contract" >&2
+    return 1
   else
     git -C "$root" rev-parse "$at^1"
+    echo "the first parent of $at" >&2
   fi
+}
+
+# has_contract REV: REV carries the gate contract, a perf/ferrofed.toml with
+# a perf/arm.env or with a gate whose gateway_env() sets the FERROFED__
+# overrides a gateway's are derived from.
+has_contract() {
+  git -C "$root" cat-file -e "$1:$CONFIG" 2> /dev/null || return 1
+  git -C "$root" cat-file -e "$1:$ARM_ENV" 2> /dev/null && return 0
+  git -C "$root" show "$1:$GATE" 2> /dev/null | block gateway_env | grep -qE 'FERROFED__[A-Z0-9_]+='
+}
+
+# block NAME: the function NAME of the script on stdin.
+block() {
+  awk -v head="$1() {" 'index($0, head) == 1 { on = 1 } on { print } on && /^\}/ { exit }'
 }
 
 # build_base REV: the release gateway of REV into target/perf-base/ferrofed,
-# REV into target/perf-base/rev.
+# REV into target/perf-base/rev, and REV's configuration contract beside
+# them: its perf/ferrofed.toml as ferrofed.toml, and its perf/arm.env as
+# arm.env or, in a tree from before that file, its gate as gate.sh.
 build_base() {
-  local rev="$1"
+  local rev="$1" src="$BASE_TREE/src"
   echo "perf-gate: building the base at $rev"
-  rm -rf "$BASE_TREE/src"
-  mkdir -p "$BASE_TREE/src"
-  git archive "$rev" | tar -x -C "$BASE_TREE/src"
+  rm -rf "$src"
+  mkdir -p "$src"
+  git archive "$rev" | tar -x -C "$src"
   printf '%s\n' "$rev" > "$BASE_TREE/rev"
+  [[ -f "$src/$CONFIG" ]] || die "the base at $rev holds no $CONFIG"
+  cp "$src/$CONFIG" "$BASE_TREE/ferrofed.toml"
+  if [[ -f "$src/$ARM_ENV" ]]; then
+    cp "$src/$ARM_ENV" "$BASE_TREE/arm.env"
+  else
+    [[ -f "$src/$GATE" ]] || die "the base at $rev holds neither $ARM_ENV nor $GATE"
+    cp "$src/$GATE" "$BASE_TREE/gate.sh"
+  fi
   # From inside the base's tree, so its own toolchain pin builds it.
-  (cd "$BASE_TREE/src" && cargo build --release --locked -p ferrofed-server --bin ferrofed --target-dir "$root/target")
+  (cd "$src" && cargo build --release --locked -p ferrofed-server --bin ferrofed --target-dir "$root/target")
   cp target/release/ferrofed "$BASE_TREE/ferrofed"
 }
 
-# fallback_base BINARY CONFIG REV [AT]: when the gateway BINARY, built from
-# the previous release REV, names a key of CONFIG it does not know, the
-# first parent of AT (HEAD by default), with the record of the fallback in
-# $BASE_TREE/base.md; nothing when it names none. Exit 2 when that parent is
-# REV itself, the one base there is.
-fallback_base() {
-  local binary="$1" config="$2" rev="$3" at="${4:-HEAD}" keys parent release
-  keys="$(refused_keys "$binary" "$config")"
-  [[ -n "$keys" ]] || return 0
-  parent="$(git -C "$root" rev-parse "$at^1")" || die "the first parent of $at cannot be resolved"
-  release="$(git -C "$root" describe --tags --exact-match --match 'v*' "$rev" 2> /dev/null || echo "$rev")"
-  [[ "$parent" != "$rev" ]] ||
-    die "the previous release $release does not know the key(s) ${keys} of $config, and it is the first parent too: the pair is not judged"
-  mkdir -p "$BASE_TREE"
-  # shellcheck disable=SC2016 # the backticks are Markdown's, never expanded
-  printf "The base is \`%s\`, the release commit's first parent: the previous release \`%s\` (\`%s\`) does not know the key(s) %s of \`%s\`, so it cannot do the head's work.\n" \
-    "$parent" "$release" "$rev" "$(sed -E 's/[^ ]+/`&`/g' <<< "$keys")" "$config" > "$BASE_TREE/base.md"
-  echo "perf-gate: the previous release $release does not know the key(s) ${keys} of $config; the base falls back to the first parent $parent" >&2
-  printf '%s\n' "$parent"
-}
-
-# build [--fallback | BASE]: the base's release gateway into
-# target/perf-base/ferrofed, the record of the base into
-# target/perf-base/base.md, then the head's into target/release/ferrofed.
+# build [BASE]: the base's release gateway and configuration contract into
+# target/perf-base/, the record of the base into target/perf-base/base.md,
+# then the head's into target/release/ferrofed.
 build() {
-  local fallback=0 rev parent=""
-  if [[ "${1:-}" == --fallback ]]; then
-    fallback=1
-    shift
-    [[ -z "${1:-}" ]] || die "--fallback falls back from the previous release, so it takes no BASE"
-  fi
+  local rev why
   cd "$root"
-  rev="$(base_rev "${1:-}")" || die "the base of ${1:-the previous release} cannot be resolved"
+  why="$(mktemp)"
+  rev="$(base_rev "${1:-}" 2> "$why")" || die "the base of ${1:-the previous release} cannot be resolved: $(< "$why")"
   rm -rf "$BASE_TREE"
   build_base "$rev"
-  # NOTE: no specification governs this: our own design; the release lane's first parent passed its
-  # own pairwise gate on main, so it stands in for a previous release that cannot read the head's keys.
-  if ((fallback)); then
-    parent="$(fallback_base "$BASE_TREE/ferrofed" "$CONFIG" "$rev")" || exit 2
-    [[ -z "$parent" ]] || build_base "$parent"
-  fi
-  [[ -f "$BASE_TREE/base.md" ]] || printf "The base is \`%s\`.\n" "$rev" > "$BASE_TREE/base.md"
+  # shellcheck disable=SC2016 # the backticks are Markdown's, never expanded
+  printf 'The base is `%s`, %s.\n' "$rev" "$(< "$why")" > "$BASE_TREE/base.md"
+  rm -f -- "$why"
   echo "perf-gate: $(< "$BASE_TREE/base.md")"
   cargo build --release --locked -p ferrofed-server --bin ferrofed
   cargo build --release --locked -p ferrofed-testkit --bin ferrofed-perf-token
 }
 
+# contract: the base's configuration contract `build` kept, one path a line.
+contract() {
+  local file
+  for file in ferrofed.toml arm.env gate.sh; do
+    [[ -f "$BASE_TREE/$file" ]] && echo "$BASE_TREE/$file"
+  done
+  return 0
+}
+
 # pack FILE: what `run` reads, built by `build`, into the tar FILE.
 pack() {
   [[ $# -eq 1 ]] || die "usage: gate.sh pack FILE"
-  local file="$1" tool
+  local file="$1" tool kept=()
   cd "$root"
   [[ -x target/release/ferrofed && -x target/release/ferrofed-perf-token ]] ||
     die "the head is not built: run gate.sh build first"
-  [[ -x "$BASE_TREE/ferrofed" && -s "$BASE_TREE/rev" && -f "$BASE_TREE/base.md" ]] ||
+  [[ -x "$BASE_TREE/ferrofed" && -s "$BASE_TREE/rev" && -f "$BASE_TREE/base.md" && -f "$BASE_TREE/ferrofed.toml" ]] ||
     die "the base is not built: run gate.sh build first"
+  [[ -f "$BASE_TREE/arm.env" || -f "$BASE_TREE/gate.sh" ]] || die "the base's overrides are not kept: run gate.sh build first"
   tool="$(command -v ferrohealth-perf)" || die "ferrohealth-perf is not on PATH"
   mkdir -p "$TOOLS"
   [[ "$tool" -ef "$TOOLS/ferrohealth-perf" ]] || cp "$tool" "$TOOLS/ferrohealth-perf"
-  tar -cf "$file" target/release/ferrofed target/release/ferrofed-perf-token \
-    "$BASE_TREE/ferrofed" "$BASE_TREE/rev" "$BASE_TREE/base.md" "$TOOLS/ferrohealth-perf"
+  while IFS= read -r file; do kept+=("$file"); done < <(contract)
+  tar -cf "$1" target/release/ferrofed target/release/ferrofed-perf-token \
+    "$BASE_TREE/ferrofed" "$BASE_TREE/rev" "$BASE_TREE/base.md" ${kept[@]+"${kept[@]}"} "$TOOLS/ferrohealth-perf"
 }
 
 # unpack FILE: the tar `pack` wrote, into the checkout.
@@ -340,7 +370,7 @@ unpack() {
   file="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
   cd "$root"
   tar -xf "$file"
-  [[ -x target/release/ferrofed && -x "$BASE_TREE/ferrofed" && -s "$BASE_TREE/rev" ]] ||
+  [[ -x target/release/ferrofed && -x "$BASE_TREE/ferrofed" && -s "$BASE_TREE/rev" && -f "$BASE_TREE/ferrofed.toml" ]] ||
     die "$file holds no built arms"
 }
 
@@ -387,36 +417,92 @@ EOF
   cp "$tls/ca.crt" "$WORK/store-ca.pem"
 }
 
-# own_urls CONFIG PORT: the overrides of the URLs a gateway on PORT is
-# addressed at, each only when CONFIG sets it: the public URL and the DPoP
-# proofs' htu (RFC 9449 §4.3).
-own_urls() {
-  grep -q '^public_url = ' "$1" && echo "FERROFED__GATEWAY__PUBLIC_URL=http://127.0.0.1:$2"
-  grep -q '^\[auth\.dpop\]' "$1" && echo "FERROFED__AUTH__DPOP__EXTERNAL_URL=http://127.0.0.1:$2"
-  return 0
+# fill NAME PORT FILE: the assignments of FILE, a tree's perf/arm.env, with
+# the values of the gateway NAME on PORT in its placeholders: @PORT@ and
+# @DIR@, the gateway's work directory. Exit 2 on a line that sets no
+# FERROFED__ variable or names another placeholder.
+fill() {
+  local name="$1" port="$2" file="$3" line var value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
+    [[ "$line" =~ ^(FERROFED__[A-Z0-9_]+)=(.*)$ ]] || die "$file: not a FERROFED__ assignment: $line"
+    var="${BASH_REMATCH[1]}"
+    value="${BASH_REMATCH[2]}"
+    value="${value//@PORT@/$port}"
+    value="${value//@DIR@/$WORK/$name}"
+    if [[ "$value" =~ @[A-Z][A-Z0-9_]*@ ]]; then
+      die "$file: $var names the unknown placeholder ${BASH_REMATCH[0]}"
+    fi
+    printf '%s=%s\n' "$var" "$value"
+  done < "$file"
 }
 
-# gateway_env NAME CONFIG DB PORT: the environment one gateway runs under,
-# one VAR=value a line, its store URL written under $WORK/NAME.
+# derive NAME CONFIG DB PORT GATE: the FERROFED__ overrides the gateway_env()
+# of GATE, a tree's own copy of this script from before perf/arm.env, gave
+# the gateway NAME, evaluated with GATE's own own_urls() and the scalar
+# constants of GATE this script does not define. Exit 2 when GATE has no
+# gateway_env() or it sets no FERROFED__ variable.
+derive() {
+  local gate="$5" body out line constant
+  body="$(block gateway_env < "$gate")"
+  [[ -n "$body" ]] || die "$gate: it has no gateway_env()"
+  out="$(
+    while IFS= read -r line; do
+      [[ "$line" =~ ^readonly[[:space:]]+([A-Z_][A-Z0-9_]*)=([^\(].*)$ ]] || continue
+      constant="${BASH_REMATCH[1]}"
+      [[ -z "${!constant+set}" ]] || continue
+      eval "$constant=${BASH_REMATCH[2]}" || exit 2
+    done < "$gate"
+    eval "$(block own_urls < "$gate")" || exit 2
+    eval "$body" || exit 2
+    gateway_env "$1" "$2" "$3" "$4"
+  )" || die "$gate: its gateway_env() cannot be evaluated"
+  out="$(grep -E '^FERROFED__[A-Z0-9_]+=' <<< "$out" || true)"
+  [[ -n "$out" ]] || die "$gate: its gateway_env() sets no FERROFED__ variable"
+  printf '%s\n' "$out"
+}
+
+# arm_env NAME CONFIG DB PORT SOURCE: the FERROFED__ overrides of the
+# gateway NAME on PORT, one a line, as its tree defines them in SOURCE: a
+# perf/arm.env, filled, or that tree's own gate from before that file.
+arm_env() {
+  case "$5" in
+    *.env) fill "$1" "$4" "$5" ;;
+    *) derive "$@" ;;
+  esac
+}
+
+# base_source: the file the base's overrides come from, as `build` kept it.
+base_source() {
+  if [[ -f "$BASE_TREE/arm.env" ]]; then
+    echo "$BASE_TREE/arm.env"
+  elif [[ -f "$BASE_TREE/gate.sh" ]]; then
+    echo "$BASE_TREE/gate.sh"
+  else
+    die "$BASE_TREE holds neither arm.env nor gate.sh: run gate.sh build first"
+  fi
+}
+
+# gateway_env NAME CONFIG DB PORT SOURCE: the environment one gateway runs
+# under, one VAR=value a line, its store URL written under $WORK/NAME and its
+# overrides those its tree defines in SOURCE (arm_env).
 gateway_env() {
-  local config="$2" db="$3" port="$4" dir="$WORK/$1"
+  local dir="$WORK/$1" overrides
   mkdir -p "$dir"
   chmod 0700 "$dir"
   printf 'postgres://ferrofed:%s@127.0.0.1:%s/%s?sslmode=require' \
-    "$STORE_PASSWORD" "$STORE_PORT" "$db" > "$dir/store-url"
-  own_urls "$config" "$port"
-  printf '%s\n' FERROFED__USAGE_REPORT__ENABLED=false "FERROFED_CONFIG=$config" \
-    "FERROFED__SERVER__LISTEN=127.0.0.1:$port" \
-    "FERROFED__SIGNING__JWKS_URI=http://127.0.0.1:$port/.well-known/jwks.json" \
-    "FERROFED__STORE__URL_FILE=$dir/store-url"
+    "$STORE_PASSWORD" "$STORE_PORT" "$3" > "$dir/store-url"
+  overrides="$(arm_env "$@")" || exit 2
+  printf '%s\n' FERROFED__USAGE_REPORT__ENABLED=false "FERROFED_CONFIG=$2" "$overrides"
 }
 
-# serve NAME BINARY CONFIG DB PORT: starts one gateway in the background
-# and prints its pid.
+# serve NAME BINARY CONFIG DB PORT SOURCE: starts one gateway in the
+# background under CONFIG and the overrides of SOURCE, and prints its pid.
 serve() {
-  local binary="$2" vars=() var
-  while IFS= read -r var; do vars+=("$var"); done < <(gateway_env "$1" "$3" "$4" "$5")
-  env ${vars[@]+"${vars[@]}"} "$binary" serve > "$WORK/$1/server.log" 2>&1 &
+  local name="$1" binary="$2" vars=() var env
+  env="$(gateway_env "$name" "$3" "$4" "$5" "$6")" || exit 2
+  while IFS= read -r var; do vars+=("$var"); done <<< "$env"
+  env ${vars[@]+"${vars[@]}"} "$binary" serve > "$WORK/$name/server.log" 2>&1 &
   echo "$!"
 }
 
@@ -427,34 +513,26 @@ unknown_keys() {
   grep -oE '`[^`]+` is not valid: unknown field' <<< "$1" | sed -E 's/^`([^`]+)`.*$/\1/' || true
 }
 
-# refusal BINARY CONFIG DB PORT: the base gateway BINARY's refusal of
-# CONFIG, under the base's environment; nothing, and exit 0, when it reads it.
+# refusal BINARY CONFIG DB PORT SOURCE: the base gateway BINARY's refusal of
+# CONFIG under the overrides of SOURCE; nothing, and exit 0, when it reads it.
 refusal() {
-  local binary="$1" vars=() var out
-  while IFS= read -r var; do vars+=("$var"); done < <(gateway_env base "$2" "$3" "$4")
+  local binary="$1" vars=() var env out
+  env="$(gateway_env base "$2" "$3" "$4" "$5")" || exit 2
+  while IFS= read -r var; do vars+=("$var"); done <<< "$env"
   out="$(env ${vars[@]+"${vars[@]}"} "$binary" config check 2>&1)" && return 0
   printf '%s\n' "$out"
   return 1
 }
 
-# refused_keys BINARY CONFIG: the keys of CONFIG the gateway BINARY does not
-# know, on one line; nothing when it knows them all. A refusal for another
-# reason, such as a file `run` makes first, names no key here.
-refused_keys() {
-  local refused
-  refused="$(refusal "$1" "$2" ferrofed_base 8070)" && return 0
-  unknown_keys "$refused" | paste -sd ' ' -
-}
-
-# accepts BINARY CONFIG DB PORT: whether the base gateway BINARY reads CONFIG
-# as the head does; exit 2 naming each key of CONFIG it does not know, so a
-# key newer than the base is never left out of one arm in silence.
+# accepts BINARY CONFIG DB PORT SOURCE: whether the base gateway BINARY reads
+# its own tree's CONFIG under its own overrides; exit 2 naming each key it
+# does not know, or the refusal, so a base that cannot start is never judged.
 accepts() {
   local binary="$1" refused keys
-  refused="$(refusal "$binary" "$2" "$3" "$4")" && return 0
+  refused="$(refusal "$@")" && return 0
   keys="$(unknown_keys "$refused" | paste -sd ' ' -)"
-  [[ -n "$keys" ]] && die "the base at $(< "$BASE_TREE/rev") does not know the key(s) ${keys} of $2, so it cannot do the head's work: the pair is not judged"
-  die "the base at $(< "$BASE_TREE/rev") refuses $2: $refused"
+  [[ -n "$keys" ]] && die "the base at $(< "$BASE_TREE/rev") does not know the key(s) ${keys} of its own $CONFIG: the pair is not judged"
+  die "the base at $(< "$BASE_TREE/rev") refuses its own $CONFIG: $refused"
 }
 
 # onward_start: the token endpoint of node A's onward lane in the
@@ -523,7 +601,7 @@ onward() {
     code=1
   fi
   uncached "$CONFIG" > "$UNCACHED_CONFIG" || exit 2
-  uncached_pid="$(serve uncached target/release/ferrofed "$UNCACHED_CONFIG" ferrofed_uncached 8060)"
+  uncached_pid="$(serve uncached target/release/ferrofed "$UNCACHED_CONFIG" ferrofed_uncached 8060 "$ARM_ENV")"
   wait_for "the uncached gateway" 60 curl --fail --silent "$UNCACHED_URL/health/readiness"
   uncached_exchanges="$(onward_probe "$UNCACHED_URL" "$1")" || exit 2
   if onward_holds "$uncached_exchanges" "$ONWARD_REQUESTS"; then
@@ -586,11 +664,13 @@ start() {
       --command "GRANT CREATE ON DATABASE ${db} TO ferrofed" > /dev/null
   done
 
-  # NOTE: no specification governs this: our own design; both arms run the head's configuration,
-  # so the pair compares the same work and a key the base does not know stops the run.
-  accepts "$BASE_TREE/ferrofed" "$CONFIG" ferrofed_base 8070
-  head_pid="$(serve head target/release/ferrofed "$CONFIG" ferrofed 8080)"
-  base_pid="$(serve base "$BASE_TREE/ferrofed" "$CONFIG" ferrofed_base 8070)"
+  # NOTE: no specification governs this: our own design; each arm boots under its own tree's
+  # configuration contract, so a pull request that renames a key reaches the head alone.
+  local base_contract
+  base_contract="$(base_source)" || exit 2
+  accepts "$BASE_TREE/ferrofed" "$BASE_TREE/ferrofed.toml" ferrofed_base 8070 "$base_contract"
+  head_pid="$(serve head target/release/ferrofed "$CONFIG" ferrofed 8080 "$ARM_ENV")"
+  base_pid="$(serve base "$BASE_TREE/ferrofed" "$BASE_TREE/ferrofed.toml" ferrofed_base 8070 "$base_contract")"
   wait_for "the head gateway" 60 curl --fail --silent "$HEAD_URL/health/readiness"
   wait_for "the base gateway" 60 curl --fail --silent "$BASE_URL/health/readiness"
 }
@@ -700,6 +780,10 @@ self_test() {
   local repo="$work/repo" saved_root="$root"
   git init --quiet "$repo"
   commit() { git -C "$repo" -c user.name=t -c user.email=t@t -c commit.gpgsign=false -c tag.gpgsign=false commit --quiet --allow-empty -m "$1"; }
+  mkdir -p "$repo/perf"
+  : > "$repo/$CONFIG"
+  printf 'FERROFED__A=1\n' > "$repo/$ARM_ENV"
+  git -C "$repo" add "$CONFIG" "$ARM_ENV"
   commit one
   commit two
   git -C "$repo" -c tag.gpgsign=false tag v0.0.1
@@ -711,18 +795,46 @@ self_test() {
   git -C "$repo" checkout --quiet -
   root="$repo"
   check "with no BASE the base is the newest tag before HEAD" \
-    "$(git -C "$repo" rev-parse v0.0.1)" "$(base_rev "")"
+    "$(git -C "$repo" rev-parse v0.0.1)" "$(base_rev "" 2> /dev/null)"
+  check "a previous release with the contract is the base, and says so" "the previous release v0.0.1" \
+    "$(base_rev "" 2>&1 > /dev/null)"
   check "a BASE names its merge base with HEAD" \
-    "$(git -C "$repo" rev-parse HEAD~1)" "$(base_rev side)"
+    "$(git -C "$repo" rev-parse HEAD~1)" "$(base_rev side 2> /dev/null)"
   check "an all-zero BASE takes the previous release" \
-    "$(git -C "$repo" rev-parse v0.0.1)" "$(base_rev 0000000000000000000000000000000000000000)"
+    "$(git -C "$repo" rev-parse v0.0.1)" "$(base_rev 0000000000000000000000000000000000000000 2> /dev/null)"
   check "with no tag before it the base is the first parent" \
-    "$(git -C "$repo" rev-parse v0.0.1~1)" "$(base_rev "" v0.0.1)"
+    "$(git -C "$repo" rev-parse v0.0.1~1)" "$(base_rev "" v0.0.1 2> /dev/null)"
+  # A release lane whose previous tag predates the gate contract.
+  local release="$work/release"
+  git init --quiet "$release"
+  rcommit() { git -C "$release" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit --quiet --allow-empty -m "$1"; }
+  rcommit before-gate
+  git -C "$release" -c tag.gpgsign=false tag v0.1.0
+  rcommit still-before
+  root="$release"
+  check "a release with no contract after it leaves no base" 1 "$( (base_rev "") > /dev/null 2>&1; echo $?)"
+  mkdir -p "$release/scripts/perf" "$release/perf"
+  : > "$release/$CONFIG"
+  printf 'serve() {\n  FERROFED__A=1 ferrofed serve\n}\n' > "$release/$GATE"
+  git -C "$release" add "$CONFIG" "$GATE"
+  rcommit one-arm-gate
+  printf 'gateway_env() {\n  echo FERROFED__A=1\n}\n' > "$release/$GATE"
+  git -C "$release" add "$GATE"
+  rcommit ab-gate
+  rcommit after-gate
+  rcommit release-commit
+  check "a previous release without the contract gives way to the oldest commit after it with one" \
+    "$(git -C "$release" rev-parse HEAD~2)" "$(base_rev "" 2> /dev/null)"
+  check "the base says why it is not the previous release" \
+    "the oldest commit after v0.1.0 that carries the gate contract, since v0.1.0 carries neither $ARM_ENV nor a $GATE whose gateway_env() sets a gateway's overrides" \
+    "$(base_rev "" 2>&1 > /dev/null)"
+  root="$repo"
   # A stand-in for a base binary: `refuses` names two keys it does not know,
   # `misses` refuses a file and `reads` reads the configuration.
   local bin="$work/bin" lane="$work/lane" kind out code
   mkdir -p "$bin" "$lane/$BASE_TREE" "$lane/perf"
-  : > "$lane/perf/ferrofed.toml"
+  : > "$lane/$BASE_TREE/ferrofed.toml"
+  printf 'FERROFED__SERVER__LISTEN=127.0.0.1:@PORT@\n' > "$lane/$BASE_TREE/arm.env"
   for kind in refuses misses reads; do
     # shellcheck disable=SC2016 # the stand-in's own parameters, expanded when it runs
     printf '#!/usr/bin/env bash\n[[ "$1 $2" == "config check" ]] || exit 64\n' > "$bin/$kind"
@@ -732,25 +844,71 @@ self_test() {
   printf '%s\n' 'echo "the signing key file is missing" >&2' 'exit 1' >> "$bin/misses"
   chmod +x "$bin"/*
   printf '%s\n' "$(git -C "$repo" rev-parse v0.0.1)" > "$lane/$BASE_TREE/rev"
-  check "a base's unknown keys are read from its config check" "emergency auth.federation[0]" \
-    "$(cd "$lane" && refused_keys "$bin/refuses" perf/ferrofed.toml)"
-  check "a base refusing a file names no key" "" "$(cd "$lane" && refused_keys "$bin/misses" perf/ferrofed.toml)"
-  check "a base reading the configuration names no key" "" "$(cd "$lane" && refused_keys "$bin/reads" perf/ferrofed.toml)"
-  out="$(cd "$lane" && fallback_base "$bin/refuses" perf/ferrofed.toml "$(git -C "$repo" rev-parse v0.0.1)" 2> /dev/null)"
-  check "a release refusing a key falls back to the first parent" "$(git -C "$repo" rev-parse HEAD~1)" "$out"
-  check "the fallback names the base, the refused release and its keys" \
-    "The base is \`$(git -C "$repo" rev-parse HEAD~1)\`, the release commit's first parent: the previous release \`v0.0.1\` (\`$(git -C "$repo" rev-parse v0.0.1)\`) does not know the key(s) \`emergency\` \`auth.federation[0]\` of \`perf/ferrofed.toml\`, so it cannot do the head's work." \
-    "$(< "$lane/$BASE_TREE/base.md")"
-  rm -f -- "$lane/$BASE_TREE/base.md"
-  check "a release reading the configuration is kept" "" \
-    "$(cd "$lane" && fallback_base "$bin/reads" perf/ferrofed.toml "$(git -C "$repo" rev-parse v0.0.1)")"
-  check "a kept release writes no fallback record" 0 "$([[ -f "$lane/$BASE_TREE/base.md" ]] && echo 1 || echo 0)"
   code=0
-  (cd "$lane" && fallback_base "$bin/refuses" perf/ferrofed.toml "$(git -C "$repo" rev-parse v0.0.1)" HEAD~1) > /dev/null 2>&1 || code=$?
-  check "a refused release that is the first parent too is not judged" 2 "$code"
+  out="$(cd "$lane" && accepts "$bin/refuses" "$BASE_TREE/ferrofed.toml" ferrofed_base 8070 "$BASE_TREE/arm.env" 2>&1)" || code=$?
+  check "a base refusing a key of its own configuration stops the run with exit 2" 2 "$code"
+  check "the refusal names each key and the base" 1 \
+    "$(grep -cF "the base at $(git -C "$repo" rev-parse v0.0.1) does not know the key(s) emergency auth.federation[0] of its own perf/ferrofed.toml" <<< "$out")"
   code=0
-  out="$(cd "$lane" && accepts "$bin/refuses" perf/ferrofed.toml ferrofed_base 8070 2>&1)" || code=$?
-  check "a pull request's base refusing a key stops the run with exit 2" 2 "$code"
+  out="$(cd "$lane" && accepts "$bin/misses" "$BASE_TREE/ferrofed.toml" ferrofed_base 8070 "$BASE_TREE/arm.env" 2>&1)" || code=$?
+  check "a base refusing for another reason stops the run with its refusal" "2 1" \
+    "$code $(grep -cF "refuses its own perf/ferrofed.toml: the signing key file is missing" <<< "$out")"
+  check "a base reading its own configuration is accepted" 0 \
+    "$( (cd "$lane" && accepts "$bin/reads" "$BASE_TREE/ferrofed.toml" ferrofed_base 8070 "$BASE_TREE/arm.env") > /dev/null 2>&1; echo $?)"
+  check "the base's overrides come from its own arm.env" "$BASE_TREE/arm.env" "$(cd "$lane" && base_source)"
+  # A tree from before perf/arm.env, its gate setting the old key shape.
+  local old="$work/old"
+  mkdir -p "$old"
+  cat > "$old/gate.sh" <<'GATE'
+readonly WORK=elsewhere
+readonly OLD_ONLY=old-value
+readonly OLD_LIST=(a b)
+own_urls() {
+  grep -q '^public_url = ' "$1" && echo "FERROFED__GATEWAY__PUBLIC_URL=http://127.0.0.1:$2"
+  return 0
+}
+gateway_env() {
+  local config="$2" db="$3" port="$4" dir="$WORK/$1"
+  mkdir -p "$dir"
+  own_urls "$config" "$port"
+  printf '%s\n' FERROFED__USAGE_REPORT__ENABLED=false "FERROFED_CONFIG=$config" \
+    "FERROFED__SERVER__LISTEN=127.0.0.1:$port" "FERROFED__OLD__KEY=$OLD_ONLY/$db" \
+    "FERROFED__STORE__URL_FILE=$dir/store-url"
+}
+other() {
+  echo FERROFED__NOT__SET=1
+}
+GATE
+  printf 'public_url = "x"\n' > "$old/ferrofed.toml"
+  check "an older tree's overrides are derived from its own gate, on its own keys" \
+    "$(printf '%s\n' FERROFED__GATEWAY__PUBLIC_URL=http://127.0.0.1:8070 FERROFED__USAGE_REPORT__ENABLED=false \
+      FERROFED__SERVER__LISTEN=127.0.0.1:8070 FERROFED__OLD__KEY=old-value/ferrofed_base \
+      "FERROFED__STORE__URL_FILE=$WORK/base/store-url")" \
+    "$(cd "$lane" && arm_env base "$old/ferrofed.toml" ferrofed_base 8070 "$old/gate.sh")"
+  rm -f -- "${lane:?}/${BASE_TREE:?}/arm.env"
+  cp "$old/gate.sh" "$lane/$BASE_TREE/gate.sh"
+  check "a base with no arm.env takes its overrides from its own gate" "$BASE_TREE/gate.sh" "$(cd "$lane" && base_source)"
+  rm -f -- "${lane:?}/${BASE_TREE:?}/gate.sh"
+  check "a base with neither is refused" 2 "$( (cd "$lane" && base_source) > /dev/null 2>&1; echo $?)"
+  printf 'other() {\n  true\n}\n' > "$old/none.sh"
+  check "an older gate with no gateway_env() is refused" 2 \
+    "$( (cd "$lane" && arm_env base "$old/ferrofed.toml" ferrofed_base 8070 "$old/none.sh") > /dev/null 2>&1; echo $?)"
+  printf 'gateway_env() {\n  echo FERROFED_CONFIG=x\n}\n' > "$old/unset.sh"
+  check "an older gate whose gateway_env() sets no FERROFED__ variable is refused" 2 \
+    "$( (cd "$lane" && arm_env base "$old/ferrofed.toml" ferrofed_base 8070 "$old/unset.sh") > /dev/null 2>&1; echo $?)"
+  printf '# a note\n\nFERROFED__A__LISTEN=127.0.0.1:@PORT@\nFERROFED__B__FILE=@DIR@/x\n' > "$work/arm.env"
+  check "a tree's arm.env is filled for the gateway" \
+    "$(printf '%s\n' FERROFED__A__LISTEN=127.0.0.1:8060 "FERROFED__B__FILE=$WORK/uncached/x")" \
+    "$(arm_env uncached "$work/x.toml" ferrofed_uncached 8060 "$work/arm.env")"
+  printf 'FERROFED__A=@NOPE@\n' > "$work/arm.env"
+  check "an unknown placeholder is refused" 2 "$( (arm_env head x ferrofed 8080 "$work/arm.env") > /dev/null 2>&1; echo $?)"
+  printf 'server.listen=x\n' > "$work/arm.env"
+  check "a line that sets no FERROFED__ variable is refused" 2 "$( (arm_env head x ferrofed 8080 "$work/arm.env") > /dev/null 2>&1; echo $?)"
+  out="$(cd "$lane" && gateway_env head "$CONFIG" ferrofed 8080 "$root/$ARM_ENV")"
+  check "the gate sets the configuration and switches the usage report off" 2 \
+    "$(grep -cxE "FERROFED__USAGE_REPORT__ENABLED=false|FERROFED_CONFIG=$CONFIG" <<< "$out")"
+  check "a gateway's store URL is written for its own database" "postgres://ferrofed:$STORE_PASSWORD@127.0.0.1:$STORE_PORT/ferrofed?sslmode=require" \
+    "$(< "$lane/$WORK/head/store-url")"
   # The arms the build job packs are the ones an attempt unpacks.
   mkdir -p "$work/arms/target/release" "$work/arms/$BASE_TREE" "$work/tool" "$work/attempt"
   printf '#!/bin/sh\necho head\n' > "$work/arms/target/release/ferrofed"
@@ -760,20 +918,23 @@ self_test() {
   chmod +x "$work/arms/target/release/"* "$work/arms/$BASE_TREE/ferrofed" "$work/tool/ferrohealth-perf"
   printf 'abc123\n' > "$work/arms/$BASE_TREE/rev"
   printf 'The base is abc123.\n' > "$work/arms/$BASE_TREE/base.md"
+  printf '[server]\n' > "$work/arms/$BASE_TREE/ferrofed.toml"
+  printf 'FERROFED__A=1\n' > "$work/arms/$BASE_TREE/arm.env"
   check "the build job packs both arms and the tool" 0 \
     "$( (root="$work/arms" PATH="$work/tool:$PATH" pack "$work/arms.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
   check "an attempt unpacks them with nothing built" 0 \
     "$( (root="$work/attempt" unpack "$work/arms.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
   check "the unpacked base is the packed one" "abc123 base perf" \
     "$(printf '%s %s %s' "$(< "$work/attempt/$BASE_TREE/rev")" "$("$work/attempt/$BASE_TREE/ferrofed")" "$("$work/attempt/$TOOLS/ferrohealth-perf")")"
+  check "the unpacked base carries its own configuration contract" "[server] FERROFED__A=1" \
+    "$(printf '%s %s' "$(< "$work/attempt/$BASE_TREE/ferrofed.toml")" "$(< "$work/attempt/$BASE_TREE/arm.env")")"
+  rm -f -- "${work:?}/arms/${BASE_TREE:?}/arm.env"
+  check "a base whose overrides are not kept is not packed" 1 \
+    "$( (root="$work/arms" PATH="$work/tool:$PATH" pack "$work/none.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
+  printf 'FERROFED__A=1\n' > "$work/arms/$BASE_TREE/arm.env"
   rm -f -- "$work/arms/$BASE_TREE/rev"
   check "an unbuilt base is not packed" 1 \
     "$( (root="$work/arms" PATH="$work/tool:$PATH" pack "$work/none.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
-  check "the refusal names each key and the base" 1 \
-    "$(grep -cF "the base at $(git -C "$repo" rev-parse v0.0.1) does not know the key(s) emergency auth.federation[0] of perf/ferrofed.toml" <<< "$out")"
-  code=0
-  (build --fallback main) > /dev/null 2>&1 || code=$?
-  check "--fallback takes no BASE" 2 "$code"
   root="$saved_root"
   # RFC 9449 §6.1: the thumbprint of the key of the example proof (§4.1).
   check "a P-256 key's thumbprint is RFC 7638's" "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I" \
@@ -822,19 +983,18 @@ self_test() {
     "$(openssl dgst -sha256 -verify "$work/ncp-public.pem" -signature "$work/signature" "$work/signed" 2>&1)"
   check "the emergency token declares EMERGENCY" 1 \
     "$(ncp_token "$ncp" EMERGENCY | cut -d. -f2 | unb64url | grep -cF "\"code\":\"EMERGENCY\"")"
-  printf 'public_url = "x"\n[auth.dpop]\n' > "$work/head.toml"
-  check "a gateway that sets both URLs is given its own" \
-    "$(printf 'FERROFED__GATEWAY__PUBLIC_URL=http://127.0.0.1:8070\nFERROFED__AUTH__DPOP__EXTERNAL_URL=http://127.0.0.1:8070')" \
-    "$(own_urls "$work/head.toml" 8070)"
-  printf '[gateway]\n' > "$work/base.toml"
-  check "a gateway that sets neither is given none" "" "$(own_urls "$work/base.toml" 8070)"
   # shellcheck disable=SC2016 # the backticks are the refusal's, never expanded
   check "every unknown key a refusal names is read" "$(printf 'emergency\nauth.dpop.nonce')" \
     "$(unknown_keys 'refused: 2 configuration refusals; `emergency` is not valid: unknown field `emergency`, expected one of `a`; `auth.dpop.nonce` is not valid: unknown field `nonce`; `server.listen` is not valid: invalid type')"
   check "a refusal that names no unknown key reads none" "" "$(unknown_keys 'the file is missing')"
+  local committed
+  committed="$(fill head 8080 "$root/$ARM_ENV")"
+  check "the committed perf/arm.env fills every placeholder" 0 "$(grep -c '@' <<< "$committed" || true)"
+  check "the committed perf/arm.env gives the head its own URLs and store" 5 \
+    "$(grep -cxE 'FERROFED__(SERVER__LISTEN=127\.0\.0\.1:8080|GATEWAY__PUBLIC_URL=http://127\.0\.0\.1:8080|AUTH__DPOP__EXTERNAL_URL=http://127\.0\.0\.1:8080|SIGNING__JWKS_URI=http://127\.0\.0\.1:8080/\.well-known/jwks\.json|STORE__URL_FILE=target/perf-run/head/store-url)' <<< "$committed")"
   # shellcheck disable=SC2016 # the pattern matches the script's own text
-  check "both arms are started with the head's configuration" 2 \
-    "$(grep -cE '^  (head|base)_pid="\$\(serve (head|base) [^ ]+ "\$CONFIG" ' "$root/scripts/perf/gate.sh")"
+  check "the head starts on its own tree's contract and the base on its own" 2 \
+    "$(grep -cE '^  (head_pid="\$\(serve head [^ ]+ "\$CONFIG" ferrofed 8080 "\$ARM_ENV"|base_pid="\$\(serve base [^ ]+ "\$BASE_TREE/ferrofed.toml" ferrofed_base 8070 "\$base_contract")' "$root/scripts/perf/gate.sh")"
   local config="$root/$CONFIG"
   check "the gateway trusts the contact point the gate mints for" 3 \
     "$(grep -cxF "issuer = \"$NCP_ISSUER\"" "$config")"
@@ -876,5 +1036,5 @@ case "${1:-}" in
     unpack "$@"
     ;;
   --self-test) self_test ;;
-  *) die "usage: gate.sh build [--fallback | BASE] | pack FILE | unpack FILE | run | --self-test" ;;
+  *) die "usage: gate.sh build [BASE] | pack FILE | unpack FILE | run | --self-test" ;;
 esac

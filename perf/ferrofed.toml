@@ -9,9 +9,10 @@
 # is relative to the repository root, under the gate's work directory,
 # target/perf-run, where the gate writes the registry document, the store's
 # connection string and CA, and the key sets of both issuers. The gate runs
-# the head and the base of a change side by side from this file, each with its
-# own listener, key set URL, public URL, DPoP URL and store connection string
-# set through `FERROFED__` overrides. Beside the quickstart's development
+# the gateway of this tree from this file, with its listener, key set URL,
+# public URL, DPoP URL and store connection string set through the
+# `FERROFED__` overrides of perf/arm.env beside it; the other arm of a change
+# runs from its own tree's pair. Beside the quickstart's development
 # issuer it trusts a synthetic national contact point whose tokens are bound
 # to a DPoP key (RFC 9449), with the FHIR face its patient summary is asked
 # on and the emergency access limit its professionals are held to (#1702),
