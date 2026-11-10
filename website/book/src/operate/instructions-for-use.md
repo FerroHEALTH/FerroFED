@@ -341,9 +341,9 @@ deployment in the EU must plan for are:
   medication action under another section reaches no section (hazard I-03).
   It writes discharge and imaging reports from a member's composition and
   lists them, with a member's own listed as it holds them; a report it
-  writes carries what the mapping reads, and an element the mapping does
-  not read, such as a diagnosis's severity or an imaging finding, is left
-  out and not declared (hazards I-19 and I-20;
+  writes carries what the mapping reads, and names by its openEHR path
+  each element the mapping does not read, such as a medicine's timing or
+  an imaging finding (hazards I-19 and I-20;
   [Discharge reports over FHIR](../integrate/discharge-reports.md),
   [Imaging reports over FHIR](../integrate/imaging-reports.md)). It
   receives discharge reports; the record the member keeps holds a received

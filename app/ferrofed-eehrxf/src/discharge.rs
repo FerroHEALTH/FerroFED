@@ -159,6 +159,7 @@ impl Writes for Served {
             "Software that writes the discharge report from the member's record automatically",
             (&self.mapping, composition),
         )?;
+        let withheld = report::withheld(&mapped);
         let sections = document
             .with_mapped_composition(mapped.bundle())
             .map_err(ServedError::Document)?;
@@ -174,7 +175,12 @@ impl Writes for Served {
             .find(|slot| slot.slice == COURSE)
             .ok_or(ServedError::Document(DocumentError::Unmapped { found: 0 }))?;
         document
-            .with_section(Section::new(course, vec![String::from(COURSE_TEXT)]))
+            .with_section(Section::new(
+                course,
+                std::iter::once(String::from(COURSE_TEXT))
+                    .chain(withheld)
+                    .collect(),
+            ))
             .map_err(ServedError::Document)?;
         for section in sections {
             let paragraph = format!(

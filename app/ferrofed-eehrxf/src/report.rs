@@ -15,6 +15,8 @@
 //! custodian. The authorship and the provenance are our own design: no
 //! specification governs them.
 
+use std::collections::BTreeSet;
+
 use eehrxf::category::Category;
 use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::document::imaging::IMAGING_BUNDLE;
@@ -32,6 +34,7 @@ use fhir_types::r4::provenance::{Provenance, ProvenanceAgent};
 use fhir_types::r4::resource::Resource;
 use fhirconnect::engine::context::CallContext;
 use fhirconnect::operations::contract::ToFhirResponse;
+use fhirconnect::operations::issues::{OPENEHR_PATH_SYSTEM, WARNING};
 use fhirconnect::operations::run::Settings;
 use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 
@@ -200,6 +203,62 @@ pub(crate) fn sourced(
         ..Provenance::default()
     }))])?;
     Ok(())
+}
+
+/// The narrative line naming, by path and never by value, each element of
+/// the member's composition the run `mapped` declared it did not carry, so a
+/// loss is never silent in the report; `None` when it declared none.
+///
+/// The run declares each loss as a `warning` issue of its `OperationOutcome`,
+/// which the document leaves out because it is no document content (FHIR R4
+/// documents.html). A loss is named by its openEHR path, which says where
+/// the member's record holds it, or by its FHIR path when it has no openEHR
+/// one; one with neither is counted alone.
+pub(crate) fn withheld(mapped: &ToFhirResponse) -> Option<String> {
+    let mut count = 0_usize;
+    let mut paths = BTreeSet::new();
+    let issues = mapped
+        .bundle()
+        .entry
+        .iter()
+        .filter_map(|entry| match entry.resource.as_ref() {
+            Some(Resource::OperationOutcome(outcome)) => Some(outcome.issue.iter()),
+            _ => None,
+        })
+        .flatten()
+        .filter(|issue| issue.severity.value.as_deref() == Some(WARNING));
+    for issue in issues {
+        count = count.saturating_add(1);
+        let openehr = issue
+            .details
+            .iter()
+            .flat_map(|details| details.coding.iter())
+            .find(|coding| {
+                coding
+                    .system
+                    .as_ref()
+                    .and_then(|system| system.value.as_deref())
+                    == Some(OPENEHR_PATH_SYSTEM)
+            })
+            .and_then(|coding| coding.code.as_ref())
+            .and_then(|code| code.value.as_deref());
+        let fhir = issue
+            .expression
+            .first()
+            .and_then(|expression| expression.value.as_deref());
+        paths.extend(openehr.or(fhir).map(str::to_owned));
+    }
+    if count == 0 {
+        return None;
+    }
+    let named = if paths.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", paths.into_iter().collect::<Vec<_>>().join(", "))
+    };
+    Some(format!(
+        "{count} element(s) of the member's record could not be carried into this report{named}, so the record holds more than the report shows."
+    ))
 }
 
 /// A shipped mapping compiled against a deployment's template, which writes
