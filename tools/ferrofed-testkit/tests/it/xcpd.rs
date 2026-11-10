@@ -30,7 +30,7 @@ async fn ask(
     )?;
     let identifier = PatientIdentifier::new(Oid::new("2.999.1")?, SecretString::from(patient))?;
     let query = DiscoveryQuery::new(Oid::new("2.999.40.1")?, identifier);
-    let client = XcpdClient::new(reqwest::Client::builder().build()?);
+    let client = XcpdClient::new(ferrofed_testkit::outbound::client(&stub.endpoint())?);
     Ok(client
         .discover(
             &gateway,

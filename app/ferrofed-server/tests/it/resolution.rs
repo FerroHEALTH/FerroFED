@@ -99,7 +99,7 @@ const NO_REGISTRY_AUDIT: &str = "[audit]\ndestination = \"log\"\n\n";
 /// The `[pixm]` table of one Manager at `pix` serving node A and node B.
 fn pixm(pix: &str) -> String {
     format!(
-        "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
+        "[[pixm.manager]]\nendpoint.url = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
     )
 }
 
@@ -389,7 +389,7 @@ fn load_refusal(dir: &Path, text: &str) -> Result<FederationError, Box<dyn Error
 fn a_pix_manager_that_leaves_a_member_unresolved_refuses_to_boot() -> TestResult {
     let dir = tempfile::tempdir()?;
     let text = format!(
-        "[[pixm.manager]]\nurl = \"https://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n"
+        "[[pixm.manager]]\nendpoint.url = \"https://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n"
     );
     let error = load_refusal(dir.path(), &text)?;
     assert!(
@@ -474,9 +474,9 @@ fn a_refusal_asking_for_a_registry_names_both_sources() {
 
 #[test]
 fn a_pix_manager_url_that_does_not_parse_refuses_to_boot_naming_its_key() -> TestResult {
-    let text = "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"not a url\"\n";
+    let text = "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nendpoint.url = \"not a url\"\n";
     match Config::from_sources(Some(&crate::support::signed(text)), &BTreeMap::new())?.resolve() {
-        Err(error::Error::Url { key, .. }) if key == "pixm.manager[0].url" => Ok(()),
+        Err(error::Error::Url { key, .. }) if key == "pixm.manager[0].endpoint.url" => Ok(()),
         other => Err(format!("refused naming the key: {other:?}").into()),
     }
 }
@@ -523,7 +523,7 @@ fn a_zero_binding_lifetime_refuses_to_boot() -> TestResult {
 #[test]
 fn a_pix_manager_secret_never_reaches_debug_output() -> TestResult {
     let text = format!(
-        "{NO_REGISTRY_AUDIT}{}\n[pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"synthetic-pix-token\"\n",
+        "{NO_REGISTRY_AUDIT}{}\n[pixm.manager.endpoint.credentials]\nuser = \"gateway\"\npassword = \"synthetic-pix-token\"\n",
         pixm("https://127.0.0.1:9")
     );
     let settings =

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! Mitz reached with the OAuth 2.0 client credentials grant of
-//! `ferrohealth-smart` (RFC 6749 §4.4), `[nl_gf.mitz.credentials.oauth]`,
+//! `ferrohealth-smart` (RFC 6749 §4.4), `[nl_gf.mitz.endpoint.credentials.oauth]`,
 //! through the real configuration path against the harness token endpoint:
 //! each question carries the token as a bearer token (RFC 6750 §2.1), the
 //! token is reused while it is fresh, and a `401` gets the question once
@@ -29,7 +29,7 @@ const SECRET: &str = "Qz7synthetic-mitz-secret";
 fn tables(mitz: &str, token_url: &str, secret_file: &Path) -> String {
     let file = toml::Value::String(secret_file.display().to_string());
     format!(
-        "{}\n[nl_gf.mitz.credentials.oauth]\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"client_secret_basic\"\nclient_secret_file = {file}\n",
+        "{}\n[nl_gf.mitz.endpoint.credentials.oauth]\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"client_secret_basic\"\nclient_secret_file = {file}\n",
         mitz_table(mitz, &holders())
     )
 }

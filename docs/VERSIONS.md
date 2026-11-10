@@ -718,11 +718,16 @@ in, the head of a change judged against its base on the same runner (#1731),
 (FerroHEALTH/FerroSYS#283), and 0.5.2 runs the two phases of a pair at once,
 each gateway at the plan's rate, so a runner whose speed moves from one
 phase to the next no longer favours either side (FerroHEALTH/FerroSYS#287).
+0.9.0 bounds the generator's lag at half the interval between two arrivals,
+25 ms at the plan's 20 a second, judges a pair steady on the head's drift
+over the base's, and measures up to two more pairs in place of one that
+cannot be judged, so a runner whose speed moves under both arms no longer
+ends an attempt with exit 2 (FerroHEALTH/FerroSYS#357, #358).
 No specification governs the choice: our own design.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| ferrohealth-perf | `0.8.0` | `.github/workflows/perf.yml` |
+| ferrohealth-perf | `0.9.0` | `.github/workflows/perf.yml` |
 
 ## Product and citation version
 

@@ -69,7 +69,7 @@ pub(crate) const CALLER: (&str, &str) = ("professional0001", "01.015");
 /// as its holders table body.
 pub(crate) fn mitz_table(endpoint: &str, holders: &str) -> String {
     format!(
-        "\n[nl_gf.mitz]\nurl = \"{endpoint}\"\nnamespaces = [\"{NAMESPACE}\"]\npurpose = \"TREAT\"\ndata_categories = [\"GGC002\"]\ntimeout = '1s'\n\n[nl_gf.mitz.holders]\n{holders}"
+        "\n[nl_gf.mitz]\nendpoint.url = \"{endpoint}\"\nnamespaces = [\"{NAMESPACE}\"]\npurpose = \"TREAT\"\ndata_categories = [\"GGC002\"]\nendpoint.timeout = '1s'\n\n[nl_gf.mitz.holders]\n{holders}"
     )
 }
 

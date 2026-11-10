@@ -13,9 +13,9 @@ each at a `Binary/{token}` URL the gateway signs for you
 The gateway also writes an imaging report from a member's openEHR
 composition when you declare the template those compositions are of
 ([Imaging reports the gateway writes](#imaging-reports-the-gateway-writes)).
-It receives no imaging report yet: holding a received report to its
-profiles needs the HL7 Europe Imaging Report package's dependency closure,
-which the gateway cannot load yet.
+It also receives an imaging report another system sends and writes it to
+the member you declare
+([Imaging reports the gateway receives](#imaging-reports-the-gateway-receives)).
 
 ## Imaging documents in the list
 
@@ -68,6 +68,59 @@ the study, and the order, history and procedure sections the profile
 requires are empty as `unavailable`. One `Provenance` names the member.
 Completeness, the access record under `Medical-Imaging` and the `424`
 answers follow the discharge report's.
+
+## Imaging reports the gateway receives
+
+Declare the member that stores received imaging reports in a
+`[[fhir.receive]]` entry, with the HL7 Europe Imaging Report 1.0.0-ballot
+package, its dependency closure, FerroBRIDGE's ADL 2 imaging report
+template with its archetypes, and the imaging project `eehrxf` ships:
+
+```toml
+[[fhir.receive]]
+category = "Medical-Imaging"
+member = "node-a"
+package = "/etc/ferrofed/packages/hl7.fhir.eu.imaging-1.0.0-ballot.tgz"
+dependencies = [
+  # the discharge report's closure, as in its example, and:
+  "/etc/ferrofed/packages/hl7.fhir.eu.health-data-api-1.0.0-ballot.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.eu.base-2.0.0-ballot.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.eu.extensions.r4-1.2.0.tgz",
+  "/etc/ferrofed/packages/hl7.terminology.r4-7.0.1.tgz",
+  "/etc/ferrofed/packages/hl7.fhir.uv.xver-r5.r4-0.0.1-snapshot-2.tgz",
+  "/etc/ferrofed/packages/fhir.dicom-2025.3.20250714.tgz",
+  "/etc/ferrofed/packages/ihe.iti.mhd-4.2.3.tgz",
+  "/etc/ferrofed/packages/ihe.iti.pdqm-3.2.0.tgz",
+  "/etc/ferrofed/packages/ihe.iti.balp-1.1.4.tgz",
+  "/etc/ferrofed/packages/ihe.formatcode.fhir-1.4.0.tgz",
+]
+template = "/etc/ferrofed/templates/ferrobridge_imaging_report.adlt"
+archetypes = [
+  "/etc/ferrofed/archetypes/openEHR-EHR-COMPOSITION.report-result.v1.adl",
+  "/etc/ferrofed/archetypes/openEHR-EHR-OBSERVATION.imaging_exam_result.v1.adl",
+]
+files = [
+  "/etc/ferrofed/mappings/imaging/ferrobridge_eu_imaging.context.yml",
+  # and every other file of the imaging project, in its order
+]
+context = "ferrobridge_eu_imaging.context"
+language = "en"
+territory = "NL"
+```
+
+- FerroBRIDGE's validator refuses a package set that lacks a package a
+  manifest names, so the list holds every package the imaging package and
+  the HL7 Europe Health Data API package it names depend on, at the
+  versions their manifests name.
+- A document whose `Composition.category` is `Medical-Imaging` is held to
+  every constraint of `BundleReportEuImaging` and `CompositionEuImaging`,
+  and of the profiles its entries claim, before anything reaches a member.
+  A document that breaks one is refused `422` and no member is asked.
+- The document is mapped into one composition of the template, the report
+  kept byte for byte in its `FEEDER_AUDIT.original_content`, and written to
+  the declared member by its own `ehr_id` alone, as a
+  [received patient summary](../evaluate/receiving-documents.md) is. Each
+  receipt is recorded once under `Medical-Imaging` in the access log.
 
 ## A member's own imaging documents
 

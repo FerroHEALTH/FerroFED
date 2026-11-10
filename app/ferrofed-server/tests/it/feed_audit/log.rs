@@ -70,7 +70,7 @@ async fn an_iti_83_record_in_the_log_names_no_patient() -> TestResult {
         &registry(&a.uri(), &b.uri(), ""),
         "profile = \"development\"",
         &format!(
-            "[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n{LOG}",
+            "[[pixm.manager]]\nendpoint.url = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n{LOG}",
             pix.uri()
         ),
     )?;

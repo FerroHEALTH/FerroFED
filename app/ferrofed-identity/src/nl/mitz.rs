@@ -27,41 +27,34 @@
 //! BSN reaches Mitz only, inside the binding crate's redacting types; nothing
 //! here logs it, and no error carries it.
 //!
-//! An OAuth 2.0 grant ([`Authentication::Grant`]) rides in no default
-//! header: each question carries the provider's current token as a bearer
-//! token (RFC 6750 §2.1), and a `401` drops it and asks once more with a
-//! fresh one (RFC 6750 §3.1).
+//! Mitz is reached through the `ferrohealth-smart` outbound client its
+//! endpoint table builds: a client credentials grant's token rides in each
+//! question as a bearer token (RFC 6750 §2.1), and a `401` drops it and asks
+//! once more with a fresh one (RFC 6750 §3.1).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ferrohealth_secret::secret_url::SecretUrl;
-use ferrohealth_smart::client::TokenError;
-use ferrohealth_smart::client::cache::TokenSource;
-use http::header::{AUTHORIZATION, HeaderMap};
-use http::{HeaderValue, StatusCode};
+use ferrohealth_smart::client::outbound::OutboundClient;
 use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, Ura, is_bsn_system};
-use nl_generic_functions::mitz::error::{ClientError, InvalidInput, MitzError};
+use nl_generic_functions::mitz::error::{InvalidInput, MitzError};
 use nl_generic_functions::mitz::question::{
-    Bsn, CareProviderType, ClosedAnswer, ClosedQuestion, DataCategory, DataHolder, DataUser,
-    MAX_CATEGORIES, ProfessionalId, Purpose, RoleCode,
+    Bsn, CareProviderType, ClosedQuestion, DataCategory, DataHolder, DataUser, MAX_CATEGORIES,
+    ProfessionalId, Purpose, RoleCode,
 };
 use nl_generic_functions::mitz::{MitzClient, UZI_ROOT};
 use secrecy::SecretString;
 use thiserror::Error;
 use tokio::task::JoinSet;
-use url::Url;
 
-use crate::fhir::{self, Authentication};
 use crate::nl::{DirectoryUraError, directory_custodians};
+use crate::outbound::Shown;
 use crate::role::consent::{ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
-use ferrohealth_server::tls_client::TlsClient;
 
 /// The name `OPTIONS {base}/` declares the Mitz pre-filter under.
 pub const MITZ_MODE: &str = "nl-gf-mitz";
@@ -87,16 +80,13 @@ pub struct HolderConfig {
 
 /// The Mitz pre-filter as the configuration names it.
 pub struct MitzConfig {
-    /// The Mitz endpoint of the closed authorization question.
-    pub endpoint: SecretUrl,
+    /// The outbound client its endpoint table builds: the Mitz endpoint of
+    /// the closed authorization question, the mutual TLS, the timeouts, the
+    /// retry table and the credential every question carries beside it.
+    pub client: OutboundClient,
     /// Whether the deployment is marked for development, which alone admits
     /// a plain `http` endpoint.
     pub development: bool,
-    /// How the gateway authenticates to Mitz beside mutual TLS.
-    pub auth: Authentication,
-    /// The TLS material: a client identity for mutual TLS and trust roots
-    /// beside the platform's.
-    pub tls: Arc<TlsClient>,
     /// The client namespaces that stand for the BSN, beside the BSN systems.
     pub namespaces: BTreeSet<IdentifierNamespace>,
     /// The Mitz data categories asked about.
@@ -116,10 +106,8 @@ pub struct MitzConfig {
 impl fmt::Debug for MitzConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MitzConfig")
-            .field("endpoint", &self.endpoint)
+            .field("client", &Shown(&self.client))
             .field("development", &self.development)
-            .field("auth", &self.auth)
-            .field("tls", &self.tls)
             .field("namespaces", &self.namespaces)
             .field("categories", &self.categories)
             .field("purpose", &self.purpose)
@@ -137,12 +125,10 @@ impl fmt::Debug for MitzConfig {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum MitzConfigError {
-    /// The endpoint does not parse as a URL.
-    #[error("the Mitz endpoint is not a URL")]
-    EndpointUrl(#[source] url::ParseError),
-    /// The client refuses the endpoint, or its HTTP client cannot be built.
-    #[error("the Mitz client cannot be built")]
-    Client(#[source] ClientError),
+    /// The client refuses the endpoint: not an `https` URL, or `http` outside
+    /// development, or one with userinfo, a query or a fragment.
+    #[error("the Mitz client refuses the endpoint")]
+    Endpoint(#[source] InvalidInput),
     /// A namespace listed as standing for the BSN is the pseudonymised BSN.
     #[error("the namespace {0} is the pseudonymised BSN and cannot stand for the BSN")]
     PseudonymAsBsn(IdentifierNamespace),
@@ -181,10 +167,6 @@ pub enum MitzConfigError {
     /// identifiers the LRZa rules refuse.
     #[error("the directory's URAs are refused")]
     Directory(#[source] DirectoryUraError),
-    /// A credential does not form an `Authorization` value (RFC 7617 §2,
-    /// RFC 6750 §2.1).
-    #[error("the HTTP client for Mitz could not be set up")]
-    Http(#[source] fhir::ClientError),
 }
 
 /// Why the Mitz pre-filter could not answer for a candidate.
@@ -203,18 +185,12 @@ pub enum MitzPrefilterError {
     /// A question's task stopped before it answered.
     #[error("a closed authorization question stopped before it answered")]
     Stopped,
-    /// The grant gave no token the question can carry.
-    #[error("the Mitz grant gave no token")]
-    Token(#[source] Arc<TokenError>),
-    /// The client that carries the grant's token cannot be built.
-    #[error("the Mitz client that carries the grant's token cannot be built")]
-    Client(#[source] MitzConfigError),
 }
 
 /// The [`ConsentPrefilter`] over Mitz's closed authorization question
 /// (Annex B §B.6, N27a).
 pub struct MitzPrefilter {
-    client: Arc<Asker>,
+    client: MitzClient,
     namespaces: BTreeSet<IdentifierNamespace>,
     categories: Vec<DataCategory>,
     purpose: Purpose,
@@ -228,8 +204,7 @@ impl MitzPrefilter {
     ///
     /// # Errors
     ///
-    /// A [`MitzConfigError`] for an endpoint, a credential or TLS material
-    /// that cannot be used, a pseudonym namespace listed as the BSN, a data
+    /// A [`MitzConfigError`] for an endpoint the client refuses, a pseudonym namespace listed as the BSN, a data
     /// category or purpose the question does not take, a holder
     /// naming no member, a member with no holder or no single URA, and a
     /// directory whose URAs the LRZa rules refuse.
@@ -250,9 +225,14 @@ impl MitzPrefilter {
         let purpose = Purpose::from_code(&config.purpose)
             .ok_or_else(|| MitzConfigError::Purpose(config.purpose.clone()))?;
         let holders = holders(&config, registry)?;
-        let client = Asker::from_config(&config)?;
+        let client = if config.development {
+            MitzClient::unencrypted_for_development(config.client)
+        } else {
+            MitzClient::new(config.client)
+        }
+        .map_err(MitzConfigError::Endpoint)?;
         Ok(Self {
-            client: Arc::new(client),
+            client,
             namespaces: config.namespaces,
             categories,
             purpose,
@@ -346,8 +326,11 @@ impl ConsentPrefilter for MitzPrefilter {
         for (holder, members) in asked {
             match self.question(bsn.clone(), holder, user.clone()) {
                 Ok(question) => {
-                    let client = Arc::clone(&self.client);
-                    tasks.spawn(async move { (members, client.ask(&question, timeout).await) });
+                    let client = self.client.clone();
+                    tasks.spawn(async move {
+                        let answer = client.ask(&question, timeout).await;
+                        (members, answer.map_err(consent_error))
+                    });
                 }
                 Err(refused) => {
                     failure.get_or_insert(ConsentError::Backend(Box::new(
@@ -496,167 +479,6 @@ fn holders(
         holders.insert(member.clone(), DataHolder::new(ura, kind));
     }
     Ok(holders)
-}
-
-/// How each question reaches Mitz.
-enum Asker {
-    /// Through one client, whose credential, if any, is a default header.
-    Fixed(MitzClient),
-    /// Through a client that carries the grant's current token.
-    Token(TokenAsker),
-}
-
-impl Asker {
-    /// The asker `config` describes; a grant's client is built per token,
-    /// and the endpoint is checked here.
-    fn from_config(config: &MitzConfig) -> Result<Self, MitzConfigError> {
-        let Authentication::Grant(source) = &config.auth else {
-            return Ok(Self::Fixed(client(config, &config.auth)?));
-        };
-        client(config, &Authentication::None)?;
-        Ok(Self::Token(TokenAsker {
-            endpoint: config.endpoint.clone(),
-            development: config.development,
-            tls: config.tls.clone(),
-            source: source.clone(),
-            current: Mutex::new(None),
-        }))
-    }
-
-    /// Asks `question` within `timeout`.
-    async fn ask(
-        &self,
-        question: &ClosedQuestion,
-        timeout: Duration,
-    ) -> Result<ClosedAnswer, ConsentError> {
-        match self {
-            Self::Fixed(client) => client.ask(question, timeout).await.map_err(consent_error),
-            Self::Token(asker) => asker.ask(question, timeout).await,
-        }
-    }
-}
-
-impl fmt::Debug for Asker {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Fixed(client) => f.debug_tuple("Fixed").field(client).finish(),
-            Self::Token(asker) => f
-                .debug_struct("Token")
-                .field("endpoint", &asker.endpoint)
-                .field("source", &asker.source)
-                .finish_non_exhaustive(),
-        }
-    }
-}
-
-/// The asker of a grant: the client of the token last handed out, rebuilt
-/// when the provider hands out another.
-struct TokenAsker {
-    endpoint: SecretUrl,
-    development: bool,
-    tls: Arc<TlsClient>,
-    source: TokenSource,
-    current: Mutex<Option<(HeaderValue, MitzClient)>>,
-}
-
-impl TokenAsker {
-    /// Asks `question` with the grant's token, and once more with a fresh
-    /// one within what is left of `timeout` when Mitz answers `401`.
-    async fn ask(
-        &self,
-        question: &ClosedQuestion,
-        timeout: Duration,
-    ) -> Result<ClosedAnswer, ConsentError> {
-        let started = Instant::now();
-        match self.client().await?.ask(question, timeout).await {
-            // NOTE: RFC 6750 §3.1: a 401 answers an invalid or expired token, so the token is
-            // dropped and the question asked once more, never again with the refused token.
-            Err(error) if error.status() == Some(StatusCode::UNAUTHORIZED) => {
-                let refused = self.lock().as_ref().map(|(held, _)| held.clone());
-                if let Some(refused) = refused {
-                    self.source.invalidate(&refused);
-                }
-                let left = timeout.saturating_sub(started.elapsed());
-                if left.is_zero() {
-                    return Err(ConsentError::DeadlineExceeded);
-                }
-                self.client()
-                    .await?
-                    .ask(question, left)
-                    .await
-                    .map_err(consent_error)
-            }
-            answered => answered.map_err(consent_error),
-        }
-    }
-
-    /// The client that carries the source's current token as a bearer token
-    /// (RFC 6750 §2.1).
-    async fn client(&self) -> Result<MitzClient, ConsentError> {
-        let failed = |error| ConsentError::Backend(Box::new(error));
-        let token = self
-            .source
-            .token()
-            .await
-            .map_err(|source| failed(MitzPrefilterError::Token(source)))?;
-        let mut header = token.header().clone();
-        header.set_sensitive(true);
-        if let Some((held, client)) = self.lock().as_ref()
-            && *held == header
-        {
-            return Ok(client.clone());
-        }
-        let client = build(
-            &self.endpoint,
-            self.development,
-            &Authentication::None,
-            &self.tls,
-            Some(header.clone()),
-        )
-        .map_err(|source| failed(MitzPrefilterError::Client(source)))?;
-        *self.lock() = Some((header, client.clone()));
-        Ok(client)
-    }
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, Option<(HeaderValue, MitzClient)>> {
-        self.current.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-}
-
-/// The client Mitz is asked through: mutual TLS and trust roots as
-/// configured, `auth` as a default header, and no redirects.
-fn client(config: &MitzConfig, auth: &Authentication) -> Result<MitzClient, MitzConfigError> {
-    build(
-        &config.endpoint,
-        config.development,
-        auth,
-        &config.tls,
-        None,
-    )
-}
-
-/// The client of [`client`] over `endpoint`, with `token`, when given, as
-/// its default `Authorization` header.
-fn build(
-    endpoint: &SecretUrl,
-    development: bool,
-    auth: &Authentication,
-    tls: &TlsClient,
-    token: Option<HeaderValue>,
-) -> Result<MitzClient, MitzConfigError> {
-    let endpoint = Url::parse(endpoint.expose()).map_err(MitzConfigError::EndpointUrl)?;
-    let mut builder = fhir::http_client_builder(auth, tls).map_err(MitzConfigError::Http)?;
-    if let Some(token) = token {
-        let mut headers = HeaderMap::new();
-        headers.insert(AUTHORIZATION, token);
-        builder = builder.default_headers(headers);
-    }
-    let client = if development {
-        MitzClient::unencrypted_for_development(endpoint, builder)
-    } else {
-        MitzClient::new(endpoint, builder)
-    };
-    client.map_err(MitzConfigError::Client)
 }
 
 #[cfg(test)]

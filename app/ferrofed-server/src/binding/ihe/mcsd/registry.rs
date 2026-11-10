@@ -32,13 +32,14 @@ use ferrofed_identity::ihe::mcsd::source::{
     ExchangeError, Materialised, Refreshed,
 };
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::config::ServerTls;
 use http::StatusCode;
 use serde::Serialize;
 
 use crate::binding::error::BindingError;
 use crate::binding::seam::RegistrySink;
-use crate::config::ihe::mcsd::DirectorySettings;
-use crate::config::service;
+use crate::config::ihe::mcsd::{DirectorySettings, ENDPOINT_KEY};
 use ferrofed_operator_api::health::Observed;
 
 /// The directory a running gateway keeps its registry in step with.
@@ -297,14 +298,15 @@ pub fn read(settings: &DirectorySettings) -> Result<RegistrySnapshot, BindingErr
 
 /// The source `settings` name.
 fn source(settings: &DirectorySettings) -> Result<DirectorySource, BindingError> {
-    let credentials = service::service_authentication(
-        "registry.mcsd.credentials",
-        settings.credentials.as_ref(),
-    )?;
+    let client =
+        OutboundClient::build(&settings.endpoint, ENDPOINT_KEY, &ServerTls).map_err(|source| {
+            BindingError::Outbound {
+                table: ENDPOINT_KEY.to_owned(),
+                source: Box::new(source),
+            }
+        })?;
     let source = DirectorySource::new(DirectoryConfig {
-        base: settings.url.clone(),
-        credentials,
-        tls: Arc::clone(&settings.tls),
+        client,
         deadline: settings.deadline,
         pages: settings.max_pages,
         bytes: settings.max_bytes,

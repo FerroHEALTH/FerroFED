@@ -11,43 +11,49 @@
 //! home_community = "2.999.40"
 //! assertion_file = "/run/secrets/xua-assertion.xml"
 //!
-//! [xcpd.tls]
+//! [[xcpd.gateway]]
+//! device = "2.999.50.1"
+//!
+//! [xcpd.gateway.endpoint]
+//! url = "https://xcpd.example.org/RespondingGateway"
+//!
+//! [xcpd.gateway.endpoint.tls]
 //! client_identity_file = "/run/secrets/xcpd-client.pem"
 //! trust_roots_file = "/etc/ferrofed/xcpd-roots.pem"
-//!
-//! [[xcpd.gateway]]
-//! url = "https://xcpd.example.org/RespondingGateway"
-//! device = "2.999.50.1"
 //!
 //! [xcpd.communities]
 //! "2.999.50" = "node-a"
 //! ```
 //!
-//! A gateway URL is `https` unless the configuration is marked
-//! `profile = "development"`: the request carries the patient identifier and
-//! the XUA assertion (ITI TF-1 §27.4.1), so it is held to the
-//! protected-payload policy of [`transport`]. No specification governs the
-//! shape of the table: our own design.
+//! Each gateway's `endpoint` is `ferrohealth-smart`'s `EndpointSection`, one
+//! outbound client per gateway, since the client posts only to its table's
+//! origin. It names the gateway's SOAP endpoint, the mutual TLS of the ATNA
+//! secure channel, and the timeout and retries of each call, and no
+//! credential: the XUA assertion is the gateway's. A gateway URL is `https`
+//! unless the configuration is marked `profile = "development"`: the request
+//! carries the patient identifier and the XUA assertion (ITI TF-1 §27.4.1),
+//! so it is held to the protected-payload policy of [`transport`]. No
+//! specification governs the shape of the table: our own design.
 //!
 //! A gateway marked `myhealth_eu = true` is a MyHealth@EU route, an eHDSI
-//! link. It is `https` in every profile, needs `tls.client_identity_file` and
-//! `tls.trust_roots_file` (Section II Security Services 10.0.0 §5.9.1 and
+//! link. It is `https` in every profile, needs `endpoint.tls.client_identity_file`
+//! and `endpoint.tls.trust_roots_file` (Section II Security Services 10.0.0 §5.9.1 and
 //! §5.9.2), and has its certificate chain checked for revocation before each
 //! discovery (X.509 Certificates Profile 7.0.0 §3.2). A fixed `assertion`
 //! never serves it: Messaging Profile 10.0.0 §1.5 admits no alternative
 //! binding, and SAML Profile 10.0.0 §2.1 bounds the identity assertion to 4
 //! hours, `sender-vouches`.
 
-use ferrohealth_config::tls::TlsClientSection;
-use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
+use ferrohealth_smart::config::credentials::CredentialsSection;
+use ferrohealth_smart::config::endpoint::EndpointSection;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use ferrofed_identity::profile::Profile;
 use ferrohealth_secret::secret::Secret;
-use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
 use crate::config::audit::AuditDestination;
@@ -80,23 +86,25 @@ pub struct Xcpd {
     pub assertion: Option<Secret>,
     /// A file holding the assertion, read at boot.
     pub assertion_file: Option<PathBuf>,
-    /// The TLS material the service is reached with: the table's `tls`
-    /// sub-table.
-    pub tls: TlsClientSection,
     /// Where the ITI-55 audit message of every exchange goes: `repository`,
     /// `log`, or `off`, which only `profile = "development"` admits. It has
     /// no default.
     pub audit: Option<AuditDestination>,
     /// The ATNA Audit Record Repository, under `audit = "repository"`.
     pub audit_repository: Option<AuditRepository>,
+    /// The retired `tls`, which each gateway's `endpoint.tls` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub tls: Removed,
 }
 
 /// One responding gateway.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct XcpdGateway {
-    /// The SOAP endpoint, `https`; no rendering shows its userinfo.
-    pub url: SecretUrl,
+    /// The SOAP endpoint, `https`, and how it is reached: the mutual TLS of
+    /// the ATNA secure channel and the timeout and retries of each call.
+    pub endpoint: EndpointSection,
     /// The receiver device's OID.
     pub device: String,
     /// The one community to ask for, when the gateway serves several.
@@ -106,6 +114,22 @@ pub struct XcpdGateway {
     /// discovery (eHDSI X.509 Certificates Profile 7.0.0 §3.2), and that no
     /// fixed assertion serves. Off by default.
     pub myhealth_eu: bool,
+    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub url: Removed,
+}
+
+impl Default for XcpdGateway {
+    fn default() -> Self {
+        Self {
+            endpoint: crate::config::endpoint::tried_once(units::Duration::from_secs(10)),
+            device: String::new(),
+            community: None,
+            myhealth_eu: false,
+            url: Removed::default(),
+        }
+    }
 }
 
 /// The XCPD localizer, with every secret and file read.
@@ -124,8 +148,6 @@ pub struct XcpdSettings {
     pub assertion: Option<Secret>,
     /// The key the assertion was read from, for an error that names it.
     pub assertion_key: &'static str,
-    /// The TLS material it is reached with, every file read.
-    pub tls: Arc<TlsClient>,
     /// Where the audit messages go.
     pub audit: AuditDestination,
     /// The repository, under [`AuditDestination::Repository`].
@@ -139,7 +161,6 @@ impl fmt::Debug for XcpdSettings {
             .field("gateways", &self.gateways)
             .field("communities", &self.communities)
             .field("assertion", &self.assertion.is_some())
-            .field("tls", &self.tls)
             .field("audit", &self.audit)
             .field("audit_repository", &self.audit_repository)
             .finish_non_exhaustive()
@@ -152,8 +173,9 @@ impl fmt::Debug for XcpdSettings {
 /// # Errors
 /// [`Error::Missing`] for no registry document, no `sender_device`, no
 /// `audit`, no gateway, or no `home_community` under `audit = "repository"`,
-/// [`Error::Url`]
-/// for a gateway URL that does not parse, [`Error::Cleartext`] for a gateway
+/// the errors of [`crate::config::endpoint::checked`] for a gateway's
+/// endpoint table, [`BindingFault::GatewayCredentials`] for one that names a
+/// credential, [`Error::Cleartext`] for a gateway
 /// URL that is not `https` outside the development profile,
 /// [`BindingFault::AuditOff`] for `audit = "off"` outside it,
 /// [`BindingFault::FixedAssertionOnMyHealthEu`] and
@@ -191,27 +213,30 @@ pub(crate) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         (xcpd.assertion.is_some() || xcpd.assertion_file.is_some()).then_some(assertion_key);
     for (index, gateway) in xcpd.gateway.iter().enumerate() {
         let key = format!("xcpd.gateway[{index}]");
-        url::Url::parse(gateway.url.expose()).map_err(|source| Error::Url {
-            key: format!("{key}.url"),
-            source,
-        })?;
+        let endpoint_key = format!("{key}.endpoint");
+        let url = crate::config::endpoint::checked(&endpoint_key, &gateway.endpoint)?;
+        if gateway.endpoint.credentials != CredentialsSection::default() {
+            return Err(Error::Binding(BindingFault::GatewayCredentials {
+                key: format!("{endpoint_key}.credentials"),
+            }));
+        }
         // NOTE: ITI TF-1 §27.4.1: the request carries the identifier and the XUA
         // assertion; a site admitted under development is reported by transport::check.
         transport::protected_payload(
             config.profile,
-            gateway.url.expose(),
-            transport::identity_site(&key, carried),
+            url.as_str(),
+            transport::identity_site(&endpoint_key, carried),
         )?;
         if gateway.myhealth_eu {
             myhealth_eu(xcpd, gateway, &key)?;
         }
+        crate::config::tls::read(&format!("{endpoint_key}.tls"), &gateway.endpoint.tls)?;
     }
     let assertion = read_secret(
         "xcpd.assertion",
         xcpd.assertion.clone(),
         xcpd.assertion_file.as_deref(),
     )?;
-    let tls = crate::config::tls::read("xcpd.tls", &xcpd.tls)?;
     Ok(Some(XcpdSettings {
         sender_device: xcpd.sender_device.clone(),
         home_community: xcpd.home_community.clone(),
@@ -220,7 +245,6 @@ pub(crate) fn resolve(config: &Config) -> Result<Option<XcpdSettings>, Error> {
         namespaces: xcpd.namespaces.clone(),
         assertion_key,
         assertion,
-        tls,
         audit,
         audit_repository,
     }))
@@ -242,13 +266,14 @@ fn myhealth_eu(xcpd: &Xcpd, gateway: &XcpdGateway, key: &str) -> Result<(), Erro
     }
     // NOTE: Section II Security Services 10.0.0 §5.9.1 and §5.9.2: an NCP link is TLS
     // with mutual authentication under the eHDSI PKI, in development as anywhere.
-    if !url::Url::parse(gateway.url.expose()).is_ok_and(|url| url.scheme() == "https") {
+    if !url::Url::parse(gateway.endpoint.url.expose()).is_ok_and(|url| url.scheme() == "https") {
         return refused(MyHealthEuNeed::Https);
     }
-    if xcpd.tls.client_identity.is_none() && xcpd.tls.client_identity_file.is_none() {
+    let tls = &gateway.endpoint.tls;
+    if tls.client_identity.is_none() && tls.client_identity_file.is_none() {
         return refused(MyHealthEuNeed::ClientIdentity);
     }
-    if xcpd.tls.trust_roots_file.is_none() {
+    if tls.trust_roots_file.is_none() {
         return refused(MyHealthEuNeed::TrustRoots);
     }
     Ok(())

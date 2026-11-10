@@ -14,48 +14,14 @@ use std::path::Path;
 
 use ferrofed_eehrxf::prescriptions::mapped::Template;
 use ferrofed_testkit::discharge;
-use ferrofed_testkit::fhir_packages;
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use serde_json::Value;
 
-use super::super::{UNREACHED_SUPPLIER, fhir_tables_with};
-use super::{VERSION_A, creating, gateway_with, issue, post, rows};
+use super::{DISCHARGE, VERSION_A, creating, gateway_with, issue, post, receiving_adl2, rows};
 use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room, wire};
 use crate::fhir::TestResult;
 use crate::support::call;
-
-/// The `[[fhir.receive]]` entry of a face that receives discharge reports
-/// at node A over FerroBRIDGE's ADL 2 template, the mapping written into
-/// `dir`, with the tables `beside` after it.
-fn receiving(dir: &Path, beside: &str) -> Result<String, Box<dyn Error>> {
-    let path = |value: &Path| toml::Value::String(value.display().to_string()).to_string();
-    let joined = |paths: &[std::path::PathBuf]| {
-        paths
-            .iter()
-            .map(|file| path(file))
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    let mapping = dir.join("hdr");
-    std::fs::create_dir_all(&mapping)?;
-    let files = joined(&discharge::mapping_files(&mapping)?);
-    let dependencies = joined(&fhir_packages::discharge_dependencies()?);
-    let archetypes = joined(&discharge::archetype_paths());
-    Ok(fhir_tables_with(
-        UNREACHED_SUPPLIER,
-        &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
-        &format!(
-            "\n[[fhir.receive]]\ncategory = \"Discharge-Reports\"\nmember = \"node-a\"\n\
-             package = {}\ndependencies = [{dependencies}]\ntemplate = {}\n\
-             archetypes = [{archetypes}]\nfiles = [{files}]\ncontext = \"{}\"\n\
-             language = \"en\"\nterritory = \"NL\"\n{beside}",
-            path(&discharge::package()),
-            path(&discharge::template_path()),
-            discharge::CONTEXT,
-        ),
-    ))
-}
 
 /// The synthetic discharge report of [`PATIENT`] a hospital system sends,
 /// written over FerroBRIDGE's discharge report template.
@@ -80,7 +46,7 @@ fn gateway(
     gateway_with(
         dir,
         (a, b),
-        (&crossref, &receiving(dir, beside)?),
+        (&crossref, &receiving_adl2(dir, &DISCHARGE, beside)?),
         &settings_with_room(),
     )
 }

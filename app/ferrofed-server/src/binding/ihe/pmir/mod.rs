@@ -30,11 +30,11 @@ use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use ferrofed_identity::ihe::pmir::{self, PmirConfigError};
-
 use http::HeaderMap;
 use std::sync::Arc;
 
+use ferrohealth_smart::client::outbound::{OutboundClient, OutboundError};
+use ferrohealth_smart::config::ServerTls;
 use ihe_atna::balp::{AuditError, AuditRecorder};
 use ihe_iti::pmir::PmirSubscriber;
 use ihe_iti::pmir::audit::received;
@@ -45,8 +45,7 @@ use url::Url;
 
 use crate::auth::Gate;
 use crate::auth::refusal::MachineRefusal;
-use crate::config::ihe::pmir::{OnDrain, PmirSettings};
-use crate::config::service::{self, ServiceAuthError};
+use crate::config::ihe::pmir::{ENDPOINT_KEY, OnDrain, PmirSettings};
 use ferrofed_operator_api::health::Observed;
 use subscription::{RegistryFault, Watch};
 
@@ -54,19 +53,17 @@ use subscription::{RegistryFault, Watch};
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum IdentityFeedError {
-    /// The Registry's subscriber cannot be built.
+    /// The Registry's base URL is not an `http(s)` URL without a query or a
+    /// fragment, so no subscriber can be built.
     #[error("the PMIR subscriber cannot be built")]
-    Subscriber(#[from] PmirConfigError),
+    Subscriber(#[source] InvalidInput),
     /// The subscription cannot be described.
     #[error("the PMIR subscription cannot be described")]
     Request(#[source] InvalidInput),
-    /// The Registry's base URL does not parse.
-    #[error("the PMIR Registry base URL is not a URL")]
-    Registry(#[source] url::ParseError),
-    /// `[pmir.credentials]` names a grant the Registry does not take, or one
-    /// whose token requests have no HTTP client.
-    #[error("the PMIR credentials cannot be used")]
-    Grant(#[source] ServiceAuthError),
+    /// The outbound client of `[pmir.endpoint]` cannot be built: its TLS,
+    /// its credential, its token source or its HTTP engine.
+    #[error("the outbound client of [pmir.endpoint] cannot be built")]
+    Outbound(#[source] Box<OutboundError>),
 }
 
 /// The identity feed a running gateway keeps: its subscription and the
@@ -113,17 +110,18 @@ impl IdentityFeed {
         domains: BTreeSet<String>,
         audit: Option<Arc<dyn AuditRecorder>>,
     ) -> Result<Self, IdentityFeedError> {
-        let auth =
-            service::service_authentication("pmir.credentials", settings.credentials.as_ref())
-                .map_err(IdentityFeedError::Grant)?;
-        let subscriber = pmir::subscriber(&settings.url, &auth, &settings.tls)?;
+        let client = OutboundClient::build(&settings.endpoint, ENDPOINT_KEY, &ServerTls)
+            .map_err(|source| IdentityFeedError::Outbound(Box::new(source)))?;
+        // NOTE: PMIR §2:3.94.5: the Registry authorizes the subscription by the credential
+        // and the TLS of the client the endpoint table builds.
+        let subscriber = PmirSubscriber::new(client).map_err(IdentityFeedError::Subscriber)?;
         // NOTE: PMIR §2:3.94.5.1: each ITI-94 exchange is audited, and one whose
         // record is refused fails like a Registry that did not answer.
         let subscriber = match &audit {
             Some(recorder) => subscriber.audited(Arc::clone(recorder)),
             None => subscriber,
         };
-        let registry = Url::parse(settings.url.expose()).map_err(IdentityFeedError::Registry)?;
+        let registry = settings.url.clone();
         let criteria = match &settings.identifier_system {
             Some(system) => {
                 Criteria::identifier_system(system).map_err(IdentityFeedError::Request)?

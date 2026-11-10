@@ -11,7 +11,6 @@
 use std::error::Error;
 use std::time::Duration;
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::mcsd::error::{FhirFormError, IdentifierFault};
 use ferrofed_identity::ihe::mcsd::source::{DirectoryConfig, DirectorySource, Refreshed};
 use ferrofed_identity::ihe::mcsd::{
@@ -23,7 +22,6 @@ use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId};
 use ferrofed_registry::native::NativeEndpoint;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mcsd::{HarnessDirectory, Member, Native};
-use ferrohealth_secret::secret_url::SecretUrl;
 use serde_json::{Value, json};
 
 use super::{NATIVE, NODE_A_PUB, ORG_A, bytes, fhir, resource};
@@ -355,9 +353,8 @@ fn eps() -> Native<'static> {
 
 fn source(harness: &HarnessDirectory) -> Result<DirectorySource, Box<dyn Error>> {
     Ok(DirectorySource::new(DirectoryConfig {
-        tls: ferrofed_testkit::tls::platform(),
-        base: SecretUrl::new(harness.base()),
-        credentials: Authentication::None,
+        client: ferrofed_testkit::outbound::client(&harness.base())
+            .expect("the outbound client builds"),
         deadline: Duration::from_secs(5),
         pages: 200,
         bytes: 64 << 20,

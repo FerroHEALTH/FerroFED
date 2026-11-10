@@ -63,7 +63,7 @@ async fn an_undirected_query_asks_only_the_member_ferropix_names_over_iti_55() -
         node_selection: "localized",
         tables: format!(
             "[federation.localization]\ntimeout = '5s'\n\n[xcpd]\nsender_device = \"2.999.40.1\"\n\
-             home_community = \"{HOME}\"\naudit = \"log\"\n\n[[xcpd.gateway]]\nurl = \"{}\"\n\
+             home_community = \"{HOME}\"\naudit = \"log\"\n\n[[xcpd.gateway]]\nendpoint.url = \"{}\"\n\
              device = \"{DEVICE}\"\n\n[xcpd.communities]\n\"{COMMUNITY}\" = \"node-a\"\n\"{ELSEWHERE}\" = \"node-b\"\n",
             pix.xcpd_endpoint()
         ),

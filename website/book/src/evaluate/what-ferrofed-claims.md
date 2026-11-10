@@ -587,9 +587,9 @@ were built there (issues
 FerroFED keeps the gateway half: the federation queries, the FHIR face
 routes and the access record, which v0.0.16 carries for prescriptions from
 openEHR medication data and test results and v0.0.18 for discharge
-reports and imaging. v0.0.19 plans the receipt of an imaging report
-([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)), the rating of what a received discharge or imaging
-report can lose ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)), and the rest of the
+reports and imaging. v0.0.19 carries the receipt of an imaging report
+([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)) and the rating of what a received discharge or imaging
+report can lose ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)), and plans the rest of the
 manufacturer's conformity work
 ([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [#940](https://github.com/FerroHEALTH/FerroFED/issues/940), [Regulatory status](regulatory-status.md)). The
 changelog fragments in
@@ -645,12 +645,11 @@ These are the ones to know before you deploy FerroFED; the
   ([Laboratory reports over FHIR](../integrate/laboratory-reports.md)),
   with hazard I-16 of the [clinical safety risk file](clinical-safety.md)
   open and I-18 closed at S4, P1. It lists and reads discharge and
-  imaging reports and receives discharge reports
+  imaging reports and receives both
   ([Discharge reports over FHIR](../integrate/discharge-reports.md),
   [Imaging reports over FHIR](../integrate/imaging-reports.md)), with
-  hazards I-19 and I-20 open at S4, P3 and the loss of a received
-  discharge report not yet rated ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)). No imaging report is
-  received yet ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)). No EU
+  hazards I-19 to I-22 open at S4, P3 ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794),
+  [#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)). No EU
   declaration of conformity has been drawn up, and no release carries the
   CE marking
   ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).

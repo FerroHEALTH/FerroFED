@@ -108,7 +108,8 @@ openehr-its = { workspace = true, features = ["json"] }
 openehr-rm.workspace = true
 # The proxy's forwarding client and the seed builder's ITS-REST client.
 reqwest.workspace = true
-# The identifier values of the stub responding gateway's answers (#367).
+# The identifier values of the stub responding gateway's answers (#367),
+# and the password of an outbound client's Basic credential (#1815).
 secrecy.workspace = true
 # The configuration text the fixed cross-reference's rows are read from.
 toml.workspace = true

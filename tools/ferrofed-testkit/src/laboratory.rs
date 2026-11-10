@@ -20,14 +20,13 @@
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use eehrxf::document::Document;
 use eehrxf::document::laboratory::{LAB_SLOTS, LABORATORY_REPORT_FORM};
 use eehrxf::document::section::Section;
 use eehrxf::mappings::LABORATORY;
 use fhir_types::r4::resource::Resource;
 use serde_json::Value;
 
-use crate::sender::{BASE, authored, displayed, resource};
+use crate::sender::{authored, displayed, resource, sent};
 
 /// The workspace root, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -138,12 +137,11 @@ pub fn received_document(
     identifiers: &[(&str, &str)],
     typed: &[TypedRange<'_>],
 ) -> Result<String, Box<dyn Error>> {
-    let mut document = Document::of(
+    let mut document = sent(
         &LABORATORY_REPORT_FORM,
-        BASE,
-        String::from("urn:uuid:5b0c3f7e-0000-4000-8000-00000000f001"),
-        String::from("2026-03-02T10:00:00Z"),
-        String::from("Laboratory report"),
+        "urn:uuid:5b0c3f7e-0000-4000-8000-00000000f001",
+        "2026-03-02T10:00:00Z",
+        "Laboratory report",
     );
     authored(
         &mut document,

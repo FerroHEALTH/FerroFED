@@ -5,25 +5,26 @@
 //! (Annex A.1), as the configuration writes them and resolved, which the
 //! IHE binding builds the resolver from.
 //!
-//! `[[pixm.manager]]` names each PIX Manager's FHIR base, its credentials,
-//! and each member it resolves mapped to that member's `ehr_id` domain;
+//! `[[pixm.manager]]` names each PIX Manager and each member it resolves
+//! mapped to that member's `ehr_id` domain, and its `endpoint` table, the
+//! `ferrohealth-smart` `EndpointSection`, names its FHIR base, its TLS,
+//! its timeouts and retries and its credentials;
 //! `[pixm.namespaces]` maps a client's issuing namespace to the PIX
 //! assigning authority when the namespace is not itself an absolute URI. No
 //! specification governs the shape of the table: our own design.
 
-use ferrohealth_config::tls::TlsClientSection;
-use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
+use ferrohealth_smart::config::endpoint::EndpointSection;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
-use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
+use url::Url;
 
 use crate::config::error::Error;
-use crate::config::service_grant::{ServiceContext, resolve_service};
+use crate::config::service_grant::ServiceContext;
 use crate::config::settings::Scheme;
 use crate::config::transport;
-use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The PIXm resolver: the identity binding of N3 over ITI-83 (Annex A.1).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -39,24 +40,43 @@ pub struct Pixm {
 }
 
 /// One PIX Manager.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PixManager {
-    /// The Manager's FHIR base URL, which no rendering shows with its
-    /// userinfo.
-    pub url: SecretUrl,
+    /// The Manager's FHIR base and how it is reached: `https`, `http` under
+    /// development only.
+    pub endpoint: EndpointSection,
     /// Each member this Manager resolves, mapped to its `ehr_id` domain: the
     /// assigning authority whose identifiers are that member's `ehr_id`s
     /// (Annex A.1).
     pub members: BTreeMap<String, String>,
-    /// How the gateway authenticates to the Manager, when the transport does
-    /// not.
-    pub credentials: Option<CredentialsSection>,
-    /// The TLS material the service is reached with: the table's `tls`
-    /// sub-table.
-    pub tls: TlsClientSection,
     /// How the gateway asks the Manager: `"get"` or `"post"`.
     pub method: PixmMethod,
+    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub url: Removed,
+    /// The retired `credentials`, which `endpoint.credentials` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub credentials: Removed,
+    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub tls: Removed,
+}
+
+impl Default for PixManager {
+    fn default() -> Self {
+        Self {
+            endpoint: crate::config::endpoint::tried_once(units::Duration::from_secs(10)),
+            members: BTreeMap::new(),
+            method: PixmMethod::default(),
+            url: Removed::default(),
+            credentials: Removed::default(),
+            tls: Removed::default(),
+        }
+    }
 }
 
 /// How the gateway invokes ITI-83 at a PIX Manager (`method`).
@@ -87,57 +107,42 @@ pub struct PixmSettings {
 /// One PIX Manager, resolved.
 #[derive(Debug)]
 pub struct PixManagerSettings {
-    /// The Manager's FHIR base URL, already known to parse.
-    pub url: SecretUrl,
+    /// The Manager's FHIR base URL, read from `endpoint`.
+    pub url: Url,
     /// Each member it resolves, mapped to that member's `ehr_id` domain.
     pub members: BTreeMap<String, String>,
     /// How the gateway authenticates to it.
     pub credentials: Option<Scheme>,
-    /// The TLS material it is reached with.
-    pub tls: Arc<TlsClient>,
+    /// How the Manager is reached, as `ferrohealth-smart`'s outbound client
+    /// reads it.
+    pub endpoint: EndpointSection,
     /// How the gateway asks it.
     pub method: PixmMethod,
 }
 
-/// Resolves `[pixm]`: every Manager URL parses, carries no userinfo and is
-/// `https` outside the development `profile`, and every secret is read.
+/// Resolves `[pixm]`: every Manager's endpoint table is one
+/// `ferrohealth-smart` accepts, its URL carries no userinfo and is `https`
+/// outside the development `profile`, and every secret is read.
 pub(crate) fn resolve(pixm: &Pixm, context: ServiceContext) -> Result<PixmSettings, Error> {
     let profile = context.profile;
     let mut managers = Vec::with_capacity(pixm.manager.len());
     for (index, manager) in pixm.manager.iter().enumerate() {
-        let key = format!("pixm.manager[{index}]");
-        let url = url::Url::parse(manager.url.expose()).map_err(|source| Error::Url {
-            key: format!("{key}.url"),
-            source,
-        })?;
-        // NOTE: no specification governs this: our own design; as the registry
-        // refuses it on an endpoint URL, a credential goes in its own section.
-        if !url.username().is_empty() || url.password().is_some() {
-            return Err(Error::UrlCredentials {
-                key: format!("{key}.url"),
-                section: format!("{key}.credentials"),
-            });
-        }
-        let section = format!("{key}.credentials");
-        let credentials = manager
-            .credentials
-            .as_ref()
-            .map(|credentials| resolve_service(&section, credentials, context))
-            .transpose()?;
+        let key = format!("pixm.manager[{index}].endpoint");
+        let endpoint = crate::config::endpoint::service(&key, &manager.endpoint, context)?;
         // NOTE: no specification governs this: our own design; the Manager is sent
         // patient identifiers, held to https at load as the XCPD and NVI tables are.
-        let carried = credentials.is_some().then_some(section.as_str());
+        let section = format!("{key}.credentials");
+        let carried = endpoint.credentials.is_some().then_some(section.as_str());
         transport::protected_payload(
             profile,
-            manager.url.expose(),
+            endpoint.url.as_str(),
             transport::identity_site(&key, carried),
         )?;
-        let tls = crate::config::tls::read(&format!("{key}.tls"), &manager.tls)?;
         managers.push(PixManagerSettings {
-            url: manager.url.clone(),
+            url: endpoint.url,
             members: manager.members.clone(),
-            credentials,
-            tls,
+            credentials: endpoint.credentials,
+            endpoint: manager.endpoint.clone(),
             method: manager.method,
         });
     }

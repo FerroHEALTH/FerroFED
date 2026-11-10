@@ -130,14 +130,17 @@ both is refused.
 
 ```toml
 [registry.mcsd]
-url = "https://directory.example.org/fhir"   # the directory's FHIR base
 refresh_interval = "5min"                    # the default; 0 is refused
 deadline = "30s"                         # one whole read or refresh, the default
 max_pages = 200                             # the defaults of the three caps
 max_size = "64MiB"                        # 64 MiB of answer bodies
 max_entries = 50000
 
-[registry.mcsd.credentials]                 # when the transport does not authenticate
+[registry.mcsd.endpoint]
+url = "https://directory.example.org/fhir"   # the directory's FHIR base
+# timeout = "10s"                            # each page; deadline bounds the whole read
+
+[registry.mcsd.endpoint.credentials]        # when the transport does not authenticate
 user = "ferrofed"
 password_file = "/run/secrets/directory-password"
 ```
@@ -219,7 +222,7 @@ it refused, `failing` after an HTTP error, a malformed answer or one past a
 cap, and `down` when it did not answer before the deadline or could not be
 reached. A `401` or a `403` is `failing` with
 `directory_fault = "refused-credentials"`: the directory refused the
-credentials of `[registry.mcsd]`.
+credentials of `[registry.mcsd.endpoint]`.
 While the directory is `degraded`, `directory_fault` says which kind of
 refusal holds the change back: `registry-invalid` for a content that breaks a
 registry rule (the `registry-invalid` class above), and

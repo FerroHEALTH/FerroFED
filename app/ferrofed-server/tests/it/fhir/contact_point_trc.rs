@@ -409,7 +409,7 @@ async fn a_trc_patient_that_cannot_be_resolved_is_its_own_security_event() -> Te
         .mount(&failing)
         .await;
     let resolver = format!(
-        "\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\
+        "\n[[pixm.manager]]\nendpoint.url = \"{}/fhir/\"\n\n[pixm.manager.members]\n\
          \"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n",
         failing.uri()
     );

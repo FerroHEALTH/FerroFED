@@ -454,54 +454,6 @@ EOF</code></pre>
       </div>
     </section>
 
-    <!-- The tracker's milestones are the roadmap. The list between the markers
-         is rendered from the GitHub milestones when the site is assembled
-         (scripts/site/assemble.sh); the committed copy carries the link only. -->
-    <section id="status">
-      <div class="wrap">
-        <div class="status-panel">
-          <h2>Where the project is</h2>
-          <p>
-            v0.0.19 is the current release. It answers one federated AQL query
-            over many nodes with the patient resolved outside AQL, merges the
-            rows as one CDR would, and routes reads, writes and definitions to
-            the node that owns them. Every caller is authenticated, each node
-            is told who is asking in a token the gateway signs, and the IHE and
-            Dutch bindings locate the patient, check consent and audit each
-            exchange. v0.0.9 added the operator console and the conformance
-            statement. v0.0.10 added the EHDS access log, the patient summary
-            in the European exchange format, and what a production deployment
-            needs. v0.0.11 adds electronic prescriptions and dispensations on
-            the FHIR face, configuration from the console as versioned
-            revisions, and the redesigned console. v0.0.12 rebuilds the
-            console on FerroUI as ferrofed-console, moves client
-            authentication onto the family's shared crate, and judges every
-            scan finding of a release. v0.0.13 serves a national contact
-            point's connector, validates a received document in full and
-            ships the Kubernetes package. v0.0.14 resolves every patient
-            through FerroPIX and keeps no patient index of its own, and adds
-            the safety controls of the clinical review to the patient
-            summary. v0.0.15 runs the gateway and the console on the
-            family's shared server crates and publishes FerroFED's
-            MyHealth@EU self-assessment. v0.0.16 serves laboratory reports
-            and prescriptions from openEHR medication data on the FHIR face,
-            and implements the Federation Tier 1.0.1 routing. v0.0.19 serves
-            discharge and imaging reports, holds a national contact point to
-            the MyHealth@EU profile, and keeps shared state in FerroFED's own
-            PostgreSQL store. The tracker's milestones are the
-            roadmap; every issue carries its acceptance criteria, and a
-            release is cut when its milestone has no open issue left.
-          </p>
-          <!-- roadmap:begin -->
-          <!-- roadmap:end -->
-          <div class="hero-cta">
-            <a class="btn btn-primary" href="https://github.com/FerroHEALTH/FerroFED/releases/latest" rel="noopener">Get the latest release</a>
-            <a class="btn btn-ghost" href="https://github.com/FerroHEALTH/FerroFED/milestones" rel="noopener">See the roadmap</a>
-          </div>
-        </div>
-      </div>
-    </section>
-
   </main>
 
   <footer class="footer">

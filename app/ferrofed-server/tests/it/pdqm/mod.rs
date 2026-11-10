@@ -109,14 +109,14 @@ pub(crate) fn tables(pix: &str, pdq: &str, transaction: &str) -> String {
 /// The `[pixm]` table of the PIX Manager at `pix` serving node A and node B.
 pub(crate) fn pixm(pix: &str) -> String {
     format!(
-        "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
+        "[[pixm.manager]]\nendpoint.url = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n"
     )
 }
 
 /// The `[pdqm]` table of the Supplier whose FHIR base is `base`.
 pub(crate) fn pdqm(base: &str, transaction: &str) -> String {
     format!(
-        "[pdqm]\nurl = \"{base}\"\ntransaction = \"{transaction}\"\nmaster = \"{MASTER}\"\ntimeout = '1s'\n\n[pdqm.namespaces]\n\"{LOCAL}\" = \"{LOCAL}\"\n"
+        "[pdqm]\nendpoint.url = \"{base}\"\ntransaction = \"{transaction}\"\nmaster = \"{MASTER}\"\nendpoint.timeout = '1s'\n\n[pdqm.namespaces]\n\"{LOCAL}\" = \"{LOCAL}\"\n"
     )
 }
 

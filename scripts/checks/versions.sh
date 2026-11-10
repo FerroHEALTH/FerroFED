@@ -58,9 +58,9 @@
 #  10. licence             LICENSE is the Business Source License 1.1 and no
 #                          first-party file claims MIT or Apache-2.0 as its
 #                          own.
-#  11. landing release     every "vX.Y.Z released" and "vX.Y.Z is the current
-#                          release" on website/landing/index.html names the
-#                          newest `## [x.y.z]` release of CHANGELOG.md.
+#  11. landing release     every "vX.Y.Z released" on
+#                          website/landing/index.html names the newest
+#                          `## [x.y.z]` release of CHANGELOG.md.
 #  12. book pins           every row of the pin table on the book pages
 #                          website/book/src/evaluate/versions.md and
 #                          website/book/src/evaluate/information-sheet.md
@@ -274,9 +274,8 @@ newest_release() {
   sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' "$changelog" | head -n1
 }
 
-# landing_release PAGE CHANGELOG: every "vX.Y.Z released" and "vX.Y.Z is the
-# current release" on PAGE names the newest release of CHANGELOG, and PAGE
-# names it at least once. An "In vX.Y.Z" tag says where a feature shipped and
+# landing_release PAGE CHANGELOG: every "vX.Y.Z released" on PAGE names the
+# newest release of CHANGELOG, and PAGE names it at least once. An "In vX.Y.Z" tag says where a feature shipped and
 # is not a release claim.
 landing_release() {
   local page=$1 log=$2 want found v count=0 stale=0
@@ -285,7 +284,7 @@ landing_release() {
     bad "$log has no ## [x.y.z] release heading"
     return
   fi
-  found="$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+ (released|is the current release)' "$page" |
+  found="$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+ released' "$page" |
     sed -E 's/^v([0-9.]+) .*/\1/' || true)"
   if [[ -z "$found" ]]; then
     bad "$page names no current release; it should say v$want, the newest release in $log"
@@ -613,14 +612,12 @@ self_test() {
   }
 
   printf '%s\n' '## [Unreleased]' '' '## [0.0.4] - 2026-10-09' '' '## [0.0.3] - 2026-10-02' > "$work/CHANGELOG.md"
-  printf '%s\n' '<p>v0.0.4 released. Signed.</p>' '<span>In v0.0.3</span>' '<p>v0.0.4 is the current release.</p>' > "$work/agree.html"
-  printf '%s\n' '<p>v0.0.3 released. Signed.</p>' '<p>v0.0.4 is the current release.</p>' > "$work/stale-note.html"
-  printf '%s\n' '<p>v0.0.4 released.</p>' '<p>v0.0.3 is the current release.</p>' > "$work/stale-panel.html"
+  printf '%s\n' '<p>v0.0.4 released. Signed.</p>' '<span>In v0.0.3</span>' > "$work/agree.html"
+  printf '%s\n' '<p>v0.0.3 released. Signed.</p>' > "$work/stale-note.html"
   printf '%s\n' '<p>In v0.0.4</p>' > "$work/silent.html"
   printf '%s\n' '## [Unreleased]' > "$work/unreleased.md"
   expect "a landing page that names the newest release" 0 landing_release "$work/agree.html" "$work/CHANGELOG.md"
   expect "a stale release note" 1 landing_release "$work/stale-note.html" "$work/CHANGELOG.md"
-  expect "a stale status panel" 1 landing_release "$work/stale-panel.html" "$work/CHANGELOG.md"
   expect "a landing page that names no release" 1 landing_release "$work/silent.html" "$work/CHANGELOG.md"
   expect "a changelog with no release" 1 landing_release "$work/agree.html" "$work/unreleased.md"
 
