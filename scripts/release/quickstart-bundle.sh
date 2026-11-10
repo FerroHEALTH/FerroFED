@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# Builds the quickstart bundle a release attaches: a reader downloads it from
+# the latest release and runs the quickstart from it, so the compose file,
+# every file it mounts and the images it runs come from one release, and the
+# reader never clones the repository (owner decision, 2026-11-10; #1849). No
+# specification governs this file: our own design.
+#
+#   scripts/release/quickstart-bundle.sh OUT [--image NAME=REF]...
+#       Writes OUT/ferrofed-quickstart/ (compose.yaml, every repository file
+#       it mounts at its own path, the scripts the quickstart runs, and the
+#       demonstration compositions the seed commits),
+#       OUT/quickstart.tar.gz holding that directory, and OUT/compose.yaml.
+#       Each --image replaces the image line of the compose service NAME
+#       (ferrofed) with REF: the release pins
+#       ghcr.io/ferrohealth/ferrofed:<version>@sha256:<digest>, CI the image
+#       it built. A ./ path compose.yaml mounts that the bundle lacks fails
+#       the build.
+#   scripts/release/quickstart-bundle.sh --self-test
+#       Builds the bundle from this checkout and proves the image pinning and
+#       the refusal of a mount the bundle would lack.
+#
+# Exit 0 on a bundle, 1 naming what is wrong, 2 on a usage error.
+set -euo pipefail
+
+readonly DIR=ferrofed-quickstart
+# The repository files and directories the bundle carries beside compose.yaml.
+readonly FILES=(
+  docker/postgres/20-ferrofed-node-databases.sh
+  docker/quickstart
+  docs/specs/federation-ref/PROVENANCE.md
+  docs/specs/federation-ref/docker/demo-data
+  scripts/quickstart/seed.sh
+  scripts/quickstart/signing-key.sh
+  scripts/quickstart/token.sh
+  scripts/quickstart/tour.sh
+)
+# The mounted paths the reader makes: none; the scripts write the keys into
+# the directories the bundle carries.
+readonly READER_PATHS='^$'
+
+usage() {
+  echo "usage: $0 OUT [--image NAME=REF]... | --self-test" >&2
+  exit 2
+}
+
+# mounts COMPOSE: every ./ path COMPOSE mounts or reads, one per line.
+mounts() {
+  sed -E 's/#.*//' "$1" | grep -oE '(^|[[:space:]:-])\./[A-Za-z0-9._/-]+' | sed -E 's/^[[:space:]:-]//' | sort -u
+}
+
+# build ROOT OUT IMAGE...: the bundle of the checkout at ROOT into OUT.
+build() {
+  local root=$1 out=$2 spec name ref path bundle
+  shift 2
+  bundle="$out/$DIR"
+  rm -rf "$bundle"
+  mkdir -p "$bundle"
+  cp "$root/compose.yaml" "$bundle/compose.yaml"
+  # Tracked files only, so a key the quickstart generated in a checkout
+  # never reaches a bundle.
+  for path in "${FILES[@]}"; do
+    git -C "$root" ls-files --error-unmatch -- "$path" > /dev/null 2>&1 || {
+      echo "quickstart-bundle: $path is not a tracked file of the checkout" >&2
+      return 1
+    }
+    while IFS= read -r -d '' file; do
+      mkdir -p "$bundle/$(dirname "$file")"
+      cp -p "$root/$file" "$bundle/$file"
+    done < <(git -C "$root" ls-files -z -- "$path")
+  done
+  for spec in "$@"; do
+    name="${spec%%=*}"
+    ref="${spec#*=}"
+    [[ -n "$name" && -n "$ref" && "$name" != "$spec" ]] || usage
+    # The image line of service NAME: the first `image:` after `  NAME:`.
+    NAME="$name" REF="$ref" perl -0pi -e \
+      'BEGIN { $n = quotemeta $ENV{NAME}; $r = $ENV{REF} } s/(\n  $n:(?:(?!\n  \S).)*?\n    image: )[^\n]+/$1$r/s or die "no image line under service $ENV{NAME}\n"' \
+      "$bundle/compose.yaml" || {
+      echo "quickstart-bundle: compose.yaml has no service $name with an image" >&2
+      return 1
+    }
+  done
+  while IFS= read -r path; do
+    [[ -z "$path" ]] && continue
+    [[ "$path" =~ $READER_PATHS ]] && continue
+    if [[ ! -e "$bundle/$path" ]]; then
+      echo "quickstart-bundle: compose.yaml mounts $path, which the bundle lacks; add it to FILES" >&2
+      return 1
+    fi
+  done < <(mounts "$bundle/compose.yaml")
+  tar -C "$out" -czf "$out/quickstart.tar.gz" "$DIR"
+  cp "$bundle/compose.yaml" "$out/compose.yaml"
+}
+
+self_test() {
+  local root work fails=0
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' RETURN
+  if ! build "$root" "$work/a" "ferrofed=ghcr.io/ferrohealth/ferrofed:9.9.9@sha256:aa" 2> "$work/err"; then
+    echo "quickstart-bundle: self-test failed: the checkout's bundle did not build: $(cat "$work/err")" >&2
+    fails=1
+  else
+    grep -qx '    image: ghcr.io/ferrohealth/ferrofed:9.9.9@sha256:aa' "$work/a/$DIR/compose.yaml" ||
+      { echo "quickstart-bundle: self-test failed: the gateway image is not pinned." >&2; fails=1; }
+    tar -tzf "$work/a/quickstart.tar.gz" | grep -qx "$DIR/docker/quickstart/ferrofed.toml" ||
+      { echo "quickstart-bundle: self-test failed: the archive lacks the configuration." >&2; fails=1; }
+  fi
+  for path in "${FILES[@]}"; do
+    mkdir -p "$work/fixture/$(dirname "$path")"
+    : > "$work/fixture/$path"
+  done
+  git -C "$work/fixture" init -q
+  git -C "$work/fixture" add -A
+  printf 'services:\n  ferrofed:\n    image: x\n    volumes:\n      - ./extra.toml:/etc/extra.toml:ro\n' > "$work/fixture/compose.yaml"
+  if build "$work/fixture" "$work/b" 2> /dev/null; then
+    echo "quickstart-bundle: self-test failed: a mount the bundle lacks passed." >&2
+    fails=1
+  fi
+  if build "$work/fixture" "$work/c" "nosuch=ref" 2> /dev/null; then
+    echo "quickstart-bundle: self-test failed: an image for a missing service passed." >&2
+    fails=1
+  fi
+  [[ "$fails" == 0 ]] || exit 1
+  echo "quickstart-bundle: self-test OK."
+}
+
+[[ $# -ge 1 ]] || usage
+if [[ "$1" == --self-test ]]; then
+  self_test
+  exit 0
+fi
+out=$1
+shift
+images=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --image)
+      images+=("${2:?usage: --image NAME=REF}")
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+mkdir -p "$out"
+out="$(cd "$out" && pwd)"
+build "$root" "$out" ${images[@]+"${images[@]}"}
+echo "quickstart-bundle: $out/quickstart.tar.gz and $out/compose.yaml"

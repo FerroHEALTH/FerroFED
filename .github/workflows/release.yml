@@ -615,6 +615,28 @@ jobs:
             "kubernetes/ferrofed-${TAG}-kubernetes.tar.gz.sha256sum" \
             --repo "$GITHUB_REPOSITORY" --clobber
 
+      # The quickstart bundle a reader downloads from the latest release:
+      # compose.yaml with the gateway pinned to the digest this release
+      # pushed, every file it mounts and the scripts the quickstart runs, as
+      # quickstart.tar.gz with its SHA-256 (scripts/release/quickstart-bundle.sh,
+      # #1849). The README's quick start downloads it, so a reader never
+      # clones the repository.
+      - name: Attach the quickstart bundle pinned by digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          GATEWAY_DIGEST: ${{ needs.build-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          bash scripts/release/quickstart-bundle.sh quickstart \
+            --image "ferrofed=ghcr.io/ferrohealth/ferrofed:${VERSION}@${GATEWAY_DIGEST}"
+          (cd quickstart && sha256sum quickstart.tar.gz > quickstart.tar.gz.sha256sum)
+          gh release upload "$TAG" \
+            quickstart/quickstart.tar.gz \
+            quickstart/quickstart.tar.gz.sha256sum \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
       - name: The draft carries every asset this version promises
         env:
           GH_TOKEN: ${{ github.token }}
@@ -671,6 +693,7 @@ jobs:
             "ferrofed-${TAG}-trivy-reports.tar.gz" \
             "ferrofed-${TAG}-kubernetes.tar.gz" \
             "ferrofed-${TAG}-kubernetes.tar.gz.sha256sum" \
+            quickstart.tar.gz quickstart.tar.gz.sha256sum \
             ${declaration:+"$declaration"}; do
             printf '%s\n' "$assets" | grep -Fxq "$asset" || missing="$missing $asset"
           done

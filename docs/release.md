@@ -103,13 +103,18 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   `ferrofed-vX.Y.Z-kubernetes.tar.gz.sha256sum`: the kustomize tree of
   `deploy/kubernetes` with the gateway and console images pinned to the
   digests the image jobs pushed, which `scripts/release/kubernetes-package.sh`
-  writes and refuses when a manifest's tag is not the release's version.
+  writes and refuses when a manifest's tag is not the release's version,
+  and the quickstart bundle, `quickstart.tar.gz` with its SHA-256: the
+  quickstart's `compose.yaml` with the gateway pinned to the pushed digest,
+  every file it mounts and the scripts it runs, which
+  `scripts/release/quickstart-bundle.sh` writes and refuses when a mount is
+  missing.
   It then checks that the draft carries every asset this version
   promises, eight per target, the three compose files, the nginx
   configuration and its checksum, the two seed data files, the dashboard
   and alert rules, the information sheet and instructions for use of
   the tag, the vulnerability record and its reports, the Kubernetes
-  package and its checksum, and the EU
+  package and its checksum, the quickstart bundle and its checksum, and the EU
   declaration of conformity when `plan` found it issued, and publishes only
   then, and only once both images are scanned and tagged. A draft missing any of them fails the check and stays a draft, so a
   half-assembled release is never visible. A release `plan` did not find the

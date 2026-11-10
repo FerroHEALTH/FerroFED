@@ -10,8 +10,9 @@
 #
 # The README shows the commands between each `ANCHOR:` and `ANCHOR_END:` line,
 # each fenced block under a `<!-- tour:<anchor> -->` line, and the
-# release-compose job of ci.yml runs this script over the gateway the change
-# builds, so a command the README shows is a command CI ran. GitHub renders no
+# release-compose job of ci.yml runs this script from the quickstart bundle
+# (scripts/release/quickstart-bundle.sh) over the gateway the change builds,
+# so a command the README shows is a command CI ran. GitHub renders no
 # include, so --self-test refuses a README copy that differs from the script
 # by a byte, and an anchor the README lacks.
 #
