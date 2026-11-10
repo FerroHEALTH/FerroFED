@@ -138,7 +138,7 @@ impl MutualTls {
     /// A [`TlsHarnessError`] when the origin does not read, or the
     /// certificates, the TLS configuration or the listener cannot be made.
     pub fn front(origin: &str) -> Result<Self, TlsHarnessError> {
-        Self::over(origin, &material()?)
+        Self::over(origin, &material()?, Ipv4Addr::LOCALHOST)
     }
 
     /// Starts two fronts on two free loopback ports, two origins, that pass
@@ -152,8 +152,8 @@ impl MutualTls {
     pub fn pair(origin: &str) -> Result<(Self, Self), TlsHarnessError> {
         let material = material()?;
         Ok((
-            Self::over(origin, &material)?,
-            Self::over(origin, &material)?,
+            Self::over(origin, &material, Ipv4Addr::LOCALHOST)?,
+            Self::over(origin, &material, Ipv4Addr::LOCALHOST)?,
         ))
     }
 
@@ -181,7 +181,7 @@ impl MutualTls {
             client_thumbprint: String::new(),
             config: pki::server_tls((&server, &server_key), None)?,
         };
-        Self::listening(origin, &material, Ipv4Addr::UNSPECIFIED)
+        Self::over(origin, &material, Ipv4Addr::UNSPECIFIED)
     }
 
     /// Returns the port the front listens on.
@@ -190,15 +190,9 @@ impl MutualTls {
         self.address.port()
     }
 
-    /// Starts a front over `material` that passes every connection to
-    /// `origin`.
-    pub(crate) fn over(origin: &str, material: &Material) -> Result<Self, TlsHarnessError> {
-        Self::listening(origin, material, Ipv4Addr::LOCALHOST)
-    }
-
     /// Starts a front over `material` on `interface` that passes every
     /// connection to `origin`; its origin names the loopback address.
-    fn listening(
+    pub(crate) fn over(
         origin: &str,
         material: &Material,
         interface: Ipv4Addr,
