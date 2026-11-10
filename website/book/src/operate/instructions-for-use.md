@@ -350,9 +350,11 @@ deployment in the EU must plan for are:
   report's diagnoses, procedures and discharge medicines, but its hospital
   course and every section the template holds no place for only in the
   original document, which the answer does not name (hazard I-21). It
-  receives no imaging report: a `Medical-Imaging`
-  `[[fhir.receive]]` entry refuses the start
-  ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716); [The categories received](../evaluate/information-sheet.md#the-categories-received)).
+  receives an imaging report the same way, keeping its study and
+  impression in the member's composition but its report identifier, its
+  performing organization and each section's narrative only in the
+  original document, which the answer does not name (hazard I-22;
+  [The categories received](../evaluate/information-sheet.md#the-categories-received)).
   The open hazards of the interoperability component are in the
   [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).
 - **The logging component is read at your Audit Record Repository.** The

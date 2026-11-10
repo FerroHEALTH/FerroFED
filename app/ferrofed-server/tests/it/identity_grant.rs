@@ -360,11 +360,10 @@ fn a_service_grant_holds_each_key_to_its_rule() -> TestResult {
     let error = Config::from_sources(Some(&oauth2), &BTreeMap::new())
         .err()
         .ok_or("the removed oauth2 table is refused at load")?;
-    assert!(
-        matches!(&error, ConfigError::Replaced { old, new }
-            if old == "pixm.manager[0].endpoint.credentials.oauth2"
-                && new == "pixm.manager[0].endpoint.credentials.oauth"),
-        "a service takes no oauth2 grant: {error:?}"
+    assert_eq!(
+        Some("pixm.manager[0].endpoint.credentials.oauth2"),
+        crate::support::refused_key(&error),
+        "an unknown key since 0.0.19: {error:?}"
     );
     Ok(())
 }

@@ -489,10 +489,8 @@ trust_roots_file = "/etc/ferrofed/pix-roots.pem"      # optional
 - Every file is read at boot and on each reload of a reloadable table. A
   file that cannot be read, or material that holds no certificate and key
   in PEM, is refused naming its key, without quoting the file.
-- The keys sat on the table itself before release 0.0.18. A configuration
-  that still sets `client_identity`, `client_identity_file` or
-  `trust_roots_file` there is refused, naming the `tls` key that replaces
-  it ([Upgrading](upgrading.md)).
+- The keys sat on the table itself before release 0.0.18; set there, they
+  are refused as unknown keys ([Upgrading](upgrading.md)).
 
 Each of these services is reached through the outbound client of
 `ferrohealth-smart` its endpoint table builds, with no redirect followed, the
