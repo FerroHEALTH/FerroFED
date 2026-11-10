@@ -190,3 +190,72 @@ async fn a_discharge_receipt_is_recorded_once_as_a_creation_of_its_category() ->
     }
     Ok(())
 }
+
+// NOTE: hazard I-21 of the clinical safety risk file: what a full received report carries into
+// the member's structured record, and the hospital course it keeps in the original alone.
+#[tokio::test]
+async fn a_full_received_discharge_report_reaches_the_members_composition_but_its_course()
+-> TestResult {
+    let sent = report()?;
+    let (a, b) = (creating().await, Server::start().await);
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), (&a, &b), "")?;
+    let (status, text) = call(app, post(&sent)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let requests = a.received_requests().await.ok_or("recording is on")?;
+    let write = requests.first().ok_or("the write")?;
+    let mut composition: Value = serde_json::from_slice(&write.body)?;
+    let original = composition
+        .pointer_mut("/feeder_audit/original_content/value")
+        .map(Value::take)
+        .ok_or("the original document")?;
+    assert_eq!(original.as_str(), Some(sent.as_str()), "kept byte for byte");
+    let mapped = composition.to_string();
+    let elements = discharge::DIAGNOSES
+        .iter()
+        .flat_map(|diagnosis| {
+            [
+                diagnosis.code,
+                diagnosis.onset,
+                diagnosis.recognised,
+                diagnosis.body_site,
+                diagnosis.comment,
+            ]
+        })
+        .chain(discharge::PROCEDURES.iter().flat_map(|procedure| {
+            [
+                procedure.code,
+                procedure.performed,
+                procedure.body_site,
+                procedure.comment,
+            ]
+        }))
+        .chain(
+            discharge::MEDICINES
+                .iter()
+                .flat_map(|medicine| [medicine.code, medicine.directions, medicine.comment]),
+        )
+        .chain([discharge::ADMITTED, discharge::DISCHARGED]);
+    for element in elements {
+        assert!(mapped.contains(element), "{element} is carried: {mapped}");
+    }
+    assert!(
+        sent.contains(discharge::HOSPITAL_COURSE) && !mapped.contains(discharge::HOSPITAL_COURSE),
+        "the hospital course reaches the member in the original document alone: {mapped}"
+    );
+    let outcome: Value = serde_json::from_str(&text)?;
+    let declared: Vec<&str> = outcome["issue"]
+        .as_array()
+        .ok_or("the issues")?
+        .iter()
+        .filter(|issue| issue["code"] == "incomplete")
+        .filter_map(|issue| issue.pointer("/expression/0").and_then(Value::as_str))
+        .collect();
+    for expression in ["Condition.severity", "Condition.verificationStatus.coding"] {
+        assert!(
+            declared.contains(&expression),
+            "{expression} is relayed as not carried: {declared:?}"
+        );
+    }
+    Ok(())
+}

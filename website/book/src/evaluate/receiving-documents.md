@@ -206,6 +206,13 @@ controls include the full validation above
 ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The safety
 review of 2026-10-25 closed both at S4, P1
 ([#1327](https://github.com/FerroHEALTH/FerroFED/issues/1327)). A received laboratory report adds I-16 (a result the
-record does not hold whole), open at S4, P3. What a received imaging or
-discharge report can lose of its own content is not yet rated
-([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)).
+record does not hold whole), open at S4, P3. A received discharge report
+adds I-21, open at S4, P3: its diagnoses, procedures and discharge
+medicines reach the member's composition with every element the mapping
+reads, and a diagnosis's severity and certainty are relayed as not
+carried, but its hospital course and every section the template holds no
+place for reach the member's record only in the original document, and
+the answer does not name them
+([FerroHEALTH/FerroBRIDGE#1820](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1820)).
+What a received imaging report can lose is rated when the gateway receives
+one ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
