@@ -8,7 +8,9 @@
 use std::error::Error;
 
 use ferrofed_testkit::containers;
-use ferrofed_testkit::containers::ferropix::{self, CONSUMER, FerroPix, SOURCE, Xcpd};
+use ferrofed_testkit::containers::ferropix::{
+    self, CONSUMER, CONSUMER_SECRET, FerroPix, SOURCE, Xcpd,
+};
 use ferrofed_testkit::proxy::{Bind, CapturingProxy};
 use ferrofed_testkit::seed::{self, CrossReferenceSeed, DemoComposition, EhrDomain, PatientId};
 use http::StatusCode;
@@ -46,6 +48,17 @@ impl Pix {
     /// own in front of it.
     pub(crate) fn origin(&self) -> &str {
         self.manager.origin()
+    }
+
+    /// Returns the token endpoint the consumer's client credentials grant
+    /// asks.
+    pub(crate) fn token_endpoint(&self) -> String {
+        self.manager.token_endpoint()
+    }
+
+    /// Returns the file of the CA the token endpoint's TLS chains to.
+    pub(crate) fn trust_roots_file(&self) -> std::path::PathBuf {
+        self.manager.trust_roots_file()
     }
 
     /// Returns the SOAP endpoint of FerroPIX's XCPD Responding Gateway.
@@ -118,7 +131,7 @@ pub(crate) async fn nodes_and_responding_pix(
     for cross_reference in &fed {
         let statuses = seed::feed_records_as(
             &manager.fhir_base(),
-            (SOURCE.user, SOURCE.password),
+            &manager.token(SOURCE)?,
             cross_reference,
         )
         .await?;
@@ -134,19 +147,25 @@ pub(crate) async fn nodes_and_responding_pix(
 /// The resolver configuration over FerroPIX, through its proxy, under the
 /// development profile, the only one that admits its plain `http`.
 pub(crate) fn pixm_resolver(pix: &Pix) -> String {
-    pixm_resolver_at(&pix.base_url())
+    pixm_resolver_at(
+        &pix.base_url(),
+        &pix.token_endpoint(),
+        &pix.trust_roots_file(),
+    )
 }
 
 /// The resolver configuration of [`pixm_resolver`], the Manager reached at
 /// `url`, for a scenario that puts a capturing proxy of its own in front of
-/// it. The gateway asks as FerroPIX's PIXm Consumer.
-pub(crate) fn pixm_resolver_at(url: &str) -> String {
+/// it. The gateway asks as FerroPIX's PIXm Consumer, under the client
+/// credentials token `token_endpoint` gives it over a TLS chain to the CA in
+/// `roots`.
+pub(crate) fn pixm_resolver_at(url: &str, token_endpoint: &str, roots: &std::path::Path) -> String {
     format!(
-        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.credentials]\nuser = \"{}\"\npassword = \"{}\"\n",
+        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.credentials.oauth]\ntoken_endpoint = \"{token_endpoint}\"\nclient_id = \"{}\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"{CONSUMER_SECRET}\"\nscope = \"system/Patient.rs\"\n\n[pixm.manager.credentials.oauth.tls]\ntrust_roots_file = {}\n",
         DOMAIN_A.system(),
         DOMAIN_B.system(),
-        CONSUMER.user,
-        CONSUMER.password
+        CONSUMER.id,
+        toml::Value::String(roots.display().to_string()),
     )
 }
 

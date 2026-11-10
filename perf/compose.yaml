@@ -9,9 +9,10 @@
 # target/perf-run/onward, so the gateway reaches node A through its onward
 # lane (#1712). No specification governs this: our own design.
 services:
-  ferropix:
+  ferropix-issuer:
     ports:
       - "127.0.0.1:8090:8080"
+      - "127.0.0.1:8180:8180"
   ferroehr-a:
     environment:
       FERROEHR_CONFIG: /etc/ferroehr/onward.toml

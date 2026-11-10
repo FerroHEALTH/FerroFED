@@ -58,6 +58,19 @@ const STUDY: &str = "imagingstudy";
 /// first of the form's slots.
 const REQUIRED: usize = 4;
 
+/// The `fullUrl` `document` gives the `ImagingStudy` the mapping run `run`
+/// wrote, which the study section lists; `None` when the run wrote none.
+#[must_use]
+pub fn study(document: &Document, run: &Bundle) -> Option<String> {
+    run.entry
+        .iter()
+        .find_map(|entry| match entry.resource.as_ref() {
+            Some(Resource::ImagingStudy(study)) => study.id.clone(),
+            _ => None,
+        })
+        .map(|id| document.full_url("ImagingStudy", &id))
+}
+
 /// Returns the query's qualified name, `eu.ferrofed.eehrxf::imaging-report`.
 ///
 /// # Errors
@@ -141,15 +154,7 @@ impl Writes for Served {
             "Software that writes the imaging report from the member's record automatically",
             (&self.mapping, composition),
         )?;
-        let study = mapped
-            .bundle()
-            .entry
-            .iter()
-            .find_map(|entry| match entry.resource.as_ref() {
-                Some(Resource::ImagingStudy(study)) => study.id.clone(),
-                _ => None,
-            })
-            .map(|id| document.full_url("ImagingStudy", &id));
+        let study = study(&document, mapped.bundle());
         let mut targets = document
             .with_mapped_report(mapped.bundle())
             .map_err(ServedError::Document)?;

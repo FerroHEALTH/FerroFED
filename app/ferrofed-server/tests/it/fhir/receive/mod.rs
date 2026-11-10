@@ -27,7 +27,7 @@ mod write;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::Router;
@@ -110,6 +110,56 @@ pub(super) fn receiving(member: &str, namespaces: &[&str]) -> String {
             path(&model),
             path(&context),
             eps::CONTEXT
+        ),
+    )
+}
+
+/// A category a face receives at node A over an ADL 2 template: the
+/// vendored package with its dependency closure, the template with its
+/// archetypes, and the mapping files and context that carry it.
+pub(super) struct Adl2Category {
+    /// The `category` of the `[[fhir.receive]]` entry.
+    pub(super) category: &'static str,
+    /// The package the received document is held to.
+    pub(super) package: PathBuf,
+    /// The package's dependency closure.
+    pub(super) dependencies: Vec<PathBuf>,
+    /// The ADL 2 operational template.
+    pub(super) template: PathBuf,
+    /// The archetypes the template flattens.
+    pub(super) archetypes: Vec<PathBuf>,
+    /// The mapping files written for the category.
+    pub(super) files: Vec<PathBuf>,
+    /// The mapping's context name.
+    pub(super) context: &'static str,
+}
+
+/// The `[fhir]` tables of a face that receives `received` at node A, with
+/// the tables `beside` after its `[[fhir.receive]]` entry.
+pub(super) fn receiving_adl2(received: &Adl2Category, beside: &str) -> String {
+    let path = |value: &Path| toml::Value::String(value.display().to_string()).to_string();
+    let joined = |paths: &[PathBuf]| {
+        paths
+            .iter()
+            .map(|file| path(file))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    fhir_tables_with(
+        UNREACHED_SUPPLIER,
+        &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
+        &format!(
+            "\n[[fhir.receive]]\ncategory = \"{}\"\nmember = \"node-a\"\n\
+             package = {}\ndependencies = [{}]\ntemplate = {}\n\
+             archetypes = [{}]\nfiles = [{}]\ncontext = \"{}\"\n\
+             language = \"en\"\nterritory = \"NL\"\n{beside}",
+            received.category,
+            path(&received.package),
+            joined(&received.dependencies),
+            path(&received.template),
+            joined(&received.archetypes),
+            joined(&received.files),
+            received.context,
         ),
     )
 }

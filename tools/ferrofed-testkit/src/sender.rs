@@ -13,6 +13,7 @@
 use std::error::Error;
 
 use eehrxf::document::Document;
+use eehrxf::document::form::Form;
 use fhir_types::codec::{Json, Path as CodecPath, Value as CodecValue};
 use fhir_types::r4::device::{Device, DeviceDeviceName};
 use fhir_types::r4::organization::Organization;
@@ -23,6 +24,19 @@ use serde_json::Value;
 /// The base the sender names its entries under, in the `example.org`
 /// domain RFC 6761 §6.5 reserves.
 pub(crate) const BASE: &str = "https://sender.example.org/fhir";
+
+/// The document of `form` the sender writes at `sent_at`, a FHIR
+/// `instant`, named by the URN `identifier` and titled `title`, its entries
+/// named under [`BASE`].
+pub(crate) fn sent(form: &'static Form, identifier: &str, sent_at: &str, title: &str) -> Document {
+    Document::of(
+        form,
+        BASE,
+        identifier.to_owned(),
+        sent_at.to_owned(),
+        title.to_owned(),
+    )
+}
 
 /// Decodes the FHIR JSON `value` as the R4 resource of `kind`.
 pub(crate) fn resource(kind: &str, value: &Value) -> Result<Resource, Box<dyn Error>> {

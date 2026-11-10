@@ -379,7 +379,7 @@ async fn the_national_connector_reads_the_summary_and_prescriptions_and_dispense
     .await?;
     let statuses = seed::feed_records_as(
         &pix.fhir_base(),
-        (SOURCE.user, SOURCE.password),
+        &pix.token(SOURCE)?,
         &CrossReferenceSeed {
             patient: PATIENT,
             ehrs: vec![(DOMAIN_A, EHR_A), (DOMAIN_B, EHR_B)],
@@ -393,7 +393,14 @@ async fn the_national_connector_reads_the_summary_and_prescriptions_and_dispense
     harness.clear_journals();
     let dir = tempfile::tempdir()?;
     let gateway = harness
-        .gateway(dir.path(), &pixm_resolver_at(&pix.fhir_base()))
+        .gateway(
+            dir.path(),
+            &pixm_resolver_at(
+                &pix.fhir_base(),
+                &pix.token_endpoint(),
+                &pix.trust_roots_file(),
+            ),
+        )
         .await?;
 
     let read = drive(&harness, &gateway.connector).await?;
