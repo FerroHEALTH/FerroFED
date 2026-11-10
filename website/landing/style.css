@@ -1,77 +1,94 @@
 /* SPDX-FileCopyrightText: Cadasto B.V. */
 /* SPDX-License-Identifier: BUSL-1.1 */
 
-/* FerroFED landing page: tokens and layout. Self-contained: a system font
-   stack, no external asset, and light and dark through prefers-color-scheme.
-   Relative URLs only. The accent is the "Azure & Iron" palette of
-   assets/brand/tokens.css. */
+/* FerroFED landing page: tokens and layout, the family site's layout with
+   FerroFED's own palette. Self-contained: a system font stack, no external
+   asset, and light and dark through prefers-color-scheme. Relative URLs only.
+   The accent is the azure of assets/brand/tokens.css. */
 
 :root {
-  /* accent: azure, with darker and lighter steps for hover and fills */
-  --fb-accent: #0369a1;
-  --fb-accent-600: #075985;
-  --fb-accent-050: #f0f9ff;
-  --fb-on-accent: #ffffff;
+  /* accent: azure, with a deeper step for hover and a pale fill */
+  --ff-accent: #0369a1;
+  --ff-accent-600: #075985;
+  --ff-accent-050: #f0f9ff;
+  --ff-on-accent: #ffffff;
   /* light theme: surface and ink from the brand tokens */
-  --fb-bg: #ffffff;
-  --fb-surface: #f8fafc;
-  --fb-text: #0f172a;
-  --fb-muted: #526070;
-  --fb-border: #dbe3ec;
-  --fb-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --ff-bg: #ffffff;
+  --ff-surface: #f8fafc;
+  --ff-text: #0f172a;
+  --ff-muted: #526070;
+  --ff-border: #dbe3ec;
+  --ff-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
   /* fonts */
-  --fb-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --fb-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --ff-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --ff-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   /* layout */
-  --fb-max: 1080px;
-  --fb-radius: 12px;
+  --ff-max: 1080px;
+  --ff-radius: 12px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     /* dark theme: the tile ground and mist text, azure-light as the voice */
-    --fb-bg: #0b1020;
-    --fb-surface: #121a2e;
-    --fb-text: #f1f5f9;
-    --fb-muted: #a3b0c2;
-    --fb-border: #24304a;
-    --fb-accent: #7dd3fc;
-    --fb-accent-600: #bae6fd;
-    --fb-accent-050: #0c1a2e;
+    --ff-bg: #0b1020;
+    --ff-surface: #121a2e;
+    --ff-text: #f1f5f9;
+    --ff-muted: #a3b0c2;
+    --ff-border: #24304a;
+    --ff-accent: #7dd3fc;
+    --ff-accent-600: #bae6fd;
+    --ff-accent-050: #0c1a2a;
     /* azure-light is a light fill, so text on it takes the tile ground */
-    --fb-on-accent: #0b1020;
-    --fb-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);
+    --ff-on-accent: #0b1020;
+    --ff-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);
   }
 }
 
 * { box-sizing: border-box; }
 
+/* Smooth scrolling and the hover transitions run only for a reader who has
+   not asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+  .btn { transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease; }
+  .card { transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
+}
+
 body {
   margin: 0;
-  font-family: var(--fb-sans);
-  color: var(--fb-text);
-  background: var(--fb-bg);
+  font-family: var(--ff-sans);
+  color: var(--ff-text);
+  background: var(--ff-bg);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-a { color: var(--fb-accent); text-decoration: none; }
-a:hover { color: var(--fb-accent-600); text-decoration: underline; }
+a { color: var(--ff-accent); text-decoration: none; }
+a:hover { color: var(--ff-accent-600); text-decoration: underline; }
+/* Every link and button shows where the keyboard is. */
+a:focus-visible {
+  outline: 2px solid var(--ff-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
 
 img, svg { max-width: 100%; height: auto; }
 
+/* Inline code breaks anywhere, so a long URL or image name wraps inside its
+   box at any width; a shell transcript (.cmd) scrolls instead. */
 code {
-  font-family: var(--fb-mono);
+  font-family: var(--ff-mono);
   font-size: 0.88em;
-  background: var(--fb-accent-050);
+  background: var(--ff-accent-050);
   padding: 0.1em 0.35em;
   border-radius: 5px;
+  overflow-wrap: anywhere;
 }
 
 .wrap {
   width: 100%;
-  max-width: var(--fb-max);
+  max-width: var(--ff-max);
   margin: 0 auto;
   padding: 0 1.25rem;
 }
@@ -82,8 +99,8 @@ code {
   top: 0;
   z-index: 50;
   backdrop-filter: saturate(180%) blur(12px);
-  background: color-mix(in srgb, var(--fb-bg) 82%, transparent);
-  border-bottom: 1px solid var(--fb-border);
+  background: color-mix(in srgb, var(--ff-bg) 82%, transparent);
+  border-bottom: 1px solid var(--ff-border);
 }
 .nav .wrap {
   display: flex;
@@ -98,9 +115,9 @@ code {
   font-weight: 800;
   font-size: 1.1rem;
   letter-spacing: -0.01em;
-  color: var(--fb-text);
+  color: var(--ff-text);
 }
-.brand:hover { text-decoration: none; color: var(--fb-accent); }
+.brand:hover { text-decoration: none; color: var(--ff-accent); }
 .brand img { width: 28px; height: 28px; }
 .nav-links {
   margin-left: auto;
@@ -110,8 +127,8 @@ code {
   font-weight: 600;
   font-size: 0.95rem;
 }
-.nav-links a { color: var(--fb-muted); }
-.nav-links a:hover { color: var(--fb-accent); text-decoration: none; }
+.nav-links a { color: var(--ff-muted); }
+.nav-links a:hover { color: var(--ff-accent); text-decoration: none; }
 
 /* Buttons */
 .btn {
@@ -125,10 +142,10 @@ code {
   border: 1.5px solid transparent;
 }
 .btn:hover { text-decoration: none; transform: translateY(-1px); }
-.btn-primary { background: var(--fb-accent); color: var(--fb-on-accent); }
-.btn-primary:hover { background: var(--fb-accent-600); color: var(--fb-on-accent); }
-.btn-ghost { border-color: var(--fb-border); color: var(--fb-text); background: var(--fb-surface); }
-.btn-ghost:hover { border-color: var(--fb-accent); color: var(--fb-accent); }
+.btn-primary { background: var(--ff-accent); color: var(--ff-on-accent); }
+.btn-primary:hover { background: var(--ff-accent-600); color: var(--ff-on-accent); }
+.btn-ghost { border-color: var(--ff-border); color: var(--ff-text); background: var(--ff-surface); }
+.btn-ghost:hover { border-color: var(--ff-accent); color: var(--ff-accent); }
 
 /* Hero */
 .hero {
@@ -142,26 +159,14 @@ code {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(60% 55% at 50% 0%, color-mix(in srgb, var(--fb-accent) 16%, transparent), transparent 70%),
-    linear-gradient(180deg, var(--fb-accent-050), transparent 42%);
+    radial-gradient(60% 55% at 50% 0%, color-mix(in srgb, var(--ff-accent) 16%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--ff-accent-050), transparent 42%);
   pointer-events: none;
 }
 .hero > * { position: relative; }
-/* The mark is the brand SVG as shipped: azure carries the shape on the light
-   ground, and both of its values read on the dark one. */
+/* The mark is the brand SVG as shipped on the light ground; the page swaps
+   in ferrofed-icon-dark.svg through <picture> on the dark one. */
 .hero-logo { width: 88px; height: 88px; margin: 0 auto 1.25rem; display: block; }
-.status {
-  display: inline-block;
-  margin: 0 auto 1.25rem;
-  padding: 0.3rem 0.85rem;
-  border-radius: 999px;
-  background: var(--fb-accent-050);
-  border: 1px solid var(--fb-border);
-  color: var(--fb-accent);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
 .hero h1 {
   font-size: clamp(1.6rem, 3.6vw, 2.5rem);
   line-height: 1.2;
@@ -170,36 +175,50 @@ code {
   letter-spacing: -0.01em;
 }
 .hero .sub {
-  color: var(--fb-muted);
+  color: var(--ff-muted);
   font-size: clamp(1rem, 1.6vw, 1.18rem);
   max-width: 62ch;
   margin: 0 auto 2rem;
 }
+/* The release badge at the top of the hero. */
+.status {
+  display: inline-block;
+  margin: 0 auto 1.25rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  background: var(--ff-accent-050);
+  border: 1px solid var(--ff-border);
+  color: var(--ff-accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.status:hover { text-decoration: none; border-color: var(--ff-accent); }
 .hero-cta { display: flex; gap: 0.85rem; justify-content: center; flex-wrap: wrap; }
 .hero .note {
   margin: 1.5rem auto 0;
   max-width: 60ch;
-  color: var(--fb-muted);
+  color: var(--ff-muted);
   font-size: 0.86rem;
 }
 
 /* Section scaffolding */
 section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
-.surface { background: var(--fb-surface); border-block: 1px solid var(--fb-border); }
+.surface { background: var(--ff-surface); border-block: 1px solid var(--ff-border); }
 .section-head { text-align: center; max-width: 62ch; margin: 0 auto 2.5rem; }
 .section-head h2 {
   font-size: clamp(1.4rem, 3vw, 2rem);
   margin: 0 0 0.6rem;
   letter-spacing: -0.01em;
 }
-.section-head p { color: var(--fb-muted); margin: 0; font-size: 1.05rem; }
+.section-head p { color: var(--ff-muted); margin: 0; font-size: 1.05rem; }
 .eyebrow {
   display: inline-block;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 0.75rem;
   font-weight: 800;
-  color: var(--fb-accent);
+  color: var(--ff-accent);
   margin-bottom: 0.5rem;
 }
 
@@ -209,7 +228,7 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
   letter-spacing: 0.08em;
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--fb-muted);
+  color: var(--ff-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -219,19 +238,22 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
   grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   gap: 1.1rem;
 }
+/* A grid item may shrink below its content's width, so nothing inside it
+   pushes it past its column. */
+.grid > * { min-width: 0; }
 .card {
-  background: var(--fb-bg);
-  border: 1px solid var(--fb-border);
-  border-radius: var(--fb-radius);
+  background: var(--ff-bg);
+  border: 1px solid var(--ff-border);
+  border-radius: var(--ff-radius);
   padding: 1.5rem;
 }
 .card:hover {
   transform: translateY(-3px);
-  box-shadow: var(--fb-shadow);
-  border-color: color-mix(in srgb, var(--fb-accent) 40%, var(--fb-border));
+  box-shadow: var(--ff-shadow);
+  border-color: color-mix(in srgb, var(--ff-accent) 40%, var(--ff-border));
 }
 .card h3 { margin: 0 0 0.4rem; font-size: 1.08rem; }
-.card p { margin: 0; color: var(--fb-muted); font-size: 0.94rem; }
+.card p { margin: 0; color: var(--ff-muted); font-size: 0.94rem; }
 .card code { font-size: 0.85em; }
 
 .audiences { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
@@ -249,24 +271,64 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
 .cmd {
   max-width: 760px;
   margin: 0 auto;
-  background: var(--fb-bg);
-  border: 1px solid var(--fb-border);
-  border-radius: var(--fb-radius);
+  background: var(--ff-bg);
+  border: 1px solid var(--ff-border);
+  border-radius: var(--ff-radius);
   padding: 1.1rem 1.25rem;
   overflow-x: auto;
-  font-family: var(--fb-mono);
+  font-family: var(--ff-mono);
   font-size: 0.86rem;
   line-height: 1.55;
 }
-.cmd code { background: none; padding: 0; font-size: inherit; }
+.cmd code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; white-space: pre; }
 
-.prose { max-width: 68ch; margin: 1.75rem auto 0; color: var(--fb-muted); }
+.prose { max-width: 68ch; margin: 1.75rem auto 0; color: var(--ff-muted); }
 .prose p { margin: 0 0 0.9rem; }
+
+/* A card that is one link reads as a card, not as link text: hovering lifts
+   the card (the .card:hover above) and underlines its title alone, never its
+   body, and the keyboard focus rings the whole card. */
+a.card,
+a.card:hover,
+a.card:focus-visible { display: block; color: inherit; text-decoration: none; }
+a.card * { text-decoration: none; }
+a.card h3 { color: var(--ff-accent); }
+a.card:hover h3,
+a.card:focus-visible h3 { text-decoration: underline; text-underline-offset: 3px; }
+a.card:focus-visible {
+  outline: 2px solid var(--ff-accent);
+  outline-offset: 3px;
+  border-radius: var(--ff-radius);
+}
+
+/* A screenshot of the console, light or dark with the reader's scheme. It
+   scales inside its box, so it never widens the page. */
+.shot { max-width: 960px; margin: 0 auto; }
+.shot img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--ff-border);
+  border-radius: var(--ff-radius);
+  box-shadow: var(--ff-shadow);
+}
+.shot figcaption {
+  margin-top: 0.8rem;
+  text-align: center;
+  color: var(--ff-muted);
+  font-size: 0.9rem;
+}
+
+/* A page of its own (the 404 page, a code-system page): one column of prose
+   under the nav. */
+.page { padding: clamp(3rem, 8vw, 5rem) 0; }
+.page h1 { font-size: clamp(1.5rem, 3.2vw, 2.2rem); line-height: 1.2; margin: 0 0 1rem; }
+.page p { max-width: 68ch; color: var(--ff-muted); }
+.page .hero-cta { justify-content: flex-start; margin-top: 2rem; }
 
 /* Footer */
 .footer {
-  border-top: 1px solid var(--fb-border);
-  background: var(--fb-surface);
+  border-top: 1px solid var(--ff-border);
+  background: var(--ff-surface);
   padding: 3rem 0 2.5rem;
   font-size: 0.92rem;
 }
@@ -279,18 +341,18 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
 }
 .footer-brand { max-width: 46ch; }
 .footer-brand .brand { margin-bottom: 0.75rem; }
-.footer-brand p { color: var(--fb-muted); margin: 0.35rem 0; }
+.footer-brand p { color: var(--ff-muted); margin: 0.35rem 0; }
 .footer-links { display: flex; gap: 2.5rem; flex-wrap: wrap; }
 .footer-links ul { list-style: none; margin: 0; padding: 0; }
-.footer-links h4 { margin: 0 0 0.6rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fb-text); }
+.footer-links h4 { margin: 0 0 0.6rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ff-text); }
 .footer-links li { margin: 0.35rem 0; }
-.footer-links a { color: var(--fb-muted); }
-.footer-links a:hover { color: var(--fb-accent); }
+.footer-links a { color: var(--ff-muted); }
+.footer-links a:hover { color: var(--ff-accent); }
 .footer-note {
   margin-top: 2.25rem;
   padding-top: 1.5rem;
-  border-top: 1px solid var(--fb-border);
-  color: var(--fb-muted);
+  border-top: 1px solid var(--ff-border);
+  color: var(--ff-muted);
   font-size: 0.85rem;
 }
 
@@ -300,9 +362,8 @@ section { padding: clamp(3rem, 7vw, 4.5rem) 0; }
   .nav-links .hide-sm { display: none; }
 }
 
-/* Motion only for a reader who has not asked the system to reduce it */
-@media (prefers-reduced-motion: no-preference) {
-  html { scroll-behavior: smooth; }
-  .btn { transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease; }
-  .card { transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
+/* A phone keeps the commands on one line inside their box where it can; a
+   longer line still scrolls inside the box, never the page. */
+@media (max-width: 480px) {
+  .cmd { font-size: 0.7rem; padding: 0.9rem 0.75rem; }
 }

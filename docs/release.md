@@ -285,10 +285,9 @@ slow one.
    (`scripts/checks/upgrade-notes.sh`), and the book's Upgrading page
    (`website/book/src/operate/upgrading.md`) takes the release's notes in the
    same pull request.
-   The landing page's release note
-   (`website/landing/index.html`) names the same version in the same pull
-   request: `scripts/checks/versions.sh` fails while it names an older one. The page is deployed from `main`, so the bump pull
-   request is where it changes; the release lane never writes to `main`.
+   The landing page's release badge needs no edit:
+   `scripts/site/assemble.sh` renders it from the workspace version, and
+   `scripts/checks/versions.sh` refuses a release typed into the page.
 4. **The public texts are reviewed against Regulation (EU) 2025/327 Art 28.**
    Every public text is read for a claim the release does not ship, a
    limitation it leaves out, or a use outside the intended purpose, and the
@@ -631,10 +630,6 @@ planned under, so step 1 moves that milestone on by one.
      the fix alone. It adds the patch's row to the support table of
      `SECURITY.md`, and the row is copied to the book's CRA information to
      the user as step 5 there says;
-   - the landing page names the patch, because `scripts/checks/versions.sh`
-     holds it to the newest release in the branch's `CHANGELOG.md`. The
-     site is deployed from `main`, so this copy only satisfies the guard,
-     and step 8 moves `main`'s;
    - the claims review, the information sheet, the instructions for use and
      the cybersecurity risk assessment get the patch's rows, and the
      technical documentation its review rows when the fix changes a
@@ -668,10 +663,7 @@ planned under, so step 1 moves that milestone on by one.
    - its row of the support table of `SECURITY.md`, and the copy of that
      row on the book's CRA information to the user;
    - the removal of the fix's fragment from `changelog.d/`, because the
-     patch's section records the fix;
-   - the landing page's release note, which
-     `scripts/checks/versions.sh` holds to the newest release in
-     `CHANGELOG.md`.
+     patch's section records the fix.
 
    `main`'s version files stay at the release they name, and its next
    version bump moves them past the patch.
