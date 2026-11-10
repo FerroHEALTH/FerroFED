@@ -164,7 +164,7 @@ impl Writes for Served {
             "Software that writes the laboratory report from the member's record automatically",
             (&self.mapping, composition),
         )?;
-        let withheld = report::withheld(&mapped);
+        let withheld = report::withheld(mapped.bundle());
         let results = document
             .with_mapped_report(mapped.bundle())
             .map_err(ServedError::Document)?;

@@ -153,7 +153,7 @@ impl Writes for Served {
             "Software that writes the imaging report from the member's record automatically",
             (&self.mapping, composition),
         )?;
-        let withheld = report::withheld(&mapped);
+        let withheld = report::withheld(mapped.bundle());
         let study = study(&document, mapped.bundle());
         let mut targets = document
             .with_mapped_report(mapped.bundle())
