@@ -157,7 +157,11 @@ async fn an_undirected_query_asks_only_the_members_the_localizer_names() -> Test
     let proxy = CapturingProxy::start(pix.origin(), Bind::Loopback).await?;
     let dir = tempfile::tempdir()?;
     let options = Options {
-        resolver: pixm_resolver_at(&format!("{}/fhir/", proxy.origin())),
+        resolver: pixm_resolver_at(
+            &format!("{}/fhir/", proxy.origin()),
+            &pix.token_endpoint(),
+            &pix.trust_roots_file(),
+        ),
         node_selection: "localized",
         tables: "[federation.localization]\ntimeout = '5s'\n".to_owned(),
         ..Options::default()
