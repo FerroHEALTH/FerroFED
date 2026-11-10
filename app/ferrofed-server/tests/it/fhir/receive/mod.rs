@@ -38,6 +38,7 @@ use ferrofed_server::config::Config;
 use ferrofed_server::config::auth::PatientBinding;
 use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_server::state::AppState;
+use ferrofed_testkit::fhir_packages::FhirPackagesError;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::{eps, fhir_packages};
 use http::{Request, header};
@@ -116,27 +117,59 @@ pub(super) fn receiving(member: &str, namespaces: &[&str]) -> String {
 
 /// A category a face receives at node A over an ADL 2 template: the
 /// vendored package with its dependency closure, the template with its
-/// archetypes, and the mapping files and context that carry it.
+/// archetypes, and the mapping files and context that carry it, each read
+/// from the testkit.
 pub(super) struct Adl2Category {
     /// The `category` of the `[[fhir.receive]]` entry.
-    pub(super) category: &'static str,
+    category: &'static str,
+    /// The directory, under the test's own, the mapping files are written to.
+    mapping: &'static str,
     /// The package the received document is held to.
-    pub(super) package: PathBuf,
+    package: fn() -> PathBuf,
     /// The package's dependency closure.
-    pub(super) dependencies: Vec<PathBuf>,
+    dependencies: fn() -> Result<Vec<PathBuf>, FhirPackagesError>,
     /// The ADL 2 operational template.
-    pub(super) template: PathBuf,
+    template: fn() -> PathBuf,
     /// The archetypes the template flattens.
-    pub(super) archetypes: Vec<PathBuf>,
-    /// The mapping files written for the category.
-    pub(super) files: Vec<PathBuf>,
+    archetypes: fn() -> Vec<PathBuf>,
+    /// Writes the category's mapping files into a directory.
+    files: fn(&Path) -> std::io::Result<Vec<PathBuf>>,
     /// The mapping's context name.
-    pub(super) context: &'static str,
+    context: &'static str,
 }
 
-/// The `[fhir]` tables of a face that receives `received` at node A, with
-/// the tables `beside` after its `[[fhir.receive]]` entry.
-pub(super) fn receiving_adl2(received: &Adl2Category, beside: &str) -> String {
+/// Imaging reports, over FerroBRIDGE's ADL 2 imaging report template.
+pub(super) const IMAGING: Adl2Category = Adl2Category {
+    category: "Medical-Imaging",
+    mapping: "imaging",
+    package: fhir_packages::imaging,
+    dependencies: fhir_packages::imaging_dependencies,
+    template: ferrofed_testkit::imaging::template_path,
+    archetypes: ferrofed_testkit::imaging::archetype_paths,
+    files: ferrofed_testkit::imaging::mapping_files,
+    context: ferrofed_testkit::imaging::CONTEXT,
+};
+
+/// Discharge reports, over FerroBRIDGE's ADL 2 discharge report template.
+pub(super) const DISCHARGE: Adl2Category = Adl2Category {
+    category: "Discharge-Reports",
+    mapping: "hdr",
+    package: ferrofed_testkit::discharge::package,
+    dependencies: fhir_packages::discharge_dependencies,
+    template: ferrofed_testkit::discharge::template_path,
+    archetypes: ferrofed_testkit::discharge::archetype_paths,
+    files: ferrofed_testkit::discharge::mapping_files,
+    context: ferrofed_testkit::discharge::CONTEXT,
+};
+
+/// The `[fhir]` tables of a face that receives `received` at node A, its
+/// mapping written into `dir`, with the tables `beside` after its
+/// `[[fhir.receive]]` entry.
+pub(super) fn receiving_adl2(
+    dir: &Path,
+    received: &Adl2Category,
+    beside: &str,
+) -> Result<String, Box<dyn Error>> {
     let path = |value: &Path| toml::Value::String(value.display().to_string()).to_string();
     let joined = |paths: &[PathBuf]| {
         paths
@@ -145,7 +178,9 @@ pub(super) fn receiving_adl2(received: &Adl2Category, beside: &str) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     };
-    fhir_tables_with(
+    let mapping = dir.join(received.mapping);
+    std::fs::create_dir_all(&mapping)?;
+    Ok(fhir_tables_with(
         UNREACHED_SUPPLIER,
         &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
         &format!(
@@ -154,14 +189,14 @@ pub(super) fn receiving_adl2(received: &Adl2Category, beside: &str) -> String {
              archetypes = [{}]\nfiles = [{}]\ncontext = \"{}\"\n\
              language = \"en\"\nterritory = \"NL\"\n{beside}",
             received.category,
-            path(&received.package),
-            joined(&received.dependencies),
-            path(&received.template),
-            joined(&received.archetypes),
-            joined(&received.files),
+            path(&(received.package)()),
+            joined(&(received.dependencies)()?),
+            path(&(received.template)()),
+            joined(&(received.archetypes)()),
+            joined(&(received.files)(&mapping)?),
             received.context,
         ),
-    )
+    ))
 }
 
 /// The configuration text of a development gateway over node A at `a`,

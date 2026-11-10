@@ -285,9 +285,9 @@ slow one.
    (`scripts/checks/upgrade-notes.sh`), and the book's Upgrading page
    (`website/book/src/operate/upgrading.md`) takes the release's notes in the
    same pull request.
-   The landing page's release note and status panel
-   (`website/landing/index.html`) name the same version in the same pull
-   request: `scripts/checks/versions.sh` fails while they name an older one. The page is deployed from `main`, so the bump pull
+   The landing page's release note
+   (`website/landing/index.html`) names the same version in the same pull
+   request: `scripts/checks/versions.sh` fails while it names an older one. The page is deployed from `main`, so the bump pull
    request is where it changes; the release lane never writes to `main`.
 4. **The public texts are reviewed against Regulation (EU) 2025/327 Art 28.**
    Every public text is read for a claim the release does not ship, a
@@ -669,7 +669,7 @@ planned under, so step 1 moves that milestone on by one.
      row on the book's CRA information to the user;
    - the removal of the fix's fragment from `changelog.d/`, because the
      patch's section records the fix;
-   - the landing page's release note and status panel, which
+   - the landing page's release note, which
      `scripts/checks/versions.sh` holds to the newest release in
      `CHANGELOG.md`.
 

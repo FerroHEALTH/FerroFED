@@ -511,16 +511,7 @@ fn search(shared: &Shared, query: Option<&str>) -> Response<Full<Bytes>> {
         entry,
         ..Bundle::default()
     };
-    match serde_json::to_vec(&bundle) {
-        Ok(bytes) => {
-            let mut answer = Response::new(Full::new(Bytes::from(bytes)));
-            answer
-                .headers_mut()
-                .insert(CONTENT_TYPE, HeaderValue::from_static(FHIR_JSON));
-            answer
-        }
-        Err(_unwritable) => outcome(StatusCode::INTERNAL_SERVER_ERROR, "exception"),
-    }
+    answered(&bundle)
 }
 
 /// ITI-94: the `Subscription` with its current status (§2:3.94.4.3).
@@ -528,16 +519,7 @@ fn read(shared: &Shared, id: &str) -> Response<Full<Bytes>> {
     let Some(held) = shared.lock().subscriptions.get(id).cloned() else {
         return outcome(StatusCode::NOT_FOUND, "not-found");
     };
-    match serde_json::to_vec(&resource(id, &held)) {
-        Ok(bytes) => {
-            let mut answer = Response::new(Full::new(Bytes::from(bytes)));
-            answer
-                .headers_mut()
-                .insert(CONTENT_TYPE, HeaderValue::from_static(FHIR_JSON));
-            answer
-        }
-        Err(_unwritable) => outcome(StatusCode::INTERNAL_SERVER_ERROR, "exception"),
-    }
+    answered(&resource(id, &held))
 }
 
 /// ITI-94: the `Subscription` is removed (§2:3.94.4.5).
@@ -562,6 +544,21 @@ fn decode(body: &[u8]) -> Option<Subscription> {
         return None;
     }
     Subscription::from_json(object, &mut Path::root("Subscription")).ok()
+}
+
+/// A `200` answer carrying `value` as FHIR JSON, or a `500` with an
+/// `OperationOutcome` when it cannot be written.
+fn answered<T: serde::Serialize>(value: &T) -> Response<Full<Bytes>> {
+    match serde_json::to_vec(value) {
+        Ok(bytes) => {
+            let mut answer = Response::new(Full::new(Bytes::from(bytes)));
+            answer
+                .headers_mut()
+                .insert(CONTENT_TYPE, HeaderValue::from_static(FHIR_JSON));
+            answer
+        }
+        Err(_unwritable) => outcome(StatusCode::INTERNAL_SERVER_ERROR, "exception"),
+    }
 }
 
 /// An answer of `status` with an `OperationOutcome` of one `error` issue of
