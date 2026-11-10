@@ -287,7 +287,7 @@ ihe-iti = "=0.1.0"
 # 0.0.82 (#1748); 0.0.50 is the release on ihe-iti 0.0.83 (#1748); 0.1.0
 # is the release on ihe-iti 0.1.0 (#1805).
 # Verified against crates.io on 2026-11-10.
-nl-generic-functions = "=0.1.0"
+nl-generic-functions = "=0.2.0"
 # The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
 # the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -367,7 +367,7 @@ x509-ocsp = { version = "0.3.0-rc.0", default-features = false }
 # page is one document the server draws, with no Leptos and no WebAssembly
 # (#1457, FerroUI#510); 0.6.8 draws the menu separators as <hr> and the
 # live regions as <output> (#1682). Verified against crates.io on 2026-11-06.
-ferrohealth-ui = "=0.6.8"
+ferrohealth-ui = "=0.6.9"
 # The FerroHEALTH SMART and OAuth 2.0 resource-server crate (#1174):
 # every caller's token checked against its issuer's metadata and key set,
 # the SMART on openEHR grant rules over the grammar it re-exports, the Basic
@@ -454,7 +454,7 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # FerroHEALTH/FerroSYS#300); 0.6.4 compares two reads of that material and
 # builds the revocation check from it (FerroHEALTH/FerroSYS#305, #307).
 # Verified against crates.io on 2026-11-09.
-ferrohealth-server = { version = "=0.8.0", default-features = false }
+ferrohealth-server = { version = "=0.8.1", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.
