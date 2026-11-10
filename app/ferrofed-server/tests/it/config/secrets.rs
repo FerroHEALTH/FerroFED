@@ -17,7 +17,7 @@ use std::error::Error as StdError;
 use super::{env, everything, full, refusal, secret_file};
 
 /// An `oauth` table beside a credentials section `[credentials."a"]`.
-const OAUTH: &str = "[credentials.\"a\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-client-secret\"\n";
+const OAUTH: &str = "[credentials.\"a\".credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-client-secret\"\n";
 
 #[test]
 #[expect(
@@ -48,8 +48,14 @@ fn a_resolved_secret_never_reaches_debug_output() -> Result<(), Box<dyn StdError
 )]
 fn an_environment_override_adds_a_credentials_section_with_no_file() -> Result<(), Box<dyn StdError>>
 {
-    let mut environment = env("FERROFED__CREDENTIALS__NODE_A__USER", "gateway");
-    environment.extend(env("FERROFED__CREDENTIALS__NODE_A__PASSWORD", "synthetic"));
+    let mut environment = env(
+        "FERROFED__CREDENTIALS__NODE_A__CREDENTIALS__USER",
+        "gateway",
+    );
+    environment.extend(env(
+        "FERROFED__CREDENTIALS__NODE_A__CREDENTIALS__PASSWORD",
+        "synthetic",
+    ));
     let settings = Config::from_sources(None, &environment)?.resolve()?;
     assert!(
         matches!(
@@ -69,7 +75,7 @@ fn an_environment_override_adds_a_credentials_section_with_no_file() -> Result<(
 fn a_secret_is_read_from_its_file_sibling_and_trimmed() -> Result<(), Box<dyn StdError>> {
     let file = secret_file("synthetic-from-file\n")?;
     let text = format!(
-        "[credentials.\"hospital-a\"]\nuser = \"gateway\"\npassword_file = {:?}\n",
+        "[credentials.\"hospital-a\"]\ncredentials.user = \"gateway\"\ncredentials.password_file = {:?}\n",
         file.path()
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
@@ -90,23 +96,23 @@ fn a_secret_is_read_from_its_file_sibling_and_trimmed() -> Result<(), Box<dyn St
 fn a_secret_set_inline_and_through_its_file_refuses_to_boot() -> Result<(), Box<dyn StdError>> {
     let file = secret_file("synthetic-from-file")?;
     let text = format!(
-        "[credentials.\"hospital-a\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic\"\nclient_secret_file = {:?}\n",
+        "[credentials.\"hospital-a\".credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic\"\nclient_secret_file = {:?}\n",
         file.path()
     );
     let error = refusal(&text)?;
     assert!(
-        matches!(&error, Error::Smart { section, .. } if section == "credentials.hospital-a.oauth"),
+        matches!(&error, Error::Smart { section, .. } if section == "credentials.hospital-a.credentials.oauth"),
         "{error:?}"
     );
     assert!(!everything(&error).contains("synthetic"), "{error}");
     let file = secret_file("synthetic-password")?;
     let text = format!(
-        "[credentials.\"clinic-b\"]\nuser = \"gateway\"\npassword = \"synthetic\"\npassword_file = {:?}\n",
+        "[credentials.\"clinic-b\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"synthetic\"\ncredentials.password_file = {:?}\n",
         file.path()
     );
     let error = refusal(&text)?;
     assert!(
-        matches!(&error, Error::SecretFile(SecretError::Both { key }) if key == "credentials.clinic-b.password"),
+        matches!(&error, Error::SecretFile(SecretError::Both { key }) if key == "credentials.clinic-b.credentials.password"),
         "{error:?}"
     );
     Ok(())
@@ -119,20 +125,20 @@ fn a_secret_set_inline_and_through_its_file_refuses_to_boot() -> Result<(), Box<
 )]
 fn a_credentials_section_must_name_exactly_one_complete_scheme() -> Result<(), Box<dyn StdError>> {
     let error = refusal(&format!(
-        "[credentials.\"a\"]\nuser = \"u\"\npassword = \"p\"\n{OAUTH}"
+        "[credentials.\"a\"]\ncredentials.user = \"u\"\ncredentials.password = \"p\"\n{OAUTH}"
     ))?;
     assert!(
         matches!(error, Error::Credentials(CredentialsFault::Scheme { .. })),
         "{error:?}"
     );
-    let error = refusal("[credentials.\"a\"]\nuser = \"u\"\n")?;
+    let error = refusal("[credentials.\"a\"]\ncredentials.user = \"u\"\n")?;
     assert!(
-        matches!(&error, Error::Missing { key } if key == "credentials.a.password"),
+        matches!(&error, Error::Missing { key } if key == "credentials.a.credentials.password"),
         "{error:?}"
     );
-    let error = refusal("[credentials.\"a\"]\npassword = \"p\"\n")?;
+    let error = refusal("[credentials.\"a\"]\ncredentials.password = \"p\"\n")?;
     assert!(
-        matches!(&error, Error::Missing { key } if key == "credentials.a.user"),
+        matches!(&error, Error::Missing { key } if key == "credentials.a.credentials.user"),
         "{error:?}"
     );
     let error = refusal("[credentials.\"a\"]\n")?;
@@ -140,7 +146,9 @@ fn a_credentials_section_must_name_exactly_one_complete_scheme() -> Result<(), B
         matches!(error, Error::Credentials(CredentialsFault::NoScheme { .. })),
         "{error:?}"
     );
-    let error = refusal("[credentials.\"node a\"]\nuser = \"u\"\npassword = \"t\"\n")?;
+    let error = refusal(
+        "[credentials.\"node a\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n",
+    )?;
     assert!(
         matches!(
             error,
@@ -159,15 +167,15 @@ fn a_credentials_section_must_name_exactly_one_complete_scheme() -> Result<(), B
 fn a_secret_file_that_cannot_be_read_or_is_empty_refuses_to_boot() -> Result<(), Box<dyn StdError>>
 {
     let error = refusal(
-        "[credentials.\"a\"]\nuser = \"u\"\npassword_file = \"/nonexistent/ferrofed/password\"\n",
+        "[credentials.\"a\"]\ncredentials.user = \"u\"\ncredentials.password_file = \"/nonexistent/ferrofed/password\"\n",
     )?;
     assert!(
-        matches!(&error, Error::SecretFile(SecretError::Read { key, .. }) if key == "credentials.a.password"),
+        matches!(&error, Error::SecretFile(SecretError::Read { key, .. }) if key == "credentials.a.credentials.password"),
         "{error:?}"
     );
     let file = secret_file("\n")?;
     let error = refusal(&format!(
-        "[credentials.\"a\"]\nuser = \"u\"\npassword_file = {:?}\n",
+        "[credentials.\"a\"]\ncredentials.user = \"u\"\ncredentials.password_file = {:?}\n",
         file.path()
     ))?;
     assert!(
@@ -184,7 +192,7 @@ fn a_secret_file_that_cannot_be_read_or_is_empty_refuses_to_boot() -> Result<(),
 )]
 fn a_refusal_never_quotes_a_secret() -> Result<(), Box<dyn StdError>> {
     let error = refusal(&format!(
-        "[credentials.\"a\"]\nuser = \"u\"\npassword = \"synthetic-secret\"\n{OAUTH}"
+        "[credentials.\"a\"]\ncredentials.user = \"u\"\ncredentials.password = \"synthetic-secret\"\n{OAUTH}"
     ))?;
     let mut rendered = error.to_string();
     let mut cause = std::error::Error::source(&error);
@@ -202,14 +210,16 @@ fn a_refusal_never_quotes_a_secret() -> Result<(), Box<dyn StdError>> {
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_secret_of_the_wrong_type_is_never_echoed() -> Result<(), Box<dyn StdError>> {
-    let error = refusal("[credentials.\"a\"]\nuser = \"u\"\npassword = 73194426\n")?;
+    let error = refusal(
+        "[credentials.\"a\"]\ncredentials.user = \"u\"\ncredentials.password = 73194426\n",
+    )?;
     assert!(matches!(error, Error::Load { .. }), "not a parse refusal");
     assert!(
         !everything(&error).contains("73194426"),
         "the refusal echoes the inline secret"
     );
     assert_eq!(
-        Some("credentials.a.password"),
+        Some("credentials.a.credentials.password"),
         crate::support::refused_key(&error),
         "the refusal names the key"
     );
@@ -224,14 +234,14 @@ fn a_secret_of_the_wrong_type_is_never_echoed() -> Result<(), Box<dyn StdError>>
 fn a_credential_the_authorization_header_cannot_carry_is_refused_by_its_key()
 -> Result<(), Box<dyn StdError>> {
     let error = refusal(
-        "[credentials.\"a\"]\nuser = \"gateway\"\npassword = \"Qz7left\\u0000Qz7right\"\n",
+        "[credentials.\"a\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"Qz7left\\u0000Qz7right\"\n",
     )?;
     assert!(
         matches!(&error, Error::Credentials(CredentialsFault::Basic {
                 key,
                 fault: BasicFault::ControlCharacter,
                 source: InvalidCredentials::ControlCharacter(BasicPart::Password),
-            }) if key == "credentials.a.password"),
+            }) if key == "credentials.a.credentials.password"),
         "{error:?}"
     );
     assert!(!everything(&error).contains("Qz7"), "{error}");
@@ -258,13 +268,15 @@ fn a_credential_the_authorization_header_cannot_carry_is_refused_by_its_key()
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_basic_user_holding_a_colon_is_refused_by_its_key() -> Result<(), Box<dyn StdError>> {
-    let error = refusal("[credentials.\"a\"]\nuser = \"gate:way\"\npassword = \"Qz7left\"\n")?;
+    let error = refusal(
+        "[credentials.\"a\"]\ncredentials.user = \"gate:way\"\ncredentials.password = \"Qz7left\"\n",
+    )?;
     assert!(
         matches!(&error, Error::Credentials(CredentialsFault::Basic {
                 key,
                 fault: BasicFault::Colon,
                 source: InvalidCredentials::ColonInUserId,
-            }) if key == "credentials.a.user"),
+            }) if key == "credentials.a.credentials.user"),
         "{error:?}"
     );
     assert!(!everything(&error).contains("Qz7"), "{error}");

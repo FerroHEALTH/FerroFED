@@ -71,11 +71,17 @@ impl Grant {
     #[must_use]
     pub fn held(table: &toml::Table, slots: &[SecretSlot]) -> Self {
         let secret = |key: &str| slots.iter().any(|slot| slot.key == key);
-        if table.contains_key("oauth") {
+        let nested = |key: &str| {
+            table
+                .get("credentials")
+                .and_then(toml::Value::as_table)
+                .is_some_and(|credentials| credentials.contains_key(key))
+        };
+        if nested("oauth") {
             Self::Oauth
         } else if table.contains_key("nuts") {
             Self::Nuts
-        } else if table.contains_key("user") || secret("password") {
+        } else if nested("user") || secret("credentials.password") {
             Self::Basic
         } else if table.is_empty() && slots.is_empty() {
             Self::Oauth
@@ -84,12 +90,12 @@ impl Grant {
         }
     }
 
-    /// The top-level keys of the settings only this grant uses.
+    /// The dotted keys of the settings only this grant uses.
     pub(crate) const fn own(self) -> &'static [&'static str] {
         match self {
             Self::Transport => &[],
-            Self::Oauth => &["oauth"],
-            Self::Basic => &["user"],
+            Self::Oauth => &["credentials.oauth"],
+            Self::Basic => &["credentials.user"],
             Self::Nuts => &["nuts"],
         }
     }
@@ -99,7 +105,7 @@ impl Grant {
     pub const fn secrets(self) -> &'static [Secret] {
         match self {
             Self::Basic => &[Secret {
-                key: "password",
+                key: "credentials.password",
                 label: Msg::Password,
             }],
             Self::Transport | Self::Oauth | Self::Nuts => &[],

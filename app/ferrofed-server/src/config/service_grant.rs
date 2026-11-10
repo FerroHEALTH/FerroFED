@@ -23,13 +23,13 @@
 
 use ferrofed_identity::profile::Profile;
 
-use crate::config::Credentials;
 use crate::config::error::Error;
 use crate::config::error::credentials::CredentialsFault;
 use crate::config::oauth;
 use crate::config::secrets::resolve_credentials;
 use crate::config::settings::{Scheme, Settings};
 use crate::config::transport::{self, Encryption, ProtectedSite};
+use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// What an identity service's credentials are resolved against: the
 /// deployment profile, which decides whether a token endpoint may be plain
@@ -72,7 +72,7 @@ pub fn site(key: &str) -> ProtectedSite {
 /// `https` outside the development profile.
 pub(crate) fn resolve_service(
     section: &str,
-    credentials: &Credentials,
+    credentials: &CredentialsSection,
     context: ServiceContext,
 ) -> Result<Scheme, Error> {
     let refused = || {

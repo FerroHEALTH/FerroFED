@@ -107,7 +107,7 @@ fn federation(base: &str) -> Result<Federation, Box<dyn Error>> {
         ),
     )?;
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout = '5s'\noverall_timeout = '6s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[credentials.\"{ENDPOINT}\"]\nuser = \"permitted\"\npassword = \"permitted-example\"\n",
+        "profile = \"development\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout = '5s'\noverall_timeout = '6s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[credentials.\"{ENDPOINT}\"]\ncredentials.user = \"permitted\"\ncredentials.password = \"permitted-example\"\n",
         toml::Value::String(document.display().to_string())
     );
     let settings =

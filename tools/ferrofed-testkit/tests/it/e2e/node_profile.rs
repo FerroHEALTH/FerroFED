@@ -97,7 +97,7 @@ pub(super) fn member(
     let quoted = |path: &Path| toml::Value::String(path.display().to_string());
     let credentials = onward.map_or_else(String::new, |user| {
         format!(
-            "\n[credentials.\"{CHECKED}\"]\nuser = \"{}\"\npassword = \"{}\"\n",
+            "\n[credentials.\"{CHECKED}\"]\ncredentials.user = \"{}\"\ncredentials.password = \"{}\"\n",
             user.user, user.password
         )
     });

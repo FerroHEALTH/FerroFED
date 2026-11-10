@@ -62,7 +62,8 @@ use crate::config::error::binding::BindingFault;
 use crate::config::resolve::localization_budget_ms;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
-use crate::config::{Config, Credentials, transport};
+use crate::config::{Config, transport};
+use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The key of the Mitz table.
 pub const MITZ_KEY: &str = "nl_gf.mitz";
@@ -74,7 +75,7 @@ pub struct Mitz {
     /// The endpoint of the closed authorization question, `https`.
     pub url: SecretUrl,
     /// How the gateway authenticates to Mitz beside mutual TLS, if at all.
-    pub credentials: Option<Credentials>,
+    pub credentials: Option<CredentialsSection>,
     /// The TLS material the service is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,

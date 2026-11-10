@@ -8,18 +8,20 @@
 //! (<https://hl7.org/fhir/R4/terminology-service.html>):
 //!
 //! ```toml
-//! [eehrxf.terminology]
+//! [eehrxf.terminology.endpoint]
 //! url = "https://terminology.example.org/fhir/"
-//! timeout = '2s'
+//! timeout = "2s"
 //!
-//! [eehrxf.terminology.credentials]
+//! [eehrxf.terminology.endpoint.credentials]
 //! user = "ferrofed"
 //! password_file = "/run/secrets/terminology-password"
 //! ```
 //!
-//! `[eehrxf.terminology.tls]` gives the
-//! mutual TLS the server asks for, as `[pdqm]` does
-//! ([`tls`](crate::config::tls)). The server is sent the codes of the
+//! The endpoint is `ferrohealth-smart`'s outbound table: its `tls` gives
+//! the mutual TLS the server asks for, its `credentials` HTTP Basic or a
+//! client credentials grant, and its `retry` the tries of one call, once by
+//! default, since the face that asks fails closed on the first refusal. The
+//! server is sent the codes of the
 //! documents the face receives, which are health data, so its URL is held to
 //! the protected-payload policy of [`transport`]. The table is optional:
 //! with none, the component fails closed where it needs a server, refusing a
@@ -29,26 +31,21 @@
 //! shape of the table: our own design.
 
 use ferrohealth_config::removed::Removed;
-use ferrohealth_config::tls::TlsClientSection;
 use ferrohealth_config::units;
-use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_smart::config::endpoint::{EndpointSection, RetrySection};
 use std::sync::Arc;
-use std::time::Duration;
 
 use eehrxf::terminology::Terminology;
-use ferrofed_eehrxf::terminology::{BridgeTerminology, BridgeTerminologyError};
-use ferrohealth_secret::secret_url::SecretUrl;
+use ferrobridge_term::error::Error as TermError;
+use ferrofed_eehrxf::terminology::BridgeTerminology;
 use serde::Deserialize;
 
+use crate::config::Config;
 use crate::config::error::Error;
-use crate::config::secrets::resolve_credentials;
-use crate::config::service::GrantRefused;
-use crate::config::settings::Scheme;
 use crate::config::transport::{self, Encryption, ProtectedSite};
-use crate::config::{Config, Credentials};
 
-/// The key of the terminology table.
-const KEY: &str = "eehrxf.terminology";
+/// The key of its endpoint table.
+const ENDPOINT: &str = "eehrxf.terminology.endpoint";
 
 /// The `[eehrxf]` table as written.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -62,17 +59,22 @@ pub struct Eehrxf {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TerminologyServer {
-    /// The server's FHIR base URL, `https`; `http` under development only.
-    pub url: SecretUrl,
-    /// How the gateway authenticates to the server, when the transport does
-    /// not.
-    pub credentials: Option<Credentials>,
-    /// The TLS material the service is reached with: the table's `tls`
-    /// sub-table.
-    pub tls: TlsClientSection,
-    /// How long one operation may take.
-    pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// The server's FHIR base and how it is reached: `https`, `http` under
+    /// development only.
+    pub endpoint: EndpointSection,
+    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub url: Removed,
+    /// The retired `credentials`, which `endpoint.credentials` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub credentials: Removed,
+    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub tls: Removed,
+    /// The retired `timeout_ms`, which `endpoint.timeout` replaced in
     /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
@@ -81,26 +83,30 @@ pub struct TerminologyServer {
 impl Default for TerminologyServer {
     fn default() -> Self {
         Self {
-            url: SecretUrl::default(),
-            credentials: None,
-            tls: TlsClientSection::default(),
-            timeout: units::Duration::from_secs(2),
+            // NOTE: no specification governs this: our own design; the face that asks
+            // fails closed on the first refusal, so one call is tried once by default.
+            endpoint: EndpointSection {
+                timeout: units::Duration::from_secs(2),
+                retry: RetrySection {
+                    max_attempts: 1,
+                    ..RetrySection::default()
+                },
+                ..EndpointSection::default()
+            },
+            url: Removed::default(),
+            credentials: Removed::default(),
+            tls: Removed::default(),
             timeout_ms: Removed::default(),
         }
     }
 }
 
-/// The terminology server, with every secret and file read.
+/// The terminology server, checked.
 #[derive(Debug)]
 pub struct TerminologySettings {
-    /// The server's FHIR base URL, already known to parse.
-    pub url: SecretUrl,
-    /// How the gateway authenticates to it: basic credentials.
-    pub credentials: Option<Scheme>,
-    /// The TLS material it is reached with.
-    pub tls: Arc<TlsClient>,
-    /// How long one operation may take.
-    pub timeout: Duration,
+    /// How the server is reached, its URL known to parse and held to the
+    /// protected-payload policy.
+    pub endpoint: EndpointSection,
 }
 
 /// Why the terminology server's client cannot be built.
@@ -110,24 +116,20 @@ pub enum TerminologyFault {
     /// `[eehrxf.terminology]` is set and `[fhir]` is not, so nothing asks it.
     #[error("[eehrxf.terminology] serves the [fhir] face, and no [fhir] is set")]
     Unused,
-    /// The credentials name a grant the server does not take.
-    #[error(transparent)]
-    Grant(#[from] GrantRefused),
     /// The client cannot be built.
     #[error("the client of [eehrxf.terminology] cannot be built")]
-    Client(#[source] BridgeTerminologyError),
+    Client(#[source] Box<TermError>),
 }
 
 impl Config {
-    /// Resolves `[eehrxf.terminology]`: a URL that parses, carries no
-    /// userinfo and is `https` outside development, basic credentials, and a
-    /// positive timeout.
+    /// Resolves `[eehrxf.terminology]`: an endpoint table
+    /// `ferrohealth-smart` accepts, whose URL carries no userinfo and is
+    /// `https` outside development.
     ///
     /// # Errors
-    /// [`Error::Missing`] for no `url`, [`Error::Url`],
-    /// [`Error::UrlCredentials`] and [`Error::Cleartext`] for the URL,
-    /// [`Error::Zero`] for a zero timeout, [`TerminologyFault::Unused`] with
-    /// no `[fhir]`, and the errors of a secret that cannot be read.
+    /// The errors of [`crate::config::endpoint::checked`],
+    /// [`Error::Cleartext`] for the URL, and [`TerminologyFault::Unused`]
+    /// with no `[fhir]`.
     pub(crate) fn resolve_terminology(&self) -> Result<Option<TerminologySettings>, Error> {
         let Some(table) = &self.eehrxf.terminology else {
             return Ok(None);
@@ -135,53 +137,25 @@ impl Config {
         if self.fhir.is_none() {
             return Err(TerminologyFault::Unused.into());
         }
-        let url_key = format!("{KEY}.url");
-        if table.url.expose().is_empty() {
-            return Err(Error::Missing { key: url_key });
-        }
-        let url = url::Url::parse(table.url.expose()).map_err(|source| Error::Url {
-            key: url_key.clone(),
-            source,
-        })?;
-        // NOTE: no specification governs this: our own design; as the registry refuses
-        // it on an endpoint URL, a credential goes in its own section.
-        if !url.username().is_empty() || url.password().is_some() {
-            return Err(Error::UrlCredentials {
-                key: url_key,
-                section: format!("{KEY}.credentials"),
-            });
-        }
-        if table.timeout.is_zero() {
-            return Err(Error::Zero {
-                key: format!("{KEY}.timeout"),
-            });
-        }
-        let section = format!("{KEY}.credentials");
-        let credentials = table
-            .credentials
-            .as_ref()
-            .map(|credentials| resolve_credentials(&section, credentials))
-            .transpose()?;
-        let payload = if credentials.is_some() {
+        let url = crate::config::endpoint::checked(ENDPOINT, &table.endpoint)?;
+        let url_key = format!("{ENDPOINT}.url");
+        let section = format!("{ENDPOINT}.credentials");
+        let payload = if crate::config::endpoint::credentialed(&table.endpoint) {
             format!("{section} and the codes of received documents")
         } else {
             String::from("the codes of received documents")
         };
         transport::protected_payload(
             self.profile,
-            table.url.expose(),
+            url.as_str(),
             ProtectedSite {
                 url_key,
                 payload,
                 requires: Encryption::Https,
             },
         )?;
-        let tls = crate::config::tls::read(&format!("{KEY}.tls"), &table.tls)?;
         Ok(Some(TerminologySettings {
-            url: table.url.clone(),
-            credentials,
-            tls,
-            timeout: table.timeout.get(),
+            endpoint: table.endpoint.clone(),
         }))
     }
 }
@@ -198,16 +172,7 @@ pub fn terminology(
     let Some(settings) = settings else {
         return Ok((Terminology::none(), None));
     };
-    let auth = crate::config::service::authentication(
-        &format!("{KEY}.credentials"),
-        settings.credentials.as_ref(),
-    )?;
-    let client = BridgeTerminology::new(
-        settings.url.expose(),
-        &auth,
-        &settings.tls,
-        settings.timeout,
-    )
-    .map_err(TerminologyFault::Client)?;
+    let client = BridgeTerminology::from_endpoint(&settings.endpoint, ENDPOINT)
+        .map_err(|error| TerminologyFault::Client(Box::new(error)))?;
     Ok((Terminology::server(Arc::new(client.clone())), Some(client)))
 }

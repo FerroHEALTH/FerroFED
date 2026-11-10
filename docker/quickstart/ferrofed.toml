@@ -75,19 +75,19 @@ jwks_file = "/etc/ferrofed/issuer/jwks.json"
 key_file = "/etc/ferrofed/signing/signing-key.pem"
 jwks_uri = "http://ferrofed:8080/.well-known/jwks.json"
 
-[credentials."node-a-query"]
+[credentials."node-a-query".credentials]
 user = "ferroehr"
 password = "ferroehr"
 
-[credentials."node-b-query"]
+[credentials."node-b-query".credentials]
 user = "ferroehr"
 password = "ferroehr"
 
-[credentials."node-c-query"]
+[credentials."node-c-query".credentials]
 user = "ferroehr"
 password = "ferroehr"
 
-[credentials."node-d-query"]
+[credentials."node-d-query".credentials]
 user = "ferroehr"
 password = "ferroehr"
 

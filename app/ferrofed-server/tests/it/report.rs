@@ -105,7 +105,7 @@ fn configuration(gateway: &str, admin: &str, document: &Path) -> String {
          [metrics]\nlisten = \"{admin}\"\n\n\
          [registry]\ndocument = {document}\n\n\
          [federation]\nid = \"{federation}\"\nnode_selection = \"ask-all\"\ndefault_namespace = \"urn:oid:{namespace}\"\n\n\
-         [credentials.\"node-a-pub\"]\nuser = \"{professional}\"\npassword = \"{professional_password}\"\n\n\
+         [credentials.\"node-a-pub\"]\ncredentials.user = \"{professional}\"\ncredentials.password = \"{professional_password}\"\n\n\
          [[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"{EHR_ID}\"\n{}",
         auth_toml()
     );
@@ -306,7 +306,7 @@ async fn a_stopped_gateway_is_reported_with_every_live_part_named_missing() -> T
     let toml = format!(
         "profile = \"development\"\n\n[server]\nlisten = \"127.0.0.1:9\"\n\n\
          [federation]\ndefault_namespace = \"urn:oid:2.999.4242\"\n\n\
-         [credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"SENTINEL-TOKEN-r705\"\n{pixm}"
+         [credentials.\"node-a-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"SENTINEL-TOKEN-r705\"\n{pixm}"
     );
     let output = tokio::task::spawn_blocking(move || {
         binary(&["report", "--out", &out_arg], &toml).map_err(|error| error.to_string())

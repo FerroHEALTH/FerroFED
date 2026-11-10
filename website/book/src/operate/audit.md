@@ -114,21 +114,30 @@ read and how `[access_log]` is configured are on
 destination = "repository"             # "log" or "off" under development, or without a registry
 
 [audit.repository]
-url = "https://arr.example.org/fhir"   # the repository's FHIR base
 hostname = "gateway.example.org"       # the gateway's network address in each record
 spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # source_id = "gateway.example.org"    # source.observer, the hostname by default
 # enterprise_site = "2.999.40"         # source.site
 # spool_max_size = "64MiB"
 # spool_max_events = 100000
-# spool_write_timeout = "2s"        # storing one record in the spool
-# timeout = "5s"                    # each delivery
-# retry_max = "1min"                 # the longest wait between two attempts
+# spool_write_timeout = "2s"           # storing one record in the spool
 
-[audit.repository.tls]                 # when the repository asks for a client certificate
+[audit.repository.endpoint]
+url = "https://arr.example.org/fhir"   # the repository's FHIR base
+# timeout = "5s"                       # each delivery
+# retry.max_backoff = "1min"           # the longest wait between two delivery rounds
+
+[audit.repository.endpoint.tls]        # when the repository asks for a client certificate
 client_identity_file = "/run/secrets/atna-client.pem"
 trust_roots_file = "/etc/ferrofed/atna-roots.pem"      # optional
 ```
+
+`[audit.repository.endpoint]` is `ferrohealth-smart`'s outbound table, the
+one every FerroHEALTH product reaches a service through: `url`, `timeout`,
+`connect_timeout`, the `retry` table (`max_attempts`, `initial_backoff`,
+`max_backoff`), `tls` and `credentials` (HTTP Basic or a client credentials
+grant under `credentials.oauth`). One delivery is one round of the `retry`
+table's tries, and a failed round waits `retry.max_backoff` before the next.
 
 - `destination` has no default outside `profile = "development"` once a
   registry is configured, or `[pixm]`, `[pdqm]` or `[pmir]` is set, since
@@ -161,8 +170,9 @@ The FHIR Feed records follow the policy of the ITI-55 audit trail. Every
 record is written to the spool first, flushed to disk, and delivered from
 there in order, so it counts as recorded once it is on disk. While the
 repository is down, or answers `5xx`, `408` or `429`, the transactions go on
-and the records wait in the spool, and the gateway tries again after a wait
-that doubles from 250 ms up to `retry_max`, with jitter. A record the
+and the records wait in the spool. One delivery is one round of the
+`[audit.repository.endpoint]` `retry` table's tries, and a failed round
+waits `retry.max_backoff` before the gateway tries again. A record the
 repository refuses with any other `4xx` would be refused again, so it is
 moved to the spool's `quarantine` subdirectory, logged with its sequence
 number and status and never its content, and the drain goes on; a spooled

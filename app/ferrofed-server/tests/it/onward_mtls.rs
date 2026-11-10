@@ -151,7 +151,7 @@ fn tls_keys(dir: &Path, front: &MutualTls) -> Result<String, Box<dyn Error>> {
 /// `token_url` authenticating by certificate, with `extra` keys.
 fn credentials(tls: &str, token_url: &str, extra: &str) -> String {
     format!(
-        "[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".oauth]\nclient_auth = \"tls_client_auth\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n{extra}"
+        "[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".credentials.oauth]\nclient_auth = \"tls_client_auth\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n{extra}"
     )
 }
 
@@ -159,7 +159,7 @@ fn credentials(tls: &str, token_url: &str, extra: &str) -> String {
 /// `expected` admits.
 fn smart(error: &ConfigError, expected: impl Fn(&SmartError) -> bool) -> bool {
     matches!(error, ConfigError::Smart { section, source }
-        if section == "credentials.node-a-pub.oauth" && expected(source))
+        if section == "credentials.node-a-pub.credentials.oauth" && expected(source))
 }
 
 /// The configuration text of a gateway over node A at `a` and node B at
@@ -354,7 +354,7 @@ fn dpop_and_certificate_binding_on_one_grant_are_refused() -> TestResult {
     assert!(two_bindings(&error), "{error:?}");
 
     let fapi2 = format!(
-        "{base}[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"tls_client_auth\"\nscope = \"{SCOPE}\"\n{both}"
+        "{base}[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".credentials.oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"tls_client_auth\"\nscope = \"{SCOPE}\"\n{both}"
     );
     let error = refused(&fapi2)?;
     assert!(two_bindings(&error), "{error:?}");
@@ -398,7 +398,7 @@ fn mutual_tls_without_a_certificate_or_over_http_is_refused() -> TestResult {
         matches!(
             &error,
             ConfigError::TlsFault(TlsFault::Cleartext { key })
-                if key == "credentials.node-a-pub.oauth.token_endpoint"
+                if key == "credentials.node-a-pub.credentials.oauth.token_endpoint"
         ),
         "{error:?}"
     );
@@ -466,7 +466,7 @@ fn a_fapi2_grant_by_certificate_needs_no_key_of_its_own() -> TestResult {
     let dir = tempfile::tempdir()?;
     let front = MutualTls::front("http://127.0.0.1:9")?;
     let tables = format!(
-        "[credentials.\"node-a-pub\"]\n{}\n[credentials.\"node-a-pub\".oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"self_signed_tls_client_auth\"\nscope = \"{SCOPE}\"\ncertificate_bound = true\n",
+        "[credentials.\"node-a-pub\"]\n{}\n[credentials.\"node-a-pub\".credentials.oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"self_signed_tls_client_auth\"\nscope = \"{SCOPE}\"\ncertificate_bound = true\n",
         tls_keys(dir.path(), &front)?
     );
     let settings = settings(&text(
@@ -530,7 +530,7 @@ fn no_rendering_shows_the_client_identity() -> TestResult {
 /// `mtls_alias_hosts`.
 fn fapi2_by_certificate(tls: &str, hosts: &str) -> String {
     format!(
-        "[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"tls_client_auth\"\nscope = \"{SCOPE}\"\ncertificate_bound = true\nmtls_alias_hosts = {hosts}\n"
+        "[credentials.\"node-a-pub\"]\n{tls}\n[credentials.\"node-a-pub\".credentials.oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"tls_client_auth\"\nscope = \"{SCOPE}\"\ncertificate_bound = true\nmtls_alias_hosts = {hosts}\n"
     )
 }
 
@@ -615,7 +615,7 @@ fn alias_hosts_without_a_mutual_tls_fapi2_grant_are_refused() -> TestResult {
     std::fs::write(&client_key, oauth::Curve::P256.pem()?)?;
     std::fs::write(&dpop, oauth::Curve::P256.pem()?)?;
     let by_key = format!(
-        "[credentials.\"node-a-pub\".oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nassertion_audience = \"issuer\"\nprivate_key_file = {}\ndpop_key_file = {}\nscope = \"{SCOPE}\"\n{hosts}",
+        "[credentials.\"node-a-pub\".credentials.oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nassertion_audience = \"issuer\"\nprivate_key_file = {}\ndpop_key_file = {}\nscope = \"{SCOPE}\"\n{hosts}",
         toml::Value::String(client_key.display().to_string()),
         toml::Value::String(dpop.display().to_string())
     );
@@ -680,7 +680,7 @@ fn a_grant_beside_tls_material_names_no_certificate_of_its_own() -> TestResult {
                 .ok_or("the key is refused at load")?;
         let shown = format!("{error:?}");
         assert!(
-            shown.contains(&format!("credentials.node-a-pub.oauth.{key}"))
+            shown.contains(&format!("credentials.node-a-pub.credentials.oauth.{key}"))
                 && shown.contains(&format!("unknown field `{key}`")),
             "{key} is an unknown key: {shown}"
         );
@@ -700,14 +700,13 @@ fn a_service_credentials_section_takes_no_tls_material() -> TestResult {
         "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"Qz7synthetic\"\ntls = {{ client_identity_file = {} }}\n",
         toml::Value::String(identity.display().to_string())
     );
-    let error = refused(&text)?;
+    let error = Config::from_sources(Some(&injected(&text)), &BTreeMap::new())
+        .err()
+        .ok_or("the key is refused at load")?;
+    let shown = format!("{error:?}");
     assert!(
-        matches!(
-            &error,
-            ConfigError::TlsFault(TlsFault::OnService { section })
-                if section == "pixm.manager[0].credentials"
-        ),
-        "{error:?}"
+        shown.contains("pixm.manager[0].credentials.tls") && shown.contains("unknown field `tls`"),
+        "a service's credentials table is ferrohealth-smart's, which takes no tls: {shown}"
     );
     Ok(())
 }

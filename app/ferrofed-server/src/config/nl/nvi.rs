@@ -34,7 +34,7 @@
 //! GFI-005; Nuts RFC021):
 //!
 //! ```toml
-//! [nl_gf.nvi.credentials.nuts]
+//! [nl_gf.nvi.nuts]
 //! authorization_server = "https://nuts.example.org/oauth2/nvi"
 //! scope = "nl-gf-localization"
 //! did = "did:web:gateway.example.org"
@@ -42,7 +42,7 @@
 //! key_file = "/run/secrets/nuts-holder.pem"
 //! dpop_key_file = "/run/secrets/nvi-dpop.pem"
 //!
-//! [[nl_gf.nvi.credentials.nuts.credential]]
+//! [[nl_gf.nvi.nuts.credential]]
 //! input_descriptor = "organization_credential"
 //! file = "/run/secrets/organization.jwt"
 //! ```
@@ -65,7 +65,8 @@ use crate::config::secrets::resolve_credentials;
 use crate::config::settings::OnwardGrant;
 use crate::config::settings::Scheme;
 use crate::config::transport::ProtectedSite;
-use crate::config::{Config, Credentials, transport};
+use crate::config::{Config, transport};
+use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The NVI localizer, as the configuration writes it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -74,9 +75,12 @@ pub struct Nvi {
     /// The Localization Service's FHIR base URL, `https`; no rendering shows
     /// its userinfo.
     pub url: SecretUrl,
-    /// How the gateway authenticates to the service, when the transport does
-    /// not: basic credentials or the Nuts grant.
-    pub credentials: Option<Credentials>,
+    /// How the gateway authenticates to the service with basic credentials,
+    /// `ferrohealth-smart`'s credentials table, when the transport does not.
+    pub credentials: Option<CredentialsSection>,
+    /// The Nuts grant the gateway authenticates to the service with, in place
+    /// of basic credentials (`[nl_gf.nvi.nuts]`).
+    pub nuts: Option<nuts::Nuts>,
     /// Each care provider, by its URA, mapped to the registry member that
     /// holds its data; optional when the directory publishes each member
     /// organisation's URA, and then equal to the map it gives.
@@ -140,40 +144,41 @@ impl NviSettings {
     #[must_use]
     pub fn grant_site(&self) -> Option<(String, ProtectedSite)> {
         match &self.credentials {
-            Some(NviCredentials::Nuts(grant)) => Some(grant.site(CREDENTIALS_KEY)),
+            Some(NviCredentials::Nuts(grant)) => Some(grant.site(NVI_KEY)),
             _ => None,
         }
     }
 }
 
-/// Resolves the credentials section `table` of the NVI: basic credentials
-/// or the Nuts grant, one of them.
-fn credentials(table: &Credentials) -> Result<NviCredentials, Error> {
+/// Resolves how the gateway authenticates to the NVI `nvi` names: basic
+/// credentials or the Nuts grant, one of them, or none.
+fn credentials(nvi: &Nvi) -> Result<Option<NviCredentials>, Error> {
     // NOTE: the IG's Localization page (Authentication and Authorization) and GF-Authentication
     // define the Nuts profile for the data user and no other grant, so every other grant is refused.
-    if table.oauth.is_some() {
+    if let Some(table) = &nvi.credentials
+        && table.oauth.is_some()
+    {
         return Err(Error::Binding(BindingFault::NviGrant {
             key: format!("{CREDENTIALS_KEY}.oauth"),
         }));
     }
-    if let Some(grant) = &table.nuts {
-        let header =
-            table.user.is_some() || table.password.is_some() || table.password_file.is_some();
-        if header {
-            return Err(Error::Credentials(CredentialsFault::Scheme {
-                section: CREDENTIALS_KEY.to_owned(),
-            }));
+    match (&nvi.nuts, &nvi.credentials) {
+        (Some(_), Some(_)) => Err(Error::Credentials(CredentialsFault::Scheme {
+            section: NVI_KEY.to_owned(),
+        })),
+        (Some(grant), None) => nuts::resolve(&format!("{NVI_KEY}.{}", nuts::KEY), grant)
+            .map(|grant| Some(NviCredentials::Nuts(grant))),
+        (None, Some(table)) => {
+            let scheme = resolve_credentials(CREDENTIALS_KEY, table)?;
+            if scheme.is_grant() {
+                return Err(Error::Credentials(CredentialsFault::GrantNotHere {
+                    section: CREDENTIALS_KEY.to_owned(),
+                }));
+            }
+            Ok(Some(NviCredentials::Header(scheme)))
         }
-        return nuts::resolve(&format!("{CREDENTIALS_KEY}.{}", nuts::KEY), grant)
-            .map(NviCredentials::Nuts);
+        (None, None) => Ok(None),
     }
-    let scheme = resolve_credentials(CREDENTIALS_KEY, table)?;
-    if scheme.is_grant() {
-        return Err(Error::Credentials(CredentialsFault::GrantNotHere {
-            section: CREDENTIALS_KEY.to_owned(),
-        }));
-    }
-    Ok(NviCredentials::Header(scheme))
 }
 
 /// Resolves `[nl_gf.nvi]`.
@@ -212,7 +217,7 @@ pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> 
             namespace: bsn.clone(),
         }));
     }
-    let credentials = nvi.credentials.as_ref().map(credentials).transpose()?;
+    let credentials = credentials(nvi)?;
     // NOTE: Annex B §B.7: the pseudonym is personal data like the BSN, so the
     // service URL is a protected-payload site; one admitted under development is reported by check.
     transport::protected_payload(

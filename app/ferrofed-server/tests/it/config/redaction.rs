@@ -112,9 +112,9 @@ fn configuration(
     let audit = crate::support::audit_toml();
     let key = toml::Value::String(crate::support::signing_key_file().to_owned());
     let text = format!(
-        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\n\
-         [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
-         [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n\n\
+        "[credentials.\"node-a-pub\".credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\n\
+         [credentials.\"node-b-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{PASSWORD}\"\n\n\
+         [credentials.\"node-d-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password_file = {path}\n\n\
          [telemetry.otlp]\nendpoint = \"{otlp}\"\n{audit}\n\
          [[pixm.manager]]\nurl = \"{pix_url}\"\n\
          members = {{ \"node-a\" = \"urn:oid:2.999.1\" }}\n\n\
@@ -122,11 +122,11 @@ fn configuration(
     );
     let env = BTreeMap::from([
         (
-            String::from("FERROFED__CREDENTIALS__NODE-C-PUB__USER"),
+            String::from("FERROFED__CREDENTIALS__NODE-C-PUB__CREDENTIALS__USER"),
             String::from("gateway"),
         ),
         (
-            String::from("FERROFED__CREDENTIALS__NODE-C-PUB__PASSWORD"),
+            String::from("FERROFED__CREDENTIALS__NODE-C-PUB__CREDENTIALS__PASSWORD"),
             ENV_PASSWORD.to_owned(),
         ),
     ]);
@@ -240,7 +240,6 @@ fn every_secret_still_resolves_to_its_value() -> TestResult {
     let client_secret = |scheme: &Scheme| -> Result<String, Box<dyn Error>> {
         match scheme {
             Scheme::Oauth { written, .. } => Ok(written
-                .0
                 .client_secret
                 .as_ref()
                 .map(secrecy::ExposeSecret::expose_secret)
@@ -253,7 +252,7 @@ fn every_secret_still_resolves_to_its_value() -> TestResult {
         let value = match scheme {
             // NOTE: §13.1 N25, a node's grant holds no client secret; the PIX
             // Manager's grant below carries the one this test resolves.
-            Scheme::Oauth { written, .. } if written.0.client_secret.is_none() => continue,
+            Scheme::Oauth { written, .. } if written.client_secret.is_none() => continue,
             Scheme::Basic { password, .. } => password.expose(),
             _ => return Err("a scheme this test does not know".into()),
         };
@@ -407,9 +406,9 @@ fn config_check_prints_no_credential() -> TestResult {
     let path = toml::Value::String(file.path().display().to_string());
     let key = toml::Value::String(crate::support::signing_key_file().to_owned());
     let text = format!(
-        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\n\
-         [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"{PASSWORD}\"\n\n\
-         [credentials.\"node-d-pub\"]\nuser = \"gateway\"\npassword_file = {path}\n"
+        "[credentials.\"node-a-pub\".credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\n\
+         [credentials.\"node-b-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{PASSWORD}\"\n\n\
+         [credentials.\"node-d-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password_file = {path}\n"
     );
     let output = binary(&["config", "check"], &text)?;
     assert!(output.status.success(), "the configuration is accepted");

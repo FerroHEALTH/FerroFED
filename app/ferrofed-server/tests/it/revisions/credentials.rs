@@ -38,7 +38,7 @@ fn id(number: u64) -> Result<RevisionId, &'static str> {
 /// The Basic password set by a reference to `file`.
 fn by_file(file: &str) -> SecretChange {
     SecretChange {
-        key: String::from("password"),
+        key: String::from("credentials.password"),
         value: None,
         file: Some(file.to_owned()),
         clear: false,
@@ -48,7 +48,7 @@ fn by_file(file: &str) -> SecretChange {
 /// The Basic password set by the value [`VALUE`].
 fn by_value() -> SecretChange {
     SecretChange {
-        key: String::from("password"),
+        key: String::from("credentials.password"),
         value: Some(WriteOnly::new(VALUE)),
         file: None,
         clear: false,
@@ -127,7 +127,7 @@ impl Gateway {
 async fn applied_credentials(gateway: &Gateway) -> Result<Applied, Box<dyn Error>> {
     let file = gateway.token_file("node-a-token")?;
     let (status, text) = gateway
-        .save_credentials(1, "user = \"gateway\"", vec![by_file(&file)])
+        .save_credentials(1, "credentials.user = \"gateway\"", vec![by_file(&file)])
         .await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     let (status, text) = gateway
@@ -308,7 +308,7 @@ async fn approval_by_the_author_is_refused_and_by_a_second_operator_admits_the_a
     let gateway = Gateway::configured(("approval = [\"onward-credentials\"]\n", ""), None)?;
     let file = gateway.token_file("node-a-token")?;
     let (status, text) = gateway
-        .save_credentials(1, "user = \"gateway\"", vec![by_file(&file)])
+        .save_credentials(1, "credentials.user = \"gateway\"", vec![by_file(&file)])
         .await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     let (status, text) = gateway
@@ -346,7 +346,7 @@ async fn an_approval_of_a_revision_that_needs_none_is_refused() -> TestResult {
     let gateway = Gateway::configured(("approval = [\"consent\"]\n", ""), None)?;
     let file = gateway.token_file("node-a-token")?;
     let (status, text) = gateway
-        .save_credentials(1, "user = \"gateway\"", vec![by_file(&file)])
+        .save_credentials(1, "credentials.user = \"gateway\"", vec![by_file(&file)])
         .await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     let (status, text) = gateway
@@ -374,13 +374,13 @@ async fn a_secret_value_is_written_to_an_owner_only_file_and_never_shown() -> Te
     tracing::subscriber::set_global_default(capture)?;
     let gateway = Gateway::configured((&with_secrets_dir(secrets.path(), ""), ""), None)?;
     let (status, text) = gateway
-        .save_credentials(1, "user = \"gateway\"", vec![by_value()])
+        .save_credentials(1, "credentials.user = \"gateway\"", vec![by_value()])
         .await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
     assert!(!text.contains(VALUE), "{text}");
     let saved: Revision = serde_json::from_str(&text)?;
     let held: toml::Table = toml::from_str(&saved.toml)?;
-    let reference = held["credentials"][ENDPOINT]["password_file"]
+    let reference = held["credentials"][ENDPOINT]["credentials"]["password_file"]
         .as_str()
         .ok_or("the revision references the file")?;
     assert!(reference.starts_with(&secrets.path().display().to_string()));
@@ -420,10 +420,10 @@ async fn a_secret_value_is_written_to_an_owner_only_file_and_never_shown() -> Te
     assert_eq!(Owner::Console, section.owner);
     assert_eq!(Some(ConsoleState::Running), section.state);
     assert_eq!(
-        Some(String::from("{ user = \"gateway\" }")),
+        Some(String::from("{ credentials = { user = \"gateway\" } }")),
         section.settings
     );
-    assert_eq!("password", section.secrets[0].key);
+    assert_eq!("credentials.password", section.secrets[0].key);
     assert_eq!(reference, section.secrets[0].reference);
     let store = std::fs::read(&gateway.store)?;
     assert!(
@@ -442,7 +442,7 @@ async fn a_secret_value_is_written_to_an_owner_only_file_and_never_shown() -> Te
 async fn a_secret_value_without_a_secrets_directory_is_refused() -> TestResult {
     let gateway = Gateway::start("")?;
     let (status, text) = gateway
-        .save_credentials(1, "user = \"gateway\"", vec![by_value()])
+        .save_credentials(1, "credentials.user = \"gateway\"", vec![by_value()])
         .await?;
     assert_eq!(StatusCode::CONFLICT, status, "{text}");
     assert_eq!("secret-store-unavailable", error_body(&text)?.code);
@@ -456,7 +456,7 @@ async fn a_refused_save_removes_the_secret_file_it_wrote() -> TestResult {
     let secrets = tempfile::tempdir()?;
     let gateway = Gateway::configured((&with_secrets_dir(secrets.path(), ""), ""), None)?;
     let (status, text) = gateway
-        .save_credentials(1, "user = \"gate:way\"", vec![by_value()])
+        .save_credentials(1, "credentials.user = \"gate:way\"", vec![by_value()])
         .await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
     assert!(!text.contains(VALUE), "{text}");
@@ -502,7 +502,7 @@ async fn settings_that_name_a_secret_are_refused() -> TestResult {
     let (status, text) = gateway
         .save_credentials(
             1,
-            &format!("user = \"gateway\"\npassword = \"{VALUE}\""),
+            &format!("credentials.user = \"gateway\"\ncredentials.password = \"{VALUE}\""),
             Vec::new(),
         )
         .await?;
@@ -519,11 +519,11 @@ async fn a_credential_the_file_provides_is_read_only() -> TestResult {
     std::fs::write(&password, "synthetic-file-password")?;
     let reference = password.display().to_string();
     let gateway = Gateway::start(&format!(
-        "\n[credentials.\"node-a-pub\"]\nuser = \"synthetic-user\"\npassword_file = {}\n",
+        "\n[credentials.\"node-a-pub\"]\ncredentials.user = \"synthetic-user\"\ncredentials.password_file = {}\n",
         toml::Value::String(reference.clone())
     ))?;
     let (status, text) = gateway
-        .save_credentials(1, "user = \"other\"", Vec::new())
+        .save_credentials(1, "credentials.user = \"other\"", Vec::new())
         .await?;
     assert_eq!(StatusCode::CONFLICT, status, "{text}");
     assert_eq!("resource-file-owned", error_body(&text)?.code);

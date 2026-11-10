@@ -637,18 +637,22 @@ members = ["node-a"]                         # each also declared for Electronic
 The terminology server, when you configure one:
 
 ```toml
-[eehrxf.terminology]
+[eehrxf.terminology.endpoint]
 url = "https://terminology.example.org/fhir/"   # the server's FHIR base
-timeout = "2s"                               # one operation's budget; 2000 unless set
+timeout = "2s"                                  # one operation's budget; 2s unless set
 
-[eehrxf.terminology.credentials]
+[eehrxf.terminology.endpoint.credentials]
 user = "ferrofed"
 password_file = "/run/secrets/terminology-password"
 ```
 
-An `[eehrxf.terminology.tls]` table gives the mutual TLS the server asks
-for, as for the identity services: `client_identity` or
-`client_identity_file`, `trust_roots_file` and `min_version`. Outside
+`[eehrxf.terminology.endpoint]` is `ferrohealth-smart`'s outbound table.
+Its `tls` sub-table gives the mutual TLS the server asks for:
+`client_identity` or `client_identity_file`, `trust_roots_file` and
+`min_version`. Its `credentials` take HTTP Basic or a client credentials
+grant under `oauth`, and its `retry` table the tries of one call, once
+unless `retry.max_attempts` says more, since the face fails closed on the
+first refusal. Outside
 `profile = "development"` the URL must be `https`, because the server is sent
 the codes of the documents you receive.
 

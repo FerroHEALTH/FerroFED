@@ -93,9 +93,12 @@ impl Running {
         std::fs::write(&key_file, ferrofed_testkit::oauth::Curve::P384.pem()?)?;
         let issuer = Issuer::new(ISSUER)?;
         let text = gateway_configuration(&document, &issuer, &key_file)?;
-        let settings =
+        // NOTE: no specification governs this: our own design; the settings live across the
+        // awaits below, so they are boxed to keep the future small.
+        let settings = Box::new(
             ferrofed_server::config::Config::from_sources(Some(&text), &BTreeMap::new())?
-                .resolve()?;
+                .resolve()?,
+        );
         let federation = Federation::load(&settings)?.ok_or("a registry is configured")?;
         let gateway = TcpListener::bind("127.0.0.1:0").await?;
         let gateway_address = gateway.local_addr()?;

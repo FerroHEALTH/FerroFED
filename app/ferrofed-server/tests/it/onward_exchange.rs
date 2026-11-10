@@ -76,7 +76,7 @@ fn key_file(dir: &Path, name: &str) -> Result<toml::Value, Box<dyn Error>> {
 fn own_grant(dir: &Path, token_url: &str, extra: &str) -> Result<String, Box<dyn Error>> {
     let key = key_file(dir, "client.pem")?;
     Ok(format!(
-        "[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\nprivate_key_file = {key}\nassertion_alg = \"ES384\"\n{extra}"
+        "[credentials.\"node-a-pub\".credentials.oauth]\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\nprivate_key_file = {key}\nassertion_alg = \"ES384\"\n{extra}"
     ))
 }
 
@@ -85,7 +85,7 @@ fn own_grant(dir: &Path, token_url: &str, extra: &str) -> Result<String, Box<dyn
 /// names the gateway as the actor, with `onward` keys.
 fn exchange_grant(dir: &Path, token_url: &str, onward: &str) -> Result<String, Box<dyn Error>> {
     Ok(format!(
-        "{}\n[credentials.\"node-a-pub\".onward]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\nprofile = \"rfc9068\"\ntoken_endpoint = \"{token_url}\"\nactor_assertion = true\n{onward}\n[credentials.\"node-a-pub\".onward.keys]\nmax_onward_lifetime = '1h'\n",
+        "{}\n[credentials.\"node-a-pub\".credentials.onward]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\nprofile = \"rfc9068\"\ntoken_endpoint = \"{token_url}\"\nactor_assertion = true\n{onward}\n[credentials.\"node-a-pub\".credentials.onward.keys]\nmax_onward_lifetime = '1h'\n",
         own_grant(dir, token_url, "")?
     ))
 }
@@ -431,7 +431,7 @@ fn the_configuration_refuses_an_exchange_without_a_resource_and_a_bad_dpop_key()
         matches!(
             &error,
             ConfigError::Smart { section, source }
-                if section == "credentials.node-a-pub.onward"
+                if section == "credentials.node-a-pub.credentials.onward"
                     && matches!(source.as_ref(), SmartError::Missing { key } if *key == "credentials.onward.audiences")
         ),
         "{error:?}"
@@ -448,7 +448,7 @@ fn the_configuration_refuses_an_exchange_without_a_resource_and_a_bad_dpop_key()
         matches!(
             &error,
             ConfigError::Smart { section, source }
-                if section == "credentials.node-a-pub.oauth"
+                if section == "credentials.node-a-pub.credentials.oauth"
                     && matches!(source.as_ref(), SmartError::DpopKey { .. })
         ),
         "{error:?}"

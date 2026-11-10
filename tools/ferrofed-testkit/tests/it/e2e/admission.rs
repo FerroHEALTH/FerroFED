@@ -111,7 +111,7 @@ fn federation(dir: &Path, registry: &str) -> Result<Option<Federation>, Box<dyn 
     std::fs::write(&key, oauth::Curve::P384.pem()?)?;
     let quoted = |path: &Path| toml::Value::String(path.display().to_string());
     let text = format!(
-        "[registry]\ndocument = {}\n\n[federation]\nper_node_timeout = '20s'\noverall_timeout = '25s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",
+        "[registry]\ndocument = {}\n\n[federation]\nper_node_timeout = '20s'\noverall_timeout = '25s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\nendpoint.url = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",
         quoted(&document),
         quoted(&key),
         unreachable::ADDRESS,

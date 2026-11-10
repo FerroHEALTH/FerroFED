@@ -8,14 +8,13 @@
 //! ([`TerminologyServer`]) with `ferrobridge_term::client::Client` in FHIR
 //! R4: `ConceptMap/$translate`, `CodeSystem/$lookup` and
 //! `ValueSet/$validate-code`, each posted as its `Parameters`
-//! (<https://hl7.org/fhir/R4/operations.html>). The HTTP client is the one
-//! every FHIR service of the gateway is reached with, with its credential
-//! and its TLS material, mutual TLS and private trust roots included. A
+//! (<https://hl7.org/fhir/R4/operations.html>). The client is built from
+//! the server's `ferrohealth-smart` endpoint table, the outbound client of
+//! every FerroHEALTH product, with its credential, its retry table and its
+//! TLS material, mutual TLS and private trust roots included. A
 //! refusal, a time-out, a transport failure and an answer that does not
 //! read are each a [`TerminologyError`] naming the operation, so no failed
 //! call is taken as an answer.
-
-use std::time::Duration;
 
 use async_trait::async_trait;
 use eehrxf::terminology::Candidate;
@@ -25,17 +24,14 @@ use eehrxf::terminology::TerminologyError;
 use eehrxf::terminology::TerminologyServer;
 use ferrobridge_term::client::Client;
 use ferrobridge_term::concept::Concept;
-use ferrobridge_term::config::{Config, RetryPolicy, WireVersion};
+use ferrobridge_term::config::WireVersion;
 use ferrobridge_term::error::Error as TermError;
 use ferrobridge_term::outcome::{LookupOutcome, TranslateOutcome, ValidateOutcome};
 use ferrobridge_term::request::{Coded, Translation, Validation};
-use ferrofed_identity::fhir::Authentication;
-use ferrofed_identity::fhir::ClientError;
-use ferrofed_identity::fhir::http_client;
-use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_smart::config::ServerTls;
+use ferrohealth_smart::config::endpoint::EndpointSection;
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::primitives::{Code, String as FhirString, Uri};
-use url::Url;
 
 /// A FHIR R4 terminology server reached over HTTP.
 #[derive(Debug, Clone)]
@@ -50,53 +46,18 @@ impl BridgeTerminology {
     pub const fn client(&self) -> &Client {
         &self.client
     }
-}
 
-/// Why the client of a terminology server cannot be built.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum BridgeTerminologyError {
-    /// The base is no absolute URL.
-    #[error("the terminology server's base is no absolute URL")]
-    Base(#[source] url::ParseError),
-    /// The HTTP client cannot be built.
-    #[error("the HTTP client of the terminology server cannot be built")]
-    Http(#[source] ClientError),
-    /// The terminology client refuses the base.
-    #[error("the terminology client cannot be built")]
-    Client(#[source] Box<TermError>),
-}
-
-impl BridgeTerminology {
-    /// Returns the client of the server at `base`, authenticated with
-    /// `auth`, over the TLS material `tls`, each call bounded by `timeout`.
-    ///
-    /// Each call is sent once: no specification governs a retry here, and
-    /// the face that asks fails closed on the first refusal (our own
-    /// design).
+    /// Returns the client of the server `endpoint` describes, the table at
+    /// the dotted `key`, its TLS read by `ferrohealth-smart`'s reader over
+    /// `ferrohealth-server`'s TLS client.
     ///
     /// # Errors
     ///
-    /// [`BridgeTerminologyError::Base`] for a base that does not parse,
-    /// [`BridgeTerminologyError::Http`] for an HTTP client that cannot be
-    /// built, and [`BridgeTerminologyError::Client`] for a base that cannot
-    /// carry a path.
-    pub fn new(
-        base: &str,
-        auth: &Authentication,
-        tls: &TlsClient,
-        timeout: Duration,
-    ) -> Result<Self, BridgeTerminologyError> {
-        let base = Url::parse(base).map_err(BridgeTerminologyError::Base)?;
-        let http = http_client(auth, tls).map_err(BridgeTerminologyError::Http)?;
-        let config = Config::new(base, WireVersion::R4)
-            .with_timeout(timeout)
-            .with_retry(RetryPolicy {
-                max_attempts: 1,
-                ..RetryPolicy::default()
-            });
-        let client = Client::with_http(config, http)
-            .map_err(|error| BridgeTerminologyError::Client(Box::new(error)))?;
+    /// The terminology client's [`TermError::Endpoint`] when the outbound
+    /// client refuses the table, its TLS or its credential, and
+    /// [`TermError::BaseUrl`] for a URL that cannot carry a path.
+    pub fn from_endpoint(endpoint: &EndpointSection, key: &'static str) -> Result<Self, TermError> {
+        let client = Client::from_endpoint(endpoint, key, &ServerTls, WireVersion::R4)?;
         Ok(Self { client })
     }
 }

@@ -19,11 +19,11 @@ use std::sync::Arc;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
-use crate::config::Credentials;
 use crate::config::error::Error;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::transport;
+use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The PIXm resolver: the identity binding of N3 over ITI-83 (Annex A.1).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -51,7 +51,7 @@ pub struct PixManager {
     pub members: BTreeMap<String, String>,
     /// How the gateway authenticates to the Manager, when the transport does
     /// not.
-    pub credentials: Option<Credentials>,
+    pub credentials: Option<CredentialsSection>,
     /// The TLS material the service is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,
