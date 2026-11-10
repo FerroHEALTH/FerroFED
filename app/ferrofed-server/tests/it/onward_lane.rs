@@ -74,7 +74,7 @@ fn lane(issuer: &str, kind: &str, extra: &str) -> String {
             "indicators = [\"{node}\"]\n",
             "{extra}",
             "[credentials.\"node-a-pub\".onward.keys]\n",
-            "max_onward_lifetime = 3600\n",
+            "max_onward_lifetime = '1h'\n",
         ),
         issuer = issuer,
         client = CLIENT_ID,

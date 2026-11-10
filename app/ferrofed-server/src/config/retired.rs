@@ -90,6 +90,11 @@ const URL_LIFETIME: Retired = Retired::replaced(
     span!("fhir.document_url_lifetime"),
     UNITS,
 );
+const ACT_REPRESENTATIVE: Retired = Retired::replaced(
+    "act_is_representative",
+    "auth.issuer[].act_represents_patient, true on the patients issuer whose act claim names the patient's representative",
+    PREPARING,
+);
 const STORE_TIMEOUT: Retired = Retired::replaced("store.timeout_ms", span!("store.timeout"), UNITS);
 const STORE_SWEEP: Retired = Retired::replaced(
     "store.sweep_interval_s",
@@ -195,6 +200,7 @@ const ALL: &[Retired] = &[
     CONFIG_POLL,
     CONFIG_CONFIRM,
     URL_LIFETIME,
+    ACT_REPRESENTATIVE,
     STORE_TIMEOUT,
     STORE_SWEEP,
     TERMINOLOGY_TIMEOUT,
@@ -299,6 +305,15 @@ pub fn check(config: &Config) -> Result<(), RemovedKeys> {
     #[cfg(feature = "binding-nl")]
     if let Some(mitz) = config.nl_gf.as_ref().and_then(|nl| nl.mitz.as_ref()) {
         found(mitz.timeout_ms, &MITZ_TIMEOUT);
+    }
+    for (index, issuer) in config.trust.issuer.iter().enumerate() {
+        if let Some(patient) = &issuer.patient {
+            removals.check_under(
+                patient.act_is_representative,
+                &ACT_REPRESENTATIVE,
+                &format!("trust.issuer[{index}].patient"),
+            );
+        }
     }
     removals.finish()
 }

@@ -95,7 +95,7 @@ async fn a_patient_query_is_one_result_set_over_both_nodes() -> TestResult {
         assert_eq!(1, bodies.len(), "each node is asked once: {bodies:?}");
         let sent = bodies.first().ok_or("one request")?;
         assert!(
-            sent.contains(&format!("e/ehr_id/value='{own}'")),
+            sent.contains(&format!("e/ehr_id/value = '{own}'")),
             "the node query is keyed on the node's own ehr_id (N7, CP-4): {sent}"
         );
         assert!(

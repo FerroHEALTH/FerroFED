@@ -333,7 +333,7 @@ product_scope = "__ferrofed.operator"
 issuer = "https://idp.example.org/realms/ferrofed"
 kind = "persons"
 first_party_clients = ["example-clinical-app", "example-reporting-service"]
-clock_skew_seconds = 60
+clock_skew = "1min"
 
 [auth.issuer.assurance]
 claim = "acr"

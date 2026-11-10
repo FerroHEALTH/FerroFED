@@ -124,7 +124,7 @@ indicators = ["https://cdr-c.example.org/openehr"]   # sent as resource (RFC 870
 actor_assertion = true
 
 [credentials."cdr-c".onward.keys]
-max_onward_lifetime = 3600
+max_onward_lifetime = "1h"
 ```
 
 For a request on behalf of a caller, the gateway sends the token endpoint
@@ -198,7 +198,7 @@ indicators = ["cdr-f"]              # sent as resource or audience, by the profi
 # correlation_claim = "txn"         # a chained federation route
 
 [credentials."cdr-f".onward.keys]
-max_onward_lifetime = 3600          # required
+max_onward_lifetime = "1h"          # required
 # The Keycloak profile only: the issuer's service accounts, whose sub is a
 # user's; the profile refuses the table at load until you list them.
 app_only = [{ subjects = ["service-account-cdr-f-batch"] }]

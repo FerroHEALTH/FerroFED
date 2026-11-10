@@ -405,7 +405,7 @@ async fn a_grant_without_the_key_it_signs_with_cannot_be_built() -> TestResult {
         "profile": "rfc9068",
         "audiences": [RESOURCE],
         "indicators": [RESOURCE],
-        "keys": {"max_onward_lifetime": 3600},
+        "keys": {"max_onward_lifetime": "1h"},
         "actor_assertion": true,
     }))?;
     assert!(

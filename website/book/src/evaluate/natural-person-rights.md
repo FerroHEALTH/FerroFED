@@ -127,7 +127,8 @@ record names the representative.
 A proxy service may instead issue a token in the person's name that names
 the representative in its RFC 8693 `act` claim, the party the person
 delegated to. The gateway reads that claim as a representative only when
-the issuer declares it one (`act_is_representative`), never by inference
+the issuer declares it one (`act_represents_patient` on the `patients`
+issuer, which `ferrohealth-smart` reads), never by inference
 ([Patient grants](../operate/patient-grants.md)). A
 document such a token inserts names the representative as each entry's
 provider, and its access record says a representative inserted it

@@ -213,7 +213,7 @@ const SMALL_SIGN_IN_POOL: &str = r#"
 [session]
 secure_cookie = false
 max_sign_ins = 4
-sign_in_timeout_s = 1
+sign_in_timeout = '1s'
 
 [oidc]
 issuer = "https://idp.example.org/realms/ferrofed"
