@@ -51,7 +51,11 @@ fn forgetful(
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;
     let state = Arc::new(AppState::build(&settings)?);
-    let gate = Arc::new(Gate::new(state, BasePath::default()));
+    let gate = Arc::new(Gate::new(
+        state,
+        BasePath::default(),
+        settings.server.request_timeout,
+    ));
     Ok(Router::new()
         .route("/v1/ehr/{ehr_id}", get(|| async { FORGOTTEN }))
         .route(

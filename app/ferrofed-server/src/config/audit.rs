@@ -125,9 +125,9 @@ pub struct FeedRepository {
     pub spool_max_bytes: Removed,
     /// The most records the spool holds.
     pub spool_max_events: usize,
-    /// The longest storing one record in the spool may take; a record not
-    /// stored by then, or by the end of its exchange's time if that comes
-    /// first, is an audit failure.
+    /// The longest storing one record in the spool may take, 10 s by
+    /// default; a record not stored by then, or by the end of its exchange's
+    /// time if that comes first, is an audit failure.
     pub spool_write_timeout: units::Duration,
     /// The retired `spool_write_timeout_ms`, which `spool_write_timeout` replaced in
     /// 0.0.19: set, it refuses the configuration.
@@ -161,7 +161,9 @@ impl Default for FeedRepository {
             spool_max_size: units::ByteSize::from_mib(64),
             spool_max_bytes: Removed::default(),
             spool_max_events: 100_000,
-            spool_write_timeout: units::Duration::from_secs(2),
+            // NOTE: no specification governs this: our own design; a durable write waits out
+            // other writers' syncs under load (#1812), so it may take a node's answer time.
+            spool_write_timeout: units::Duration::from_secs(10),
             spool_write_timeout_ms: Removed::default(),
             timeout: units::Duration::from_secs(5),
             timeout_ms: Removed::default(),

@@ -150,9 +150,9 @@ fn the_spool_write_timeout_bounds_each_record_and_is_never_zero() -> TestResult 
         .map_err(|error| error.to_string())?;
     let repository = settings.audit.repository.ok_or("a repository")?;
     assert_eq!(
-        std::time::Duration::from_secs(2),
+        std::time::Duration::from_secs(10),
         repository.bounds.write_timeout,
-        "the default bound"
+        "the default bound, room for a durable write on a loaded disk (#1812)"
     );
     let message = refusal(&text(
         dir.path(),

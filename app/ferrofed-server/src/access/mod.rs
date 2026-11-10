@@ -29,7 +29,11 @@
 //! reservation is filled with the record of how the write ended, a failed
 //! one included. Should that still fail, the member's answer stands, so a
 //! client never retries a write that was made, and the loss is raised as the
-//! security event `write-unrecorded`. No record content reaches a node,
+//! security event `write-unrecorded`. Storing a record may take what is
+//! left of the request's own time, its `server.request_timeout` less the
+//! combining margin, up to the sink's own write bound, so a slow disk under
+//! load uses the time the request has and still fails closed past it. No
+//! record content reaches a node,
 //! the operator log, a span or a metric label (§5.4, N33): the failure is
 //! logged under the gateway's request id with the error chain, which names
 //! no value. No specification governs where the record is built: our own
@@ -46,6 +50,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::net::IpAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::extract::{Request, State};
 use axum::middleware::Next;
@@ -415,13 +420,28 @@ pub(crate) struct NoAccess;
 pub struct Gate {
     state: Arc<AppState>,
     base: BasePath,
+    request_timeout: Duration,
 }
 
 impl Gate {
-    /// The gate over the federation `state` serves, under the base `base`.
+    /// The gate over the federation `state` serves, under the base `base`,
+    /// for requests the server answers within `request_timeout`.
     #[must_use]
-    pub fn new(state: Arc<AppState>, base: BasePath) -> Self {
-        Self { state, base }
+    pub fn new(state: Arc<AppState>, base: BasePath, request_timeout: Duration) -> Self {
+        Self {
+            state,
+            base,
+            request_timeout,
+        }
+    }
+
+    /// What is left of the time of a request that entered at `entered` for
+    /// storing its record: the request timeout less the combining margin,
+    /// so the gateway answers before the server's own timeout does.
+    fn left(&self, entered: tokio::time::Instant) -> Duration {
+        self.request_timeout
+            .saturating_sub(Duration::from_millis(crate::config::COMBINING_MARGIN_MS))
+            .saturating_sub(entered.elapsed())
     }
 
     /// Whether the federation `state` serves keeps an access log.
@@ -579,6 +599,40 @@ async fn served(
     }
 }
 
+/// `response` once `sink` stored `record`, within what is left of the time
+/// of the request that entered at `entered`; the refusal `503
+/// access-unrecorded` naming `request_id` when it was not.
+async fn stored(
+    gate: &Gate,
+    entered: tokio::time::Instant,
+    (sink, record): (Arc<dyn AccessSink>, AccessRecord),
+    response: Response,
+    (request_id, logged): (&str, &str),
+) -> Response {
+    // NOTE: Regulation (EU) 2025/327 Annex II 3.2; a record not stored in the request's
+    // own time withholds the answer, and its write goes on in the sink.
+    let left = gate.left(entered);
+    match tokio::time::timeout(left, sink.store(record)).await {
+        Ok(Ok(())) => response,
+        Ok(Err(failure)) => {
+            tracing::error!(
+                error = %crate::chain(&failure),
+                request_id = logged,
+                "the access could not be recorded, so its answer is withheld"
+            );
+            error::fixed(Code::AccessUnrecorded, request_id)
+        }
+        Err(_elapsed) => {
+            tracing::error!(
+                left_ms = left.as_millis(),
+                request_id = logged,
+                "the access was not recorded within the request's time, so its answer is withheld"
+            );
+            error::fixed(Code::AccessUnrecorded, request_id)
+        }
+    }
+}
+
 /// Stores the record of the access the answer of `next` carries before the
 /// answer leaves.
 ///
@@ -589,6 +643,7 @@ async fn served(
 /// Every answer of the gateway's surface passes here, so no path that
 /// returns data can leave without its record.
 pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next) -> Response {
+    let entered = tokio::time::Instant::now();
     let caller = request.extensions().get::<Caller>().cloned();
     let address = request
         .extensions()
@@ -660,17 +715,15 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
         );
     }
     let Some(reserved) = reserved else {
-        return match accessed.log.sink.store(record).await {
-            Ok(()) => response,
-            Err(failure) => {
-                tracing::error!(
-                    error = %crate::chain(&failure),
-                    request_id = logged,
-                    "the access could not be recorded, so its answer is withheld"
-                );
-                error::fixed(Code::AccessUnrecorded, &request_id)
-            }
-        };
+        let sink = Arc::clone(&accessed.log.sink);
+        return stored(
+            &gate,
+            entered,
+            (sink, record),
+            response,
+            (&request_id, &logged),
+        )
+        .await;
     };
     match reserved.store(record).await {
         Ok(()) => response,

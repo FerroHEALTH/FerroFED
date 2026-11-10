@@ -104,7 +104,7 @@ async fn a_routed_read_resolved_by_the_probe_leaves_a_probe_span_over_each_membe
     let dir = tempfile::tempdir()?;
     let read = Request::get(format!("/v1/ehr/{EHR_A}")).body(Body::empty())?;
     let (status, acting, text) = answer(over(dir.path(), &a, &b)?, read).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(StatusCode::OK, status, "{text}\n{}", exported.causes());
     assert_eq!(Some(ENDPOINT_A), acting.as_deref());
     let spans = exported.spans()?;
 
@@ -148,7 +148,7 @@ async fn a_read_routed_to_a_named_node_leaves_one_node_request_under_the_request
         .header("openEHR-federation-endpoint", ENDPOINT_A)
         .body(Body::empty())?;
     let (status, _, text) = answer(over(dir.path(), &a, &b)?, read).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(StatusCode::OK, status, "{text}\n{}", exported.causes());
     let spans = exported.spans()?;
 
     let request = the(&spans, "GET /v1/ehr/{ehr_id}")?;

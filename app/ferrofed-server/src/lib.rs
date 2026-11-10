@@ -291,6 +291,7 @@ fn gated(
             Arc::new(access::Gate::new(
                 Arc::clone(state),
                 server.base_path.clone(),
+                server.request_timeout,
             )),
             access::record,
         ));
