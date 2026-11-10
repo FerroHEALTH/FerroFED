@@ -128,9 +128,7 @@ record is not told of those losses, so they still arise in normal use.
 
 Since `eehrxf` 0.1.170 the component maps a received medical imaging
 report, Art 14(1)(d), and a discharge report, Art 14(1)(f), the same way.
-The gateway receives the discharge report; a `Medical-Imaging`
-`[[fhir.receive]]` entry still refuses the start, because the gateway's
-package set does not hold the imaging package's dependency closure
+The gateway receives both
 ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)). An imaging report
 is held to the HL7 Europe Imaging Report 1.0.0-ballot `BundleReportEuImaging`
 and `CompositionEuImaging` profiles, which a document whose
@@ -146,7 +144,9 @@ package and its dependency closure, the template the project maps over and
 every file of the project in its order. The discharge project maps
 FerroBRIDGE's ADL 2 template, so its entry names the `.adlt` template with
 every archetype it holds in `archetypes`
-([Discharge reports the gateway receives](../integrate/discharge-reports.md#discharge-reports-the-gateway-receives)).
+([Discharge reports the gateway receives](../integrate/discharge-reports.md#discharge-reports-the-gateway-receives)),
+and so does the imaging project's
+([Imaging reports the gateway receives](../integrate/imaging-reports.md#imaging-reports-the-gateway-receives)).
 
 ## Inserted by the person
 
@@ -214,5 +214,9 @@ carried, but its hospital course and every section the template holds no
 place for reach the member's record only in the original document, and
 the answer does not name them
 ([FerroHEALTH/FerroBRIDGE#1820](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1820)).
-What a received imaging report can lose is rated when the gateway receives
-one ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
+A received imaging report adds I-22, open at S4, P3: its study and
+impression reach the member's composition, but its report identifier, its
+performing organization and each section's narrative reach the member's
+record only in the original document, undeclared
+([FerroHEALTH/FerroBRIDGE#1827](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1827),
+[#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).

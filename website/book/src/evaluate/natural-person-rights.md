@@ -293,8 +293,8 @@ writes it to the member that owns its prescription
 A prescription is served, never received. A discharge report is received
 at the member a `[[fhir.receive]]` declares for it
 ([Discharge reports the gateway receives](../integrate/discharge-reports.md#discharge-reports-the-gateway-receives)).
-The imaging report is the gap of point 2.2
-([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
+An imaging report is received the same way
+([Imaging reports the gateway receives](../integrate/imaging-reports.md#imaging-reports-the-gateway-receives)).
 
 ## Art 8: restricting access
 
