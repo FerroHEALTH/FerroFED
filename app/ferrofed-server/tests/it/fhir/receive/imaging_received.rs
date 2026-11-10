@@ -13,36 +13,15 @@ use std::error::Error;
 use std::path::Path;
 
 use ferrofed_eehrxf::prescriptions::mapped::Template;
-use ferrofed_testkit::fhir_packages;
 use ferrofed_testkit::imaging;
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use serde_json::Value;
 
-use super::{Adl2Category, VERSION_A, creating, gateway_with, issue, post, receiving_adl2, rows};
+use super::{IMAGING, VERSION_A, creating, gateway_with, issue, post, receiving_adl2, rows};
 use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room, wire};
 use crate::fhir::TestResult;
 use crate::support::call;
-
-/// The `[[fhir.receive]]` entry of a face that receives imaging reports at
-/// node A over FerroBRIDGE's ADL 2 template, the mapping written into
-/// `dir`, with the tables `beside` after it.
-fn receiving(dir: &Path, beside: &str) -> Result<String, Box<dyn Error>> {
-    let mapping = dir.join("imaging");
-    std::fs::create_dir_all(&mapping)?;
-    Ok(receiving_adl2(
-        &Adl2Category {
-            category: "Medical-Imaging",
-            package: fhir_packages::imaging(),
-            dependencies: fhir_packages::imaging_dependencies()?,
-            template: imaging::template_path(),
-            archetypes: imaging::archetype_paths(),
-            files: imaging::mapping_files(&mapping)?,
-            context: imaging::CONTEXT,
-        },
-        beside,
-    ))
-}
 
 /// The synthetic imaging report of [`PATIENT`] a radiology system sends,
 /// written over FerroBRIDGE's imaging report template.
@@ -67,7 +46,7 @@ fn gateway(
     gateway_with(
         dir,
         (a, b),
-        (&crossref, &receiving(dir, beside)?),
+        (&crossref, &receiving_adl2(dir, &IMAGING, beside)?),
         &settings_with_room(),
     )
 }

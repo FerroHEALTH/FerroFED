@@ -14,35 +14,14 @@ use std::path::Path;
 
 use ferrofed_eehrxf::prescriptions::mapped::Template;
 use ferrofed_testkit::discharge;
-use ferrofed_testkit::fhir_packages;
 use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use serde_json::Value;
 
-use super::{Adl2Category, VERSION_A, creating, gateway_with, issue, post, receiving_adl2, rows};
+use super::{DISCHARGE, VERSION_A, creating, gateway_with, issue, post, receiving_adl2, rows};
 use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room, wire};
 use crate::fhir::TestResult;
 use crate::support::call;
-
-/// The `[[fhir.receive]]` entry of a face that receives discharge reports
-/// at node A over FerroBRIDGE's ADL 2 template, the mapping written into
-/// `dir`, with the tables `beside` after it.
-fn receiving(dir: &Path, beside: &str) -> Result<String, Box<dyn Error>> {
-    let mapping = dir.join("hdr");
-    std::fs::create_dir_all(&mapping)?;
-    Ok(receiving_adl2(
-        &Adl2Category {
-            category: "Discharge-Reports",
-            package: discharge::package(),
-            dependencies: fhir_packages::discharge_dependencies()?,
-            template: discharge::template_path(),
-            archetypes: discharge::archetype_paths(),
-            files: discharge::mapping_files(&mapping)?,
-            context: discharge::CONTEXT,
-        },
-        beside,
-    ))
-}
 
 /// The synthetic discharge report of [`PATIENT`] a hospital system sends,
 /// written over FerroBRIDGE's discharge report template.
@@ -67,7 +46,7 @@ fn gateway(
     gateway_with(
         dir,
         (a, b),
-        (&crossref, &receiving(dir, beside)?),
+        (&crossref, &receiving_adl2(dir, &DISCHARGE, beside)?),
         &settings_with_room(),
     )
 }
