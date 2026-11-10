@@ -37,6 +37,10 @@ id = "perf"
 per_node_timeout = "10s"
 overall_timeout = "25s"
 node_selection = "ask-all"
+# A contact point's summary is asked under partial completeness: node A's
+# onward lane is of kind persons, which carries no contact point's
+# professional, so node A is named and the other three members answer.
+best_effort = true
 
 [auth]
 

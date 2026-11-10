@@ -99,7 +99,14 @@ as `{ncp_token}` and `{ncp_emergency_token}`. Two request groups use them
 
 Each request names the key in `dpop_key_file`, so `ferrohealth-perf` sends
 its token in the `DPoP` scheme with a fresh proof, and carries the
-`ncp-correlation-id` header the contact point declares. The tool sends the
+`ncp-correlation-id` header the contact point declares. Node A is reached
+through an onward lane of kind `persons`, which carries no contact point's
+professional
+([The onward lane of a node](../operate/onward-credentials.md#the-onward-lane-of-a-node)),
+so node A fails before anything is sent to it. Both groups send
+`openEHR-federation-completeness: partial`, which `federation.best_effort =
+true` in `perf/ferrofed.toml` admits, and the summary names node A beside
+what nodes B to D answer. The tool sends the
 plan's requests in turn, so the emergency group gets one arrival in seven,
 under three a second at the plan's rate of 20, below the limit; a
 self-test check fails a plan whose rate over its request count reaches 5.

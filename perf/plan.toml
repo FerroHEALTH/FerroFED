@@ -83,13 +83,16 @@ headers = { authorization = "Bearer {token}", openEHR-federation-endpoint = "nod
 # A national contact point's patient summary under its treatment token,
 # bound to the gate's P-256 key by cnf.jkt and sent in the DPoP scheme with a
 # fresh proof per request (RFC 9449 §4.2, §7.1), with the correlation header
-# perf/ferrofed.toml declares.
+# perf/ferrofed.toml declares. Node A's onward lane, of kind persons,
+# carries no contact point's professional and fails node A before anything
+# is sent to it, so the summary is asked under partial completeness and
+# names node A beside what nodes B to D answer.
 [[requests]]
 group = "contact-point-summary"
 method = "GET"
 path = "/fhir/Patient/$summary?identifier=urn:oid:2.999.1.1%7Cffd-test-0001"
 status = 200
-headers = { authorization = "Bearer {ncp_token}", ncp-correlation-id = "perf-contact-point-summary" }
+headers = { authorization = "Bearer {ncp_token}", ncp-correlation-id = "perf-contact-point-summary", openEHR-federation-completeness = "partial" }
 dpop_key_file = "target/perf-run/ncp/dpop-key.pem"
 
 # The same summary as an emergency access, under the EMERGENCY token, which
@@ -103,5 +106,5 @@ group = "contact-point-emergency"
 method = "GET"
 path = "/fhir/Patient/$summary?identifier=urn:oid:2.999.1.1%7Cffd-test-0001"
 status = 200
-headers = { authorization = "Bearer {ncp_emergency_token}", ncp-correlation-id = "perf-contact-point-emergency" }
+headers = { authorization = "Bearer {ncp_emergency_token}", ncp-correlation-id = "perf-contact-point-emergency", openEHR-federation-completeness = "partial" }
 dpop_key_file = "target/perf-run/ncp/dpop-key.pem"
