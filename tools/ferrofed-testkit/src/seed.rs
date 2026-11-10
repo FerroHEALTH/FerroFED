@@ -360,7 +360,7 @@ pub async fn seed(api_root: &str, plan: &SeedPlan) -> Result<SeedReport, SeedErr
 }
 
 /// Feeds `cross_reference` as one record per member, sent as the Patient
-/// Identity Source `source`, a Basic user-id and password.
+/// Identity Source under its client credentials token `token`.
 ///
 /// Each member's record is a conditional update
 /// `PUT [base]/Patient?identifier=<member domain>|<ehr_id>` of a `Patient`
@@ -379,7 +379,7 @@ pub async fn seed(api_root: &str, plan: &SeedPlan) -> Result<SeedReport, SeedErr
 /// [`SeedError::Refused`] when the Manager answers anything but success.
 pub async fn feed_records_as(
     pix_base: &str,
-    source: (&str, &str),
+    token: &str,
     cross_reference: &CrossReferenceSeed,
 ) -> Result<Vec<StatusCode>, SeedError> {
     use fhir_types::r4::human_name::HumanName;
@@ -417,7 +417,7 @@ pub async fn feed_records_as(
             .append_pair("identifier", &format!("{}|{ehr_id}", domain.system()));
         let request = client
             .put(url)
-            .basic_auth(source.0, Some(source.1))
+            .bearer_auth(token)
             .header(CONTENT_TYPE, "application/fhir+json")
             .header(ACCEPT, "application/fhir+json")
             .body(body);
