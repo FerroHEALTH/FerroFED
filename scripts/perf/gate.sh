@@ -104,6 +104,13 @@ readonly NCP_PATIENT='urn:oid:2.999.1.1|ffd-test-0001'
 # The eHDSI PurposeOfUse system (SAML Profile 10.0.0 §2.3) and HL7 ActReason.
 readonly EHDSI_PURPOSE=urn:uuid:3bc18518-d305-46c2-a8d6-94bd59856e9e
 readonly ACT_REASON=http://terminology.hl7.org/CodeSystem/v3-ActReason
+# The plan's emergency access group, and the attempts the store's emergency
+# count has written in a database: one insert or update of
+# ferrofed.emergency_access per attempt (app/ferrofed-server/src/store/
+# emergency.rs), read from PostgreSQL's cumulative statistics.
+readonly EMERGENCY_GROUP=contact-point-emergency
+readonly ATTEMPTS="SELECT coalesce(sum(n_tup_ins + n_tup_upd), 0) FROM pg_stat_user_tables WHERE schemaname = 'ferrofed' AND relname = 'emergency_access';"
+readonly STATS_WAIT=30
 # admin_url DB: the superuser on DB, which the gate counts transactions as.
 admin_url() { printf 'postgresql://postgres:%s@127.0.0.1:%s/%s?sslmode=disable' "$STORE_PASSWORD" "$STORE_PORT" "$1"; }
 
@@ -621,6 +628,54 @@ onward() {
   return "$code"
 }
 
+# answered REPORT GROUP: the requests of GROUP the head answered as expected
+# over every pair of the A/B report REPORT.
+answered() {
+  jq --arg group "$2" '[.pairs[].head.groups[$group].answered // 0] | add // 0' "$1"
+}
+
+# counted ANSWERED: whether the head's store holds at least ANSWERED emergency
+# attempts, read again for up to STATS_WAIT seconds, since a backend reports
+# its statistics after its transaction ends.
+counted() {
+  local attempts
+  for _ in $(seq 1 "$STATS_WAIT"); do
+    attempts="$(docker exec "$STORE_NAME" psql --quiet --no-psqlrc --tuples-only --no-align \
+      --username postgres --dbname ferrofed --command "$ATTEMPTS")" || return 1
+    if ((attempts >= $1)); then
+      echo "$attempts"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "$attempts"
+  return 1
+}
+
+# emergency_counted REPORT: the head answered emergency accesses in the A/B
+# report REPORT and its store counted each one; 1 when either fails.
+emergency_counted() {
+  local answered attempts
+  answered="$(answered "$1" "$EMERGENCY_GROUP")" || {
+    echo "perf-gate: $1 does not read as an A/B report" >&2
+    return 1
+  }
+  if ((answered == 0)); then
+    echo "perf-gate: the head answered no request of $EMERGENCY_GROUP as expected" >&2
+    return 1
+  fi
+  if attempts="$(counted "$answered")"; then
+    echo "perf-gate: the head's store counted $attempts emergency attempts for the $answered the head answered"
+  else
+    echo "perf-gate: the head's store counted ${attempts:-no} emergency attempts for the $answered the head answered" >&2
+    return 1
+  fi
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    printf '## Emergency access\n\nThe head answered %s emergency accesses in the measured windows, and its store counted %s attempts.\n\n' \
+      "$answered" "$attempts" >> "$GITHUB_STEP_SUMMARY"
+  fi
+}
+
 start() {
   local store_image
   store_image="$(pin "FerroPIX database image")"
@@ -731,6 +786,9 @@ run() {
     --base-url "$BASE_URL" --base-pid "$base_pid" --base-database-url "$(admin_url ferrofed_base)" \
     --head-url "$HEAD_URL" --head-pid "$head_pid" --head-database-url "$(admin_url ferrofed)" \
     --out-dir target/perf || code=$?
+  if [[ -f target/perf/latest.json ]]; then
+    emergency_counted target/perf/latest.json || { [[ "$code" -ne 0 ]] || code=1; }
+  fi
   busy_loop || { [[ "$code" -ne 0 ]] || code=1; }
   onward "$token" || { [[ "$code" -ne 0 ]] || code=1; }
   if [[ "$code" -ne 0 ]]; then
@@ -1000,6 +1058,14 @@ GATE
     "$(grep -cxF "issuer = \"$NCP_ISSUER\"" "$config")"
   check "the gateway reads the contact point's audience and key set" 2 \
     "$(grep -cxE "audience = \[\"$NCP_AUDIENCE\"\]|jwks_file = \"$NCP_JWKS\"" "$config")"
+  printf '{"pairs":[{"head":{"groups":{"%s":{"answered":5},"x":{"answered":9}}}},{"head":{"groups":{"%s":{"answered":7}}}},{"head":{"groups":{}}}]}\n' \
+    "$EMERGENCY_GROUP" "$EMERGENCY_GROUP" > "$work/ab.json"
+  check "the emergency group's answers are summed over the head's pairs" 12 "$(answered "$work/ab.json" "$EMERGENCY_GROUP")"
+  check "a report with no emergency group answered none" 0 "$(answered "$work/ab.json" absent)"
+  check "the plan sends the emergency group under the emergency token and the DPoP key" 1 \
+    "$(awk -v group="group = \"$EMERGENCY_GROUP\"" '$0 == group { on = 1 } on && /^dpop_key_file = "target\/perf-run\/ncp\/dpop-key.pem"$/ { print; exit }' "$root/$PLAN" | grep -c . || true)"
+  check "the plan's groups keep the emergency group under the limit at the plan's rate" 1 \
+    "$(awk '/^rate = / { rate = $3 } /^\[\[requests\]\]/ { n++ } END { print (rate / n < 5) ? 1 : 0 }' "$root/$PLAN")"
   check "a lane with few exchanges holds the limit" 0 "$(onward_holds 10 200 && echo 0 || echo 1)"
   check "a lane past the limit fails it" 1 "$(onward_holds 11 200 && echo 0 || echo 1)"
   check "an exchange per request fails the limit" 1 "$(onward_holds 200 200 && echo 0 || echo 1)"
