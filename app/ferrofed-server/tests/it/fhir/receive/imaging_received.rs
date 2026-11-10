@@ -50,7 +50,7 @@ fn receiving(dir: &Path, beside: &str) -> Result<String, Box<dyn Error>> {
              package = {}\ndependencies = [{dependencies}]\ntemplate = {}\n\
              archetypes = [{archetypes}]\nfiles = [{files}]\ncontext = \"{}\"\n\
              language = \"en\"\nterritory = \"NL\"\n{beside}",
-            path(&imaging::package()),
+            path(&fhir_packages::imaging()),
             path(&imaging::template_path()),
             imaging::CONTEXT,
         ),

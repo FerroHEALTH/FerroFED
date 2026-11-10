@@ -183,13 +183,6 @@ pub fn composition(source: &TemplateSource, uid: &str) -> Result<String, Box<dyn
 /// by.
 pub const CONTEXT: &str = "ferrobridge_eu_imaging.context";
 
-/// Returns the path of the vendored HL7 Europe Imaging Report 1.0.0-ballot
-/// package.
-#[must_use]
-pub fn package() -> PathBuf {
-    crate::fhir_packages::imaging()
-}
-
 /// Writes the imaging mapping `eehrxf` ships into `directory`, which must
 /// exist, and returns its files in loading order.
 ///
