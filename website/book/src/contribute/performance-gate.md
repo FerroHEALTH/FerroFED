@@ -70,7 +70,7 @@ The A/B run has two parts:
    with the store's sweep and every other background worker running. These
    limits are absolute and compared with nothing.
 2. **Load, in pairs.** Four pairs, each a load phase against both gateways
-   at once: 20 arrivals a second to each for 60 seconds after a 30-second
+   at once: 20 arrivals a second to each for 60 seconds after a 10-second
    warm-up, open loop, one gateway's arrivals half an interval after the
    other's, the gateway that leads alternating by pair. Run side by side,
    both arms see the same runner, whose speed can move by a third from one
@@ -104,9 +104,9 @@ through an onward lane of kind `persons`, which carries no contact point's
 professional
 ([The onward lane of a node](../operate/onward-credentials.md#the-onward-lane-of-a-node)),
 so node A fails before anything is sent to it. Both groups send
-`openEHR-federation-completeness: partial`, which `federation.best_effort =
-true` in `perf/ferrofed.toml` admits, and the summary names node A beside
-what nodes B to D answer. The tool sends the
+`openEHR-federation-completeness: partial`, which `federation.best_effort`
+admits at its default, and the summary names node A beside what nodes B to
+D answer. No other group sends the header, so nothing they measure changes. The tool sends the
 plan's requests in turn, so the emergency group gets one arrival in seven,
 under three a second at the plan's rate of 20, below the limit; a
 self-test check fails a plan whose rate over its request count reaches 5.

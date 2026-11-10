@@ -21,10 +21,7 @@ max_transactions_per_second = 1.0
 
 [load]
 rate = 20.0
-# The contact point's summaries fan out to three members and FerroPIX's
-# PDQm Supplier, and their first phase ran a third to half faster in its
-# second half after a 10 s warm-up (#1744), so the warm-up is 30 s.
-warmup_secs = 30
+warmup_secs = 10
 duration_secs = 60
 
 # How far the head may stray from the base, beyond the noise the two arms
