@@ -59,8 +59,8 @@ versioned object as a `urn:uuid:`. A search whose `type` admits only
 
 Reading the URL asks that member alone for the composition and writes it
 as an HL7 Europe Imaging Report 1.0.0-ballot `BundleReportEuImaging`: a
-`CompositionEuImaging` authored by the gateway's `Device` and the operator,
-about a `Patient` named by the identifier the identity binding holds behind
+`CompositionEuImaging` authored by the gateway's `Device`, whose owner is
+the operator, its custodian the member's organisation, about a `Patient` named by the identifier the identity binding holds behind
 the member's `ehr_id` and described by the demographics binding's header
 as the laboratory report's is, with the `DiagnosticReportEuImaging` and the
 `ImagingStudyEuImaging` the mapping writes. The imaging study section lists

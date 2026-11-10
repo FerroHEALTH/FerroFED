@@ -15,6 +15,10 @@
 //! Report 1.0.0 package names beyond it (#1714): the committed
 //! `hl7.fhir.uv.ips` 2.0.1 and `xtehr.eu.ehds.models` 1.0.0, and
 //! `hl7.terminology.r4` 7.2.0 and 7.4.0 of the MyHealth@EU closure's cache.
+//! [`imaging_dependencies`] adds what the HL7 Europe Imaging Report
+//! 1.0.0-ballot package names beyond that (#1785): the committed
+//! `hl7.fhir.eu.health-data-api` 1.0.0-ballot and the packages
+//! `docs/specs/fhir-packages-imaging/PROVENANCE.md` pins.
 //!
 //! FerroBRIDGE's validator refuses a package set that lacks a package a
 //! manifest names. The closure's committed packages sit under `docs/specs/`;
@@ -48,6 +52,18 @@ const MYHEALTH_PROVENANCE: &str = "docs/specs/fhir-packages-myhealth-eu/PROVENAN
 
 /// The cache directory of the MyHealth@EU closure.
 const MYHEALTH_CACHE: &str = ".vendor-cache/fhir-packages-myhealth-eu";
+
+/// The provenance that pins the cached packages the imaging report closure
+/// names beyond the discharge report's.
+const IMAGING_PROVENANCE: &str = "docs/specs/fhir-packages-imaging/PROVENANCE.md";
+
+/// The cache directory of the imaging report closure.
+const IMAGING_CACHE: &str = ".vendor-cache/fhir-packages-imaging";
+
+/// The committed package the imaging report closure names beyond the
+/// discharge report's.
+const IMAGING_COMMITTED: &str =
+    "docs/specs/eu-hl7-health-data-api/hl7.fhir.eu.health-data-api-1.0.0-ballot.tgz";
 
 /// The committed packages the discharge report closure names beyond the
 /// Patient Summary's. The Xt-EHR models declare FHIR 5.0.0, so the
@@ -185,6 +201,27 @@ pub fn discharge_dependencies() -> Result<Vec<PathBuf>, FhirPackagesError> {
     let mut paths = dependencies()?;
     paths.extend(DISCHARGE_COMMITTED.iter().map(|path| root.join(path)));
     paths.extend(cached(MYHEALTH_PROVENANCE, MYHEALTH_CACHE)?);
+    Ok(paths)
+}
+
+/// Returns the path of the committed HL7 Europe Imaging Report 1.0.0-ballot
+/// package, the package whose profiles an imaging report is held to.
+#[must_use]
+pub fn imaging() -> PathBuf {
+    Path::new(ROOT).join("docs/specs/eu-hl7-imaging/hl7.fhir.eu.imaging-1.0.0-ballot.tgz")
+}
+
+/// Returns every package of the HL7 Europe Imaging Report 1.0.0-ballot
+/// package's dependency closure: the discharge report's, with the packages
+/// the imaging report names beyond it.
+///
+/// # Errors
+///
+/// The errors of [`dependencies`].
+pub fn imaging_dependencies() -> Result<Vec<PathBuf>, FhirPackagesError> {
+    let mut paths = discharge_dependencies()?;
+    paths.push(Path::new(ROOT).join(IMAGING_COMMITTED));
+    paths.extend(cached(IMAGING_PROVENANCE, IMAGING_CACHE)?);
     Ok(paths)
 }
 

@@ -141,8 +141,8 @@ impl Writes for Served {
     /// the `Bundle-eu-lab` document `report` names.
     ///
     /// The document's `Composition` is authored by the gateway's `Device`
-    /// and the operator's `Organization`, its subject the `Patient` the
-    /// identifier names, its report the `DiagnosticReport-eu-lab` the
+    /// and the operator's `Organization`, its custodian the member's
+    /// `Organization`, its subject the `Patient` the identifier names, its report the `DiagnosticReport-eu-lab` the
     /// mapping writes with its results listed in one section, and one
     /// `Provenance` names the member as the source of those results.
     ///

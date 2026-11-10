@@ -11,8 +11,8 @@
 //! Each is a document the gateway authors with its `Device` and the
 //! operator's `Organization`, about the `Patient` an identifier names and
 //! the identity binding describes, whose mapped content one `Provenance`
-//! traces to the member it was read at, which the `Composition` names an
-//! author too. The authorship and the provenance are our own design: no
+//! traces to the member it was read at, which the `Composition` names its
+//! custodian. The authorship and the provenance are our own design: no
 //! specification governs them.
 
 use eehrxf::category::Category;
@@ -175,8 +175,8 @@ fn patient(report: Report<'_>) -> Patient {
     patient
 }
 
-/// Adds to `document` the member `report` names as an `Organization` the
-/// `Composition` names an author, and one `Provenance` naming it as the
+/// Adds to `document` the member `report` names as the `Organization` the
+/// `Composition` names its custodian, and one `Provenance` naming it as the
 /// source of `targets`, the `fullUrl`s of what the run mapped.
 ///
 /// # Errors
@@ -187,12 +187,9 @@ pub(crate) fn sourced(
     report: Report<'_>,
     targets: &[String],
 ) -> Result<(), DocumentError> {
-    // NOTE: FHIR R4 documents.html §3.3.1 admits only what the Composition references; HL7
-    // Europe HDR 1.0.0 composition-eu-hdr Composition.author names who answers for the content.
-    let member = document.with_author(&Resource::Organization(Box::new(organization(
-        "member",
-        report.member,
-    ))))?;
+    // NOTE: FHIR R4 documents.html §3.3.1 admits only what the Composition references; FHIR R4
+    // Composition.custodian is who maintains and gives access to it, the member holding the source.
+    let member = document.with_custodian(organization("member", report.member))?;
     document.add(&[Resource::Provenance(Box::new(Provenance {
         target: targets.iter().map(|url| reference(url)).collect(),
         recorded: report.timestamp.into(),

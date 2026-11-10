@@ -203,3 +203,12 @@ async fn a_laboratory_report_of_a_patient_the_binding_holds_nothing_of_conforms(
     assert!(breaks.is_empty(), "{breaks:#?}");
     Ok(())
 }
+
+#[test]
+fn the_composition_names_the_member_its_custodian() -> TestResult {
+    let bundle: serde_json::Value = serde_json::from_str(&written(&PatientHeader::default())?)?;
+    let custodian = conforming::custodian(&bundle)?;
+    assert_eq!(custodian["resourceType"], "Organization", "{custodian}");
+    assert_eq!(custodian["name"], conforming::MEMBER, "{custodian}");
+    Ok(())
+}

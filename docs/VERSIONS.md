@@ -254,6 +254,7 @@ row carries the pin-set digest first and the tarball sha256 after it.
 | FHIR package closure of the Patient Summary | the 15 registry tarballs the committed HL7 Europe manifests name and the repository does not commit (`hl7.fhir.r4.core` 4.0.1, `hl7.fhir.eu.base` 2.0.0, `hl7.fhir.uv.extensions.r4` 5.2.0 and 5.3.0, `hl7.fhir.uv.xver-r5.r4` 0.1.0, `hl7.terminology.r4` 5.0.0, 6.2.0, 6.3.0, 6.5.0, 7.1.0 and 7.3.0, `hl7.fhir.uv.ipa` 1.1.0, `hl7.fhir.uv.smart-app-launch` 2.0.0, `hl7.fhir.uv.ips` 1.1.0, `fhir.dicom` 2022.4.20221006), cache only for their size, which FerroBRIDGE's validator holds a received document to with the committed packages (#808); pin-set digest `4da6e21751ced98a8fb1879aafd6b2b37b975921338adffc4d6d3465088db485`, R4 core sha256 `ebd7731df7d36b5b7d39d5fb6c9d77b44bb7fe5742f1a2e87f164738c3289d44` | `scripts/vendor/fhir-packages.sh`, `docs/specs/fhir-packages/PROVENANCE.md`, `tools/ferrofed-testkit/src/fhir_packages.rs` |
 | IHE MHD FHIR package | package `ihe.iti.mhd` 4.2.2, pin-set digest `6f75d10023f323696b2ed5219ca1e2db57df4b41a6efede3caf69139f3ffdd70`, tarball sha256 `824061df179f6ade65c29bd79dfc35f00075748fe13054c8505a6e6f3d1cd578`, the version `myhealth.eu.fhir.ncp-api` 9.1.1-ci depends on | `scripts/vendor/eehrxf.sh`, `docs/specs/ihe-mhd/PROVENANCE.md` |
 | FHIR package closure of the MyHealth@EU guides | the 3 registry tarballs the manifests of the MyHealth@EU guides, `hl7.fhir.eu.laboratory` 2.1.0 and `hl7.fhir.eu.hdr` 1.0.0 name beside the Patient Summary's closure and the committed packages (`hl7.terminology.r4` 7.2.0 and 7.4.0, `hl7.fhir.uv.xver-r5.r4` 0.0.1-snapshot-2), cache only for their size; pin-set digest `40c0a9bdd1b3da6c3061474c0ef3c0ef1e387ef2f8c74ce1fce99786cf7b3e32` | `scripts/vendor/fhir-packages.sh`, `docs/specs/fhir-packages-myhealth-eu/PROVENANCE.md` |
+| FHIR package closure of the Imaging Report | the 8 registry tarballs the manifests of `hl7.fhir.eu.imaging` 1.0.0-ballot, `hl7.fhir.eu.health-data-api` 1.0.0-ballot and their dependencies name beside the closures above and the committed packages (`hl7.fhir.eu.base` 2.0.0-ballot, `hl7.fhir.eu.extensions.r4` 1.2.0, `hl7.terminology.r4` 7.0.1, `fhir.dicom` 2025.3.20250714, `ihe.iti.mhd` 4.2.3, `ihe.iti.pdqm` 3.2.0, `ihe.iti.balp` 1.1.4, `ihe.formatcode.fhir` 1.4.0), cache only, which FerroBRIDGE's validator holds a written imaging report to (#1785, #1716); pin-set digest `2045b0c214f518834d1882c401e4ad1e88afb005e25d10331da54307818bb766` | `scripts/vendor/fhir-packages.sh`, `docs/specs/fhir-packages-imaging/PROVENANCE.md` |
 
 ### MyHealth@EU, eHDSI and Xt-EHR material (#1290)
 
@@ -488,7 +489,7 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | =0.3.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `eehrxf` | 0.3.2 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
 | `fhirconnect` | =0.1.249 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | =0.1.151 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `ferrobridge-term` | =0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |

@@ -72,7 +72,8 @@ one version id is listed once, from the member that created it.
 Reading the URL asks that member alone for the composition and writes it
 as an HL7 Europe Hospital Discharge Report 1.0.0 `bundle-eu-hdr` in the
 composition's language: a `composition-eu-hdr` authored by the gateway's
-`Device`, the operator and the member, about a `Patient` named by the
+`Device` and the operator, its custodian the member's organisation, about
+a `Patient` named by the
 identifier the identity binding holds behind the member's `ehr_id` and
 described by the demographics binding's header as the laboratory report's
 is, with the stay as its

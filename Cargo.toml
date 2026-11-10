@@ -100,9 +100,11 @@ ehds-logging = { version = "=0.10.0", default-features = false }
 # 0.0.130 (#1722); 0.1.181 assembles the patient summary from one EPS root
 # context and selects a medication action under the Medication Summary
 # section (#1742); 0.1.187 is the release on openehr-* 0.0.135 (#1754);
-# 0.3.0 is the release on ferrohealth-smart 0.16 (#1805).
+# 0.3.0 is the release on ferrohealth-smart 0.16 (#1805); 0.3.2 names a
+# document's custodian (`Document::with_custodian`, FerroHEALTH/FerroBRIDGE
+# #1819), which every written report names the member (#1785).
 # Verified against crates.io on 2026-11-10.
-eehrxf = { version = "=0.3.0", default-features = false }
+eehrxf = { version = "0.3.2", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
