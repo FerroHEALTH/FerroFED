@@ -446,7 +446,7 @@ ferrohealth-config = "=0.4.1"
 ferrohealth-health = { version = "=0.1.1", default-features = false }
 # The HTTP server plumbing of FerroHEALTH/FerroSYS (#1397): the health routes
 # every product serves, the listeners with their TLS and the drain, and the
-# healthcheck. 0.3.7
+# healthcheck. Pinned exactly, as a product pins every family crate; 0.3.7
 # carries GHSA-2mc2-h3jq-c5wg, 0.3.8 refuses a client CA under
 # `client_auth = "none"` and keeps a listener's TLS reloadable from the
 # product's own reload path, 0.3.9 names that refusal's values readably,
@@ -461,10 +461,9 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # FerroHEALTH/FerroSYS#300); 0.6.4 compares two reads of that material and
 # builds the revocation check from it (FerroHEALTH/FerroSYS#305, #307);
 # 0.8.2 hands out the check's gated TLS, which a MyHealth@EU gateway's
-# outbound client is built over (#1815, FerroHEALTH/FerroSYS#348), required
-# by a caret range as the family requires its crates.
+# outbound client is built over (#1815, FerroHEALTH/FerroSYS#348).
 # Verified against crates.io on 2026-11-10.
-ferrohealth-server = { version = "0.8.2", default-features = false }
+ferrohealth-server = { version = "=0.8.2", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.
