@@ -120,7 +120,7 @@ spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # enterprise_site = "2.999.40"         # source.site
 # spool_max_size = "64MiB"
 # spool_max_events = 100000
-# spool_write_timeout = "2s"           # storing one record in the spool
+# spool_write_timeout = "10s"          # storing one record in the spool, within the request's own time
 
 [audit.repository.endpoint]
 url = "https://arr.example.org/fhir"   # the repository's FHIR base
@@ -210,16 +210,24 @@ for its directory, and the transaction waits for that before it uses its
 answer. A disk that is slow or has stalled could hold the transaction
 without limit, so the wait is bounded, on both spools:
 
-- by `spool_write_timeout` (2000 by default), in `[audit.repository]`
-  and in `[xcpd.audit_repository]`, the longest one record may take to be
-  stored, the wait for the write before it included;
+- by `spool_write_timeout`, in `[audit.repository]` (`"10s"` by default)
+  and in `[xcpd.audit_repository]` (`"2s"` by default), the longest one
+  record may take to be stored, the wait for the write before it included;
+- for the record of an access, by what is left of the request's own time:
+  `server.request_timeout` less the one-second combining margin, so the
+  gateway answers `503 access-unrecorded` before the server's own timeout
+  does;
 - and, for an ITI-83 query, an ITI-78 search or ITI-119 match of the
   `[pdqm]` step, or an ITI-55 discovery, by the time the transaction was
   given: what is left of the patient query's budget, of the step's
-  `timeout_ms`, or of the localization's time. Whichever of the two bounds
-  comes first applies.
+  `timeout_ms`, or of the localization's time. Whichever bound comes first
+  applies.
 
-A record that `spool_write_timeout` cuts off is an audit failure, as a
+On a loaded host a durable write waits for the journal to commit other
+writers' data as well (ext4 in its default `data=ordered` mode), so one
+record can take seconds. The access log's ten-second bound and the
+request's own time leave room for that, and the record still fails closed
+past them (#1812). A record that `spool_write_timeout` cuts off is an audit failure, as a
 full spool is, with the outcomes in the table above, and an ITI-55
 discovery fails closed under every `on_failure` policy
 ([The audit repository](localization.md#the-audit-repository)). A record still

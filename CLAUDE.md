@@ -213,7 +213,7 @@ product belongs there (`.claude/memory/family-architecture.md`): patient
 identity and the IHE profiles are FerroPIX's, reached as a client over the
 `ihe-iti` and `nl-generic-functions` crates it publishes, and the
 interoperability component `eehrxf` is FerroBRIDGE's, published from there and
-pinned exactly here; every component change is made there (A76, #813, owner
+required by a caret range here (#1772); every component change is made there (A76, #813, owner
 decision 2026-10-28: no component is built in one product to be moved later).
 
 ## Repo map
@@ -274,7 +274,8 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   rewrite on `openehr-query` behind `aql`, the cross-node merge behind
   `merge`). The interoperability component of Regulation (EU) 2025/327
   (decision A58) is `eehrxf`, published from FerroHEALTH/FerroBRIDGE since
-  #813 and pinned exactly (`eehrxf = "=0.1.142"`); FerroFED keeps no copy, and
+  #813 and required by a caret range, as every FerroBRIDGE crate is since it
+  follows Cargo SemVer (`eehrxf = "0.3.2"`, #1772); FerroFED keeps no copy, and
   its own half is `app/ferrofed-eehrxf` below. The logging component,
   `ehds-logging` (the Annex II 3.2 access record, the
   Art 14(1) categories and their map, the sink, and `balp`; #623), and the
