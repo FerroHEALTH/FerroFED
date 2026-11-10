@@ -13,7 +13,6 @@ use std::time::Duration;
 
 #[cfg(feature = "binding-ihe")]
 use crate::audit::AuditTrailError;
-use crate::config::service::GrantRefused;
 use crate::health::dependencies::Indicator;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_identity::role::demographics::Demographics;
@@ -163,23 +162,49 @@ pub enum LocalizationError {
     #[error("nl_gf.nvi.namespaces has an empty namespace")]
     #[cfg(feature = "binding-nl")]
     NviNamespace(#[source] ferrofed_identity::role::patient::PatientRefError),
-    /// A credentials section names a grant, which only a node takes.
-    #[error("the localizer's credentials cannot be used")]
-    Grant(#[source] GrantRefused),
+    /// The outbound client of a localizer's endpoint table cannot be built:
+    /// its TLS, its credential or its HTTP engine.
+    #[error("the outbound client of [{table}] cannot be built")]
+    #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
+    Outbound {
+        /// The endpoint table's dotted key, such as `xcpd.gateway[0].endpoint`.
+        table: String,
+        /// What `ferrohealth-smart` reported; it names no secret.
+        #[source]
+        source: Box<ferrohealth_smart::client::outbound::OutboundError>,
+    },
     /// The NVI localizer refuses its configuration.
     #[error("the [nl_gf.nvi] localizer cannot be enabled")]
     #[cfg(feature = "binding-nl")]
     Nvi(#[source] ferrofed_identity::nl::nvi::NviConfigError),
-    /// The HTTP client the Nuts grant of `[nl_gf.nvi.credentials]` sends its
-    /// token requests through could not be built.
+    /// The HTTP client the Nuts grant of `[nl_gf.nvi.nuts]` sends its token
+    /// requests through could not be built.
     #[error("the HTTP client of nl_gf.nvi.nuts could not be built")]
     #[cfg(feature = "binding-nl")]
     NviNutsClient(#[source] reqwest::Error),
-    /// The TLS material of the MyHealth@EU gateways cannot build their
-    /// revocation check.
-    #[error("the TLS material of the MyHealth@EU responding gateways cannot be used")]
+    /// The TLS material of a MyHealth@EU gateway cannot be read.
+    #[error("the TLS material of [{table}] cannot be read")]
     #[cfg(feature = "binding-ihe")]
-    XcpdRevocation(#[source] ferrohealth_server::revocation::RevocationSetupError),
+    XcpdTls {
+        /// The gateway's TLS table, `xcpd.gateway[<index>].endpoint.tls`.
+        table: String,
+        /// What the reader reported; it names no key.
+        #[source]
+        source: ferrohealth_server::tls_client::TlsClientError,
+    },
+    /// The TLS material of a MyHealth@EU gateway cannot build its
+    /// revocation check.
+    #[error(
+        "the TLS material of [{table}] cannot build the revocation check of a MyHealth@EU route"
+    )]
+    #[cfg(feature = "binding-ihe")]
+    XcpdRevocation {
+        /// The gateway's TLS table, `xcpd.gateway[<index>].endpoint.tls`.
+        table: String,
+        /// What the check reported; it names no key.
+        #[source]
+        source: ferrohealth_server::revocation::RevocationSetupError,
+    },
     /// The XUA assertion is not one SAML 2.0 `Assertion` element.
     #[error("{key} is not one SAML 2.0 Assertion element")]
     #[cfg(feature = "binding-ihe")]

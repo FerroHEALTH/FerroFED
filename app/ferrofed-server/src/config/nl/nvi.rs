@@ -12,10 +12,12 @@
 //!
 //! ```toml
 //! [nl_gf.nvi]
+//! namespaces = ["pseudo-bsn"]
+//!
+//! [nl_gf.nvi.endpoint]
 //! url = "https://nvi.example.org/fhir"
 //! credentials = { user = "ferrofed", password_file = "/run/secrets/nvi-password" }
 //! tls = { client_identity_file = "/run/secrets/nvi-client.pem", trust_roots_file = "/etc/ferrofed/nvi-roots.pem" }
-//! namespaces = ["pseudo-bsn"]
 //!
 //! [nl_gf.nvi.custodians]
 //! "ura-test-0001" = "node-a"
@@ -26,12 +28,14 @@
 //! protected-payload policy of [`transport`]. No specification governs the
 //! shape of the table: our own design.
 //!
-//! The gateway authenticates to the service as a data user: by mutual TLS,
+//! `[nl_gf.nvi.endpoint]` is `ferrohealth-smart`'s `EndpointSection`. The
+//! gateway authenticates to the service as a data user: by mutual TLS,
 //! basic credentials, or on GF-Authentication with the Nuts grant, the same
 //! table and the same implementation a node's onward credentials take
-//! ([`super::nuts`]). The grant's `DPoP`-bound token is sent
-//! to the service alone, with a proof of each request (the IG's GFI-004 and
-//! GFI-005; Nuts RFC021):
+//! ([`super::nuts`]), which the outbound client carries as the product's
+//! authorization. The grant's `DPoP`-bound token is sent to the service
+//! alone, with a proof of each request (the IG's GFI-004 and GFI-005; Nuts
+//! RFC021):
 //!
 //! ```toml
 //! [nl_gf.nvi.nuts]
@@ -47,15 +51,16 @@
 //! file = "/run/secrets/organization.jwt"
 //! ```
 
-use ferrohealth_config::tls::TlsClientSection;
-use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
+use ferrohealth_smart::config::credentials::CredentialsSection;
+use ferrohealth_smart::config::endpoint::EndpointSection;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::sync::Arc;
 
-use ferrohealth_secret::secret_url::SecretUrl;
 use nl_generic_functions::identification::is_bsn_system;
 use serde::Deserialize;
+use url::Url;
 
 use super::nuts::{self, NutsOnward};
 use crate::config::error::Error;
@@ -66,18 +71,16 @@ use crate::config::settings::OnwardGrant;
 use crate::config::settings::Scheme;
 use crate::config::transport::ProtectedSite;
 use crate::config::{Config, transport};
-use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The NVI localizer, as the configuration writes it.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Nvi {
-    /// The Localization Service's FHIR base URL, `https`; no rendering shows
-    /// its userinfo.
-    pub url: SecretUrl,
-    /// How the gateway authenticates to the service with basic credentials,
-    /// `ferrohealth-smart`'s credentials table, when the transport does not.
-    pub credentials: Option<CredentialsSection>,
+    /// The Localization Service's FHIR base, `https`, and how it is reached:
+    /// its TLS, the timeout and retries of each call, and basic credentials
+    /// when neither the transport nor the Nuts grant authenticates the
+    /// gateway.
+    pub endpoint: EndpointSection,
     /// The Nuts grant the gateway authenticates to the service with, in place
     /// of basic credentials (`[nl_gf.nvi.nuts]`).
     pub nuts: Option<nuts::Nuts>,
@@ -89,9 +92,32 @@ pub struct Nvi {
     /// `http://fhir.nl/fhir/NamingSystem/pseudo-bsn` itself; a BSN system is
     /// refused.
     pub namespaces: Vec<String>,
-    /// The TLS material the service is reached with: the table's `tls`
-    /// sub-table.
-    pub tls: TlsClientSection,
+    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub url: Removed,
+    /// The retired `credentials`, which `endpoint.credentials` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub credentials: Removed,
+    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub tls: Removed,
+}
+
+impl Default for Nvi {
+    fn default() -> Self {
+        Self {
+            endpoint: crate::config::endpoint::tried_once(units::Duration::from_secs(10)),
+            nuts: None,
+            custodians: BTreeMap::new(),
+            namespaces: Vec::new(),
+            url: Removed::default(),
+            credentials: Removed::default(),
+            tls: Removed::default(),
+        }
+    }
 }
 
 /// How the gateway authenticates to the Localization Service, resolved.
@@ -107,16 +133,17 @@ pub enum NviCredentials {
 
 /// The NVI localizer, with every secret and file read.
 pub struct NviSettings {
-    /// The service's FHIR base URL, already known to parse.
-    pub url: SecretUrl,
+    /// The service's FHIR base URL, read from `endpoint`.
+    pub url: Url,
     /// How the gateway authenticates to it.
     pub credentials: Option<NviCredentials>,
+    /// How the service is reached, as `ferrohealth-smart`'s outbound client
+    /// reads it.
+    pub endpoint: Box<EndpointSection>,
     /// The custodian map, as written.
     pub custodians: BTreeMap<String, String>,
     /// The namespaces that stand for the pseudonymised BSN, as written.
     pub namespaces: Vec<String>,
-    /// The TLS material it is reached with, every file read.
-    pub tls: Arc<TlsClient>,
 }
 
 impl fmt::Debug for NviSettings {
@@ -124,18 +151,22 @@ impl fmt::Debug for NviSettings {
         f.debug_struct("NviSettings")
             .field("url", &self.url)
             .field("credentials", &self.credentials)
+            .field("endpoint", &self.endpoint)
             .field("custodians", &self.custodians)
             .field("namespaces", &self.namespaces)
-            .field("tls", &self.tls)
             .finish()
     }
 }
 
-/// The key of the NVI table, which names its URL and its credentials.
+/// The key of the NVI table.
 pub const NVI_KEY: &str = "nl_gf.nvi";
 
+/// The key of the NVI's endpoint table, which names its URL and its
+/// credentials.
+pub const NVI_ENDPOINT: &str = "nl_gf.nvi.endpoint";
+
 /// The key of the NVI's credentials section.
-pub(crate) const CREDENTIALS_KEY: &str = "nl_gf.nvi.credentials";
+pub(crate) const CREDENTIALS_KEY: &str = "nl_gf.nvi.endpoint.credentials";
 
 impl NviSettings {
     /// Returns the site the Nuts grant sends the gateway's credentials and
@@ -155,14 +186,14 @@ impl NviSettings {
 fn credentials(nvi: &Nvi) -> Result<Option<NviCredentials>, Error> {
     // NOTE: the IG's Localization page (Authentication and Authorization) and GF-Authentication
     // define the Nuts profile for the data user and no other grant, so every other grant is refused.
-    if let Some(table) = &nvi.credentials
-        && table.oauth.is_some()
-    {
+    if nvi.endpoint.credentials.oauth.is_some() {
         return Err(Error::Binding(BindingFault::NviGrant {
             key: format!("{CREDENTIALS_KEY}.oauth"),
         }));
     }
-    match (&nvi.nuts, &nvi.credentials) {
+    let table = &nvi.endpoint.credentials;
+    let basic = (*table != CredentialsSection::default()).then_some(table);
+    match (&nvi.nuts, basic) {
         (Some(_), Some(_)) => Err(Error::Credentials(CredentialsFault::Scheme {
             section: NVI_KEY.to_owned(),
         })),
@@ -190,22 +221,7 @@ pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> 
             key: String::from("registry.document"),
         });
     }
-    let url_key = format!("{NVI_KEY}.url");
-    if nvi.url.expose().is_empty() {
-        return Err(Error::Missing { key: url_key });
-    }
-    let url = url::Url::parse(nvi.url.expose()).map_err(|source| Error::Url {
-        key: url_key.clone(),
-        source,
-    })?;
-    // NOTE: no specification governs this: our own design; as the registry
-    // refuses it on an endpoint URL, a credential goes in its own section.
-    if !url.username().is_empty() || url.password().is_some() {
-        return Err(Error::UrlCredentials {
-            key: url_key,
-            section: format!("{NVI_KEY}.credentials"),
-        });
-    }
+    let url = crate::config::endpoint::checked(NVI_ENDPOINT, &nvi.endpoint)?;
     // NOTE: Annex B §B.1, N33: the NVI is keyed on the pseudonymised BSN, so a BSN
     // system listed as its alias would send a BSN there under the pseudonym's label.
     if let Some(bsn) = nvi
@@ -222,15 +238,18 @@ pub(super) fn resolve(config: &Config, nvi: &Nvi) -> Result<NviSettings, Error> 
     // service URL is a protected-payload site; one admitted under development is reported by check.
     transport::protected_payload(
         config.profile,
-        nvi.url.expose(),
-        transport::identity_site(NVI_KEY, credentials.is_some().then_some(CREDENTIALS_KEY)),
+        url.as_str(),
+        transport::identity_site(
+            NVI_ENDPOINT,
+            credentials.is_some().then_some(CREDENTIALS_KEY),
+        ),
     )?;
-    let tls = crate::config::tls::read("nl_gf.nvi.tls", &nvi.tls)?;
+    crate::config::tls::read("nl_gf.nvi.endpoint.tls", &nvi.endpoint.tls)?;
     Ok(NviSettings {
-        url: nvi.url.clone(),
+        url,
         credentials,
+        endpoint: Box::new(nvi.endpoint.clone()),
         custodians: nvi.custodians.clone(),
         namespaces: nvi.namespaces.clone(),
-        tls,
     })
 }

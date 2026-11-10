@@ -407,7 +407,7 @@ issuer beside it, `ferropix-issuer` (NAV's mock-oauth2-server, which signs any
 client credentials request, NOT for anything real), and FerroPIX joins that
 issuer's network namespace, since it reads an issuer's metadata over plain
 `http` only on loopback. The gateway asks FerroPIX under the token
-`[pixm.manager.credentials.oauth]` obtains there, and the one-shot
+`[pixm.manager.endpoint.credentials.oauth]` obtains there, and the one-shot
 `ferropix-seed` service, as the Patient Identity Source, feeds it the patients
 of `docker/quickstart/patients.tsv` over ITI-104 under its own token before
 the gateway starts.

@@ -311,7 +311,7 @@ elif [[ -n "$rendered" ]]; then
     bad "the example names no https PIX Manager URL to rewrite"
   elif out="$(check 2>&1)"; then
     bad "ferrofed config check accepts a PIX Manager credential sent over plain http"
-  elif ! grep -qF 'pixm.manager[0].url' <<< "$out"; then
+  elif ! grep -qF 'pixm.manager[0].endpoint.url' <<< "$out"; then
     bad "ferrofed config check refuses a cleartext credential without naming its key: $out"
   else
     echo "OK: a credential sent over plain http is refused by key"

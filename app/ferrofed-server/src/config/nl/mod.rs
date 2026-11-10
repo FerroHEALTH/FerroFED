@@ -54,7 +54,7 @@ pub struct NlGfSettings {
 ///
 /// # Errors
 /// [`BindingFault::BsnAsPseudonym`] for a BSN system listed in `namespaces`,
-/// [`Error::Missing`] for no registry or no `url`, [`Error::Url`] for a URL
+/// [`Error::Missing`] for no registry or no `endpoint.url`, [`Error::Url`] for a URL
 /// that does not parse, [`Error::UrlCredentials`] for one that carries a
 /// user name or a password, [`Error::Cleartext`] for one that is not
 /// `https` outside the development profile, [`BindingFault::NviGrant`] for an
@@ -121,14 +121,17 @@ pub(crate) fn sites(settings: &Settings) -> Result<Vec<ProtectedSite>, Cleartext
         return Ok(Vec::new());
     };
     let services = [
-        nl_gf
-            .nvi
-            .as_ref()
-            .map(|nvi| (nvi::NVI_KEY, nvi.url.expose(), nvi.credentials.is_some())),
+        nl_gf.nvi.as_ref().map(|nvi| {
+            (
+                nvi::NVI_ENDPOINT,
+                nvi.url.as_str(),
+                nvi.credentials.is_some(),
+            )
+        }),
         nl_gf.mitz.as_ref().map(|mitz| {
             (
-                mitz::MITZ_KEY,
-                mitz.url.expose(),
+                mitz::MITZ_ENDPOINT,
+                mitz.url.as_str(),
                 mitz.credentials.is_some(),
             )
         }),

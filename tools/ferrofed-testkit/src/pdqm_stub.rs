@@ -171,7 +171,7 @@ pub async fn by_identifier(answers: &[(&str, &[Entry])]) -> Server {
 }
 
 /// Returns the FHIR base of `server`, with its trailing slash, that a
-/// `[pdqm] url` names.
+/// `[pdqm] endpoint.url` names.
 #[must_use]
 pub fn base_url(server: &Server) -> String {
     format!("{}/fhir/", server.uri())

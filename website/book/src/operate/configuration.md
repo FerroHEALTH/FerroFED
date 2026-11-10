@@ -365,22 +365,64 @@ replaced: `postgres://***@db.example.org:5432/ferrofed?***`. A libpq
 key/value connection string shows as `***` whole. The value itself is sent
 unchanged.
 
-A PIX Manager's `url` carries no credential: one with a user name or a
-password in it is refused naming the key, as an endpoint URL in the registry
-document is. Its credentials go in `[pixm.manager.credentials]`, which takes
-a user and a password, or the `oauth` client-credentials grant
-authenticated by a client secret or a client assertion
-([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)), never a
-`nuts` grant. The credentials of `[pdqm]`, `[pmir]` and
-`[registry.mcsd]` take the same. Each grant a node's section can name is
-described in [Onward credentials](onward-credentials.md). The credentials of
-`[nl_gf.mitz]` take the same: a user and a password, or the `oauth` grant,
-whose token each question carries as a bearer token. A grant
-a section does not take is refused at load, naming it, and never read as no
-credential.
-`[nl_gf.nvi.credentials]` takes the `nuts` grant as well, and refuses
-`oauth`
-([Dutch localization](localization.md#dutch-localization-nl_gfnvi)).
+### The endpoint table of a service
+
+Every outbound service a binding names is written as one `endpoint` table,
+the `EndpointSection` of `ferrohealth-smart` that every FerroHEALTH product
+reads for an outbound integration: `[pixm.manager.endpoint]` under each
+`[[pixm.manager]]`, `[pdqm.endpoint]`, `[pmir.endpoint]`,
+`[registry.mcsd.endpoint]`, `[xcpd.gateway.endpoint]` under each
+`[[xcpd.gateway]]`, `[nl_gf.nvi.endpoint]` and `[nl_gf.mitz.endpoint]`, as
+`[audit.repository.endpoint]` and `[eehrxf.terminology.endpoint]` are:
+
+```toml
+[pdqm.endpoint]
+url = "https://pdq.example.org/fhir/"   # required
+timeout = "1s"                          # one whole call, every try and wait included
+# connect_timeout = "500ms"             # opening the connection; unset, timeout bounds it
+# retry = { max_attempts = 1, initial_backoff = "200ms", max_backoff = "5s" }
+
+[pdqm.endpoint.tls]
+client_identity_file = "/run/secrets/pdq-client.pem"
+
+[pdqm.endpoint.credentials]
+user = "ferrofed-pdq-consumer"
+password_file = "/run/secrets/pdq-password"
+```
+
+- `url` is the service's base. It carries no credential: one with a user
+  name or a password in it is refused naming the key, as an endpoint URL in
+  the registry document is.
+- `timeout` bounds one call. Each table keeps its own default, so a key you
+  leave out keeps the value the service had before it moved under
+  `endpoint`: `1s` for `[pdqm]` and `[nl_gf.mitz]`, `5s` for `[pmir]`, and
+  `10s` for the others.
+- `retry` tries a call again when the service could not be reached, the try
+  timed out, or it answered `5xx`. Each identity, localization and consent
+  table tries a call once unless you raise `max_attempts`, so a failure
+  fails the step at once within the query's budget.
+- `tls` is the TLS material of [Mutual TLS to the identity
+  services](#mutual-tls-to-the-identity-services).
+- `credentials` takes a user and a password, or the `oauth`
+  client-credentials grant authenticated by a client secret or a client
+  assertion ([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)),
+  never a `nuts` grant. Each grant a node's section can name is described in
+  [Onward credentials](onward-credentials.md). Mitz takes the same: a user
+  and a password, or the `oauth` grant, whose token each question carries
+  as a bearer token. A grant a table does not take is refused at load,
+  naming it, and never read as no credential. `[nl_gf.nvi.endpoint.credentials]`
+  takes a user and a password and refuses `oauth`; the NVI's `nuts` grant
+  sits in `[nl_gf.nvi.nuts]`
+  ([Dutch localization](localization.md#dutch-localization-nl_gfnvi)). An
+  XCPD responding gateway takes no credential: the XUA assertion is the
+  gateway's, and a `[xcpd.gateway.endpoint.credentials]` is refused.
+
+When a service refuses a token with `401`, the gateway drops the token and
+sends the call once more with a fresh one, and a second `401` fails the
+call (RFC 6750 §3.1). The
+`url`, `credentials` and `tls` keys sat on the table itself before release
+0.0.19; a configuration that still sets one there is refused, naming the
+`endpoint` key that replaces it ([Upgrading](upgrading.md)).
 
 ### A PIX Manager asked by `GET` or `POST`
 
@@ -402,8 +444,10 @@ request URL carries no parameter. PIXm does not require a Manager to accept a
 
 ```toml
 [[pixm.manager]]
-url = "https://pix.example.org/fhir/"
 method = "post"   # the patient identifier travels in the body, never the URL
+
+[pixm.manager.endpoint]
+url = "https://pix.example.org/fhir/"
 ```
 
 Any other value is refused naming the key. The answer is read the same way
@@ -414,19 +458,18 @@ as sent: the URL of a `GET`, or the request line, media type and body of a
 ### Mutual TLS to the identity services
 
 A national identity service often authenticates the gateway by its client
-certificate instead of, or beside, a password or a token. Every table that
-names an outbound service takes its TLS material in a `tls` sub-table:
-`[[pixm.manager]]`, `[pdqm]`, `[pmir]`, `[registry.mcsd]`, `[xcpd]`,
-`[nl_gf.nvi]`, `[nl_gf.mitz]` and a node's `[credentials."<endpoint id>"]`;
-`[audit.repository]` and `[eehrxf.terminology]` take it in their `endpoint`
-table, `[audit.repository.endpoint.tls]` and
-`[eehrxf.terminology.endpoint.tls]`:
+certificate instead of, or beside, a password or a token. Every outbound
+service takes its TLS material in the `tls` table of its `endpoint`
+([The endpoint table of a service](#the-endpoint-table-of-a-service)), and a
+node in the `tls` sub-table of its `[credentials."<endpoint id>"]`:
 
 ```toml
 [[pixm.manager]]
+
+[pixm.manager.endpoint]
 url = "https://pix.example.org/fhir/"
 
-[pixm.manager.tls]
+[pixm.manager.endpoint.tls]
 client_identity_file = "/run/secrets/pix-client.pem"  # mutual TLS
 trust_roots_file = "/etc/ferrofed/pix-roots.pem"      # optional
 # min_version = "1.2"                                 # "1.3" unless lowered
@@ -436,7 +479,7 @@ trust_roots_file = "/etc/ferrofed/pix-roots.pem"      # optional
   client certificate chain and its private key, which the gateway presents
   in the TLS handshake. It is a secret: it shows as `***` wherever the
   configuration is rendered, and setting both forms is refused naming
-  `<table>.tls.client_identity`.
+  `<table>.endpoint.tls.client_identity`.
 - `trust_roots_file` names a PEM bundle of trust roots the service's
   certificate chains to, added to the platform's roots.
 - `min_version` is the oldest TLS version the gateway speaks to the
@@ -449,9 +492,11 @@ trust_roots_file = "/etc/ferrofed/pix-roots.pem"      # optional
 - The keys sat on the table itself before release 0.0.18; set there, they
   are refused as unknown keys ([Upgrading](upgrading.md)).
 
-Each of these services is reached through one client build, with no
-redirect followed, the credential sent as a sensitive default header, and
-the TLS material above.
+Each of these services is reached through the outbound client of
+`ferrohealth-smart` its endpoint table builds, with no redirect followed, the
+credential marked sensitive, and the TLS material above. A MyHealth@EU
+responding gateway's client completes a connection only over a chain its
+revocation check cleared ([Localization](localization.md#a-myhealtheu-route)).
 
 ### What must travel encrypted
 
@@ -474,14 +519,14 @@ never a value. The rule covers:
   gateway's credentials in a Verifiable Presentation;
 - the `issuer` of a node's `oauth` section, whose token endpoint receives
   the client assertion and, under an `onward` table, the callers' tokens;
-- the `url` of every PIX Manager, which is asked for patient identifiers
-  with or without `[pixm.manager.credentials]`;
-- the `url` of `[pdqm]`, the PDQm Supplier, which is sent the patient
-  identifier with or without `[pdqm.credentials]`;
-- the `url` of every XCPD responding gateway, which is sent the patient
-  identifier and, when one is configured, the XUA assertion;
-- the `url` of `[nl_gf.nvi]`, which is sent the pseudonymised BSN and, when
-  one is configured, its credentials;
+- the `endpoint.url` of every PIX Manager, which is asked for patient
+  identifiers with or without `[pixm.manager.endpoint.credentials]`;
+- the `endpoint.url` of `[pdqm]`, the PDQm Supplier, which is sent the
+  patient identifier with or without `[pdqm.endpoint.credentials]`;
+- the `endpoint.url` of every XCPD responding gateway, which is sent the
+  patient identifier and, when one is configured, the XUA assertion;
+- the `endpoint.url` of `[nl_gf.nvi]`, which is sent the pseudonymised BSN
+  and, when one is configured, its credentials;
 - `telemetry.otlp.endpoint` when it carries a user name or a password; an
   `https://` collector meets the rule.
 

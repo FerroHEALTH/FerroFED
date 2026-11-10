@@ -298,7 +298,7 @@ async fn a_stopped_gateway_is_reported_with_every_live_part_named_missing() -> T
     // A data-keyed table and a URL with a path, in the PIXm
     // binding, beside a bearer token and a namespace.
     let pixm = if cfg!(feature = "binding-ihe") {
-        "\n[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/SENTINEL-PIX-PATH\"\n\n\
+        "\n[[pixm.manager]]\nendpoint.url = \"http://127.0.0.1:9/fhir/SENTINEL-PIX-PATH\"\n\n\
          [pixm.manager.members]\n\"SENTINEL-MEMBER\" = \"urn:oid:2.999.7777\"\n"
     } else {
         ""

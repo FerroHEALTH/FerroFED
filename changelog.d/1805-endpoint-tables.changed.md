@@ -1,6 +1,6 @@
-- The gateway runs on `ferrohealth-smart` 0.16.2, `ferrohealth-session`
+- The gateway runs on `ferrohealth-smart` 0.16.3, `ferrohealth-session`
   0.10.0, `ihe-atna` and `ehds-logging` 0.10.0, `ihe-iti` and
-  `nl-generic-functions` 0.1.0, and FerroBRIDGE's `eehrxf`,
+  `nl-generic-functions` 0.2.0, and FerroBRIDGE's `eehrxf`,
   `ferrobridge-term` and `ferrobridge-validator` 0.3.0. The audit
   repository and the terminology server are reached through
   `ferrohealth-smart`'s outbound client, so `[eehrxf.terminology]` also

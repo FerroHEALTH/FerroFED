@@ -98,7 +98,7 @@ fn pixm(pix: &str, token_url: &str, secret_file: &Path) -> String {
 fn pixm_auditing(pix: &str, token_url: &str, secret_file: &Path, audit: &str) -> String {
     let file = toml::Value::String(secret_file.display().to_string());
     format!(
-        "{audit}\n[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[pixm.manager.credentials.oauth]\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"client_secret_basic\"\nclient_secret_file = {file}\nscope = \"{SCOPE}\"\n"
+        "{audit}\n[[pixm.manager]]\nendpoint.url = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[pixm.manager.endpoint.credentials.oauth]\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"client_secret_basic\"\nclient_secret_file = {file}\nscope = \"{SCOPE}\"\n"
     )
 }
 
@@ -253,7 +253,7 @@ fn manager_with(profile: &str, oauth: &str) -> String {
         format!("scope = \"{SCOPE}\"\n")
     };
     format!(
-        "profile = \"{profile}\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.credentials.oauth]\nclient_id = \"{CLIENT_ID}\"\n{scope}{oauth}"
+        "profile = \"{profile}\"\n\n[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.endpoint.credentials.oauth]\nclient_id = \"{CLIENT_ID}\"\n{scope}{oauth}"
     )
 }
 
@@ -279,7 +279,7 @@ fn everything(error: &ConfigError) -> String {
 
 #[test]
 fn config_check_names_the_key_it_refuses_and_never_the_secret() -> TestResult {
-    let key = "pixm.manager[0].credentials.oauth";
+    let key = "pixm.manager[0].endpoint.credentials.oauth";
     let cases = [
         (
             manager_with(
@@ -299,9 +299,9 @@ fn config_check_names_the_key_it_refuses_and_never_the_secret() -> TestResult {
         ),
         (
             format!(
-                "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"tls_client_auth\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n"
+                "profile = \"development\"\n\n[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.endpoint.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"tls_client_auth\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n"
             ),
-            String::from("pixm.manager[0].credentials"),
+            String::from("pixm.manager[0].endpoint.credentials"),
         ),
     ];
     for (toml, named) in cases {
@@ -320,7 +320,7 @@ fn config_check_names_the_key_it_refuses_and_never_the_secret() -> TestResult {
 
 #[test]
 fn a_service_grant_holds_each_key_to_its_rule() -> TestResult {
-    let key = "pixm.manager[0].credentials.oauth";
+    let key = "pixm.manager[0].endpoint.credentials.oauth";
     let endpoint = "token_endpoint = \"https://as.example.org/token\"\n";
     let cases: [(String, &str); 4] = [
         (
@@ -355,13 +355,13 @@ fn a_service_grant_holds_each_key_to_its_rule() -> TestResult {
         assert!(!shown.contains(SECRET), "{reason}: {shown}");
     }
     let oauth2 = format!(
-        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"system/aql-*.s\"\nresource = \"https://pix.example.org/fhir\"\n"
+        "profile = \"development\"\n\n[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\n[pixm.manager.endpoint.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"system/aql-*.s\"\nresource = \"https://pix.example.org/fhir\"\n"
     );
     let error = Config::from_sources(Some(&oauth2), &BTreeMap::new())
         .err()
         .ok_or("the removed oauth2 table is refused at load")?;
     assert_eq!(
-        Some("pixm.manager[0].credentials.oauth2"),
+        Some("pixm.manager[0].endpoint.credentials.oauth2"),
         crate::support::refused_key(&error),
         "an unknown key since 0.0.19: {error:?}"
     );

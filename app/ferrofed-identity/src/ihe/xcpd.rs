@@ -24,8 +24,13 @@
 //! transaction's purpose, inside `ihe_iti`'s redacting types; nothing here
 //! logs it, and no error carries it.
 //!
-//! A gateway marked as a MyHealth@EU route is an eHDSI link: it is reached
-//! through its [`RevocationCheck`], the family's revocation-checking TLS
+//! Each gateway is asked through the `ferrohealth-smart` outbound client its
+//! own endpoint table builds, since an `ihe-iti` XCPD client posts only to
+//! the origin of its table's URL.
+//!
+//! A gateway marked as a MyHealth@EU route is an eHDSI link: its outbound
+//! client is built over [`GatedTls`], the gated TLS of its
+//! [`RevocationCheck`], the family's revocation-checking TLS
 //! (`ferrohealth_server::revocation`), which checks the chain the gateway
 //! presents for revocation before the discovery is sent, and a chain that
 //! is revoked or whose status no source gives fails the discovery closed
@@ -39,8 +44,11 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ferrohealth_secret::secret_url::SecretUrl;
-use ferrohealth_server::revocation::{RevocationCheck, RevocationError, RevocationSetupError};
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_server::revocation::{RevocationCheck, RevocationError};
+use ferrohealth_smart::client::PresentedTls;
+use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::config::TlsBuilder;
 use ihe_iti::xcpd::XcpdClient;
 use ihe_iti::xcpd::audit::{self, AuditError, AuditEvent, AuditRecorder};
 use ihe_iti::xcpd::discovery::Discovery;
@@ -53,13 +61,12 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use url::Url;
 
-use crate::fhir::{self, Authentication, ClientError};
 use crate::ihe::audit::AUDIT_TARGET;
 use crate::ihe::audit::balp::{audited_as, logged_as};
+use crate::outbound::Shown;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
-use ferrohealth_server::tls_client::TlsClient;
 
 /// The audit recorder that writes each ITI-55 audit message as a structured
 /// `tracing` event at [`AUDIT_TARGET`], for a deployment that routes its log
@@ -169,19 +176,75 @@ pub enum Transport {
     UnencryptedForDevelopment,
 }
 
+/// The TLS of a MyHealth@EU route as a `ferrohealth-smart` [`TlsBuilder`].
+///
+/// It is the gated configuration of its [`RevocationCheck`], whose
+/// connections complete only over a chain the check cleared, presenting the
+/// client certificate the check was built with.
+///
+/// It builds the one configuration whatever table it is handed, since the
+/// check was built from the gateway's own `tls` table. `Debug` shows the
+/// check as the check shows itself, never a key.
+#[derive(Debug, Clone)]
+pub struct GatedTls(RevocationCheck);
+
+impl GatedTls {
+    /// The gated TLS of `check`.
+    #[must_use]
+    pub fn new(check: RevocationCheck) -> Self {
+        Self(check)
+    }
+
+    /// The check whose cleared chains the connections complete over.
+    #[must_use]
+    pub fn check(&self) -> &RevocationCheck {
+        &self.0
+    }
+}
+
+impl TlsBuilder for GatedTls {
+    fn build(
+        &self,
+        _key: &str,
+        _section: &TlsClientSection,
+    ) -> Result<PresentedTls, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(PresentedTls::new(
+            Arc::clone(self.0.config()),
+            self.0.certificate().cloned(),
+        ))
+    }
+}
+
 /// One responding gateway as the configuration names it.
-#[derive(Debug)]
 pub struct GatewayConfig {
-    /// The SOAP endpoint, which `Debug` shows without its userinfo.
-    pub endpoint: SecretUrl,
+    /// The outbound client its endpoint table builds: the SOAP endpoint, the
+    /// TLS of the ATNA secure channel (ITI TF-1 Table 27.1.3-1), the
+    /// timeouts and the retry table. A MyHealth@EU route's is built over
+    /// [`GatedTls`].
+    pub client: OutboundClient,
     /// The receiver device's OID.
     pub device: String,
     /// The one community to ask for, when the gateway serves several
     /// (§3.55.4.1.2.5).
     pub community: Option<String>,
-    /// Whether the gateway is a MyHealth@EU route, an eHDSI link reached
-    /// through [`XcpdConfig::revocation`].
+    /// Whether the gateway is a MyHealth@EU route, an eHDSI link, whose
+    /// `client` is built over the [`GatedTls`] of `revocation`.
     pub myhealth_eu: bool,
+    /// The revocation check of a MyHealth@EU route; required when the
+    /// gateway is marked.
+    pub revocation: Option<RevocationCheck>,
+}
+
+impl fmt::Debug for GatewayConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GatewayConfig")
+            .field("client", &Shown(&self.client))
+            .field("device", &self.device)
+            .field("community", &self.community)
+            .field("myhealth_eu", &self.myhealth_eu)
+            .field("revocation", &self.revocation)
+            .finish()
+    }
 }
 
 /// The XCPD localizer as the configuration names it.
@@ -202,13 +265,6 @@ pub struct XcpdConfig {
     pub namespaces: BTreeMap<IdentifierNamespace, String>,
     /// How the responding gateways are reached.
     pub transport: Transport,
-    /// The TLS material of the ATNA secure channel (ITI TF-1 Table
-    /// 27.1.3-1).
-    pub tls: Arc<TlsClient>,
-    /// The TLS of the gateways marked as MyHealth@EU routes, which checks
-    /// each one's chain for revocation before a discovery is sent; required
-    /// when one is marked.
-    pub revocation: Option<RevocationCheck>,
 }
 
 /// An XCPD localizer that cannot be built.
@@ -227,15 +283,6 @@ pub enum XcpdConfigError {
     /// The gateway's own home community is not an OID.
     #[error("the home community is not an ISO OID")]
     HomeCommunity(#[source] InvalidInput),
-    /// A gateway's endpoint does not parse as a URL.
-    #[error("the endpoint of responding gateway {index} is not a URL")]
-    EndpointUrl {
-        /// The gateway's position, counted from 0.
-        index: usize,
-        /// What the URL parser reported.
-        #[source]
-        source: url::ParseError,
-    },
     /// A gateway's endpoint is refused: not `https` outside development, or
     /// not `http(s)` at all.
     #[error(
@@ -280,18 +327,19 @@ pub enum XcpdConfigError {
     /// A namespace mapping is not an OID.
     #[error("the assigning authority mapped from namespace {0} is not an ISO OID")]
     Namespace(IdentifierNamespace),
-    /// The HTTP client could not be built.
-    #[error("the HTTP client for the responding gateways could not be built")]
-    Client(#[source] ClientError),
     /// A gateway is a MyHealth@EU route and no revocation check is given.
     #[error("responding gateway {index} is a MyHealth@EU route and has no revocation check")]
     Unchecked {
         /// The gateway's position, counted from 0.
         index: usize,
     },
-    /// The HTTP client of the MyHealth@EU routes could not be built.
-    #[error("the HTTP client for the MyHealth@EU responding gateways could not be built")]
-    RevocationClient(#[source] RevocationSetupError),
+    /// A gateway's outbound client carries a credential, which no
+    /// responding gateway is sent: the XUA assertion is the credential.
+    #[error("responding gateway {index} carries a credential; the XUA assertion is its credential")]
+    Credential {
+        /// The gateway's position, counted from 0.
+        index: usize,
+    },
 }
 
 /// Why the XCPD localizer could not answer.
@@ -386,9 +434,9 @@ impl XcpdLocalizer {
     /// # Errors
     /// An [`XcpdConfigError`] for no gateway, an identifier that is not an
     /// OID, an endpoint refused under `config.transport`, a community mapped
-    /// twice or to an unknown member, a member no community serves, TLS
-    /// material that does not read as PEM, a MyHealth@EU gateway with no
-    /// revocation check, or an HTTP client that cannot be built.
+    /// twice or to an unknown member, a member no community serves, a
+    /// MyHealth@EU gateway with no revocation check, or a gateway whose
+    /// outbound client carries a credential.
     pub fn from_config(
         config: XcpdConfig,
         assertion: Option<Arc<dyn AssertionSource>>,
@@ -405,35 +453,22 @@ impl XcpdLocalizer {
             .transpose()
             .map_err(XcpdConfigError::HomeCommunity)?
             .map(HomeCommunityId::new);
-        // NOTE: no specification governs this: our own design; the gateways are asked
-        // with no `Authorization` header and no redirect, since the body names the patient.
-        let http = fhir::http_client(&Authentication::None, &config.tls)
-            .map_err(XcpdConfigError::Client)?;
-        let checked = config
-            .revocation
-            .as_ref()
-            .map(RevocationCheck::http_client)
-            .transpose()
-            .map_err(XcpdConfigError::RevocationClient)?;
         let mut gateways = Vec::with_capacity(config.gateways.len());
-        for (index, gateway) in config.gateways.iter().enumerate() {
-            let target = responding(index, gateway, config.transport)?;
-            let (client, check) = if gateway.myhealth_eu {
-                let (Some(revocation), Some(http)) = (&config.revocation, &checked) else {
-                    return Err(XcpdConfigError::Unchecked { index });
-                };
-                let endpoint = Url::parse(gateway.endpoint.expose())
-                    .map_err(|source| XcpdConfigError::EndpointUrl { index, source })?;
-                (
-                    XcpdClient::new(http.clone()),
-                    Some((revocation.clone(), endpoint)),
-                )
-            } else {
-                (XcpdClient::new(http.clone()), None)
+        for (index, gateway) in config.gateways.into_iter().enumerate() {
+            let target = responding(index, &gateway, config.transport)?;
+            // NOTE: no specification governs this: our own design; the gateways are asked
+            // with no `Authorization` header, since the XUA assertion in the body is the credential.
+            if gateway.client.authorization().is_some() {
+                return Err(XcpdConfigError::Credential { index });
+            }
+            let check = match (gateway.myhealth_eu, gateway.revocation) {
+                (true, Some(revocation)) => Some((revocation, gateway.client.url().clone())),
+                (true, None) => return Err(XcpdConfigError::Unchecked { index }),
+                (false, _) => None,
             };
             gateways.push(Gateway {
                 target,
-                client,
+                client: XcpdClient::new(gateway.client),
                 check,
             });
         }
@@ -667,8 +702,7 @@ fn responding(
     gateway: &GatewayConfig,
     transport: Transport,
 ) -> Result<RespondingGateway, XcpdConfigError> {
-    let endpoint = Url::parse(gateway.endpoint.expose())
-        .map_err(|source| XcpdConfigError::EndpointUrl { index, source })?;
+    let endpoint = gateway.client.url().clone();
     let device = Oid::new(&gateway.device)
         .map_err(|source| XcpdConfigError::GatewayOid { index, source })?;
     let built = match transport {

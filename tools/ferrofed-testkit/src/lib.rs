@@ -75,6 +75,9 @@
 //!   listener and the client CA it admits a proxy by (#632);
 //! - [`otlp`]: an in-process OTLP/gRPC trace collector, which keeps every
 //!   span the gateway exports (#437);
+//! - [`outbound`]: the `ferrohealth-smart` outbound client a test reaches a
+//!   harness server through, as the gateway builds each service client
+//!   (#1815);
 //! - [`pdqm_stub`]: fixed ITI-78 and ITI-119 answers on a `wiremock`
 //!   server for the offline suites; patient identity is FerroPIX's (#1360);
 //! - [`pixm_stub`]: fixed ITI-83 answers on a `wiremock` server for the
@@ -127,6 +130,7 @@ pub mod nuts;
 pub mod nvi;
 pub mod oauth;
 pub mod otlp;
+pub mod outbound;
 pub mod pdqm_stub;
 pub mod perf_token;
 pub mod pixm_stub;

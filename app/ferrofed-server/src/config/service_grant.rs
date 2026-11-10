@@ -11,7 +11,7 @@
 //! §3.72.4.2).
 //!
 //! ```toml
-//! [pixm.manager.credentials.oauth]
+//! [pixm.manager.endpoint.credentials.oauth]
 //! token_endpoint = "https://mpi.example.org/auth/oauth2_token"
 //! client_id = "ferrofed-pix-consumer"
 //! client_auth = "client_secret_basic"

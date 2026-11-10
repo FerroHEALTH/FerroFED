@@ -57,7 +57,7 @@ fn registry(urls: [&str; 3]) -> String {
 /// The `[pixm]` resolver over the Manager at `base`, one domain per member.
 fn pixm(base: &str) -> String {
     format!(
-        "[[pixm.manager]]\nurl = \"{base}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\"node-c\" = \"{}\"\n",
+        "[[pixm.manager]]\nendpoint.url = \"{base}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\"node-c\" = \"{}\"\n",
         DOMAIN_A.system(),
         DOMAIN_B.system(),
         DOMAIN_C.system()

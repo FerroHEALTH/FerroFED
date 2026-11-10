@@ -114,7 +114,7 @@ fn knowing_another(dir: &Path, a: &str, b: &str) -> Result<Router, Box<dyn Error
 #[cfg(feature = "binding-ihe")]
 fn pix_gateway(dir: &Path, a: &str, b: &str, pix: &str) -> Result<Router, Box<dyn Error>> {
     let pixm = format!(
-        "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
+        "[[pixm.manager]]\nendpoint.url = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n"
     );
     gateway(dir, &registry(a, b, ""), "profile = \"development\"", &pixm)
 }
