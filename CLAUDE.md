@@ -289,13 +289,14 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   nothing in FerroFED, so FerroPIX can use them as they are.
 - `ihe-iti` (the IHE ITI profiles: `pixm`, `pdqm`, `mcsd`, `pmir`, `xcpd`,
   with `balp` and `atna` turning on their audit records, written through
-  `ihe-atna`, and the FHIR-free request `authorizer` the engine implements) is owned and published by FerroHEALTH/FerroPIX since #367;
-  FerroFED pins it exactly from crates.io (`ihe-iti = "=0.0.76"`) and keeps
-  no copy.
+  `ihe-atna`, every client built from `ferrohealth-smart`'s outbound client)
+  is owned and published by FerroHEALTH/FerroPIX since #367; FerroFED
+  requires it by a caret range from crates.io (`ihe-iti = "0.2.0"`) and
+  keeps no copy.
 - `nl-generic-functions` (the Annex B functions: `nvi`, `mitz`, `lrza`,
   `nuts-auth`, and the BSN naming systems in `identification`) is owned and published by
-  FerroHEALTH/FerroPIX since #367; FerroFED pins it exactly from crates.io
-  (`nl-generic-functions = "=0.0.43"`) and keeps no copy.
+  FerroHEALTH/FerroPIX since #367; FerroFED requires it by a caret range
+  from crates.io (`nl-generic-functions = "0.2.0"`) and keeps no copy.
 - `app/`: FerroFED's own glue, each a hard `publish = false`:
   `ferrofed-registry` (members, learned maps, incidents, the definition store
   trait), `ferrofed-operator-api` (the operator and console wire documents
@@ -307,8 +308,9 @@ The Cargo workspace (#28), the crate map of `docs/architecture.md` §11:
   feature `balp`, which
   `ihe` implies and the server always enables (#697); `nl/`, behind feature `nl`, the NVI localizer and the Mitz
   pre-filter over `nl-generic-functions`; and at the top `session`, the
-  resolution bindings per verified caller, `fhir`, the one IHE FHIR client
-  and TLS type, and `profile`, the deployment profile),
+  resolution bindings per verified caller, and `profile`, the deployment
+  profile; every adapter takes the `ferrohealth-smart` outbound client its
+  endpoint table builds),
   `ferrofed-eehrxf` (the interoperability component's federation half:
   the patient summary's stored section queries, read-only under the
   reserved namespace `eu.ferrofed.eehrxf`, which the server's registry

@@ -8,8 +8,6 @@
 
 pub mod audit;
 #[cfg(feature = "ihe")]
-pub mod iua;
-#[cfg(feature = "ihe")]
 pub mod mcsd;
 #[cfg(feature = "ihe")]
 pub mod pdqm;

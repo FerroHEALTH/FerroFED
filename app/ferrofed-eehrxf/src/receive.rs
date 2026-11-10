@@ -25,7 +25,7 @@ use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use eehrxf::category::Category;
 use eehrxf::mapping::{Mapping, MappingError};
-use eehrxf::mappings::{EPS, HDR, IMAGING, LABORATORY, MPD};
+use eehrxf::mappings::{EPS, HDR, IMAGING, LABORATORY};
 use eehrxf::receive::category::Uncategorised;
 use eehrxf::receive::conform::{Finding, FindingKind, Unevaluated};
 use eehrxf::receive::displays::DisplayError;
@@ -604,12 +604,35 @@ pub enum Unreceived {
 const fn accounted(kind: Category) -> &'static [&'static str] {
     match kind {
         Category::PatientSummary => EPS.accounted(),
-        Category::Prescription | Category::Dispensation => MPD.accounted(),
         Category::Imaging => IMAGING.accounted(),
         Category::Laboratory => LABORATORY.accounted(),
         Category::Discharge => HDR.accounted(),
-        // NOTE: no specification governs this: our own design; a category `eehrxf` adds ships its
-        // project with it, and until this names it a run declares nothing beyond the engine's losses.
+        // NOTE: HL7 Europe MPD 1.0.0 has no Bundle or Composition profile, so no prescription or
+        // dispensation is received; a category `eehrxf` adds declares nothing here until it is named.
         _ => &[],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use eehrxf::category::Category;
+    use eehrxf::mappings::HDR;
+
+    use super::accounted;
+
+    /// No element accounted for.
+    const NONE: &[&str] = &[];
+
+    #[test]
+    fn a_received_discharge_report_declares_what_the_hdr_project_accounts_for() {
+        assert_ne!(accounted(Category::Discharge), NONE);
+        assert_eq!(accounted(Category::Discharge), HDR.accounted());
+    }
+
+    #[test]
+    fn a_category_no_document_is_received_for_declares_nothing() {
+        assert!(Category::Prescription.profiles().is_none());
+        assert_eq!(accounted(Category::Prescription), NONE);
+        assert_eq!(accounted(Category::Dispensation), NONE);
     }
 }

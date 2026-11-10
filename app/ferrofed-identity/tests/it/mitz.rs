@@ -11,7 +11,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::nl::mitz::{
     HolderConfig, MITZ_MODE, MitzConfig, MitzConfigError, MitzPrefilter,
 };
@@ -21,7 +20,6 @@ use ferrofed_identity::role::consent::{
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
 use ferrofed_testkit::mitz::Mitz;
-use ferrohealth_secret::secret_url::SecretUrl;
 
 use crate::support::{PATIENT_VALUE, registry};
 
@@ -48,10 +46,8 @@ fn config(endpoint: &str, holders: &[(&str, Option<&str>)]) -> Result<MitzConfig
         );
     }
     Ok(MitzConfig {
-        endpoint: SecretUrl::new(endpoint),
+        client: ferrofed_testkit::outbound::client(endpoint)?,
         development: true,
-        auth: Authentication::None,
-        tls: ferrofed_testkit::tls::platform(),
         namespaces: BTreeSet::from([IdentifierNamespace::new(BSN_ALIAS)?]),
         categories: vec![String::from("GGC002")],
         purpose: String::from("TREAT"),
@@ -447,10 +443,11 @@ fn refused(edit: impl FnOnce(&mut MitzConfig)) -> Result<MitzConfigError, Box<dy
 fn every_refused_configuration_is_typed() -> TestResult {
     assert!(matches!(
         refused(|config| {
-            config.endpoint = SecretUrl::new("http://mitz.example.org/vraag");
+            config.client = ferrofed_testkit::outbound::client("http://mitz.example.org/vraag")
+                .expect("the outbound client builds");
             config.development = false;
         })?,
-        MitzConfigError::Client(_)
+        MitzConfigError::Endpoint(_)
     ));
     assert!(matches!(
         refused(|config| {

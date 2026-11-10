@@ -4,8 +4,8 @@
 # What FerroFED claims
 
 FerroFED claims what a release ships and a test holds. This page lists the
-standing decisions, what each release shipped, and what is planned, so you
-can tell them apart. The
+standing decisions and what each release shipped, and the limitations to
+know before you deploy it. The
 [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md)
 has the detail of every change.
 
@@ -571,39 +571,6 @@ ships what it holds.
   under a token exchanged for that caller ([#1682](https://github.com/FerroHEALTH/FerroFED/issues/1682), [#1703](https://github.com/FerroHEALTH/FerroFED/issues/1703), [#1704](https://github.com/FerroHEALTH/FerroFED/issues/1704), [#1705](https://github.com/FerroHEALTH/FerroFED/issues/1705), [#1749](https://github.com/FerroHEALTH/FerroFED/issues/1749)).
 - Every outbound client on the family's `TlsClient`, at TLS 1.3 unless its
   `tls` sub-table lowers it ([#1750](https://github.com/FerroHEALTH/FerroFED/issues/1750), [#1766](https://github.com/FerroHEALTH/FerroFED/issues/1766)).
-
-## Planned
-
-Each milestone on the
-[milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is a
-release, and every issue in it names the sections it answers.
-
-The European interoperability software component, `eehrxf` and every
-document it builds in the exchange format, moves to FerroBRIDGE
-([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)). Prescriptions from openEHR medication data through a
-FHIRconnect mapping, laboratory reports, discharge reports and imaging
-were built there (issues
-[FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321), [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322), [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325) and [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326), now closed).
-FerroFED keeps the gateway half: the federation queries, the FHIR face
-routes and the access record, which v0.0.16 carries for prescriptions from
-openEHR medication data and test results and v0.0.18 for discharge
-reports and imaging. v0.0.19 carries the receipt of an imaging report
-([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)) and the rating of what a received discharge or imaging
-report can lose ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)), and plans the rest of the
-manufacturer's conformity work
-([#525](https://github.com/FerroHEALTH/FerroFED/issues/525), [#940](https://github.com/FerroHEALTH/FerroFED/issues/940), [Regulatory status](regulatory-status.md)). The
-changelog fragments in
-[`changelog.d/`](https://github.com/FerroHEALTH/FerroFED/tree/main/changelog.d)
-list what is merged on `main` for the next release.
-
-Waiting on the EU: the patient summary, built, is re-checked against the
-Art 15(1) implementing act once it is adopted
-([FerroHEALTH/FerroBRIDGE#1327](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1327)); the logging
-component, built, is re-checked against the Art 36(1)
-common specifications once they are adopted
-([#799](https://github.com/FerroHEALTH/FerroFED/issues/799)); and the Art 40
-testing environment is run once it exists
-([#675](https://github.com/FerroHEALTH/FerroFED/issues/675)).
 
 ## Limitations
 

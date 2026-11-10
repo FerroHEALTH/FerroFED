@@ -17,7 +17,6 @@ use ferrofed_testkit::mcsd::{HarnessDirectory, Member, Outage};
 use ihe_iti::mcsd::budget::{Budget, Limits};
 use ihe_iti::mcsd::client::McsdClient;
 use ihe_iti::mcsd::replica::{Refresh, Replica, Scope};
-use url::Url;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -37,10 +36,9 @@ fn member(name: &str) -> Member {
 }
 
 fn client(directory: &HarnessDirectory) -> Result<McsdClient, Box<dyn Error>> {
-    let http = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()?;
-    Ok(McsdClient::new(Url::parse(&directory.base())?, http)?)
+    Ok(McsdClient::new(ferrofed_testkit::outbound::client(
+        &directory.base(),
+    )?)?)
 }
 
 fn scope() -> Scope {

@@ -9,23 +9,26 @@
 //!
 //! ```toml
 //! [pdqm]
-//! url = "https://pdq.example.org/fhir/"
 //! transaction = "iti-78"
 //! master = "urn:oid:2.999.1"
-//! timeout = '1s'
+//!
+//! [pdqm.endpoint]
+//! url = "https://pdq.example.org/fhir/"
+//! timeout = "1s"
 //!
 //! [pdqm.namespaces]
 //! "2.999.7" = "urn:oid:2.999.7"
 //!
-//! [pdqm.credentials.oauth]
+//! [pdqm.endpoint.credentials.oauth]
 //! token_endpoint = "https://pdq.example.org/auth/token"
 //! client_id = "ferrofed-pdq-consumer"
 //! client_secret_file = "/run/secrets/pdq-consumer"
 //! scope = "*"
 //! ```
 //!
-//! `[pdqm.tls]` gives the mutual TLS the
-//! Supplier asks for, as `[xcpd]` does ([`tls`](crate::config::tls)).
+//! `[pdqm.endpoint]` is `ferrohealth-smart`'s `EndpointSection`: its
+//! `timeout` bounds one exchange with the Supplier, every retry included,
+//! and its `tls` gives the mutual TLS the Supplier asks for.
 //!
 //! `transaction` is `iti-78`, the Mobile Patient Demographics Query, or
 //! `iti-119`, the Patient Demographics Match, where the deployment declares
@@ -38,40 +41,35 @@
 //! shape of the table: our own design.
 
 use ferrohealth_config::removed::Removed;
-use ferrohealth_config::tls::TlsClientSection;
 use ferrohealth_config::units;
-use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_smart::config::endpoint::EndpointSection;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::ihe::pdqm::Transaction;
-use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
+use url::Url;
 
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::resolve::localization_budget_ms;
-use crate::config::service_grant::{ServiceContext, resolve_service};
+use crate::config::service_grant::ServiceContext;
 use crate::config::settings::Scheme;
 use crate::config::{Config, transport};
-use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The key of the table.
 pub const PDQM_KEY: &str = "pdqm";
+
+/// The key of its endpoint table.
+pub const PDQM_ENDPOINT: &str = "pdqm.endpoint";
 
 /// The PDQm demographics step, as the configuration writes it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Pdqm {
-    /// The Supplier's FHIR base URL, `https`; `http` under development only.
-    pub url: SecretUrl,
-    /// How the gateway authenticates to the Supplier, when the transport
-    /// does not.
-    pub credentials: Option<CredentialsSection>,
-    /// The TLS material the service is reached with: the table's `tls`
-    /// sub-table.
-    pub tls: TlsClientSection,
+    /// The Supplier's FHIR base and how it is reached: `https`, `http` under
+    /// development only. Its `timeout` bounds one exchange.
+    pub endpoint: EndpointSection,
     /// The transaction the Supplier is asked with: `iti-78` or `iti-119`.
     pub transaction: Transaction,
     /// The identifier system of the master domain.
@@ -79,25 +77,37 @@ pub struct Pdqm {
     /// Each client namespace taken to the Supplier, mapped to the identifier
     /// system the identifier is sent in.
     pub namespaces: BTreeMap<String, String>,
-    /// How long one exchange with the Supplier may take.
-    pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// The retired `timeout_ms`, which `endpoint.timeout` replaced in
     /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
+    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub url: Removed,
+    /// The retired `credentials`, which `endpoint.credentials` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub credentials: Removed,
+    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub tls: Removed,
 }
 
 impl Default for Pdqm {
     fn default() -> Self {
         Self {
-            url: SecretUrl::default(),
-            credentials: None,
-            tls: TlsClientSection::default(),
+            // NOTE: no specification governs this: our own design; the step runs ahead of
+            // localization within the overall budget, so one exchange takes a second by default.
+            endpoint: crate::config::endpoint::tried_once(units::Duration::from_secs(1)),
             transaction: Transaction::Search,
             master: String::new(),
             namespaces: BTreeMap::new(),
-            timeout: units::Duration::from_secs(1),
             timeout_ms: Removed::default(),
+            url: Removed::default(),
+            credentials: Removed::default(),
+            tls: Removed::default(),
         }
     }
 }
@@ -105,13 +115,14 @@ impl Default for Pdqm {
 /// The PDQm demographics step, with every secret read.
 #[derive(Debug)]
 pub struct PdqmSettings {
-    /// The Supplier's FHIR base URL, already known to parse.
-    pub url: SecretUrl,
+    /// The Supplier's FHIR base URL, read from `endpoint`.
+    pub url: Url,
     /// How the gateway authenticates to it: basic credentials or the client
     /// credentials grant of `oauth`.
     pub credentials: Option<Scheme>,
-    /// The TLS material it is reached with.
-    pub tls: Arc<TlsClient>,
+    /// How the Supplier is reached, as `ferrohealth-smart`'s outbound client
+    /// reads it.
+    pub endpoint: Box<EndpointSection>,
     /// The transaction the Supplier is asked with.
     pub transaction: Transaction,
     /// The identifier system of the master domain, as written.
@@ -122,15 +133,15 @@ pub struct PdqmSettings {
     pub timeout: Duration,
 }
 
-/// Resolves `[pdqm]`: a URL that parses, carries no userinfo and is `https`
-/// outside development, basic credentials or an `oauth` grant, a master
-/// domain, at least one namespace and none the cross-reference maps, and a
-/// positive timeout that, with the localizer's, ends before the overall
-/// budget (§11.5).
+/// Resolves `[pdqm]`: an endpoint table whose URL carries no userinfo and is
+/// `https` outside development, with basic credentials or an `oauth` grant,
+/// a master domain, at least one namespace and none the cross-reference
+/// maps, and a positive timeout that, with the localizer's, ends before the
+/// overall budget (§11.5).
 ///
 /// # Errors
-/// [`Error::Missing`] for no `url`, `master` or `namespaces`, [`Error::Zero`]
-/// for a zero timeout, [`BindingFault::DemographicsBudget`] for a budget that
+/// [`Error::Missing`] for no `endpoint.url`, `master` or `namespaces`,
+/// [`Error::Zero`] for a zero timeout, [`BindingFault::DemographicsBudget`] for a budget that
 /// leaves no time to resolve, [`Error::Url`], [`Error::UrlCredentials`] and
 /// [`Error::Cleartext`] for the URL, [`CredentialsFault::GrantNotHere`] for an
 /// OAuth 2.0 or Nuts grant, [`BindingFault::Pdqm`] for a namespace
@@ -147,38 +158,19 @@ pub(crate) fn resolve(
     let missing = |key: &str| Error::Missing {
         key: format!("{PDQM_KEY}.{key}"),
     };
-    let url_key = format!("{PDQM_KEY}.url");
-    if pdqm.url.expose().is_empty() {
-        return Err(missing("url"));
-    }
-    let url = url::Url::parse(pdqm.url.expose()).map_err(|source| Error::Url {
-        key: url_key.clone(),
-        source,
-    })?;
-    // NOTE: no specification governs this: our own design; as the registry
-    // refuses it on an endpoint URL, a credential goes in its own section.
-    if !url.username().is_empty() || url.password().is_some() {
-        return Err(Error::UrlCredentials {
-            key: url_key,
-            section: format!("{PDQM_KEY}.credentials"),
-        });
-    }
+    let endpoint = crate::config::endpoint::service(PDQM_ENDPOINT, &pdqm.endpoint, context)?;
     if pdqm.master.is_empty() {
         return Err(missing("master"));
     }
     if pdqm.namespaces.is_empty() {
         return Err(missing("namespaces"));
     }
-    if pdqm.timeout.as_millis() == 0 {
-        return Err(Error::Zero {
-            key: format!("{PDQM_KEY}.timeout"),
-        });
-    }
+    let timeout = pdqm.endpoint.timeout;
     let localization_ms = localization_budget_ms(config);
     let overall_ms = config.federation.overall_timeout.as_millis();
-    if pdqm.timeout.as_millis().saturating_add(localization_ms) >= overall_ms {
+    if timeout.as_millis().saturating_add(localization_ms) >= overall_ms {
         return Err(Error::Binding(BindingFault::DemographicsBudget {
-            timeout_ms: pdqm.timeout.as_millis(),
+            timeout_ms: timeout.as_millis(),
             localization_ms,
             overall_ms,
         }));
@@ -195,27 +187,24 @@ pub(crate) fn resolve(
             fault: "is a namespace [pixm.namespaces] maps, so the cross-reference resolves it as it is",
         }));
     }
-    let section = format!("{PDQM_KEY}.credentials");
-    let credentials = pdqm
-        .credentials
-        .as_ref()
-        .map(|credentials| resolve_service(&section, credentials, context))
-        .transpose()?;
+    let section = format!("{PDQM_ENDPOINT}.credentials");
     // NOTE: no specification governs this: our own design; the Supplier is sent
     // patient identifiers, held to https at load as every identity service is.
     transport::protected_payload(
         config.profile,
-        pdqm.url.expose(),
-        transport::identity_site(PDQM_KEY, credentials.is_some().then_some(section.as_str())),
+        endpoint.url.as_str(),
+        transport::identity_site(
+            PDQM_ENDPOINT,
+            endpoint.credentials.is_some().then_some(section.as_str()),
+        ),
     )?;
-    let tls = crate::config::tls::read(&format!("{PDQM_KEY}.tls"), &pdqm.tls)?;
     Ok(Some(PdqmSettings {
-        url: pdqm.url.clone(),
-        credentials,
-        tls,
+        url: endpoint.url,
+        credentials: endpoint.credentials,
+        endpoint: Box::new(pdqm.endpoint.clone()),
         transaction: pdqm.transaction,
         master: pdqm.master.clone(),
         namespaces: pdqm.namespaces.clone(),
-        timeout: Duration::from_millis(pdqm.timeout.as_millis()),
+        timeout: timeout.get(),
     }))
 }

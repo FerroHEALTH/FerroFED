@@ -697,7 +697,7 @@ fn a_service_credentials_section_takes_no_tls_material() -> TestResult {
     let identity = dir.path().join("client.pem");
     std::fs::write(&identity, "unused")?;
     let text = format!(
-        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"Qz7synthetic\"\ntls = {{ client_identity_file = {} }}\n",
+        "[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.endpoint.credentials]\nuser = \"gateway\"\npassword = \"Qz7synthetic\"\ntls = {{ client_identity_file = {} }}\n",
         toml::Value::String(identity.display().to_string())
     );
     let error = Config::from_sources(Some(&injected(&text)), &BTreeMap::new())
@@ -705,7 +705,8 @@ fn a_service_credentials_section_takes_no_tls_material() -> TestResult {
         .ok_or("the key is refused at load")?;
     let shown = format!("{error:?}");
     assert!(
-        shown.contains("pixm.manager[0].credentials.tls") && shown.contains("unknown field `tls`"),
+        shown.contains("pixm.manager[0].endpoint.credentials.tls")
+            && shown.contains("unknown field `tls`"),
         "a service's credentials table is ferrohealth-smart's, which takes no tls: {shown}"
     );
     Ok(())

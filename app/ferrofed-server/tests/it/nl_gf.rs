@@ -102,7 +102,7 @@ impl Resolution {
         }])
         .await;
         let mut tables = format!(
-            "[[pixm.manager]]\nurl = \"{}\"\n\n[pixm.manager.members]\n",
+            "[[pixm.manager]]\nendpoint.url = \"{}\"\n\n[pixm.manager.members]\n",
             pixm_stub::base_url(&pix)
         );
         for (member, domain) in MEMBERS.into_iter().zip(DOMAINS) {
@@ -156,7 +156,7 @@ pub(crate) fn configuration(
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     Ok(format!(
-        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout = '1s'\n\n[nl_gf.nvi]\nurl = \"{nvi}\"\nnamespaces = [\"{namespace}\"]\n\n[nl_gf.nvi.custodians]\n{custodians}\n{tables}",
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout = '1s'\n\n[nl_gf.nvi]\nendpoint.url = \"{nvi}\"\nnamespaces = [\"{namespace}\"]\n\n[nl_gf.nvi.custodians]\n{custodians}\n{tables}",
         document = toml::Value::String(document.display().to_string()),
         namespace = patient().namespace(),
     ))
@@ -423,7 +423,7 @@ fn an_nvi_over_plain_http_is_refused_outside_development() -> TestResult {
     )?;
     match resolved(&text) {
         Err(error::Error::Cleartext(refused)) => {
-            assert_eq!("nl_gf.nvi.url", refused.site.url_key);
+            assert_eq!("nl_gf.nvi.endpoint.url", refused.site.url_key);
             Ok(())
         }
         other => Err(format!("the pseudonym never travels in clear text: {other:?}").into()),
@@ -445,7 +445,10 @@ fn an_nvi_over_plain_http_is_named_under_development() -> TestResult {
         .map(|site| format!("{}: {}", site.url_key, site.payload))
         .collect();
     assert!(
-        sites.contains(&"nl_gf.nvi.url: the patient identifiers asked of nl_gf.nvi".to_owned()),
+        sites.contains(
+            &"nl_gf.nvi.endpoint.url: the patient identifiers asked of nl_gf.nvi.endpoint"
+                .to_owned()
+        ),
         "{sites:?}"
     );
     Ok(())
@@ -502,7 +505,7 @@ fn the_nvi_and_xcpd_together_refuse_to_boot() -> TestResult {
         |text| {
             format!(
                 "{text}\n[xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\n\n\
-             [[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n\n\
+             [[xcpd.gateway]]\nendpoint.url = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n\n\
              [xcpd.communities]\n\"2.999.50\" = \"node-a\"\n\"2.999.60\" = \"node-b\"\n\
              \"2.999.70\" = \"node-c\"\n"
             )

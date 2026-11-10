@@ -275,7 +275,7 @@ issuer = "https://idp.example.org/realms/CANARY-REALM"
 patient = { header = "CANARY-HEADER", claim = "CANARY-CLAIM" }
 
 [[pixm.manager]]
-url = "https://pix-user:pix-pass@pix.example.org/fhir"
+endpoint.url = "https://pix-user:pix-pass@pix.example.org/fhir"
 
 [pixm.manager.members]
 "CANARY-MEMBER" = "urn:oid:2.999.7777"

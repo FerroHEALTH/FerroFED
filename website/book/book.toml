@@ -20,8 +20,11 @@ site-url = "/docs/"
 # theme/favicon.png into the build output and links them from every page. Both
 # are copies of assets/brand/favicon.svg and favicon-32.png, kept in step by
 # scripts/checks/favicon-sync.sh (assets/brand/README.md).
-default-theme = "rust"
-preferred-dark-theme = "coal"
+# The two themes theme/ferrofed.css recolours with the azure palette, and
+# theme/fonts/fonts.css keeps mdBook's bundled web fonts out.
+default-theme = "light"
+preferred-dark-theme = "navy"
+additional-css = ["theme/ferrofed.css"]
 git-repository-url = "https://github.com/FerroHEALTH/FerroFED"
 edit-url-template = "https://github.com/FerroHEALTH/FerroFED/edit/main/website/book/src/{path}"
 # js/mermaid-theme-sync.js is our own: it redraws the diagrams when the theme

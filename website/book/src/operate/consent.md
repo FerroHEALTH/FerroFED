@@ -115,13 +115,15 @@ reading.
 profile = "production"
 
 [nl_gf.mitz]
-url = "https://mitz.example.org/geslotenautorisatievraag"
-tls = { client_identity_file = "/run/secrets/mitz-client.pem", trust_roots_file = "/etc/ferrofed/mitz-roots.pem" }  # mutual TLS; the roots are optional
-credentials = { user = "ferrofed", password_file = "/run/secrets/mitz-password" }  # optional
 namespaces = ["urn:oid:2.999.1"]  # client namespaces that stand for the BSN
 purpose = "TREAT"                 # TREAT or COC
 data_categories = ["GGC002"]      # the Mitz data categories asked about
-timeout = "1s"                 # one round of questions, within the query's budget
+
+[nl_gf.mitz.endpoint]
+url = "https://mitz.example.org/geslotenautorisatievraag"
+timeout = "1s"                    # one round of questions, the default, within the query's budget
+tls = { client_identity_file = "/run/secrets/mitz-client.pem", trust_roots_file = "/etc/ferrofed/mitz-roots.pem" }  # mutual TLS; the roots are optional
+credentials = { user = "ferrofed", password_file = "/run/secrets/mitz-password" }  # optional
 
 [nl_gf.mitz.holders]              # each member's care provider
 "node-a" = { type = "V6" }        # the URA from [nl_gf.nvi.custodians] or the directory
@@ -149,8 +151,8 @@ provider_identifier_prefixes = ["urn:oid:2.16.528.1.1007.3.3."]
 "nl.organisation_type" = [{ claim = "organisation_type" }]
 ```
 
-`timeout_ms` bounds one round of questions, and it is a part of
-`federation.overall_timeout`: with `pdqm.timeout_ms` and the localizer's
+`endpoint.timeout` bounds one round of questions, and it is a part of
+`federation.overall_timeout`: with `pdqm.endpoint.timeout` and the localizer's
 budget it must end before the overall budget, or the configuration is
 refused, naming the keys (§11.5). `OPTIONS {base}/` declares it as
 `timeout.consent_ms`.
@@ -190,9 +192,11 @@ What a deployment must provide:
   value the question does not take as a BSN, with `patient-value`. Neither
   is reported as a Mitz outage, since Mitz is never called, and no claim
   value appears in a label, a log line or an error.
-- **TLS.** The `url` must be `https` outside `profile = "development"`.
+- **TLS.** `[nl_gf.mitz.endpoint]` is Mitz's
+  [endpoint table](configuration.md#the-endpoint-table-of-a-service). Its
+  `url` must be `https` outside `profile = "development"`.
   `credentials` takes basic credentials or the OAuth 2.0 client
-  credentials grant of `[nl_gf.mitz.credentials.oauth]` (RFC 6749 §4.4),
+  credentials grant of `[nl_gf.mitz.endpoint.credentials.oauth]` (RFC 6749 §4.4),
   never a `nuts` grant. The gateway obtains the token
   at the token endpoint, which must be `https` outside
   `profile = "development"`, caches it while it is fresh, and sends it with

@@ -8,7 +8,6 @@
 use std::error::Error;
 use std::time::Duration;
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::mcsd::error::FhirFormError;
 use ferrofed_identity::ihe::mcsd::source::{
     DirectoryConfig, DirectoryReadError, DirectorySource, Refreshed,
@@ -17,7 +16,6 @@ use ferrofed_registry::error::LoadError;
 use ferrofed_registry::id::{EndpointId, NodeId, OrganisationId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::mcsd::{HarnessDirectory, Member};
-use ferrohealth_secret::secret_url::SecretUrl;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -33,9 +31,8 @@ fn member(name: &str) -> Member {
 
 fn source(harness: &HarnessDirectory) -> Result<DirectorySource, Box<dyn Error>> {
     Ok(DirectorySource::new(DirectoryConfig {
-        tls: ferrofed_testkit::tls::platform(),
-        base: SecretUrl::new(harness.base()),
-        credentials: Authentication::None,
+        client: ferrofed_testkit::outbound::client(&harness.base())
+            .expect("the outbound client builds"),
         deadline: Duration::from_secs(5),
         pages: 200,
         bytes: 64 << 20,
@@ -110,9 +107,11 @@ async fn a_refresh_into_a_broken_registry_is_refused_and_the_content_kept() -> T
 #[tokio::test]
 async fn a_directory_that_does_not_answer_is_an_exchange_error() -> TestResult {
     let source = DirectorySource::new(DirectoryConfig {
-        tls: ferrofed_testkit::tls::platform(),
-        base: SecretUrl::new(format!("{}/fhir", ferrofed_testkit::unreachable::BASE)),
-        credentials: Authentication::None,
+        client: ferrofed_testkit::outbound::client(&format!(
+            "{}/fhir",
+            ferrofed_testkit::unreachable::BASE
+        ))
+        .expect("the outbound client builds"),
         deadline: Duration::from_secs(2),
         pages: 200,
         bytes: 64 << 20,
@@ -156,9 +155,8 @@ async fn a_directory_past_a_cap_gives_no_registry() -> TestResult {
     let harness = HarnessDirectory::start().await;
     harness.publish(&[member("a"), member("b")])?;
     let source = DirectorySource::new(DirectoryConfig {
-        tls: ferrofed_testkit::tls::platform(),
-        base: SecretUrl::new(harness.base()),
-        credentials: Authentication::None,
+        client: ferrofed_testkit::outbound::client(&harness.base())
+            .expect("the outbound client builds"),
         deadline: Duration::from_secs(5),
         pages: 200,
         bytes: 64 << 20,

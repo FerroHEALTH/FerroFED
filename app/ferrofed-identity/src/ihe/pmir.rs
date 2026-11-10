@@ -3,9 +3,9 @@
 
 //! The identity lifecycle over PMIR (track 8 of §16.3, Annex A.4).
 //!
-//! It holds what an ITI-93 message means for the resolution bindings, and
-//! the ITI-94 subscriber that asks for the messages (§5.2, "PMIR for
-//! identity lifecycle").
+//! It holds what an ITI-93 message means for the resolution bindings (§5.2,
+//! "PMIR for identity lifecycle"); the server subscribes with `ihe-iti`'s
+//! ITI-94 subscriber over the outbound client of `[pmir.endpoint]`.
 //!
 //! A message changes routing state only. [`change_of`] reads which `ehr_id`s
 //! its changes touch, from the identifiers a Patient Master Identity carries
@@ -17,20 +17,10 @@
 use std::collections::BTreeSet;
 
 use ferrofed_registry::id::EhrId;
-use ferrohealth_secret::secret_url::SecretUrl;
-use ihe_iti::authorizer::Authorizable;
-use ihe_iti::pmir::PmirSubscriber;
-use ihe_iti::pmir::error::InvalidInput;
 use ihe_iti::pmir::feed::{Event, Feed, PatientIdentity};
-use openehr_its::rest::client::InvalidCredentials;
 use secrecy::ExposeSecret;
-use thiserror::Error;
-use url::Url;
 
-use crate::fhir::{Authentication, ClientError};
-use crate::ihe::iua;
 use crate::session::IdentityChange;
-use ferrohealth_server::tls_client::TlsClient;
 
 /// What one change touches.
 enum Touched {
@@ -100,69 +90,4 @@ fn carried(identity: &PatientIdentity, domains: &BTreeSet<String>) -> Touched {
     } else {
         Touched::Ehrs(ehrs)
     }
-}
-
-/// A subscriber that cannot be built.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum PmirConfigError {
-    /// The Registry's base URL does not parse as a URL.
-    #[error("the Patient Identity Registry base URL is not a URL")]
-    BaseUrl(#[source] url::ParseError),
-    /// The Registry's base URL is not an `http(s)` URL without a query.
-    #[error(
-        "the Patient Identity Registry base URL is not an http(s) URL without a query or a fragment"
-    )]
-    Base(#[source] InvalidInput),
-    /// A credential does not form an `Authorization` value (RFC 7617 §2,
-    /// RFC 6750 §2.1).
-    #[error(
-        "the credentials of the Patient Identity Registry cannot be sent in the Authorization header"
-    )]
-    Credentials(#[source] InvalidCredentials),
-    /// The HTTP client could not be built.
-    #[error("the HTTP client for the Patient Identity Registry could not be built")]
-    Client(#[source] reqwest::Error),
-    /// The HTTP client refused the TLS material.
-    #[error(transparent)]
-    Tls(ferrohealth_server::tls_client::TlsClientError),
-    /// The credential is a grant the client was built to send in a default
-    /// header, where its token cannot ride.
-    #[error("the grant of the Patient Identity Registry cannot ride in a default header")]
-    Grant,
-}
-
-impl From<ClientError> for PmirConfigError {
-    fn from(error: ClientError) -> Self {
-        match error {
-            ClientError::Credentials(source) => Self::Credentials(source),
-            ClientError::Build(source) => Self::Client(source),
-            ClientError::Tls(source) => Self::Tls(source),
-            ClientError::Grant => Self::Grant,
-        }
-    }
-}
-
-/// The ITI-94 subscriber of the Registry at `base`.
-///
-/// It authenticates with `auth`, by which the Registry authorizes the
-/// subscription (§2:3.94.5), and with the `tls` material, over the IHE FHIR
-/// client of [`crate::fhir::http_client`].
-///
-/// # Errors
-/// A [`PmirConfigError`] for a base that is no `http(s)` URL, a
-/// credential that forms no `Authorization` value, or a client that cannot be
-/// built.
-pub fn subscriber(
-    base: &SecretUrl,
-    auth: &Authentication,
-    tls: &TlsClient,
-) -> Result<PmirSubscriber, PmirConfigError> {
-    let base = Url::parse(base.expose()).map_err(PmirConfigError::BaseUrl)?;
-    let (http, authorizer) = iua::client(auth, tls)?;
-    let subscriber = PmirSubscriber::new(base, http).map_err(PmirConfigError::Base)?;
-    Ok(match authorizer {
-        Some(authorizer) => subscriber.with_authorizer(authorizer),
-        None => subscriber,
-    })
 }

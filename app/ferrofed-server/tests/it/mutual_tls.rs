@@ -58,7 +58,7 @@ fn tls_keys(dir: &Path, name: &str, front: &MutualTls) -> Result<String, Box<dyn
     std::fs::write(&identity, front.client_identity())?;
     std::fs::write(&roots, front.trust_roots())?;
     Ok(format!(
-        "tls = {{ client_identity_file = {}, trust_roots_file = {} }}\n",
+        "endpoint.tls = {{ client_identity_file = {}, trust_roots_file = {} }}\n",
         toml::Value::String(identity.display().to_string()),
         toml::Value::String(roots.display().to_string())
     ))
@@ -69,7 +69,7 @@ fn roots_only(dir: &Path, name: &str, front: &MutualTls) -> Result<String, Box<d
     let roots = dir.join(format!("{name}-roots.pem"));
     std::fs::write(&roots, front.trust_roots())?;
     Ok(format!(
-        "tls = {{ trust_roots_file = {} }}\n",
+        "endpoint.tls = {{ trust_roots_file = {} }}\n",
         toml::Value::String(roots.display().to_string())
     ))
 }
@@ -84,7 +84,7 @@ async fn pixm_and_pdqm_resolve_over_mutual_tls() -> TestResult {
     let pdq_front = MutualTls::front(&pdq.uri())?;
     let dir = tempfile::tempdir()?;
     let tables = format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n{}\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pdqm]\nurl = \"{}\"\nmaster = \"{}\"\ntimeout = '4s'\n{}\n[pdqm.namespaces]\n\"{}\" = \"{}\"\n",
+        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nendpoint.url = \"{}/fhir/\"\n{}\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pdqm]\nendpoint.url = \"{}\"\nmaster = \"{}\"\nendpoint.timeout = '4s'\n{}\n[pdqm.namespaces]\n\"{}\" = \"{}\"\n",
         pix_front.origin(),
         tls_keys(dir.path(), "pix", &pix_front)?,
         crate::pdqm::DOMAIN_A,
@@ -132,7 +132,7 @@ async fn a_pix_manager_that_requires_a_client_certificate_refuses_a_gateway_with
     let pix_front = MutualTls::front(&pix.uri())?;
     let dir = tempfile::tempdir()?;
     let tables = format!(
-        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n{}\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
+        "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nendpoint.url = \"{}/fhir/\"\n{}\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
         pix_front.origin(),
         roots_only(dir.path(), "pix", &pix_front)?,
         crate::pdqm::DOMAIN_A,
@@ -216,28 +216,32 @@ fn refusal(text: &str) -> Result<config::error::Error, Box<dyn Error>> {
 
 #[test]
 fn a_tls_file_that_cannot_be_read_is_refused_naming_its_key() -> TestResult {
-    let missing = "tls = { trust_roots_file = \"/nonexistent/ferrofed-roots.pem\" }\n";
+    let missing = "endpoint.tls = { trust_roots_file = \"/nonexistent/ferrofed-roots.pem\" }\n";
     for (table, key) in [
         (
-            format!("[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n{missing}"),
-            "pixm.manager[0].tls.trust_roots_file",
-        ),
-        (
             format!(
-                "[pdqm]\nurl = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\n{missing}\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n"
+                "[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n{missing}"
             ),
-            "pdqm.tls.trust_roots_file",
+            "pixm.manager[0].endpoint.tls.trust_roots_file",
         ),
         (
             format!(
-                "{}\n[registry]\ndocument = \"registry.toml\"\n\n[pmir]\nurl = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_clients = [\"pmir-registry\"]\n{missing}",
+                "[pdqm]\nendpoint.url = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\n{missing}\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n"
+            ),
+            "pdqm.endpoint.tls.trust_roots_file",
+        ),
+        (
+            format!(
+                "{}\n[registry]\ndocument = \"registry.toml\"\n\n[pmir]\nendpoint.url = \"https://pmir.example.org/fhir/\"\ncallback_url = \"https://gateway.example.org/pmir/feed\"\nfeed_clients = [\"pmir-registry\"]\n{missing}",
                 crate::support::caller::auth_toml()
             ),
-            "pmir.tls.trust_roots_file",
+            "pmir.endpoint.tls.trust_roots_file",
         ),
         (
-            format!("[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n{missing}"),
-            "registry.mcsd.tls.trust_roots_file",
+            format!(
+                "[registry.mcsd]\nendpoint.url = \"https://directory.example.org/fhir\"\n{missing}"
+            ),
+            "registry.mcsd.endpoint.tls.trust_roots_file",
         ),
     ] {
         let error = refusal(&table)?;
@@ -252,10 +256,10 @@ fn a_tls_file_that_cannot_be_read_is_refused_naming_its_key() -> TestResult {
 #[test]
 fn an_identity_given_inline_and_as_a_file_is_refused() -> TestResult {
     let error = refusal(
-        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\ntls = { client_identity = \"Qz7inline\", client_identity_file = \"/nonexistent/ferrofed-client.pem\" }\n",
+        "[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\nendpoint.tls = { client_identity = \"Qz7inline\", client_identity_file = \"/nonexistent/ferrofed-client.pem\" }\n",
     )?;
     assert!(
-        matches!(&error, config::error::Error::TlsClient(TlsClientError::Identity(SecretError::Both { key })) if key == "pixm.manager[0].tls.client_identity"),
+        matches!(&error, config::error::Error::TlsClient(TlsClientError::Identity(SecretError::Both { key })) if key == "pixm.manager[0].endpoint.tls.client_identity"),
         "{error:?}"
     );
     assert!(!format!("{error} {error:?}").contains("Qz7inline"));
@@ -268,14 +272,14 @@ fn a_client_identity_that_is_no_pem_is_refused_at_load_without_its_content() -> 
     let identity = dir.path().join("client.pem");
     std::fs::write(&identity, "Qz7notpem")?;
     let error = refusal(&format!(
-        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\ntls = {{ client_identity_file = {} }}\n",
+        "[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\nendpoint.tls = {{ client_identity_file = {} }}\n",
         toml::Value::String(identity.display().to_string()),
     ))?;
     assert!(
         matches!(
             &error,
             config::error::Error::TlsClient(TlsClientError::Pem { key, .. })
-                if key == "pixm.manager[0].tls.client_identity"
+                if key == "pixm.manager[0].endpoint.tls.client_identity"
         ),
         "{error:?}"
     );
@@ -289,14 +293,14 @@ fn a_client_identity_that_is_no_pem_is_refused_at_load_without_its_content() -> 
 fn a_tls_key_left_on_its_table_is_refused_naming_its_replacement() -> TestResult {
     for (table, old, new) in [
         (
-            "[pdqm]\nurl = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\ntrust_roots_file = \"/etc/roots.pem\"\n",
+            "[pdqm]\nendpoint.url = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\ntrust_roots_file = \"/etc/roots.pem\"\n",
             "pdqm.trust_roots_file",
-            "pdqm.tls.trust_roots_file",
+            "pdqm.endpoint.tls.trust_roots_file",
         ),
         (
-            "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\nclient_identity_file = \"/run/client.pem\"\n",
+            "[registry.mcsd]\nendpoint.url = \"https://directory.example.org/fhir\"\nclient_identity_file = \"/run/client.pem\"\n",
             "registry.mcsd.client_identity_file",
-            "registry.mcsd.tls.client_identity_file",
+            "registry.mcsd.endpoint.tls.client_identity_file",
         ),
         (
             "[credentials.\"node-a\"]\nclient_identity = \"Qz7inline\"\n",
@@ -329,7 +333,7 @@ fn a_directory_identity_renewed_at_the_same_path_is_a_change() -> TestResult {
     let dir = tempfile::tempdir()?;
     let first = MutualTls::front("http://127.0.0.1:9")?;
     let table = format!(
-        "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n{}",
+        "[registry.mcsd]\nendpoint.url = \"https://directory.example.org/fhir\"\n{}",
         tls_keys(dir.path(), "mcsd", &first)?
     );
     let directory = |settings: config::settings::Settings| {
