@@ -85,8 +85,8 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.63" }
 # ferrohealth-smart 0.16, whose FHIR Feed repository (feature smart) is built
 # from the outbound client of [audit.repository.endpoint] (#1805).
 # Verified against crates.io on 2026-11-10.
-ihe-atna = { version = "=0.10.0", default-features = false }
-ehds-logging = { version = "=0.10.0", default-features = false }
+ihe-atna = { version = "0.11.1", default-features = false }
+ehds-logging = { version = "0.11.1", default-features = false }
 # The European interoperability software component of Regulation (EU)
 # 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
 # owner decision of 2026-10-28 (#813). Like every FerroBRIDGE crate here it
@@ -106,7 +106,7 @@ ehds-logging = { version = "=0.10.0", default-features = false }
 # document's custodian (`Document::with_custodian`, FerroHEALTH/FerroBRIDGE
 # #1819), which every written report names the member (#1785).
 # Verified against crates.io on 2026-11-10.
-eehrxf = { version = "0.3.2", default-features = false }
+eehrxf = { version = "0.4.2", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -246,7 +246,7 @@ fhir-types = { version = "0.1.130", default-features = false }
 # carries one copy of that family (#1028).
 # Required by a caret range, as eehrxf above (#1772); 0.1.249 is the release
 # eehrxf 0.3.0 requires. Verified against crates.io on 2026-11-10.
-fhirconnect = "0.1.249"
+fhirconnect = "0.1.252"
 # The FHIR terminology client the European interoperability component asks
 # its terminology server through (#925), from FerroBRIDGE, with the `context`
 # form of `$validate-code`. Required by a caret range, as eehrxf above
@@ -255,7 +255,7 @@ fhirconnect = "0.1.249"
 # 0.3.0 builds its client from a ferrohealth-smart 0.16 endpoint table
 # (Client::from_endpoint, feature smart; #1805). Verified against crates.io on
 # 2026-11-10.
-ferrobridge-term = "0.3.0"
+ferrobridge-term = "0.4.0"
 # The FHIR R4 profile validator a document received in the exchange format is
 # held to in full: every invariant, binding and entry profile (#808), from
 # FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
@@ -263,8 +263,8 @@ ferrobridge-term = "0.3.0"
 # and openehr-mapping-core 0.1.148 are the releases eehrxf 0.1.187 requires
 # (#1754); 0.3.0 is the release on ferrobridge-term 0.3 (#1805). Verified
 # against crates.io on 2026-11-10.
-ferrobridge-validator = "0.3.0"
-openehr-mapping-core = "0.1.151"
+ferrobridge-validator = "0.4.0"
+openehr-mapping-core = "0.1.152"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by
 # FerroHEALTH/FerroPIX since #367. 0.0.66 is the release on ferrohealth-smart 0.8 and
@@ -281,7 +281,7 @@ openehr-mapping-core = "0.1.151"
 # builds every client from ferrohealth-smart's outbound client (#1815) and
 # is required by a caret range, as the FerroBRIDGE crates (#1772).
 # Verified against crates.io on 2026-11-10.
-ihe-iti = "0.2.0"
+ihe-iti = "0.3.0"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
 # published by FerroHEALTH/FerroPIX since #367. 0.0.33 is the release on ferrohealth-smart
 # 0.8 (#1390); 0.0.40 is the release on ihe-iti 0.0.73, whose `authorizer`
@@ -292,7 +292,7 @@ ihe-iti = "0.2.0"
 # clients from ferrohealth-smart's outbound client (#1815) and is required
 # by a caret range, as ihe-iti above.
 # Verified against crates.io on 2026-11-10.
-nl-generic-functions = "0.2.0"
+nl-generic-functions = "0.3.0"
 # The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
 # the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -372,7 +372,7 @@ x509-ocsp = { version = "0.3.0-rc.0", default-features = false }
 # page is one document the server draws, with no Leptos and no WebAssembly
 # (#1457, FerroUI#510); 0.6.8 draws the menu separators as <hr> and the
 # live regions as <output> (#1682). Verified against crates.io on 2026-11-06.
-ferrohealth-ui = "=0.6.8"
+ferrohealth-ui = "=0.6.9"
 # The FerroHEALTH SMART and OAuth 2.0 resource-server crate (#1174):
 # every caller's token checked against its issuer's metadata and key set,
 # the SMART on openEHR grant rules over the grammar it re-exports, the Basic
@@ -408,13 +408,13 @@ ferrohealth-ui = "=0.6.8"
 # the product's own authorization, which the NVI's Nuts grant rides as
 # (#1815). Required by a caret range, as the IHE crates below.
 # Verified against crates.io on 2026-11-10.
-ferrohealth-smart = { version = "0.16.3", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
+ferrohealth-smart = { version = "0.17.1", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
 # a product pins every family crate, at the version ferrohealth-smart
 # requires. Verified against crates.io on 2026-10-28.
-ferrohealth-secret = "=0.2.0"
+ferrohealth-secret = "=0.2.1"
 # The operator console's OpenID Connect sign-in and its session of
 # FerroHEALTH/FerroAUTH (#1504): the `[oidc]` and `[session]` sections, the
 # session store, the four sign-in routes and the middleware every page sits
@@ -427,7 +427,7 @@ ferrohealth-secret = "=0.2.0"
 # ferrohealth-smart 0.13 (#1748), and 0.10.0 the release on ferrohealth-smart
 # 0.16 (#1805).
 # Verified against crates.io on 2026-11-10.
-ferrohealth-session = { version = "=0.10.0", default-features = false }
+ferrohealth-session = { version = "=0.11.0", default-features = false }
 # The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
 # defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
 # into one typed tree, with where each key came from and the merged table the
@@ -440,7 +440,7 @@ ferrohealth-session = { version = "=0.10.0", default-features = false }
 # against crates.io on 2026-11-06. 0.4.3 layers a product's defaults under an
 # optional table or each element of an array of tables a source writes, which
 # every outbound table's `endpoint` takes (#1815, FerroHEALTH/FerroSYS#353).
-ferrohealth-config = "=0.4.3"
+ferrohealth-config = "=0.4.4"
 # The health family of FerroHEALTH/FerroSYS (#1397): the readiness
 # document, and with `registry` the indicators and the lifecycle the gateway
 # runs. Pinned exactly, at the version ferrohealth-server requires.
@@ -465,7 +465,7 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # 0.8.2 hands out the check's gated TLS, which a MyHealth@EU gateway's
 # outbound client is built over (#1815, FerroHEALTH/FerroSYS#348).
 # Verified against crates.io on 2026-11-10.
-ferrohealth-server = { version = "=0.8.2", default-features = false }
+ferrohealth-server = { version = "=0.8.4", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.
@@ -480,7 +480,7 @@ ferrohealth-telemetry = { version = "=0.4.0", default-features = false }
 # `[usage_report]` section, envelope v2, the instance id, the window and the
 # reporter. Pinned exactly, as a product pins every family crate. Verified
 # against crates.io on 2026-11-05.
-ferrohealth-usage-report = { version = "=0.4.0", default-features = false }
+ferrohealth-usage-report = { version = "=0.4.1", default-features = false }
 # The console's string catalogs (#1162): Project Fluent messages embedded at
 # build time from app/ferrofed-console/locales/, the crate and version
 # ferrohealth-ui catalogs its own words with, so one locale drives both.

@@ -23,6 +23,7 @@ use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::role::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
 use ferrofed_testkit::mock::Server;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::client::outbound::OutboundClient;
 use ferrohealth_smart::config::ServerTls;
 use ferrohealth_smart::config::credentials::OauthSection;
@@ -97,7 +98,7 @@ fn manager(server: &Server, auth: Auth, pairs: &[(&str, &str)]) -> ManagerConfig
         }
         Auth::Grant(token_endpoint) => {
             endpoint.credentials.oauth = Some(OauthSection {
-                token_endpoint,
+                token_endpoint: SecretUrl::new(token_endpoint),
                 client_id: "ferrofed".to_owned(),
                 client_secret: Some(SecretString::from("synthetic-client-secret")),
                 ..OauthSection::default()

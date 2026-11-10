@@ -158,8 +158,8 @@ async fn an_imaging_receipt_is_recorded_once_as_a_creation_of_its_category() -> 
 // NOTE: hazard I-22 of the clinical safety risk file: what a received report carries into the
 // member's structured record, and what it keeps in the original document alone.
 #[tokio::test]
-async fn a_received_imaging_report_reaches_the_members_composition_but_its_identifier() -> TestResult
-{
+async fn a_received_imaging_report_reaches_the_members_composition_and_declares_its_identifier_lost()
+-> TestResult {
     let sent = report()?;
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
@@ -190,6 +190,30 @@ async fn a_received_imaging_report_reaches_the_members_composition_but_its_ident
         assert!(
             sent.contains(element) && !mapped.contains(element),
             "{element} reaches the member in the original document alone: {mapped}"
+        );
+    }
+    let outcome: Value = serde_json::from_str(&text)?;
+    let declared: Vec<&str> = outcome["issue"]
+        .as_array()
+        .ok_or("the issues")?
+        .iter()
+        .filter(|issue| issue["code"] == "incomplete")
+        .filter_map(|issue| issue.pointer("/expression/0").and_then(Value::as_str))
+        .collect();
+    assert!(
+        declared
+            .iter()
+            .any(|held| held.starts_with("DiagnosticReport.identifier")),
+        "the report's identifier is relayed to the sender as not carried: {declared:?}"
+    );
+    for carried in [
+        "DiagnosticReport.code",
+        "DiagnosticReport.conclusion",
+        "ImagingStudy.modality",
+    ] {
+        assert!(
+            !declared.iter().any(|held| held.starts_with(carried)),
+            "{carried} is carried, not declared: {declared:?}"
         );
     }
     Ok(())

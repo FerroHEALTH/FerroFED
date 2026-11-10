@@ -11,6 +11,7 @@
 use std::error::Error;
 use std::time::Duration;
 
+use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_session::config::OidcSection;
 use ferrohealth_session::record::SignedIn;
 use ferrohealth_smart::oidc::{Callback, PendingSignIn};
@@ -51,9 +52,9 @@ pub async fn signed_in(answer: Answer<'_>) -> Result<(SignedIn, String), Box<dyn
     issuer.publish(&server).await?;
     let section = OidcSection {
         issuer: uri.clone(),
-        authorization_endpoint: Some(format!("{uri}/auth")),
-        token_endpoint: Some(format!("{uri}/token")),
-        jwks_uri: Some(format!("{uri}{JWKS_PATH}")),
+        authorization_endpoint: Some(SecretUrl::new(format!("{uri}/auth"))),
+        token_endpoint: Some(SecretUrl::new(format!("{uri}/token"))),
+        jwks_uri: Some(SecretUrl::new(format!("{uri}{JWKS_PATH}"))),
         client_id: String::from(CLIENT_ID),
         redirect_uri: String::from("http://127.0.0.1:3000/auth/callback"),
         ..OidcSection::default()
