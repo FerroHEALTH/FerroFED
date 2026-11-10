@@ -47,14 +47,16 @@ and a retry measures at once (#1807). In each attempt,
 `scripts/perf/gate.sh unpack` restores them and `scripts/perf/gate.sh run`
 then:
 
-1. starts the quickstart's four FerroEHR nodes and FerroPIX from
-   `compose.yaml`, with `perf/compose.yaml` publishing FerroPIX on loopback,
-   and seeds both with `docker/quickstart/patients.tsv`;
+1. starts the head's quickstart, the four FerroEHR nodes and FerroPIX from
+   `compose.yaml`, with `perf/compose.yaml` publishing FerroPIX on
+   loopback, seeded with `docker/quickstart/patients.tsv`, and gives the
+   base its own copy of each of those services that differs in the base's
+   tree, as the compose project `ferrofed-perf-base` on `127.0.0.2`;
 2. starts a PostgreSQL server over TLS for FerroFED's own store, with a
    database for each gateway;
 3. checks with `ferrofed config check` that the base binary reads its own
-   tree's configuration, and starts both gateways over the same nodes and
-   FerroPIX, each under its own tree's configuration contract: the head on
+   tree's configuration, and starts both gateways, each over its own nodes
+   and FerroPIX and under its own tree's configuration contract: the head on
    port 8080 and the base on port 8070, each with the stored-query registry
    on its own store database;
 4. runs `ferrohealth-perf ab` over `perf/plan.toml`;
@@ -171,6 +173,29 @@ key, because the base binary refused the head's file at boot
 `perf/ferrofed.toml` that enables more work is now measured as part of the
 head, the family rule FerroBRIDGE, FerroTERM and FerroPIX follow.
 
+The contract includes the services the tree pins. Each arm runs over the
+four FerroEHR nodes and the FerroPIX its own `compose.yaml` and
+`perf/compose.yaml` start, at that tree's image pins and under that tree's
+configuration and seed. The gate compares the two trees' resolved compose
+definitions service by service, with the files each one mounts and, for the
+nodes, the files they are seeded from. Every group of services connected by
+`depends_on` that holds a difference, such as FerroPIX with its database
+and its seed, the base gets its own copy of, started from the base's tree
+as the compose project `ferrofed-perf-base` with every port it publishes
+on `127.0.0.2` in place of `127.0.0.1`. The groups that are the same, the
+nodes when only FerroPIX moved, both arms share, so the runner holds one
+copy of them. The base gateway gets its own `perf/ferrofed.toml` with each
+address of its own services' ports, on `127.0.0.1` or `localhost`, moved to
+`127.0.0.2`, and its own registry document of the nodes it runs over.
+Nothing else in the file changes. A base whose
+services publish beyond `127.0.0.2`, or whose file reads no
+`target/perf-run/registry.toml`, is refused with exit 2. When FerroPIX
+0.0.25 moved its machines from Basic credentials to client credentials
+tokens ([#1825](https://github.com/FerroHEALTH/FerroFED/issues/1825)), a
+gate that ran both arms over the head's FerroPIX had the base's Basic
+requests refused fast, and judged the head over a base that did no
+patient resolution at all.
+
 A base from before `perf/arm.env` has its overrides derived from its own
 `scripts/perf/gate.sh`: the gate evaluates that script's `gateway_env()`
 with its own `own_urls()` and constants and keeps the `FERROFED__` lines.
@@ -267,4 +292,5 @@ bash scripts/perf/gate.sh run
 `bash scripts/perf/gate.sh --self-test` checks the pin reader, the plan
 rendering, the registry rewrite, the base resolution with the release
 base, each arm's overrides from `perf/arm.env` and from an older tree's
-gate, the base's refusals and the two plans' idle limits on any machine.
+gate, the move of the base's services and configuration to its own
+address, the base's refusals and the two plans' idle limits on any machine.

@@ -378,9 +378,16 @@ in the development profile and resolves every patient through FerroPIX, the
 FerroHEALTH patient index, as its PIXm Consumer: FerroFED keeps no patient
 index of its own ([Identity resolution](identity.md)). Compose runs FerroPIX
 on its own PostgreSQL, configured by `docker/quickstart/ferropix/ferropix.toml`
-with development credentials and a development sealing key, and the
-one-shot `ferropix-seed` service feeds it the patients of
-`docker/quickstart/patients.tsv` over ITI-104 before the gateway starts.
+with a development sealing key. FerroPIX admits a machine only with a client
+credentials token of an issuer it trusts, so Compose runs a development token
+issuer beside it, `ferropix-issuer` (NAV's mock-oauth2-server, which signs any
+client credentials request, NOT for anything real), and FerroPIX joins that
+issuer's network namespace, since it reads an issuer's metadata over plain
+`http` only on loopback. The gateway asks FerroPIX under the token
+`[pixm.manager.credentials.oauth]` obtains there, and the one-shot
+`ferropix-seed` service, as the Patient Identity Source, feeds it the patients
+of `docker/quickstart/patients.tsv` over ITI-104 under its own token before
+the gateway starts.
 
 `docker compose down -v` stops the stack and removes its volumes. A
 quickstart volume created before v0.0.8 holds the roles with their earlier

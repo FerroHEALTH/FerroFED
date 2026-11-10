@@ -3,9 +3,10 @@
 #
 # The configuration of the quickstart's FerroPIX, the patient index the
 # gateway resolves every patient through (compose.yaml, the `ferropix`
-# service): FerroPIX's development profile, with two Basic users holding
-# development passwords, NOT for anything real. Every key is listed in
-# FerroPIX's book, https://ferropix.eu/docs/operate/configuration.html.
+# service): FerroPIX's development profile, whose machines sign in with the
+# development issuer's client credentials tokens, NOT for anything real.
+# Every key is listed in FerroPIX's book,
+# https://ferropix.eu/docs/operate/configuration.html.
 
 profile = "development"
 public_base_url = "http://ferropix:8080"
@@ -17,19 +18,31 @@ listen = "0.0.0.0:8080"
 url = "postgresql://ferropix:ferropix_example@ferropix-postgres:5432/ferropix"
 data_key_file = "/run/secrets/ferropix-data-key"
 
-# The seed job feeds every domain as its one Patient Identity Source, and
-# the gateway asks as the PIXm Consumer. Each password_hash is the Argon2id
-# PHC string of the password docker/quickstart/ferropix/seed.sh and
-# docker/quickstart/ferrofed.toml send.
-[[auth.basic.users]]
-user = "quickstart-source"
-password_hash = "$argon2id$v=19$m=19456,t=2,p=1$ZmVycm9mZWQtc291cmNlLXNhbHQ$tBcj4hfLaGRGVGF9bFKn7yKB4lcUjmOTvyMeZ55pdKk"
-scopes = ["system/Patient.cud"]
+# The development token issuer the quickstart runs beside FerroPIX
+# (compose.yaml, the `ferropix-issuer` service), NAV's mock-oauth2-server.
+# FerroPIX reads an issuer's metadata at start and accepts plain http only
+# on loopback (RFC 8414 §2), so FerroPIX joins the issuer's network
+# namespace and reaches it on localhost, and the issuer names itself so in
+# every token, whoever asks for it. It
+# signs the client credentials tokens of the seed, the Patient Identity Source
+# of every domain, and of the gateway, the PIXm Consumer: a token whose `sub`
+# is its client is a machine's (RFC 9068 §2.2). It signs with `typ` JWT and
+# names the client in `client_id`, so the issuer takes the claims it carries.
+# A development issuer, NOT for anything real.
+[[auth.issuer]]
+issuer = "http://localhost:8180/ferrofed"
+kind = "persons"
+profile = "rfc9068"
+audience = ["http://ferropix:8080/fhir"]
+token_types = ["JWT"]
+required_claims = ["iss", "exp", "aud", "sub"]
+client_claims = ["client_id", "azp"]
 
-[[auth.basic.users]]
-user = "ferrofed"
-password_hash = "$argon2id$v=19$m=19456,t=2,p=1$ZmVycm9mZWQtY29uc3VtZXItc2FsdA$51aYstBVyvm/RYL2TNzU400Fwfl3M0V5vjybCi4FcVM"
-scopes = ["system/Patient.rs"]
+# The client the development issuer may vouch for as the Source of each
+# domain (PIXm 3.1.0 §2:3.104.5).
+[[trust.issuer]]
+issuer = "http://localhost:8180/ferrofed"
+clients = ["quickstart-source"]
 
 # The patient's namespace is authoritative, so FerroPIX links each member's
 # record of one patient through it; each member's ehr_ids are a local domain.
