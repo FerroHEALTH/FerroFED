@@ -11,6 +11,7 @@ mod redaction;
 mod refusals;
 mod renamed;
 mod replica;
+mod retired;
 mod secrets;
 mod sources;
 
