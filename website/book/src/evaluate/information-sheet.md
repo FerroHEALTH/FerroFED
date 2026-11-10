@@ -156,13 +156,12 @@ documents of three categories:
 | (a) | `Patient-Summaries` | yes |
 | (b) | `Electronic-Prescriptions` | no |
 | (c) | `Electronic-Dispensations` | no |
-| (d) | `Medical-Imaging` | no |
+| (d) | `Medical-Imaging` | yes |
 | (e) | `Laboratory-Reports` | yes |
 | (f) | `Discharge-Reports` | yes |
 
-An imaging report is not received yet: a `Medical-Imaging`
-`[[fhir.receive]]` entry refuses the start until the gateway's package set
-holds the HL7 Europe Imaging Report package's dependency closure
+An imaging report is received over the HL7 Europe Imaging Report
+1.0.0-ballot package closure, which the package set pins
 ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
 
 An electronic dispensation, Art 14(1)(c), is received as one resource,

@@ -18,13 +18,6 @@ const SHEET: &str = concat!(
     "/../../website/book/src/evaluate/information-sheet.md"
 );
 
-/// The categories the component maps on receipt whose package's dependency
-/// closure the gateway's package set does not hold yet, so a
-/// `[[fhir.receive]]` entry for one refuses the start and the sheet calls it
-/// not received.
-// TODO(#1716): empty this once the imaging package closure loads.
-const CLOSURE_MISSING: &[&str] = &["Medical-Imaging"];
-
 /// The heading of the table's section.
 const HEADING: &str = "### The categories received";
 
@@ -81,19 +74,17 @@ fn the_sheet_calls_received_exactly_the_categories_this_build_receives() -> Test
     for (code, received) in &rows {
         // NOTE: eehrxf 0.1.170 `ReceivedDocument::category` names a category by its
         // `Composition.type` or, for an imaging report, its `Composition.category` slice.
-        let receivable = !CLOSURE_MISSING.contains(&code.as_str())
-            && Category::of_code(code).is_some_and(|category| {
-                category.profiles().is_some()
-                    && (category.document_type().is_some()
-                        || category.document_category().is_some())
-            });
+        let receivable = Category::of_code(code).is_some_and(|category| {
+            category.profiles().is_some()
+                && (category.document_type().is_some() || category.document_category().is_some())
+        });
         assert_eq!(
             *received, receivable,
             "{code}: the sheet and the build disagree"
         );
     }
     for category in Category::ENABLED {
-        if category.profiles().is_some() && !CLOSURE_MISSING.contains(&category.code()) {
+        if category.profiles().is_some() {
             assert!(
                 rows.iter()
                     .any(|(code, received)| code == category.code() && *received),
