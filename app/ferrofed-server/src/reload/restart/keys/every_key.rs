@@ -645,3 +645,34 @@ fn every_key_is_applied_or_named_as_needing_a_restart() -> TestResult {
     );
     Ok(())
 }
+
+// TEMPORARY timing probe for #1834; removed before the fix lands.
+#[test]
+#[expect(clippy::print_stderr, clippy::expect_used, reason = "a temporary probe")]
+fn timing_probe_1834() -> TestResult {
+    let root = tempfile::tempdir()?;
+    let listener = ListenerCertificates::generate()?;
+    let dir = root.path().join("a");
+    std::fs::create_dir_all(&dir)?;
+    files(&dir, "a", &listener)?;
+    let tree: Table = MAXIMAL.replace("@DIR@", &dir.display().to_string()).parse()?;
+    let started = std::time::Instant::now();
+    for _ in 0..20 {
+        resolve(&tree).expect("resolves");
+    }
+    let resolves = started.elapsed() / 20;
+    let started = std::time::Instant::now();
+    for _ in 0..20 {
+        load(&tree).expect("loads");
+    }
+    let loads = started.elapsed() / 20;
+    let provider = std::sync::Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+    let started = std::time::Instant::now();
+    for _ in 0..20 {
+        rustls_platform_verifier::Verifier::new_with_extra_roots([], std::sync::Arc::clone(&provider))
+            .expect("a verifier");
+    }
+    let verifiers = started.elapsed() / 20;
+    eprintln!("PROBE1834 resolve={resolves:?} load={loads:?} platform_verifier={verifiers:?}");
+    Ok(())
+}

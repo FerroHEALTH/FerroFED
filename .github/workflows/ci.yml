@@ -930,6 +930,14 @@ jobs:
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
           tool: cargo-nextest
+      # TEMPORARY probe for #1834; reverted before the pull request is armed.
+      - name: Probe the every-key cost
+        env:
+          FEATURES: ${{ matrix.features }}
+        run: >-
+          cargo nextest run --profile ci --locked --package ferrofed-server
+          --no-default-features --features "${FEATURES}" --no-tests=pass --no-capture
+          -E 'test(timing_probe_1834) | test(every_key_is_applied)'
       - name: Run the server's tests in the build
         env:
           FEATURES: ${{ matrix.features }}
