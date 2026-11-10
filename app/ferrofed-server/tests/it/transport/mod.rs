@@ -71,7 +71,9 @@ fn oauth() -> String {
 
 /// Basic credentials for node A.
 fn basic() -> String {
-    format!("[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{SECRET}\"\n")
+    format!(
+        "[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{SECRET}\"\n"
+    )
 }
 
 /// The client credentials grant for node A at `token_endpoint`, its

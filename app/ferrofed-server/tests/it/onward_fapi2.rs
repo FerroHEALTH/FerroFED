@@ -288,7 +288,9 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
     let (_authority, material) = material(dir.path()).await?;
     let tables = &material.tables;
 
-    let both = format!("{tables}\n[credentials.\"node-a-pub\"]\ncredentials.user = \"x\"\ncredentials.password = \"y\"\n");
+    let both = format!(
+        "{tables}\n[credentials.\"node-a-pub\"]\ncredentials.user = \"x\"\ncredentials.password = \"y\"\n"
+    );
     let error = refused(&both)?;
     assert!(
         matches!(
@@ -435,7 +437,10 @@ async fn a_cleartext_issuer_is_refused_outside_development() -> TestResult {
     let Err(refused) = transport::check(&settings, None) else {
         return Err("a plain http issuer passed the transport check".into());
     };
-    assert_eq!("credentials.node-a-pub.credentials.oauth.issuer", refused.site.url_key);
+    assert_eq!(
+        "credentials.node-a-pub.credentials.oauth.issuer",
+        refused.site.url_key
+    );
     Ok(())
 }
 

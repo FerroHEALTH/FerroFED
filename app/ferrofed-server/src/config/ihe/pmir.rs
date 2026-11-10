@@ -48,13 +48,13 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::ITS_REST_PREFIX;
+use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::public_url::PublicUrl;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::transport::{self, Encryption, ProtectedSite};
-use crate::config::Config;
 use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The PMIR identity feed, as the configuration writes it.

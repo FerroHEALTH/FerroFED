@@ -30,8 +30,12 @@ fn stored(gateway: &Gateway, needle: &str) -> Result<bool, std::io::Error> {
 async fn a_secret_written_inline_is_refused_and_never_echoed() -> TestResult {
     let gateway = Gateway::start("")?;
     for table in [
-        format!("\n[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{INLINE}\"\n"),
-        format!("\n[credentials.\"node-a-pub\"]\ncredentials.user = \"u\"\ncredentials.password = \"{INLINE}\"\n"),
+        format!(
+            "\n[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{INLINE}\"\n"
+        ),
+        format!(
+            "\n[credentials.\"node-a-pub\"]\ncredentials.user = \"u\"\ncredentials.password = \"{INLINE}\"\n"
+        ),
         format!("\n[telemetry.otlp]\nendpoint = \"http://u:{INLINE}@127.0.0.1:4317\"\n"),
     ] {
         let toml = rest(&gateway.one(), &table);

@@ -48,8 +48,14 @@ fn a_resolved_secret_never_reaches_debug_output() -> Result<(), Box<dyn StdError
 )]
 fn an_environment_override_adds_a_credentials_section_with_no_file() -> Result<(), Box<dyn StdError>>
 {
-    let mut environment = env("FERROFED__CREDENTIALS__NODE_A__CREDENTIALS__USER", "gateway");
-    environment.extend(env("FERROFED__CREDENTIALS__NODE_A__CREDENTIALS__PASSWORD", "synthetic"));
+    let mut environment = env(
+        "FERROFED__CREDENTIALS__NODE_A__CREDENTIALS__USER",
+        "gateway",
+    );
+    environment.extend(env(
+        "FERROFED__CREDENTIALS__NODE_A__CREDENTIALS__PASSWORD",
+        "synthetic",
+    ));
     let settings = Config::from_sources(None, &environment)?.resolve()?;
     assert!(
         matches!(
@@ -140,7 +146,9 @@ fn a_credentials_section_must_name_exactly_one_complete_scheme() -> Result<(), B
         matches!(error, Error::Credentials(CredentialsFault::NoScheme { .. })),
         "{error:?}"
     );
-    let error = refusal("[credentials.\"node a\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n")?;
+    let error = refusal(
+        "[credentials.\"node a\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n",
+    )?;
     assert!(
         matches!(
             error,
@@ -202,7 +210,9 @@ fn a_refusal_never_quotes_a_secret() -> Result<(), Box<dyn StdError>> {
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_secret_of_the_wrong_type_is_never_echoed() -> Result<(), Box<dyn StdError>> {
-    let error = refusal("[credentials.\"a\"]\ncredentials.user = \"u\"\ncredentials.password = 73194426\n")?;
+    let error = refusal(
+        "[credentials.\"a\"]\ncredentials.user = \"u\"\ncredentials.password = 73194426\n",
+    )?;
     assert!(matches!(error, Error::Load { .. }), "not a parse refusal");
     assert!(
         !everything(&error).contains("73194426"),
@@ -258,7 +268,9 @@ fn a_credential_the_authorization_header_cannot_carry_is_refused_by_its_key()
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_basic_user_holding_a_colon_is_refused_by_its_key() -> Result<(), Box<dyn StdError>> {
-    let error = refusal("[credentials.\"a\"]\ncredentials.user = \"gate:way\"\ncredentials.password = \"Qz7left\"\n")?;
+    let error = refusal(
+        "[credentials.\"a\"]\ncredentials.user = \"gate:way\"\ncredentials.password = \"Qz7left\"\n",
+    )?;
     assert!(
         matches!(&error, Error::Credentials(CredentialsFault::Basic {
                 key,

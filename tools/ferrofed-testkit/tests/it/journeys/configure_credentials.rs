@@ -142,7 +142,11 @@ async fn secret_saved(
         "a password field is never filled"
     );
     browser
-        .press(&browser.element(choice("credentials.password", "Set a value")).await?)
+        .press(
+            &browser
+                .element(choice("credentials.password", "Set a value"))
+                .await?,
+        )
         .await?;
     // The stylesheet shows the field once its choice is ticked, with no
     // script (FerroUI's reveal).

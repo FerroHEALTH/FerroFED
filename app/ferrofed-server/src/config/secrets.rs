@@ -98,7 +98,12 @@ pub(crate) fn resolve_node_credentials(
         onward_organisations: credentials.onward_organisations,
         node: Some((section, credentials)),
     };
-    let scheme = match scheme(&table, &credentials.credentials, &beside, presented.as_ref()) {
+    let scheme = match scheme(
+        &table,
+        &credentials.credentials,
+        &beside,
+        presented.as_ref(),
+    ) {
         Ok(scheme) => node_secretless(&table, node_scope(&table, scheme)?)?,
         Err(Error::Credentials(CredentialsFault::NoScheme { .. })) if material.is_some() => {
             return Ok((None, material));

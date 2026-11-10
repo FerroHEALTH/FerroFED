@@ -331,7 +331,9 @@ fn a_terminology_server_with_no_url_or_no_time_is_refused() -> TestResult {
     let refused = resolved(
         dir.path(),
         &public(),
-        &with_terminology("endpoint.url = \"https://terminology.example.org/fhir\"\nendpoint.timeout = '0s'"),
+        &with_terminology(
+            "endpoint.url = \"https://terminology.example.org/fhir\"\nendpoint.timeout = '0s'",
+        ),
     );
     assert!(
         matches!(&refused, Err(Error::Zero { key }) if key == "eehrxf.terminology.endpoint.timeout"),
@@ -343,7 +345,8 @@ fn a_terminology_server_with_no_url_or_no_time_is_refused() -> TestResult {
 #[test]
 fn a_terminology_url_that_carries_a_credential_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let tables = with_terminology("endpoint.url = \"https://user:Qz7pw@terminology.example.org/fhir\"");
+    let tables =
+        with_terminology("endpoint.url = \"https://user:Qz7pw@terminology.example.org/fhir\"");
     let refused = resolved(dir.path(), &public(), &tables);
     assert!(
         matches!(&refused, Err(Error::UrlCredentials { section, .. }) if section == "eehrxf.terminology.endpoint.credentials"),

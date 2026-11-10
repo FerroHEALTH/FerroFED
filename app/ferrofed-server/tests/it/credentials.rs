@@ -122,7 +122,9 @@ fn a_credentials_key_follows_the_registry_endpoint_id_rule() -> TestResult {
         "n\u{e9}",
         too_long.as_str(),
     ] {
-        let toml = format!("[credentials.\"{key}\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n");
+        let toml = format!(
+            "[credentials.\"{key}\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n"
+        );
         let Err(error) = Config::from_sources(Some(&toml), &BTreeMap::new())?.resolve() else {
             return Err(format!("{key:?} was accepted").into());
         };
@@ -149,7 +151,9 @@ fn a_credentials_key_follows_the_registry_endpoint_id_rule() -> TestResult {
 
     let longest = "a".repeat(MAX_ID_LEN);
     for key in ["hospital-a.query", "node_a", "9b", longest.as_str()] {
-        let toml = format!("[credentials.\"{key}\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n");
+        let toml = format!(
+            "[credentials.\"{key}\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n"
+        );
         let settings = Config::from_sources(Some(&toml), &BTreeMap::new())?.resolve()?;
         assert!(
             settings.credentials.contains_key(&EndpointId::new(key)?),

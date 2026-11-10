@@ -19,11 +19,11 @@ use std::sync::Arc;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
-use ferrohealth_smart::config::credentials::CredentialsSection;
 use crate::config::error::Error;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::transport;
+use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The PIXm resolver: the identity binding of N3 over ITI-83 (Annex A.1).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]

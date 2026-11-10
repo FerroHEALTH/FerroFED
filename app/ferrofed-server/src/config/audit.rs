@@ -309,7 +309,10 @@ fn resolve_repository(
         ("spool_max_size", table.spool_max_size.is_zero()),
         ("spool_max_events", table.spool_max_events == 0),
         ("spool_write_timeout", table.spool_write_timeout.is_zero()),
-        ("endpoint.retry.max_backoff", table.endpoint.retry.max_backoff.is_zero()),
+        (
+            "endpoint.retry.max_backoff",
+            table.endpoint.retry.max_backoff.is_zero(),
+        ),
     ] {
         if zero {
             return Err(Error::Zero { key: key(field) });

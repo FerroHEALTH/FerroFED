@@ -98,7 +98,9 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
     let body = page(&service, &session, "/configuration/credentials").await?;
     assert!(body.contains("Credentials and bindings"), "{body}");
     assert!(
-        body.contains("<code>credentials.password</code>: set, read from <code>/run/secrets/node-a</code>"),
+        body.contains(
+            "<code>credentials.password</code>: set, read from <code>/run/secrets/node-a</code>"
+        ),
         "{body}"
     );
     assert!(body.contains("Add credentials"), "{body}");
@@ -198,7 +200,10 @@ async fn every_value_of_a_section_is_escaped() -> Result<(), Box<dyn Error>> {
 fn save_credentials(secrets: &[(&str, &str, &str, &str)]) -> String {
     let mut fields: Vec<(String, String)> = vec![
         (String::from("setting_rows"), String::from("c0")),
-        (String::from("setting][c0][key"), String::from("credentials.user")),
+        (
+            String::from("setting][c0][key"),
+            String::from("credentials.user"),
+        ),
         (String::from("setting][c0][value"), String::from("u")),
     ];
     for (row, (key, choice, value, file)) in secrets.iter().enumerate() {
