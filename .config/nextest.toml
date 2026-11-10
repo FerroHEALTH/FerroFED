@@ -37,6 +37,14 @@ slow-timeout = { period = "30s", terminate-after = 6 }
 filter = '(package(ferrofed-eehrxf) & test(/^receive::/)) | (package(ferrofed-server) & (test(/^fhir::receive::/) | test(/facade::receive::refusal::/)))'
 slow-timeout = { period = "30s", terminate-after = 6 }
 
+# A written report's conformance test holds the report to its category's
+# whole package closure the same way, the imaging report's the largest
+# (#1785), and fetches any closure package its cache lacks first, so it gets
+# the same three minutes.
+[[profile.default.overrides]]
+filter = 'package(ferrofed-eehrxf) & test(/::a_.*_conforms/)'
+slow-timeout = { period = "30s", terminate-after = 6 }
+
 # A container-backed test pulls images and starts PostgreSQL and two
 # FerroEHR nodes, so it gets ten minutes before it is killed. Every such test
 # sits in an e2e module (scripts/checks/e2e-placement.sh).

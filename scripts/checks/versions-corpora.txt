@@ -26,6 +26,7 @@ docs/specs/xt-ehr-deliverables|Xt-EHR deliverables
 docs/specs/eu-xtehr-metadata|Xt-EHR Metadata Foundation
 docs/specs/fhir-packages|FHIR package closure of the Patient Summary
 docs/specs/fhir-packages-myhealth-eu|FHIR package closure of the MyHealth@EU guides
+docs/specs/fhir-packages-imaging|FHIR package closure of the Imaging Report
 docs/specs/eu-hl7-base|HL7 Europe Base and Core
 docs/specs/eu-hl7-eps|HL7 Europe Patient Summary
 docs/specs/eu-hl7-mpd|HL7 Europe Medication Prescription and Dispense

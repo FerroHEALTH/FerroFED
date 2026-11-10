@@ -81,7 +81,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
 | `fhir-types` | 0.1.130 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled in the binding crates and in the interoperability component `eehrxf`, never in the engine (decisions A16 and A59); 0.1.127 is the release `fhirconnect` builds on (#684) |
-| `eehrxf` | 0.3.0 (FerroBRIDGE, BUSL-1.1) | the European interoperability software component (decision A58), published from FerroHEALTH/FerroBRIDGE since the owner decision of 2026-10-28 (A76, #813) |
+| `eehrxf` | 0.3.2 (FerroBRIDGE, BUSL-1.1) | the European interoperability software component (decision A58), published from FerroHEALTH/FerroBRIDGE since the owner decision of 2026-10-28 (A76, #813) |
 | `fhirconnect`, `openehr-mapping-core` | 0.1.249 and 0.1.151 (FerroBRIDGE, BUSL-1.1) | the FHIRconnect 1.0.0 engine `eehrxf` runs in process under `openehr` (#730), required by a caret range since FerroBRIDGE's published crates follow Cargo SemVer (decision A61, #684, #1772) |
 | `ferrobridge-term` | 0.3.0 (FerroBRIDGE, BUSL-1.1) | the FHIR terminology client the interoperability component asks its optional terminology server through (decision A63, #925): `$translate`, `$lookup` and `$validate-code` in R4, over the HTTP client the gateway builds with its credential and TLS material |
 | `ferrohealth-smart` | =0.9.4 (`fetch`, `axum`, `openehr`; BUSL-1.1) | the SMART and OAuth 2.0 resource-server crate every FerroHEALTH product runs on (#1174): it checks tokens and never issues them, verifies each issuer's tokens from its RFC 8414 metadata and key set, decides the SMART on openEHR grants through `ferrohealth_smart::openehr`, and obtains the gateway's own token with the client credentials grant of `[<section>.oauth]` |
@@ -90,7 +90,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
 The `openehr-*` rows are the lockstep 0.0.136, the line the published
-`eehrxf` 0.3.0 and `fhirconnect` 0.1.249 require (#813, #1581, #1722, #1742, #1754, #1799, #1805). The
+`eehrxf` 0.3.2 and `fhirconnect` 0.1.249 require (#813, #1581, #1722, #1742, #1754, #1799, #1805, #1785). The
 gaps FerroEHR #3505 to #3514 closed in 0.0.74, which v0.0.2 coded against,
 0.0.76 closes FerroEHR #3526, the open ITS-REST `Error`, 0.0.77 closes
 FerroEHR #3529, the function classification the rewrite reads, 0.0.78
