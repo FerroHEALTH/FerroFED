@@ -62,7 +62,7 @@ async fn asked_by_ehr_id_alone(server: &Server, own: &str, case: &str) -> TestRe
     assert_eq!(1, bodies.len(), "{case}: each node is asked once");
     let sent = bodies.first().ok_or("one request")?;
     assert!(
-        sent.contains(&format!("e/ehr_id/value='{own}'")),
+        sent.contains(&format!("e/ehr_id/value = '{own}'")),
         "{case}: the node query is keyed on the node's own ehr_id: {sent}"
     );
     assert!(
@@ -160,7 +160,7 @@ async fn a_clinician_predicate_reaches_the_node_unchanged() -> TestResult {
         let bodies = received(server).await?;
         let sent = bodies.first().ok_or("one request")?;
         assert!(
-            sent.contains("c/composer/identifiers/id='clinician-77'"),
+            sent.contains("c/composer/identifiers/id = 'clinician-77'"),
             "the clinician predicate is dispatched as written (§5.4.3): {sent}"
         );
     }
@@ -234,7 +234,7 @@ async fn a_short_identifier_inside_the_nodes_ehr_id_is_answered() -> TestResult 
     assert_eq!(1, bodies.len(), "node A is asked once");
     let sent = bodies.first().ok_or("one request")?;
     assert!(
-        sent.contains(&format!("e/ehr_id/value='{EHR_A}'")),
+        sent.contains(&format!("e/ehr_id/value = '{EHR_A}'")),
         "the node query is keyed on the node's own ehr_id: {sent}"
     );
     assert!(

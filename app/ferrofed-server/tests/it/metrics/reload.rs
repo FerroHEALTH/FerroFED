@@ -46,7 +46,7 @@ async fn an_applied_and_a_refused_reload_each_count_under_their_result() -> Test
     std::fs::write(
         &config,
         crate::support::signed(&format!(
-            "profile = \"development\"\n\n[registry]\ndocument = {named}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
+            "profile = \"development\"\n\n[registry]\ndocument = {named}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
             crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
         )),
     )?;

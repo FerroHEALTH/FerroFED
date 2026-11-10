@@ -11,8 +11,10 @@
 
 use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_config::units;
 use ferrohealth_secret::secret::Secret;
-use ferrohealth_server::tls_client::TlsClientSection;
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -41,6 +43,7 @@ pub mod postgres;
 pub mod public_url;
 pub mod registry;
 pub(crate) mod resolve;
+pub mod retired;
 pub mod revision_policy;
 pub mod revisions;
 pub(crate) mod secrets;
@@ -64,7 +67,7 @@ pub const PREFIX: &str = "FERROFED";
 
 /// The milliseconds kept for combining the answers after the fan-out budget.
 ///
-/// `server.request_timeout_ms` must exceed `federation.overall_timeout_ms` by
+/// `server.request_timeout` must exceed `federation.overall_timeout` by
 /// more than this. A client "can rely on" an answer "within its declared overall budget, plus
 /// combining time" (§11.5), so the request timeout never cuts the `504`
 /// envelope the budget produces when it expires.
@@ -163,8 +166,8 @@ pub struct Config {
     /// The installation report to `FerroPULSE` (`[usage_report]`), on by
     /// default.
     pub usage_report: ferrohealth_usage_report::section::UsageReportSection,
-    /// Whether a source set `server.shutdown_timeout_ms`; unset, the drain
-    /// lasts `server.request_timeout_ms` ([`Config::load`] and
+    /// Whether a source set `server.shutdown_timeout`; unset, the drain
+    /// lasts `server.request_timeout` ([`Config::load`] and
     /// [`Config::from_sources`] read it from the provenance).
     #[serde(skip)]
     pub shutdown_timeout_written: bool,
@@ -217,12 +220,20 @@ pub struct Federation {
     /// gateway names its federation.
     pub id: Option<String>,
     /// How long one node's request may take (§11.5, N38).
-    pub per_node_timeout_ms: u64,
+    pub per_node_timeout: units::Duration,
+    /// The retired `per_node_timeout_ms`, which `per_node_timeout` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub per_node_timeout_ms: Removed,
     /// How long the whole fan-out may take (§11.5, N38). With a registry
-    /// configured, `server.request_timeout_ms` must exceed it by more than
+    /// configured, `server.request_timeout` must exceed it by more than
     /// [`COMBINING_MARGIN_MS`], so the gateway answers with its envelope
     /// before the request timeout cuts the connection.
-    pub overall_timeout_ms: u64,
+    pub overall_timeout: units::Duration,
+    /// The retired `overall_timeout_ms`, which `overall_timeout` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub overall_timeout_ms: Removed,
     /// The issuing namespace an unqualified patient identifier resolves in
     /// (§5.2 requires the namespace; no specification governs the default: our
     /// own design). Without it, a query that names no namespace is a `400`.
@@ -230,7 +241,11 @@ pub struct Federation {
     /// How long each resolution binding of a client session lives after the
     /// last resolution that returned it (§12.5.1 step 2): a correctness
     /// bound, past which the binding is never routed on.
-    pub binding_ttl_ms: u64,
+    pub binding_ttl: units::Duration,
+    /// The retired `binding_ttl_ms`, which `binding_ttl` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub binding_ttl_ms: Removed,
     /// How many `ehr_id` bindings the resolution bindings of every caller
     /// hold together (§12.5.1 step 2); zero is refused.
     pub binding_capacity: u32,
@@ -297,7 +312,11 @@ pub struct Federation {
     /// refused.
     pub max_in_flight_per_node: u32,
     /// The most bytes read of one member answer, past which it is `node-error` (§11.1).
-    pub max_node_answer_bytes: usize,
+    pub max_node_answer_size: units::ByteSize,
+    /// The retired `max_node_answer_bytes`, which `max_node_answer_size` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub max_node_answer_bytes: Removed,
     /// What the gateway needs of each national contact point, one
     /// `[[federation.contact_point]]` per `[[auth.issuer]]` whose
     /// `[[auth.federation]]` table sets `contact_point = true`.
@@ -432,14 +451,19 @@ pub struct Localization {
     pub on_failure: OnFailure,
     /// How long the localizer may take, a part of the overall budget it must
     /// end before (§11.5); zero is refused.
-    pub timeout_ms: u64,
+    pub timeout: units::Duration,
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub timeout_ms: Removed,
 }
 
 impl Default for Localization {
     fn default() -> Self {
         Self {
             on_failure: OnFailure::Closed,
-            timeout_ms: 5_000,
+            timeout: units::Duration::from_secs(5),
+            timeout_ms: Removed::default(),
         }
     }
 }
@@ -448,10 +472,13 @@ impl Default for Federation {
     fn default() -> Self {
         Self {
             id: None,
-            per_node_timeout_ms: 10_000,
-            overall_timeout_ms: 25_000,
+            per_node_timeout: units::Duration::from_secs(10),
+            per_node_timeout_ms: Removed::default(),
+            overall_timeout: units::Duration::from_secs(25),
+            overall_timeout_ms: Removed::default(),
             default_namespace: None,
-            binding_ttl_ms: 900_000,
+            binding_ttl: units::Duration::from_mins(15),
+            binding_ttl_ms: Removed::default(),
             binding_capacity: 100_000,
             ehr_index_capacity: 100_000,
             node_selection: None,
@@ -474,7 +501,8 @@ impl Default for Federation {
             fan_out_stored_queries: false,
             consent: ConsentReporting::default(),
             max_in_flight_per_node: 64,
-            max_node_answer_bytes: 16 * 1024 * 1024,
+            max_node_answer_size: units::ByteSize::from_mib(16),
+            max_node_answer_bytes: Removed::default(),
             contact_point: Vec::new(),
         }
     }
@@ -546,7 +574,7 @@ impl Credentials {
 ///
 /// The current key signs every client assertion and every conveyance. The
 /// previous key, during a rotation, is published beside it for
-/// `rotation_overlap_s` from the start of the process and never signs. The
+/// `rotation_overlap` from the start of the process and never signs. The
 /// next key, ahead of a rotation, is published beside them and never signs,
 /// so every node holds it before any replica signs with it. Each
 /// is a P-256 or a P-384 private key in PKCS#8 PEM, read from its file at
@@ -571,11 +599,19 @@ pub struct Signing {
     /// `{base}/.well-known/jwks.json` at its public address, or wherever the
     /// deployment publishes the keys (§13.1).
     pub jwks_uri: Option<String>,
-    /// How long the nodes cache the JWK Set, in seconds.
-    pub node_jwks_cache_s: u64,
+    /// How long the nodes cache the JWK Set.
+    pub node_jwks_cache: units::Duration,
+    /// The retired `node_jwks_cache_s`, which `node_jwks_cache` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub node_jwks_cache_s: Removed,
     /// How long the previous key stays published, in seconds: at least 300
-    /// plus `node_jwks_cache_s`.
-    pub rotation_overlap_s: u64,
+    /// plus `node_jwks_cache`.
+    pub rotation_overlap: units::Duration,
+    /// The retired `rotation_overlap_s`, which `rotation_overlap` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub rotation_overlap_s: Removed,
 }
 
 impl Default for Signing {
@@ -586,8 +622,10 @@ impl Default for Signing {
             next_key_file: None,
             next_key_algorithm: None,
             jwks_uri: None,
-            node_jwks_cache_s: 3600,
-            rotation_overlap_s: 3900,
+            node_jwks_cache: units::Duration::from_hours(1),
+            node_jwks_cache_s: Removed::default(),
+            rotation_overlap: units::Duration::from_mins(65),
+            rotation_overlap_s: Removed::default(),
         }
     }
 }

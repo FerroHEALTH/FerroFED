@@ -120,7 +120,7 @@ pub enum BindingFault {
     /// no time to resolve and ask the members (§11.5; no specification
     /// governs the step's budget: our own design).
     #[error(
-        "pdqm.timeout_ms ({timeout_ms}) plus federation.localization.timeout_ms ({localization_ms}) must be below federation.overall_timeout_ms ({overall_ms}), of which both are a part (§11.5)"
+        "pdqm.timeout ({timeout_ms} ms) plus federation.localization.timeout ({localization_ms} ms) must be below federation.overall_timeout ({overall_ms} ms), of which both are a part (§11.5)"
     )]
     #[cfg(feature = "binding-ihe")]
     DemographicsBudget {
@@ -137,7 +137,7 @@ pub enum BindingFault {
     /// (§11.5; no specification governs the pre-filter's budget: our own
     /// design).
     #[error(
-        "nl_gf.mitz.timeout_ms ({timeout_ms}) plus pdqm.timeout_ms ({demographics_ms}) plus federation.localization.timeout_ms ({localization_ms}) must be below federation.overall_timeout_ms ({overall_ms}), of which all three are a part (§11.5)"
+        "nl_gf.mitz.timeout ({timeout_ms} ms) plus pdqm.timeout ({demographics_ms} ms) plus federation.localization.timeout ({localization_ms} ms) must be below federation.overall_timeout ({overall_ms} ms), of which all three are a part (§11.5)"
     )]
     #[cfg(feature = "binding-nl")]
     PrefilterBudget {

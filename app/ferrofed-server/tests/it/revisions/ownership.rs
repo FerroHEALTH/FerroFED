@@ -111,7 +111,7 @@ async fn a_save_that_sets_each_file_owned_resource_as_the_file_does_is_taken() -
         .get_mut("federation")
         .and_then(toml::Value::as_table_mut)
         .ok_or("the file's federation table")?
-        .insert(String::from("per_node_timeout_ms"), toml::Value::from(4000));
+        .insert(String::from("per_node_timeout"), toml::Value::from("4s"));
     let (status, text) = gateway
         .save(Some(1), "a longer wait", &toml::to_string(&table)?)
         .await?;

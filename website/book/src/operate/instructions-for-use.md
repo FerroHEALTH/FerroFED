@@ -52,7 +52,7 @@ own ([The medical device question](../evaluate/data-protection.md#the-medical-de
    ([Supported platforms](deployment-shape.md#supported-platforms)). The
    gateway holds little in memory: about 2 MiB at rest in the measurement on
    [Memory footprint](container.md#memory-footprint). Each concurrent query
-   holds its members' answers, up to `federation.max_node_answer_bytes` each
+   holds its members' answers, up to `federation.max_node_answer_size` each
    ([The answer bound](overload.md#the-answer-bound)), so size memory from
    the sizing below.
 2. **Gather the services it consumes:** two or more openEHR CDRs that serve
@@ -217,9 +217,9 @@ member holds the clinician's answer. Size them from what you measure:
 
 | Setting | Default | How to size it |
 |---|---|---|
-| `federation.per_node_timeout_ms` | `10000` | above the slowest member's 99th percentile on `ferrofed_node_request_duration_seconds`, measured under your load ([Metrics](metrics.md#the-metrics)) |
-| `federation.overall_timeout_ms` | `25000` | above `per_node_timeout_ms` plus the resolver's and the localizer's time on their duration histograms ([Timeouts](queries-and-areas.md#timeouts)) |
-| `server.request_timeout_ms` | `30000` | more than one second above `overall_timeout_ms`; `config check` refuses less |
+| `federation.per_node_timeout` | `10s` | above the slowest member's 99th percentile on `ferrofed_node_request_duration_seconds`, measured under your load ([Metrics](metrics.md#the-metrics)) |
+| `federation.overall_timeout` | `25s` | above `per_node_timeout` plus the resolver's and the localizer's time on their duration histograms ([Timeouts](queries-and-areas.md#timeouts)) |
+| `server.request_timeout` | `30s` | more than one second above `overall_timeout`; `config check` refuses less |
 | `server.max_concurrent_requests` | `512` | the queries your members can take at once divided by the number of members each query asks ([The concurrency limit](overload.md#the-concurrency-limit)) |
 | `federation.max_in_flight_per_node` | `64` | the requests the smallest member can serve at once; past it a member is reported `time-out` ([The per-member cap](overload.md#the-per-member-cap)) |
 | `[server.caller_rate]` | off | set only where one caller can crowd out others ([The per-caller rate](overload.md#the-per-caller-rate)) |
@@ -288,10 +288,10 @@ event, and its frequency is the event's:
 | Clear a quarantined audit record | when `ferrofed_audit_quarantined` rises, after reading why the repository refused it | [The audit spool](hardening.md#the-audit-spool) |
 | Rotate the signing key | on your key policy's schedule, and at once when it may have leaked | [Rotating the signing key](onward-credentials.md#rotating-the-signing-key) |
 | Rotate a machine client's secret | on your credential policy's schedule, and at once when it may have leaked: rotate the client secret of the Prometheus scraper or the PMIR Registry at its issuer and give it the new one | [`metrics.scrape_clients`](metrics.md#who-the-admin-listener-serves), [`pmir.feed_clients`](identity.md#the-identity-feed-pmir) |
-| Renew TLS certificates and onward credentials | before each expires; send `SIGHUP` after replacing a listener's certificate files, or set the listener's `reload_interval_s` so the gateway reads them again on that period | [Hardening](hardening.md#tls), [TLS on the listeners](configuration.md#tls-on-the-listeners) |
+| Renew TLS certificates and onward credentials | before each expires; send `SIGHUP` after replacing a listener's certificate files, or set the listener's `reload_interval` so the gateway reads them again on that period | [Hardening](hardening.md#tls), [TLS on the listeners](configuration.md#tls-on-the-listeners) |
 | Clear a held `ehr_id` collision | once the member at fault has fixed it, on each replica that holds it | [Clearing a held collision](registry.md#clearing-a-held-collision) |
 | Move to the newest release | when a new release is published, because an earlier release receives no fix; once the end date of your release in `SECURITY.md` has passed, the startup banner and `config check` say so as well | [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions), [The startup banner](configuration.md#the-startup-banner) |
-| Confirm an applied change to an onward credential or a binding section | under `config.ui = "managed"`, within `config.confirm_ms` (120000 ms by default) of the apply, once the gateway works with it; unconfirmed, it is rolled back | [Commit-confirm](configuration-revisions.md#commit-confirm) |
+| Confirm an applied change to an onward credential or a binding section | under `config.ui = "managed"`, within `config.confirm` (120000 ms by default) of the apply, once the gateway works with it; unconfirmed, it is rolled back | [Commit-confirm](configuration-revisions.md#commit-confirm) |
 | Bring a replica back in step | when `FerroFEDConfigurationDrift` fires: fix what the replica refused, then send it `SIGHUP` or apply a newer revision | [Several replicas](configuration-revisions.md#several-replicas) |
 | Back up the configuration revisions | under `config.ui = "managed"`, with the stored-query store and before every upgrade: the `redb` file or the PostgreSQL database, and the files of `config.secrets_dir` | [Turning it on](configuration-revisions.md#turning-it-on) |
 | Confirm a prescription member's contract | at admission, and when a member declared in `[[fhir.serve]]` changes its CDR product or version | [The member contract](../integrate/prescriptions.md#the-member-contract) |
@@ -299,7 +299,7 @@ event, and its frequency is the event's:
 | Export the identity state | before a system that replaces FerroFED takes over, on each replica | [Exporting the identity state](identity-state-export.md), [Decommissioning](decommissioning.md) |
 | Keep each receiving category's packages complete | when you move a `[[fhir.receive]]` `package` or one of its dependencies to a new version: name every package of its dependency closure in `dependencies`, which `config check` holds to the manifests | [Receiving a document](../evaluate/receiving-documents.md) |
 | Keep the PIX Manager fed | continuously: the gateway keeps no patient index of its own, so a patient whose records a member has not fed to the PIX Manager over ITI-104, or whose binding the PIX Manager has dropped, resolves at no member and answers as not found | [Identity resolution](identity.md) |
-| Move the gateway's keys out of `[server]` | before you upgrade to 0.0.16: this release refuses `server.public_url`, `server.replica`, `server.bindings_drain_timeout_ms` and `server.overload_retry_after_s` as unknown keys, so write them as `gateway.public_url`, `gateway.replica`, `gateway.bindings_drain_timeout_ms` and `server.retry_after_s` | [Upgrading](upgrading.md#to-v0016-from-v0015) |
+| Move the gateway's keys out of `[server]` | before you upgrade to 0.0.16: this release refuses `server.public_url`, `server.replica`, `server.bindings_drain_timeout` and `server.overload_retry_after_s` as unknown keys, so write them as `gateway.public_url`, `gateway.replica`, `gateway.bindings_drain_timeout` and `server.retry_after` | [Upgrading](upgrading.md#to-v0016-from-v0015) |
 | Keep the console's identity provider reachable at its start | when the console's `[oidc]` names `issuer` alone: the console reads the provider's endpoints from its discovery document when it starts and refuses to start without it; name `authorization_endpoint`, `token_endpoint` and `jwks_uri` to start without asking the provider | [Upgrading](upgrading.md#to-v0016-from-v0015) |
 | Move the keys 0.0.18 renamed or removed | before you upgrade to 0.0.18: this release refuses each one at start-up and in `config check`, naming its replacement, among them `[auth]` issuer keys moved onto each `[[auth.issuer]]`, `[[auth.basic.users]]`, `[stored_queries] url`, `[trust.issuer.national_contact_point]`, a node's `oauth2` and `fapi2` tables and every outbound table's TLS keys outside its `tls` sub-table | [Upgrading](upgrading.md#to-v0018-from-v0016) |
 | Back up FerroFED's own store | when `[store]` is set, before every upgrade: dump the `ferrofed` schema of its PostgreSQL database, which holds the stored queries, the emergency access counts, the DPoP proofs and a contact point's dispensations; an older release refuses a store a newer one migrated | [FerroFED's own store](store.md#migrations) |

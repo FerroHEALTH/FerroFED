@@ -439,7 +439,7 @@ localizes and resolves that identifier as it would the client's own.
 url = "https://pdq.example.org/fhir/"
 transaction = "iti-78"                 # or "iti-119"
 master = "urn:oid:2.999.1"             # the master domain's identifier system
-timeout_ms = 1000                      # each exchange with the Supplier
+timeout = "1s"                      # each exchange with the Supplier
 
 [pdqm.namespaces]
 "urn:oid:2.999.7" = "urn:oid:2.999.7"  # a client namespace = the system it is sent in
@@ -531,7 +531,7 @@ localizer ([`[pixm]` as the localizer](#pixm-as-the-localizer),
 
 A merge at the identity source can leave a caller's
 [resolution bindings](registry.md) naming the `ehr_id` of an identity that no
-longer exists. Each binding expires in any case `federation.binding_ttl_ms`
+longer exists. Each binding expires in any case `federation.binding_ttl`
 after the last resolution that returned it, and a resolution after the merge
 no longer returns the stale one. With
 `[pmir]` set, the gateway also hears of each change as it happens: it
@@ -546,8 +546,8 @@ callback_url = "https://gateway.example.org/pmir/feed"   # where the Registry se
 path = "/pmir/feed"                                       # the route under {base}, the default
 feed_clients = ["pmir-registry"]                          # the clients the Registry sends as, at an [[auth.issuer]]
 # identifier_system = "urn:oid:2.999.1"                  # only Patients with an identifier here
-# timeout_ms = 5000
-# check_interval_s = 60
+# timeout = "5s"
+# check_interval = "1min"
 # on_drain = "keep"                                       # or "unsubscribe"; see Several replicas
 
 [pmir.credentials.oauth]              # how the gateway authenticates to the Registry
@@ -570,10 +570,10 @@ scope = "*"
   deletes the others. A delete the Registry answers `404` or `410` found the
   subscription already gone. A Registry that
   answers that search `400` or `404` does not support it, and the gateway
-  creates. Every `check_interval_s` the gateway reads the subscription back.
+  creates. Every `check_interval` the gateway reads the subscription back.
   It deletes and recreates one the Registry reports `error` or `off`, and
   recreates one the Registry no longer holds. Each failed check doubles the
-  wait before the next, up to 32 times `check_interval_s`, and a check that
+  wait before the next, up to 32 times `check_interval`, and a check that
   succeeds resets it. If the Registry answers a create `201` with no
   `Location`, or with one outside `url`, the gateway cannot manage that
   subscription. It creates no other until a restart and reports the fault as
@@ -639,10 +639,10 @@ from the `callback_url` you give each of them:
   deletes the subscription the other replicas rely on. Each message reaches
   the one replica the balancer picks, which drops the stale bindings. The
   other replicas keep theirs until they expire: a binding lives
-  `federation.binding_ttl_ms` after its caller's last resolution
+  `federation.binding_ttl` after its caller's last resolution
   ([Resolution bindings](registry.md#resolution-bindings)), so on those
   replicas a stale binding is routed on until its caller has made no
-  resolution for that long. Lower `binding_ttl_ms` to narrow the window.
+  resolution for that long. Lower `binding_ttl` to narrow the window.
 - **A `callback_url` of its own for each replica**, an address the Registry
   reaches each replica at, such as a StatefulSet pod's stable name. Each
   replica holds its own subscription, so the Registry sends every change to

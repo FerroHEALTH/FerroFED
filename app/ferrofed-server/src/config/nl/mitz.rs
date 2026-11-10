@@ -43,7 +43,10 @@
 //! of [`transport`]. No specification governs the shape of the table: our
 //! own design.
 
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_config::units;
+use ferrohealth_server::tls_client::TlsClient;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
@@ -81,8 +84,12 @@ pub struct Mitz {
     pub purpose: String,
     /// The Mitz data categories asked about.
     pub data_categories: Vec<String>,
-    /// How long one round of questions may take, in milliseconds.
-    pub timeout_ms: u64,
+    /// How long one round of questions may take.
+    pub timeout: units::Duration,
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub timeout_ms: Removed,
     /// Each member's data holder, by member id.
     pub holders: BTreeMap<String, Holder>,
 }
@@ -96,7 +103,8 @@ impl Default for Mitz {
             namespaces: Vec::new(),
             purpose: String::new(),
             data_categories: Vec::new(),
-            timeout_ms: 1_000,
+            timeout: units::Duration::from_secs(1),
+            timeout_ms: Removed::default(),
             holders: BTreeMap::new(),
         }
     }
@@ -219,7 +227,7 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
         namespaces: mitz.namespaces.clone(),
         purpose: mitz.purpose.clone(),
         data_categories: mitz.data_categories.clone(),
-        timeout: Duration::from_millis(mitz.timeout_ms),
+        timeout: Duration::from_millis(mitz.timeout.as_millis()),
         holders: mitz.holders.clone(),
     })
 }
@@ -227,17 +235,21 @@ pub(super) fn resolve(config: &Config, mitz: &Mitz) -> Result<MitzSettings, Erro
 /// Holds the pre-filter's budget, with the demographics step's and the
 /// localizer's, below the overall budget, of which each is a part (§11.5).
 fn budget(config: &Config, mitz: &Mitz) -> Result<(), Error> {
-    let demographics_ms = config.pdqm.as_ref().map_or(0, |pdqm| pdqm.timeout_ms);
+    let demographics_ms = config
+        .pdqm
+        .as_ref()
+        .map_or(0, |pdqm| pdqm.timeout.as_millis());
     let localization_ms = localization_budget_ms(config);
-    let overall_ms = config.federation.overall_timeout_ms;
+    let overall_ms = config.federation.overall_timeout.as_millis();
     if mitz
-        .timeout_ms
+        .timeout
+        .as_millis()
         .saturating_add(demographics_ms)
         .saturating_add(localization_ms)
         >= overall_ms
     {
         return Err(Error::Binding(BindingFault::PrefilterBudget {
-            timeout_ms: mitz.timeout_ms,
+            timeout_ms: mitz.timeout.as_millis(),
             demographics_ms,
             localization_ms,
             overall_ms,
@@ -279,9 +291,9 @@ fn question(mitz: &Mitz) -> Result<(), Error> {
             fault: "lists the pseudonymised BSN, which cannot stand for the BSN Mitz is asked by",
         }));
     }
-    if mitz.timeout_ms == 0 {
+    if mitz.timeout.as_millis() == 0 {
         return Err(Error::Zero {
-            key: format!("{MITZ_KEY}.timeout_ms"),
+            key: format!("{MITZ_KEY}.timeout"),
         });
     }
     Ok(())

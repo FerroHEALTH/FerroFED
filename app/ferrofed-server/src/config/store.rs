@@ -11,7 +11,7 @@
 //! verified by, `ca_file`, the platform's roots when it is unset; how many
 //! connections the gateway opens, `max_connections`; how long one statement
 //! or connection may take, `timeout_ms`; and how often rows past their
-//! window are deleted, `sweep_interval_s`. The connection always requires
+//! window are deleted, `sweep_interval`. The connection always requires
 //! TLS: a connection string that does not set `sslmode=require` is refused
 //! under every profile.
 //!
@@ -23,6 +23,8 @@
 //! database. No specification governs the store or its configuration: our
 //! own design.
 
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::units;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -68,10 +70,18 @@ pub struct Store {
     pub max_connections: usize,
     /// How long one connection, or one statement, may take, in
     /// milliseconds; zero is refused.
-    pub timeout_ms: u64,
+    pub timeout: units::Duration,
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub timeout_ms: Removed,
     /// How often the rows past their window are deleted, in seconds; zero
     /// is refused.
-    pub sweep_interval_s: u64,
+    pub sweep_interval: units::Duration,
+    /// The retired `sweep_interval_s`, which `sweep_interval` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub sweep_interval_s: Removed,
 }
 
 impl Default for Store {
@@ -81,8 +91,10 @@ impl Default for Store {
             url_file: None,
             ca_file: None,
             max_connections: 4,
-            timeout_ms: 10_000,
-            sweep_interval_s: 60,
+            timeout: units::Duration::from_secs(10),
+            timeout_ms: Removed::default(),
+            sweep_interval: units::Duration::from_mins(1),
+            sweep_interval_s: Removed::default(),
         }
     }
 }
@@ -206,10 +218,10 @@ pub fn resolve(config: &Config) -> Result<Option<StoreSettings>, Error> {
         url,
         ca,
         max_connections,
-        timeout: Duration::from_millis(positive("store.timeout_ms", section.timeout_ms)?),
+        timeout: Duration::from_millis(positive("store.timeout", section.timeout.as_millis())?),
         sweep_interval: Duration::from_secs(positive(
-            "store.sweep_interval_s",
-            section.sweep_interval_s,
+            "store.sweep_interval",
+            section.sweep_interval.as_secs(),
         )?),
     }))
 }

@@ -184,7 +184,7 @@ fn settings_resolving(
     let text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout_ms = 4000\noverall_timeout_ms = 6000\n{federation}\n\
+         per_node_timeout = '4s'\noverall_timeout = '6s'\n{federation}\n\
          [stored_queries]\npath = {store}\n{identity}{}{}",
         audit_tables(repository, extra),
         map_toml(retention)

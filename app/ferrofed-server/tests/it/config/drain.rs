@@ -31,7 +31,7 @@ fn resolved(
 )]
 fn an_unset_drain_takes_the_request_timeout_and_the_delay_is_zero() -> Result<(), Box<dyn StdError>>
 {
-    let server = resolved("[server]\nrequest_timeout_ms = 45000\n")?;
+    let server = resolved("[server]\nrequest_timeout = '45s'\n")?;
     assert_eq!(Duration::from_secs(45), server.shutdown_timeout);
     assert_eq!(Duration::ZERO, server.drain_delay);
     Ok(())
@@ -46,7 +46,7 @@ fn a_drain_shorter_than_the_request_timeout_refuses_to_boot_naming_both_keys()
 -> Result<(), Box<dyn StdError>> {
     for shutdown_ms in [1, 10_000, 29_999] {
         let error = refusal(&format!(
-            "[server]\nrequest_timeout_ms = 30000\nshutdown_timeout_ms = {shutdown_ms}\n"
+            "[server]\nrequest_timeout = '30s'\nshutdown_timeout = '{shutdown_ms}ms'\n"
         ))?;
         assert!(
             matches!(
@@ -60,8 +60,8 @@ fn a_drain_shorter_than_the_request_timeout_refuses_to_boot_naming_both_keys()
         );
         let message = error.to_string();
         assert!(
-            message.contains("server.shutdown_timeout_ms")
-                && message.contains("server.request_timeout_ms"),
+            message.contains("server.shutdown_timeout")
+                && message.contains("server.request_timeout"),
             "the refusal names both keys: {message}"
         );
     }
@@ -76,7 +76,7 @@ fn a_drain_shorter_than_the_request_timeout_refuses_to_boot_naming_both_keys()
 fn a_drain_as_long_as_the_request_timeout_or_longer_is_accepted() -> Result<(), Box<dyn StdError>> {
     for shutdown_ms in [30_000_u64, 45_000] {
         let server = resolved(&format!(
-            "[server]\nrequest_timeout_ms = 30000\nshutdown_timeout_ms = {shutdown_ms}\n"
+            "[server]\nrequest_timeout = '30s'\nshutdown_timeout = '{shutdown_ms}ms'\n"
         ))?;
         assert_eq!(Duration::from_millis(shutdown_ms), server.shutdown_timeout);
     }
@@ -89,16 +89,16 @@ fn a_drain_as_long_as_the_request_timeout_or_longer_is_accepted() -> Result<(), 
     reason = "a test asserts, and returns its setup errors"
 )]
 fn the_drain_delay_is_read_from_the_file_and_the_environment() -> Result<(), Box<dyn StdError>> {
-    let server = resolved("[server]\ndrain_delay_ms = 5000\n")?;
+    let server = resolved("[server]\ndrain_delay = '5s'\n")?;
     assert_eq!(Duration::from_secs(5), server.drain_delay);
     let server = Config::from_sources(
-        Some("[server]\ndrain_delay_ms = 5000\n"),
-        &env("FERROFED__SERVER__DRAIN_DELAY_MS", "7000"),
+        Some("[server]\ndrain_delay = '5s'\n"),
+        &env("FERROFED__SERVER__DRAIN_DELAY", "7s"),
     )?
     .resolve()?
     .server;
     assert_eq!(Duration::from_secs(7), server.drain_delay);
-    let error = refusal("[server]\ndrain_delay_ms = \"five seconds\"\n")?;
+    let error = refusal("[server]\ndrain_delay = \"five seconds\"\n")?;
     assert!(matches!(error, Error::Load { .. }), "{error:?}");
     Ok(())
 }
@@ -111,7 +111,7 @@ fn the_drain_delay_is_read_from_the_file_and_the_environment() -> Result<(), Box
 fn the_bindings_drain_has_a_budget_read_from_the_file() -> Result<(), Box<dyn StdError>> {
     let server = resolved("[server]\n")?;
     assert_eq!(Duration::from_secs(5), server.bindings_drain);
-    let server = resolved("[gateway]\nbindings_drain_timeout_ms = 8000\n")?;
+    let server = resolved("[gateway]\nbindings_drain_timeout = '8s'\n")?;
     assert_eq!(Duration::from_secs(8), server.bindings_drain);
     Ok(())
 }
@@ -122,9 +122,9 @@ fn the_bindings_drain_has_a_budget_read_from_the_file() -> Result<(), Box<dyn St
     reason = "a test asserts, and returns its setup errors"
 )]
 fn a_bindings_drain_of_zero_refuses_to_boot_naming_its_key() -> Result<(), Box<dyn StdError>> {
-    let error = refusal("[gateway]\nbindings_drain_timeout_ms = 0\n")?;
+    let error = refusal("[gateway]\nbindings_drain_timeout = '0ms'\n")?;
     assert!(
-        matches!(&error, Error::Zero { key } if key == "gateway.bindings_drain_timeout_ms"),
+        matches!(&error, Error::Zero { key } if key == "gateway.bindings_drain_timeout"),
         "{error:?}"
     );
     Ok(())

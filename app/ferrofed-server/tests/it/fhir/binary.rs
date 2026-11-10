@@ -121,7 +121,7 @@ async fn a_read_asks_the_member_by_its_ehr_id_alone() -> TestResult {
 async fn an_expired_url_is_refused() -> TestResult {
     let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
     let dir = tempfile::tempdir()?;
-    let app = members.gateway_keyed(dir.path(), ("", ""), "document_url_lifetime_secs = 1")?;
+    let app = members.gateway_keyed(dir.path(), ("", ""), "document_url_lifetime = '1s'")?;
     let url = listed_b(app.clone()).await?;
     tokio::time::sleep(Duration::from_millis(2_100)).await;
     members.proxy_b.clear_journal();

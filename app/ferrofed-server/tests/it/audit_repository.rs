@@ -104,7 +104,7 @@ fn config(
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     Ok(format!(
-        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {BUDGET_MS}\noverall_timeout_ms = {BUDGET_MS}\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = {LOCALIZATION_MS}\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"repository\"\n\n[[xcpd.gateway]]\nurl = \"{gateway}\"\ndevice = \"2.999.50.1\"\n\n[xcpd.communities]\n{communities}\n[xcpd.audit_repository]\nhostname = \"gateway.example.org\"\n{repository}\n{rows}",
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '{BUDGET_MS}ms'\noverall_timeout = '{BUDGET_MS}ms'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout = '{LOCALIZATION_MS}ms'\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"repository\"\n\n[[xcpd.gateway]]\nurl = \"{gateway}\"\ndevice = \"2.999.50.1\"\n\n[xcpd.communities]\n{communities}\n[xcpd.audit_repository]\nhostname = \"gateway.example.org\"\n{repository}\n{rows}",
         document = toml::Value::String(document.display().to_string()),
     ))
 }
@@ -119,7 +119,7 @@ fn reaching(
     let roots = dir.join("atna-roots.pem");
     std::fs::write(&roots, repository.trust_roots())?;
     Ok(format!(
-        "url = \"{}\"\ntls = {{ trust_roots_file = {} }}\nconnect_timeout_ms = 500\nretry_max_ms = 400\n{extra}",
+        "url = \"{}\"\ntls = {{ trust_roots_file = {} }}\nconnect_timeout = '500ms'\nretry_max = '400ms'\n{extra}",
         repository.url(),
         toml::Value::String(roots.display().to_string())
     ))
@@ -532,12 +532,10 @@ fn a_spool_write_timeout_of_zero_refuses_to_load_naming_its_key() -> TestResult 
     let text = unreachable(
         dir.path(),
         "development",
-        "url = \"tls://arr.example.org\"\nspool_write_timeout_ms = 0",
+        "url = \"tls://arr.example.org\"\nspool_write_timeout = '0ms'",
     )?;
     match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
-        Err(error::Error::Zero { key })
-            if key == "xcpd.audit_repository.spool_write_timeout_ms" =>
-        {
+        Err(error::Error::Zero { key }) if key == "xcpd.audit_repository.spool_write_timeout" => {
             Ok(())
         }
         other => Err(format!("a zero bound would refuse every message: {other:?}").into()),

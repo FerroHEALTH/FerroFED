@@ -169,7 +169,7 @@ fn text(dir: &Path, (a, b): (&str, &str), tables: &str) -> Result<String, Box<dy
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
     Ok(format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = false\n\n{}\n{}\n{tables}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = false\n\n{}\n{}\n{tables}",
         crossref(&[("node-a", "2222aaaa-2222-4222-8222-222222222222")]),
         signing(dir)?
     ))
@@ -652,21 +652,38 @@ fn a_grant_beside_tls_material_names_no_certificate_of_its_own() -> TestResult {
     let front = MutualTls::front("http://127.0.0.1:9")?;
     let tls = tls_keys(dir.path(), &front)?;
     let identity = toml::Value::String(dir.path().join("node-a-client.pem").display().to_string());
-    for extra in [
-        format!("client_certificate_file = {identity}\nclient_key_file = {identity}\n"),
-        format!("ca_file = {identity}\n"),
+    let extra = format!("tls = {{ client_identity_file = {identity} }}\n");
+    let tables = credentials(&tls, "https://idp.example.org/token", &extra);
+    let error = refused(&over_node_a(dir.path(), &tables)?)?;
+    assert!(
+        smart(&error, |refused| matches!(
+            refused,
+            SmartError::Exclusive { .. }
+        )),
+        "{extra}: {error:?}"
+    );
+    let shown = format!("{error} {error:?}");
+    assert!(!shown.contains("PRIVATE KEY"), "{shown}");
+    // NOTE: no specification governs this: the family's one-release rule; ferrohealth-smart
+    // 0.15 deleted the named refusals of the grant's own certificate keys.
+    for (extra, key) in [
+        (
+            format!("client_certificate_file = {identity}\n"),
+            "client_certificate_file",
+        ),
+        (format!("ca_file = {identity}\n"), "ca_file"),
     ] {
         let tables = credentials(&tls, "https://idp.example.org/token", &extra);
-        let error = refused(&over_node_a(dir.path(), &tables)?)?;
+        let error =
+            Config::from_sources(Some(&over_node_a(dir.path(), &tables)?), &BTreeMap::new())
+                .err()
+                .ok_or("the key is refused at load")?;
+        let shown = format!("{error:?}");
         assert!(
-            smart(&error, |refused| matches!(
-                refused,
-                SmartError::Exclusive { .. }
-            )),
-            "{extra}: {error:?}"
+            shown.contains(&format!("credentials.node-a-pub.oauth.{key}"))
+                && shown.contains(&format!("unknown field `{key}`")),
+            "{key} is an unknown key: {shown}"
         );
-        let shown = format!("{error} {error:?}");
-        assert!(!shown.contains("PRIVATE KEY"), "{shown}");
     }
     Ok(())
 }

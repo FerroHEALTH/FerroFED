@@ -69,7 +69,7 @@ pub(crate) fn gateway_at(
     // NOTE: `server.base_path` writes the root as the empty path.
     let written = if base == "/" { "" } else { base };
     let text = format!(
-        "profile = \"development\"\n\n[server]\nbase_path = \"{written}\"\nrequest_timeout_ms = 10000\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{rows}"
+        "profile = \"development\"\n\n[server]\nbase_path = \"{written}\"\nrequest_timeout = '10s'\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{rows}"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;

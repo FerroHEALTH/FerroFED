@@ -92,8 +92,10 @@ person](../evaluate/receiving-documents.md#inserted-by-the-person)).
 A proxy or a legal representative (Art 4(2)) who inserts for the person is
 told apart only when the token says so. RFC 8693 §4.1 names any delegate
 in the `act` claim, a client service as well as a person, so set
-`act_is_representative = true` in `[trust.issuer.patient]` only for an
-issuer whose patient tokens name the representative there. Every entry of
+`act_represents_patient = true` on the `[[auth.issuer]]` of `kind =
+"patients"` only for an issuer whose patient tokens name the
+representative there; on any other issuer, a patient token that carries
+`act` is refused as an invalid token. Every entry of
 a document such a token inserts then names the representative, a
 `PARTY_IDENTIFIED` holding the `act` `sub`, and its access record says a
 representative inserted it ([Inserted by the

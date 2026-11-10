@@ -6,7 +6,7 @@
 //! replica that refuses it keeps its running configuration, reports the
 //! drift on `GET /admin/config` and on the metrics, and does not try it
 //! again until a reload; `config.ui = "off"` starts no watch; and
-//! `config.poll_ms` is read within its bounds. No specification governs
+//! `config.poll` is read within its bounds. No specification governs
 //! this: our own design.
 
 use std::collections::BTreeMap;
@@ -233,10 +233,10 @@ fn the_poll_interval_is_read_within_its_bounds() -> TestResult {
     assert_eq!(Duration::from_secs(5), resolve("")?.revision_poll);
     assert_eq!(
         Duration::from_millis(100),
-        resolve("poll_ms = 100\n")?.revision_poll
+        resolve("poll = '100ms'\n")?.revision_poll
     );
     for value in [0_u64, 99, 600_001] {
-        let refused = resolve(&format!("poll_ms = {value}\n"));
+        let refused = resolve(&format!("poll = '{value}ms'\n"));
         assert!(
             matches!(
                 refused,
@@ -245,13 +245,11 @@ fn the_poll_interval_is_read_within_its_bounds() -> TestResult {
             "{value}: {refused:?}"
         );
     }
-    let off = Config::from_sources(Some("[config]\npoll_ms = 1000\n"), &BTreeMap::new())?.resolve();
+    let off = Config::from_sources(Some("[config]\npoll = '1s'\n"), &BTreeMap::new())?.resolve();
     assert!(
         matches!(
             off,
-            Err(Error::Revisions(RevisionsFault::Off {
-                key: "config.poll_ms"
-            }))
+            Err(Error::Revisions(RevisionsFault::Off { key: "config.poll" }))
         ),
         "{off:?}"
     );

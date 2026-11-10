@@ -6,7 +6,10 @@
 //! (<https://opentelemetry.io/docs/specs/otlp/>).
 //!
 //! [`Collector::start`] serves it over TLS, requiring a client certificate,
-//! when it is given the synthetic set of [`ListenerCertificates`].
+//! when it is given the synthetic set of [`ListenerCertificates`]. The kit
+//! terminates that TLS itself and hands tonic the plain streams, so no crate
+//! of the build turns on tonic's own TLS, under which tonic refuses the
+//! `https` dial `ferrohealth-telemetry` makes over its own connector.
 //!
 //! It runs on a thread and a runtime of its own, so a gateway exporting from
 //! its batch thread, a `serve` process, or a test runtime that has stopped
@@ -14,8 +17,14 @@
 //! specification governs this test device: our own design.
 
 use std::io;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex, PoisonError};
+use std::task::{Context, Poll};
 use std::thread::JoinHandle;
+
+use ferrohealth_config::tls::TlsVersion;
+use ferrohealth_server::section::{ClientAuth, TlsSection};
+use ferrohealth_server::tls::{TlsError, TlsKeys, server_config_of};
 
 use opentelemetry_proto::tonic::collector::trace::v1::trace_service_server::{
     TraceService, TraceServiceServer,
@@ -24,9 +33,13 @@ use opentelemetry_proto::tonic::collector::trace::v1::{
     ExportTraceServiceRequest, ExportTraceServiceResponse,
 };
 use opentelemetry_proto::tonic::trace::v1::Span;
-use tokio::sync::oneshot;
-use tonic::transport::server::TcpIncoming;
-use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::sync::{mpsc, oneshot};
+use tokio_rustls::TlsAcceptor;
+use tokio_rustls::rustls::ServerConfig;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::transport::Server;
+use tonic::transport::server::{Connected, TcpIncoming};
 
 use crate::listener::ListenerCertificates;
 
@@ -43,9 +56,12 @@ pub enum CollectorError {
     /// Its runtime could not be built.
     #[error("the collector's runtime could not be built")]
     Runtime(#[source] io::Error),
+    /// Its certificates could not be written for the TLS configuration.
+    #[error("the collector's certificates could not be written")]
+    Write(#[source] io::Error),
     /// Its TLS configuration was refused.
     #[error("the collector's TLS configuration was refused")]
-    Tls(#[source] tonic::transport::Error),
+    Tls(#[source] TlsError),
 }
 
 /// An OTLP/gRPC trace collector on a loopback port, stopped when dropped.
@@ -67,23 +83,13 @@ impl Collector {
     ///
     /// Returns [`CollectorError::Bind`] when no port can be bound,
     /// [`CollectorError::Runtime`] when the collector's runtime cannot be
-    /// built, and [`CollectorError::Tls`] when the TLS configuration is
+    /// built, [`CollectorError::Write`] when the certificates cannot be
+    /// written, and [`CollectorError::Tls`] when the TLS configuration is
     /// refused.
     pub fn start(certificates: Option<&ListenerCertificates>) -> Result<Self, CollectorError> {
-        let tls = certificates.map(|certificates| {
-            // NOTE: tonic's server reads rustls's process-level provider, ambiguous while two crypto
-            // crates are linked; an earlier install wins, so the result is dropped.
-            let _installed: Result<(), Arc<tokio_rustls::rustls::crypto::CryptoProvider>> =
-                tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
-            ServerTlsConfig::new()
-                .identity(Identity::from_pem(certificates.chain(), certificates.key()))
-                .client_ca_root(Certificate::from_pem(certificates.client_ca()))
-        });
+        let tls = certificates.map(server_tls).transpose()?;
         let scheme = if tls.is_some() { "https" } else { "http" };
-        let mut builder = Server::builder();
-        if let Some(tls) = tls {
-            builder = builder.tls_config(tls).map_err(CollectorError::Tls)?;
-        }
+        let builder = Server::builder();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -103,15 +109,26 @@ impl Collector {
         // NOTE: tonic's `serve_with_incoming_shutdown` waits for accepted connections to close
         // (tonic 0.14 `Server` docs); a client on the test's blocked runtime never closes one (#1507).
         let thread = std::thread::spawn(move || {
-            let serving = builder
-                .add_service(service)
-                .serve_with_incoming(TcpIncoming::from(listener));
+            let mut builder = builder;
+            let router = builder.add_service(service);
             // A dropped sender stops the collector as the sent signal does. Dropping the
             // runtime with the thread then drops every connection task it still holds.
             runtime.block_on(async move {
-                tokio::select! {
-                    served = serving => served,
-                    _stopped = stopped => Ok(()),
+                match tls {
+                    None => {
+                        let serving = router.serve_with_incoming(TcpIncoming::from(listener));
+                        tokio::select! {
+                            served = serving => served,
+                            _stopped = stopped => Ok(()),
+                        }
+                    }
+                    Some(config) => {
+                        let serving = router.serve_with_incoming(accepted(listener, config));
+                        tokio::select! {
+                            served = serving => served,
+                            _stopped = stopped => Ok(()),
+                        }
+                    }
                 }
             })
         });
@@ -167,6 +184,94 @@ impl Drop for Collector {
         {
             std::panic::resume_unwind(panic);
         }
+    }
+}
+
+/// The server configuration of `certificates`, built by `ferrohealth-server`
+/// as a listener's is: their server certificate, a client certificate their
+/// client CA signed required, and the ALPN protocol `h2` of gRPC.
+fn server_tls(certificates: &ListenerCertificates) -> Result<Arc<ServerConfig>, CollectorError> {
+    let dir = tempfile::tempdir().map_err(CollectorError::Write)?;
+    let write = |name: &str, pem: &str| {
+        let path = dir.path().join(name);
+        std::fs::write(&path, pem)
+            .map(|()| path)
+            .map_err(CollectorError::Write)
+    };
+    let section = TlsSection {
+        certificate_file: write("server.pem", certificates.chain())?,
+        key_file: write("server.key", certificates.key())?,
+        client_auth: ClientAuth::Required,
+        client_ca_file: Some(write("client-ca.pem", certificates.client_ca())?),
+        reload_interval: None,
+        healthcheck_identity_file: None,
+        min_version: TlsVersion::Tls12,
+    };
+    let mut config = Arc::unwrap_or_clone(
+        server_config_of(&section, TlsKeys::SERVER).map_err(CollectorError::Tls)?,
+    );
+    config.alpn_protocols = vec![b"h2".to_vec()];
+    Ok(Arc::new(config))
+}
+
+/// The TLS connections `listener` accepts under `config`, each handshake on
+/// a task of its own; a refused handshake is dropped, as the client sees.
+fn accepted(
+    listener: tokio::net::TcpListener,
+    config: Arc<ServerConfig>,
+) -> ReceiverStream<Result<Accepted, io::Error>> {
+    let (connections, incoming) = mpsc::channel(16);
+    let acceptor = TlsAcceptor::from(config);
+    tokio::spawn(async move {
+        while let Ok((tcp, _peer)) = listener.accept().await {
+            let acceptor = acceptor.clone();
+            let connections = connections.clone();
+            tokio::spawn(async move {
+                if let Ok(stream) = acceptor.accept(tcp).await {
+                    // A server that stopped dropped the receiver; the connection goes with it.
+                    let _sent = connections.send(Ok(Accepted(stream))).await;
+                }
+            });
+        }
+    });
+    ReceiverStream::new(incoming)
+}
+
+/// One TLS connection the collector accepted, handed to tonic as plain IO.
+#[derive(Debug)]
+struct Accepted(tokio_rustls::server::TlsStream<tokio::net::TcpStream>);
+
+impl Connected for Accepted {
+    type ConnectInfo = ();
+
+    fn connect_info(&self) -> Self::ConnectInfo {}
+}
+
+impl AsyncRead for Accepted {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.0).poll_read(context, buffer)
+    }
+}
+
+impl AsyncWrite for Accepted {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.0).poll_write(context, buffer)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.0).poll_flush(context)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.0).poll_shutdown(context)
     }
 }
 

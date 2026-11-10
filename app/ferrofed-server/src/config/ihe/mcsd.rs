@@ -5,7 +5,10 @@
 //! the table and its resolution, from which the IHE binding keeps the
 //! registry in step with the directory.
 
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_config::units;
+use ferrohealth_server::tls_client::TlsClient;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,7 +29,7 @@ const URL_KEY: &str = "registry.mcsd.url";
 /// The mCSD care services directory the registry is read from.
 ///
 /// Its `Organization`s and `Endpoint`s are read with ITI-90 and checked as
-/// the registry document in FHIR form is; every `refresh_interval_s` the
+/// the registry document in FHIR form is; every `refresh_interval` the
 /// changes since the last read are asked for with ITI-91 and checked again
 /// before they replace the running registry. Each read or refresh ends at
 /// its deadline and its caps on pages, bytes and entries, so a faulty
@@ -44,15 +47,27 @@ pub struct McsdDirectory {
     /// The TLS material the service is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,
-    /// How often the changes are asked for, in seconds.
-    pub refresh_interval_s: u64,
+    /// How often the changes are asked for.
+    pub refresh_interval: units::Duration,
+    /// The retired `refresh_interval_s`, which `refresh_interval` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub refresh_interval_s: Removed,
     /// How long one whole read or refresh may take, every page of both
-    /// resource types included, in milliseconds.
-    pub deadline_ms: u64,
+    /// resource types included.
+    pub deadline: units::Duration,
+    /// The retired `deadline_ms`, which `deadline` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub deadline_ms: Removed,
     /// The most pages one read or refresh may read.
     pub max_pages: usize,
     /// The most bytes of answer bodies one read or refresh may read.
-    pub max_bytes: usize,
+    pub max_size: units::ByteSize,
+    /// The retired `max_bytes`, which `max_size` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub max_bytes: Removed,
     /// The most Bundle entries one read or refresh may read.
     pub max_entries: usize,
 }
@@ -63,10 +78,13 @@ impl Default for McsdDirectory {
             url: SecretUrl::default(),
             credentials: None,
             tls: TlsClientSection::default(),
-            refresh_interval_s: 300,
-            deadline_ms: 30_000,
+            refresh_interval: units::Duration::from_mins(5),
+            refresh_interval_s: Removed::default(),
+            deadline: units::Duration::from_secs(30),
+            deadline_ms: Removed::default(),
             max_pages: 200,
-            max_bytes: 64 << 20,
+            max_size: units::ByteSize::from_mib(64),
+            max_bytes: Removed::default(),
             max_entries: 50_000,
         }
     }
@@ -169,10 +187,10 @@ pub(crate) fn resolve(
     if credentials.is_some() {
         transport::protected_payload(profile, directory.url.expose(), site())?;
     }
-    let refresh_interval = Duration::from_secs(directory.refresh_interval_s);
+    let refresh_interval = Duration::from_secs(directory.refresh_interval.as_secs());
     if refresh_interval.is_zero() {
         return Err(Error::Zero {
-            key: String::from("registry.mcsd.refresh_interval_s"),
+            key: String::from("registry.mcsd.refresh_interval"),
         });
     }
     let tls = crate::config::tls::read("registry.mcsd.tls", &directory.tls)?;
@@ -181,9 +199,12 @@ pub(crate) fn resolve(
         credentials,
         tls,
         refresh_interval,
-        deadline: positive_ms("registry.mcsd.deadline_ms", directory.deadline_ms)?,
+        deadline: positive_ms("registry.mcsd.deadline", directory.deadline.as_millis())?,
         max_pages: positive("registry.mcsd.max_pages", directory.max_pages)?,
-        max_bytes: positive("registry.mcsd.max_bytes", directory.max_bytes)?,
+        max_bytes: positive(
+            "registry.mcsd.max_size",
+            usize::try_from(directory.max_size.bytes()).unwrap_or(usize::MAX),
+        )?,
         max_entries: positive("registry.mcsd.max_entries", directory.max_entries)?,
         audit,
     })

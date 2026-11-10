@@ -247,7 +247,7 @@ impl Federation {
             Dependencies::new(snapshot.endpoints().map(Endpoint::id), resolver.is_some());
         let observed = Arc::new(Observed::new(
             ResolutionBindings::new(std::time::Duration::from_millis(
-                crate::config::Federation::default().binding_ttl_ms,
+                crate::config::Federation::default().binding_ttl.as_millis(),
             )),
             default_index_capacity(),
         ));

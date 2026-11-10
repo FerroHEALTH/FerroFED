@@ -278,7 +278,7 @@ impl Harness {
         let text = format!(
             "{identity}\n\n[gateway]\npublic_url = \"{origin}\"\n\n\
              [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
-             node_selection = \"ask-all\"\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\n\n\
+             node_selection = \"ask-all\"\nper_node_timeout = '20s'\noverall_timeout = '25s'\n\n\
              [auth]\n{}\n\
              [fhir]\nbase = \"{FHIR}\"\nreceive_namespaces = [\"{namespace}\"]\n\n\
              [fhir.operator]\nname = \"Synthetic Operator\"\nidentifier_system = \"urn:oid:2.999.9\"\n\
@@ -286,7 +286,7 @@ impl Harness {
              template = {}\nfiles = [{}, {}]\ncontext = \"{}\"\n\n\
              [[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\", \"node-b\"]\n\n\
              [[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [\"node-a\", \"node-b\"]\n\n\
-             [pdqm]\nurl = \"{}\"\ntransaction = \"iti-78\"\nmaster = \"{namespace}\"\ntimeout_ms = 5000\n\n\
+             [pdqm]\nurl = \"{}\"\ntransaction = \"iti-78\"\nmaster = \"{namespace}\"\ntimeout = '5s'\n\n\
              [pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n\n\
              [signing]\nkey_file = {}\njwks_uri = \"{origin}/.well-known/jwks.json\"\n{}{}",
             path_of(&document),

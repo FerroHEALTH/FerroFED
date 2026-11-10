@@ -89,8 +89,8 @@ listen = "127.0.0.1:8080"
 base_path = "/fed"
 trusted_proxies = ["127.0.0.1"]
 forwarded_header = "x-forwarded-for"
-drain_delay_ms = 5000
-shutdown_timeout_ms = 30000
+drain_delay = "5s"
+shutdown_timeout = "30s"
 
 [gateway]
 public_url = "https://gateway.example.org/fed"
@@ -101,8 +101,8 @@ format = "json"
 [federation]
 id = "example-federation"
 node_selection = "ask-all"
-per_node_timeout_ms = 10000
-overall_timeout_ms = 25000
+per_node_timeout = "10s"
+overall_timeout = "25s"
 ```
 
 The image sets `FERROFED__SERVER__LISTEN=0.0.0.0:8080`, which overrides
@@ -111,7 +111,7 @@ The image sets `FERROFED__SERVER__LISTEN=0.0.0.0:8080`, which overrides
 reverse proxy of [step 8](#8-tls-and-the-public-address) on loopback, and
 from no one else
 ([Behind a reverse proxy](public-address.md#behind-a-reverse-proxy)).
-`drain_delay_ms` keeps the listener open while a load balancer stops
+`drain_delay` keeps the listener open while a load balancer stops
 routing to a stopping gateway
 ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
 
@@ -333,7 +333,7 @@ product_scope = "__ferrofed.operator"
 issuer = "https://idp.example.org/realms/ferrofed"
 kind = "persons"
 first_party_clients = ["example-clinical-app", "example-reporting-service"]
-clock_skew_seconds = 60
+clock_skew = "1min"
 
 [auth.issuer.assurance]
 claim = "acr"
@@ -677,8 +677,8 @@ listen = "127.0.0.1:9464"
   `outbound-gate-stopped` event is an incident
   ([Hardening](hardening.md#logs-metrics-and-traces)).
 - **Restarts.** On `SIGTERM` readiness turns `503`, the listener stays open
-  for `drain_delay_ms`, the requests in flight get `shutdown_timeout_ms`,
-  and the bindings get `bindings_drain_timeout_ms` to stop their
+  for `drain_delay`, the requests in flight get `shutdown_timeout`,
+  and the bindings get `bindings_drain_timeout` to stop their
   processes. Keep the runtime's grace period above all three
   ([Stopping without dropping a request](health.md#stopping-without-dropping-a-request)).
 - **Several replicas.** The replicas share nothing in memory. A follow-up

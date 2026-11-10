@@ -40,9 +40,9 @@ pub(crate) struct Options {
     pub(crate) resolver: String,
     /// `federation.node_selection`.
     pub(crate) node_selection: &'static str,
-    /// `federation.per_node_timeout_ms`.
+    /// `federation.per_node_timeout`.
     pub(crate) per_node_ms: u64,
-    /// `federation.overall_timeout_ms`.
+    /// `federation.overall_timeout`.
     pub(crate) overall_ms: u64,
     /// Further `[federation]` keys, one per line.
     pub(crate) federation: String,
@@ -104,7 +104,7 @@ pub(crate) fn gateway_with(
     )?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "{}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = {}\noverall_timeout_ms = {}\nnode_selection = \"{}\"\nid = \"example-federation\"\n{}\n\n{}\n",
+        "{}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '{}ms'\noverall_timeout = '{}ms'\nnode_selection = \"{}\"\nid = \"example-federation\"\n{}\n\n{}\n",
         options.resolver,
         options.per_node_ms,
         options.overall_ms,

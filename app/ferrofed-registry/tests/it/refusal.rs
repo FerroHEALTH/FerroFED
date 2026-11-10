@@ -387,7 +387,7 @@ fn an_unknown_field_is_refused_at_every_level() {
         ),
         ONE_NODE.replace(
             "connection_type = \"openehr-rest-query\"",
-            "connection_type = \"openehr-rest-query\"\ntimeout = 5",
+            "connection_type = \"openehr-rest-query\"\ntimeout = '5ms'",
         ),
     ];
     for document in &cases {

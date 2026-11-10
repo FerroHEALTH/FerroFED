@@ -110,15 +110,15 @@ const FHIR: Option<&str> = Some("fhir");
 /// shows them.
 pub(crate) const ENTRIES: &[Entry] = &[
     scalar(
-        "federation.per_node_timeout_ms",
+        "federation.per_node_timeout",
         Section::Federation,
-        Some("10000"),
+        Some("\"10s\""),
         TIMEOUTS,
     ),
     scalar(
-        "federation.overall_timeout_ms",
+        "federation.overall_timeout",
         Section::Federation,
-        Some("25000"),
+        Some("\"25s\""),
         TIMEOUTS,
     ),
     scalar(
@@ -140,9 +140,9 @@ pub(crate) const ENTRIES: &[Entry] = &[
         None,
     ),
     scalar(
-        "federation.localization.timeout_ms",
+        "federation.localization.timeout",
         Section::Federation,
-        Some("5000"),
+        Some("\"5s\""),
         None,
     ),
     scalar(
@@ -224,9 +224,9 @@ pub(crate) const ENTRIES: &[Entry] = &[
     ),
     scalar("fhir.base", Section::Fhir, None, FHIR),
     scalar(
-        "fhir.document_url_lifetime_secs",
+        "fhir.document_url_lifetime",
         Section::Fhir,
-        Some("300"),
+        Some("\"5min\""),
         FHIR,
     ),
     whole("fhir.receive", Section::Fhir, Some("[]"), FHIR),

@@ -81,7 +81,7 @@ async fn beside_an_onward_lane_the_admission_check_uses_the_client_credentials_g
         "audiences = [\"https://cdr-a.example.org/openehr\"]\n",
         "indicators = [\"https://cdr-a.example.org/openehr\"]\n\n",
         "[credentials.\"node-a-pub\".onward.keys]\n",
-        "max_onward_lifetime = 3600\n",
+        "max_onward_lifetime = '1h'\n",
     ))
     .await
 }

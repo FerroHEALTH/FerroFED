@@ -24,6 +24,7 @@ use ferrofed_server::config::transport;
 use ferrofed_server::metrics::SCOPE;
 use ferrofed_testkit::listener::ListenerCertificates;
 use ferrofed_testkit::otlp::Collector;
+use ferrohealth_server::telemetry::TelemetryBuildError;
 use ferrohealth_telemetry::telemetry::{InitError, Service, Telemetry};
 use opentelemetry::trace::Tracer as _;
 
@@ -39,22 +40,34 @@ fn resolved(text: &str) -> Result<Settings, Box<dyn std::error::Error>> {
 
 /// The export the configuration `text` builds, or the refusal it is built
 /// with.
-fn built(text: &str) -> Result<Result<Telemetry, InitError>, Box<dyn std::error::Error>> {
-    Ok(Telemetry::new(
+fn built(text: &str) -> Result<Result<Telemetry, TelemetryBuildError>, Box<dyn std::error::Error>> {
+    Ok(ferrohealth_server::telemetry::build(
         &resolved(text)?.telemetry,
         Service::new(SCOPE, VERSION),
     ))
 }
 
+/// `error` and every source under it, one per line.
+fn chain(error: &dyn std::error::Error) -> String {
+    let mut text = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        text.push('\n');
+        text.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    text
+}
+
 /// Writes the client identity and the trust roots of `certificates` into
-/// `dir`, and returns the `[telemetry.otlp]` keys naming them.
+/// `dir`, and returns the `[telemetry.otlp.tls]` table naming them.
 fn tls_table(dir: &Path, certificates: &ListenerCertificates) -> Result<String, std::io::Error> {
     let identity = dir.join("collector-client.pem");
     let roots = dir.join("collector-ca.pem");
     std::fs::write(&identity, certificates.client_identity())?;
     std::fs::write(&roots, certificates.ca())?;
     Ok(format!(
-        "client_identity_file = {}\ntrust_roots_file = {}\n",
+        "[telemetry.otlp.tls]\nclient_identity_file = {}\ntrust_roots_file = {}\n",
         toml::Value::String(identity.display().to_string()),
         toml::Value::String(roots.display().to_string()),
     ))
@@ -84,13 +97,16 @@ async fn tls_material_beside_an_http_collector_or_none_is_refused() -> TestResul
     .err()
     .ok_or("TLS material beside an http:// collector is refused")?;
     assert!(
-        matches!(error, InitError::TlsWithoutHttps { .. }),
+        matches!(error, TelemetryBuildError::Init(InitError::TlsWithoutHttps)),
         "{error}"
     );
     let error = built(&format!("[telemetry.otlp]\n{table}"))?
         .err()
         .ok_or("TLS material beside no collector is refused")?;
-    assert!(matches!(error, InitError::MissingEndpoint), "{error}");
+    assert!(
+        matches!(error, TelemetryBuildError::Init(InitError::MissingEndpoint)),
+        "{error}"
+    );
     Ok(())
 }
 
@@ -106,27 +122,27 @@ async fn tls_material_that_is_no_pem_of_its_kind_is_refused_without_quoting_it()
         (
             "client_identity_file",
             &no_key,
-            "telemetry.otlp.client_identity_file",
+            "telemetry.otlp.tls.client_identity",
         ),
         (
             "client_identity_file",
             &garbage,
-            "telemetry.otlp.client_identity_file",
+            "telemetry.otlp.tls.client_identity",
         ),
         (
             "trust_roots_file",
             &garbage,
-            "telemetry.otlp.trust_roots_file",
+            "telemetry.otlp.tls.trust_roots_file",
         ),
     ];
     for (key, path, named) in cases {
         let error = built(&format!(
-            "[telemetry.otlp]\nendpoint = \"https://collector.example.org:4317\"\n{key} = {}\n",
+            "[telemetry.otlp]\nendpoint = \"https://collector.example.org:4317\"\n\n[telemetry.otlp.tls]\n{key} = {}\n",
             toml::Value::String(path.display().to_string())
         ))?
         .err()
-        .ok_or("the material is refused")?
-        .to_string();
+        .ok_or("the material is refused")?;
+        let error = chain(&error);
         assert!(error.contains(named), "{error}");
         assert!(!error.contains(SECRET), "{error}");
     }
@@ -173,7 +189,7 @@ async fn a_span_reaches_a_mutual_tls_collector_only_with_the_identity_and_the_ro
     let identity = dir.path().join("collector-client.pem");
     std::fs::write(&identity, certificates.client_identity())?;
     let identity_only = format!(
-        "client_identity_file = {}\n",
+        "[telemetry.otlp.tls]\nclient_identity_file = {}\n",
         toml::Value::String(identity.display().to_string())
     );
     assert_eq!(

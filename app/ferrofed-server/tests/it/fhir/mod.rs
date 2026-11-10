@@ -117,7 +117,7 @@ fn fhir_tables_with(pdq: &str, keys: &str, tables: &str) -> String {
          [[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\ntemplate = {}\n\
          files = [{}, {}]\ncontext = \"{}\"\n\n\
          [pdqm]\nurl = \"{pdq}\"\ntransaction = \"iti-78\"\nmaster = \"{NAMESPACE}\"\n\
-         timeout_ms = 1000\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{tables}",
+         timeout = '1s'\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{tables}",
         path(&eps::opt()),
         path(&model),
         path(&context),
@@ -153,7 +153,7 @@ pub(crate) fn text_registered(
     Ok(format!(
         "profile = \"development\"\n\n[gateway]\npublic_url = \"{PUBLIC}\"\n\n\
          [registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\n\
-         node_selection = \"ask-all\"\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\
+         node_selection = \"ask-all\"\nper_node_timeout = '2s'\noverall_timeout = '3s'\n\
          {federation}\n{}{}{tables}",
         crossref(rows),
         fhir_tables(pdq)

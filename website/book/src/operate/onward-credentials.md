@@ -124,7 +124,7 @@ indicators = ["https://cdr-c.example.org/openehr"]   # sent as resource (RFC 870
 actor_assertion = true
 
 [credentials."cdr-c".onward.keys]
-max_onward_lifetime = 3600
+max_onward_lifetime = "1h"
 ```
 
 For a request on behalf of a caller, the gateway sends the token endpoint
@@ -198,7 +198,7 @@ indicators = ["cdr-f"]              # sent as resource or audience, by the profi
 # correlation_claim = "txn"         # a chained federation route
 
 [credentials."cdr-f".onward.keys]
-max_onward_lifetime = 3600          # required
+max_onward_lifetime = "1h"          # required
 # The Keycloak profile only: the issuer's service accounts, whose sub is a
 # user's; the profile refuses the table at load until you list them.
 app_only = [{ subjects = ["service-account-cdr-f-batch"] }]
@@ -708,7 +708,7 @@ own `kid`:
 | Key | Signs | Published |
 |---|---|---|
 | `key_file` | every token | always |
-| `previous_key_file` | never | for `rotation_overlap_s` from the start of the process |
+| `previous_key_file` | never | for `rotation_overlap` from the start of the process |
 | `next_key_file` | never | always |
 
 A node verifies a token by its `kid` (RFC 7515 §4.1.4) against the JWK Set
@@ -719,9 +719,9 @@ a token its `[signing]` keys sign at most 300 seconds; the
 `openEHR-federation-client` token lives 60.
 
 The procedure assumes that no node caches the JWK Set longer than
-`node_jwks_cache_s` (3600 s by default). Set it to the longest cache time of
+`node_jwks_cache` (3600 s by default). Set it to the longest cache time of
 your nodes and their authorization servers; `config check` refuses a
-`rotation_overlap_s` shorter than 300 seconds plus `node_jwks_cache_s`.
+`rotation_overlap` shorter than 300 seconds plus `node_jwks_cache`.
 `assertion_lifetime_s`, which earlier releases took here, is refused at
 load: no `[signing]` key signs a client assertion any more. The three steps hold for one gateway and for any
 number of replicas behind one address:
@@ -730,18 +730,18 @@ number of replicas behind one address:
    it as `next_key_file`, and restart the replicas one by one. Each
    restarted replica publishes the current key and the new one, and still
    signs with the current key. When the last replica runs the new
-   configuration, wait `node_jwks_cache_s` more, so every node's cached set
+   configuration, wait `node_jwks_cache` more, so every node's cached set
    came from a replica that publishes the new key.
 2. **Sign with it.** Set the new key as `key_file`, move the old one to
    `previous_key_file`, remove `next_key_file`, and restart the replicas one
    by one. A restarted replica signs with the new key. During the restart
    every replica publishes both keys: a restarted one as current and
    previous, one not yet restarted as current and next. A replica publishes
-   the previous key for `rotation_overlap_s` from its own start, so finish
-   this rolling restart within `rotation_overlap_s` minus the longest token
-   lifetime: 3600 s with the defaults. Raise `rotation_overlap_s` before
+   the previous key for `rotation_overlap` from its own start, so finish
+   this rolling restart within `rotation_overlap` minus the longest token
+   lifetime: 3600 s with the defaults. Raise `rotation_overlap` before
    this step for a slower rollout.
-3. **Retire the old key.** Once `rotation_overlap_s` has passed since the
+3. **Retire the old key.** Once `rotation_overlap` has passed since the
    last replica restarted, no replica publishes the old key and no token it
    signed is still valid. Remove `previous_key_file` at your next restart.
 

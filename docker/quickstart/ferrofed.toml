@@ -25,11 +25,11 @@ profile = "development"
 # compose.yaml's stop_grace_period outlasts all three, and
 # scripts/checks/release-compose.sh holds it to them.
 [server]
-drain_delay_ms = 0
-shutdown_timeout_ms = 30000
+drain_delay = "0ms"
+shutdown_timeout = "30s"
 
 [gateway]
-bindings_drain_timeout_ms = 5000
+bindings_drain_timeout = "5s"
 
 [registry]
 document = "/etc/ferrofed/registry.toml"
@@ -37,8 +37,8 @@ document = "/etc/ferrofed/registry.toml"
 [federation]
 # The federation's own identifier, which OPTIONS / names (§7a.2, N30).
 id = "quickstart"
-per_node_timeout_ms = 10000
-overall_timeout_ms = 25000
+per_node_timeout = "10s"
+overall_timeout = "25s"
 # No localizer is configured, so every member's cross-reference decides where
 # a patient query goes (the ask-all node selection of the specification's
 # reference flow, Variant B).

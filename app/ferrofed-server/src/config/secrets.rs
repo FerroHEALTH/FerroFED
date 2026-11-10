@@ -368,11 +368,11 @@ pub(crate) fn resolve_signing(
     let max = MAX_ASSERTION_LIFETIME.as_secs();
     // NOTE: no specification governs this: our own design; a node holding the
     // previous set still meets a token the previous key signed.
-    if signing.rotation_overlap_s < max.saturating_add(signing.node_jwks_cache_s) {
+    if signing.rotation_overlap.as_secs() < max.saturating_add(signing.node_jwks_cache.as_secs()) {
         return Err(Error::Credentials(CredentialsFault::RotationOverlap {
-            overlap_s: signing.rotation_overlap_s,
+            overlap_s: signing.rotation_overlap.as_secs(),
             lifetime_s: max,
-            cache_s: signing.node_jwks_cache_s,
+            cache_s: signing.node_jwks_cache.as_secs(),
         }));
     }
     let jwks_uri = jwks_uri(signing.jwks_uri.as_deref(), public)?;
@@ -398,7 +398,7 @@ pub(crate) fn resolve_signing(
             key: String::from("signing.next_key_file"),
         });
     }
-    let overlap = Duration::from_secs(signing.rotation_overlap_s);
+    let overlap = Duration::from_secs(signing.rotation_overlap.as_secs());
     let ring_refused = |key: &str| {
         let key = key.to_owned();
         move |source| {

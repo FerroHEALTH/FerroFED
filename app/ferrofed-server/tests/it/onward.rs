@@ -99,7 +99,7 @@ fn gateway(dir: &Path, a: &str, b: &str, tables: &str) -> Result<Router, Box<dyn
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = false\n\n{}\n{tables}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = false\n\n{}\n{tables}",
         crossref(&[("node-a", "2222aaaa-2222-4222-8222-222222222222")])
     );
     let settings = Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve()?;
@@ -532,7 +532,7 @@ fn the_configuration_refuses_a_grant_it_cannot_use() -> TestResult {
         format!("{refused} {refused:?}").contains("assertion_lifetime_s"),
         "{refused:?}"
     );
-    let error = resolve(&signing_with("rotation_overlap_s = 3899", &good_key))?;
+    let error = resolve(&signing_with("rotation_overlap = '3899s'", &good_key))?;
     assert!(
         matches!(
             error,

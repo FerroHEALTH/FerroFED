@@ -310,7 +310,7 @@ async fn gateway(
     let mut text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         best_effort = true\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\n\
+         best_effort = true\nper_node_timeout = '2s'\noverall_timeout = '3s'\n\n\
          [stored_queries]\nbackend = \"redb\"\npath = {definitions}\n\n\
          [signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
          [auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n\

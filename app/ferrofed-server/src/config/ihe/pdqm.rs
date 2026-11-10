@@ -12,7 +12,7 @@
 //! url = "https://pdq.example.org/fhir/"
 //! transaction = "iti-78"
 //! master = "urn:oid:2.999.1"
-//! timeout_ms = 1000
+//! timeout = '1s'
 //!
 //! [pdqm.namespaces]
 //! "2.999.7" = "urn:oid:2.999.7"
@@ -37,7 +37,10 @@
 //! applies a change, as it does to `[pixm]`. No specification governs the
 //! shape of the table: our own design.
 
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_config::units;
+use ferrohealth_server::tls_client::TlsClient;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -75,8 +78,12 @@ pub struct Pdqm {
     /// Each client namespace taken to the Supplier, mapped to the identifier
     /// system the identifier is sent in.
     pub namespaces: BTreeMap<String, String>,
-    /// How long one exchange with the Supplier may take, in milliseconds.
-    pub timeout_ms: u64,
+    /// How long one exchange with the Supplier may take.
+    pub timeout: units::Duration,
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub timeout_ms: Removed,
 }
 
 impl Default for Pdqm {
@@ -88,7 +95,8 @@ impl Default for Pdqm {
             transaction: Transaction::Search,
             master: String::new(),
             namespaces: BTreeMap::new(),
-            timeout_ms: 1_000,
+            timeout: units::Duration::from_secs(1),
+            timeout_ms: Removed::default(),
         }
     }
 }
@@ -160,16 +168,16 @@ pub(crate) fn resolve(
     if pdqm.namespaces.is_empty() {
         return Err(missing("namespaces"));
     }
-    if pdqm.timeout_ms == 0 {
+    if pdqm.timeout.as_millis() == 0 {
         return Err(Error::Zero {
-            key: format!("{PDQM_KEY}.timeout_ms"),
+            key: format!("{PDQM_KEY}.timeout"),
         });
     }
     let localization_ms = localization_budget_ms(config);
-    let overall_ms = config.federation.overall_timeout_ms;
-    if pdqm.timeout_ms.saturating_add(localization_ms) >= overall_ms {
+    let overall_ms = config.federation.overall_timeout.as_millis();
+    if pdqm.timeout.as_millis().saturating_add(localization_ms) >= overall_ms {
         return Err(Error::Binding(BindingFault::DemographicsBudget {
-            timeout_ms: pdqm.timeout_ms,
+            timeout_ms: pdqm.timeout.as_millis(),
             localization_ms,
             overall_ms,
         }));
@@ -207,6 +215,6 @@ pub(crate) fn resolve(
         transaction: pdqm.transaction,
         master: pdqm.master.clone(),
         namespaces: pdqm.namespaces.clone(),
-        timeout: Duration::from_millis(pdqm.timeout_ms),
+        timeout: Duration::from_millis(pdqm.timeout.as_millis()),
     }))
 }

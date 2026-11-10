@@ -40,7 +40,7 @@ fn replica(dir: &Path, store: &str) -> Result<(Arc<AppState>, Router), Box<dyn E
     let text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n{store}"
+         per_node_timeout = '2s'\noverall_timeout = '3s'\n{store}"
     );
     let settings =
         Config::from_sources(Some(&crate::support::signed(&text)), &BTreeMap::new())?.resolve()?;

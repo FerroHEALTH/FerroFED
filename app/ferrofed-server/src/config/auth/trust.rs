@@ -147,12 +147,11 @@ pub struct PatientIssuer {
     /// The identifier system whose values are that member's `ehr_id`s, as
     /// the cross-reference names it.
     pub ehr_id_system: String,
-    /// Whether the RFC 8693 `act` claim of this issuer's patient tokens
-    /// names a natural person who acts for the patient, a proxy or a legal
-    /// representative (Regulation (EU) 2025/327 Art 4(2)); `false` by
-    /// default, and then no caller of this issuer is read as a
-    /// representative.
-    pub act_is_representative: bool,
+    /// The retired `act_is_representative`, which the issuer's
+    /// `act_represents_patient` replaced in 0.0.19: set, it refuses the
+    /// configuration.
+    #[serde(skip_serializing)]
+    pub act_is_representative: ferrohealth_config::removed::Removed,
 }
 
 impl Trust {
@@ -326,6 +325,5 @@ fn resolve_patient(key: &str, written: &PatientIssuer) -> Result<PatientBinding,
     Ok(PatientBinding {
         endpoint,
         ehr_id_system,
-        act_is_representative: written.act_is_representative,
     })
 }
