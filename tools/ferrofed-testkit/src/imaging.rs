@@ -17,7 +17,6 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use eehrxf::document::Document;
 use eehrxf::document::imaging::{IMAGING_REPORT_FORM, IMAGING_SLOTS};
 use eehrxf::document::section::{EmptyReason, Section};
 use eehrxf::mapping::Mapping;
@@ -29,7 +28,7 @@ use fhirconnect::operations::run::Settings;
 use openehr_mapping_core::template::TemplateSource;
 
 use crate::medication::{Written, composed};
-use crate::sender::{BASE, device, displayed, named, organization};
+use crate::sender::{device, displayed, named, organization, sent};
 
 /// The workspace root, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -226,12 +225,11 @@ pub fn received_document(
     source: &TemplateSource,
     identifiers: &[(&str, &str)],
 ) -> Result<String, Box<dyn Error>> {
-    let mut document = Document::of(
+    let mut document = sent(
         &IMAGING_REPORT_FORM,
-        BASE,
-        String::from("urn:uuid:5b0c3f7e-0000-4000-8000-00000000e1c1"),
-        String::from(SENT_AT),
-        String::from("Imaging report"),
+        "urn:uuid:5b0c3f7e-0000-4000-8000-00000000e1c1",
+        SENT_AT,
+        "Imaging report",
     );
     let subject = named(&mut document, identifiers)?;
     let hospital = document.full_url("Organization", "hospital");
@@ -256,15 +254,7 @@ pub fn received_document(
             .with_patient(reference(&subject))
             .with_who(reference(&device)),
     )?;
-    let study = run
-        .bundle()
-        .entry
-        .iter()
-        .find_map(|entry| match entry.resource.as_ref() {
-            Some(Resource::ImagingStudy(study)) => study.id.clone(),
-            _ => None,
-        })
-        .map(|id| document.full_url("ImagingStudy", &id))
+    let study = ferrofed_eehrxf::imaging::study(&document, run.bundle())
         .ok_or("the run writes the study")?;
     document.with_mapped_report(run.bundle())?;
     for slot in IMAGING_SLOTS.iter().take(REQUIRED) {

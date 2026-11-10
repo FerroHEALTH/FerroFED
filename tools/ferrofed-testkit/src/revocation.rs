@@ -189,7 +189,7 @@ impl RevocationFront {
             client_thumbprint: thumbprint(client.der()),
             config,
         };
-        let front = MutualTls::over(origin, &material)?;
+        let front = MutualTls::over(origin, &material, Ipv4Addr::LOCALHOST)?;
         Ok(Self { front, status })
     }
 

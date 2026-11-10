@@ -100,6 +100,11 @@ tokio-rustls = { workspace = true, features = ["tls12", "aws_lc_rs"] }
 ferrofed-identity = { workspace = true, features = ["ihe"] }
 ferrofed-operator-api.workspace = true
 ferrofed-registry.workspace = true
+# The study the gateway's imaging writer lists, which the synthetic sender
+# lists the same way (#1716), and the gateway's own read-only stored
+# queries, which the console's stored-query view lists beside the
+# deployment's (#776).
+ferrofed-eehrxf.workspace = true
 # The RM identifiers the seed's EHR_STATUS names its subject with.
 openehr-base.workspace = true
 # The canonical JSON writer the seed's EHR_STATUS is written with.
@@ -130,9 +135,6 @@ wiremock.workspace = true
 # candidate node (#91), and runs the gateway's node profile checks against
 # its CDR products over a node client (#93, #573).
 ferrofed-server.workspace = true
-# The gateway's own read-only stored queries, which the console's stored-query
-# view lists beside the deployment's (#776).
-ferrofed-eehrxf.workspace = true
 # The ITS-REST query body the node profile's captured queries are read as
 # (#739).
 openehr-its = { workspace = true, features = ["rest"] }
