@@ -113,10 +113,11 @@ impl Writes for Served {
     /// Writes `composition`, an imaging composition in canonical JSON, as
     /// the `BundleReportEuImaging` document `report` names.
     ///
-    /// The document's `Composition` is authored by the gateway's `Device`
-    /// and the operator's `Organization`, its subject the `Patient` the
-    /// identifier names, and its report the `DiagnosticReportEuImaging` the
-    /// mapping writes. The imaging study section lists the study the
+    /// The document's `Composition` is authored by the gateway's `Device`,
+    /// whose owner is the operator's `Organization`, and the report's
+    /// performing organizations, its custodian the member's `Organization`,
+    /// its subject the `Patient` the identifier names, and its report the
+    /// `DiagnosticReportEuImaging` the mapping writes. The imaging study section lists the study the
     /// mapping writes, and each other section `CompositionEuImaging`
     /// requires is empty as `unavailable`, which `eu-imaging-composition-1`
     /// asks of an empty section. One `Provenance` names the member as the

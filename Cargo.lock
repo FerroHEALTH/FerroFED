@@ -1209,9 +1209,9 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.3.0"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7b93cb4a6c9d7b872a129070f28991e8d1a8006f8a2039550929d1582f74a43"
+checksum = "8b9bdad5f8a458c745f5fff2c944061699f3453f8e9ccf509bc7a83a58d1ce06"
 dependencies = [
  "async-trait",
  "ferrobridge-term",

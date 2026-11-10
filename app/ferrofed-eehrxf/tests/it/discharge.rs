@@ -227,17 +227,13 @@ fn the_patient_is_named_by_identifier_and_header_and_the_member_by_provenance() 
                 && member.ends_with(organization["id"].as_str().unwrap_or("-"))),
         "{member}"
     );
-    let [composition] = of_type(&bundle, "Composition")[..] else {
-        return Err("one Composition".into());
-    };
-    assert!(
-        composition["author"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .any(|author| author["reference"] == member),
-        "documents.html §3.3.1: the Composition references the member: {composition}"
+    let custodian = conforming::custodian(&bundle)?;
+    assert_eq!(
+        custodian["name"],
+        conforming::MEMBER,
+        "documents.html §3.3.1: the Composition references the member as its custodian: {custodian}"
     );
+    assert!(member.ends_with(custodian["id"].as_str().unwrap_or("-")));
     Ok(())
 }
 

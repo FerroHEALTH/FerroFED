@@ -40,7 +40,8 @@ or `504` naming it, and is named in an `outcome` entry under `partial`
 Reading that URL asks the member alone for the composition
 (`GET {base}/ehr/{ehr_id}/composition/{uid}`) and writes it as an HL7
 Europe Laboratory Report 2.0.0 `Bundle-eu-lab` document: the gateway's
-`Device`, the operator and the member author it, its
+`Device` and the operator author it, the member's organisation is its
+custodian, its
 `DiagnosticReport-eu-lab` and results are the mapping's, its results are
 listed in a `Laboratory studies` section, one `Provenance` names the
 member, and its `Patient` is the identifier the identity binding names

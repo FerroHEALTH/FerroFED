@@ -4,7 +4,8 @@
 //! The imaging report's stored query, under its reserved name, and the
 //! report the gateway writes from one member's imaging composition through
 //! the shipped imaging project, compiled against FerroBRIDGE's vendored ADL
-//! 2 imaging report template.
+//! 2 imaging report template, held to `BundleReportEuImaging` over the
+//! Imaging Report 1.0.0-ballot package closure by FerroBRIDGE's validator.
 #![expect(
     clippy::disallowed_types,
     reason = "a test reads the document it wrote as JSON"
@@ -16,14 +17,14 @@ use eehrxf::crosswalk::imaging::{IMAGING_COMPOSITION, IMAGING_DIAGNOSTIC_REPORT,
 use eehrxf::document::imaging::IMAGING_BUNDLE;
 use ferrofed_eehrxf::imaging::{self, ARCHETYPE, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
-use ferrofed_eehrxf::report::{Report, Writes as _};
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, VERSION};
 use ferrofed_eehrxf::section_query::{self, ISSUER, PATIENT};
-use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_identity::role::header::PatientHeader;
-use ferrofed_testkit::imaging as fixture;
+use ferrofed_testkit::{fhir_packages, imaging as fixture};
 use openehr_query::parser;
 use serde_json::Value;
+
+use crate::conforming;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -69,26 +70,13 @@ fn written() -> Result<Value, Box<dyn Error>> {
     };
     let served = Served::compile(template)?;
     let composition = fixture::composition(&template.source()?, UID)?;
-    let organisation = |name: &str| Organisation {
-        id: name.to_lowercase().replace(' ', "-"),
-        name: Some(name.to_owned()),
-        identifiers: Vec::new(),
-    };
-    let (operator, member) = (
-        organisation("Synthetic operator"),
-        organisation("Synthetic member"),
-    );
-    let bundle = served.document(
-        &composition,
-        Report {
-            base: "https://gateway.example.org/fhir",
-            identifier: "urn:uuid:5b0c3f7e-0000-4000-8000-00000000e101",
-            timestamp: "2026-10-21T08:00:00Z",
-            patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
-            header: &PatientHeader::default(),
-            operator: &operator,
-            member: &member,
-        },
+    let bundle = conforming::written(
+        &served,
+        (
+            &composition,
+            "urn:uuid:5b0c3f7e-0000-4000-8000-00000000e101",
+        ),
+        &PatientHeader::default(),
     )?;
     Ok(serde_json::to_value(&bundle)?)
 }
@@ -150,5 +138,29 @@ fn the_member_is_named_by_provenance_and_the_patient_by_identifier() -> TestResu
                     .is_some_and(|who| who.contains("member"))
         });
     assert!(named, "a Provenance names the member");
+    Ok(())
+}
+
+#[test]
+fn the_composition_names_the_member_its_custodian() -> TestResult {
+    let bundle = written()?;
+    let custodian = conforming::custodian(&bundle)?;
+    assert_eq!(custodian["resourceType"], "Organization", "{custodian}");
+    assert_eq!(custodian["name"], conforming::MEMBER, "{custodian}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_written_imaging_report_conforms_to_bundle_report_eu_imaging() -> TestResult {
+    let breaks = conforming::breaks(
+        &written()?.to_string(),
+        IMAGING_BUNDLE,
+        (
+            fhir_packages::imaging(),
+            fhir_packages::imaging_dependencies()?,
+        ),
+    )
+    .await?;
+    assert!(breaks.is_empty(), "{breaks:#?}");
     Ok(())
 }
