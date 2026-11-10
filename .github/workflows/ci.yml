@@ -342,6 +342,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash scripts/checks/module-cycles.sh
 
+      # ---- quickstart --------------------------------------------------
+      # The README's quick start is the anchored steps of the tour, which the
+      # quickstart job runs; the self-test holds each README copy to its anchor.
+      - name: quickstart
+        if: ${{ !cancelled() }}
+        run: bash scripts/quickstart/tour.sh --self-test
+
       # ---- versions ----------------------------------------------------
       # The version-drift guard. It compares every present config file against
       # docs/VERSIONS.md and skips loudly for the files that have not landed yet,
@@ -757,6 +764,7 @@ jobs:
     outputs:
       cargo: ${{ steps.check.outputs.cargo }}
       perf: ${{ steps.perf.outputs.perf }}
+      quickstart: ${{ steps.quickstart.outputs.quickstart }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -790,6 +798,22 @@ jobs:
             fi
           fi
           echo "perf=$perf" >> "$GITHUB_OUTPUT"
+      # The quickstart tour runs on a push to main, on a dispatch, and on a
+      # pull request or merge group that changes the README or what the
+      # quickstart starts.
+      - id: quickstart
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          quickstart=true
+          if [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "merge_group" ]; then
+            changed="$(git diff --name-only HEAD^1 HEAD)"
+            if ! grep -qE '^(README\.md$|compose\.yaml$|scripts/quickstart/|docker/quickstart/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
+              quickstart=false
+            fi
+          fi
+          echo "quickstart=$quickstart" >> "$GITHUB_OUTPUT"
 
   fmt:
     name: rustfmt
@@ -1200,6 +1224,27 @@ jobs:
       - run: bash scripts/checks/upgrade-notes.sh target/x86_64-unknown-linux-musl/debug/ferrofed
       - run: bash scripts/checks/production-guide.sh target/x86_64-unknown-linux-musl/debug/ferrofed
 
+  # The README's quick start, run as written: the compose quickstart over the
+  # published images, seeded, and one federated query that must answer
+  # complete with a composition from each of the four nodes.
+  quickstart:
+    name: quickstart
+    needs: detect
+    if: needs.detect.outputs.quickstart == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The README's quick start runs as written
+        run: bash scripts/quickstart/tour.sh
+      - name: Stop the quickstart
+        if: always()
+        run: docker compose down --volumes
+
   doc:
     name: rustdoc
     needs: detect
@@ -1525,6 +1570,7 @@ jobs:
       - conformance-report
       - fhir-validator
       - release-compose
+      - quickstart
       - doc
       - cargo-deny
       - msrv
