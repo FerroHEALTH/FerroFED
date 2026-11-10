@@ -1251,6 +1251,9 @@ jobs:
             exit 0
           fi
           bash scripts/quickstart/tour.sh
+      - name: The gateway's log, when the tour failed
+        if: failure()
+        run: docker compose logs ferrofed
       - name: Stop the quickstart
         if: always()
         run: docker compose down --volumes
