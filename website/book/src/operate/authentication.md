@@ -171,7 +171,7 @@ demographic_clients = []
 | `auth.issuer[].act_represents_patient` | `false` | On a `patients` issuer, whether the RFC 8693 `act` claim of its tokens names a proxy or a legal representative who acts for the patient (Regulation (EU) 2025/327 Art 4(2)), so a document such a token inserts names that representative; a patient token that carries `act` on an issuer without it is refused as an invalid token ([Patient grants](patient-grants.md)). |
 | `trust.issuer[].requester` | none | Refused: who asks for the data is read from the `nl.professional_number`, `nl.role`, `nl.ura` and `nl.organisation_type` fields of the issuer's `[[auth.federation]]` table, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. |
 | `trust.issuer[].client_tokens_act_for_professional` | none | Refused: a token `ferrohealth-smart` classifies as a system's reaches no patient data ([Professionals and assurance](#professionals-and-assurance)). |
-| `auth.attributes[].issuer` | none | A `persons` issuer whose tokens state their professional: its name, identifier and roles, the organisation and the purposes of use, read by `ferrohealth-smart` ([What a token states about its professional](#what-a-token-states-about-its-professional)). Without a table, a token of the issuer states none of them. |
+| `auth.attributes[].issuer` | none | A `persons` issuer whose tokens state their professional: its name, identifier and roles, the organisation and the purposes of use, read by `ferrohealth-smart` ([What a token states about its professional](#what-a-token-states-about-its-professional)); or a `patients` or `machines` issuer whose tokens state their purposes of use alone. Without a table, a token of the issuer states none of them. |
 | `auth.attributes[].mapping` | none | `iua`: read the IHE IUA extension, `extensions.ihe_iua` (ITI TF-2 3.71.4.2.2.1.1). |
 | `auth.attributes[].authorization_details_purposes` | `false` | Whether the `system\|code` `purpose_of_use` of each RFC 9396 `authorization_details` entry is read as a purpose of use too (Annex B §B.4a.3). |
 | `auth.attributes[].fields` | `{}` | Sources over the mapping's, one list per field, each `{ claim = "<dotted path>" }` or `{ constant = "<value>" }`. `"professional.issuing_authority_name"` names the agency that issued the professional's identifier (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which IHE IUA defines no claim for. |
@@ -391,7 +391,11 @@ codings) is refused as an invalid token, naming the field. An issuer with no
 table states no professional, organisation or purpose, so with
 `trust.purpose_of_use.required` its callers are refused every route that
 reaches a node. The agency that issued the professional's identifier is the
-table's `"professional.issuing_authority_name"` source:
+table's `"professional.issuing_authority_name"` source. A machine of the
+issuer (a client-credentials token) states its purposes of use alone, and a
+`patients` or `machines` issuer may have a table that names no field but
+`purpose_of_use`, so a patient and their representative declare theirs
+([Patient grants](patient-grants.md)):
 
 ```toml
 [[auth.attributes]]

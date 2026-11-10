@@ -278,13 +278,15 @@ pub(crate) fn scraping() -> String {
 pub(crate) const PATIENT_ISSUER: &str = "https://patients.issuer.example.test";
 
 /// Returns the suite's `patients` issuer, its tokens verified against
-/// [`jwks_file`] and its `patient/` grants bound as `binding` says.
+/// [`jwks_file`], the purposes of use its tokens declare read by its
+/// [`iua`] table, and its `patient/` grants bound as `binding` says.
 #[cfg(feature = "binding-ihe")]
 pub(crate) fn patients_issuer(
     binding: ferrofed_server::config::auth::PatientBinding,
 ) -> IssuerSettings {
     let mut settings = KeySetSettings::new(PATIENT_ISSUER, AUDIENCE, IssuerKind::Patients);
     settings.jwks_file = Some(jwks_file().to_owned());
+    settings.attributes = Some(iua(PATIENT_ISSUER));
     let mut issuer = IssuerSettings::new(PATIENT_ISSUER, Verification::KeySet(Box::new(settings)));
     issuer.patient = Some(binding);
     issuer
