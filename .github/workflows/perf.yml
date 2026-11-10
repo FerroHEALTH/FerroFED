@@ -2,26 +2,32 @@
 # SPDX-License-Identifier: BUSL-1.1
 
 # The performance gate (#1687, #1731), called by ci.yml on a change that
-# reaches the gateway and by release.yml on the release commit. Each attempt
-# job builds the release gateway of the commit and of its base, installs
-# ferrohealth-perf (FerroHEALTH/FerroSYS#249) at its docs/VERSIONS.md pin and
-# runs scripts/perf/gate.sh once through .github/actions/perf-attempt: the
-# tool's A/B mode, the head's idle phase with every background worker
-# running held to absolute limits, then pairs of load phases against the
-# base and the head on the same runner, the head judged over the base, and
-# the planted store poller the idle phase must fail. The base is the merge
-# base of the commit with the `base` input, or with none the previous
-# release; on the release lane, a previous release that does not know a
-# key of perf/ferrofed.toml gives way to the release commit's first parent
+# reaches the gateway and by release.yml on the release commit. The build
+# job builds the release gateway of the commit and of its base once, with
+# the token endpoint, installs ferrohealth-perf (FerroHEALTH/FerroSYS#249)
+# at its docs/VERSIONS.md pin, and hands all of them to the attempt jobs as
+# one artifact (#1807), so a slow build never eats an attempt's measuring
+# window and a retry builds nothing. Each attempt job runs
+# scripts/perf/gate.sh once through .github/actions/perf-attempt: the tool's
+# A/B mode, the head's idle phase with every background worker running held
+# to absolute limits, then pairs of load phases against the base and the
+# head on the same runner, the head judged over the base, and the planted
+# store poller the idle phase must fail. The base is the merge base of the
+# commit with the `base` input, or with none the previous release; on the
+# release lane, a previous release that does not know a key of
+# perf/ferrofed.toml gives way to the release commit's first parent
 # (#1762). An attempt that ends with exit 2 could not be judged and says
 # nothing about the code, so it is retried on a fresh runner on any CPU
 # model. Some runners stall the gate for a whole job
 # (FerroHEALTH/FerroPIX#511), so an attempt that ends with exit 1 on a CPU
-# model STALL_PRONE lists is retried too. At most two retries run. The
-# verdict job passes the gate when the last attempt that ran passed; a
-# breach on any other model fails at once, with no retry. In a merge group
-# ci.yml passes `skip` and only the verdict job runs (#1788). No
-# specification governs this: our own design.
+# model STALL_PRONE lists is retried too, and so is an attempt job cancelled
+# while the run itself was not (a runner that shut down or a job that
+# reached its time limit ends with no exit code). At most two retries run.
+# scripts/perf/verdict.sh passes the gate when the last attempt that ran
+# passed; a breach on any other model fails at once, with no retry, and a
+# run cancelled by its concurrency group or a person retries nothing. In a
+# merge group ci.yml passes `skip` and only the verdict job runs (#1788).
+# No specification governs this: our own design.
 name: Perf
 
 on:
@@ -68,16 +74,13 @@ env:
     AMD EPYC 9V74 80-Core Processor
 
 jobs:
-  perf:
-    name: perf (attempt 1)
+  build:
+    name: perf build
     if: ${{ !inputs.skip }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
-    outputs:
-      code: ${{ steps.attempt.outputs.code }}
-      retryable: ${{ steps.attempt.outputs.retryable }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,21 +91,55 @@ jobs:
         with:
           cache: ${{ inputs.cache && 'true' || 'false' }}
           cache-save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install ferrohealth-perf
+        env:
+          VERSION: ${{ env.FERROHEALTH_PERF_VERSION }}
+        run: cargo install ferrohealth-perf --version "=${VERSION}" --locked
+      - name: Build the base and the head
+        env:
+          BASE: ${{ inputs.base }}
+          FALLBACK: ${{ inputs.fallback }}
+        run: |
+          set -euo pipefail
+          if [ "$FALLBACK" = true ]; then
+            bash scripts/perf/gate.sh build --fallback
+          else
+            bash scripts/perf/gate.sh build "$BASE"
+          fi
+          bash scripts/perf/gate.sh pack target/perf-arms.tar
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-arms
+          path: target/perf-arms.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  perf:
+    name: perf (attempt 1)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.attempt.outputs.code }}
+      retryable: ${{ steps.attempt.outputs.retryable }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: attempt
         uses: ./.github/actions/perf-attempt
         with:
           attempt: "1"
-          base: ${{ inputs.base }}
-          fallback: ${{ inputs.fallback }}
-          version: ${{ env.FERROHEALTH_PERF_VERSION }}
           stall-prone: ${{ env.STALL_PRONE }}
 
   perf-retry:
     name: perf (attempt 2)
-    needs: perf
-    if: needs.perf.outputs.retryable == 'true'
+    needs: [build, perf]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.perf.outputs.retryable == 'true' || needs.perf.result == 'cancelled') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 45
     permissions:
       contents: read
     outputs:
@@ -112,27 +149,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The base is built from history, so every commit is fetched.
-          fetch-depth: 0
-      - uses: ./.github/actions/setup-rust
-        with:
-          cache: ${{ inputs.cache && 'true' || 'false' }}
-          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
       - id: attempt
         uses: ./.github/actions/perf-attempt
         with:
           attempt: "2"
-          base: ${{ inputs.base }}
-          fallback: ${{ inputs.fallback }}
-          version: ${{ env.FERROHEALTH_PERF_VERSION }}
           stall-prone: ${{ env.STALL_PRONE }}
 
   perf-retry-2:
     name: perf (attempt 3)
-    needs: perf-retry
-    if: needs.perf-retry.outputs.retryable == 'true'
+    needs: [build, perf-retry]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.perf-retry.outputs.retryable == 'true' || needs.perf-retry.result == 'cancelled') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 45
     permissions:
       contents: read
     outputs:
@@ -142,30 +170,22 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The base is built from history, so every commit is fetched.
-          fetch-depth: 0
-      - uses: ./.github/actions/setup-rust
-        with:
-          cache: ${{ inputs.cache && 'true' || 'false' }}
-          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
       - id: attempt
         uses: ./.github/actions/perf-attempt
         with:
           attempt: "3"
-          base: ${{ inputs.base }}
-          fallback: ${{ inputs.fallback }}
-          version: ${{ env.FERROHEALTH_PERF_VERSION }}
           stall-prone: ${{ env.STALL_PRONE }}
 
   # The gate passes when the last attempt that ran passed; an attempt job
   # that did not finish fails it.
   verdict:
     name: perf verdict
-    needs: [perf, perf-retry, perf-retry-2]
+    needs: [build, perf, perf-retry, perf-retry-2]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    permissions: {}
+    permissions:
+      contents: read
     steps:
       # The merge queue proves the merged tree; the gate ran on the pull
       # request and runs again on the push to main. No specification governs
@@ -180,23 +200,31 @@ jobs:
             echo "A merge-group run proves the merged tree and builds nothing for the performance gate. The gate ran on the pull request and runs on the push to main with the same thresholds."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "performance gate skipped in the merge group"
-      - name: The last attempt passed
-        if: ${{ !inputs.skip }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ always() && !inputs.skip }}
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/perf
+      - name: The run was cancelled
+        if: cancelled()
+        run: echo "RUN_CANCELLED=true" >> "$GITHUB_ENV"
+      - name: The build finished
+        if: ${{ always() && !inputs.skip }}
         env:
-          RESULTS: ${{ needs.perf.result }} ${{ needs.perf-retry.result }} ${{ needs.perf-retry-2.result }}
-          CODES: ${{ needs.perf.outputs.code }} ${{ needs.perf-retry.outputs.code }} ${{ needs.perf-retry-2.outputs.code }}
+          BUILD: ${{ needs.build.result }}
         run: |
           set -euo pipefail
-          echo "attempt results: ${RESULTS}; exit codes: ${CODES}"
-          case " ${RESULTS} " in
-            *" failure "* | *" cancelled "*)
-              echo "::error title=Performance gate::an attempt did not finish"
-              exit 1
-              ;;
-          esac
-          last="$(awk '{ print $NF }' <<< "${CODES}")"
-          if [ "$last" != "0" ]; then
-            echo "::error title=Performance gate::the last attempt ended with exit ${last}"
+          if [ "$BUILD" != success ]; then
+            echo "::error title=Performance gate::the arms were not built (${BUILD})"
             exit 1
           fi
-          echo "the last attempt passed"
+      - name: The last attempt passed
+        if: ${{ always() && !inputs.skip }}
+        env:
+          RESULT_1: ${{ needs.perf.result }}
+          RESULT_2: ${{ needs.perf-retry.result }}
+          RESULT_3: ${{ needs.perf-retry-2.result }}
+          CODE_1: ${{ needs.perf.outputs.code }}
+          CODE_2: ${{ needs.perf-retry.outputs.code }}
+          CODE_3: ${{ needs.perf-retry-2.outputs.code }}
+        run: bash scripts/perf/verdict.sh

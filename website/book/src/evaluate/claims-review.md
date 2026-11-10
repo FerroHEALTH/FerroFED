@@ -69,7 +69,7 @@ as a broken command, is fixed in the same change.
 | v0.0.14 | 2026-10-28 | see below | 64 to 69, below | the v0.0.14 version bump |
 | v0.0.15 | 2026-10-30 | see below | 70 to 74, below | the v0.0.15 version bump |
 | v0.0.16 | 2026-11-05 | see below | 75 to 81, below | the v0.0.16 version bump |
-| v0.0.17 | 2026-11-09 | see below | 82 to 91, below | the v0.0.17 version bump |
+| v0.0.18 | 2026-11-10 | see below | 82 to 91, below | the version bump of v0.0.17, tagged and never released, re-cut as v0.0.18 |
 
 ### Findings of 2026-10-06
 

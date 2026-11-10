@@ -98,7 +98,10 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
-### To v0.0.17, from v0.0.16
+### To v0.0.18, from v0.0.16
+
+v0.0.17 was tagged and never released; these are its notes, which
+v0.0.18 ships.
 
 - Have a national contact point's authorization server write the format of
   the HP Identity Assertion's `NameID` as `ehdsi.assertion.name_id_format`,

@@ -137,19 +137,23 @@ fn a_configured_data_user_is_refused() -> TestResult {
 }
 
 #[test]
-fn a_requester_table_on_a_trusted_issuer_is_an_unknown_key() -> TestResult {
+fn a_requester_table_on_a_trusted_issuer_is_refused_naming_its_replacement() -> TestResult {
     let (_dir, text) = edited(|table| {
         format!(
             "{table}\n[auth]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n\n[trust.issuer.requester]\nprofessional = \"{PROFESSIONAL_CLAIM}\"\nrole = \"{ROLE_CLAIM}\"\norganisation = \"{ORGANISATION_CLAIM}\"\norganisation_type = \"{ORGANISATION_TYPE_CLAIM}\"\n"
         )
     })?;
     match resolved(&text) {
-        Err(refused)
-            if crate::support::refused_key(&refused) == Some("trust.issuer[0].requester") =>
-        {
+        Err(refused @ error::Error::Auth { .. }) => {
+            let shown = refused.to_string();
+            assert!(
+                shown.contains("trust.issuer[0].requester")
+                    && shown.contains("[[auth.federation]]"),
+                "{shown}"
+            );
             Ok(())
         }
-        other => Err(format!("an unknown key since 0.0.18 (#1787): {other:?}").into()),
+        other => Err(format!("the removed table is refused by name: {other:?}").into()),
     }
 }
 
@@ -292,11 +296,11 @@ fn an_oauth_grant_resolves_and_an_oauth2_grant_is_refused() -> TestResult {
         )
     })?;
     match resolved(&text) {
-        Err(error)
-            if crate::support::refused_key(&error) == Some("nl_gf.mitz.credentials.oauth2") =>
+        Err(error::Error::Replaced { old, new })
+            if old == "nl_gf.mitz.credentials.oauth2" && new == "nl_gf.mitz.credentials.oauth" =>
         {
             Ok(())
         }
-        other => Err(format!("oauth2 is an unknown key since 0.0.18: {other:?}").into()),
+        other => Err(format!("Mitz takes the oauth grant alone: {other:?}").into()),
     }
 }
