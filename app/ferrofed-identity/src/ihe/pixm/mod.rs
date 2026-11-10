@@ -29,45 +29,46 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ferrohealth_secret::secret_url::SecretUrl;
+use ferrohealth_smart::client::outbound::OutboundClient;
 use ihe_atna::balp::AuditRecorder;
-use ihe_iti::authorizer::Authorizable;
 use ihe_iti::pixm::error::{InvalidInput, PixmError};
 use ihe_iti::pixm::identifier::{CrossReference, SourceIdentifier, TargetSystem};
 use ihe_iti::pixm::{Invocation, PixmClient};
-use openehr_its::rest::client::InvalidCredentials;
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 use tokio::task::JoinSet;
-use url::Url;
 
-use crate::fhir::{Authentication, ClientError};
 use crate::ihe::audit::balp::audited_as;
-use crate::ihe::iua;
+use crate::outbound::Shown;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
 use crate::role::resolver::{Identification, Resolution, Resolver, ResolverError};
-use ferrohealth_server::tls_client::TlsClient;
 
 mod identify;
 
 /// One PIX Manager as the configuration names it.
-#[derive(Debug)]
 pub struct ManagerConfig {
-    /// The Manager's FHIR base URL, which `Debug` shows without its userinfo.
-    pub base: SecretUrl,
-    /// How the gateway authenticates to it.
-    pub auth: Authentication,
-    /// The TLS material it is reached with: a client identity for mutual TLS
-    /// and trust roots beside the platform's.
-    pub tls: Arc<TlsClient>,
+    /// The outbound client its endpoint table builds: the Manager's FHIR
+    /// base URL, the TLS material, the timeouts, the retry table and the
+    /// credential every request carries.
+    pub client: OutboundClient,
     /// The members this Manager resolves, each with its `ehr_id` domain: the
     /// assigning authority whose identifiers are that member's `ehr_id`s.
     pub members: BTreeMap<NodeId, String>,
     /// How the gateway asks it: the `GET` ITI-83 prescribes, or a `POST` that
     /// keeps the patient identifier out of the request URL.
     pub invocation: Invocation,
+}
+
+impl fmt::Debug for ManagerConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ManagerConfig")
+            .field("client", &Shown(&self.client))
+            .field("members", &self.members)
+            .field("invocation", &self.invocation)
+            .finish()
+    }
 }
 
 /// A PIXm resolver that cannot be built.
@@ -98,40 +99,12 @@ pub enum PixmConfigError {
         #[source]
         source: InvalidInput,
     },
-    /// A Manager's base URL does not parse as a URL.
-    #[error("a PIX Manager base URL is not a URL")]
-    BaseUrl(#[source] url::ParseError),
     /// A Manager's base URL is not an `http(s)` URL without a query.
     #[error("a PIX Manager base URL is not an http(s) URL without a query or a fragment")]
     Base(#[source] InvalidInput),
     /// A namespace mapping does not name an absolute URI.
     #[error("the PIX domain mapped from namespace {0} is not an absolute URI")]
     Namespace(IdentifierNamespace),
-    /// A credential does not form an `Authorization` value (RFC 7617 §2,
-    /// RFC 6750 §2.1).
-    #[error("the credentials of a PIX Manager cannot be sent in the Authorization header")]
-    Credentials(#[source] InvalidCredentials),
-    /// The HTTP client could not be built.
-    #[error("the HTTP client for a PIX Manager could not be built")]
-    Client(#[source] reqwest::Error),
-    /// The HTTP client refused the TLS material.
-    #[error(transparent)]
-    Tls(ferrohealth_server::tls_client::TlsClientError),
-    /// The credential is a grant the client was built to send in a default
-    /// header, where its token cannot ride.
-    #[error("the grant of a PIX Manager cannot ride in a default header")]
-    Grant,
-}
-
-impl From<ClientError> for PixmConfigError {
-    fn from(error: ClientError) -> Self {
-        match error {
-            ClientError::Credentials(source) => Self::Credentials(source),
-            ClientError::Build(source) => Self::Client(source),
-            ClientError::Tls(source) => Self::Tls(source),
-            ClientError::Grant => Self::Grant,
-        }
-    }
 }
 
 /// Why the PIXm resolver could not answer for a member.
@@ -203,9 +176,8 @@ impl PixmResolver {
     ///
     /// # Errors
     /// A [`PixmConfigError`] for an unknown, doubled or uncovered member, a
-    /// base URL that does not parse, a domain or base URL the PIXm client
-    /// refuses, a namespace mapping that is not a URI, credentials no header
-    /// can carry, or an HTTP client that cannot be built.
+    /// domain or base URL the PIXm client refuses, or a namespace mapping
+    /// that is not a URI.
     pub fn from_config(
         managers: Vec<ManagerConfig>,
         namespaces: BTreeMap<IdentifierNamespace, String>,
@@ -233,14 +205,9 @@ impl PixmResolver {
                 seen.push(member.clone());
                 members.push((member, target));
             }
-            let (http, authorizer) = iua::client(&manager.auth, &manager.tls)?;
-            let base = Url::parse(manager.base.expose()).map_err(PixmConfigError::BaseUrl)?;
-            let mut client = PixmClient::new(base, http)
+            let client = PixmClient::new(manager.client)
                 .map_err(PixmConfigError::Base)?
                 .invoked_by(manager.invocation);
-            if let Some(authorizer) = authorizer {
-                client = client.with_authorizer(authorizer);
-            }
             built.push(Arc::new(Manager { client, members }));
         }
         if let Some(uncovered) = registry

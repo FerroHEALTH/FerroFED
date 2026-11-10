@@ -28,7 +28,6 @@ use ferrofed_server::federation::Federation;
 use ferrofed_server::localization::LocalizationPolicy;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::xcpd::{Answer, Community, RespondingGateway};
-use ferrohealth_secret::secret_url::SecretUrl;
 use http::StatusCode;
 use ihe_iti::xcpd::audit::{AuditError, AuditEvent, AuditRecorder};
 use openehr_federation::outcome::ErrorDetail;
@@ -89,10 +88,11 @@ async fn a_discovery_still_recording_its_audit_at_the_budget_fails_closed_under_
             sender_device: "2.999.40.1".to_owned(),
             home_community: Some("2.999.40".to_owned()),
             gateways: vec![GatewayConfig {
-                endpoint: SecretUrl::new(holding.endpoint().as_str()),
+                client: ferrofed_testkit::outbound::client(&holding.endpoint())?,
                 device: "2.999.50.1".to_owned(),
                 community: None,
                 myhealth_eu: false,
+                revocation: None,
             }],
             communities: BTreeMap::from([
                 (COMMUNITY_A.to_owned(), "node-a".parse()?),
@@ -100,8 +100,6 @@ async fn a_discovery_still_recording_its_audit_at_the_budget_fails_closed_under_
             ]),
             namespaces: BTreeMap::new(),
             transport: Transport::UnencryptedForDevelopment,
-            tls: ferrofed_testkit::tls::platform(),
-            revocation: None,
         },
         None,
         federation.snapshot(),

@@ -37,16 +37,18 @@ home_community = "2.999.40"            # optional: the gateway's own community
 audit = "log"                          # required: "log", or "off" in development
 assertion_file = "/run/secrets/xua.xml"            # optional
 
-[xcpd.tls]
-client_identity_file = "/run/secrets/xcpd-client.pem"
-trust_roots_file = "/etc/ferrofed/xcpd-roots.pem"  # optional
-# min_version = "1.2"                  # only for a MyHealth@EU route, below
-
 [[xcpd.gateway]]
-url = "https://xcpd.region.example.org/RespondingGateway"
 device = "2.999.50.1"                  # the receiver device OID
 # community = "2.999.50"               # optional: ask for this community only
 # myhealth_eu = true                   # optional: a MyHealth@EU route, an eHDSI link
+
+[xcpd.gateway.endpoint]
+url = "https://xcpd.region.example.org/RespondingGateway"
+
+[xcpd.gateway.endpoint.tls]
+client_identity_file = "/run/secrets/xcpd-client.pem"
+trust_roots_file = "/etc/ferrofed/xcpd-roots.pem"  # optional
+# min_version = "1.2"                  # only for a MyHealth@EU route, below
 
 [xcpd.communities]                     # every member needs one
 "2.999.50" = "node-a"
@@ -72,9 +74,15 @@ What a deployment must provide:
   community, or boot is refused, since no discovery could ever name it. A
   community a gateway answers that the map does not name belongs to no
   member and adds no candidate.
+- **One endpoint table per gateway.** Each `[[xcpd.gateway]]` names its
+  own [endpoint table](configuration.md#the-endpoint-table-of-a-service),
+  since the gateway posts to a responding gateway only on the origin its
+  table's `url` names. It takes no `credentials`: the XUA assertion is the
+  credential, and a credentials table there is refused.
 - **TLS.** Every XCPD actor is an ATNA Secure Node or Secure Application
-  (ITI TF-1 Table 27.1.3-1), so a gateway URL must be `https`. In
-  `[xcpd.tls]`, `client_identity` (or `client_identity_file`) holds the PEM
+  (ITI TF-1 Table 27.1.3-1), so a gateway URL must be `https`. In each
+  gateway's `[xcpd.gateway.endpoint.tls]`, `client_identity` (or
+  `client_identity_file`) holds the PEM
   client certificate chain and private key for mutual TLS,
   `trust_roots_file` adds the network's roots to the platform's, and
   `min_version` is the oldest TLS version the gateway speaks, `"1.3"`
@@ -129,15 +137,15 @@ refuses a configuration that breaks one, naming the gateway as
   identity assertion lives at most 4 hours and is `sender-vouches` (SAML
   Profile 10.0.0 §2.1). A marked gateway beside either key is refused.
 - **Mutual TLS under the eHDSI PKI.** The URL is `https` in every profile,
-  development included, and `[xcpd.tls]` must name `client_identity_file`
-  and `trust_roots_file` (Section II Security Services 10.0.0 §5.9.1 and
+  development included, and its `[xcpd.gateway.endpoint.tls]` must name
+  `client_identity_file` and `trust_roots_file` (Section II Security Services 10.0.0 §5.9.1 and
   §5.9.2). The link trusts those roots alone, never the platform's.
 - **TLS 1.2 for a peer that speaks no TLS 1.3.** eHDSI Section II Security
   Services 10.0.0 §5.9.1 makes TLS 1.2 the minimum between NCPeH, with TLS
   1.3 recommended and TLS 1.0 and 1.1 prohibited, and eHDSI Cryptographic
   Algorithms 9.0.0 says "at least TLS 1.2 SHALL be used. TLS 1.3 is
   RECOMMENDED." The gateway speaks TLS 1.3 alone by default, so set
-  `min_version = "1.2"` in `[xcpd.tls]` when a responding NCPeH speaks only
+  `min_version = "1.2"` in its `[xcpd.gateway.endpoint.tls]` when a responding NCPeH speaks only
   TLS 1.2. The revocation check speaks the same versions.
 - **Revocation checked before any data is sent.** Before each discovery,
   the gateway opens a TLS connection to the responding gateway and sends
@@ -259,7 +267,7 @@ the Dutch Generic Functions, the NVI, in place of XCPD (Annex B §B.1,
 GF-Localization of the Generic Functions IG `fhir.nl.gf` 0.3.0). Under
 `federation.node_selection = "localized"`, each undirected patient query
 first asks the NVI's Localization Service which care providers hold data
-for the patient: `GET [url]/DocumentReference?patient.identifier=<pseudonym>
+for the patient: `GET [endpoint.url]/DocumentReference?patient.identifier=<pseudonym>
 &type=http://loinc.org|55188-7`. The service answers with one localization
 record per care provider, named by its URA, and the members that hold those
 providers' data are the candidates. Every other member is `not-localized`
@@ -276,10 +284,12 @@ on_failure = "closed"   # the default (§14.1)
 timeout = "5s"
 
 [nl_gf.nvi]
+namespaces = ["pseudo-bsn"]   # client namespaces that stand for the pseudonym
+
+[nl_gf.nvi.endpoint]
 url = "https://nvi.example.org/fhir"
 credentials = { user = "ferrofed", password_file = "/run/secrets/nvi-password" }  # optional, or the Nuts grant
 tls = { client_identity_file = "/run/secrets/nvi-client.pem", trust_roots_file = "/etc/ferrofed/nvi-roots.pem" }  # optional, mutual TLS
-namespaces = ["pseudo-bsn"]   # client namespaces that stand for the pseudonym
 
 [nl_gf.nvi.custodians]        # optional with a directory that publishes URAs
 "ura-test-0001" = "node-a"
@@ -287,6 +297,8 @@ namespaces = ["pseudo-bsn"]   # client namespaces that stand for the pseudonym
 "ura-test-0003" = "node-b"    # one member may hold several providers' data
 
 [[pixm.manager]]              # resolution, Step 1c of Annex B §B.7
+
+[pixm.manager.endpoint]
 url = "https://pix.example.org/fhir/"
 
 [pixm.manager.members]
@@ -322,11 +334,14 @@ What a deployment must provide:
   gateway never merges the two. An organisation that publishes two different
   URAs is refused as well. The map is rebuilt on every reload and directory
   refresh ([The registry from an mCSD directory](registry.md)).
-- **TLS and credentials.** The `url` must be `https` outside
-  `profile = "development"`; a plain `http` URL is refused at boot, naming
-  its key, as is a URL that carries a user name or a password.
-  `credentials` takes basic credentials or the Nuts grant of
-  GF-Authentication ([The NVI's Nuts grant](onward-credentials.md#the-nvis-nuts-grant)),
+- **TLS and credentials.** `[nl_gf.nvi.endpoint]` is the NVI's
+  [endpoint table](configuration.md#the-endpoint-table-of-a-service). Its
+  `url` must be `https` outside `profile = "development"`; a plain `http`
+  URL is refused at boot, naming its key, as is a URL that carries a user
+  name or a password. The gateway authenticates with the basic credentials
+  of `endpoint.credentials` or with the Nuts grant of GF-Authentication in
+  `[nl_gf.nvi.nuts]`
+  ([The NVI's Nuts grant](onward-credentials.md#the-nvis-nuts-grant)),
   one of them; an `oauth` table is refused, naming its key, as
   the IG defines no such grant for the Localization Service. The IG asks a
   requester for authorization attributes (its organization, practitioner and

@@ -345,10 +345,11 @@ async fn the_nuts_token_reaches_the_nvi_alone() -> TestResult {
     Ok(())
 }
 
-/// A token the NVI no longer accepts fails that query's localization
-/// closed, and is dropped, so the next query obtains another and localizes.
+/// A token the NVI no longer accepts is dropped on the NVI's `401`, and the
+/// search is sent once more with a new one, so the query still localizes
+/// (RFC 6750 §3.1).
 #[tokio::test]
-async fn a_token_the_nvi_refuses_is_replaced_on_the_next_query() -> TestResult {
+async fn a_token_the_nvi_refuses_is_replaced_within_the_query() -> TestResult {
     let dir = tempfile::tempdir()?;
     let grant = grant(dir.path(), 300).await?;
     let nvi = guarded_nvi(&grant.authority).await;
@@ -363,16 +364,6 @@ async fn a_token_the_nvi_refuses_is_replaced_on_the_next_query() -> TestResult {
     ask(&app).await?;
     grant.authority.issuance().revoke_all();
 
-    let (_status, _text, refused) = ask(&app).await?;
-    assert!(
-        refused
-            .meta
-            .federation
-            .endpoints
-            .iter()
-            .all(|endpoint| endpoint.status == "not-localized" && endpoint.error.is_some()),
-        "the refused token fails the localization closed (§14.1)"
-    );
     let (_status, _text, replaced) = ask(&app).await?;
     assert_eq!(
         vec![
@@ -460,11 +451,11 @@ fn an_oauth2_or_fapi2_grant_for_the_nvi_is_refused() -> TestResult {
             "issuer = \"https://as.example.org\"\nscope = \"x\"\n",
         ),
     ] {
-        let tables = format!("\n[nl_gf.nvi.credentials.{grant}]\n{table}");
+        let tables = format!("\n[nl_gf.nvi.endpoint.credentials.{grant}]\n{table}");
         match resolve(dir.path(), "development", &tables) {
             Err(error) => match error.downcast_ref::<ConfigError>() {
                 Some(refused) => assert_eq!(
-                    Some(format!("nl_gf.nvi.credentials.{grant}").as_str()),
+                    Some(format!("nl_gf.nvi.endpoint.credentials.{grant}").as_str()),
                     crate::support::refused_key(refused),
                     "{grant} is an unknown key since 0.0.19"
                 ),
@@ -473,10 +464,10 @@ fn an_oauth2_or_fapi2_grant_for_the_nvi_is_refused() -> TestResult {
             Ok(other) => return Err(format!("{grant} for the NVI: {other:?}").into()),
         }
     }
-    let tables = "\n[nl_gf.nvi.credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"x\"\nclient_secret = \"synthetic\"\n";
+    let tables = "\n[nl_gf.nvi.endpoint.credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"x\"\nclient_secret = \"synthetic\"\n";
     match resolve(dir.path(), "development", tables)? {
         Err(ConfigError::Binding(BindingFault::NviGrant { key })) => {
-            assert_eq!("nl_gf.nvi.credentials.oauth", key);
+            assert_eq!("nl_gf.nvi.endpoint.credentials.oauth", key);
         }
         other => return Err(format!("oauth for the NVI: {other:?}").into()),
     }
@@ -491,7 +482,7 @@ async fn a_nuts_grant_the_nvi_cannot_use_names_its_key() -> TestResult {
     let grant = grant(dir.path(), 300).await?;
 
     let both = format!(
-        "\n[nl_gf.nvi.credentials]\nuser = \"gateway\"\npassword = \"synthetic-token\"\n{}",
+        "\n[nl_gf.nvi.endpoint.credentials]\nuser = \"gateway\"\npassword = \"synthetic-token\"\n{}",
         grant.tables
     );
     match resolve(dir.path(), "development", &both)? {

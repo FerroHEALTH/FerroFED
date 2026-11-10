@@ -91,7 +91,7 @@ pub(crate) fn config(
     for url in gateways {
         write!(
             gateway_tables,
-            "\n[[xcpd.gateway]]\nurl = \"{url}\"\ndevice = \"2.999.50.1\"\n"
+            "\n[[xcpd.gateway]]\nendpoint.url = \"{url}\"\ndevice = \"2.999.50.1\"\n"
         )?;
     }
     Ok(format!(
@@ -347,7 +347,7 @@ fn an_http_gateway_outside_development_refuses_to_boot_naming_its_key() -> TestR
     .to_owned();
     match Config::from_sources(Some(&injected(&text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Cleartext(refused)) => {
-            assert_eq!("xcpd.gateway[0].url", refused.site.url_key);
+            assert_eq!("xcpd.gateway[0].endpoint.url", refused.site.url_key);
             Ok(())
         }
         other => Err(format!("plain http carries the identifier in clear text: {other:?}").into()),
@@ -412,7 +412,7 @@ fn an_assertion_that_is_no_saml_assertion_refuses_to_boot_naming_its_key() -> Te
 
 #[test]
 fn xcpd_without_a_registry_refuses_to_boot() -> TestResult {
-    let text = "[xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\n\n[[xcpd.gateway]]\nurl = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n";
+    let text = "[xcpd]\nsender_device = \"2.999.40.1\"\naudit = \"log\"\n\n[[xcpd.gateway]]\nendpoint.url = \"https://xcpd.example.org/rg\"\ndevice = \"2.999.50.1\"\n";
     match Config::from_sources(Some(&injected(text)), &BTreeMap::new())?.resolve() {
         Err(error::Error::Missing { key }) if key == "registry.document" => Ok(()),
         other => Err(format!("refused for its missing registry: {other:?}").into()),

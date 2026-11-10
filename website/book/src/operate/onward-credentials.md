@@ -388,9 +388,9 @@ certificate_bound = true
 
 The client identity is a secret no rendering shows; the settings and the
 start-up log name the endpoints that present a certificate, never the
-certificate or its key. A service's
-own `credentials` section, under `[[pixm.manager]]` or `[pdqm]` for
-example, takes no TLS material: name it on the service's table.
+certificate or its key. A service's own `credentials` section, under
+`[pixm.manager.endpoint]` or `[pdqm.endpoint]` for example, takes no TLS
+material: name it in the endpoint table's `tls`.
 
 ## The Nuts grant (Annex B §B.4)
 
@@ -502,8 +502,11 @@ The token is obtained and cached as a node's is, each token request bounded
 by the localization's `timeout_ms`. Every search carries it under the `DPoP`
 scheme with a proof of `dpop_key_file`'s key over the search URL without its
 query, so the pseudonym never reaches a proof or the authorization server
-(RFC 9449 §4.2, §7.1). A `401` from the NVI drops the token, and a nonce it
-demands is answered once (RFC 9449 §9). A grant the authorization server
+(RFC 9449 §4.2, §7.1). The grant rides on the outbound client of
+`[nl_gf.nvi.endpoint]` as its authorization, so that table names no
+`credentials` beside it. A `401` from the NVI drops the token and the search
+is sent once more with a fresh one; a nonce it demands is kept and the search
+sent once more with it (RFC 9449 §9). A second `401` fails the search. A grant the authorization server
 refuses leaves the localization unavailable, so the query fails closed
 (§14.1). The token goes to the NVI alone, never to a node, a log line or an
 error. `authorization_server` must be `https` outside development, or boot

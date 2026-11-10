@@ -98,7 +98,7 @@ fn audited_gateway_state(
         &registry(a, b, ""),
         "profile = \"development\"",
         &format!(
-            "[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n{}",
+            "[[pixm.manager]]\nendpoint.url = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n{}",
             audit_tables(repository, extra)
         ),
         (BUDGET_MS, BUDGET_MS),
@@ -314,7 +314,7 @@ async fn the_log_destination_records_each_resolution_without_the_patient() -> Te
         &registry(&a.uri(), &b.uri(), ""),
         "profile = \"development\"",
         &format!(
-            "[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[audit]\ndestination = \"log\"\n",
+            "[[pixm.manager]]\nendpoint.url = \"{}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"{DOMAIN_A}\"\n\"node-b\" = \"{DOMAIN_B}\"\n\n[audit]\ndestination = \"log\"\n",
             pix.uri()
         ),
     )?;

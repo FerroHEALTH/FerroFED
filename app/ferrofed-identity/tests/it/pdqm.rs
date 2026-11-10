@@ -17,7 +17,6 @@ use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::pdqm::{PdqmConfig, PdqmConfigError, PdqmDemographics, Transaction};
 use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmResolver};
 use ferrofed_identity::role::behalf::OnBehalfOf;
@@ -29,7 +28,6 @@ use ferrofed_identity::role::resolver::{Resolution, Resolver};
 use ferrofed_registry::id::NodeId;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdqm_stub::{self, Entry};
-use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_atna::balp::{AuditError, AuditRecorder, Exchange};
 use ihe_iti::pixm::Invocation;
 use secrecy::SecretString;
@@ -68,9 +66,7 @@ fn client_patient() -> PatientRef {
 
 fn config(base: &str, transaction: Transaction) -> PdqmConfig {
     PdqmConfig {
-        tls: ferrofed_testkit::tls::platform(),
-        base: SecretUrl::new(base.to_owned()),
-        auth: Authentication::None,
+        client: ferrofed_testkit::outbound::client(base).expect("the outbound client builds"),
         transaction,
         master: MASTER.to_owned(),
         namespaces: BTreeMap::from([(
@@ -166,9 +162,8 @@ async fn the_master_identity_of_an_iti_78_search_is_resolved_by_the_pix_manager(
         .await;
     let resolver = PixmResolver::from_config(
         vec![ManagerConfig {
-            tls: ferrofed_testkit::tls::platform(),
-            base: SecretUrl::new(format!("{}/fhir/", pix.uri())),
-            auth: Authentication::None,
+            client: ferrofed_testkit::outbound::client(&format!("{}/fhir/", pix.uri()))
+                .expect("the outbound client builds"),
             members: BTreeMap::from([
                 (NodeId::new("node-a")?, DOMAIN_A.to_owned()),
                 (NodeId::new("node-b")?, DOMAIN_B.to_owned()),

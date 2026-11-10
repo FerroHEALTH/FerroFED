@@ -9,41 +9,44 @@
 //!
 //! ```toml
 //! [pmir]
-//! url = "https://pmir.example.org/fhir"
 //! callback_url = "https://gateway.example.org/pmir/feed"
 //! path = "/pmir/feed"
 //! feed_clients = ["pmir-registry"]
 //! identifier_system = "urn:oid:2.999.1"
 //! on_drain = "keep"
 //!
-//! [pmir.credentials.oauth]
+//! [pmir.endpoint]
+//! url = "https://pmir.example.org/fhir"
+//! timeout = "5s"
+//!
+//! [pmir.endpoint.credentials.oauth]
 //! token_endpoint = "https://pmir.example.org/auth/token"
 //! client_id = "ferrofed-pmir-subscriber"
 //! client_secret_file = "/run/secrets/pmir-subscriber"
 //! scope = "*"
 //! ```
 //!
-//! `[pmir.tls]` gives the mutual TLS the
-//! Registry asks for, as `[xcpd]` does ([`tls`](crate::config::tls)).
+//! `[pmir.endpoint]` is `ferrohealth-smart`'s `EndpointSection`: its
+//! `timeout` bounds one exchange with the Registry and its `tls` gives the
+//! mutual TLS the Registry asks for.
 //!
 //! The Registry sends the feed with a client-credentials token (RFC 6749
 //! §4.4) of a client `feed_clients` names, issued by an `[[auth.issuer]]` the
 //! gateway trusts and agreed with its operator out of band: the subscription carries no credential for the feed
 //! (§2:3.94.5), and ITI-93 leaves the client authentication to "an
 //! appropriate agreement between client and server" (§2:3.93.5). Both the
-//! Registry's `url` and the `callback_url` carry patient identifiers, so each
+//! Registry's `endpoint.url` and the `callback_url` carry patient identifiers, so each
 //! is held to the protected-payload policy of [`transport`]. No specification
 //! governs the shape of the table: our own design.
 
 use ferrohealth_config::removed::Removed;
-use ferrohealth_config::tls::TlsClientSection;
 use ferrohealth_config::units;
 use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_smart::config::endpoint::EndpointSection;
 use std::sync::Arc;
 use std::time::Duration;
 
 use ferrofed_identity::profile::Profile;
-use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 use url::Url;
 
@@ -52,25 +55,23 @@ use crate::config::Config;
 use crate::config::error::Error;
 use crate::config::error::binding::BindingFault;
 use crate::config::public_url::PublicUrl;
-use crate::config::service_grant::{ServiceContext, resolve_service};
+use crate::config::service_grant::ServiceContext;
 use crate::config::settings::Scheme;
 use crate::config::transport::{self, Encryption, ProtectedSite};
-use ferrohealth_smart::config::credentials::CredentialsSection;
+
+/// The key of the Registry's endpoint table.
+pub const ENDPOINT_KEY: &str = "pmir.endpoint";
 
 /// The PMIR identity feed, as the configuration writes it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Pmir {
-    /// The Patient Identity Registry's FHIR base URL, with no user name or
-    /// password.
-    pub url: SecretUrl,
-    /// How the gateway authenticates to the Registry, by which the Registry
-    /// authorizes the subscription (§2:3.94.5): basic credentials or the
-    /// client credentials grant of `oauth`.
-    pub credentials: Option<CredentialsSection>,
-    /// The TLS material the service is reached with: the table's `tls`
-    /// sub-table.
-    pub tls: TlsClientSection,
+    /// The Patient Identity Registry's FHIR base, with no user name or
+    /// password, and how it is reached: its TLS, the timeout of one
+    /// exchange, and the credentials by which the Registry authorizes the
+    /// subscription (§2:3.94.5), basic credentials or the client credentials
+    /// grant of `oauth`.
+    pub endpoint: EndpointSection,
     /// The absolute URL the Registry sends the feed to: the gateway's public
     /// address followed by `{base}` and `path`, the `channel.endpoint` of the
     /// subscription. Empty, it is `path` under `gateway.public_url`, which
@@ -86,9 +87,7 @@ pub struct Pmir {
     /// (`Patient?identifier=<system>|`, §2:3.94.4.1.2.1.1). Unset, every
     /// Patient change is sent.
     pub identifier_system: Option<String>,
-    /// How long one exchange with the Registry may take.
-    pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// The retired `timeout_ms`, which `endpoint.timeout` replaced in
     /// 0.0.19: set, it refuses the configuration.
     #[serde(skip_serializing)]
     pub timeout_ms: Removed,
@@ -102,6 +101,18 @@ pub struct Pmir {
     /// What a drain does with the subscription: `keep` it at the Registry,
     /// the default, or `unsubscribe`.
     pub on_drain: OnDrain,
+    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub url: Removed,
+    /// The retired `credentials`, which `endpoint.credentials` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub credentials: Removed,
+    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub tls: Removed,
 }
 
 /// The key of the URL the Registry sends the feed to.
@@ -129,18 +140,18 @@ pub enum OnDrain {
 impl Default for Pmir {
     fn default() -> Self {
         Self {
-            url: SecretUrl::default(),
-            credentials: None,
-            tls: TlsClientSection::default(),
+            endpoint: crate::config::endpoint::tried_once(units::Duration::from_secs(5)),
             callback_url: String::new(),
             path: String::from("/pmir/feed"),
             feed_clients: Vec::new(),
             identifier_system: None,
-            timeout: units::Duration::from_secs(5),
             timeout_ms: Removed::default(),
             check_interval: units::Duration::from_mins(1),
             check_interval_s: Removed::default(),
             on_drain: OnDrain::Keep,
+            url: Removed::default(),
+            credentials: Removed::default(),
+            tls: Removed::default(),
         }
     }
 }
@@ -150,10 +161,14 @@ impl Default for Pmir {
 pub struct PmirSettings {
     /// The Registry's FHIR base URL, already known to parse as an `http` or
     /// `https` URL with no user name or password.
-    pub url: SecretUrl,
+    pub url: Url,
     /// How the gateway authenticates to the Registry.
     pub credentials: Option<Scheme>,
-    /// The TLS material the Registry is reached with.
+    /// How the Registry is reached, as `ferrohealth-smart`'s outbound client
+    /// reads it.
+    pub endpoint: Box<EndpointSection>,
+    /// The TLS material `endpoint.tls` names, read at load, which a reload
+    /// compares.
     pub tls: Arc<TlsClient>,
     /// Where the Registry sends the feed.
     pub callback_url: Url,
@@ -172,8 +187,7 @@ pub struct PmirSettings {
 }
 
 impl PmirSettings {
-    /// Whether `other` names the same Registry, credentials, TLS material,
-    /// callback, path, feed users, criteria, timings and drain.
+    /// Whether `other` names the same endpoint table, credentials, callback, path, feed users, criteria, timings and drain.
     #[must_use]
     pub fn same_as(&self, other: &Self) -> bool {
         let credentials = match (&self.credentials, &other.credentials) {
@@ -182,7 +196,7 @@ impl PmirSettings {
             _ => false,
         };
         credentials
-            && self.url.expose() == other.url.expose()
+            && self.endpoint == other.endpoint
             && self.tls == other.tls
             && self.callback_url == other.callback_url
             && self.path == other.path
@@ -198,8 +212,10 @@ impl PmirSettings {
 /// gateway's credentials, and answering with the identities it holds.
 fn registry_site() -> ProtectedSite {
     ProtectedSite {
-        url_key: String::from("pmir.url"),
-        payload: String::from("pmir.credentials and the subscription to patient identities"),
+        url_key: String::from("pmir.endpoint.url"),
+        payload: String::from(
+            "pmir.endpoint.credentials and the subscription to patient identities",
+        ),
         requires: Encryption::Https,
     }
 }
@@ -233,7 +249,7 @@ pub fn sites(
     };
     cleartext.extend(transport::protected_payload(
         profile,
-        pmir.url.expose(),
+        pmir.url.as_str(),
         registry_site(),
     )?);
     cleartext.extend(transport::protected_payload(
@@ -251,7 +267,7 @@ pub fn sites(
 /// is the feed route under it, and a set one must name that route.
 ///
 /// # Errors
-/// [`Error::Missing`] for no registry, no `url`, no `callback_url` or no feed
+/// [`Error::Missing`] for no registry, no `endpoint.url`, no `callback_url` or no feed
 /// client; [`BindingFault::FeedIssuer`] when `issuers` is false, so no issuer
 /// signs a feed client's token; [`Error::Url`] or [`Error::HttpUrl`] for a URL that does not parse
 /// or is no `http(s)` URL without credentials;
@@ -279,12 +295,12 @@ pub(crate) fn resolve(
             key: String::from("registry.document"),
         });
     }
-    if pmir.url.is_empty() {
-        return Err(Error::Missing {
-            key: String::from("pmir.url"),
+    let endpoint = crate::config::endpoint::service(ENDPOINT_KEY, &pmir.endpoint, context)?;
+    if !matches!(endpoint.url.scheme(), "http" | "https") {
+        return Err(Error::HttpUrl {
+            key: String::from("pmir.endpoint.url"),
         });
     }
-    http_url("pmir.url", pmir.url.expose())?;
     let path = feed_path(&pmir.path)?;
     let callback_url = match (pmir.callback_url.is_empty(), public) {
         (false, _) => http_url(CALLBACK_URL, &pmir.callback_url)?,
@@ -311,31 +327,22 @@ pub(crate) fn resolve(
     if !issuers {
         return Err(Error::Binding(BindingFault::FeedIssuer));
     }
-    let section = String::from("pmir.credentials");
-    let credentials = pmir
-        .credentials
-        .as_ref()
-        .map(|credentials| resolve_service(&section, credentials, context))
-        .transpose()?;
     if let Some(system) = &pmir.identifier_system {
         Url::parse(system).map_err(|source| Error::Url {
             key: String::from("pmir.identifier_system"),
             source,
         })?;
     }
-    let tls = crate::config::tls::read("pmir.tls", &pmir.tls)?;
     let settings = PmirSettings {
-        url: pmir.url.clone(),
-        credentials,
-        tls,
+        url: endpoint.url,
+        credentials: endpoint.credentials,
+        tls: endpoint.tls,
+        endpoint: Box::new(pmir.endpoint.clone()),
         callback_url,
         path,
         feed_clients: pmir.feed_clients.clone(),
         identifier_system: pmir.identifier_system.clone(),
-        timeout: positive(
-            "pmir.timeout",
-            Duration::from_millis(pmir.timeout.as_millis()),
-        )?,
+        timeout: pmir.endpoint.timeout.get(),
         check_interval: positive(
             "pmir.check_interval",
             Duration::from_secs(pmir.check_interval.as_secs()),

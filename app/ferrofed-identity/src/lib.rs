@@ -38,8 +38,7 @@
 //!     (Annex A §A.2);
 //!   - `ihe::xcpd`: the localizer over XCPD ITI-55 (Annex A.3);
 //!   - `ihe::pmir`: what a PMIR ITI-93 message does to the resolution
-//!     bindings, and the ITI-94 subscriber that asks for the messages
-//!     (track 8, Annex A.4);
+//!     bindings (track 8, Annex A.4);
 //!   - `ihe::mcsd`: the registry document in FHIR form, `Organization` and
 //!     `Endpoint` resources read through `ihe_iti`'s mCSD reader (N19, N20),
 //!     and in `ihe::mcsd::source` the registry read from an mCSD directory
@@ -57,20 +56,18 @@
 //!     question (Annex B §B.6);
 //! - [`session`]: the resolution bindings of §12.5.1 step 2, in memory and
 //!   scoped to the client session;
-//! - [`fhir`]: the one HTTP client build every outbound client of this crate
-//!   uses, with its [`Authentication`](fhir::Authentication) and its one
-//!   `ferrohealth_server::tls_client::TlsClient`;
 //! - [`profile`]: the deployment profile a server configuration declares.
 //!
 //! How the gateway authenticates to each node as itself (§13.1, N25) is the
 //! engine's, in `ferrofed_engine::onward`.
 #![doc(test(attr(deny(warnings))))]
 
-pub mod fhir;
 #[cfg(feature = "balp")]
 pub mod ihe;
 #[cfg(feature = "nl")]
 pub mod nl;
+#[cfg(any(feature = "ihe", feature = "nl"))]
+mod outbound;
 pub mod profile;
 pub mod role;
 pub mod session;

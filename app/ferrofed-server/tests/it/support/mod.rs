@@ -549,7 +549,7 @@ pub(crate) fn unasked_pixm(registry: &str) -> String {
             members
         });
     format!(
-        "\n[[pixm.manager]]\nurl = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n{members}"
+        "\n[[pixm.manager]]\nendpoint.url = \"http://127.0.0.1:9/fhir/\"\n\n[pixm.manager.members]\n{members}"
     )
 }
 

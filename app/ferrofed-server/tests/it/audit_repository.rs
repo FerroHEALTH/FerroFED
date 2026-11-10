@@ -104,7 +104,7 @@ fn config(
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     Ok(format!(
-        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '{BUDGET_MS}ms'\noverall_timeout = '{BUDGET_MS}ms'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout = '{LOCALIZATION_MS}ms'\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"repository\"\n\n[[xcpd.gateway]]\nurl = \"{gateway}\"\ndevice = \"2.999.50.1\"\n\n[xcpd.communities]\n{communities}\n[xcpd.audit_repository]\nhostname = \"gateway.example.org\"\n{repository}\n{rows}",
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '{BUDGET_MS}ms'\noverall_timeout = '{BUDGET_MS}ms'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout = '{LOCALIZATION_MS}ms'\n\n[xcpd]\nsender_device = \"2.999.40.1\"\nhome_community = \"2.999.40\"\naudit = \"repository\"\n\n[[xcpd.gateway]]\nendpoint.url = \"{gateway}\"\ndevice = \"2.999.50.1\"\n\n[xcpd.communities]\n{communities}\n[xcpd.audit_repository]\nhostname = \"gateway.example.org\"\n{repository}\n{rows}",
         document = toml::Value::String(document.display().to_string()),
     ))
 }

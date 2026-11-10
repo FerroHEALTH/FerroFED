@@ -28,60 +28,47 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
 use ferrofed_registry::id::{NodeId, OrganisationId};
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use ferrohealth_secret::secret_url::SecretUrl;
-use ihe_iti::authorizer::{Authorizable, Authorizer};
+use ferrohealth_smart::client::outbound::OutboundClient;
 use nl_generic_functions::identification::{PSEUDO_BSN_SYSTEM, PseudoBsn, Ura, is_bsn_system};
 use nl_generic_functions::lrza::LrzaError;
 use nl_generic_functions::nvi::NviClient;
 use nl_generic_functions::nvi::error::{InvalidInput, NviError};
 use secrecy::SecretString;
 use thiserror::Error;
-use url::Url;
 
-use crate::fhir::{self, Authentication, ClientError};
 use crate::nl::{DirectoryUraError, directory_custodians};
+use crate::outbound::Shown;
 use crate::role::behalf::OnBehalfOf;
 use crate::role::localizer::{Localization, Localizer, LocalizerError};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
-use ferrohealth_server::tls_client::TlsClient;
 
 /// The NVI localizer as the configuration names it.
 pub struct NviConfig {
-    /// The Localization Service's FHIR base URL, which `Debug` shows without
-    /// its userinfo.
-    pub base: SecretUrl,
-    /// How the gateway authenticates to the service with a fixed header.
-    pub auth: Authentication,
-    /// The authorizer that makes the headers of each request, such as the
-    /// Nuts grant's `DPoP`-bound token and its proof (the IG's GFI-005); set
-    /// with [`Authentication::None`] alone.
-    pub authorizer: Option<Arc<dyn Authorizer>>,
+    /// The outbound client its endpoint table builds: the Localization
+    /// Service's FHIR base URL, the TLS material, the timeouts, the retry
+    /// table, and the credential every request carries, or the authorizer
+    /// that makes the headers of each, such as the Nuts grant's
+    /// `DPoP`-bound token and its proof (the IG's GFI-005).
+    pub client: OutboundClient,
     /// Each care provider, by its URA, mapped to the registry member that
     /// holds its data; empty when the registry's directory gives the map.
     pub custodians: BTreeMap<String, NodeId>,
     /// The client namespaces that stand for the pseudonymised BSN, beside
     /// [`PSEUDO_BSN_SYSTEM`] itself.
     pub namespaces: BTreeSet<IdentifierNamespace>,
-    /// The TLS material: a client identity for mutual TLS and trust roots
-    /// beside the platform's.
-    pub tls: Arc<TlsClient>,
 }
 
 impl fmt::Debug for NviConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("NviConfig")
-            .field("base", &self.base)
-            .field("auth", &self.auth)
-            .field("authorizer", &self.authorizer)
+            .field("client", &Shown(&self.client))
             .field("custodians", &self.custodians)
             .field("namespaces", &self.namespaces)
-            .field("tls", &self.tls)
             .finish()
     }
 }
@@ -93,9 +80,6 @@ impl fmt::Debug for NviConfig {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum NviConfigError {
-    /// The base URL does not parse as a URL.
-    #[error("the Localization Service base URL is not a URL")]
-    BaseUrl(#[source] url::ParseError),
     /// The base URL is not an `http(s)` URL without a query or a fragment.
     #[error(
         "the Localization Service base URL is not an http(s) URL without a query or a fragment"
@@ -137,15 +121,6 @@ pub enum NviConfigError {
     /// `not-localized`.
     #[error("registry member {0} is mapped from no custodian URA")]
     UnlocatedMember(NodeId),
-    /// Both a fixed credential and an authorizer are configured, so a request
-    /// would carry two credentials.
-    #[error("the Localization Service takes a fixed credential or an authorizer, not both")]
-    TwoCredentials,
-    /// The HTTP client could not be built: a credential that forms no
-    /// `Authorization` value (RFC 7617 §2, RFC 6750 §2.1), or a client the
-    /// platform refuses.
-    #[error("the HTTP client for the Localization Service could not be built")]
-    Client(#[source] ClientError),
 }
 
 /// Why the NVI localizer could not answer.
@@ -178,19 +153,14 @@ impl NviLocalizer {
     /// # Errors
     ///
     /// An [`NviConfigError`] for a BSN system listed as standing for the
-    /// pseudonym, a base URL that is not one, a custodian with an empty URA or
-    /// naming a member the registry does not hold, a member organisation whose
-    /// URAs the LRZa rules refuse, a configured map that disagrees with the
-    /// directory's, a member no custodian maps to, and TLS material or a
-    /// credential that cannot be used, or a fixed credential beside an
-    /// authorizer.
+    /// pseudonym, a base URL the client refuses, a custodian with an empty
+    /// URA or naming a member the registry does not hold, a member
+    /// organisation whose URAs the LRZa rules refuse, a configured map that
+    /// disagrees with the directory's, and a member no custodian maps to.
     pub fn from_config(
         config: NviConfig,
         registry: &RegistrySnapshot,
     ) -> Result<Self, NviConfigError> {
-        if config.authorizer.is_some() && !matches!(config.auth, Authentication::None) {
-            return Err(NviConfigError::TwoCredentials);
-        }
         // NOTE: Annex B §B.1, N33: the NVI is keyed on the pseudonym, so a BSN system listed
         // as its alias would send a BSN there; refused here as well as at configuration load.
         if let Some(bsn) = config
@@ -200,8 +170,6 @@ impl NviLocalizer {
         {
             return Err(NviConfigError::BsnAsPseudonym(bsn.clone()));
         }
-        let base = Url::parse(config.base.expose()).map_err(NviConfigError::BaseUrl)?;
-        let http = http_client(&config)?;
         let mut written: BTreeMap<Ura, BTreeSet<NodeId>> = BTreeMap::new();
         for (ura, member) in config.custodians {
             let ura = Ura::new(ura).map_err(|_empty| NviConfigError::EmptyUra)?;
@@ -237,10 +205,7 @@ impl NviLocalizer {
         {
             return Err(NviConfigError::UnlocatedMember(unlocated.clone()));
         }
-        let mut client = NviClient::new(base, http).map_err(NviConfigError::Base)?;
-        if let Some(authorizer) = config.authorizer {
-            client = client.with_authorizer(authorizer);
-        }
+        let client = NviClient::new(config.client).map_err(NviConfigError::Base)?;
         Ok(Self {
             client,
             custodians,
@@ -348,11 +313,4 @@ fn disagreement(
         .chain(derived.keys())
         .find(|ura| written.get(*ura) != derived.get(*ura))
         .cloned()
-}
-
-/// The HTTP client the service is asked through: no redirects, because the
-/// request URL holds the pseudonym, the credential as a default header, and
-/// the TLS material `config` names.
-fn http_client(config: &NviConfig) -> Result<reqwest::Client, NviConfigError> {
-    fhir::http_client(&config.auth, &config.tls).map_err(NviConfigError::Client)
 }
