@@ -254,7 +254,15 @@ pub fn received_document(
             .with_patient(reference(&subject))
             .with_who(reference(&device)),
     )?;
-    let study = ferrofed_eehrxf::imaging::study(&document, run.bundle())
+    let study = run
+        .bundle()
+        .entry
+        .iter()
+        .find_map(|entry| match entry.resource.as_ref() {
+            Some(Resource::ImagingStudy(study)) => study.id.clone(),
+            _ => None,
+        })
+        .map(|id| document.full_url("ImagingStudy", &id))
         .ok_or("the run writes the study")?;
     document.with_mapped_report(run.bundle())?;
     for slot in IMAGING_SLOTS.iter().take(REQUIRED) {
