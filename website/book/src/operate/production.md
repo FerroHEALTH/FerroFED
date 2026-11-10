@@ -378,9 +378,9 @@ node's grant takes no client secret (§13.1, N25):
 
 ```toml
 # ferrofed.toml
-[credentials."cdr-a-query"]
-credentials.user = "ferrofed-gateway"
-credentials.password_file = "/run/secrets/ferrofed/cdr-a-password"
+[credentials."cdr-a-query".credentials]
+user = "ferrofed-gateway"
+password_file = "/run/secrets/ferrofed/cdr-a-password"
 
 [credentials."cdr-b-query".credentials.oauth]
 token_endpoint = "https://auth.cdr-b.example.org/oauth2/token"

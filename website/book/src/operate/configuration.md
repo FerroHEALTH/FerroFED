@@ -288,9 +288,9 @@ listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-
 
 # Outbound credentials, one section per endpoint id. Each section names one
 # scheme: a user and a password, or a grant; see Onward credentials.
-[credentials."clinic-b"]
-credentials.user = "ferrofed"
-credentials.password_file = "/run/secrets/clinic-b-password"
+[credentials."clinic-b".credentials]
+user = "ferrofed"
+password_file = "/run/secrets/clinic-b-password"
 
 # OAuth 2.0 client credentials with a signed JWT client assertion (§13.1).
 [credentials."cdr-c".credentials.oauth]

@@ -264,9 +264,9 @@ client_auth = "private_key_jwt"
 private_key_file = "/run/secrets/ferrofed/node-a-client.pem"
 scope = "system/aql-*.s"
 
-[credentials."node-b-query"]
-credentials.user = "ferrofed"
-credentials.password_file = "/run/secrets/ferrofed/node-b-password"
+[credentials."node-b-query".credentials]
+user = "ferrofed"
+password_file = "/run/secrets/ferrofed/node-b-password"
 
 # FerroFED's own PostgreSQL store, off unless the table is set. A
 # contact-point issuer ([[federation.contact_point]]) and the

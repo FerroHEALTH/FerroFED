@@ -147,17 +147,17 @@ indicators = ["https://node-a.perf.ferrofed.invalid"]
 [credentials."node-a-query".credentials.onward.keys]
 max_onward_lifetime = "1h"
 
-[credentials."node-b-query"]
-credentials.user = "ferroehr"
-credentials.password = "ferroehr"
+[credentials."node-b-query".credentials]
+user = "ferroehr"
+password = "ferroehr"
 
-[credentials."node-c-query"]
-credentials.user = "ferroehr"
-credentials.password = "ferroehr"
+[credentials."node-c-query".credentials]
+user = "ferroehr"
+password = "ferroehr"
 
-[credentials."node-d-query"]
-credentials.user = "ferroehr"
-credentials.password = "ferroehr"
+[credentials."node-d-query".credentials]
+user = "ferroehr"
+password = "ferroehr"
 
 [[pixm.manager]]
 url = "http://127.0.0.1:8090/fhir/"
