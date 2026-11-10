@@ -26,7 +26,7 @@ const POPULATION: &str = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c";
 fn audit_tables(spool: &str) -> String {
     format!(
         "\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\n\
-         url = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\n{spool}\n",
+         endpoint.url = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\n{spool}\n",
         ferrofed_testkit::unreachable::ADDRESS
     )
 }

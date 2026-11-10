@@ -164,14 +164,16 @@ data:
     destination = "repository"
 
     [audit.repository]
-    # EDIT: your Audit Record Repository's FHIR base.
-    url = "https://arr.example.org/fhir"
     # EDIT: the gateway's network address each record names.
     hostname = "gateway.example.org"
     spool_dir = "/var/lib/ferrofed/audit-feed-spool"
+
+    [audit.repository.endpoint]
+    # EDIT: your Audit Record Repository's FHIR base.
+    url = "https://arr.example.org/fhir"
     # When the repository asks for a client certificate, add it to the
     # ferrofed-secrets Secret:
-    # [audit.repository.tls]
+    # [audit.repository.endpoint.tls]
     # client_identity_file = "/run/secrets/ferrofed/atna-client.pem"
     # trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
 

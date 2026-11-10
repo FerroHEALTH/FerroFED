@@ -15,6 +15,7 @@ use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::client::{ClientAuth, PresentedTls};
+use ferrohealth_smart::config::credentials::{CredentialsSection, OauthSection};
 use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
@@ -27,7 +28,7 @@ use crate::config::oauth::Onward;
 use crate::config::public_url::PublicUrl;
 use crate::config::settings::{JWKS_PATH, Scheme, SigningSettings};
 use crate::config::tls::{self, TlsFault};
-use crate::config::{Credentials, Signing, SigningAlgorithm};
+use crate::config::{NodeCredentials, Signing, SigningAlgorithm};
 use ferrohealth_server::tls_client::TlsClient;
 
 /// The longest lifetime a JWT the gateway signs with its `[signing]` key may
@@ -39,24 +40,29 @@ const MAX_ASSERTION_LIFETIME: Duration = Duration::from_secs(300);
 /// Returns the scheme a service's `credentials` describe, once it is known
 /// to fit the `Authorization` header it is sent in.
 ///
-/// TLS material is refused here: a service's own table names it.
+/// An onward lane is refused here: a node's section alone takes one.
+#[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub(crate) fn resolve_credentials(
     section: &str,
-    credentials: &Credentials,
+    credentials: &CredentialsSection,
 ) -> Result<Scheme, Error> {
-    if credentials.names_tls() {
-        return Err(TlsFault::OnService {
-            section: section.to_owned(),
-        }
-        .into());
-    }
     if credentials.onward.is_some() {
         return Err(CredentialsFault::OnwardOnService {
             section: section.to_owned(),
         }
         .into());
     }
-    scheme(section, credentials, None)
+    scheme(section, credentials, &Beside::default(), None)
+}
+
+/// What a node's section names beside its credentials table.
+#[derive(Default)]
+struct Beside<'a> {
+    /// Whether the onward lane carries another party's organisation.
+    onward_organisations: bool,
+    /// The node's section and its key, which a refusal of the whole section
+    /// names and the Dutch binding reads its Nuts grant from.
+    node: Option<(&'a str, &'a NodeCredentials)>,
 }
 
 /// Returns what a node's `credentials` describe: the scheme, when the
@@ -70,14 +76,15 @@ pub(crate) fn resolve_credentials(
 /// (RFC 8705 §2, §3).
 pub(crate) fn resolve_node_credentials(
     section: &str,
-    credentials: &Credentials,
+    credentials: &NodeCredentials,
 ) -> Result<(Option<Scheme>, Option<Arc<TlsClient>>), Error> {
     let material = credentials
         .tls
         .as_ref()
         .map(|table| tls::read(&format!("{section}.tls"), table))
         .transpose()?;
-    presents_certificate(section, credentials, material.as_deref())?;
+    let table = format!("{section}.credentials");
+    presents_certificate(&table, &credentials.credentials, material.as_deref())?;
     let presented = material
         .as_deref()
         .map(|tls| -> Result<PresentedTls, Error> {
@@ -87,8 +94,12 @@ pub(crate) fn resolve_node_credentials(
             ))
         })
         .transpose()?;
-    let scheme = match scheme(section, credentials, presented) {
-        Ok(scheme) => node_secretless(section, node_scope(section, scheme)?)?,
+    let beside = Beside {
+        onward_organisations: credentials.onward_organisations,
+        node: Some((section, credentials)),
+    };
+    let scheme = match scheme(&table, &credentials.credentials, &beside, presented.as_ref()) {
+        Ok(scheme) => node_secretless(&table, node_scope(&table, scheme)?)?,
         Err(Error::Credentials(CredentialsFault::NoScheme { .. })) if material.is_some() => {
             return Ok((None, material));
         }
@@ -108,10 +119,10 @@ pub(crate) fn resolve_node_credentials(
 /// [`TlsFault::Cleartext`] naming the URL's key.
 fn presents_certificate(
     section: &str,
-    credentials: &Credentials,
+    credentials: &CredentialsSection,
     material: Option<&TlsClient>,
 ) -> Result<(), Error> {
-    let Some(table) = credentials.oauth.as_ref().map(|oauth| &oauth.0) else {
+    let Some(table) = credentials.oauth.as_ref() else {
         return Ok(());
     };
     // NOTE: RFC 8705 §3, a token bound to a certificate is used only over
@@ -153,7 +164,7 @@ fn presents_certificate(
 /// Returns [`CredentialsFault::SecretForNode`] naming the key.
 fn node_secretless(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
     if let Scheme::Oauth { written, .. } = &scheme {
-        let table = &written.0;
+        let table = &**written;
         // NOTE: §13.1 N25; a node's grant carries the gateway's own identity, which a
         // secret shared with the node's authorization server does not prove.
         let key = if matches!(
@@ -186,9 +197,9 @@ fn node_secretless(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
 /// Returns [`CredentialsFault::Scope`] naming the scope's key.
 fn node_scope(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
     if let Scheme::Oauth { written, .. } = &scheme
-        && !written.0.scope.is_empty()
+        && !written.scope.is_empty()
     {
-        Scope::parse(&written.0.scope).map_err(|source| {
+        Scope::parse(&written.scope).map_err(|source| {
             Error::Credentials(CredentialsFault::Scope {
                 key: format!("{section}.oauth.scope"),
                 source,
@@ -198,33 +209,41 @@ fn node_scope(section: &str, scheme: Scheme) -> Result<Scheme, Error> {
     Ok(scheme)
 }
 
-/// Returns the scheme `credentials` describe.
+/// Returns the scheme `credentials`, the credentials table at `section`,
+/// describe, with what a node's section names `beside` it.
 fn scheme(
     section: &str,
-    credentials: &Credentials,
-    presented: Option<PresentedTls>,
+    credentials: &CredentialsSection,
+    beside: &Beside<'_>,
+    presented: Option<&PresentedTls>,
 ) -> Result<Scheme, Error> {
     let password = read_secret(
         &format!("{section}.password"),
-        credentials.password.clone(),
+        credentials.password.clone().map(Secret::from),
         credentials.password_file.as_deref(),
     )?;
+    // NOTE: no specification governs this: our own design; a refusal of the whole section
+    // names the node's section, which holds the nested table and the keys beside it.
+    let whole = beside.node.map_or(section, |(node, _)| node);
     #[cfg(feature = "binding-nl")]
-    let bound = crate::config::nl::sets_onward(credentials);
+    let bound = beside
+        .node
+        .is_some_and(|(_, node)| crate::config::nl::sets_onward(node));
     #[cfg(not(feature = "binding-nl"))]
     let bound = false;
     let refused = || {
         Error::Credentials(CredentialsFault::Scheme {
-            section: section.to_owned(),
+            section: whole.to_owned(),
         })
     };
-    let basic = credentials.user.is_some() || password.is_some();
+    let user = Some(credentials.user.as_str()).filter(|user| !user.is_empty());
+    let basic = user.is_some() || password.is_some();
     if credentials.onward.is_some() && (basic || bound) {
         return Err(refused());
     }
-    if credentials.onward_organisations && credentials.onward.is_none() {
+    if beside.onward_organisations && credentials.onward.is_none() {
         return Err(CredentialsFault::OnwardOrganisations {
-            section: section.to_owned(),
+            section: whole.to_owned(),
         }
         .into());
     }
@@ -238,7 +257,10 @@ fn scheme(
             return Err(refused());
         }
         #[cfg(feature = "binding-nl")]
-        if let Some(grant) = crate::config::nl::onward(section, credentials) {
+        if let Some(grant) = beside
+            .node
+            .and_then(|(node_section, node)| crate::config::nl::onward(node_section, node))
+        {
             return grant.map(Scheme::Binding);
         }
     }
@@ -246,9 +268,9 @@ fn scheme(
         if basic {
             return Err(refused());
         }
-        return oauth_scheme(section, oauth, credentials, presented);
+        return oauth_scheme(section, oauth, credentials, beside, presented);
     }
-    match (credentials.user.as_deref(), password) {
+    match (user, password) {
         (Some(user), Some(password)) => {
             openehr_its::rest::client::Credentials::basic(user, password.to_secret_string())
                 .header_value()
@@ -274,27 +296,28 @@ fn scheme(
 
 /// Returns the scheme of `section`'s `oauth` table, with the onward lane it
 /// authenticates when `credentials` write one, carrying another party's
-/// organisation when they opt in.
+/// organisation when the node's section opts in.
 fn oauth_scheme(
     section: &str,
-    oauth: &crate::config::oauth::Oauth,
-    credentials: &Credentials,
-    presented: Option<PresentedTls>,
+    oauth: &OauthSection,
+    credentials: &CredentialsSection,
+    beside: &Beside<'_>,
+    presented: Option<&PresentedTls>,
 ) -> Result<Scheme, Error> {
-    let grant = oauth.resolve(&format!("{section}.oauth"), presented)?;
+    let grant = crate::config::oauth::resolve(&format!("{section}.oauth"), oauth, presented)?;
     let onward = credentials
         .onward
         .as_ref()
         .map(|written| Onward::resolve(&format!("{section}.onward"), written, grant.clone()))
         .transpose()?;
-    let onward = match (onward, credentials.onward_organisations) {
+    let onward = match (onward, beside.onward_organisations) {
         (Some(onward), true) if onward.kind == IssuerKind::Federation => Some(Onward {
             organisations: Organisations::ReadOnly,
             ..onward
         }),
         (_, true) => {
             return Err(CredentialsFault::OnwardOrganisations {
-                section: section.to_owned(),
+                section: beside.node.map_or(section, |(node, _)| node).to_owned(),
             }
             .into());
         }

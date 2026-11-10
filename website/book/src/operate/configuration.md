@@ -289,11 +289,11 @@ listen = "127.0.0.1:9464"     # the admin listener: GET /metrics and the stored-
 # Outbound credentials, one section per endpoint id. Each section names one
 # scheme: a user and a password, or a grant; see Onward credentials.
 [credentials."clinic-b"]
-user = "ferrofed"
-password_file = "/run/secrets/clinic-b-password"
+credentials.user = "ferrofed"
+credentials.password_file = "/run/secrets/clinic-b-password"
 
 # OAuth 2.0 client credentials with a signed JWT client assertion (§13.1).
-[credentials."cdr-c".oauth]
+[credentials."cdr-c".credentials.oauth]
 token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"
 client_id = "ferrofed-gateway"
 client_auth = "private_key_jwt"
@@ -320,7 +320,7 @@ file = "/run/secrets/nuts-organization-credential.jwt"
 # A FAPI 2.0 authorization server, the BgZ/eOverdracht track (Annex B
 # §B.4a): an ES256 private_key_jwt assertion naming the issuer, a DPoP-bound
 # token, and RFC 9396 authorization_details.
-[credentials."cdr-e".oauth]
+[credentials."cdr-e".credentials.oauth]
 issuer = "https://as.cdr-e.example.org"
 security_profile = "fapi2"
 client_id = "urn:oid:2.16.528.1.1007.3.3.<URA>"
@@ -417,8 +417,10 @@ A national identity service often authenticates the gateway by its client
 certificate instead of, or beside, a password or a token. Every table that
 names an outbound service takes its TLS material in a `tls` sub-table:
 `[[pixm.manager]]`, `[pdqm]`, `[pmir]`, `[registry.mcsd]`, `[xcpd]`,
-`[nl_gf.nvi]`, `[nl_gf.mitz]`, `[audit.repository]`,
-`[eehrxf.terminology]` and a node's `[credentials."<endpoint id>"]`:
+`[nl_gf.nvi]`, `[nl_gf.mitz]` and a node's `[credentials."<endpoint id>"]`;
+`[audit.repository]` and `[eehrxf.terminology]` take it in their `endpoint`
+table, `[audit.repository.endpoint.tls]` and
+`[eehrxf.terminology.endpoint.tls]`:
 
 ```toml
 [[pixm.manager]]
@@ -538,7 +540,7 @@ lower case, with `__` between the segments:
 
 ```text
 FERROFED__SERVER__LISTEN=0.0.0.0:8080
-FERROFED__CREDENTIALS__HOSPITAL_A__PASSWORD_FILE=/run/secrets/hospital-a-password
+FERROFED__CREDENTIALS__HOSPITAL_A__CREDENTIALS__PASSWORD_FILE=/run/secrets/hospital-a-password
 ```
 
 A value reads as TOML syntax when it is one (`9`, `true`) and as the string it

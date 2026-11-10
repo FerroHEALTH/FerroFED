@@ -2,7 +2,7 @@
   keys that name no unit: on each `[[auth.issuer]]` `clock_skew`,
   `jwks_max_age`, `jwks_refresh_interval` and `timeout`;
   `introspection.cache_max_age`; `[auth.dpop]` `max_age` and `clock_skew`;
-  on each `[credentials."<id>".oauth]` `refresh_margin`, `timeout` and
+  on each `[credentials."<id>".credentials.oauth]` `refresh_margin`, `timeout` and
   `previous_key_overlap`; and `[onward.keys] max_onward_lifetime`, until
   now a bare number of seconds. The old keys are refused as unknown keys
   (#1799).

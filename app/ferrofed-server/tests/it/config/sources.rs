@@ -270,23 +270,23 @@ fn a_key_from_the_old_server_table_is_refused_by_its_name() -> Result<(), Box<dy
     Ok(())
 }
 
-/// The `[credentials."<endpoint id>".onward]` table of `endpoint`, with
+/// The `[credentials."<endpoint id>".credentials.onward]` table of `endpoint`, with
 /// `extra` written into it.
 fn onward_lane(endpoint: &str, extra: &str) -> String {
     format!(
-        "[credentials.\"{endpoint}\".oauth]\n\
+        "[credentials.\"{endpoint}\".credentials.oauth]\n\
          token_endpoint = \"https://as.example.org/token\"\n\
          client_id = \"ferrofed\"\n\
          client_auth = \"private_key_jwt\"\n\
          private_key_file = {key}\n\n\
-         [credentials.\"{endpoint}\".onward]\n\
+         [credentials.\"{endpoint}\".credentials.onward]\n\
          issuer = \"https://federation.cdr-a.example.org\"\n\
          kind = \"persons\"\n\
          profile = \"rfc9068\"\n\
          audiences = [\"https://cdr-a.example.org/openehr\"]\n\
          indicators = [\"https://cdr-a.example.org/openehr\"]\n\
          {extra}\n\
-         [credentials.\"{endpoint}\".onward.keys]\n\
+         [credentials.\"{endpoint}\".credentials.onward.keys]\n\
          max_onward_lifetime = '1h'\n\n",
         key = toml::Value::String(crate::support::signing_key_file().to_owned())
     )

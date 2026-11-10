@@ -650,7 +650,7 @@ static AUDIT_SPOOL: LazyLock<(tempfile::TempDir, String)> = LazyLock::new(|| {
 /// repository receives names its own `[audit]` over the harness.
 pub(crate) fn audit_toml() -> String {
     format!(
-        "\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",
+        "\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\nendpoint.url = \"https://{}/arr/\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",
         ferrofed_testkit::unreachable::ADDRESS,
         toml::Value::String(AUDIT_SPOOL.1.clone())
     )

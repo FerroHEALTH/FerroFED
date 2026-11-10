@@ -194,9 +194,9 @@ async fn the_export_holds_a_secret_as_its_reference_alone() -> TestResult {
     let body = serde_json::to_string(&SectionRequest {
         base: Some(RevisionId::FIRST),
         reason: String::from("the node's token"),
-        settings: String::from("user = \"gateway\""),
+        settings: String::from("credentials.user = \"gateway\""),
         secrets: vec![SecretChange {
-            key: String::from("password"),
+            key: String::from("credentials.password"),
             value: Some(WriteOnly::new(VALUE)),
             file: None,
             clear: false,
@@ -221,7 +221,7 @@ async fn the_export_holds_a_secret_as_its_reference_alone() -> TestResult {
     );
     assert!(!exported.contains(VALUE), "the export holds the secret");
     let table: toml::Table = toml::from_str(&exported)?;
-    let reference = table["credentials"]["node-a-pub"]["password_file"]
+    let reference = table["credentials"]["node-a-pub"]["credentials"]["password_file"]
         .as_str()
         .ok_or("the secret is exported as its reference")?;
     assert!(
@@ -257,7 +257,7 @@ async fn refused(
 async fn an_import_with_an_inline_secret_is_refused() -> TestResult {
     let gateway = Gateway::start("")?;
     let text = format!(
-        "{}\n[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"{VALUE}\"\n",
+        "{}\n[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{VALUE}\"\n",
         gateway.held(1)?.toml
     );
     refused(
@@ -288,13 +288,14 @@ async fn an_import_that_changes_a_credential_the_file_provides_is_refused() -> T
     let password = secrets.path().join("node-a");
     std::fs::write(&password, "synthetic-file-password")?;
     let gateway = Gateway::start(&format!(
-        "\n[credentials.\"node-a-pub\"]\nuser = \"synthetic-user\"\npassword_file = {}\n",
+        "\n[credentials.\"node-a-pub\"]\ncredentials.user = \"synthetic-user\"\ncredentials.password_file = {}\n",
         toml::Value::String(password.display().to_string())
     ))?;
     let mut table: toml::Table = toml::from_str(&gateway.held(1)?.toml)?;
     let credentials = table
         .get_mut("credentials")
         .and_then(|value| value.get_mut("node-a-pub"))
+        .and_then(|value| value.get_mut("credentials"))
         .and_then(toml::Value::as_table_mut)
         .ok_or("the file's credentials")?;
     credentials.insert(String::from("user"), toml::Value::from("another-user"));

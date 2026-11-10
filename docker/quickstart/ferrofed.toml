@@ -76,20 +76,20 @@ key_file = "/etc/ferrofed/signing/signing-key.pem"
 jwks_uri = "http://ferrofed:8080/.well-known/jwks.json"
 
 [credentials."node-a-query"]
-user = "ferroehr"
-password = "ferroehr"
+credentials.user = "ferroehr"
+credentials.password = "ferroehr"
 
 [credentials."node-b-query"]
-user = "ferroehr"
-password = "ferroehr"
+credentials.user = "ferroehr"
+credentials.password = "ferroehr"
 
 [credentials."node-c-query"]
-user = "ferroehr"
-password = "ferroehr"
+credentials.user = "ferroehr"
+credentials.password = "ferroehr"
 
 [credentials."node-d-query"]
-user = "ferroehr"
-password = "ferroehr"
+credentials.user = "ferroehr"
+credentials.password = "ferroehr"
 
 # The patient index: FerroPIX's PIXm Manager on the compose network. Each
 # member's ehr_ids are one identifier domain there, as

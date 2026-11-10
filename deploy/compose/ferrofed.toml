@@ -194,11 +194,13 @@ password_file = "/run/secrets/ferrofed/pix-password"
 destination = "repository"
 
 [audit.repository]
-url = "https://arr.example.org/fhir"          # EDIT
 hostname = "gateway.example.org"              # EDIT
 spool_dir = "/var/lib/ferrofed/audit-feed-spool"
+
+[audit.repository.endpoint]
+url = "https://arr.example.org/fhir"          # EDIT
 # When the repository asks for a client certificate:
-# [audit.repository.tls]
+# [audit.repository.endpoint.tls]
 # client_identity_file = "/run/secrets/ferrofed/atna-client.pem"
 # trust_roots_file = "/run/secrets/ferrofed/atna-roots.pem"
 
@@ -255,7 +257,7 @@ spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # 7523 §2.2), its public key published in the gateway's JWK Set, or by the
 # TLS client certificate of the section's tls table (RFC 8705 §2), never by
 # a client secret.
-[credentials."node-a-query".oauth]
+[credentials."node-a-query".credentials.oauth]
 issuer = "https://auth.node-a.example.org"
 client_id = "ferrofed-gateway"
 client_auth = "private_key_jwt"
@@ -263,8 +265,8 @@ private_key_file = "/run/secrets/ferrofed/node-a-client.pem"
 scope = "system/aql-*.s"
 
 [credentials."node-b-query"]
-user = "ferrofed"
-password_file = "/run/secrets/ferrofed/node-b-password"
+credentials.user = "ferrofed"
+credentials.password_file = "/run/secrets/ferrofed/node-b-password"
 
 # FerroFED's own PostgreSQL store, off unless the table is set. A
 # contact-point issuer ([[federation.contact_point]]) and the

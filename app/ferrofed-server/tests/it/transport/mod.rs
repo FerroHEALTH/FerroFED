@@ -64,14 +64,14 @@ const SECTION: &str = "credentials.node-a-pub";
 /// `private_key_jwt` assertion signed by the suite's signing key.
 fn oauth() -> String {
     format!(
-        "[credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed-test-gateway\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {}\n",
+        "[credentials.\"node-a-pub\".credentials.oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed-test-gateway\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {}\n",
         toml::Value::String(crate::support::signing_key_file().to_owned())
     )
 }
 
 /// Basic credentials for node A.
 fn basic() -> String {
-    format!("[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"{SECRET}\"\n")
+    format!("[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{SECRET}\"\n")
 }
 
 /// The client credentials grant for node A at `token_endpoint`, its
@@ -81,7 +81,7 @@ fn grant(dir: &Path, token_endpoint: &str) -> Result<String, Box<dyn Error>> {
     std::fs::write(&key, oauth::Curve::P384.pem()?)?;
     let key = toml::Value::String(key.display().to_string());
     Ok(format!(
-        "[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\
+        "[credentials.\"node-a-pub\".credentials.oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\
          token_endpoint = \"{token_endpoint}\"\nclient_id = \"ferrofed-test-gateway\"\nscope = \"system/aql-*.s\"\n"
     ))
 }
@@ -209,8 +209,8 @@ fn a_plain_http_token_endpoint_is_refused_outside_development() -> TestResult {
     refused_on(
         &settings,
         &site(
-            "credentials.node-a-pub.oauth.token_endpoint",
-            "credentials.node-a-pub.oauth",
+            "credentials.node-a-pub.credentials.oauth.token_endpoint",
+            "credentials.node-a-pub.credentials.oauth",
         ),
     )
 }
@@ -341,8 +341,8 @@ fn every_site_starts_under_development_and_is_reported() -> TestResult {
     let sites = vec![
         site(ENDPOINT_URL, SECTION),
         site(
-            "credentials.node-a-pub.oauth.token_endpoint",
-            "credentials.node-a-pub.oauth",
+            "credentials.node-a-pub.credentials.oauth.token_endpoint",
+            "credentials.node-a-pub.credentials.oauth",
         ),
     ];
     #[cfg(feature = "binding-ihe")]

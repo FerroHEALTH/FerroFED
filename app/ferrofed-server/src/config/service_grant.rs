@@ -23,8 +23,8 @@
 
 use ferrofed_identity::profile::Profile;
 
-use crate::config::Credentials;
 use crate::config::error::Error;
+use ferrohealth_smart::config::credentials::CredentialsSection;
 use crate::config::error::credentials::CredentialsFault;
 use crate::config::oauth;
 use crate::config::secrets::resolve_credentials;
@@ -72,7 +72,7 @@ pub fn site(key: &str) -> ProtectedSite {
 /// `https` outside the development profile.
 pub(crate) fn resolve_service(
     section: &str,
-    credentials: &Credentials,
+    credentials: &CredentialsSection,
     context: ServiceContext,
 ) -> Result<Scheme, Error> {
     let refused = || {

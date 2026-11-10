@@ -178,11 +178,14 @@ fn allergy_codes(bundle: &serde_json::Value) -> Vec<(String, String)> {
 fn stub_terminology(
     server: &ferrofed_testkit::mock::Server,
 ) -> Result<Terminology, Box<dyn Error>> {
-    let client = ferrofed_eehrxf::terminology::BridgeTerminology::new(
-        &format!("{}/fhir", server.uri()),
-        &ferrofed_identity::fhir::Authentication::None,
-        &ferrofed_testkit::tls::platform(),
-        std::time::Duration::from_secs(5),
+    let endpoint = serde_json::from_value(serde_json::json!({
+        "url": format!("{}/fhir", server.uri()),
+        "timeout": "5s",
+        "retry": { "max_attempts": 1 },
+    }))?;
+    let client = ferrofed_eehrxf::terminology::BridgeTerminology::from_endpoint(
+        &endpoint,
+        "eehrxf.terminology.endpoint",
     )?;
     Ok(Terminology::server(std::sync::Arc::new(client)))
 }

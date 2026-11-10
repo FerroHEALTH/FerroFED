@@ -19,7 +19,7 @@ use std::sync::Arc;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
-use crate::config::Credentials;
+use ferrohealth_smart::config::credentials::CredentialsSection;
 use crate::config::error::Error;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
@@ -51,7 +51,7 @@ pub struct PixManager {
     pub members: BTreeMap<String, String>,
     /// How the gateway authenticates to the Manager, when the transport does
     /// not.
-    pub credentials: Option<Credentials>,
+    pub credentials: Option<CredentialsSection>,
     /// The TLS material the service is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,

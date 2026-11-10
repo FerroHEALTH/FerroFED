@@ -296,7 +296,7 @@ fn with_terminology(keys: &str) -> String {
 #[test]
 fn a_terminology_server_beside_the_face_resolves() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let tables = with_terminology("url = \"https://terminology.example.org/fhir\"");
+    let tables = with_terminology("endpoint.url = \"https://terminology.example.org/fhir\"");
     resolved(dir.path(), &public(), &tables)?;
     Ok(())
 }
@@ -307,7 +307,7 @@ fn a_terminology_server_with_no_face_is_refused() -> TestResult {
     let refused = resolved(
         dir.path(),
         &public(),
-        &terminology("url = \"https://terminology.example.org/fhir\""),
+        &terminology("endpoint.url = \"https://terminology.example.org/fhir\""),
     );
     assert!(
         matches!(refused, Err(Error::Terminology(TerminologyFault::Unused))),
@@ -322,19 +322,19 @@ fn a_terminology_server_with_no_url_or_no_time_is_refused() -> TestResult {
     let refused = resolved(
         dir.path(),
         &public(),
-        &with_terminology("timeout = '100ms'"),
+        &with_terminology("endpoint.timeout = '100ms'"),
     );
     assert!(
-        matches!(&refused, Err(Error::Missing { key }) if key == "eehrxf.terminology.url"),
+        matches!(&refused, Err(Error::Missing { key }) if key == "eehrxf.terminology.endpoint.url"),
         "{refused:?}"
     );
     let refused = resolved(
         dir.path(),
         &public(),
-        &with_terminology("url = \"https://terminology.example.org/fhir\"\ntimeout = '0s'"),
+        &with_terminology("endpoint.url = \"https://terminology.example.org/fhir\"\nendpoint.timeout = '0s'"),
     );
     assert!(
-        matches!(&refused, Err(Error::Zero { key }) if key == "eehrxf.terminology.timeout"),
+        matches!(&refused, Err(Error::Zero { key }) if key == "eehrxf.terminology.endpoint.timeout"),
         "{refused:?}"
     );
     Ok(())
@@ -343,10 +343,10 @@ fn a_terminology_server_with_no_url_or_no_time_is_refused() -> TestResult {
 #[test]
 fn a_terminology_url_that_carries_a_credential_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let tables = with_terminology("url = \"https://user:Qz7pw@terminology.example.org/fhir\"");
+    let tables = with_terminology("endpoint.url = \"https://user:Qz7pw@terminology.example.org/fhir\"");
     let refused = resolved(dir.path(), &public(), &tables);
     assert!(
-        matches!(&refused, Err(Error::UrlCredentials { section, .. }) if section == "eehrxf.terminology.credentials"),
+        matches!(&refused, Err(Error::UrlCredentials { section, .. }) if section == "eehrxf.terminology.endpoint.credentials"),
         "{refused:?}"
     );
     Ok(())

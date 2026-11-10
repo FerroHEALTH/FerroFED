@@ -32,23 +32,18 @@
 
 use std::fmt;
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_trait::async_trait;
-use ihe_atna::atna::feed::{FeedAddressError, FeedRepository};
 use ihe_atna::atna::forwarder::Forwarder;
 use ihe_atna::atna::spool::reserve::Reservation;
 use ihe_atna::balp::{AuditError, AuditRecorder, Direction, Entity, Exchange, Observer, Reserved};
 #[cfg(feature = "ihe")]
 use ihe_atna::user::{PurposeOfUse, User};
-use url::Url;
 
-use crate::fhir::{self, Authentication, ClientError};
 use crate::ihe::audit::AUDIT_TARGET;
 use crate::ihe::audit::delivery::Delivery;
 #[cfg(feature = "ihe")]
 use crate::role::behalf::OnBehalfOf;
-use ferrohealth_server::tls_client::TlsClient;
 
 /// Returns `on_behalf` as `ihe_iti`'s audited clients take it: a verified
 /// caller is the user of the exchange, and the gateway its own system.
@@ -84,45 +79,6 @@ pub(crate) fn logged_as(on_behalf: &ihe_atna::user::OnBehalfOf) -> &'static str 
         ihe_atna::user::OnBehalfOf::User(_) => "caller",
         _ => "other",
     }
-}
-
-/// Why a FHIR Feed repository could not be built.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum FeedConfigError {
-    /// The HTTP client could not be built.
-    #[error("the HTTP client for the audit repository could not be built")]
-    Client(#[source] ClientError),
-    /// The repository's FHIR base was refused.
-    #[error("the audit repository FHIR base was refused")]
-    Address(#[source] FeedAddressError),
-}
-
-/// Returns the FHIR Feed repository at `base`.
-///
-/// It is reached over `https`, or over clear text when `cleartext` is set,
-/// which a development deployment alone asks for, with the `tls` material:
-/// the ATNA secure channel authenticates both sides (ITI TF-2 §3.19). Each
-/// request is bounded by `timeout`, and no redirect is followed, because a
-/// record names the patient.
-///
-/// # Errors
-///
-/// A [`FeedConfigError`] for an HTTP client that cannot be built or a base
-/// the feed refuses.
-pub fn feed_repository(
-    base: Url,
-    cleartext: bool,
-    tls: &TlsClient,
-    timeout: Duration,
-) -> Result<FeedRepository, FeedConfigError> {
-    let http = fhir::http_client(&Authentication::None, tls).map_err(FeedConfigError::Client)?;
-    if cleartext {
-        FeedRepository::cleartext(base, http, timeout)
-    } else {
-        FeedRepository::new(base, http, timeout)
-    }
-    .map_err(FeedConfigError::Address)
 }
 
 /// The recorder over one FHIR Feed repository and its spool.

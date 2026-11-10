@@ -511,9 +511,9 @@ fn no_secret_from_the_configuration_reaches_the_banner() -> TestResult {
         "profile = \"development\"\n\n\
          [registry]\ndocument = {document}\n\n\
          [federation]\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n\
-         [credentials.\"node-a-pub\".oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\n\
+         [credentials.\"node-a-pub\".credentials.oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\n\n\
          {pixm}\
-         [credentials.\"node-b-pub\"]\nuser = \"{SECRET}-user\"\npassword = \"{SECRET}-password\"\n\n\
+         [credentials.\"node-b-pub\"]\ncredentials.user = \"{SECRET}-user\"\ncredentials.password = \"{SECRET}-password\"\n\n\
          [[testkit.crossref]]\nnamespace = \"{NAMESPACE}\"\nvalue = \"{PATIENT}\"\nmember = \"node-a\"\nehr_id = \"7d44b88c-4199-4bad-97dc-d78268e01398\"\n"
     );
     let settings =

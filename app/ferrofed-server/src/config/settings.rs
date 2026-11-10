@@ -381,7 +381,7 @@ pub enum Scheme {
         /// The grant.
         grant: Box<ferrohealth_smart::client::ClientCredentials>,
         /// The table as written, which a reload compares.
-        written: Box<crate::config::oauth::Oauth>,
+        written: Box<ferrohealth_smart::config::credentials::OauthSection>,
         /// A node's onward lane, which this grant authenticates; the grant's
         /// own token then carries only the gateway's own requests.
         onward: Option<Box<crate::config::oauth::Onward>>,

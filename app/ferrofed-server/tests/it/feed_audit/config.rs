@@ -95,7 +95,7 @@ fn the_repository_table_and_the_destination_go_together() -> TestResult {
     let message = refusal(&text(
         dir.path(),
         "production",
-        "[audit]\ndestination = \"log\"\n\n[audit.repository]\nurl = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\n",
+        "[audit]\ndestination = \"log\"\n\n[audit.repository]\nendpoint.url = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\n",
     )?)?;
     assert!(message.contains("[audit.repository]"), "{message}");
     Ok(())
@@ -108,26 +108,26 @@ fn outside_development_the_repository_is_https_with_a_spool_on_disk() -> TestRes
     let message = refusal(&text(
         dir.path(),
         "production",
-        "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\n",
+        "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nendpoint.url = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\n",
     )?)?;
     assert!(message.contains("audit.repository.spool_dir"), "{message}");
     let cleartext = text(
         dir.path(),
         "production",
         &format!(
-            "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"http://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {spool}\n"
+            "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nendpoint.url = \"http://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {spool}\n"
         ),
     )?;
     let settings = resolve(&cleartext)?.map_err(|error| error.to_string())?;
     let refused = ferrofed_server::config::transport::check(&settings, None)
         .err()
         .ok_or("plain http is refused outside development")?;
-    assert_eq!("audit.repository.url", refused.site.url_key);
+    assert_eq!("audit.repository.endpoint.url", refused.site.url_key);
     let https = text(
         dir.path(),
         "production",
         &format!(
-            "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {spool}\n"
+            "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nendpoint.url = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {spool}\n"
         ),
     )?;
     let settings = resolve(&https)?.map_err(|error| error.to_string())?;
@@ -143,7 +143,7 @@ fn the_spool_write_timeout_bounds_each_record_and_is_never_zero() -> TestResult 
     let spool = toml::Value::String(dir.path().join("spool").display().to_string());
     let table = |extra: &str| {
         format!(
-            "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {spool}\n{extra}"
+            "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nendpoint.url = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {spool}\n{extra}"
         )
     };
     let settings = resolve(&text(dir.path(), "production", &table(""))?)?
@@ -169,7 +169,7 @@ fn the_spool_write_timeout_bounds_each_record_and_is_never_zero() -> TestResult 
 /// The `[audit]` tables of a repository spooling in `spool`.
 fn spooled_in(spool: &Path) -> String {
     format!(
-        "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",
+        "[audit]\ndestination = \"repository\"\n\n[audit.repository]\nendpoint.url = \"https://arr.example.org/fhir\"\nhostname = \"gateway.example.org\"\nspool_dir = {}\n",
         toml::Value::String(spool.display().to_string())
     )
 }

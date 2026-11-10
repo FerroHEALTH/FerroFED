@@ -4,12 +4,15 @@
 # Onward credentials
 
 How the gateway authenticates to each node it sends a request to (§13.1,
-N25). Each endpoint's `[credentials."<id>"]` section names one scheme: a
-user and a password ([Configuration](configuration.md#the-file)), or one of
-the grants on this page, which obtain a token at the node's authorization
+N25). Each endpoint's `[credentials."<id>"]` section names one scheme. Its
+nested `[credentials."<id>".credentials]` table is `ferrohealth-smart`'s
+credentials table: a user and a password
+([Configuration](configuration.md#the-file)), or the `oauth` grant below.
+Beside that table the section takes the `nuts` grant, the node's `tls` and
+`onward_organisations`. A grant obtains a token at the node's authorization
 server before the request:
 
-- `oauth`: the client-credentials grant of `ferrohealth-smart`, the table
+- `credentials.oauth`: the client-credentials grant of `ferrohealth-smart`, the table
   every FerroHEALTH product reads for an upstream it calls as itself. It
   binds its tokens to a key or to the TLS client certificate where you ask
   for it, holds to the FAPI 2.0 Security Profile with
@@ -17,6 +20,10 @@ server before the request:
   it that exchanges each caller's token for one of the node's own
   ([The onward lane of a node](#the-onward-lane-of-a-node));
 - `nuts`: the Nuts track of the Dutch Generic Functions (Annex B §B.4).
+
+Until 0.0.19, `user`, `password`, `password_file`, `oauth` and `onward` sat
+in the section itself; this release refuses each there, naming its key in
+the nested table (see the upgrade notes).
 
 A section names one of them; two in one section refuse the configuration.
 The `oauth2` and `fapi2` tables of earlier releases, and the section's
@@ -36,7 +43,7 @@ access token with the client-credentials grant (RFC 6749 §4.4), and sends
 the token as `Authorization: Bearer` (RFC 6750 §2.1):
 
 ```toml
-[credentials."cdr-c".oauth]
+[credentials."cdr-c".credentials.oauth]
 token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"   # or issuer, read from its RFC 8414 metadata
 client_id = "ferrofed-gateway"
 client_auth = "private_key_jwt"                 # or tls_client_auth, self_signed_tls_client_auth
@@ -107,14 +114,14 @@ as the actor, as the `oauth2` token exchange of earlier releases always
 did:
 
 ```toml
-[credentials."cdr-c".oauth]
+[credentials."cdr-c".credentials.oauth]
 token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"
 client_id = "ferrofed-gateway"
 client_auth = "private_key_jwt"
 private_key_file = "/run/secrets/cdr-c-client.pem"
 scope = "system/aql-*.s"                         # the gateway's own requests
 
-[credentials."cdr-c".onward]
+[credentials."cdr-c".credentials.onward]
 issuer = "https://auth.cdr-c.example.org"        # the issuer of the exchanged tokens
 kind = "persons"
 profile = "rfc9068"
@@ -123,7 +130,7 @@ audiences = ["https://cdr-c.example.org/openehr"]
 indicators = ["https://cdr-c.example.org/openehr"]   # sent as resource (RFC 8707)
 actor_assertion = true
 
-[credentials."cdr-c".onward.keys]
+[credentials."cdr-c".credentials.onward.keys]
 max_onward_lifetime = "1h"
 ```
 
@@ -181,14 +188,14 @@ table of `ferrohealth-smart`, and the `oauth` table authenticates the gateway
 at the onward issuer:
 
 ```toml
-[credentials."cdr-f".oauth]
+[credentials."cdr-f".credentials.oauth]
 issuer = "https://as.cdr-f.example.org"
 client_id = "ferrofed-gateway"
 client_auth = "private_key_jwt"
 private_key_file = "/run/secrets/cdr-f-client.pem"
 scope = "system/aql-*.s"            # the gateway's own requests alone
 
-[credentials."cdr-f".onward]
+[credentials."cdr-f".credentials.onward]
 issuer = "https://as.cdr-f.example.org"
 kind = "persons"                    # persons, federation or patients
 profile = "keycloak"                # rfc9068, entra or keycloak: picks the grant
@@ -197,7 +204,7 @@ indicators = ["cdr-f"]              # sent as resource or audience, by the profi
 # scope = "..."                     # the Entra profile names the node here
 # correlation_claim = "txn"         # a chained federation route
 
-[credentials."cdr-f".onward.keys]
+[credentials."cdr-f".credentials.onward.keys]
 max_onward_lifetime = "1h"          # required
 # The Keycloak profile only: the issuer's service accounts, whose sub is a
 # user's; the profile refuses the table at load until you list them.
@@ -211,7 +218,7 @@ parameters under the Entra profile. It checks every issued token before use
 (its issuer, its `aud` inside `audiences`, its lifetime against
 `max_onward_lifetime`, the gateway as its client or `act`, and the caller's
 person), and caches it until shortly before it or the caller's token
-expires. A `federation` issuer adds a `[credentials."<id>".onward.federation]`
+expires. A `federation` issuer adds a `[credentials."<id>".credentials.onward.federation]`
 table whose `exchanges_from` lists the caller issuers it is trusted to map
 and whose `person_mapping` names the subject-token claim the issued token's
 `professional.hp_identifier` must carry.
@@ -347,7 +354,7 @@ table names no certificate of its own.
 client_identity_file = "/run/secrets/cdr-f-client.pem"
 trust_roots_file = "/etc/ferrofed/cdr-f-roots.pem"
 
-[credentials."cdr-f".oauth]
+[credentials."cdr-f".credentials.oauth]
 client_auth = "tls_client_auth"              # or self_signed_tls_client_auth
 token_endpoint = "https://auth.cdr-f.example.org/oauth2/token"
 client_id = "ferrofed-gateway"
@@ -472,13 +479,13 @@ section and a `nuts` section for the same endpoint refuse the configuration.
 
 ### The NVI's Nuts grant
 
-The same table under `[nl_gf.nvi.credentials.nuts]` authenticates the
+The same table under `[nl_gf.nvi.nuts]` authenticates the
 gateway to the NVI, the Localization Service of
 [Dutch localization](localization.md#dutch-localization-nl_gfnvi), as a data
 user on GF-Authentication (the IG's Localization page, GFI-004, GFI-005):
 
 ```toml
-[nl_gf.nvi.credentials.nuts]
+[nl_gf.nvi.nuts]
 authorization_server = "https://nuts.example.org/oauth2/nvi"
 scope = "nl-gf-localization"
 did = "did:web:gateway.example.org"
@@ -486,7 +493,7 @@ kid = "did:web:gateway.example.org#key-1"
 key_file = "/run/secrets/nuts-holder.pem"
 dpop_key_file = "/run/secrets/nvi-dpop.pem"
 
-[[nl_gf.nvi.credentials.nuts.credential]]
+[[nl_gf.nvi.nuts.credential]]
 input_descriptor = "organization_credential"
 file = "/run/secrets/organization.jwt"
 ```
@@ -514,7 +521,7 @@ healthcare attributes in an RFC 9396 `authorization_details` object of type
 `nl-gis-v1` (§B.4a.2, §B.4a.3):
 
 ```toml
-[credentials."cdr-e".oauth]
+[credentials."cdr-e".credentials.oauth]
 issuer = "https://as.cdr-e.example.org"
 security_profile = "fapi2"
 client_id = "urn:oid:2.16.528.1.1007.3.3.<URA>"
@@ -597,7 +604,7 @@ name the host in the `oauth` table:
 [credentials."cdr-e"]
 tls = { client_identity_file = "/run/secrets/cdr-e-client.pem" }
 
-[credentials."cdr-e".oauth]
+[credentials."cdr-e".credentials.oauth]
 issuer = "https://as.cdr-e.example.org"
 security_profile = "fapi2"
 client_auth = "tls_client_auth"

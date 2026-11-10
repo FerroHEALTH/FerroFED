@@ -62,7 +62,7 @@ fn oauth(token_url: &str) -> String {
         .iter()
         .map(|endpoint| {
             format!(
-                "[credentials.\"{endpoint}\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n\n"
+                "[credentials.\"{endpoint}\".credentials.oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{token_url}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"{SCOPE}\"\n\n"
             )
         })
         .collect::<Vec<_>>()

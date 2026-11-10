@@ -14,7 +14,7 @@ use ferrofed_identity::role::localizer::OnFailure;
 use ferrohealth_config::removed::Removed;
 use ferrohealth_config::tls::TlsClientSection;
 use ferrohealth_config::units;
-use ferrohealth_secret::secret::Secret;
+use ferrohealth_smart::config::credentials::CredentialsSection;
 use openehr_federation::aggregate::AggregateFunction;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -29,6 +29,7 @@ pub mod base_path;
 pub mod catalog;
 pub mod eehrxf;
 pub mod emergency;
+pub mod endpoint;
 pub mod error;
 pub mod fhir;
 pub mod gateway;
@@ -104,7 +105,7 @@ pub struct Config {
     ///
     /// The registry names the endpoints, and the node dispatch hands each one
     /// its credentials.
-    pub credentials: BTreeMap<String, Credentials>,
+    pub credentials: BTreeMap<String, NodeCredentials>,
     /// The PIXm resolver (`[pixm]`): the PIX Managers and each member's
     /// `ehr_id` domain there (#43).
     #[cfg(feature = "binding-ihe")]
@@ -508,40 +509,29 @@ impl Default for Federation {
     }
 }
 
-/// The credentials one endpoint expects.
+/// The credentials of one node, `[credentials."<endpoint id>"]`.
 ///
-/// A section names basic credentials, the OAuth 2.0 client credentials grant
-/// of `ferrohealth-smart` (`oauth`), under the FAPI 2.0 Security Profile
-/// where it says so, or a Nuts grant, and for a node its onward lane and the
-/// TLS client certificate the gateway presents to it and to its
-/// authorization server. Machine-to-machine authentication is HTTP
-/// Basic or an OAuth 2.0 grant, never a static bearer token.
-/// Every secret is reachable inline or through its `_file` sibling; setting
-/// both is a boot error, and so is naming two schemes. A node's section may
-/// name its TLS material alone, when the transport authenticates the
-/// gateway. An inline secret is a [`Secret`], which no rendering shows.
+/// `credentials` is `ferrohealth-smart`'s credentials table: HTTP Basic, or
+/// the OAuth 2.0 client credentials grant (`oauth`), under the FAPI 2.0
+/// Security Profile where it says so, with the node's onward lane
+/// (`onward`) beside it. Beside that table the gateway reads a Nuts grant
+/// (`nuts`) and the TLS client certificate it presents to the node and to
+/// its authorization server (`tls`). Machine-to-machine authentication is
+/// HTTP Basic or an OAuth 2.0 grant, never a static bearer token. Every
+/// secret is reachable inline or through its `_file` sibling; setting both
+/// is a boot error, and so is naming two schemes. A section may name its TLS
+/// material alone, when the transport authenticates the gateway.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Credentials {
-    /// The user name of RFC 7617 basic authentication.
-    pub user: Option<String>,
-    /// The password of RFC 7617 basic authentication.
-    pub password: Option<Secret>,
-    /// A file holding the password, read at boot.
-    pub password_file: Option<PathBuf>,
-    /// The OAuth 2.0 client credentials grant (RFC 6749 §4.4) of
-    /// `ferrohealth-smart` (`[credentials."<endpoint id>".oauth]`), the
-    /// default onward mechanism of §13.1 (N25): a token obtained with a
-    /// client secret or a `private_key_jwt` assertion, cached, and renewed
-    /// once on a `401`.
-    pub oauth: Option<oauth::Oauth>,
-    /// The onward lane of a node (`[credentials."<endpoint id>".onward]`),
-    /// the `[<lane>.credentials.onward]` table of `ferrohealth-smart`: every
-    /// request a verified caller originates reaches the node under the
-    /// token the table's issuer exchanges the caller's for (RFC 8693 §2.1,
-    /// RFC 7523 §2.1), authenticated by `oauth`, whose own token carries
-    /// only the gateway's own requests. A node's section alone takes it.
-    pub onward: Option<ferrohealth_smart::config::onward::OnwardSection>,
+pub struct NodeCredentials {
+    /// The node's credentials table of `ferrohealth-smart`
+    /// (`[credentials."<endpoint id>".credentials]`): basic credentials, or
+    /// the client credentials grant (RFC 6749 §4.4), the default onward
+    /// mechanism of §13.1 (N25), with the onward lane it authenticates: every
+    /// request a verified caller originates reaches the node under the token
+    /// the lane's issuer exchanges the caller's for (RFC 8693 §2.1, RFC 7523
+    /// §2.1).
+    pub credentials: CredentialsSection,
     /// Whether the node's onward lane carries another party's organisation,
     /// a request no named person stands behind, which its `federation`
     /// issuer exchanges for a token naming the organisation alone and the
@@ -555,19 +545,29 @@ pub struct Credentials {
     #[cfg(feature = "binding-nl")]
     pub nuts: Option<nl::nuts::Nuts>,
     /// The TLS material the node and its authorization server are reached
-    /// with, `[credentials."<endpoint id>".tls]` (RFC 8705); a node's section
-    /// alone takes it, and the node is then reached over `https` alone when
-    /// it names a client identity.
+    /// with, `[credentials."<endpoint id>".tls]` (RFC 8705); the node is then
+    /// reached over `https` alone when it names a client identity.
     pub tls: Option<TlsClientSection>,
-}
-
-impl Credentials {
-    /// Whether the section names TLS material, which only a node's section
-    /// takes.
-    #[must_use]
-    pub fn names_tls(&self) -> bool {
-        self.tls.is_some()
-    }
+    /// The retired `user`, which `credentials.user` replaced in 0.0.19: set,
+    /// it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub user: Removed,
+    /// The retired `password`, which `credentials.password` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub password: Removed,
+    /// The retired `password_file`, which `credentials.password_file`
+    /// replaced in 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub password_file: Removed,
+    /// The retired `oauth`, which `credentials.oauth` replaced in 0.0.19:
+    /// set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub oauth: Removed,
+    /// The retired `onward`, which `credentials.onward` replaced in 0.0.19:
+    /// set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub onward: Removed,
 }
 
 /// The gateway's signing keys and their publication (§13.1, N25).

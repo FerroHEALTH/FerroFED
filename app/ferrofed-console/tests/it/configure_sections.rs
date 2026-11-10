@@ -38,10 +38,10 @@ const RESOURCES: &str = r#"{"running":2,"head":3,"members":[],"stored_query_regi
     "stored_queries":[],
     "sections":[
       {"resource":{"credentials":"node-a-pub"},"owner":"file",
-       "secrets":[{"key":"password","reference":"/run/secrets/node-a"}]},
+       "secrets":[{"key":"credentials.password","reference":"/run/secrets/node-a"}]},
       {"resource":{"credentials":"node-c-pub"},"owner":"console","state":"running",
-       "settings":"{ user = \"<script>u</script>\" }",
-       "secrets":[{"key":"oauth.client_secret","reference":"/var/lib/s/\"><img src=x onerror=1>"}]}],
+       "settings":"{ credentials = { user = \"<script>u</script>\" } }",
+       "secrets":[{"key":"credentials.oauth.client_secret","reference":"/var/lib/s/\"><img src=x onerror=1>"}]}],
     "bindings":["localization","consent"]}"#;
 
 /// The history, empty of markup.
@@ -98,7 +98,7 @@ async fn the_page_shows_each_owner_the_secrets_by_reference_and_what_awaits()
     let body = page(&service, &session, "/configuration/credentials").await?;
     assert!(body.contains("Credentials and bindings"), "{body}");
     assert!(
-        body.contains("<code>password</code>: set, read from <code>/run/secrets/node-a</code>"),
+        body.contains("<code>credentials.password</code>: set, read from <code>/run/secrets/node-a</code>"),
         "{body}"
     );
     assert!(body.contains("Add credentials"), "{body}");
@@ -198,7 +198,7 @@ async fn every_value_of_a_section_is_escaped() -> Result<(), Box<dyn Error>> {
 fn save_credentials(secrets: &[(&str, &str, &str, &str)]) -> String {
     let mut fields: Vec<(String, String)> = vec![
         (String::from("setting_rows"), String::from("c0")),
-        (String::from("setting][c0][key"), String::from("user")),
+        (String::from("setting][c0][key"), String::from("credentials.user")),
         (String::from("setting][c0][value"), String::from("u")),
     ];
     for (row, (key, choice, value, file)) in secrets.iter().enumerate() {
@@ -247,7 +247,7 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
         &session,
         "/configuration/credentials/node-c-pub",
         save_credentials(&[
-            ("password", "set", VALUE, ""),
+            ("credentials.password", "set", VALUE, ""),
             ("tls.client_identity", "keep", "", ""),
         ]),
     )
@@ -262,7 +262,7 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
         return Err(format!("one save, not {}", sent.len()).into());
     };
     let request: SectionRequest = serde_json::from_str(sent)?;
-    assert_eq!("{ user = \"u\" }", request.settings);
+    assert_eq!("{ credentials = { user = \"u\" } }", request.settings);
     let changes: Vec<(&str, bool, bool)> = request
         .secrets
         .iter()
@@ -270,8 +270,8 @@ async fn a_secret_value_goes_to_the_replica_alone() -> Result<(), Box<dyn Error>
         .collect();
     assert_eq!(
         vec![
-            ("password", true, false),
-            ("oauth.client_secret", false, true)
+            ("credentials.password", true, false),
+            ("credentials.oauth.client_secret", false, true)
         ],
         changes,
         "the value is set, and the client secret basic authentication no longer uses is cleared"
@@ -308,17 +308,17 @@ async fn a_section_form_that_does_not_read_asks_no_replica() -> Result<(), Box<d
     let (service, session) = signed_in_console(&listener).await?;
     for (secret, said, at) in [
         (
-            ("password", "set", "", ""),
-            "Type the value of password",
+            ("credentials.password", "set", "", ""),
+            "Type the value of credentials.password",
             "cfg-x-x0-value",
         ),
         (
-            ("password", "file", VALUE, "secrets/p"),
+            ("credentials.password", "file", VALUE, "secrets/p"),
             "is not an absolute path",
             "cfg-x-x0-file",
         ),
         (
-            ("password", "file", "", ""),
+            ("credentials.password", "file", "", ""),
             "Give the absolute path",
             "cfg-x-x0-file",
         ),
@@ -328,7 +328,7 @@ async fn a_section_form_that_does_not_read_asks_no_replica() -> Result<(), Box<d
             "",
         ),
         (
-            ("password", "guess", VALUE, ""),
+            ("credentials.password", "guess", VALUE, ""),
             "Choose Keep, Set a value",
             "cfg-x-x0-choice",
         ),

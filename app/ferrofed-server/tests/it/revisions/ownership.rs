@@ -21,7 +21,7 @@ fn file_owned() -> Result<(Gateway, tempfile::TempDir), Box<dyn Error>> {
     let password = secrets.path().join("node-a");
     std::fs::write(&password, "synthetic-file-password")?;
     let gateway = Gateway::start(&format!(
-        "\n[credentials.\"node-a-pub\"]\nuser = \"synthetic-user\"\npassword_file = {}\n\
+        "\n[credentials.\"node-a-pub\"]\ncredentials.user = \"synthetic-user\"\ncredentials.password_file = {}\n\
          \n[federation.consent]\ndisclose = true\n",
         toml::Value::String(password.display().to_string())
     ))?;
@@ -65,6 +65,7 @@ async fn a_save_that_changes_a_file_owned_credential_is_refused() -> TestResult 
     table
         .get_mut("credentials")
         .and_then(|value| value.get_mut("node-a-pub"))
+        .and_then(|value| value.get_mut("credentials"))
         .and_then(toml::Value::as_table_mut)
         .ok_or("the file's credentials")?
         .insert(String::from("user"), toml::Value::from("another-user"));

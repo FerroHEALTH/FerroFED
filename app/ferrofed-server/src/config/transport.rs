@@ -274,8 +274,8 @@ fn credential_sites(
                 sites.push((
                     endpoint.as_str().to_owned(),
                     site(
-                        format!("{section}.oauth.token_endpoint"),
-                        format!("{section}.oauth"),
+                        format!("{section}.credentials.oauth.token_endpoint"),
+                        format!("{section}.credentials.oauth"),
                     ),
                 ));
             }
@@ -283,8 +283,8 @@ fn credential_sites(
                 sites.push((
                     issuer.to_owned(),
                     site(
-                        format!("{section}.oauth.issuer"),
-                        format!("{section}.oauth"),
+                        format!("{section}.credentials.oauth.issuer"),
+                        format!("{section}.credentials.oauth"),
                     ),
                 ));
             }

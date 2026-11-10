@@ -86,7 +86,7 @@ async fn material(dir: &Path) -> Result<(AuthorizationServer, Material), Box<dyn
     let client = file("fapi2-client.pem", &client_pem)?;
     let dpop = file("fapi2-dpop.pem", &oauth::Curve::P256.pem()?)?;
     let tables = format!(
-        "[credentials.\"node-a-pub\".oauth]\nissuer = \"{}\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nassertion_audience = \"issuer\"\nprivate_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\nauthorization_details = '''{DETAILS}'''\n",
+        "[credentials.\"node-a-pub\".credentials.oauth]\nissuer = \"{}\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nassertion_audience = \"issuer\"\nprivate_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\nauthorization_details = '''{DETAILS}'''\n",
         authority.issuer()
     );
     Ok((authority, Material { tables, client_pem }))
@@ -266,7 +266,7 @@ fn with_line(tables: &str, key: &str, line: &str) -> String {
 /// `expected` admits.
 fn smart(error: &ConfigError, expected: impl Fn(&SmartError) -> bool) -> bool {
     matches!(error, ConfigError::Smart { section, source }
-        if section == "credentials.node-a-pub.oauth" && expected(source))
+        if section == "credentials.node-a-pub.credentials.oauth" && expected(source))
 }
 
 /// Whether `error` is the crate's FAPI 2.0 refusal `expected` admits.
@@ -288,7 +288,7 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
     let (_authority, material) = material(dir.path()).await?;
     let tables = &material.tables;
 
-    let both = format!("{tables}\n[credentials.\"node-a-pub\"]\nuser = \"x\"\npassword = \"y\"\n");
+    let both = format!("{tables}\n[credentials.\"node-a-pub\"]\ncredentials.user = \"x\"\ncredentials.password = \"y\"\n");
     let error = refused(&both)?;
     assert!(
         matches!(
@@ -365,12 +365,12 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
     );
 
     let untargeted = format!(
-        "{tables}\n[credentials.\"node-a-pub\".onward]\nissuer = \"https://as.example.org\"\nkind = \"persons\"\nprofile = \"rfc9068\"\nactor_assertion = true\n\n[credentials.\"node-a-pub\".onward.keys]\nmax_onward_lifetime = '1h'\n"
+        "{tables}\n[credentials.\"node-a-pub\".credentials.onward]\nissuer = \"https://as.example.org\"\nkind = \"persons\"\nprofile = \"rfc9068\"\nactor_assertion = true\n\n[credentials.\"node-a-pub\".credentials.onward.keys]\nmax_onward_lifetime = '1h'\n"
     );
     let error = refused(&untargeted)?;
     assert!(
         matches!(&error, ConfigError::Smart { section, source }
-            if section == "credentials.node-a-pub.onward"
+            if section == "credentials.node-a-pub.credentials.onward"
                 && matches!(source.as_ref(), SmartError::Missing { key } if *key == "credentials.onward.audiences")),
         "{error:?}"
     );
@@ -435,7 +435,7 @@ async fn a_cleartext_issuer_is_refused_outside_development() -> TestResult {
     let Err(refused) = transport::check(&settings, None) else {
         return Err("a plain http issuer passed the transport check".into());
     };
-    assert_eq!("credentials.node-a-pub.oauth.issuer", refused.site.url_key);
+    assert_eq!("credentials.node-a-pub.credentials.oauth.issuer", refused.site.url_key);
     Ok(())
 }
 
@@ -448,7 +448,7 @@ fn the_assertion_audience_is_configured() -> TestResult {
     let key = toml::Value::String(crate::support::signing_key_file().to_owned());
     let oauth = |endpoint: &str, extra: &str| {
         format!(
-            "[credentials.\"node-a-pub\".oauth]\n{endpoint}client_auth = \"private_key_jwt\"\nprivate_key_file = {key}\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n{extra}{}",
+            "[credentials.\"node-a-pub\".credentials.oauth]\n{endpoint}client_auth = \"private_key_jwt\"\nprivate_key_file = {key}\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n{extra}{}",
             crate::support::signing_toml()
         )
     };
