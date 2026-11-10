@@ -412,9 +412,10 @@ ferrohealth-smart = { version = "0.16.3", default-features = false, features = [
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
-# a product pins every family crate, at the version ferrohealth-smart
-# requires. Verified against crates.io on 2026-10-28.
-ferrohealth-secret = "=0.2.0"
+# a product pins every family crate; 0.2.1 is the release
+# ferrohealth-config 0.4.4 requires (#1834).
+# Verified against crates.io on 2026-11-10.
+ferrohealth-secret = "=0.2.1"
 # The operator console's OpenID Connect sign-in and its session of
 # FerroHEALTH/FerroAUTH (#1504): the `[oidc]` and `[session]` sections, the
 # session store, the four sign-in routes and the middleware every page sits
@@ -439,8 +440,9 @@ ferrohealth-session = { version = "=0.10.0", default-features = false }
 # [[auth.issuer]] from the environment by element index (#1682). Verified
 # against crates.io on 2026-11-06. 0.4.3 layers a product's defaults under an
 # optional table or each element of an array of tables a source writes, which
-# every outbound table's `endpoint` takes (#1815, FerroHEALTH/FerroSYS#353).
-ferrohealth-config = "=0.4.3"
+# every outbound table's `endpoint` takes (#1815, FerroHEALTH/FerroSYS#353);
+# 0.4.4 is the release ferrohealth-server 0.8.4 requires (#1834).
+ferrohealth-config = "=0.4.4"
 # The health family of FerroHEALTH/FerroSYS (#1397): the readiness
 # document, and with `registry` the indicators and the lifecycle the gateway
 # runs. Pinned exactly, at the version ferrohealth-server requires.
@@ -463,9 +465,12 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # FerroHEALTH/FerroSYS#300); 0.6.4 compares two reads of that material and
 # builds the revocation check from it (FerroHEALTH/FerroSYS#305, #307);
 # 0.8.2 hands out the check's gated TLS, which a MyHealth@EU gateway's
-# outbound client is built over (#1815, FerroHEALTH/FerroSYS#348).
+# outbound client is built over (#1815, FerroHEALTH/FerroSYS#348); 0.8.4
+# builds the platform verifier once per process for each set of extra roots,
+# so a resolve no longer reads the system root store each time (#1834,
+# FerroHEALTH/FerroSYS#372).
 # Verified against crates.io on 2026-11-10.
-ferrohealth-server = { version = "=0.8.2", default-features = false }
+ferrohealth-server = { version = "=0.8.4", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.
