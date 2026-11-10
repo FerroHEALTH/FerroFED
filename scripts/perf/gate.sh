@@ -23,19 +23,26 @@
 #       base and why.
 #   scripts/perf/gate.sh pack FILE
 #       Packs what `run` reads into the tar FILE: the head's release
-#       gateway and token endpoint, the base's gateway, its rev, base.md and
-#       configuration contract, and the ferrohealth-perf on PATH as
+#       gateway and token endpoint, the base's gateway, its rev, base.md,
+#       configuration contract and the files of its tree its sibling
+#       services start and are seeded from, and the ferrohealth-perf on PATH as
 #       target/perf-tools/. The perf
 #       workflow's build job writes it once for every attempt (#1807).
 #   scripts/perf/gate.sh unpack FILE
 #       Unpacks FILE into the checkout, so `run` measures with nothing built;
 #       put target/perf-tools on PATH for the tool.
 #   scripts/perf/gate.sh run
-#       Starts the quickstart's nodes and FerroPIX, seeds them, starts the
-#       store's PostgreSQL over TLS and both gateways, the head on 8080 and
+#       Starts each arm's own quickstart nodes and FerroPIX from its own
+#       tree's compose.yaml and perf/compose.yaml, at that tree's pins and
+#       under its configuration, and seeds them with its own scripts: the
+#       head's on 127.0.0.1, the base's as the compose project
+#       ferrofed-perf-base on SIBLING_HOST. Then it starts the store's
+#       PostgreSQL over TLS and both gateways, the head on 8080 and
 #       the base on 8070, each under its own tree's configuration contract:
 #       its perf/ferrofed.toml and the overrides of its perf/arm.env, or for
-#       a tree from before that file the overrides its own gate set. A base
+#       a tree from before that file the overrides its own gate set; the
+#       base's file has the address of each service its stack publishes
+#       moved to SIBLING_HOST and reads its own registry document. A base
 #       that refuses its own configuration stops the run with exit 2, naming
 #       the refusal. It renders perf/plan.toml with the quickstart's
 #       development token and the synthetic contact point's DPoP-bound
@@ -53,8 +60,9 @@
 #   scripts/perf/gate.sh --self-test
 #       Proves the pin reader, the plan rendering, the registry rewrite, the
 #       base resolution, each arm's overrides from perf/arm.env and from an
-#       older tree's gate, the agreement of the two plans' idle limits and
-#       the contact point's keys and tokens offline.
+#       older tree's gate, the move of the base's services and
+#       configuration to SIBLING_HOST, the agreement of the two plans' idle
+#       limits and the contact point's keys and tokens offline.
 #
 # Needs Docker with Compose, curl, git, openssl and ferrohealth-perf on PATH,
 # on Linux, where the tool reads the servers' CPU and memory from /proc. No
@@ -77,6 +85,15 @@ readonly STORE_NAME=ferrofed-perf-store
 readonly STORE_PORT=5433
 readonly STORE_PASSWORD=perf
 readonly SERVICES=(ferroehr-a ferroehr-b ferroehr-c ferroehr-d ferropix)
+# The base arm's own sibling services (start_base): the compose project, the
+# loopback address it publishes on, the files of the base's tree it starts
+# and is seeded from, and what the gate writes for it.
+readonly BASE_PROJECT=ferrofed-perf-base
+readonly SIBLING_HOST=127.0.0.2
+readonly SIBLING_TREE=(compose.yaml perf docker scripts/quickstart docs/specs/federation-ref/docker/demo-data)
+readonly BASE_OVERRIDE=$WORK/base-compose.yaml
+readonly BASE_CONFIG=$WORK/base-ferrofed.toml
+readonly BASE_REGISTRY=$WORK/base-registry.toml
 # The onward lane of node A (perf/ferrofed.toml, perf/ferroehr-onward.toml):
 # the token endpoint's address, the key sets it writes for node A, the
 # client key it writes for the gateway's private_key_jwt, and the third
@@ -146,14 +163,16 @@ render() {
   printf '%s\n' "$text" > "$2"
 }
 
-# registry DOCUMENT: the quickstart's registry DOCUMENT with each node's
-# compose host and port replaced by the loopback port compose publishes it on.
+# registry DOCUMENT [HOST]: the quickstart's registry DOCUMENT with each
+# node's compose host and port replaced by the port compose publishes it on
+# at HOST, 127.0.0.1 by default.
 registry() {
+  local host="${2:-127.0.0.1}"
   sed -E \
-    -e 's|http://ferroehr-a:8080/|http://127.0.0.1:8081/|' \
-    -e 's|http://ferroehr-b:8080/|http://127.0.0.1:8082/|' \
-    -e 's|http://ferroehr-c:8080/|http://127.0.0.1:8083/|' \
-    -e 's|http://ferroehr-d:8080/|http://127.0.0.1:8084/|' "$1"
+    -e "s|http://ferroehr-a:8080/|http://${host}:8081/|" \
+    -e "s|http://ferroehr-b:8080/|http://${host}:8082/|" \
+    -e "s|http://ferroehr-c:8080/|http://${host}:8083/|" \
+    -e "s|http://ferroehr-d:8080/|http://${host}:8084/|" "$1"
 }
 
 # b64url: standard input as unpadded base64url (RFC 7515 §2).
@@ -365,7 +384,11 @@ pack() {
   tool="$(command -v ferrohealth-perf)" || die "ferrohealth-perf is not on PATH"
   mkdir -p "$TOOLS"
   [[ "$tool" -ef "$TOOLS/ferrohealth-perf" ]] || cp "$tool" "$TOOLS/ferrohealth-perf"
+  [[ -f "$BASE_TREE/src/compose.yaml" ]] || die "the base's tree is not kept: run gate.sh build first"
   while IFS= read -r file; do kept+=("$file"); done < <(contract)
+  for file in "${SIBLING_TREE[@]}"; do
+    [[ -e "$BASE_TREE/src/$file" ]] && kept+=("$BASE_TREE/src/$file")
+  done
   tar -cf "$1" target/release/ferrofed target/release/ferrofed-perf-token \
     "$BASE_TREE/ferrofed" "$BASE_TREE/rev" "$BASE_TREE/base.md" ${kept[@]+"${kept[@]}"} "$TOOLS/ferrohealth-perf"
 }
@@ -379,10 +402,55 @@ unpack() {
   tar -xf "$file"
   [[ -x target/release/ferrofed && -x "$BASE_TREE/ferrofed" && -s "$BASE_TREE/rev" && -f "$BASE_TREE/ferrofed.toml" ]] ||
     die "$file holds no built arms"
+  [[ -f "$BASE_TREE/src/compose.yaml" ]] || die "$file holds no base tree to start its services from"
 }
 
 compose() {
   FERROFED__USAGE_REPORT__ENABLED=false docker compose -f compose.yaml -f "$OVERRIDE" "$@"
+}
+
+# base_compose ARGS: docker compose over the base's own compose.yaml and its
+# perf/compose.yaml moved to SIBLING_HOST, as the project BASE_PROJECT, with
+# relative paths read in the base's tree.
+base_compose() {
+  FERROFED__USAGE_REPORT__ENABLED=false FERROFED_BIND_HOST="$SIBLING_HOST" docker compose \
+    --project-name "$BASE_PROJECT" --project-directory "$BASE_TREE/src" \
+    -f "$BASE_TREE/src/compose.yaml" -f "$BASE_OVERRIDE" "$@"
+}
+
+# moved FILE: the compose FILE with each port it publishes on 127.0.0.1
+# published on SIBLING_HOST.
+moved() {
+  sed -E "s/(^|[^0-9])127\.0\.0\.1:/\1${SIBLING_HOST}:/g" "$1"
+}
+
+# published SPEC: the host ports the services the gate starts, SERVICES and
+# what they depend on, publish in the resolved compose SPEC, JSON as `docker
+# compose config` prints it, one a line; exit 2 when one is published beyond
+# SIBLING_HOST, where it would meet the head's.
+published() {
+  local started
+  started="$(jq --args '.services as $all
+    | def grow: (. + [.[] | $all[.].depends_on // {} | keys[]]) | unique;
+    [$ARGS.positional | until(grow == .; grow)[] | $all[.].ports[]?]' "${SERVICES[@]}" <<< "$1")" ||
+    die "the base's resolved compose files do not read as JSON"
+  jq -e --arg host "$SIBLING_HOST" 'all(.host_ip == $host)' <<< "$started" > /dev/null ||
+    die "the base's services publish a port beyond $SIBLING_HOST"
+  jq -r '[.[].published | tostring] | unique | .[]' <<< "$started"
+}
+
+# relocate CONFIG PORT...: the base's CONFIG with each address of a PORT its
+# services publish, on 127.0.0.1 or localhost, moved to SIBLING_HOST, and
+# the gate's registry document replaced by the base's own; exit 2 when
+# CONFIG does not read the gate's registry document.
+relocate() {
+  local config="$1" port edits=()
+  shift
+  for port in "$@"; do
+    edits+=(-e "s#//(127\.0\.0\.1|localhost):${port}([^0-9]|\$)#//${SIBLING_HOST}:${port}\2#g")
+  done
+  grep -qF "\"$WORK/registry.toml\"" "$config" || die "the base's $CONFIG does not read the gate's $WORK/registry.toml"
+  sed -E ${edits[@]+"${edits[@]}"} -e "s#\"$WORK/registry\.toml\"#\"$BASE_REGISTRY\"#" "$config"
 }
 
 head_pid=""
@@ -399,6 +467,8 @@ cleanup() {
   done
   docker rm --force "$STORE_NAME" > /dev/null 2>&1 || true
   compose down --volumes > /dev/null 2>&1 || true
+  [[ -f "$BASE_OVERRIDE" ]] && { base_compose down --volumes > /dev/null 2>&1 || true; }
+  return 0
 }
 
 # store_tls: a CA and the store server's certificate for 127.0.0.1, under
@@ -676,6 +746,32 @@ emergency_counted() {
   fi
 }
 
+# start_base: the base's own quickstart nodes and FerroPIX, from its own
+# tree's compose files at its pins and under its configuration, on
+# SIBLING_HOST, seeded by its own tree's scripts, with its registry document
+# and its configuration moved there.
+start_base() {
+  local src="$BASE_TREE/src" spec listed ports=() port
+  [[ -f "$src/compose.yaml" && -f "$src/$OVERRIDE" ]] || die "$src holds no compose.yaml and $OVERRIDE to start the base's services from"
+  moved "$src/$OVERRIDE" > "$BASE_OVERRIDE"
+  # The base's node A mounts the onward key sets at its tree's target/perf-run.
+  mkdir -p "$src/target"
+  rm -rf "$src/target/perf-run"
+  ln -s "$root/$WORK" "$src/target/perf-run"
+  spec="$(base_compose config --format json)" || die "the base's compose files do not resolve"
+  listed="$(published "$spec")" || exit 2
+  while IFS= read -r port; do [[ -n "$port" ]] && ports+=("$port"); done <<< "$listed"
+  ((${#ports[@]} > 0)) || die "the base's services publish no port"
+  base_compose up --detach --wait "${SERVICES[@]}" > "$WORK/base-compose.log" 2>&1 ||
+    die "the base's nodes and FerroPIX did not come up: $(tail -n 20 "$WORK/base-compose.log")"
+  base_compose run --rm ferropix-seed > "$WORK/base-seed-ferropix.log" 2>&1 ||
+    die "the base's FerroPIX could not be seeded: $(tail -n 20 "$WORK/base-seed-ferropix.log")"
+  FERROFED_BIND_HOST="$SIBLING_HOST" bash "$src/scripts/quickstart/seed.sh" > "$WORK/base-seed-nodes.log" 2>&1 ||
+    die "the base's nodes could not be seeded: $(tail -n 20 "$WORK/base-seed-nodes.log")"
+  registry "$src/docker/quickstart/registry.toml" "$SIBLING_HOST" > "$BASE_REGISTRY"
+  relocate "$BASE_TREE/ferrofed.toml" ${ports[@]+"${ports[@]}"} > "$BASE_CONFIG" || exit 2
+}
+
 start() {
   local store_image
   store_image="$(pin "FerroPIX database image")"
@@ -698,6 +794,9 @@ start() {
   bash scripts/quickstart/seed.sh > "$WORK/seed-nodes.log" 2>&1 ||
     die "the nodes could not be seeded: $(tail -n 20 "$WORK/seed-nodes.log")"
   registry docker/quickstart/registry.toml > "$WORK/registry.toml"
+  # NOTE: no specification governs this: our own design; each arm runs on the sibling
+  # services its own tree pins, so a pull request that moves a pin reaches the head alone.
+  start_base
 
   store_tls
   docker run --detach --name "$STORE_NAME" --publish "127.0.0.1:${STORE_PORT}:5432" \
@@ -723,9 +822,9 @@ start() {
   # configuration contract, so a pull request that renames a key reaches the head alone.
   local base_contract
   base_contract="$(base_source)" || exit 2
-  accepts "$BASE_TREE/ferrofed" "$BASE_TREE/ferrofed.toml" ferrofed_base 8070 "$base_contract"
+  accepts "$BASE_TREE/ferrofed" "$BASE_CONFIG" ferrofed_base 8070 "$base_contract"
   head_pid="$(serve head target/release/ferrofed "$CONFIG" ferrofed 8080 "$ARM_ENV")"
-  base_pid="$(serve base "$BASE_TREE/ferrofed" "$BASE_TREE/ferrofed.toml" ferrofed_base 8070 "$base_contract")"
+  base_pid="$(serve base "$BASE_TREE/ferrofed" "$BASE_CONFIG" ferrofed_base 8070 "$base_contract")"
   wait_for "the head gateway" 60 curl --fail --silent "$HEAD_URL/health/readiness"
   wait_for "the base gateway" 60 curl --fail --silent "$BASE_URL/health/readiness"
 }
@@ -827,6 +926,27 @@ self_test() {
     'url = "http://127.0.0.1:8083/ferroehr/rest/openehr"' "$(registry "$work/registry.toml")"
   check "every quickstart node is reached on loopback" 0 \
     "$(registry "$root/docker/quickstart/registry.toml" | grep -c 'http://ferroehr-' || true)"
+  check "the base's nodes are reached on its own address" \
+    "url = \"http://$SIBLING_HOST:8083/ferroehr/rest/openehr\"" "$(registry "$work/registry.toml" "$SIBLING_HOST")"
+  # shellcheck disable=SC2016 # the compose interpolation is the file's, never expanded
+  printf '    ports:\n      - "127.0.0.1:8090:8080"\n      - "${FERROFED_BIND_HOST:-127.0.0.1}:8081:8080"\n' > "$work/override.yaml"
+  # shellcheck disable=SC2016 # the compose interpolation is the file's, never expanded
+  check "the base's override publishes its ports on its own address" \
+    "$(printf '    ports:\n      - "%s:8090:8080"\n      - "${FERROFED_BIND_HOST:-127.0.0.1}:8081:8080"' "$SIBLING_HOST")" \
+    "$(moved "$work/override.yaml")"
+  local spec
+  spec="$(printf '{"services":{"ferrofed":{"ports":[{"host_ip":"127.0.0.1","published":"8080"}]},"ferropix":{"depends_on":{"ferropix-issuer":{}}},"ferropix-issuer":{"ports":[{"host_ip":"%s","published":8090}]},"ferroehr-a":{"ports":[{"host_ip":"%s","published":"8081"}]},"ferroehr-b":{},"ferroehr-c":{},"ferroehr-d":{}}}' "$SIBLING_HOST" "$SIBLING_HOST")"
+  check "the base's ports are those its started services and their dependencies publish" "8081 8090" \
+    "$(published "$spec" | paste -sd ' ' -)"
+  check "a base port published beyond its own address is refused" 2 \
+    "$( (published "${spec//\"$SIBLING_HOST\"/\"127.0.0.1\"}") > /dev/null 2>&1; echo $?)"
+  printf 'document = "%s/registry.toml"\nurl = "http://127.0.0.1:8090/fhir/"\ntoken_endpoint = "http://localhost:8090/t"\nonward = "http://127.0.0.1:8095/token"\nother = "http://127.0.0.1:80900/"\n' "$WORK" > "$work/base.toml"
+  check "the base's configuration reaches its own services and registry, and nothing else moves" \
+    "$(printf 'document = "%s"\nurl = "http://%s:8090/fhir/"\ntoken_endpoint = "http://%s:8090/t"\nonward = "http://127.0.0.1:8095/token"\nother = "http://127.0.0.1:80900/"' "$BASE_REGISTRY" "$SIBLING_HOST" "$SIBLING_HOST")" \
+    "$(relocate "$work/base.toml" 8081 8090)"
+  printf 'url = "http://127.0.0.1:8090/fhir/"\n' > "$work/unregistered.toml"
+  check "a base configuration that reads no gate registry is refused" 2 \
+    "$( (relocate "$work/unregistered.toml" 8090) > /dev/null 2>&1; echo $?)"
   printf '[idle]\n# a note\nmax = 1.0\n\n[load]\nrate = 2.0\n' > "$work/plan.toml"
   check "the idle table is read alone" "max = 1.0" "$(idle_table "$work/plan.toml")"
   check "the gate and the busy-loop plan hold the same idle limits" \
@@ -978,6 +1098,10 @@ GATE
   printf 'The base is abc123.\n' > "$work/arms/$BASE_TREE/base.md"
   printf '[server]\n' > "$work/arms/$BASE_TREE/ferrofed.toml"
   printf 'FERROFED__A=1\n' > "$work/arms/$BASE_TREE/arm.env"
+  mkdir -p "$work/arms/$BASE_TREE/src/perf" "$work/arms/$BASE_TREE/src/crates"
+  printf 'name: base\n' > "$work/arms/$BASE_TREE/src/compose.yaml"
+  printf 'services: {}\n' > "$work/arms/$BASE_TREE/src/$OVERRIDE"
+  : > "$work/arms/$BASE_TREE/src/crates/lib.rs"
   check "the build job packs both arms and the tool" 0 \
     "$( (root="$work/arms" PATH="$work/tool:$PATH" pack "$work/arms.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
   check "an attempt unpacks them with nothing built" 0 \
@@ -986,6 +1110,13 @@ GATE
     "$(printf '%s %s %s' "$(< "$work/attempt/$BASE_TREE/rev")" "$("$work/attempt/$BASE_TREE/ferrofed")" "$("$work/attempt/$TOOLS/ferrohealth-perf")")"
   check "the unpacked base carries its own configuration contract" "[server] FERROFED__A=1" \
     "$(printf '%s %s' "$(< "$work/attempt/$BASE_TREE/ferrofed.toml")" "$(< "$work/attempt/$BASE_TREE/arm.env")")"
+  check "the unpacked base carries the compose files its services start from, and no source" "name: base services: {} 0" \
+    "$(printf '%s %s %s' "$(< "$work/attempt/$BASE_TREE/src/compose.yaml")" "$(< "$work/attempt/$BASE_TREE/src/$OVERRIDE")" \
+      "$(find "$work/attempt/$BASE_TREE/src" -name lib.rs | wc -l | tr -d ' ')")"
+  mv "$work/arms/$BASE_TREE/src/compose.yaml" "$work/arms/$BASE_TREE/src/compose.kept"
+  check "a base whose tree is not kept is not packed" 1 \
+    "$( (root="$work/arms" PATH="$work/tool:$PATH" pack "$work/none.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
+  mv "$work/arms/$BASE_TREE/src/compose.kept" "$work/arms/$BASE_TREE/src/compose.yaml"
   rm -f -- "${work:?}/arms/${BASE_TREE:?}/arm.env"
   check "a base whose overrides are not kept is not packed" 1 \
     "$( (root="$work/arms" PATH="$work/tool:$PATH" pack "$work/none.tar") > /dev/null 2>&1 && echo 0 || echo 1)"
@@ -1052,7 +1183,7 @@ GATE
     "$(grep -cxE 'FERROFED__(SERVER__LISTEN=127\.0\.0\.1:8080|GATEWAY__PUBLIC_URL=http://127\.0\.0\.1:8080|AUTH__DPOP__EXTERNAL_URL=http://127\.0\.0\.1:8080|SIGNING__JWKS_URI=http://127\.0\.0\.1:8080/\.well-known/jwks\.json|STORE__URL_FILE=target/perf-run/head/store-url)' <<< "$committed")"
   # shellcheck disable=SC2016 # the pattern matches the script's own text
   check "the head starts on its own tree's contract and the base on its own" 2 \
-    "$(grep -cE '^  (head_pid="\$\(serve head [^ ]+ "\$CONFIG" ferrofed 8080 "\$ARM_ENV"|base_pid="\$\(serve base [^ ]+ "\$BASE_TREE/ferrofed.toml" ferrofed_base 8070 "\$base_contract")' "$root/scripts/perf/gate.sh")"
+    "$(grep -cE '^  (head_pid="\$\(serve head [^ ]+ "\$CONFIG" ferrofed 8080 "\$ARM_ENV"|base_pid="\$\(serve base [^ ]+ "\$BASE_CONFIG" ferrofed_base 8070 "\$base_contract")' "$root/scripts/perf/gate.sh")"
   local config="$root/$CONFIG"
   check "the gateway trusts the contact point the gate mints for" 3 \
     "$(grep -cxF "issuer = \"$NCP_ISSUER\"" "$config")"
