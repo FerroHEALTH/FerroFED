@@ -15,14 +15,12 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmResolver};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::role::resolver::{Identification, Resolver};
 use ferrofed_registry::id::{EhrId, NodeId};
 use ferrofed_testkit::mock::Server;
-use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::pixm::Invocation;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, ResponseTemplate};
@@ -58,9 +56,8 @@ fn namespace(value: &str) -> IdentifierNamespace {
 fn resolver(server: &Server) -> PixmResolver {
     PixmResolver::from_config(
         vec![ManagerConfig {
-            tls: ferrofed_testkit::tls::platform(),
-            base: SecretUrl::new(format!("{}/fhir/", server.uri())),
-            auth: Authentication::None,
+            client: ferrofed_testkit::outbound::client(&format!("{}/fhir/", server.uri()))
+                .expect("the outbound client builds"),
             members: BTreeMap::from([
                 (node("node-a"), DOMAIN_A.to_owned()),
                 (node("node-b"), DOMAIN_B.to_owned()),

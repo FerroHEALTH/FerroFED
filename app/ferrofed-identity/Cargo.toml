@@ -26,7 +26,6 @@ ihe = [
   "ihe-iti/pdqm",
   "ihe-iti/pixm",
   "ihe-iti/pmir",
-  "ihe-iti/smart",
   "ihe-iti/xcpd",
 ]
 # The BALP recorders: the FHIR Feed of ITI-20 to an ATNA Audit Record
@@ -36,9 +35,11 @@ ihe = [
 balp = ["dep:ihe-atna"]
 # The adapters of the Dutch binding (Annex B): NVI and Mitz, with the LRZa
 # URAs they read. The server's binding-nl turns it on.
-nl = ["dep:nl-generic-functions", "ihe-iti/authorizer"]
+nl = ["dep:nl-generic-functions"]
 
 [dependencies]
+# The table type the gated TLS of a MyHealth@EU route builds for (#1815).
+ferrohealth-config.workspace = true
 ferrohealth-secret.workspace = true
 async-trait.workspace = true
 ferrofed-registry.workspace = true

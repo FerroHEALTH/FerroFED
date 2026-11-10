@@ -59,10 +59,10 @@ fn with(key: &str, value: &str) -> String {
 #[test]
 fn a_table_without_its_url_master_or_namespaces_is_refused() -> TestResult {
     for (text, key) in [
-        (with("url", "\"\""), "pdqm.url"),
+        (with("endpoint.url", "\"\""), "pdqm.endpoint.url"),
         (with("master", "\"\""), "pdqm.master"),
         (
-            format!("[pdqm]\nurl = \"{BASE}\"\nmaster = \"{MASTER}\"\n"),
+            format!("[pdqm]\nendpoint.url = \"{BASE}\"\nmaster = \"{MASTER}\"\n"),
             "pdqm.namespaces",
         ),
     ] {
@@ -74,10 +74,10 @@ fn a_table_without_its_url_master_or_namespaces_is_refused() -> TestResult {
     }
     let error = refusal(&format!(
         "profile = \"development\"\n{}",
-        with("timeout", "'0s'")
+        with("endpoint.timeout", "'0s'")
     ))?;
     assert!(
-        matches!(&error, error::Error::Zero { key } if key == "pdqm.timeout"),
+        matches!(&error, error::Error::Zero { key } if key == "pdqm.endpoint.timeout"),
         "{error:?}"
     );
     Ok(())
@@ -87,21 +87,24 @@ fn a_table_without_its_url_master_or_namespaces_is_refused() -> TestResult {
 fn a_credential_in_the_url_or_an_unsigned_assertion_grant_is_refused() -> TestResult {
     let error = refusal(&format!(
         "profile = \"development\"\n{}",
-        with("url", "\"https://user:Qz7secret@pdq.example.org/fhir/\"")
+        with(
+            "endpoint.url",
+            "\"https://user:Qz7secret@pdq.example.org/fhir/\""
+        )
     ))?;
     assert!(
-        matches!(&error, error::Error::UrlCredentials { key, .. } if key == "pdqm.url"),
+        matches!(&error, error::Error::UrlCredentials { key, .. } if key == "pdqm.endpoint.url"),
         "{error:?}"
     );
     assert!(!format!("{error} {error:?}").contains("Qz7secret"));
     let error = refusal(&format!(
-        "profile = \"development\"\n{}\n[pdqm.credentials.oauth]\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n",
+        "profile = \"development\"\n{}\n[pdqm.endpoint.credentials.oauth]\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"gateway\"\nscope = \"system/aql-*.s\"\n",
         pdqm(BASE, "iti-78")
     ))?;
     assert!(
         matches!(
             &error,
-            error::Error::Smart { section, .. } if section == "pdqm.credentials.oauth"
+            error::Error::Smart { section, .. } if section == "pdqm.endpoint.credentials.oauth"
         ),
         "an assertion grant without its key is refused: {error:?}"
     );
@@ -118,14 +121,14 @@ fn a_fapi2_grant_in_its_section_is_refused() -> TestResult {
     };
     let (client, dpop) = (file("client.pem")?, file("dpop.pem")?);
     let error = refusal(&format!(
-        "profile = \"development\"\n{}\n[pdqm.credentials.fapi2]\nissuer = \"https://as.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"gateway\"\nclient_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\n",
+        "profile = \"development\"\n{}\n[pdqm.endpoint.credentials.fapi2]\nissuer = \"https://as.example.org\"\ngrant = \"client_credentials\"\nclient_id = \"gateway\"\nclient_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\n",
         pdqm(BASE, "iti-78")
     ))?;
     assert!(
         matches!(
             &error,
             error::Error::Replaced { old, new }
-                if old == "pdqm.credentials.fapi2" && new == "pdqm.credentials.oauth"
+                if old == "pdqm.endpoint.credentials.fapi2" && new == "pdqm.endpoint.credentials.oauth"
         ),
         "{error:?}"
     );
@@ -135,7 +138,7 @@ fn a_fapi2_grant_in_its_section_is_refused() -> TestResult {
 #[test]
 fn a_namespace_the_cross_reference_maps_is_refused() -> TestResult {
     let error = refusal(&format!(
-        "profile = \"development\"\n[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.namespaces]\n\"{LOCAL}\" = \"{LOCAL}\"\n\n{}",
+        "profile = \"development\"\n[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.namespaces]\n\"{LOCAL}\" = \"{LOCAL}\"\n\n{}",
         pdqm(BASE, "iti-78")
     ))?;
     assert!(
@@ -154,7 +157,7 @@ fn plain_http_outside_development_is_refused() -> TestResult {
     let error::Error::Cleartext(cleartext) = &error else {
         return Err(format!("plain http is refused, got {error:?}").into());
     };
-    assert_eq!("pdqm.url", cleartext.site.url_key);
+    assert_eq!("pdqm.endpoint.url", cleartext.site.url_key);
     Ok(())
 }
 
@@ -182,7 +185,7 @@ fn an_unknown_transaction_is_refused() -> TestResult {
 fn a_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
     let error = refusal(&format!(
         "profile = \"development\"\n[federation]\noverall_timeout = '1s'\n\n{}",
-        with("timeout", "'1s'")
+        with("endpoint.timeout", "'1s'")
     ))?;
     assert!(
         matches!(
@@ -202,7 +205,7 @@ fn a_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
 fn the_default_localizer_budget_counts_when_no_section_is_written() -> TestResult {
     let error = refusal(&format!(
         "profile = \"development\"\n[federation]\noverall_timeout = '6s'\nnode_selection = \"localized\"\n\n{}",
-        with("timeout", "'1s'")
+        with("endpoint.timeout", "'1s'")
     ))?;
     assert!(
         matches!(
@@ -243,7 +246,7 @@ fn federation(tables: &str) -> Result<Result<Option<Federation>, FederationError
 /// The `[pixm]` table of a PIX Manager the tests never reach.
 fn unreached_pixm() -> String {
     String::from(
-        "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n",
+        "[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n",
     )
 }
 

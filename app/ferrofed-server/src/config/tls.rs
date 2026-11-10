@@ -48,7 +48,7 @@ pub enum TlsFault {
 }
 
 /// Reads the TLS material `section` names for the table at `key`, such as
-/// `xcpd.tls`, so a refusal names `xcpd.tls.client_identity`.
+/// `pdqm.endpoint.tls`, so a refusal names `pdqm.endpoint.tls.client_identity`.
 ///
 /// # Errors
 ///

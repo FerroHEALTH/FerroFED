@@ -1451,7 +1451,6 @@ dependencies = [
  "ferrohealth-secret",
  "ferrohealth-smart",
  "http",
- "ihe-iti",
  "jiff",
  "jsonschema",
  "jsonwebtoken",
@@ -1677,9 +1676,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-config"
-version = "0.4.1"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d18951fc3a4752fabbe4363a82f965e90893dcdc0ace12bb2f4371c7b3f25f1"
+checksum = "0988b65c0d550f4240abc4decc0ab8eb9e2f3118d194f3fdb8fcea37dafd0c4d"
 dependencies = [
  "ferrohealth-secret",
  "percent-encoding",
@@ -1713,9 +1712,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-server"
-version = "0.8.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9f0a1dafa1db3dd982b9988c30c021e0aec05b63dd3e184a4fd6b537a610cb6"
+checksum = "4e47727e318894f5434d77089bf8399e7fbdc679ffea846f08757c2bde2d0c8b"
 dependencies = [
  "aws-lc-rs",
  "axum",
@@ -1776,9 +1775,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-smart"
-version = "0.16.2"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f10de82e5050754ccf7f6bc91789c20d228e8028ae19bce4879e8f847698c15c"
+checksum = "a62af5a286d9d7bb00b4b90889b3d74a2ab1f39ea172271f34e64f1ef54438ca"
 dependencies = [
  "argon2",
  "aws-lc-rs",
@@ -2659,9 +2658,9 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07b31f714aedceb85f55c6c68af8e5bd6d382e9f91ba4dbbab6d901e2fa9e997"
+checksum = "df5efb3626dbac59c3d81c296105103a5329f7ed94e95c6e0ef9716ee34f8a76"
 dependencies = [
  "async-trait",
  "ferrohealth-smart",
@@ -3140,9 +3139,9 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "nl-generic-functions"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64a8d228589f75fb72fea34f0534d16c54b37cb8b330424745e25157fb63acf8"
+checksum = "a6e0ba778fd5dd415deebc9b397d0d0280f8075fe2d1cd50813119109e84e1dd"
 dependencies = [
  "base64 0.23.1",
  "ferrohealth-smart",

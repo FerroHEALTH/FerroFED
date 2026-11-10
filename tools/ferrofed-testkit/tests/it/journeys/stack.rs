@@ -320,7 +320,7 @@ async fn gateway(
     // NOTE: writing to a String cannot fail, so the result is dropped.
     let _written: std::fmt::Result = write!(
         text,
-        "\n[[pixm.manager]]\nurl = \"{pix}\"\n\n[pixm.manager.members]\n\
+        "\n[[pixm.manager]]\nendpoint.url = \"{pix}\"\n\n[pixm.manager.members]\n\
          \"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n",
         DOMAINS[0].system(),
         DOMAINS[1].system()

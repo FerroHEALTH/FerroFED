@@ -25,7 +25,6 @@ use std::sync::Arc;
 use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::grant::lane::Lane;
 use ferrofed_engine::onward::grant::on_behalf::SharedOnBehalf;
-use ferrofed_identity::fhir::{self, Authentication};
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_smart::client::dpop::DpopKey;
@@ -250,7 +249,10 @@ fn transport(
         endpoint: endpoint.clone(),
         source,
     };
-    let builder = fhir::http_client_builder(&Authentication::None, tls)
+    // NOTE: no specification governs this: our own design; a node request carries the
+    // patient's ehr_id and the credential, so it follows no redirect anywhere the registry does not name.
+    let builder = tls
+        .apply(reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()))
         .map_err(|source| failed(Box::new(source)))?;
     node_transport(builder, settings).map_err(|source| failed(Box::new(source)))
 }

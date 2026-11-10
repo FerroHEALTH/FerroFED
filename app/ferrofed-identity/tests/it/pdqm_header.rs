@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::pdqm::{PdqmConfig, PdqmDemographics, Transaction};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::demographics::{Ambiguity, Demographics};
@@ -24,7 +23,6 @@ use ferrofed_identity::role::header::{HeaderAnswer, PatientHeader};
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdqm_stub::{self, Entry};
-use ferrohealth_secret::secret_url::SecretUrl;
 use secrecy::SecretString;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -51,9 +49,7 @@ const BIRTH_DATE: &str = "1970-01-01";
 /// The step over the Supplier at `base`, asked with `transaction`.
 fn step(base: &str, transaction: Transaction) -> Result<PdqmDemographics, Box<dyn Error>> {
     Ok(PdqmDemographics::from_config(PdqmConfig {
-        tls: ferrofed_testkit::tls::platform(),
-        base: SecretUrl::new(base.to_owned()),
-        auth: Authentication::None,
+        client: ferrofed_testkit::outbound::client(base)?,
         transaction,
         master: MASTER.to_owned(),
         namespaces: BTreeMap::from([(

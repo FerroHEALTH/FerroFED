@@ -1,30 +1,35 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The mCSD care services directory, `[registry.mcsd]` (§15.1, Annex A.5):
-//! the table and its resolution, from which the IHE binding keeps the
-//! registry in step with the directory.
+//! The mCSD care services directory, `[registry.mcsd]` (§15.1, Annex A.5).
+//!
+//! The table and its resolution, from which the IHE binding keeps the
+//! registry in step with the directory. `[registry.mcsd.endpoint]` is
+//! `ferrohealth-smart`'s `EndpointSection`: the directory's FHIR base, its
+//! TLS, the timeout and retries of each call, and its credentials.
 
 use ferrohealth_config::removed::Removed;
-use ferrohealth_config::tls::TlsClientSection;
 use ferrohealth_config::units;
 use ferrohealth_server::tls_client::TlsClient;
+use ferrohealth_smart::config::endpoint::EndpointSection;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
+use url::Url;
 
 use crate::config::audit::AuditSettings;
 use crate::config::error::Error;
 use crate::config::resolve::{positive, positive_ms};
-use crate::config::service_grant::{ServiceContext, resolve_service};
+use crate::config::service_grant::ServiceContext;
 use crate::config::settings::Scheme;
 use crate::config::transport;
-use ferrohealth_smart::config::credentials::CredentialsSection;
+
+/// The key of the directory's endpoint table.
+pub const ENDPOINT_KEY: &str = "registry.mcsd.endpoint";
 
 /// The key of the directory's URL.
-const URL_KEY: &str = "registry.mcsd.url";
+const URL_KEY: &str = "registry.mcsd.endpoint.url";
 
 /// The mCSD care services directory the registry is read from.
 ///
@@ -38,15 +43,11 @@ const URL_KEY: &str = "registry.mcsd.url";
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct McsdDirectory {
-    /// The directory's FHIR base URL, `http` or `https`, with no user name
-    /// or password.
-    pub url: SecretUrl,
-    /// How the gateway authenticates to the directory, when the transport
-    /// does not: basic credentials or the client credentials grant of `oauth`.
-    pub credentials: Option<CredentialsSection>,
-    /// The TLS material the service is reached with: the table's `tls`
-    /// sub-table.
-    pub tls: TlsClientSection,
+    /// The directory's FHIR base, `http` or `https` with no user name or
+    /// password, and how it is reached: its TLS, the timeout and retries of
+    /// each call, and basic credentials or the client credentials grant of
+    /// `oauth`.
+    pub endpoint: EndpointSection,
     /// How often the changes are asked for.
     pub refresh_interval: units::Duration,
     /// The retired `refresh_interval_s`, which `refresh_interval` replaced in
@@ -70,14 +71,24 @@ pub struct McsdDirectory {
     pub max_bytes: Removed,
     /// The most Bundle entries one read or refresh may read.
     pub max_entries: usize,
+    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub url: Removed,
+    /// The retired `credentials`, which `endpoint.credentials` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub credentials: Removed,
+    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
+    /// refuses the configuration.
+    #[serde(skip_serializing)]
+    pub tls: Removed,
 }
 
 impl Default for McsdDirectory {
     fn default() -> Self {
         Self {
-            url: SecretUrl::default(),
-            credentials: None,
-            tls: TlsClientSection::default(),
+            endpoint: crate::config::endpoint::tried_once(units::Duration::from_secs(10)),
             refresh_interval: units::Duration::from_mins(5),
             refresh_interval_s: Removed::default(),
             deadline: units::Duration::from_secs(30),
@@ -86,6 +97,9 @@ impl Default for McsdDirectory {
             max_size: units::ByteSize::from_mib(64),
             max_bytes: Removed::default(),
             max_entries: 50_000,
+            url: Removed::default(),
+            credentials: Removed::default(),
+            tls: Removed::default(),
         }
     }
 }
@@ -95,11 +109,15 @@ impl Default for McsdDirectory {
 pub struct DirectorySettings {
     /// The directory's FHIR base URL, already known to parse as an `http` or
     /// `https` URL with no user name or password.
-    pub url: SecretUrl,
+    pub url: Url,
     /// How the gateway authenticates to it: basic credentials or the client
     /// credentials grant of `oauth`.
     pub credentials: Option<Scheme>,
-    /// The TLS material the directory is reached with.
+    /// How the directory is reached, as `ferrohealth-smart`'s outbound
+    /// client reads it.
+    pub endpoint: Box<EndpointSection>,
+    /// The TLS material `endpoint.tls` names, read at load, which a reload
+    /// compares.
     pub tls: Arc<TlsClient>,
     /// How often the changes are asked for.
     pub refresh_interval: Duration,
@@ -117,8 +135,8 @@ pub struct DirectorySettings {
 }
 
 impl DirectorySettings {
-    /// Whether `other` names the same directory, credentials, TLS material,
-    /// interval, deadline and caps.
+    /// Whether `other` names the same endpoint table, credentials, interval,
+    /// deadline and caps.
     #[must_use]
     pub fn same_as(&self, other: &Self) -> bool {
         let credentials = match (&self.credentials, &other.credentials) {
@@ -127,7 +145,7 @@ impl DirectorySettings {
             _ => false,
         };
         credentials
-            && self.url.expose() == other.url.expose()
+            && self.endpoint == other.endpoint
             && self.tls == other.tls
             && self.refresh_interval == other.refresh_interval
             && self.deadline == other.deadline
@@ -143,13 +161,14 @@ impl DirectorySettings {
 pub fn site() -> transport::ProtectedSite {
     transport::ProtectedSite {
         url_key: String::from(URL_KEY),
-        payload: String::from("registry.mcsd.credentials"),
+        payload: String::from("registry.mcsd.endpoint.credentials"),
         requires: transport::Encryption::Https,
     }
 }
 
-/// Resolves `[registry.mcsd]`: an `http` or `https` base URL with no user name
-/// or password, basic credentials or an `oauth` grant, and a positive interval,
+/// Resolves `[registry.mcsd]`: an endpoint table with an `http` or `https`
+/// base URL with no user name or password, basic credentials or an `oauth`
+/// grant, and a positive interval,
 /// deadline and caps, audited as `audit` says.
 pub(crate) fn resolve(
     directory: &McsdDirectory,
@@ -157,35 +176,18 @@ pub(crate) fn resolve(
     audit: AuditSettings,
 ) -> Result<DirectorySettings, Error> {
     let profile = context.profile;
-    if directory.url.is_empty() {
-        return Err(Error::Missing {
-            key: URL_KEY.to_owned(),
-        });
-    }
-    let url = url::Url::parse(directory.url.expose()).map_err(|source| Error::Url {
-        key: URL_KEY.to_owned(),
-        source,
-    })?;
-    // NOTE: no specification governs this: our own design; as on a PIX Manager
-    // URL, a credential goes in its own section and never in the URL.
-    if !matches!(url.scheme(), "http" | "https")
-        || !url.username().is_empty()
-        || url.password().is_some()
-    {
+    let endpoint = crate::config::endpoint::service(ENDPOINT_KEY, &directory.endpoint, context)?;
+    // NOTE: no specification governs this: our own design; the directory is a FHIR
+    // server, so its base is an http(s) URL (FHIR R4 RESTful API §3.1.0.1.2).
+    if !matches!(endpoint.url.scheme(), "http" | "https") {
         return Err(Error::HttpUrl {
             key: URL_KEY.to_owned(),
         });
     }
-    let section = String::from("registry.mcsd.credentials");
-    let credentials = directory
-        .credentials
-        .as_ref()
-        .map(|credentials| resolve_service(&section, credentials, context))
-        .transpose()?;
     // NOTE: no specification governs this: our own design; the credential is
     // held to https before anything is sent, and the binding's sites report it.
-    if credentials.is_some() {
-        transport::protected_payload(profile, directory.url.expose(), site())?;
+    if endpoint.credentials.is_some() {
+        transport::protected_payload(profile, endpoint.url.as_str(), site())?;
     }
     let refresh_interval = Duration::from_secs(directory.refresh_interval.as_secs());
     if refresh_interval.is_zero() {
@@ -193,11 +195,11 @@ pub(crate) fn resolve(
             key: String::from("registry.mcsd.refresh_interval"),
         });
     }
-    let tls = crate::config::tls::read("registry.mcsd.tls", &directory.tls)?;
     Ok(DirectorySettings {
-        url: directory.url.clone(),
-        credentials,
-        tls,
+        url: endpoint.url,
+        credentials: endpoint.credentials,
+        tls: endpoint.tls,
+        endpoint: Box::new(directory.endpoint.clone()),
         refresh_interval,
         deadline: positive_ms("registry.mcsd.deadline", directory.deadline.as_millis())?,
         max_pages: positive("registry.mcsd.max_pages", directory.max_pages)?,

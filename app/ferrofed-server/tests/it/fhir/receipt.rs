@@ -138,7 +138,7 @@ async fn a_member_with_no_endpoint_in_service_is_refused_with_nothing_sent() -> 
 #[cfg(feature = "binding-ihe")]
 fn pixm(pix: &str) -> String {
     format!(
-        "\n[[pixm.manager]]\nurl = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.31\"\n\"node-b\" = \"urn:oid:2.999.32\"\n"
+        "\n[[pixm.manager]]\nendpoint.url = \"{pix}/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.31\"\n\"node-b\" = \"urn:oid:2.999.32\"\n"
     )
 }
 

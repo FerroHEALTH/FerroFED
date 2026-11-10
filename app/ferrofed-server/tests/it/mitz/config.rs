@@ -56,7 +56,7 @@ fn a_mitz_over_plain_http_is_refused_outside_development() -> TestResult {
     let (_dir, text) = edited(|table| table.replace("https://", "http://"))?;
     match resolved(&text) {
         Err(error::Error::Cleartext(refused)) => {
-            assert_eq!("nl_gf.mitz.url", refused.site.url_key);
+            assert_eq!("nl_gf.mitz.endpoint.url", refused.site.url_key);
             Ok(())
         }
         other => Err(format!("the BSN never travels in clear text: {other:?}").into()),
@@ -73,7 +73,10 @@ fn a_mitz_over_plain_http_is_named_under_development() -> TestResult {
         .map(|site| format!("{}: {}", site.url_key, site.payload))
         .collect();
     assert!(
-        sites.contains(&"nl_gf.mitz.url: the patient identifiers asked of nl_gf.mitz".to_owned()),
+        sites.contains(
+            &"nl_gf.mitz.endpoint.url: the patient identifiers asked of nl_gf.mitz.endpoint"
+                .to_owned()
+        ),
         "{sites:?}"
     );
     Ok(())
@@ -217,7 +220,7 @@ fn a_holder_naming_no_member_refuses_to_boot() -> TestResult {
 fn a_prefilter_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
     let tables = format!(
-        "overall_timeout = '3s'\n\n[federation.localization]\ntimeout = '1500ms'\n\n[pdqm]\nurl = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\ntimeout = '500ms'\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{}",
+        "overall_timeout = '3s'\n\n[federation.localization]\ntimeout = '1500ms'\n\n[pdqm]\nendpoint.url = \"https://pdq.example.org/fhir/\"\nmaster = \"urn:oid:2.999.1\"\nendpoint.timeout = '500ms'\n\n[pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n{}",
         mitz_table("https://mitz.example.org/vraag", &holders())
     );
     match resolved(&configuration(dir.path(), "production", &tables)?) {
@@ -231,8 +234,8 @@ fn a_prefilter_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult 
         ) => {
             let text = refused.to_string();
             for key in [
-                "nl_gf.mitz.timeout",
-                "pdqm.timeout",
+                "nl_gf.mitz.endpoint.timeout",
+                "pdqm.endpoint.timeout",
                 "federation.localization.timeout",
                 "federation.overall_timeout",
             ] {
@@ -267,13 +270,13 @@ fn a_prefilter_budget_alone_past_the_overall_budget_is_refused() -> TestResult {
 fn an_oauth_grant_over_plain_http_is_refused_outside_development() -> TestResult {
     let (_dir, text) = edited(|table| {
         format!(
-            "{table}\n[nl_gf.mitz.credentials.oauth]\ntoken_endpoint = \"http://mitz.example.org/oauth2/token\"\nclient_id = \"ferrofed-mitz\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"Qz7synthetic-mitz-secret\"\n"
+            "{table}\n[nl_gf.mitz.endpoint.credentials.oauth]\ntoken_endpoint = \"http://mitz.example.org/oauth2/token\"\nclient_id = \"ferrofed-mitz\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"Qz7synthetic-mitz-secret\"\n"
         )
     })?;
     match resolved(&text) {
         Err(error::Error::Cleartext(refused)) => {
             assert_eq!(
-                "nl_gf.mitz.credentials.oauth.token_endpoint",
+                "nl_gf.mitz.endpoint.credentials.oauth.token_endpoint",
                 refused.site.url_key
             );
             Ok(())
@@ -286,18 +289,19 @@ fn an_oauth_grant_over_plain_http_is_refused_outside_development() -> TestResult
 fn an_oauth_grant_resolves_and_an_oauth2_grant_is_refused() -> TestResult {
     let (_dir, text) = edited(|table| {
         format!(
-            "{table}\n[nl_gf.mitz.credentials.oauth]\ntoken_endpoint = \"https://mitz.example.org/oauth2/token\"\nclient_id = \"ferrofed-mitz\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"Qz7synthetic-mitz-secret\"\n"
+            "{table}\n[nl_gf.mitz.endpoint.credentials.oauth]\ntoken_endpoint = \"https://mitz.example.org/oauth2/token\"\nclient_id = \"ferrofed-mitz\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"Qz7synthetic-mitz-secret\"\n"
         )
     })?;
     resolved(&text)?;
     let (_dir, text) = edited(|table| {
         format!(
-            "{table}\n[nl_gf.mitz.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://mitz.example.org/oauth2/token\"\nclient_id = \"ferrofed-mitz\"\nscope = \"system/aql-*.s\"\nresource = \"https://mitz.example.org\"\n"
+            "{table}\n[nl_gf.mitz.endpoint.credentials.oauth2]\ngrant = \"token_exchange\"\nclient_auth = \"private_key_jwt\"\ntoken_endpoint = \"https://mitz.example.org/oauth2/token\"\nclient_id = \"ferrofed-mitz\"\nscope = \"system/aql-*.s\"\nresource = \"https://mitz.example.org\"\n"
         )
     })?;
     match resolved(&text) {
         Err(error::Error::Replaced { old, new })
-            if old == "nl_gf.mitz.credentials.oauth2" && new == "nl_gf.mitz.credentials.oauth" =>
+            if old == "nl_gf.mitz.endpoint.credentials.oauth2"
+                && new == "nl_gf.mitz.endpoint.credentials.oauth" =>
         {
             Ok(())
         }

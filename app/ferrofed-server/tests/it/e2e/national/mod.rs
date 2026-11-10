@@ -286,7 +286,7 @@ impl Harness {
              template = {}\nfiles = [{}, {}]\ncontext = \"{}\"\n\n\
              [[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\", \"node-b\"]\n\n\
              [[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [\"node-a\", \"node-b\"]\n\n\
-             [pdqm]\nurl = \"{}\"\ntransaction = \"iti-78\"\nmaster = \"{namespace}\"\ntimeout = '5s'\n\n\
+             [pdqm]\nendpoint.url = \"{}\"\ntransaction = \"iti-78\"\nmaster = \"{namespace}\"\nendpoint.timeout = '5s'\n\n\
              [pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n\n\
              [signing]\nkey_file = {}\njwks_uri = \"{origin}/.well-known/jwks.json\"\n{}{}",
             path_of(&document),
