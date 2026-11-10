@@ -19,8 +19,7 @@ use ferrofed_testkit::mock::Server;
 use http::StatusCode;
 use serde_json::Value;
 
-use super::super::{UNREACHED_SUPPLIER, fhir_tables_with};
-use super::{VERSION_A, creating, gateway_with, issue, post, rows};
+use super::{Adl2Category, VERSION_A, creating, gateway_with, issue, post, receiving_adl2, rows};
 use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, received, settings_with_room, wire};
 use crate::fhir::TestResult;
 use crate::support::call;
@@ -29,31 +28,19 @@ use crate::support::call;
 /// at node A over FerroBRIDGE's ADL 2 template, the mapping written into
 /// `dir`, with the tables `beside` after it.
 fn receiving(dir: &Path, beside: &str) -> Result<String, Box<dyn Error>> {
-    let path = |value: &Path| toml::Value::String(value.display().to_string()).to_string();
-    let joined = |paths: &[std::path::PathBuf]| {
-        paths
-            .iter()
-            .map(|file| path(file))
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
     let mapping = dir.join("hdr");
     std::fs::create_dir_all(&mapping)?;
-    let files = joined(&discharge::mapping_files(&mapping)?);
-    let dependencies = joined(&fhir_packages::discharge_dependencies()?);
-    let archetypes = joined(&discharge::archetype_paths());
-    Ok(fhir_tables_with(
-        UNREACHED_SUPPLIER,
-        &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
-        &format!(
-            "\n[[fhir.receive]]\ncategory = \"Discharge-Reports\"\nmember = \"node-a\"\n\
-             package = {}\ndependencies = [{dependencies}]\ntemplate = {}\n\
-             archetypes = [{archetypes}]\nfiles = [{files}]\ncontext = \"{}\"\n\
-             language = \"en\"\nterritory = \"NL\"\n{beside}",
-            path(&discharge::package()),
-            path(&discharge::template_path()),
-            discharge::CONTEXT,
-        ),
+    Ok(receiving_adl2(
+        &Adl2Category {
+            category: "Discharge-Reports",
+            package: discharge::package(),
+            dependencies: fhir_packages::discharge_dependencies()?,
+            template: discharge::template_path(),
+            archetypes: discharge::archetype_paths(),
+            files: discharge::mapping_files(&mapping)?,
+            context: discharge::CONTEXT,
+        },
+        beside,
     ))
 }
 
