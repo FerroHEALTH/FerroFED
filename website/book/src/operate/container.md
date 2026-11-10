@@ -26,13 +26,18 @@ and no checkout of the repository.
 
    ```sh
    mkdir ferrofed && cd ferrofed
-   for f in compose.yaml ferrofed.toml registry.toml ferrofed.conf ferrofed.conf.sha256sum; do
-     curl -LO "https://github.com/FerroHEALTH/FerroFED/releases/latest/download/$f"
+   curl -fsSL -o compose.yaml https://github.com/FerroHEALTH/FerroFED/releases/latest/download/gateway-compose.yaml
+   for f in ferrofed.toml registry.toml ferrofed.conf ferrofed.conf.sha256sum; do
+     curl -fsSLO "https://github.com/FerroHEALTH/FerroFED/releases/latest/download/$f"
    done
    sha256sum -c ferrofed.conf.sha256sum
    ```
 
-   `…/releases/download/vX.Y.Z/$f` downloads the files of one version.
+   `…/releases/download/vX.Y.Z/$f` downloads the files of one version. The
+   release attaches the gateway's compose file as `gateway-compose.yaml`,
+   since its `compose.yaml` is the self-contained
+   [quickstart](#the-quickstart); saved as `compose.yaml`, it is the file
+   Compose reads without `-f`.
    `ferrofed.conf` is the nginx configuration of the
    [production guide](production.md#8-tls-and-the-public-address); Compose
    does not read it.
@@ -114,8 +119,8 @@ so a gateway that drained cleanly on a host reboot would stay down. Docker resta
 for failing its healthcheck; the healthcheck tells `--wait` and you whether the
 gateway is ready.
 
-To move to a newer release, download its `compose.yaml` over the old one and
-run `docker compose up --wait`. Read the release's Upgrade notes first, and
+To move to a newer release, download its `gateway-compose.yaml` over the old
+`compose.yaml` and run `docker compose up --wait`. Read the release's Upgrade notes first, and
 follow [Upgrading](upgrading.md); [Rollback](rollback.md) says how to go back.
 
 A deployment resolves patients through its PIX Manager; the quickstart below
@@ -306,18 +311,35 @@ gh attestation verify ferrofed-vX.Y.Z-x86_64-unknown-linux-musl.tar.gz \
 
 ## The quickstart
 
+Every release attaches the quickstart as one self-contained `compose.yaml`,
+with its `.sha256sum`: every file it needs is inlined as a Compose config, so
+it needs Docker Compose 2.23.1 or newer and no checkout. Download the latest
+release's into an empty directory, write the gateway's signing key beside it,
+and start it:
+
 ```sh
-scripts/quickstart/signing-key.sh
+curl -fsSLO https://github.com/FerroHEALTH/FerroFED/releases/latest/download/compose.yaml
+mkdir -p secrets
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out secrets/signing-key.pem
+chmod 644 secrets/signing-key.pem
 docker compose up --wait
-scripts/quickstart/seed.sh
 curl http://127.0.0.1:8080/health
 ```
 
-`scripts/quickstart/signing-key.sh` writes the gateway's development
-signing key into `docker/quickstart/signing/`, which is never committed, and
-keeps a key that exists. The gateway signs the caller's identity onto every
-request to a node with it, and refuses to start without it
-([What a node is told about the caller](caller-token.md)).
+The gateway signs the caller's identity onto every request to a node with
+that key, and refuses to start without it
+([What a node is told about the caller](caller-token.md)). It is a
+development key: the gateway runs as uid 65532 and Compose hands the file
+over as it is, so it is readable by every user.
+
+Before the gateway starts, the one-shot `files` and `ferroehr-init`
+services copy the inlined files onto volumes the read-only services mount
+(Compose refuses an inlined config in a read-only service), the
+`ferropix-seed` service feeds FerroPIX the synthetic patients, and the
+`ehr-seed` service creates their EHRs at the four nodes, committing the
+Federation Tier reference implementation's demonstration template and
+compositions, fetched at a pinned commit and refused unless each has its
+pinned SHA-256.
 
 `--wait` returns once every service reports healthy. The gateway service
 runs `ghcr.io/ferrohealth/ferrofed` at the product version, the tag default
@@ -347,8 +369,9 @@ The four nodes run FerroEHR's documented image, and each stamps its own
 registry declares for it. They share one FerroEHR PostgreSQL container, and
 each connects to its own database there, `ferroehr_a` to `ferroehr_d`, owned
 by a login role of the same name. The image's own init script creates the
-first; `docker/postgres/20-ferrofed-node-databases.sh`, mounted beside it, runs
-that script again for the other three. A schema per node would not do:
+first; the `node-databases` config (a copy of
+`docker/postgres/20-ferrofed-node-databases.sh`), copied beside it, runs that
+script again for the other three. A schema per node would not do:
 FerroEHR creates fixed schema names in the database it connects to, so two
 nodes in one database would share their tables. Each database admits only its
 own node's role, because the script revokes `CONNECT` from `PUBLIC` and grants
@@ -396,12 +419,12 @@ once before you bring that stack up again, then seed it anew.
 
 ### The synthetic patients
 
-`scripts/quickstart/seed.sh` reads `docker/quickstart/patients.tsv`, the
-patients FerroPIX was fed, and creates exactly those EHRs over each
-node's ITS-REST API: `PUT /v1/ehr/{ehr_id}` with the patient on
-`EHR_STATUS.subject`, the vendored `International Patient Summary` template,
-and one vendored demo composition per EHR. It needs `curl`, and a second run
-reports what is already there and adds nothing. Every identifier lies in the
+The `ehr-seed` service reads the patients file, the patients FerroPIX was
+fed, and creates exactly those EHRs over each node's ITS-REST API:
+`PUT /v1/ehr/{ehr_id}` with the patient on `EHR_STATUS.subject`, the
+reference implementation's `International Patient Summary` template, and one
+of its demo compositions per EHR. A second `up` reports what is already
+there and adds nothing. Every identifier lies in the
 example arc `urn:oid:2.999`:
 
 | Patient, in `urn:oid:2.999.1.1` | Node A | Node B | Node C | Node D |
@@ -417,14 +440,15 @@ patient.
 ### A federated query
 
 Ask for the compositions of the patient every node knows. Every request
-carries an access token: `scripts/quickstart/token.sh` generates a
-development issuer's key pair with `openssl` on its first run, writes its key
-set where the gateway reads it, and prints a token valid for an hour
+carries an access token, which the development issuer signs for the
+quickstart's client
 ([The quickstart issuer](authentication.md#the-quickstart-issuer)):
 
 ```sh
+TOKEN="$(curl -s http://127.0.0.1:8190/quickstart/token -d grant_type=client_credentials \
+  -d client_id=quickstart-client -d client_secret=any | jq -r .access_token)"
 curl -s http://127.0.0.1:8080/v1/query/aql \
-  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d @- <<'EOF'
 {"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
 EOF
@@ -455,7 +479,7 @@ attributes beside the data (§8, §9.4):
 
 ```sh
 curl -s http://127.0.0.1:8080/v1/query/aql \
-  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d @- <<'EOF'
 {"q": "SELECT p/id AS endpoint_id, p/system_id AS system_id, c/uid/value AS composition FROM ENDPOINT p [\"node-c-query\"] CONTAINS EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
 EOF

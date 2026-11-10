@@ -88,9 +88,9 @@ readonly STORE_PORT=5433
 readonly STORE_PASSWORD=perf
 readonly SERVICES=(ferroehr-a ferroehr-b ferroehr-c ferroehr-d ferropix)
 # The one-shot services that seed what SERVICES start, and the files the
-# nodes are seeded from, by scripts/quickstart/seed.sh.
-readonly SEEDS=(ferropix-seed)
-readonly NODE_SEED_INPUTS=(scripts/quickstart/seed.sh docker/quickstart/patients.tsv docker/quickstart/registry.toml docs/specs/federation-ref/docker/demo-data)
+# nodes are seeded from, by the ehr-seed service.
+readonly SEEDS=(ferropix-seed ehr-seed)
+readonly NODE_SEED_INPUTS=(docker/quickstart/ehr-seed.sh docker/quickstart/patients.tsv docker/quickstart/registry.toml)
 # The base arm's own sibling services (start_base): the compose project, the
 # loopback address it publishes on, the files of the base's tree it starts
 # and is seeded from, and what the gate writes for it.
@@ -840,10 +840,19 @@ start_base() {
         base_compose run --rm ferropix-seed > "$WORK/base-seed-ferropix.log" 2>&1 ||
           die "the base's FerroPIX could not be seeded: $(tail -n 20 "$WORK/base-seed-ferropix.log")"
         ;;
+      ehr-seed)
+        # TODO(#1850): a base from before the ehr-seed service seeds its nodes
+        # with its own scripts/quickstart/seed.sh below.
+        [[ -f "$src/scripts/quickstart/seed.sh" ]] && continue
+        base_compose run --rm ehr-seed > "$WORK/base-seed-nodes.log" 2>&1 ||
+          die "the base's nodes could not be seeded: $(tail -n 20 "$WORK/base-seed-nodes.log")"
+        ;;
       "${SERVICES[0]}")
         nodes="$SIBLING_HOST"
-        FERROFED_BIND_HOST="$SIBLING_HOST" bash "$src/scripts/quickstart/seed.sh" > "$WORK/base-seed-nodes.log" 2>&1 ||
-          die "the base's nodes could not be seeded: $(tail -n 20 "$WORK/base-seed-nodes.log")"
+        if [[ -f "$src/scripts/quickstart/seed.sh" ]]; then
+          FERROFED_BIND_HOST="$SIBLING_HOST" bash "$src/scripts/quickstart/seed.sh" > "$WORK/base-seed-nodes.log" 2>&1 ||
+            die "the base's nodes could not be seeded: $(tail -n 20 "$WORK/base-seed-nodes.log")"
+        fi
         ;;
     esac
   done
@@ -861,16 +870,16 @@ start() {
   mkdir -p "$WORK"
   chmod 0700 "$WORK"
 
-  bash scripts/quickstart/signing-key.sh > /dev/null
+  bash scripts/perf/signing-key.sh > /dev/null
   # The caller issuer's key set, which the token endpoint verifies against.
-  bash scripts/quickstart/token.sh > /dev/null
+  bash scripts/perf/caller-token.sh > /dev/null
   onward_start
   contact_point_keys "$NCP_DIR" "$NCP_JWKS" || die "the contact point's keys could not be made"
   compose up --detach --wait "${SERVICES[@]}" > "$WORK/compose.log" 2>&1 ||
     die "the quickstart's nodes and FerroPIX did not come up: $(tail -n 20 "$WORK/compose.log")"
   compose run --rm ferropix-seed > "$WORK/seed-ferropix.log" 2>&1 ||
     die "FerroPIX could not be seeded: $(tail -n 20 "$WORK/seed-ferropix.log")"
-  bash scripts/quickstart/seed.sh > "$WORK/seed-nodes.log" 2>&1 ||
+  compose run --rm ehr-seed > "$WORK/seed-nodes.log" 2>&1 ||
     die "the nodes could not be seeded: $(tail -n 20 "$WORK/seed-nodes.log")"
   registry docker/quickstart/registry.toml > "$WORK/registry.toml"
   # NOTE: no specification governs this: our own design; each arm runs on the sibling
@@ -956,7 +965,7 @@ run() {
   fi
   start
   local token ncp ncp_emergency code=0 server
-  token="$(bash scripts/quickstart/token.sh)" || die "the development token could not be minted"
+  token="$(bash scripts/perf/caller-token.sh)" || die "the development token could not be minted"
   ncp="$(ncp_token "$NCP_DIR" TREATMENT)" || die "the contact point's token could not be minted"
   ncp_emergency="$(ncp_token "$NCP_DIR" EMERGENCY)" || die "the contact point's emergency token could not be minted"
   render "$PLAN" "$WORK/plan.toml" "$token" "$ncp" "$ncp_emergency" || exit 2
@@ -1023,8 +1032,8 @@ self_test() {
   # image, then in a file it mounts, then whose nodes' seed differs.
   local trees="$work/trees" head_spec base_spec rel
   for rel in head "$BASE_TREE/src"; do
-    mkdir -p "$trees/$rel/docker/quickstart/ferropix" "$trees/$rel/scripts/quickstart" "$trees/$rel/docs/specs/federation-ref/docker/demo-data"
-    printf 'seed\n' > "$trees/$rel/scripts/quickstart/seed.sh"
+    mkdir -p "$trees/$rel/docker/quickstart/ferropix"
+    printf 'seed\n' > "$trees/$rel/docker/quickstart/ehr-seed.sh"
     printf 'p\n' > "$trees/$rel/docker/quickstart/patients.tsv"
     printf 'r\n' > "$trees/$rel/docker/quickstart/registry.toml"
     printf 'pix = 1\n' > "$trees/$rel/docker/quickstart/ferropix/ferropix.toml"

@@ -15,12 +15,13 @@
 # include, so --self-test refuses a README copy that differs from the script
 # by a byte, and an anchor the README lacks.
 #
-# It writes the quickstart's signing key, starts the published gateway image
-# beside four FerroEHR nodes and FerroPIX, seeds the nodes with synthetic
-# patients and sends the gateway one federated query, which must answer
-# complete with a composition from each node. Run it from a checkout with
-# docker compose, curl, jq and openssl. `docker compose down --volumes`
-# removes what it started.
+# It runs the repository's compose.yaml, the file each release attaches:
+# writes the gateway's signing key, starts the gateway beside four FerroEHR
+# nodes and FerroPIX, which compose seeds with synthetic patients, asks the
+# development issuer for a token and sends the gateway one federated query,
+# which must answer complete with a composition from each node. Run it beside
+# compose.yaml with docker compose, curl, jq and openssl.
+# `docker compose down --volumes` removes what it started.
 
 set -euo pipefail
 
@@ -93,14 +94,18 @@ cd "$root"
 export FERROFED__USAGE_REPORT__ENABLED=false
 
 # ANCHOR: start
-scripts/quickstart/signing-key.sh
+mkdir -p secrets
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out secrets/signing-key.pem
+chmod 644 secrets/signing-key.pem
 docker compose up --wait
-scripts/quickstart/seed.sh
 # ANCHOR_END: start
 
 # ANCHOR: query
+token="$(curl --fail-with-body -s http://127.0.0.1:8190/quickstart/token \
+  -d grant_type=client_credentials -d client_id=quickstart-client -d client_secret=any \
+  | jq -er .access_token)"
 curl --fail-with-body -s http://127.0.0.1:8080/v1/query/aql \
-  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
+  -H "Authorization: Bearer $token" \
   -H 'Content-Type: application/json' -d @- <<'EOF' | jq -e '.meta.federation.complete and (.rows | length) == 4'
 {"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
 EOF

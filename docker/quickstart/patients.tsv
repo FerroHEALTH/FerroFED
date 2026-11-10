@@ -7,7 +7,7 @@
 # urn:oid:2.999 that ITU-T X.660 reserves for examples, and each EHR's first
 # group names its node and its last group its patient.
 #
-# scripts/quickstart/seed.sh creates each EHR at its node from these lines,
+# docker/quickstart/ehr-seed.sh creates each EHR at its node from these lines,
 # and docker/quickstart/ferropix/seed.sh feeds FerroPIX the same lines over
 # ITI-104, so the nodes and the patient index agree on every ehr_id. The
 # domains are the ones docker/quickstart/ferrofed.toml maps each member to in
