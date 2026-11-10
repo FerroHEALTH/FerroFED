@@ -9,9 +9,10 @@
 #
 # perf runs the performance gate on the tagged commit (#1687, perf.yml), with
 # no build cache, judged against the previous release built beside it
-# (#1731), or by the release commit's first parent when that release does not
-# know a key of perf/ferrofed.toml (#1762), so a release the gate fails is
-# never drafted.
+# (#1731), or the oldest commit after it that carries the gate contract when
+# that release carries none (#1813), each arm under its own tree's
+# configuration, so a release the gate fails is never drafted; the notes name
+# the base.
 #
 # plan refuses a tag whose milestone (titled exactly as the tag) is missing or
 # still holds an open item, and milestone closes it once every leg succeeded
@@ -207,7 +208,6 @@ jobs:
     uses: ./.github/workflows/perf.yml
     with:
       cache: false
-      fallback: true
 
   # ---- github-release: create the release as a DRAFT ------------------------
 
@@ -232,6 +232,17 @@ jobs:
         with:
           name: release-notes
 
+      # The notes name the commit the gate measured the release against and
+      # why, which is not the previous release when that tag carries no gate
+      # contract (#1813).
+      - name: Name the performance gate's base in the notes
+        env:
+          BASE: ${{ needs.perf.outputs.base }}
+          RECORD: ${{ needs.perf.outputs.base-record }}
+        run: |
+          set -euo pipefail
+          [ -n "$BASE" ] && [ -n "$RECORD" ] || { echo "::error::the performance gate names no base"; exit 1; }
+          printf '\nPerformance: %s\n' "$RECORD" >> release-notes.md
       # Created as a DRAFT and finalized only after every asset is attached. A
       # draft is mutable, which is the window the binary uploads need, and it
       # is not visible to anyone browsing releases.
