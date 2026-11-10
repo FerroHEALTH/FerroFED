@@ -76,22 +76,51 @@ The A/B run has two parts:
    both arms see the same runner, whose speed can move by a third from one
    minute to the next. The arrivals go over the gateway's hot
    paths: the self-description, a patient's federated query, a population
-   query, a stored query run by name and a template list routed to the one
-   member the registry names. Every request must be answered with the
-   status the plan names.
+   query, a stored query run by name, a template list routed to the one
+   member the registry names, and a national contact point's patient
+   summary under its treatment token and as an emergency access (see
+   below). Every request must be answered with the status the plan names.
 
-A national contact point's routes are not in the set yet. Its token must be
-bound to the client certificate of the connection or to a `DPoP` key, and
-the base of a change has to serve the same routes as the head, so
-[#1702](https://github.com/FerroHEALTH/FerroFED/issues/1702) adds them in
-two steps. `perf/ferrofed.toml` already trusts a synthetic contact point
-whose tokens are bound to a `DPoP` key (RFC 9449), with the FHIR face for
-its patient summary and the emergency access limit, and `gate.sh` makes the
-contact point's signing key, its key set and the P-256 `DPoP` key under
-`target/perf-run/` and mints its tokens for the treatment and the emergency
-purposes, which a plan names as `{ncp_token}` and `{ncp_emergency_token}`.
-The request groups follow once a release carries that configuration, since
-the release lane's base is the previous release.
+## A national contact point under load
+
+`perf/ferrofed.toml` trusts a synthetic national contact point whose
+tokens are bound to a `DPoP` key (RFC 9449), with the FHIR face for its
+patient summary and the emergency access limit `[emergency] threshold = 5`
+per `window = "1s"`. `gate.sh` makes the contact point's signing key, its
+key set and the P-256 `DPoP` key under `target/perf-run/`, and mints its
+tokens for the treatment and the emergency purposes, which the plan names
+as `{ncp_token}` and `{ncp_emergency_token}`. Two request groups use them
+([#1744](https://github.com/FerroHEALTH/FerroFED/issues/1744)):
+
+| Group | Request | Token |
+|---|---|---|
+| `contact-point-summary` | `GET /fhir/Patient/$summary?identifier=urn:oid:2.999.1.1%7Cffd-test-0001` | the treatment token |
+| `contact-point-emergency` | the same summary, as an emergency access | the emergency token |
+
+Each request names the key in `dpop_key_file`, so `ferrohealth-perf` sends
+its token in the `DPoP` scheme with a fresh proof, and carries the
+`ncp-correlation-id` header the contact point declares. Node A is reached
+through an onward lane of kind `persons`, which carries no contact point's
+professional
+([The onward lane of a node](../operate/onward-credentials.md#the-onward-lane-of-a-node)),
+so node A fails before anything is sent to it. Both groups send
+`openEHR-federation-completeness: partial`, which `federation.best_effort`
+admits at its default, and the summary names node A beside what nodes B to
+D answer. No other group sends the header, so nothing they measure changes. The tool sends the
+plan's requests in turn, so the emergency group gets one arrival in seven,
+under three a second at the plan's rate of 20, below the limit; a
+self-test check fails a plan whose rate over its request count reaches 5.
+
+The gateway counts every emergency access in its store, with or without an
+access log ([#1737](https://github.com/FerroHEALTH/FerroFED/issues/1737)).
+After the A/B run the gate sums the emergency accesses the head answered
+as expected in the A/B report and reads how many attempts the head's store
+wrote to `ferrofed.emergency_access`, from PostgreSQL's cumulative
+statistics (one insert or update per attempt). Fewer attempts than answers
+fail the gate, and the job summary names both counts. The base of the
+change serves the same groups once it carries the contact point, which
+every release from v0.0.17 does; a base that answers them otherwise only
+adds a note.
 
 ## The onward lane under load
 
