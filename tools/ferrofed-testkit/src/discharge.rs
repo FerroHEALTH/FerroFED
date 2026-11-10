@@ -15,7 +15,6 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use eehrxf::document::Document;
 use eehrxf::document::discharge::{DISCHARGE_REPORT_FORM, HDR_SLOTS};
 use eehrxf::document::section::Section;
 use eehrxf::mapping::Mapping;
@@ -28,7 +27,7 @@ use openehr_mapping_core::template::TemplateSource;
 use crate::medication::{
     ENTRY, OTHER_CARE, Written, details, held, order, patient_summary_template, summary_order,
 };
-use crate::sender::{BASE, authored, displayed};
+use crate::sender::{authored, displayed, sent};
 
 /// The workspace root, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -503,12 +502,11 @@ pub fn received_document(
     source: &TemplateSource,
     identifiers: &[(&str, &str)],
 ) -> Result<String, Box<dyn Error>> {
-    let mut document = Document::of(
+    let mut document = sent(
         &DISCHARGE_REPORT_FORM,
-        BASE,
-        String::from("urn:uuid:5b0c3f7e-0000-4000-8000-00000000d1c1"),
-        String::from(SENT_AT),
-        String::from("Discharge report"),
+        "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d1c1",
+        SENT_AT,
+        "Discharge report",
     );
     let (subject, device) = authored(
         &mut document,
