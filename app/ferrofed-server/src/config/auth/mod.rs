@@ -134,9 +134,6 @@ pub struct IssuerSettings {
     /// Where this issuer's `patient/` grants are confined, when they are
     /// honoured at all.
     pub patient: Option<PatientBinding>,
-    /// The claim that carries the agency that issued the professional's
-    /// identifier, when this issuer's tokens carry one.
-    pub professional_issuing_authority: Option<String>,
     /// This issuer as a national contact point, when its `[[auth.federation]]`
     /// table sets `contact_point = true`, with its
     /// `[[federation.contact_point]]`: its requests are served with consent
@@ -156,7 +153,6 @@ impl IssuerSettings {
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
             patient: None,
-            professional_issuing_authority: None,
             national_contact_point: None,
         }
     }
@@ -298,6 +294,10 @@ pub enum AuthFault {
     /// `[trust.issuer] client_tokens_act_for_professional`, removed: a
     /// client acting with no person reaches no patient data.
     ActsForRemoved,
+    /// `[trust.issuer] professional_issuing_authority`, removed in 0.0.20 in
+    /// favour of the `professional.issuing_authority_name` source of the
+    /// issuer's `[[auth.attributes]]` table.
+    IssuingAuthorityMoved,
 }
 
 impl fmt::Display for AuthFault {
@@ -339,6 +339,9 @@ impl fmt::Display for AuthFault {
             }
             Self::ActsForRemoved => {
                 "is removed: a token ferrohealth-smart classifies as a system's reaches no patient data; a professional acting through a client is a delegated person of a persons issuer"
+            }
+            Self::IssuingAuthorityMoved => {
+                "is removed: the professional's attributes are read by the issuer's [[auth.attributes]] table (mapping = \"iua\"), and the claim naming the issuing agency is its fields.\"professional.issuing_authority_name\" = [{ claim = \"<the claim>\" }]"
             }
             Self::BasicRemoved => {
                 "is refused: the gateway admits no Basic caller; a machine authenticates with a client-credentials token (RFC 6749 §4.4) of an [[auth.issuer]], its client named in metrics.scrape_clients or pmir.feed_clients"

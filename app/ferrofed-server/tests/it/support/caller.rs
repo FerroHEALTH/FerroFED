@@ -12,6 +12,8 @@ use std::sync::LazyLock;
 
 use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::{Claims, Issuer, IssuerError};
+use ferrohealth_smart::federation::Mapping;
+use ferrohealth_smart::federation::person::AttributesSection;
 use ferrohealth_smart::kind::IssuerKind;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 
@@ -155,8 +157,27 @@ pub(crate) fn persons_toml() -> String {
 pub(crate) fn key_set(issuer: &str, jwks_file: &Path) -> Verification {
     let mut settings = KeySetSettings::new(issuer, AUDIENCE, IssuerKind::Persons);
     settings.jwks_file = Some(jwks_file.to_owned());
+    settings.attributes = Some(iua(issuer));
     settings.profile.first_party_clients = FIRST_PARTY.map(str::to_owned).to_vec();
     Verification::KeySet(Box::new(settings))
+}
+
+/// Returns the `[[auth.attributes]]` table of `issuer`: the IHE IUA
+/// extension and the purposes of use of its `authorization_details`.
+pub(crate) fn iua(issuer: &str) -> AttributesSection {
+    AttributesSection {
+        issuer: issuer.to_owned(),
+        mapping: Some(Mapping::Iua),
+        authorization_details_purposes: true,
+        ..AttributesSection::default()
+    }
+}
+
+/// Returns the `[[auth.attributes]]` table of [`iua`] as configuration text.
+pub(crate) fn attributes_toml(issuer: &str) -> String {
+    format!(
+        "\n[[auth.attributes]]\nissuer = \"{issuer}\"\nmapping = \"iua\"\nauthorization_details_purposes = true\n"
+    )
 }
 
 /// Returns the `[auth]` of every test gateway: the test issuer is trusted,
@@ -176,9 +197,10 @@ pub(crate) fn auth() -> AuthSettings {
 /// its issuer an `[[auth.issuer]]` entry, so a test can append another.
 pub(crate) fn auth_toml() -> String {
     format!(
-        "\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\n{}jwks_file = {}\n\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
+        "\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\n{}jwks_file = {}\n{}\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
         persons_toml(),
         toml_path(jwks_file()),
+        attributes_toml(ISSUER),
         claims().client_id
     )
 }
@@ -187,10 +209,11 @@ pub(crate) fn auth_toml() -> String {
 /// a file as it is now.
 pub(crate) fn issuer_toml(issuer: &Issuer) -> Result<String, Box<dyn StdError>> {
     Ok(format!(
-        "\n[[auth.issuer]]\nissuer = \"{}\"\n{}jwks_file = {}\n",
+        "\n[[auth.issuer]]\nissuer = \"{}\"\n{}jwks_file = {}\n{}",
         issuer.name(),
         persons_toml(),
-        toml_path(&jwks_file_of(issuer)?)
+        toml_path(&jwks_file_of(issuer)?),
+        attributes_toml(issuer.name())
     ))
 }
 

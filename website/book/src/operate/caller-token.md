@@ -38,7 +38,7 @@ key's `kid` and `typ` `openehr-federation-client+jwt`. Its claims:
 | `acting` | `person` when the caller's `sub` names a natural person, `client` when it names a client application ([Professionals and assurance](authentication.md#professionals-and-assurance)) |
 | `subject_name` | the professional's name, when the caller's token states `extensions.ihe_iua.subject_name` (IHE IUA) |
 | `national_provider_identifier` | the professional's identifier from their national authority, when the caller's token states it (IHE IUA) |
-| `national_provider_identifier_authority` | the name of the agency that issued that identifier, when the caller's issuer sets `professional_issuing_authority` and the token states it (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`) |
+| `national_provider_identifier_authority` | the name of the agency that issued that identifier, when the caller's issuer's `[[auth.attributes]]` table names its `"professional.issuing_authority_name"` source and the token states it (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`) |
 | `subject_role` | the professional's roles, each as `{"system", "code"}`, when the caller's token states `extensions.ihe_iua.subject_role` (IHE IUA) |
 | `assurance_level` | `low`, `substantial` or `high`, the level the caller's authentication reached, when its issuer declares `[auth.issuer.assurance]` and the token states a value it maps |
 | `national_contact_point` | for a caller a [national contact point](authentication.md#national-contact-points) vouched for: `health_professional`, the rows of Implementing Regulation (EU) 2026/2099 Annex Table 1 the eHDSI assertion carries under their data identifiers, with `on_behalf_of` when stated, `healthcare_provider`, the provider's identifier and issuing authority from Table 2, and `asserted_by`, the contact point's issuer, which marks them as its assertion; never a name or an address |
@@ -46,9 +46,9 @@ key's `kid` and `typ` `openehr-federation-client+jwt`. Its claims:
 With `subject_organization_id`, the provider's identifier, the professional
 claims let a node record the professional and the provider of every
 registration or update it makes on the caller's behalf, which Regulation (EU)
-2025/327 Art 13(4) asks an electronic health record to identify. Declare
-`professional_issuing_authority` for an issuer whose tokens state the agency
-that issued the identifier.
+2025/327 Art 13(4) asks an electronic health record to identify. Name the
+`"professional.issuing_authority_name"` source in the `[[auth.attributes]]`
+table of an issuer whose tokens state the agency that issued the identifier.
 
 The token never carries the caller's own token, its `client_id`, or a
 patient identifier: an IUA `person_id` is never read (N33). The outbound

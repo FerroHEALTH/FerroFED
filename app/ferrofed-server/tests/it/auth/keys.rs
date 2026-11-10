@@ -40,6 +40,7 @@ fn trusting(issuer: &str, file: Option<PathBuf>, refresh: Duration) -> AuthSetti
     settings.profile.first_party_clients = FIRST_PARTY.map(str::to_owned).to_vec();
     settings.jwks_file = file;
     settings.jwks_refresh_interval = refresh;
+    settings.attributes = Some(crate::support::caller::iua(issuer));
     AuthSettings {
         issuers: vec![IssuerSettings::new(
             issuer,

@@ -122,6 +122,18 @@ clock_skew = "1min"
 # minimum = "substantial"
 # levels = { "urn:example:loa:substantial" = "substantial", "urn:example:loa:high" = "high" }
 
+# What the issuer's tokens state about their professional: the IHE IUA
+# extension and the purposes of use of their authorization_details. Name the
+# claim carrying the agency that issued the professional's identifier as the
+# "professional.issuing_authority_name" source when the tokens state one.
+# https://ferrofed.eu/docs/operate/authentication.html#what-a-token-states-about-its-professional
+[[auth.attributes]]
+issuer = "https://idp.example.org"
+mapping = "iua"
+authorization_details_purposes = true
+# [auth.attributes.fields]
+# "professional.issuing_authority_name" = [{ claim = "hp_issuing_authority" }]
+
 # What the issuer's tokens are honoured for beyond their user/ and system/
 # grants.
 [[trust.issuer]]
@@ -130,9 +142,6 @@ issuer = "https://idp.example.org"
 # backend_clients = ["example-reporting-service"]
 # The client_ids admitted to the DEMOGRAPHIC API.
 # demographic_clients = []
-# The string claim that carries the agency that issued the professional's
-# national_provider_identifier, which each node is told.
-# professional_issuing_authority = "hp_issuing_authority"
 #
 # Honour this issuer's patient/ grants, confined to the patient its tokens'
 # ehrId names: the one member whose platform issues them, and the identifier

@@ -62,6 +62,13 @@ audience = ["ferrofed-quickstart"]
 first_party_clients = ["quickstart-client"]
 jwks_file = "/etc/ferrofed/issuer/jwks.json"
 
+# What the issuer's tokens state about their professional: the IHE IUA
+# extension and the purposes of use of their authorization_details.
+[[auth.attributes]]
+issuer = "https://quickstart-issuer.ferrofed.invalid"
+mapping = "iua"
+authorization_details_purposes = true
+
 # The gateway's own signing key, P-384 (ES384) here; a P-256 key signs
 # ES256. Every request to a node carries the caller's identity in an
 # openEHR-federation-client token signed with it (§13.1, N24), and the

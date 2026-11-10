@@ -105,12 +105,9 @@ pub struct TrustedIssuer {
     /// The removed `client_tokens_act_for_professional`, refused by name
     /// ([`AuthFault::ActsForRemoved`]).
     pub client_tokens_act_for_professional: Option<Removed>,
-    /// The name of the string claim of this issuer's tokens that carries
-    /// the name of the agency that issued the professional's
-    /// `national_provider_identifier`, the `issuing_authority_name` of
-    /// Implementing Regulation (EU) 2026/2099 Annex Table 1; absent by
-    /// default, and then none is read or conveyed.
-    pub professional_issuing_authority: Option<String>,
+    /// The removed `professional_issuing_authority`, refused by name
+    /// ([`AuthFault::IssuingAuthorityMoved`]); removed in 0.0.20.
+    pub professional_issuing_authority: Option<Removed>,
     /// The removed `[trust.issuer.national_contact_point]`, read only so that
     /// a configuration still setting it is refused by name
     /// ([`AuthFault::ContactPointMoved`]); its value is never kept.
@@ -267,10 +264,12 @@ fn policy(
             return Err(fault(&format!("{key}.{name}"), refusal));
         }
     }
-    let professional_issuing_authority = claim_name(
-        &format!("{key}.professional_issuing_authority"),
-        written.professional_issuing_authority.as_ref(),
-    )?;
+    if written.professional_issuing_authority.is_some() {
+        return Err(fault(
+            &format!("{key}.professional_issuing_authority"),
+            AuthFault::IssuingAuthorityMoved,
+        ));
+    }
     if written.national_contact_point.is_some() {
         return Err(fault(
             &format!("{key}.national_contact_point"),
@@ -281,23 +280,8 @@ fn policy(
         backend_clients: written.backend_clients.iter().cloned().collect(),
         demographic_clients: written.demographic_clients.iter().cloned().collect(),
         patient,
-        professional_issuing_authority,
         ..IssuerSettings::new(written.issuer.clone(), verification)
     })
-}
-
-/// Resolves an optional claim name at `key`: absent, or set and not empty.
-///
-/// # Errors
-///
-/// Returns [`Error::Missing`] for a claim name written empty.
-fn claim_name(key: &str, written: Option<&String>) -> Result<Option<String>, Error> {
-    match written {
-        Some(name) if name.is_empty() => Err(Error::Missing {
-            key: key.to_owned(),
-        }),
-        written => Ok(written.cloned()),
-    }
 }
 
 /// Resolves one `[trust.issuer.patient]` at `key`: an endpoint id and a

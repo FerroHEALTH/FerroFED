@@ -39,7 +39,7 @@ const INTROSPECT: &str = "/introspect";
 /// the secret `synthetic-secret`.
 fn introspecting(endpoint: &str) -> Result<AuthSettings, Box<dyn Error>> {
     let section: AuthSection = toml::from_str(&format!(
-        "[[issuer]]\nissuer = \"{endpoint}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\nfirst_party_clients = [\"synthetic-client\"]\nmode = \"introspection\"\n\n[issuer.introspection]\nendpoint = \"{endpoint}{INTROSPECT}\"\n\n[issuer.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n"
+        "[[issuer]]\nissuer = \"{endpoint}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\nfirst_party_clients = [\"synthetic-client\"]\nmode = \"introspection\"\n\n[issuer.introspection]\nendpoint = \"{endpoint}{INTROSPECT}\"\n\n[issuer.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n\n[[attributes]]\nissuer = \"{endpoint}\"\nmapping = \"iua\"\n"
     ))?;
     let settings = section
         .resolve()?

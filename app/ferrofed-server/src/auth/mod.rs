@@ -47,8 +47,8 @@
 //! client assertions is public too (RFC 7517), and is served beside them,
 //! outside the gate.
 
+mod attributes;
 pub mod caller;
-mod claims;
 pub mod contact_point;
 pub mod face;
 pub mod guard;
@@ -83,7 +83,6 @@ use http::HeaderMap;
 use secrecy::SecretString;
 
 use crate::auth::caller::{Actor, Caller, PatientContext, Professional, Stated, VerifiedBy};
-use crate::auth::claims::Claims;
 use crate::auth::contact_point::ContactPoints;
 use crate::auth::introspection::Introspected;
 use crate::auth::permission::{Requirement, Resource};
@@ -433,13 +432,13 @@ impl Gate {
             .filter(|client| !client.is_empty())
             .ok_or_else(|| invalid("client_id"))?
             .to_owned();
-        let claims = Claims::read(smart.claims()).map_err(|_shape| invalid("claims"))?;
         let verified_by = match (&self.mode, &trusted.verification) {
             (AuthMode::Edge(_), _) => VerifiedBy::Edge,
             (_, Verification::Introspection(_)) => VerifiedBy::Introspection,
             (_, Verification::KeySet(_)) => VerifiedBy::Signature,
         };
         let subject = smart.subject().to_owned();
+        let statement = attributes::Statement::of(smart);
         // NOTE: RFC 9068 §2.2 and the issuer's profile: `ferrohealth-smart` classifies an
         // app-only token as a system, which names no natural person.
         let acting = match smart.kind() {
@@ -457,16 +456,14 @@ impl Gate {
             issuer: trusted.issuer.clone(),
             subject,
             client_id,
-            organisation: claims.organisation(),
+            organisation: statement.organisation(),
             granted: smart.scope().join(" "),
-            purposes: claims.purposes(),
+            purposes: statement.purposes(),
         };
         let caller = Caller::new(stated, verified_by)
             .with_launch_ehr_id(smart.ehr_id().map(str::to_owned))
             .with_requester(requester(smart.kind()))
-            .with_professional(
-                claims.professional(trusted.professional_issuing_authority.as_deref()),
-            )
+            .with_professional(statement.professional())
             .with_assurance(assurance)
             .with_acting(acting)
             .with_representative(representative(smart.kind()));

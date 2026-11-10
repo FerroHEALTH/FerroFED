@@ -341,12 +341,22 @@ const HP_ID: &str = "urn:oid:2.999.7.1|hp-0042";
 /// The code system of the synthetic professional's role.
 const ROLE_SYSTEM: &str = "http://terminology.hl7.org/CodeSystem/practitioner-role";
 
-/// The suite's `[auth]`, its issuer naming [`AUTHORITY_CLAIM`] as the claim
-/// that carries the professional identifier's issuing authority.
+/// The suite's `[auth]`, its issuer's `[[auth.attributes]]` table reading
+/// the professional identifier's issuing authority from [`AUTHORITY_CLAIM`].
 fn naming_the_issuing_authority() -> AuthSettings {
     let mut auth = crate::support::caller::auth();
     for issuer in &mut auth.issuers {
-        issuer.professional_issuing_authority = Some(AUTHORITY_CLAIM.to_owned());
+        if let ferrofed_server::config::auth::Verification::KeySet(settings) =
+            &mut issuer.verification
+            && let Some(attributes) = settings.attributes.as_mut()
+        {
+            attributes.fields.insert(
+                ferrohealth_smart::federation::Field::ProfessionalIssuingAuthorityName,
+                vec![ferrohealth_smart::federation::Source::Claim(
+                    AUTHORITY_CLAIM.to_owned(),
+                )],
+            );
+        }
     }
     auth
 }
