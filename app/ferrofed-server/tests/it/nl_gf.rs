@@ -156,7 +156,7 @@ pub(crate) fn configuration(
     let document = dir.join("registry.toml");
     std::fs::write(&document, registry)?;
     Ok(format!(
-        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout_ms = 1000\n\n[nl_gf.nvi]\nurl = \"{nvi}\"\nnamespaces = [\"{namespace}\"]\n\n[nl_gf.nvi.custodians]\n{custodians}\n{tables}",
+        "profile = \"{profile}\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"localized\"\nid = \"example-federation\"\n\n[federation.localization]\ntimeout = '1s'\n\n[nl_gf.nvi]\nurl = \"{nvi}\"\nnamespaces = [\"{namespace}\"]\n\n[nl_gf.nvi.custodians]\n{custodians}\n{tables}",
         document = toml::Value::String(document.display().to_string()),
         namespace = patient().namespace(),
     ))
@@ -481,7 +481,7 @@ fn the_nvi_under_the_ask_all_selection_refuses_to_boot() -> TestResult {
                 "node_selection = \"localized\"",
                 "node_selection = \"ask-all\"",
             )
-            .replace("[federation.localization]\ntimeout_ms = 1000\n", "")
+            .replace("[federation.localization]\ntimeout = '1s'\n", "")
         },
     )?;
     match Federation::load(&resolved(&text)?) {

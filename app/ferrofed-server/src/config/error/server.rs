@@ -106,26 +106,26 @@ pub enum ServerFault {
     /// the combining margin, so it could cut the answer and the `504`
     /// envelope the budget produces when it expires (§11.4, §11.5).
     #[error(
-        "server.request_timeout_ms ({request_ms}) must exceed federation.overall_timeout_ms ({overall_ms}) plus {margin_ms} ms for combining the answers (§11.5)"
+        "server.request_timeout ({request_ms} ms) must exceed federation.overall_timeout ({overall_ms} ms) plus {margin_ms} ms for combining the answers (§11.5)"
     )]
     Budget {
         /// The overall fan-out budget.
         overall_ms: u64,
         /// The combining margin the request timeout must leave past it.
         margin_ms: u64,
-        /// The request timeout.
+        /// The request timeout, in milliseconds.
         request_ms: u64,
     },
     /// The drain is shorter than the request timeout, so a stop could cut a
     /// request the server accepted before its listener closed (no
     /// specification governs this: our own design).
     #[error(
-        "server.shutdown_timeout_ms ({shutdown_ms}) must be at least server.request_timeout_ms ({request_ms}), so the drain outlasts every request accepted before the listener closed; leave it unset to take the request timeout"
+        "server.shutdown_timeout ({shutdown_ms} ms) must be at least server.request_timeout ({request_ms} ms), so the drain outlasts every request accepted before the listener closed; leave it unset to take the request timeout"
     )]
     Drain {
-        /// The drain.
+        /// The drain, in milliseconds.
         shutdown_ms: u64,
-        /// The request timeout.
+        /// The request timeout, in milliseconds.
         request_ms: u64,
     },
     /// A healthcheck identity is named where `ferrofed healthcheck` never

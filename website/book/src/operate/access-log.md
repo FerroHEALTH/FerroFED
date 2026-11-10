@@ -430,7 +430,7 @@ the access. Under the IHE binding the question is one ITI-83 to the
 member's PIX Manager, the `ehr_id` in the member's domain as the source
 identifier and each namespace's assigning authority as a target system
 (PIXm 3.1.0 §2:3.83.4.1.2), recorded as every ITI-83 is. It is asked on
-behalf of the caller, within `federation.per_node_timeout_ms`, of the
+behalf of the caller, within `federation.per_node_timeout`, of the
 identity service alone: nothing is sent to a node, and no identifier
 reaches a log line (§5.4, N33).
 
@@ -469,7 +469,7 @@ then writes an `ehr` entity for each `ehr_id` the delivered rows hold, at
 each member whose own answer held it, and names the patient behind each
 as for a request addressed by `ehr_id` (see above). A search by the
 person's identifier finds it. All the identity service's answers for one
-record share one `federation.per_node_timeout_ms`. A query recombined
+record share one `federation.per_node_timeout`. A query recombined
 at the gateway, such as `COUNT`, delivers no row of any one EHR.
 
 Otherwise the record names no `ehr_id` and no patient, and carries one

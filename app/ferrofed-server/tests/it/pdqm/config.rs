@@ -74,10 +74,10 @@ fn a_table_without_its_url_master_or_namespaces_is_refused() -> TestResult {
     }
     let error = refusal(&format!(
         "profile = \"development\"\n{}",
-        with("timeout_ms", "0")
+        with("timeout", "'0s'")
     ))?;
     assert!(
-        matches!(&error, error::Error::Zero { key } if key == "pdqm.timeout_ms"),
+        matches!(&error, error::Error::Zero { key } if key == "pdqm.timeout"),
         "{error:?}"
     );
     Ok(())
@@ -181,8 +181,8 @@ fn an_unknown_transaction_is_refused() -> TestResult {
 #[test]
 fn a_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
     let error = refusal(&format!(
-        "profile = \"development\"\n[federation]\noverall_timeout_ms = 1000\n\n{}",
-        with("timeout_ms", "1000")
+        "profile = \"development\"\n[federation]\noverall_timeout = '1s'\n\n{}",
+        with("timeout", "'1s'")
     ))?;
     assert!(
         matches!(
@@ -201,8 +201,8 @@ fn a_budget_that_leaves_no_time_to_resolve_is_refused() -> TestResult {
 #[test]
 fn the_default_localizer_budget_counts_when_no_section_is_written() -> TestResult {
     let error = refusal(&format!(
-        "profile = \"development\"\n[federation]\noverall_timeout_ms = 6000\nnode_selection = \"localized\"\n\n{}",
-        with("timeout_ms", "1000")
+        "profile = \"development\"\n[federation]\noverall_timeout = '6s'\nnode_selection = \"localized\"\n\n{}",
+        with("timeout", "'1s'")
     ))?;
     assert!(
         matches!(

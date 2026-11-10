@@ -557,7 +557,7 @@ async fn a_registry_from_either_source_without_a_signing_key_does_not_load() -> 
     for source in [
         format!("[registry]\ndocument = {document}\n"),
         format!(
-            "[registry.mcsd]\nurl = \"{}\"\nrefresh_interval_s = 3600\ndeadline_ms = 5000\n",
+            "[registry.mcsd]\nurl = \"{}\"\nrefresh_interval = '1h'\ndeadline = '5s'\n",
             harness.base()
         ),
     ] {

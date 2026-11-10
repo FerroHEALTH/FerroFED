@@ -40,6 +40,10 @@ pub enum Error {
         #[source]
         source: Box<ferrohealth_config::error::ConfigError>,
     },
+    /// The sources set keys a release retired, each named with its
+    /// replacement (`config::retired`).
+    #[error(transparent)]
+    Retired(#[from] ferrohealth_config::removed::RemovedKeys),
     /// A key a release renamed is still set under its old name, in the file
     /// or as an override; the upgrade notes of that release give the step.
     #[error("{old} was renamed to {new}; set {new} instead (see the upgrade notes)")]

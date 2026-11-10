@@ -371,7 +371,7 @@ managing_organisation = "org-a"
              [[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\ntemplate = {}\n\
              files = [{}, {}]\ncontext = \"{}\"\n\n\
              [pdqm]\nurl = \"http://127.0.0.1:9/fhir/\"\ntransaction = \"iti-78\"\n\
-             master = \"{NAMESPACE}\"\ntimeout_ms = 1000\n\n\
+             master = \"{NAMESPACE}\"\ntimeout = '1s'\n\n\
              [pdqm.namespaces]\n\"urn:oid:2.999.7\" = \"urn:oid:2.999.7\"\n\n\
              [[fhir.receive]]\ncategory = \"Patient-Summaries\"\nmember = \"node-a\"\n\
              package = {}\ndependencies = [{dependencies}]\ntemplate = {}\n\

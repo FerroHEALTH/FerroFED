@@ -159,7 +159,7 @@ async fn an_undirected_query_asks_only_the_members_the_localizer_names() -> Test
     let options = Options {
         resolver: pixm_resolver_at(&format!("{}/fhir/", proxy.origin())),
         node_selection: "localized",
-        tables: "[federation.localization]\ntimeout_ms = 5000\n".to_owned(),
+        tables: "[federation.localization]\ntimeout = '5s'\n".to_owned(),
         ..Options::default()
     };
     let app = gateway_with(dir.path(), &nodes, &options)?;

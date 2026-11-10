@@ -154,7 +154,7 @@ async fn a_create_answered_late_is_adopted_and_not_made_twice() -> TestResult {
     let (_dir, gateway) = subscribing(
         &registry.base_url(),
         "http://127.0.0.1:9/pmir/feed",
-        "timeout_ms = 200\n",
+        "timeout = '200ms'\n",
     )?;
     let feed = feed(&gateway)?;
     assert_eq!(
@@ -213,7 +213,7 @@ async fn each_failed_check_doubles_the_wait_and_a_success_resets_it() -> TestRes
     let (_dir, gateway) = subscribing(
         &registry.base_url(),
         "http://127.0.0.1:9/pmir/feed",
-        "check_interval_s = 60\n",
+        "check_interval = '1min'\n",
     )?;
     let feed = feed(&gateway)?;
     let mut waits = Vec::new();

@@ -22,7 +22,7 @@ use crate::registry_mcsd::{Gateway, config, members};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-/// The `[registry.mcsd] deadline_ms` of each directory read.
+/// The `[registry.mcsd] deadline` of each directory read.
 ///
 /// The directory answers at once, so the budget only has to outlast a stall
 /// of a loaded host.

@@ -163,7 +163,7 @@ demographic_clients = []
 | `trust.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
 | `trust.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[trust.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](patient-grants.md)). |
 | `trust.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
-| `trust.issuer[].patient.act_is_representative` | `false` | Whether the RFC 8693 `act` claim of this issuer's patient tokens names a proxy or a legal representative who acts for the patient (Regulation (EU) 2025/327 Art 4(2)), so a document such a token inserts names that representative ([Patient grants](patient-grants.md)). |
+| `auth.issuer[].act_represents_patient` | `false` | On a `patients` issuer, whether the RFC 8693 `act` claim of its tokens names a proxy or a legal representative who acts for the patient (Regulation (EU) 2025/327 Art 4(2)), so a document such a token inserts names that representative; a patient token that carries `act` on an issuer without it is refused as an invalid token ([Patient grants](patient-grants.md)). |
 | `trust.issuer[].requester` | none | Refused: who asks for the data is read from the `nl.professional_number`, `nl.role`, `nl.ura` and `nl.organisation_type` fields of the issuer's `[[auth.federation]]` table, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. |
 | `trust.issuer[].client_tokens_act_for_professional` | none | Refused: a token `ferrohealth-smart` classifies as a system's reaches no patient data ([Professionals and assurance](#professionals-and-assurance)). |
 | `trust.issuer[].professional_issuing_authority` | none | The string claim of this issuer's tokens that carries the name of the agency that issued the professional's `national_provider_identifier` (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which each node is told. IHE IUA defines no claim for it. Without it, none is read or conveyed. |
@@ -581,7 +581,7 @@ byte outside visible ASCII is refused `400 correlation-invalid`.
 `OPTIONS {base}/` declares every contact point under
 `federation.national_contact_point`: `disclose: false`, `professional:
 "asserted-by-contact-point"`, `purpose_of_use: "required"`, the emergency
-access limit in effect as `emergency` with its `threshold` and `window_s`,
+access limit in effect as `emergency` with its `threshold` and `window`,
 and per issuer the claim each field is read from, by its field name, and
 the correlation header. The eHDSI profile defines no token carrier for its
 attributes, so the claim names, the member and the header are FerroFED's

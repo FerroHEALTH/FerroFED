@@ -89,7 +89,7 @@ fn over_document(dir: &std::path::Path, a: &str, b: &str) -> Result<Router, Box<
     std::fs::write(&document, registry(a, b, ""))?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n{}",
         crossref(&[("node-a", EHR_A), ("node-b", EHR_B)])
     );
     let federation = Federation::load(&settings(&text)?)?.ok_or("a registry is configured")?;

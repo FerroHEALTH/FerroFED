@@ -50,7 +50,7 @@ pub(crate) fn store_toml(
     let url = dir.join(format!("{name}-url"));
     std::fs::write(&url, format!("{}\n", server.url(name)))?;
     Ok(format!(
-        "\n[store]\nurl_file = {}\nca_file = {}\nmax_connections = 2\ntimeout_ms = 5000\n",
+        "\n[store]\nurl_file = {}\nca_file = {}\nmax_connections = 2\ntimeout = '5s'\n",
         toml::Value::String(url.display().to_string()),
         toml::Value::String(ca.display().to_string()),
     ))
@@ -117,7 +117,7 @@ fn gateway(dir: &Path, store: &str) -> Result<(Arc<AppState>, Router), Box<dyn E
     let text = format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n\n\
+         per_node_timeout = '2s'\noverall_timeout = '3s'\n\n\
          [stored_queries]\nbackend = \"postgres\"\n{store}{rows}"
     );
     let settings =

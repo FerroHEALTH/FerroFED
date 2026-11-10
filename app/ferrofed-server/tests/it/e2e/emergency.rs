@@ -278,7 +278,11 @@ async fn the_window_slides_and_a_professional_is_granted_again_once_it_passes() 
     }
     let server = database::postgres_tls("emergency_window", &[]).await?;
     let members = Members::start().await;
-    let replica = members.replica(&server, "emergency_window", "threshold = 1\nwindow_s = 2\n")?;
+    let replica = members.replica(
+        &server,
+        "emergency_window",
+        "threshold = 1\nwindow = '2s'\n",
+    )?;
     let (status, text) = emergency(&replica, HP).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     assert_denied(&emergency(&replica, HP).await?)?;

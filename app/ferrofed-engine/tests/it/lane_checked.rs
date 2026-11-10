@@ -154,7 +154,7 @@ pub(crate) fn lane_carrying(
             .or_insert_with(|| json!({}))
             .as_object_mut()
             .ok_or("keys are a table")?;
-        keys.insert("max_onward_lifetime".to_owned(), 3600.into());
+        keys.insert("max_onward_lifetime".to_owned(), "1h".into());
     }
     let section: OnwardSection = serde_json::from_value(section)?;
     let resolved = section.resolve(oauth.resolve()?)?;

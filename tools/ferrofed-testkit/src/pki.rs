@@ -15,7 +15,8 @@
 use std::io;
 use std::sync::Arc;
 
-use ferrohealth_server::section::{ClientAuth, TlsSection, TlsVersion};
+use ferrohealth_config::tls::TlsVersion;
+use ferrohealth_server::section::{ClientAuth, TlsSection};
 use ferrohealth_server::tls::{self, TlsError, TlsKeys};
 use rcgen::{
     BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa,
@@ -113,7 +114,7 @@ pub(crate) fn server_tls_chain(
             ClientAuth::None
         },
         client_ca_file,
-        reload_interval_s: None,
+        reload_interval: None,
         healthcheck_identity_file: None,
         min_version: TlsVersion::Tls12,
     };

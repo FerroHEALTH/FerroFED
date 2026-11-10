@@ -319,7 +319,11 @@ fn a_terminology_server_with_no_face_is_refused() -> TestResult {
 #[test]
 fn a_terminology_server_with_no_url_or_no_time_is_refused() -> TestResult {
     let dir = tempfile::tempdir()?;
-    let refused = resolved(dir.path(), &public(), &with_terminology("timeout_ms = 100"));
+    let refused = resolved(
+        dir.path(),
+        &public(),
+        &with_terminology("timeout = '100ms'"),
+    );
     assert!(
         matches!(&refused, Err(Error::Missing { key }) if key == "eehrxf.terminology.url"),
         "{refused:?}"
@@ -327,10 +331,10 @@ fn a_terminology_server_with_no_url_or_no_time_is_refused() -> TestResult {
     let refused = resolved(
         dir.path(),
         &public(),
-        &with_terminology("url = \"https://terminology.example.org/fhir\"\ntimeout_ms = 0"),
+        &with_terminology("url = \"https://terminology.example.org/fhir\"\ntimeout = '0s'"),
     );
     assert!(
-        matches!(&refused, Err(Error::Zero { key }) if key == "eehrxf.terminology.timeout_ms"),
+        matches!(&refused, Err(Error::Zero { key }) if key == "eehrxf.terminology.timeout"),
         "{refused:?}"
     );
     Ok(())

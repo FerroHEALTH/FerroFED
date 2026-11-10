@@ -275,7 +275,7 @@ async fn a_registry_document_that_does_not_parse_is_refused_without_its_text() -
 async fn a_configuration_config_check_refuses_is_refused_with_its_error() -> TestResult {
     let gateway = Gateway::start("")?;
     let toml =
-        rest(&gateway.one(), "").replace("per_node_timeout_ms = 5000", "per_node_timeout_ms = 0");
+        rest(&gateway.one(), "").replace("per_node_timeout = '5s'", "per_node_timeout = '0ms'");
     let (status, text) = gateway.save(Some(1), "a zero budget", &toml).await?;
     assert_eq!(StatusCode::UNPROCESSABLE_ENTITY, status, "{text}");
     let refused = error_body(&text)?;
@@ -415,7 +415,7 @@ async fn a_reload_keeps_the_running_revision_until_the_file_changes() -> TestRes
         &gateway.config,
         text.replace(
             "id = \"example-federation\"",
-            "id = \"example-federation\"\nbinding_ttl_ms = 600000",
+            "id = \"example-federation\"\nbinding_ttl = '10min'",
         ),
     )?;
     gateway.reloader.reload()?;

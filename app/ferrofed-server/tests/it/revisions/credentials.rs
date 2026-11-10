@@ -139,7 +139,7 @@ async fn applied_credentials(gateway: &Gateway) -> Result<Applied, Box<dyn Error
 
 #[tokio::test]
 async fn a_credential_change_awaits_its_confirmation_and_stays_once_confirmed() -> TestResult {
-    let gateway = Gateway::configured(("confirm_ms = 60000\n", ""), None)?;
+    let gateway = Gateway::configured(("confirm = '1min'\n", ""), None)?;
     let applied = applied_credentials(&gateway).await?;
     assert_eq!(
         vec![Resource::Credentials(ENDPOINT.to_owned())],
@@ -178,7 +178,7 @@ async fn a_credential_change_awaits_its_confirmation_and_stays_once_confirmed() 
 
 #[tokio::test]
 async fn an_unconfirmed_change_rolls_back_at_its_deadline() -> TestResult {
-    let gateway = Gateway::configured(("confirm_ms = 60000\n", ""), None)?;
+    let gateway = Gateway::configured(("confirm = '1min'\n", ""), None)?;
     let applied = applied_credentials(&gateway).await?;
     let deadline = applied.current.awaiting.ok_or("the apply awaits")?.deadline;
     let before = deadline.checked_sub(SignedDuration::from_secs(1))?;
@@ -214,7 +214,7 @@ async fn an_unconfirmed_change_rolls_back_at_its_deadline() -> TestResult {
 
 #[tokio::test]
 async fn a_restart_rolls_back_a_change_past_its_deadline() -> TestResult {
-    let gateway = Gateway::configured(("confirm_ms = 60000\n", ""), None)?;
+    let gateway = Gateway::configured(("confirm = '1min'\n", ""), None)?;
     let applied = applied_credentials(&gateway).await?;
     let mut lapsed = applied.current;
     if let Some(awaiting) = &mut lapsed.awaiting {
@@ -241,7 +241,7 @@ async fn a_restart_rolls_back_a_change_past_its_deadline() -> TestResult {
 
 #[tokio::test]
 async fn a_restart_within_the_deadline_keeps_awaiting() -> TestResult {
-    let gateway = Gateway::configured(("confirm_ms = 60000\n", ""), None)?;
+    let gateway = Gateway::configured(("confirm = '1min'\n", ""), None)?;
     applied_credentials(&gateway).await?;
     let gateway = gateway.restart()?;
     let mark = gateway.mark()?;
@@ -580,7 +580,7 @@ async fn a_consent_change_applies_through_the_reload_and_survives_a_file_reload(
     let file = std::fs::read_to_string(&gateway.config)?;
     std::fs::write(
         &gateway.config,
-        file.replace("per_node_timeout_ms = 5000", "per_node_timeout_ms = 4000"),
+        file.replace("per_node_timeout = '5s'", "per_node_timeout = '4s'"),
     )?;
     gateway.reloader.reload()?;
     let mark = gateway.mark()?;

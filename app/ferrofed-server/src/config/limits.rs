@@ -41,7 +41,7 @@ pub struct CallerRateSettings {
 ///
 /// # Errors
 /// Returns [`Error::Missing`] when `server.max_concurrent_requests` is
-/// unset, and [`Error::Zero`] when `server.retry_after_s` is zero.
+/// unset, and [`Error::Zero`] when `server.retry_after` is zero.
 pub fn resolve_overload(section: &ServerSection) -> Result<Overload, Error> {
     let max_concurrent_requests =
         section
@@ -49,14 +49,14 @@ pub fn resolve_overload(section: &ServerSection) -> Result<Overload, Error> {
             .ok_or_else(|| Error::Missing {
                 key: String::from("server.max_concurrent_requests"),
             })?;
-    if section.retry_after_s == 0 {
+    if section.retry_after.is_zero() {
         return Err(Error::Zero {
-            key: String::from("server.retry_after_s"),
+            key: String::from("server.retry_after"),
         });
     }
     Ok(Overload {
         max_concurrent_requests,
-        retry_after: Duration::from_secs(section.retry_after_s),
+        retry_after: section.retry_after.get(),
         caller_rate: section.caller_rate.map(|rate| CallerRateSettings {
             requests_per_second: rate.requests_per_second,
             burst: rate.burst,

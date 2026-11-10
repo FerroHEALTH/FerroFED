@@ -30,14 +30,14 @@ const RENAMED: [(&str, &str, &str, &str); 4] = [
         "FERROFED__SERVER__REPLICA",
     ),
     (
-        "server.bindings_drain_timeout_ms",
-        "gateway.bindings_drain_timeout_ms",
+        "server.bindings_drain_timeout",
+        "gateway.bindings_drain_timeout",
         "5000",
-        "FERROFED__SERVER__BINDINGS_DRAIN_TIMEOUT_MS",
+        "FERROFED__SERVER__BINDINGS_DRAIN_TIMEOUT",
     ),
     (
         "server.overload_retry_after_s",
-        "server.retry_after_s",
+        "server.retry_after",
         "5",
         "FERROFED__SERVER__OVERLOAD_RETRY_AFTER_S",
     ),

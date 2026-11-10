@@ -220,7 +220,7 @@ pub(crate) fn federation_resolving(
     std::fs::write(&document, registry)?;
     let document = toml::Value::String(document.display().to_string());
     let config = format!(
-        "{resolver}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
+        "{resolver}\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '20s'\noverall_timeout = '25s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
     );
     let settings_ = Config::from_sources(Some(&crate::support::signed(&config)), &BTreeMap::new())?
         .resolve()?;
