@@ -27,7 +27,7 @@ has run on every change since the workspace landed.
 |---|---|---|
 | `ci.yml` | push to `main`, pull request into `main` or a security patch branch, merge group, dispatch | the two tiers below and the `conclusion` check |
 | `perf.yml` | called by `ci.yml` on a pull request that reaches the gateway, on a push to `main` and a dispatch, and by `release.yml` on the tagged commit; in a merge group its verdict passes without a build (§The merge queue proves the merged tree) | the performance gate: `ferrohealth-perf`'s A/B mode, the release build of the change and of its base (the merge base with the pull request's base, the commit before a push, or the previous release, which gives way to the oldest commit after it that carries the gate contract when it carries none, #1813) run side by side on one runner, each under its own tree's `perf/ferrofed.toml` and `perf/arm.env` and over the nodes and FerroPIX its own tree's compose files pin, the head's idle phase with every background worker running held to absolute limits, pairs of load phases with the head judged over the base, and a planted store poller the idle phase must fail (`scripts/perf/gate.sh`, #1687, #1731); an attempt that ends with exit 2 on any CPU model, or with exit 1 on a stall-prone one, is retried on a fresh runner at most twice, through `.github/actions/perf-attempt`, and its verdict job passes when the last attempt passed |
-| `label-guards.yml` | the `no-changelog` or `no-crate-bump` label added to or removed from a pull request | re-runs the guard that label escapes, and with it `conclusion`, in the CI run on the head commit (§Triggers and concurrency) |
+| `label-guards.yml` | the `no-changelog` or `no-crate-bump` label added to or removed from a pull request, and the completion of a pull request's CI run | re-runs the guard that label escapes, and with it `conclusion`, in the CI run on the head commit (§Triggers and concurrency) |
 | `codeql.yml` | push to `main` and pull request into `main` or a security patch branch, touching workflows, actions, its configuration or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` and leaves out the `tests/` trees through `.github/codeql/codeql-config.yml` |
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
 | `sonar.yml` | push to `main`, same-repository pull requests | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
@@ -568,15 +568,21 @@ passed (#788).
 
 The two guards that have a label escape read the pull request's labels from
 the API when they run. `label-guards.yml` runs when `no-changelog` or
-`no-crate-bump` is added or removed: it waits for the CI run on the head
-commit to finish and, when the guard's result no longer matches the labels
-(a failure with its escape now set, or a pass with it now removed), re-runs
-that job. Re-running a job re-runs its dependent jobs
+`no-crate-bump` is added or removed, and when a pull request's CI run
+completes (`workflow_run`). It never waits: when the CI run on the head
+commit is still in flight it exits, and that run's completion starts it
+again. It re-runs a guard when the guard's label changed after the guard
+job started and the result no longer matches the labels (a failure with its
+escape now set, or a pass with it now removed). It re-runs one guard and
+exits, and the completion of that re-run checks the other. Re-running a job re-runs its dependent jobs
 ([re-run a job from a workflow run](https://docs.github.com/en/rest/actions/workflow-runs#re-run-a-job-from-a-workflow-run)),
 so `conclusion` reports again in the same run. That workflow decides nothing
 a merge depends on: the guard reads the labels itself, and `conclusion`
-fails until a re-run passes. A pull request from a fork gets a read-only
-token there, so a maintainer re-runs the guard by hand.
+fails until a re-run passes. The `workflow_run` job runs main's copy of the
+workflow with a write token, checks nothing out and reads the pull request
+through the API only. A pull request from a fork gets a read-only token on
+its label event, so a label changed on a fork after its CI run completed
+needs a maintainer to re-run the guard by hand.
 
 Each label reaches the workflows as an event of its own. `gh pr create
 --label a --label b` does not attach the labels with the pull request: the
@@ -585,9 +591,8 @@ Each label reaches the workflows as an event of its own. `gh pr create
 now ignores them, so a label costs no CI run, and `label-guards.yml` starts
 one run per label event. For a label other than `no-changelog` or
 `no-crate-bump` that run's job is skipped and takes no runner. For one of
-those two, the job holds a runner while it waits for the CI run on the head
-commit to finish, up to its 60-minute timeout, and may then re-run the guard
-and `conclusion`. When a pull request is opened with an escape label and its
+those two, and on each completed CI run of a pull request, the job takes a
+runner for the seconds its reads and one re-run need (#1844). When a pull request is opened with an escape label and its
 guard reads the labels before that label's event lands, the guard fails in
 the first run and passes in the re-run.
 
