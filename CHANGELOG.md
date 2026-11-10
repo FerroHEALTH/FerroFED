@@ -24,9 +24,9 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
-## [0.0.17] - 2026-11-09
+## [0.0.18] - 2026-11-10
 
-Security fixes until 2031-11-09, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+Security fixes until 2031-11-10, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
 
 ### Upgrade notes
 
@@ -621,6 +621,14 @@ Security fixes until 2031-11-09, 5 years from this release (Regulation (EU) 2024
   `[trust.issuer.requester]`, `[trust.issuer.assurance]` and
   `[trust.issuer] client_tokens_act_for_professional`, with the gateway's
   own assurance-level type and claim readers (#1704).
+- The named refusals of keys v0.0.16 and earlier releases removed or
+  renamed are deleted, under the one-release rule for removal aids; each
+  such key is now refused as an unknown key. They are `[dev]` (removed in
+  v0.0.14) and the `[server]` keys v0.0.16 renamed (`server.public_url`,
+  `server.replica`, `server.bindings_drain_timeout_ms` and
+  `server.overload_retry_after_s`). The Upgrade notes of the release that
+  removed each key give its step. The refusals of the keys v0.0.17 removed
+  stay for this release, since v0.0.17 was never released (#1787).
 
 ### Fixed
 
@@ -684,6 +692,12 @@ Security fixes until 2031-11-09, 5 years from this release (Regulation (EU) 2024
   key. The `client_secret_basic` grant it showed is refused by
   `ferrofed config check` since a node's grant takes no client secret
   (§13.1, N25).
+- The performance gate builds the base and the head once, in a job of its
+  own, and hands them to each attempt as an artifact, so a slow build no
+  longer uses up an attempt's time limit. An attempt cancelled while the run
+  goes on (a runner that shut down, or a job that reached its time limit) is
+  followed by the next attempt instead of failing the gate. No threshold
+  changes (#1807).
 
 ### Security
 
@@ -7107,8 +7121,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.17...HEAD
-[0.0.17]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.16...v0.0.17
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.18...HEAD
+[0.0.18]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.16...v0.0.18
 [0.0.16]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.13...v0.0.14

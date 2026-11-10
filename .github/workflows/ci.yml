@@ -360,9 +360,12 @@ jobs:
           bash scripts/checks/ehds-acts.sh --self-test
           bash scripts/vendor/ehdsi-specifications.sh --check
           bash scripts/vendor/sogis-acm.sh --check
-      - name: versions / The performance gate reads its pins, renders its plan, resolves its base and holds its two idle tables equal
+      - name: versions / The performance gate reads its pins, renders its plan, resolves its base, packs its arms and holds its two idle tables equal
         if: ${{ !cancelled() }}
         run: bash scripts/perf/gate.sh --self-test
+      - name: versions / The performance gate's verdict passes only on the last attempt that ran
+        if: ${{ !cancelled() }}
+        run: bash scripts/perf/verdict.sh --self-test
 
       # ---- favicon-sync ------------------------------------------------
       # The book theme favicons are copies of the brand mark, so the mark exists
@@ -782,7 +785,7 @@ jobs:
           perf=true
           if [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "merge_group" ]; then
             changed="$(git diff --name-only HEAD^1 HEAD)"
-            if ! grep -qE '^(app/ferrofed-(server|engine|registry|identity|eehrxf|operator-api)/|crates/|perf/|scripts/perf/|scripts/quickstart/|docker/quickstart/|compose\.yaml$|Cargo\.toml$|Cargo\.lock$|rust-toolchain\.toml$|docs/VERSIONS\.md$|\.github/workflows/(ci|perf)\.yml$|\.github/actions/setup-rust/)' <<< "$changed"; then
+            if ! grep -qE '^(app/ferrofed-(server|engine|registry|identity|eehrxf|operator-api)/|crates/|perf/|scripts/perf/|scripts/quickstart/|docker/quickstart/|compose\.yaml$|Cargo\.toml$|Cargo\.lock$|rust-toolchain\.toml$|docs/VERSIONS\.md$|\.github/workflows/(ci|perf)\.yml$|\.github/actions/(setup-rust|perf-attempt)/)' <<< "$changed"; then
               perf=false
             fi
           fi

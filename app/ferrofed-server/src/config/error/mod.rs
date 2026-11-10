@@ -44,6 +44,27 @@ pub enum Error {
     /// replacement (`config::retired`).
     #[error(transparent)]
     Retired(#[from] ferrohealth_config::removed::RemovedKeys),
+    /// A key a release renamed is still set under its old name, in the file
+    /// or as an override; the upgrade notes of that release give the step.
+    #[error("{old} was renamed to {new}; set {new} instead (see the upgrade notes)")]
+    Renamed {
+        /// The old dotted key.
+        old: String,
+        /// The dotted key that replaces it.
+        new: String,
+    },
+    /// A grant table a release removed is still set; the grant moved to the
+    /// `oauth` table beside it, and the upgrade notes of that release give
+    /// the step.
+    #[error(
+        "{old} is removed; configure the grant in {new}, and a token exchange in the onward table beside it (see the upgrade notes)"
+    )]
+    Replaced {
+        /// The removed dotted key.
+        old: String,
+        /// The dotted key of the table that replaces it.
+        new: String,
+    },
     /// A secret and its `_file` sibling are both set, or the file cannot be
     /// read or holds nothing.
     #[error(transparent)]

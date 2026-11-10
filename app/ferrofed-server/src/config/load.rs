@@ -165,6 +165,12 @@ pub(crate) fn with_pairs(
 /// `file` unless the refusal is that the file could not be read, which
 /// names it itself.
 fn refused(file: Option<&Path>, source: ConfigError) -> Error {
+    if let Some((old, new)) = replaced(&source) {
+        return Error::Replaced { old, new };
+    }
+    if let Some((old, new)) = renamed(&source) {
+        return Error::Renamed { old, new };
+    }
     let file = match source {
         ConfigError::Read { .. } => None,
         _ => file.map(Path::to_path_buf),
@@ -180,6 +186,64 @@ fn refused(file: Option<&Path>, source: ConfigError) -> Error {
 fn checked(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
     crate::config::retired::check(loaded.settings())?;
     Ok(loaded)
+}
+
+/// The release that names the refusals of this module, which v0.0.17
+/// introduced and never shipped (the tag was not released): they live for
+/// v0.0.18 alone and are deleted in v0.0.19, after which each key is
+/// refused as any unknown key is (#1787).
+#[cfg(test)]
+const REFUSALS_SINCE: &str = "0.0.18";
+
+/// The outbound TLS keys a table took before they moved into its `tls`
+/// sub-table (#1750).
+const MOVED_TO_TLS: [&str; 3] = [
+    "client_identity",
+    "client_identity_file",
+    "trust_roots_file",
+];
+
+/// The moved key `source` refuses and its replacement, when it refuses
+/// one, alone or among other refusals.
+fn renamed(source: &ConfigError) -> Option<(String, String)> {
+    match source {
+        ConfigError::Invalid { key: Some(key), .. } => moved_to_tls(key),
+        ConfigError::Refusals { refusals } => refusals.iter().find_map(renamed),
+        _ => None,
+    }
+}
+
+/// The grant tables of a credentials section the `oauth` table replaced
+/// (#1749), with the key each moved to inside it.
+const REPLACED_BY_OAUTH: [(&str, &str); 3] = [
+    ("oauth2", "oauth"),
+    ("fapi2", "oauth"),
+    ("mtls_alias_hosts", "oauth.mtls_alias_hosts"),
+];
+
+/// The removed grant key `source` refuses and the key that replaces it,
+/// when it refuses one, alone or among other refusals.
+fn replaced(source: &ConfigError) -> Option<(String, String)> {
+    match source {
+        ConfigError::Invalid { key: Some(key), .. } => {
+            let (table, leaf) = key.rsplit_once('.')?;
+            REPLACED_BY_OAUTH
+                .into_iter()
+                .find(|(old, _)| *old == leaf)
+                .filter(|_| table.starts_with("credentials.") || table.ends_with(".credentials"))
+                .map(|(_, new)| (key.clone(), format!("{table}.{new}")))
+        }
+        ConfigError::Refusals { refusals } => refusals.iter().find_map(replaced),
+        _ => None,
+    }
+}
+
+/// `key`, an outbound TLS key refused on its table, and the key of its
+/// table's `tls` sub-table that replaces it.
+fn moved_to_tls(key: &str) -> Option<(String, String)> {
+    let (table, leaf) = key.rsplit_once('.')?;
+    (MOVED_TO_TLS.contains(&leaf) && !table.ends_with("tls"))
+        .then(|| (key.to_owned(), format!("{table}.tls.{leaf}")))
 }
 
 /// Refuses a file or an override that sets a resource the operator console
@@ -200,6 +264,18 @@ fn console_free(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
 mod tests {
     use crate::config::Config;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn the_named_refusals_live_for_one_release() {
+        // NOTE: no specification governs this: our own design; the workspace is the last
+        // release's version until the cut, so the refusals hold through the 0.0.18 cut alone.
+        let version = env!("CARGO_PKG_VERSION");
+        assert!(
+            ["0.0.17", super::REFUSALS_SINCE].contains(&version),
+            "delete the refusals of {} at {version} (#1787)",
+            super::REFUSALS_SINCE
+        );
+    }
 
     #[test]
     fn an_absent_file_and_an_empty_environment_leave_the_defaults() {
