@@ -501,8 +501,8 @@ fn no_secret_from_the_configuration_reaches_the_banner() -> TestResult {
     // with the IHE binding alone, is the table that still carries one.
     let pixm = if cfg!(feature = "binding-ihe") {
         format!(
-            "[[pixm.manager]]\nurl = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\n\
-             [pixm.manager.credentials.oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{SECRET}-client-secret\"\n\n"
+            "[[pixm.manager]]\nendpoint.url = \"https://pix.example.org/fhir/\"\n\n[pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\n\
+             [pixm.manager.endpoint.credentials.oauth]\ntoken_endpoint = \"https://idp.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{SECRET}-client-secret\"\n\n"
         )
     } else {
         String::new()

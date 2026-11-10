@@ -27,13 +27,9 @@ const PROMPT: Duration = Duration::from_secs(5);
 fn subscriber(
     registry: &PatientIdentityRegistry,
 ) -> Result<PmirSubscriber, Box<dyn std::error::Error>> {
-    let http = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()?;
-    Ok(PmirSubscriber::new(
-        Url::parse(&registry.base_url())?,
-        http,
-    )?)
+    Ok(PmirSubscriber::new(ferrofed_testkit::outbound::client(
+        &registry.base_url(),
+    )?)?)
 }
 
 fn request() -> Result<SubscriptionRequest, Box<dyn std::error::Error>> {

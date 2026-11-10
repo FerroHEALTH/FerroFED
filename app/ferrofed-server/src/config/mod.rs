@@ -49,7 +49,6 @@ pub mod revision_policy;
 pub mod revisions;
 pub(crate) mod secrets;
 pub mod server;
-pub mod service;
 #[cfg(any(feature = "binding-ihe", feature = "binding-nl"))]
 pub mod service_grant;
 pub mod settings;

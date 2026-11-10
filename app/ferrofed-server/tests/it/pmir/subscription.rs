@@ -154,7 +154,7 @@ async fn a_create_answered_late_is_adopted_and_not_made_twice() -> TestResult {
     let (_dir, gateway) = subscribing(
         &registry.base_url(),
         "http://127.0.0.1:9/pmir/feed",
-        "timeout = '200ms'\n",
+        "endpoint.timeout = '200ms'\n",
     )?;
     let feed = feed(&gateway)?;
     assert_eq!(

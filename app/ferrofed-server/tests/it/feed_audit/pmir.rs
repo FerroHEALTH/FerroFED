@@ -29,18 +29,18 @@ type TestResult = Result<(), Box<dyn Error>>;
 /// learn.
 const SUBSUMED: &str = "qz7-subsumed-4713";
 
-/// The `[pmir] timeout` of each exchange with the Registry.
+/// The `[pmir] endpoint.timeout` of each exchange with the Registry.
 ///
 /// The Registry answers at once, so the budget only has to outlast a stall
 /// of a loaded host.
 const BUDGET_MS: u64 = 8_000;
 
-/// The `[pmir] timeout` key within [`BUDGET_MS`], followed by the
+/// The `[pmir] endpoint.timeout` key within [`BUDGET_MS`], followed by the
 /// `[audit]` tables that post every record to `repository` with the
 /// `[audit.repository]` keys `extra`.
 fn audited(repository: &FeedRepository, extra: &str) -> String {
     format!(
-        "timeout = '{BUDGET_MS}ms'\n{}",
+        "endpoint.timeout = '{BUDGET_MS}ms'\n{}",
         audit_tables(repository, extra)
     )
 }

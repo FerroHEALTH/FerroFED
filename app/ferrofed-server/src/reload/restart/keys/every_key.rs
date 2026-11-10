@@ -120,13 +120,13 @@ client_identity_file = "@DIR@/client.pem"
 trust_roots_file = "@DIR@/client-ca.pem"
 
 [[pixm.manager]]
-url = "https://pix.example.org/fhir/"
+endpoint.url = "https://pix.example.org/fhir/"
 method = "get"
 
 [pixm.manager.members]
 "node-a" = "urn:oid:2.999.10"
 
-[pixm.manager.credentials]
+[pixm.manager.endpoint.credentials]
 user = "ferrofed"
 password_file = "@DIR@/token"
 
@@ -134,10 +134,10 @@ password_file = "@DIR@/token"
 "urn:oid:2.999.1" = "urn:oid:2.999.1"
 
 [pdqm]
-url = "https://pdq.example.org/fhir/"
+endpoint.url = "https://pdq.example.org/fhir/"
 transaction = "iti-78"
 master = "urn:oid:2.999.1"
-timeout = '2s'
+endpoint.timeout = '2s'
 
 [pdqm.namespaces]
 "urn:oid:2.999.7" = "urn:oid:2.999.7"
@@ -148,34 +148,34 @@ home_community = "2.999.40"
 audit = "log"
 
 [[xcpd.gateway]]
-url = "https://xcpd.example.org/rg"
+endpoint.url = "https://xcpd.example.org/rg"
 device = "2.999.50.1"
 
 [xcpd.communities]
 "2.999.50" = "node-b"
 
 [pmir]
-url = "https://pmir.example.org/fhir/"
+endpoint.url = "https://pmir.example.org/fhir/"
 callback_url = "https://gateway.example.org/fed/pmir/feed"
 path = "/pmir/feed"
 feed_clients = ["synthetic-scraper"]
-timeout = '2s'
+endpoint.timeout = '2s'
 check_interval = '1min'
 on_drain = "keep"
 
 [nl_gf.nvi]
-url = "https://nvi.example.org/fhir/"
+endpoint.url = "https://nvi.example.org/fhir/"
 namespaces = ["urn:oid:2.999.1"]
 
 [nl_gf.nvi.custodians]
 "urn:oid:2.999.60" = "node-a"
 
 [nl_gf.mitz]
-url = "https://mitz.example.org/fhir/"
+endpoint.url = "https://mitz.example.org/fhir/"
 namespaces = ["urn:oid:2.999.1"]
 purpose = "TREAT"
 data_categories = ["GGC002"]
-timeout = '1s'
+endpoint.timeout = '1s'
 
 [nl_gf.mitz.holders]
 "node-a" = { type = "V6", ura = "90000001" }

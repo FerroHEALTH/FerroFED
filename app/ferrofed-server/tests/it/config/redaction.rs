@@ -14,7 +14,6 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Debug;
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::pixm::ManagerConfig;
 use ferrofed_registry::document::Document;
 use ferrofed_server::config::Config;
@@ -116,9 +115,9 @@ fn configuration(
          [credentials.\"node-b-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{PASSWORD}\"\n\n\
          [credentials.\"node-d-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password_file = {path}\n\n\
          [telemetry.otlp]\nendpoint = \"{otlp}\"\n{audit}\n\
-         [[pixm.manager]]\nurl = \"{pix_url}\"\n\
-         members = {{ \"node-a\" = \"urn:oid:2.999.1\" }}\n\n\
-         [pixm.manager.credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{CLIENT_SECRET}\"\n\n{extra}"
+         [[pixm.manager]]\nmembers = {{ \"node-a\" = \"urn:oid:2.999.1\" }}\n\n\
+         [pixm.manager.endpoint]\nurl = \"{pix_url}\"\n\n\
+         [pixm.manager.endpoint.credentials.oauth]\ntoken_endpoint = \"https://as.example.org/token\"\nclient_id = \"ferrofed\"\nclient_secret = \"{CLIENT_SECRET}\"\n\n{extra}"
     );
     let env = BTreeMap::from([
         (
@@ -160,17 +159,12 @@ fn no_configuration_type_renders_a_credential_as_written() -> TestResult {
     redacted("Pixm", pixm);
     for manager in &pixm.manager {
         redacted("PixManager", manager);
-        shows_placeholder("PixManager.url", &manager.url);
+        shows_placeholder("PixManager.endpoint.url", &manager.endpoint.url);
     }
     shows_placeholder("TelemetrySection", &config.telemetry);
     shows_placeholder("Store", &config.store);
     let composed = ManagerConfig {
-        tls: ferrofed_testkit::tls::platform(),
-        base: SecretUrl::new(pix_url_with_userinfo()),
-        auth: Authentication::Basic {
-            user: String::from("gateway"),
-            password: Secret::new(PASSWORD).to_secret_string(),
-        },
+        client: ferrofed_testkit::outbound::basic(&pix_url_with_userinfo(), "gateway", PASSWORD)?,
         members: BTreeMap::new(),
         invocation: Invocation::Post,
     };
@@ -216,14 +210,8 @@ fn no_resolved_settings_type_renders_a_credential() -> TestResult {
         if let Some(scheme) = &manager.credentials {
             redacted("PIX Manager credentials", scheme);
         }
-        let auth = Authentication::Basic {
-            user: String::from("gateway"),
-            password: secrecy::SecretString::from(PASSWORD),
-        };
         let composed = ManagerConfig {
-            tls: ferrofed_testkit::tls::platform(),
-            base: manager.url.clone(),
-            auth,
+            client: ferrofed_testkit::outbound::basic(manager.url.as_str(), "gateway", PASSWORD)?,
             members: BTreeMap::new(),
             invocation: Invocation::Get,
         };
@@ -268,7 +256,7 @@ fn every_secret_still_resolves_to_its_value() -> TestResult {
     let manager = pixm.managers.first().ok_or("one Manager")?;
     assert_eq!(
         PIX_URL,
-        manager.url.expose(),
+        manager.url.as_str(),
         "the Manager URL is kept as written"
     );
     let held = manager
@@ -304,7 +292,7 @@ fn a_pix_manager_url_with_userinfo_is_refused_without_quoting_it() -> TestResult
         matches!(
             &refused,
             ferrofed_server::config::error::Error::UrlCredentials { key, section }
-                if key == "pixm.manager[0].url" && section == "pixm.manager[0].credentials"
+                if key == "pixm.manager[0].endpoint.url" && section == "pixm.manager[0].endpoint.credentials"
         ),
         "the refusal names the key and the section"
     );
@@ -315,7 +303,7 @@ fn a_pix_manager_url_with_userinfo_is_refused_without_quoting_it() -> TestResult
     let output = binary(
         &["config", "check"],
         &format!(
-            "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nurl = \"{}\"\n",
+            "[audit]\ndestination = \"log\"\n\n[[pixm.manager]]\nendpoint.url = \"{}\"\n",
             pix_url_with_userinfo()
         ),
     )?;
@@ -325,7 +313,7 @@ fn a_pix_manager_url_with_userinfo_is_refused_without_quoting_it() -> TestResult
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("pixm.manager[0].url"),
+        stderr.contains("pixm.manager[0].endpoint.url"),
         "config check names the key"
     );
     for sentinel in [URL_USER, URL_PASSWORD] {

@@ -248,12 +248,12 @@ fn a_credential_the_authorization_header_cannot_carry_is_refused_by_its_key()
 
     #[cfg(feature = "binding-ihe")]
     {
-        let manager = "[[pixm.manager]]\nurl = \"http://127.0.0.1:9\"\n\
-                       [pixm.manager.credentials]\nuser = \"gateway\"\npassword = \"Qz7left\\nQz7right\"\n";
+        let manager = "[[pixm.manager]]\nendpoint.url = \"http://127.0.0.1:9\"\n\
+                       [pixm.manager.endpoint.credentials]\nuser = \"gateway\"\npassword = \"Qz7left\\nQz7right\"\n";
         let error = refusal(manager)?;
         assert!(
             matches!(&error, Error::Credentials(CredentialsFault::Basic { key, .. })
-                if key == "pixm.manager[0].credentials.password"),
+                if key == "pixm.manager[0].endpoint.credentials.password"),
             "a PIX Manager credential is held to the same rule: {error:?}"
         );
         assert!(!everything(&error).contains("Qz7"), "{error}");

@@ -247,7 +247,7 @@ async fn failing_manager() -> Server {
 #[cfg(feature = "binding-ihe")]
 fn pixm(pix: &Server) -> String {
     format!(
-        "\n[[pixm.manager]]\nurl = \"{}/fhir/\"\n\n[pixm.manager.members]\n\
+        "\n[[pixm.manager]]\nendpoint.url = \"{}/fhir/\"\n\n[pixm.manager.members]\n\
          \"node-a\" = \"urn:oid:2.999.10\"\n\"node-b\" = \"urn:oid:2.999.20\"\n",
         pix.uri()
     )
