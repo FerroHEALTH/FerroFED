@@ -188,7 +188,7 @@ async fn a_routed_read_sends_the_gateways_trace_never_the_clients() -> TestResul
         .header("tracestate", CLIENT_STATE)
         .body(Body::empty())?;
     let (status, _, text) = answer(over(dir.path(), &a, &b)?, read).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(StatusCode::OK, status, "{text}\n{}", exported.causes());
     let spans = exported.spans()?;
     let trace = own_root(the(&spans, "GET /v1/ehr/{ehr_id}")?, CLIENT_TRACE)?;
     recorded_nowhere(&spans, &[CLIENT_TRACE, CLIENT_SPAN, CLIENT_STATE]);
@@ -209,7 +209,7 @@ async fn a_traceparent_that_does_not_parse_is_recorded_nowhere() -> TestResult {
         .header("traceparent", "00-synthetic-not-a-trace-01")
         .body(Body::empty())?;
     let (status, _, text) = answer(over(dir.path(), &a, &b)?, read).await?;
-    assert_eq!(StatusCode::OK, status, "{text}");
+    assert_eq!(StatusCode::OK, status, "{text}\n{}", exported.causes());
     let spans = exported.spans()?;
     recorded_nowhere(&spans, &["synthetic-not-a-trace"]);
     none_of_the_clients(&a, &["synthetic-not-a-trace"]).await

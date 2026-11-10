@@ -61,6 +61,7 @@ pub(crate) const ALLOWED_ATTRIBUTES: [&str; 16] = [
 pub(crate) struct Exported {
     exporter: InMemorySpanExporter,
     provider: SdkTracerProvider,
+    logs: Logs,
     _default: DefaultGuard,
 }
 
@@ -80,18 +81,33 @@ impl Exported {
             .with_simple_exporter(exporter.clone())
             .with_sampler(sampler(ratio))
             .build();
+        let logs = Logs::default();
         let subscriber = traced(
             Rendering::Json,
             "info",
             false,
-            Logs::default(),
+            logs.clone(),
             Some(provider.tracer("ferrofed")),
         )?;
         Ok(Self {
             exporter,
             provider,
+            logs,
             _default: tracing::subscriber::set_default(subscriber),
         })
+    }
+
+    /// Every line the console wrote at `WARN` or `ERROR` so far, which names
+    /// the cause of a refused answer when a status assertion fails.
+    pub(crate) fn causes(&self) -> String {
+        self.logs
+            .text()
+            .lines()
+            .filter(|line| {
+                line.contains(r#""level":"ERROR""#) || line.contains(r#""level":"WARN""#)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// Every span exported so far, in the order each ended.
