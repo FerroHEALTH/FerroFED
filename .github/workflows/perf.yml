@@ -16,7 +16,8 @@
 # commit with the `base` input, or with none the previous release, or the
 # oldest commit after it that carries the gate contract when that release
 # carries none (#1813); each arm boots under its own tree's
-# perf/ferrofed.toml and perf/arm.env, so a change that renames a key
+# perf/ferrofed.toml and perf/arm.env, over the nodes and FerroPIX its own
+# tree's compose files pin, so a change that renames a key or moves a pin
 # reaches the head alone. An attempt that ends with exit 2 could not be judged and says
 # nothing about the code, so it is retried on a fresh runner on any CPU
 # model. Some runners stall the gate for a whole job

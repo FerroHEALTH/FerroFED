@@ -138,7 +138,7 @@ impl MutualTls {
     /// A [`TlsHarnessError`] when the origin does not read, or the
     /// certificates, the TLS configuration or the listener cannot be made.
     pub fn front(origin: &str) -> Result<Self, TlsHarnessError> {
-        Self::over(origin, &material()?)
+        Self::over(origin, &material()?, Ipv4Addr::LOCALHOST)
     }
 
     /// Starts two fronts on two free loopback ports, two origins, that pass
@@ -152,14 +152,51 @@ impl MutualTls {
     pub fn pair(origin: &str) -> Result<(Self, Self), TlsHarnessError> {
         let material = material()?;
         Ok((
-            Self::over(origin, &material)?,
-            Self::over(origin, &material)?,
+            Self::over(origin, &material, Ipv4Addr::LOCALHOST)?,
+            Self::over(origin, &material, Ipv4Addr::LOCALHOST)?,
         ))
     }
 
-    /// Starts a front over `material` that passes every connection to
-    /// `origin`.
-    pub(crate) fn over(origin: &str, material: &Material) -> Result<Self, TlsHarnessError> {
+    /// Starts a front with no client authentication, on every interface,
+    /// that passes every connection to `origin`, its certificate naming
+    /// `names` beside `127.0.0.1`: the `https` a container reaches a harness
+    /// server by, through a name such as `host.docker.internal`, trusting
+    /// [`MutualTls::trust_roots`].
+    ///
+    /// # Errors
+    ///
+    /// A [`TlsHarnessError`] as [`MutualTls::front`] gives one.
+    pub fn open(origin: &str, names: &[&str]) -> Result<Self, TlsHarnessError> {
+        let ca = Authority::generate("FerroFED harness TLS CA")?;
+        let mut subjects = vec![Ipv4Addr::LOCALHOST.to_string()];
+        subjects.extend(names.iter().map(|name| (*name).to_owned()));
+        let (server, server_key) = ca.issue(
+            "harness TLS front",
+            subjects,
+            ExtendedKeyUsagePurpose::ServerAuth,
+        )?;
+        let material = Material {
+            trust_roots: ca.certificate.pem(),
+            client_identity: String::new(),
+            client_thumbprint: String::new(),
+            config: pki::server_tls((&server, &server_key), None)?,
+        };
+        Self::over(origin, &material, Ipv4Addr::UNSPECIFIED)
+    }
+
+    /// Returns the port the front listens on.
+    #[must_use]
+    pub fn port(&self) -> u16 {
+        self.address.port()
+    }
+
+    /// Starts a front over `material` on `interface` that passes every
+    /// connection to `origin`; its origin names the loopback address.
+    pub(crate) fn over(
+        origin: &str,
+        material: &Material,
+        interface: Ipv4Addr,
+    ) -> Result<Self, TlsHarnessError> {
         let target = origin
             .strip_prefix("http://")
             .map(|rest| rest.trim_end_matches('/'))
@@ -167,9 +204,9 @@ impl MutualTls {
             .ok_or(TlsHarnessError::Origin)?
             .to_owned();
         let acceptor = TlsAcceptor::from(Arc::new(material.config.clone()));
-        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+        let listener = std::net::TcpListener::bind((interface, 0))?;
         listener.set_nonblocking(true)?;
-        let address = listener.local_addr()?;
+        let address = SocketAddr::from((Ipv4Addr::LOCALHOST, listener.local_addr()?.port()));
         let handshakes = Arc::new(AtomicUsize::new(0));
         let refused = Arc::new(AtomicUsize::new(0));
         let presented = Arc::new(Mutex::new(Vec::new()));

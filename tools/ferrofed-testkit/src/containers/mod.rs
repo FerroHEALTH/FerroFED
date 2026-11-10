@@ -179,6 +179,15 @@ pub enum HarnessError {
     /// The certificates of a harness TLS server could not be generated.
     #[error("the harness certificates could not be generated")]
     Certificate(#[source] rcgen::Error),
+    /// The harness issuer could not make its key or sign a token.
+    #[error("the harness issuer could not be made")]
+    Issuer(#[source] crate::issuer::IssuerError),
+    /// The TLS front of a harness server could not be started.
+    #[error("the TLS front of a harness server could not be started")]
+    Tls(#[source] crate::tls::TlsHarnessError),
+    /// A harness file could not be written.
+    #[error("a harness file could not be written")]
+    Write(#[source] std::io::Error),
 }
 
 /// A started PostgreSQL server holding one database per node, on a network

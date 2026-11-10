@@ -14,14 +14,26 @@
 # Re-running is safe: a record FerroPIX holds already is answered 200 and
 # replaced with the same content.
 #
-# Usage: seed.sh PATIENTS BASE, with the Basic credentials in FERROPIX_USER
-# and FERROPIX_PASSWORD (development values). Exit 1 naming the line FerroPIX
-# refused; 0 once every line is fed.
+# Usage: seed.sh PATIENTS BASE TOKEN_ENDPOINT, with the Source's client in
+# FERROPIX_CLIENT_ID and FERROPIX_CLIENT_SECRET (development values). The seed
+# feeds as a machine, under a client credentials token of the development
+# issuer (RFC 6749 §4.4), since FerroPIX admits a Patient Identity Source only
+# so. Exit 1 naming the line FerroPIX refused, or the token not obtained; 0
+# once every line is fed.
 set -eu
 
 patients="$1"
 base="$2"
+token_endpoint="$3"
 fed=0
+
+answer="$(curl -sS -u "$FERROPIX_CLIENT_ID:$FERROPIX_CLIENT_SECRET" \
+  -d grant_type=client_credentials -d scope=system/Patient.cud "$token_endpoint")"
+token="$(printf '%s' "$answer" | sed -n 's/.*"access_token" *: *"\([^"]*\)".*/\1/p')"
+[ -n "$token" ] || {
+  echo "seed: the issuer at $token_endpoint gave the Source no token" >&2
+  exit 1
+}
 
 while IFS="$(printf '\t')" read -r member ehr_id namespace value domain; do
   case "$member" in
@@ -33,7 +45,7 @@ while IFS="$(printf '\t')" read -r member ehr_id namespace value domain; do
 {\"system\":\"$namespace\",\"value\":\"$value\"}],\
 \"name\":[{\"family\":\"Synthetic\",\"given\":[\"$value\"]}]}"
   status="$(curl -sS -o /dev/null -w '%{http_code}' -X PUT \
-    -u "$FERROPIX_USER:$FERROPIX_PASSWORD" \
+    -H "Authorization: Bearer $token" \
     -H 'Content-Type: application/fhir+json' -H 'Accept: application/fhir+json' \
     --data-binary "$body" \
     "$base/Patient?identifier=$domain%7C$ehr_id")"

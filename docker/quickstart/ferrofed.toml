@@ -94,7 +94,7 @@ password = "ferroehr"
 # The patient index: FerroPIX's PIXm Manager on the compose network. Each
 # member's ehr_ids are one identifier domain there, as
 # docker/quickstart/patients.tsv names it, and the gateway asks as FerroPIX's
-# PIXm Consumer, a development credential, NOT for anything real.
+# PIXm Consumer, under a client credentials token.
 [[pixm.manager]]
 
 [pixm.manager.endpoint]
@@ -106,6 +106,12 @@ url = "http://ferropix:8080/fhir/"
 "node-c" = "urn:oid:2.999.2.3"
 "node-d" = "urn:oid:2.999.2.4"
 
-[pixm.manager.endpoint.credentials]
-user = "ferrofed"
-password = "ferrofed-consumer-example"
+# The PIXm Consumer's client credentials grant at the quickstart's
+# development token issuer (compose.yaml, the `ferropix-issuer` service),
+# which FerroPIX trusts; a development client secret, NOT for anything real.
+[pixm.manager.endpoint.credentials.oauth]
+token_endpoint = "http://ferropix-issuer:8180/ferrofed/token"
+client_id = "ferrofed"
+client_auth = "client_secret_basic"
+client_secret = "ferrofed-consumer-example"
+scope = "system/Patient.rs"

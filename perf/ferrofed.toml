@@ -117,9 +117,15 @@ timeout = "5s"
 [pdqm.namespaces]
 "urn:oid:2.999.7" = "urn:oid:2.999.7"
 
-[pdqm.endpoint.credentials]
-user = "ferrofed"
-password = "ferrofed-consumer-example"
+# FerroPIX's PDQm Supplier and PIXm Manager take a machine's client
+# credentials token of the quickstart's development issuer
+# (compose.yaml, the `ferropix-issuer` service, published on 8180).
+[pdqm.endpoint.credentials.oauth]
+token_endpoint = "http://localhost:8180/ferrofed/token"
+client_id = "ferrofed"
+client_auth = "client_secret_basic"
+client_secret = "ferrofed-consumer-example"
+scope = "system/Patient.rs"
 
 [signing]
 key_file = "docker/quickstart/signing/signing-key.pem"
@@ -171,9 +177,12 @@ url = "http://127.0.0.1:8090/fhir/"
 "node-c" = "urn:oid:2.999.2.3"
 "node-d" = "urn:oid:2.999.2.4"
 
-[pixm.manager.endpoint.credentials]
-user = "ferrofed"
-password = "ferrofed-consumer-example"
+[pixm.manager.endpoint.credentials.oauth]
+token_endpoint = "http://localhost:8180/ferrofed/token"
+client_id = "ferrofed"
+client_auth = "client_secret_basic"
+client_secret = "ferrofed-consumer-example"
+scope = "system/Patient.rs"
 
 [stored_queries]
 backend = "postgres"
