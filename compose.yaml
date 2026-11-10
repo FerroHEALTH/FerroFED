@@ -28,9 +28,16 @@
 # scripts/quickstart/seed.sh creates them at the nodes over ITS-REST.
 #
 # THE PATIENT INDEX. FerroPIX runs under its development profile on its own
-# PostgreSQL, configured by docker/quickstart/ferropix/ferropix.toml, with
-# development credentials and a development sealing key
-# (docker/quickstart/ferropix/data-key), NOT for anything real.
+# PostgreSQL, configured by docker/quickstart/ferropix/ferropix.toml, with a
+# development sealing key (docker/quickstart/ferropix/data-key), NOT for
+# anything real. Its machines, the seed feeding it and the gateway asking it,
+# sign in with client credentials tokens of the `ferropix-issuer` service,
+# NAV's mock-oauth2-server, a development issuer that signs any client
+# credentials request, NOT for anything real. FerroPIX reads an issuer's
+# metadata at start and accepts plain http only on loopback (RFC 8414 §2),
+# so it joins the issuer's network namespace, the issuer answers to the name
+# `ferropix` on the compose network, and every token names the issuer as
+# FerroPIX sees it, http://localhost:8180/ferrofed.
 #
 # THE SIGNING KEY. The gateway signs the caller's identity onto every request
 # to a node with its own key, which scripts/quickstart/signing-key.sh writes
@@ -243,12 +250,43 @@ services:
       retries: 30
       start_period: 20s
 
-  # FerroPIX, the patient index: its PIXm Manager answers the gateway's
-  # ITI-83 and takes the seed's ITI-104 feed.
-  ferropix:
-    image: ghcr.io/ferrohealth/ferropix:0.0.17@sha256:7418567e53a2993d9b617cd99de2d1bbe4d940fd7432db2e793eb3837ce9f815
+  # The development token issuer of FerroPIX's machines, and the owner of the
+  # network namespace FerroPIX joins (THE PATIENT INDEX above). The client
+  # credentials grant: the client as `sub` and `client_id`, FerroPIX's
+  # audience, the scope asked for, and the issuer FerroPIX reads on loopback.
+  # `$$` is a literal `$` to compose.
+  ferropix-issuer:
+    image: ghcr.io/navikt/mock-oauth2-server:6.1.5@sha256:d88e445d55c4ff6eed59b02d86adfece47d985233b1616fb712669b98328c8a2
     restart: unless-stopped
+    networks:
+      default:
+        aliases: [ferropix]
+    environment:
+      # FerroPIX listens on 8080 in this namespace, so the issuer moves.
+      SERVER_PORT: "8180"
+      JSON_CONFIG: >-
+        {"tokenCallbacks":[{"issuerId":"ferrofed",
+        "requestMappings":[{"requestParam":"grant_type","match":"client_credentials",
+        "claims":{"iss":"http://localhost:8180/ferrofed","sub":"$${clientId}",
+        "client_id":"$${clientId}","aud":["http://ferropix:8080/fhir"],
+        "scope":"$${scope}"}}]}]}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+  # FerroPIX, the patient index: its PIXm Manager answers the gateway's
+  # ITI-83 and takes the seed's ITI-104 feed, in the issuer's network
+  # namespace, as `ferropix` on the compose network.
+  ferropix:
+    image: ghcr.io/ferrohealth/ferropix:0.0.25@sha256:4fcbabdd21bfc8993c94afe9043c25e7c2a651b872aebbd4d86935ff4c57cba5
+    restart: unless-stopped
+    network_mode: service:ferropix-issuer
     depends_on:
+      ferropix-issuer:
+        condition: service_started
       ferropix-postgres:
         condition: service_healthy
     environment:
@@ -262,6 +300,8 @@ services:
       # The audit spool and the usage report's instance id.
       - ferropix-state:/var/lib/ferropix
     read_only: true
+    tmpfs:
+      - /tmp
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
@@ -272,8 +312,6 @@ services:
       retries: 10
       start_period: 20s
 
-  # Feeds FerroPIX the patients of docker/quickstart/patients.tsv once, as
-  # each member's Patient Identity Source, and exits.
   ferropix-seed:
     image: curlimages/curl:8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
     restart: "no"
@@ -282,10 +320,11 @@ services:
         condition: service_healthy
     environment:
       # The Patient Identity Source of docker/quickstart/ferropix/ferropix.toml,
-      # a development credential, NOT for anything real.
-      FERROPIX_USER: quickstart-source
-      FERROPIX_PASSWORD: ferrofed-source-example
-    entrypoint: ["/bin/sh", "/seed/seed.sh", "/seed/patients.tsv", "http://ferropix:8080/fhir"]
+      # a client of the development issuer, which signs whatever secret it is
+      # sent: a development credential, NOT for anything real.
+      FERROPIX_CLIENT_ID: quickstart-source
+      FERROPIX_CLIENT_SECRET: quickstart-source-example
+    entrypoint: ["/bin/sh", "/seed/seed.sh", "/seed/patients.tsv", "http://ferropix:8080/fhir", "http://ferropix:8180/ferrofed/token"]
     volumes:
       - ./docker/quickstart/ferropix/seed.sh:/seed/seed.sh:ro
       - ./docker/quickstart/patients.tsv:/seed/patients.tsv:ro
