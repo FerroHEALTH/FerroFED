@@ -3,9 +3,9 @@
 
 //! The identity lifecycle over PMIR (track 8 of §16.3, Annex A.4).
 //!
-//! It holds what an ITI-93 message means for the resolution bindings, and
-//! the ITI-94 subscriber that asks for the messages (§5.2, "PMIR for
-//! identity lifecycle").
+//! It holds what an ITI-93 message means for the resolution bindings (§5.2,
+//! "PMIR for identity lifecycle"); the server subscribes with `ihe-iti`'s
+//! ITI-94 subscriber over the outbound client of `[pmir.endpoint]`.
 //!
 //! A message changes routing state only. [`change_of`] reads which `ehr_id`s
 //! its changes touch, from the identifiers a Patient Master Identity carries
@@ -17,12 +17,8 @@
 use std::collections::BTreeSet;
 
 use ferrofed_registry::id::EhrId;
-use ferrohealth_smart::client::outbound::OutboundClient;
-use ihe_iti::pmir::PmirSubscriber;
-use ihe_iti::pmir::error::InvalidInput;
 use ihe_iti::pmir::feed::{Event, Feed, PatientIdentity};
 use secrecy::ExposeSecret;
-use thiserror::Error;
 
 use crate::session::IdentityChange;
 
@@ -94,27 +90,4 @@ fn carried(identity: &PatientIdentity, domains: &BTreeSet<String>) -> Touched {
     } else {
         Touched::Ehrs(ehrs)
     }
-}
-
-/// A subscriber that cannot be built.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum PmirConfigError {
-    /// The Registry's base URL is not an `http(s)` URL without a query.
-    #[error(
-        "the Patient Identity Registry base URL is not an http(s) URL without a query or a fragment"
-    )]
-    Base(#[source] InvalidInput),
-}
-
-/// The ITI-94 subscriber of the Registry `client`'s endpoint table names.
-///
-/// It authenticates with the credential and the TLS material of `client`,
-/// by which the Registry authorizes the subscription (§2:3.94.5).
-///
-/// # Errors
-/// [`PmirConfigError::Base`] for a base that is no `http(s)` URL without a
-/// query or a fragment.
-pub fn subscriber(client: OutboundClient) -> Result<PmirSubscriber, PmirConfigError> {
-    PmirSubscriber::new(client).map_err(PmirConfigError::Base)
 }

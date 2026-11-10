@@ -38,8 +38,7 @@
 //!     (Annex A §A.2);
 //!   - `ihe::xcpd`: the localizer over XCPD ITI-55 (Annex A.3);
 //!   - `ihe::pmir`: what a PMIR ITI-93 message does to the resolution
-//!     bindings, and the ITI-94 subscriber that asks for the messages
-//!     (track 8, Annex A.4);
+//!     bindings (track 8, Annex A.4);
 //!   - `ihe::mcsd`: the registry document in FHIR form, `Organization` and
 //!     `Endpoint` resources read through `ihe_iti`'s mCSD reader (N19, N20),
 //!     and in `ihe::mcsd::source` the registry read from an mCSD directory

@@ -23,6 +23,8 @@ use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_identity::role::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
 use ferrofed_testkit::mock::Server;
+use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::config::ServerTls;
 use ferrohealth_smart::config::credentials::OauthSection;
 use ihe_iti::pixm::Invocation;
 use secrecy::SecretString;
@@ -103,7 +105,8 @@ fn manager(server: &Server, auth: Auth, pairs: &[(&str, &str)]) -> ManagerConfig
         }
     }
     ManagerConfig {
-        client: ferrofed_testkit::outbound::build(&endpoint).expect("the outbound client builds"),
+        client: OutboundClient::build(&endpoint, "pixm.manager.endpoint", &ServerTls)
+            .expect("the outbound client builds"),
         members: members(pairs),
         invocation: Invocation::Get,
     }

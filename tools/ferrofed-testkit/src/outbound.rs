@@ -38,22 +38,13 @@ pub fn endpoint(url: &str) -> EndpointSection {
     }
 }
 
-/// The outbound client `endpoint` describes.
-///
-/// # Errors
-///
-/// The [`OutboundError`] of a table `ferrohealth-smart` refuses.
-pub fn build(endpoint: &EndpointSection) -> Result<OutboundClient, OutboundError> {
-    OutboundClient::build(endpoint, KEY, &ServerTls)
-}
-
 /// The outbound client of `url`, as [`endpoint`] describes it.
 ///
 /// # Errors
 ///
 /// The [`OutboundError`] of a URL `ferrohealth-smart` refuses.
 pub fn client(url: &str) -> Result<OutboundClient, OutboundError> {
-    build(&endpoint(url))
+    OutboundClient::build(&endpoint(url), KEY, &ServerTls)
 }
 
 /// The outbound client of `url` sending HTTP Basic `user` and `password`.
@@ -66,7 +57,7 @@ pub fn basic(url: &str, user: &str, password: &str) -> Result<OutboundClient, Ou
     let mut table = endpoint(url);
     user.clone_into(&mut table.credentials.user);
     table.credentials.password = Some(SecretString::from(password));
-    build(&table)
+    OutboundClient::build(&table, KEY, &ServerTls)
 }
 
 /// The outbound client of `url` presenting the TLS material `tls` names.
@@ -78,7 +69,7 @@ pub fn basic(url: &str, user: &str, password: &str) -> Result<OutboundClient, Ou
 pub fn with_tls(url: &str, tls: TlsClientSection) -> Result<OutboundClient, OutboundError> {
     let mut table = endpoint(url);
     table.tls = tls;
-    build(&table)
+    OutboundClient::build(&table, KEY, &ServerTls)
 }
 
 /// The outbound client of `url` presenting `identity` and trusting `roots`.
