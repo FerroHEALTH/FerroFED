@@ -84,6 +84,11 @@
 #                          support table, with its release date and the end
 #                          of its support period five years on (Regulation
 #                          (EU) 2024/2847 Art 13(8)).
+#  16. quickstart clone    every `git clone` of FerroFED on README.md and
+#                          the book's container page names `--branch
+#                          v<product version>`, so the configuration a
+#                          reader clones is the one the image compose.yaml
+#                          pins reads.
 #
 # The container images check (9) holds docker/console/Dockerfile to the same
 # base-image row as docker/Dockerfile.
@@ -324,6 +329,23 @@ readme_status() {
     fi
   done <<< "$found"
   [[ "$stale" -eq 0 ]] && note "OK: $readme names a release no older than $product, $count times"
+  return 0
+}
+
+# quickstart_clone PAGE PRODUCT: every `git clone` of the FerroFED repository
+# on PAGE names `--branch vPRODUCT`. A clone of main pairs main's quickstart
+# configuration with the released image compose.yaml pins, which refuses a key
+# main renamed since (#1849).
+quickstart_clone() {
+  local page=$1 product=$2 line count=0 wrong=0
+  while IFS= read -r line; do
+    count=$((count + 1))
+    if [[ "$line" != *"--branch v$product "* ]]; then
+      bad "$page clones FerroFED without --branch v$product: $line"
+      wrong=1
+    fi
+  done < <(grep -E 'git clone .*github\.com/FerroHEALTH/FerroFED' "$page" || true)
+  [[ "$wrong" -eq 0 && "$count" -gt 0 ]] && note "OK: $page clones v$product, $count times"
   return 0
 }
 
@@ -623,6 +645,13 @@ self_test() {
   expect "a README with one stale status line among current ones" 1 readme_status "$work/readme-mixed.md" 0.0.9
   expect "a README with no status line" 1 readme_status "$work/readme-silent.md" 0.0.9
   expect "a README behind a newer minor line" 1 readme_status "$work/readme-ahead.md" 0.1.0
+
+  printf '%s\n' 'git clone --branch v0.0.9 --depth 1 https://github.com/FerroHEALTH/FerroFED && cd FerroFED' > "$work/clone-tag.md"
+  printf '%s\n' 'git clone https://github.com/FerroHEALTH/FerroFED && cd FerroFED' > "$work/clone-main.md"
+  printf '%s\n' 'git clone --branch v0.0.8 --depth 1 https://github.com/FerroHEALTH/FerroFED && cd FerroFED' > "$work/clone-old.md"
+  expect "a quickstart clone of the product version" 0 quickstart_clone "$work/clone-tag.md" 0.0.9
+  expect "a quickstart clone of main" 1 quickstart_clone "$work/clone-main.md" 0.0.9
+  expect "a quickstart clone of an older release" 1 quickstart_clone "$work/clone-old.md" 0.0.9
 
   mkdir -p "$work/tree/crates/spec-crate/src/inner" "$work/tree/app/app-crate/src"
   printf '%s\n' 'pub const SPEC: &str = "0.9.0";' > "$work/tree/crates/spec-crate/src/lib.rs"
@@ -965,6 +994,15 @@ if [[ -f README.md ]] && [[ -n "$want_product" ]]; then
   readme_status README.md "$want_product"
 else
   note "no README.md or no product version yet, skipped"
+fi
+
+echo "== quickstart clone (README.md, the book's container page <-> $matrix product version)"
+if [[ -n "$want_product" ]]; then
+  for page in README.md website/book/src/operate/container.md; do
+    [[ -f "$page" ]] && quickstart_clone "$page" "$want_product"
+  done
+else
+  note "no product version yet, skipped"
 fi
 
 echo "== landing-page release (website/landing/index.html, rendered from Cargo.toml)"

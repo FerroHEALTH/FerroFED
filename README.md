@@ -111,11 +111,13 @@ point.
 
 The quickstart runs the published gateway image beside four FerroEHR
 record servers and FerroPIX, with synthetic patients. You need Docker
-Compose, `git`, `curl`, `jq` and `openssl`. Every command below is a step of
+Compose, `git`, `curl`, `jq` and `openssl`. Clone the release, so the
+quickstart's configuration is the one its gateway image reads. Every command
+below is a step of
 [`scripts/quickstart/tour.sh`](scripts/quickstart/tour.sh), which CI runs.
 
 ```sh
-git clone https://github.com/FerroHEALTH/FerroFED && cd FerroFED
+git clone --branch v0.0.18 --depth 1 https://github.com/FerroHEALTH/FerroFED && cd FerroFED
 ```
 
 Write the gateway's signing key, start the stack and seed the four servers:
