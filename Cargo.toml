@@ -437,8 +437,10 @@ ferrohealth-session = { version = "=0.10.0", default-features = false }
 # and names the key of a refusal inside an array of tables; 0.2.9 splits the
 # loader with the API unchanged; 0.2.10 sets an array of tables such as
 # [[auth.issuer]] from the environment by element index (#1682). Verified
-# against crates.io on 2026-11-06.
-ferrohealth-config = "=0.4.1"
+# against crates.io on 2026-11-06. 0.4.3 layers a product's defaults under an
+# optional table or each element of an array of tables a source writes, which
+# every outbound table's `endpoint` takes (#1815, FerroHEALTH/FerroSYS#353).
+ferrohealth-config = "=0.4.3"
 # The health family of FerroHEALTH/FerroSYS (#1397): the readiness
 # document, and with `registry` the indicators and the lifecycle the gateway
 # runs. Pinned exactly, at the version ferrohealth-server requires.

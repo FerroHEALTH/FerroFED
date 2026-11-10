@@ -32,10 +32,71 @@ pub fn loader() -> Result<Loader, Error> {
         file: None,
         source: Box::new(source),
     };
-    Loader::new(PREFIX)
-        .map_err(fault)?
-        .defaults("server", &crate::config::server::defaults())
-        .map_err(fault)
+    endpoint_defaults(
+        Loader::new(PREFIX)
+            .map_err(fault)?
+            .defaults("server", &crate::config::server::defaults())
+            .map_err(fault)?,
+    )
+    .map_err(fault)
+}
+
+/// `loader` with each outbound table's own `endpoint` defaults, layered
+/// under a table, or each element of an array of tables, a source writes, so
+/// a key the operator leaves out keeps the table's default and an unwritten
+/// table stays absent (FerroHEALTH/FerroSYS#353).
+fn endpoint_defaults(loader: Loader) -> Result<Loader, ConfigError> {
+    let loader = loader
+        .defaults_if_written(
+            "audit.repository",
+            "endpoint",
+            &crate::config::audit::FeedRepository::default().endpoint,
+        )?
+        .defaults_if_written(
+            "eehrxf.terminology",
+            "endpoint",
+            &crate::config::eehrxf::TerminologyServer::default().endpoint,
+        )?;
+    #[cfg(feature = "binding-ihe")]
+    let loader = loader
+        .defaults_each(
+            "pixm.manager",
+            "endpoint",
+            &crate::config::ihe::pixm::PixManager::default().endpoint,
+        )?
+        .defaults_if_written(
+            "pdqm",
+            "endpoint",
+            &crate::config::ihe::pdqm::Pdqm::default().endpoint,
+        )?
+        .defaults_if_written(
+            "pmir",
+            "endpoint",
+            &crate::config::ihe::pmir::Pmir::default().endpoint,
+        )?
+        .defaults_if_written(
+            "registry.mcsd",
+            "endpoint",
+            &crate::config::ihe::mcsd::McsdDirectory::default().endpoint,
+        )?
+        .defaults_each(
+            "xcpd.gateway",
+            "endpoint",
+            &crate::config::ihe::xcpd::XcpdGateway::default().endpoint,
+        )?;
+    #[cfg(feature = "binding-nl")]
+    let loader = loader
+        .defaults_if_written(
+            "nl_gf.nvi",
+            "endpoint",
+            &crate::config::nl::nvi::Nvi::default().endpoint,
+        )?
+        .defaults_if_written(
+            "nl_gf.mitz",
+            "endpoint",
+            &crate::config::nl::mitz::Mitz::default().endpoint,
+        )?;
+    Ok(loader)
 }
 
 /// The dotted key whose source decides whether the drain follows the
@@ -355,5 +416,55 @@ best_effort = true
             &[("federation.best_effort.x".to_owned(), "1".to_owned())],
         );
         assert!(refused.is_err(), "{refused:?}");
+    }
+
+    /// The `endpoint` table `text` sets under `[pdqm]` and each
+    /// `[[pixm.manager]]`, as loaded.
+    fn tables(text: &str) -> Config {
+        Config::from_sources(Some(text), &BTreeMap::new()).expect("the configuration loads")
+    }
+
+    #[cfg(feature = "binding-ihe")]
+    #[test]
+    fn a_partly_written_endpoint_table_keeps_its_tables_defaults() {
+        let unwritten = tables("");
+        assert!(unwritten.pdqm.is_none(), "an unwritten [pdqm] stays absent");
+        assert!(unwritten.pixm.is_none(), "an unwritten [pixm] stays absent");
+        let written = tables(
+            "[pdqm]\nmaster = \"urn:oid:2.999.1\"\n\n[pdqm.endpoint]\nurl = \"https://pdq.example.org/fhir/\"\n\n\
+             [[pixm.manager]]\nendpoint.url = \"https://a.example.org/fhir/\"\n\n\
+             [[pixm.manager]]\nendpoint.url = \"https://b.example.org/fhir/\"\nendpoint.retry.max_attempts = 3\n",
+        );
+        let pdqm = written.pdqm.expect("[pdqm] is written");
+        assert_eq!(1000, pdqm.endpoint.timeout.as_millis(), "PDQm keeps its 1s");
+        assert_eq!(
+            1, pdqm.endpoint.retry.max_attempts,
+            "PDQm tries a call once"
+        );
+        let managers = written.pixm.expect("[pixm] is written").manager;
+        let attempts: Vec<u32> = managers
+            .iter()
+            .map(|manager| manager.endpoint.retry.max_attempts)
+            .collect();
+        assert_eq!(
+            vec![1, 3],
+            attempts,
+            "each element keeps the default it does not set"
+        );
+    }
+
+    #[test]
+    fn a_partly_written_audit_repository_keeps_its_delivery_defaults() {
+        let written = tables(
+            "[audit.repository]\nhostname = \"gateway.example.org\"\n\n\
+             [audit.repository.endpoint]\nurl = \"https://arr.example.org/fhir\"\n",
+        );
+        let endpoint = written
+            .audit
+            .repository
+            .expect("[audit.repository] is written")
+            .endpoint;
+        assert_eq!(5000, endpoint.timeout.as_millis());
+        assert_eq!(60_000, endpoint.retry.max_backoff.as_millis());
     }
 }
