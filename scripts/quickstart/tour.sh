@@ -10,10 +10,10 @@
 #
 # The README shows the commands between each `ANCHOR:` and `ANCHOR_END:` line,
 # each fenced block under a `<!-- tour:<anchor> -->` line, and the
-# quickstart job of ci.yml runs this script, so a command the README
-# shows is a command CI ran. GitHub renders no include, so --self-test refuses
-# a README copy that differs from the script by a byte, and an anchor the
-# README lacks.
+# release-compose job of ci.yml runs this script over the gateway the change
+# builds, so a command the README shows is a command CI ran. GitHub renders no
+# include, so --self-test refuses a README copy that differs from the script
+# by a byte, and an anchor the README lacks.
 #
 # It writes the quickstart's signing key, starts the published gateway image
 # beside four FerroEHR nodes and FerroPIX, seeds the nodes with synthetic

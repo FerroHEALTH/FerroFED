@@ -344,7 +344,7 @@ jobs:
 
       # ---- quickstart --------------------------------------------------
       # The README's quick start is the anchored steps of the tour, which the
-      # quickstart job runs; the self-test holds each README copy to its anchor.
+      # release-compose job runs; the self-test holds each README copy to its anchor.
       - name: quickstart
         if: ${{ !cancelled() }}
         run: bash scripts/quickstart/tour.sh --self-test
@@ -1223,39 +1223,30 @@ jobs:
       # note: the guard runs it over the example the last release attached.
       - run: bash scripts/checks/upgrade-notes.sh target/x86_64-unknown-linux-musl/debug/ferrofed
       - run: bash scripts/checks/production-guide.sh target/x86_64-unknown-linux-musl/debug/ferrofed
-
-  # The README's quick start, run as written: the compose quickstart over the
-  # published images, seeded, and one federated query that must answer
-  # complete with a composition from each of the four nodes.
-  quickstart:
-    name: quickstart
-    needs: detect
-    if: needs.detect.outputs.quickstart == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # The gateway image compose.yaml names is tagged only once its release
-      # is published, after the version bump reached main; until then there
-      # is nothing to pull, and the tour waits for the publish.
-      - name: The README's quick start runs as written
+      # The README's quick start, run as written over this change's gateway:
+      # the binary above staged as the image docker/Dockerfile builds, tagged
+      # under the name compose.yaml pulls, beside the quickstart's FerroEHR
+      # nodes and FerroPIX. The repository's quickstart configuration is
+      # main's, so the gateway it runs against is the one this change builds.
+      - name: Build the quickstart's gateway image from this change
+        if: needs.detect.outputs.quickstart == 'true'
         run: |
           set -euo pipefail
-          version="$(sed -nE 's|.*ghcr\.io/ferrohealth/ferrofed:\$\{FERROFED_VERSION:-([0-9.]+)\}.*|\1|p' compose.yaml | head -n1)"
-          if ! docker manifest inspect "ghcr.io/ferrohealth/ferrofed:$version" > /dev/null 2>&1; then
-            echo "::notice::ghcr.io/ferrohealth/ferrofed:$version is not published yet; the tour runs once its release is."
-            exit 0
-          fi
-          bash scripts/quickstart/tour.sh
+          mkdir -p dist/linux_amd64
+          cp target/x86_64-unknown-linux-musl/debug/ferrofed dist/linux_amd64/ferrofed
+          docker buildx build --load --platform linux/amd64 -t ghcr.io/ferrohealth/ferrofed:ci -f docker/Dockerfile .
+      - name: The README's quick start runs as written
+        if: needs.detect.outputs.quickstart == 'true'
+        env:
+          FERROFED_VERSION: ci
+        run: bash scripts/quickstart/tour.sh
       - name: The gateway's log, when the tour failed
-        if: failure()
+        if: failure() && needs.detect.outputs.quickstart == 'true'
         run: docker compose logs ferrofed
       - name: Stop the quickstart
-        if: always()
+        if: always() && needs.detect.outputs.quickstart == 'true'
+        env:
+          FERROFED_VERSION: ci
         run: docker compose down --volumes
 
   doc:
@@ -1583,7 +1574,6 @@ jobs:
       - conformance-report
       - fhir-validator
       - release-compose
-      - quickstart
       - doc
       - cargo-deny
       - msrv
