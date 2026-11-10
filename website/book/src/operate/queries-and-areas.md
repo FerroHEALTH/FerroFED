@@ -42,18 +42,18 @@ asked for `partial`. The setting is named in the startup log line.
 ## Timeouts
 
 A federated query runs under two budgets (§11.5, N38): each node's request may
-take `per_node_timeout_ms`, and the whole fan-out, resolution included, may
-take `overall_timeout_ms`. A node past either is abandoned and reported
+take `per_node_timeout`, and the whole fan-out, resolution included, may
+take `overall_timeout`. A node past either is abandoned and reported
 `time-out`, so under all-or-nothing the query fails `504` with
 `meta.federation` naming every node.
 
 ```toml
 [server]
-request_timeout_ms = 30000    # must exceed overall_timeout_ms by more than 1000
+request_timeout = "30s"    # must exceed overall_timeout by more than 1000
 
 [federation]
-per_node_timeout_ms = 10000   # one node's request
-overall_timeout_ms = 25000    # the whole fan-out
+per_node_timeout = "10s"   # one node's request
+overall_timeout = "25s"    # the whole fan-out
 ```
 
 A client can shorten the budget for one request with `Prefer: wait=<seconds>`
@@ -63,10 +63,10 @@ in force. Only the first `wait` counts, a malformed one is ignored and never
 refused, and `wait=0` asks no node and reports each one `time-out`. The
 budget in force is the one `meta.federation.timeout` reports.
 
-The server's own `request_timeout_ms` answers `408` with an empty body, which
+The server's own `request_timeout` answers `408` with an empty body, which
 would drop that envelope. A gateway that federates therefore refuses to boot,
-and `config check` refuses the file, unless `server.request_timeout_ms` is
-greater than `federation.overall_timeout_ms` plus one second, the time the
+and `config check` refuses the file, unless `server.request_timeout` is
+greater than `federation.overall_timeout` plus one second, the time the
 gateway keeps for combining the answers. The refusal names both keys. The
 defaults leave four seconds to spare. The one second is FerroFED's own choice:
 §11.5 promises an answer "within its declared overall budget, plus combining
@@ -394,7 +394,7 @@ fan_out_template_upload = true   # off by default
   names its one node, and every other definition request still routes to
   one node.
 - Each member is sent the upload independently, within the request's
-  `per_node_timeout_ms` and `overall_timeout_ms`. A member that accepts keeps
+  `per_node_timeout` and `overall_timeout`. A member that accepts keeps
   the template: the gateway rolls nothing back.
 - The answer names each member's outcome, and a partial success answers
   `207`, never `200` ([client

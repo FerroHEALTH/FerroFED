@@ -33,9 +33,9 @@ fn full() -> String {
 const FULL: &str = r#"
 [server]
 listen = "0.0.0.0:9000"
-request_timeout_ms = 1000
-shutdown_timeout_ms = 2000
-body_limit_bytes = 4096
+request_timeout = '1s'
+shutdown_timeout = '2s'
+body_limit = '4KiB'
 
 [telemetry]
 format = "json"
@@ -101,7 +101,7 @@ const BROKEN_DEV_ROWS: [&str; 3] = [
 /// registry document is only named, since resolving never reads it.
 fn federating(request_ms: u64, overall_ms: u64) -> String {
     format!(
-        "[server]\nrequest_timeout_ms = {request_ms}\n\n[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n[federation]\nper_node_timeout_ms = 1000\noverall_timeout_ms = {overall_ms}\n{}",
+        "[server]\nrequest_timeout = '{request_ms}ms'\n\n[registry]\ndocument = \"/nonexistent/registry.toml\"\n\n[federation]\nper_node_timeout = '1s'\noverall_timeout = '{overall_ms}ms'\n{}",
         crate::support::audit_toml()
     )
 }

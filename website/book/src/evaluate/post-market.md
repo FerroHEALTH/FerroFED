@@ -356,7 +356,7 @@ credential and no file, and only when it is one of these:
 
 - a boolean;
 - a number under a timeout, interval, limit, capacity or size key, such as
-  `request_timeout_ms`;
+  `request_timeout`;
 - the scheme, host and port of a URL under a URL key, such as `url` or
   `issuer`, with its userinfo, path, query and fragment replaced by `***`;
 - a closed setting or a listen address that has the expected shape, such as

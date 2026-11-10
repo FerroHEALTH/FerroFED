@@ -152,13 +152,13 @@ On `SIGTERM` or `SIGINT` the gateway stops in four steps. No specification
 governs this: our own design.
 
 1. Readiness answers `503` at once, with the phase `draining`, and the
-   listener keeps accepting for `server.drain_delay_ms`. A request that
+   listener keeps accepting for `server.drain_delay`. A request that
    arrives in this window is served like any other.
 2. The listener closes. Each connection finishes the request it is serving
    and is closed, and no new connection is accepted.
-3. The requests in flight get `server.shutdown_timeout_ms` to finish. A
+3. The requests in flight get `server.shutdown_timeout` to finish. A
    connection still open after that is dropped.
-4. The bindings get `gateway.bindings_drain_timeout_ms` (5 seconds by
+4. The bindings get `gateway.bindings_drain_timeout` (5 seconds by
    default) to stop their processes, such as deleting the PMIR
    subscription ([The identity feed](identity.md#the-identity-feed-pmir)).
    A process still stopping after that is abandoned, and the gateway logs
@@ -174,7 +174,7 @@ Set the delay to the longest of those times. It is `0` by default, which
 closes the listener at once: right for a single process with nothing in
 front, and the reason a gateway behind a balancer sets it.
 
-`server.shutdown_timeout_ms` defaults to `server.request_timeout_ms`, and
+`server.shutdown_timeout` defaults to `server.request_timeout`, and
 `config check`, `serve` and a reload refuse a value shorter than that,
 naming both keys. A request accepted just before the listener closes may
 run for the whole request timeout, so a shorter drain would cut it, and a
@@ -184,13 +184,13 @@ rolling restart.
 The runtime's grace period must outlast every step. Docker sends `SIGKILL`
 after `stop_grace_period`, and the kubelet after
 `terminationGracePeriodSeconds`, counted from the moment the pod is deleted.
-Keep each above `drain_delay_ms` plus `shutdown_timeout_ms` plus
-`bindings_drain_timeout_ms`, with room for the last metrics and spans to be
+Keep each above `drain_delay` plus `shutdown_timeout` plus
+`bindings_drain_timeout`, with room for the last metrics and spans to be
 pushed. The drain is at least the request timeout, so the grace period is
 derived as delay + request timeout + bindings' budget + room. The shipped
 examples keep 5 seconds of room:
 
-| Example | `drain_delay_ms` | `shutdown_timeout_ms` | `bindings_drain_timeout_ms` | Arithmetic | Grace period |
+| Example | `drain_delay` | `shutdown_timeout` | `bindings_drain_timeout` | Arithmetic | Grace period |
 |---|---|---|---|---|---|
 | `deploy/kubernetes/base/` | 5000 | 30000 | 5000 | 5 (`preStop` sleep) + 5 + 30 + 5 + 5 | `terminationGracePeriodSeconds: 50` |
 | `deploy/compose/` | 0 | 30000 | 5000 | 0 + 30 + 5 + 5 | `stop_grace_period: 40s` |

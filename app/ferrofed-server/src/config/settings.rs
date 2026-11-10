@@ -248,11 +248,11 @@ pub struct ServerSettings {
     pub forwarded_header: ferrohealth_server::client_address::ForwardedHeader,
     /// How long one request may take before the server answers `408`.
     pub request_timeout: Duration,
-    /// How long a client may take to send a request head, in milliseconds.
-    pub header_read_timeout_ms: std::num::NonZeroU64,
+    /// How long a client may take to send a request head.
+    pub header_read_timeout: Duration,
     /// How long a kept-alive HTTP/1.1 connection may wait for its next
-    /// request, in milliseconds.
-    pub idle_timeout_ms: std::num::NonZeroU64,
+    /// request.
+    pub idle_timeout: Duration,
     /// How long the listener keeps accepting after the stop signal, with
     /// readiness already `503`.
     pub drain_delay: Duration,
@@ -297,7 +297,12 @@ impl ServerSettings {
         reason = "the base path was resolved from the section's own form, so it reads back"
     )]
     pub fn section(&self) -> ferrohealth_server::section::ServerSection {
-        let millis = |duration: Duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
+        let span = |duration: Duration| {
+            ferrohealth_config::units::Duration::from_millis(
+                u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
+            )
+        };
+        let size = |bytes: u64| ferrohealth_config::units::ByteSize::from_bytes(bytes);
         let base = self.base_path.as_str();
         let base_path = if self.base_path.is_root() {
             ferrohealth_server::section::BasePath::default()
@@ -308,20 +313,20 @@ impl ServerSettings {
         ferrohealth_server::section::ServerSection {
             listen: self.listen,
             base_path,
-            request_timeout_ms: millis(self.request_timeout),
-            header_read_timeout_ms: self.header_read_timeout_ms,
-            idle_timeout_ms: self.idle_timeout_ms,
-            body_limit_bytes: self.body_limit,
-            drain_delay_ms: millis(self.drain_delay),
-            shutdown_timeout_ms: millis(self.shutdown_timeout),
+            request_timeout: span(self.request_timeout),
+            header_read_timeout: span(self.header_read_timeout),
+            idle_timeout: span(self.idle_timeout),
+            body_limit: size(u64::try_from(self.body_limit).unwrap_or(u64::MAX)),
+            drain_delay: span(self.drain_delay),
+            shutdown_timeout: span(self.shutdown_timeout),
             max_concurrent_requests: Some(self.overload.max_concurrent_requests),
-            retry_after_s: self.overload.retry_after.as_secs(),
+            retry_after: span(self.overload.retry_after),
             tls: None,
             trusted_proxies: self.trusted_proxies.clone(),
             forwarded_header: self.forwarded_header,
             caller_rate: None,
             compression: self.compression.is_some(),
-            compression_min_bytes: self.compression.unwrap_or(1024),
+            compression_min_size: size(self.compression.unwrap_or(1024)),
         }
     }
 }

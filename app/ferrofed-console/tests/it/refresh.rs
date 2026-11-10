@@ -55,7 +55,7 @@ async fn console(
         text = text.replace(
             "[session]\nsecure_cookie = false\n",
             &format!(
-                "[session]\nsecure_cookie = false\nidle_timeout_s = {absolute}\nabsolute_timeout_s = {absolute}\n"
+                "[session]\nsecure_cookie = false\nidle_timeout = '{absolute}s'\nabsolute_timeout = '{absolute}s'\n"
             ),
         );
     }

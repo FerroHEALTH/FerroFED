@@ -4,6 +4,7 @@
 //! The test that holds every key of a maximal configuration to being
 //! applied by a reload or named as needing a restart.
 
+use ferrohealth_config::units;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::path::Path;
@@ -28,21 +29,21 @@ listen = "127.0.0.1:8080"
 base_path = "/fed"
 trusted_proxies = ["10.0.0.1"]
 forwarded_header = "x-forwarded-for"
-request_timeout_ms = 30000
-header_read_timeout_ms = 20000
-idle_timeout_ms = 95000
-drain_delay_ms = 10
-shutdown_timeout_ms = 40000
-body_limit_bytes = 1048576
+request_timeout = "30s"
+header_read_timeout = "20s"
+idle_timeout = "95s"
+drain_delay = "10ms"
+shutdown_timeout = "40s"
+body_limit = "1MiB"
 max_concurrent_requests = 512
-retry_after_s = 2
+retry_after = "2s"
 compression = true
-compression_min_bytes = 1024
+compression_min_size = "1KiB"
 
 [gateway]
 public_url = "https://gateway.example.org/fed"
 replica = "replica-a"
-bindings_drain_timeout_ms = 5000
+bindings_drain_timeout = '5s'
 
 [server.caller_rate]
 requests_per_second = 10
@@ -53,7 +54,7 @@ certificate_file = "@DIR@/listener.crt"
 key_file = "@DIR@/listener.key"
 client_auth = "required"
 client_ca_file = "@DIR@/client-ca.pem"
-reload_interval_s = 3600
+reload_interval = "1h"
 min_version = "1.2"
 healthcheck_identity_file = "@DIR@/client.pem"
 
@@ -67,6 +68,8 @@ endpoint = "https://otel.example.org:4317"
 traces = true
 metrics = true
 sample_ratio = 0.5
+
+[telemetry.otlp.tls]
 client_identity_file = "@DIR@/collector-client.pem"
 trust_roots_file = "@DIR@/collector-ca.pem"
 
@@ -76,10 +79,10 @@ format = "toml"
 
 [federation]
 id = "example-federation"
-per_node_timeout_ms = 10000
-overall_timeout_ms = 20000
+per_node_timeout = '10s'
+overall_timeout = '20s'
 default_namespace = "urn:oid:2.999.1"
-binding_ttl_ms = 900000
+binding_ttl = '15min'
 binding_capacity = 1000
 ehr_index_capacity = 1000
 node_selection = "localized"
@@ -92,11 +95,11 @@ demographic_endpoint = "node-a-query"
 fan_out_template_upload = true
 fan_out_stored_queries = true
 max_in_flight_per_node = 16
-max_node_answer_bytes = 1048576
+max_node_answer_size = '1MiB'
 
 [federation.localization]
 on_failure = "closed"
-timeout_ms = 1000
+timeout = '1s'
 
 [federation.consent]
 disclose = true
@@ -134,7 +137,7 @@ password_file = "@DIR@/token"
 url = "https://pdq.example.org/fhir/"
 transaction = "iti-78"
 master = "urn:oid:2.999.1"
-timeout_ms = 2000
+timeout = '2s'
 
 [pdqm.namespaces]
 "urn:oid:2.999.7" = "urn:oid:2.999.7"
@@ -156,8 +159,8 @@ url = "https://pmir.example.org/fhir/"
 callback_url = "https://gateway.example.org/fed/pmir/feed"
 path = "/pmir/feed"
 feed_clients = ["synthetic-scraper"]
-timeout_ms = 2000
-check_interval_s = 60
+timeout = '2s'
+check_interval = '1min'
 on_drain = "keep"
 
 [nl_gf.nvi]
@@ -172,7 +175,7 @@ url = "https://mitz.example.org/fhir/"
 namespaces = ["urn:oid:2.999.1"]
 purpose = "TREAT"
 data_categories = ["GGC002"]
-timeout_ms = 1000
+timeout = '1s'
 
 [nl_gf.mitz.holders]
 "node-a" = { type = "V6", ura = "90000001" }
@@ -185,8 +188,8 @@ path = "@DIR@/stored.redb"
 url_file = "@DIR@/store-url"
 ca_file = "@DIR@/collector-ca.pem"
 max_connections = 4
-timeout_ms = 10000
-sweep_interval_s = 60
+timeout = '10s'
+sweep_interval = '1min'
 
 [metrics]
 listen = "127.0.0.1:9090"
@@ -199,8 +202,8 @@ key_file = "@DIR@/listener.key"
 [signing]
 key_file = "@DIR@/signing.pem"
 jwks_uri = "https://gateway.example.org/fed/.well-known/jwks.json"
-node_jwks_cache_s = 300
-rotation_overlap_s = 600
+node_jwks_cache = '5min'
+rotation_overlap = '10min'
 
 [auth]
 product_scope = "__ferrofed.operator"
@@ -210,10 +213,10 @@ issuer = "https://idp.example.org"
 kind = "persons"
 profile = "rfc9068"
 audience = ["https://gateway.example.org/fed"]
-clock_skew_seconds = 60
-jwks_max_age_seconds = 300
-jwks_refresh_interval_seconds = 30
-timeout_ms = 2000
+clock_skew = '1min'
+jwks_max_age = '5min'
+jwks_refresh_interval = '30s'
+timeout = '2s'
 first_party_clients = ["ferrofed-console"]
 
 [trust.purpose_of_use]
@@ -240,8 +243,8 @@ deployment = "compose"
 ui = "managed"
 backend = "redb"
 path = "@DIR@/revisions.redb"
-poll_ms = 2000
-confirm_ms = 120000
+poll = '2s'
+confirm = '2min'
 approval = ["consent"]
 secrets_dir = "@DIR@/secrets"
 "#;
@@ -399,6 +402,28 @@ fn alternatives(key: &str, value: &Value, from: &str, to: &str) -> Vec<Value> {
             .map(Value::Integer)
             .collect(),
         Value::Float(number) => vec![Value::Float(number / 2.0)],
+        Value::String(text) if text.parse::<units::Duration>().is_ok() => {
+            let millis = text
+                .parse::<units::Duration>()
+                .map_or(0, units::Duration::as_millis);
+            [
+                millis * 2,
+                millis + 1000,
+                millis.saturating_sub(1000).max(1),
+            ]
+            .into_iter()
+            .map(|millis| Value::String(units::Duration::from_millis(millis).to_string()))
+            .collect()
+        }
+        Value::String(text) if text.parse::<units::ByteSize>().is_ok() => {
+            let bytes = text
+                .parse::<units::ByteSize>()
+                .map_or(0, units::ByteSize::bytes);
+            [bytes * 2, bytes + 1024, bytes.saturating_sub(1024).max(1)]
+                .into_iter()
+                .map(|bytes| Value::String(units::ByteSize::from_bytes(bytes).to_string()))
+                .collect()
+        }
         Value::String(text) if text.starts_with(from) => {
             vec![Value::String(text.replacen(from, to, 1))]
         }
@@ -442,7 +467,7 @@ const REFUSED: &[&str] = &["profile"];
 
 /// The keys that only bound another key at load and set nothing the
 /// gateway runs on.
-const CHECKED_ONLY: &[&str] = &["signing.node_jwks_cache_s"];
+const CHECKED_ONLY: &[&str] = &["signing.node_jwks_cache"];
 
 /// The keys another key of the maximal configuration holds to the one
 /// value it has, so no change of the key alone loads: an issuer that

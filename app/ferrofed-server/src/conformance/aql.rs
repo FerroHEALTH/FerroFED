@@ -25,7 +25,7 @@
 //!     .directed(DirectiveKind::Endpoint, None, &["node-a-pub"])
 //!     .to_aql();
 //! let expected = "SELECT c/uid/value FROM ENDPOINT ['node-a-pub'] CONTAINS EHR e \
-//!                 CONTAINS COMPOSITION c WHERE c/uid/value='it\\'s'";
+//!                 CONTAINS COMPOSITION c WHERE c/uid/value = 'it\\'s'";
 //! assert_eq!(expected, aql);
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```

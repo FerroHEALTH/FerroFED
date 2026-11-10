@@ -338,7 +338,7 @@ async fn the_timeout_budget_follows_the_configuration() -> TestResult {
     let defaults = described("").await?;
     assert_eq!(10_000, defaults.federation.timeout.per_node_ms, "N38");
     assert_eq!(25_000, defaults.federation.timeout.overall_ms, "N38");
-    let set = described("per_node_timeout_ms = 1500\noverall_timeout_ms = 4000").await?;
+    let set = described("per_node_timeout = '1500ms'\noverall_timeout = '4s'").await?;
     assert_eq!(
         1500, set.federation.timeout.per_node_ms,
         "N38: discoverable"

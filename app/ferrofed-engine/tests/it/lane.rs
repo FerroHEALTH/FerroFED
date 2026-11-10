@@ -94,7 +94,7 @@ pub(crate) fn lane_of(
         "audiences": [NODE],
         "indicators": [NODE],
         "correlation_claim": correlation.unwrap_or_default(),
-        "keys": {"max_onward_lifetime": 3600},
+        "keys": {"max_onward_lifetime": "1h"},
         "federation": {
             "contact_point": false,
             "exchanges_from": [exchanges_from],

@@ -173,7 +173,7 @@ pub fn policy(
                 let default = config::Localization::default();
                 LocalizationSettings {
                     on_failure: default.on_failure,
-                    timeout: Duration::from_millis(default.timeout_ms),
+                    timeout: Duration::from_millis(default.timeout.as_millis()),
                 }
             });
             let seam =

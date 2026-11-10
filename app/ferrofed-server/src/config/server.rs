@@ -8,10 +8,9 @@
 //! surface, and `[server.tls]` and `[metrics.tls]` their TLS. No
 //! specification governs the configuration: our own design.
 
-use std::num::{NonZeroU64, NonZeroUsize};
-use std::path::PathBuf;
+use std::num::NonZeroUsize;
 
-use ferrohealth_server::section::{ClientAuth, ServerSection, TlsSection, TlsVersion};
+use ferrohealth_server::section::{ClientAuth, ServerSection, TlsSection};
 use ferrohealth_server::tls::{HealthcheckTls, TlsKeys, server_config_of};
 use serde::Deserialize;
 
@@ -68,44 +67,9 @@ pub struct Metrics {
     /// address that is not a loopback one needs a client here, or
     /// `[metrics.tls] client_ca_file`.
     pub scrape_clients: Vec<String>,
-    /// The TLS the admin listener serves (`[metrics.tls]`); unset, it serves
-    /// plain HTTP.
-    pub tls: Option<ListenerTls>,
-}
-
-/// The TLS a listener serves: its certificate and key, and the client
-/// certificates it asks for.
-///
-/// Every file is read at start and again on `SIGHUP`, every
-/// `reload_interval_s` and when a configuration revision is applied, so a
-/// renewed certificate takes effect without a restart; a changed path takes
-/// a restart. The listener speaks TLS 1.3 alone unless `min_version`
-/// lowers it to TLS 1.2, with the suites of RFC 9325 §4.2, and nothing older
-/// (RFC 8446; BCP 195, RFC 9325 §3.1.1).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct ListenerTls {
-    /// The PEM file holding the certificate chain the listener presents,
-    /// its own certificate first.
-    pub certificate_file: Option<PathBuf>,
-    /// The PEM file holding the private key of that certificate.
-    pub key_file: Option<PathBuf>,
-    /// Whether the listener asks a client certificate: `none`, the default,
-    /// `optional` or `required`.
-    pub client_auth: ClientAuth,
-    /// The PEM file of the CA certificates a client certificate must chain
-    /// to: required unless `client_auth` is `none`, and refused when it is.
-    pub client_ca_file: Option<PathBuf>,
-    /// How often, in seconds, the files are read again; unset, only
-    /// `SIGHUP` and an applied revision read them again.
-    pub reload_interval_s: Option<NonZeroU64>,
-    /// The oldest TLS version the listener speaks: `"1.3"`, the default, or
-    /// `"1.2"` to keep a TLS 1.2 client.
-    pub min_version: TlsVersion,
-    /// The PEM file holding the client certificate chain and key `ferrofed
-    /// healthcheck` presents to a listener that requires one; `[server.tls]`
-    /// only.
-    pub healthcheck_identity_file: Option<PathBuf>,
+    /// The TLS the admin listener serves (`[metrics.tls]`), the table
+    /// `ferrohealth-server` reads; unset, it serves plain HTTP.
+    pub tls: Option<TlsSection>,
 }
 
 /// The TLS of one listener, resolved: the table `ferrohealth-server` serves
@@ -123,37 +87,6 @@ impl ListenerTlsSettings {
     #[must_use]
     pub fn requires_client_certificate(&self) -> bool {
         self.section.client_auth == ClientAuth::Required
-    }
-}
-
-impl ListenerTls {
-    /// Resolves the TLS of the listener whose table is `table`, reading
-    /// every file once, as `serve` and a reload read them.
-    ///
-    /// # Errors
-    ///
-    /// [`Error::Missing`] for an unset `certificate_file` or `key_file`,
-    /// [`ServerFault::HealthcheckIdentityUnused`] for a healthcheck identity outside
-    /// `[server.tls]` or beside no client certificate asked for, and
-    /// [`Error::ListenerTls`] for a file that does not read, a key that does
-    /// not match its certificate, or a `client_auth` its `client_ca_file`
-    /// disagrees with.
-    pub(crate) fn resolve(&self, table: &'static str) -> Result<ListenerTlsSettings, Error> {
-        let required = |field: &str, value: &Option<PathBuf>| {
-            value.clone().ok_or_else(|| Error::Missing {
-                key: format!("{table}.{field}"),
-            })
-        };
-        let section = TlsSection {
-            certificate_file: required("certificate_file", &self.certificate_file)?,
-            key_file: required("key_file", &self.key_file)?,
-            client_auth: self.client_auth,
-            client_ca_file: self.client_ca_file.clone(),
-            reload_interval_s: self.reload_interval_s,
-            healthcheck_identity_file: self.healthcheck_identity_file.clone(),
-            min_version: self.min_version,
-        };
-        resolve_section(section, table)
     }
 }
 
@@ -210,7 +143,9 @@ pub(crate) fn resolve_server_tls(
 /// `server.compression` is on.
 #[must_use]
 pub fn compression(section: &ServerSection) -> Option<u64> {
-    section.compression.then_some(section.compression_min_bytes)
+    section
+        .compression
+        .then_some(section.compression_min_size.bytes())
 }
 
 /// Resolves `tls`, the TLS of the listener whose table is `table`, when it
@@ -218,12 +153,13 @@ pub fn compression(section: &ServerSection) -> Option<u64> {
 ///
 /// # Errors
 ///
-/// The errors of [`ListenerTls::resolve`].
+/// The errors of [`resolve_section`].
 pub(crate) fn resolve_tls(
-    tls: Option<&ListenerTls>,
+    tls: Option<&TlsSection>,
     table: &'static str,
 ) -> Result<Option<ListenerTlsSettings>, Error> {
-    tls.map(|tls| tls.resolve(table)).transpose()
+    tls.map(|tls| resolve_section(tls.clone(), table))
+        .transpose()
 }
 
 /// The table of the client listener's TLS.

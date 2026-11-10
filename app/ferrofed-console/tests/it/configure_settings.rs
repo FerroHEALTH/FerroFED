@@ -22,8 +22,8 @@ use crate::support::{get_as, send};
 /// start changes, a node selection, the store's connection by its file and
 /// a category map.
 const RUNNING: &str = r#"{"ui":"managed","revision":1,"settings":[
-    {"key":"federation.per_node_timeout_ms","section":"federation","value":5000,"source":"revision",
-     "default":10000,"restart":true,"next":5500,"editable":true},
+    {"key":"federation.per_node_timeout","section":"federation","value":"5s","source":"revision",
+     "default":"10s","restart":true,"next":"5500ms","editable":true},
     {"key":"federation.node_selection","section":"federation","value":"localized","source":"revision",
      "restart":true,"editable":true},
     {"key":"federation.best_effort","section":"federation","value":true,"source":"default",
@@ -72,8 +72,8 @@ async fn each_tab_draws_its_settings_with_their_values_sources_keys_and_next_sta
     let body = page(&service, &session, "/configuration").await?;
     assert!(body.contains("Federation behaviour"), "{body}");
     assert!(body.contains("Per-node timeout"), "{body}");
-    assert!(body.contains("5,000 ms"), "{body}");
-    assert!(body.contains("5,500 ms at the next start"), "{body}");
+    assert!(body.contains("5s"), "{body}");
+    assert!(body.contains("5500ms at the next start"), "{body}");
     assert_eq!(
         1,
         body.matches(r#"class="fui-setting-source""#).count(),
@@ -81,7 +81,7 @@ async fn each_tab_draws_its_settings_with_their_values_sources_keys_and_next_sta
          nothing sets says Default: {body}"
     );
     assert!(body.contains("Default"), "{body}");
-    assert!(body.contains("federation.per_node_timeout_ms"), "{body}");
+    assert!(body.contains("federation.per_node_timeout"), "{body}");
     assert!(body.contains("Next start"), "{body}");
     assert!(body.contains("localized</code>"), "{body}");
     assert!(
@@ -131,7 +131,7 @@ async fn the_edit_is_a_plain_form_with_a_control_for_each_editable_setting()
         "{body}"
     );
     assert!(body.contains(r#"name="form[base]" value="2""#), "{body}");
-    assert!(body.contains(r#"value="5000""#), "{body}");
+    assert!(body.contains(r#"value="5s""#), "{body}");
     assert!(
         body.contains(r#"<option value="localized" selected"#),
         "{body}"
@@ -149,7 +149,7 @@ async fn a_save_sends_only_the_settings_the_operator_changed() -> Result<(), Box
         .and(body_json(serde_json::json!({
             "base": 2,
             "reason": "synthetic longer budget",
-            "settings": {"federation.per_node_timeout_ms": "6000"},
+            "settings": {"federation.per_node_timeout": "6000"},
         })))
         .respond_with(
             ResponseTemplate::new(201)
@@ -165,7 +165,7 @@ async fn a_save_sends_only_the_settings_the_operator_changed() -> Result<(), Box
         ("base", "2"),
         ("reason", "synthetic longer budget"),
         ("setting_rows", "0"),
-        ("setting][0][key", "federation.per_node_timeout_ms"),
+        ("setting][0][key", "federation.per_node_timeout"),
         ("setting][0][was", "5000"),
         ("setting][0][value", "6000"),
         ("setting_rows", "1"),
@@ -198,7 +198,7 @@ async fn a_save_that_changes_nothing_is_refused_before_any_replica_is_asked()
         ("base", "2"),
         ("reason", "synthetic nothing"),
         ("setting_rows", "0"),
-        ("setting][0][key", "federation.per_node_timeout_ms"),
+        ("setting][0][key", "federation.per_node_timeout"),
         ("setting][0][was", "5000"),
         ("setting][0][value", "5000"),
     ]);

@@ -121,7 +121,7 @@ credentials = { user = "ferrofed", password_file = "/run/secrets/mitz-password" 
 namespaces = ["urn:oid:2.999.1"]  # client namespaces that stand for the BSN
 purpose = "TREAT"                 # TREAT or COC
 data_categories = ["GGC002"]      # the Mitz data categories asked about
-timeout_ms = 1000                 # one round of questions, within the query's budget
+timeout = "1s"                 # one round of questions, within the query's budget
 
 [nl_gf.mitz.holders]              # each member's care provider
 "node-a" = { type = "V6" }        # the URA from [nl_gf.nvi.custodians] or the directory
@@ -150,7 +150,7 @@ provider_identifier_prefixes = ["urn:oid:2.16.528.1.1007.3.3."]
 ```
 
 `timeout_ms` bounds one round of questions, and it is a part of
-`federation.overall_timeout_ms`: with `pdqm.timeout_ms` and the localizer's
+`federation.overall_timeout`: with `pdqm.timeout_ms` and the localizer's
 budget it must end before the overall budget, or the configuration is
 refused, naming the keys (§11.5). `OPTIONS {base}/` declares it as
 `timeout.consent_ms`.

@@ -223,7 +223,7 @@ fn the_default_limit_is_five_per_professional_per_24_hours() -> TestResult {
 /// §2.5 lets a country tighten the limit.
 #[test]
 fn a_tighter_limit_is_taken() -> TestResult {
-    let limit = resolved("threshold = 2\nwindow_s = 3600\n")?.emergency;
+    let limit = resolved("threshold = 2\nwindow = '1h'\n")?.emergency;
     assert_eq!(2, limit.threshold.get());
     assert_eq!(Duration::from_secs(3600), limit.window);
     Ok(())
@@ -252,7 +252,7 @@ fn a_threshold_above_five_is_refused_naming_section_2_5() {
 /// naming §2.5.
 #[test]
 fn a_window_longer_than_24_hours_is_refused_naming_section_2_5() {
-    let refused = resolved("window_s = 86401\n").err();
+    let refused = resolved("window = '86401s'\n").err();
     assert!(
         matches!(
             &refused,
@@ -264,7 +264,7 @@ fn a_window_longer_than_24_hours_is_refused_naming_section_2_5() {
     );
     let message = refused.map(|error| error.to_string()).unwrap_or_default();
     assert!(message.contains("§2.5"), "{message}");
-    assert!(message.contains("emergency.window_s"), "{message}");
+    assert!(message.contains("emergency.window"), "{message}");
 }
 
 /// §2.5: every country "MUST provide" emergency access, so a limit that
@@ -273,7 +273,7 @@ fn a_window_longer_than_24_hours_is_refused_naming_section_2_5() {
 fn a_threshold_or_a_window_of_zero_is_refused() {
     for (table, key) in [
         ("threshold = 0\n", "emergency.threshold"),
-        ("window_s = 0\n", "emergency.window_s"),
+        ("window = '0ms'\n", "emergency.window"),
     ] {
         let refused = resolved(table).err();
         assert!(
@@ -291,7 +291,7 @@ fn an_unknown_key_of_the_table_is_refused() {
 /// The boot refuses a looser limit as `config check` does, naming §2.5.
 #[test]
 fn config_check_refuses_a_looser_limit_naming_section_2_5() -> TestResult {
-    for table in ["threshold = 10000\n", "window_s = 172800\n"] {
+    for table in ["threshold = 10000\n", "window = '2d'\n"] {
         let output = binary(
             &["config", "check"],
             &format!("profile = \"development\"\n\n[emergency]\n{table}"),

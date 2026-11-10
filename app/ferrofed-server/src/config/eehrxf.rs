@@ -10,7 +10,7 @@
 //! ```toml
 //! [eehrxf.terminology]
 //! url = "https://terminology.example.org/fhir/"
-//! timeout_ms = 2000
+//! timeout = '2s'
 //!
 //! [eehrxf.terminology.credentials]
 //! user = "ferrofed"
@@ -28,7 +28,10 @@
 //! `[fhir]` face, so it is refused without one. No specification governs the
 //! shape of the table: our own design.
 
-use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+use ferrohealth_config::removed::Removed;
+use ferrohealth_config::tls::TlsClientSection;
+use ferrohealth_config::units;
+use ferrohealth_server::tls_client::TlsClient;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -67,8 +70,12 @@ pub struct TerminologyServer {
     /// The TLS material the service is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,
-    /// How long one operation may take, in milliseconds.
-    pub timeout_ms: u64,
+    /// How long one operation may take.
+    pub timeout: units::Duration,
+    /// The retired `timeout_ms`, which `timeout` replaced in
+    /// 0.0.19: set, it refuses the configuration.
+    #[serde(skip_serializing)]
+    pub timeout_ms: Removed,
 }
 
 impl Default for TerminologyServer {
@@ -77,7 +84,8 @@ impl Default for TerminologyServer {
             url: SecretUrl::default(),
             credentials: None,
             tls: TlsClientSection::default(),
-            timeout_ms: 2_000,
+            timeout: units::Duration::from_secs(2),
+            timeout_ms: Removed::default(),
         }
     }
 }
@@ -143,9 +151,9 @@ impl Config {
                 section: format!("{KEY}.credentials"),
             });
         }
-        if table.timeout_ms == 0 {
+        if table.timeout.is_zero() {
             return Err(Error::Zero {
-                key: format!("{KEY}.timeout_ms"),
+                key: format!("{KEY}.timeout"),
             });
         }
         let section = format!("{KEY}.credentials");
@@ -173,7 +181,7 @@ impl Config {
             url: table.url.clone(),
             credentials,
             tls,
-            timeout: Duration::from_millis(table.timeout_ms),
+            timeout: table.timeout.get(),
         }))
     }
 }

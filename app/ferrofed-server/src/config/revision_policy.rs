@@ -10,7 +10,7 @@
 //! Every onward credential and every binding section the console manages
 //! ([`Resource`]) is a risky resource: a revision that changes one runs
 //! awaiting a confirmation, and the gateway rolls it back unless an
-//! operator confirms it within `config.confirm_ms`. `config.approval` names
+//! operator confirms it within `config.confirm`. `config.approval` names
 //! resource kinds or single resources a revision may change only once an
 //! operator other than its author approved it. No specification governs
 //! this: our own design.
@@ -119,7 +119,7 @@ impl ApprovalRule {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Policy {
     /// How long an applied revision that changed a risky resource awaits
-    /// its confirmation, `config.confirm_ms`.
+    /// its confirmation, `config.confirm`.
     pub confirm: Duration,
     /// The resources a revision changes only with a second operator's
     /// approval, `config.approval`.

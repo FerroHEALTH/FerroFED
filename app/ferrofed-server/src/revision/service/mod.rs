@@ -377,7 +377,7 @@ impl Revisions {
     /// A revision that changes a resource `config.approval` names applies
     /// only once an operator other than its author approved it; one that
     /// changes a credential or a binding section runs awaiting its
-    /// confirmation until the deadline `config.confirm_ms` sets.
+    /// confirmation until the deadline `config.confirm` sets.
     ///
     /// # Errors
     ///

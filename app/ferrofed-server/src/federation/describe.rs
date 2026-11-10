@@ -377,7 +377,7 @@ fn its_rest(federation: &Federation, registry: bool) -> Result<ItsRestAreas, Des
               when another member holds its ehr_id; every other request under \
               {base}/v1/ehr/{ehr_id} goes to the one node that owns the ehr_id, found by \
               the targeting headers, the resolution bindings the same verified caller's \
-              queries recorded, held in memory for federation.binding_ttl_ms, the ehr_id \
+              queries recorded, held in memory for federation.binding_ttl, the ehr_id \
               index, then for a read an ask-all probe; \
               a versioned write only when that node controls the version it amends; \
               GET {base}/v1/ehr?subject_id= resolves the subject and goes to the one \

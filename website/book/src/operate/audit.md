@@ -119,11 +119,11 @@ hostname = "gateway.example.org"       # the gateway's network address in each r
 spool_dir = "/var/lib/ferrofed/audit-feed-spool"
 # source_id = "gateway.example.org"    # source.observer, the hostname by default
 # enterprise_site = "2.999.40"         # source.site
-# spool_max_bytes = 67108864
+# spool_max_size = "64MiB"
 # spool_max_events = 100000
-# spool_write_timeout_ms = 2000        # storing one record in the spool
-# timeout_ms = 5000                    # each delivery
-# retry_max_ms = 60000                 # the longest wait between two attempts
+# spool_write_timeout = "2s"        # storing one record in the spool
+# timeout = "5s"                    # each delivery
+# retry_max = "1min"                 # the longest wait between two attempts
 
 [audit.repository.tls]                 # when the repository asks for a client certificate
 client_identity_file = "/run/secrets/atna-client.pem"
@@ -162,7 +162,7 @@ record is written to the spool first, flushed to disk, and delivered from
 there in order, so it counts as recorded once it is on disk. While the
 repository is down, or answers `5xx`, `408` or `429`, the transactions go on
 and the records wait in the spool, and the gateway tries again after a wait
-that doubles from 250 ms up to `retry_max_ms`, with jitter. A record the
+that doubles from 250 ms up to `retry_max`, with jitter. A record the
 repository refuses with any other `4xx` would be refused again, so it is
 moved to the spool's `quarantine` subdirectory, logged with its sequence
 number and status and never its content, and the drain goes on; a spooled
@@ -170,7 +170,7 @@ file that is no FHIR `AuditEvent` is quarantined the same way. A quarantined
 record stays counted under the spool's bounds until you remove it.
 
 On `SIGTERM`, once the bindings have stopped, the gateway stops every audit
-trail within `gateway.bindings_drain_timeout_ms`. Each forwarder finishes the
+trail within `gateway.bindings_drain_timeout`. Each forwarder finishes the
 record it is writing, ends an ITI-20 syslog connection with a TLS
 `close_notify` (RFC 5425 §4.4) and returns, so the frames it wrote last
 reach the repository; a socket dropped with the repository's session
@@ -180,7 +180,7 @@ written stays in the spool for the next start. A trail that does not stop in
 time is logged.
 
 Only a record the gateway can neither deliver nor store is an audit
-failure: a full spool (`spool_max_events` or `spool_max_bytes`), one that
+failure: a full spool (`spool_max_events` or `spool_max_size`), one that
 cannot be written, or one that does not store the record in time
 ([A slow disk](#a-slow-disk)). The transaction then fails closed, and its
 answer is never used:
@@ -200,7 +200,7 @@ for its directory, and the transaction waits for that before it uses its
 answer. A disk that is slow or has stalled could hold the transaction
 without limit, so the wait is bounded, on both spools:
 
-- by `spool_write_timeout_ms` (2000 by default), in `[audit.repository]`
+- by `spool_write_timeout` (2000 by default), in `[audit.repository]`
   and in `[xcpd.audit_repository]`, the longest one record may take to be
   stored, the wait for the write before it included;
 - and, for an ITI-83 query, an ITI-78 search or ITI-119 match of the
@@ -209,7 +209,7 @@ without limit, so the wait is bounded, on both spools:
   `timeout_ms`, or of the localization's time. Whichever of the two bounds
   comes first applies.
 
-A record that `spool_write_timeout_ms` cuts off is an audit failure, as a
+A record that `spool_write_timeout` cuts off is an audit failure, as a
 full spool is, with the outcomes in the table above, and an ITI-55
 discovery fails closed under every `on_failure` policy
 ([The audit repository](localization.md#the-audit-repository)). A record still
@@ -238,14 +238,14 @@ stalled disk holds one thread of the gateway, never one per transaction.
 A record still waiting when its transaction stopped waiting stays queued:
 it is written once the writes ahead of it end, and delivered like any
 other, in the order the records were queued. A queued record holds its
-place under `spool_max_events` and `spool_max_bytes` as a stored one does,
+place under `spool_max_events` and `spool_max_size` as a stored one does,
 so a stalled disk holds no more records in memory than the spool could
 hold on disk. A record past either bound is refused at once, without
 waiting: its transaction fails as with any full spool, the refusal is
 logged with its count and never the record, and
 `ferrofed_audit_refused_total` counts it ([Metrics](metrics.md)). The mCSD directory
 reads and the PMIR subscription exchanges run outside any patient query,
-so `spool_write_timeout_ms` alone bounds their records.
+so `spool_write_timeout` alone bounds their records.
 
 The spool holds records that name patients. The gateway creates the
 directory readable by its own user alone (`0700`) and every file `0600`,

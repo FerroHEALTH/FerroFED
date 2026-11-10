@@ -428,7 +428,7 @@ pub(super) fn correlation(
 /// Regulation (EU) 2026/2099 Art 6(1) and (2); §13.4 authn-end-user, CP-39);
 /// that a patient-data request needs a purpose of use; the emergency access
 /// limit in effect, the `threshold` of accesses one relayed professional is
-/// granted in any `window_s` seconds (eHDSI Section II Security Services
+/// granted in any `window` seconds (eHDSI Section II Security Services
 /// 10.0.0 §2.5); and, per issuer, the claim each attribute is read from and
 /// the correlation header.
 // NOTE: §7a.2 leaves the `federation` object open and names no such member (N30 requires

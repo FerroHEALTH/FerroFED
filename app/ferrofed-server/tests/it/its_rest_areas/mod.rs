@@ -231,7 +231,7 @@ fn settings_text(
     Ok(format!(
         "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
          [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\
-         per_node_timeout_ms = 2000\noverall_timeout_ms = 3000\n{}\n{store}{}",
+         per_node_timeout = '2s'\noverall_timeout = '3s'\n{}\n{store}{}",
         mode.federation(),
         crossref(rows)
     ))

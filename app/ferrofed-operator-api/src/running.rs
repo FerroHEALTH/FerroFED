@@ -130,7 +130,7 @@ pub enum Source {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Setting {
-    /// The dotted key, such as `federation.per_node_timeout_ms`.
+    /// The dotted key, such as `federation.per_node_timeout`.
     pub key: String,
     /// The section it belongs to.
     pub section: Section,
@@ -203,7 +203,7 @@ mod tests {
             revision: None,
             settings: vec![
                 Setting {
-                    key: String::from("federation.per_node_timeout_ms"),
+                    key: String::from("federation.per_node_timeout"),
                     section: Section::Federation,
                     value: Some(toml::Value::Integer(2500)),
                     source: Source::File,
@@ -233,6 +233,6 @@ mod tests {
         let read: RunningConfig = serde_json::from_str(&text).expect("the document reads");
         assert_eq!(document, read);
         assert_eq!(1, read.of(Section::StoredQueries).count());
-        assert!(read.setting("federation.per_node_timeout_ms").is_some());
+        assert!(read.setting("federation.per_node_timeout").is_some());
     }
 }

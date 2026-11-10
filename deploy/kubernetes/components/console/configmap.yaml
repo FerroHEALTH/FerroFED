@@ -26,7 +26,7 @@ data:
     # The gateway, over its Service.
     [gateway]
     base_url = "http://ferrofed:8080/"
-    timeout_ms = 30000
+    timeout = "30s"
 
     [session]
     # Served behind an HTTPS proxy, so the session cookie is Secure.

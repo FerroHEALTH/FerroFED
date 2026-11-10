@@ -40,7 +40,7 @@
 //!
 //! let node = patient.for_node(&HierObjectId::new("7d44b88c-4199-4bad-97dc-d78268e01398")?);
 //! let expected = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c \
-//!                 WHERE e/ehr_id/value='7d44b88c-4199-4bad-97dc-d78268e01398'";
+//!                 WHERE e/ehr_id/value = '7d44b88c-4199-4bad-97dc-d78268e01398'";
 //! assert_eq!(node.aql(), expected);
 //! assert_eq!(node.columns(), [ColumnSource::Subject, ColumnSource::Node(0)]);
 //! # Ok::<(), Box<dyn std::error::Error>>(())

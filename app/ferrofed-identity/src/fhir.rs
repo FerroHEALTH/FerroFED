@@ -131,7 +131,8 @@ pub fn http_client_builder(
 
 #[cfg(test)]
 mod tests {
-    use ferrohealth_server::tls_client::{TlsClient, TlsClientSection};
+    use ferrohealth_config::tls::TlsClientSection;
+    use ferrohealth_server::tls_client::TlsClient;
 
     use super::{Authentication, http_client};
 

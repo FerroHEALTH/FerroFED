@@ -129,7 +129,7 @@ impl Topology<'_> {
         let document = toml::Value::String(document.display().to_string());
         let (namespace, value) = (PATIENT.namespace(), PATIENT.value());
         let mut config = format!(
-            "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 20000\noverall_timeout_ms = 25000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
+            "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '20s'\noverall_timeout = '25s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n"
         );
         for (member, ehr_id) in [("node-a", self.a.ehr_id), ("node-b", self.b.ehr_id)] {
             write!(
@@ -283,7 +283,7 @@ fn located_by_ehr_id(
         "{case}: the ITS-REST query and nothing else"
     );
     assert!(
-        holds(&sent.body, &format!("e/ehr_id/value='{}'", member.ehr_id)),
+        holds(&sent.body, &format!("e/ehr_id/value = '{}'", member.ehr_id)),
         "{case}: {} is keyed on its own ehr_id (N7, N34): {body}",
         member.endpoint
     );

@@ -85,7 +85,7 @@ fn own_grant(dir: &Path, token_url: &str, extra: &str) -> Result<String, Box<dyn
 /// names the gateway as the actor, with `onward` keys.
 fn exchange_grant(dir: &Path, token_url: &str, onward: &str) -> Result<String, Box<dyn Error>> {
     Ok(format!(
-        "{}\n[credentials.\"node-a-pub\".onward]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\nprofile = \"rfc9068\"\ntoken_endpoint = \"{token_url}\"\nactor_assertion = true\n{onward}\n[credentials.\"node-a-pub\".onward.keys]\nmax_onward_lifetime = 3600\n",
+        "{}\n[credentials.\"node-a-pub\".onward]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\nprofile = \"rfc9068\"\ntoken_endpoint = \"{token_url}\"\nactor_assertion = true\n{onward}\n[credentials.\"node-a-pub\".onward.keys]\nmax_onward_lifetime = '1h'\n",
         own_grant(dir, token_url, "")?
     ))
 }
@@ -126,7 +126,7 @@ fn served(
     std::fs::write(&document, registry(a, unreachable::BASE, ""))?;
     let document = toml::Value::String(document.display().to_string());
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout_ms = 2000\noverall_timeout_ms = 3000\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = false\n\n{}\n{tables}",
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nper_node_timeout = '2s'\noverall_timeout = '3s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\nbest_effort = false\n\n{}\n{tables}",
         crossref(&[("node-a", "2222aaaa-2222-4222-8222-222222222222")])
     );
     let settings = Config::from_sources(Some(&signed(&text)), &BTreeMap::new())?.resolve()?;

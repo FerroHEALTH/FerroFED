@@ -35,7 +35,7 @@ use serde::Deserialize;
 use crate::support::call;
 
 /// The longest a test waits for the forwarder to reach a state it reaches
-/// within one retry of `retry_max_ms`: far past any stall of a loaded host,
+/// within one retry of `retry_max`: far past any stall of a loaded host,
 /// so only a forwarder that never gets there fails the wait.
 pub(crate) const SETTLE: Duration = Duration::from_secs(15);
 
@@ -43,7 +43,7 @@ pub(crate) const SETTLE: Duration = Duration::from_secs(15);
 /// `[audit.repository]` keys `extra`.
 pub(crate) fn audit_tables(repository: &FeedRepository, extra: &str) -> String {
     format!(
-        "\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"{}\"\nhostname = \"gateway.example.org\"\nretry_max_ms = 400\n{extra}\n",
+        "\n[audit]\ndestination = \"repository\"\n\n[audit.repository]\nurl = \"{}\"\nhostname = \"gateway.example.org\"\nretry_max = '400ms'\n{extra}\n",
         repository.base()
     )
 }

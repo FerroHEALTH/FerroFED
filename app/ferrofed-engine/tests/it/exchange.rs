@@ -152,7 +152,7 @@ pub(crate) fn section(
         "token_endpoint": endpoint.token_url(),
         "audiences": [RESOURCE],
         "indicators": [RESOURCE],
-        "keys": {"max_onward_lifetime": 3600},
+        "keys": {"max_onward_lifetime": "1h"},
         "actor_assertion": true,
     });
     if let (Some(object), serde_json::Value::Object(extra)) = (section.as_object_mut(), extra) {

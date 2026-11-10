@@ -40,7 +40,7 @@ pub fn loader() -> Result<Loader, Error> {
 
 /// The dotted key whose source decides whether the drain follows the
 /// request timeout ([`Config::shutdown_timeout_written`]).
-const SHUTDOWN_TIMEOUT: &str = "server.shutdown_timeout_ms";
+const SHUTDOWN_TIMEOUT: &str = "server.shutdown_timeout";
 
 impl Config {
     /// Reads the configuration of the running process: the file `sources`
@@ -65,6 +65,7 @@ impl Config {
         loader
             .load_with::<Self>(sources.config.as_deref(), &sources.sets)
             .map_err(|source| refused(file.as_deref(), source))
+            .and_then(checked)
             .and_then(console_free)
     }
 
@@ -103,10 +104,11 @@ impl Config {
         loader()?
             .load_sources::<Self>(text, None, environment)
             .map_err(|source| refused(None, source))
+            .and_then(checked)
     }
 
     /// Resolves the configuration `loaded` holds, knowing which of its
-    /// sources set `server.shutdown_timeout_ms`.
+    /// sources set `server.shutdown_timeout`.
     ///
     /// # Errors
     /// Every error [`Config::resolve`] returns.
@@ -117,7 +119,7 @@ impl Config {
     }
 }
 
-/// Whether a source of `loaded` set `server.shutdown_timeout_ms`.
+/// Whether a source of `loaded` set `server.shutdown_timeout`.
 fn shutdown_written(loaded: &Loaded<Config>) -> bool {
     loaded.provenance().source(SHUTDOWN_TIMEOUT) != Source::Default
 }
@@ -177,6 +179,13 @@ fn refused(file: Option<&Path>, source: ConfigError) -> Error {
         file,
         source: Box::new(source),
     }
+}
+
+/// Refuses every key a release retired that the sources set
+/// (`config::retired`).
+fn checked(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
+    crate::config::retired::check(loaded.settings())?;
+    Ok(loaded)
 }
 
 /// The release that names the refusals of this module, which v0.0.17
@@ -273,8 +282,8 @@ mod tests {
         let config = Config::from_sources(None, &BTreeMap::new()).expect("the defaults parse");
         assert_eq!(Config::default(), config);
         assert_eq!("127.0.0.1:8080", config.server.listen.to_string());
-        assert_eq!(1024 * 1024, config.server.body_limit_bytes);
-        assert_eq!(0, config.server.drain_delay_ms);
+        assert_eq!(1024 * 1024, config.server.body_limit.bytes());
+        assert!(config.server.drain_delay.is_zero());
         assert!(!config.shutdown_timeout_written);
         assert_eq!(
             Some(512),

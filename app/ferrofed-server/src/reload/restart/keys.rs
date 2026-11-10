@@ -101,25 +101,25 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("server.base_path", |boot, fresh| {
         boot.server.base_path != fresh.server.base_path
     }),
-    ("server.request_timeout_ms", |boot, fresh| {
+    ("server.request_timeout", |boot, fresh| {
         boot.server.request_timeout != fresh.server.request_timeout
     }),
-    ("server.header_read_timeout_ms", |boot, fresh| {
-        boot.server.header_read_timeout_ms != fresh.server.header_read_timeout_ms
+    ("server.header_read_timeout", |boot, fresh| {
+        boot.server.header_read_timeout != fresh.server.header_read_timeout
     }),
-    ("server.idle_timeout_ms", |boot, fresh| {
-        boot.server.idle_timeout_ms != fresh.server.idle_timeout_ms
+    ("server.idle_timeout", |boot, fresh| {
+        boot.server.idle_timeout != fresh.server.idle_timeout
     }),
-    ("server.drain_delay_ms", |boot, fresh| {
+    ("server.drain_delay", |boot, fresh| {
         boot.server.drain_delay != fresh.server.drain_delay
     }),
-    ("server.shutdown_timeout_ms", |boot, fresh| {
+    ("server.shutdown_timeout", |boot, fresh| {
         boot.server.shutdown_timeout != fresh.server.shutdown_timeout
     }),
-    ("gateway.bindings_drain_timeout_ms", |boot, fresh| {
+    ("gateway.bindings_drain_timeout", |boot, fresh| {
         boot.server.bindings_drain != fresh.server.bindings_drain
     }),
-    ("server.body_limit_bytes", |boot, fresh| {
+    ("server.body_limit", |boot, fresh| {
         boot.server.body_limit != fresh.server.body_limit
     }),
     ("server.compression", |boot, fresh| {
@@ -149,7 +149,7 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("federation.default_namespace", |boot, fresh| {
         boot.federation.default_namespace != fresh.federation.default_namespace
     }),
-    ("federation.binding_ttl_ms", |boot, fresh| {
+    ("federation.binding_ttl", |boot, fresh| {
         boot.federation.binding_ttl != fresh.federation.binding_ttl
     }),
     ("federation.binding_capacity", |boot, fresh| {
@@ -167,7 +167,7 @@ pub(super) const RESTART_KEYS: &[RestartKey] = &[
     ("federation.max_in_flight_per_node", |boot, fresh| {
         boot.federation.max_in_flight_per_node != fresh.federation.max_in_flight_per_node
     }),
-    ("federation.max_node_answer_bytes", |boot, fresh| {
+    ("federation.max_node_answer_size", |boot, fresh| {
         boot.federation.max_node_answer_bytes != fresh.federation.max_node_answer_bytes
     }),
     ("federation.fan_out_template_upload", |boot, fresh| {
