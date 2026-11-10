@@ -175,14 +175,14 @@ fn a_grant_is_taken_and_a_node_method_or_a_zero_interval_is_refused() {
     let mutual = settings(
         "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\n\n[registry.mcsd.credentials.oauth2]\ngrant = \"client_credentials\"\nclient_auth = \"tls_client_auth\"\ntoken_endpoint = \"https://auth.example.org/token\"\nclient_id = \"ferrofed\"\nscope = \"system/aql-*.s\"\n",
     );
-    assert!(
-        matches!(
-            mutual.err().as_deref().and_then(|error| error.downcast_ref::<ConfigError>()),
-            Some(ConfigError::Replaced { old, new })
-                if old == "registry.mcsd.credentials.oauth2"
-                    && new == "registry.mcsd.credentials.oauth"
-        ),
-        "a node's grant is refused"
+    assert_eq!(
+        Some("registry.mcsd.credentials.oauth2"),
+        mutual
+            .err()
+            .as_deref()
+            .and_then(|error| error.downcast_ref::<ConfigError>())
+            .and_then(crate::support::refused_key),
+        "an unknown key since 0.0.19"
     );
     let zero = settings(
         "[registry.mcsd]\nurl = \"https://directory.example.org/fhir\"\nrefresh_interval = '0ms'\n",

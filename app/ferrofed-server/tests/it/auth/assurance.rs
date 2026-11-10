@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use ferrofed_server::config::Config;
-use ferrofed_server::config::auth::AuthFault;
 use ferrofed_server::config::error::Error as ConfigError;
 use ferrohealth_smart::assurance::AssuranceLevel;
 
@@ -88,41 +87,33 @@ fn a_least_level_no_value_reaches_is_refused() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Each removed per-issuer key refuses to boot, naming itself and its
-/// replacement.
+/// Each per-issuer key a release before 0.0.18 removed is an unknown key
+/// now, refused by the load naming it (#1787).
 #[test]
-fn each_removed_per_issuer_key_is_refused_naming_its_replacement() -> Result<(), Box<dyn Error>> {
-    for (body, key, fault, replacement) in [
+fn each_removed_per_issuer_key_is_an_unknown_key() -> Result<(), Box<dyn Error>> {
+    for (body, key) in [
         (
             "\n[trust.issuer.assurance]\nminimum = \"substantial\"\nsubstantial = [\"urn:example:loa:2\"]\n",
             "trust.issuer[0].assurance",
-            AuthFault::AssuranceMoved,
-            "[auth.issuer.assurance]",
         ),
         (
             "\n[trust.issuer.requester]\nprofessional = \"uzi\"\nrole = \"role\"\norganisation = \"ura\"\norganisation_type = \"type\"\n",
             "trust.issuer[0].requester",
-            AuthFault::RequesterMoved,
-            "[[auth.federation]]",
         ),
         (
             "client_tokens_act_for_professional = true\n",
             "trust.issuer[0].client_tokens_act_for_professional",
-            AuthFault::ActsForRemoved,
-            "delegated person",
         ),
     ] {
         let text = format!("{}{body}", issuer());
-        let refused = refusal(&text)?.ok_or_else(|| format!("{key} is refused"))?;
-        let ConfigError::Auth {
-            key: named,
-            fault: found,
-        } = &refused
-        else {
-            return Err(format!("{key}: expected {fault:?}, got {refused:?}").into());
-        };
-        assert_eq!((key, fault), (named.as_str(), *found), "{text}");
-        assert!(refused.to_string().contains(replacement), "{refused}");
+        let refused = Config::from_sources(Some(&text), &BTreeMap::new())
+            .err()
+            .ok_or_else(|| format!("{key} is refused"))?;
+        assert_eq!(
+            Some(key),
+            crate::support::refused_key(&refused),
+            "{refused:?}"
+        );
     }
     Ok(())
 }
