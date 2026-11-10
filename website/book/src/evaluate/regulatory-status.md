@@ -576,9 +576,7 @@ before the Regulation applies on 26 March 2027:
   ([#522](https://github.com/FerroHEALTH/FerroFED/issues/522)), and is
   re-checked against the Art 15(1) implementing act once it is adopted.
   None is adopted.
-- [#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716): the receipt of an imaging report, which waits on the
-  imaging package's dependency closure in the gateway's package set, and
-  [#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794): the rating of what a received discharge or imaging
+- [#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794): the rating of what a received discharge or imaging
   report can lose. The component moved to FerroBRIDGE
   ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)), where prescriptions from openEHR medication data,
   laboratory reports, discharge reports and imaging were built (issues [FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321),

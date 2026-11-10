@@ -16,6 +16,7 @@ use eehrxf::document::Document;
 use fhir_types::codec::{Json, Path as CodecPath, Value as CodecValue};
 use fhir_types::r4::device::{Device, DeviceDeviceName};
 use fhir_types::r4::organization::Organization;
+use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
 use serde_json::Value;
 
@@ -40,6 +41,45 @@ pub(crate) fn authored(
     identifiers: &[(&str, &str)],
     (system, (id, name)): (&str, (&str, &str)),
 ) -> Result<(String, String), Box<dyn Error>> {
+    let subject = named(document, identifiers)?;
+    let device = document.with_author(&Resource::Device(Box::new(device(system, None))))?;
+    document.with_author(&Resource::Organization(Box::new(organization(id, name))))?;
+    Ok((subject, device))
+}
+
+/// The sender's `Device` named `system`, owned by the organization at
+/// `owner` when it names one.
+pub(crate) fn device(system: &str, owner: Option<&str>) -> Device {
+    Device {
+        id: Some(String::from("sender")),
+        device_name: vec![DeviceDeviceName {
+            name: system.into(),
+            r#type: "user-friendly-name".into(),
+            ..DeviceDeviceName::default()
+        }],
+        owner: owner.map(|url| Reference {
+            reference: Some(url.into()),
+            ..Reference::default()
+        }),
+        ..Device::default()
+    }
+}
+
+/// The sender's `Organization` `id`, named `name`.
+pub(crate) fn organization(id: &str, name: &str) -> Organization {
+    Organization {
+        id: Some(id.to_owned()),
+        name: Some(name.into()),
+        ..Organization::default()
+    }
+}
+
+/// Names in `document` the synthetic patient of `identifiers`, each a
+/// `(system, value)`, as the document's subject, and returns its reference.
+pub(crate) fn named(
+    document: &mut Document,
+    identifiers: &[(&str, &str)],
+) -> Result<String, Box<dyn Error>> {
     let identifier: Vec<Value> = identifiers
         .iter()
         .map(|(system, value)| serde_json::json!({ "system": system, "value": value }))
@@ -57,22 +97,7 @@ pub(crate) fn authored(
     else {
         return Err("the synthetic patient is no Patient".into());
     };
-    let subject = document.with_patient(*patient)?;
-    let device = document.with_author(&Resource::Device(Box::new(Device {
-        id: Some(String::from("sender")),
-        device_name: vec![DeviceDeviceName {
-            name: system.into(),
-            r#type: "user-friendly-name".into(),
-            ..DeviceDeviceName::default()
-        }],
-        ..Device::default()
-    })))?;
-    document.with_author(&Resource::Organization(Box::new(Organization {
-        id: Some(id.to_owned()),
-        name: Some(name.into()),
-        ..Organization::default()
-    })))?;
-    Ok((subject, device))
+    Ok(document.with_patient(*patient)?)
 }
 
 /// Gives every coding in `value` that names no display the one `displays`

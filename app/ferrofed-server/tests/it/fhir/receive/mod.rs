@@ -15,6 +15,7 @@ mod discharge;
 mod discharge_received;
 mod display;
 mod imaging;
+mod imaging_received;
 mod inserted;
 mod laboratory;
 mod laboratory_grant;
