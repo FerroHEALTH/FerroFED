@@ -25,6 +25,7 @@ use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use eehrxf::category::Category;
 use eehrxf::mapping::{Mapping, MappingError};
+use eehrxf::mappings::{EPS, HDR, IMAGING, LABORATORY, MPD};
 use eehrxf::receive::category::Uncategorised;
 use eehrxf::receive::conform::{Finding, FindingKind, Unevaluated};
 use eehrxf::receive::displays::DisplayError;
@@ -208,7 +209,8 @@ impl Receivers {
                         category,
                         context: source.context.clone(),
                         source: error,
-                    })?;
+                    })?
+                    .accounting(accounted(kind));
             by.insert(
                 kind,
                 Receiver {
@@ -590,4 +592,24 @@ pub enum Unreceived {
     /// The transformation of the document could not be counted.
     #[error("the transformation of the document could not be counted")]
     Transformation(#[source] ReportError),
+}
+
+/// The received elements the project `eehrxf` ships for `kind` accounts
+/// for, which a run over the deployment's copy of that project declares
+/// when it carries one into no structured element.
+///
+/// A mapping compiled from files accounts for none until it is named
+/// (`Mapping::accounting`), so a received report's losses would reach the
+/// member undeclared.
+const fn accounted(kind: Category) -> &'static [&'static str] {
+    match kind {
+        Category::PatientSummary => EPS.accounted(),
+        Category::Prescription | Category::Dispensation => MPD.accounted(),
+        Category::Imaging => IMAGING.accounted(),
+        Category::Laboratory => LABORATORY.accounted(),
+        Category::Discharge => HDR.accounted(),
+        // NOTE: no specification governs this: our own design; a category `eehrxf` adds ships its
+        // project with it, and until this names it a run declares nothing beyond the engine's losses.
+        _ => &[],
+    }
 }
