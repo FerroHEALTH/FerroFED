@@ -285,9 +285,6 @@ slow one.
    (`scripts/checks/upgrade-notes.sh`), and the book's Upgrading page
    (`website/book/src/operate/upgrading.md`) takes the release's notes in the
    same pull request.
-   The quickstart's `git clone --branch v<version>` on `README.md` and on
-   the book's container page moves with the version, so a reader clones the
-   configuration the pinned image reads (`versions.sh` check 16).
    The landing page's release badge needs no edit:
    `scripts/site/assemble.sh` renders it from the workspace version, and
    `scripts/checks/versions.sh` refuses a release typed into the page.

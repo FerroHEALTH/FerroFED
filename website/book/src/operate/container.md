@@ -306,11 +306,7 @@ gh attestation verify ferrofed-vX.Y.Z-x86_64-unknown-linux-musl.tar.gz \
 
 ## The quickstart
 
-From a clone of the release, whose `compose.yaml` pins the gateway image
-that reads its quickstart configuration:
-
 ```sh
-git clone --branch v0.0.18 --depth 1 https://github.com/FerroHEALTH/FerroFED && cd FerroFED
 scripts/quickstart/signing-key.sh
 docker compose up --wait
 scripts/quickstart/seed.sh
