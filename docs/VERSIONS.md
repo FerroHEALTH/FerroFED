@@ -475,24 +475,27 @@ FerroHEALTH/FerroBRIDGE since the owner decision of 2026-10-28 (#813, decision
 A76), and every change to it is made there. Its `openehr` feature (#684,
 #730) runs FHIRconnect 1.0.0 in process through FerroBRIDGE's published
 `fhirconnect`, with the template index and the mapping-file loader of
-`openehr-mapping-core` (decision A61). Each crate below is pinned exactly in
-the root `Cargo.toml`, because FerroBRIDGE's crate line moves by patch, at the
-version the pinned `eehrxf` requires, and all build on the `openehr-*` line
-above. The component's terminology server is asked
-through FerroBRIDGE's `ferrobridge-term` (#925), pinned exactly the same way,
+`openehr-mapping-core` (decision A61). Each crate below is required by a
+caret range in the root `Cargo.toml`, with its floor at the version the
+pinned `eehrxf` requires: FerroBRIDGE's published crates follow Cargo
+SemVer, a breaking change moving the minor while a crate is 0.x, judged by
+cargo-semver-checks (FerroHEALTH/FerroBRIDGE#1745, #1772), and the lock
+holds one copy of each. All build on the `openehr-*` line above. The
+component's terminology server is asked
+through FerroBRIDGE's `ferrobridge-term` (#925), required the same way,
 built from the `ferrohealth-smart` outbound table `[eehrxf.terminology.endpoint]`
 with its credential and TLS material (#1805). A
 received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
-(#808), pinned exactly the same way, on the same `fhir-types` and
+(#808), required the same way, on the same `fhir-types` and
 `ferrobridge-term` lines.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | =0.3.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | =0.1.249 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | =0.1.151 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | =0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | =0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | 0.3.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | 0.1.249 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | 0.1.151 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | 0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | 0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
