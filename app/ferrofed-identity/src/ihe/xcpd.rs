@@ -56,7 +56,6 @@ use ihe_iti::xcpd::error::{InvalidInput, XcpdError};
 use ihe_iti::xcpd::identifier::{HomeCommunityId, Oid, PatientIdentifier};
 use ihe_iti::xcpd::request::{DiscoveryQuery, RespondingGateway};
 use ihe_iti::xcpd::security::XuaAssertion;
-use rustls::pki_types::CertificateDer;
 use secrecy::{ExposeSecret, SecretString};
 use thiserror::Error;
 use tokio::task::JoinSet;
@@ -187,23 +186,19 @@ pub enum Transport {
 /// check was built from the gateway's own `tls` table. `Debug` shows the
 /// check as the check shows itself, never a key.
 #[derive(Debug, Clone)]
-pub struct GatedTls {
-    check: RevocationCheck,
-    certificate: Option<CertificateDer<'static>>,
-}
+pub struct GatedTls(RevocationCheck);
 
 impl GatedTls {
-    /// The gated TLS of `check`, presenting `certificate`, the end-entity
-    /// certificate of the identity the check was built with.
+    /// The gated TLS of `check`.
     #[must_use]
-    pub fn new(check: RevocationCheck, certificate: Option<CertificateDer<'static>>) -> Self {
-        Self { check, certificate }
+    pub fn new(check: RevocationCheck) -> Self {
+        Self(check)
     }
 
     /// The check whose cleared chains the connections complete over.
     #[must_use]
     pub fn check(&self) -> &RevocationCheck {
-        &self.check
+        &self.0
     }
 }
 
@@ -214,8 +209,8 @@ impl TlsBuilder for GatedTls {
         _section: &TlsClientSection,
     ) -> Result<PresentedTls, Box<dyn std::error::Error + Send + Sync>> {
         Ok(PresentedTls::new(
-            Arc::new(self.check.client_config()),
-            self.certificate.clone(),
+            Arc::clone(self.0.config()),
+            self.0.certificate().cloned(),
         ))
     }
 }

@@ -153,5 +153,5 @@ fn revocation(table: &str, written: &XcpdGateway) -> Result<GatedTls, Localizati
         return Err(refused(RevocationSetupError::NoClientCertificate));
     }
     let check = RevocationCheck::from_tls_client(&tls).map_err(refused)?;
-    Ok(GatedTls::new(check, tls.certificate().cloned()))
+    Ok(GatedTls::new(check))
 }

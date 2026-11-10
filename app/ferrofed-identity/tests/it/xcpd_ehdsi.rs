@@ -54,8 +54,7 @@ fn localizer(
     let url = format!("{}{PATH}", front.origin());
     let client = match &revocation {
         Some(check) => {
-            let presented = front.tls_client("xcpd.gateway.endpoint.tls")?;
-            let gated = GatedTls::new(check.clone(), presented.certificate().cloned());
+            let gated = GatedTls::new(check.clone());
             let endpoint = ferrofed_testkit::outbound::endpoint(&url);
             OutboundClient::build(&endpoint, "xcpd.gateway.endpoint", &gated)?
         }
