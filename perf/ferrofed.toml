@@ -128,14 +128,14 @@ jwks_uri = "http://127.0.0.1:8080/.well-known/jwks.json"
 # issuer perf/ferroehr-onward.toml trusts, and the gateway's own requests
 # take the client-credentials token. The gate counts the exchanges, and runs
 # this lane again with `cache = false`, which it must fail.
-[credentials."node-a-query".oauth]
+[credentials."node-a-query".credentials.oauth]
 token_endpoint = "http://127.0.0.1:8095/token"
 client_id = "ferrofed-perf"
 client_auth = "private_key_jwt"
 private_key_file = "target/perf-run/onward-client.pem"
 scope = "system/aql-*.s"
 
-[credentials."node-a-query".onward]
+[credentials."node-a-query".credentials.onward]
 issuer = "https://quickstart-issuer.ferrofed.invalid"
 kind = "persons"
 profile = "rfc9068"
@@ -143,18 +143,18 @@ token_endpoint = "http://127.0.0.1:8095/token"
 audiences = ["https://node-a.perf.ferrofed.invalid"]
 indicators = ["https://node-a.perf.ferrofed.invalid"]
 
-[credentials."node-a-query".onward.keys]
+[credentials."node-a-query".credentials.onward.keys]
 max_onward_lifetime = "1h"
 
-[credentials."node-b-query"]
+[credentials."node-b-query".credentials]
 user = "ferroehr"
 password = "ferroehr"
 
-[credentials."node-c-query"]
+[credentials."node-c-query".credentials]
 user = "ferroehr"
 password = "ferroehr"
 
-[credentials."node-d-query"]
+[credentials."node-d-query".credentials]
 user = "ferroehr"
 password = "ferroehr"
 

@@ -5,10 +5,11 @@
   `gateway.bindings_drain_timeout`, `signing.node_jwks_cache` and
   `rotation_overlap`, `emergency.window`, `config.poll` and `confirm`,
   `store.timeout` and `sweep_interval`, `fhir.document_url_lifetime`,
-  `eehrxf.terminology.timeout`, `pdqm.timeout`, `pmir.timeout` and
+  `eehrxf.terminology.endpoint.timeout`, `pdqm.timeout`, `pmir.timeout` and
   `check_interval`, `nl_gf.mitz.timeout`, `registry.mcsd.refresh_interval`,
-  `deadline` and `max_size`, `audit.repository.spool_max_size`,
-  `spool_write_timeout`, `timeout` and `retry_max`, and
+  `deadline` and `max_size`, `audit.repository.spool_max_size` and
+  `spool_write_timeout`, `audit.repository.endpoint.timeout` and
+  `retry.max_backoff`, and
   `xcpd.audit_repository.spool_max_size`, `spool_write_timeout`,
   `connect_timeout`, `send_timeout` and `retry_max`, with the
   `FERROFED__` overrides to match. Each old key (`per_node_timeout_ms`,

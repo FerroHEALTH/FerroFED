@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The onward lane of a node, `[credentials."<endpoint id>".onward]`,
+//! The onward lane of a node, `[credentials."<endpoint id>".credentials.onward]`,
 //! through the real configuration path: a person's token exchanged per
 //! request at a `wiremock` token endpoint, the node reached under the issued
 //! token alone, a refused exchange or a caller the lane's issuer does not
@@ -59,13 +59,13 @@ const TOKEN_EXCHANGE: &str = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-typ
 fn lane(issuer: &str, kind: &str, extra: &str) -> String {
     format!(
         concat!(
-            "[credentials.\"node-a-pub\".oauth]\n",
+            "[credentials.\"node-a-pub\".credentials.oauth]\n",
             "token_endpoint = \"{issuer}/token\"\n",
             "client_id = \"{client}\"\n",
             "client_auth = \"private_key_jwt\"\n",
             "private_key_file = {key}\n",
             "scope = \"system/aql-*.s\"\n\n",
-            "[credentials.\"node-a-pub\".onward]\n",
+            "[credentials.\"node-a-pub\".credentials.onward]\n",
             "issuer = \"{onward}\"\n",
             "kind = \"{kind}\"\n",
             "profile = \"rfc9068\"\n",
@@ -73,7 +73,7 @@ fn lane(issuer: &str, kind: &str, extra: &str) -> String {
             "audiences = [\"{node}\"]\n",
             "indicators = [\"{node}\"]\n",
             "{extra}",
-            "[credentials.\"node-a-pub\".onward.keys]\n",
+            "[credentials.\"node-a-pub\".credentials.onward.keys]\n",
             "max_onward_lifetime = '1h'\n",
         ),
         issuer = issuer,
@@ -91,11 +91,11 @@ fn lane(issuer: &str, kind: &str, extra: &str) -> String {
 /// issuer.
 fn federation_lane(issuer: &str) -> String {
     let federation = format!(
-        "[credentials.\"node-a-pub\".onward.federation]\ncontact_point = false\nexchanges_from = [\"{ISSUER}\"]\nperson_mapping = \"sub\"\ncountries = [\"NL\"]\nissuing_authorities = [\"synthetic-authority\"]\nprovider_identifier_prefixes = [\"urn:oid:2.999\"]\n"
+        "[credentials.\"node-a-pub\".credentials.onward.federation]\ncontact_point = false\nexchanges_from = [\"{ISSUER}\"]\nperson_mapping = \"sub\"\ncountries = [\"NL\"]\nissuing_authorities = [\"synthetic-authority\"]\nprovider_identifier_prefixes = [\"urn:oid:2.999\"]\n"
     );
     lane(issuer, "federation", "").replace(
-        "[credentials.\"node-a-pub\".onward.keys]",
-        &format!("{federation}\n[credentials.\"node-a-pub\".onward.keys]"),
+        "[credentials.\"node-a-pub\".credentials.onward.keys]",
+        &format!("{federation}\n[credentials.\"node-a-pub\".credentials.onward.keys]"),
     )
 }
 
@@ -320,11 +320,11 @@ fn refusal(tables: &str) -> Result<ConfigError, Box<dyn Error>> {
 fn an_onward_table_without_its_oauth_client_is_refused() -> TestResult {
     let tables = lane("https://as.example.org", "persons", "");
     let start = tables
-        .find("[credentials.\"node-a-pub\".onward]")
+        .find("[credentials.\"node-a-pub\".credentials.onward]")
         .ok_or("the onward table")?;
     let error = refusal(tables.get(start..).ok_or("the onward part")?)?;
     assert!(
-        matches!(&error, ConfigError::Missing { key } if key == "credentials.node-a-pub.oauth"),
+        matches!(&error, ConfigError::Missing { key } if key == "credentials.node-a-pub.credentials.oauth"),
         "{error:?}"
     );
     Ok(())
@@ -334,7 +334,7 @@ fn an_onward_table_without_its_oauth_client_is_refused() -> TestResult {
 #[test]
 fn an_onward_table_beside_a_basic_user_is_refused() -> TestResult {
     let tables = format!(
-        "{}\n[credentials.\"node-a-pub\"]\nuser = \"synthetic-user\"\npassword = \"synthetic-password\"\n",
+        "{}\n[credentials.\"node-a-pub\"]\ncredentials.user = \"synthetic-user\"\ncredentials.password = \"synthetic-password\"\n",
         lane("https://as.example.org", "persons", "")
     );
     let error = refusal(&tables)?;
@@ -353,7 +353,7 @@ fn an_onward_table_with_no_audience_is_refused() -> TestResult {
         .replace(&format!("audiences = [\"{NODE}\"]\n"), "");
     let error = refusal(&tables)?;
     assert!(
-        matches!(&error, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.onward"),
+        matches!(&error, ConfigError::Smart { section, .. } if section == "credentials.node-a-pub.credentials.onward"),
         "{error:?}"
     );
     Ok(())
@@ -371,7 +371,7 @@ fn opted_in(tables: &str) -> String {
 fn onward_organisations_needs_a_federation_lane() -> TestResult {
     let persons = lane("https://as.example.org", "persons", "");
     let start = persons
-        .find("[credentials.\"node-a-pub\".onward]")
+        .find("[credentials.\"node-a-pub\".credentials.onward]")
         .ok_or("the onward table")?;
     let oauth_alone = persons.get(..start).ok_or("the oauth part")?;
     for tables in [opted_in(&persons), opted_in(oauth_alone)] {

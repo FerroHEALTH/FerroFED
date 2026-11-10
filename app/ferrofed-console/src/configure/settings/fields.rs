@@ -9,7 +9,7 @@ use crate::locale::Msg;
 
 /// The settings of basic authentication.
 pub(crate) const BASIC: &[Field] = &[Field {
-    key: "user",
+    key: "credentials.user",
     label: Msg::UserName,
     kind: Kind::Text,
 }];
@@ -33,76 +33,77 @@ pub(crate) const SECURITY_PROFILE: &[(&str, Msg)] = &[
     ("fapi2", Msg::Fapi20),
 ];
 
-/// The settings of the client credentials grant, the `oauth` table, with
-/// its sender constraint and its security profile.
+/// The settings of the client credentials grant, the `oauth` table of the
+/// node's nested `ferrohealth-smart` credentials table, with its sender
+/// constraint and its security profile.
 pub(crate) const OAUTH: &[Field] = &[
     Field {
-        key: "oauth.issuer",
+        key: "credentials.oauth.issuer",
         label: Msg::Issuer,
         kind: Kind::Text,
     },
     Field {
-        key: "oauth.token_endpoint",
+        key: "credentials.oauth.token_endpoint",
         label: Msg::TokenEndpoint,
         kind: Kind::Url,
     },
     Field {
-        key: "oauth.client_id",
+        key: "credentials.oauth.client_id",
         label: Msg::ClientId,
         kind: Kind::Text,
     },
     Field {
-        key: "oauth.client_auth",
+        key: "credentials.oauth.client_auth",
         label: Msg::ClientAuthentication,
         kind: Kind::Choice(CLIENT_AUTH),
     },
     Field {
-        key: "oauth.security_profile",
+        key: "credentials.oauth.security_profile",
         label: Msg::SecurityProfile,
         kind: Kind::Choice(SECURITY_PROFILE),
     },
     Field {
-        key: "oauth.private_key_file",
+        key: "credentials.oauth.private_key_file",
         label: Msg::ClientKeyFile,
         kind: Kind::Path,
     },
     Field {
-        key: "oauth.previous_private_key_file",
+        key: "credentials.oauth.previous_private_key_file",
         label: Msg::PreviousClientKeyFile,
         kind: Kind::Path,
     },
     Field {
-        key: "oauth.dpop_key_file",
+        key: "credentials.oauth.dpop_key_file",
         label: Msg::DpopKeyFile,
         kind: Kind::Path,
     },
     Field {
-        key: "oauth.certificate_bound",
+        key: "credentials.oauth.certificate_bound",
         label: Msg::BindTokensTlsClientCertificate,
         kind: Kind::Switch,
     },
     Field {
-        key: "oauth.mtls_alias_hosts",
+        key: "credentials.oauth.mtls_alias_hosts",
         label: Msg::MutualTlsAliasHosts,
         kind: Kind::List,
     },
     Field {
-        key: "oauth.scope",
+        key: "credentials.oauth.scope",
         label: Msg::Scope,
         kind: Kind::Text,
     },
     Field {
-        key: "oauth.authorization_details",
+        key: "credentials.oauth.authorization_details",
         label: Msg::AuthorizationDetailsJson,
         kind: Kind::Text,
     },
     Field {
-        key: "oauth.resource",
+        key: "credentials.oauth.resource",
         label: Msg::Resource,
         kind: Kind::Text,
     },
     Field {
-        key: "oauth.audience",
+        key: "credentials.oauth.audience",
         label: Msg::Audience,
         kind: Kind::Text,
     },

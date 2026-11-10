@@ -64,7 +64,7 @@ fhir-types = { workspace = true, optional = true, features = ["r4", "resources"]
 # The audit types every recorder here speaks: the ATNA spool, forwarder and
 # syslog sender (ITI-20) and the BALP AuditEvent with its FHIR Feed, from the
 # family's audit library (FerroHEALTH/FerroAUDIT).
-ihe-atna = { workspace = true, optional = true, features = ["atna", "balp"] }
+ihe-atna = { workspace = true, optional = true, features = ["atna", "balp", "smart"] }
 # The instant an ITI-91 refresh asks from, read off the directory's `Date`
 # (#86), and the time an ITI-20 syslog message is written at (#418).
 jiff.workspace = true

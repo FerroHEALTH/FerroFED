@@ -105,19 +105,19 @@ fn managed_refuses_a_secret_inline_outside_the_core() -> TestResult {
         "a secret of the core stays inline"
     );
     let refused = resolved(&format!(
-        "{managed}\n[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"synthetic-inline-token\"\n"
+        "{managed}\n[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"synthetic-inline-token\"\n"
     ))?;
     let Err(Error::Revisions(RevisionsFault::InlineSecret { key })) = &refused else {
         return Err(format!("refused as inline: {refused:?}").into());
     };
-    assert_eq!("credentials.node-a-pub.password", key);
+    assert_eq!("credentials.node-a-pub.credentials.password", key);
     let message = refused
         .err()
         .map(|error| error.to_string())
         .unwrap_or_default();
     assert!(!message.contains("synthetic-inline-token"), "{message}");
     let off = resolved(
-        "[credentials.\"node-a-pub\"]\nuser = \"gateway\"\npassword = \"synthetic-inline-token\"\n",
+        "[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"synthetic-inline-token\"\n",
     )?;
     assert!(off.is_ok(), "off keeps an inline secret as before: {off:?}");
     Ok(())

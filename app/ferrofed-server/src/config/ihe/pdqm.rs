@@ -54,7 +54,8 @@ use crate::config::error::binding::BindingFault;
 use crate::config::resolve::localization_budget_ms;
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
-use crate::config::{Config, Credentials, transport};
+use crate::config::{Config, transport};
+use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The key of the table.
 pub const PDQM_KEY: &str = "pdqm";
@@ -67,7 +68,7 @@ pub struct Pdqm {
     pub url: SecretUrl,
     /// How the gateway authenticates to the Supplier, when the transport
     /// does not.
-    pub credentials: Option<Credentials>,
+    pub credentials: Option<CredentialsSection>,
     /// The TLS material the service is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,

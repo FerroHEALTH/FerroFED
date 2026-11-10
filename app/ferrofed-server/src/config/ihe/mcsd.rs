@@ -15,13 +15,13 @@ use std::time::Duration;
 use ferrohealth_secret::secret_url::SecretUrl;
 use serde::Deserialize;
 
-use crate::config::Credentials;
 use crate::config::audit::AuditSettings;
 use crate::config::error::Error;
 use crate::config::resolve::{positive, positive_ms};
 use crate::config::service_grant::{ServiceContext, resolve_service};
 use crate::config::settings::Scheme;
 use crate::config::transport;
+use ferrohealth_smart::config::credentials::CredentialsSection;
 
 /// The key of the directory's URL.
 const URL_KEY: &str = "registry.mcsd.url";
@@ -43,7 +43,7 @@ pub struct McsdDirectory {
     pub url: SecretUrl,
     /// How the gateway authenticates to the directory, when the transport
     /// does not: basic credentials or the client credentials grant of `oauth`.
-    pub credentials: Option<Credentials>,
+    pub credentials: Option<CredentialsSection>,
     /// The TLS material the service is reached with: the table's `tls`
     /// sub-table.
     pub tls: TlsClientSection,

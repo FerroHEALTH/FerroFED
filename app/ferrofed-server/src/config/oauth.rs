@@ -18,7 +18,7 @@
 //! 8705 §2 methods `tls_client_auth` and `self_signed_tls_client_auth`.
 //!
 //! ```toml
-//! [credentials."cdr-a".oauth]
+//! [credentials."cdr-a".credentials.oauth]
 //! issuer = "https://as.cdr-a.example.org"
 //! client_id = "ferrofed"
 //! client_auth = "private_key_jwt"
@@ -28,94 +28,50 @@
 //! ```
 
 use ferrofed_engine::onward::grant::lane::Organisations;
-use ferrohealth_smart::client::{ClientCredentials, Endpoint};
+use ferrohealth_smart::client::{ClientCredentials, Endpoint, PresentedTls};
+use ferrohealth_smart::config::ServerTls;
 use ferrohealth_smart::config::credentials::OauthSection;
 use ferrohealth_smart::config::onward::{OnwardLane, OnwardSection};
 use ferrohealth_smart::kind::IssuerKind;
-use secrecy::ExposeSecret as _;
-use serde::{Deserialize, Serialize};
 
 use crate::config::error::Error;
 
-/// `[<section>.oauth]` as written: the table `ferrohealth-smart` reads.
+/// Resolves the grant `table`, the table at `key`, every secret read.
 ///
-/// Two tables compare equal when they render alike and hold the same inline
-/// client secret, so a reload sees a changed secret.
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-#[serde(transparent)]
-pub struct Oauth(pub OauthSection);
-
-impl PartialEq for Oauth {
-    fn eq(&self, other: &Self) -> bool {
-        // TODO(#1805): compare by the section's own PartialEq once smart 0.16.1 derives it.
-        // NOTE: no specification governs this: our own design; the table renders its
-        // secret redacted, so the inline secrets are compared besides.
-        let secret = |table: &Self| {
-            table
-                .0
-                .client_secret
-                .as_ref()
-                .map(|secret| secret.expose_secret().to_owned())
-        };
-        serde_json::to_value(&self.0).ok() == serde_json::to_value(&other.0).ok()
-            && secret(self) == secret(other)
-    }
-}
-
-impl Eq for Oauth {}
-
-impl Oauth {
-    /// Resolves the grant the table at `key` describes, every secret and the
-    /// assertion key read, reaching its token endpoint over `presented`,
-    /// the TLS material of a node the gateway already read, when one is
-    /// given: the table then names no client certificate, key or trust roots
-    /// of its own (RFC 8705 §2, §3).
-    ///
-    /// # Errors
-    /// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
-    /// refuses.
-    pub fn resolve(
-        &self,
-        key: &str,
-        presented: Option<ferrohealth_smart::client::PresentedTls>,
-    ) -> Result<ClientCredentials, Error> {
-        match presented {
-            // NOTE: RFC 8705 §2: the grant presents the node section's identity, so a TLS
-            // table of its own beside it would never be read, and is refused.
-            Some(_) if self.0.tls.names_material() => {
-                Err(ferrohealth_smart::config::ConfigError::Exclusive {
-                    left: "credentials.oauth.tls",
-                    right: "credentials.tls",
-                })
-            }
-            Some(presented) => self.0.resolve_with_tls(&Presenting(presented)),
-            None => self.0.resolve(),
+/// Its own `tls` is read by `ferrohealth-smart`'s reader. Given
+/// `presented`, the TLS of the node the grant serves, a table whose
+/// `tls` names no material presents that connection's trust roots and
+/// client certificate instead (RFC 8705 §2, §3).
+///
+/// # Errors
+/// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
+/// refuses, and for one that names TLS material of its own beside the
+/// node's.
+pub fn resolve(
+    key: &str,
+    table: &OauthSection,
+    presented: Option<&PresentedTls>,
+) -> Result<ClientCredentials, Error> {
+    match presented {
+        // NOTE: RFC 8705 §2: the grant presents the node section's identity, so a TLS
+        // table of its own beside it would leave two identities, and is refused.
+        Some(_) if table.tls.names_material() => {
+            Err(ferrohealth_smart::config::ConfigError::Exclusive {
+                left: "credentials.credentials.oauth.tls",
+                right: "credentials.tls",
+            })
         }
-        .map_err(|source| Error::Smart {
-            section: key.to_owned(),
-            source: Box::new(source),
-        })
+        Some(connection) => table.resolve_sharing_tls(&ServerTls, connection),
+        None => table.resolve_with_tls(&ServerTls),
     }
+    .map_err(|source| Error::Smart {
+        section: key.to_owned(),
+        source: Box::new(source),
+    })
 }
 
-/// The TLS a node's grant presents: the node section's `tls` identity the
-/// gateway already read, never a `tls` table of the grant's own, which the
-/// gateway refuses (RFC 8705 §2, §3).
-// TODO(#1806): build it from the shared section once `[credentials."<id>"]` holds it.
-struct Presenting(ferrohealth_smart::client::PresentedTls);
-
-impl ferrohealth_smart::config::TlsBuilder for Presenting {
-    fn build(
-        &self,
-        _key: &str,
-        _section: &ferrohealth_config::tls::TlsClientSection,
-    ) -> Result<ferrohealth_smart::client::PresentedTls, Box<dyn std::error::Error + Send + Sync>>
-    {
-        Ok(self.0.clone())
-    }
-}
-
-/// A node's `[credentials."<endpoint id>".onward]` table, resolved: the
+/// A node's `[credentials."<endpoint id>".credentials.onward]` table,
+/// resolved: the
 /// client of its issuer's onward grants and the node as their target.
 #[derive(Debug, Clone)]
 pub struct Onward {

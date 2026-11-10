@@ -142,7 +142,7 @@ pub fn credentials(
     let mut table = held.clone();
     for other in Grant::ALL.into_iter().filter(|other| *other != grant) {
         for key in other.own() {
-            table.remove(*key);
+            place(&mut table, key, None);
         }
     }
     let fields: Vec<&Field> = grant.fields().iter().chain(TLS).collect();
@@ -430,28 +430,28 @@ mod tests {
     fn a_credential_keeps_what_its_form_does_not_show_and_drops_the_other_grants()
     -> Result<(), Refused> {
         let held = held(Some(
-            r#"{ user = "old", tls = { trust_roots_file = "/run/roots.pem" }, oauth = { client_id = "a", extra = 1 } }"#,
+            r#"{ credentials = { user = "old", oauth = { client_id = "a", extra = 1 } }, tls = { trust_roots_file = "/run/roots.pem" } }"#,
         ))?;
         assert_eq!(Grant::Oauth, Grant::held(&held, &[]));
         let text = credentials(
             &held,
             Grant::Oauth,
             &[
-                row("oauth.client_id", "gateway"),
-                row("oauth.scope", "system/aql-*.s"),
-                row("oauth.certificate_bound", ""),
+                row("credentials.oauth.client_id", "gateway"),
+                row("credentials.oauth.scope", "system/aql-*.s"),
+                row("credentials.oauth.certificate_bound", ""),
                 row("tls.trust_roots_file", ""),
             ],
         )?;
         let built = super::held(Some(&text))?;
-        assert_eq!("gateway", shown(&built, "oauth.client_id"));
-        assert_eq!("system/aql-*.s", shown(&built, "oauth.scope"));
-        assert_eq!("1", shown(&built, "oauth.extra"));
-        assert!(lookup(&built, "user").is_none(), "{text}");
+        assert_eq!("gateway", shown(&built, "credentials.oauth.client_id"));
+        assert_eq!("system/aql-*.s", shown(&built, "credentials.oauth.scope"));
+        assert_eq!("1", shown(&built, "credentials.oauth.extra"));
+        assert!(lookup(&built, "credentials.user").is_none(), "{text}");
         assert!(lookup(&built, "tls.trust_roots_file").is_none(), "{text}");
         assert!(lookup(&built, "tls").is_none(), "{text}");
         assert!(
-            lookup(&built, "oauth.certificate_bound").is_none(),
+            lookup(&built, "credentials.oauth.certificate_bound").is_none(),
             "{text}"
         );
         Ok(())
@@ -460,21 +460,21 @@ mod tests {
     #[test]
     #[expect(clippy::panic_in_result_fn, reason = "test assertions")]
     fn a_list_and_a_switch_are_written_as_their_types() -> Result<(), Refused> {
-        let mut hosts = row("oauth.mtls_alias_hosts", "");
+        let mut hosts = row("credentials.oauth.mtls_alias_hosts", "");
         hosts.values = vec![String::from("mtls.example.org"), String::new()];
         let text = credentials(
             &toml::Table::new(),
             Grant::Oauth,
-            &[hosts, row("oauth.certificate_bound", "true")],
+            &[hosts, row("credentials.oauth.certificate_bound", "true")],
         )?;
         let built = held(Some(&text))?;
         assert_eq!(
             vec![String::from("mtls.example.org")],
-            listed(&built, "oauth.mtls_alias_hosts")
+            listed(&built, "credentials.oauth.mtls_alias_hosts")
         );
         assert_eq!(
             Some(&toml::Value::Boolean(true)),
-            lookup(&built, "oauth.certificate_bound")
+            lookup(&built, "credentials.oauth.certificate_bound")
         );
         Ok(())
     }

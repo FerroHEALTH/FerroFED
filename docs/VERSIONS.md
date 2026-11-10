@@ -480,18 +480,19 @@ the root `Cargo.toml`, because FerroBRIDGE's crate line moves by patch, at the
 version the pinned `eehrxf` requires, and all build on the `openehr-*` line
 above. The component's terminology server is asked
 through FerroBRIDGE's `ferrobridge-term` (#925), pinned exactly the same way,
-over the HTTP client the gateway builds with its credential and TLS material. A
+built from the `ferrohealth-smart` outbound table `[eehrxf.terminology.endpoint]`
+with its credential and TLS material (#1805). A
 received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 (#808), pinned exactly the same way, on the same `fhir-types` and
 `ferrobridge-term` lines.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | =0.2.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `eehrxf` | =0.3.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
 | `fhirconnect` | =0.1.249 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | =0.1.151 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | =0.2.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | =0.2.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | =0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | =0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -504,8 +505,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | =0.9.1 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | =0.9.1 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | =0.10.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | =0.10.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 

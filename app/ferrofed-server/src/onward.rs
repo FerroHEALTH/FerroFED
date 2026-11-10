@@ -174,7 +174,7 @@ pub(crate) fn onward(
                     ferrohealth_smart::client::ClientCredentials::clone(grant),
                 )
                 .map_err(|source| OnwardError::TokenTransport {
-                    section: format!("credentials.{endpoint}.oauth"),
+                    section: format!("credentials.{endpoint}.credentials.oauth"),
                     source: Box::new(source),
                 })?;
                 // NOTE: §13.1 N25; under an onward lane the grant's own token carries the

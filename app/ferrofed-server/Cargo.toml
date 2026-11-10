@@ -110,7 +110,7 @@ ihe-iti = { workspace = true, optional = true, features = ["atna", "balp"] }
 # The audit trail every build writes to (#697): the ATNA spool, forwarder and
 # syslog sender (ITI-20) and the BALP AuditEvent with its FHIR Feed, from the
 # family's audit library (FerroHEALTH/FerroAUDIT).
-ihe-atna = { workspace = true, features = ["atna", "balp"] }
+ihe-atna = { workspace = true, features = ["atna", "balp", "smart"] }
 # The Nuts grant of an endpoint's onward credentials, Annex B §B.4 (#88),
 # built from the configuration, and the BSN naming systems the NVI and Mitz
 # configuration is checked against (GF-Identification, behind `nvi`), and the
@@ -185,6 +185,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
 uuid.workspace = true
+# The terminology client's error, which a terminology table that cannot be
+# built is refused with (#1805).
+ferrobridge-term.workspace = true
 
 [dev-dependencies]
 # The error a package set that cannot validate a received document returns,

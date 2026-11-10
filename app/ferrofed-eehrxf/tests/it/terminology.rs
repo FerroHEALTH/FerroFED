@@ -16,13 +16,11 @@ use eehrxf::terminology::Operation;
 use eehrxf::terminology::Terminology;
 use eehrxf::terminology::TerminologyError;
 use ferrofed_eehrxf::terminology::BridgeTerminology;
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_testkit::mock::Server;
 use fhir_types::r4::coding::Coding;
 use fhir_types::r4::primitives::Code;
 use fhir_types::r4::primitives::Uri;
 use http::StatusCode;
-use secrecy::SecretString;
 use wiremock::Mock;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::body_string_contains;
@@ -37,17 +35,15 @@ const PREFERRED: &str = "http://example.org/fhir/CodeSystem/preferred";
 const FHIR_JSON: &str = "application/fhir+json";
 
 /// The terminology answered by `server`, under `/fhir`, with basic
-/// credentials.
+/// credentials, each call tried once.
 fn terminology(server: &Server, timeout: Duration) -> Result<Terminology, Box<dyn Error>> {
-    let client = BridgeTerminology::new(
-        &format!("{}/fhir", server.uri()),
-        &Authentication::Basic {
-            user: String::from("ferrofed"),
-            password: SecretString::from("synthetic-token"),
-        },
-        &ferrofed_testkit::tls::platform(),
-        timeout,
-    )?;
+    let endpoint = serde_json::from_value(serde_json::json!({
+        "url": format!("{}/fhir", server.uri()),
+        "timeout": format!("{}ms", timeout.as_millis()),
+        "retry": { "max_attempts": 1 },
+        "credentials": { "user": "ferrofed", "password": "synthetic-token" },
+    }))?;
+    let client = BridgeTerminology::from_endpoint(&endpoint, "eehrxf.terminology.endpoint")?;
     Ok(Terminology::server(Arc::new(client)))
 }
 

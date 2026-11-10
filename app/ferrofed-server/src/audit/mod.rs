@@ -33,11 +33,12 @@ use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use ehds_logging::balp::BalpSink;
 use ehds_logging::sink::AccessSink;
-use ferrofed_identity::ihe::audit::balp::{
-    FeedAudit, FeedConfigError, LogFeedAudit, feed_repository,
-};
+use ferrofed_identity::ihe::audit::balp::{FeedAudit, LogFeedAudit};
 use ferrofed_operator_api::health::{Indication, Observed};
 use ferrohealth_server::tls_client::TlsClientError;
+use ferrohealth_smart::client::outbound::{OutboundClient, OutboundError};
+use ferrohealth_smart::config::ServerTls;
+use ihe_atna::atna::feed::{FeedConfigError, FeedRepository};
 use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::RepositoryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
@@ -297,6 +298,10 @@ pub enum AuditTrailError {
     /// or by rustls.
     #[error("the audit repository's TLS material cannot be used")]
     Tls(#[source] TlsClientError),
+    /// The outbound client of `[audit.repository.endpoint]` cannot be
+    /// built.
+    #[error("the audit repository's outbound client cannot be built")]
+    Outbound(#[source] OutboundError),
     /// The FHIR Feed repository was refused.
     #[error("the audit repository cannot be reached as configured")]
     Feed(#[source] FeedConfigError),
@@ -335,12 +340,14 @@ pub fn feed_trail(settings: &FeedRepositorySettings) -> Result<Arc<FeedAudit>, A
         |directory| directory.display().to_string(),
     );
     started(key, settings, || {
-        let repository = feed_repository(
-            settings.url.clone(),
-            settings.cleartext,
-            &settings.tls,
-            settings.timeout,
-        )
+        let client =
+            OutboundClient::build(&settings.endpoint, "audit.repository.endpoint", &ServerTls)
+                .map_err(AuditTrailError::Outbound)?;
+        let repository = if settings.cleartext {
+            FeedRepository::cleartext(client)
+        } else {
+            FeedRepository::new(client)
+        }
         .map_err(AuditTrailError::Feed)?;
         let spool = spool(
             "audit.repository.spool_dir",
@@ -349,7 +356,7 @@ pub fn feed_trail(settings: &FeedRepositorySettings) -> Result<Arc<FeedAudit>, A
             Content::AuditEvents,
         )?;
         Ok(FeedAudit::new(
-            Forwarder::fhir_feed(spool, repository, settings.retry_max),
+            Forwarder::fhir_feed(spool, repository),
             settings.observer.clone(),
         ))
     })

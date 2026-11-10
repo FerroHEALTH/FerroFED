@@ -311,6 +311,36 @@ async fn an_imaging_report_the_member_holds_no_longer_is_not_found() -> TestResu
     Ok(())
 }
 
+/// A synthetic medical image in PNG: the signature and an empty `IEND`
+/// chunk.
+const ORIGINAL_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\x00IEND\xaeB`\x82";
+
+// NOTE: MyHealth@EU Requirements Catalogue 10.0.0 08 and 08.01: an Original Clinical Document is
+// unmodified after its creation, and a medical image is one in JPG or PNG.
+#[tokio::test]
+async fn a_members_original_image_in_png_is_read_byte_for_byte_with_its_media_type() -> TestResult {
+    let document = DOCUMENT
+        .replace("application/fhir+json", "image/png")
+        .replace("85430-7", "18748-4");
+    let members = Members::holding(IMAGING, &document).await?;
+    let dir = tempfile::tempdir()?;
+    let app = members.gateway(dir.path(), ("", ""))?;
+    let (status, text) = call(app.clone(), list(IMAGING_TYPE)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let url = url_of(&listed(&IMAGING, &text)?.0)?;
+    members.own.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/fhir/Binary/img-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(ORIGINAL_PNG, "image/png"))
+        .mount(&members.own)
+        .await;
+    let (status, headers, body) = exchange(app, binary(&url)?).await?;
+    assert_eq!(StatusCode::OK, status, "{}", String::from_utf8_lossy(&body));
+    assert_eq!(body, ORIGINAL_PNG, "the original byte for byte");
+    assert_eq!(field(&headers, "content-type"), Some("image/png"));
+    Ok(())
+}
+
 #[cfg(feature = "binding-ihe")]
 #[tokio::test]
 async fn the_imaging_list_and_read_are_recorded_under_the_category() -> TestResult {

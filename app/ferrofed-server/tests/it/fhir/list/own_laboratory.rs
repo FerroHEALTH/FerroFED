@@ -290,6 +290,41 @@ async fn a_binary_the_member_holds_no_longer_is_not_found_and_a_failed_read_is_n
     Ok(())
 }
 
+/// A synthetic original report in PDF, with bytes that are no UTF-8.
+const ORIGINAL_PDF: &[u8] =
+    b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
+
+// NOTE: MyHealth@EU Requirements Catalogue 10.0.0 08 and 08.01: an Original Clinical Document is
+// unmodified after its creation, in PDF, JPG or PNG.
+#[tokio::test]
+async fn a_members_original_report_in_pdf_is_read_byte_for_byte_with_its_media_type() -> TestResult
+{
+    let document = DOCUMENT.replace("application/fhir+json", "application/pdf");
+    let members = Members::holding(LABORATORY, &document).await?;
+    let dir = tempfile::tempdir()?;
+    let app = members.gateway(dir.path(), ("", ""))?;
+    let (status, text) = call(app.clone(), list(LABORATORY_TYPE)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let (reference, written) = listed(&LABORATORY, &text)?;
+    let url = url_of(&reference)?;
+    assert_eq!(
+        written,
+        document.replace("\"Binary/lab-1\"", &format!("\"{url}\"")),
+        "the reference keeps the member's media type"
+    );
+    members.own.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/fhir/Binary/lab-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(ORIGINAL_PDF, "application/pdf"))
+        .mount(&members.own)
+        .await;
+    let (status, headers, body) = exchange(app, binary(&url)?).await?;
+    assert_eq!(StatusCode::OK, status, "{}", String::from_utf8_lossy(&body));
+    assert_eq!(body, ORIGINAL_PDF, "the original byte for byte");
+    assert_eq!(field(&headers, "content-type"), Some("application/pdf"));
+    Ok(())
+}
+
 #[cfg(feature = "binding-ihe")]
 #[tokio::test]
 async fn the_list_and_the_read_are_recorded_under_the_category() -> TestResult {

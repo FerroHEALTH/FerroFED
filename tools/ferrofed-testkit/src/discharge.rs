@@ -426,6 +426,10 @@ pub fn mapping_files(directory: &std::path::Path) -> std::io::Result<Vec<PathBuf
     HDR.write_to(directory)
 }
 
+/// The hospital course the synthetic sender writes as its section's one
+/// paragraph.
+pub const HOSPITAL_COURSE: &str = "A synthetic hospital course.";
+
 /// The instant the synthetic sender writes its report at.
 const SENT_AT: &str = "2026-10-21T08:00:00Z";
 
@@ -528,10 +532,7 @@ pub fn received_document(
         .iter()
         .find(|slot| slot.slice == "sectionHospitalCourse")
         .ok_or("the hospital course slot")?;
-    document.with_section(Section::new(
-        course,
-        vec![String::from("A synthetic hospital course.")],
-    ))?;
+    document.with_section(Section::new(course, vec![String::from(HOSPITAL_COURSE)]))?;
     for section in document.with_mapped_composition(run.bundle())? {
         let paragraph = format!("{}.", section.slot.title);
         document.with_section(section.into_section(vec![paragraph]))?;

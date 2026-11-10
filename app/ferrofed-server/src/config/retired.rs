@@ -26,6 +26,9 @@ pub const PREPARING: &str = "0.0.19";
 /// The release that retired the unit-suffixed keys (#1800).
 const UNITS: &str = PREPARING;
 
+/// The release that moved each outbound table under `endpoint` (#1805).
+const ENDPOINTS: &str = PREPARING;
+
 /// A duration such as `30s`.
 macro_rules! span {
     ($key:literal) => {
@@ -101,10 +104,50 @@ const STORE_SWEEP: Retired = Retired::replaced(
     span!("store.sweep_interval"),
     UNITS,
 );
+const NODE_USER: Retired = Retired::replaced(
+    "user",
+    "credentials.\"<endpoint id>\".credentials.user",
+    ENDPOINTS,
+);
+const NODE_PASSWORD: Retired = Retired::replaced(
+    "password",
+    "credentials.\"<endpoint id>\".credentials.password",
+    ENDPOINTS,
+);
+const NODE_PASSWORD_FILE: Retired = Retired::replaced(
+    "password_file",
+    "credentials.\"<endpoint id>\".credentials.password_file",
+    ENDPOINTS,
+);
+const NODE_OAUTH: Retired = Retired::replaced(
+    "oauth",
+    "credentials.\"<endpoint id>\".credentials.oauth",
+    ENDPOINTS,
+);
+const NODE_ONWARD: Retired = Retired::replaced(
+    "onward",
+    "credentials.\"<endpoint id>\".credentials.onward",
+    ENDPOINTS,
+);
+const TERMINOLOGY_URL: Retired = Retired::replaced(
+    "eehrxf.terminology.url",
+    "eehrxf.terminology.endpoint.url",
+    ENDPOINTS,
+);
+const TERMINOLOGY_CREDENTIALS: Retired = Retired::replaced(
+    "eehrxf.terminology.credentials",
+    "eehrxf.terminology.endpoint.credentials",
+    ENDPOINTS,
+);
+const TERMINOLOGY_TLS: Retired = Retired::replaced(
+    "eehrxf.terminology.tls",
+    "eehrxf.terminology.endpoint.tls",
+    ENDPOINTS,
+);
 const TERMINOLOGY_TIMEOUT: Retired = Retired::replaced(
     "eehrxf.terminology.timeout_ms",
-    span!("eehrxf.terminology.timeout"),
-    UNITS,
+    span!("eehrxf.terminology.endpoint.timeout"),
+    ENDPOINTS,
 );
 const FEED_SPOOL_SIZE: Retired = Retired::replaced(
     "audit.repository.spool_max_bytes",
@@ -116,15 +159,25 @@ const FEED_SPOOL_WRITE: Retired = Retired::replaced(
     span!("audit.repository.spool_write_timeout"),
     UNITS,
 );
+const FEED_URL: Retired = Retired::replaced(
+    "audit.repository.url",
+    "audit.repository.endpoint.url",
+    ENDPOINTS,
+);
+const FEED_TLS: Retired = Retired::replaced(
+    "audit.repository.tls",
+    "audit.repository.endpoint.tls",
+    ENDPOINTS,
+);
 const FEED_TIMEOUT: Retired = Retired::replaced(
     "audit.repository.timeout_ms",
-    span!("audit.repository.timeout"),
-    UNITS,
+    span!("audit.repository.endpoint.timeout"),
+    ENDPOINTS,
 );
 const FEED_RETRY: Retired = Retired::replaced(
     "audit.repository.retry_max_ms",
-    span!("audit.repository.retry_max"),
-    UNITS,
+    span!("audit.repository.endpoint.retry.max_backoff"),
+    ENDPOINTS,
 );
 #[cfg(feature = "binding-ihe")]
 const MCSD_REFRESH: Retired = Retired::replaced(
@@ -203,9 +256,19 @@ const ALL: &[Retired] = &[
     ACT_REPRESENTATIVE,
     STORE_TIMEOUT,
     STORE_SWEEP,
+    NODE_USER,
+    NODE_PASSWORD,
+    NODE_PASSWORD_FILE,
+    NODE_OAUTH,
+    NODE_ONWARD,
+    TERMINOLOGY_URL,
+    TERMINOLOGY_CREDENTIALS,
+    TERMINOLOGY_TLS,
     TERMINOLOGY_TIMEOUT,
     FEED_SPOOL_SIZE,
     FEED_SPOOL_WRITE,
+    FEED_URL,
+    FEED_TLS,
     FEED_TIMEOUT,
     FEED_RETRY,
     #[cfg(feature = "binding-ihe")]
@@ -267,11 +330,16 @@ pub fn check(config: &Config) -> Result<(), RemovedKeys> {
         found(store.sweep_interval_s, &STORE_SWEEP);
     }
     if let Some(terminology) = &config.eehrxf.terminology {
+        found(terminology.url, &TERMINOLOGY_URL);
+        found(terminology.credentials, &TERMINOLOGY_CREDENTIALS);
+        found(terminology.tls, &TERMINOLOGY_TLS);
         found(terminology.timeout_ms, &TERMINOLOGY_TIMEOUT);
     }
     if let Some(repository) = &config.audit.repository {
         found(repository.spool_max_bytes, &FEED_SPOOL_SIZE);
         found(repository.spool_write_timeout_ms, &FEED_SPOOL_WRITE);
+        found(repository.url, &FEED_URL);
+        found(repository.tls, &FEED_TLS);
         found(repository.timeout_ms, &FEED_TIMEOUT);
         found(repository.retry_max_ms, &FEED_RETRY);
     }
@@ -306,6 +374,18 @@ pub fn check(config: &Config) -> Result<(), RemovedKeys> {
     if let Some(mitz) = config.nl_gf.as_ref().and_then(|nl| nl.mitz.as_ref()) {
         found(mitz.timeout_ms, &MITZ_TIMEOUT);
     }
+    for (id, node) in &config.credentials {
+        let table = format!("credentials.{}", toml_key(id));
+        for (removed, retired) in [
+            (node.user, &NODE_USER),
+            (node.password, &NODE_PASSWORD),
+            (node.password_file, &NODE_PASSWORD_FILE),
+            (node.oauth, &NODE_OAUTH),
+            (node.onward, &NODE_ONWARD),
+        ] {
+            removals.check_under(removed, retired, &table);
+        }
+    }
     for (index, issuer) in config.trust.issuer.iter().enumerate() {
         if let Some(patient) = &issuer.patient {
             removals.check_under(
@@ -316,6 +396,19 @@ pub fn check(config: &Config) -> Result<(), RemovedKeys> {
         }
     }
     removals.finish()
+}
+
+/// `id` as a TOML key: bare when it is one, quoted otherwise.
+fn toml_key(id: &str) -> String {
+    let bare = !id.is_empty()
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
+    if bare {
+        id.to_owned()
+    } else {
+        format!("{id:?}")
+    }
 }
 
 #[cfg(test)]

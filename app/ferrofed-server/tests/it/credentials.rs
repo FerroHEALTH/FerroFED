@@ -86,16 +86,16 @@ fn a_static_bearer_token_is_refused_as_an_unknown_key() -> TestResult {
 #[test]
 fn a_basic_password_holding_a_newline_refuses_to_boot() -> TestResult {
     let toml = format!(
-        "[server]\nlisten = \"127.0.0.1:1\"\n[credentials.\"clinic-b\"]\nuser = \"gateway\"\npassword = \"{}\\n{}\"\n",
+        "[server]\nlisten = \"127.0.0.1:1\"\n[credentials.\"clinic-b\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"{}\\n{}\"\n",
         HALVES[0], HALVES[1]
     );
-    refuses_naming(&toml, "credentials.clinic-b.password")
+    refuses_naming(&toml, "credentials.clinic-b.credentials.password")
 }
 
 #[test]
 fn a_basic_user_holding_a_colon_refuses_to_boot() -> TestResult {
-    let toml = "[server]\nlisten = \"127.0.0.1:1\"\n[credentials.\"clinic-b\"]\nuser = \"gate:way\"\npassword = \"Qz7left\"\n";
-    refuses_naming(toml, "credentials.clinic-b.user")
+    let toml = "[server]\nlisten = \"127.0.0.1:1\"\n[credentials.\"clinic-b\"]\ncredentials.user = \"gate:way\"\ncredentials.password = \"Qz7left\"\n";
+    refuses_naming(toml, "credentials.clinic-b.credentials.user")
 }
 
 #[test]
@@ -104,9 +104,9 @@ fn a_secret_file_holding_a_control_character_refuses_to_boot() -> TestResult {
     writeln!(password, "{}\u{7f}{}", HALVES[0], HALVES[1])?;
     let path = toml::Value::String(password.path().display().to_string());
     let toml = format!(
-        "[server]\nlisten = \"127.0.0.1:1\"\n[credentials.\"clinic-b\"]\nuser = \"gateway\"\npassword_file = {path}\n"
+        "[server]\nlisten = \"127.0.0.1:1\"\n[credentials.\"clinic-b\"]\ncredentials.user = \"gateway\"\ncredentials.password_file = {path}\n"
     );
-    refuses_naming(&toml, "credentials.clinic-b.password_file")
+    refuses_naming(&toml, "credentials.clinic-b.credentials.password_file")
 }
 
 /// A credentials key is held to the registry's endpoint id rule whether or
@@ -122,7 +122,9 @@ fn a_credentials_key_follows_the_registry_endpoint_id_rule() -> TestResult {
         "n\u{e9}",
         too_long.as_str(),
     ] {
-        let toml = format!("[credentials.\"{key}\"]\nuser = \"u\"\npassword = \"t\"\n");
+        let toml = format!(
+            "[credentials.\"{key}\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n"
+        );
         let Err(error) = Config::from_sources(Some(&toml), &BTreeMap::new())?.resolve() else {
             return Err(format!("{key:?} was accepted").into());
         };
@@ -141,7 +143,7 @@ fn a_credentials_key_follows_the_registry_endpoint_id_rule() -> TestResult {
     }
     let output = binary(
         &["config", "check"],
-        "[credentials.\"node:a\"]\nuser = \"u\"\npassword = \"t\"\n",
+        "[credentials.\"node:a\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n",
     )?;
     assert_eq!(Some(i32::from(EXIT_CONFIG)), output.status.code());
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -149,7 +151,9 @@ fn a_credentials_key_follows_the_registry_endpoint_id_rule() -> TestResult {
 
     let longest = "a".repeat(MAX_ID_LEN);
     for key in ["hospital-a.query", "node_a", "9b", longest.as_str()] {
-        let toml = format!("[credentials.\"{key}\"]\nuser = \"u\"\npassword = \"t\"\n");
+        let toml = format!(
+            "[credentials.\"{key}\"]\ncredentials.user = \"u\"\ncredentials.password = \"t\"\n"
+        );
         let settings = Config::from_sources(Some(&toml), &BTreeMap::new())?.resolve()?;
         assert!(
             settings.credentials.contains_key(&EndpointId::new(key)?),
@@ -168,8 +172,8 @@ async fn a_valid_credential_reaches_its_node_on_every_request() -> TestResult {
         dir.path(),
         &registry(&a.uri(), &b.uri(), ""),
         "",
-        "[credentials.\"node-a-pub\"]\nuser = \"gateway-a\"\npassword = \"synthetic-token\"\n\n\
-         [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword = \"synthetic-pw\"\n",
+        "[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway-a\"\ncredentials.password = \"synthetic-token\"\n\n\
+         [credentials.\"node-b-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"synthetic-pw\"\n",
     )?;
     let aql = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c";
 
@@ -214,8 +218,8 @@ async fn a_credential_from_a_file_reaches_its_node_as_written() -> TestResult {
         &registry(&a.uri(), &b.uri(), ""),
         "",
         &format!(
-            "[credentials.\"node-a-pub\"]\nuser = \"gateway-a\"\npassword_file = {token}\n\n\
-             [credentials.\"node-b-pub\"]\nuser = \"gateway\"\npassword_file = {password}\n"
+            "[credentials.\"node-a-pub\"]\ncredentials.user = \"gateway-a\"\ncredentials.password_file = {token}\n\n\
+             [credentials.\"node-b-pub\"]\ncredentials.user = \"gateway\"\ncredentials.password_file = {password}\n"
         ),
     )?;
     let aql = "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c";
@@ -248,7 +252,7 @@ async fn a_credential_from_a_file_reaches_its_node_as_written() -> TestResult {
 #[test]
 fn an_inline_secret_is_accepted_under_the_production_profile() -> TestResult {
     let toml = "profile = \"production\"\n\n[server]\nlisten = \"127.0.0.1:1\"\n\n\
-                [credentials.\"clinic-b\"]\nuser = \"gateway\"\npassword = \"synthetic-inline-pw\"\n";
+                [credentials.\"clinic-b\"]\ncredentials.user = \"gateway\"\ncredentials.password = \"synthetic-inline-pw\"\n";
     let output = binary(&["config", "check"], toml)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(

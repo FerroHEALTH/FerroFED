@@ -63,7 +63,8 @@ async-trait.workspace = true
 # FerroBRIDGE's FHIR terminology client, which the seam is answered with
 # (#925), over the HTTP client the identity crate builds with its credential
 # and TLS material.
-ferrobridge-term.workspace = true
+ferrobridge-term = { workspace = true, features = ["smart"] }
+ferrohealth-smart.workspace = true
 # FerroBRIDGE's FHIR R4 profile validator: the package set a received
 # document is validated against (#808).
 ferrobridge-validator.workspace = true
@@ -86,7 +87,6 @@ ferrofed-testkit.workspace = true
 # The written document, read back in the tests.
 serde_json.workspace = true
 # The runtime the terminology client is driven on, and the stub server it asks.
-secrecy.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "time"] }
 # The status a terminology refusal carries, matched in the tests.
 http.workspace = true

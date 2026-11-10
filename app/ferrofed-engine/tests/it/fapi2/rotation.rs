@@ -152,7 +152,7 @@ async fn a_grant_with_no_client_key_publishes_none_and_takes_no_previous_one() -
         "client_auth": "self_signed_tls_client_auth",
         "previous_private_key_file": "/nonexistent/previous.pem",
     }))?;
-    let problems = table.problems("credentials.node-a-pub.oauth");
+    let problems = table.problems("credentials.node-a-pub.credentials.oauth");
     assert!(
         problems
             .iter()

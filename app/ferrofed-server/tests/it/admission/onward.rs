@@ -74,13 +74,13 @@ async fn the_admission_check_authenticates_with_the_onward_grant() -> TestResult
 async fn beside_an_onward_lane_the_admission_check_uses_the_client_credentials_grant() -> TestResult
 {
     admitted_with(concat!(
-        "\n[credentials.\"node-a-pub\".onward]\n",
+        "\n[credentials.\"node-a-pub\".credentials.onward]\n",
         "issuer = \"https://federation.cdr-a.example.org\"\n",
         "kind = \"persons\"\n",
         "profile = \"rfc9068\"\n",
         "audiences = [\"https://cdr-a.example.org/openehr\"]\n",
         "indicators = [\"https://cdr-a.example.org/openehr\"]\n\n",
-        "[credentials.\"node-a-pub\".onward.keys]\n",
+        "[credentials.\"node-a-pub\".credentials.onward.keys]\n",
         "max_onward_lifetime = '1h'\n",
     ))
     .await
@@ -96,7 +96,7 @@ async fn admitted_with(onward: &str) -> TestResult {
     std::fs::write(&key, oauth::Curve::P384.pem()?)?;
     let key = toml::Value::String(key.display().to_string());
     let tables = format!(
-        "{}\n[signing]\nkey_file = {key}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[credentials.\"node-a-pub\".oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"system/composition-*.cr\"\n",
+        "{}\n[signing]\nkey_file = {key}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[credentials.\"node-a-pub\".credentials.oauth]\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {key}\ntoken_endpoint = \"{}\"\nclient_id = \"{CLIENT_ID}\"\nscope = \"system/composition-*.cr\"\n",
         crossref(&[("node-a", V4[0])]),
         endpoint.token_url()
     ) + onward;

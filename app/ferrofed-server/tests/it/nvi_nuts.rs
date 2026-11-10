@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The NVI localizer authenticated with the Nuts grant, through the real
-//! configuration path: `[nl_gf.nvi.credentials.nuts]` takes the table a
+//! configuration path: `[nl_gf.nvi.nuts]` takes the table a
 //! node's onward credentials take, the harness Nuts node issues a
 //! `DPoP`-bound token for a Verifiable Presentation of the gateway's
 //! credentials, and the harness Localization Service answers only that token
@@ -57,7 +57,7 @@ const DEFINITION: &str =
     r#"{"id": "pd_synthetic", "input_descriptors": [{"id": "organization_credential"}]}"#;
 
 /// The section the grant is configured in.
-const SECTION: &str = "nl_gf.nvi.credentials.nuts";
+const SECTION: &str = "nl_gf.nvi.nuts";
 
 /// A harness Nuts node trusting a fresh holder and issuer, issuing tokens
 /// that live `expires_in` seconds.
@@ -495,7 +495,7 @@ async fn a_nuts_grant_the_nvi_cannot_use_names_its_key() -> TestResult {
     );
     match resolve(dir.path(), "development", &both)? {
         Err(ConfigError::Credentials(CredentialsFault::Scheme { section })) => {
-            assert_eq!("nl_gf.nvi.credentials", section);
+            assert_eq!("nl_gf.nvi", section);
         }
         other => return Err(format!("two schemes: {other:?}").into()),
     }

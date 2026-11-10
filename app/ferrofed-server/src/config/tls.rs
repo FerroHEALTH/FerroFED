@@ -27,15 +27,6 @@ use crate::config::error::Error;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum TlsFault {
-    /// A service's credentials section names TLS material, which that
-    /// service's own table takes.
-    #[error(
-        "{section} names a tls table, which only a node's [credentials] section takes; set it on the service's own table"
-    )]
-    OnService {
-        /// The credentials section.
-        section: String,
-    },
     /// A grant uses mutual TLS, and its endpoint's section names no client
     /// identity to present.
     #[error(

@@ -172,7 +172,7 @@ pub enum LocalizationError {
     Nvi(#[source] ferrofed_identity::nl::nvi::NviConfigError),
     /// The HTTP client the Nuts grant of `[nl_gf.nvi.credentials]` sends its
     /// token requests through could not be built.
-    #[error("the HTTP client of nl_gf.nvi.credentials.nuts could not be built")]
+    #[error("the HTTP client of nl_gf.nvi.nuts could not be built")]
     #[cfg(feature = "binding-nl")]
     NviNutsClient(#[source] reqwest::Error),
     /// The TLS material of the MyHealth@EU gateways cannot build their

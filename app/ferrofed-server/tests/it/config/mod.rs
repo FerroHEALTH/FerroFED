@@ -11,6 +11,7 @@ mod redaction;
 mod refusals;
 mod renamed;
 mod replica;
+mod retired;
 mod secrets;
 mod sources;
 
@@ -41,15 +42,15 @@ body_limit = '4KiB'
 format = "json"
 filter = "debug"
 
-[credentials."hospital-a".oauth]
+[credentials."hospital-a".credentials.oauth]
 token_endpoint = "https://as.hospital-a.example.org/token"
 client_id = "ferrofed"
 client_auth = "private_key_jwt"
 private_key_file = @KEY@
 
 [credentials."clinic-b"]
-user = "gateway"
-password = "synthetic-password"
+credentials.user = "gateway"
+credentials.password = "synthetic-password"
 "#;
 
 /// Returns the environment map a single override makes.
