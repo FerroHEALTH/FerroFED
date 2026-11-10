@@ -346,8 +346,11 @@ deployment in the EU must plan for are:
   out and not declared (hazards I-19 and I-20;
   [Discharge reports over FHIR](../integrate/discharge-reports.md),
   [Imaging reports over FHIR](../integrate/imaging-reports.md)). It
-  receives discharge reports, whose loss of content is not yet rated
-  ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794)), and no imaging report: a `Medical-Imaging`
+  receives discharge reports; the record the member keeps holds a received
+  report's diagnoses, procedures and discharge medicines, but its hospital
+  course and every section the template holds no place for only in the
+  original document, which the answer does not name (hazard I-21). It
+  receives no imaging report: a `Medical-Imaging`
   `[[fhir.receive]]` entry refuses the start
   ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716); [The categories received](../evaluate/information-sheet.md#the-categories-received)).
   The open hazards of the interoperability component are in the
