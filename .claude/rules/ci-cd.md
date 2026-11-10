@@ -55,11 +55,13 @@ Fifteen workflows:
   `lint` and `guards`, one step per check under `!cancelled()` (#1790). The
   `conclusion` job is the single required status check on `main`. The design
   is `docs/ci-cd.md`.
-- `.github/workflows/label-guards.yml`: when the `no-changelog` or
-  `no-crate-bump` label changes, it waits for the CI run on the head commit
-  and re-runs the guard that label escapes when its result is stale, with
-  `conclusion` after it. `ci.yml` runs on no label event, so one commit gets
-  one run (`docs/ci-cd.md` §Triggers and concurrency).
+- `.github/workflows/label-guards.yml`: on a `no-changelog` or
+  `no-crate-bump` label event, and on the completion of a CI run, it re-runs
+  the guard that label escapes when a label change after the guard ran made
+  its result stale, with `conclusion` after it. It never waits for CI: a run
+  still in flight is left to its own completion. `ci.yml` runs on no label
+  event, so one commit gets one run (`docs/ci-cd.md` §Triggers and
+  concurrency).
 - `main` merges through GitHub's merge queue, so a branch is never updated by
   hand. The required check also runs on `merge_group`, and the queue tests
   each pull request on top of the ones ahead of it. Auto-merge on a pull

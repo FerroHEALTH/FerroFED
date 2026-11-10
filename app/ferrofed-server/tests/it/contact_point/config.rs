@@ -155,20 +155,19 @@ fn a_contact_point_with_no_provider_issuing_authority_is_refused() -> Result<(),
 }
 
 #[test]
-fn the_removed_trust_table_is_refused_naming_its_successor() -> Result<(), Box<dyn Error>> {
+fn the_trust_table_removed_before_0_0_18_is_an_unknown_key() -> Result<(), Box<dyn Error>> {
     let text = format!(
         "{}\n[[trust.issuer]]\nissuer = \"{NCP}\"\n\n[trust.issuer.national_contact_point]\nfamily_name = \"f\"\n",
         declaring("")
     );
-    let (key, refused) = fault(&text)?;
+    let refused = Config::from_sources(Some(&text), &BTreeMap::new())
+        .err()
+        .ok_or("the removed table is refused at load")?;
     assert_eq!(
-        (
-            "trust.issuer[0].national_contact_point",
-            AuthFault::ContactPointMoved
-        ),
-        (key.as_str(), refused)
+        Some("trust.issuer[0].national_contact_point"),
+        crate::support::refused_key(&refused),
+        "{refused:?}"
     );
-    assert!(refused.to_string().contains("[[federation.contact_point]]"));
     Ok(())
 }
 

@@ -60,8 +60,7 @@ const REQUIRED: usize = 4;
 
 /// The `fullUrl` `document` gives the `ImagingStudy` the mapping run `run`
 /// wrote, which the study section lists; `None` when the run wrote none.
-#[must_use]
-pub fn study(document: &Document, run: &Bundle) -> Option<String> {
+fn study(document: &Document, run: &Bundle) -> Option<String> {
     run.entry
         .iter()
         .find_map(|entry| match entry.resource.as_ref() {
