@@ -70,7 +70,7 @@ The A/B run has two parts:
    with the store's sweep and every other background worker running. These
    limits are absolute and compared with nothing.
 2. **Load, in pairs.** Four pairs, each a load phase against both gateways
-   at once: 20 arrivals a second to each for 60 seconds after a 10-second
+   at once: 20 arrivals a second to each for 60 seconds after a 30-second
    warm-up, open loop, one gateway's arrivals half an interval after the
    other's, the gateway that leads alternating by pair. Run side by side,
    both arms see the same runner, whose speed can move by a third from one
