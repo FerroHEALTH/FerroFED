@@ -327,7 +327,7 @@ fn resolve_repository(
         .map_err(|source| Error::Smart {
             section: key("endpoint"),
             source: Box::new(ferrohealth_smart::config::ConfigError::TlsBuild {
-                key: "audit.repository.endpoint.tls",
+                key: String::from("audit.repository.endpoint.tls"),
                 source,
             }),
         })?;

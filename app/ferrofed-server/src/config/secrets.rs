@@ -144,8 +144,8 @@ fn presents_certificate(
     // travels in the handshake, so it is presented over TLS under every profile.
     if presents {
         for (key, url) in [
-            ("token_endpoint", &table.token_endpoint),
-            ("issuer", &table.issuer),
+            ("token_endpoint", table.token_endpoint.expose()),
+            ("issuer", table.issuer.expose()),
         ] {
             let tls = url::Url::parse(url).is_ok_and(|parsed| parsed.scheme() == "https");
             if !url.is_empty() && !tls {

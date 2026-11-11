@@ -158,7 +158,7 @@ walks through more queries.
 
 ## Deploy it
 
-FerroFED is at v0.0.18. Every release publishes, from one tag:
+FerroFED is at v0.0.19. Every release publishes, from one tag:
 
 - the gateway image `ghcr.io/ferrohealth/ferrofed` and the console image
   `ghcr.io/ferrohealth/ferrofed-console`, for `linux/amd64` and

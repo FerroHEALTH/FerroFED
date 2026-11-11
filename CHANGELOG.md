@@ -25,6 +25,267 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.19] - 2026-11-11
+
+Security fixes until 2031-11-11, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- Write the spans of time of `ferrohealth-smart` 0.15 as durations under
+  keys that name no unit: on each `[[auth.issuer]]` `clock_skew`,
+  `jwks_max_age`, `jwks_refresh_interval` and `timeout`;
+  `introspection.cache_max_age`; `[auth.dpop]` `max_age` and `clock_skew`;
+  on each `[credentials."<id>".credentials.oauth]` `refresh_margin`, `timeout` and
+  `previous_key_overlap`; and `[onward.keys] max_onward_lifetime`, until
+  now a bare number of seconds. The old keys are refused as unknown keys
+  (#1799).
+- Write `[auth] scopeless_subjects` entries as tables with `issuer` and
+  `sub` (#1799).
+- Move `[trust.issuer.patient] act_is_representative` to
+  `act_represents_patient = true` on the `[[auth.issuer]]` of `kind =
+  "patients"`. The old key refuses the start, naming its replacement. A
+  patient token that carries an RFC 8693 `act` claim on an issuer without
+  it is now refused as an invalid token (#1799).
+- In the operator console, write `[oidc] timeout` and `[session]`
+  `sign_in_timeout`, `idle_timeout` and `absolute_timeout` as durations,
+  and move `[oidc] ca_file` to `[oidc.tls] trust_roots_file` (#1799).
+- Move the `[server]` keys of `ferrohealth-server` 0.8 to their durations
+  and sizes: `request_timeout`, `header_read_timeout`, `idle_timeout`,
+  `drain_delay`, `shutdown_timeout`, `retry_after` (whole seconds),
+  `body_limit`, `compression_min_size` and `[server.tls]`
+  `reload_interval`, as in `request_timeout = "30s"`. The old keys
+  (`request_timeout_ms` and the others) are refused as unknown keys
+  (#1799).
+- Move `[telemetry.otlp]` `client_identity_file` and `trust_roots_file`
+  into `[telemetry.otlp.tls]`, which also takes `min_version` (#1799).
+- Write every span of time and amount of data of FerroFED's own sections
+  as a duration (`"30s"`, `"5min"`) or a size (`"16MiB"`) under a key that
+  names no unit: `federation.per_node_timeout`, `overall_timeout`,
+  `binding_ttl` and `max_node_answer_size`, `federation.localization.timeout`,
+  `gateway.bindings_drain_timeout`, `signing.node_jwks_cache` and
+  `rotation_overlap`, `emergency.window`, `config.poll` and `confirm`,
+  `store.timeout` and `sweep_interval`, `fhir.document_url_lifetime`,
+  `eehrxf.terminology.endpoint.timeout`, `pdqm.timeout`, `pmir.timeout` and
+  `check_interval`, `nl_gf.mitz.timeout`, `registry.mcsd.refresh_interval`,
+  `deadline` and `max_size`, `audit.repository.spool_max_size` and
+  `spool_write_timeout`, `audit.repository.endpoint.timeout` and
+  `retry.max_backoff`, and
+  `xcpd.audit_repository.spool_max_size`, `spool_write_timeout`,
+  `connect_timeout`, `send_timeout` and `retry_max`, with the
+  `FERROFED__` overrides to match. Each old key (`per_node_timeout_ms`,
+  `window_s`, `spool_max_bytes` and the others) refuses the start and
+  `config check`, naming its replacement. The operator console writes
+  `gateway.timeout` in place of `gateway.timeout_ms` (#1800).
+- Move the address, timeouts, TLS and credential of `[audit.repository]`
+  and `[eehrxf.terminology]` into their new `endpoint` table,
+  `ferrohealth-smart`'s outbound table. `[audit.repository]` keeps
+  `hostname`, `source_id`, `enterprise_site` and the `spool_*` keys, and
+  `[audit.repository.endpoint]` takes `url`, `timeout` (from `timeout_ms`),
+  `retry.max_backoff` (from `retry_max_ms`, the wait between two delivery
+  rounds) and `tls`. `[eehrxf.terminology.endpoint]` takes `url`, `timeout`
+  (from `timeout_ms`), `tls` and `credentials`; one call is tried once
+  unless `retry.max_attempts` says more. Each old key refuses the start and
+  `config check`, naming its replacement (#1805).
+- Move a node's `user`, `password`, `password_file`, `oauth` and `onward`
+  from `[credentials."<id>"]` into its nested
+  `[credentials."<id>".credentials]` table, `ferrohealth-smart`'s
+  credentials table, with the `FERROFED__CREDENTIALS__<ID>__CREDENTIALS__`
+  overrides to match. `tls`, `nuts` and `onward_organisations` stay in the
+  section. Each old key refuses the start and `config check`, naming its
+  replacement. The operator console's credentials form writes the nested
+  table (#1806).
+- Move the NVI's Nuts grant from `[nl_gf.nvi.credentials.nuts]` to
+  `[nl_gf.nvi.nuts]`; `[nl_gf.nvi.credentials]` is `ferrohealth-smart`'s
+  credentials table, which refuses `nuts` as an unknown key (#1806).
+- Move the address, TLS and credential of every identity, localization and
+  consent service into its `endpoint` table, `ferrohealth-smart`'s outbound
+  table, as `[audit.repository]` and `[eehrxf.terminology]` moved: `url`,
+  `tls` and `credentials` of `[[pixm.manager]]`, `[pdqm]`, `[pmir]`,
+  `[registry.mcsd]`, `[nl_gf.nvi]` and `[nl_gf.mitz]` go to
+  `[<table>.endpoint]`, and the `timeout` of `[pdqm]`, `[pmir]` and
+  `[nl_gf.mitz]` (from `timeout_ms`) to `endpoint.timeout`. Each
+  `[[xcpd.gateway]]` takes its own `[xcpd.gateway.endpoint]` with its `url`,
+  and the shared `[xcpd.tls]` moves into the `tls` of each gateway's
+  endpoint table. A table you leave partly written keeps its defaults: one
+  try per call, `1s` for PDQm and Mitz, `5s` for PMIR and `10s` for the
+  others. The NVI's Nuts grant stays in `[nl_gf.nvi.nuts]`. Each old key
+  refuses the start and `config check`, naming its replacement (#1815).
+- The release asset `compose.yaml` is now the self-contained quickstart. The
+  gateway-only compose file of the production guide, which carried that name,
+  is attached as `gateway-compose.yaml`: an operator who downloads it by name
+  fetches `gateway-compose.yaml` and saves it as `compose.yaml` beside
+  `ferrofed.toml` and `registry.toml`, as Install and run shows
+  ([#1849](https://github.com/FerroHEALTH/FerroFED/issues/1849)).
+
+### Added
+
+- The FHIR face receives an imaging report (Art 14(1)(d)): a
+  `Medical-Imaging` `[[fhir.receive]]` entry now loads over the HL7 Europe
+  Imaging Report 1.0.0-ballot package closure, and a received report is
+  held to `BundleReportEuImaging`, mapped by the imaging project `eehrxf`
+  ships over FerroBRIDGE's ADL 2 imaging report template, and written to
+  the declared member by its own `ehr_id` alone, with its access record
+  ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
+- The performance gate sends a national contact point's FHIR patient
+  summary under its `DPoP`-bound treatment token, and the same summary as
+  an emergency access under its emergency token, below the emergency limit.
+  After the run it checks that the head's store counted every emergency
+  access the head answered
+  ([The performance gate](https://ferrofed.eu/docs/contribute/performance-gate.html#a-national-contact-point-under-load),
+  #1744).
+- A received imaging report's answer declares each element of the report
+  and its study, and each section, that the member's composition does not
+  carry, as an `incomplete` issue of its `OperationOutcome`, so the sender
+  is told what the member's record holds only in the original document
+  (`eehrxf` 0.6.1, hazard I-22) (#1838).
+
+### Changed
+
+- The clinical safety risk file rates what a received discharge report can
+  lose of its own content as hazard I-21, open at S4, P3. Its diagnoses,
+  procedures and discharge medicines reach the member's composition with
+  every element the HDR mapping reads. Its hospital course and every
+  section the template has no place for reach the member's record only in
+  the original document, and the answer does not name them. The instructions
+  for use and "Receiving a document" say so
+  ([Receiving a document](https://ferrofed.eu/docs/evaluate/receiving-documents.html#hazards),
+  #1794).
+- The MyHealth@EU self-assessment rows 08 and 08.01 are re-assessed as
+  partly met: a laboratory, discharge or imaging document or an image a
+  member serves itself reaches the contact point byte for byte with its
+  media type, a PDF and a PNG among them, and a report the gateway writes
+  from an openEHR composition is a new document, no original
+  ([What stays with the contact point](https://ferrofed.eu/docs/integrate/national-contact-point.html#what-stays-with-the-contact-point),
+  #1795).
+- The gateway runs on `ferrohealth-smart` 0.15.1, `ferrohealth-session`
+  0.9.0, `ihe-atna` and `ehds-logging` 0.9.1, `ihe-iti` 0.0.84 and
+  `nl-generic-functions` 0.0.51, with FerroBRIDGE's `eehrxf`,
+  `ferrobridge-term` and `ferrobridge-validator` 0.2.0, `fhirconnect`
+  0.1.249, `openehr-mapping-core` 0.1.151 and the `openehr-*` crates at
+  0.0.136. A patient's representative is the caller `ferrohealth-smart`
+  classifies as one, and the gateway no longer reads the `act` claim
+  itself. A node grant's own `tls` table beside the node section's TLS
+  identity is refused, naming both (#1799).
+- Moved `ferrohealth-config` to 0.4.1, `ferrohealth-telemetry` to 0.4.0,
+  `ferrohealth-server` to 0.8.0, `ferrohealth-usage-report` to 0.4.0 and
+  the performance gate's `ferrohealth-perf` to 0.8.0. The OTLP collector's
+  TLS is read and handed to the export by `ferrohealth-server`'s
+  `telemetry::build`, and `[metrics.tls]` is the family's listener TLS
+  table, so the gateway keeps no copy of either (#1799).
+- Every span of time and amount of data in the configuration reads as a
+  `ferrohealth-config` duration or size, so the file, the `FERROFED__`
+  overrides, `config check`, `ferrofed report` and the operator console's
+  settings show one form, such as `"10s"` or `"16MiB"` (#1800).
+- The gateway runs on `ferrohealth-smart` 0.16.3, `ferrohealth-session`
+  0.10.0, `ihe-atna` and `ehds-logging` 0.10.0, `ihe-iti` and
+  `nl-generic-functions` 0.2.0, and FerroBRIDGE's `eehrxf`,
+  `ferrobridge-term` and `ferrobridge-validator` 0.3.0. The audit
+  repository and the terminology server are reached through
+  `ferrohealth-smart`'s outbound client, so `[eehrxf.terminology]` also
+  takes a client credentials grant. A node's grant presents the node's TLS
+  identity through `ferrohealth-smart`'s own form of it
+  (`resolve_sharing_tls`) (#1805, #1806).
+- The record of an access may take what is left of the request's own time
+  to be stored, `server.request_timeout` less the one-second combining
+  margin, up to `[audit.repository] spool_write_timeout`, whose default
+  rises from 2 s to 10 s. Under load a durable write to the spool can wait
+  seconds for the disk, and a read is no longer refused `503
+  access-unrecorded` while the request still has time; past it the answer
+  is still withheld (#1812).
+- Every PIXm, PDQm, PMIR, mCSD and XCPD client, and the NVI and Mitz
+  clients, is built from `ferrohealth-smart`'s outbound client, through
+  `ihe-iti` and `nl-generic-functions` 0.2.0, one client per XCPD responding
+  gateway. A service that refuses a token with `401` is sent the call once
+  more with a fresh token, where the call failed before; the NVI's Nuts
+  grant rides on the outbound client as the product's authorization, and a
+  MyHealth@EU responding gateway's client is built over the gated TLS of its
+  revocation check, so it still sends nothing before the check clears the
+  chain (#1815).
+- The quickstart, the performance gate and the end-to-end lane run FerroPIX
+  0.0.25, which admits a machine only with a client credentials token. The
+  quickstart adds a development token issuer, `ferropix-issuer` (NAV's
+  mock-oauth2-server 6.1.5), in whose network namespace FerroPIX runs. The
+  gateway asks FerroPIX as PIXm Consumer under the `oauth` grant of
+  `[pixm.manager.endpoint.credentials]`, and the seed feeds it as the Patient Identity
+  Source under its own token. FerroPIX takes no Basic machine user any more
+  (#1825).
+- Configuration resolution builds the platform's TLS verifier once per
+  process for each set of extra roots, through `ferrohealth-server` 0.8.4
+  with `ferrohealth-config` 0.4.4 and `ferrohealth-secret` 0.2.1, so a load,
+  a reload or `config check` no longer reads the system root store once per
+  outbound table. On Linux each read took about 25 ms (#1834).
+- The quickstart and the end-to-end lane run FerroPIX 0.0.26, which changes
+  no configuration key over 0.0.25. The gateway and the console move to
+  `ferrohealth-smart` 0.18.0, `ferrohealth-session` 0.13.0,
+  `ferrohealth-config` 0.4.4, `ferrohealth-server` 0.8.4, `ihe-atna` and
+  `ehds-logging` 0.12.0, `ihe-iti` and `nl-generic-functions` 0.4.0, and
+  `eehrxf` 0.6.1 with `fhirconnect` 0.2.1, `ferrobridge-term` and
+  `ferrobridge-validator` 0.5.0, with no configuration key changed (#1838).
+- A password in the userinfo of an issuer or endpoint URL the configuration
+  names no longer reaches any rendering of the configuration, `Debug` or
+  serialized: every endpoint and issuer URL of `ferrohealth-smart` 0.18,
+  the `issuer` of each `[[trust.issuer]]` and `[[federation.contact_point]]`,
+  and the console's `[oidc]` issuer and redirect URIs on
+  `ferrohealth-session` 0.13 are held as masking URLs. The start still
+  refuses an issuer with userinfo (#1838).
+- ferrofed.eu takes the FerroHEALTH family layout: the hero badge is
+  rendered from the workspace version at assembly, the stylesheet link
+  carries a content hash, the release-by-release cards move to the book's
+  new Releases page, the book opens in its azure light and navy themes with
+  its parts in the order Evaluate, Integrate, Operate, Contribute and a
+  Changelog page, and the README quick start is the anchored steps of
+  `scripts/quickstart/tour.sh`, which a new CI job runs
+  ([#1846](https://github.com/FerroHEALTH/FerroFED/issues/1846)).
+- The quickstart is one self-contained `compose.yaml`, attached to each
+  release with its `.sha256sum`, and the README and the book download it in
+  place of a checkout. Every file it read from the repository is inlined as
+  a Compose config, copied onto volumes by two one-shot services so the
+  gateway, FerroPIX and their databases keep read-only root filesystems; a
+  development issuer service, whose network namespace the gateway shares,
+  signs the caller's token; the reader writes the gateway's signing key with
+  one `openssl` line; and an `ehr-seed` service seeds the four nodes with the
+  reference implementation's demonstration data, fetched at a pinned commit
+  and refused unless each file has its pinned SHA-256. The gateway-only
+  compose file of the production guide is attached as `gateway-compose.yaml`
+  ([#1849](https://github.com/FerroHEALTH/FerroFED/issues/1849)).
+
+### Removed
+
+- The named refusals that shipped in v0.0.18 for one release are deleted,
+  under the one-release rule for removal aids. Each such key is now refused
+  as an unknown key: the outbound TLS keys left on a table outside its
+  `tls` sub-table, `[credentials."<id>".oauth2]`, `.fapi2` and
+  `mtls_alias_hosts` and their service forms,
+  `[trust.issuer.national_contact_point]`, `[trust.issuer.requester]`,
+  `[trust.issuer.assurance]`, `client_tokens_act_for_professional`, and
+  `[stored_queries] url` and `url_file`. The Upgrade notes of v0.0.18 give
+  each step. The refusals this release adds for the keys it moves stay
+  until v0.0.20 (#1787).
+
+### Fixed
+
+- Every report the FHIR face writes from a member's composition, the
+  laboratory, discharge and imaging report alike, names that member's
+  `Organization` as its `Composition.custodian`, so an imaging report no
+  longer carries the member unreferenced, which FHIR R4 documents.html
+  §3.3.1 refuses; a written imaging report is held to
+  `BundleReportEuImaging` over the Imaging Report package closure, which the
+  package set now pins (`eehrxf` 0.3.2,
+  [#1785](https://github.com/FerroHEALTH/FerroFED/issues/1785)).
+- A laboratory, discharge or imaging report the FHIR face writes from a
+  member's composition names, in the narrative of the section the gateway
+  writes, each element of the record its mapping declared it did not carry,
+  by its openEHR path and never by its value, as the patient summary does.
+  An imaging composition's findings and a discharge medicine's timing are no
+  longer left out without a word
+  ([#1826](https://github.com/FerroHEALTH/FerroFED/issues/1826)).
+- A document received on the FHIR face is mapped with the declarations of
+  the project `eehrxf` ships for its category, so each element that project
+  accounts for and the run carries into no structured element is relayed to
+  the member as not carried. A received discharge report's hospital course
+  and a laboratory report's `basedOn` are no longer dropped without a word
+  ([#1827](https://github.com/FerroHEALTH/FerroFED/issues/1827)).
+
 ## [0.0.18] - 2026-11-10
 
 Security fixes until 2031-11-10, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -7122,7 +7383,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.18...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.19...HEAD
+[0.0.19]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.18...v0.0.19
 [0.0.18]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.16...v0.0.18
 [0.0.16]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.14...v0.0.15

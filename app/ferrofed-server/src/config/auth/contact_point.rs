@@ -15,6 +15,7 @@
 //! and the countries beside the Member States its professionals may come
 //! from. No specification governs the keys: our own design.
 
+use ferrohealth_secret::secret_url::SecretUrl;
 use std::collections::BTreeSet;
 
 use ferrohealth_smart::federation::{FederationSection, Field};
@@ -29,8 +30,9 @@ use crate::config::error::Error;
 #[serde(default, deny_unknown_fields)]
 pub struct ContactPointTable {
     /// The `[[auth.issuer]]` the table describes, a `federation` issuer
-    /// whose `[[auth.federation]]` table sets `contact_point = true`.
-    pub issuer: String,
+    /// whose `[[auth.federation]]` table sets `contact_point = true`; a
+    /// password in its userinfo reaches no rendering.
+    pub issuer: SecretUrl,
     /// The request header the contact point's national connector sends its
     /// correlation identifier in, recorded in the access record so it can be
     /// joined with the contact point's own log; absent by default, and then
@@ -152,13 +154,15 @@ pub fn declare(issuers: &mut [IssuerSettings], tables: &[ContactPointTable]) -> 
                 key: format!("{key}.issuer"),
             });
         }
-        if named.contains(&table.issuer.as_str()) {
+        if named.contains(&table.issuer.expose()) {
             return Err(fault(&format!("{key}.issuer"), AuthFault::DuplicateIssuer));
         }
-        named.push(&table.issuer);
+        named.push(table.issuer.expose());
         let issuer = issuers
             .iter_mut()
-            .find(|issuer| issuer.issuer == table.issuer && issuer.verification.is_contact_point())
+            .find(|issuer| {
+                issuer.issuer == table.issuer.expose() && issuer.verification.is_contact_point()
+            })
             .ok_or_else(|| fault(&format!("{key}.issuer"), AuthFault::NotContactPoint))?;
         let declared = table.resolve(&key)?;
         if let Some(section) = issuer.verification.federation() {
