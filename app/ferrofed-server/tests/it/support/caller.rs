@@ -12,6 +12,7 @@ use std::sync::LazyLock;
 
 use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::{Claims, Issuer, IssuerError};
+use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::federation::Mapping;
 use ferrohealth_smart::federation::person::AttributesSection;
 use ferrohealth_smart::kind::IssuerKind;
@@ -166,7 +167,7 @@ pub(crate) fn key_set(issuer: &str, jwks_file: &Path) -> Verification {
 /// extension and the purposes of use of its `authorization_details`.
 pub(crate) fn iua(issuer: &str) -> AttributesSection {
     AttributesSection {
-        issuer: issuer.to_owned(),
+        issuer: SecretUrl::new(issuer),
         mapping: Some(Mapping::Iua),
         authorization_details_purposes: true,
         ..AttributesSection::default()

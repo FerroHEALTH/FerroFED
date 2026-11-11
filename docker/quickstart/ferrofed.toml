@@ -63,7 +63,7 @@ first_party_clients = ["quickstart-client"]
 # What the issuer's tokens state about their professional: the IHE IUA
 # extension and the purposes of use of their authorization_details.
 [[auth.attributes]]
-issuer = "https://quickstart-issuer.ferrofed.invalid"
+issuer = "http://localhost:8190/quickstart"
 mapping = "iua"
 authorization_details_purposes = true
 
