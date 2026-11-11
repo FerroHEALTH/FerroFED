@@ -186,11 +186,12 @@ fn performed_also_by_a_practitioner(sent: &str) -> Result<String, Box<dyn Error>
 /// The expressions of the `incomplete` issues of the outcome `text`.
 fn declared(text: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let outcome: Value = serde_json::from_str(text)?;
-    Ok(outcome["issue"]
-        .as_array()
+    Ok(outcome
+        .get("issue")
+        .and_then(Value::as_array)
         .ok_or("the issues")?
         .iter()
-        .filter(|issue| issue["code"] == "incomplete")
+        .filter(|issue| issue.get("code").and_then(Value::as_str) == Some("incomplete"))
         .filter_map(|issue| issue.pointer("/expression/0").and_then(Value::as_str))
         .map(str::to_owned)
         .collect())
