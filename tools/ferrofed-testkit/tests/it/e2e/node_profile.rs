@@ -32,10 +32,8 @@ use ferrofed_server::conformance::node_profile::{Finding, Profile, Verdict, chec
 use ferrofed_server::federation::Federation;
 use ferrofed_testkit::containers::images::FERROEHR;
 use ferrofed_testkit::containers::marks;
-use ferrofed_testkit::containers::restricted::{self, RESTRICTED_ADMIN, RESTRICTED_CLINICIAN};
-use ferrofed_testkit::containers::{
-    self, HarnessUser, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode,
-};
+use ferrofed_testkit::containers::restricted;
+use ferrofed_testkit::containers::{self, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode};
 use ferrofed_testkit::node_profile;
 use ferrofed_testkit::pixm_stub;
 use ferrofed_testkit::seed::{
@@ -46,6 +44,7 @@ use openehr_its::json::from_canonical_json;
 use openehr_its::rest::client::Credentials;
 use openehr_its::rest::generated::query::AdhocQueryExecute;
 use openehr_rm::v1_2::ehr::ehr::Ehr;
+use secrecy::SecretString;
 use uuid::Uuid;
 
 mod ehrbase;
@@ -77,14 +76,9 @@ fn record(finding: Finding, name: &str) -> TestResult {
     Ok(())
 }
 
-/// The federation over the one member at `api_root`, reached with `onward`
-/// as its Basic onward credentials when given, written into `dir` with a
-/// synthetic signing key beside it.
-pub(super) fn member(
-    dir: &Path,
-    api_root: &str,
-    onward: Option<HarnessUser>,
-) -> Result<Federation, Box<dyn Error>> {
+/// The federation over the one member at `api_root`, reached with no onward
+/// credentials, written into `dir` with a synthetic signing key beside it.
+pub(super) fn member(dir: &Path, api_root: &str) -> Result<Federation, Box<dyn Error>> {
     let document = dir.join("registry.toml");
     std::fs::write(
         &document,
@@ -95,14 +89,8 @@ pub(super) fn member(
     let key = dir.join("signing-key.pem");
     std::fs::write(&key, oauth::Curve::P384.pem()?)?;
     let quoted = |path: &Path| toml::Value::String(path.display().to_string());
-    let credentials = onward.map_or_else(String::new, |user| {
-        format!(
-            "\n[credentials.\"{CHECKED}\"]\ncredentials.user = \"{}\"\ncredentials.password = \"{}\"\n",
-            user.user, user.password
-        )
-    });
     let text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout = '20s'\noverall_timeout = '25s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n{credentials}",
+        "profile = \"development\"\n\n[registry]\ndocument = {}\n\n[federation]\nper_node_timeout = '20s'\noverall_timeout = '25s'\nnode_selection = \"ask-all\"\nid = \"example-federation\"\n\n[signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n",
         quoted(&document),
         quoted(&key)
     );
@@ -110,23 +98,22 @@ pub(super) fn member(
     Federation::load(&settings)?.ok_or_else(|| "a registry is configured".into())
 }
 
-/// The interface of the one member at `api_root`, reached with `onward` as
-/// its Basic onward credentials when given.
-pub(super) fn interface(
-    api_root: &str,
-    onward: Option<HarnessUser>,
-) -> Result<Interface, Box<dyn Error>> {
+/// The interface of the one member at `api_root`, reached with no onward
+/// credentials.
+pub(super) fn interface(api_root: &str) -> Result<Interface, Box<dyn Error>> {
     let dir = tempfile::tempdir()?;
-    let federation = member(dir.path(), api_root, onward)?;
+    let federation = member(dir.path(), api_root)?;
     Ok(Interface::of(&federation, &EndpointId::new(CHECKED)?)?)
 }
 
-/// `user` as the principal a node's policy refuses.
-pub(super) fn principal(user: HarnessUser) -> Principal {
-    Principal::new(
-        user.user,
-        Arc::new(Credentials::basic(user.user, user.password)),
-    )
+/// The bearer credentials `token`.
+pub(super) fn bearer(token: &str) -> Arc<Credentials> {
+    Arc::new(Credentials::Bearer(SecretString::from(token.to_owned())))
+}
+
+/// `name` under the bearer `token`, as the principal a node's policy refuses.
+pub(super) fn principal(name: &str, token: &str) -> Principal {
+    Principal::new(name, bearer(token))
 }
 
 // conformance: CP-27
@@ -150,7 +137,7 @@ async fn ferroehr_is_invocable_on_its_local_ehr_id_alone() -> TestResult {
     seed::seed(&node.api_root(), &plan).await?;
     node.proxy.clear_journal();
 
-    let finding = checks::invocable_on_ehr_id(&interface(&node.api_root(), None)?, EHR).await?;
+    let finding = checks::invocable_on_ehr_id(&interface(&node.api_root())?, EHR).await?;
     assert_eq!(4, finding.evidence().len(), "{finding:?}");
 
     let journal = node.proxy.journal();
@@ -203,7 +190,7 @@ async fn ferroehr_is_checked_for_an_ehr_created_without_a_subject() -> TestResul
     }
     let node = containers::ferroehr(NODE_A_SYSTEM_ID).await?;
 
-    let finding = checks::subject_not_required(&interface(&node.api_root(), None)?).await?;
+    let finding = checks::subject_not_required(&interface(&node.api_root())?).await?;
     assert!(!finding.evidence().is_empty(), "{finding:?}");
     record(finding, "subject-not-required")
 }
@@ -216,17 +203,17 @@ async fn ferroehr_is_checked_for_passing_its_errors_through() -> TestResult {
     }
     let node = containers::ferroehr(NODE_A_SYSTEM_ID).await?;
 
-    let finding = checks::errors_passed_through(&interface(&node.api_root(), None)?).await?;
+    let finding = checks::errors_passed_through(&interface(&node.api_root())?).await?;
     assert_eq!(3, finding.evidence().len(), "{finding:?}");
     record(finding, "errors-passed-through")
 }
 
-/// Creates an EHR at the restricted node of `api_root` as its administrator
-/// and returns its `ehr_id`.
-async fn created_by_the_administrator(api_root: &str) -> Result<Uuid, Box<dyn Error>> {
+/// Creates an EHR at the restricted node of `api_root` as its administrator,
+/// under the token `admin`, and returns its `ehr_id`.
+async fn created_by_the_administrator(api_root: &str, admin: &str) -> Result<Uuid, Box<dyn Error>> {
     let answer = reqwest::Client::new()
         .post(format!("{api_root}/v1/ehr"))
-        .basic_auth(RESTRICTED_ADMIN.user, Some(RESTRICTED_ADMIN.password))
+        .bearer_auth(admin)
         .header("Accept", "application/json")
         .header("Prefer", "return=representation")
         .send()
@@ -242,16 +229,17 @@ async fn ferroehr_is_checked_for_holding_its_own_access_decision() -> TestResult
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let node = restricted::ferroehr_restricted(NODE_A_SYSTEM_ID).await?;
-    let ehr_id = created_by_the_administrator(&node.api_root()).await?;
-    let arrangement = Arrangement::new(ehr_id, principal(RESTRICTED_CLINICIAN));
+    let restricted = restricted::ferroehr_restricted(NODE_A_SYSTEM_ID).await?;
+    let api_root = restricted.node.api_root();
+    let ehr_id = created_by_the_administrator(&api_root, &restricted.admin).await?;
+    let arrangement = Arrangement::new(
+        ehr_id,
+        principal("harness-clinician", &restricted.clinician),
+    );
+    let administrator = interface(&api_root)?.presenting(bearer(&restricted.admin));
 
-    let finding = checks::refused(
-        Release::AccessDecidedAtNode,
-        &interface(&node.api_root(), Some(RESTRICTED_ADMIN))?,
-        &arrangement,
-    )
-    .await?;
+    let finding =
+        checks::refused(Release::AccessDecidedAtNode, &administrator, &arrangement).await?;
     assert_ne!(
         Verdict::NotObservable,
         finding.verdict(),
@@ -306,7 +294,7 @@ async fn ferroehr_is_checked_for_withholding_a_restricted_composition() -> TestR
     marks::restrict(node.origin(), EHR, restricted).await?;
 
     let finding = checks::restriction_before_release(
-        &interface(&node.api_root(), None)?,
+        &interface(&node.api_root())?,
         EHR,
         (served, restricted),
     )

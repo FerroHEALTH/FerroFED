@@ -786,3 +786,81 @@ mod representative_tests {
         assert_eq!(None, representative(&CallerKind::Person));
     }
 }
+
+#[cfg(test)]
+mod kind_tests {
+    use std::collections::BTreeMap;
+
+    use ferrohealth_smart::federation::{Attribute, External, Field};
+    use ferrohealth_smart::kind::{CallerKind, IssuerKind};
+    use ferrohealth_smart::resource::{Caller as SmartCaller, Settings as KeySetSettings};
+
+    use super::{contact_point_caller, requester};
+    use crate::auth::caller::VerifiedBy;
+    use crate::auth::refusal::Refusal;
+    use crate::config::auth::{IssuerSettings, Verification};
+
+    /// A professional of another party, with each of `fields` stated.
+    fn external(fields: &[(Field, &str)]) -> CallerKind {
+        let fields = fields
+            .iter()
+            .map(|(field, value)| (*field, Attribute::Text((*value).to_owned())))
+            .collect::<BTreeMap<_, _>>();
+        CallerKind::ExternalPerson(Box::new(External::new("synthetic-remote", fields)))
+    }
+
+    // NOTE: §13.1 and §13.4; the requester of a domestic federation route is read from the
+    // fields ferrohealth-smart's [[auth.federation]] sources stated, and from no claim.
+    #[test]
+    fn a_domestic_federation_token_states_its_requester_through_caller_kind_alone() {
+        let partner = external(&[
+            (Field::NlProfessionalNumber, "synthetic-uzi-0042"),
+            (Field::NlRole, "01.015"),
+            (Field::NlUra, "synthetic-ura-7"),
+            (Field::NlOrganisationType, "V4"),
+        ]);
+        assert!(requester(&partner).is_some(), "{partner:?}");
+        for kind in [CallerKind::Person, CallerKind::System, CallerKind::Patient] {
+            assert_eq!(
+                None,
+                requester(&kind),
+                "{kind:?} is no partner's professional"
+            );
+        }
+    }
+
+    // NOTE: MyHealth@EU Requirements Catalogue 10.0.0 requirement 01; a contact point's
+    // token is served only when ferrohealth-smart classified it as an external person.
+    #[test]
+    fn a_contact_point_token_is_served_only_as_the_external_person_caller_kind_names() {
+        let issuer = "https://ncp.example.test";
+        let trusted = IssuerSettings::new(
+            issuer,
+            Verification::KeySet(Box::new(KeySetSettings::new(
+                issuer,
+                "urn:example:ferrofed-under-test",
+                IssuerKind::Federation,
+            ))),
+        );
+        for kind in [CallerKind::Person, CallerKind::System] {
+            let smart = SmartCaller::new(
+                "synthetic-hp".to_owned(),
+                Some("synthetic-ncp".to_owned()),
+                "patient/*.rs",
+                None,
+                false,
+                kind,
+            )
+            .with_issuer(issuer.to_owned());
+            let refused = contact_point_caller(
+                &smart,
+                &trusted,
+                ("synthetic-hp".to_owned(), "synthetic-ncp".to_owned()),
+                VerifiedBy::Signature,
+            )
+            .err()
+            .map(|refused| refused.refusal);
+            assert_eq!(Some(Refusal::Invalid), refused);
+        }
+    }
+}

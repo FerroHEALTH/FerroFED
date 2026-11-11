@@ -15,18 +15,24 @@
 //! about EHRbase. No specification governs which products the harness runs:
 //! our own design.
 
+use std::net::{Ipv4Addr, TcpListener};
 use std::sync::Arc;
 
-use testcontainers::core::{IntoContainerPort, WaitFor};
+use testcontainers::core::{Host, IntoContainerPort, WaitFor};
 use testcontainers::{ContainerRequest, GenericImage, ImageExt};
 use uuid::Uuid;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::images::{EHRBASE, EHRBASE_POSTGRES};
 use super::retry;
 use super::{
-    CDR_PORT, DatabaseServer, HarnessError, HarnessUser, Node, POSTGRES_PORT, Product, names,
+    CDR_PORT, DatabaseServer, HarnessError, Node, POSTGRES_PORT, Product, names,
     postgres_health_check, ready, role_password,
 };
+use crate::issuer::{Claims, Issuer, JWKS_PATH};
+use crate::mock::Server;
+use crate::reference::CONTAINER_HOST;
 
 /// The path of EHRbase's ITS-REST API root, the path `/v1/ehr` lives under:
 /// the servlet context path `/ehrbase` and the API context path
@@ -52,17 +58,26 @@ const EHRBASE_PRODUCT: Product = Product {
     readiness_path: READINESS_PATH,
 };
 
-/// The administrator of a restricted EHRbase node, in its `ADMIN` role.
-pub const RESTRICTED_ADMIN: HarnessUser = HarnessUser {
-    user: "harness-admin",
-    password: "harness-admin-example",
-};
+/// The issuer of a restricted node's tokens, a synthetic value.
+const ISSUER: &str = "https://ehrbase.issuer.example.test";
 
-/// The user of a restricted EHRbase node, in its `USER` role.
-pub const RESTRICTED_USER: HarnessUser = HarnessUser {
-    user: "harness-user",
-    password: "harness-user-example",
-};
+/// The audience of a restricted node's tokens.
+const AUDIENCE: &str = "https://ehrbase.cdr.example.test/openehr";
+
+/// A restricted EHRbase node, and the tokens of its administrator and its
+/// user.
+#[derive(Debug)]
+pub struct Restricted {
+    /// The node.
+    pub node: Node,
+    /// The administrator's token, in the node's `ADMIN` role.
+    pub admin: String,
+    /// The user's token, in the node's `USER` role.
+    pub user: String,
+    /// The server the node reads the issuer's key set from, held while the
+    /// node runs.
+    _keys: Server,
+}
 
 /// Starts EHRbase as `system_id` on a database server of its own, with
 /// authentication off, and waits for its health endpoint.
@@ -90,33 +105,67 @@ pub fn withheld_path(ehr_id: Uuid) -> String {
     format!("/rest/openehr/v1/ehr/{ehr_id}/**")
 }
 
-/// Starts EHRbase as `system_id` on a database server of its own with Basic
-/// authentication on, withholding the EHR `withheld` from its user role, and
-/// waits for its health endpoint.
+/// Starts EHRbase as `system_id` on a database server of its own with
+/// OAuth 2.0 bearer authentication on, withholding the EHR `withheld` from
+/// its user role, and waits for its health endpoint.
 ///
-/// [`RESTRICTED_ADMIN`] holds the `ADMIN` role and [`RESTRICTED_USER`] the
-/// `USER` role. EHRbase 2.36.0 has no access policy over an EHR's content;
-/// the narrowest refusal its configuration expresses is a role rule over a
-/// request path (`security.additionalAuthorizations`), so the node admits
-/// the administrator alone to [`withheld_path`] of `withheld`. The node
+/// The node verifies every token against the key set of a harness
+/// [`Issuer`], which it reads from a server on every interface of the
+/// Docker host, as [`CONTAINER_HOST`], and holds its `iss` to that issuer:
+/// the image names an issuer of its own by default, and Spring's resource
+/// server reads no metadata for it beside a key set URI. EHRbase takes a
+/// token's roles from
+/// its `scope` (EHRbase's `SecurityConfigOAuth2`), so the administrator's
+/// token states `ADMIN` and the user's `USER`. EHRbase 2.36.0 has no access
+/// policy over an EHR's content; the narrowest refusal its configuration
+/// expresses is a role rule over a request path
+/// (`security.additionalAuthorizations`), so the node admits the
+/// administrator alone to [`withheld_path`] of `withheld`. The node
 /// profile's access check reads what that rule withholds (§13, N26).
 ///
 /// # Errors
 ///
-/// Returns [`HarnessError::Container`] when Docker refuses a container and
+/// Returns [`HarnessError::Container`] when Docker refuses a container,
+/// [`HarnessError::Issuer`] when the issuer's key or a token cannot be made,
+/// [`HarnessError::Write`] when the key set's listener cannot be bound, and
 /// [`HarnessError::NotReady`] when the CDR does not become ready in time.
 pub async fn ehrbase_restricted(
     system_id: &'static str,
     withheld: Uuid,
-) -> Result<Node, HarnessError> {
+) -> Result<Restricted, HarnessError> {
+    let issuer = Issuer::new(ISSUER).map_err(HarnessError::Issuer)?;
+    let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).map_err(HarnessError::Write)?;
+    let port = listener.local_addr().map_err(HarnessError::Write)?.port();
+    let keys = Server::from(MockServer::builder().listener(listener).start().await);
+    Mock::given(method("GET"))
+        .and(path(JWKS_PATH))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_string(issuer.jwks_json().map_err(HarnessError::Issuer)?),
+        )
+        .mount(&keys)
+        .await;
+    let jwks_uri = format!("http://{CONTAINER_HOST}:{port}{JWKS_PATH}");
     let database = Arc::new(database_server().await?);
     let server = retry::start(|| {
         request(&database, system_id)
-            .with_env_var("SECURITY_AUTHTYPE", "BASIC")
-            .with_env_var("SECURITY_AUTHADMINUSER", RESTRICTED_ADMIN.user)
-            .with_env_var("SECURITY_AUTHADMINPASSWORD", RESTRICTED_ADMIN.password)
-            .with_env_var("SECURITY_AUTHUSER", RESTRICTED_USER.user)
-            .with_env_var("SECURITY_AUTHPASSWORD", RESTRICTED_USER.password)
+            .with_host(CONTAINER_HOST, Host::HostGateway)
+            .with_env_var("SECURITY_AUTHTYPE", "OAUTH")
+            .with_env_var(
+                "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI",
+                &jwks_uri,
+            )
+            .with_env_var(
+                "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI",
+                ISSUER,
+            )
+            .with_env_var(
+                "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWSALGORITHMS",
+                "ES256",
+            )
+            .with_env_var("SECURITY_OAUTH2ADMINROLE", "ADMIN")
+            .with_env_var("SECURITY_OAUTH2USERROLE", "USER")
             .with_env_var(
                 "SECURITY_ADDITIONALAUTHORIZATIONS_0_PATHPATTERN",
                 withheld_path(withheld),
@@ -128,7 +177,27 @@ pub async fn ehrbase_restricted(
         image: EHRBASE.repository,
         source,
     })?;
-    ready(EHRBASE_PRODUCT, system_id, server, database).await
+    let node = ready(EHRBASE_PRODUCT, system_id, server, database).await?;
+    Ok(Restricted {
+        node,
+        admin: token(&issuer, "harness-admin", "ADMIN")?,
+        user: token(&issuer, "harness-user", "USER")?,
+        _keys: keys,
+    })
+}
+
+/// A token of `issuer` for `subject` in `role`, typed `JWT`, the type a
+/// Spring resource server admits by default.
+fn token(issuer: &Issuer, subject: &str, role: &str) -> Result<String, HarnessError> {
+    let mut claims = Claims::new(ISSUER, AUDIENCE);
+    subject.clone_into(&mut claims.sub);
+    claims.scope = Some(role.to_owned());
+    claims.extensions = None;
+    let mut header = issuer.header();
+    header.typ = Some(String::from("JWT"));
+    issuer
+        .mint_with(&header, &claims)
+        .map_err(HarnessError::Issuer)
 }
 
 /// The EHRbase container as `system_id` on `database`, before its access

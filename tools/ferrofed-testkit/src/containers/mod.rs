@@ -189,25 +189,6 @@ pub enum HarnessError {
     /// A harness file could not be written.
     #[error("a harness file could not be written")]
     Write(#[source] std::io::Error),
-    /// A node's SCIM endpoint could not be asked to provision a user.
-    #[error("the SCIM provisioning of {user} reached no answer")]
-    Unprovisioned {
-        /// The user the harness provisions.
-        user: &'static str,
-        /// What the client reported.
-        #[source]
-        source: reqwest::Error,
-    },
-    /// A node's SCIM endpoint refused to provision a user.
-    #[error(
-        "the node answered the SCIM provisioning of {user} with {status}, where it creates one with 201"
-    )]
-    ProvisionRefused {
-        /// The user the harness provisions.
-        user: &'static str,
-        /// The node's answer.
-        status: http::StatusCode,
-    },
 }
 
 /// A started PostgreSQL server holding one database per node, on a network
@@ -443,15 +424,6 @@ fn node_settings(
         .with_env_var("FERROEHR__API__SYSTEM_ID", system_id)
         .with_env_var("FERROEHR__RECORD__SUBJECT_INDEX", "local")
         .with_env_var("FERROEHR__USAGE_REPORT__ENABLED", "false")
-}
-
-/// A synthetic user of a node [`restricted::ferroehr_restricted`] starts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct HarnessUser {
-    /// The Basic user name.
-    pub user: &'static str,
-    /// The Basic password, a synthetic development value.
-    pub password: &'static str,
 }
 
 /// Returns a network name and a database server container name for a node
