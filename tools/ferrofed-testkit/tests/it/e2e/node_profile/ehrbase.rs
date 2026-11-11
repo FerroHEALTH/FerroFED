@@ -150,7 +150,7 @@ async fn ehrbase_is_checked_for_passing_its_errors_through() -> TestResult {
 /// Creates the EHR `ehr_id`, with no subject, at the restricted node of
 /// `api_root` as its administrator, under the token `admin`.
 async fn created_by_the_administrator(api_root: &str, ehr_id: Uuid, admin: &str) -> TestResult {
-    reqwest::Client::new()
+    let answer = reqwest::Client::new()
         .put(format!("{api_root}/v1/ehr/{ehr_id}"))
         .bearer_auth(admin)
         .header("Content-Type", "application/json")
@@ -158,9 +158,23 @@ async fn created_by_the_administrator(api_root: &str, ehr_id: Uuid, admin: &str)
         .header("Prefer", "return=minimal")
         .body(to_canonical_json(&seed::ehr_status(None)))
         .send()
-        .await?
-        .error_for_status()?;
-    Ok(())
+        .await?;
+    if answer.status().is_success() {
+        return Ok(());
+    }
+    // NOTE: RFC 6750 §3, a resource server names why it refused a bearer token
+    // in its WWW-Authenticate challenge, which the failure carries.
+    let challenge = answer
+        .headers()
+        .get(http::header::WWW_AUTHENTICATE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("no challenge")
+        .to_owned();
+    Err(format!(
+        "the administrator's EHR was answered {}: {challenge}",
+        answer.status()
+    )
+    .into())
 }
 
 // conformance: CP-18
