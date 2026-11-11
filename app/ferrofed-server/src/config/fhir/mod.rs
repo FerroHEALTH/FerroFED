@@ -24,7 +24,6 @@
 //! face does not need `[stored_queries]`. No specification governs the
 //! configuration: our own design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -81,10 +80,6 @@ pub struct Fhir {
     /// How long the URL of a member's document in the
     /// document list stays valid.
     pub document_url_lifetime: units::Duration,
-    /// The retired `document_url_lifetime_secs`, which `document_url_lifetime` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub document_url_lifetime_secs: Removed,
 }
 
 impl Default for Fhir {
@@ -98,7 +93,6 @@ impl Default for Fhir {
             serve: Vec::new(),
             report: Vec::new(),
             document_url_lifetime: units::Duration::from_mins(5),
-            document_url_lifetime_secs: Removed::default(),
         }
     }
 }

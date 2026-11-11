@@ -47,7 +47,6 @@
 //! development the spool is a directory, which survives a restart. No
 //! specification governs the shape of the table: our own design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use ferrohealth_smart::config::TlsBuilder as _;
 use ferrohealth_smart::config::endpoint::{EndpointSection, RetrySection};
@@ -125,36 +124,12 @@ pub struct FeedRepository {
     pub spool_dir: Option<PathBuf>,
     /// The most bytes the spool holds.
     pub spool_max_size: units::ByteSize,
-    /// The retired `spool_max_bytes`, which `spool_max_size` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub spool_max_bytes: Removed,
     /// The most records the spool holds.
     pub spool_max_events: usize,
     /// The longest storing one record in the spool may take, 10 s by
     /// default; a record not stored by then, or by the end of its exchange's
     /// time if that comes first, is an audit failure.
     pub spool_write_timeout: units::Duration,
-    /// The retired `spool_write_timeout_ms`, which `spool_write_timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub spool_write_timeout_ms: Removed,
-    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub url: Removed,
-    /// The retired `timeout_ms`, which `endpoint.timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub timeout_ms: Removed,
-    /// The retired `retry_max_ms`, which `endpoint.retry.max_backoff`
-    /// replaced in 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub retry_max_ms: Removed,
-    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub tls: Removed,
 }
 
 impl Default for FeedRepository {
@@ -173,16 +148,10 @@ impl Default for FeedRepository {
             enterprise_site: None,
             spool_dir: None,
             spool_max_size: units::ByteSize::from_mib(64),
-            spool_max_bytes: Removed::default(),
             spool_max_events: 100_000,
             // NOTE: no specification governs this: our own design; a durable write waits out
             // other writers' syncs under load (#1812), so it may take a node's answer time.
             spool_write_timeout: units::Duration::from_secs(10),
-            spool_write_timeout_ms: Removed::default(),
-            url: Removed::default(),
-            timeout_ms: Removed::default(),
-            retry_max_ms: Removed::default(),
-            tls: Removed::default(),
         }
     }
 }

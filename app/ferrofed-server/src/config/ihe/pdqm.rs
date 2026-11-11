@@ -40,7 +40,6 @@
 //! applies a change, as it does to `[pixm]`. No specification governs the
 //! shape of the table: our own design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use ferrohealth_smart::config::endpoint::EndpointSection;
 use std::collections::BTreeMap;
@@ -77,22 +76,6 @@ pub struct Pdqm {
     /// Each client namespace taken to the Supplier, mapped to the identifier
     /// system the identifier is sent in.
     pub namespaces: BTreeMap<String, String>,
-    /// The retired `timeout_ms`, which `endpoint.timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub timeout_ms: Removed,
-    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub url: Removed,
-    /// The retired `credentials`, which `endpoint.credentials` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub credentials: Removed,
-    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub tls: Removed,
 }
 
 impl Default for Pdqm {
@@ -104,10 +87,6 @@ impl Default for Pdqm {
             transaction: Transaction::Search,
             master: String::new(),
             namespaces: BTreeMap::new(),
-            timeout_ms: Removed::default(),
-            url: Removed::default(),
-            credentials: Removed::default(),
-            tls: Removed::default(),
         }
     }
 }

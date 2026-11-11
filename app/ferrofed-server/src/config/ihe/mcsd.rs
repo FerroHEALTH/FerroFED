@@ -8,7 +8,6 @@
 //! `ferrohealth-smart`'s `EndpointSection`: the directory's FHIR base, its
 //! TLS, the timeout and retries of each call, and its credentials.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use ferrohealth_server::tls_client::TlsClient;
 use ferrohealth_smart::config::endpoint::EndpointSection;
@@ -50,39 +49,15 @@ pub struct McsdDirectory {
     pub endpoint: EndpointSection,
     /// How often the changes are asked for.
     pub refresh_interval: units::Duration,
-    /// The retired `refresh_interval_s`, which `refresh_interval` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub refresh_interval_s: Removed,
     /// How long one whole read or refresh may take, every page of both
     /// resource types included.
     pub deadline: units::Duration,
-    /// The retired `deadline_ms`, which `deadline` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub deadline_ms: Removed,
     /// The most pages one read or refresh may read.
     pub max_pages: usize,
     /// The most bytes of answer bodies one read or refresh may read.
     pub max_size: units::ByteSize,
-    /// The retired `max_bytes`, which `max_size` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub max_bytes: Removed,
     /// The most Bundle entries one read or refresh may read.
     pub max_entries: usize,
-    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub url: Removed,
-    /// The retired `credentials`, which `endpoint.credentials` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub credentials: Removed,
-    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub tls: Removed,
 }
 
 impl Default for McsdDirectory {
@@ -90,16 +65,10 @@ impl Default for McsdDirectory {
         Self {
             endpoint: crate::config::endpoint::tried_once(units::Duration::from_secs(10)),
             refresh_interval: units::Duration::from_mins(5),
-            refresh_interval_s: Removed::default(),
             deadline: units::Duration::from_secs(30),
-            deadline_ms: Removed::default(),
             max_pages: 200,
             max_size: units::ByteSize::from_mib(64),
-            max_bytes: Removed::default(),
             max_entries: 50_000,
-            url: Removed::default(),
-            credentials: Removed::default(),
-            tls: Removed::default(),
         }
     }
 }
