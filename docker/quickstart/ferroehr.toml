@@ -12,9 +12,10 @@
 # and accepts plain http only on loopback (RFC 8414 §2), so the nodes run in
 # the issuer's network namespace, like the gateway, and name the issuer as
 # they see it there. The gateway reaches a node for a caller only under the
-# token the issuer exchanged the caller's token for (RFC 8693): the person as
-# `sub`, the node as `aud` and the gateway's client `ferrofed` as its client,
-# which the node reads as a delegate acting for the person. The ehr-seed
+# token the issuer issued for the caller's token (RFC 7523): the person as
+# `sub`, the node as `aud` and the gateway's client for that node
+# (`ferrofed-node-a` to `ferrofed-node-d`) as its client, which the node
+# reads as a delegate acting for the person. The ehr-seed
 # service signs in through the node's own client `quickstart-seed`.
 #
 # FerroEHR binds every person who signs in to a demographic PERSON. These
@@ -40,7 +41,7 @@ issuer = "http://localhost:8190/quickstart"
 kind = "persons"
 audience = ["http://localhost:8081/ferroehr/rest/openehr"]
 first_party_clients = ["quickstart-seed"]
-delegates = [{ client = "ferrofed" }]
+delegates = [{ client = "ferrofed-node-a" }, { client = "ferrofed-node-b" }, { client = "ferrofed-node-c" }, { client = "ferrofed-node-d" }]
 
 [[auth.party]]
 issuer = "http://localhost:8190/quickstart"

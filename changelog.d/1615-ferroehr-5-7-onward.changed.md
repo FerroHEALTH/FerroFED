@@ -5,8 +5,10 @@
   person who signs in to a `PERSON` it creates at the first request, and
   admits the gateway only as a delegate acting for the person a token names:
   each node's endpoint has an onward lane, so a caller's query reaches the
-  node under the token the issuer exchanges the caller's token for (RFC
-  8693), and no node is reached under a Basic user. The nodes run in the
+  node under the token the issuer issues for the caller's token (the JWT
+  bearer grant, RFC 7523, which the development issuer answers for the
+  gateway's 300-second client assertions), and no node is reached under a
+  Basic user. The nodes run in the
   issuer's network namespace, each on its own port, and four
   `ferroehr-definitions-*` one-shots load FerroEHR's professional `PERSON`
   and `ROLE` templates, vendored under `docs/specs/ferroehr-definitions/`,

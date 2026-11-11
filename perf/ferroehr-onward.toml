@@ -25,7 +25,7 @@ issuer = "http://localhost:8190/quickstart"
 kind = "persons"
 audience = ["http://localhost:8081/ferroehr/rest/openehr"]
 first_party_clients = ["quickstart-seed"]
-delegates = [{ client = "ferrofed" }]
+delegates = [{ client = "ferrofed-node-a" }, { client = "ferrofed-node-b" }, { client = "ferrofed-node-c" }, { client = "ferrofed-node-d" }]
 
 [[auth.party]]
 issuer = "http://localhost:8190/quickstart"

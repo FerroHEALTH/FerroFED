@@ -395,10 +395,14 @@ quickstart's development issuer, the `issuer` service, as its issuer of
 persons (`docker/quickstart/ferroehr.toml`, inlined as the `ferroehr-config`
 config), and admits a token only when it names the node's own API root as its
 audience. The gateway reaches a node for a caller only under the token the
-issuer exchanges the caller's token for (RFC 8693), the node's onward lane
+issuer issues for the caller's token, the node's onward lane
 ([The onward lane of a node](onward-credentials.md#the-onward-lane-of-a-node)):
-the caller as `sub`, the node as `aud` and the gateway's client `ferrofed` as
-its client, which the node reads as a delegate acting for that person. A node
+the caller as `sub`, the node as `aud` and the gateway's client for that node,
+`ferrofed-node-a` to `ferrofed-node-d`, as its client, which the node reads
+as a delegate acting for that person. The lanes take the JWT bearer grant
+(RFC 7523 §2.1, `onward_grant = "jwt_bearer"`), the caller's token as the
+assertion: the development issuer refuses an RFC 8693 token exchange whose
+client assertion lives longer than 120 seconds, and the gateway's live 300. A node
 creates the person's `PERSON` at the first request, from the token's `name`,
 when the token names the identity provider `quickstart` (FerroEHR's
 just-in-time creation). Before each node starts, its `ferroehr-definitions-*`
