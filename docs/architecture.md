@@ -1171,9 +1171,10 @@ no OAuth 2.0 client of its own (#1749):
   configured. `[signing]` stays FerroFED's table, with its own P-256 and
   P-384 rule;
 - **rotation:** the JWKS publishes the current and the previous `kid` for one
-  overlap window of at least the 300 s assertion lifetime plus the nodes'
+  overlap window of at least the 60 s assertion lifetime plus the nodes'
   JWKS cache time;
-- **assertions:** `exp` of 300 s, fixed by the crate, a unique `jti`, `aud`
+- **assertions:** `exp` of 60 s, fixed by the crate since `ferrohealth-smart`
+  0.19.1 (FerroHEALTH/FerroAUTH#461), a unique `jti`, `aud`
   the node's token endpoint, or, with `assertion_audience = "issuer"`, the
   authorization server's issuer identifier as one string, the other value
   RFC 7523 §3 admits and the only one the FAPI 2.0 Security Profile accepts

@@ -415,9 +415,11 @@ ferrohealth-ui = "=0.6.9"
 # server-tls reader (#1805, #1806); 0.16.3 lets an outbound client carry
 # the product's own authorization, which the NVI's Nuts grant rides as
 # (#1815); 0.19.0 holds the issuer every `[auth]` table names as a
-# SecretUrl (#1864). Required by a caret range, as the IHE crates below.
-# Verified against crates.io on 2026-11-11.
-ferrohealth-smart = { version = "0.19.0", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
+# SecretUrl (#1864); 0.19.1 signs each client assertion for 60 seconds,
+# which the quickstart's development issuer requires of a token exchange
+# (FerroHEALTH/FerroAUTH#461, #1615). Required by a caret range, as the IHE
+# crates below. Verified against crates.io on 2026-11-11.
+ferrohealth-smart = { version = "0.19.1", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as

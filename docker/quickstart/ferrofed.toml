@@ -84,23 +84,18 @@ jwks_uri = "http://ferrofed:8080/.well-known/jwks.json"
 # Each node is reached for a caller under a token of its own issuer of
 # persons, the development issuer, obtained for that caller: the gateway
 # sends the caller's verified token to the issuer's token endpoint as the
-# assertion of the JWT bearer grant (RFC 7523 §2.1), asking for the
-# quickstart caller's clinical scopes, and checks the issued token before use
-# (the caller as `sub`, the node as `aud`, the gateway's client for that node
-# as its client, within an hour). The development issuer refuses an RFC 8693
-# token exchange whose client assertion lives longer than 120 seconds, and
-# the gateway's live 300, so the quickstart takes the JWT bearer grant, which
-# the issuer answers with the same token. Each node has a client of its own,
-# `ferrofed-node-a` to `ferrofed-node-d`, by which the issuer names the node
-# as the token's audience. The gateway authenticates with a client assertion
-# signed with its signing key (RFC 7523), which the development issuer
-# accepts without checking its signature, NOT for anything real. The `oauth`
-# table's own token, for work no caller originates, is never sent for a
-# caller. The nodes, in the issuer's network namespace too, answer on
-# localhost.
+# subject of an RFC 8693 token exchange, naming the node's API root as its
+# resource (RFC 8707), and
+# checks the issued token before use (the caller as `sub`, the node as `aud`,
+# the gateway's client as its client, within an hour). The gateway
+# authenticates with a client assertion signed with its signing key (RFC
+# 7523), which the development issuer accepts without checking, NOT for
+# anything real. The `oauth` table authenticates the gateway; its own token,
+# for work no caller originates, is never sent for a caller. The nodes, in the
+# issuer's network namespace too, answer on localhost.
 [credentials."node-a-query".credentials.oauth]
 token_endpoint = "http://localhost:8190/quickstart/token"
-client_id = "ferrofed-node-a"
+client_id = "ferrofed"
 client_auth = "private_key_jwt"
 private_key_file = "/run/secrets/signing-key"
 scope = "system/aql-*.s"
@@ -111,15 +106,14 @@ kind = "persons"
 profile = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8081/ferroehr/rest/openehr"]
-scope = "user/aql-*.s user/composition-*.cruds user/template-*.cruds"
+indicators = ["http://localhost:8081/ferroehr/rest/openehr"]
 
 [credentials."node-a-query".credentials.onward.keys]
 max_onward_lifetime = "1h"
-onward_grant = "jwt_bearer"
 
 [credentials."node-b-query".credentials.oauth]
 token_endpoint = "http://localhost:8190/quickstart/token"
-client_id = "ferrofed-node-b"
+client_id = "ferrofed"
 client_auth = "private_key_jwt"
 private_key_file = "/run/secrets/signing-key"
 scope = "system/aql-*.s"
@@ -130,15 +124,14 @@ kind = "persons"
 profile = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8082/ferroehr/rest/openehr"]
-scope = "user/aql-*.s user/composition-*.cruds user/template-*.cruds"
+indicators = ["http://localhost:8082/ferroehr/rest/openehr"]
 
 [credentials."node-b-query".credentials.onward.keys]
 max_onward_lifetime = "1h"
-onward_grant = "jwt_bearer"
 
 [credentials."node-c-query".credentials.oauth]
 token_endpoint = "http://localhost:8190/quickstart/token"
-client_id = "ferrofed-node-c"
+client_id = "ferrofed"
 client_auth = "private_key_jwt"
 private_key_file = "/run/secrets/signing-key"
 scope = "system/aql-*.s"
@@ -149,15 +142,14 @@ kind = "persons"
 profile = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8083/ferroehr/rest/openehr"]
-scope = "user/aql-*.s user/composition-*.cruds user/template-*.cruds"
+indicators = ["http://localhost:8083/ferroehr/rest/openehr"]
 
 [credentials."node-c-query".credentials.onward.keys]
 max_onward_lifetime = "1h"
-onward_grant = "jwt_bearer"
 
 [credentials."node-d-query".credentials.oauth]
 token_endpoint = "http://localhost:8190/quickstart/token"
-client_id = "ferrofed-node-d"
+client_id = "ferrofed"
 client_auth = "private_key_jwt"
 private_key_file = "/run/secrets/signing-key"
 scope = "system/aql-*.s"
@@ -168,11 +160,10 @@ kind = "persons"
 profile = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8084/ferroehr/rest/openehr"]
-scope = "user/aql-*.s user/composition-*.cruds user/template-*.cruds"
+indicators = ["http://localhost:8084/ferroehr/rest/openehr"]
 
 [credentials."node-d-query".credentials.onward.keys]
 max_onward_lifetime = "1h"
-onward_grant = "jwt_bearer"
 
 # The patient index: FerroPIX's PIXm Manager on the compose network. Each
 # member's ehr_ids are one identifier domain there, as

@@ -60,7 +60,7 @@ scope = "system/aql-*.s system/composition-*.cru"
   ([Signing keys and the JWK Set](#signing-keys-and-the-jwk-set)), under the
   RFC 7638 thumbprint as its `kid` unless `kid` names another. The
   assertion names `client_id` as its `iss` and `sub`, carries a fresh `jti`
-  and lives 300 seconds. `tls_client_auth` and
+  and lives 60 seconds. `tls_client_auth` and
   `self_signed_tls_client_auth` authenticate by the TLS client certificate
   instead ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)).
 - A node's grant takes no client secret: `client_secret_basic`,
