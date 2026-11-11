@@ -2766,8 +2766,8 @@ separate members. The CI harness stays at two nodes plus the third for
 three-node cases. The compose quickstart runs four, `ferroehr-a` to
 `ferroehr-d`, on the same layout, with synthetic patients spread across them:
 one at all four, one at two, one at one and one at none, all in the example
-arc, which the quickstart's FerroPIX cross-references and
-`scripts/quickstart/seed.sh` creates over ITS-REST.
+arc, which the quickstart's FerroPIX cross-references and its `ehr-seed`
+service creates over ITS-REST.
 
 **The PIX Manager.** No lightweight container answers `$ihe-pix` and accepts
 ITI-104 seeding on its own: HAPI FHIR does not implement the operation out of

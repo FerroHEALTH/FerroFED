@@ -153,6 +153,7 @@ impl Writes for Served {
             "Software that writes the imaging report from the member's record automatically",
             (&self.mapping, composition),
         )?;
+        let withheld = report::withheld(mapped.bundle());
         let study = study(&document, mapped.bundle());
         let mut targets = document
             .with_mapped_report(mapped.bundle())
@@ -160,13 +161,14 @@ impl Writes for Served {
         targets.extend(study.iter().cloned());
         report::sourced(&mut document, report, &targets).map_err(ServedError::Document)?;
         for slot in IMAGING_SLOTS.iter().take(REQUIRED) {
-            let section = Section::new(
-                slot,
-                vec![format!(
-                    "The {} as the member records it, written by the gateway.",
-                    slot.title.to_lowercase()
-                )],
-            );
+            let mut paragraphs = vec![format!(
+                "The {} as the member records it, written by the gateway.",
+                slot.title.to_lowercase()
+            )];
+            if slot.slice == STUDY {
+                paragraphs.extend(withheld.clone());
+            }
+            let section = Section::new(slot, paragraphs);
             // NOTE: HL7 Europe Imaging Report 1.0.0-ballot eu-imaging-composition-1: a section holds an
             // entry or an emptyReason, and the member's record holds no order, history or procedure.
             let section = match (&study, slot.slice == STUDY) {

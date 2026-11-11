@@ -48,9 +48,12 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   named and the list goes on, so one run reports every finding, before
   any release exists.
 - **github-release** creates the release as a draft carrying those notes, and
-  attaches `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`
-  under those names: the gateway alone at this release's image, with the two
-  example files it mounts. It attaches the nginx reverse proxy
+  attaches the quickstart, the repository's self-contained `compose.yaml`
+  (`scripts/quickstart/compose-configs.sh --check` refuses a stale inlined
+  copy), with its SHA-256 as `compose.yaml.sha256sum`, and
+  `deploy/compose/compose.yaml` as `gateway-compose.yaml` with
+  `ferrofed.toml` and `registry.toml`: the gateway alone at this release's
+  image, with the two example files it mounts. It attaches the nginx reverse proxy
   configuration of the production guide, `deploy/nginx/ferrofed.conf`, as
   `ferrofed.conf`, with its SHA-256 as `ferrofed.conf.sha256sum`, and fails
   when the tag's tree has no such file. It also attaches the conformance
@@ -105,7 +108,8 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   digests the image jobs pushed, which `scripts/release/kubernetes-package.sh`
   writes and refuses when a manifest's tag is not the release's version.
   It then checks that the draft carries every asset this version
-  promises, eight per target, the three compose files, the nginx
+  promises, eight per target, the quickstart compose file and its checksum,
+  the three gateway compose files, the nginx
   configuration and its checksum, the two seed data files, the dashboard
   and alert rules, the information sheet and instructions for use of
   the tag, the vulnerability record and its reports, the Kubernetes

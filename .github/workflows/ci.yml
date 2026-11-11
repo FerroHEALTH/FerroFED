@@ -347,7 +347,10 @@ jobs:
       # release-compose job runs; the self-test holds each README copy to its anchor.
       - name: quickstart
         if: ${{ !cancelled() }}
-        run: bash scripts/quickstart/tour.sh --self-test
+        run: |
+          bash scripts/quickstart/tour.sh --self-test
+          bash scripts/quickstart/compose-configs.sh --self-test
+          bash scripts/quickstart/compose-configs.sh --check
 
       # ---- versions ----------------------------------------------------
       # The version-drift guard. It compares every present config file against
@@ -809,7 +812,7 @@ jobs:
           quickstart=true
           if [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "merge_group" ]; then
             changed="$(git diff --name-only HEAD^1 HEAD)"
-            if ! grep -qE '^(README\.md$|compose\.yaml$|scripts/quickstart/|docker/quickstart/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
+            if ! grep -qE '^(README\.md$|compose\.yaml$|scripts/quickstart/|docker/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
               quickstart=false
             fi
           fi
