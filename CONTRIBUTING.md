@@ -49,7 +49,10 @@ passes on your machine; in CI, where `CI` is set, the same gap fails it.
 The `conclusion` job aggregates every job and is the single required check on
 `main`.
 
-The Rust gates mirror CI:
+While you work, `scripts/checks/fast.sh` runs rustfmt, clippy, nextest and
+the doctests over the packages your change reaches, and checks the fuzz
+crate when the change reaches a crate it builds on. `--dry-run` prints the
+plan and `--all` runs every package. The Rust gates mirror CI:
 
 ```
 cargo fmt --all --check
