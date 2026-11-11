@@ -111,28 +111,36 @@ point.
 
 The quickstart runs the published gateway image beside four FerroEHR
 record servers and FerroPIX, with synthetic patients. You need Docker
-Compose, `git`, `curl`, `jq` and `openssl`. Every command below is a step of
-[`scripts/quickstart/tour.sh`](scripts/quickstart/tour.sh), which CI runs.
+Compose 2.23.1 or newer, `curl`, `jq` and `openssl`, and no checkout. Every
+release attaches the quickstart as one self-contained `compose.yaml`;
+download the latest release's into an empty directory:
 
 ```sh
-git clone https://github.com/FerroHEALTH/FerroFED && cd FerroFED
+curl -fsSLO https://github.com/FerroHEALTH/FerroFED/releases/latest/download/compose.yaml
 ```
 
-Write the gateway's signing key, start the stack and seed the four servers:
+Write the gateway's signing key, readable by the gateway's user in the
+container, and start the stack, which seeds FerroPIX and the four servers
+with the synthetic patients:
 
 <!-- tour:start -->
 ```sh
-scripts/quickstart/signing-key.sh
+mkdir -p secrets
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out secrets/signing-key.pem
+chmod 644 secrets/signing-key.pem
 docker compose up --wait
-scripts/quickstart/seed.sh
 ```
 
-Ask the gateway for the compositions of the patient every server knows:
+Ask the development issuer for a token, and the gateway for the
+compositions of the patient every server knows:
 
 <!-- tour:query -->
 ```sh
+token="$(curl --fail-with-body -s http://127.0.0.1:8190/quickstart/token \
+  -d grant_type=client_credentials -d client_id=quickstart-client -d client_secret=any \
+  | jq -er .access_token)"
 curl --fail-with-body -s http://127.0.0.1:8080/v1/query/aql \
-  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
+  -H "Authorization: Bearer $token" \
   -H 'Content-Type: application/json' -d @- <<'EOF' | jq -e '.meta.federation.complete and (.rows | length) == 4'
 {"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
 EOF
@@ -140,7 +148,10 @@ EOF
 
 The answer holds a composition from each of the four servers, and its
 `meta.federation` part reports all four as `active` and the answer as
-complete. The credentials are development values for a laptop, and
+complete. Every step is part of
+[`scripts/quickstart/tour.sh`](scripts/quickstart/tour.sh), which CI runs
+over the repository's `compose.yaml`, the file each release attaches. The
+credentials are development values for a laptop, and
 `docker compose down --volumes` removes what the quickstart started.
 [The quickstart page](https://ferrofed.eu/docs/operate/container.html#the-quickstart)
 walks through more queries.

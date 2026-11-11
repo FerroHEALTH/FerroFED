@@ -18,17 +18,19 @@ FerroEHR instances, on one PostgreSQL server that holds a database per node
 in the development profile and resolves every patient through FerroPIX, the
 FerroHEALTH patient index, which Compose runs beside it on its own
 PostgreSQL and seeds with four synthetic patients over ITI-104 before the
-gateway starts. It trusts one development
-issuer, whose tokens `scripts/quickstart/token.sh` prints, and signs with a
-key `scripts/quickstart/signing-key.sh` writes once
+gateway starts; a one-shot seed creates their EHRs at the nodes. It trusts
+one development issuer, a service whose network namespace the gateway
+shares, and signs with a key you write once beside `compose.yaml`
 ([The quickstart issuer](../operate/authentication.md#the-quickstart-issuer)).
 
 ```mermaid
 flowchart TB
-    you["You: curl, seed.sh<br/>and token.sh"]
-    keys["docker/quickstart:<br/>issuer key set,<br/>signing key"]
+    you["You: curl"]
+    keys["./secrets:<br/>signing key"]
     subgraph compose["docker compose"]
-        gw["ferrofed, :8080"]
+        iss["issuer, :8190<br/>tokens"]
+        gw["ferrofed, :8080<br/>in the issuer's namespace"]
+        ehrseed["ehr-seed<br/>ITS-REST, once"]
         pix["ferropix<br/>PIXm Manager"]
         seed["ferropix-seed<br/>ITI-104, once"]
         subgraph nodes["Four member CDRs"]
@@ -39,9 +41,10 @@ flowchart TB
         end
         pg[("ferroehr-postgres<br/>ferroehr_a to ferroehr_d")]
     end
+    you -->|"client credentials"| iss
     you -->|"AQL, Bearer"| gw
-    keys -->|"mounted<br/>read-only"| gw
-    you -->|"seed over ITS-REST"| nodes
+    keys -->|"a secret"| gw
+    ehrseed -->|"seed over ITS-REST"| nodes
     gw -->|"AQL, Basic auth,<br/>the signed caller"| nodes
     gw -->|"ITI-83"| pix
     seed -->|"ITI-104"| pix
@@ -50,7 +53,7 @@ flowchart TB
 
 - Every port binds the loopback interface, so nothing is reachable from the
   network until you name an interface.
-- The seed script writes over each node's ITS-REST API only, with
+- The seed writes over each node's ITS-REST API only, with
   identifiers in the example arc `urn:oid:2.999`.
 - The node credentials and database passwords are development values that
   must not reach anything real.
