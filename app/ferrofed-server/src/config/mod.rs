@@ -11,7 +11,6 @@
 
 use ferrofed_identity::profile::Profile;
 use ferrofed_identity::role::localizer::OnFailure;
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::tls::TlsClientSection;
 use ferrohealth_config::units;
 use ferrohealth_smart::config::credentials::CredentialsSection;
@@ -221,19 +220,11 @@ pub struct Federation {
     pub id: Option<String>,
     /// How long one node's request may take (§11.5, N38).
     pub per_node_timeout: units::Duration,
-    /// The retired `per_node_timeout_ms`, which `per_node_timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub per_node_timeout_ms: Removed,
     /// How long the whole fan-out may take (§11.5, N38). With a registry
     /// configured, `server.request_timeout` must exceed it by more than
     /// [`COMBINING_MARGIN_MS`], so the gateway answers with its envelope
     /// before the request timeout cuts the connection.
     pub overall_timeout: units::Duration,
-    /// The retired `overall_timeout_ms`, which `overall_timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub overall_timeout_ms: Removed,
     /// The issuing namespace an unqualified patient identifier resolves in
     /// (§5.2 requires the namespace; no specification governs the default: our
     /// own design). Without it, a query that names no namespace is a `400`.
@@ -242,10 +233,6 @@ pub struct Federation {
     /// last resolution that returned it (§12.5.1 step 2): a correctness
     /// bound, past which the binding is never routed on.
     pub binding_ttl: units::Duration,
-    /// The retired `binding_ttl_ms`, which `binding_ttl` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub binding_ttl_ms: Removed,
     /// How many `ehr_id` bindings the resolution bindings of every caller
     /// hold together (§12.5.1 step 2); zero is refused.
     pub binding_capacity: u32,
@@ -313,10 +300,6 @@ pub struct Federation {
     pub max_in_flight_per_node: u32,
     /// The most bytes read of one member answer, past which it is `node-error` (§11.1).
     pub max_node_answer_size: units::ByteSize,
-    /// The retired `max_node_answer_bytes`, which `max_node_answer_size` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub max_node_answer_bytes: Removed,
     /// What the gateway needs of each national contact point, one
     /// `[[federation.contact_point]]` per `[[auth.issuer]]` whose
     /// `[[auth.federation]]` table sets `contact_point = true`.
@@ -452,10 +435,6 @@ pub struct Localization {
     /// How long the localizer may take, a part of the overall budget it must
     /// end before (§11.5); zero is refused.
     pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub timeout_ms: Removed,
 }
 
 impl Default for Localization {
@@ -463,7 +442,6 @@ impl Default for Localization {
         Self {
             on_failure: OnFailure::Closed,
             timeout: units::Duration::from_secs(5),
-            timeout_ms: Removed::default(),
         }
     }
 }
@@ -473,12 +451,9 @@ impl Default for Federation {
         Self {
             id: None,
             per_node_timeout: units::Duration::from_secs(10),
-            per_node_timeout_ms: Removed::default(),
             overall_timeout: units::Duration::from_secs(25),
-            overall_timeout_ms: Removed::default(),
             default_namespace: None,
             binding_ttl: units::Duration::from_mins(15),
-            binding_ttl_ms: Removed::default(),
             binding_capacity: 100_000,
             ehr_index_capacity: 100_000,
             node_selection: None,
@@ -502,7 +477,6 @@ impl Default for Federation {
             consent: ConsentReporting::default(),
             max_in_flight_per_node: 64,
             max_node_answer_size: units::ByteSize::from_mib(16),
-            max_node_answer_bytes: Removed::default(),
             contact_point: Vec::new(),
         }
     }
@@ -547,26 +521,6 @@ pub struct NodeCredentials {
     /// with, `[credentials."<endpoint id>".tls]` (RFC 8705); the node is then
     /// reached over `https` alone when it names a client identity.
     pub tls: Option<TlsClientSection>,
-    /// The retired `user`, which `credentials.user` replaced in 0.0.19: set,
-    /// it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub user: Removed,
-    /// The retired `password`, which `credentials.password` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub password: Removed,
-    /// The retired `password_file`, which `credentials.password_file`
-    /// replaced in 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub password_file: Removed,
-    /// The retired `oauth`, which `credentials.oauth` replaced in 0.0.19:
-    /// set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub oauth: Removed,
-    /// The retired `onward`, which `credentials.onward` replaced in 0.0.19:
-    /// set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub onward: Removed,
 }
 
 /// The gateway's signing keys and their publication (§13.1, N25).
@@ -600,17 +554,9 @@ pub struct Signing {
     pub jwks_uri: Option<String>,
     /// How long the nodes cache the JWK Set.
     pub node_jwks_cache: units::Duration,
-    /// The retired `node_jwks_cache_s`, which `node_jwks_cache` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub node_jwks_cache_s: Removed,
     /// How long the previous key stays published, in seconds: at least 300
     /// plus `node_jwks_cache`.
     pub rotation_overlap: units::Duration,
-    /// The retired `rotation_overlap_s`, which `rotation_overlap` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub rotation_overlap_s: Removed,
 }
 
 impl Default for Signing {
@@ -622,9 +568,7 @@ impl Default for Signing {
             next_key_algorithm: None,
             jwks_uri: None,
             node_jwks_cache: units::Duration::from_hours(1),
-            node_jwks_cache_s: Removed::default(),
             rotation_overlap: units::Duration::from_mins(65),
-            rotation_overlap_s: Removed::default(),
         }
     }
 }

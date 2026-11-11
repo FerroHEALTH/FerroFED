@@ -51,7 +51,6 @@
 //! file = "/run/secrets/organization.jwt"
 //! ```
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use ferrohealth_smart::config::credentials::CredentialsSection;
 use ferrohealth_smart::config::endpoint::EndpointSection;
@@ -92,18 +91,6 @@ pub struct Nvi {
     /// `http://fhir.nl/fhir/NamingSystem/pseudo-bsn` itself; a BSN system is
     /// refused.
     pub namespaces: Vec<String>,
-    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub url: Removed,
-    /// The retired `credentials`, which `endpoint.credentials` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub credentials: Removed,
-    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub tls: Removed,
 }
 
 impl Default for Nvi {
@@ -113,9 +100,6 @@ impl Default for Nvi {
             nuts: None,
             custodians: BTreeMap::new(),
             namespaces: Vec::new(),
-            url: Removed::default(),
-            credentials: Removed::default(),
-            tls: Removed::default(),
         }
     }
 }

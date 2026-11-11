@@ -39,7 +39,6 @@
 //! is held to the protected-payload policy of [`transport`]. No specification
 //! governs the shape of the table: our own design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use ferrohealth_server::tls_client::TlsClient;
 use ferrohealth_smart::config::endpoint::EndpointSection;
@@ -87,32 +86,12 @@ pub struct Pmir {
     /// (`Patient?identifier=<system>|`, §2:3.94.4.1.2.1.1). Unset, every
     /// Patient change is sent.
     pub identifier_system: Option<String>,
-    /// The retired `timeout_ms`, which `endpoint.timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub timeout_ms: Removed,
     /// How often the gateway checks its subscription and subscribes again
     /// when the Registry no longer holds it.
     pub check_interval: units::Duration,
-    /// The retired `check_interval_s`, which `check_interval` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub check_interval_s: Removed,
     /// What a drain does with the subscription: `keep` it at the Registry,
     /// the default, or `unsubscribe`.
     pub on_drain: OnDrain,
-    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub url: Removed,
-    /// The retired `credentials`, which `endpoint.credentials` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub credentials: Removed,
-    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub tls: Removed,
 }
 
 /// The key of the URL the Registry sends the feed to.
@@ -145,13 +124,8 @@ impl Default for Pmir {
             path: String::from("/pmir/feed"),
             feed_clients: Vec::new(),
             identifier_system: None,
-            timeout_ms: Removed::default(),
             check_interval: units::Duration::from_mins(1),
-            check_interval_s: Removed::default(),
             on_drain: OnDrain::Keep,
-            url: Removed::default(),
-            credentials: Removed::default(),
-            tls: Removed::default(),
         }
     }
 }

@@ -30,7 +30,6 @@
 //! `[fhir]` face, so it is refused without one. No specification governs the
 //! shape of the table: our own design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use ferrohealth_smart::config::endpoint::{EndpointSection, RetrySection};
 use std::sync::Arc;
@@ -62,22 +61,6 @@ pub struct TerminologyServer {
     /// The server's FHIR base and how it is reached: `https`, `http` under
     /// development only.
     pub endpoint: EndpointSection,
-    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub url: Removed,
-    /// The retired `credentials`, which `endpoint.credentials` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub credentials: Removed,
-    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub tls: Removed,
-    /// The retired `timeout_ms`, which `endpoint.timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub timeout_ms: Removed,
 }
 
 impl Default for TerminologyServer {
@@ -93,10 +76,6 @@ impl Default for TerminologyServer {
                 },
                 ..EndpointSection::default()
             },
-            url: Removed::default(),
-            credentials: Removed::default(),
-            tls: Removed::default(),
-            timeout_ms: Removed::default(),
         }
     }
 }

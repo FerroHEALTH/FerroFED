@@ -22,7 +22,6 @@
 //! threshold of zero is refused too, because §2.5 has every country provide
 //! emergency access.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use std::num::NonZeroU32;
 use std::time::Duration;
@@ -48,10 +47,6 @@ pub struct Emergency {
     pub threshold: u32,
     /// The window, 1 to [`MAX_WINDOW_S`].
     pub window: units::Duration,
-    /// The retired `window_s`, which `window` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub window_s: Removed,
 }
 
 impl Default for Emergency {
@@ -59,7 +54,6 @@ impl Default for Emergency {
         Self {
             threshold: MAX_THRESHOLD,
             window: units::Duration::from_secs(MAX_WINDOW_S),
-            window_s: Removed::default(),
         }
     }
 }

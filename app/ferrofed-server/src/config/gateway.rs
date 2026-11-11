@@ -7,7 +7,6 @@
 //! bindings may take to stop. No specification governs the configuration:
 //! our own design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use std::num::NonZeroU64;
 
@@ -45,10 +44,6 @@ pub struct Gateway {
     /// has ended, such as deleting the PMIR subscription; a process still
     /// running when it elapses is abandoned with a warning. Zero is refused.
     pub bindings_drain_timeout: units::Duration,
-    /// The retired `bindings_drain_timeout_ms`, which `bindings_drain_timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub bindings_drain_timeout_ms: Removed,
 }
 
 impl Default for Gateway {
@@ -57,7 +52,6 @@ impl Default for Gateway {
             public_url: None,
             replica: None,
             bindings_drain_timeout: units::Duration::from_secs(5),
-            bindings_drain_timeout_ms: Removed::default(),
         }
     }
 }
