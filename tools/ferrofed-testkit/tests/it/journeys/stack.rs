@@ -315,7 +315,9 @@ async fn gateway(
          [signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
          [auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n\
          [[auth.issuer]]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\n\
-         first_party_clients = [\"synthetic-client\"]\njwks_file = {jwks}\n"
+         first_party_clients = [\"synthetic-client\"]\njwks_file = {jwks}\n\n\
+         [[auth.attributes]]\nissuer = \"{ISSUER}\"\nmapping = \"iua\"\n\
+         authorization_details_purposes = true\n"
     );
     // NOTE: writing to a String cannot fail, so the result is dropped.
     let _written: std::fmt::Result = write!(
