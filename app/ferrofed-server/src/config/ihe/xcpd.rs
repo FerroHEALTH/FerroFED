@@ -44,7 +44,6 @@
 //! binding, and SAML Profile 10.0.0 §2.1 bounds the identity assertion to 4
 //! hours, `sender-vouches`.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use ferrohealth_smart::config::credentials::CredentialsSection;
 use ferrohealth_smart::config::endpoint::EndpointSection;
@@ -92,10 +91,6 @@ pub struct Xcpd {
     pub audit: Option<AuditDestination>,
     /// The ATNA Audit Record Repository, under `audit = "repository"`.
     pub audit_repository: Option<AuditRepository>,
-    /// The retired `tls`, which each gateway's `endpoint.tls` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub tls: Removed,
 }
 
 /// One responding gateway.
@@ -114,10 +109,6 @@ pub struct XcpdGateway {
     /// discovery (eHDSI X.509 Certificates Profile 7.0.0 §3.2), and that no
     /// fixed assertion serves. Off by default.
     pub myhealth_eu: bool,
-    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub url: Removed,
 }
 
 impl Default for XcpdGateway {
@@ -127,7 +118,6 @@ impl Default for XcpdGateway {
             device: String::new(),
             community: None,
             myhealth_eu: false,
-            url: Removed::default(),
         }
     }
 }

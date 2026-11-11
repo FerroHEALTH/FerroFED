@@ -23,7 +23,6 @@
 //! database. No specification governs the store or its configuration: our
 //! own design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -71,17 +70,9 @@ pub struct Store {
     /// How long one connection, or one statement, may take, in
     /// milliseconds; zero is refused.
     pub timeout: units::Duration,
-    /// The retired `timeout_ms`, which `timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub timeout_ms: Removed,
     /// How often the rows past their window are deleted, in seconds; zero
     /// is refused.
     pub sweep_interval: units::Duration,
-    /// The retired `sweep_interval_s`, which `sweep_interval` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub sweep_interval_s: Removed,
 }
 
 impl Default for Store {
@@ -92,9 +83,7 @@ impl Default for Store {
             ca_file: None,
             max_connections: 4,
             timeout: units::Duration::from_secs(10),
-            timeout_ms: Removed::default(),
             sweep_interval: units::Duration::from_mins(1),
-            sweep_interval_s: Removed::default(),
         }
     }
 }

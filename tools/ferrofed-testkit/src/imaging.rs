@@ -254,17 +254,12 @@ pub fn received_document(
             .with_patient(reference(&subject))
             .with_who(reference(&device)),
     )?;
-    let study = run
-        .bundle()
-        .entry
-        .iter()
-        .find_map(|entry| match entry.resource.as_ref() {
-            Some(Resource::ImagingStudy(study)) => study.id.clone(),
-            _ => None,
-        })
-        .map(|id| document.full_url("ImagingStudy", &id))
-        .ok_or("the run writes the study")?;
     document.with_mapped_report(run.bundle())?;
+    let study = document
+        .studies()
+        .next()
+        .map(str::to_owned)
+        .ok_or("the run writes the study")?;
     for slot in IMAGING_SLOTS.iter().take(REQUIRED) {
         let section = Section::new(slot, vec![format!("{}.", slot.title)]);
         // NOTE: HL7 Europe Imaging Report 1.0.0-ballot eu-imaging-composition-1: a section holds an

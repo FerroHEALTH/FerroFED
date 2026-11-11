@@ -47,7 +47,6 @@
 //! of [`transport`]. No specification governs the shape of the table: our
 //! own design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use ferrohealth_smart::config::endpoint::EndpointSection;
 use std::collections::BTreeMap;
@@ -86,24 +85,8 @@ pub struct Mitz {
     pub purpose: String,
     /// The Mitz data categories asked about.
     pub data_categories: Vec<String>,
-    /// The retired `timeout_ms`, which `endpoint.timeout` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub timeout_ms: Removed,
     /// Each member's data holder, by member id.
     pub holders: BTreeMap<String, Holder>,
-    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub url: Removed,
-    /// The retired `credentials`, which `endpoint.credentials` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub credentials: Removed,
-    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub tls: Removed,
 }
 
 impl Default for Mitz {
@@ -115,11 +98,7 @@ impl Default for Mitz {
             namespaces: Vec::new(),
             purpose: String::new(),
             data_categories: Vec::new(),
-            timeout_ms: Removed::default(),
             holders: BTreeMap::new(),
-            url: Removed::default(),
-            credentials: Removed::default(),
-            tls: Removed::default(),
         }
     }
 }

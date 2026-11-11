@@ -13,7 +13,6 @@
 //! assigning authority when the namespace is not itself an absolute URI. No
 //! specification governs the shape of the table: our own design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use ferrohealth_smart::config::endpoint::EndpointSection;
 use std::collections::BTreeMap;
@@ -52,18 +51,6 @@ pub struct PixManager {
     pub members: BTreeMap<String, String>,
     /// How the gateway asks the Manager: `"get"` or `"post"`.
     pub method: PixmMethod,
-    /// The retired `url`, which `endpoint.url` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub url: Removed,
-    /// The retired `credentials`, which `endpoint.credentials` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub credentials: Removed,
-    /// The retired `tls`, which `endpoint.tls` replaced in 0.0.19: set, it
-    /// refuses the configuration.
-    #[serde(skip_serializing)]
-    pub tls: Removed,
 }
 
 impl Default for PixManager {
@@ -72,9 +59,6 @@ impl Default for PixManager {
             endpoint: crate::config::endpoint::tried_once(units::Duration::from_secs(10)),
             members: BTreeMap::new(),
             method: PixmMethod::default(),
-            url: Removed::default(),
-            credentials: Removed::default(),
-            tls: Removed::default(),
         }
     }
 }

@@ -121,11 +121,6 @@ pub struct PatientIssuer {
     /// The identifier system whose values are that member's `ehr_id`s, as
     /// the cross-reference names it.
     pub ehr_id_system: String,
-    /// The retired `act_is_representative`, which the issuer's
-    /// `act_represents_patient` replaced in 0.0.19: set, it refuses the
-    /// configuration.
-    #[serde(skip_serializing)]
-    pub act_is_representative: ferrohealth_config::removed::Removed,
 }
 
 impl Trust {

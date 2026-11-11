@@ -244,7 +244,9 @@ Today:
   `ratchet-tighten.yml` lowers the counts on `main` (#1467).
   `module-cycles.sh` fails when two top-level modules of `ferrofed-server`
   import each other outside tests, which `tools/module-cycles` finds
-  (#1580).
+  (#1580). `fast.sh` is the default local gate: rustfmt, clippy, nextest
+  and the doctests over the packages a change reaches, and the fuzz crate
+  when it builds on one (#1858).
 - `scripts/conformance/`: the matrix, obligations and per-run report
   (`report.sh`) scripts.
 - `scripts/release/`: the changelog assembly, the crates.io lane, the

@@ -295,6 +295,14 @@ jobs:
           bash scripts/checks/file-length.sh --self-test
           bash scripts/checks/file-length.sh
 
+      # ---- fast ----------------------------------------------------------
+      # The default local gate's plan (#1858): its self-test builds a fixture
+      # workspace and reads the packages a dry run reaches for each kind of
+      # change. CI runs the whole workspace; this proves only the selection.
+      - name: fast
+        if: ${{ !cancelled() }}
+        run: bash scripts/checks/fast.sh --self-test
+
       # ---- duplication -------------------------------------------------
       # The duplication ratchet (#1463): jscpd, pinned in docs/VERSIONS.md and
       # run from its image by digest, over the hand-written Rust; the duplicated

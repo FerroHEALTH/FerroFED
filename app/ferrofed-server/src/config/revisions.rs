@@ -26,7 +26,6 @@
 //! ([`crate::config::tree::CORE`]). No specification governs this: our own
 //! design.
 
-use ferrohealth_config::removed::Removed;
 use ferrohealth_config::units;
 use std::fmt;
 use std::path::PathBuf;
@@ -113,19 +112,11 @@ pub struct Revisions {
     /// mark, to apply a revision another replica marked running; 5000 when
     /// the table sets none.
     pub poll: Option<units::Duration>,
-    /// The retired `poll_ms`, which `poll` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub poll_ms: Removed,
     /// How long, an applied revision that changed an
     /// onward credential or a binding section awaits an operator's
     /// confirmation before the gateway rolls it back; 120000 when the
     /// table sets none.
     pub confirm: Option<units::Duration>,
-    /// The retired `confirm_ms`, which `confirm` replaced in
-    /// 0.0.19: set, it refuses the configuration.
-    #[serde(skip_serializing)]
-    pub confirm_ms: Removed,
     /// The resource kinds and resources a revision changes only once an
     /// operator other than its author approved it.
     pub approval: Vec<String>,

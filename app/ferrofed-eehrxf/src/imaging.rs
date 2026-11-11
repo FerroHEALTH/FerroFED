@@ -29,7 +29,6 @@ use eehrxf::mapping::Mapping;
 use eehrxf::mappings::IMAGING;
 use ferrofed_registry::definition::{StoredDefinition, query_name};
 use fhir_types::r4::bundle::Bundle;
-use fhir_types::r4::resource::Resource;
 use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::printer;
 
@@ -57,18 +56,6 @@ const STUDY: &str = "imagingstudy";
 /// How many of `CompositionEuImaging`'s sections the profile requires, the
 /// first of the form's slots.
 const REQUIRED: usize = 4;
-
-/// The `fullUrl` `document` gives the `ImagingStudy` the mapping run `run`
-/// wrote, which the study section lists; `None` when the run wrote none.
-fn study(document: &Document, run: &Bundle) -> Option<String> {
-    run.entry
-        .iter()
-        .find_map(|entry| match entry.resource.as_ref() {
-            Some(Resource::ImagingStudy(study)) => study.id.clone(),
-            _ => None,
-        })
-        .map(|id| document.full_url("ImagingStudy", &id))
-}
 
 /// Returns the query's qualified name, `eu.ferrofed.eehrxf::imaging-report`.
 ///
@@ -154,10 +141,10 @@ impl Writes for Served {
             (&self.mapping, composition),
         )?;
         let withheld = report::withheld(mapped.bundle());
-        let study = study(&document, mapped.bundle());
         let mut targets = document
             .with_mapped_report(mapped.bundle())
             .map_err(ServedError::Document)?;
+        let study = document.studies().next().map(str::to_owned);
         targets.extend(study.iter().cloned());
         report::sourced(&mut document, report, &targets).map_err(ServedError::Document)?;
         for slot in IMAGING_SLOTS.iter().take(REQUIRED) {

@@ -671,8 +671,8 @@ say so:
 
 ### The budgets
 
-A member's request has `per_node_timeout_ms` (10 seconds by default) and the
-whole fan-out `overall_timeout_ms` (25 seconds); a client may shorten the
+A member's request has `per_node_timeout` (10 seconds by default) and the
+whole fan-out `overall_timeout` (25 seconds); a client may shorten the
 wait, never lengthen it
 ([Timeouts](../operate/queries-and-areas.md#timeouts)). The gateway serves at
 most `max_concurrent_requests` at once and answers `503` with `Retry-After`
