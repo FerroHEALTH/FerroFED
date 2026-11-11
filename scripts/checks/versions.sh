@@ -58,9 +58,10 @@
 #  10. licence             LICENSE is the Business Source License 1.1 and no
 #                          first-party file claims MIT or Apache-2.0 as its
 #                          own.
-#  11. landing release     every "vX.Y.Z released" on
-#                          website/landing/index.html names the newest
-#                          `## [x.y.z]` release of CHANGELOG.md.
+#  11. landing release     website/landing/index.html types no
+#                          "vX.Y.Z released" and carries the
+#                          {{version:ferrofed}} marker the assembly renders
+#                          from the root Cargo.toml.
 #  12. book pins           every row of the pin table on the book pages
 #                          website/book/src/evaluate/versions.md and
 #                          website/book/src/evaluate/information-sheet.md
@@ -274,30 +275,21 @@ newest_release() {
   sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' "$changelog" | head -n1
 }
 
-# landing_release PAGE CHANGELOG: every "vX.Y.Z released" on PAGE names the
-# newest release of CHANGELOG, and PAGE names it at least once. An "In vX.Y.Z" tag says where a feature shipped and
-# is not a release claim.
+# landing_release PAGE: PAGE types no release of its own ("vX.Y.Z
+# released") and carries the {{version:ferrofed}} marker, which
+# scripts/site/assemble.sh renders from the root Cargo.toml.
 landing_release() {
-  local page=$1 log=$2 want found v count=0 stale=0
-  want="$(newest_release "$log")"
-  if [[ -z "$want" ]]; then
-    bad "$log has no ## [x.y.z] release heading"
-    return
+  local page=$1 typed
+  typed="$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+ released' "$page" || true)"
+  if [[ -n "$typed" ]]; then
+    bad "$page types a release by hand (${typed//$'\n'/, }); write v{{version:ferrofed}}, which the assembly renders"
+    return 0
   fi
-  found="$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+ released' "$page" |
-    sed -E 's/^v([0-9.]+) .*/\1/' || true)"
-  if [[ -z "$found" ]]; then
-    bad "$page names no current release; it should say v$want, the newest release in $log"
-    return
+  if ! grep -qF '{{version:ferrofed}}' "$page"; then
+    bad "$page carries no {{version:ferrofed}} marker for its hero badge"
+    return 0
   fi
-  while IFS= read -r v; do
-    count=$((count + 1))
-    if [[ "$v" != "$want" ]]; then
-      bad "$page says v$v is the current release, the newest release in $log is $want"
-      stale=1
-    fi
-  done <<< "$found"
-  [[ "$stale" -eq 0 ]] && note "OK: $page names v$want, the newest release, $count times"
+  note "OK: $page renders its release from Cargo.toml"
   return 0
 }
 
@@ -612,14 +604,12 @@ self_test() {
   }
 
   printf '%s\n' '## [Unreleased]' '' '## [0.0.4] - 2026-10-09' '' '## [0.0.3] - 2026-10-02' > "$work/CHANGELOG.md"
-  printf '%s\n' '<p>v0.0.4 released. Signed.</p>' '<span>In v0.0.3</span>' > "$work/agree.html"
-  printf '%s\n' '<p>v0.0.3 released. Signed.</p>' > "$work/stale-note.html"
+  printf '%s\n' '<a class="status">v{{version:ferrofed}} released</a>' > "$work/agree.html"
+  printf '%s\n' '<a class="status">v0.0.3 released</a>' > "$work/typed.html"
   printf '%s\n' '<p>In v0.0.4</p>' > "$work/silent.html"
-  printf '%s\n' '## [Unreleased]' > "$work/unreleased.md"
-  expect "a landing page that names the newest release" 0 landing_release "$work/agree.html" "$work/CHANGELOG.md"
-  expect "a stale release note" 1 landing_release "$work/stale-note.html" "$work/CHANGELOG.md"
-  expect "a landing page that names no release" 1 landing_release "$work/silent.html" "$work/CHANGELOG.md"
-  expect "a changelog with no release" 1 landing_release "$work/agree.html" "$work/unreleased.md"
+  expect "a landing page that renders its release" 0 landing_release "$work/agree.html"
+  expect "a landing page that types its release" 1 landing_release "$work/typed.html"
+  expect "a landing page with no badge marker" 1 landing_release "$work/silent.html"
 
   local status_heading='## Status'
   printf '%s\n' "$status_heading" '' 'FerroFED is at v0.0.9 on its 0.0.x line.' > "$work/readme-current.md"
@@ -977,11 +967,11 @@ else
   note "no README.md or no product version yet, skipped"
 fi
 
-echo "== landing-page release (website/landing/index.html <-> CHANGELOG.md)"
-if [[ -f website/landing/index.html ]] && [[ -f CHANGELOG.md ]]; then
-  landing_release website/landing/index.html CHANGELOG.md
+echo "== landing-page release (website/landing/index.html, rendered from Cargo.toml)"
+if [[ -f website/landing/index.html ]]; then
+  landing_release website/landing/index.html
 else
-  note "no website/landing/index.html or CHANGELOG.md yet, skipped"
+  note "no website/landing/index.html yet, skipped"
 fi
 
 echo "== support periods (CHANGELOG.md <-> SECURITY.md)"

@@ -5,18 +5,15 @@
 
 [Introduction](introduction.md)
 
-# How it works
+# Evaluate
 
-- [Overview](how-it-works/overview.md)
+- [How it works](how-it-works/overview.md)
   - [A federated query, end to end](how-it-works/federated-query.md)
   - [Where the patient identifier stops](how-it-works/identifier-hygiene.md)
   - [Follow-ups and writes](how-it-works/follow-ups-and-writes.md)
   - [Definitions and stored queries](how-it-works/definitions.md)
   - [Trust and keys](how-it-works/trust-and-keys.md)
   - [Deployment](how-it-works/deployment.md)
-
-# Evaluate
-
 - [The Federation Tier with AQL](evaluate/the-federation-tier.md)
 - [What FerroFED claims](evaluate/what-ferrofed-claims.md)
   - [Claims review](evaluate/claims-review.md)
@@ -41,6 +38,21 @@
   - [Complaints and incidents](evaluate/post-market.md)
 - [Data protection](evaluate/data-protection.md)
 - [Threat model](evaluate/threat-model.md)
+
+# Integrate
+
+- [The client contract](integrate/client-contract.md)
+  - [Follow-ups](integrate/follow-ups.md)
+  - [Templates, definitions and demographics](integrate/templates-and-demographics.md)
+  - [Stored queries](integrate/stored-queries.md)
+- [The patient summary over FHIR](integrate/patient-summary.md)
+  - [Laboratory reports over FHIR](integrate/laboratory-reports.md)
+  - [Discharge reports over FHIR](integrate/discharge-reports.md)
+  - [Imaging reports over FHIR](integrate/imaging-reports.md)
+  - [Terminology on the FHIR face](integrate/terminology.md)
+- [Prescriptions and dispensations over FHIR](integrate/prescriptions.md)
+- [A national contact point](integrate/national-contact-point.md)
+- [Errors and status codes](integrate/errors.md)
 
 # Operate
 
@@ -84,21 +96,7 @@
 - [The operator console](operate/operator-console.md)
 - [Hardening](operate/hardening.md)
 - [Troubleshooting](operate/troubleshooting.md)
-
-# Integrate
-
-- [The client contract](integrate/client-contract.md)
-  - [Follow-ups](integrate/follow-ups.md)
-  - [Templates, definitions and demographics](integrate/templates-and-demographics.md)
-  - [Stored queries](integrate/stored-queries.md)
-- [The patient summary over FHIR](integrate/patient-summary.md)
-  - [Laboratory reports over FHIR](integrate/laboratory-reports.md)
-  - [Discharge reports over FHIR](integrate/discharge-reports.md)
-  - [Imaging reports over FHIR](integrate/imaging-reports.md)
-  - [Terminology on the FHIR face](integrate/terminology.md)
-- [Prescriptions and dispensations over FHIR](integrate/prescriptions.md)
-- [A national contact point](integrate/national-contact-point.md)
-- [Errors and status codes](integrate/errors.md)
+- [Releases](operate/releases.md)
 
 # Contribute
 
@@ -106,3 +104,7 @@
 - [Checks and gates](contribute/checks-and-gates.md)
 - [The performance gate](contribute/performance-gate.md)
 - [Adding a country](contribute/adding-a-country.md)
+
+---
+
+[Changelog](changelog.md)

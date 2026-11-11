@@ -8,7 +8,7 @@
 
 [Documentation](https://ferrofed.eu/docs/) ·
 [Quick start](#quick-start) ·
-[What FerroFED claims](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html) ·
+[What it implements](#what-it-implements) ·
 [Licensing](https://ferrohealth.eu/docs/licensing.html)
 
 **Project**<br>
@@ -43,105 +43,52 @@
 
 </div>
 
-## What FerroFED does
+
+## What FerroFED is
 
 A patient's record is spread over many places: the hospital that treated
 them last year, the clinic they visit now, a care organisation in another
 country. Each keeps its own part, and a doctor who needs the whole picture
 today has to phone around or wait for documents.
 
-FerroFED connects those places. An application asks it one ordinary
-question about a patient, and FerroFED asks every organisation that may
-hold part of the record, then returns one combined answer that names where
-each part came from. It stores no clinical data itself: the records stay
-with the organisations that own them.
+FerroFED connects those places. It is an openEHR federation gateway, in pure
+Rust. An application asks it one ordinary AQL query about a patient, and
+FerroFED asks every organisation that may hold part of the record, then
+returns one combined answer that names where each part came from. It stores
+no clinical data itself: the records stay with the organisations that own
+them.
 
 It does this with care for privacy. FerroFED first looks up which
 identifier each organisation uses for the patient, through a patient index
 (a service that matches one person's identities across organisations), and
 never sends a patient's name or national number to the organisations it
-asks. FerroFED keeps no patient index of its own: it asks FerroPIX, or any
-IHE PIXm and PDQm service, as a client. Every access to patient data is logged.
+asks. It keeps no patient index of its own: it asks FerroPIX, or any IHE
+PIXm and PDQm service, as a client. Every access to patient data is logged.
 
-FerroFED works with openEHR, the open standard for structured health
-records, and with the European rules for sharing records across borders:
-the European Health Data Space (EHDS) and the MyHealth@EU patient summary.
-
-### Who it is for
-
-- **Regions and networks of care providers** that want a shared view of a
-  patient's record without moving all data into one central database.
-- **National contact points and eHealth agencies** that connect a country's
-  records to MyHealth@EU.
-- **Software vendors and integrators** that build applications over the
-  records of several organisations.
-
-### Why you can trust what it claims
-
-Every release is signed and comes with a software bill of materials (the
-list of every component inside) and SLSA build provenance, so you can check
-that what you install is what was built here. The source is public, and
-every feature is in this repository: there is no paid edition with extra
-functions. The
-[conformance statement](https://ferrofed.eu/docs/evaluate/conformance-statement.html)
-claims the Federation Tier specification point by point and names the test
-that holds each point, so you can check a claim against the standard
-yourself.
-
-## Part of FerroHEALTH
-
-FerroFED is one of five [FerroHEALTH](https://ferrohealth.eu) servers. Each
-does one job and reaches the others only over published standards:
-FerroEHR stores the record, FerroBRIDGE translates it to FHIR and the OMOP
-research model, FerroFED connects records across organisations and borders,
-FerroPIX matches patient identities, and FerroTERM serves the code systems
-(the shared lists of medical terms). FerroFED works in front of any openEHR
-record server and beside any IHE patient index, not only the FerroHEALTH
-ones. Sign-in, the audit trail and the web consoles come from three shared
-libraries: FerroAUTH, FerroAUDIT and FerroUI.
+It is for regions and networks of care providers that want a shared view of
+a patient's record without one central database, for national contact
+points and eHealth agencies that connect a country's records to
+MyHealth@EU, and for vendors and integrators that build applications over
+the records of several organisations.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="website/book/src/operate/img/console/topology-dark.png">
-  <img src="website/book/src/operate/img/console/topology.png" alt="The FerroFED operator console showing the members of a federation">
+  <source media="(prefers-color-scheme: dark)" srcset="website/book/src/operate/img/console/dashboard-dark.png">
+  <img src="website/book/src/operate/img/console/dashboard.png" alt="The FerroFED operator console dashboard">
 </picture>
 
-## Quick start
+## What it implements
 
-FerroFED is at v0.0.19. The quickstart runs the published gateway image
-beside four FerroEHR record servers with synthetic patients. You need Docker
-Compose, `openssl` and `git`:
-
-```sh
-git clone https://github.com/FerroHEALTH/FerroFED && cd FerroFED
-scripts/quickstart/signing-key.sh
-docker compose up --wait
-scripts/quickstart/seed.sh
-```
-
-Then ask the gateway for the compositions of the patient every server knows:
-
-```sh
-curl -s http://127.0.0.1:8080/v1/query/aql \
-  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
-  -H 'Content-Type: application/json' -d @- <<'EOF'
-{"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
-EOF
-```
-
-The answer holds a composition from each of the four servers, and its
-`meta.federation` part reports all four as `active`. The credentials are
-development values.
-[The quickstart page](https://ferrofed.eu/docs/operate/container.html#the-quickstart)
-walks through more queries, and
-[a production deployment](https://ferrofed.eu/docs/operate/production.html)
-takes you from the release `compose.yaml` to a first federated query over
-your own record servers.
-
-## What ships today
+FerroFED implements the openEHR Federation Working Group's
+[Federation Tier with AQL](https://syntaric.github.io/openehr-federation-spec/)
+specification, release 1.0.1, and reaches every node over openEHR ITS-REST
+1.1.0. The
+[conformance statement](https://ferrofed.eu/docs/evaluate/conformance-statement.html)
+claims the specification point by point and names the test that holds each
+point.
 
 ### Federated queries
 
-- [The federated query](https://ferrofed.eu/docs/how-it-works/federated-query.html): ordinary AQL in, one merged openEHR result out, with the status of every member
+- [The federated query](https://ferrofed.eu/docs/how-it-works/federated-query.html): ordinary AQL in, one merged openEHR result out, with the status of every member, and never a silent partial answer
 - [Patient identifiers kept out of every query](https://ferrofed.eu/docs/how-it-works/identifier-hygiene.html), resolved first through IHE PIXm and PDQm
 - [Localization](https://ferrofed.eu/docs/operate/localization.html): ask only the members that hold the patient, through IHE XCPD, the Dutch NVI or the patient index
 - [Follow-ups and writes](https://ferrofed.eu/docs/how-it-works/follow-ups-and-writes.html) routed to the one member that owns the record
@@ -150,27 +97,86 @@ your own record servers.
 
 ### European exchange
 
-- [The patient summary over FHIR](https://ferrofed.eu/docs/integrate/patient-summary.html) in the European exchange format
+- [The patient summary over FHIR](https://ferrofed.eu/docs/integrate/patient-summary.html) in the European exchange format, with [laboratory](https://ferrofed.eu/docs/integrate/laboratory-reports.html), [discharge](https://ferrofed.eu/docs/integrate/discharge-reports.html) and [imaging](https://ferrofed.eu/docs/integrate/imaging-reports.html) reports
 - [Prescriptions and dispensations over FHIR](https://ferrofed.eu/docs/integrate/prescriptions.html) in the HL7 Europe profiles
 - [A national contact point](https://ferrofed.eu/docs/integrate/national-contact-point.html) for MyHealth@EU
-
-### Security and privacy
-
-- [Client authentication](https://ferrofed.eu/docs/operate/authentication.html) with OAuth 2.0 access tokens and SMART on openEHR scopes
-- [Onward credentials](https://ferrofed.eu/docs/operate/onward-credentials.html): the gateway signs in to each member as itself, with DPoP or mutual TLS where asked
-- [What a member is told about the caller](https://ferrofed.eu/docs/operate/caller-token.html), in a token the gateway signs
-- [The access log](https://ferrofed.eu/docs/operate/access-log.html) of every access to patient data, as the EHDS asks
-- [The audit trail](https://ferrofed.eu/docs/operate/audit.html) of every IHE transaction, in the IHE ATNA format
 
 ### Operations
 
 - [The operator console](https://ferrofed.eu/docs/operate/operator-console.html), with versioned configuration revisions
-- [Container images and release binaries](https://ferrofed.eu/docs/operate/container.html), and a [Kubernetes package](https://ferrofed.eu/docs/operate/kubernetes.html)
 - [Admitting a member](https://ferrofed.eu/docs/operate/admission.html) after a check, and a [conformance run](https://ferrofed.eu/docs/operate/conformance-run.html) to score a deployment
 - [Health probes](https://ferrofed.eu/docs/operate/health.html), [metrics](https://ferrofed.eu/docs/operate/metrics.html), [tracing](https://ferrofed.eu/docs/operate/tracing.html) and [overload protection](https://ferrofed.eu/docs/operate/overload.html)
 
-<details>
-<summary><b>Published crates</b> (1)</summary>
+## Quick start
+
+The quickstart runs the published gateway image beside four FerroEHR
+record servers and FerroPIX, with synthetic patients. You need Docker
+Compose, `git`, `curl`, `jq` and `openssl`. Every command below is a step of
+[`scripts/quickstart/tour.sh`](scripts/quickstart/tour.sh), which CI runs.
+
+```sh
+git clone https://github.com/FerroHEALTH/FerroFED && cd FerroFED
+```
+
+Write the gateway's signing key, start the stack and seed the four servers:
+
+<!-- tour:start -->
+```sh
+scripts/quickstart/signing-key.sh
+docker compose up --wait
+scripts/quickstart/seed.sh
+```
+
+Ask the gateway for the compositions of the patient every server knows:
+
+<!-- tour:query -->
+```sh
+curl --fail-with-body -s http://127.0.0.1:8080/v1/query/aql \
+  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
+  -H 'Content-Type: application/json' -d @- <<'EOF' | jq -e '.meta.federation.complete and (.rows | length) == 4'
+{"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
+EOF
+```
+
+The answer holds a composition from each of the four servers, and its
+`meta.federation` part reports all four as `active` and the answer as
+complete. The credentials are development values for a laptop, and
+`docker compose down --volumes` removes what the quickstart started.
+[The quickstart page](https://ferrofed.eu/docs/operate/container.html#the-quickstart)
+walks through more queries.
+
+## Deploy it
+
+FerroFED is at v0.0.19. Every release publishes, from one tag:
+
+- the gateway image `ghcr.io/ferrohealth/ferrofed` and the console image
+  `ghcr.io/ferrohealth/ferrofed-console`, for `linux/amd64` and
+  `linux/arm64`;
+- the [Kubernetes package](https://ferrofed.eu/docs/operate/kubernetes.html),
+  `deploy/kubernetes/`, with each image pinned by digest;
+- the `ferrofed` binary for x86_64 and aarch64 Linux, on glibc and on musl,
+  and the release `compose.yaml` on the
+  [GitHub release](https://github.com/FerroHEALTH/FerroFED/releases).
+
+[A production deployment](https://ferrofed.eu/docs/operate/production.html)
+takes you from the release `compose.yaml` to a first federated query over
+your own record servers, and
+[Configuration](https://ferrofed.eu/docs/operate/configuration.html) names
+every key.
+
+## Security and conformance
+
+- [Client authentication](https://ferrofed.eu/docs/operate/authentication.html) with OAuth 2.0 access tokens and SMART on openEHR scopes
+- [Onward credentials](https://ferrofed.eu/docs/operate/onward-credentials.html): the gateway signs in to each member as itself, with DPoP or mutual TLS where asked
+- [What a member is told about the caller](https://ferrofed.eu/docs/operate/caller-token.html), in a token the gateway signs
+- [The access log](https://ferrofed.eu/docs/operate/access-log.html) of every access to patient data, as the EHDS asks, and [the audit trail](https://ferrofed.eu/docs/operate/audit.html) of every IHE transaction in the IHE ATNA format
+- Every release is signed and carries an SBOM and SLSA Build Level 3 provenance, and every scan finding an OpenVEX judgement
+- [What FerroFED claims](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html), the [conformance matrix](https://ferrofed.eu/docs/evaluate/conformance.html) and the [regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html) under the EHDS Regulation
+
+The source is public and every feature is in this repository; there is no
+paid edition with extra functions.
+
+## Crates
 
 | Crate | What it does | Version | Docs | Downloads |
 |---|---|---|---|---|
@@ -178,21 +184,39 @@ your own record servers.
 
 The interoperability component of Regulation (EU) 2025/327 the gateway runs, [`eehrxf`](https://crates.io/crates/eehrxf), is published from [FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE).
 
-</details>
+## Part of FerroHEALTH
 
+FerroFED is one of five [FerroHEALTH](https://ferrohealth.eu) servers. Each
+does one job and reaches the others only over published standards:
+FerroEHR stores the record, FerroBRIDGE translates it to FHIR and the OMOP
+research model, FerroFED connects records across organisations and borders,
+FerroPIX matches patient identities, and FerroTERM serves the code systems.
+FerroFED works in front of any openEHR record server and beside any IHE
+patient index.
 
-## Learn more
+## Documentation
 
-- [Documentation](https://ferrofed.eu/docs/) and the [FerroHEALTH book](https://ferrohealth.eu/docs/)
-- [What FerroFED claims](https://ferrofed.eu/docs/evaluate/what-ferrofed-claims.html), with its limitations, and the [conformance matrix](https://ferrofed.eu/docs/evaluate/conformance.html)
-- [Regulatory status](https://ferrofed.eu/docs/evaluate/regulatory-status.html), [data protection](https://ferrofed.eu/docs/evaluate/data-protection.html) and the [threat model](https://ferrofed.eu/docs/evaluate/threat-model.html)
-- [Changelog](CHANGELOG.md) and [milestones](https://github.com/FerroHEALTH/FerroFED/milestones)
-- [Security policy](SECURITY.md)
-- [Contributing](CONTRIBUTING.md), [code of conduct](CODE_OF_CONDUCT.md), [support](SUPPORT.md), [governance](GOVERNANCE.md), [maintainers](MAINTAINERS.md) and the [AI statement](AI_STATEMENT.md)
+- [The FerroFED book](https://ferrofed.eu/docs/): evaluate, integrate,
+  operate and contribute, and the
+  [FerroHEALTH book](https://ferrohealth.eu/docs/) for what the family
+  shares
+- [Data protection](https://ferrofed.eu/docs/evaluate/data-protection.html)
+  and the [threat model](https://ferrofed.eu/docs/evaluate/threat-model.html)
+- [Releases](https://ferrofed.eu/docs/operate/releases.html), the
+  [changelog](CHANGELOG.md) and the
+  [GitHub releases](https://github.com/FerroHEALTH/FerroFED/releases)
+
+## Support and contributing
+
+- [Support](SUPPORT.md) and the [security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md), [code of conduct](CODE_OF_CONDUCT.md),
+  [governance](GOVERNANCE.md), [maintainers](MAINTAINERS.md) and the
+  [AI statement](AI_STATEMENT.md)
 
 ## Licence
 
-Business Source License 1.1 ([LICENSE](LICENSE)), with Apache License 2.0 as
-the Change License four years after each version; the
-[licensing page](https://ferrohealth.eu/docs/licensing.html) says when you
-need a commercial licence from Cadasto B.V.
+Business Source License 1.1 ([LICENSE](LICENSE)): free outside production
+and for non-commercial production use, a commercial licence from Cadasto
+B.V. for other production use, and Apache License 2.0 four years after each
+version. The [licensing page](https://ferrohealth.eu/docs/licensing.html)
+says which applies to you.

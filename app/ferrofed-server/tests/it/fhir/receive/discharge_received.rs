@@ -223,5 +223,23 @@ async fn a_full_received_discharge_report_reaches_the_members_composition_but_it
             "{expression} is relayed as not carried: {declared:?}"
         );
     }
+    let document: Value = serde_json::from_str(&sent)?;
+    let course = document
+        .pointer("/entry/0/resource/section")
+        .and_then(Value::as_array)
+        .ok_or("the sections")?
+        .iter()
+        .position(|section| {
+            section
+                .pointer("/code/coding/0/code")
+                .and_then(Value::as_str)
+                == Some("8648-8")
+        })
+        .ok_or("the hospital course section")?;
+    let section = format!("Composition.section[{course}]");
+    assert!(
+        declared.contains(&section.as_str()),
+        "the hospital course, {section}, is relayed as not carried (eehrxf 0.3.2 HDR accounted): {declared:?}"
+    );
     Ok(())
 }
