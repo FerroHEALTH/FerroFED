@@ -70,6 +70,7 @@ as a broken command, is fixed in the same change.
 | v0.0.15 | 2026-10-30 | see below | 70 to 74, below | the v0.0.15 version bump |
 | v0.0.16 | 2026-11-05 | see below | 75 to 81, below | the v0.0.16 version bump |
 | v0.0.18 | 2026-11-10 | see below | 82 to 91, below | the version bump of v0.0.17, tagged and never released, re-cut as v0.0.18 |
+| v0.0.19 | 2026-11-11 | see below | 92 to 95, below | the v0.0.19 version bump |
 
 ### Findings of 2026-10-06
 
@@ -594,6 +595,40 @@ Against Art 28(b), a limitation left out:
 91. The instructions for use did not name the backup of FerroFED's own
     store or the rotation of a node grant's private key, both new with this
     release. Their maintenance table now names both.
+
+No text suggested a use outside the intended purpose, (c).
+
+### Findings of 2026-11-11
+
+The review at the v0.0.19 cut. Read in full: `README.md`, `CITATION.cff`,
+the information sheet, the claims page, the instructions for use, the
+Upgrading page, the clinical safety risk file's hazards I-20 to I-22 and
+the assembled release notes. Every other page of the book and `README.md`
+was searched for "planned", "v0.0.18", "v0.0.19", the imaging report's
+receipt, the FerroPIX and `ferrohealth-smart` versions and the keys the
+release moves, next to a statement that the work is still to come.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+92. The information sheet said the gateway receives each category but the
+    imaging report. It now says each is received, as its table of the
+    categories received already did
+    ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
+93. The claims page had no section for the release. It now has one for
+    v0.0.19.
+94. Hazard I-22 named the declaration of what a received imaging report
+    loses as planned. The risk file now names it as a control in place,
+    every loss declared to the sender, and keeps the hazard open at S4, P3
+    because no reader of the member's record is told
+    ([#1827](https://github.com/FerroHEALTH/FerroFED/issues/1827), [#1838](https://github.com/FerroHEALTH/FerroFED/issues/1838)).
+
+Against Art 28(b), a limitation left out:
+
+95. The instructions for use did not name the keys 0.0.19 moves, or that
+    the keys 0.0.18 refused by name are now refused as unknown keys. Their
+    maintenance table now does, with the Upgrading page's notes for
+    v0.0.19.
 
 No text suggested a use outside the intended purpose, (c).
 

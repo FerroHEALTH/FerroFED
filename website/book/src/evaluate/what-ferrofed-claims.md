@@ -572,6 +572,28 @@ ships what it holds.
 - Every outbound client on the family's `TlsClient`, at TLS 1.3 unless its
   `tls` sub-table lowers it ([#1750](https://github.com/FerroHEALTH/FerroFED/issues/1750), [#1766](https://github.com/FerroHEALTH/FerroFED/issues/1766)).
 
+### v0.0.19: imaging reports received, and what a report loses declared
+
+Released on 2026-11-11.
+
+- The medical imaging report, Art 14(1)(d), received at a
+  `[[fhir.receive]]` member over the HL7 Europe Imaging Report package
+  closure, validated in full and written at its member
+  ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
+- Each received category compiled with the declarations of the project
+  `eehrxf` ships for it, so what a received report loses is relayed to the
+  sender as not carried, and a written report names what its mapping
+  declared it left out; a written report names its member the custodian
+  ([#1785](https://github.com/FerroHEALTH/FerroFED/issues/1785), [#1826](https://github.com/FerroHEALTH/FerroFED/issues/1826), [#1827](https://github.com/FerroHEALTH/FerroFED/issues/1827), [#1838](https://github.com/FerroHEALTH/FerroFED/issues/1838)).
+- Every outbound service, the identity and Dutch service clients included,
+  configured with one endpoint table: its address, TLS, timeouts and
+  credential ([#1805](https://github.com/FerroHEALTH/FerroFED/issues/1805), [#1806](https://github.com/FerroHEALTH/FerroFED/issues/1806), [#1815](https://github.com/FerroHEALTH/FerroFED/issues/1815)).
+- The family crates on `ferrohealth-smart` 0.18, with a password in the
+  userinfo of any configured URL masked in every rendering of the
+  configuration, and the quickstart on FerroPIX 0.0.26 under client
+  credentials tokens, published as a self-contained `compose.yaml`
+  ([#1825](https://github.com/FerroHEALTH/FerroFED/issues/1825), [#1838](https://github.com/FerroHEALTH/FerroFED/issues/1838), [#1849](https://github.com/FerroHEALTH/FerroFED/issues/1849)).
+
 ## Limitations
 
 Regulation (EU) 2025/327 Art 28(b) forbids "failing to inform the
