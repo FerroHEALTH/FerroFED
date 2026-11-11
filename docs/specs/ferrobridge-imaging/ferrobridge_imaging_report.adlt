@@ -1,8 +1,10 @@
 -- SPDX-FileCopyrightText: Cadasto B.V.
 -- SPDX-License-Identifier: BUSL-1.1
--- FerroBRIDGE's imaging report template over two published CKM archetypes:
+-- FerroBRIDGE's imaging report template over three published CKM archetypes:
 -- a COMPOSITION.report-result.v1 (fixtures/ckm/library) holding one
--- OBSERVATION.imaging_exam_result.v1 (fixtures/ckm/imaging). The international
+-- OBSERVATION.imaging_exam_result.v1 (fixtures/ckm/imaging), whose Imaging
+-- service slot (protocol at0026) holds the CLUSTER.organisation.v1
+-- (fixtures/ckm/library) that performed the examination. The international
 -- CKM publishes no imaging report composition template, so no specification
 -- governs this template: our own design for the HL7 Europe Imaging Report
 -- 1.0.0-ballot round trip. Node identifiers are at-coded, the ADL 1.4 codes
@@ -32,7 +34,7 @@ description
 definition
     COMPOSITION[at0000.1] matches {
         /content matches {
-            use_archetype OBSERVATION[at0000.2, openEHR-EHR-OBSERVATION.imaging_exam_result.v1]
+            use_archetype OBSERVATION[at0000.2, openEHR-EHR-OBSERVATION.imaging_exam_result-ferrobridge.v1]
         }
     }
 
@@ -46,6 +48,49 @@ terminology
             ["at0000.2"] = <
                 text = <"Imaging examination result">
                 description = <"The imaging examination a DiagnosticReport and its ImagingStudy carry.">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-OBSERVATION.imaging_exam_result-ferrobridge.v1.0.0
+
+specialize
+    openEHR-EHR-OBSERVATION.imaging_exam_result.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Imaging Report round trip of FerroBRIDGE.">
+        >
+    >
+
+definition
+    OBSERVATION[at0000.1] matches {
+        /protocol[at0025]/items matches {
+            use_archetype CLUSTER[at0026.1, openEHR-EHR-CLUSTER.organisation.v1]
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Imaging examination result">
+                description = <"The imaging examination a DiagnosticReport and its ImagingStudy carry.">
+            >
+            ["at0026.1"] = <
+                text = <"Imaging service">
+                description = <"The organisation that performed the imaging examination.">
             >
         >
     >
