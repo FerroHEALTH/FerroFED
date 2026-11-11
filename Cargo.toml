@@ -106,7 +106,7 @@ ehds-logging = { version = "0.12.0", default-features = false }
 # document's custodian (`Document::with_custodian`, FerroHEALTH/FerroBRIDGE
 # #1819), which every written report names the member (#1785).
 # Verified against crates.io on 2026-11-10.
-eehrxf = { version = "0.6.0", default-features = false }
+eehrxf = { version = "0.6.1", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).

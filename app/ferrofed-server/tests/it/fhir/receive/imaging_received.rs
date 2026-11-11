@@ -155,12 +155,46 @@ async fn an_imaging_receipt_is_recorded_once_as_a_creation_of_its_category() -> 
     Ok(())
 }
 
+/// `sent` with its report performed by the sender's organization, the
+/// `Organization` entry the document already holds as its custodian.
+fn performed(sent: &str) -> Result<String, Box<dyn Error>> {
+    let mut document: Value = serde_json::from_str(sent)?;
+    let entries = document
+        .get_mut("entry")
+        .and_then(Value::as_array_mut)
+        .ok_or("the entries")?;
+    let kind = |entry: &Value, name: &str| {
+        entry
+            .pointer("/resource/resourceType")
+            .and_then(Value::as_str)
+            == Some(name)
+    };
+    let organization = entries
+        .iter()
+        .find(|entry| kind(entry, "Organization"))
+        .and_then(|entry| entry.get("fullUrl"))
+        .and_then(Value::as_str)
+        .ok_or("the custodian")?
+        .to_owned();
+    let report = entries
+        .iter_mut()
+        .find(|entry| kind(entry, "DiagnosticReport"))
+        .and_then(|entry| entry.get_mut("resource"))
+        .and_then(Value::as_object_mut)
+        .ok_or("the report")?;
+    report.insert(
+        String::from("performer"),
+        serde_json::json!([{ "reference": organization }]),
+    );
+    Ok(document.to_string())
+}
+
 // NOTE: hazard I-22 of the clinical safety risk file: what a received report carries into the
 // member's structured record, and what it keeps in the original document alone.
 #[tokio::test]
-async fn a_received_imaging_report_reaches_the_members_composition_and_declares_its_identifier_lost()
+async fn a_received_imaging_report_reaches_the_members_composition_and_declares_what_it_loses()
 -> TestResult {
-    let sent = report()?;
+    let sent = performed(&report()?)?;
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), (&a, &b), "")?;
@@ -200,12 +234,12 @@ async fn a_received_imaging_report_reaches_the_members_composition_and_declares_
         .filter(|issue| issue["code"] == "incomplete")
         .filter_map(|issue| issue.pointer("/expression/0").and_then(Value::as_str))
         .collect();
-    assert!(
-        declared
-            .iter()
-            .any(|held| held.starts_with("DiagnosticReport.identifier")),
-        "the report's identifier is relayed to the sender as not carried: {declared:?}"
-    );
+    for element in ["DiagnosticReport.identifier", "DiagnosticReport.performer"] {
+        assert!(
+            declared.iter().any(|held| held.starts_with(element)),
+            "{element} is relayed to the sender as not carried: {declared:?}"
+        );
+    }
     for carried in [
         "DiagnosticReport.code",
         "DiagnosticReport.conclusion",
