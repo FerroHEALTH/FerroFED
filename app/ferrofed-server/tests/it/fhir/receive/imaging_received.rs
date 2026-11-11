@@ -155,38 +155,45 @@ async fn an_imaging_receipt_is_recorded_once_as_a_creation_of_its_category() -> 
     Ok(())
 }
 
-/// `sent` with its report performed by the sender's organization, the
-/// `Organization` entry the document already holds as its custodian.
-fn performed(sent: &str) -> Result<String, Box<dyn Error>> {
+/// `sent` with a `Practitioner` beside the organization that performed its
+/// report, as a second performer.
+fn performed_also_by_a_practitioner(sent: &str) -> Result<String, Box<dyn Error>> {
     let mut document: Value = serde_json::from_str(sent)?;
     let entries = document
         .get_mut("entry")
         .and_then(Value::as_array_mut)
         .ok_or("the entries")?;
-    let kind = |entry: &Value, name: &str| {
-        entry
-            .pointer("/resource/resourceType")
-            .and_then(Value::as_str)
-            == Some(name)
-    };
-    let organization = entries
-        .iter()
-        .find(|entry| kind(entry, "Organization"))
-        .and_then(|entry| entry.get("fullUrl"))
-        .and_then(Value::as_str)
-        .ok_or("the custodian")?
-        .to_owned();
-    let report = entries
+    let practitioner = "http://example.org/fhir/Practitioner/synthetic-radiologist";
+    entries.push(serde_json::json!({
+        "fullUrl": practitioner,
+        "resource": {"resourceType": "Practitioner", "id": "synthetic-radiologist"}
+    }));
+    let performers = entries
         .iter_mut()
-        .find(|entry| kind(entry, "DiagnosticReport"))
-        .and_then(|entry| entry.get_mut("resource"))
-        .and_then(Value::as_object_mut)
-        .ok_or("the report")?;
-    report.insert(
-        String::from("performer"),
-        serde_json::json!([{ "reference": organization }]),
-    );
+        .find(|entry| {
+            entry
+                .pointer("/resource/resourceType")
+                .and_then(Value::as_str)
+                == Some("DiagnosticReport")
+        })
+        .and_then(|entry| entry.pointer_mut("/resource/performer"))
+        .and_then(Value::as_array_mut)
+        .ok_or("the report's performers")?;
+    performers.push(serde_json::json!({ "reference": practitioner }));
     Ok(document.to_string())
+}
+
+/// The expressions of the `incomplete` issues of the outcome `text`.
+fn declared(text: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    let outcome: Value = serde_json::from_str(text)?;
+    Ok(outcome["issue"]
+        .as_array()
+        .ok_or("the issues")?
+        .iter()
+        .filter(|issue| issue["code"] == "incomplete")
+        .filter_map(|issue| issue.pointer("/expression/0").and_then(Value::as_str))
+        .map(str::to_owned)
+        .collect())
 }
 
 // NOTE: hazard I-22 of the clinical safety risk file: what a received report carries into the
@@ -194,7 +201,7 @@ fn performed(sent: &str) -> Result<String, Box<dyn Error>> {
 #[tokio::test]
 async fn a_received_imaging_report_reaches_the_members_composition_and_declares_what_it_loses()
 -> TestResult {
-    let sent = performed(&report()?)?;
+    let sent = report()?;
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
     let app = gateway(dir.path(), (&a, &b), "")?;
@@ -217,32 +224,26 @@ async fn a_received_imaging_report_reaches_the_members_composition_and_declares_
         imaging::DESCRIPTION,
         imaging::STUDY_UID,
         imaging::CONCLUSION,
+        imaging::PERFORMER,
+        "openEHR-EHR-CLUSTER.organisation.v1",
     ] {
         assert!(mapped.contains(element), "{element} is carried: {mapped}");
     }
-    for element in [imaging::REPORT_IDENTIFIER, "Synthetic radiology"] {
-        assert!(
-            sent.contains(element) && !mapped.contains(element),
-            "{element} reaches the member in the original document alone: {mapped}"
-        );
-    }
-    let outcome: Value = serde_json::from_str(&text)?;
-    let declared: Vec<&str> = outcome["issue"]
-        .as_array()
-        .ok_or("the issues")?
-        .iter()
-        .filter(|issue| issue["code"] == "incomplete")
-        .filter_map(|issue| issue.pointer("/expression/0").and_then(Value::as_str))
-        .collect();
-    for element in ["DiagnosticReport.identifier", "DiagnosticReport.performer"] {
-        assert!(
-            declared.iter().any(|held| held.starts_with(element)),
-            "{element} is relayed to the sender as not carried: {declared:?}"
-        );
-    }
+    assert!(
+        sent.contains(imaging::REPORT_IDENTIFIER) && !mapped.contains(imaging::REPORT_IDENTIFIER),
+        "the report identifier reaches the member in the original document alone: {mapped}"
+    );
+    let declared = declared(&text)?;
+    assert!(
+        declared
+            .iter()
+            .any(|held| held.starts_with("DiagnosticReport.identifier")),
+        "the report identifier is relayed to the sender as not carried: {declared:?}"
+    );
     for carried in [
         "DiagnosticReport.code",
         "DiagnosticReport.conclusion",
+        "DiagnosticReport.performer",
         "ImagingStudy.modality",
     ] {
         assert!(
@@ -250,5 +251,27 @@ async fn a_received_imaging_report_reaches_the_members_composition_and_declares_
             "{carried} is carried, not declared: {declared:?}"
         );
     }
+    Ok(())
+}
+
+// NOTE: hazard I-22: HL7 Europe Imaging Report 1.0.0-ballot DiagnosticReportEuImaging.performer admits
+// a Practitioner beside the organization slice, and the Imaging service slot holds an organisation alone.
+#[tokio::test]
+async fn a_performer_that_is_no_organization_is_declared_to_the_sender() -> TestResult {
+    let sent = performed_also_by_a_practitioner(&report()?)?;
+    let (a, b) = (creating().await, Server::start().await);
+    let dir = tempfile::tempdir()?;
+    let app = gateway(dir.path(), (&a, &b), "")?;
+    let (status, text) = call(app, post(&sent)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let declared = declared(&text)?;
+    assert!(
+        declared.contains(&String::from("DiagnosticReport.performer[1]")),
+        "the practitioner is relayed to the sender as not carried: {declared:?}"
+    );
+    assert!(
+        !declared.contains(&String::from("DiagnosticReport.performer[0]")),
+        "the organization is carried, not declared: {declared:?}"
+    );
     Ok(())
 }

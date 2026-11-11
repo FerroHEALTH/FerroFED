@@ -1172,9 +1172,9 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.6.4"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9775f6ca047d7b9b83eab800817e4f5082d543ca86e9e63a32d8b5ae1a08a9a"
+checksum = "d30439ec7a3db2946fa290a9126aa291d1df446105da13b9eaeb54611c653e0e"
 dependencies = [
  "async-trait",
  "ferrobridge-term",
@@ -1904,9 +1904,9 @@ dependencies = [
 
 [[package]]
 name = "fhirconnect"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e98122fe36cec49e3fbf34e9cfbbde0bc0e96a8fe34fc11fb297c0a49619faa5"
+checksum = "b9eb01bd8eb9e1e48fb3987c54e55d2a62a21b1c8144a4b32a133ba22caf660d"
 dependencies = [
  "base64 0.23.1",
  "fhir-types",
