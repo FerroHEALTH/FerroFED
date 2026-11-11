@@ -15,6 +15,7 @@
 
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 use ferrohealth_smart::resource::introspection::IntrospectionSettings;
 use http::HeaderName;
@@ -83,8 +84,9 @@ pub struct Edge {
 #[serde(default, deny_unknown_fields)]
 pub struct TrustedIssuer {
     /// The issuer identifier its tokens carry in `iss`, which an
-    /// `[[auth.issuer]]` table trusts.
-    pub issuer: String,
+    /// `[[auth.issuer]]` table trusts; a password in its userinfo reaches no
+    /// rendering, as `ferrohealth-smart` 0.18 holds the issuer it names.
+    pub issuer: SecretUrl,
     /// The `client_id`s of the backend clients whose `system/aql-*` grant is
     /// honoured.
     pub backend_clients: Vec<String>,
@@ -172,13 +174,13 @@ impl Trust {
                     key: format!("{key}.issuer"),
                 });
             }
-            if named.contains(&written.issuer.as_str()) {
+            if named.contains(&written.issuer.expose()) {
                 return Err(fault(&format!("{key}.issuer"), AuthFault::DuplicateIssuer));
             }
-            named.push(&written.issuer);
+            named.push(written.issuer.expose());
             let issuer = issuers
                 .iter_mut()
-                .find(|issuer| issuer.issuer == written.issuer)
+                .find(|issuer| issuer.issuer == written.issuer.expose())
                 .ok_or_else(|| fault(&format!("{key}.issuer"), AuthFault::UnknownIssuer))?;
             *issuer = policy(&key, written, issuer.verification.clone())?;
         }
@@ -235,7 +237,7 @@ fn policy(
         demographic_clients: written.demographic_clients.iter().cloned().collect(),
         patient,
         professional_issuing_authority,
-        ..IssuerSettings::new(written.issuer.clone(), verification)
+        ..IssuerSettings::new(written.issuer.expose(), verification)
     })
 }
 

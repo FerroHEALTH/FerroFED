@@ -413,3 +413,30 @@ fn config_check_prints_no_credential() -> TestResult {
     }
     Ok(())
 }
+
+/// The suite's `[auth]` and `[trust]`, with its issuer named by a URL that
+/// carries userinfo.
+fn issuer_with_userinfo() -> String {
+    let issuer = format!("https://{URL_USER}:{URL_PASSWORD}@idp.example.org");
+    crate::support::caller::auth_toml().replace(crate::support::caller::ISSUER, &issuer)
+}
+
+#[test]
+fn an_issuers_userinfo_never_renders_in_the_configuration_or_config_check() -> TestResult {
+    let text = issuer_with_userinfo();
+    let config = Config::from_sources(Some(&text), &BTreeMap::new())?;
+    redacted("Config", &config);
+    let output = binary(&["config", "check"], &text)?;
+    let printed = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for sentinel in SENTINELS {
+        assert!(
+            !printed.contains(sentinel),
+            "config check prints an issuer's userinfo"
+        );
+    }
+    Ok(())
+}

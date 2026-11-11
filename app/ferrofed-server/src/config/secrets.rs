@@ -145,7 +145,7 @@ fn presents_certificate(
     if presents {
         for (key, url) in [
             ("token_endpoint", table.token_endpoint.expose()),
-            ("issuer", table.issuer.as_str()),
+            ("issuer", table.issuer.expose()),
         ] {
             let tls = url::Url::parse(url).is_ok_and(|parsed| parsed.scheme() == "https");
             if !url.is_empty() && !tls {
