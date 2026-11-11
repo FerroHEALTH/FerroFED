@@ -66,9 +66,13 @@ blank() {
 }
 
 # declares_version FILE: whether FILE checks BASH_VERSINFO on a code line.
+# The text is read whole first: under pipefail, grep -q ending a pipe early
+# fails the writer with SIGPIPE on a long file, and a declared script would
+# then be checked (#1861).
 declares_version() {
-  local file="$1"
-  blank "$file" | grep -q -E 'BASH_VERSINFO'
+  local file="$1" text
+  text="$(blank "$file")"
+  grep -q -E 'BASH_VERSINFO' <<< "$text"
 }
 
 # maybe_empty FILE: the arrays FILE assigns empty or fills with read -a.
@@ -192,6 +196,13 @@ self_test() {
   expect 0 'arithmetic' "x=${d}((a < 4))"
   expect 0 'grep -v' "grep -v -E 'x' file"
   expect 0 'declared version' 'if ((BASH_VERSINFO[0] < 4)); then' '  echo "needs bash 4" >&2; exit 1' 'fi' 'declare -A seen=()' 'mapfile -t lines < file'
+  # A declaring script longer than a pipe buffer, whose check sits at the top.
+  local long=('if ((BASH_VERSINFO[0] < 4)); then' '  echo "needs bash 4" >&2; exit 1' 'fi') i
+  for ((i = 0; i < 4000; i++)); do
+    long+=("echo \"line $i of a long script that declares its bash\"")
+  done
+  long+=('declare -A seen=()')
+  expect 0 'long declared version' "${long[@]}"
   if [[ "$failed" -ne 0 ]]; then
     exit 1
   fi
