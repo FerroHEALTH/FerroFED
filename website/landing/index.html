@@ -11,9 +11,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>FerroFED: an openEHR federation gateway</title>
-  <meta name="description" content="FerroFED is a pure-Rust openEHR federation gateway after the Federation Tier with AQL specification: one ordinary AQL query in, standard AQL to every node scoped to its own EHR id, one answer out with each node's provenance. Released as signed Linux binaries and a container image.">
+  <meta name="description" content="FerroFED is a pure-Rust openEHR federation gateway after the Federation Tier with AQL specification: one ordinary AQL query in, standard AQL to every node scoped to its own EHR id, one answer out with each node's provenance. ">
   <link rel="canonical" href="https://ferrofed.eu/">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v={{hash:style.css}}">
   <link rel="icon" href="./assets/brand/favicon.svg" type="image/svg+xml">
   <link rel="alternate icon" href="./assets/brand/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="alternate icon" href="./assets/brand/favicon.ico" sizes="32x32 16x16">
@@ -21,7 +21,7 @@
   <meta property="og:url" content="https://ferrofed.eu/">
   <meta property="og:site_name" content="FerroFED">
   <meta property="og:title" content="FerroFED: an openEHR federation gateway">
-  <meta property="og:description" content="A pure-Rust openEHR federation gateway: one ordinary AQL query in, standard AQL to every node scoped to its own EHR id, one answer out. Signed Linux binaries and a container image.">
+  <meta property="og:description" content="A pure-Rust openEHR federation gateway: one ordinary AQL query in, standard AQL to every node scoped to its own EHR id, one answer out.">
   <meta name="twitter:card" content="summary">
 
   <!-- Structured data. Browsers never execute an application/ld+json data block
@@ -36,7 +36,8 @@
     "codeRepository": "https://github.com/FerroHEALTH/FerroFED",
     "programmingLanguage": "Rust",
     "license": "https://github.com/FerroHEALTH/FerroFED/blob/main/LICENSE",
-    "applicationCategory": "HealthApplication"
+    "applicationCategory": "HealthApplication",
+    "runtimePlatform": "Linux"
   }
   </script>
 </head>
@@ -45,14 +46,17 @@
   <header class="nav">
     <div class="wrap">
       <a class="brand" href="./">
-        <img src="./assets/brand/ferrofed-icon.svg" alt="" aria-hidden="true" width="28" height="28">
+        <picture>
+          <source srcset="./assets/brand/ferrofed-icon-dark.svg" media="(prefers-color-scheme: dark)">
+          <img src="./assets/brand/ferrofed-icon.svg" alt="" aria-hidden="true" width="28" height="28">
+        </picture>
         <span>FerroFED</span>
       </a>
       <nav class="nav-links" aria-label="Primary">
         <a href="./docs/">Docs</a>
-        <a href="./docs/evaluate/the-federation-tier.html" class="hide-sm">The specification</a>
-        <a href="./docs/operate/container.html" class="hide-sm">Install</a>
-        <a href="./docs/evaluate/what-ferrofed-claims.html" class="hide-sm">What it claims</a>
+        <a href="./docs/operate/container.html#the-quickstart" class="hide-sm">Quickstart</a>
+        <a href="./docs/operate/production.html" class="hide-sm">Deploy</a>
+        <a href="./docs/evaluate/the-federation-tier.html" class="hide-sm">Specification</a>
         <a href="https://github.com/FerroHEALTH/FerroFED" rel="noopener">GitHub</a>
       </nav>
     </div>
@@ -62,27 +66,143 @@
 
     <section class="hero">
       <div class="wrap">
-        <img class="hero-logo" src="./assets/brand/ferrofed-icon.svg" alt="FerroFED" width="88" height="88">
-        <p class="status" role="note">v0.0.18 released. Linux binaries, the gateway and console images, signed, and a compose file to start it.</p>
+        <picture>
+          <source srcset="./assets/brand/ferrofed-icon-dark.svg" media="(prefers-color-scheme: dark)">
+          <img class="hero-logo" src="./assets/brand/ferrofed-icon.svg" alt="FerroFED" width="88" height="88">
+        </picture>
+        <!-- The version is rendered from the root Cargo.toml when the site is
+             assembled (scripts/site/assemble.sh), so it is always the release
+             main carries. -->
+        <a class="status" href="https://github.com/FerroHEALTH/FerroFED/releases/latest" rel="noopener">v{{version:ferrofed}} released</a>
         <h1>Where else the record is.</h1>
         <p class="sub">
-          FerroFED is an openEHR federation gateway. A client sends it an
-          ordinary AQL query with no federation syntax: the gateway resolves
-          the patient outside the query, sends standard AQL to each CDR scoped
-          to that node's own EHR id, and merges the answers with each node's
-          provenance into one ordinary result set. It holds no clinical data
-          of its own.
+          FerroFED is an openEHR federation gateway, in pure Rust. A client
+          sends it an ordinary AQL query with no federation syntax: the
+          gateway resolves the patient outside the query, sends standard AQL
+          to each CDR scoped to that node's own EHR id, and merges the answers
+          with each node's provenance into one ordinary result set. It holds
+          no clinical data of its own.
         </p>
         <div class="hero-cta">
-          <a class="btn btn-primary" href="./docs/operate/container.html">Install and run</a>
+          <a class="btn btn-primary" href="./docs/operate/container.html#the-quickstart">Run the quickstart</a>
           <a class="btn btn-ghost" href="./docs/evaluate/the-federation-tier.html">Read about the specification</a>
         </div>
         <p class="note">
-          Each release ships the <code>ferrofed</code> binary for x86_64 and
-          aarch64 Linux, on glibc and on musl, with SLSA provenance and SBOMs,
-          and the image <code>ghcr.io/ferrohealth/ferrofed</code> for
-          <code>linux/amd64</code> and <code>linux/arm64</code>.
+          A gateway image and an operator console image on GHCR, a Kubernetes
+          package and the <code>ferrofed</code> binary for x86_64 and aarch64
+          Linux, built at SLSA Build Level 3.
         </p>
+      </div>
+    </section>
+
+    <section id="federation" class="surface">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">What it does</span>
+          <h2>One query in, one answer out, every node named</h2>
+          <p>
+            FerroFED follows the openEHR Federation Working Group's Federation
+            Tier with AQL specification and reaches every node over openEHR
+            ITS-REST 1.1.0. The
+            <a href="./docs/evaluate/conformance-statement.html">conformance statement</a>
+            names the test that holds each conformance point.
+          </p>
+        </div>
+        <div class="grid">
+
+          <a class="card" href="./docs/how-it-works/federated-query.html">
+            <span class="tag">Federation Tier with AQL 1.0.1</span>
+            <h3>Transparent to the client</h3>
+            <p>
+              <code>/v1/query/aql</code> takes a conformant openEHR query and
+              answers one ordinary ITS-REST result set. Ordering, paging,
+              <code>DISTINCT</code> and the aggregates apply across nodes, and
+              what cannot be exact is refused with a reason.
+            </p>
+          </a>
+
+          <a class="card" href="./docs/how-it-works/identifier-hygiene.html">
+            <span class="tag">IHE PIXm, PDQm and XCPD</span>
+            <h3>No identifier in what a node receives</h3>
+            <p>
+              The patient resolves to each node's local EHR id outside AQL,
+              through a patient index such as FerroPIX. The rewrite refuses a
+              query that would leak an identifier, and an outbound gate checks
+              every request again.
+            </p>
+          </a>
+
+          <a class="card" href="./docs/integrate/client-contract.html">
+            <span class="tag">Federation metadata</span>
+            <h3>Never a silent partial answer</h3>
+            <p>
+              Every node in scope is reported with its status. A node that
+              does not answer in its time budget fails the query, unless the
+              client asks for flagged partial rows with every missing node
+              named.
+            </p>
+          </a>
+
+          <a class="card" href="./docs/how-it-works/follow-ups-and-writes.html">
+            <span class="tag">Follow-ups and writes</span>
+            <h3>Every request reaches its owner</h3>
+            <p>
+              A request under an EHR goes to the one node that holds it, a
+              versioned write only to the CDR that created the version, and a
+              stored query lives at the gateway as an immutable version it
+              distributes to the members.
+            </p>
+          </a>
+
+          <a class="card" href="./docs/integrate/patient-summary.html">
+            <span class="tag">EHDS and MyHealth@EU</span>
+            <h3>The European exchange format on FHIR</h3>
+            <p>
+              The patient summary, prescriptions and dispensations, laboratory,
+              imaging and discharge reports in the HL7 Europe profiles, from a
+              member's openEHR record or its own FHIR endpoint, and served to a
+              national contact point.
+            </p>
+          </a>
+
+          <a class="card" href="./docs/operate/authentication.html">
+            <span class="tag">OAuth 2.0, DPoP and EHDS logging</span>
+            <h3>Every caller verified, every access recorded</h3>
+            <p>
+              Each caller is authenticated at the gateway and each node reached
+              with its own credential. Consent can be checked first, and every
+              access to patient data is recorded with the verified caller and
+              the categories of the data.
+            </p>
+          </a>
+
+        </div>
+      </div>
+    </section>
+
+    <section id="console">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">The operator console</span>
+          <h2>The federation as the gateway sees it</h2>
+          <p>
+            The console shows the members, their reachability, the incidents
+            and the stored queries, runs a federated query with every node's
+            status, and keeps the configuration as revisions an operator
+            saves, applies and rolls back.
+          </p>
+        </div>
+        <figure class="shot">
+          <picture>
+            <source srcset="./docs/operate/img/console/dashboard-dark.png" media="(prefers-color-scheme: dark)">
+            <img src="./docs/operate/img/console/dashboard.png" alt="The console's dashboard: the organisations, the nodes reachable, the open incidents and the running configuration revision, with the nodes that need attention and the topology." width="1440" height="900" loading="lazy">
+          </picture>
+          <figcaption>
+            The dashboard, drawn with synthetic data.
+            <a href="./docs/operate/operator-console.html">Every page of the console</a>,
+            and <a href="./docs/operate/configuration-revisions.html">configuration revisions</a>.
+          </figcaption>
+        </figure>
       </div>
     </section>
 
@@ -90,282 +210,86 @@
       <div class="wrap">
         <div class="section-head">
           <span class="eyebrow">Run it</span>
-          <h2>The gateway and four member CDRs, in one command</h2>
+          <h2>From a laptop to a Kubernetes cluster</h2>
           <p>
-            The repository's quickstart starts the published image beside four
-            FerroEHR nodes, each with its own database and system id on one
-            PostgreSQL server. A seed script creates synthetic patients over
-            each node's ITS-REST API, and you send the gateway one ordinary
-            ITS-REST query.
+            The gateway is one static binary on a distroless base, in front of
+            the CDRs you already run and beside a patient index. The console
+            is its own image and keeps no patient data.
           </p>
         </div>
-        <pre class="cmd"><code>git clone https://github.com/FerroHEALTH/FerroFED.git
-cd FerroFED
-scripts/quickstart/signing-key.sh
-docker compose up --wait
-scripts/quickstart/seed.sh
+        <div class="grid">
 
-curl -s http://127.0.0.1:8080/v1/query/aql \
-  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
-  -H 'Content-Type: application/json' -d @- &lt;&lt;'EOF'
-{"q": "SELECT c/uid/value FROM EHR e CONTAINS COMPOSITION c WHERE e/ehr_status/subject/external_ref/id/value = 'ffd-test-0001' AND e/ehr_status/subject/external_ref/namespace = 'urn:oid:2.999.1.1'"}
-EOF</code></pre>
-        <div class="prose">
-          <p>
-            The answer is one ITS-REST result set with a composition from each
-            node in its rows, and <code>meta.federation</code> reports all four
-            endpoints <code>active</code>. Each node received a query scoped
-            to its own EHR id, with no patient identifier in it. The patients
-            are synthetic, resolved through the quickstart's FerroPIX, and
-            the credentials are development values for a laptop.
-          </p>
-          <p>
-            To run the binary on its own, download a tarball from the
-            <a href="https://github.com/FerroHEALTH/FerroFED/releases/latest" rel="noopener">latest release</a>
-            and verify it with <code>gh attestation verify</code> before you
-            start it. <a href="./docs/operate/container.html">The container
-            page</a> covers the image, the ports and the verification, and
-            <a href="./docs/operate/configuration.html">the configuration
-            page</a> covers the registry, the identity service and client
-            authentication.
-          </p>
+          <a class="card" href="./docs/operate/container.html#the-quickstart">
+            <span class="tag">Compose</span>
+            <h3>The quickstart</h3>
+            <p>
+              <code>docker compose up --wait</code> from a checkout starts the
+              gateway beside four FerroEHR nodes and FerroPIX; a seed script
+              adds synthetic patients, and you send one federated query.
+            </p>
+          </a>
+
+          <a class="card" href="./docs/operate/container.html#the-image">
+            <span class="tag">OCI images</span>
+            <h3>The container images</h3>
+            <p>
+              <code>ghcr.io/ferrohealth/ferrofed</code> and
+              <code>ghcr.io/ferrohealth/ferrofed-console</code>, for amd64 and
+              arm64, each with SLSA provenance and an SBOM you verify before
+              you run it.
+            </p>
+          </a>
+
+          <a class="card" href="./docs/operate/kubernetes.html">
+            <span class="tag">Kubernetes</span>
+            <h3>The Kubernetes package</h3>
+            <p>
+              A kustomize package, <code>deploy/kubernetes/</code>, attached to
+              every release with each image pinned by digest: the gateway's
+              StatefulSet, its network policy and its disruption budget.
+            </p>
+          </a>
+
         </div>
       </div>
     </section>
 
-    <section id="properties">
+    <section id="family">
       <div class="wrap">
         <div class="section-head">
-          <span class="eyebrow">What it does</span>
-          <h2>What the gateway does, release by release</h2>
+          <span class="eyebrow">In the family</span>
+          <h2>The product that connects records across organisations</h2>
           <p>
-            FerroFED follows the openEHR Federation Working Group's Federation
-            Tier with AQL specification, and each card answers a normative
-            requirement there. The
-            <a href="./docs/evaluate/conformance.html">conformance matrix</a>
-            shows which points a test scores today.
+            The FerroHEALTH products reach each other only over published
+            protocols. FerroFED sits in front of the CDRs and asks the patient
+            index where a patient's records are.
           </p>
         </div>
         <div class="grid">
 
           <article class="card">
-            <span class="tag">In v0.0.3</span>
-            <h3>Transparent to the client</h3>
+            <h3>FerroEHR</h3>
             <p>
-              <code>/v1/query/aql</code> takes a conformant openEHR query with
-              no federation syntax and answers one ordinary ITS-REST result
-              set, with the federation's additions in one metadata member that
-              names every endpoint.
+              The openEHR CDR each member runs. The gateway reaches it over
+              ITS-REST 1.1.0 like any other client, and the node profile is
+              checked against FerroEHR and EHRbase.
             </p>
           </article>
 
           <article class="card">
-            <span class="tag">In v0.0.3</span>
-            <h3>No identifier in what the gateway sends a node</h3>
+            <h3>FerroPIX</h3>
             <p>
-              The patient identifier is resolved to each node's local EHR id
-              outside AQL, through an IHE PIXm PIX Manager, and consumed at the
-              gateway. The rewrite refuses a query that would leak it, and an
-              outbound gate checks every request again before it leaves. A
-              body the client writes reaches its node as the client sent it.
+              The patient index the gateway resolves through. FerroFED keeps
+              no table of patients: it asks a PIXm Manager as a client, and the
+              quickstart runs FerroPIX.
             </p>
           </article>
 
           <article class="card">
-            <span class="tag">In v0.0.6</span>
-            <h3>Never a silent partial answer</h3>
+            <h3>FerroBRIDGE</h3>
             <p>
-              Every node in scope is reported with a status. When a node that
-              was asked does not answer in its time budget, the default is to
-              fail the query. A client that asks for flagged partial rows gets
-              them, every missing node named.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.6</span>
-            <h3>Merged as one CDR would</h3>
-            <p>
-              <code>ORDER BY</code> with <code>LIMIT</code>, bounded
-              <code>OFFSET</code> pages, <code>DISTINCT</code> and the
-              aggregates are applied across nodes, and a copied version can be
-              kept once. What cannot be exact is refused with a reason.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.6</span>
-            <h3>Directed and self-describing</h3>
-            <p>
-              A client names nodes in the AQL or in a header and can select
-              each row's endpoint as a column. <code>OPTIONS /</code> says what
-              the gateway does and which members stand behind it.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.6</span>
-            <h3>Follow-ups reach the right node</h3>
-            <p>
-              A request under <code>/v1/ehr/{ehr_id}</code> goes to the one
-              node that holds that EHR: the node the client names, else the one
-              the gateway learned, else the one it finds. Two nodes claiming
-              one EHR id are refused, never guessed between.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.7</span>
-            <h3>Writes and definitions reach their owner</h3>
-            <p>
-              A versioned write goes only to the CDR that created the version.
-              A template goes to the node you name, or to several on request,
-              and stored queries live at the gateway as immutable versions it
-              can distribute to the members.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.7</span>
-            <h3>Ready to operate</h3>
-            <p>
-              A check to run before you admit a node, a registry reload on
-              <code>SIGHUP</code>, health probes, Prometheus and OpenTelemetry
-              metrics, a stored-query store on a file, PostgreSQL or a
-              read-only directory, and a compose file in every release that
-              starts the gateway in front of the CDRs you already run.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.8</span>
-            <h3>Every caller verified, every node reached its own way</h3>
-            <p>
-              Each caller is authenticated at the gateway, and each node is
-              reached with its own credential: OAuth 2.0 with DPoP, or the
-              Dutch Nuts and FAPI 2.0 grants. Patients are located
-              through XCPD, PIXm, PDQm or the Dutch NVI, consent can be
-              checked with Mitz first, and every IHE exchange is audited.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.9</span>
-            <h3>An operator console, and a conformance statement</h3>
-            <p>
-              The operator console shows the members, incidents and stored
-              queries and runs a federated query with every node's status and
-              completeness, signed in through OpenID Connect with no
-              JavaScript of its own. The conformance statement scores each
-              conformance point of the Federation Tier by a test or a recorded
-              deferral, with the node profile checked against FerroEHR and
-              EHRbase, and <code>ferrofed conformance run</code> scores your
-              own deployment.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.10</span>
-            <h3>EHDS readiness, and ready for production</h3>
-            <p>
-              Every access to patient data is recorded with the verified
-              caller and the categories of the data, as the EHDS logging
-              component asks. A FHIR face answers the patient summary in the
-              European exchange format and receives a patient summary into
-              the member you name. Several replicas, restarts with no dropped
-              request, TLS on the listener, overload limits and inbound
-              metrics are built, and the specification is pinned at 1.0.0.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.11</span>
-            <h3>Prescriptions on the FHIR face, and a new console</h3>
-            <p>
-              The FHIR face searches and reads a patient's electronic
-              prescriptions and writes a dispensation to the member that
-              owns its prescription, passed through in the HL7 Europe MPD
-              profiles from the members that serve them. The operator
-              console is redesigned, and can keep the configuration as
-              versioned revisions an operator saves, applies and rolls back.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.12</span>
-            <h3>The console rebuilt, and every finding judged</h3>
-            <p>
-              The operator console is rebuilt on FerroUI as ferrofed-console:
-              every page is drawn on the server and every action works with
-              no WebAssembly. Client authentication runs on the family's
-              shared resource-server crate, static bearer tokens are gone,
-              and each release is refused while a scan finding in its images
-              or binaries has no statement that judges it.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.13</span>
-            <h3>The national contact point, served</h3>
-            <p>
-              A national contact point's connector reads the patient summary,
-              the document list and the prescriptions on the FHIR face and
-              posts a dispensation, held by an end-to-end test. A received
-              document is validated in full against its profiles, and the
-              gateway ships a Kubernetes package with its images pinned by
-              digest.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.14</span>
-            <h3>No patient index, and safer summaries</h3>
-            <p>
-              The gateway keeps no table of patients in any profile: every
-              patient resolves through FerroPIX, the family's patient index,
-              which the quickstart runs. The patient summary marks a probable
-              duplicate medicine across members, a repeated entry is never
-              merged into one, and a dispensation is checked against the
-              owner's before it is written.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.15</span>
-            <h3>The family's server, and the MyHealth@EU catalogue</h3>
-            <p>
-              The gateway and its console run on the FerroHEALTH family's
-              shared server, configuration, health and telemetry crates, with
-              TLS 1.3 by default and every error a problem details document.
-              FerroFED's reading of the MyHealth@EU requirements catalogue is
-              published as a self-assessment, with the gateway changes it
-              found for a national contact point.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.16</span>
-            <h3>Laboratory reports, and prescriptions from openEHR</h3>
-            <p>
-              The FHIR face receives, lists and serves laboratory reports in
-              the European exchange format, from a member's openEHR record or
-              from the member's own FHIR endpoint. A member that keeps its
-              prescriptions in openEHR serves them as HL7 Europe prescriptions
-              and receives dispensations, and the console draws every page on
-              its server.
-            </p>
-          </article>
-
-          <article class="card">
-            <span class="tag">In v0.0.18</span>
-            <h3>Discharge and imaging reports, and the contact point</h3>
-            <p>
-              The FHIR face lists and serves discharge and imaging reports from
-              a member's openEHR record or its own FHIR endpoint, and receives
-              discharge reports. A national contact point's requests are held
-              to the patient of its treatment relationship and to the
-              MyHealth@EU emergency limit, and every node request goes under a
-              token exchanged for its caller.
+              The <code>eehrxf</code> crate builds the European exchange
+              documents the FHIR face serves from a member's openEHR record.
             </p>
           </article>
 
@@ -376,46 +300,23 @@ EOF</code></pre>
     <section id="audiences" class="surface">
       <div class="wrap">
         <div class="section-head">
-          <span class="eyebrow">Where to start</span>
-          <h2>Four questions, four answers</h2>
+          <span class="eyebrow">The documentation</span>
+          <h2>Four questions, four parts of the book</h2>
         </div>
         <div class="grid audiences">
 
           <article class="card audience">
             <span class="tag">Evaluate</span>
-            <h3>Does this fit my problem?</h3>
+            <h3>Does it fit my problem?</h3>
             <p>
-              What the Federation Tier is, what FerroFED claims and what is
-              planned, where each conformance point stands, the version pins,
-              the licence and the status under the EHDS Regulation.
+              How a federated query works, what the Federation Tier asks and
+              what FerroFED claims, the conformance statement, and the status
+              under the EHDS Regulation.
             </p>
             <ul>
-              <li><a href="./docs/evaluate/the-federation-tier.html">The Federation Tier with AQL</a></li>
+              <li><a href="./docs/how-it-works/overview.html">How it works</a></li>
               <li><a href="./docs/evaluate/what-ferrofed-claims.html">What FerroFED claims</a></li>
-              <li><a href="./docs/evaluate/conformance.html">Conformance matrix</a></li>
-              <li><a href="./docs/evaluate/obligations.html">Obligations checklist</a></li>
-              <li><a href="./docs/evaluate/versions.html">Pinned versions</a></li>
               <li><a href="./docs/evaluate/regulatory-status.html">Regulatory status</a></li>
-              <li><a href="./docs/evaluate/data-protection.html">Data protection</a></li>
-              <li><a href="./docs/evaluate/threat-model.html">Threat model</a></li>
-            </ul>
-          </article>
-
-          <article class="card audience">
-            <span class="tag">Operate</span>
-            <h3>How do I run it, and what does it need?</h3>
-            <p>
-              One binary or a distroless image, a registry of member CDRs over
-              ITS-REST, and an identifier cross-reference service, plus the
-              failure behaviour to know before you run it.
-            </p>
-            <ul>
-              <li><a href="./docs/operate/production.html">A production deployment, step by step</a></li>
-              <li><a href="./docs/operate/deployment-shape.html">What FerroFED runs beside</a></li>
-              <li><a href="./docs/operate/container.html">The container image and the quickstart</a></li>
-              <li><a href="./docs/operate/configuration.html">Configuration</a></li>
-              <li><a href="./docs/operate/admission.html">Admitting a node</a></li>
-              <li><a href="./docs/operate/hardening.html">Hardening</a></li>
             </ul>
           </article>
 
@@ -423,14 +324,28 @@ EOF</code></pre>
             <span class="tag">Integrate</span>
             <h3>What does a client send and get?</h3>
             <p>
-              An ordinary AQL request in, an ordinary result set out, and the
-              federation metadata that says which nodes answered.
+              An ordinary AQL request in, an ordinary result set out, the
+              federation metadata that says which nodes answered, and the
+              European exchange format on the FHIR face.
             </p>
             <ul>
               <li><a href="./docs/integrate/client-contract.html">The client contract</a></li>
-              <li><a href="./docs/integrate/follow-ups.html">Follow-ups</a></li>
-              <li><a href="./docs/integrate/stored-queries.html">Stored queries</a></li>
+              <li><a href="./docs/integrate/patient-summary.html">The patient summary over FHIR</a></li>
               <li><a href="./docs/integrate/errors.html">Errors and status codes</a></li>
+            </ul>
+          </article>
+
+          <article class="card audience">
+            <span class="tag">Operate</span>
+            <h3>What does running it involve?</h3>
+            <p>
+              A production deployment step by step, every configuration key,
+              admitting a node, the console, and hardening.
+            </p>
+            <ul>
+              <li><a href="./docs/operate/production.html">A production deployment</a></li>
+              <li><a href="./docs/operate/configuration.html">Configuration</a></li>
+              <li><a href="./docs/operate/hardening.html">Hardening</a></li>
             </ul>
           </article>
 
@@ -438,66 +353,17 @@ EOF</code></pre>
             <span class="tag">Contribute</span>
             <h3>How is the work organised?</h3>
             <p>
-              The tracker is the worklist and the checks are committed scripts
-              you can run yourself. A change answers one issue and cites the
-              specification section it implements.
+              The tracker is the worklist, every check is a committed script
+              you can run, and a change cites the specification section it
+              implements.
             </p>
             <ul>
               <li><a href="./docs/contribute/how-the-work-is-organised.html">How the work is organised</a></li>
               <li><a href="./docs/contribute/checks-and-gates.html">Checks and gates</a></li>
-              <li><a href="./docs/contribute/adding-a-country.html">Adding a country</a></li>
-              <li><a href="./docs/evaluate/licensing.html">Licensing</a></li>
+              <li><a href="./docs/changelog.html">Changelog</a></li>
             </ul>
           </article>
 
-        </div>
-      </div>
-    </section>
-
-    <!-- The tracker's milestones are the roadmap. The list between the markers
-         is rendered from the GitHub milestones when the site is assembled
-         (scripts/site/assemble.sh); the committed copy carries the link only. -->
-    <section id="status">
-      <div class="wrap">
-        <div class="status-panel">
-          <h2>Where the project is</h2>
-          <p>
-            v0.0.18 is the current release. It answers one federated AQL query
-            over many nodes with the patient resolved outside AQL, merges the
-            rows as one CDR would, and routes reads, writes and definitions to
-            the node that owns them. Every caller is authenticated, each node
-            is told who is asking in a token the gateway signs, and the IHE and
-            Dutch bindings locate the patient, check consent and audit each
-            exchange. v0.0.9 added the operator console and the conformance
-            statement. v0.0.10 added the EHDS access log, the patient summary
-            in the European exchange format, and what a production deployment
-            needs. v0.0.11 adds electronic prescriptions and dispensations on
-            the FHIR face, configuration from the console as versioned
-            revisions, and the redesigned console. v0.0.12 rebuilds the
-            console on FerroUI as ferrofed-console, moves client
-            authentication onto the family's shared crate, and judges every
-            scan finding of a release. v0.0.13 serves a national contact
-            point's connector, validates a received document in full and
-            ships the Kubernetes package. v0.0.14 resolves every patient
-            through FerroPIX and keeps no patient index of its own, and adds
-            the safety controls of the clinical review to the patient
-            summary. v0.0.15 runs the gateway and the console on the
-            family's shared server crates and publishes FerroFED's
-            MyHealth@EU self-assessment. v0.0.16 serves laboratory reports
-            and prescriptions from openEHR medication data on the FHIR face,
-            and implements the Federation Tier 1.0.1 routing. v0.0.18 serves
-            discharge and imaging reports, holds a national contact point to
-            the MyHealth@EU profile, and keeps shared state in FerroFED's own
-            PostgreSQL store. The tracker's milestones are the
-            roadmap; every issue carries its acceptance criteria, and a
-            release is cut when its milestone has no open issue left.
-          </p>
-          <!-- roadmap:begin -->
-          <!-- roadmap:end -->
-          <div class="hero-cta">
-            <a class="btn btn-primary" href="https://github.com/FerroHEALTH/FerroFED/releases/latest" rel="noopener">Get the latest release</a>
-            <a class="btn btn-ghost" href="https://github.com/FerroHEALTH/FerroFED/milestones" rel="noopener">See the roadmap</a>
-          </div>
         </div>
       </div>
     </section>
@@ -509,14 +375,21 @@ EOF</code></pre>
       <div class="footer-grid">
         <div class="footer-brand">
           <a class="brand" href="./">
-            <img src="./assets/brand/ferrofed-icon.svg" alt="" aria-hidden="true" width="28" height="28">
+            <picture>
+          <source srcset="./assets/brand/ferrofed-icon-dark.svg" media="(prefers-color-scheme: dark)">
+          <img src="./assets/brand/ferrofed-icon.svg" alt="" aria-hidden="true" width="28" height="28">
+        </picture>
             <span>FerroFED</span>
           </a>
           <p>
             A pure-Rust openEHR federation gateway, one of the
             <a href="https://ferrohealth.eu/" rel="noopener">FerroHEALTH</a>
             family. The software is licensed under the
-            <a href="https://github.com/FerroHEALTH/FerroFED/blob/main/LICENSE" rel="noopener">Business Source License 1.1</a>.
+            <a href="https://github.com/FerroHEALTH/FerroFED/blob/main/LICENSE" rel="noopener">Business Source License 1.1</a>:
+            free outside production and for non-commercial production use, a
+            commercial licence for other production use, and Apache License
+            2.0 four years after each version.
+            <a href="./docs/evaluate/licensing.html">Which applies to you</a>.
           </p>
           <p>
             Manufactured by Cadasto B.V., Comeniusstraat 2d, 1817 MS Alkmaar,
@@ -529,11 +402,11 @@ EOF</code></pre>
             <h4>Read</h4>
             <ul>
               <li><a href="./docs/">Documentation</a></li>
-              <li><a href="./docs/operate/container.html">Install and run</a></li>
-              <li><a href="./docs/evaluate/the-federation-tier.html">The specification</a></li>
-              <li><a href="./docs/evaluate/licensing.html">Licensing</a></li>
+              <li><a href="./docs/operate/container.html#the-quickstart">Quickstart</a></li>
+              <li><a href="./docs/operate/configuration.html">Configuration</a></li>
               <li><a href="./docs/evaluate/regulatory-status.html">Regulatory status</a></li>
               <li><a href="./docs/evaluate/post-market.html">Complaints and incidents</a></li>
+              <li><a href="https://ferrohealth.eu/docs/" rel="noopener">The family book</a></li>
               <li><a href="https://syntaric.github.io/openehr-federation-spec/" rel="noopener">Federation Tier with AQL</a></li>
             </ul>
           </div>
@@ -542,8 +415,9 @@ EOF</code></pre>
             <ul>
               <li><a href="https://github.com/FerroHEALTH/FerroFED" rel="noopener">GitHub</a></li>
               <li><a href="https://github.com/FerroHEALTH/FerroFED/releases" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/FerroHEALTH/FerroFED/milestones" rel="noopener">Roadmap</a></li>
               <li><a href="https://github.com/FerroHEALTH/FerroFED/issues" rel="noopener">Issues</a></li>
-              <li><a href="https://github.com/FerroHEALTH/FerroFED/milestones" rel="noopener">Milestones</a></li>
+              <li><a href="https://github.com/FerroHEALTH/FerroFED/security/policy" rel="noopener">Security policy</a></li>
             </ul>
           </div>
         </div>

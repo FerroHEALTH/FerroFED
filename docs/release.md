@@ -48,9 +48,12 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   named and the list goes on, so one run reports every finding, before
   any release exists.
 - **github-release** creates the release as a draft carrying those notes, and
-  attaches `deploy/compose/compose.yaml`, `ferrofed.toml` and `registry.toml`
-  under those names: the gateway alone at this release's image, with the two
-  example files it mounts. It attaches the nginx reverse proxy
+  attaches the quickstart, the repository's self-contained `compose.yaml`
+  (`scripts/quickstart/compose-configs.sh --check` refuses a stale inlined
+  copy), with its SHA-256 as `compose.yaml.sha256sum`, and
+  `deploy/compose/compose.yaml` as `gateway-compose.yaml` with
+  `ferrofed.toml` and `registry.toml`: the gateway alone at this release's
+  image, with the two example files it mounts. It attaches the nginx reverse proxy
   configuration of the production guide, `deploy/nginx/ferrofed.conf`, as
   `ferrofed.conf`, with its SHA-256 as `ferrofed.conf.sha256sum`, and fails
   when the tag's tree has no such file. It also attaches the conformance
@@ -105,7 +108,8 @@ plan ── github-release (draft) ── build-binaries ── build-image ─�
   digests the image jobs pushed, which `scripts/release/kubernetes-package.sh`
   writes and refuses when a manifest's tag is not the release's version.
   It then checks that the draft carries every asset this version
-  promises, eight per target, the three compose files, the nginx
+  promises, eight per target, the quickstart compose file and its checksum,
+  the three gateway compose files, the nginx
   configuration and its checksum, the two seed data files, the dashboard
   and alert rules, the information sheet and instructions for use of
   the tag, the vulnerability record and its reports, the Kubernetes
@@ -285,10 +289,9 @@ slow one.
    (`scripts/checks/upgrade-notes.sh`), and the book's Upgrading page
    (`website/book/src/operate/upgrading.md`) takes the release's notes in the
    same pull request.
-   The landing page's release note and status panel
-   (`website/landing/index.html`) name the same version in the same pull
-   request: `scripts/checks/versions.sh` fails while they name an older one. The page is deployed from `main`, so the bump pull
-   request is where it changes; the release lane never writes to `main`.
+   The landing page's release badge needs no edit:
+   `scripts/site/assemble.sh` renders it from the workspace version, and
+   `scripts/checks/versions.sh` refuses a release typed into the page.
 4. **The public texts are reviewed against Regulation (EU) 2025/327 Art 28.**
    Every public text is read for a claim the release does not ship, a
    limitation it leaves out, or a use outside the intended purpose, and the
@@ -631,10 +634,6 @@ planned under, so step 1 moves that milestone on by one.
      the fix alone. It adds the patch's row to the support table of
      `SECURITY.md`, and the row is copied to the book's CRA information to
      the user as step 5 there says;
-   - the landing page names the patch, because `scripts/checks/versions.sh`
-     holds it to the newest release in the branch's `CHANGELOG.md`. The
-     site is deployed from `main`, so this copy only satisfies the guard,
-     and step 8 moves `main`'s;
    - the claims review, the information sheet, the instructions for use and
      the cybersecurity risk assessment get the patch's rows, and the
      technical documentation its review rows when the fix changes a
@@ -668,10 +667,7 @@ planned under, so step 1 moves that milestone on by one.
    - its row of the support table of `SECURITY.md`, and the copy of that
      row on the book's CRA information to the user;
    - the removal of the fix's fragment from `changelog.d/`, because the
-     patch's section records the fix;
-   - the landing page's release note and status panel, which
-     `scripts/checks/versions.sh` holds to the newest release in
-     `CHANGELOG.md`.
+     patch's section records the fix.
 
    `main`'s version files stay at the release they name, and its next
    version bump moves them past the patch.

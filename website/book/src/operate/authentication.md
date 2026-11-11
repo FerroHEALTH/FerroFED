@@ -551,8 +551,7 @@ contact point with no `[[federation.contact_point]]`, a
 `[[federation.contact_point]]` that names no contact point, a `countries`
 code that is neither a Member State nor one of its `additional_countries`,
 and an `[[auth.federation]]` table that names no source of
-`provider.issuing_authority_name`. The removed
-`[trust.issuer.national_contact_point]` is refused, naming its successor.
+`provider.issuing_authority_name`.
 
 **Who authenticates the professional.** The contact point's side does. The
 gateway verifies the contact point's token, as it verifies every caller's,
@@ -719,17 +718,20 @@ token ([Errors and status codes](../integrate/errors.md)).
 
 ## The quickstart issuer
 
-The compose quickstart trusts one development issuer.
-`scripts/quickstart/token.sh` generates its RSA key pair with `openssl` on
-its first run, writes the key set to `docker/quickstart/issuer/jwks.json`,
-which the gateway reads, and prints a token valid for an hour, with every
-scope in the `user/` compartment and the purpose of use `TREAT`. The private
-key stays in that directory, which git ignores. It is a development key and
-not for anything real.
+The compose quickstart trusts one development issuer, its `issuer` service,
+NAV's mock-oauth2-server at `http://localhost:8190/quickstart`. Its client
+credentials grant for `quickstart-client` returns a person's token valid
+for an hour, the user `quickstart-user`, every scope in the `user/`
+compartment and the purpose of use `TREAT`. The gateway reads an issuer's
+metadata and accepts plain `http` only on loopback, so it runs in the
+issuer's network namespace. It signs for anyone who asks and is not for
+anything real.
 
 ```sh
+TOKEN="$(curl -s http://127.0.0.1:8190/quickstart/token -d grant_type=client_credentials \
+  -d client_id=quickstart-client -d client_secret=any | jq -r .access_token)"
 curl -s http://127.0.0.1:8080/v1/query/aql \
-  -H "Authorization: Bearer $(scripts/quickstart/token.sh)" \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"q": "…"}'
 ```
 

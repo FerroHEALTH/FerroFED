@@ -19,7 +19,6 @@ use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
 use ferrofed_registry::id::NodeId;
 use ferrofed_testkit::tls::MutualTls;
 use ferrofed_testkit::xcpd::{Answer, Community, RespondingGateway};
-use ferrohealth_secret::secret_url::SecretUrl;
 use ihe_iti::xcpd::security::XuaAssertion;
 
 use crate::support::{PATIENT_VALUE, registry};
@@ -55,10 +54,11 @@ fn config(gateways: &[String], transport: Transport) -> Result<XcpdConfig, Box<d
             .iter()
             .map(|endpoint| {
                 Ok(GatewayConfig {
-                    endpoint: SecretUrl::new(endpoint.as_str()),
+                    client: ferrofed_testkit::outbound::client(endpoint)?,
                     device: "2.999.50.1".to_owned(),
                     community: None,
                     myhealth_eu: false,
+                    revocation: None,
                 })
             })
             .collect::<Result<_, Box<dyn Error>>>()?,
@@ -68,8 +68,6 @@ fn config(gateways: &[String], transport: Transport) -> Result<XcpdConfig, Box<d
         ]),
         namespaces: BTreeMap::new(),
         transport,
-        tls: ferrofed_testkit::tls::platform(),
-        revocation: None,
     })
 }
 

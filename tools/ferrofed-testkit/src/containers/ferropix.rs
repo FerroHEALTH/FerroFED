@@ -136,7 +136,7 @@ pub struct FerroPix {
 
 impl FerroPix {
     /// Returns the FHIR base, with its trailing slash, that the gateway's
-    /// `[[pixm.manager]] url` names and the feed is sent to.
+    /// `[[pixm.manager]] endpoint.url` names and the feed is sent to.
     #[must_use]
     pub fn fhir_base(&self) -> String {
         format!("{}{FHIR_PATH}", self.origin)

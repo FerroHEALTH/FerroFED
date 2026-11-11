@@ -58,6 +58,18 @@ const STUDY: &str = "imagingstudy";
 /// first of the form's slots.
 const REQUIRED: usize = 4;
 
+/// The `fullUrl` `document` gives the `ImagingStudy` the mapping run `run`
+/// wrote, which the study section lists; `None` when the run wrote none.
+fn study(document: &Document, run: &Bundle) -> Option<String> {
+    run.entry
+        .iter()
+        .find_map(|entry| match entry.resource.as_ref() {
+            Some(Resource::ImagingStudy(study)) => study.id.clone(),
+            _ => None,
+        })
+        .map(|id| document.full_url("ImagingStudy", &id))
+}
+
 /// Returns the query's qualified name, `eu.ferrofed.eehrxf::imaging-report`.
 ///
 /// # Errors
@@ -141,28 +153,22 @@ impl Writes for Served {
             "Software that writes the imaging report from the member's record automatically",
             (&self.mapping, composition),
         )?;
-        let study = mapped
-            .bundle()
-            .entry
-            .iter()
-            .find_map(|entry| match entry.resource.as_ref() {
-                Some(Resource::ImagingStudy(study)) => study.id.clone(),
-                _ => None,
-            })
-            .map(|id| document.full_url("ImagingStudy", &id));
+        let withheld = report::withheld(mapped.bundle());
+        let study = study(&document, mapped.bundle());
         let mut targets = document
             .with_mapped_report(mapped.bundle())
             .map_err(ServedError::Document)?;
         targets.extend(study.iter().cloned());
         report::sourced(&mut document, report, &targets).map_err(ServedError::Document)?;
         for slot in IMAGING_SLOTS.iter().take(REQUIRED) {
-            let section = Section::new(
-                slot,
-                vec![format!(
-                    "The {} as the member records it, written by the gateway.",
-                    slot.title.to_lowercase()
-                )],
-            );
+            let mut paragraphs = vec![format!(
+                "The {} as the member records it, written by the gateway.",
+                slot.title.to_lowercase()
+            )];
+            if slot.slice == STUDY {
+                paragraphs.extend(withheld.clone());
+            }
+            let section = Section::new(slot, paragraphs);
             // NOTE: HL7 Europe Imaging Report 1.0.0-ballot eu-imaging-composition-1: a section holds an
             // entry or an emptyReason, and the member's record holds no order, history or procedure.
             let section = match (&study, slot.slice == STUDY) {

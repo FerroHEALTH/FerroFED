@@ -16,7 +16,7 @@ listen = "0.0.0.0:8080"
 
 [db]
 url = "postgresql://ferropix:ferropix_example@ferropix-postgres:5432/ferropix"
-data_key_file = "/run/secrets/ferropix-data-key"
+data_key_file = "/etc/ferropix/data-key"
 
 # The development token issuer the quickstart runs beside FerroPIX
 # (compose.yaml, the `ferropix-issuer` service), NAV's mock-oauth2-server.

@@ -17,9 +17,10 @@
 //!
 //! A Generic Functions service the gateway is a data user of, such as the
 //! NVI Localization Service, is reached the same way: [`NutsAuthorizer`] is
-//! the authorizer of its `nl-generic-functions` client, the same provider
-//! obtains its token, and every request to the service carries the token
-//! with a proof of the grant's key over the request (GFI-005).
+//! the `ferrohealth-smart` outbound client's [`Authorizer`] its
+//! `nl-generic-functions` client is built over, the same provider obtains
+//! its token, and every request to the service carries the token with a
+//! proof of the grant's key over the request (GFI-005).
 //!
 //! A token is cached until `REFRESH_MARGIN` of `onward::grant::cache` before
 //! the end of the lifetime its `expires_in` stated, one token request per
@@ -37,7 +38,6 @@ use std::time::{Duration, Instant};
 use ferrofed_registry::id::EndpointId;
 use http::header::WWW_AUTHENTICATE;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
-use ihe_iti::authorizer::{Authorized, Authorizer, AuthorizerError, Retry};
 use nl_generic_functions::nuts_auth::error::{NutsAuthError, ProofError};
 use nl_generic_functions::nuts_auth::holder::Holder;
 use nl_generic_functions::nuts_auth::{DpopProver, Grant, NutsClient};
@@ -48,6 +48,7 @@ use url::Url;
 use crate::onward::Clock;
 use crate::onward::grant::cache::TokenCache;
 use ferrohealth_smart::client::dpop::{self, DpopKey, Role};
+use ferrohealth_smart::client::outbound::{Authorized, Authorizer, AuthorizerError};
 
 /// What a Nuts grant at one node's authorization server asks for, as whom,
 /// and the key its tokens are bound to.
@@ -254,15 +255,17 @@ impl fmt::Debug for NutsCredentials {
 const PROOF_HEADER: HeaderName = HeaderName::from_static("dpop");
 
 /// The Nuts grant of a Generic Functions service the gateway is a data user
-/// of, as the [`Authorizer`] of that service's client (the IG's GFI-004 and
-/// GFI-005).
+/// of, as the [`Authorizer`] of the outbound client that service's client is
+/// built over (the IG's GFI-004 and GFI-005).
 ///
 /// Every request carries the grant's token under the `DPoP` scheme and a
 /// proof of the grant's key over the request's method, its URL without query
 /// and fragment, and the token (RFC 9449 §4.2, §7.1). The token is cached
-/// and refreshed as a node's is, and dropped when the service answers `401`.
-/// A `401` whose `DPoP` challenge names `use_dpop_nonce` keeps the nonce and
-/// asks for the request once more (§9). The token goes to that service alone.
+/// and refreshed as a node's is. The outbound client sends a request the
+/// service answers `401` once more with new headers: a `401` whose `DPoP`
+/// challenge names `use_dpop_nonce` keeps the token and the nonce (§9), and
+/// any other drops the token, so the resend carries a new one (RFC 6750
+/// §3.1). The token goes to that service alone.
 ///
 /// `Debug` names the service and the grant, never a token.
 #[derive(Debug)]
@@ -295,7 +298,7 @@ impl NutsAuthorizer {
 
     /// The `Authorization` and `DPoP` headers of a request with `method` to
     /// `url`, each marked sensitive.
-    async fn headers(&self, method: &Method, url: &Url) -> Result<HeaderMap, AuthorizerError> {
+    async fn proven(&self, method: &Method, url: &Url) -> Result<HeaderMap, AuthorizerError> {
         let credentials = &self.credentials;
         let token = credentials
             .cache
@@ -333,11 +336,11 @@ enum Unproven {
 }
 
 impl Authorizer for NutsAuthorizer {
-    fn authorize<'a>(&'a self, method: &'a Method, url: &'a Url) -> Authorized<'a> {
-        Box::pin(self.headers(method, url))
+    fn headers<'a>(&'a self, method: &'a Method, url: &'a Url) -> Authorized<'a> {
+        Box::pin(self.proven(method, url))
     }
 
-    fn answered(&self, url: &Url, status: StatusCode, headers: &HeaderMap) -> Retry {
+    fn answered(&self, url: &Url, status: StatusCode, headers: &HeaderMap) {
         // NOTE: RFC 9449 §8.1, a nonce is NQCHAR text, so a header value that
         // is not visible ASCII is legitimately no nonce.
         let nonce = headers
@@ -349,14 +352,9 @@ impl Authorizer for NutsAuthorizer {
                 .dpop
                 .remember(Role::Resource, url, nonce);
         }
-        if status != StatusCode::UNAUTHORIZED {
-            return Retry::Done;
+        if status == StatusCode::UNAUTHORIZED && !(nonce.is_some() && demands_nonce(headers)) {
+            self.credentials.refused();
         }
-        if nonce.is_some() && demands_nonce(headers) {
-            return Retry::Resend;
-        }
-        self.credentials.refused();
-        Retry::Done
     }
 }
 

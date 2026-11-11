@@ -80,7 +80,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `openehr-base`, `openehr-rm` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison and, from 0.0.79, the attribute model with the BASE primitives, the `Ordered` marker and the `OBJECT_REF` targets (FerroEHR #3537) |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
-| `fhir-types` | 0.1.130 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled in the binding crates and in the interoperability component `eehrxf`, never in the engine (decisions A16 and A59); 0.1.127 is the release `fhirconnect` builds on (#684) |
+| `fhir-types` | 0.1.131 (`r4` with `terminology`, `resources` from the PDQm client #119 and the mCSD reader #74; Apache-2.0) | the FHIR R4 model for PIXm `Parameters`, the PDQm `Patient` and the mCSD resources, compiled in the binding crates and in the interoperability component `eehrxf`, never in the engine (decisions A16 and A59); 0.1.127 is the release `fhirconnect` builds on (#684) |
 | `eehrxf` | 0.3.2 (FerroBRIDGE, BUSL-1.1) | the European interoperability software component (decision A58), published from FerroHEALTH/FerroBRIDGE since the owner decision of 2026-10-28 (A76, #813) |
 | `fhirconnect`, `openehr-mapping-core` | 0.1.249 and 0.1.151 (FerroBRIDGE, BUSL-1.1) | the FHIRconnect 1.0.0 engine `eehrxf` runs in process under `openehr` (#730), required by a caret range since FerroBRIDGE's published crates follow Cargo SemVer (decision A61, #684, #1772) |
 | `ferrobridge-term` | 0.3.0 (FerroBRIDGE, BUSL-1.1) | the FHIR terminology client the interoperability component asks its optional terminology server through (decision A63, #925): `$translate`, `$lookup` and `$validate-code` in R4, over the HTTP client the gateway builds with its credential and TLS material |
@@ -534,8 +534,8 @@ cut at the request's overall deadline, and the three Step-1 seams that ask a
 remote service each run inside a budget of their own: the localizer's
 (`federation.localization.timeout_ms`, its default under
 `node_selection = "localized"` when the section is not written), the
-demographics step's (`pdqm.timeout_ms`) and the consent pre-filter's
-(`nl_gf.mitz.timeout_ms`; the development table asks no service and has
+demographics step's (`pdqm.endpoint.timeout`) and the consent pre-filter's
+(`nl_gf.mitz.endpoint.timeout`; the development table asks no service and has
 none). Each is declared in `OPTIONS` beside the N38 timeouts
 (`timeout.localization_ms`, `demographics_ms`, `consent_ms`) and is a strict
 part of the overall budget: a configuration whose localizer budget alone,
@@ -1618,7 +1618,7 @@ request is composed: the node client and the PIXm client take the wrapped
 `SecretString`, and a URL is parsed from `expose()` where load validates it
 and where its client or store is built. A PIX Manager URL, like a registry
 endpoint URL, refuses userinfo at load: its credentials go in
-`[pixm.manager.credentials]`.
+`[pixm.manager.endpoint.credentials]`.
 
 **Membership is configuration.** The bootstrap document is TOML
 (`[[organisation]]`, `[[node]]`, `[[endpoint]]`, `[[node.identifier]]`) with
@@ -2436,9 +2436,9 @@ ArchUnit rules (`aqlPipelineIsPure`, `registryStaysALeaf`,
 | Crate | Responsibility | Depends on | Must not depend on |
 |---|---|---|---|
 | `crates/openehr-federation` | the Federation Tier with AQL specification: the wire additions of section 10 (always on), the rewrite of section 4 (feature `aql`, no I/O) and the merge of section 9 (feature `merge`, pure) | `serde`, `serde_json`, `openehr-its` (`rest`); `openehr-query` with `aql`; `openehr-rm` with `merge` | anything in FerroFED, any HTTP client, any storage |
-| `ihe-iti` (crates.io, `=0.0.76`, from FerroHEALTH/FerroPIX) | the IHE ITI profiles, owned and published by FerroHEALTH/FerroPIX since #367, so FerroFED keeps no copy; one feature each: `pixm` (ITI-83), `pdqm` (ITI-78, ITI-119), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies); `balp` turns on the FHIR profiles' audit records and `atna` the ITI-55 audit message, each written through `ihe-atna`; `authorizer`, the FHIR-free request authorizer the IHE clients, the NVI client and the engine's Nuts grant share (#1516) | `fhir-types` (`r4`, `resources`), an HTTP client, `ihe-atna` (its `user` module with `pixm`, `pdqm` and `xcpd`; `atna` and `balp` with the features of those names), and only under `xcpd` the SOAP stack | anything in FerroFED |
+| `ihe-iti` (crates.io, `^0.2.0`, from FerroHEALTH/FerroPIX) | the IHE ITI profiles, owned and published by FerroHEALTH/FerroPIX since #367, so FerroFED keeps no copy; one feature each: `pixm` (ITI-83), `pdqm` (ITI-78, ITI-119), `mcsd` (ITI-90), `pmir` (ITI-93, ITI-94), `xcpd` (ITI-55, the only feature with SOAP 1.2, HL7 v3 and SAML XUA dependencies); `balp` turns on the FHIR profiles' audit records and `atna` the ITI-55 audit message, each written through `ihe-atna`; every client is built from `ferrohealth-smart`'s outbound client, which carries the credential, the retry table and, for the NVI, the engine's Nuts grant as the product's `Authorizer` (#1516, #1815) | `fhir-types` (`r4`, `resources`), an HTTP client, `ihe-atna` (its `user` module with `pixm`, `pdqm` and `xcpd`; `atna` and `balp` with the features of those names), and only under `xcpd` the SOAP stack | anything in FerroFED |
 | `ihe-atna` (crates.io, `=0.3.1`, from FerroHEALTH/FerroAUDIT) | the family's audit library, published from FerroAUDIT: `atna`, the ITI-20 DICOM audit message over syslog with TLS, the bounded store-and-forward spool and the forwarder, and `balp`, the BALP `AuditEvent` and the ATX: FHIR Feed; `user`, whom an exchange is made for | `quick-xml`, `rustls`, `tokio` under `atna`; `fhir-types` (`r4`, `resources`), an HTTP client with no TLS backend of its own, `tokio` under `balp`, which no longer takes `atna` | anything in FerroFED |
-| `nl-generic-functions` (crates.io, `=0.0.43`) | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza` and `nuts-auth`; `nvi` takes the request authorizer of `ihe-iti` (#730, #1516); owned and published by FerroHEALTH/FerroPIX since #367, so FerroFED keeps no copy | the clients each function needs, `ferrohealth-smart`'s RFC 8414 metadata rule under `nuts-auth` | anything in FerroFED |
+| `nl-generic-functions` (crates.io, `^0.2.0`) | the Dutch Generic Functions of Annex B, one feature each: `nvi`, `mitz`, `lrza` and `nuts-auth`; the `nvi` and `mitz` clients are built from `ferrohealth-smart`'s outbound client (#730, #1516, #1815); owned and published by FerroHEALTH/FerroPIX since #367, so FerroFED keeps no copy | the clients each function needs, `ferrohealth-smart`'s RFC 8414 metadata rule under `nuts-auth` | anything in FerroFED |
 | `ehds-logging` (crates.io, `=0.3.1`, from FerroHEALTH/FerroAUDIT) | the European logging software component of Regulation (EU) 2025/327 (decision A58): the Annex II 3.2 access record, the Art 14(1) categories, coded as A81 decides, the map that classifies an access, the retention of each record by category and origin (A75), its security labels by category and origin (A91), the record of each semantic transformation an access applied (A100), the sink; `balp` writes the record as an IHE BALP `AuditEvent` | `serde`, `jiff`, `secrecy`; `ihe-atna` (`balp`) under `balp` | `eehrxf`, `fhirconnect`, anything in FerroFED |
 | `eehrxf` (crates.io, `=0.1.128`, from FerroHEALTH/FerroBRIDGE) | the European interoperability software component (decisions A58, A60 to A62): the format-neutral dataset model read from the Xt-EHR *EHDS Logical Information Models* package, one feature per Art 14(1) category (`patient-summary`, `prescription`, `dispensation`, `imaging`, `laboratory`, `discharge`), `fhir-r4`, the FHIR R4 serialisation with no openEHR crate, whose `document` writes the patient summary as an HL7 Europe Patient Summary document `Bundle` under `patient-summary` (#809), and `openehr`, which turns on `fhir-r4` and runs FerroBRIDGE's FHIRconnect engine in process over a canonical-JSON composition and its OPT (#730); under `fhir-r4`, `receive` reads and checks a received document, and under `openehr` maps it into one composition that keeps the original (#801); under `fhir-r4`, `transformation` reports what each transformation transcoded, left untranscoded and dropped, by path (A100); published from FerroHEALTH/FerroBRIDGE since the owner decision of 2026-10-28 (A76, #813), where every change to it is made | `serde`, `serde_json`, `flate2`, `tar`; `fhir-types` (`r4`, `resources`), `async-trait` and `http` (the terminology server seam, #687) under `fhir-r4`; `fhirconnect`, `openehr-mapping-core` and `openehr-rm` under `openehr` | `ehds-logging`, anything in FerroFED |
 | `app/ferrofed-registry` | the registry model and snapshot, the learned maps, incidents, and the `DefinitionStore` trait; a leaf | `openehr-base` | the operator documents, the engine, identity, any storage implementation |
@@ -2766,8 +2766,8 @@ separate members. The CI harness stays at two nodes plus the third for
 three-node cases. The compose quickstart runs four, `ferroehr-a` to
 `ferroehr-d`, on the same layout, with synthetic patients spread across them:
 one at all four, one at two, one at one and one at none, all in the example
-arc, which the quickstart's FerroPIX cross-references and
-`scripts/quickstart/seed.sh` creates over ITS-REST.
+arc, which the quickstart's FerroPIX cross-references and its `ehr-seed`
+service creates over ITS-REST.
 
 **The PIX Manager.** No lightweight container answers `$ihe-pix` and accepts
 ITI-104 seeding on its own: HAPI FHIR does not implement the operation out of

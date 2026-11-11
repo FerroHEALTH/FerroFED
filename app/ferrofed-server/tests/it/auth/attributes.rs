@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 
 use ferrofed_server::auth::refusal::Refusal;
 use ferrofed_server::config::Config;
-use ferrofed_server::config::auth::{AuthFault, Verification};
+use ferrofed_server::config::auth::Verification;
 use ferrofed_server::config::error::Error as ConfigError;
 
 use super::{Gateway, TestResult, assert_refused, bearing, claims, minted, query};
@@ -37,30 +37,30 @@ async fn an_issuer_without_an_attributes_table_states_no_purpose() -> TestResult
     assert_refused(&gateway, request, Refusal::PurposeOfUse).await
 }
 
-/// The removed `professional_issuing_authority` refuses to boot, naming the
-/// `[[auth.attributes]]` source that replaces it.
+/// The `professional_issuing_authority` 0.0.20 retired refuses the load,
+/// naming the `[[auth.attributes]]` source that replaces it (the family's
+/// one-release rule, `ferrohealth_config::removed`).
 #[test]
-fn the_removed_issuing_authority_key_is_refused_naming_its_replacement() -> TestResult {
-    let text = "[auth]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\nprofessional_issuing_authority = \"hp_issuing_authority\"\n";
-    let refused = Config::from_sources(Some(text), &BTreeMap::new())?
-        .resolve()
+fn the_retired_issuing_authority_key_is_refused_naming_its_replacement() -> TestResult {
+    let text = "[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\nprofessional_issuing_authority = \"hp_issuing_authority\"\n";
+    let refused = Config::from_sources(Some(text), &BTreeMap::new())
         .err()
-        .ok_or("the removed key is refused")?;
-    let ConfigError::Auth { key, fault } = &refused else {
-        return Err(format!("expected an [auth] refusal, got {refused:?}").into());
+        .ok_or("the retired key is refused at load")?;
+    let ConfigError::Retired(retired) = &refused else {
+        return Err(format!("expected a retired-key refusal, got {refused:?}").into());
     };
-    assert_eq!(
-        (
-            "trust.issuer[0].professional_issuing_authority",
-            AuthFault::IssuingAuthorityMoved
-        ),
-        (key.as_str(), *fault)
-    );
+    let named: Vec<(&str, &str)> = retired
+        .removals()
+        .iter()
+        .map(|removal| (removal.key(), removal.replacement().unwrap_or_default()))
+        .collect();
+    assert_eq!(1, named.len(), "{named:?}");
     assert!(
-        refused
-            .to_string()
-            .contains("\"professional.issuing_authority_name\""),
-        "{refused}"
+        named.iter().any(|(key, replacement)| {
+            *key == "trust.issuer[0].professional_issuing_authority"
+                && replacement.contains("professional.issuing_authority_name")
+        }),
+        "{named:?}"
     );
     Ok(())
 }

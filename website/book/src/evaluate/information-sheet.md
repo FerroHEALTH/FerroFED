@@ -42,8 +42,8 @@ The running gateway names the same details in `GET {base}/`,
 Art 38(2)(b): "the name and version of the EHR system and date of its
 release".
 
-The EHR system is **FerroFED**. This sheet describes FerroFED 0.0.18,
-released on 2026-11-10. It ships as these forms:
+The EHR system is **FerroFED**. This sheet describes FerroFED 0.0.19,
+released on 2026-11-11. It ships as these forms:
 
 - the gateway image `ghcr.io/ferrohealth/ferrofed`, for Linux on `x86_64`
   and `aarch64`;
@@ -82,6 +82,7 @@ says what it holds and what it waits on.
 
 | Release | Date |
 |---|---|
+| 0.0.19 | 2026-11-11 |
 | 0.0.18 | 2026-11-10 |
 | 0.0.16 | 2026-11-05 |
 | 0.0.15 | 2026-10-30 |
@@ -156,13 +157,12 @@ documents of three categories:
 | (a) | `Patient-Summaries` | yes |
 | (b) | `Electronic-Prescriptions` | no |
 | (c) | `Electronic-Dispensations` | no |
-| (d) | `Medical-Imaging` | no |
+| (d) | `Medical-Imaging` | yes |
 | (e) | `Laboratory-Reports` | yes |
 | (f) | `Discharge-Reports` | yes |
 
-An imaging report is not received yet: a `Medical-Imaging`
-`[[fhir.receive]]` entry refuses the start until the gateway's package set
-holds the HL7 Europe Imaging Report package's dependency closure
+An imaging report is received over the HL7 Europe Imaging Report
+1.0.0-ballot package closure, which the package set pins
 ([#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
 
 An electronic dispensation, Art 14(1)(c), is received as one resource,
@@ -203,7 +203,7 @@ Item names its row in the matrix exactly.
 
 | Item | Pin | What FerroFED does with it |
 |---|---|---|
-| Product version | 0.0.18 | the FerroFED version this sheet describes |
+| Product version | 0.0.19 | the FerroFED version this sheet describes |
 | Federation Tier with AQL | 1.0.1 | the federation it implements: the façade, the rewrite per node, the merged answer with `meta.federation`, follow-up routing; the release the openEHR SEC approved, with its 1.0.1 erratum to the routing of EHR-scoped version requests |
 | openEHR ITS-REST | 1.1.0 | the API a client calls and the API it calls at each member |
 | openEHR AQL | 1.1.0 | the query language a client sends and each member answers |
@@ -250,8 +250,7 @@ Beside them:
 The European electronic health record exchange format of Art 15 has no
 adopted implementing act. The gateway serves the patient summary and
 laboratory, medical imaging and discharge reports in the FHIR R4 form of
-HL7 Europe's packages and receives each but the imaging report in the same
-form
+HL7 Europe's packages and receives each in the same form
 ([The categories received](#the-categories-received),
 [Laboratory reports over FHIR](../integrate/laboratory-reports.md),
 [Imaging reports over FHIR](../integrate/imaging-reports.md),
@@ -284,8 +283,8 @@ the minimum of Art 13(8), and ships them only in the newest release
 (Art 13(10)), with the end date published.
 [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
 lists every release with the date until which fixes are published, five
-years from its release date. For FerroFED 0.0.18 that date is 2031-11-10;
-0.0.18 itself is supported while it is the newest release.
+years from its release date. For FerroFED 0.0.19 that date is 2031-11-11;
+0.0.19 itself is supported while it is the newest release.
 The rest of the information the Cyber Resilience Act's Annex II asks for is
 on [CRA information to the user](cra-user-information.md).
 

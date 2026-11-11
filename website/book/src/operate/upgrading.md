@@ -98,6 +98,100 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
+### To v0.0.19, from v0.0.18
+
+The keys v0.0.18 refused by name, the outbound TLS keys outside a `tls`
+sub-table, a node's `oauth2` and `fapi2` tables and `mtls_alias_hosts`, the
+removed `[trust.issuer]` tables and `client_tokens_act_for_professional`,
+and `[stored_queries] url` and `url_file`, are now refused as unknown keys.
+Move them as the notes for v0.0.18 below say before you upgrade.
+
+- Write the spans of time of `ferrohealth-smart` 0.15 as durations under
+  keys that name no unit: on each `[[auth.issuer]]` `clock_skew`,
+  `jwks_max_age`, `jwks_refresh_interval` and `timeout`;
+  `introspection.cache_max_age`; `[auth.dpop]` `max_age` and `clock_skew`;
+  on each `[credentials."<id>".credentials.oauth]` `refresh_margin`, `timeout` and
+  `previous_key_overlap`; and `[onward.keys] max_onward_lifetime`, until
+  now a bare number of seconds. The old keys are refused as unknown keys
+  (#1799).
+- Write `[auth] scopeless_subjects` entries as tables with `issuer` and
+  `sub` (#1799).
+- Move `[trust.issuer.patient] act_is_representative` to
+  `act_represents_patient = true` on the `[[auth.issuer]]` of `kind =
+  "patients"`. The old key refuses the start, naming its replacement. A
+  patient token that carries an RFC 8693 `act` claim on an issuer without
+  it is now refused as an invalid token (#1799).
+- In the operator console, write `[oidc] timeout` and `[session]`
+  `sign_in_timeout`, `idle_timeout` and `absolute_timeout` as durations,
+  and move `[oidc] ca_file` to `[oidc.tls] trust_roots_file` (#1799).
+- Move the `[server]` keys of `ferrohealth-server` 0.8 to their durations
+  and sizes: `request_timeout`, `header_read_timeout`, `idle_timeout`,
+  `drain_delay`, `shutdown_timeout`, `retry_after` (whole seconds),
+  `body_limit`, `compression_min_size` and `[server.tls]`
+  `reload_interval`, as in `request_timeout = "30s"`. The old keys
+  (`request_timeout_ms` and the others) are refused as unknown keys
+  (#1799).
+- Move `[telemetry.otlp]` `client_identity_file` and `trust_roots_file`
+  into `[telemetry.otlp.tls]`, which also takes `min_version` (#1799).
+- Write every span of time and amount of data of FerroFED's own sections
+  as a duration (`"30s"`, `"5min"`) or a size (`"16MiB"`) under a key that
+  names no unit: `federation.per_node_timeout`, `overall_timeout`,
+  `binding_ttl` and `max_node_answer_size`, `federation.localization.timeout`,
+  `gateway.bindings_drain_timeout`, `signing.node_jwks_cache` and
+  `rotation_overlap`, `emergency.window`, `config.poll` and `confirm`,
+  `store.timeout` and `sweep_interval`, `fhir.document_url_lifetime`,
+  `eehrxf.terminology.endpoint.timeout`, `pdqm.timeout`, `pmir.timeout` and
+  `check_interval`, `nl_gf.mitz.timeout`, `registry.mcsd.refresh_interval`,
+  `deadline` and `max_size`, `audit.repository.spool_max_size` and
+  `spool_write_timeout`, `audit.repository.endpoint.timeout` and
+  `retry.max_backoff`, and
+  `xcpd.audit_repository.spool_max_size`, `spool_write_timeout`,
+  `connect_timeout`, `send_timeout` and `retry_max`, with the
+  `FERROFED__` overrides to match. Each old key (`per_node_timeout_ms`,
+  `window_s`, `spool_max_bytes` and the others) refuses the start and
+  `config check`, naming its replacement. The operator console writes
+  `gateway.timeout` in place of `gateway.timeout_ms` (#1800).
+- Move the address, timeouts, TLS and credential of `[audit.repository]`
+  and `[eehrxf.terminology]` into their new `endpoint` table,
+  `ferrohealth-smart`'s outbound table. `[audit.repository]` keeps
+  `hostname`, `source_id`, `enterprise_site` and the `spool_*` keys, and
+  `[audit.repository.endpoint]` takes `url`, `timeout` (from `timeout_ms`),
+  `retry.max_backoff` (from `retry_max_ms`, the wait between two delivery
+  rounds) and `tls`. `[eehrxf.terminology.endpoint]` takes `url`, `timeout`
+  (from `timeout_ms`), `tls` and `credentials`; one call is tried once
+  unless `retry.max_attempts` says more. Each old key refuses the start and
+  `config check`, naming its replacement (#1805).
+- Move a node's `user`, `password`, `password_file`, `oauth` and `onward`
+  from `[credentials."<id>"]` into its nested
+  `[credentials."<id>".credentials]` table, `ferrohealth-smart`'s
+  credentials table, with the `FERROFED__CREDENTIALS__<ID>__CREDENTIALS__`
+  overrides to match. `tls`, `nuts` and `onward_organisations` stay in the
+  section. Each old key refuses the start and `config check`, naming its
+  replacement. The operator console's credentials form writes the nested
+  table (#1806).
+- Move the NVI's Nuts grant from `[nl_gf.nvi.credentials.nuts]` to
+  `[nl_gf.nvi.nuts]`; `[nl_gf.nvi.credentials]` is `ferrohealth-smart`'s
+  credentials table, which refuses `nuts` as an unknown key (#1806).
+- Move the address, TLS and credential of every identity, localization and
+  consent service into its `endpoint` table, `ferrohealth-smart`'s outbound
+  table, as `[audit.repository]` and `[eehrxf.terminology]` moved: `url`,
+  `tls` and `credentials` of `[[pixm.manager]]`, `[pdqm]`, `[pmir]`,
+  `[registry.mcsd]`, `[nl_gf.nvi]` and `[nl_gf.mitz]` go to
+  `[<table>.endpoint]`, and the `timeout` of `[pdqm]`, `[pmir]` and
+  `[nl_gf.mitz]` (from `timeout_ms`) to `endpoint.timeout`. Each
+  `[[xcpd.gateway]]` takes its own `[xcpd.gateway.endpoint]` with its `url`,
+  and the shared `[xcpd.tls]` moves into the `tls` of each gateway's
+  endpoint table. A table you leave partly written keeps its defaults: one
+  try per call, `1s` for PDQm and Mitz, `5s` for PMIR and `10s` for the
+  others. The NVI's Nuts grant stays in `[nl_gf.nvi.nuts]`. Each old key
+  refuses the start and `config check`, naming its replacement (#1815).
+- The release asset `compose.yaml` is now the self-contained quickstart. The
+  gateway-only compose file of the production guide, which carried that name,
+  is attached as `gateway-compose.yaml`: an operator who downloads it by name
+  fetches `gateway-compose.yaml` and saves it as `compose.yaml` beside
+  `ferrofed.toml` and `registry.toml`, as Install and run shows
+  ([#1849](https://github.com/FerroHEALTH/FerroFED/issues/1849)).
+
 ### To v0.0.18, from v0.0.16
 
 v0.0.17 was tagged and never released; these are its notes, which

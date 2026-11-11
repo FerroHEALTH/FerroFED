@@ -46,13 +46,15 @@ authority whose identifiers are that member's `ehr_id`s.
 
 ```toml
 [[pixm.manager]]
+
+[pixm.manager.endpoint]
 url = "https://pix.example.org/fhir/"
 
 [pixm.manager.members]
 "hospital-a" = "urn:oid:2.999.10"   # a registry node id = its ehr_id domain
 "clinic-b" = "urn:oid:2.999.20"
 
-[pixm.manager.credentials]
+[pixm.manager.endpoint.credentials]
 user = "ferrofed-pix-consumer"
 password_file = "/run/secrets/pix-password"
 
@@ -64,13 +66,15 @@ password_file = "/run/secrets/pix-password"
   resolved by exactly one: a member no Manager names, a member two Managers
   name, and a name the registry does not hold each refuse the configuration.
 - Each domain, and each value of `[pixm.namespaces]`, is an absolute URI.
-- `url` is the Manager's FHIR base, `https`, with no query or fragment. The
+- `[pixm.manager.endpoint]` is the Manager's
+  [endpoint table](configuration.md#the-endpoint-table-of-a-service). Its
+  `url` is the Manager's FHIR base, `https`, with no query or fragment. The
   Manager is asked for patient identifiers, so `http` is refused naming
-  `pixm.manager[N].url`, with or without credentials, unless the profile is
-  `development`
+  `pixm.manager[N].endpoint.url`, with or without credentials, unless the
+  profile is `development`
   ([What must travel encrypted](configuration.md#what-must-travel-encrypted)). A user name or password in it refuses the configuration, naming
-  `pixm.manager[N].url` and never quoting it; the credentials go in
-  `[pixm.manager.credentials]`, with the keys of an endpoint's
+  `pixm.manager[N].endpoint.url` and never quoting it; the credentials go in
+  `[pixm.manager.endpoint.credentials]`, with the keys of an endpoint's
   [credentials](configuration.md#the-file): `user` and `password`, the
   password with its `_file` sibling, or an `oauth` grant
   ([A PIX Manager behind OAuth 2.0](#a-pix-manager-behind-oauth-20)). Leave
@@ -116,11 +120,11 @@ does, is asked with a token the gateway obtains itself by the OAuth 2.0
 client-credentials grant (RFC 6749 §4.4; IUA ITI-71 §3.71.4.1.2.1). The
 `oauth` table is the one of `ferrohealth-smart`, which every FerroHEALTH
 product reads for an upstream it calls as itself, and the same table serves
-`[pdqm.credentials]`, `[pmir.credentials]` and
-`[registry.mcsd.credentials]`.
+`[pdqm.endpoint.credentials]`, `[pmir.endpoint.credentials]` and
+`[registry.mcsd.endpoint.credentials]`.
 
 ```toml
-[pixm.manager.credentials.oauth]
+[pixm.manager.endpoint.credentials.oauth]
 token_endpoint = "https://mpi.example.org/auth/oauth2_token"
 client_id = "ferrofed-pix-consumer"
 client_auth = "client_secret_basic"     # or client_secret_post, or private_key_jwt
@@ -354,14 +358,16 @@ every domain, address and secret is an example.
 
    ```toml
    [[pixm.manager]]
-   url = "https://mpi.example.org/fhir/"
    method = "get"
+
+   [pixm.manager.endpoint]
+   url = "https://mpi.example.org/fhir/"
 
    [pixm.manager.members]
    "hospital-a" = "urn:oid:2.999.10"
    "clinic-b" = "urn:oid:2.999.20"
 
-   [pixm.manager.credentials.oauth]
+   [pixm.manager.endpoint.credentials.oauth]
    token_endpoint = "https://mpi.example.org/auth/oauth2_token"
    client_id = "FFD_PIX_CONSUMER"
    client_auth = "client_secret_post"   # SanteMPI reads the client from the body
@@ -436,15 +442,17 @@ localizes and resolves that identifier as it would the client's own.
 
 ```toml
 [pdqm]
-url = "https://pdq.example.org/fhir/"
 transaction = "iti-78"                 # or "iti-119"
 master = "urn:oid:2.999.1"             # the master domain's identifier system
-timeout = "1s"                      # each exchange with the Supplier
+
+[pdqm.endpoint]
+url = "https://pdq.example.org/fhir/"
+timeout = "1s"                         # each exchange with the Supplier, the default
 
 [pdqm.namespaces]
 "urn:oid:2.999.7" = "urn:oid:2.999.7"  # a client namespace = the system it is sent in
 
-[pdqm.credentials]
+[pdqm.endpoint.credentials]
 user = "ferrofed-pdq-consumer"
 password_file = "/run/secrets/pdq-password"
 ```
@@ -462,10 +470,10 @@ password_file = "/run/secrets/pdq-password"
 - `master` is the identifier system of the master domain. The master
   identifier is resolved in the namespace of the same name, so `[pixm]`
   must resolve it; `[pdqm]` without it refuses the configuration.
-- `url`, the credentials and the `http` rule are those of a PIX Manager: the
-  Supplier is sent the patient identifier, so plain `http` is refused,
-  naming `pdqm.url`, unless the profile is `development`. No redirect is
-  followed, and an answer is read up to 8 MiB.
+- `[pdqm.endpoint]`, the credentials and the `http` rule are those of a PIX
+  Manager: the Supplier is sent the patient identifier, so plain `http` is
+  refused, naming `pdqm.endpoint.url`, unless the profile is
+  `development`. No redirect is followed, and an answer is read up to 8 MiB.
 - A `SIGHUP` reload applies a change to `[pdqm]`, as it does to `[pixm]`:
   the reloaded federation asks the Supplier the new table names.
 
@@ -541,16 +549,18 @@ ITI-93 message (PMIR 1.6.0, Annex A.4).
 
 ```toml
 [pmir]
-url = "https://pmir.example.org/fhir"                    # the Registry's FHIR base
 callback_url = "https://gateway.example.org/pmir/feed"   # where the Registry sends the feed
 path = "/pmir/feed"                                       # the route under {base}, the default
 feed_clients = ["pmir-registry"]                          # the clients the Registry sends as, at an [[auth.issuer]]
 # identifier_system = "urn:oid:2.999.1"                  # only Patients with an identifier here
-# timeout = "5s"
 # check_interval = "1min"
 # on_drain = "keep"                                       # or "unsubscribe"; see Several replicas
 
-[pmir.credentials.oauth]              # how the gateway authenticates to the Registry
+[pmir.endpoint]
+url = "https://pmir.example.org/fhir"                    # the Registry's FHIR base
+# timeout = "5s"                                          # each exchange with the Registry
+
+[pmir.endpoint.credentials.oauth]     # how the gateway authenticates to the Registry
 token_endpoint = "https://pmir.example.org/auth/token"
 client_id = "ferrofed-pmir-subscriber"
 client_auth = "client_secret_basic"
@@ -559,7 +569,7 @@ scope = "*"
 ```
 
 - **The subscription.** At start the gateway creates a `Subscription` at
-  `url` with a `message` channel to `callback_url` and a FHIR JSON payload.
+  `endpoint.url` with a `message` channel to `callback_url` and a FHIR JSON payload.
   Its criteria is `Patient`, or `Patient?identifier=<system>|` with
   `identifier_system` set, so the Registry sends only the Patients that
   carry an identifier from that authority. Before it creates one, the
@@ -575,7 +585,7 @@ scope = "*"
   recreates one the Registry no longer holds. Each failed check doubles the
   wait before the next, up to 32 times `check_interval`, and a check that
   succeeds resets it. If the Registry answers a create `201` with no
-  `Location`, or with one outside `url`, the gateway cannot manage that
+  `Location`, or with one outside `endpoint.url`, the gateway cannot manage that
   subscription. It creates no other until a restart and reports the fault as
   `unmanageable`; delete that subscription at the Registry. On a drain the
   gateway stops checking and lets the check in flight end. With `on_drain =
@@ -609,7 +619,7 @@ scope = "*"
   bindings went. The messages carry patient identifiers and demographics, so
   no identifier reaches a log line, a metric or an answer.
 
-`url` and `callback_url` carry patient identities, so both are `https`
+`endpoint.url` and `callback_url` carry patient identities, so both are `https`
 outside `profile = "development"`, and neither may carry a user name or a
 password. `GET {base}/operator/dependencies` reports the Registry as
 `identity_registry`: `up` while the gateway holds a subscription in

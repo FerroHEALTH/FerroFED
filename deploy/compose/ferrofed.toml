@@ -55,14 +55,14 @@ format = "toml"
 # directory's FHIR base. Its Organization and Endpoint resources carry the
 # registry ids as the FHIR form of the registry does.
 # [registry.mcsd]
-# url = "https://directory.example.org/fhir"   # EDIT
+# endpoint.url = "https://directory.example.org/fhir"   # EDIT
 # refresh_interval = "5min"
 # deadline = "30s"   # one read or refresh, every page
 # max_pages = 200
 # max_bytes = 67108864
 # max_entries = 50000
 #
-# [registry.mcsd.credentials]
+# [registry.mcsd.endpoint.credentials]
 # user = "ferrofed"
 # password_file = "/run/secrets/ferrofed/directory-password"
 
@@ -169,7 +169,10 @@ issuer = "https://idp.example.org"
 # The identity service: an IHE PIXm PIX Manager.
 # https://ferrofed.eu/docs/operate/identity.html
 [[pixm.manager]]
-# EDIT: the Manager's FHIR base URL.
+
+# EDIT: the Manager's FHIR base URL; ferrohealth-smart's endpoint table, with
+# its timeout, retry and tls keys.
+[pixm.manager.endpoint]
 url = "https://pix.example.org/fhir/"
 
 # EDIT: every node of registry.toml, mapped to its ehr_id domain at the
@@ -180,9 +183,9 @@ url = "https://pix.example.org/fhir/"
 
 # How the gateway authenticates to the Manager: a user with password_file,
 # or the OAuth 2.0 client credentials grant of IUA ITI-71 under
-# [pixm.manager.credentials.oauth]. Remove the section when the transport
-# authenticates the gateway.
-[pixm.manager.credentials]
+# [pixm.manager.endpoint.credentials.oauth]. Remove the section when the
+# transport authenticates the gateway.
+[pixm.manager.endpoint.credentials]
 user = "ferrofed"
 password_file = "/run/secrets/ferrofed/pix-password"
 
@@ -226,7 +229,7 @@ url = "https://arr.example.org/fhir"          # EDIT
 # audit = "repository"
 #
 # [[xcpd.gateway]]
-# url = "https://xcpd.example.org/RespondingGateway"   # EDIT
+# endpoint.url = "https://xcpd.example.org/RespondingGateway"   # EDIT
 # device = "2.999.50.1"                                # EDIT
 #
 # [xcpd.communities]
@@ -246,11 +249,11 @@ url = "https://arr.example.org/fhir"          # EDIT
 # drops the resolution bindings it could have made stale.
 # https://ferrofed.eu/docs/operate/identity.html#the-identity-feed-pmir
 # [pmir]
-# url = "https://pmir.example.org/fhir"                    # EDIT
+# endpoint.url = "https://pmir.example.org/fhir"           # EDIT
 # callback_url = "https://gateway.example.org/pmir/feed"   # EDIT
 # feed_clients = ["pmir-registry"]   # EDIT: the Registry's client at an [[auth.issuer]]
 #
-# [pmir.credentials.oauth]
+# [pmir.endpoint.credentials.oauth]
 # token_endpoint = "https://pmir.example.org/auth/token"   # EDIT
 # client_id = "ferrofed-pmir-subscriber"
 # client_auth = "client_secret_basic"

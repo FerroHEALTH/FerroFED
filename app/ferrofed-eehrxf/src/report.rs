@@ -15,6 +15,8 @@
 //! custodian. The authorship and the provenance are our own design: no
 //! specification governs them.
 
+use std::collections::BTreeSet;
+
 use eehrxf::category::Category;
 use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::document::imaging::IMAGING_BUNDLE;
@@ -32,6 +34,7 @@ use fhir_types::r4::provenance::{Provenance, ProvenanceAgent};
 use fhir_types::r4::resource::Resource;
 use fhirconnect::engine::context::CallContext;
 use fhirconnect::operations::contract::ToFhirResponse;
+use fhirconnect::operations::issues::{OPENEHR_PATH_SYSTEM, WARNING};
 use fhirconnect::operations::run::Settings;
 use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 
@@ -202,6 +205,61 @@ pub(crate) fn sourced(
     Ok(())
 }
 
+/// The narrative line naming, by path and never by value, each element of
+/// the member's composition the mapping run `run` declared it did not carry, so a
+/// loss is never silent in the report; `None` when it declared none.
+///
+/// The run declares each loss as a `warning` issue of its `OperationOutcome`,
+/// which the document leaves out because it is no document content (FHIR R4
+/// documents.html). A loss is named by its openEHR path, which says where
+/// the member's record holds it, or by its FHIR path when it has no openEHR
+/// one; one with neither is counted alone.
+pub(crate) fn withheld(run: &Bundle) -> Option<String> {
+    let mut count = 0_usize;
+    let mut paths = BTreeSet::new();
+    let issues = run
+        .entry
+        .iter()
+        .filter_map(|entry| match entry.resource.as_ref() {
+            Some(Resource::OperationOutcome(outcome)) => Some(outcome.issue.iter()),
+            _ => None,
+        })
+        .flatten()
+        .filter(|issue| issue.severity.value.as_deref() == Some(WARNING));
+    for issue in issues {
+        count = count.saturating_add(1);
+        let openehr = issue
+            .details
+            .iter()
+            .flat_map(|details| details.coding.iter())
+            .find(|coding| {
+                coding
+                    .system
+                    .as_ref()
+                    .and_then(|system| system.value.as_deref())
+                    == Some(OPENEHR_PATH_SYSTEM)
+            })
+            .and_then(|coding| coding.code.as_ref())
+            .and_then(|code| code.value.as_deref());
+        let fhir = issue
+            .expression
+            .first()
+            .and_then(|expression| expression.value.as_deref());
+        paths.extend(openehr.or(fhir).map(str::to_owned));
+    }
+    if count == 0 {
+        return None;
+    }
+    let named = if paths.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", paths.into_iter().collect::<Vec<_>>().join(", "))
+    };
+    Some(format!(
+        "{count} element(s) of the member's record could not be carried into this report{named}, so the record holds more than the report shows."
+    ))
+}
+
 /// A shipped mapping compiled against a deployment's template, which writes
 /// a member's composition as the document of its category.
 pub trait Writes: std::fmt::Debug + Send + Sync {
@@ -288,5 +346,90 @@ impl Written {
             Self::Discharge => "discharge report",
             Self::Imaging => "imaging report",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fhir_types::r4::bundle::{Bundle, BundleEntry};
+    use fhir_types::r4::codeable_concept::CodeableConcept;
+    use fhir_types::r4::coding::Coding;
+    use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
+    use fhir_types::r4::resource::Resource;
+    use fhirconnect::operations::issues::OPENEHR_PATH_SYSTEM;
+
+    use super::withheld;
+
+    /// An issue of `severity`, naming `openehr` by its openEHR path and
+    /// `fhir` by its FHIR path when either is given.
+    fn issue(severity: &str, openehr: Option<&str>, fhir: Option<&str>) -> OperationOutcomeIssue {
+        OperationOutcomeIssue {
+            severity: severity.into(),
+            code: "incomplete".into(),
+            details: openehr.map(|path| CodeableConcept {
+                coding: vec![Coding {
+                    system: Some(OPENEHR_PATH_SYSTEM.into()),
+                    code: Some(path.into()),
+                    ..Coding::default()
+                }],
+                ..CodeableConcept::default()
+            }),
+            expression: fhir.into_iter().map(Into::into).collect(),
+            ..OperationOutcomeIssue::default()
+        }
+    }
+
+    /// A run whose `OperationOutcome` holds `issues`.
+    fn run(issues: Vec<OperationOutcomeIssue>) -> Bundle {
+        Bundle {
+            r#type: "collection".into(),
+            entry: vec![BundleEntry {
+                resource: Some(Resource::OperationOutcome(Box::new(OperationOutcome {
+                    issue: issues,
+                    ..OperationOutcome::default()
+                }))),
+                ..BundleEntry::default()
+            }],
+            ..Bundle::default()
+        }
+    }
+
+    #[test]
+    fn a_run_that_declares_nothing_adds_no_line() {
+        assert_eq!(withheld(&run(vec![issue("information", None, None)])), None);
+    }
+
+    #[test]
+    fn a_loss_is_named_by_its_openehr_path_before_its_fhir_path() {
+        let line = withheld(&run(vec![issue(
+            "warning",
+            Some("/content[openEHR-EHR-OBSERVATION.imaging_exam_result.v1]/data/events/data/items[at0012]"),
+            Some("DiagnosticReport.conclusion"),
+        )]))
+        .unwrap();
+        assert!(line.starts_with("1 element(s)"), "{line}");
+        assert!(line.contains("items[at0012]"), "{line}");
+        assert!(!line.contains("DiagnosticReport.conclusion"), "{line}");
+    }
+
+    #[test]
+    fn a_loss_with_no_openehr_path_is_named_by_its_fhir_path_and_one_with_neither_is_counted() {
+        let line = withheld(&run(vec![
+            issue("warning", None, Some("Composition.section[3]")),
+            issue("warning", None, None),
+        ]))
+        .unwrap();
+        assert!(line.starts_with("2 element(s)"), "{line}");
+        assert!(line.contains("(Composition.section[3])"), "{line}");
+    }
+
+    #[test]
+    fn a_loss_named_by_no_path_is_counted_alone() {
+        assert_eq!(
+            withheld(&run(vec![issue("warning", None, None)])).as_deref(),
+            Some(
+                "1 element(s) of the member's record could not be carried into this report, so the record holds more than the report shows."
+            )
+        );
     }
 }

@@ -7,13 +7,17 @@
 #   scripts/site/assemble.sh OUT
 #
 # The landing page lands at the site root and the mdBook under /docs/, which is
-# what book.toml's site-url declares. The landing page's roadmap block (between
-# `<!-- roadmap:begin -->` and `<!-- roadmap:end -->`) is rendered here from the
-# tracker's open milestones through the GitHub API when `gh` is authenticated.
-# Without a token the block stays empty and the page keeps its link to the
-# milestones page, so an assembly on a laptop never fails on the network.
-# SITE_ROADMAP=off leaves the block empty without asking the API, which is how
-# the offline link guard (scripts/checks/site-links.sh) assembles the site.
+# what book.toml's site-url declares. Two markers of the landing pages are
+# rendered on the way, and a marker nothing renders fails the assembly:
+#
+#   * {{version:ferrofed}} becomes the [workspace.package] version of the
+#     root Cargo.toml, so the hero badge always names the release main
+#     carries.
+#   * {{hash:style.css}} becomes the first twelve hex digits of the
+#     stylesheet's sha256, so a browser that cached an older stylesheet
+#     fetches the new one with the new page.
+#
+# No specification governs the assembly: our own design.
 #
 # The brand assets (assets/brand) and llms.txt live outside the landing
 # directory and are copied in here, because both are addressed from the site
@@ -31,31 +35,21 @@ cd "$root"
 
 readonly OUT="${1:?usage: $0 OUT}"
 readonly LANDING=website/landing
-readonly REPO=FerroHEALTH/FerroFED
 
-# The open milestones as list items, oldest due date first. Every field that
-# reaches the page is HTML-escaped, because a milestone title is text somebody
-# typed.
-roadmap() {
-  gh api "repos/$REPO/milestones?state=open&sort=due_on&direction=asc" --jq '
-    def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
-    ["<ul class=\"roadmap\">"]
-    + map("  <li><span class=\"tag\">" + (.title | esc) + "</span>"
-          + "<a href=\"" + .html_url + "\" rel=\"noopener\">" + (.open_issues | tostring) + " open, " + (.closed_issues | tostring) + " closed</a>"
-          + (if .due_on == null then "" else "<span class=\"due\">due " + .due_on[0:10] + "</span>" end)
-          + "</li>")
-    + ["</ul>"] | .[]'
+# product_version: the [workspace.package] version of the root Cargo.toml.
+product_version() {
+  awk '/^\[workspace\.package\]/ { p = 1; next } /^\[/ { p = 0 }
+    p && $1 == "version" { if (match($0, /"[^"]*"/)) { print substr($0, RSTART + 1, RLENGTH - 2); exit } }' Cargo.toml
 }
 
-# One temporary tree for the rendered book and one file for the roadmap block,
-# both removed on every exit path. `mdbook build --dest-dir` resolves a
-# relative path against the book root, so the absolute path mktemp returns is
-# what keeps the output out of website/book/.
+# One temporary tree for the rendered book, removed on every exit path.
+# `mdbook build --dest-dir` resolves a relative path against the book root, so
+# the absolute path mktemp returns is what keeps the output out of
+# website/book/.
 book="$(mktemp -d)"
-block="$(mktemp)"
 source="$(mktemp -d)"
 component=""
-trap 'rm -rf "$book" "$source" ${component:+"$component"}; rm -f "$block"' EXIT
+trap 'rm -rf "$book" "$source" ${component:+"$component"}' EXIT
 
 # The conformance pages are rendered from the matrix and the test markers, so
 # a page that disagrees with them fails the build before mdBook runs (#95).
@@ -64,13 +58,18 @@ bash scripts/conformance/matrix.sh --check-pages
 # The statement block and the tests page read the markers of every test file,
 # so the repository holds placeholders and the site renders both into its own
 # copy of the book, which keeps a rendering from going stale on main (#912).
-cp -R website/book/src website/book/book.toml "$source/"
+# The copy keeps the repository's layout, so the Changelog page's include of
+# ../../../CHANGELOG.md resolves as it does in the checkout.
+staged="$source/website/book"
+mkdir -p "$staged"
+cp CHANGELOG.md "$source/"
+cp -R website/book/src website/book/book.toml "$staged/"
 for extra in website/book/vendor website/book/js website/book/theme; do
-  if [[ -e "$extra" ]]; then cp -R "$extra" "$source/"; fi
+  if [[ -e "$extra" ]]; then cp -R "$extra" "$staged/"; fi
 done
-bash scripts/conformance/matrix.sh --statement-write-into "$source/src" > /dev/null
+bash scripts/conformance/matrix.sh --statement-write-into "$staged/src" > /dev/null
 
-mdbook build "$source" --dest-dir "$book"
+mdbook build "$staged" --dest-dir "$book"
 
 rm -rf "${OUT:?}"
 mkdir -p "$OUT/docs"
@@ -123,17 +122,19 @@ for dir in "${DEFINITIONS[@]}"; do
   done
 done
 
-if [[ "${SITE_ROADMAP:-on}" == off ]]; then
-  echo "assemble: SITE_ROADMAP=off, so the roadmap block stays empty."
-elif roadmap > "$block" 2>/dev/null && [[ -s "$block" ]]; then
-  awk -v blockfile="$block" '
-    /<!-- roadmap:begin -->/ { print; while ((getline line < blockfile) > 0) print line; skip = 1; next }
-    /<!-- roadmap:end -->/ { skip = 0 }
-    !skip { print }
-  ' "$LANDING/index.html" > "$OUT/index.html"
-  echo "assemble: roadmap rendered from the open milestones."
-else
-  echo "assemble: no GitHub API access, so the roadmap block stays empty." >&2
+version="$(product_version)"
+if [[ -z "$version" ]]; then
+  echo "assemble: Cargo.toml has no [workspace.package] version" >&2
+  exit 1
 fi
+style_hash="$(shasum -a 256 "$OUT/style.css" | cut -c1-12)"
+while IFS= read -r page; do
+  VERSION="$version" STYLE_HASH="$style_hash" perl -pi -e \
+    's/\{\{version:ferrofed\}\}/$ENV{VERSION}/g; s/\{\{hash:style\.css\}\}/$ENV{STYLE_HASH}/g' "$page"
+  if grep -q '{{' "$page"; then
+    echo "assemble: $page keeps a marker nothing renders" >&2
+    exit 1
+  fi
+done < <(find "$OUT" -path "$OUT/docs" -prune -o -name '*.html' -print)
 
 echo "assemble: site at $OUT"

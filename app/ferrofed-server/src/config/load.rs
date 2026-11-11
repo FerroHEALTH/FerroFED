@@ -32,10 +32,71 @@ pub fn loader() -> Result<Loader, Error> {
         file: None,
         source: Box::new(source),
     };
-    Loader::new(PREFIX)
-        .map_err(fault)?
-        .defaults("server", &crate::config::server::defaults())
-        .map_err(fault)
+    endpoint_defaults(
+        Loader::new(PREFIX)
+            .map_err(fault)?
+            .defaults("server", &crate::config::server::defaults())
+            .map_err(fault)?,
+    )
+    .map_err(fault)
+}
+
+/// `loader` with each outbound table's own `endpoint` defaults, layered
+/// under a table, or each element of an array of tables, a source writes, so
+/// a key the operator leaves out keeps the table's default and an unwritten
+/// table stays absent (FerroHEALTH/FerroSYS#353).
+fn endpoint_defaults(loader: Loader) -> Result<Loader, ConfigError> {
+    let loader = loader
+        .defaults_if_written(
+            "audit.repository",
+            "endpoint",
+            &crate::config::audit::FeedRepository::default().endpoint,
+        )?
+        .defaults_if_written(
+            "eehrxf.terminology",
+            "endpoint",
+            &crate::config::eehrxf::TerminologyServer::default().endpoint,
+        )?;
+    #[cfg(feature = "binding-ihe")]
+    let loader = loader
+        .defaults_each(
+            "pixm.manager",
+            "endpoint",
+            &crate::config::ihe::pixm::PixManager::default().endpoint,
+        )?
+        .defaults_if_written(
+            "pdqm",
+            "endpoint",
+            &crate::config::ihe::pdqm::Pdqm::default().endpoint,
+        )?
+        .defaults_if_written(
+            "pmir",
+            "endpoint",
+            &crate::config::ihe::pmir::Pmir::default().endpoint,
+        )?
+        .defaults_if_written(
+            "registry.mcsd",
+            "endpoint",
+            &crate::config::ihe::mcsd::McsdDirectory::default().endpoint,
+        )?
+        .defaults_each(
+            "xcpd.gateway",
+            "endpoint",
+            &crate::config::ihe::xcpd::XcpdGateway::default().endpoint,
+        )?;
+    #[cfg(feature = "binding-nl")]
+    let loader = loader
+        .defaults_if_written(
+            "nl_gf.nvi",
+            "endpoint",
+            &crate::config::nl::nvi::Nvi::default().endpoint,
+        )?
+        .defaults_if_written(
+            "nl_gf.mitz",
+            "endpoint",
+            &crate::config::nl::mitz::Mitz::default().endpoint,
+        )?;
+    Ok(loader)
 }
 
 /// The dotted key whose source decides whether the drain follows the
@@ -165,12 +226,6 @@ pub(crate) fn with_pairs(
 /// `file` unless the refusal is that the file could not be read, which
 /// names it itself.
 fn refused(file: Option<&Path>, source: ConfigError) -> Error {
-    if let Some((old, new)) = replaced(&source) {
-        return Error::Replaced { old, new };
-    }
-    if let Some((old, new)) = renamed(&source) {
-        return Error::Renamed { old, new };
-    }
     let file = match source {
         ConfigError::Read { .. } => None,
         _ => file.map(Path::to_path_buf),
@@ -186,73 +241,6 @@ fn refused(file: Option<&Path>, source: ConfigError) -> Error {
 fn checked(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
     crate::config::retired::check(loaded.settings())?;
     Ok(loaded)
-}
-
-/// The release that names the refusals of this module, which v0.0.17
-/// introduced and never shipped (the tag was not released): they live for
-/// v0.0.18 alone and are deleted in v0.0.19, after which each key is
-/// refused as any unknown key is (#1787).
-#[cfg(test)]
-const REFUSALS_SINCE: &str = "0.0.18";
-
-/// The outbound TLS keys a table took before they moved into its `tls`
-/// sub-table (#1750).
-const MOVED_TO_TLS: [&str; 3] = [
-    "client_identity",
-    "client_identity_file",
-    "trust_roots_file",
-];
-
-/// The moved key `source` refuses and its replacement, when it refuses
-/// one, alone or among other refusals.
-fn renamed(source: &ConfigError) -> Option<(String, String)> {
-    match source {
-        ConfigError::Invalid { key: Some(key), .. } => moved_to_tls(key),
-        ConfigError::Refusals { refusals } => refusals.iter().find_map(renamed),
-        _ => None,
-    }
-}
-
-/// The grant tables of a credentials section the `oauth` table replaced
-/// (#1749), with the key each moved to inside it.
-const REPLACED_BY_OAUTH: [(&str, &str); 3] = [
-    ("oauth2", "oauth"),
-    ("fapi2", "oauth"),
-    ("mtls_alias_hosts", "oauth.mtls_alias_hosts"),
-];
-
-/// The removed grant key `source` refuses and the key that replaces it,
-/// when it refuses one, alone or among other refusals.
-fn replaced(source: &ConfigError) -> Option<(String, String)> {
-    match source {
-        ConfigError::Invalid { key: Some(key), .. } => {
-            let (table, leaf) = key.rsplit_once('.')?;
-            REPLACED_BY_OAUTH
-                .into_iter()
-                .find(|(old, _)| *old == leaf)
-                .filter(|_| table.starts_with("credentials.") || table.ends_with(".credentials"))
-                .map(|(_, new)| {
-                    // NOTE: no specification governs this: our own design; a node's grant sits
-                    // in its nested credentials table since 0.0.19 (#1806).
-                    let table = if table.ends_with(".credentials") {
-                        table.to_owned()
-                    } else {
-                        format!("{table}.credentials")
-                    };
-                    (key.clone(), format!("{table}.{new}"))
-                })
-        }
-        ConfigError::Refusals { refusals } => refusals.iter().find_map(replaced),
-        _ => None,
-    }
-}
-
-/// `key`, an outbound TLS key refused on its table, and the key of its
-/// table's `tls` sub-table that replaces it.
-fn moved_to_tls(key: &str) -> Option<(String, String)> {
-    let (table, leaf) = key.rsplit_once('.')?;
-    (MOVED_TO_TLS.contains(&leaf) && !table.ends_with("tls"))
-        .then(|| (key.to_owned(), format!("{table}.tls.{leaf}")))
 }
 
 /// Refuses a file or an override that sets a resource the operator console
@@ -273,18 +261,6 @@ fn console_free(loaded: Loaded<Config>) -> Result<Loaded<Config>, Error> {
 mod tests {
     use crate::config::Config;
     use std::collections::BTreeMap;
-
-    #[test]
-    fn the_named_refusals_live_for_one_release() {
-        // NOTE: no specification governs this: our own design; the workspace is the last
-        // release's version until the cut, so the refusals hold through the 0.0.18 cut alone.
-        let version = env!("CARGO_PKG_VERSION");
-        assert!(
-            ["0.0.17", super::REFUSALS_SINCE].contains(&version),
-            "delete the refusals of {} at {version} (#1787)",
-            super::REFUSALS_SINCE
-        );
-    }
 
     #[test]
     fn an_absent_file_and_an_empty_environment_leave_the_defaults() {
@@ -336,5 +312,55 @@ best_effort = true
             &[("federation.best_effort.x".to_owned(), "1".to_owned())],
         );
         assert!(refused.is_err(), "{refused:?}");
+    }
+
+    /// The `endpoint` table `text` sets under `[pdqm]` and each
+    /// `[[pixm.manager]]`, as loaded.
+    fn tables(text: &str) -> Config {
+        Config::from_sources(Some(text), &BTreeMap::new()).expect("the configuration loads")
+    }
+
+    #[cfg(feature = "binding-ihe")]
+    #[test]
+    fn a_partly_written_endpoint_table_keeps_its_tables_defaults() {
+        let unwritten = tables("");
+        assert!(unwritten.pdqm.is_none(), "an unwritten [pdqm] stays absent");
+        assert!(unwritten.pixm.is_none(), "an unwritten [pixm] stays absent");
+        let written = tables(
+            "[pdqm]\nmaster = \"urn:oid:2.999.1\"\n\n[pdqm.endpoint]\nurl = \"https://pdq.example.org/fhir/\"\n\n\
+             [[pixm.manager]]\nendpoint.url = \"https://a.example.org/fhir/\"\n\n\
+             [[pixm.manager]]\nendpoint.url = \"https://b.example.org/fhir/\"\nendpoint.retry.max_attempts = 3\n",
+        );
+        let pdqm = written.pdqm.expect("[pdqm] is written");
+        assert_eq!(1000, pdqm.endpoint.timeout.as_millis(), "PDQm keeps its 1s");
+        assert_eq!(
+            1, pdqm.endpoint.retry.max_attempts,
+            "PDQm tries a call once"
+        );
+        let managers = written.pixm.expect("[pixm] is written").manager;
+        let attempts: Vec<u32> = managers
+            .iter()
+            .map(|manager| manager.endpoint.retry.max_attempts)
+            .collect();
+        assert_eq!(
+            vec![1, 3],
+            attempts,
+            "each element keeps the default it does not set"
+        );
+    }
+
+    #[test]
+    fn a_partly_written_audit_repository_keeps_its_delivery_defaults() {
+        let written = tables(
+            "[audit.repository]\nhostname = \"gateway.example.org\"\n\n\
+             [audit.repository.endpoint]\nurl = \"https://arr.example.org/fhir\"\n",
+        );
+        let endpoint = written
+            .audit
+            .repository
+            .expect("[audit.repository] is written")
+            .endpoint;
+        assert_eq!(5000, endpoint.timeout.as_millis());
+        assert_eq!(60_000, endpoint.retry.max_backoff.as_millis());
     }
 }

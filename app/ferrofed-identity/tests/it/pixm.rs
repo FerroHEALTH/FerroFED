@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use ferrofed_identity::fhir::Authentication;
 use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmConfigError, PixmResolver};
 use ferrofed_identity::role::behalf::OnBehalfOf;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRef};
@@ -25,12 +24,11 @@ use ferrofed_identity::role::resolver::{Resolution, Resolver, ResolverError};
 use ferrofed_registry::id::NodeId;
 use ferrofed_testkit::mock::Server;
 use ferrohealth_secret::secret_url::SecretUrl;
-use ferrohealth_smart::client::cache::TokenSource;
-use ferrohealth_smart::client::{ClientCredentials, Endpoint};
+use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::config::ServerTls;
+use ferrohealth_smart::config::credentials::OauthSection;
 use ihe_iti::pixm::Invocation;
-use openehr_its::rest::client::InvalidCredentials;
 use secrecy::SecretString;
-use url::Url;
 use wiremock::matchers::{body_string_contains, header, method, path, query_param};
 use wiremock::{Mock, Request, Respond, ResponseTemplate};
 
@@ -80,11 +78,36 @@ fn namespaces() -> BTreeMap<IdentifierNamespace, String> {
     )])
 }
 
-fn manager(server: &Server, auth: Authentication, pairs: &[(&str, &str)]) -> ManagerConfig {
+/// How a test's gateway authenticates to the stub Manager.
+enum Auth {
+    /// The transport alone.
+    None,
+    /// HTTP Basic with this user and password.
+    Basic(&'static str, &'static str),
+    /// The client credentials grant of the token endpoint at this URL.
+    Grant(String),
+}
+
+fn manager(server: &Server, auth: Auth, pairs: &[(&str, &str)]) -> ManagerConfig {
+    let mut endpoint = ferrofed_testkit::outbound::endpoint(&format!("{}/fhir/", server.uri()));
+    match auth {
+        Auth::None => {}
+        Auth::Basic(user, password) => {
+            user.clone_into(&mut endpoint.credentials.user);
+            endpoint.credentials.password = Some(SecretString::from(password));
+        }
+        Auth::Grant(token_endpoint) => {
+            endpoint.credentials.oauth = Some(OauthSection {
+                token_endpoint: SecretUrl::new(token_endpoint),
+                client_id: "ferrofed".to_owned(),
+                client_secret: Some(SecretString::from("synthetic-client-secret")),
+                ..OauthSection::default()
+            });
+        }
+    }
     ManagerConfig {
-        tls: ferrofed_testkit::tls::platform(),
-        base: SecretUrl::new(format!("{}/fhir/", server.uri())),
-        auth,
+        client: OutboundClient::build(&endpoint, "pixm.manager.endpoint", &ServerTls)
+            .expect("the outbound client builds"),
         members: members(pairs),
         invocation: Invocation::Get,
     }
@@ -95,7 +118,7 @@ fn resolver(server: &Server) -> PixmResolver {
     PixmResolver::from_config(
         vec![manager(
             server,
-            Authentication::None,
+            Auth::None,
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         namespaces(),
@@ -397,7 +420,7 @@ async fn a_namespace_with_no_pix_domain_asks_nobody() {
     let resolver = PixmResolver::from_config(
         vec![manager(
             &server,
-            Authentication::None,
+            Auth::None,
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         BTreeMap::new(),
@@ -435,22 +458,16 @@ impl Respond for Issuing {
     }
 }
 
-/// The token endpoint of [`Issuing`], and a source of its tokens.
-async fn tokens() -> (Server, TokenSource) {
+/// The token endpoint of [`Issuing`], and its URL.
+async fn tokens() -> (Server, String) {
     let endpoint = Server::start().await;
     Mock::given(method("POST"))
         .and(path("/token"))
         .respond_with(Issuing::default())
         .mount(&endpoint)
         .await;
-    let url = Url::parse(&format!("{}/token", endpoint.uri())).expect("the stub's URL");
-    let source = TokenSource::new(ClientCredentials::new(
-        Endpoint::Token(url),
-        "ferrofed".to_owned(),
-        SecretString::from("synthetic-client-secret"),
-    ))
-    .expect("the token client builds");
-    (endpoint, source)
+    let url = format!("{}/token", endpoint.uri());
+    (endpoint, url)
 }
 
 /// How many tokens `endpoint` issued.
@@ -485,7 +502,7 @@ async fn a_grant_token_the_manager_refuses_is_replaced_once() {
     let resolver = PixmResolver::from_config(
         vec![manager(
             &server,
-            Authentication::Grant(source),
+            Auth::Grant(source),
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         namespaces(),
@@ -512,7 +529,7 @@ async fn a_grant_the_manager_keeps_refusing_leaves_the_member_unavailable() {
     let resolver = PixmResolver::from_config(
         vec![manager(
             &server,
-            Authentication::Grant(source),
+            Auth::Grant(source),
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         namespaces(),
@@ -558,10 +575,7 @@ async fn the_basic_credential_travels_to_the_manager() {
     let resolver = PixmResolver::from_config(
         vec![manager(
             &server,
-            Authentication::Basic {
-                user: String::from("ferrofed"),
-                password: SecretString::from("synthetic-pix-token"),
-            },
+            Auth::Basic("ferrofed", "synthetic-pix-token"),
             &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
         )],
         namespaces(),
@@ -597,7 +611,7 @@ async fn a_manager_configured_to_post_is_asked_in_the_body_and_never_in_the_url(
         .await;
     let mut config = manager(
         &server,
-        Authentication::None,
+        Auth::None,
         &[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)],
     );
     config.invocation = Invocation::Post;
@@ -627,9 +641,8 @@ async fn a_manager_configured_to_post_is_asked_in_the_body_and_never_in_the_url(
 fn every_member_must_have_exactly_one_domain() {
     let server_uri = "http://127.0.0.1:9";
     let config = |pairs: &[(&str, &str)]| ManagerConfig {
-        tls: ferrofed_testkit::tls::platform(),
-        base: SecretUrl::new(format!("{server_uri}/fhir/")),
-        auth: Authentication::None,
+        client: ferrofed_testkit::outbound::client(&format!("{server_uri}/fhir/"))
+            .expect("the outbound client builds"),
         members: members(pairs),
         invocation: Invocation::Get,
     };
@@ -661,53 +674,4 @@ fn every_member_must_have_exactly_one_domain() {
         Err(PixmConfigError::Domain { .. })
     ));
     assert!(matches!(built(Vec::new()), Err(PixmConfigError::NoManager)));
-}
-
-#[test]
-fn a_credential_no_authorization_value_carries_is_refused_with_its_cause() {
-    let refused = |auth| {
-        let config = ManagerConfig {
-            tls: ferrofed_testkit::tls::platform(),
-            base: SecretUrl::new("http://127.0.0.1:9/fhir/"),
-            auth,
-            members: members(&[("node-a", DOMAIN_A), ("node-b", DOMAIN_B)]),
-            invocation: Invocation::Get,
-        };
-        PixmResolver::from_config(vec![config], namespaces(), &registry())
-            .expect_err("the credential is refused")
-    };
-    let control = refused(Authentication::Basic {
-        user: "gateway".to_owned(),
-        password: SecretString::from("Qz7left\nQz7right"),
-    });
-    assert!(
-        matches!(
-            &control,
-            PixmConfigError::Credentials(InvalidCredentials::ControlCharacter(_))
-        ),
-        "a basic password carries no control character (RFC 7617 §2): {control:?}"
-    );
-    let basic = refused(Authentication::Basic {
-        user: "gate:way".to_owned(),
-        password: SecretString::from("Qz7left"),
-    });
-    assert!(
-        matches!(
-            &basic,
-            PixmConfigError::Credentials(InvalidCredentials::ColonInUserId)
-        ),
-        "a basic user-id carries no colon (RFC 7617 §2): {basic:?}"
-    );
-    for error in [&control, &basic] {
-        let mut rendered = format!("{error}\n{error:?}");
-        let mut cause = std::error::Error::source(error);
-        while let Some(source) = cause {
-            rendered.push_str(&source.to_string());
-            cause = source.source();
-        }
-        assert!(
-            !rendered.contains("Qz7"),
-            "the refusal quotes no secret: {rendered}"
-        );
-    }
 }

@@ -12,12 +12,13 @@ use ferrofed_identity::ihe::pixm::{ManagerConfig, PixmResolver};
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrohealth_smart::client::outbound::OutboundClient;
+use ferrohealth_smart::config::ServerTls;
 use ihe_iti::pixm::Invocation;
 
 use crate::binding::error::BindingError;
 use crate::config::audit::AuditSettings;
 use crate::config::ihe::pixm::{PixmMethod, PixmSettings};
-use crate::config::service;
 
 /// The PIXm resolver `[pixm]` describes over the members of `snapshot`.
 pub(super) fn resolver(
@@ -36,15 +37,13 @@ pub(super) fn resolver(
             })?;
             members.insert(member, domain.clone());
         }
-        let key = format!("pixm.manager[{index}]");
-        let auth = service::service_authentication(
-            &format!("{key}.credentials"),
-            manager.credentials.as_ref(),
-        )?;
+        let client = OutboundClient::build(&manager.endpoint, "pixm.manager.endpoint", &ServerTls)
+            .map_err(|source| BindingError::Outbound {
+                table: format!("pixm.manager[{index}].endpoint"),
+                source: Box::new(source),
+            })?;
         managers.push(ManagerConfig {
-            base: manager.url.clone(),
-            auth,
-            tls: Arc::clone(&manager.tls),
+            client,
             members,
             invocation: match manager.method {
                 PixmMethod::Get => Invocation::Get,

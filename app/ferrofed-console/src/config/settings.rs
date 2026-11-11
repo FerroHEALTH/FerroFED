@@ -199,7 +199,7 @@ fn resolve_admin(replicas: &[Replica]) -> Result<Vec<ReplicaSettings>, Error> {
 /// secret, and the console's own rule for a post-logout redirect.
 fn resolve_oidc(oidc: &OidcSection) -> Result<OidcSettings, Error> {
     let checked = oidc.check()?;
-    let redirect_uri = Url::parse(&oidc.redirect_uri).map_err(|source| Error::Url {
+    let redirect_uri = Url::parse(oidc.redirect_uri.expose()).map_err(|source| Error::Url {
         key: String::from("oidc.redirect_uri"),
         source,
     })?;

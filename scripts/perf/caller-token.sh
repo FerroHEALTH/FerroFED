@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
-# Mints an access token the compose quickstart's gateway accepts, and prints
-# it (no specification governs the quickstart issuer: our own design).
+# Mints a caller's access token the gateways of the performance gate accept,
+# and prints it (no specification governs the gate's issuer: our own design).
 #
-# The quickstart gateway trusts one development issuer, whose key set it reads
-# from docker/quickstart/issuer/jwks.json (docker/quickstart/ferrofed.toml,
-# [auth]). The first run generates that issuer's RSA key pair with openssl and
+# perf/ferrofed.toml trusts one development issuer, whose key set it reads
+# from docker/quickstart/issuer/jwks.json, the path a base tree's
+# perf/ferrofed.toml reads too. The first run generates that issuer's RSA key pair with openssl and
 # writes the key set; the private key stays in docker/quickstart/issuer/,
 # which git ignores, so no key is ever committed. A development key, NOT for
 # anything real.
@@ -16,8 +16,8 @@
 # scope in the user/ compartment, the purpose of use TREAT in the IHE IUA
 # extension, valid for one hour.
 #
-# Usage, after `docker compose up --wait`:
-#   curl -H "Authorization: Bearer $(scripts/quickstart/token.sh)" ...
+# Usage, as scripts/perf/gate.sh runs it:
+#   curl -H "Authorization: Bearer $(scripts/perf/caller-token.sh)" ...
 # Needs openssl and od. Exit 1 when a key cannot be made or a token signed.
 set -euo pipefail
 cd "$(dirname "$0")/../.."

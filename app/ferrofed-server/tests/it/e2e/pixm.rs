@@ -161,7 +161,7 @@ pub(crate) fn pixm_resolver(pix: &Pix) -> String {
 /// `roots`.
 pub(crate) fn pixm_resolver_at(url: &str, token_endpoint: &str, roots: &std::path::Path) -> String {
     format!(
-        "profile = \"development\"\n\n[[pixm.manager]]\nurl = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.credentials.oauth]\ntoken_endpoint = \"{token_endpoint}\"\nclient_id = \"{}\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"{CONSUMER_SECRET}\"\nscope = \"system/Patient.rs\"\n\n[pixm.manager.credentials.oauth.tls]\ntrust_roots_file = {}\n",
+        "profile = \"development\"\n\n[[pixm.manager]]\nendpoint.url = \"{url}\"\n\n[pixm.manager.members]\n\"node-a\" = \"{}\"\n\"node-b\" = \"{}\"\n\n[pixm.manager.endpoint.credentials.oauth]\ntoken_endpoint = \"{token_endpoint}\"\nclient_id = \"{}\"\nclient_auth = \"client_secret_basic\"\nclient_secret = \"{CONSUMER_SECRET}\"\nscope = \"system/Patient.rs\"\n\n[pixm.manager.endpoint.credentials.oauth.tls]\ntrust_roots_file = {}\n",
         DOMAIN_A.system(),
         DOMAIN_B.system(),
         CONSUMER.id,

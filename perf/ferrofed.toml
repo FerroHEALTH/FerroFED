@@ -114,9 +114,11 @@ identifier_system = "urn:oid:2.999.9"
 identifier_value = "perf-operator"
 
 [pdqm]
-url = "http://127.0.0.1:8090/fhir/"
 transaction = "iti-78"
 master = "urn:oid:2.999.1.1"
+
+[pdqm.endpoint]
+url = "http://127.0.0.1:8090/fhir/"
 timeout = "5s"
 
 [pdqm.namespaces]
@@ -125,7 +127,7 @@ timeout = "5s"
 # FerroPIX's PDQm Supplier and PIXm Manager take a machine's client
 # credentials token of the quickstart's development issuer
 # (compose.yaml, the `ferropix-issuer` service, published on 8180).
-[pdqm.credentials.oauth]
+[pdqm.endpoint.credentials.oauth]
 token_endpoint = "http://localhost:8180/ferrofed/token"
 client_id = "ferrofed"
 client_auth = "client_secret_basic"
@@ -172,6 +174,8 @@ user = "ferroehr"
 password = "ferroehr"
 
 [[pixm.manager]]
+
+[pixm.manager.endpoint]
 url = "http://127.0.0.1:8090/fhir/"
 
 [pixm.manager.members]
@@ -180,7 +184,7 @@ url = "http://127.0.0.1:8090/fhir/"
 "node-c" = "urn:oid:2.999.2.3"
 "node-d" = "urn:oid:2.999.2.4"
 
-[pixm.manager.credentials.oauth]
+[pixm.manager.endpoint.credentials.oauth]
 token_endpoint = "http://localhost:8180/ferrofed/token"
 client_id = "ferrofed"
 client_auth = "client_secret_basic"

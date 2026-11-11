@@ -184,3 +184,33 @@ fn nothing_traced_while_the_console_loads_starts_and_serves_shows_a_secret()
     assert!(!output.contains(SENTINEL), "{output}");
     Ok(())
 }
+
+#[test]
+fn an_oidc_url_with_userinfo_never_renders() -> Result<(), Box<dyn Error>> {
+    let mut file = tempfile::NamedTempFile::new()?;
+    writeln!(file, "synthetic-client-secret")?;
+    let secret_file = toml::Value::String(file.path().display().to_string());
+    let userinfo = format!("console:{SENTINEL}@");
+    let text = format!(
+        "{}client_secret_file = {secret_file}\n",
+        PROVIDER
+            .replace("https://idp.", &format!("https://{userinfo}idp."))
+            .replace(
+                "http://127.0.0.1:3000",
+                &format!("http://{userinfo}127.0.0.1:3000")
+            )
+    );
+    let config = Config::from_sources(Some(&text), &BTreeMap::new())?;
+    for shown in [format!("{config:?}"), format!("{config:#?}")] {
+        assert!(
+            !shown.contains(SENTINEL),
+            "the Debug output of the configuration carries the userinfo"
+        );
+    }
+    let refused = config
+        .resolve()
+        .err()
+        .ok_or("an [oidc] URL with userinfo is refused")?;
+    holds_no_secret("an [oidc] URL with userinfo", &refused);
+    Ok(())
+}

@@ -164,6 +164,7 @@ impl Writes for Served {
             "Software that writes the laboratory report from the member's record automatically",
             (&self.mapping, composition),
         )?;
+        let withheld = report::withheld(mapped.bundle());
         let results = document
             .with_mapped_report(mapped.bundle())
             .map_err(ServedError::Document)?;
@@ -172,12 +173,11 @@ impl Writes for Served {
             .iter()
             .find(|slot| slot.code == SECTION)
             .ok_or(ServedError::Document(DocumentError::Unmapped { found: 0 }))?;
-        let mut section = Section::new(
-            slot,
-            vec![String::from(
-                "The results as the member records them, written by the gateway.",
-            )],
-        );
+        let mut paragraphs = vec![String::from(
+            "The results as the member records them, written by the gateway.",
+        )];
+        paragraphs.extend(withheld);
+        let mut section = Section::new(slot, paragraphs);
         for result in results {
             section = section.with_entry(result);
         }

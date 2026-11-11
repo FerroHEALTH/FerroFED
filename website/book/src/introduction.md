@@ -79,21 +79,21 @@ the gateway:
 
 Every client authenticates with an access token from an issuer you trust
 ([Client authentication](operate/authentication.md)). Each page says what is
-built and names the issue of what is planned, and the claims page lists the
+built, and the claims page lists the
 [limitations](evaluate/what-ferrofed-claims.md#limitations) to know before
 you deploy it.
 
 ## How this book is organised
 
-The five parts follow what you came to do.
+The four parts follow what you came to do.
 
-- **How it works:** the gateway in diagrams, one question per page.
-- **Evaluate:** whether FerroFED fits your problem. What the Federation Tier
-  is, what FerroFED claims and what is planned, the conformance matrix and
-  the obligations checklist, the version pins and the licence.
-- **Operate:** installing, configuring and running the gateway, and what it
-  needs around it.
+- **Evaluate:** whether FerroFED fits your problem. How the gateway works,
+  one question per page, what the Federation Tier is, what FerroFED claims,
+  the conformance matrix and the obligations checklist, the version pins and
+  the licence.
 - **Integrate:** what a client sends and what it gets back.
+- **Operate:** installing, configuring and running the gateway, what it
+  needs around it, and what each release added.
 - **Contribute:** how the work is tracked and which checks a change has to
   pass.
 
