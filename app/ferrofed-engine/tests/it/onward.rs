@@ -25,7 +25,9 @@ use ferrofed_testkit::issuance::Verdict;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrofed_testkit::unreachable;
-use ferrohealth_smart::client::assertion::{ASSERTION_TYPE, AssertionError, AssertionKey};
+use ferrohealth_smart::client::assertion::{
+    ASSERTION_LIFETIME_SECONDS, ASSERTION_TYPE, AssertionError, AssertionKey,
+};
 use ferrohealth_smart::client::cache::Clock as TokenClock;
 use ferrohealth_smart::client::keys::{KeyRing, KeyRingError};
 use ferrohealth_smart::client::{ClientCredentials, Endpoint};
@@ -315,7 +317,7 @@ async fn the_assertion_carries_the_rfc_7523_claims() -> TestResult {
         assert_eq!(CLIENT_ID, claims.iss);
         assert_eq!(CLIENT_ID, claims.sub);
         assert_eq!(endpoint.token_url(), claims.aud);
-        assert_eq!(300, claims.exp - claims.iat);
+        assert_eq!(ASSERTION_LIFETIME_SECONDS, claims.exp - claims.iat);
         seen.push(claims.jti);
     }
     seen.dedup();

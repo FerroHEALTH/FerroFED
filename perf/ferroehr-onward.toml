@@ -2,38 +2,86 @@
 # SPDX-License-Identifier: BUSL-1.1
 
 # Node A's FerroEHR configuration under the performance gate
-# (scripts/perf/gate.sh, perf/compose.yaml): the quickstart's inline
-# ferroehr-config of compose.yaml, with the gate's token endpoint
-# (ferrofed-perf-token) trusted beside the Basic user, so the gateway reaches
-# node A through its onward lane (#1712). The persons issuer signs the token
-# each caller's is exchanged for, the machines issuer the gateway's own; the
-# token endpoint writes both key sets under target/perf-run/onward, mounted
-# here. No specification governs this: our own design.
+# (scripts/perf/gate.sh, perf/compose.yaml): the quickstart's
+# docker/quickstart/ferroehr.toml, with the gate's token endpoint
+# (ferrofed-perf-token) trusted as a second issuer of persons, so the gateway
+# reaches node A through its onward lane (#1712), and as the issuer of the
+# gateway's own token. The token endpoint signs the token each caller's is
+# exchanged for and the gateway's own, and writes both key sets under
+# target/perf-run/onward, mounted here. The quickstart's issuer stays first,
+# for the seed and for the audience compose.yaml gives node A. Each person
+# of either issuer is created at the first request (FerroEHR's just-in-time
+# creation) when the token names the identity provider `quickstart` and a
+# `name`. No specification governs this: our own design.
 
-[server]
-listen = "0.0.0.0:8080"
-
-[ehr_index]
-provider = "local"
+[record]
+subject_index = "local"
 
 [auth]
 enabled = true
 
-[[auth.basic.users]]
-user = "ferroehr"
-password_hash = "$argon2id$v=19$m=19456,t=2,p=1$ZmVycm9laHJEZXZTYWx0$be5nPwWjfUl1qvSrvkvqvdMOuCgM0VFcN/VN4MFLjT8"
-scopes = ["user/composition-*.cruds", "user/template-*.cruds", "user/aql-*.cruds", "__ferroehr.platform"]
-roles = ["ADMIN", "USER"]
+[[auth.issuer]]
+issuer = "http://localhost:8190/quickstart"
+kind = "persons"
+audience = ["http://localhost:8081/ferroehr/rest/openehr"]
+first_party_clients = ["quickstart-seed"]
+delegates = [{ client = "ferrofed" }]
+
+[[auth.party]]
+issuer = "http://localhost:8190/quickstart"
+identifier_issuer = "urn:oid:2.999.7.8"
+identifier_type = "login"
+
+[[authz.party_binding.issuer]]
+issuer = "http://localhost:8190/quickstart"
+jit = true
+admit_idp = ["quickstart"]
 
 [[auth.issuer]]
 issuer = "https://quickstart-issuer.ferrofed.invalid"
+kind = "persons"
 audience = ["https://node-a.perf.ferrofed.invalid"]
 jwks_file = "/etc/ferroehr/onward/persons.json"
+delegates = [{ client = "ferrofed-perf" }]
 
+[[auth.party]]
+issuer = "https://quickstart-issuer.ferrofed.invalid"
+identifier_issuer = "urn:oid:2.999.7.10"
+identifier_type = "login"
+
+[[authz.party_binding.issuer]]
+issuer = "https://quickstart-issuer.ferrofed.invalid"
+jit = true
+admit_idp = ["quickstart"]
+
+# The gateway's own token, for work no caller originates, from the token
+# endpoint's machines issuer, for an audience of its own: no two issuers of
+# a node share one.
 [[auth.issuer]]
 issuer = "https://perf-onward.ferrofed.invalid/machines"
-audience = ["https://node-a.perf.ferrofed.invalid"]
+kind = "machines"
+audience = ["https://node-a.perf.ferrofed.invalid/machines"]
 jwks_file = "/etc/ferroehr/onward/machines.json"
+
+[authz.party_binding]
+provider = { issuer = "urn:oid:2.999.7.9", id = "quickstart" }
+
+[[authz.party_binding.person.template]]
+template_id = "openEHR-DEMOGRAPHIC-PERSON.healthcare_professional.v1.0.0"
+default = true
+key = { path = "/details[id2]/items[id3]", type = "login" }
+user_name = { path = "/details[id2]/items[id3]", type = "scim_user_name" }
+external_id = { path = "/details[id2]/items[id3]", type = "scim_external_id" }
+
+[[authz.party_binding.person.attribute]]
+scim = "name.formatted"
+oidc = "name"
+jit = true
+name = true
+path = { "openEHR-DEMOGRAPHIC-PERSON.healthcare_professional.v1.0.0" = "/identities[id4]/details[id5]/items[id6]" }
+
+[authz.party_binding.professional_role]
+template_id = "openEHR-DEMOGRAPHIC-ROLE.healthcare_professional.v1.0.0"
 
 [authz.rbac]
 enabled = false

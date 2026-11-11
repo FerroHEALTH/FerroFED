@@ -232,9 +232,18 @@ fn config_check_refuses_a_creating_system_mapping_to_an_undeclared_endpoint()
 fn the_quickstart_configuration_passes_config_check() -> Result<(), Box<dyn StdError>> {
     let quickstart =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docker/quickstart");
+    // Each node's onward lane signs its client assertions with the gateway's
+    // signing key, a compose secret, so its path moves with the key's.
+    let lanes = ["a", "b", "c", "d"].map(|node| {
+        format!(
+            "credentials.node-{node}-query.credentials.oauth.private_key_file={}",
+            crate::support::signing_key_file()
+        )
+    });
     let output = Command::new(env!("CARGO_BIN_EXE_ferrofed"))
         .args(["config", "check", "--config"])
         .arg(quickstart.join("ferrofed.toml"))
+        .args(lanes.iter().flat_map(|lane| ["--set", lane.as_str()]))
         .env_remove("FERROFED_CONFIG")
         .env(
             "FERROFED__REGISTRY__DOCUMENT",

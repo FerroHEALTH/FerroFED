@@ -262,8 +262,10 @@ url = "https://arr.example.org/fhir"          # EDIT
 
 # EDIT: the credentials the gateway sends each endpoint of registry.toml, one
 # section per endpoint id: the OAuth 2.0 client credentials grant, the
-# default onward mechanism of the Federation Tier (§13.1), or a user and a
-# password. Leave an endpoint out when it needs none.
+# default onward mechanism of the Federation Tier (§13.1), with an onward
+# table where the node admits each caller only under a token of its own
+# issuer obtained for that caller (FerroEHR from 5.7.0). Leave an endpoint
+# out when it needs none.
 # https://ferrofed.eu/docs/operate/onward-credentials.html#oauth-20-to-a-node
 # A node's grant authenticates by a private_key_jwt client assertion (RFC
 # 7523 §2.2), its public key published in the gateway's JWK Set, or by the
@@ -276,9 +278,26 @@ client_auth = "private_key_jwt"
 private_key_file = "/run/secrets/ferrofed/node-a-client.pem"
 scope = "system/aql-*.s"
 
-[credentials."node-b-query".credentials]
-user = "ferrofed"
-password_file = "/run/secrets/ferrofed/node-b-password"
+# Node B admits a caller's request only under the token its issuer exchanges
+# the caller's token for (RFC 8693), the onward table; the oauth table
+# authenticates the gateway there and carries its own requests alone.
+# https://ferrofed.eu/docs/operate/onward-credentials.html#the-onward-lane-of-a-node
+[credentials."node-b-query".credentials.oauth]
+issuer = "https://auth.node-b.example.org"
+client_id = "ferrofed-gateway"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/ferrofed/node-b-client.pem"
+scope = "system/aql-*.s"
+
+[credentials."node-b-query".credentials.onward]
+issuer = "https://auth.node-b.example.org"
+kind = "persons"
+profile = "rfc9068"
+audiences = ["https://node-b.example.org/openehr"]
+indicators = ["https://node-b.example.org/openehr"]
+
+[credentials."node-b-query".credentials.onward.keys]
+max_onward_lifetime = "1h"
 
 # FerroFED's own PostgreSQL store, off unless the table is set. A
 # contact-point issuer ([[federation.contact_point]]) and the

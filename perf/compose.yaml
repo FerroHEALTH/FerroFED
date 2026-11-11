@@ -3,19 +3,42 @@
 
 # The performance gate's override of the quickstart's compose.yaml
 # (scripts/perf/gate.sh): FerroPIX is published on the host's loopback, so the
-# gateway the gate runs on the host resolves patients through it, and node A
-# reads perf/ferroehr-onward.toml, which trusts the gate's token endpoint
-# beside the Basic user, with the key sets that endpoint writes under
+# gateway the gate runs on the host resolves patients through it. The nodes
+# run in the namespace of the quickstart's issuer, which publishes their
+# ports; the gate's gateways listen on the host's 8080, 8070 and 8060, so the
+# issuer publishes the nodes' ports and its own alone. Node A reads
+# perf/ferroehr-onward.toml, which trusts the gate's token endpoint beside the
+# quickstart's issuer, with the key set that endpoint writes under
 # target/perf-run/onward, so the gateway reaches node A through its onward
-# lane (#1712). No specification governs this: our own design.
+# lane (#1712). Nodes B to D run with their authentication off, so the
+# gateway reaches them with no credential, as it reached them with the
+# quickstart's Basic user before FerroEHR 5.7.0 bound every Basic user to a
+# PERSON: the gate measures the gateway, not the nodes' sign-in. No
+# specification governs this: our own design.
 services:
   ferropix-issuer:
     ports:
       - "127.0.0.1:8090:8080"
       - "127.0.0.1:8180:8180"
+  issuer:
+    ports: !override
+      - "127.0.0.1:8190:8190"
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8082:8082"
+      - "127.0.0.1:8083:8083"
+      - "127.0.0.1:8084:8084"
   ferroehr-a:
     environment:
       FERROEHR_CONFIG: /etc/ferroehr/onward.toml
     volumes:
       - ./perf/ferroehr-onward.toml:/etc/ferroehr/onward.toml:ro
       - ./target/perf-run/onward:/etc/ferroehr/onward:ro
+  ferroehr-b:
+    environment:
+      FERROEHR__AUTH__ENABLED: "false"
+  ferroehr-c:
+    environment:
+      FERROEHR__AUTH__ENABLED: "false"
+  ferroehr-d:
+    environment:
+      FERROEHR__AUTH__ENABLED: "false"

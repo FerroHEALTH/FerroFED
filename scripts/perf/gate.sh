@@ -170,15 +170,17 @@ render() {
 }
 
 # registry DOCUMENT [HOST]: the quickstart's registry DOCUMENT with each
-# node's compose host and port replaced by the port compose publishes it on
-# at HOST, 127.0.0.1 by default.
+# node's address replaced by the port compose publishes it on at HOST,
+# 127.0.0.1 by default: a node on its compose host and port, or, from
+# FerroEHR 5.7.0, on its own port of the issuer's namespace, localhost there.
 registry() {
   local host="${2:-127.0.0.1}"
   sed -E \
     -e "s|http://ferroehr-a:8080/|http://${host}:8081/|" \
     -e "s|http://ferroehr-b:8080/|http://${host}:8082/|" \
     -e "s|http://ferroehr-c:8080/|http://${host}:8083/|" \
-    -e "s|http://ferroehr-d:8080/|http://${host}:8084/|" "$1"
+    -e "s|http://ferroehr-d:8080/|http://${host}:8084/|" \
+    -e "s|http://localhost:(808[1-4])/|http://${host}:\1/|" "$1"
 }
 
 # b64url: standard input as unpadded base64url (RFC 7515 §2).
@@ -1005,8 +1007,11 @@ self_test() {
   printf 'url = "http://ferroehr-c:8080/ferroehr/rest/openehr"\n' > "$work/registry.toml"
   check "a node's compose address becomes its loopback port" \
     'url = "http://127.0.0.1:8083/ferroehr/rest/openehr"' "$(registry "$work/registry.toml")"
+  printf 'url = "http://localhost:8084/ferroehr/rest/openehr"\n' > "$work/namespace.toml"
+  check "a node on its port of the issuer's namespace becomes its loopback port" \
+    'url = "http://127.0.0.1:8084/ferroehr/rest/openehr"' "$(registry "$work/namespace.toml")"
   check "every quickstart node is reached on loopback" 0 \
-    "$(registry "$root/docker/quickstart/registry.toml" | grep -c 'http://ferroehr-' || true)"
+    "$(registry "$root/docker/quickstart/registry.toml" | grep -cE 'http://(ferroehr-|localhost:)' || true)"
   check "the base's nodes are reached on its own address" \
     "url = \"http://$SIBLING_HOST:8083/ferroehr/rest/openehr\"" "$(registry "$work/registry.toml" "$SIBLING_HOST")"
   # shellcheck disable=SC2016 # the compose interpolation is the file's, never expanded

@@ -1171,9 +1171,10 @@ no OAuth 2.0 client of its own (#1749):
   configured. `[signing]` stays FerroFED's table, with its own P-256 and
   P-384 rule;
 - **rotation:** the JWKS publishes the current and the previous `kid` for one
-  overlap window of at least the 300 s assertion lifetime plus the nodes'
+  overlap window of at least the 60 s assertion lifetime plus the nodes'
   JWKS cache time;
-- **assertions:** `exp` of 300 s, fixed by the crate, a unique `jti`, `aud`
+- **assertions:** `exp` of 60 s, fixed by the crate since `ferrohealth-smart`
+  0.19.1 (FerroHEALTH/FerroAUTH#461), a unique `jti`, `aud`
   the node's token endpoint, or, with `assertion_audience = "issuer"`, the
   authorization server's issuer identifier as one string, the other value
   RFC 7523 §3 admits and the only one the FAPI 2.0 Security Profile accepts
@@ -1213,7 +1214,13 @@ no OAuth 2.0 client of its own (#1749):
   attestation, FerroEHR's committer placeholder of the onward token's `iss`
   and `sub` (`ferrofed_engine::single_node::committer`, #1705); through any
   other lane an attestation is refused `403` before sending; a header commit
-  is forwarded as sent, with no committer of the gateway's;
+  is forwarded as sent, with no committer of the gateway's. A FerroEHR node
+  from release 5.7.0 lists the onward issuer as a `persons` issuer with its
+  own audience and the gateway's client among its `delegates`, and binds
+  every person to a demographic `PERSON`; the quickstart's four nodes run so,
+  each reached through its lane at the development issuer, and the e2e lane
+  holds that a person's query reaches such a node under the exchanged token
+  and fails there under the gateway's own (#1615);
 - **token exchange** (built with #439, onto the lane with #1749): where a
   node's authorization server supports RFC 8693, the node's `onward` table
   sets `actor_assertion = true`. The `subject_token` is the caller's

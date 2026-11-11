@@ -3,9 +3,9 @@
 #
 # The registry document of the compose.yaml quickstart: the four member CDRs
 # the gateway federates, four FerroEHR instances as node A to node D, each
-# reached on the Compose network at its ITS-REST API root (the §12b.1
-# registry entry, N21; no specification governs the document format: our own
-# design). Each system_id is the one compose.yaml configures the node to
+# reached at its ITS-REST API root on its own port of the network namespace
+# it shares with the gateway (the §12b.1 registry entry, N21; no
+# specification governs the document format: our own design). Each system_id is the one compose.yaml configures the node to
 # stamp. Every name here is quickstart-local.
 
 [[organisation]]
@@ -47,27 +47,27 @@ system_id = "node-d.quickstart.local"
 [[endpoint]]
 id = "node-a-query"
 node = "node-a"
-url = "http://ferroehr-a:8080/ferroehr/rest/openehr"
+url = "http://localhost:8081/ferroehr/rest/openehr"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-a"
 
 [[endpoint]]
 id = "node-b-query"
 node = "node-b"
-url = "http://ferroehr-b:8080/ferroehr/rest/openehr"
+url = "http://localhost:8082/ferroehr/rest/openehr"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-b"
 
 [[endpoint]]
 id = "node-c-query"
 node = "node-c"
-url = "http://ferroehr-c:8080/ferroehr/rest/openehr"
+url = "http://localhost:8083/ferroehr/rest/openehr"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-c"
 
 [[endpoint]]
 id = "node-d-query"
 node = "node-d"
-url = "http://ferroehr-d:8080/ferroehr/rest/openehr"
+url = "http://localhost:8084/ferroehr/rest/openehr"
 connection_type = "openehr-rest-query"
 managing_organisation = "org-d"

@@ -1,0 +1,82 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The configuration the compose.yaml quickstart's four FerroEHR nodes share
+# (FerroEHR 5.7.0, https://ferroehr.eu/docs/latest/installation/config-auth.html).
+# Each node sets its own database, system_id, listen port and audience in its
+# environment. Development settings, NOT for anything real.
+#
+# Every node is reached under a token of the quickstart's development issuer,
+# the `issuer` service of compose.yaml (NAV's mock-oauth2-server), which the
+# nodes trust as their issuer of persons. A node reads an issuer's metadata
+# and accepts plain http only on loopback (RFC 8414 §2), so the nodes run in
+# the issuer's network namespace, like the gateway, and name the issuer as
+# they see it there. The gateway reaches a node for a caller only under the
+# token the issuer exchanged the caller's token for (RFC 8693): the person as
+# `sub`, the node as `aud` and the gateway's client `ferrofed` as its client,
+# which the node reads as a delegate acting for the person. The ehr-seed
+# service signs in through the node's own client `quickstart-seed`.
+#
+# FerroEHR binds every person who signs in to a demographic PERSON. These
+# nodes create a provisional PERSON at a person's first request
+# (just-in-time creation) when the token names the issuer's identity
+# provider `quickstart` and the person's `name`, over the professional PERSON
+# and ROLE templates the ferroehr-definitions services load before each node
+# starts (docs/specs/ferroehr-definitions/).
+
+[record]
+# The gateway resolves patients through FerroPIX and names each node's own
+# ehr_id, so a node keeps only its in-instance subject lookup.
+subject_index = "local"
+
+[auth]
+enabled = true
+
+# Each node overrides `audience` with its own API root
+# (FERROEHR__AUTH__ISSUER__0__AUDIENCE), so a token for one node is refused
+# at another.
+[[auth.issuer]]
+issuer = "http://localhost:8190/quickstart"
+kind = "persons"
+audience = ["http://localhost:8081/ferroehr/rest/openehr"]
+first_party_clients = ["quickstart-seed"]
+delegates = [{ client = "ferrofed" }]
+
+[[auth.party]]
+issuer = "http://localhost:8190/quickstart"
+identifier_issuer = "urn:oid:2.999.7.8"
+identifier_type = "login"
+
+[authz.party_binding]
+# The healthcare provider the nodes act for, an example id under the OID arc
+# 2.999, which ITU-T X.660 reserves for examples.
+provider = { issuer = "urn:oid:2.999.7.9", id = "quickstart" }
+
+[[authz.party_binding.issuer]]
+issuer = "http://localhost:8190/quickstart"
+jit = true
+admit_idp = ["quickstart"]
+
+# The party mapping over the professional PERSON and ROLE templates: the
+# binding key, `userName` and `externalId` share the identifier element and
+# are told apart by type, and the token's `name` is the person's name.
+[[authz.party_binding.person.template]]
+template_id = "openEHR-DEMOGRAPHIC-PERSON.healthcare_professional.v1.0.0"
+default = true
+key = { path = "/details[id2]/items[id3]", type = "login" }
+user_name = { path = "/details[id2]/items[id3]", type = "scim_user_name" }
+external_id = { path = "/details[id2]/items[id3]", type = "scim_external_id" }
+
+[[authz.party_binding.person.attribute]]
+scim = "name.formatted"
+oidc = "name"
+jit = true
+name = true
+path = { "openEHR-DEMOGRAPHIC-PERSON.healthcare_professional.v1.0.0" = "/identities[id4]/details[id5]/items[id6]" }
+
+[authz.party_binding.professional_role]
+template_id = "openEHR-DEMOGRAPHIC-ROLE.healthcare_professional.v1.0.0"
+
+# Authentication only, no role gate: a bound person may use the clinical API.
+[authz.rbac]
+enabled = false

@@ -330,6 +330,7 @@ for `openEHR-EHR-INSTRUCTION.medication_order.v3`,
 | FerroBRIDGE medication template | `FerroHEALTH/FerroBRIDGE` commit `94f2f95381e96790a7f55ca44a1ca7c150e4638d` path `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_medication.adlt` and `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt` at commit `4919759845d7297201bf52995da21ec79861648a` (FerroHEALTH/FerroBRIDGE#1696), with `openEHR-EHR-COMPOSITION.encounter.v1`, `openEHR-EHR-COMPOSITION.health_summary.v1`, `openEHR-EHR-SECTION.adhoc.v1`, `openEHR-EHR-SECTION.immunisation_list.v0`, `openEHR-EHR-CLUSTER.medication.v2`, `openEHR-EHR-CLUSTER.therapeutic_direction.v1`, `openEHR-EHR-CLUSTER.dosage.v2` and `openEHR-EHR-CLUSTER.timing_daily.v1` from `openEHR/CKM-mirror` commit `c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094`, pin-set digest `959cf679f784af3d14dcf0721da583ecf3e4f645513a38369804754e20345767`, template sha256 `7d2224c9cf5b92093096c15286ff56594e88270fc23705caefceeb71a7929f75` | `scripts/vendor/ferrobridge-medication.sh`, `docs/specs/ferrobridge-medication/PROVENANCE.md` |
 | FerroBRIDGE discharge report template | `FerroHEALTH/FerroBRIDGE` tag `v0.0.22` (commit `7498b0a22f11d9c67040ecf95f35001342c774fb`) path `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_discharge_report.adlt`, with `openEHR-EHR-COMPOSITION.transfer_summary.v1`, `openEHR-EHR-EVALUATION.problem_diagnosis.v1`, `openEHR-EHR-ACTION.procedure.v1` and the mirror's `LICENSE` from `openEHR/CKM-mirror` commit `c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094`, pin-set digest `e3182f182e42078265a2fe785b88a1ecbfeca45bb844d578bf2a3db7725d606e` | `scripts/vendor/ferrobridge-discharge.sh`, `docs/specs/ferrobridge-discharge/PROVENANCE.md` |
 | FerroBRIDGE imaging report template | `FerroHEALTH/FerroBRIDGE` tag `v0.0.24` (commit `bc1c3e555b5418daff29c01dc4e11fa24f5d1ebe`) path `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_imaging_report.adlt`, with `openEHR-EHR-COMPOSITION.report-result.v1`, `openEHR-EHR-OBSERVATION.imaging_exam_result.v1`, `openEHR-EHR-CLUSTER.organisation.v1` and the mirror's `LICENSE` from `openEHR/CKM-mirror` commit `c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094`, pin-set digest `48c45dfcd2823642bb82f6d63cc1b7511fbe8a56b2eddabfa959b062fc055f16` | `scripts/vendor/ferrobridge-imaging.sh`, `docs/specs/ferrobridge-imaging/PROVENANCE.md` |
+| FerroEHR professional definitions | `FerroHEALTH/FerroEHR` tag `v5.7.0` (commit `7d85f0a1d2b86ca5bf2d43025090e6a102d99f74`) paths `deploy/definitions/professional/openEHR-DEMOGRAPHIC-PERSON.healthcare_professional.v1.0.0.adls`, `deploy/definitions/professional/openEHR-DEMOGRAPHIC-ROLE.healthcare_professional.v1.0.0.adls` and `LICENSE-CC-BY-SA-3.0`, pin-set digest `1563759c01325d1a409f58558157785d991696fff9557d19675d77335cb82f66` | `scripts/vendor/ferroehr-definitions.sh`, `docs/specs/ferroehr-definitions/PROVENANCE.md` |
 
 ## openEHR model crates (crates.io)
 
@@ -625,8 +626,11 @@ own `system_id` and its own database on one FerroEHR PostgreSQL container
 image is pinned by tag and by the digest of its image index, resolved on
 2026-10-01, and the base image again on 2026-10-22 for the `ca-certificates`
 20250419+deb13u1 it ships (Debian DSA-6572-1, #1226). The two FerroEHR images
-were resolved on 2026-10-22 from FerroEHR v5.3.2, the release on that same
-base. FerroEHR publishes them under `ghcr.io/ferrohealth` from v4.3.3, the
+were resolved on 2026-11-11 from FerroEHR v5.7.0, the first release that binds
+every caller to a demographic `PERSON` and admits the gateway's onward token
+for its caller, so the quickstart and the e2e harness reach a node with
+authentication on under the caller (FerroEHR #5003, #5005, #5006; #1615).
+FerroEHR publishes them under `ghcr.io/ferrohealth` from v4.3.3, the
 release that makes AQL honour `EHR_ACCESS` on every query form (FerroEHR
 #3562, #566).
 `scripts/checks/versions.sh` holds every row equal to the file that repeats
@@ -635,8 +639,8 @@ it.
 | Item | Pin | Repeated in |
 |---|---|---|
 | Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88` | `docker/Dockerfile` `FROM`, `docker/console/Dockerfile` `FROM` |
-| FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:5.6.3@sha256:cd4e067a30c730a92b886c1669cd669eda9ffd3e47ddf727f28928738e197d62` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:5.6.3@sha256:5c976b9e7d1c363490bdb3ff2ed82bc8aefcb6b18e9ee3762124f7b5800abe7d` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:5.7.0@sha256:44c9268cb8a154df118a10ffe84329633f22923ea2cc54261ff0cea57a2ee7e7` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:5.7.0@sha256:3b7dbfce603b4ff3c8a29366655f195baf2bfeaf903a1bf1be851ba69293743a` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroPIX PIX Manager image | `ghcr.io/ferrohealth/ferropix:0.0.26@sha256:85d40e6fdcdb39f782007eff91eb059861a4e039ca3f8fb56e37f2fa0f28d78a` | `compose.yaml`, the `FERROPIX` constant in `tools/ferrofed-testkit/src/containers/images.rs` |

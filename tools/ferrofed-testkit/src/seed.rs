@@ -304,10 +304,27 @@ pub struct PixBaseError(#[source] url::ParseError);
 /// [`SeedError::Send`] when a request cannot be sent, and
 /// [`SeedError::Refused`] when the node answers anything but success.
 pub async fn seed(api_root: &str, plan: &SeedPlan) -> Result<SeedReport, SeedError> {
-    let api_root = api_root.trim_end_matches('/');
     let client = reqwest::Client::builder()
         .build()
         .map_err(SeedError::Client)?;
+    seed_with(&client, api_root, plan).await
+}
+
+/// Seeds the node at `api_root` with `plan` as [`seed`] does, sending every
+/// request through `client`, which carries the credential a node with
+/// authentication on admits, such as a default `Authorization` header.
+///
+/// # Errors
+///
+/// Returns [`SeedError::Fixture`] when a vendored file cannot be read,
+/// [`SeedError::Send`] when a request cannot be sent, and
+/// [`SeedError::Refused`] when the node answers anything but success.
+pub async fn seed_with(
+    client: &reqwest::Client,
+    api_root: &str,
+    plan: &SeedPlan,
+) -> Result<SeedReport, SeedError> {
+    let api_root = api_root.trim_end_matches('/');
     let mut report = SeedReport::default();
 
     for ehr in &plan.ehrs {

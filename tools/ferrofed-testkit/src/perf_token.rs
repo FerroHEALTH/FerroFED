@@ -14,7 +14,8 @@
 //! 6749 §4.4) issues the gateway's own token, from the machines issuer. RFC
 //! 8693 token exchange verifies the `subject_token` against the caller
 //! issuer's key set (its signature, `iss` and `exp`) and issues a token of
-//! the persons issuer for the same `sub`, the client as `client_id`, the
+//! the persons issuer for the same `sub`, with the subject token's `name`
+//! and `idp` where it carries them, the client as `client_id`, the
 //! requested `scope` or else the subject token's, and the `resource` or
 //! `audience` it names as `aud`.
 //! Both issued tokens are ES256 JWTs typed `at+jwt` (RFC 9068 §2.1) that
@@ -333,6 +334,14 @@ struct Subject {
     sub: String,
     #[serde(default)]
     scope: Option<String>,
+    /// The person's name, which a FerroEHR node creates the person's
+    /// `PERSON` from at the first request.
+    #[serde(default)]
+    name: Option<String>,
+    /// The identity provider the person signed in at, which such a node
+    /// admits a first request by.
+    #[serde(default)]
+    idp: Option<String>,
 }
 
 /// Routes one request.
@@ -396,6 +405,13 @@ fn token(shared: &Shared, body: &[u8]) -> Response<Full<Bytes>> {
             };
             let mut claims = Claims::new(&settings.persons_issuer, audience);
             claims.sub = subject.sub;
+            // NOTE: RFC 8693 §2.1 leaves the issued claims to the server; the device keeps the
+            // person's name and identity provider, which a FerroEHR node creates the PERSON from.
+            for (claim, value) in [("name", subject.name), ("idp", subject.idp)] {
+                if let Some(value) = value {
+                    claims.other.insert(claim.to_owned(), value);
+                }
+            }
             // NOTE: RFC 8693 §2.1: with no `scope` the server picks it; the device grants the subject's.
             issue(
                 shared,

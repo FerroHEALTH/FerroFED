@@ -44,6 +44,7 @@ use testcontainers::{ContainerAsync, ContainerRequest, GenericImage, ImageExt};
 use database::database_server;
 use images::FERROEHR;
 
+pub mod bound;
 pub mod database;
 pub mod ehrbase;
 pub mod ferropix;
@@ -188,6 +189,25 @@ pub enum HarnessError {
     /// A harness file could not be written.
     #[error("a harness file could not be written")]
     Write(#[source] std::io::Error),
+    /// A node's SCIM endpoint could not be asked to provision a user.
+    #[error("the SCIM provisioning of {user} reached no answer")]
+    Unprovisioned {
+        /// The user the harness provisions.
+        user: &'static str,
+        /// What the client reported.
+        #[source]
+        source: reqwest::Error,
+    },
+    /// A node's SCIM endpoint refused to provision a user.
+    #[error(
+        "the node answered the SCIM provisioning of {user} with {status}, where it creates one with 201"
+    )]
+    ProvisionRefused {
+        /// The user the harness provisions.
+        user: &'static str,
+        /// The node's answer.
+        status: http::StatusCode,
+    },
 }
 
 /// A started PostgreSQL server holding one database per node, on a network
@@ -384,31 +404,44 @@ fn ferroehr_request(
 
 /// The FerroEHR container as `system_id` on the database `name` of the
 /// server `host` reached over `network`, before its access posture is set.
-///
-/// The usage report is switched off: a container does not inherit the CI
-/// runner's environment, so FerroEHR's own CI detection cannot see that it
-/// runs in a test, and every run would report itself as an installation.
-/// The node keeps its in-instance subject lookup (`[ehr_index] provider =
-/// "local"`), because the gateway resolves every patient itself.
 fn ferroehr_on_network(
     network: String,
     host: &str,
     name: &str,
     system_id: &'static str,
 ) -> ContainerRequest<GenericImage> {
-    FERROEHR
+    let request = FERROEHR
         .image()
         .with_exposed_port(CDR_PORT.tcp())
-        .with_network(network)
+        .with_network(network);
+    node_settings(request, host, name, system_id)
+}
+
+/// `request` with the settings every FerroEHR container of the harness
+/// shares: the database `name` of the server `host`, `system_id`, and the
+/// subject lookup and the usage report.
+///
+/// The usage report is switched off: a container does not inherit the CI
+/// runner's environment, so FerroEHR's own CI detection cannot see that it
+/// runs in a test, and every run would report itself as an installation.
+/// The node keeps its in-instance subject lookup (`[record] subject_index =
+/// "local"`), because the gateway resolves every patient itself.
+fn node_settings(
+    request: ContainerRequest<GenericImage>,
+    host: &str,
+    name: &str,
+    system_id: &'static str,
+) -> ContainerRequest<GenericImage> {
+    request
         .with_env_var(
-            "FERROEHR__DB__URL",
+            "FERROEHR__DATABASE__URL",
             format!(
                 "postgres://{name}:{}@{host}:{POSTGRES_PORT}/{name}",
                 role_password(name),
             ),
         )
-        .with_env_var("FERROEHR__REST__SYSTEM_ID", system_id)
-        .with_env_var("FERROEHR__EHR_INDEX__PROVIDER", "local")
+        .with_env_var("FERROEHR__API__SYSTEM_ID", system_id)
+        .with_env_var("FERROEHR__RECORD__SUBJECT_INDEX", "local")
         .with_env_var("FERROEHR__USAGE_REPORT__ENABLED", "false")
 }
 

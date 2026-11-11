@@ -36,16 +36,16 @@ use crate::support::{call, signed};
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// The client the onward issuer registered the gateway as.
-const CLIENT_ID: &str = "ferrofed-onward-gateway";
+pub(crate) const CLIENT_ID: &str = "ferrofed-onward-gateway";
 
 /// The audience, and the resource indicator, of node A's onward tokens.
-const NODE: &str = "https://cdr-a.example.org/openehr";
+pub(crate) const NODE: &str = "https://cdr-a.example.org/openehr";
 
 /// The caller the tests send the query as.
 const CALLER: &str = "synthetic-clinician-onward";
 
 /// The gateway's own token, which no caller's request may carry.
-const OWN_TOKEN: &str = "synthetic-gateway-own-token";
+pub(crate) const OWN_TOKEN: &str = "synthetic-gateway-own-token";
 
 /// A one-row answer from a node.
 const ONE_ROW: &str =
@@ -56,7 +56,7 @@ const TOKEN_EXCHANGE: &str = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-typ
 
 /// The `oauth` and `onward` tables of node A at the token endpoint `issuer`,
 /// whose onward issuer signs tokens of `kind`, with `extra` onward keys.
-fn lane(issuer: &str, kind: &str, extra: &str) -> String {
+pub(crate) fn lane(issuer: &str, kind: &str, extra: &str) -> String {
     format!(
         concat!(
             "[credentials.\"node-a-pub\".credentials.oauth]\n",
@@ -131,7 +131,7 @@ fn onward_token() -> Result<String, Box<dyn Error>> {
 
 /// An authorization server issuing the gateway its own token, and, for a
 /// token exchange, `exchanged` with `status`.
-async fn authorization_server(exchanged: &str, status: u16) -> Server {
+pub(crate) async fn authorization_server(exchanged: &str, status: u16) -> Server {
     let server = Server::start().await;
     let answer = if status == 200 {
         ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -199,7 +199,7 @@ fn patient_post(authorization: &str) -> Result<Request<Body>, Box<dyn Error>> {
 }
 
 /// The forms the authorization server received for a token exchange.
-async fn exchanges(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
+pub(crate) async fn exchanges(server: &Server) -> Result<Vec<String>, Box<dyn Error>> {
     Ok(server
         .received_requests()
         .await

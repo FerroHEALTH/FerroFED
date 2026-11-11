@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # The gateway configuration of the compose.yaml quickstart. It federates the
-# four nodes of registry.toml and sends each FerroEHR's quickstart Basic-auth
-# user: development credentials, NOT for anything real.
+# four nodes of registry.toml and reaches each under the token the
+# quickstart's development issuer exchanges the caller's token for:
+# development credentials, NOT for anything real.
 #
 # A development profile: the gateway resolves each patient through the
 # quickstart's FerroPIX, the patient index compose.yaml runs beside it, as a
@@ -80,21 +81,89 @@ authorization_details_purposes = true
 key_file = "/run/secrets/signing-key"
 jwks_uri = "http://ferrofed:8080/.well-known/jwks.json"
 
-[credentials."node-a-query".credentials]
-user = "ferroehr"
-password = "ferroehr"
+# Each node is reached for a caller under a token of its own issuer of
+# persons, the development issuer, obtained for that caller: the gateway
+# sends the caller's verified token to the issuer's token endpoint as the
+# subject of an RFC 8693 token exchange, naming the node's API root as its
+# resource (RFC 8707), and
+# checks the issued token before use (the caller as `sub`, the node as `aud`,
+# the gateway's client as its client, within an hour). The gateway
+# authenticates with a client assertion signed with its signing key (RFC
+# 7523), which the development issuer accepts without checking, NOT for
+# anything real. The `oauth` table authenticates the gateway; its own token,
+# for work no caller originates, is never sent for a caller. The nodes, in the
+# issuer's network namespace too, answer on localhost.
+[credentials."node-a-query".credentials.oauth]
+token_endpoint = "http://localhost:8190/quickstart/token"
+client_id = "ferrofed"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/signing-key"
+scope = "system/aql-*.s"
 
-[credentials."node-b-query".credentials]
-user = "ferroehr"
-password = "ferroehr"
+[credentials."node-a-query".credentials.onward]
+issuer = "http://localhost:8190/quickstart"
+kind = "persons"
+profile = "rfc9068"
+token_endpoint = "http://localhost:8190/quickstart/token"
+audiences = ["http://localhost:8081/ferroehr/rest/openehr"]
+indicators = ["http://localhost:8081/ferroehr/rest/openehr"]
 
-[credentials."node-c-query".credentials]
-user = "ferroehr"
-password = "ferroehr"
+[credentials."node-a-query".credentials.onward.keys]
+max_onward_lifetime = "1h"
 
-[credentials."node-d-query".credentials]
-user = "ferroehr"
-password = "ferroehr"
+[credentials."node-b-query".credentials.oauth]
+token_endpoint = "http://localhost:8190/quickstart/token"
+client_id = "ferrofed"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/signing-key"
+scope = "system/aql-*.s"
+
+[credentials."node-b-query".credentials.onward]
+issuer = "http://localhost:8190/quickstart"
+kind = "persons"
+profile = "rfc9068"
+token_endpoint = "http://localhost:8190/quickstart/token"
+audiences = ["http://localhost:8082/ferroehr/rest/openehr"]
+indicators = ["http://localhost:8082/ferroehr/rest/openehr"]
+
+[credentials."node-b-query".credentials.onward.keys]
+max_onward_lifetime = "1h"
+
+[credentials."node-c-query".credentials.oauth]
+token_endpoint = "http://localhost:8190/quickstart/token"
+client_id = "ferrofed"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/signing-key"
+scope = "system/aql-*.s"
+
+[credentials."node-c-query".credentials.onward]
+issuer = "http://localhost:8190/quickstart"
+kind = "persons"
+profile = "rfc9068"
+token_endpoint = "http://localhost:8190/quickstart/token"
+audiences = ["http://localhost:8083/ferroehr/rest/openehr"]
+indicators = ["http://localhost:8083/ferroehr/rest/openehr"]
+
+[credentials."node-c-query".credentials.onward.keys]
+max_onward_lifetime = "1h"
+
+[credentials."node-d-query".credentials.oauth]
+token_endpoint = "http://localhost:8190/quickstart/token"
+client_id = "ferrofed"
+client_auth = "private_key_jwt"
+private_key_file = "/run/secrets/signing-key"
+scope = "system/aql-*.s"
+
+[credentials."node-d-query".credentials.onward]
+issuer = "http://localhost:8190/quickstart"
+kind = "persons"
+profile = "rfc9068"
+token_endpoint = "http://localhost:8190/quickstart/token"
+audiences = ["http://localhost:8084/ferroehr/rest/openehr"]
+indicators = ["http://localhost:8084/ferroehr/rest/openehr"]
+
+[credentials."node-d-query".credentials.onward.keys]
+max_onward_lifetime = "1h"
 
 # The patient index: FerroPIX's PIXm Manager on the compose network. Each
 # member's ehr_ids are one identifier domain there, as

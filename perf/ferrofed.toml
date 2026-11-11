@@ -149,6 +149,7 @@ client_id = "ferrofed-perf"
 client_auth = "private_key_jwt"
 private_key_file = "target/perf-run/onward-client.pem"
 scope = "system/aql-*.s"
+audience = "https://node-a.perf.ferrofed.invalid/machines"
 
 [credentials."node-a-query".credentials.onward]
 issuer = "https://quickstart-issuer.ferrofed.invalid"
@@ -161,17 +162,8 @@ indicators = ["https://node-a.perf.ferrofed.invalid"]
 [credentials."node-a-query".credentials.onward.keys]
 max_onward_lifetime = "1h"
 
-[credentials."node-b-query".credentials]
-user = "ferroehr"
-password = "ferroehr"
-
-[credentials."node-c-query".credentials]
-user = "ferroehr"
-password = "ferroehr"
-
-[credentials."node-d-query".credentials]
-user = "ferroehr"
-password = "ferroehr"
+# Nodes B to D run with their authentication off under the gate
+# (perf/compose.yaml), so the gateway sends them no credential.
 
 [[pixm.manager]]
 

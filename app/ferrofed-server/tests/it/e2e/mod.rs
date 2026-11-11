@@ -49,6 +49,10 @@
 //! trace in its answers (Regulation (EU) 2025/327 Art 23, Art 8), in
 //! [`national`].
 //!
+//! A person's query reaches a FerroEHR node with authentication on under
+//! the token the node's authorization server exchanged the caller's token
+//! for, and fails there under the gateway's own token, in [`onward_cdr`].
+//!
 //! A restriction of processing set at node A leaves the restricted
 //! composition out of the federated answer, and a follow-up read of it
 //! answers the node's `403`, in [`restriction`].
@@ -100,6 +104,7 @@ mod dpop_replay;
 mod emergency;
 mod keycloak;
 mod national;
+mod onward_cdr;
 mod pixm;
 mod restriction;
 mod revisions_postgres;

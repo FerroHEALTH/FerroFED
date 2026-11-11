@@ -12,9 +12,10 @@
 # anything real.
 #
 # The token is an RFC 9068 access token signed RS256: issuer, audience and
-# subject as the quickstart configuration names them, every SMART on openEHR
-# scope in the user/ compartment, the purpose of use TREAT in the IHE IUA
-# extension, valid for one hour.
+# subject as the quickstart configuration names them, the name and identity
+# provider a FerroEHR node creates the person's PERSON from, every SMART on
+# openEHR scope in the user/ compartment, the purpose of use TREAT in the IHE
+# IUA extension, valid for one hour.
 #
 # Usage, as scripts/perf/gate.sh runs it:
 #   curl -H "Authorization: Bearer $(scripts/perf/caller-token.sh)" ...
@@ -73,7 +74,7 @@ kid="$(modulus | openssl dgst -sha256 | sed 's/^.*= *//' | cut -c1-16)"
 now="$(date +%s)"
 jti="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
 header="$(printf '{"alg":"RS256","typ":"at+jwt","kid":"%s"}' "$kid" | b64url)"
-payload="$(printf '{"iss":"%s","sub":"quickstart-user","aud":"%s","client_id":"quickstart-client","iat":%s,"exp":%s,"jti":"%s","scope":"user/aql-*.s user/composition-*.cruds user/template-*.cruds","extensions":{"ihe_iua":{"subject_organization_id":"urn:oid:2.999.7","purpose_of_use":[{"system":"%s","code":"TREAT"}]}}}' \
+payload="$(printf '{"iss":"%s","sub":"quickstart-user","aud":"%s","client_id":"quickstart-client","name":"Quickstart User","idp":"quickstart","iat":%s,"exp":%s,"jti":"%s","scope":"user/aql-*.s user/composition-*.cruds user/template-*.cruds","extensions":{"ihe_iua":{"subject_organization_id":"urn:oid:2.999.7","purpose_of_use":[{"system":"%s","code":"TREAT"}]}}}' \
   "$ISSUER" "$AUDIENCE" "$now" "$((now + 3600))" "$jti" "$ACT_REASON" | b64url)"
 signature="$(printf '%s.%s' "$header" "$payload" |
   openssl dgst -sha256 -sign "$KEY" -binary | b64url)" || die "the token could not be signed"
