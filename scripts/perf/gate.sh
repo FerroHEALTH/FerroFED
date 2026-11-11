@@ -1321,7 +1321,7 @@ GATE
     "$(uncached "$work/base.toml" > /dev/null 2>&1 && echo 0 || echo 1)"
   check "the gate's configuration has node A's onward lane, cached" 1 \
     "$(uncached "$config" | grep -cxF 'cache = false')"
-  check "the quickstart issuer signs the caller's token and the onward lane's, for node A's audience" 3 \
+  check "the quickstart issuer signs the caller's token and the onward lane's, for node A's audience, and its attributes table names it" 4 \
     "$(grep -cxE "issuer = \"$QUICKSTART_ISSUER\"|audiences = \[\"https://node-a.perf.ferrofed.invalid\"\]" "$config")"
   check "node A trusts the token endpoint's issuers" 2 \
     "$(grep -cxE 'jwks_file = "/etc/ferroehr/onward/(persons|machines).json"' "$root/perf/ferroehr-onward.toml")"
