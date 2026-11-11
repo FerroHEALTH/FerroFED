@@ -111,7 +111,10 @@ pub fn withheld_path(ehr_id: Uuid) -> String {
 ///
 /// The node verifies every token against the key set of a harness
 /// [`Issuer`], which it reads from a server on every interface of the
-/// Docker host, as [`CONTAINER_HOST`]. EHRbase takes a token's roles from
+/// Docker host, as [`CONTAINER_HOST`], and holds its `iss` to that issuer:
+/// the image names an issuer of its own by default, and Spring's resource
+/// server reads no metadata for it beside a key set URI. EHRbase takes a
+/// token's roles from
 /// its `scope` (EHRbase's `SecurityConfigOAuth2`), so the administrator's
 /// token states `ADMIN` and the user's `USER`. EHRbase 2.36.0 has no access
 /// policy over an EHR's content; the narrowest refusal its configuration
@@ -152,6 +155,10 @@ pub async fn ehrbase_restricted(
             .with_env_var(
                 "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI",
                 &jwks_uri,
+            )
+            .with_env_var(
+                "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI",
+                ISSUER,
             )
             .with_env_var(
                 "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWSALGORITHMS",
