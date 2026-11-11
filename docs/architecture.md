@@ -1213,7 +1213,13 @@ no OAuth 2.0 client of its own (#1749):
   attestation, FerroEHR's committer placeholder of the onward token's `iss`
   and `sub` (`ferrofed_engine::single_node::committer`, #1705); through any
   other lane an attestation is refused `403` before sending; a header commit
-  is forwarded as sent, with no committer of the gateway's;
+  is forwarded as sent, with no committer of the gateway's. A FerroEHR node
+  from release 5.7.0 lists the onward issuer as a `persons` issuer with its
+  own audience and the gateway's client among its `delegates`, and binds
+  every person to a demographic `PERSON`; the quickstart's four nodes run so,
+  each reached through its lane at the development issuer, and the e2e lane
+  holds that a person's query reaches such a node under the exchanged token
+  and fails there under the gateway's own (#1615);
 - **token exchange** (built with #439, onto the lane with #1749): where a
   node's authorization server supports RFC 8693, the node's `onward` table
   sets `actor_assertion = true`. The `subject_token` is the caller's

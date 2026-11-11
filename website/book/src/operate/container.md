@@ -362,7 +362,9 @@ FerroPULSE by default, the gateway's instance id kept on the
 | `ferroehr-b` | member node B, FerroEHR with `system_id` `node-b.quickstart.local` | `127.0.0.1:8082/ferroehr/rest/openehr/v1` |
 | `ferroehr-c` | member node C, FerroEHR with `system_id` `node-c.quickstart.local` | `127.0.0.1:8083/ferroehr/rest/openehr/v1` |
 | `ferroehr-d` | member node D, FerroEHR with `system_id` `node-d.quickstart.local` | `127.0.0.1:8084/ferroehr/rest/openehr/v1` |
+| `ferroehr-definitions-a` to `-d` | one-shots that load the professional `PERSON` and `ROLE` templates into each node's database | not published |
 | `ferroehr-postgres` | one FerroEHR PostgreSQL server, a database per node | not published |
+| `issuer` | the development token issuer of the callers and the nodes, whose network namespace the gateway and the nodes share | `127.0.0.1:8190` |
 
 The four nodes run FerroEHR's documented image, and each stamps its own
 `system_id` into every EHR and version it creates, the value the quickstart
@@ -382,11 +384,31 @@ no production boundary.
 Four instances of one product: EHRbase, the second product the topology first
 used, refuses a `.` in `PARTY_REF.namespace`, which openEHR BASE admits, so its
 EHRs could not carry the OID-style issuing namespace the synthetic patients
-use. Every node uses FerroEHR's quickstart Basic-auth user, `ferroehr` /
-`ferroehr`, and every database role's password is its name followed by
-`_example` (`ferroehr_a_example`): development credentials that must not
-reach anything real. Every image is pinned by tag
-and digest, and `docs/VERSIONS.md` carries each pin.
+use. Every database role's password is its name followed by `_example`
+(`ferroehr_a_example`): development credentials that must not reach anything
+real. Every image is pinned by tag and digest, and `docs/VERSIONS.md` carries
+each pin.
+
+The nodes run FerroEHR 5.7.0, which binds every person who signs in to a
+demographic `PERSON`, and reach no one under a Basic user. Each trusts the
+quickstart's development issuer, the `issuer` service, as its issuer of
+persons (`docker/quickstart/ferroehr.toml`, inlined as the `ferroehr-config`
+config), and admits a token only when it names the node's own API root as its
+audience. The gateway reaches a node for a caller only under the token the
+issuer exchanges the caller's token for (RFC 8693), the node's onward lane
+([The onward lane of a node](onward-credentials.md#the-onward-lane-of-a-node)):
+the caller as `sub`, the node as `aud` and the gateway's client `ferrofed` as
+its client, which the node reads as a delegate acting for that person. A node
+creates the person's `PERSON` at the first request, from the token's `name`,
+when the token names the identity provider `quickstart` (FerroEHR's
+just-in-time creation). Before each node starts, its `ferroehr-definitions-*`
+service loads the professional `PERSON` and `ROLE` templates the binding maps
+into the node's database, FerroEHR's own pair, vendored under
+`docs/specs/ferroehr-definitions/`. A node reads its issuer's metadata over
+plain `http` only on loopback, so the nodes run in the issuer's network
+namespace, like the gateway, each on its own port, which the issuer publishes.
+The `ehr-seed` service signs in as the person `quickstart-seeder`, through the
+nodes' own client `quickstart-seed`.
 
 Every published port binds the loopback interface. A published port is
 DNAT'd ahead of the host firewall's own rules, so a port on `0.0.0.0` is
@@ -396,7 +418,7 @@ front.
 
 `docker/quickstart/registry.toml` names the four nodes and
 `docker/quickstart/ferrofed.toml` configures the gateway with each node's
-quickstart credentials; Compose mounts both read-only. The configuration runs
+onward lane; Compose mounts both read-only. The configuration runs
 in the development profile and resolves every patient through FerroPIX, the
 FerroHEALTH patient index, as its PIXm Consumer: FerroFED keeps no patient
 index of its own ([Identity resolution](identity.md)). Compose runs FerroPIX

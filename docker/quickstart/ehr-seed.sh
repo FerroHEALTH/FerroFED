@@ -19,15 +19,22 @@
 # 409, which the seed reports and passes, and a composition is committed only
 # to an EHR this run created.
 #
-# Usage: ehr-seed.sh PATIENTS, with the nodes reached as http://ferroehr-a:8080
-# to http://ferroehr-d:8080 on the compose network, or the URL each
-# FERROEHR_<A..D>_URL names, and the development user in FERROEHR_USER and
-# FERROEHR_PASSWORD. Exit 1 naming the step a node refused or the file that
-# did not verify; 0 once every row is in place.
+# The seed signs in as the person `quickstart-seeder` through the nodes' own
+# client `quickstart-seed`, with a token the quickstart's development issuer
+# signs for it under the client credentials grant, and every node creates
+# that person's PERSON at its first request (docker/quickstart/ferroehr.toml).
+# The issuer names itself as it is asked, so the seed runs in the issuer's
+# network namespace, as the nodes do, and asks it on localhost.
+#
+# Usage: ehr-seed.sh PATIENTS, with the nodes reached as http://localhost:8081
+# to http://localhost:8084, or the URL each FERROEHR_<A..D>_URL names, and the
+# token asked of the token endpoint QUICKSTART_TOKEN_URL names,
+# http://localhost:8190/quickstart/token by default. Exit 1 naming the step a
+# node refused or the file that did not verify; 0 once every row is in place.
 set -eu
 
 patients="$1"
-user_pass="${FERROEHR_USER:-ferroehr}:${FERROEHR_PASSWORD:-ferroehr}"
+token_url="${QUICKSTART_TOKEN_URL:-http://localhost:8190/quickstart/token}"
 readonly DEMO=https://raw.githubusercontent.com/syntaric/openehr-federation-ref/9cb8606d1fce457b6b7f3a42f703d7069686a413/docker/demo-data
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -53,19 +60,28 @@ fetch composition-67890-hospital.json "$work/67890-hospital.json" 508a09bd53c29e
 # api_root MEMBER: the URL of the member's ITS-REST API root.
 api_root() {
   case "$1" in
-    node-a) printf '%s' "${FERROEHR_A_URL:-http://ferroehr-a:8080}" ;;
-    node-b) printf '%s' "${FERROEHR_B_URL:-http://ferroehr-b:8080}" ;;
-    node-c) printf '%s' "${FERROEHR_C_URL:-http://ferroehr-c:8080}" ;;
-    node-d) printf '%s' "${FERROEHR_D_URL:-http://ferroehr-d:8080}" ;;
+    node-a) printf '%s' "${FERROEHR_A_URL:-http://localhost:8081}" ;;
+    node-b) printf '%s' "${FERROEHR_B_URL:-http://localhost:8082}" ;;
+    node-c) printf '%s' "${FERROEHR_C_URL:-http://localhost:8083}" ;;
+    node-d) printf '%s' "${FERROEHR_D_URL:-http://localhost:8084}" ;;
     *) die "member '$1' is not a quickstart node" ;;
   esac
   printf '/ferroehr/rest/openehr'
 }
 
+# The seeder's token, one for every node, kept in a header file so it never
+# stands on a command line.
+curl -fsS --retry 5 --retry-all-errors --retry-connrefused -o "$work/token.json" "$token_url" \
+  -d grant_type=client_credentials -d client_id=quickstart-seed -d client_secret=any ||
+  die "the development issuer at $token_url did not sign the seeder's token"
+token="$(sed -n 's/.*"access_token" *: *"\([^"]*\)".*/\1/p' "$work/token.json")"
+[ -n "$token" ] || die "the development issuer's answer carries no access token"
+printf 'Authorization: Bearer %s\n' "$token" > "$work/authorization"
+
 # call METHOD URL CONTENT_TYPE BODY_FILE: sends one request and prints the
 # status; the answer body is kept in $work/answer for a refusal message.
 call() {
-  curl -sS -u "$user_pass" -X "$1" "$2" \
+  curl -sS -H "@$work/authorization" -X "$1" "$2" \
     -H "Content-Type: $3" -H 'Accept: application/json' \
     -H 'Prefer: return=minimal' --data-binary "@$4" \
     -o "$work/answer" -w '%{http_code}'

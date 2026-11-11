@@ -7,7 +7,7 @@
 //!
 //! The restriction is FerroEHR's own extension,
 //! `POST {origin}/ferroehr/rest/extensions/v1/admin/restriction`
-//! behind `[admin] enabled = true`: no openEHR specification defines a consent
+//! behind `[api] admin = true`: no openEHR specification defines a consent
 //! or restriction resource, so the harness sets the mark the way the node's
 //! operator would, outside ITS-REST. A restricted object leaves every AQL
 //! result of the node, and a point read of it answers `403`. The harness
@@ -75,7 +75,7 @@ async fn node(
         ferroehr_request(database, name, system_id)
             .with_env_var("FERROEHR__AUTH__ENABLED", "false")
             .with_env_var("FERROEHR__AUTHZ__RBAC__ENABLED", "false")
-            .with_env_var("FERROEHR__ADMIN__ENABLED", "true")
+            .with_env_var("FERROEHR__API__ADMIN", "true")
     })
     .await
     .map_err(|source| HarnessError::Container {

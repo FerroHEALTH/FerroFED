@@ -5,8 +5,8 @@
 # registry document, mounted read-only at /etc/ferrofed by statefulset.yaml.
 # It holds no secret. Every secret is a key of the ferrofed-secrets Secret,
 # which statefulset.yaml mounts at /run/secrets/ferrofed, named here by a
-# `_file` key: the signing key below, and for an endpoint that needs credentials, the password_file or
-# oauth.client_secret_file of its [credentials."<endpoint id>"] section. Make
+# `_file` key: the signing key below, and for an endpoint that needs credentials, the
+# private_key_file of its [credentials."<endpoint id>".credentials.oauth] grant. Make
 # the Secret with, for example:
 #
 #   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 \

@@ -136,7 +136,10 @@ client-credentials grant and RFC 8693 token exchange with ES256 tokens, and
 it writes its key sets under `target/perf-run/onward`, which
 `perf/compose.yaml` mounts into node A beside `perf/ferroehr-onward.toml`,
 the quickstart's node configuration with the token endpoint's issuers
-trusted. The other three nodes keep their Basic user.
+trusted. The other three nodes run with their authentication off, so the
+gateway sends them no credential: from FerroEHR 5.7.0 a Basic user is a
+person bound to a demographic `PERSON`, and the gate measures the gateway,
+not the nodes' sign-in.
 
 Node A's share of the load, the definition reads and its part of every
 query, carries the exchange and the cache in both arms. A missing or broken

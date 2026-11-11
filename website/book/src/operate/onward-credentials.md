@@ -292,6 +292,31 @@ and when `ferrohealth-smart` refuses it: no `issuer`, `kind` or `audiences`,
 no `max_onward_lifetime`, a `federation` issuer without `exchanges_from` or
 `person_mapping`, or a target its grant cannot ask for.
 
+### A FerroEHR node
+
+FerroEHR from release 5.7.0 binds every person who signs in to a
+demographic `PERSON`, and writes the committer of a person's commit
+itself, so it admits the gateway's writes for a caller only under a token
+that names that caller. FerroFED reaches such a node under the caller from
+v0.0.20, through an onward lane of kind `persons` on each of the node's
+endpoints, and a deployment adds the node's `persons` issuers, the step
+FerroEHR's party binding page holds back for a gateway, once its gateway
+runs that release with those lanes. The node's side of the lane:
+
+- the onward issuer is an `[[auth.issuer]]` of kind `persons` whose
+  `audience` is the node's own and is one of the lane's `audiences`;
+- the gateway's client is one of the issuer's `delegates`:
+  `{ client = "<client_id>" }` where the issued token names the gateway as
+  its client, or `{ sub = "<client_id>" }` where it names the gateway in
+  `act`;
+- each person the lane carries binds to a `PERSON` under the issuer's
+  `[[auth.party]]` table, provisioned through SCIM or created at the first
+  request (FerroEHR's just-in-time creation).
+
+The quickstart runs four such nodes, and the end-to-end lane holds that a
+person's query reaches one under the exchanged token and fails there under
+the gateway's own ([Container](container.md)).
+
 ## Tokens bound to a key: DPoP
 
 `dpop_key_file` in a node's `oauth` section binds that node's tokens to a

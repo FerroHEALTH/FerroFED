@@ -68,13 +68,26 @@
 # gateway refuses to start.
 #
 # THE NODES. Each runs FerroEHR's documented image and stamps its own system_id
-# into every EHR and version it creates. All four use FerroEHR's quickstart
-# Basic-auth user, a development credential and NOT for anything real:
+# into every EHR and version it creates. Each trusts the `issuer` service as
+# its issuer of persons, binds every person who signs in to a demographic
+# PERSON it creates at the person's first request, and admits a token only
+# when it names the node as its audience (the ferroehr-config config). The
+# gateway reaches a node for a caller under the token the issuer exchanges
+# the caller's token for (RFC 8693), never under a credential of its own. A
+# node reads its issuer's metadata on loopback, so the nodes run in the
+# issuer's network namespace, each on its own port, which the issuer service
+# publishes. Before a node starts, its ferroehr-definitions service loads
+# the professional PERSON and ROLE templates the binding maps into the
+# node's database. Ask the issuer for the seeder's token, which every node
+# admits, on the host:
 #
-#   node A  http://127.0.0.1:8081/ferroehr/rest/openehr/v1   ferroehr / ferroehr
-#   node B  http://127.0.0.1:8082/ferroehr/rest/openehr/v1   ferroehr / ferroehr
-#   node C  http://127.0.0.1:8083/ferroehr/rest/openehr/v1   ferroehr / ferroehr
-#   node D  http://127.0.0.1:8084/ferroehr/rest/openehr/v1   ferroehr / ferroehr
+#   curl -s http://127.0.0.1:8190/quickstart/token -d grant_type=client_credentials \
+#     -d client_id=quickstart-seed -d client_secret=any | jq -r .access_token
+#
+#   node A  http://127.0.0.1:8081/ferroehr/rest/openehr/v1
+#   node B  http://127.0.0.1:8082/ferroehr/rest/openehr/v1
+#   node C  http://127.0.0.1:8083/ferroehr/rest/openehr/v1
+#   node D  http://127.0.0.1:8084/ferroehr/rest/openehr/v1
 #
 # THE DATABASE. One FerroEHR PostgreSQL container holds four databases,
 # ferroehr_a to ferroehr_d, each owned by a login role of the same name whose
@@ -104,11 +117,11 @@ name: ferrofed
 # What the four nodes share; each service below merges it and adds its own
 # database, system_id and port.
 x-ferroehr-node: &ferroehr-node
-  image: ghcr.io/ferrohealth/ferroehr:5.6.3@sha256:cd4e067a30c730a92b886c1669cd669eda9ffd3e47ddf727f28928738e197d62
+  image: ghcr.io/ferrohealth/ferroehr:5.7.0@sha256:44c9268cb8a154df118a10ffe84329633f22923ea2cc54261ff0cea57a2ee7e7
   restart: unless-stopped
-  depends_on:
-    ferroehr-postgres:
-      condition: service_healthy
+  # In the issuer's network namespace, so the issuer is on loopback (THE
+  # NODES above); the issuer service publishes each node's port.
+  network_mode: service:issuer
   configs:
     - source: ferroehr-config
       target: /etc/ferroehr/ferroehr.toml
@@ -125,6 +138,35 @@ x-ferroehr-node: &ferroehr-node
     timeout: 5s
     retries: 5
     start_period: 20s
+
+# What the four definitions services share: each loads FerroEHR's
+# professional PERSON and ROLE templates into its node's database with
+# `ferroehr definitions load`, and exits. A template stored with the same
+# text is left alone, so it runs at every `up`.
+x-ferroehr-definitions: &ferroehr-definitions
+  image: ghcr.io/ferrohealth/ferroehr:5.7.0@sha256:44c9268cb8a154df118a10ffe84329633f22923ea2cc54261ff0cea57a2ee7e7
+  restart: "no"
+  depends_on:
+    ferroehr-postgres:
+      condition: service_healthy
+  command:
+    - definitions
+    - load
+    - /etc/ferroehr/definitions/person.adls
+    - /etc/ferroehr/definitions/role.adls
+  configs:
+    - source: ferroehr-config
+      target: /etc/ferroehr/ferroehr.toml
+    - source: ferroehr-definition-person
+      target: /etc/ferroehr/definitions/person.adls
+    - source: ferroehr-definition-role
+      target: /etc/ferroehr/definitions/role.adls
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  # NOT read_only, for the inline configs (the nodes say why).
+  tmpfs:
+    - /tmp
 
 services:
   ferrofed:
@@ -207,12 +249,18 @@ services:
       retries: 3
       start_period: 15s
 
-  # The development token issuer of the gateway's callers, and the owner of the
-  # network namespace the gateway joins (THE CALLER'S TOKEN above). The client
-  # credentials grant of `quickstart-client` returns a person's token: the
-  # user `quickstart-user`, the gateway's audience, the scopes of a clinical
-  # query, and the purpose of use the gateway records. `$$` is a literal `$`
-  # to compose.
+  # The development token issuer of the gateway's callers and of the nodes,
+  # and the owner of the network namespace the gateway and the nodes join
+  # (THE CALLER'S TOKEN and THE NODES above), NOT for anything real. The
+  # client credentials grant of `quickstart-client` returns a person's token:
+  # the user `quickstart-user`, the gateway's audience, the scopes of a
+  # clinical query, the purpose of use the gateway records, and the name and
+  # identity provider a node creates the person's PERSON from. That of
+  # `quickstart-seed` returns the seeder's token for the four nodes, and that
+  # of `ferrofed`, the gateway's own client at the nodes, an app-only token.
+  # A token exchange (RFC 8693) keeps the subject token's person, names the
+  # node the gateway asks for (its `resource`) as `aud` and the gateway as its
+  # client, typed at+jwt (RFC 9068). `$$` is a literal `$` to compose.
   issuer:
     image: ghcr.io/navikt/mock-oauth2-server:6.1.5@sha256:d88e445d55c4ff6eed59b02d86adfece47d985233b1616fb712669b98328c8a2
     restart: unless-stopped
@@ -222,15 +270,35 @@ services:
     ports:
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROFED_PORT:-8080}:8080"
       - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROFED_ISSUER_PORT:-8190}:8190"
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_A_PORT:-8081}:8081"
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_B_PORT:-8082}:8082"
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_C_PORT:-8083}:8083"
+      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_D_PORT:-8084}:8084"
     environment:
       # The gateway listens on 8080 in this namespace, so the issuer moves.
       SERVER_PORT: "8190"
       JSON_CONFIG: >-
         {"tokenCallbacks":[{"issuerId":"quickstart",
-        "requestMappings":[{"requestParam":"grant_type","match":"client_credentials",
+        "requestMappings":[{"requestParam":"grant_type","match":"urn:ietf:params:oauth:grant-type:token-exchange",
+        "typeHeader":"at+jwt",
+        "claims":{"aud":"$${resource}","client_id":"$${clientId}","scope":"$${scope}"}},
+        {"requestParam":"client_id","match":"ferrofed",
+        "typeHeader":"at+jwt",
+        "claims":{"sub":"ferrofed","client_id":"ferrofed","scope":"$${scope}",
+        "aud":["http://localhost:8081/ferroehr/rest/openehr","http://localhost:8082/ferroehr/rest/openehr",
+        "http://localhost:8083/ferroehr/rest/openehr","http://localhost:8084/ferroehr/rest/openehr"]}},
+        {"requestParam":"client_id","match":"quickstart-seed",
+        "typeHeader":"at+jwt",
+        "claims":{"sub":"quickstart-seeder","client_id":"quickstart-seed",
+        "name":"Quickstart Seeder","idp":"quickstart",
+        "aud":["http://localhost:8081/ferroehr/rest/openehr","http://localhost:8082/ferroehr/rest/openehr",
+        "http://localhost:8083/ferroehr/rest/openehr","http://localhost:8084/ferroehr/rest/openehr"],
+        "scope":"user/aql-*.s user/composition-*.cruds user/template-*.cruds"}},
+        {"requestParam":"grant_type","match":"client_credentials",
         "typeHeader":"at+jwt",
         "claims":{"iss":"http://localhost:8190/quickstart","sub":"quickstart-user",
         "client_id":"quickstart-client","aud":"ferrofed-quickstart",
+        "name":"Quickstart User","idp":"quickstart",
         "scope":"user/aql-*.s user/composition-*.cruds user/template-*.cruds",
         "extensions":{"ihe_iua":{"subject_organization_id":"urn:oid:2.999.7",
         "purpose_of_use":[{"system":"http://terminology.hl7.org/CodeSystem/v3-ActReason","code":"TREAT"}]}}}}]}]}
@@ -286,7 +354,7 @@ services:
   # node databases script onto the volume the database mounts as its init
   # directory, and exits. It runs that same pinned image, with no network.
   ferroehr-init:
-    image: ghcr.io/ferrohealth/ferroehr-postgres:5.6.3@sha256:5c976b9e7d1c363490bdb3ff2ed82bc8aefcb6b18e9ee3762124f7b5800abe7d
+    image: ghcr.io/ferrohealth/ferroehr-postgres:5.7.0@sha256:3b7dbfce603b4ff3c8a29366655f195baf2bfeaf903a1bf1be851ba69293743a
     user: "0:0"
     network_mode: none
     entrypoint:
@@ -307,7 +375,7 @@ services:
 
   # The one database server of the four nodes, FerroEHR's own PostgreSQL image.
   ferroehr-postgres:
-    image: ghcr.io/ferrohealth/ferroehr-postgres:5.6.3@sha256:5c976b9e7d1c363490bdb3ff2ed82bc8aefcb6b18e9ee3762124f7b5800abe7d
+    image: ghcr.io/ferrohealth/ferroehr-postgres:5.7.0@sha256:3b7dbfce603b4ff3c8a29366655f195baf2bfeaf903a1bf1be851ba69293743a
     restart: unless-stopped
     environment:
       # The development superuser password of FerroEHR's own quickstart.
@@ -466,13 +534,17 @@ services:
 
   # Creates the EHRs of the patients at the four nodes over ITS-REST and
   # commits a demonstration composition to each (the ehr-seed-sh config), once
-  # every node is healthy, before the gateway starts.
+  # every node is healthy, before the gateway starts. It signs in as the
+  # seeder, in the issuer's network namespace (THE NODES above).
   ehr-seed:
     image: curlimages/curl:8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
     restart: "no"
+    network_mode: service:issuer
     depends_on:
       files:
         condition: service_completed_successfully
+      issuer:
+        condition: service_started
       ferroehr-a:
         condition: service_healthy
       ferroehr-b:
@@ -491,17 +563,34 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  ferroehr-definitions-a:
+    <<: *ferroehr-definitions
+    environment:
+      FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
+      FERROEHR__DATABASE__URL: postgres://ferroehr_a:ferroehr_a_example@ferroehr-postgres:5432/ferroehr_a
+      FERROEHR__API__SYSTEM_ID: node-a.quickstart.local
+      FERROEHR__USAGE_REPORT__ENABLED: "false"
+
   ferroehr-a:
     <<: *ferroehr-node
+    depends_on:
+      issuer:
+        condition: service_started
+      ferroehr-definitions-a:
+        condition: service_completed_successfully
     environment:
       # FerroEHR reads only the configuration file this names, the inline
       # ferroehr-config below; each node sets it, since its own environment
       # replaces the anchor's.
       FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
-      FERROEHR__DB__URL: postgres://ferroehr_a:ferroehr_a_example@ferroehr-postgres:5432/ferroehr_a
+      FERROEHR__DATABASE__URL: postgres://ferroehr_a:ferroehr_a_example@ferroehr-postgres:5432/ferroehr_a
       # The system_id the node stamps into every EHR and version it creates,
       # the one docker/quickstart/registry.toml declares for node-a.
-      FERROEHR__REST__SYSTEM_ID: node-a.quickstart.local
+      FERROEHR__API__SYSTEM_ID: node-a.quickstart.local
+      # Its own port in the issuer's namespace, and its own API root as the
+      # audience a token for it names: a token for another node is refused.
+      FERROEHR__SERVER__LISTEN: 0.0.0.0:8081
+      FERROEHR__AUTH__ISSUER__0__AUDIENCE: http://localhost:8081/ferroehr/rest/openehr
       FERROEHR__TELEMETRY__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
       # FerroEHR's installation report to FerroPULSE: on by default, and
       # FERROEHR__USAGE_REPORT__ENABLED=false, or FerroFED's switch when that
@@ -509,72 +598,318 @@ services:
       # What it sends and when:
       # https://ferroehr.eu/docs/latest/usage-report.html
       FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
-    ports:
-      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_A_PORT:-8081}:8080"
+
+  ferroehr-definitions-b:
+    <<: *ferroehr-definitions
+    environment:
+      FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
+      FERROEHR__DATABASE__URL: postgres://ferroehr_b:ferroehr_b_example@ferroehr-postgres:5432/ferroehr_b
+      FERROEHR__API__SYSTEM_ID: node-b.quickstart.local
+      FERROEHR__USAGE_REPORT__ENABLED: "false"
 
   ferroehr-b:
     <<: *ferroehr-node
+    depends_on:
+      issuer:
+        condition: service_started
+      ferroehr-definitions-b:
+        condition: service_completed_successfully
     environment:
       FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
-      FERROEHR__DB__URL: postgres://ferroehr_b:ferroehr_b_example@ferroehr-postgres:5432/ferroehr_b
-      FERROEHR__REST__SYSTEM_ID: node-b.quickstart.local
+      FERROEHR__DATABASE__URL: postgres://ferroehr_b:ferroehr_b_example@ferroehr-postgres:5432/ferroehr_b
+      FERROEHR__API__SYSTEM_ID: node-b.quickstart.local
+      FERROEHR__SERVER__LISTEN: 0.0.0.0:8082
+      FERROEHR__AUTH__ISSUER__0__AUDIENCE: http://localhost:8082/ferroehr/rest/openehr
       FERROEHR__TELEMETRY__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
       FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
-    ports:
-      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_B_PORT:-8082}:8080"
+
+  ferroehr-definitions-c:
+    <<: *ferroehr-definitions
+    environment:
+      FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
+      FERROEHR__DATABASE__URL: postgres://ferroehr_c:ferroehr_c_example@ferroehr-postgres:5432/ferroehr_c
+      FERROEHR__API__SYSTEM_ID: node-c.quickstart.local
+      FERROEHR__USAGE_REPORT__ENABLED: "false"
 
   ferroehr-c:
     <<: *ferroehr-node
+    depends_on:
+      issuer:
+        condition: service_started
+      ferroehr-definitions-c:
+        condition: service_completed_successfully
     environment:
       FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
-      FERROEHR__DB__URL: postgres://ferroehr_c:ferroehr_c_example@ferroehr-postgres:5432/ferroehr_c
-      FERROEHR__REST__SYSTEM_ID: node-c.quickstart.local
+      FERROEHR__DATABASE__URL: postgres://ferroehr_c:ferroehr_c_example@ferroehr-postgres:5432/ferroehr_c
+      FERROEHR__API__SYSTEM_ID: node-c.quickstart.local
+      FERROEHR__SERVER__LISTEN: 0.0.0.0:8083
+      FERROEHR__AUTH__ISSUER__0__AUDIENCE: http://localhost:8083/ferroehr/rest/openehr
       FERROEHR__TELEMETRY__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
       FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
-    ports:
-      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_C_PORT:-8083}:8080"
+
+  ferroehr-definitions-d:
+    <<: *ferroehr-definitions
+    environment:
+      FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
+      FERROEHR__DATABASE__URL: postgres://ferroehr_d:ferroehr_d_example@ferroehr-postgres:5432/ferroehr_d
+      FERROEHR__API__SYSTEM_ID: node-d.quickstart.local
+      FERROEHR__USAGE_REPORT__ENABLED: "false"
 
   ferroehr-d:
     <<: *ferroehr-node
+    depends_on:
+      issuer:
+        condition: service_started
+      ferroehr-definitions-d:
+        condition: service_completed_successfully
     environment:
       FERROEHR_CONFIG: /etc/ferroehr/ferroehr.toml
-      FERROEHR__DB__URL: postgres://ferroehr_d:ferroehr_d_example@ferroehr-postgres:5432/ferroehr_d
-      FERROEHR__REST__SYSTEM_ID: node-d.quickstart.local
+      FERROEHR__DATABASE__URL: postgres://ferroehr_d:ferroehr_d_example@ferroehr-postgres:5432/ferroehr_d
+      FERROEHR__API__SYSTEM_ID: node-d.quickstart.local
+      FERROEHR__SERVER__LISTEN: 0.0.0.0:8084
+      FERROEHR__AUTH__ISSUER__0__AUDIENCE: http://localhost:8084/ferroehr/rest/openehr
       FERROEHR__TELEMETRY__FORMAT: ${FERROEHR_LOG_FORMAT:-pretty}
       FERROEHR__USAGE_REPORT__ENABLED: ${FERROEHR__USAGE_REPORT__ENABLED:-${FERROFED__USAGE_REPORT__ENABLED:-true}}
-    ports:
-      - "${FERROFED_BIND_HOST:-127.0.0.1}:${FERROEHR_D_PORT:-8084}:8080"
 
 configs:
-  # FerroEHR's quickstart configuration, shared by the four nodes and inline
-  # (`$` is escaped as `$$` against Compose interpolation). The Basic-auth user
-  # is ferroehr / ferroehr (the hash is Argon2id of "ferroehr"): development
-  # credentials only.
+  # The configuration the four nodes and their definitions services share,
+  # inline (`$` is escaped as `$$` against Compose interpolation): a
+  # development configuration, NOT for anything real.
   ferroehr-config:
+    # source: docker/quickstart/ferroehr.toml
     content: |
-      [server]
-      listen = "0.0.0.0:8080"
+      # SPDX-FileCopyrightText: Cadasto B.V.
+      # SPDX-License-Identifier: BUSL-1.1
+      #
+      # The configuration the compose.yaml quickstart's four FerroEHR nodes share
+      # (FerroEHR 5.7.0, https://ferroehr.eu/docs/latest/installation/config-auth.html).
+      # Each node sets its own database, system_id, listen port and audience in its
+      # environment. Development settings, NOT for anything real.
+      #
+      # Every node is reached under a token of the quickstart's development issuer,
+      # the `issuer` service of compose.yaml (NAV's mock-oauth2-server), which the
+      # nodes trust as their issuer of persons. A node reads an issuer's metadata
+      # and accepts plain http only on loopback (RFC 8414 §2), so the nodes run in
+      # the issuer's network namespace, like the gateway, and name the issuer as
+      # they see it there. The gateway reaches a node for a caller only under the
+      # token the issuer exchanged the caller's token for (RFC 8693): the person as
+      # `sub`, the node as `aud` and the gateway's client `ferrofed` as its client,
+      # which the node reads as a delegate acting for the person. The ehr-seed
+      # service signs in through the node's own client `quickstart-seed`.
+      #
+      # FerroEHR binds every person who signs in to a demographic PERSON. These
+      # nodes create a provisional PERSON at a person's first request
+      # (just-in-time creation) when the token names the issuer's identity
+      # provider `quickstart` and the person's `name`, over the professional PERSON
+      # and ROLE templates the ferroehr-definitions services load before each node
+      # starts (docs/specs/ferroehr-definitions/).
 
-      # The gateway resolves patients through FerroPIX and names each node's
-      # own ehr_id, so a node keeps only its in-instance subject lookup.
-      [ehr_index]
-      provider = "local"
+      [record]
+      # The gateway resolves patients through FerroPIX and names each node's own
+      # ehr_id, so a node keeps only its in-instance subject lookup.
+      subject_index = "local"
 
       [auth]
       enabled = true
 
-      # FerroEHR checks the SMART on openEHR scopes a Basic user holds on
-      # every route: these grant every resource family, and the product scope
-      # admits the ADMIN and DEMOGRAPHIC APIs.
-      [[auth.basic.users]]
-      user = "ferroehr"
-      password_hash = "$$argon2id$$v=19$$m=19456,t=2,p=1$$ZmVycm9laHJEZXZTYWx0$$be5nPwWjfUl1qvSrvkvqvdMOuCgM0VFcN/VN4MFLjT8"
-      scopes = ["user/composition-*.cruds", "user/template-*.cruds", "user/aql-*.cruds", "__ferroehr.platform"]
-      roles = ["ADMIN", "USER"]
+      # Each node overrides `audience` with its own API root
+      # (FERROEHR__AUTH__ISSUER__0__AUDIENCE), so a token for one node is refused
+      # at another.
+      [[auth.issuer]]
+      issuer = "http://localhost:8190/quickstart"
+      kind = "persons"
+      audience = ["http://localhost:8081/ferroehr/rest/openehr"]
+      first_party_clients = ["quickstart-seed"]
+      delegates = [{ client = "ferrofed" }]
 
+      [[auth.party]]
+      issuer = "http://localhost:8190/quickstart"
+      identifier_issuer = "urn:oid:2.999.7.8"
+      identifier_type = "login"
+
+      [authz.party_binding]
+      # The healthcare provider the nodes act for, an example id under the OID arc
+      # 2.999, which ITU-T X.660 reserves for examples.
+      provider = { issuer = "urn:oid:2.999.7.9", id = "quickstart" }
+
+      [[authz.party_binding.issuer]]
+      issuer = "http://localhost:8190/quickstart"
+      jit = true
+      admit_idp = ["quickstart"]
+
+      # The party mapping over the professional PERSON and ROLE templates: the
+      # binding key, `userName` and `externalId` share the identifier element and
+      # are told apart by type, and the token's `name` is the person's name.
+      [[authz.party_binding.person.template]]
+      template_id = "openEHR-DEMOGRAPHIC-PERSON.healthcare_professional.v1.0.0"
+      default = true
+      key = { path = "/details[id2]/items[id3]", type = "login" }
+      user_name = { path = "/details[id2]/items[id3]", type = "scim_user_name" }
+      external_id = { path = "/details[id2]/items[id3]", type = "scim_external_id" }
+
+      [[authz.party_binding.person.attribute]]
+      scim = "name.formatted"
+      oidc = "name"
+      jit = true
+      name = true
+      path = { "openEHR-DEMOGRAPHIC-PERSON.healthcare_professional.v1.0.0" = "/identities[id4]/details[id5]/items[id6]" }
+
+      [authz.party_binding.professional_role]
+      template_id = "openEHR-DEMOGRAPHIC-ROLE.healthcare_professional.v1.0.0"
+
+      # Authentication only, no role gate: a bound person may use the clinical API.
       [authz.rbac]
       enabled = false
+  # FerroEHR's professional PERSON and ROLE templates, which each node's
+  # definitions service loads, vendored from its release.
+  ferroehr-definition-person:
+    # source: docs/specs/ferroehr-definitions/openEHR-DEMOGRAPHIC-PERSON.healthcare_professional.v1.0.0.adls
+    content: |
+      archetype (adl_version=2.0.6; rm_release=1.1.0)
+          openEHR-DEMOGRAPHIC-PERSON.healthcare_professional.v1.0.0
 
+      language
+          original_language = <[ISO_639-1::en]>
+
+      description
+          original_author = <
+              ["name"] = <"FerroEHR">
+              ["organisation"] = <"Cadasto B.V.">
+          >
+          lifecycle_state = <"unmanaged">
+          details = <
+              ["en"] = <
+                  language = <[ISO_639-1::en]>
+                  purpose = <"A healthcare professional's PERSON, whose login identifiers bind the person to their sign-ins.">
+                  use = <"Adapted from the openEHR CKM archetypes the derived_from entry names: the person's identifiers in details, the name in identities and a work email in contacts, every element optional so a person provisioned without one is complete.">
+                  copyright = <"© openEHR Foundation">
+              >
+          >
+          other_details = <
+              ["licence"] = <"This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 License. To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/3.0/.">
+              ["derived_from"] = <"openEHR-DEMOGRAPHIC-PERSON.person.v0, openEHR-DEMOGRAPHIC-CLUSTER.person_identifier.v0, openEHR-DEMOGRAPHIC-PARTY_IDENTITY.person_name.v0, openEHR-DEMOGRAPHIC-ADDRESS.electronic_communication.v0 (openEHR CKM)">
+          >
+
+      definition
+          PERSON[id1] matches {
+              details matches {
+                  ITEM_TREE[id2] matches {
+                      items matches {
+                          ELEMENT[id3] occurrences matches {0..*} matches {
+                              value matches { DV_IDENTIFIER[id13] }
+                          }
+                      }
+                  }
+              }
+              identities matches {
+                  PARTY_IDENTITY[id4] matches {
+                      details matches {
+                          ITEM_TREE[id5] matches {
+                              items matches {
+                                  ELEMENT[id6] occurrences matches {0..1} matches {
+                                      value matches { DV_TEXT[id14] }
+                                  }
+                                  ELEMENT[id7] occurrences matches {0..1} matches {
+                                      value matches { DV_TEXT[id15] }
+                                  }
+                                  ELEMENT[id8] occurrences matches {0..1} matches {
+                                      value matches { DV_TEXT[id16] }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+              contacts matches {
+                  CONTACT[id9] occurrences matches {0..1} matches {
+                      addresses matches {
+                          ADDRESS[id10] matches {
+                              details matches {
+                                  ITEM_TREE[id11] matches {
+                                      items matches {
+                                          ELEMENT[id12] occurrences matches {0..1} matches {
+                                              value matches { DV_TEXT[id17] }
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+      terminology
+          term_definitions = <
+              ["en"] = <
+                  ["id1"] = <text = <"Healthcare professional"> description = <"A person who provides healthcare.">>
+                  ["id2"] = <text = <"Person identifiers"> description = <"The identifiers of the person.">>
+                  ["id3"] = <text = <"Identifier main data"> description = <"An identifier of the person, such as a login identifier.">>
+                  ["id4"] = <text = <"Person name"> description = <"The name of the person.">>
+                  ["id5"] = <text = <"Name"> description = <"The structure of the name.">>
+                  ["id6"] = <text = <"Full name"> description = <"The name as it is written in full.">>
+                  ["id7"] = <text = <"Given name"> description = <"The given name of the person.">>
+                  ["id8"] = <text = <"Family name"> description = <"The family name of the person.">>
+                  ["id9"] = <text = <"Contacts"> description = <"The contacts of the person.">>
+                  ["id10"] = <text = <"Electronic communication"> description = <"An electronic address of the person.">>
+                  ["id11"] = <text = <"Electronic communication details"> description = <"The structure of the address.">>
+                  ["id12"] = <text = <"Email address"> description = <"The work email address of the person.">>
+              >
+          >
+  ferroehr-definition-role:
+    # source: docs/specs/ferroehr-definitions/openEHR-DEMOGRAPHIC-ROLE.healthcare_professional.v1.0.0.adls
+    content: |
+      archetype (adl_version=2.0.6; rm_release=1.1.0)
+          openEHR-DEMOGRAPHIC-ROLE.healthcare_professional.v1.0.0
+
+      language
+          original_language = <[ISO_639-1::en]>
+
+      description
+          original_author = <
+              ["name"] = <"FerroEHR">
+              ["organisation"] = <"Cadasto B.V.">
+          >
+          lifecycle_state = <"unmanaged">
+          details = <
+              ["en"] = <
+                  language = <[ISO_639-1::en]>
+                  purpose = <"The professional ROLE a healthcare professional's PERSON performs, which makes the person bindable.">
+                  use = <"Adapted from the openEHR CKM archetype the derived_from entry names, with its name the only content and that optional.">
+                  copyright = <"© openEHR Foundation">
+              >
+          >
+          other_details = <
+              ["licence"] = <"This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 License. To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/3.0/.">
+              ["derived_from"] = <"openEHR-DEMOGRAPHIC-ROLE.individual_provider.v0, openEHR-DEMOGRAPHIC-PARTY_IDENTITY.person_name.v0 (openEHR CKM)">
+          >
+
+      definition
+          ROLE[id1] matches {
+              identities matches {
+                  PARTY_IDENTITY[id2] matches {
+                      details matches {
+                          ITEM_TREE[id3] matches {
+                              items matches {
+                                  ELEMENT[id4] occurrences matches {0..1} matches {
+                                      value matches { DV_TEXT[id5] }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+      terminology
+          term_definitions = <
+              ["en"] = <
+                  ["id1"] = <text = <"Healthcare professional role"> description = <"The role of a person who provides healthcare.">>
+                  ["id2"] = <text = <"Role name"> description = <"The name of the role.">>
+                  ["id3"] = <text = <"Name"> description = <"The structure of the name.">>
+                  ["id4"] = <text = <"Full name"> description = <"The name of the role as it is written in full.">>
+              >
+          >
   # The files the quickstart needs, each a copy of its source in the
   # repository, which compose-configs.sh holds the copy to.
   ferrofed-toml:
@@ -584,8 +919,9 @@ configs:
       # SPDX-License-Identifier: BUSL-1.1
       #
       # The gateway configuration of the compose.yaml quickstart. It federates the
-      # four nodes of registry.toml and sends each FerroEHR's quickstart Basic-auth
-      # user: development credentials, NOT for anything real.
+      # four nodes of registry.toml and reaches each under the token the
+      # quickstart's development issuer exchanges the caller's token for:
+      # development credentials, NOT for anything real.
       #
       # A development profile: the gateway resolves each patient through the
       # quickstart's FerroPIX, the patient index compose.yaml runs beside it, as a
@@ -662,21 +998,89 @@ configs:
       key_file = "/run/secrets/signing-key"
       jwks_uri = "http://ferrofed:8080/.well-known/jwks.json"
 
-      [credentials."node-a-query".credentials]
-      user = "ferroehr"
-      password = "ferroehr"
+      # Each node is reached for a caller under a token of its own issuer of
+      # persons, the development issuer, obtained for that caller: the gateway
+      # sends the caller's verified token to the issuer's token endpoint as the
+      # subject of an RFC 8693 token exchange, naming the node's API root as its
+      # resource (RFC 8707), and
+      # checks the issued token before use (the caller as `sub`, the node as `aud`,
+      # the gateway's client as its client, within an hour). The gateway
+      # authenticates with a client assertion signed with its signing key (RFC
+      # 7523), which the development issuer accepts without checking, NOT for
+      # anything real. The `oauth` table authenticates the gateway; its own token,
+      # for work no caller originates, is never sent for a caller. The nodes, in the
+      # issuer's network namespace too, answer on localhost.
+      [credentials."node-a-query".credentials.oauth]
+      token_endpoint = "http://localhost:8190/quickstart/token"
+      client_id = "ferrofed"
+      client_auth = "private_key_jwt"
+      private_key_file = "/run/secrets/signing-key"
+      scope = "system/aql-*.s"
 
-      [credentials."node-b-query".credentials]
-      user = "ferroehr"
-      password = "ferroehr"
+      [credentials."node-a-query".credentials.onward]
+      issuer = "http://localhost:8190/quickstart"
+      kind = "persons"
+      profile = "rfc9068"
+      token_endpoint = "http://localhost:8190/quickstart/token"
+      audiences = ["http://localhost:8081/ferroehr/rest/openehr"]
+      indicators = ["http://localhost:8081/ferroehr/rest/openehr"]
 
-      [credentials."node-c-query".credentials]
-      user = "ferroehr"
-      password = "ferroehr"
+      [credentials."node-a-query".credentials.onward.keys]
+      max_onward_lifetime = "1h"
 
-      [credentials."node-d-query".credentials]
-      user = "ferroehr"
-      password = "ferroehr"
+      [credentials."node-b-query".credentials.oauth]
+      token_endpoint = "http://localhost:8190/quickstart/token"
+      client_id = "ferrofed"
+      client_auth = "private_key_jwt"
+      private_key_file = "/run/secrets/signing-key"
+      scope = "system/aql-*.s"
+
+      [credentials."node-b-query".credentials.onward]
+      issuer = "http://localhost:8190/quickstart"
+      kind = "persons"
+      profile = "rfc9068"
+      token_endpoint = "http://localhost:8190/quickstart/token"
+      audiences = ["http://localhost:8082/ferroehr/rest/openehr"]
+      indicators = ["http://localhost:8082/ferroehr/rest/openehr"]
+
+      [credentials."node-b-query".credentials.onward.keys]
+      max_onward_lifetime = "1h"
+
+      [credentials."node-c-query".credentials.oauth]
+      token_endpoint = "http://localhost:8190/quickstart/token"
+      client_id = "ferrofed"
+      client_auth = "private_key_jwt"
+      private_key_file = "/run/secrets/signing-key"
+      scope = "system/aql-*.s"
+
+      [credentials."node-c-query".credentials.onward]
+      issuer = "http://localhost:8190/quickstart"
+      kind = "persons"
+      profile = "rfc9068"
+      token_endpoint = "http://localhost:8190/quickstart/token"
+      audiences = ["http://localhost:8083/ferroehr/rest/openehr"]
+      indicators = ["http://localhost:8083/ferroehr/rest/openehr"]
+
+      [credentials."node-c-query".credentials.onward.keys]
+      max_onward_lifetime = "1h"
+
+      [credentials."node-d-query".credentials.oauth]
+      token_endpoint = "http://localhost:8190/quickstart/token"
+      client_id = "ferrofed"
+      client_auth = "private_key_jwt"
+      private_key_file = "/run/secrets/signing-key"
+      scope = "system/aql-*.s"
+
+      [credentials."node-d-query".credentials.onward]
+      issuer = "http://localhost:8190/quickstart"
+      kind = "persons"
+      profile = "rfc9068"
+      token_endpoint = "http://localhost:8190/quickstart/token"
+      audiences = ["http://localhost:8084/ferroehr/rest/openehr"]
+      indicators = ["http://localhost:8084/ferroehr/rest/openehr"]
+
+      [credentials."node-d-query".credentials.onward.keys]
+      max_onward_lifetime = "1h"
 
       # The patient index: FerroPIX's PIXm Manager on the compose network. Each
       # member's ehr_ids are one identifier domain there, as
@@ -710,9 +1114,9 @@ configs:
       #
       # The registry document of the compose.yaml quickstart: the four member CDRs
       # the gateway federates, four FerroEHR instances as node A to node D, each
-      # reached on the Compose network at its ITS-REST API root (the §12b.1
-      # registry entry, N21; no specification governs the document format: our own
-      # design). Each system_id is the one compose.yaml configures the node to
+      # reached at its ITS-REST API root on its own port of the network namespace
+      # it shares with the gateway (the §12b.1 registry entry, N21; no
+      # specification governs the document format: our own design). Each system_id is the one compose.yaml configures the node to
       # stamp. Every name here is quickstart-local.
 
       [[organisation]]
@@ -754,28 +1158,28 @@ configs:
       [[endpoint]]
       id = "node-a-query"
       node = "node-a"
-      url = "http://ferroehr-a:8080/ferroehr/rest/openehr"
+      url = "http://localhost:8081/ferroehr/rest/openehr"
       connection_type = "openehr-rest-query"
       managing_organisation = "org-a"
 
       [[endpoint]]
       id = "node-b-query"
       node = "node-b"
-      url = "http://ferroehr-b:8080/ferroehr/rest/openehr"
+      url = "http://localhost:8082/ferroehr/rest/openehr"
       connection_type = "openehr-rest-query"
       managing_organisation = "org-b"
 
       [[endpoint]]
       id = "node-c-query"
       node = "node-c"
-      url = "http://ferroehr-c:8080/ferroehr/rest/openehr"
+      url = "http://localhost:8083/ferroehr/rest/openehr"
       connection_type = "openehr-rest-query"
       managing_organisation = "org-c"
 
       [[endpoint]]
       id = "node-d-query"
       node = "node-d"
-      url = "http://ferroehr-d:8080/ferroehr/rest/openehr"
+      url = "http://localhost:8084/ferroehr/rest/openehr"
       connection_type = "openehr-rest-query"
       managing_organisation = "org-d"
   patients-tsv:
@@ -827,15 +1231,22 @@ configs:
       # 409, which the seed reports and passes, and a composition is committed only
       # to an EHR this run created.
       #
-      # Usage: ehr-seed.sh PATIENTS, with the nodes reached as http://ferroehr-a:8080
-      # to http://ferroehr-d:8080 on the compose network, or the URL each
-      # FERROEHR_<A..D>_URL names, and the development user in FERROEHR_USER and
-      # FERROEHR_PASSWORD. Exit 1 naming the step a node refused or the file that
-      # did not verify; 0 once every row is in place.
+      # The seed signs in as the person `quickstart-seeder` through the nodes' own
+      # client `quickstart-seed`, with a token the quickstart's development issuer
+      # signs for it under the client credentials grant, and every node creates
+      # that person's PERSON at its first request (docker/quickstart/ferroehr.toml).
+      # The issuer names itself as it is asked, so the seed runs in the issuer's
+      # network namespace, as the nodes do, and asks it on localhost.
+      #
+      # Usage: ehr-seed.sh PATIENTS, with the nodes reached as http://localhost:8081
+      # to http://localhost:8084, or the URL each FERROEHR_<A..D>_URL names, and the
+      # token asked of the token endpoint QUICKSTART_TOKEN_URL names,
+      # http://localhost:8190/quickstart/token by default. Exit 1 naming the step a
+      # node refused or the file that did not verify; 0 once every row is in place.
       set -eu
 
       patients="$$1"
-      user_pass="$${FERROEHR_USER:-ferroehr}:$${FERROEHR_PASSWORD:-ferroehr}"
+      token_url="$${QUICKSTART_TOKEN_URL:-http://localhost:8190/quickstart/token}"
       readonly DEMO=https://raw.githubusercontent.com/syntaric/openehr-federation-ref/9cb8606d1fce457b6b7f3a42f703d7069686a413/docker/demo-data
       work="$$(mktemp -d)"
       trap 'rm -rf "$$work"' EXIT
@@ -861,19 +1272,28 @@ configs:
       # api_root MEMBER: the URL of the member's ITS-REST API root.
       api_root() {
         case "$$1" in
-          node-a) printf '%s' "$${FERROEHR_A_URL:-http://ferroehr-a:8080}" ;;
-          node-b) printf '%s' "$${FERROEHR_B_URL:-http://ferroehr-b:8080}" ;;
-          node-c) printf '%s' "$${FERROEHR_C_URL:-http://ferroehr-c:8080}" ;;
-          node-d) printf '%s' "$${FERROEHR_D_URL:-http://ferroehr-d:8080}" ;;
+          node-a) printf '%s' "$${FERROEHR_A_URL:-http://localhost:8081}" ;;
+          node-b) printf '%s' "$${FERROEHR_B_URL:-http://localhost:8082}" ;;
+          node-c) printf '%s' "$${FERROEHR_C_URL:-http://localhost:8083}" ;;
+          node-d) printf '%s' "$${FERROEHR_D_URL:-http://localhost:8084}" ;;
           *) die "member '$$1' is not a quickstart node" ;;
         esac
         printf '/ferroehr/rest/openehr'
       }
 
+      # The seeder's token, one for every node, kept in a header file so it never
+      # stands on a command line.
+      curl -fsS --retry 5 --retry-all-errors --retry-connrefused -o "$$work/token.json" "$$token_url" \
+        -d grant_type=client_credentials -d client_id=quickstart-seed -d client_secret=any ||
+        die "the development issuer at $$token_url did not sign the seeder's token"
+      token="$$(sed -n 's/.*"access_token" *: *"\([^"]*\)".*/\1/p' "$$work/token.json")"
+      [ -n "$$token" ] || die "the development issuer's answer carries no access token"
+      printf 'Authorization: Bearer %s\n' "$$token" > "$$work/authorization"
+
       # call METHOD URL CONTENT_TYPE BODY_FILE: sends one request and prints the
       # status; the answer body is kept in $$work/answer for a refusal message.
       call() {
-        curl -sS -u "$$user_pass" -X "$$1" "$$2" \
+        curl -sS -H "@$$work/authorization" -X "$$1" "$$2" \
           -H "Content-Type: $$3" -H 'Accept: application/json' \
           -H 'Prefer: return=minimal' --data-binary "@$$4" \
           -o "$$work/answer" -w '%{http_code}'
