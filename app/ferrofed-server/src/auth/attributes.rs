@@ -58,7 +58,7 @@ impl<'caller> Statement<'caller> {
     }
 
     /// The non-empty text value of `field`, when the token states one.
-    fn text(self, field: Field) -> Option<String> {
+    pub(super) fn text(self, field: Field) -> Option<String> {
         match self.field(field)? {
             Attribute::Text(value) if !value.is_empty() => Some(value.clone()),
             Attribute::Text(_) | Attribute::Codes(_) => None,
@@ -71,12 +71,6 @@ impl<'caller> Statement<'caller> {
             Some(Attribute::Codes(codes)) => codes,
             _ => &[],
         }
-    }
-
-    /// Returns the organisation the token names: the IUA
-    /// `subject_organization_id`, read as the provider's identifier.
-    pub(super) fn organisation(self) -> Option<String> {
-        self.text(Field::ProviderHealthcareProviderIdentifier)
     }
 
     /// Returns every purpose of use the token declares, sorted and without

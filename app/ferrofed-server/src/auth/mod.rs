@@ -456,7 +456,8 @@ impl Gate {
             issuer: trusted.issuer.clone(),
             subject,
             client_id,
-            organisation: statement.organisation(),
+            // NOTE: IHE ITI TF-2 3.71.4.2.2.1.1; the IUA `subject_organization_id` names the provider's organisation.
+            organisation: statement.text(Field::ProviderHealthcareProviderIdentifier),
             granted: smart.scope().join(" "),
             purposes: statement.purposes(),
         };
