@@ -960,16 +960,9 @@ jobs:
       - name: Run the server's tests in the build
         env:
           FEATURES: ${{ matrix.features }}
-        # TEMPORARY for #1834: the suite once, then the every-key walk ten times, reverted before the PR is armed.
-        run: |
-          cargo nextest run --profile ci --locked --package ferrofed-server \
-            --no-default-features --features "${FEATURES}" --no-tests=pass
-          for run in 1 2 3 4 5 6 7 8 9 10; do
-            echo "== every_key run ${run} of 10"
-            cargo nextest run --profile ci --locked --package ferrofed-server \
-              --no-default-features --features "${FEATURES}" --no-tests=pass \
-              -E 'test(=reload::restart::keys::every_key::every_key_is_applied_or_named_as_needing_a_restart)'
-          done
+        run: >-
+          cargo nextest run --profile ci --locked --package ferrofed-server
+          --no-default-features --features "${FEATURES}" --no-tests=pass
 
   # The container-backed suite (#39; no specification governs it: our own
   # design). Every such test checks FERROFED_E2E first and returns early without it, so the
