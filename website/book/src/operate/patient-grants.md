@@ -16,6 +16,11 @@ issuer = "https://patient-portal.example.org"
 kind = "patients"
 audience = ["https://gateway.example.org/fed"]
 
+[[auth.attributes]]
+issuer = "https://patient-portal.example.org"
+mapping = "iua"
+authorization_details_purposes = true
+
 [[trust.issuer]]
 issuer = "https://patient-portal.example.org"
 
@@ -27,7 +32,12 @@ ehr_id_system = "urn:oid:2.999.9.1"
 The issuer is a `patients` issuer: `ferrohealth-smart` admits its token only
 when the token carries `patient/` scopes and no `user/` or `system/` scope,
 so a professional of the same platform signs in through an issuer of its
-own ([Who the caller is](authentication.md#who-the-caller-is)).
+own ([Who the caller is](authentication.md#who-the-caller-is)). Its
+`[[auth.attributes]]` table reads the purpose of use each token declares,
+the patient's and a representative's alike; it names no field but
+`purpose_of_use`, since a `patients` token states no professional. Without
+the table, every caller of the issuer is refused
+`purpose-of-use-required`.
 
 `config check` and the start refuse a binding whose endpoint the registry
 lacks, a binding without a registry, and a binding without a cross-reference

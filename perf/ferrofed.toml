@@ -47,6 +47,13 @@ audience = ["ferrofed-quickstart"]
 first_party_clients = ["quickstart-client"]
 jwks_file = "docker/quickstart/issuer/jwks.json"
 
+# What the issuer's tokens state about their professional: the IHE IUA
+# extension and the purposes of use of their authorization_details.
+[[auth.attributes]]
+issuer = "https://quickstart-issuer.ferrofed.invalid"
+mapping = "iua"
+authorization_details_purposes = true
+
 # The synthetic national contact point, its key set written by the gate. Its
 # constants follow tools/ferrofed-testkit/src/national_connector.rs.
 [[auth.issuer]]

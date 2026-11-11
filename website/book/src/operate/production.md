@@ -343,10 +343,19 @@ minimum = "substantial"
 "urn:example:loa:substantial" = "substantial"
 "urn:example:loa:high" = "high"
 
+[[auth.attributes]]
+issuer = "https://idp.example.org/realms/ferrofed"
+mapping = "iua"
+
 [[trust.issuer]]
 issuer = "https://idp.example.org/realms/ferrofed"
 backend_clients = ["example-reporting-service"]
 ```
+
+The `[[auth.attributes]]` table reads the professional and the purpose of
+use from the IHE IUA claims under `extensions.ihe_iua` (ITI TF-2
+§3.71.4.2.2.1.1), where the realm's `purpose-of-use` mapper below writes
+them.
 
 The realm's tokens are typed `at+jwt` and carry `client_id`, so the issuer
 keeps the default `rfc9068` profile. A person's token is admitted only

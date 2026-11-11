@@ -97,12 +97,12 @@ pub struct TrustedIssuer {
     /// (`[trust.issuer.patient]`); absent by default, and then a `patient/`
     /// grant of this issuer admits nothing.
     pub patient: Option<PatientIssuer>,
-    /// The name of the string claim of this issuer's tokens that carries
-    /// the name of the agency that issued the professional's
-    /// `national_provider_identifier`, the `issuing_authority_name` of
-    /// Implementing Regulation (EU) 2026/2099 Annex Table 1; absent by
-    /// default, and then none is read or conveyed.
-    pub professional_issuing_authority: Option<String>,
+    /// The retired `professional_issuing_authority`, which the
+    /// `professional.issuing_authority_name` source of the issuer's
+    /// `[[auth.attributes]]` table replaced in 0.0.20: set, it refuses the
+    /// configuration.
+    #[serde(skip_serializing)]
+    pub professional_issuing_authority: ferrohealth_config::removed::Removed,
 }
 
 /// `[trust.issuer.patient]`: the one member endpoint whose platform issues
@@ -223,31 +223,12 @@ fn policy(
         .as_ref()
         .map(|patient| resolve_patient(&format!("{key}.patient"), patient))
         .transpose()?;
-    let professional_issuing_authority = claim_name(
-        &format!("{key}.professional_issuing_authority"),
-        written.professional_issuing_authority.as_ref(),
-    )?;
     Ok(IssuerSettings {
         backend_clients: written.backend_clients.iter().cloned().collect(),
         demographic_clients: written.demographic_clients.iter().cloned().collect(),
         patient,
-        professional_issuing_authority,
         ..IssuerSettings::new(written.issuer.expose(), verification)
     })
-}
-
-/// Resolves an optional claim name at `key`: absent, or set and not empty.
-///
-/// # Errors
-///
-/// Returns [`Error::Missing`] for a claim name written empty.
-fn claim_name(key: &str, written: Option<&String>) -> Result<Option<String>, Error> {
-    match written {
-        Some(name) if name.is_empty() => Err(Error::Missing {
-            key: key.to_owned(),
-        }),
-        written => Ok(written.cloned()),
-    }
 }
 
 /// Resolves one `[trust.issuer.patient]` at `key`: an endpoint id and a

@@ -13,6 +13,7 @@
 )]
 
 mod assurance;
+mod attributes;
 mod cited;
 mod config;
 pub(crate) mod dpop;

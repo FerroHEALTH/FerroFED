@@ -183,9 +183,10 @@ impl PatientContext {
 
 /// The professional's identification a token states.
 ///
-/// It is read from the IHE IUA extension (ITI TF-2 3.71.4.2.2.1.1), and the
-/// agency that issued the identifier from the claim the issuer's
-/// `professional_issuing_authority` names. `Debug` shows which members are present and none of their values.
+/// It is read by the issuer's `[[auth.attributes]]` table: the IHE IUA
+/// extension (ITI TF-2 3.71.4.2.2.1.1), and the agency that issued the
+/// identifier from the table's `professional.issuing_authority_name` source.
+/// `Debug` shows which members are present and none of their values.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Professional {
     /// `national_provider_identifier`: "A unique identifier issued to health

@@ -123,6 +123,11 @@ kind = "persons"
 audience = ["https://gateway.example.org/fed"]
 first_party_clients = ["example-clinical-app"]
 
+[[auth.attributes]]
+issuer = "https://idp.example.org"
+mapping = "iua"
+authorization_details_purposes = true
+
 [[trust.issuer]]
 issuer = "https://idp.example.org"
 backend_clients = ["example-reporting-service"]
@@ -166,7 +171,11 @@ demographic_clients = []
 | `auth.issuer[].act_represents_patient` | `false` | On a `patients` issuer, whether the RFC 8693 `act` claim of its tokens names a proxy or a legal representative who acts for the patient (Regulation (EU) 2025/327 Art 4(2)), so a document such a token inserts names that representative; a patient token that carries `act` on an issuer without it is refused as an invalid token ([Patient grants](patient-grants.md)). |
 | `trust.issuer[].requester` | none | Refused: who asks for the data is read from the `nl.professional_number`, `nl.role`, `nl.ura` and `nl.organisation_type` fields of the issuer's `[[auth.federation]]` table, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. |
 | `trust.issuer[].client_tokens_act_for_professional` | none | Refused: a token `ferrohealth-smart` classifies as a system's reaches no patient data ([Professionals and assurance](#professionals-and-assurance)). |
-| `trust.issuer[].professional_issuing_authority` | none | The string claim of this issuer's tokens that carries the name of the agency that issued the professional's `national_provider_identifier` (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which each node is told. IHE IUA defines no claim for it. Without it, none is read or conveyed. |
+| `auth.attributes[].issuer` | none | A `persons` issuer whose tokens state their professional: its name, identifier and roles, the organisation and the purposes of use, read by `ferrohealth-smart` ([What a token states about its professional](#what-a-token-states-about-its-professional)); or a `patients` or `machines` issuer whose tokens state their purposes of use alone. Without a table, a token of the issuer states none of them. |
+| `auth.attributes[].mapping` | none | `iua`: read the IHE IUA extension, `extensions.ihe_iua` (ITI TF-2 3.71.4.2.2.1.1). |
+| `auth.attributes[].authorization_details_purposes` | `false` | Whether the `system\|code` `purpose_of_use` of each RFC 9396 `authorization_details` entry is read as a purpose of use too (Annex B §B.4a.3). |
+| `auth.attributes[].fields` | `{}` | Sources over the mapping's, one list per field, each `{ claim = "<dotted path>" }` or `{ constant = "<value>" }`. `"professional.issuing_authority_name"` names the agency that issued the professional's identifier (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which IHE IUA defines no claim for. |
+| `trust.issuer[].professional_issuing_authority` | none | Refused since 0.0.20: name the claim as the `"professional.issuing_authority_name"` source of the issuer's `[[auth.attributes]]` table. |
 | `trust.issuer[].assurance` | none | Refused: set the issuer's `[auth.issuer.assurance]` table instead. |
 | `federation.contact_point[].issuer` | none | A national contact point: an `[[auth.issuer]]` of `kind = "federation"` whose `[[auth.federation]]` table sets `contact_point = true` ([National contact points](#national-contact-points)). Every such issuer needs one `[[federation.contact_point]]`, and one naming any other issuer is refused. |
 | `federation.contact_point[].correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
@@ -362,13 +371,41 @@ rely on a node inferring it from the query). The gateway reads it from the
 IHE IUA extension, `extensions.ihe_iua.purpose_of_use`, an array of FHIR
 `Coding` (ITI TF-2 3.71.4.2.2.1.1), or from RFC 9396
 `authorization_details[].purpose_of_use`, written `system|code` (Annex B
-§B.4a.3). A token that declares none is a `403`
+§B.4a.3), as the issuer's `[[auth.attributes]]` table reads them. A token that declares none is a `403`
 (`purpose-of-use-required`) on every route that reaches a node. A deployment
 relaxes the rule with `trust.purpose_of_use.required = false`, and records why
 in its [§13.4 decisions](deployment-decisions.md#3-purpose-of-use). The
 organisation the caller acts for is read from
 `extensions.ihe_iua.subject_organization_id`. The IUA `person_id` claim, a
 patient identifier, is never read.
+
+### What a token states about its professional
+
+An issuer's `[[auth.attributes]]` table is where `ferrohealth-smart` reads
+what a `persons` token states about its professional, the same table in
+every FerroHEALTH product. With `mapping = "iua"` it reads the IHE IUA
+`subject_name`, `national_provider_identifier`, `subject_role`,
+`subject_organization_id` and `purpose_of_use`, and a token whose claim has
+another shape (a `subject_role` or `purpose_of_use` that is no array of
+codings) is refused as an invalid token, naming the field. An issuer with no
+table states no professional, organisation or purpose, so with
+`trust.purpose_of_use.required` its callers are refused every route that
+reaches a node. The agency that issued the professional's identifier is the
+table's `"professional.issuing_authority_name"` source. A machine of the
+issuer (a client-credentials token) states its purposes of use alone, and a
+`patients` or `machines` issuer may have a table that names no field but
+`purpose_of_use`, so a patient and their representative declare theirs
+([Patient grants](patient-grants.md)):
+
+```toml
+[[auth.attributes]]
+issuer = "https://idp.example.org"
+mapping = "iua"
+authorization_details_purposes = true
+
+[auth.attributes.fields]
+"professional.issuing_authority_name" = [{ claim = "hp_issuing_authority" }]
+```
 
 ### Emergency purposes
 

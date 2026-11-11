@@ -134,9 +134,6 @@ pub struct IssuerSettings {
     /// Where this issuer's `patient/` grants are confined, when they are
     /// honoured at all.
     pub patient: Option<PatientBinding>,
-    /// The claim that carries the agency that issued the professional's
-    /// identifier, when this issuer's tokens carry one.
-    pub professional_issuing_authority: Option<String>,
     /// This issuer as a national contact point, when its `[[auth.federation]]`
     /// table sets `contact_point = true`, with its
     /// `[[federation.contact_point]]`: its requests are served with consent
@@ -156,7 +153,6 @@ impl IssuerSettings {
             backend_clients: BTreeSet::new(),
             demographic_clients: BTreeSet::new(),
             patient: None,
-            professional_issuing_authority: None,
             national_contact_point: None,
         }
     }
