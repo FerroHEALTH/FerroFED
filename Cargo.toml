@@ -108,8 +108,10 @@ ehds-logging = { version = "0.13.0", default-features = false }
 # #1819), which every written report names the member (#1785); 0.6.4 names
 # the imaging studies a document holds (`Document::studies`,
 # FerroHEALTH/FerroBRIDGE#1887), which the imaging report's study section
-# lists (#1854); 0.7.0 is the release on ferrobridge-term 0.6 (#1864).
-# Verified against crates.io on 2026-11-11.
+# lists (#1854); 0.6.6 carries an imaging report's performing organization
+# into the Imaging service slot (FerroHEALTH/FerroBRIDGE#1878), which a
+# received report keeps in the member's record (#1860); 0.7.0 is the release
+# on ferrobridge-term 0.6 (#1864). Verified against crates.io on 2026-11-11.
 eehrxf = { version = "0.7.0", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
