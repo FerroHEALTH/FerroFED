@@ -36,10 +36,11 @@ const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 /// The template the shipped imaging project maps.
 pub const TEMPLATE: &str = "openEHR-EHR-COMPOSITION.ferrobridge_imaging_report.v1.0.0";
 
-/// The archetypes the template specialises or holds.
-const ARCHETYPES: [&str; 2] = [
+/// The archetypes the template specialises, holds or slots.
+const ARCHETYPES: [&str; 3] = [
     "openEHR-EHR-COMPOSITION.report-result.v1.adl",
     "openEHR-EHR-OBSERVATION.imaging_exam_result.v1.adl",
+    "openEHR-EHR-CLUSTER.organisation.v1.adl",
 ];
 
 /// The conclusion the synthetic report states.
@@ -66,6 +67,9 @@ pub const MODALITY: &str = "MR";
 /// The description of the synthetic study.
 pub const DESCRIPTION: &str = "Synthetic MR study";
 
+/// The organisation that performed the synthetic examination.
+pub const PERFORMER: &str = "Synthetic radiology";
+
 /// The synthetic study's DICOM study instance UID.
 pub const STUDY_UID: &str = "urn:oid:2.25.110239581749205781493301578934620193847";
 
@@ -81,7 +85,8 @@ pub fn template_path() -> PathBuf {
     directory().join("ferrobridge_imaging_report.adlt")
 }
 
-/// Returns the paths of every archetype the template specialises or holds.
+/// Returns the paths of every archetype the template specialises, holds or
+/// slots.
 #[must_use]
 pub fn archetype_paths() -> Vec<PathBuf> {
     ARCHETYPES
@@ -154,7 +159,7 @@ fn collection() -> String {
             },
             {
                 "fullUrl": "http://example.org/fhir/Organization/synthetic-radiology",
-                "resource": {"resourceType": "Organization", "id": "synthetic-radiology", "name": "Synthetic radiology"}
+                "resource": {"resourceType": "Organization", "id": "synthetic-radiology", "name": PERFORMER}
             }
         ]
     })
