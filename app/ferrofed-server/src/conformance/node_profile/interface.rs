@@ -263,6 +263,16 @@ impl Interface {
         self
     }
 
+    /// Returns the interface reaching the node with `credentials` in place
+    /// of the endpoint's onward credentials: a token the node's own issuer
+    /// signed for an administrator, for a node a harness or an operator
+    /// reaches outside the federation's lanes.
+    #[must_use]
+    pub fn presenting(mut self, credentials: SharedCredentials) -> Self {
+        self.client = self.client.with_credentials_provider(credentials);
+        self
+    }
+
     /// Returns the endpoint the interface reaches.
     #[must_use]
     pub fn endpoint(&self) -> &EndpointId {

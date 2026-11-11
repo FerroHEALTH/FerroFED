@@ -16,9 +16,7 @@ use ferrofed_registry::id::EndpointId;
 use ferrofed_server::conformance::node_profile::checks::Release;
 use ferrofed_server::conformance::node_profile::interface::Arrangement;
 use ferrofed_server::conformance::node_profile::{Check, Finding, Profile, Verdict, checks};
-use ferrofed_testkit::containers::ehrbase::{
-    self, RESTRICTED_ADMIN, RESTRICTED_USER, withheld_path,
-};
+use ferrofed_testkit::containers::ehrbase::{self, withheld_path};
 use ferrofed_testkit::containers::images::EHRBASE;
 use ferrofed_testkit::containers::{self, NODE_A_SYSTEM_ID, NODE_B_SYSTEM_ID, ProxiedNode};
 use ferrofed_testkit::node_profile;
@@ -30,7 +28,7 @@ use http::StatusCode;
 use openehr_its::json::to_canonical_json;
 use uuid::Uuid;
 
-use super::{COUNT, TestResult, federation, interface, principal, registry};
+use super::{COUNT, TestResult, bearer, federation, interface, principal, registry};
 
 /// The EHR the invocation check reads.
 const EHR: Uuid = Uuid::from_u128(0x9393_9393_9393_4393_8393_0000_0000_0549);
@@ -101,7 +99,7 @@ async fn ehrbase_is_invocable_on_its_local_ehr_id_alone() -> TestResult {
     }
     node.proxy.clear_journal();
 
-    let observed = checks::invocable_on_ehr_id(&interface(&node.api_root(), None)?, EHR).await?;
+    let observed = checks::invocable_on_ehr_id(&interface(&node.api_root())?, EHR).await?;
     assert_eq!(4, observed.evidence().len(), "{observed:?}");
 
     let journal = node.proxy.journal();
@@ -131,7 +129,7 @@ async fn ehrbase_is_checked_for_an_ehr_created_without_a_subject() -> TestResult
     }
     let node = ehrbase::ehrbase(NODE_A_SYSTEM_ID).await?;
 
-    let finding = checks::subject_not_required(&interface(&node.api_root(), None)?).await?;
+    let finding = checks::subject_not_required(&interface(&node.api_root())?).await?;
     assert!(!finding.evidence().is_empty(), "{finding:?}");
     record(finding, "subject-not-required")
 }
@@ -144,17 +142,17 @@ async fn ehrbase_is_checked_for_passing_its_errors_through() -> TestResult {
     }
     let node = ehrbase::ehrbase(NODE_A_SYSTEM_ID).await?;
 
-    let finding = checks::errors_passed_through(&interface(&node.api_root(), None)?).await?;
+    let finding = checks::errors_passed_through(&interface(&node.api_root())?).await?;
     assert_eq!(3, finding.evidence().len(), "{finding:?}");
     record(finding, "errors-passed-through")
 }
 
 /// Creates the EHR `ehr_id`, with no subject, at the restricted node of
-/// `api_root` as its administrator.
-async fn created_by_the_administrator(api_root: &str, ehr_id: Uuid) -> TestResult {
+/// `api_root` as its administrator, under the token `admin`.
+async fn created_by_the_administrator(api_root: &str, ehr_id: Uuid, admin: &str) -> TestResult {
     reqwest::Client::new()
         .put(format!("{api_root}/v1/ehr/{ehr_id}"))
-        .basic_auth(RESTRICTED_ADMIN.user, Some(RESTRICTED_ADMIN.password))
+        .bearer_auth(admin)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
         .header("Prefer", "return=minimal")
@@ -171,16 +169,14 @@ async fn ehrbase_is_checked_for_holding_its_own_access_decision() -> TestResult 
     if !containers::e2e_enabled() {
         return Ok(());
     }
-    let node = ehrbase::ehrbase_restricted(NODE_A_SYSTEM_ID, WITHHELD).await?;
-    created_by_the_administrator(&node.api_root(), WITHHELD).await?;
-    let arrangement = Arrangement::new(WITHHELD, principal(RESTRICTED_USER));
+    let restricted = ehrbase::ehrbase_restricted(NODE_A_SYSTEM_ID, WITHHELD).await?;
+    let api_root = restricted.node.api_root();
+    created_by_the_administrator(&api_root, WITHHELD, &restricted.admin).await?;
+    let arrangement = Arrangement::new(WITHHELD, principal("harness-user", &restricted.user));
+    let administrator = interface(&api_root)?.presenting(bearer(&restricted.admin));
 
-    let observed = checks::refused(
-        Release::AccessDecidedAtNode,
-        &interface(&node.api_root(), Some(RESTRICTED_ADMIN))?,
-        &arrangement,
-    )
-    .await?;
+    let observed =
+        checks::refused(Release::AccessDecidedAtNode, &administrator, &arrangement).await?;
     assert_ne!(
         Verdict::NotObservable,
         observed.verdict(),

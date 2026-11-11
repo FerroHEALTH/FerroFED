@@ -190,6 +190,9 @@ uuid.workspace = true
 ferrobridge-term.workspace = true
 
 [dev-dependencies]
+# The partner's professional the caller-kind tests of auth::kind_tests build
+# (#1615).
+ferrohealth-smart = { workspace = true, features = ["test-support"] }
 # The error a package set that cannot validate a received document returns,
 # built by the refusal test (#808).
 ferrobridge-validator.workspace = true
