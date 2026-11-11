@@ -6,7 +6,7 @@
 //!
 //! Each section keeps a retired key as a
 //! [`Removed`](ferrohealth_config::removed::Removed) field and this module
-//! declares it once as a [`Retired`](ferrohealth_config::removed::Retired),
+//! declares it once as a [`Retired`],
 //! with the release that retired it.
 //! [`check`] refuses every one the sources set, all at once, each naming
 //! its replacement. The release after it deletes the field and the
@@ -14,9 +14,7 @@
 //! specification governs this: the family's rule of 2026-11-09, read through
 //! `ferrohealth_config::removed`.
 
-#[cfg(test)]
-use ferrohealth_config::removed::Retired;
-use ferrohealth_config::removed::{Removals, RemovedKeys};
+use ferrohealth_config::removed::{Removals, RemovedKeys, Retired};
 
 use crate::config::Config;
 
@@ -27,9 +25,18 @@ use crate::config::Config;
 /// so the first pull request after each cut moves this on.
 pub const PREPARING: &str = "0.0.20";
 
+/// `[[trust.issuer]] professional_issuing_authority`, which the
+/// `professional.issuing_authority_name` source of the issuer's
+/// `[[auth.attributes]]` table replaced (#1615).
+const ISSUING_AUTHORITY: Retired = Retired::replaced(
+    "professional_issuing_authority",
+    "auth.attributes[].fields.\"professional.issuing_authority_name\", the claim the issuer's [[auth.attributes]] table reads the issuing agency from",
+    PREPARING,
+);
+
 /// Every declaration of this module, for the one-release check.
 #[cfg(test)]
-const ALL: &[Retired] = &[];
+const ALL: &[Retired] = &[ISSUING_AUTHORITY];
 
 /// Refuses every retired key `config` sets, all at once.
 ///
@@ -37,8 +44,16 @@ const ALL: &[Retired] = &[];
 ///
 /// [`RemovedKeys`] naming each retired key the sources set with its
 /// replacement.
-pub fn check(_config: &Config) -> Result<(), RemovedKeys> {
-    Removals::new().finish()
+pub fn check(config: &Config) -> Result<(), RemovedKeys> {
+    let mut removals = Removals::new();
+    for (index, issuer) in config.trust.issuer.iter().enumerate() {
+        removals.check_under(
+            issuer.professional_issuing_authority,
+            &ISSUING_AUTHORITY,
+            &format!("trust.issuer[{index}]"),
+        );
+    }
+    removals.finish()
 }
 
 #[cfg(test)]
