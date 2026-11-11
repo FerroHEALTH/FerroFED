@@ -1,23 +1,19 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
-# Writes the compose quickstart gateway's ES384 signing key, once, before the
-# first `docker compose up` (no specification governs the quickstart key: our
-# own design).
+# Writes the ES384 signing key of the gateways the performance gate runs on the
+# host, once (no specification governs the gate's key: our own design).
 #
 # The gateway signs every request to a node with this key: the caller's
 # identity travels in an openEHR-federation-client token, and the gateway
 # publishes the public half at /.well-known/jwks.json (Federation Tier §13.1,
-# N24, N25). docker/quickstart/ferrofed.toml names the key, and compose.yaml
-# mounts docker/quickstart/signing/ read-only, which git ignores, so no key
-# is ever committed. A development key, NOT for anything real.
+# N24, N25). perf/ferrofed.toml names the key under
+# docker/quickstart/signing/, which git ignores, so no key is ever committed;
+# the path stays where a base tree's perf/ferrofed.toml reads it too. A
+# development key, NOT for anything real. A key that exists is kept.
 #
-# The file is readable by every user: the container runs the gateway as uid
-# 65532, which a key readable by its owner alone would refuse. A key that
-# exists is kept.
-#
-# Usage, from anywhere, before `docker compose up --wait`:
-#   scripts/quickstart/signing-key.sh
+# Usage, from anywhere, before scripts/perf/gate.sh starts the gateways:
+#   scripts/perf/signing-key.sh
 # Needs openssl. Exit 1 when the key cannot be made.
 set -euo pipefail
 cd "$(dirname "$0")/../.."

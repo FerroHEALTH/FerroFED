@@ -313,3 +313,33 @@ fn a_composition_with_no_language_is_refused() -> TestResult {
     );
     Ok(())
 }
+
+// NOTE: hazard I-19 of the clinical safety risk file: an element of an entry the HDR mapping does not
+// carry is named in the report by its openEHR path, never by its value.
+#[test]
+fn an_element_the_mapping_leaves_out_is_named_in_the_report_by_path() -> TestResult {
+    let bundle = written()?;
+    let [composition] = of_type(&bundle, "Composition")[..] else {
+        return Err("one Composition".into());
+    };
+    let course = composition
+        .get("section")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|section| {
+            section
+                .pointer("/code/coding/0/code")
+                .and_then(Value::as_str)
+                == Some("8648-8")
+        })
+        .and_then(|section| section.pointer("/text/div"))
+        .and_then(Value::as_str)
+        .ok_or("the hospital course narrative")?;
+    assert!(
+        course.contains("could not be carried into this report")
+            && course.contains("activities[at0001]/timing"),
+        "a discharge medicine's timing is named by its openEHR path: {course}"
+    );
+    Ok(())
+}

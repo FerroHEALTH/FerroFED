@@ -284,20 +284,29 @@ jobs:
               ;;
           esac
 
-      # The gateway alone, at this release's image, with the two example files
-      # it mounts, so a downloader edits them and starts it with
-      # `docker compose up` and no checkout. Each asset is named after its
-      # file: compose.yaml, the name Compose reads without `-f`, ferrofed.toml
-      # and registry.toml, the names it mounts. --clobber replaces the copies a
-      # re-run of this job attached to the same draft.
-      - name: Attach the gateway compose files
+      # The quickstart: the repository's compose.yaml, one self-contained file
+      # with every file it needs inlined as a config, which a reader downloads
+      # from the latest release and starts with no checkout (#1849), with its
+      # SHA-256 in sha256sum form. The gateway alone, at this release's image,
+      # rides beside it as gateway-compose.yaml, with the two example files it
+      # mounts under the names it mounts, ferrofed.toml and registry.toml; the
+      # production guide saves it as compose.yaml. --clobber replaces the
+      # copies a re-run of this job attached to the same draft.
+      - name: Attach the quickstart and the gateway compose files
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.tag }}
         run: |
           set -euo pipefail
+          bash scripts/quickstart/compose-configs.sh --check
+          mkdir -p compose-assets
+          cp compose.yaml compose-assets/compose.yaml
+          (cd compose-assets && sha256sum compose.yaml > compose.yaml.sha256sum)
+          cp deploy/compose/compose.yaml compose-assets/gateway-compose.yaml
           gh release upload "$TAG" \
-            deploy/compose/compose.yaml \
+            compose-assets/compose.yaml \
+            compose-assets/compose.yaml.sha256sum \
+            compose-assets/gateway-compose.yaml \
             deploy/compose/ferrofed.toml \
             deploy/compose/registry.toml \
             --repo "$GITHUB_REPOSITORY" --clobber
@@ -644,8 +653,9 @@ jobs:
                 || missing="$missing ferrofed-${TAG}-${target}${suffix}"
             done
           done < <(printf '%s' "$TARGETS" | jq -r '.include[].target')
-          # The release-wide assets github-release attaches: the gateway
-          # compose file, the two example files it mounts, the nginx reverse
+          # The release-wide assets github-release attaches: the quickstart
+          # compose file with its SHA-256, the gateway compose file, the two
+          # example files it mounts, the nginx reverse
           # proxy configuration with its SHA-256, the conformance seed data
           # with its SHA-256, the dashboard and alert rules, and the
           # information sheet and instructions for use of this tag, the
@@ -660,7 +670,7 @@ jobs:
               exit 1
               ;;
           esac
-          for asset in compose.yaml ferrofed.toml registry.toml \
+          for asset in compose.yaml compose.yaml.sha256sum gateway-compose.yaml ferrofed.toml registry.toml \
             ferrofed.conf ferrofed.conf.sha256sum \
             ferrofed-conformance-seed-data.json \
             ferrofed-conformance-seed-data.json.sha256sum \

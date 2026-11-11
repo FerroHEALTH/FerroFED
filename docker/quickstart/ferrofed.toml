@@ -9,7 +9,7 @@
 # quickstart's FerroPIX, the patient index compose.yaml runs beside it, as a
 # PIXm Consumer (ITI-83). FerroFED keeps no patient index of its own.
 # docker/quickstart/patients.tsv names the synthetic patients; the compose
-# `ferropix-seed` service feeds them to FerroPIX and scripts/quickstart/seed.sh
+# `ferropix-seed` service feeds them to FerroPIX and the `ehr-seed` service
 # creates their EHRs at the nodes, so the two never disagree.
 #
 # The nodes and FerroPIX are reached over plain http inside the Docker
@@ -45,34 +45,32 @@ overall_timeout = "25s"
 node_selection = "ask-all"
 
 # Every caller authenticates (§13.1, N25). The quickstart trusts one
-# development issuer, whose key set scripts/quickstart/token.sh writes on its
-# first run into docker/quickstart/issuer/, which compose.yaml mounts here:
-# development keys, NOT for anything real. The gateway reads the set when a
-# token first needs it, so the key can be made after `docker compose up`.
-# The issuer is an https URL under the reserved .invalid domain (RFC 2606):
-# an identifier the gateway never calls, since the key set is a file. Its
-# tokens name a person, signed in through the one client the quickstart
+# development issuer, the `issuer` service of compose.yaml (NAV's
+# mock-oauth2-server), which signs a person's token for whoever asks:
+# development keys, NOT for anything real. The gateway reads an issuer's
+# metadata and accepts plain http only on loopback (RFC 8414 §2), so it runs in
+# the issuer's network namespace and names the issuer as it sees it there.
+# Its tokens name a person, signed in through the one client the quickstart
 # token names.
 [auth]
 
 [[auth.issuer]]
-issuer = "https://quickstart-issuer.ferrofed.invalid"
+issuer = "http://localhost:8190/quickstart"
 kind = "persons"
 audience = ["ferrofed-quickstart"]
 first_party_clients = ["quickstart-client"]
-jwks_file = "/etc/ferrofed/issuer/jwks.json"
 
 # The gateway's own signing key, P-384 (ES384) here; a P-256 key signs
 # ES256. Every request to a node carries the caller's identity in an
 # openEHR-federation-client token signed with it (§13.1, N24), and the
 # gateway publishes its public half at jwks_uri.
-# scripts/quickstart/signing-key.sh writes it into docker/quickstart/signing/
-# before the first `docker compose up`, which compose.yaml mounts here: a
+# The reader writes it into ./secrets/signing-key.pem before the first
+# `docker compose up`, which compose.yaml hands over as a secret: a
 # development key, NOT for anything real. The FerroEHR nodes of the
 # quickstart do not verify the token; a node that does fetches the key set
 # from jwks_uri, the gateway's address on the compose network.
 [signing]
-key_file = "/etc/ferrofed/signing/signing-key.pem"
+key_file = "/run/secrets/signing-key"
 jwks_uri = "http://ferrofed:8080/.well-known/jwks.json"
 
 [credentials."node-a-query".credentials]
