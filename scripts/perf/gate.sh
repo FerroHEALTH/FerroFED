@@ -841,18 +841,11 @@ start_base() {
           die "the base's FerroPIX could not be seeded: $(tail -n 20 "$WORK/base-seed-ferropix.log")"
         ;;
       ehr-seed)
-        # TODO(#1850): a base from before the ehr-seed service seeds its nodes
-        # with its own scripts/quickstart/seed.sh below.
-        [[ -f "$src/scripts/quickstart/seed.sh" ]] && continue
         base_compose run --rm ehr-seed > "$WORK/base-seed-nodes.log" 2>&1 ||
           die "the base's nodes could not be seeded: $(tail -n 20 "$WORK/base-seed-nodes.log")"
         ;;
       "${SERVICES[0]}")
         nodes="$SIBLING_HOST"
-        if [[ -f "$src/scripts/quickstart/seed.sh" ]]; then
-          FERROFED_BIND_HOST="$SIBLING_HOST" bash "$src/scripts/quickstart/seed.sh" > "$WORK/base-seed-nodes.log" 2>&1 ||
-            die "the base's nodes could not be seeded: $(tail -n 20 "$WORK/base-seed-nodes.log")"
-        fi
         ;;
     esac
   done
