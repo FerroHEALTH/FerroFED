@@ -47,6 +47,7 @@ use ferrofed_server::config::auth::contact_point::ContactPoint;
 use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::Claims;
 use ferrofed_testkit::national_connector;
+use ferrohealth_secret::secret_url::SecretUrl;
 use ferrohealth_server::tls::PeerCertificates;
 use ferrohealth_smart::federation::{FederationSection, Field, Mapping, Source};
 use ferrohealth_smart::kind::IssuerKind;
@@ -103,7 +104,7 @@ pub(crate) static CERTIFICATE: LazyLock<Vec<u8>> = LazyLock::new(|| {
 pub(crate) fn federation() -> FederationSection {
     let constant = |value: &str| vec![Source::Constant(value.to_owned())];
     FederationSection {
-        issuer: NCP_ISSUER.to_owned(),
+        issuer: SecretUrl::new(NCP_ISSUER),
         contact_point: Some(true),
         mapping: Some(Mapping::Ehdsi),
         fields: BTreeMap::from([
