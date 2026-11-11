@@ -11,9 +11,10 @@
 # or when it depends, directly or through other workspace packages, on one
 # that is. A change to any other file reaches every package, because the
 # packages read the root manifests, the toolchain and lint files, and files
-# under conformance/, website/ and the root CHANGELOG.md, except for the files no
-# build reads: the ones under .claude/, .github/, changelog.d/, docs/,
-# scripts/ and security/, and the root's other Markdown.
+# under conformance/ and website/ and the root changelog, except for the
+# files no build reads: the ones under the two dot directories of agent and
+# workflow configuration, changelog.d/, docs/, scripts/ and security/, and
+# the root's other Markdown.
 #
 # Usage:
 #   scripts/checks/fast.sh [--base <rev>] [--all] [--dry-run]
@@ -186,9 +187,9 @@ run() {
 
 args=()
 for package in $reached; do args+=(-p "$package"); done
-run cargo fmt --check "${args[@]}"
-run cargo clippy --locked "${args[@]}" --all-targets --all-features -- -D warnings
-run cargo nextest run --locked "${args[@]}" --no-tests=pass
+run cargo fmt --check ${args[@]+"${args[@]}"}
+run cargo clippy --locked ${args[@]+"${args[@]}"} --all-targets --all-features -- -D warnings
+run cargo nextest run --locked ${args[@]+"${args[@]}"} --no-tests=pass
 # `cargo test --doc` refuses a package without a library target.
 libraries=" $(jq -r '
   .workspace_members as $members
@@ -202,7 +203,7 @@ for package in $reached; do
   case "$libraries" in *" $package "*) docs+=(-p "$package") ;; esac
 done
 if [[ "${#docs[@]}" -gt 0 ]]; then
-  run cargo test --doc --locked "${docs[@]}"
+  run cargo test --doc --locked ${docs[@]+"${docs[@]}"}
 fi
 # The fuzz crate sits outside the workspace (fuzz/Cargo.toml), so the steps
 # above never compile it; it is checked when the change reaches a crate it
