@@ -427,7 +427,7 @@ ferrohealth-secret = "=0.2.1"
 # ferrohealth-smart 0.13 (#1748), and 0.10.0 the release on ferrohealth-smart
 # 0.16 (#1805).
 # Verified against crates.io on 2026-11-10.
-ferrohealth-session = { version = "=0.12.0", default-features = false }
+ferrohealth-session = { version = "=0.13.0", default-features = false }
 # The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
 # defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
 # into one typed tree, with where each key came from and the merged table the

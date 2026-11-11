@@ -51,12 +51,12 @@ pub async fn signed_in(answer: Answer<'_>) -> Result<(SignedIn, String), Box<dyn
     let issuer = Issuer::new(uri.clone())?;
     issuer.publish(&server).await?;
     let section = OidcSection {
-        issuer: uri.clone(),
+        issuer: SecretUrl::new(uri.clone()),
         authorization_endpoint: Some(SecretUrl::new(format!("{uri}/auth"))),
         token_endpoint: Some(SecretUrl::new(format!("{uri}/token"))),
         jwks_uri: Some(SecretUrl::new(format!("{uri}{JWKS_PATH}"))),
         client_id: String::from(CLIENT_ID),
-        redirect_uri: String::from("http://127.0.0.1:3000/auth/callback"),
+        redirect_uri: SecretUrl::new("http://127.0.0.1:3000/auth/callback"),
         ..OidcSection::default()
     };
     let party = section.check()?.relying_party().await?;
