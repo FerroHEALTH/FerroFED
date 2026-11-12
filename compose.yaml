@@ -170,7 +170,7 @@ x-ferroehr-definitions: &ferroehr-definitions
 
 services:
   ferrofed:
-    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.19}
+    image: ghcr.io/ferrohealth/ferrofed:${FERROFED_VERSION:-0.0.20}
     container_name: ferrofed
     restart: unless-stopped
     # In the issuer's network namespace, so the issuer is on loopback (THE

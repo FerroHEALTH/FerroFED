@@ -9,7 +9,7 @@ members = ["crates/*", "app/*", "tools/*"]
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.0.19"
+version = "0.0.20"
 edition = "2024"
 rust-version = "1.98"
 license = "BUSL-1.1"
@@ -68,7 +68,7 @@ openehr-am = "0.0.136"
 # member is never packaged, so it takes the path alone.
 openehr-federation = { path = "crates/openehr-federation", version = "0.0.63" }
 # The shared audit library of the family, published from FerroHEALTH/FerroAUDIT
-# and pinned exactly: the ATNA ITI-20 sender and the BALP AuditEvent
+# and required by a caret range: the ATNA ITI-20 sender and the BALP AuditEvent
 # (ihe-atna), and the EHDS logging component (ehds-logging); 0.2.6 closes a
 # forwarder's syslog connection with close_notify (#1278); 0.3.1 is the
 # release on ferrohealth-smart 0.8 (#1390); 0.3.2 writes a data entity that

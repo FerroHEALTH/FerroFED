@@ -211,12 +211,16 @@ adds I-21, open at S4, P3: its diagnoses, procedures and discharge
 medicines reach the member's composition with every element the mapping
 reads, and a diagnosis's severity and certainty are relayed as not
 carried, but its hospital course and every section the template holds no
-place for reach the member's record only in the original document, and
-the answer does not name them
+place for reach the member's record only in the original document; the
+answer declares them to the sender as not carried, and a reader of the
+member's record is told of none
 ([FerroHEALTH/FerroBRIDGE#1820](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1820)).
-A received imaging report adds I-22, open at S4, P3: its study and
-impression reach the member's composition, but its report identifier, its
-performing organization and each section's narrative reach the member's
-record only in the original document, undeclared
+A received imaging report adds I-22, open at S4, P3: its study, its
+impression and, since `eehrxf` 0.6.6, its performing organization reach the
+member's composition, but its report identifier, a performer that is no
+organization and each section's narrative reach the member's record only in
+the original document; the answer declares each to the sender as not
+carried, and a reader of the member's record is told of none
 ([FerroHEALTH/FerroBRIDGE#1827](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1827),
-[#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)).
+[#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716),
+[#1860](https://github.com/FerroHEALTH/FerroFED/issues/1860)).
