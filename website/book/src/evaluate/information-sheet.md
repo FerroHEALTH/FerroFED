@@ -226,7 +226,7 @@ Item names its row in the matrix exactly.
 | HL7 Europe Hospital Discharge Report | `hl7.fhir.eu.hdr` 1.0.0 | the discharge report document the FHIR face receives, writes from a member's composition and lists, Art 14(1)(f) |
 | HL7 Europe Base and Core | `hl7.fhir.eu.base` 2.0.1 | the EU core profiles each mapped entry of the patient summary is written to |
 | HL7 Europe EU Health Data API | `hl7.fhir.eu.health-data-api` 1.0.0-ballot | the document list's `DocumentReference` profile, the Document Access Provider interactions it asks a member that serves its own laboratory, imaging or discharge reports, and the category codes of the access record |
-| `eehrxf` | 0.7.0 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
+| `eehrxf` | 0.8.0 | the European interoperability software component, Art 25(1), published from [FerroHEALTH/FerroBRIDGE](https://github.com/FerroHEALTH/FerroBRIDGE) ([its pages](https://ferrobridge.eu/docs/evaluate/interoperability-component.html)); it reads the Xt-EHR EHDS Logical Information Models 1.0.0 as its dataset model |
 
 Beside them:
 
