@@ -594,6 +594,28 @@ Released on 2026-11-11.
   credentials tokens, published as a self-contained `compose.yaml`
   ([#1825](https://github.com/FerroHEALTH/FerroFED/issues/1825), [#1838](https://github.com/FerroHEALTH/FerroFED/issues/1838), [#1849](https://github.com/FerroHEALTH/FerroFED/issues/1849)).
 
+### v0.0.20: FerroEHR nodes reached under the caller
+
+Released on 2026-11-12.
+
+- A FerroEHR 5.7.0 node reached under the caller, through an onward lane
+  of kind `persons` on each of its endpoints, in the quickstart, the
+  end-to-end harness and the release compose example; no quickstart node is
+  reached under a Basic user
+  ([#1615](https://github.com/FerroHEALTH/FerroFED/issues/1615)).
+- The professional, the organisation and the purposes of use a caller's
+  token states read only through its issuer's `[[auth.attributes]]` or
+  `[[auth.federation]]` table, by `ferrohealth-smart`
+  ([#1615](https://github.com/FerroHEALTH/FerroFED/issues/1615), [#1704](https://github.com/FerroHEALTH/FerroFED/issues/1704)).
+- A received imaging report's performing organization carried into the
+  member's structured record, and a performer that is no organization
+  declared to the sender as not carried
+  ([#1860](https://github.com/FerroHEALTH/FerroFED/issues/1860)).
+- The family crates on `ferrohealth-smart` 0.19, with the issuer of every
+  `[auth]` table masked in every rendering of the configuration, and the
+  quickstart on FerroPIX 0.0.29
+  ([#1864](https://github.com/FerroHEALTH/FerroFED/issues/1864), [#1474](https://github.com/FerroHEALTH/FerroFED/issues/1474)).
+
 ## Limitations
 
 Regulation (EU) 2025/327 Art 28(b) forbids "failing to inform the

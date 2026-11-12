@@ -175,6 +175,7 @@ is the newest. The end dates, as `SECURITY.md` lists them:
 | v0.0.16 | 2026-11-05 | 2031-11-05 |
 | v0.0.18 | 2026-11-10 | 2031-11-10 |
 | v0.0.19 | 2026-11-11 | 2031-11-11 |
+| v0.0.20 | 2026-11-12 | 2031-11-12 |
 
 `SECURITY.md` is the record. The release cut adds each new row to it and
 copies the row here, and a guard, `scripts/checks/support-periods.sh`, fails

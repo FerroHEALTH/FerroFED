@@ -98,6 +98,43 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
+### To v0.0.20, from v0.0.19
+
+The keys v0.0.19 refused by name, the unit-suffixed keys such as
+`federation.per_node_timeout_ms`, the `url`, `credentials`, `tls` and
+`timeout_ms` keys of every outbound table that moved under its `endpoint`
+table, a node's `user`, `password`, `password_file`, `oauth` and `onward`
+outside its nested `credentials` table, `[trust.issuer.patient]
+act_is_representative`, and the operator console's `[gateway] timeout_ms`,
+are now refused as unknown keys. Move them as the notes for v0.0.19 below
+say before you upgrade.
+
+- Add an `[[auth.attributes]]` table with `mapping = "iua"` and
+  `authorization_details_purposes = true` for every `persons`, `patients`
+  or `machines` issuer whose callers declare a purpose of use. Without it,
+  every such caller is refused `purpose-of-use-required`. A `patients` or
+  `machines` table names no field but `purpose_of_use`
+  ([Authentication](authentication.md), #1615).
+- Move a `[[trust.issuer]] professional_issuing_authority = "<claim>"` to
+  that table's `fields."professional.issuing_authority_name" = [{ claim =
+  "<claim>" }]`. The old key refuses the start, naming its replacement
+  (#1615).
+- Give an imaging report receiver (`[[fhir.receive]]` of the imaging
+  category) FerroBRIDGE's imaging report template at v0.0.24, and add the
+  CKM `CLUSTER.organisation.v1` it slots to its archetypes. The imaging
+  mapping this release ships does not compile against the earlier
+  revision, and the gateway refuses to start with it. Both are vendored
+  under `docs/specs/ferrobridge-imaging/` (#1860).
+- Run `docker compose down -v` once before you start the quickstart on
+  this release. Its FerroEHR 5.7.0 nodes need the professional `PERSON` and
+  `ROLE` templates and the persons a quickstart volume from an earlier
+  release does not hold (#1615).
+- A gateway that writes to a FerroEHR 5.7.0 node reaches it under the
+  caller from this release, through an onward lane of kind `persons` on
+  each of the node's endpoints. Once every FerroEHR endpoint has its onward
+  lane, add the node's `persons` issuers, as
+  [Onward credentials](onward-credentials.md#a-ferroehr-node) says (#1615).
+
 ### To v0.0.19, from v0.0.18
 
 The keys v0.0.18 refused by name, the outbound TLS keys outside a `tls`

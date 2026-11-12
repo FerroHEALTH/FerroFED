@@ -71,6 +71,7 @@ as a broken command, is fixed in the same change.
 | v0.0.16 | 2026-11-05 | see below | 75 to 81, below | the v0.0.16 version bump |
 | v0.0.18 | 2026-11-10 | see below | 82 to 91, below | the version bump of v0.0.17, tagged and never released, re-cut as v0.0.18 |
 | v0.0.19 | 2026-11-11 | see below | 92 to 95, below | the v0.0.19 version bump |
+| v0.0.20 | 2026-11-12 | see below | 96 to 100, below | the v0.0.20 version bump |
 
 ### Findings of 2026-10-06
 
@@ -629,6 +630,53 @@ Against Art 28(b), a limitation left out:
     the keys 0.0.18 refused by name are now refused as unknown keys. Their
     maintenance table now does, with the Upgrading page's notes for
     v0.0.19.
+
+No text suggested a use outside the intended purpose, (c).
+
+### Findings of 2026-11-12
+
+The review at the v0.0.20 cut. Read in full: `README.md`, `CITATION.cff`,
+the information sheet, the claims page, the instructions for use, the
+Upgrading page, the page on receiving documents, the onward credentials
+page, the clinical safety risk file's hazards I-21 and I-22 and L-03 and
+L-04, and the assembled release notes. Every other page of the book and
+`README.md` was searched for "planned", "v0.0.19", "v0.0.20", FerroEHR
+5.6, a Basic user at a node, the IUA extension and `authorization_details`,
+the performing organization, the `eehrxf`, `ehds-logging`, FerroPIX and
+`ferrohealth-smart` versions and the keys the release removes, next to a
+statement that the work is still to come.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+96. The information sheet named the interoperability component as `eehrxf`
+    0.3.2, and seven rows of `docs/VERSIONS.md` named the component and
+    audit crates of releases ago. Both now name the root `Cargo.toml`
+    requirements, `eehrxf` 0.7.0 among them, and `scripts/checks/versions.sh`
+    fails when one drifts again
+    ([#1874](https://github.com/FerroHEALTH/FerroFED/issues/1874)).
+97. The instructions for use and the page on receiving documents said a
+    received imaging report keeps its performing organization only in the
+    original document, and that the answer names none of a received
+    report's losses. Both now say the organization reaches the member's
+    composition and each loss is declared to the sender and told to no
+    reader of the member's record
+    ([#1827](https://github.com/FerroHEALTH/FerroFED/issues/1827), [#1860](https://github.com/FerroHEALTH/FerroFED/issues/1860)).
+98. The release notes said a deployment adds a FerroEHR node's `persons`
+    issuers "from this release" without naming the release. They and the
+    onward credentials page now name v0.0.20 as the first FerroFED release
+    that reaches a FerroEHR node under the caller
+    ([#1615](https://github.com/FerroHEALTH/FerroFED/issues/1615)).
+99. The claims page had no section for the release. It now has one for
+    v0.0.20.
+
+Against Art 28(b), a limitation left out:
+
+100. The instructions for use did not name the `[[auth.attributes]]` table
+     a purpose-of-use issuer needs from 0.0.20, the imaging template it
+     needs, or that the keys 0.0.19 refused by name are now refused as
+     unknown keys. Their maintenance table now does, with the Upgrading
+     page's notes for v0.0.20.
 
 No text suggested a use outside the intended purpose, (c).
 

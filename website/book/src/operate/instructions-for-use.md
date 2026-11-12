@@ -301,6 +301,7 @@ event, and its frequency is the event's:
 | Keep the PIX Manager fed | continuously: the gateway keeps no patient index of its own, so a patient whose records a member has not fed to the PIX Manager over ITI-104, or whose binding the PIX Manager has dropped, resolves at no member and answers as not found | [Identity resolution](identity.md) |
 | Move the gateway's keys out of `[server]` | before you upgrade to 0.0.16: this release refuses `server.public_url`, `server.replica`, `server.bindings_drain_timeout` and `server.overload_retry_after_s` as unknown keys, so write them as `gateway.public_url`, `gateway.replica`, `gateway.bindings_drain_timeout` and `server.retry_after` | [Upgrading](upgrading.md#to-v0016-from-v0015) |
 | Keep the console's identity provider reachable at its start | when the console's `[oidc]` names `issuer` alone: the console reads the provider's endpoints from its discovery document when it starts and refuses to start without it; name `authorization_endpoint`, `token_endpoint` and `jwks_uri` to start without asking the provider | [Upgrading](upgrading.md#to-v0016-from-v0015) |
+| Move the keys 0.0.20 removed, and declare each issuer's attributes | before you upgrade to 0.0.20: an `[[auth.attributes]]` table for every issuer whose callers declare a purpose of use, without which each such caller is refused `purpose-of-use-required`, and `[[trust.issuer]] professional_issuing_authority` moved into that table; an imaging receiver's template at FerroBRIDGE v0.0.24 with `CLUSTER.organisation.v1`; the keys 0.0.19 refused by name are now refused as unknown keys, and `config check` names each one | [Upgrading](upgrading.md#to-v0020-from-v0019) |
 | Move the keys 0.0.19 renamed or moved | before you upgrade to 0.0.19: every span of time and amount of data under a key that names no unit, the outbound tables' address, TLS and credential under each `endpoint` table, and the node credentials nested under `credentials`; the keys 0.0.18 refused by name are now refused as unknown keys, and `config check` names each one | [Upgrading](upgrading.md#to-v0019-from-v0018) |
 | Move the keys 0.0.18 renamed or removed | before you upgrade to 0.0.18: this release refuses each one at start-up and in `config check`, naming its replacement, among them `[auth]` issuer keys moved onto each `[[auth.issuer]]`, `[[auth.basic.users]]`, `[stored_queries] url`, `[trust.issuer.national_contact_point]`, a node's `oauth2` and `fapi2` tables and every outbound table's TLS keys outside its `tls` sub-table | [Upgrading](upgrading.md#to-v0018-from-v0016) |
 | Back up FerroFED's own store | when `[store]` is set, before every upgrade: dump the `ferrofed` schema of its PostgreSQL database, which holds the stored queries, the emergency access counts, the DPoP proofs and a contact point's dispensations; an older release refuses a store a newer one migrated | [FerroFED's own store](store.md#migrations) |
@@ -350,11 +351,13 @@ deployment in the EU must plan for are:
   receives discharge reports; the record the member keeps holds a received
   report's diagnoses, procedures and discharge medicines, but its hospital
   course and every section the template holds no place for only in the
-  original document, which the answer does not name (hazard I-21). It
-  receives an imaging report the same way, keeping its study and
-  impression in the member's composition but its report identifier, its
-  performing organization and each section's narrative only in the
-  original document, which the answer does not name (hazard I-22;
+  original document. The answer declares each of them to the sender as not
+  carried, and a reader of the member's record is told of none (hazard
+  I-21). It receives an imaging report the same way, keeping its study, its
+  impression and its performing organization in the member's composition
+  but its report identifier, a performer that is no organization and each
+  section's narrative only in the original document, declared to the
+  sender and told to no reader of the member's record (hazard I-22;
   [The categories received](../evaluate/information-sheet.md#the-categories-received)).
   The open hazards of the interoperability component are in the
   [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).

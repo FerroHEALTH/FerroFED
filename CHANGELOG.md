@@ -25,6 +25,111 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.20] - 2026-11-12
+
+Security fixes until 2031-11-12, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- Add an `[[auth.attributes]]` table with `mapping = "iua"` and
+  `authorization_details_purposes = true` for every `persons`, `patients`
+  or `machines` issuer whose callers declare a purpose of use; without it
+  every such caller is refused `purpose-of-use-required`. A `patients` or
+  `machines` table names no field but `purpose_of_use`. Move a `[[trust.issuer]]
+  professional_issuing_authority = "<claim>"` to that table's
+  `fields."professional.issuing_authority_name" = [{ claim = "<claim>" }]`;
+  the old key now refuses to boot (#1615).
+- An imaging report receiver (`[[fhir.receive]]` of the imaging category)
+  needs FerroBRIDGE's imaging report template at v0.0.24, which slots the
+  CKM `CLUSTER.organisation.v1`, and that archetype among its archetypes:
+  the imaging mapping of `eehrxf` 0.6.6 and later (this release ships 0.7.0)
+  does not compile against the earlier revision, and the gateway refuses to
+  start with it. Both are vendored under `docs/specs/ferrobridge-imaging/`
+  (#1860).
+
+### Changed
+
+- The quickstart runs FerroPIX 0.0.29, the newest release, whose
+  `private_key_jwt` client assertions are valid for 60 seconds and whose
+  configured issuers are masked in every rendering of its configuration.
+  The quickstart's FerroPIX configuration is unchanged (#1474).
+- The professional, the organisation and the purposes of use a caller's
+  token states are read only through its issuer's `[[auth.attributes]]` table
+  (a `persons` issuer) or its `[[auth.federation]]` table, as
+  `ferrohealth-smart` reads them; the gateway's own reader of the IHE IUA
+  extension and the `authorization_details` purposes is gone (#1615).
+- The compose quickstart and the end-to-end harness run FerroEHR 5.7.0, node
+  and database image alike, pinned by digest, in place of 5.6.3, and the
+  gateway reaches every quickstart node under the caller. Each node trusts
+  the quickstart's development issuer as its issuer of persons, binds every
+  person who signs in to a `PERSON` it creates at the first request, and
+  admits the gateway only as a delegate acting for the person a token names:
+  each node's endpoint has an onward lane, so a caller's query reaches the
+  node under the token the issuer exchanges the caller's token for (RFC
+  8693), and no node is reached under a Basic user. The nodes run in the
+  issuer's network namespace, each on its own port, and four
+  `ferroehr-definitions-*` one-shots load FerroEHR's professional `PERSON`
+  and `ROLE` templates, vendored under `docs/specs/ferroehr-definitions/`,
+  before the nodes start. A quickstart volume from an earlier release holds
+  no such templates or persons: run `docker compose down -v` once before you
+  bring the stack up again (#1615).
+- The release compose example reaches node B through an onward lane in place
+  of a user and a password, and the onward credentials page states what a
+  FerroEHR 5.7.0 node lists for the gateway: the onward issuer as a `persons`
+  issuer with the node's own audience, and the gateway's client among its
+  delegates. v0.0.20 is the first FerroFED release that reaches a FerroEHR
+  node under the caller: a deployment whose gateway writes to FerroEHR adds
+  the node's `persons` issuers once its gateway runs v0.0.20 and every
+  FerroEHR endpoint has its onward lane (#1615).
+- The gateway runs on `ferrohealth-smart` 0.19.1, which signs each client
+  assertion of a grant for 60 seconds in place of 300, the lifetime the
+  quickstart's development issuer admits on a token exchange (#1615).
+- A received imaging report's performing organization reaches the member's
+  structured record. The imaging mapping of `eehrxf` 0.6.6 and later writes
+  an `Organization` performer into the Imaging service slot of the
+  examination result as a `CLUSTER.organisation.v1`, over FerroBRIDGE's
+  imaging report template at v0.0.24. A performer that is no `Organization`
+  is declared to the sender as not carried (#1860).
+
+### Removed
+
+- `[[trust.issuer]] professional_issuing_authority`: the claim naming the
+  agency that issued the professional's identifier is the
+  `fields."professional.issuing_authority_name"` source of the issuer's
+  `[[auth.attributes]]` table (#1615).
+- The named refusals that shipped in v0.0.19 for one release are deleted,
+  under the one-release rule for removal aids. Each such key is now refused
+  as an unknown key: the unit-suffixed keys (`federation.per_node_timeout_ms`,
+  `emergency.window_s`, `store.sweep_interval_s` and the rest, #1800), the
+  `url`, `credentials`, `tls` and `timeout_ms` keys of every outbound table
+  that moved under its `endpoint` table (#1805, #1815), a node's `user`,
+  `password`, `password_file`, `oauth` and `onward` outside its nested
+  `[credentials."<id>".credentials]` table (#1806), and
+  `[trust.issuer.patient] act_is_representative`. The Upgrade notes of
+  v0.0.19 give each step (#1855).
+- The operator console no longer refuses `[gateway] timeout_ms` by name,
+  under the one-release rule for removal aids: v0.0.19 retired it for
+  `gateway.timeout`, and the console now refuses it as an unknown key
+  (#1873).
+
+### Fixed
+
+- An issuer written with userinfo (`https://user:password@…`) in
+  `[[auth.attributes]]`, `[[auth.federation]]`, `[[auth.party]]` or
+  `auth.scopeless_subjects` no longer shows its password in
+  `ferrofed config check` or in the configuration's `Debug` rendering:
+  it renders as `https://***@…`, as `[[auth.issuer]]` already did. The
+  gateway moves to `ferrohealth-smart` 0.19, which holds the issuer of
+  every configuration table as a `SecretUrl`, with `ferrohealth-session`
+  0.14, `ihe-atna` and `ehds-logging` 0.13, `ferrobridge-term` and
+  `ferrobridge-validator` 0.6, `eehrxf` 0.7, and `ihe-iti` and
+  `nl-generic-functions` 0.5, the releases on the same line (#1864).
+- The information sheet names the interoperability component this release
+  ships, `eehrxf` 0.7.0, where it named 0.3.2, and the pin matrix names the
+  `eehrxf`, `fhirconnect`, `openehr-mapping-core`, `ferrobridge-term`,
+  `ferrobridge-validator`, `ihe-atna` and `ehds-logging` requirements the
+  build uses (#1874).
+
 ## [0.0.19] - 2026-11-11
 
 Security fixes until 2031-11-11, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -7383,7 +7488,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.19...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.20...HEAD
+[0.0.20]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.19...v0.0.20
 [0.0.19]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.18...v0.0.19
 [0.0.18]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.16...v0.0.18
 [0.0.16]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.15...v0.0.16
