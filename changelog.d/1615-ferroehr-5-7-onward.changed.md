@@ -17,9 +17,10 @@
   of a user and a password, and the onward credentials page states what a
   FerroEHR 5.7.0 node lists for the gateway: the onward issuer as a `persons`
   issuer with the node's own audience, and the gateway's client among its
-  delegates. From this release a deployment whose FerroFED gateway writes to
-  FerroEHR adds the node's `persons` issuers once every FerroEHR endpoint has
-  its onward lane (#1615).
+  delegates. v0.0.20 is the first FerroFED release that reaches a FerroEHR
+  node under the caller: a deployment whose gateway writes to FerroEHR adds
+  the node's `persons` issuers once its gateway runs v0.0.20 and every
+  FerroEHR endpoint has its onward lane (#1615).
 - The gateway runs on `ferrohealth-smart` 0.19.1, which signs each client
   assertion of a grant for 60 seconds in place of 300, the lifetime the
   quickstart's development issuer admits on a token exchange (#1615).

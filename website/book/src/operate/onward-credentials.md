@@ -298,8 +298,8 @@ FerroEHR from release 5.7.0 binds every person who signs in to a
 demographic `PERSON`, and writes the committer of a person's commit
 itself, so it admits the gateway's writes for a caller only under a token
 that names that caller. FerroFED reaches such a node under the caller from
-v0.0.20, through an onward lane of kind `persons` on each of the node's
-endpoints, and a deployment adds the node's `persons` issuers, the step
+v0.0.20, the first FerroFED release that does, through an onward lane of
+kind `persons` on each of the node's endpoints, and a deployment adds the node's `persons` issuers, the step
 FerroEHR's party binding page holds back for a gateway, once its gateway
 runs that release with those lanes. The node's side of the lane:
 
