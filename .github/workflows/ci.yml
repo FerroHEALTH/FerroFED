@@ -83,9 +83,9 @@ jobs:
       # the same class of live, token-holding code.
       - name: zizmor
         if: ${{ !cancelled() }}
-        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
-          tool: zizmor@1.31.1
+          tool: zizmor@1.32.0
       - name: zizmor / Audit .github
         if: ${{ !cancelled() }}
         # GH_TOKEN enables the online audits. impostor-commit verifies that a
@@ -126,7 +126,7 @@ jobs:
       # specification governs this: our own design).
       - name: shellcheck
         if: ${{ !cancelled() }}
-        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: shellcheck@0.11.0
       - name: shellcheck / Every tracked shell program is clean at severity=style
@@ -231,8 +231,8 @@ jobs:
         # digest, so no GitHub release is fetched on each run (#1773). The
         # checkout is mounted at its own path, so the rule path resolves.
         env:
-          PROMETHEUS_VERSION: 3.15.1
-          PROMETHEUS_DIGEST: sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
+          PROMETHEUS_VERSION: 3.16.0
+          PROMETHEUS_DIGEST: sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06
         run: |
           set -euo pipefail
           bin="$RUNNER_TEMP/promtool-bin"
@@ -898,7 +898,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
       - uses: ./.github/actions/fhir-packages
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: cargo-nextest
       # Every feature: a library feature no workspace member enables yet (the
@@ -962,7 +962,7 @@ jobs:
         with:
           cache-shared-key: binding-tests-${{ matrix.build }}
       - uses: ./.github/actions/fhir-packages
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: cargo-nextest
       - name: Run the server's tests in the build
@@ -997,7 +997,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
       - uses: ./.github/actions/fhir-packages
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: cargo-nextest
       # The local Maven repository the reference implementation is built
@@ -1143,8 +1143,8 @@ jobs:
     permissions:
       contents: read
     env:
-      FHIR_VALIDATOR_VERSION: 7.0.4
-      FHIR_VALIDATOR_SHA256: 43e29fa8822d670740a909c395ca5b70a3d07fbaa8936f8dedc6a98b007f555b
+      FHIR_VALIDATOR_VERSION: 7.0.5
+      FHIR_VALIDATOR_SHA256: 9dfe9f305b0f9389eceade2a4a1c9a2740d7b0e614066fdf07a78b571c76d92f
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1292,7 +1292,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: cargo-deny
       # Reads the same RustSec advisory database as cargo-audit and adds
@@ -1321,7 +1321,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: cargo-hack
       # The Cargo book's named tool for verifying the declared rust-version,
@@ -1349,7 +1349,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: cargo-hack
       - run: >-
@@ -1380,7 +1380,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
       - run: cargo build --locked --release -p ferrofed-console --bin ferrofed-console
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: cargo-nextest
       - name: Every page under the strict policy and the boundary
@@ -1418,14 +1418,14 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: cargo-nextest
       - name: Install Chrome and chromedriver
         id: chrome
         uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
         with:
-          chrome-version: 156.0.8078.80
+          chrome-version: 157.0.8103.78
           install-chromedriver: true
       # Each journey starts the pinned chromedriver on a port of its own and
       # stops it with its session, so the journeys run at the profile's full

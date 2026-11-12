@@ -560,7 +560,7 @@ dependency of the testkit. Chrome and chromedriver come as one Chrome for
 Testing release, which `browser-actions/setup-chrome` installs in the
 `journeys (browser)` job of `ci.yml`, so the browser and its driver always
 match. `thirtyfour` was the latest on crates.io on 2026-10-29, and the Chrome
-for Testing release was the newest stable one on 2026-10-14. `scripts/checks/versions.sh`
+for Testing release was the newest stable one on 2026-11-12. `scripts/checks/versions.sh`
 holds both rows, and the weekly `scripts/checks/pin-freshness.sh` reports a
 newer stable Chrome for Testing release.
 
@@ -569,17 +569,17 @@ release into `target/journey-tools`, where the journeys look first. It takes
 each download URL from the Chrome for Testing JSON API
 (`known-good-versions-with-downloads.json`) and checks each zip against the
 SHA-256 below before it unpacks it. Chrome for Testing publishes no SHA-256,
-so each digest was taken on 2026-10-16 of a download whose MD5 equals the
+so each digest was taken on 2026-11-12 of a download whose MD5 equals the
 `x-goog-hash` the storage bucket serves with it.
 
 | Item | Pin | Repeated in |
 |---|---|---|
 | `thirtyfour` | 0.38.1 | the root `Cargo.toml` `[workspace.dependencies]` |
-| Chrome for Testing (Chrome and chromedriver) | 156.0.8078.80 | the `chrome-version` of `.github/workflows/ci.yml`, and `scripts/release/journey-tools.sh` |
-| Chrome for Testing, `chrome-linux64.zip` SHA-256 | `b711c720f774be355197f32edf37e0651418ba036d92446ee2da19ac017540a7` | `scripts/release/journey-tools.sh` |
-| Chrome for Testing, `chrome-mac-arm64.zip` SHA-256 | `8bc590d1b1acac042a000234c768f31830f25a3983a83ed5e067114c87c4cad1` | `scripts/release/journey-tools.sh` |
-| Chrome for Testing, `chromedriver-linux64.zip` SHA-256 | `cae58bbd262ba5c8a0ce2540f44254b6e789efc4fe9b18bbb4a00487a9f5859e` | `scripts/release/journey-tools.sh` |
-| Chrome for Testing, `chromedriver-mac-arm64.zip` SHA-256 | `b5fe5abe5a82ca3ac49b3f2ea9e177b63f82fc3a4227883e0eaa9894a6bf3b7f` | `scripts/release/journey-tools.sh` |
+| Chrome for Testing (Chrome and chromedriver) | 157.0.8103.78 | the `chrome-version` of `.github/workflows/ci.yml`, and `scripts/release/journey-tools.sh` |
+| Chrome for Testing, `chrome-linux64.zip` SHA-256 | `9223832977a13db3646201b1341c1f9cf08afa3ceae92540116d7b0c062364fb` | `scripts/release/journey-tools.sh` |
+| Chrome for Testing, `chrome-mac-arm64.zip` SHA-256 | `bf3b49d0fe62a62397e98641aa736ef813c46014f03ec13d4913442e6966c7fc` | `scripts/release/journey-tools.sh` |
+| Chrome for Testing, `chromedriver-linux64.zip` SHA-256 | `0c27ff9aac902d3f7d2d01dde2235c1ff9c320bb8914b3624f4c79d52abacaea` | `scripts/release/journey-tools.sh` |
+| Chrome for Testing, `chromedriver-mac-arm64.zip` SHA-256 | `dc099dc128da1a324d85f877db7930b1ecd38e097aff02996434ebaacf4417bf` | `scripts/release/journey-tools.sh` |
 
 ## Language and runtime
 
@@ -641,17 +641,17 @@ it.
 | Container base image | `gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88` | `docker/Dockerfile` `FROM`, `docker/console/Dockerfile` `FROM` |
 | FerroEHR node image | `ghcr.io/ferrohealth/ferroehr:5.7.0@sha256:44c9268cb8a154df118a10ffe84329633f22923ea2cc54261ff0cea57a2ee7e7` | `compose.yaml`, the `FERROEHR` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:5.7.0@sha256:3b7dbfce603b4ff3c8a29366655f195baf2bfeaf903a1bf1be851ba69293743a` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| EHRbase node image | `ehrbase/ehrbase:2.36.0@sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| EHRbase node image | `ehrbase/ehrbase:2.38.0@sha256:b265855956270f028b7e457340d87c96290a007252ac5a52dffed3321a6ce93a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| FerroPIX PIX Manager image | `ghcr.io/ferrohealth/ferropix:0.0.26@sha256:85d40e6fdcdb39f782007eff91eb059861a4e039ca3f8fb56e37f2fa0f28d78a` | `compose.yaml`, the `FERROPIX` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroPIX PIX Manager image | `ghcr.io/ferrohealth/ferropix:0.0.29@sha256:5324915eb33aacefe76b23d5dbd8d666e622645fd51609c164b111bafb7632eb` | `compose.yaml`, the `FERROPIX` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroPIX database image | `postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6` | `compose.yaml`, the `FERROPIX_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | Quickstart FerroPIX token issuer image | `ghcr.io/navikt/mock-oauth2-server:6.1.5@sha256:d88e445d55c4ff6eed59b02d86adfece47d985233b1616fb712669b98328c8a2` | `compose.yaml` |
 | Quickstart FerroPIX seed image | `curlimages/curl:8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93` | `compose.yaml` |
 | SanteMPI PIX Manager image | `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` | the `SANTEMPI` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | SanteMPI database image | `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | Reference implementation build image | `maven:3.10.0-eclipse-temurin-21@sha256:9b4877723dadf350b452dd97d9a6401e7b56f98fa9dfe420c32ad909989c7e4c` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| Reference implementation runtime image | `eclipse-temurin:21.0.12.1_1-jre-noble@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| Keycloak identity provider image | `quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b` | the `KEYCLOAK` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| Reference implementation runtime image | `eclipse-temurin:21.0.13_9-jre-noble@sha256:0d57a8e90c2bb844c5a8e1b2b71e11eff06dad7edcfd803cd21ed4ae203b2515` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| Keycloak identity provider image | `quay.io/keycloak/keycloak:26.8.2@sha256:723b1d6e254c0fc96d5cffec860c7e0744d6a3277822b865bb538cf891575e41` | the `KEYCLOAK` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | nginx reverse proxy image | `nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94` | read from this row by `scripts/checks/production-guide.sh`, which runs `deploy/nginx/ferrofed.conf` in it |
 
 The quickstart's gateway image, `ghcr.io/ferrohealth/ferrofed`, carries the
@@ -667,8 +667,8 @@ test suite always run the same nodes. The weekly
 
 The node profile also runs against a second CDR product, EHRbase (#549), so a
 finding can be told apart as the product's or the check's. Its rows pin the
-current stable release, 2.36.0, and the database image EHRbase's own compose
-file documents beside it, each resolved on 2026-10-05 from the registry by
+current stable release, 2.38.0, and the database image EHRbase's own compose
+file documents beside it, each resolved on 2026-11-12 from the registry by
 the digest of its image index. EHRbase is published under the Apache License
 2.0, and both images are public and need no credential to pull. No specification governs which products the
 harness runs: our own design.
@@ -691,8 +691,8 @@ Hub by the digest of its image index. The guard reads the image from this
 row, so the row is its one pin. nginx is published under the 2-clause BSD
 licence, and the image is public.
 
-The production guide's Keycloak recipe (#724) runs against Keycloak 26.8.0,
-the newest stable release, resolved on 2026-10-06 from Quay by the digest of
+The production guide's Keycloak recipe (#724) runs against Keycloak 26.8.2,
+the newest stable release, resolved on 2026-11-12 from Quay by the digest of
 its image index. The Keycloak image carries no `awk`, which the recipe pipes
 into, so its `kcadm.sh` commands run on the runtime image of the reference
 implementation row with the admin CLI copied out of the Keycloak container.
@@ -811,7 +811,7 @@ versions the vendored manifests name.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `zizmor` | 1.31.1 | `.github/workflows/ci.yml` |
+| `zizmor` | 1.32.0 | `.github/workflows/ci.yml` |
 | `actionlint` | 1.7.12 | `.github/workflows/ci.yml` |
 | `shellcheck` | 0.11.0 | `.github/workflows/ci.yml` |
 | `hadolint` | 2.15.1 | `.github/workflows/ci.yml` |
@@ -821,8 +821,8 @@ versions the vendored manifests name.
 | `CRDs-catalog` | `fd90051867733c60d32d16450556e9cd18459aef` | `.github/workflows/ci.yml` |
 | `kustomize` | 5.8.3 | `.github/workflows/ci.yml` |
 | `lychee` | 0.24.2 | `.github/workflows/ci.yml` |
-| `promtool` | 3.15.1 | `.github/workflows/ci.yml` |
-| `validator_cli` | 7.0.4 | `.github/workflows/ci.yml` |
+| `promtool` | 3.16.0 | `.github/workflows/ci.yml` |
+| `validator_cli` | 7.0.5 | `.github/workflows/ci.yml` |
 
 Keep the locally installed versions on these numbers, so a finding costs a
 local run rather than a CI round trip (`.claude/rules/ci-cd.md`).
