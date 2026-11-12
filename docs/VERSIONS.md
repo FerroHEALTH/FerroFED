@@ -493,25 +493,25 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | 0.3.2 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | 0.1.249 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | 0.1.151 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | 0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | 0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | 0.7.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | 0.2.1 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | 0.1.154 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | 0.6.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | 0.6.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
 The ATNA ITI-20 sender, the BALP `AuditEvent` with its FHIR Feed, and the
 European logging component come from the family's audit library,
-FerroHEALTH/FerroAUDIT (#1176). Both crates are pinned exactly in the root
-`Cargo.toml` and move together, one version line and one release tag. The
+FerroHEALTH/FerroAUDIT (#1176). Both crates are required by a caret range in
+the root `Cargo.toml` and move together, one version line and one release tag. The
 IHE and EU corpora FerroAUDIT vendors for them are kept here at the same pins
 where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | =0.10.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | =0.10.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | 0.13.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | 0.13.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
@@ -742,7 +742,7 @@ each cut moves this row and every file that repeats it in one pull request.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| Product version | 0.0.19 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
+| Product version | 0.0.20 | `CITATION.cff` `version`, the root `Cargo.toml` `[workspace.package]` `version`, the `compose.yaml` gateway image tag default |
 
 `CITATION.cff` tracks this row exactly, and the guard compares the two, and
 the root `Cargo.toml` `[workspace.package]` `version` with both.

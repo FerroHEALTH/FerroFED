@@ -84,6 +84,9 @@
 #                          support table, with its release date and the end
 #                          of its support period five years on (Regulation
 #                          (EU) 2024/2847 Art 13(8)).
+#  16. component crates    the rows of the interoperability component, its
+#                          engine and the audit crates match the root
+#                          Cargo.toml [workspace.dependencies] requirement.
 #
 # The container images check (9) holds docker/console/Dockerfile to the same
 # base-image row as docker/Dockerfile.
@@ -578,6 +581,28 @@ statefulset_tag() {
   return 0
 }
 
+# crate_rows MATRIX MANIFEST CRATE...: each CRATE's row of MATRIX names the
+# requirement of the root manifest MANIFEST, an exact one with its `=`.
+crate_rows() {
+  local matrix_file="$1" manifest="$2" crate want req
+  shift 2
+  shipped "$manifest" || return 0
+  for crate in "$@"; do
+    want="$(pin_of "$crate" "$matrix_file")"
+    req="$(manifest_req "$crate" "$manifest")"
+    if [[ -z "$want" ]]; then
+      bad "$matrix_file has no $crate row"
+    elif [[ -z "$req" ]]; then
+      bad "$crate: $manifest has no requirement, $matrix_file pins $want"
+    elif [[ "$req" != "$want" ]]; then
+      bad "$crate: $manifest requires $req, $matrix_file pins $want"
+    else
+      note "OK: $crate $want ($manifest agrees)"
+    fi
+  done
+  return 0
+}
+
 # The self-test drives the two checks above against fixtures in a temporary
 # directory: an agreeing input passes, and each kind of drift fails with its
 # reason.
@@ -775,6 +800,15 @@ TABLES
   expect "a manifest a release behind" 1 statefulset_tag "$work/stale-statefulset.yaml" 0.0.9
   expect "a manifest with no gateway image" 1 statefulset_tag "$work/untagged-statefulset.yaml" 0.0.9
   expect "a manifest that is missing" 1 statefulset_tag "$work/no-such-statefulset.yaml" 0.0.9
+
+  printf '%s\n' '| Item | Pin | Repeated in |' '|---|---|---|' '| `eehrxf` | 0.7.0 | the root `Cargo.toml` |' '| `ihe-atna` | =0.13.0 | the root `Cargo.toml` |' > "$work/crates.md"
+  printf '%s\n' '[workspace.dependencies]' 'eehrxf = { version = "0.7.0", default-features = false }' 'ihe-atna = "=0.13.0"' > "$work/Cargo.toml"
+  printf '%s\n' '[workspace.dependencies]' 'eehrxf = { version = "0.8.0", default-features = false }' 'ihe-atna = "=0.13.0"' > "$work/moved.toml"
+  printf '%s\n' '[workspace.dependencies]' 'eehrxf = "0.7.0"' 'ihe-atna = "0.13.0"' > "$work/unpinned.toml"
+  expect "component rows that match the manifest" 0 crate_rows "$work/crates.md" "$work/Cargo.toml" eehrxf ihe-atna
+  expect "a component the manifest moved" 1 crate_rows "$work/crates.md" "$work/moved.toml" eehrxf ihe-atna
+  expect "an exact row over a caret requirement" 1 crate_rows "$work/crates.md" "$work/unpinned.toml" ihe-atna
+  expect "a component with no row" 1 crate_rows "$work/crates.md" "$work/Cargo.toml" ehds-logging
 
   rm -r "$work"
   echo "versions: self-test OK."
@@ -1311,6 +1345,12 @@ for crate in opentelemetry opentelemetry_sdk opentelemetry-proto tracing-opentel
     fi
   fi
 done
+
+echo "== component crates ($matrix <-> Cargo.toml)"
+# The interoperability component, its engine and the audit crates are each
+# required by one root Cargo.toml line their rows restate (#1874).
+crate_rows "$matrix" Cargo.toml eehrxf fhirconnect openehr-mapping-core \
+  ferrobridge-term ferrobridge-validator ihe-atna ehds-logging
 
 echo "== console toolchain ($matrix <-> Cargo.toml, ci.yml)"
 # FerroUI is pinned exactly, so the root Cargo.toml is held to its row; About
