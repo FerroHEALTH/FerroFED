@@ -41,8 +41,8 @@ Security fixes until 2031-11-12, 5 years from this release (Regulation (EU) 2024
   the old key now refuses to boot (#1615).
 - An imaging report receiver (`[[fhir.receive]]` of the imaging category)
   needs FerroBRIDGE's imaging report template at v0.0.24, which slots the
-  CKM `CLUSTER.organisation.v1`, and that archetype among its archetypes:
-  the imaging mapping of `eehrxf` 0.6.6 and later (this release ships 0.7.0)
+  CKM `openEHR-EHR-CLUSTER.organisation.v1`, and that archetype among its
+  archetypes: the imaging mapping of `eehrxf` 0.6.6 and later (this release ships 0.7.0)
   does not compile against the earlier revision, and the gateway refuses to
   start with it. Both are vendored under `docs/specs/ferrobridge-imaging/`
   (#1860).
@@ -87,8 +87,8 @@ Security fixes until 2031-11-12, 5 years from this release (Regulation (EU) 2024
 - A received imaging report's performing organization reaches the member's
   structured record. The imaging mapping of `eehrxf` 0.6.6 and later writes
   an `Organization` performer into the Imaging service slot of the
-  examination result as a `CLUSTER.organisation.v1`, over FerroBRIDGE's
-  imaging report template at v0.0.24. A performer that is no `Organization`
+  examination result as an `openEHR-EHR-CLUSTER.organisation.v1`, over
+  FerroBRIDGE's imaging report template at v0.0.24. A performer that is no `Organization`
   is declared to the sender as not carried (#1860).
 
 ### Removed
