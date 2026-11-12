@@ -1183,10 +1183,10 @@ dependencies = [
  "fhirconnect",
  "flate2",
  "http",
- "openehr-base",
- "openehr-its",
+ "openehr-base 0.0.136",
+ "openehr-its 0.0.136",
  "openehr-mapping-core",
- "openehr-rm",
+ "openehr-rm 0.0.136",
  "openehr-sdt",
  "serde",
  "serde_json",
@@ -1390,7 +1390,7 @@ dependencies = [
  "jiff",
  "jsonwebtoken",
  "openehr-federation",
- "openehr-its",
+ "openehr-its 0.1.0",
  "percent-encoding",
  "reqwest",
  "secrecy",
@@ -1425,9 +1425,9 @@ dependencies = [
  "http",
  "jiff",
  "openehr-adl",
- "openehr-am",
- "openehr-base",
- "openehr-its",
+ "openehr-am 0.1.0",
+ "openehr-base 0.1.0",
+ "openehr-its 0.1.0",
  "openehr-mapping-core",
  "openehr-query",
  "serde",
@@ -1456,11 +1456,11 @@ dependencies = [
  "jsonwebtoken",
  "mime",
  "nl-generic-functions",
- "openehr-base",
+ "openehr-base 0.1.0",
  "openehr-federation",
- "openehr-its",
+ "openehr-its 0.1.0",
  "openehr-query",
- "openehr-rm",
+ "openehr-rm 0.1.0",
  "opentelemetry",
  "opentelemetry_sdk",
  "pem 3.0.6",
@@ -1496,7 +1496,7 @@ dependencies = [
  "ihe-iti",
  "jiff",
  "nl-generic-functions",
- "openehr-its",
+ "openehr-its 0.1.0",
  "reqwest",
  "rustls",
  "secrecy",
@@ -1531,8 +1531,8 @@ dependencies = [
  "ferrohealth-secret",
  "fhir-types",
  "jiff",
- "openehr-base",
- "openehr-its",
+ "openehr-base 0.1.0",
+ "openehr-its 0.1.0",
  "proptest",
  "serde",
  "serde_json",
@@ -1579,11 +1579,11 @@ dependencies = [
  "jsonschema",
  "jsonwebtoken",
  "nl-generic-functions",
- "openehr-base",
+ "openehr-base 0.1.0",
  "openehr-federation",
- "openehr-its",
+ "openehr-its 0.1.0",
  "openehr-query",
- "openehr-rm",
+ "openehr-rm 0.1.0",
  "opentelemetry",
  "opentelemetry-proto",
  "opentelemetry_sdk",
@@ -1645,10 +1645,10 @@ dependencies = [
  "ihe-iti",
  "jiff",
  "jsonwebtoken",
- "openehr-base",
- "openehr-its",
+ "openehr-base 0.1.0",
+ "openehr-its 0.1.0",
  "openehr-mapping-core",
- "openehr-rm",
+ "openehr-rm 0.1.0",
  "opentelemetry-proto",
  "pem 3.0.6",
  "rcgen",
@@ -1806,9 +1806,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-telemetry"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "796c92508539000485f0d59584f1555448b8eab6b64ed09bb273dbc29093a8d8"
+checksum = "adafa31603dfef1680fa40f350d7334d8a55594bd749ababe236732f895b7ad9"
 dependencies = [
  "axum",
  "ferrohealth-config",
@@ -1911,12 +1911,12 @@ dependencies = [
  "base64 0.23.1",
  "fhir-types",
  "jsonschema",
- "openehr-base",
- "openehr-its",
+ "openehr-base 0.0.136",
+ "openehr-its 0.0.136",
  "openehr-mapping-core",
- "openehr-rm",
+ "openehr-rm 0.0.136",
  "openehr-sdt",
- "openehr-term",
+ "openehr-term 0.0.136",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -3330,17 +3330,17 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "openehr-adl"
-version = "0.0.136"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb985e6244882ccb4754b6728521fffdf854143f18926dfabc8515a7963a1c51"
+checksum = "d6c747b2d87942e9233b021cb7e1a61190730b363d638fa97c657494b126d546"
 dependencies = [
  "indexmap 2.14.2",
- "openehr-am",
- "openehr-base",
- "openehr-its",
- "openehr-lang",
- "openehr-rm",
- "openehr-term",
+ "openehr-am 0.1.0",
+ "openehr-base 0.1.0",
+ "openehr-its 0.1.0",
+ "openehr-lang 0.1.0",
+ "openehr-rm 0.1.0",
+ "openehr-term 0.1.0",
  "regex",
  "serde_json",
  "thiserror",
@@ -3354,8 +3354,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7aa7ceda6b694d4b3679c5169c5c5574660fa47908f3f74a911056a382d19e6"
 dependencies = [
  "indexmap 2.14.2",
- "openehr-base",
- "openehr-lang",
+ "openehr-base 0.0.136",
+ "openehr-lang 0.0.136",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "openehr-am"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c5fc2b8f2cf27e45daf1accf67beef69599562367b9525901e9936ebbc0db07"
+dependencies = [
+ "indexmap 2.14.2",
+ "openehr-base 0.1.0",
+ "openehr-lang 0.1.0",
  "serde",
  "serde_json",
 ]
@@ -3373,15 +3386,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "openehr-base"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24ed8aea27427aa5e7e5c5cd244f7cf9324b83d1d4f5c31652d50bb7d3df7fdf"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "openehr-federation"
 version = "0.0.63"
 dependencies = [
  "ferrofed-testkit",
  "jsonschema",
- "openehr-base",
- "openehr-its",
+ "openehr-base 0.1.0",
+ "openehr-its 0.1.0",
  "openehr-query",
- "openehr-rm",
+ "openehr-rm 0.1.0",
  "proptest",
  "rust_decimal",
  "serde",
@@ -3397,16 +3422,37 @@ version = "0.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "130b0a129b7ea5315ff2b941ed33dd397ea4f0ba4d4f35e9637208693cb965d1"
 dependencies = [
+ "indexmap 2.14.2",
+ "openehr-am 0.0.136",
+ "openehr-base 0.0.136",
+ "openehr-lang 0.0.136",
+ "openehr-rm 0.0.136",
+ "openehr-term 0.0.136",
+ "quick-xml",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "openehr-its"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30fa37a748efaeadc20367feb044ecfdd058301bfe06290ad27ab8a9a1f66fbc"
+dependencies = [
  "async-trait",
  "backon",
  "base64 0.23.1",
  "http",
  "indexmap 2.14.2",
- "openehr-am",
- "openehr-base",
- "openehr-lang",
- "openehr-rm",
- "openehr-term",
+ "openehr-am 0.1.0",
+ "openehr-base 0.1.0",
+ "openehr-lang 0.1.0",
+ "openehr-rm 0.1.0",
+ "openehr-term 0.1.0",
  "quick-xml",
  "regex",
  "reqwest",
@@ -3429,7 +3475,22 @@ dependencies = [
  "chumsky",
  "indexmap 2.14.2",
  "logos",
- "openehr-base",
+ "openehr-base 0.0.136",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "openehr-lang"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd34c7cb65ea9f93afffb1290de889442ca20f4202223ef4fcbdf72fa4f62491"
+dependencies = [
+ "chumsky",
+ "indexmap 2.14.2",
+ "logos",
+ "openehr-base 0.1.0",
  "serde",
  "serde_json",
  "thiserror",
@@ -3442,10 +3503,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51f1f0266ff528a2a8937a4a1156e9aec405efd529675d4caf40ae848dc58956"
 dependencies = [
  "jsonschema",
- "openehr-am",
- "openehr-base",
- "openehr-its",
- "openehr-rm",
+ "openehr-am 0.0.136",
+ "openehr-base 0.0.136",
+ "openehr-its 0.0.136",
+ "openehr-rm 0.0.136",
  "openehr-sdt",
  "regex",
  "serde",
@@ -3456,9 +3517,9 @@ dependencies = [
 
 [[package]]
 name = "openehr-query"
-version = "0.0.136"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a817d60b6206f5727a70282046292f8eaf7439fb03957235ef0b509b98a29a9"
+checksum = "7c60340fb296e9d3ba3e93a41b130cbfdbcba5470a45e35269159c11f886e82a"
 dependencies = [
  "chumsky",
  "logos",
@@ -3471,10 +3532,27 @@ version = "0.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbe67f6f797f13626005c4fe84a131399ae23f1b340066c7cfc60cd111ebc328"
 dependencies = [
- "openehr-base",
- "openehr-term",
+ "openehr-base 0.0.136",
+ "openehr-term 0.0.136",
  "rust_decimal",
- "ryu-js",
+ "ryu-js 0.2.2",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "openehr-rm"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e590f8defb9ab4732ff175ba49b9f938bddaca162bdac1b1eef73f2c520829e"
+dependencies = [
+ "openehr-base 0.1.0",
+ "openehr-term 0.1.0",
+ "rust_decimal",
+ "ryu-js 1.0.3",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -3490,12 +3568,12 @@ checksum = "7617f7319f1830c1d34009a018ef58b00345005bba8d83b7575c54674fdb2890"
 dependencies = [
  "fancy-regex 0.20.0",
  "indexmap 2.14.2",
- "openehr-am",
- "openehr-base",
- "openehr-its",
- "openehr-lang",
- "openehr-rm",
- "openehr-term",
+ "openehr-am 0.0.136",
+ "openehr-base 0.0.136",
+ "openehr-its 0.0.136",
+ "openehr-lang 0.0.136",
+ "openehr-rm 0.0.136",
+ "openehr-term 0.0.136",
  "regex",
  "serde",
  "serde_json",
@@ -3508,7 +3586,19 @@ version = "0.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd76799b16a76d27c5a7dbafc3c4c7c1e66296847ac30e787661c6bccf1dbc7a"
 dependencies = [
- "openehr-base",
+ "openehr-base 0.0.136",
+ "roxmltree",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "openehr-term"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86cbee950efb23c7d894ccebc50b6313dcfb44ec51bc624c62a5390ce51b1b60"
+dependencies = [
+ "openehr-base 0.1.0",
  "roxmltree",
  "serde",
  "thiserror",
@@ -4437,6 +4527,12 @@ name = "ryu-js"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6518fc26bced4d53678a22d6e423e9d8716377def84545fe328236e3af070e7f"
+
+[[package]]
+name = "ryu-js"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04d056b875a9d2e6cb9a61d127afee9ac5999b9f87bcb32079d1318e505be714"
 
 [[package]]
 name = "same-file"
