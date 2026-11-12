@@ -1,0 +1,1 @@
+- FerroFED moves to `ferrohealth-smart` 0.20 with the family releases on its line: `ferrohealth-session` 0.15, `ihe-atna` and `ehds-logging` 0.14, `ferrobridge-term` and `ferrobridge-validator` 0.7, `eehrxf` 0.8, and `ihe-iti` and `nl-generic-functions` 0.6. A refusal of a role issuer (`ConfigError::RoleIssuer`) renders the issuer with its userinfo masked (#1876).
