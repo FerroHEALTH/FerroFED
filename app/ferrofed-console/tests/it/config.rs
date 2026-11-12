@@ -227,6 +227,20 @@ fn an_unknown_key_is_refused() {
     assert!(source.to_string().contains("server.port"), "{source}");
 }
 
+// `gateway.timeout_ms`, refused by name for the one release that retired it,
+// is an unknown key from 0.0.20 (#1873).
+#[test]
+fn the_retired_gateway_timeout_ms_is_an_unknown_key() {
+    let error = refused("[gateway]\ntimeout_ms = 2000\n");
+    let error::Error::Load { source } = &error else {
+        panic!("a refused load: {error:?}");
+    };
+    assert!(
+        source.to_string().contains("gateway.timeout_ms"),
+        "{source}"
+    );
+}
+
 #[test]
 fn an_unknown_variable_is_refused_by_its_name() {
     let error = Config::from_sources(

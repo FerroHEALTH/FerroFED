@@ -4,7 +4,6 @@
 //! The checked settings the console runs on, resolved from the written
 //! [`Config`] with every `_file` secret read.
 
-use ferrohealth_config::removed::{Removals, Retired};
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -64,21 +63,6 @@ pub struct OidcSettings {
     redirect_uri: Url,
 }
 
-/// `gateway.timeout_ms`, retired in 0.0.19 for `gateway.timeout`; the
-/// release after it refuses the key as unknown.
-const GATEWAY_TIMEOUT: Retired = Retired::replaced(
-    "gateway.timeout_ms",
-    "gateway.timeout, a duration such as `30s`",
-    PREPARING,
-);
-
-/// The release the console is preparing.
-///
-/// `removed::stale` holds [`GATEWAY_TIMEOUT`] to it
-/// (FerroHEALTH/FerroSYS#339); the first pull request after each cut moves
-/// it on.
-const PREPARING: &str = "0.0.19";
-
 impl OidcSettings {
     /// The console's own origin, `scheme://host:port`: the origin of its
     /// redirection endpoint, which an unsafe request must come from.
@@ -106,11 +90,8 @@ impl Config {
     /// [`Error::Scope`] for `offline_access` listed in `oidc.scopes`,
     /// [`Error::InsecureCookie`] for `secure_cookie = false` on a console
     /// whose `redirect_uri` is not `http` on loopback, and the secret errors
-    /// of a `_file`, and [`Error::Retired`] for a key a release retired.
+    /// of a `_file`.
     pub fn resolve(&self) -> Result<Settings, Error> {
-        let mut removals = Removals::new();
-        removals.check(self.gateway.timeout_ms, &GATEWAY_TIMEOUT);
-        removals.finish()?;
         let listen = self
             .server
             .listen
@@ -267,17 +248,5 @@ fn is_loopback(url: &Url) -> bool {
         Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
         Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
         None => false,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use ferrohealth_config::removed::stale;
-
-    use super::{GATEWAY_TIMEOUT, PREPARING};
-
-    #[test]
-    fn the_retired_gateway_timeout_lives_for_the_one_release_that_retires_it() {
-        assert_eq!(0, stale(&[GATEWAY_TIMEOUT], PREPARING).len());
     }
 }
