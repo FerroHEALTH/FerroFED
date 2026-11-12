@@ -801,7 +801,7 @@ TABLES
   expect "a manifest with no gateway image" 1 statefulset_tag "$work/untagged-statefulset.yaml" 0.0.9
   expect "a manifest that is missing" 1 statefulset_tag "$work/no-such-statefulset.yaml" 0.0.9
 
-  printf '%s\n' '| Item | Pin | Repeated in |' '|---|---|---|' '| `eehrxf` | 0.7.0 | the root `Cargo.toml` |' '| `ihe-atna` | =0.13.0 | the root `Cargo.toml` |' > "$work/crates.md"
+  printf '%s\n' '| Item | Pin | Repeated in |' '|---|---|---|' '| eehrxf | 0.7.0 | the root Cargo.toml |' '| ihe-atna | =0.13.0 | the root Cargo.toml |' > "$work/crates.md"
   printf '%s\n' '[workspace.dependencies]' 'eehrxf = { version = "0.7.0", default-features = false }' 'ihe-atna = "=0.13.0"' > "$work/Cargo.toml"
   printf '%s\n' '[workspace.dependencies]' 'eehrxf = { version = "0.8.0", default-features = false }' 'ihe-atna = "=0.13.0"' > "$work/moved.toml"
   printf '%s\n' '[workspace.dependencies]' 'eehrxf = "0.7.0"' 'ihe-atna = "0.13.0"' > "$work/unpinned.toml"
