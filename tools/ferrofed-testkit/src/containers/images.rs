@@ -67,8 +67,8 @@ pub const FERROEHR_POSTGRES: PinnedImage = PinnedImage {
 /// node profile runs against beside FerroEHR.
 pub const EHRBASE: PinnedImage = PinnedImage {
     repository: "ehrbase/ehrbase",
-    tag: "2.36.0",
-    digest: "sha256:c8e642264b73637e0576ec01b5c73f5dc9be6f34eb3644f0ced890c5f916640a",
+    tag: "2.38.0",
+    digest: "sha256:b265855956270f028b7e457340d87c96290a007252ac5a52dffed3321a6ce93a",
 };
 
 /// The database image EHRbase documents beside that release, which creates
@@ -86,8 +86,8 @@ pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
 /// lane resolves and localizes patients through.
 pub const FERROPIX: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferropix",
-    tag: "0.0.26",
-    digest: "sha256:85d40e6fdcdb39f782007eff91eb059861a4e039ca3f8fb56e37f2fa0f28d78a",
+    tag: "0.0.29",
+    digest: "sha256:5324915eb33aacefe76b23d5dbd8d666e622645fd51609c164b111bafb7632eb",
 };
 
 /// The PostgreSQL FerroPIX keeps its cross-reference in: the release FerroPIX
@@ -128,14 +128,14 @@ pub const MAVEN: PinnedImage = PinnedImage {
 /// Keycloak recipe's admin CLI.
 pub const TEMURIN_JRE: PinnedImage = PinnedImage {
     repository: "eclipse-temurin",
-    tag: "21.0.12.1_1-jre-noble",
-    digest: "sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c",
+    tag: "21.0.13_9-jre-noble",
+    digest: "sha256:0d57a8e90c2bb844c5a8e1b2b71e11eff06dad7edcfd803cd21ed4ae203b2515",
 };
 
 /// Keycloak, the identity provider the production guide's issuer recipe is
 /// written for and [`keycloak`](mod@super::keycloak) applies.
 pub const KEYCLOAK: PinnedImage = PinnedImage {
     repository: "quay.io/keycloak/keycloak",
-    tag: "26.8.1",
-    digest: "sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b",
+    tag: "26.8.2",
+    digest: "sha256:723b1d6e254c0fc96d5cffec860c7e0744d6a3277822b865bb538cf891575e41",
 };
