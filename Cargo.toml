@@ -51,17 +51,17 @@ publish = false
 # #3565); 0.0.83 said so when a deadline passed (FerroEHR #3560), and 0.0.82
 # printed a scope in its canonical form (FerroEHR #3557) and sent a DPoP-bound
 # token with a proof from a prover (FerroEHR #3558).
-openehr-base = "0.0.136"
-openehr-rm = "0.0.136"
-openehr-query = { version = "0.0.136", features = ["federation"] }
-openehr-its = { version = "0.0.136", default-features = false }
+openehr-base = "0.1.1"
+openehr-rm = "0.1.1"
+openehr-query = { version = "0.1.1", features = ["federation"] }
+openehr-its = { version = "0.1.1", default-features = false }
 # The ADL parser and the OPT2 builder of the family, at its version: a map-mode
 # member's ADL 2 template is built into its operational template with them
 # (#1560). Verified against crates.io on 2026-11-08.
-openehr-adl = "0.0.136"
+openehr-adl = "0.1.1"
 # The archetype model the OPT2 builder writes, which a test hands the ADL 2
 # printer (#1581). Verified against crates.io on 2026-11-08.
-openehr-am = "0.0.136"
+openehr-am = "0.1.1"
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
@@ -86,8 +86,8 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.63" }
 # from the outbound client of [audit.repository.endpoint] (#1805); 0.13.0 is
 # the release on ferrohealth-smart 0.19 (#1864); 0.14.0 the release on
 # ferrohealth-smart 0.20 (#1876). Verified against crates.io on 2026-11-12.
-ihe-atna = { version = "0.14.0", default-features = false }
-ehds-logging = { version = "0.14.0", default-features = false }
+ihe-atna = { version = "0.18.0", default-features = false }
+ehds-logging = { version = "0.18.0", default-features = false }
 # The European interoperability software component of Regulation (EU)
 # 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
 # owner decision of 2026-10-28 (#813). Like every FerroBRIDGE crate here it
@@ -113,7 +113,7 @@ ehds-logging = { version = "0.14.0", default-features = false }
 # received report keeps in the member's record (#1860); 0.7.0 is the release
 # on ferrobridge-term 0.6 (#1864), and 0.8.0 the release on ferrobridge-term
 # 0.7 (#1876). Verified against crates.io on 2026-11-12.
-eehrxf = { version = "0.8.0", default-features = false }
+eehrxf = { version = "0.12.0", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -253,7 +253,7 @@ fhir-types = { version = "0.1.131", default-features = false }
 # carries one copy of that family (#1028).
 # Required by a caret range, as eehrxf above (#1772); 0.1.249 is the release
 # eehrxf 0.3.0 requires. Verified against crates.io on 2026-11-10.
-fhirconnect = "0.2.1"
+fhirconnect = "0.3.0"
 # The FHIR terminology client the European interoperability component asks
 # its terminology server through (#925), from FerroBRIDGE, with the `context`
 # form of `$validate-code`. Required by a caret range, as eehrxf above
@@ -263,7 +263,7 @@ fhirconnect = "0.2.1"
 # (Client::from_endpoint, feature smart; #1805); 0.6.0 is the release on
 # ferrohealth-smart 0.19 (#1864); 0.7.0 the release on ferrohealth-smart 0.20
 # (#1876). Verified against crates.io on 2026-11-12.
-ferrobridge-term = "0.7.0"
+ferrobridge-term = "0.10.0"
 # The FHIR R4 profile validator a document received in the exchange format is
 # held to in full: every invariant, binding and entry profile (#808), from
 # FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
@@ -272,8 +272,8 @@ ferrobridge-term = "0.7.0"
 # (#1754); 0.3.0 is the release on ferrobridge-term 0.3 (#1805); 0.6.0 the
 # release on ferrobridge-term 0.6 (#1864); 0.7.0 the release on
 # ferrobridge-term 0.7 (#1876). Verified against crates.io on 2026-11-12.
-ferrobridge-validator = "0.7.0"
-openehr-mapping-core = "0.1.154"
+ferrobridge-validator = "0.10.0"
+openehr-mapping-core = "0.2.0"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by
 # FerroHEALTH/FerroPIX since #367. 0.0.66 is the release on ferrohealth-smart 0.8 and
@@ -292,7 +292,7 @@ openehr-mapping-core = "0.1.154"
 # the release on ferrohealth-smart 0.19 and ihe-atna 0.13 (#1864); 0.6.0
 # the release on ferrohealth-smart 0.20 and ihe-atna 0.14 (#1876).
 # Verified against crates.io on 2026-11-12.
-ihe-iti = "0.6.0"
+ihe-iti = "0.9.0"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
 # published by FerroHEALTH/FerroPIX since #367. 0.0.33 is the release on ferrohealth-smart
 # 0.8 (#1390); 0.0.40 is the release on ihe-iti 0.0.73, whose `authorizer`
@@ -304,7 +304,7 @@ ihe-iti = "0.6.0"
 # by a caret range, as ihe-iti above; 0.5.0 is the release on ihe-iti 0.5
 # (#1864), and 0.6.0 the release on ihe-iti 0.6 (#1876). Verified against
 # crates.io on 2026-11-12.
-nl-generic-functions = "0.6.0"
+nl-generic-functions = "0.9.0"
 # The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
 # the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -424,7 +424,7 @@ ferrohealth-ui = "=0.6.9"
 # (FerroHEALTH/FerroAUTH#461, #1615); 0.20.0 masks the issuer a role-issuer
 # refusal names (#1876). Required by a caret range, as the IHE crates below.
 # Verified against crates.io on 2026-11-12.
-ferrohealth-smart = { version = "0.20.0", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
+ferrohealth-smart = { version = "0.24.1", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
@@ -445,7 +445,7 @@ ferrohealth-secret = "=0.2.1"
 # 0.16 (#1805), and 0.14.0 the release on ferrohealth-smart 0.19 (#1864),
 # and 0.15.0 the release on ferrohealth-smart 0.20 (#1876). Verified against
 # crates.io on 2026-11-12.
-ferrohealth-session = { version = "=0.15.0", default-features = false }
+ferrohealth-session = { version = "=0.19.0", default-features = false }
 # The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
 # defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
 # into one typed tree, with where each key came from and the merged table the
@@ -497,7 +497,7 @@ ferrohealth-server = { version = "=0.8.4", default-features = false }
 # line names the request in flight (FerroHEALTH/FerroSYS#181); 0.2.5 splits
 # the request log with the API unchanged. Verified against crates.io on
 # 2026-11-05.
-ferrohealth-telemetry = { version = "=0.4.0", default-features = false }
+ferrohealth-telemetry = { version = "=0.4.1", default-features = false }
 # The installation report of FerroHEALTH/FerroSYS to FerroPULSE (#1397): the
 # `[usage_report]` section, envelope v2, the instance id, the window and the
 # reporter. Pinned exactly, as a product pins every family crate. Verified
