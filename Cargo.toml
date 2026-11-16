@@ -67,7 +67,7 @@ openehr-am = "0.2.0"
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
 # member is never packaged, so it takes the path alone.
-openehr-federation = { path = "crates/openehr-federation", version = "0.0.63" }
+openehr-federation = { path = "crates/openehr-federation", version = "0.0.64" }
 # The shared audit library of the family, published from FerroHEALTH/FerroAUDIT
 # and required by a caret range: the ATNA ITI-20 sender and the BALP AuditEvent
 # (ihe-atna), and the EHDS logging component (ehds-logging); 0.2.6 closes a
