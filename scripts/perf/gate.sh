@@ -1298,8 +1298,8 @@ GATE
   local committed
   committed="$(fill head 8080 "$root/$ARM_ENV")"
   check "the committed perf/arm.env fills every placeholder" 0 "$(grep -c '@' <<< "$committed" || true)"
-  check "the committed perf/arm.env gives the head its own URLs and store" 5 \
-    "$(grep -cxE 'FERROFED__(SERVER__LISTEN=127\.0\.0\.1:8080|GATEWAY__PUBLIC_URL=http://127\.0\.0\.1:8080|AUTH__DPOP__EXTERNAL_URL=http://127\.0\.0\.1:8080|SIGNING__JWKS_URI=http://127\.0\.0\.1:8080/\.well-known/jwks\.json|STORE__URL_FILE=target/perf-run/head/store-url)' <<< "$committed")"
+  check "the committed perf/arm.env gives the head its own URLs and store" 4 \
+    "$(grep -cxE 'FERROFED__(SERVER__LISTEN=127\.0\.0\.1:8080|GATEWAY__PUBLIC_URL=http://127\.0\.0\.1:8080|SIGNING__JWKS_URI=http://127\.0\.0\.1:8080/\.well-known/jwks\.json|STORE__URL_FILE=target/perf-run/head/store-url)' <<< "$committed")"
   # shellcheck disable=SC2016 # the pattern matches the script's own text
   check "the head starts on its own tree's contract and the base on its own" 2 \
     "$(grep -cE '^  (head_pid="\$\(serve head [^ ]+ "\$CONFIG" ferrofed 8080 "\$ARM_ENV"|base_pid="\$\(serve base [^ ]+ "\$BASE_CONFIG" ferrofed_base 8070 "\$base_contract")' "$root/scripts/perf/gate.sh")"

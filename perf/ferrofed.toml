@@ -73,7 +73,6 @@ fields."professional.issuing_authority_name" = [{ constant = "Qz9-ncp-hp-authori
 fields."provider.issuing_authority_name" = [{ constant = "Qz9-ncp-hcp-authority" }]
 
 [auth.dpop]
-external_url = "http://127.0.0.1:8080"
 
 [[federation.contact_point]]
 issuer = "https://perf-ncp.ferrofed.invalid"
