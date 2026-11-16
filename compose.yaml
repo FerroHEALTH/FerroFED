@@ -479,7 +479,7 @@ services:
   # ITI-83 and takes the seed's ITI-104 feed, in the issuer's network
   # namespace, as `ferropix` on the compose network.
   ferropix:
-    image: ghcr.io/ferrohealth/ferropix:0.0.29@sha256:5324915eb33aacefe76b23d5dbd8d666e622645fd51609c164b111bafb7632eb
+    image: ghcr.io/ferrohealth/ferropix:0.0.33@sha256:6241e7334f0d9eb39b6fc4744960fb848f20f615980bd60d31849b44058e398e
     restart: unless-stopped
     network_mode: service:ferropix-issuer
     depends_on:
