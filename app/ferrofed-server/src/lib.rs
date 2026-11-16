@@ -141,7 +141,7 @@ pub const ITS_REST_PREFIX: &str = "/v1/";
 /// The family moves in lockstep, so one version names every member the
 /// workspace pins (`openehr-query`, `openehr-its`, `openehr-base` and
 /// `openehr-rm`).
-pub const OPENEHR_FAMILY: &str = "0.0.136";
+pub const OPENEHR_FAMILY: &str = "0.2.0";
 
 /// Returns `error` and every cause behind it as one line.
 pub(crate) fn chain(error: &dyn std::error::Error) -> String {
@@ -298,12 +298,7 @@ fn gated(
     let rated = match server.overload.caller_rate {
         Some(rate) => routes
             .layer(axum::middleware::from_fn_with_state(
-                ferrohealth_server::caller_rate::CallerLimit::new(
-                    ferrohealth_server::section::CallerRate {
-                        requests_per_second: rate.requests_per_second,
-                        burst: rate.burst,
-                    },
-                ),
+                ferrohealth_server::caller_rate::CallerLimit::new(rate),
                 ferrohealth_server::caller_rate::limit,
             ))
             .layer(axum::middleware::from_fn(overload::caller_key)),

@@ -282,6 +282,9 @@ pub enum AuthFault {
     ContactPointUndeclared,
     /// A `[[auth.basic.users]]` entry: the gateway admits no Basic caller.
     BasicRemoved,
+    /// `[auth.dpop]` is set without `gateway.public_url`, the URL a proof
+    /// names its request at.
+    DpopWithoutPublicUrl,
 }
 
 impl fmt::Display for AuthFault {
@@ -314,6 +317,9 @@ impl fmt::Display for AuthFault {
             }
             Self::ContactPointUndeclared => {
                 "is a contact point, and no [[federation.contact_point]] table names it"
+            }
+            Self::DpopWithoutPublicUrl => {
+                "is set, but gateway.public_url is not, and a DPoP proof's htu is checked against the URL clients address the gateway at"
             }
             Self::BasicRemoved => {
                 "is refused: the gateway admits no Basic caller; a machine authenticates with a client-credentials token (RFC 6749 §4.4) of an [[auth.issuer]], its client named in metrics.scrape_clients or pmir.feed_clients"
@@ -355,6 +361,7 @@ impl Auth {
             ),
             ("auth.capabilities", section.capabilities.is_empty()),
             ("auth.scopes_supported", section.scopes_supported.is_empty()),
+            ("auth.described_issuer", section.described_issuer.is_none()),
         ] {
             if !empty {
                 return Err(fault(key, AuthFault::Unread));
@@ -397,6 +404,13 @@ impl Auth {
                 AuthFault::BasicRemoved,
             ));
         }
+        // NOTE: RFC 9449 §4.3 check 9: a proof's htu is the URL its client addresses, so the
+        // check reads the public URL's origin and the request's whole path under it.
+        let dpop = match (dpop, public) {
+            (Some(dpop), Some(public)) => Some(dpop.settings(public.origin())),
+            (Some(_), None) => return Err(fault("auth.dpop", AuthFault::DpopWithoutPublicUrl)),
+            (None, _) => None,
+        };
         let (mode, purpose_required, mut issuers) = trust.resolve(keyed, introspected)?;
         contact_point::declare(&mut issuers, &federation.contact_point)?;
         Ok(AuthSettings {

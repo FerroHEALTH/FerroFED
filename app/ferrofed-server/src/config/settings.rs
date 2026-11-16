@@ -319,7 +319,7 @@ impl ServerSettings {
             body_limit: size(u64::try_from(self.body_limit).unwrap_or(u64::MAX)),
             drain_delay: span(self.drain_delay),
             shutdown_timeout: span(self.shutdown_timeout),
-            max_concurrent_requests: Some(self.overload.max_concurrent_requests),
+            max_concurrent_requests: self.overload.max_concurrent_requests,
             retry_after: span(self.overload.retry_after),
             tls: None,
             trusted_proxies: self.trusted_proxies.clone(),

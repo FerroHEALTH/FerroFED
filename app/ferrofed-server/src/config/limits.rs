@@ -9,10 +9,10 @@
 //! `429` with `Retry-After` (RFC 6585 §4). No specification governs the
 //! limits themselves: our own design.
 
-use std::num::{NonZeroU32, NonZeroUsize};
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
-use ferrohealth_server::section::ServerSection;
+use ferrohealth_server::section::{CallerRate, ServerSection};
 
 use crate::config::error::Error;
 
@@ -25,41 +25,22 @@ pub struct Overload {
     /// `Retry-After`, in whole seconds.
     pub retry_after: Duration,
     /// The per-caller rate limit, when `[server.caller_rate]` is set.
-    pub caller_rate: Option<CallerRateSettings>,
-}
-
-/// The per-caller rate limit, resolved.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CallerRateSettings {
-    /// The requests one caller may send per second, sustained.
-    pub requests_per_second: NonZeroU32,
-    /// The requests one caller may send at once.
-    pub burst: NonZeroU32,
+    pub caller_rate: Option<CallerRate>,
 }
 
 /// Resolves the overload limits of `[server]`.
 ///
 /// # Errors
-/// Returns [`Error::Missing`] when `server.max_concurrent_requests` is
-/// unset, and [`Error::Zero`] when `server.retry_after` is zero.
+/// Returns [`Error::Zero`] when `server.retry_after` is zero.
 pub fn resolve_overload(section: &ServerSection) -> Result<Overload, Error> {
-    let max_concurrent_requests =
-        section
-            .max_concurrent_requests
-            .ok_or_else(|| Error::Missing {
-                key: String::from("server.max_concurrent_requests"),
-            })?;
     if section.retry_after.is_zero() {
         return Err(Error::Zero {
             key: String::from("server.retry_after"),
         });
     }
     Ok(Overload {
-        max_concurrent_requests,
+        max_concurrent_requests: section.max_concurrent_requests,
         retry_after: section.retry_after.get(),
-        caller_rate: section.caller_rate.map(|rate| CallerRateSettings {
-            requests_per_second: rate.requests_per_second,
-            burst: rate.burst,
-        }),
+        caller_rate: section.caller_rate,
     })
 }

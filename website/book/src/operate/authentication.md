@@ -159,8 +159,8 @@ demographic_clients = []
 | `auth.issuer[].assurance.claim` | `acr` | The claim, a dotted path, that carries the authentication assurance of this issuer's tokens ([The assurance level](#the-assurance-level)). |
 | `auth.issuer[].assurance.levels` | `{}` | The level, `low`, `substantial` or `high`, each claim value stands for. |
 | `auth.issuer[].assurance.minimum` | none | The least level a patient-data request needs; some value must reach it. |
-| `auth.dpop.external_url` | none | The gateway's base URL as its clients address it; setting `[auth.dpop]` admits `DPoP` requests ([`DPoP`](#dpop)), and a proof's `htu` is compared with this URL, the request path appended. |
-| `auth.dpop.max_age_seconds`, `.clock_skew_seconds`, `.algorithms` | `60`, `10`, the six asymmetric algorithms | How long after its `iat` a proof is accepted, at most 300; how far an `iat` may lie ahead, at most 300; and the algorithms a proof may be signed with. |
+| `auth.dpop` | none | Setting the table admits `DPoP` requests ([`DPoP`](#dpop)). It needs `gateway.public_url`: a proof's `htu` is compared with that URL's origin, the request's whole path appended. |
+| `auth.dpop.max_age`, `.clock_skew`, `.algorithms` | `60s`, `10s`, the six asymmetric algorithms | How long after its `iat` a proof is accepted, at most 300; how far an `iat` may lie ahead, at most 300; and the algorithms a proof may be signed with. |
 | `trust.mode` | `token` | `token`: the client presents a bearer token. `edge`: a proxy authenticates the client ([The edge mode](#the-edge-mode)). |
 | `trust.purpose_of_use.required` | `true` | Whether a token must declare a purpose of use ([Purpose of use](#purpose-of-use)). |
 | `trust.issuer[].issuer` | none | The issuer this entry's policy is for, which an `[[auth.issuer]]` table trusts. |
@@ -183,8 +183,9 @@ demographic_clients = []
 | `trust.edge.header` | none | The header the edge's assertion travels in, with `trust.mode = "edge"`. |
 
 `[auth] enabled = false` is refused: the gateway has no unauthenticated mode.
-So are `auth.scopeless_subjects`, `auth.capabilities` and
-`auth.scopes_supported`, which the gateway reads nowhere: it serves no SMART
+So are `auth.scopeless_subjects`, `auth.capabilities`,
+`auth.scopes_supported` and `auth.described_issuer`, which the gateway reads
+nowhere: it serves no SMART
 discovery document and grants nothing without a scope. A key `[auth]` held
 for every issuer before `ferrohealth-smart` 0.9 (`audience`, `algorithms`,
 `clock_skew_seconds`, `jwks_max_age_seconds`, `jwks_refresh_interval_seconds`,
@@ -630,13 +631,17 @@ request with a `DPoP` proof (RFC 9449), presenting the token in the `DPoP`
 scheme. With `[auth.dpop]` the gateway admits such a request: it checks the
 proof against the request's method and URL (§4.3) and the token's
 `cnf.jkt` against the proof's key (§6), and spends the proof's `jti` so a
-second use is refused (§11.1). Without the table no `DPoP` request is
-admitted. A national contact point's tokens must be sender-constrained, by
+second use is refused (§11.1). The URL is the origin of
+[`gateway.public_url`](configuration.md), with the request's whole path
+appended, its base path included, so the table needs that key and is
+refused without it. Without the table no `DPoP` request is admitted. A national contact point's tokens must be sender-constrained, by
 `DPoP` or by the client certificate of the connection (RFC 8705 §3).
 
 ```toml
+[gateway]
+public_url = "https://gateway.example.org"
+
 [auth.dpop]
-external_url = "https://gateway.example.org"
 ```
 
 RFC 9449 §11.1 notes that single use "may not always be feasible in

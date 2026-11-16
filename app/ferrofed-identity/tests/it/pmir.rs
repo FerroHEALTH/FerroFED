@@ -108,7 +108,7 @@ fn an_update_cannot_be_scoped() {
     let update = entry(
         "PUT",
         "Patient/p-1",
-        &patient("p-1", &[(EHR_DOMAIN, EHR_A)], ""),
+        &patient("p-1", &[(EHR_DOMAIN, EHR_A)], r#","active":true"#),
         "200",
     );
     assert_eq!(
@@ -122,7 +122,7 @@ fn a_create_touches_nothing() {
     let create = entry(
         "POST",
         "Patient",
-        &patient("p-1", &[(EHR_DOMAIN, EHR_A)], ""),
+        &patient("p-1", &[(EHR_DOMAIN, EHR_A)], r#","active":true"#),
         "201",
     );
     assert_eq!(None, change_of(&feed(&[create]), &domains()));

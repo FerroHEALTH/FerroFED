@@ -216,8 +216,10 @@ fn an_issuer_without_a_kind_is_refused() -> Result<(), Box<dyn Error>> {
     )
 }
 
-/// GHSA-jhg2-jwjp-hq74: a Basic credential is a person's, so a Basic user
-/// granted a `system/` scope fails to load, naming the user.
+/// GHSA-jhg2-jwjp-hq74: a Basic credential is a person's, and since
+/// `ferrohealth-smart` 0.23 `[[auth.basic.users]]` holds the credential
+/// alone, so a Basic user written with a `system/` scope fails to load,
+/// naming the key that would grant it.
 #[test]
 fn a_basic_user_with_a_system_scope_is_refused_naming_the_user() -> Result<(), Box<dyn Error>> {
     let text = format!(
@@ -225,7 +227,15 @@ fn a_basic_user_with_a_system_scope_is_refused_naming_the_user() -> Result<(), B
         issuer("", ISSUER),
         "$argon2id$v=19$m=19456,t=2,p=1$c3ludGhldGljLXNhbHQtMTY$4es9c3W3V1fKeaFNam0B7dB/9kjZXP6/+9VB3yhq8ZA"
     );
-    refused_by_the_crate(&text, "synthetic-machine")
+    let refused = Config::from_sources(Some(&text), &BTreeMap::new())
+        .err()
+        .ok_or("a Basic user with a scope is refused")?;
+    assert_eq!(
+        Some("auth.basic.users[0].scopes"),
+        crate::support::refused_key(&refused),
+        "{refused:?}"
+    );
+    Ok(())
 }
 
 #[test]
@@ -291,6 +301,7 @@ fn a_key_the_gateway_reads_nowhere_is_refused() -> Result<(), Box<dyn Error>> {
         ),
         ("capabilities", "[\"permission-v1\"]"),
         ("scopes_supported", "[\"user/aql-*.s\"]"),
+        ("described_issuer", "\"https://issuer.example.test\""),
     ] {
         refused_for(
             &issuer(&format!("{key} = {value}"), ISSUER),

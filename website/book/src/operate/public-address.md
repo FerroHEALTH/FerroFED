@@ -45,6 +45,11 @@ written: it is the gateway's identifier at its issuers, which need not be
 its URL. Without `gateway.public_url`, each key is read as written and
 nothing is compared.
 
+`[auth.dpop]` reads the URL too: a `DPoP` proof's `htu` is compared with
+the origin of `gateway.public_url`, the request's whole path appended
+(RFC 9449 §4.3), so the table is refused without the key
+([`DPoP`](authentication.md#dpop)).
+
 ## Behind a reverse proxy
 
 The gateway names each request by the address it came from, which the

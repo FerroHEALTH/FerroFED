@@ -271,11 +271,8 @@ mod tests {
         assert!(config.server.drain_delay.is_zero());
         assert!(!config.shutdown_timeout_written);
         assert_eq!(
-            Some(512),
-            config
-                .server
-                .max_concurrent_requests
-                .map(std::num::NonZeroUsize::get),
+            512,
+            config.server.max_concurrent_requests.get(),
             "the gateway's own default"
         );
         assert!(config.credentials.is_empty());
