@@ -11,8 +11,8 @@
 
 use std::num::NonZeroU32;
 
-use ferrofed_server::config::limits::CallerRateSettings;
 use ferrofed_testkit::atna_feed::FeedRepository;
+use ferrohealth_server::section::CallerRate;
 use http::StatusCode;
 
 use super::{LAB_REPORT, TestResult, accesses, composition, gateway_under, node_with_rows};
@@ -29,7 +29,7 @@ async fn a_rate_limited_request_writes_no_access_record() -> TestResult {
     let repository = FeedRepository::start().await;
     let dir = tempfile::tempdir()?;
     let mut server = settings_with_room();
-    server.overload.caller_rate = Some(CallerRateSettings {
+    server.overload.caller_rate = Some(CallerRate {
         requests_per_second: NonZeroU32::new(1).ok_or("one is positive")?,
         burst: NonZeroU32::new(1).ok_or("one is positive")?,
     });

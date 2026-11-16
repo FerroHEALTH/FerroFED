@@ -26,11 +26,11 @@ use std::time::Duration;
 use axum::Router;
 use axum::body::Body;
 use ferrofed_server::config::Config;
-use ferrofed_server::config::limits::CallerRateSettings;
 use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_server::federation::Federation;
 use ferrofed_server::state::AppState;
 use ferrofed_testkit::mock::Server;
+use ferrohealth_server::section::CallerRate;
 use http::{Request, StatusCode, header};
 use openehr_federation::headers::COMPLETENESS;
 use wiremock::matchers::{method, path};
@@ -178,7 +178,7 @@ async fn a_request_past_the_concurrency_limit_is_503_with_retry_after() -> TestR
 #[tokio::test]
 async fn a_caller_past_its_rate_is_429_and_another_caller_is_not() -> TestResult {
     let mut server = settings();
-    server.overload.caller_rate = Some(CallerRateSettings {
+    server.overload.caller_rate = Some(CallerRate {
         requests_per_second: NonZeroU32::new(1).ok_or("one is positive")?,
         burst: NonZeroU32::new(1).ok_or("one is positive")?,
     });

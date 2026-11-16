@@ -112,13 +112,14 @@ async fn without_the_table_no_dpop_request_is_admitted() -> TestResult {
     gateway.nobody_asked().await
 }
 
-/// `[auth.dpop]` as written: its `external_url` is the base a proof's `htu`
-/// is compared with (RFC 9449 §4.3, check 9), read through the
-/// configuration as the gateway reads it.
+/// `[auth.dpop]` as written: the origin of `gateway.public_url` is the base a
+/// proof's `htu` is compared with (RFC 9449 §4.3, check 9), the request's
+/// whole path under it, read through the configuration as the gateway reads
+/// it.
 #[test]
 fn the_table_is_read_from_the_configuration() -> TestResult {
     let text = format!(
-        "{}\n[auth.dpop]\nexternal_url = \"{EXTERNAL}\"\nmax_age = '30s'\n",
+        "[gateway]\npublic_url = \"{EXTERNAL}\"\n{}\n[auth.dpop]\nmax_age = '30s'\n",
         crate::support::caller::auth_toml()
     );
     let settings = ferrofed_server::config::Config::from_sources(
@@ -130,4 +131,61 @@ fn the_table_is_read_from_the_configuration() -> TestResult {
     assert_eq!(Url::parse(EXTERNAL)?, dpop.external_url);
     assert_eq!(std::time::Duration::from_secs(30), dpop.max_age);
     Ok(())
+}
+
+/// The origin of `gateway.public_url` is the base under a base path too,
+/// since the gate checks the request's whole path.
+#[test]
+fn the_base_is_the_origin_under_a_base_path() -> TestResult {
+    let text = format!(
+        "[gateway]\npublic_url = \"{EXTERNAL}/fed\"\n[server]\nbase_path = \"/fed\"\n{}\n[auth.dpop]\n",
+        crate::support::caller::auth_toml()
+    );
+    let settings = ferrofed_server::config::Config::from_sources(
+        Some(&text),
+        &std::collections::BTreeMap::new(),
+    )?
+    .resolve()?;
+    let dpop = settings.server.auth.dpop.ok_or("the table is read")?;
+    assert_eq!(Url::parse(EXTERNAL)?, dpop.external_url);
+    Ok(())
+}
+
+/// `[auth.dpop]` without `gateway.public_url` is refused: the gateway has no
+/// URL a proof's `htu` could be compared with.
+#[test]
+fn the_table_without_a_public_url_is_refused() -> TestResult {
+    let text = format!("{}\n[auth.dpop]\n", crate::support::caller::auth_toml());
+    let refused = ferrofed_server::config::Config::from_sources(
+        Some(&text),
+        &std::collections::BTreeMap::new(),
+    )?
+    .resolve()
+    .err()
+    .ok_or("the table is refused")?;
+    assert!(
+        matches!(
+            &refused,
+            ferrofed_server::config::error::Error::Auth { key, fault: ferrofed_server::config::auth::AuthFault::DpopWithoutPublicUrl }
+                if key == "auth.dpop"
+        ),
+        "{refused:?}"
+    );
+    Ok(())
+}
+
+/// `[auth.dpop] external_url` is gone: the public URL is named once, and the
+/// key is refused as unknown.
+#[test]
+fn the_external_url_key_is_refused() {
+    let text = format!(
+        "{}\n[auth.dpop]\nexternal_url = \"{EXTERNAL}\"\n",
+        crate::support::caller::auth_toml()
+    );
+    let refused = ferrofed_server::config::Config::from_sources(
+        Some(&text),
+        &std::collections::BTreeMap::new(),
+    )
+    .and_then(|config| config.resolve().map(|_| ()));
+    assert!(refused.is_err(), "external_url is an unknown key");
 }

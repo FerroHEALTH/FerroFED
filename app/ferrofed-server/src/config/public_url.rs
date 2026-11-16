@@ -72,6 +72,14 @@ impl PublicUrl {
         &self.written
     }
 
+    /// The origin of the URL: its scheme, host and port, with the path `/`.
+    #[must_use]
+    pub fn origin(&self) -> Url {
+        let mut origin = self.parsed.clone();
+        origin.set_path("/");
+        origin
+    }
+
     /// The absolute URL of `route`, a path that starts with `/`, under
     /// `{base}`.
     ///

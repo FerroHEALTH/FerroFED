@@ -18,6 +18,11 @@ use crate::config::base_path::BasePath;
 use crate::config::error::Error;
 use crate::config::error::server::ServerFault;
 
+/// The most requests the gateway serves at once by default: one federated
+/// query is a request to every member, so the gateway takes twice the 256
+/// of `ferrohealth-server`.
+pub const MAX_CONCURRENT_REQUESTS: NonZeroUsize = NonZeroUsize::MIN.saturating_add(511);
+
 /// The gateway's defaults of the shared `[server]` table.
 ///
 /// [`load::loader`](crate::config::load::loader) layers them under every
@@ -26,7 +31,7 @@ use crate::config::error::server::ServerFault;
 #[must_use]
 pub fn defaults() -> ServerSection {
     ServerSection {
-        max_concurrent_requests: NonZeroUsize::new(512),
+        max_concurrent_requests: MAX_CONCURRENT_REQUESTS,
         ..ServerSection::default()
     }
 }
