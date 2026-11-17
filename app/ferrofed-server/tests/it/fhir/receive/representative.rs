@@ -130,7 +130,7 @@ async fn a_representatives_document_names_them_as_every_entrys_provider() -> Tes
 }
 
 // NOTE: RFC 8693 §4.1: ferrohealth-smart 0.14 refuses a token whose current actor its
-// issuer declares neither a delegate nor the patient's representative (FerroHEALTH/FerroAUTH#377).
+// issuer declares neither a delegate nor the patient's representative (FerroHEALTH/FerroSMART#377).
 #[tokio::test]
 async fn an_act_the_issuer_does_not_declare_is_refused_with_nothing_written() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
