@@ -6099,9 +6099,9 @@ dependencies = [
 
 [[package]]
 name = "x509-ocsp"
-version = "0.3.0-rc.0"
+version = "0.3.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24e12c9a7f47a2a518e34d822c083d6bc21736d58d3425707244e046923efb79"
+checksum = "c9adad5e5ba07625d8c85ded0fcbc2bc20a7fc4d9f5db6fbde3141065e67befc"
 dependencies = [
  "const-oid 0.10.2",
  "der 0.8.3",
