@@ -447,7 +447,7 @@ ferrohealth-ui = "=0.6.10"
 # (#1815); 0.19.0 holds the issuer every `[auth]` table names as a
 # SecretUrl (#1864); 0.19.1 signs each client assertion for 60 seconds,
 # which the quickstart's development issuer requires of a token exchange
-# (FerroHEALTH/FerroAUTH#461, #1615); 0.20.0 masks the issuer a role-issuer
+# (FerroHEALTH/FerroSMART#461, #1615); 0.20.0 masks the issuer a role-issuer
 # refusal names (#1876). Required by a caret range, as the IHE crates below.
 # 0.26.0 is the release on ferrohealth-server 0.10, past 0.22, where
 # [auth.dpop] takes its base from the product's public URL (#1891). 0.28.0
@@ -465,7 +465,7 @@ ferrohealth-smart = { version = "0.29.1", default-features = false, features = [
 # Verified against crates.io on 2026-11-10.
 ferrohealth-secret = "=0.2.1"
 # The operator console's OpenID Connect sign-in and its session of
-# FerroHEALTH/FerroAUTH (#1504): the `[oidc]` and `[session]` sections, the
+# FerroHEALTH/FerroSMART (#1504): the `[oidc]` and `[session]` sections, the
 # session store, the four sign-in routes and the middleware every page sits
 # behind, over ferrohealth-smart's relying party. Pinned exactly, as a
 # product pins every family crate; 0.3.0 is the release on
