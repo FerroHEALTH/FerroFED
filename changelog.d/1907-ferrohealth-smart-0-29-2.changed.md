@@ -1,0 +1,1 @@
+- FerroFED moves to `ferrohealth-smart` 0.29.2, whose relying party types its client assertion by RFC 10070 (§4) and whose App Launch discovery document names `token_endpoint_auth_signing_alg_values_supported` beside `private_key_jwt` (SMART App Launch 2.2.0, Client Authentication: Asymmetric), and the console to `ferrohealth-ui` 0.6.11 (#1907).

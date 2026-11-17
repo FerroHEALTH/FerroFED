@@ -408,9 +408,10 @@ x509-ocsp = { version = "0.3.0-rc.0", default-features = false }
 # page is one document the server draws, with no Leptos and no WebAssembly
 # (#1457, FerroUI#510); 0.6.8 draws the menu separators as <hr> and the
 # live regions as <output> (#1682); 0.6.10 adds the FerroSMART brand, the 400
-# page and `surface::page_card` (#1895). Verified against crates.io on
-# 2026-11-16.
-ferrohealth-ui = "=0.6.10"
+# page and `surface::page_card` (#1895); 0.6.11 takes the locale first in
+# `action_menu::items`, which the console does not call, and draws
+# FerroSMART's own brand (#1907). Verified against crates.io on 2026-11-17.
+ferrohealth-ui = "=0.6.11"
 # The FerroHEALTH SMART and OAuth 2.0 resource-server crate (#1174):
 # every caller's token checked against its issuer's metadata and key set,
 # the SMART on openEHR grant rules over the grammar it re-exports, the Basic
@@ -454,9 +455,11 @@ ferrohealth-ui = "=0.6.10"
 # takes a client assertion's `aud` and `typ` from the grant's security
 # profile, past 0.27's shared `describe` rule (#1895). 0.29 ships the
 # `ferrosmart` issuer preset, and 0.29.1 refuses an issuer named in two
-# `[[auth.issuer]]` tables (#1899). Verified against
+# `[[auth.issuer]]` tables (#1899). 0.29.2 types a relying party's client
+# assertion by RFC 10070 and names the signing algorithms in the App Launch
+# discovery document beside `private_key_jwt` (#1907). Verified against
 # crates.io on 2026-11-17.
-ferrohealth-smart = { version = "0.29.1", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
+ferrohealth-smart = { version = "0.29.2", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as

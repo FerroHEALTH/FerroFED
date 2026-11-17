@@ -552,7 +552,7 @@ version it draws with, read from the crate. `scripts/checks/versions.sh` holds e
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ferrohealth-ui` (FerroUI) | 0.6.10 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `.claude/rules/console-ui.md` |
+| `ferrohealth-ui` (FerroUI) | 0.6.11 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `.claude/rules/console-ui.md` |
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only
