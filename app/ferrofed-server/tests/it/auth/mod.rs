@@ -18,6 +18,7 @@ mod cited;
 mod config;
 pub(crate) mod dpop;
 mod edge;
+mod ferrosmart;
 mod introspection;
 mod kept_token;
 mod keys;

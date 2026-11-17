@@ -36,9 +36,11 @@ use ehds_logging::sink::AccessSink;
 use ferrofed_identity::ihe::audit::balp::{FeedAudit, LogFeedAudit};
 use ferrofed_operator_api::health::{Indication, Observed};
 use ferrohealth_server::tls_client::TlsClientError;
-use ferrohealth_smart::client::outbound::{OutboundClient, OutboundError};
+use ferrohealth_smart::client::outbound::{OutboundClient, OutboundError, SendError};
 use ferrohealth_smart::config::ServerTls;
-use ihe_atna::atna::feed::{FeedConfigError, FeedRepository};
+use http::header::CONTENT_TYPE;
+use http::{Method, StatusCode};
+use ihe_atna::atna::feed::{FeedClient, FeedConfigError, FeedRepository, FeedSendError};
 use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::RepositoryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
@@ -327,6 +329,41 @@ pub enum AuditTrailError {
     },
 }
 
+/// The FHIR Feed's client: the gateway's own outbound client of
+/// `[audit.repository.endpoint]`, with its TLS, timeouts, credential and
+/// retries (no specification governs the seam: `ihe-atna`'s design).
+struct Feed(OutboundClient);
+
+#[async_trait::async_trait]
+impl FeedClient for Feed {
+    fn authorizes(&self) -> bool {
+        self.0.authorization().is_some()
+    }
+
+    async fn post(
+        &self,
+        url: &url::Url,
+        content_type: &'static str,
+        body: &[u8],
+    ) -> Result<StatusCode, FeedSendError> {
+        let answer = self
+            .0
+            .send(&Method::POST, url, |request| {
+                request
+                    .header(CONTENT_TYPE, content_type)
+                    .body(body.to_vec())
+            })
+            .await
+            .map_err(|error| match error {
+                SendError::Transport(error) => {
+                    FeedSendError::Transport(Box::new(error.without_url()))
+                }
+                other => FeedSendError::Credentials(Box::new(other)),
+            })?;
+        Ok(answer.status())
+    }
+}
+
 /// The FHIR Feed trail `settings` describe: the one already running over
 /// the same spool, or a new one, started when a Tokio runtime is running.
 ///
@@ -343,10 +380,13 @@ pub fn feed_trail(settings: &FeedRepositorySettings) -> Result<Arc<FeedAudit>, A
         let client =
             OutboundClient::build(&settings.endpoint, "audit.repository.endpoint", &ServerTls)
                 .map_err(AuditTrailError::Outbound)?;
+        let base = client.url().clone();
+        let between_rounds = std::time::Duration::from(client.retry().max_backoff);
+        let client: Arc<dyn FeedClient> = Arc::new(Feed(client));
         let repository = if settings.cleartext {
-            FeedRepository::cleartext(client)
+            FeedRepository::cleartext(&base, client, between_rounds)
         } else {
-            FeedRepository::new(client)
+            FeedRepository::new(&base, client, between_rounds)
         }
         .map_err(AuditTrailError::Feed)?;
         let spool = spool(
