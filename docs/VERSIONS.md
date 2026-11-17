@@ -339,9 +339,9 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is 0.2.0 since 2026-11-16, the line the published `eehrxf` 0.14,
-`fhirconnect` 0.4 and `openehr-mapping-core` 0.3 require by a caret range, so
-the lock holds one copy of each member (#1181, #813, #1891).
+pin is 0.2.0 since 2026-11-16, the line the published `eehrxf` 0.17,
+`fhirconnect` 0.5 and `openehr-mapping-core` 0.4 require by a caret range, so
+the lock holds one copy of each member (#1181, #813, #1891, #1899).
 `openehr-sdt` left the group with 0.0.116, which no longer carries the
 SMART on openEHR scope grammar: the onward grant (#81) writes and checks the
 scope it requests with `ferrohealth-smart`'s `openehr::smart_scopes`, the
@@ -493,11 +493,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | 0.15.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | 0.4.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | 0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | 0.12.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | 0.12.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | 0.17.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | 0.5.1 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | 0.4.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | 0.13.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | 0.13.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -510,8 +510,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | 0.22.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | 0.22.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | 0.23.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | 0.23.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
