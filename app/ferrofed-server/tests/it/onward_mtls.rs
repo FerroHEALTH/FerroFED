@@ -615,7 +615,7 @@ fn alias_hosts_without_a_mutual_tls_fapi2_grant_are_refused() -> TestResult {
     std::fs::write(&client_key, oauth::Curve::P256.pem()?)?;
     std::fs::write(&dpop, oauth::Curve::P256.pem()?)?;
     let by_key = format!(
-        "[credentials.\"node-a-pub\".credentials.oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nassertion_audience = \"issuer\"\nprivate_key_file = {}\ndpop_key_file = {}\nscope = \"{SCOPE}\"\n{hosts}",
+        "[credentials.\"node-a-pub\".credentials.oauth]\nissuer = \"https://as.cdr-a.example.org\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {}\ndpop_key_file = {}\nscope = \"{SCOPE}\"\n{hosts}",
         toml::Value::String(client_key.display().to_string()),
         toml::Value::String(dpop.display().to_string())
     );

@@ -98,6 +98,18 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
+### To v0.0.21, from v0.0.20
+
+- Delete `assertion_audience` from every `credentials.oauth` table. It is
+  now an unknown key and refuses the start. A grant's `security_profile`
+  fixes the assertion's `aud` and `typ`: a plain grant names the token
+  endpoint under `typ` `JWT`, and a `security_profile = "fapi2"` grant the
+  issuer under `typ` `client-authentication+jwt`. A table that set
+  `assertion_audience = "issuer"` without `security_profile = "fapi2"` now
+  sends the token endpoint; set `security_profile = "fapi2"` when its
+  authorization server is a FAPI 2.0 one
+  ([Onward credentials](onward-credentials.md), #1895).
+
 ### To v0.0.20, from v0.0.19
 
 The keys v0.0.19 refused by name, the unit-suffixed keys such as

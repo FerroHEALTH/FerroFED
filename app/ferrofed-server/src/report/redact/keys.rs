@@ -16,7 +16,6 @@ pub const KNOWN_KEYS: &[&str] = &[
     "archetypes",
     "assertion",
     "assertion_alg",
-    "assertion_audience",
     "assertion_file",
     "audience",
     "audit",

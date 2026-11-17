@@ -71,10 +71,12 @@ async fn device() -> Result<(PerfTokenEndpoint, Issuer, tempfile::TempDir), Box<
 }
 
 /// A client assertion for `endpoint` signed with the PKCS#8 PEM `pem` by
-/// the signer the gateway's `private_key_jwt` grant uses.
+/// the signer the gateway's `private_key_jwt` grant uses: the token endpoint
+/// as `aud` under `typ` `JWT`, a plain grant's (SMART App Launch 2.2.0,
+/// Client Authentication: Asymmetric).
 fn assertion(endpoint: &PerfTokenEndpoint, pem: &str) -> Result<String, Box<dyn Error>> {
     let key = AssertionKey::from_pem(pem.as_bytes(), None, None)?;
-    Ok(key.assertion(CLIENT, &endpoint.token_url())?)
+    Ok(key.assertion(CLIENT, &endpoint.token_url(), "JWT")?)
 }
 
 /// Posts `form` to the token endpoint, authenticated by an assertion signed

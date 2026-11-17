@@ -36,7 +36,7 @@ use ferrofed_testkit::oauth;
 use ferrofed_testkit::unreachable;
 use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::fapi2::Fapi2Error;
-use ferrohealth_smart::client::{AssertionAudience, Endpoint, TokenError};
+use ferrohealth_smart::client::{Endpoint, TokenError};
 use ferrohealth_smart::config::ConfigError as SmartError;
 use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
@@ -86,7 +86,7 @@ async fn material(dir: &Path) -> Result<(AuthorizationServer, Material), Box<dyn
     let client = file("fapi2-client.pem", &client_pem)?;
     let dpop = file("fapi2-dpop.pem", &oauth::Curve::P256.pem()?)?;
     let tables = format!(
-        "[credentials.\"node-a-pub\".credentials.oauth]\nissuer = \"{}\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nassertion_audience = \"issuer\"\nprivate_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\nauthorization_details = '''{DETAILS}'''\n",
+        "[credentials.\"node-a-pub\".credentials.oauth]\nissuer = \"{}\"\nsecurity_profile = \"fapi2\"\nclient_id = \"{CLIENT_ID}\"\nclient_auth = \"private_key_jwt\"\nprivate_key_file = {client}\ndpop_key_file = {dpop}\nscope = \"system/aql-*.s\"\nauthorization_details = '''{DETAILS}'''\n",
         authority.issuer()
     );
     Ok((authority, Material { tables, client_pem }))
@@ -444,12 +444,13 @@ async fn a_cleartext_issuer_is_refused_outside_development() -> TestResult {
     Ok(())
 }
 
-/// The `oauth` grant names the token endpoint as its assertions' `aud` by
-/// default, and the issuer with `assertion_audience = "issuer"`, which then
-/// needs `issuer`; an `issuer` beside a token endpoint is refused (RFC 7523
-/// §3; FAPI 2.0 §5.3.2.1).
+/// The assertion's `aud` is never configured: it follows the security
+/// profile (SMART App Launch 2.2.0, Client Authentication: Asymmetric; FAPI
+/// 2.0 §5.3.3.1), so `assertion_audience` is an unknown key that fails the
+/// load. The grant still takes its endpoint from `token_endpoint` or
+/// `issuer`, and both together are refused.
 #[test]
-fn the_assertion_audience_is_configured() -> TestResult {
+fn the_assertion_audience_is_an_unknown_key() -> TestResult {
     let key = toml::Value::String(crate::support::signing_key_file().to_owned());
     let oauth = |endpoint: &str, extra: &str| {
         format!(
@@ -457,38 +458,36 @@ fn the_assertion_audience_is_configured() -> TestResult {
             crate::support::signing_toml()
         )
     };
-    let aud = |text: &str| -> Result<(AssertionAudience, Endpoint), Box<dyn Error>> {
+    let endpoint_of = |text: &str| -> Result<Endpoint, Box<dyn Error>> {
         let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
         match settings.credentials.values().next() {
-            Some(Scheme::Oauth { grant, .. }) => {
-                Ok((grant.assertion_audience, grant.endpoint.clone()))
-            }
+            Some(Scheme::Oauth { grant, .. }) => Ok(grant.endpoint.clone()),
             other => Err(format!("an oauth grant, got {other:?}").into()),
         }
     };
     let token = "token_endpoint = \"https://as.example.org/token\"\n";
-    let (audience, endpoint) = aud(&oauth(token, ""))?;
-    assert_eq!(AssertionAudience::TokenEndpoint, audience);
+    let endpoint = endpoint_of(&oauth(token, ""))?;
     assert!(
         matches!(&endpoint, Endpoint::Token(url) if url.as_str() == "https://as.example.org/token"),
         "{endpoint:?}"
     );
     let issuer = "issuer = \"https://as.example.org\"\n";
-    let (audience, endpoint) = aud(&oauth(issuer, "assertion_audience = \"issuer\"\n"))?;
-    assert_eq!(AssertionAudience::Issuer, audience);
     assert_eq!(
         Endpoint::Issuer("https://as.example.org".to_owned()),
-        endpoint
+        endpoint_of(&oauth(issuer, ""))?
     );
 
-    let error = refused(&oauth(token, "assertion_audience = \"issuer\"\n"))?;
-    assert!(
-        smart(&error, |refused| matches!(
-            refused,
-            SmartError::Missing { .. }
-        )),
-        "{error:?}"
-    );
+    for value in ["issuer", "token_endpoint"] {
+        let text = oauth(issuer, &format!("assertion_audience = \"{value}\"\n"));
+        let refused = Config::from_sources(Some(&text), &BTreeMap::new())
+            .err()
+            .ok_or("the removed key is refused at load")?;
+        assert_eq!(
+            Some("credentials.node-a-pub.credentials.oauth.assertion_audience"),
+            crate::support::refused_key(&refused),
+            "assertion_audience is an unknown key: {refused:?}"
+        );
+    }
     let error = refused(&oauth(token, issuer))?;
     assert!(
         smart(&error, |refused| matches!(
