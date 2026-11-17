@@ -32,7 +32,7 @@ siblings:
   owner pointed at both as "the perfect way" to set up Claude and GitHub;
   this repository's `.claude/`, `.github/` and `scripts/` were carried from
   FerroBRIDGE, the newer of the two, and adapted.
-- The shared-crate repositories (FerroAUTH, FerroAUDIT, FerroUI) carry the
+- The shared-crate repositories (FerroSMART, FerroAUDIT, FerroUI) carry the
   cross-cutting work FerroFED consumes as exact pins.
 
 **How to apply:**
