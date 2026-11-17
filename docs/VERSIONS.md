@@ -493,11 +493,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | 0.14.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `eehrxf` | 0.15.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
 | `fhirconnect` | 0.4.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | 0.3.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | 0.11.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | 0.11.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | 0.12.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | 0.12.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -510,8 +510,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | 0.21.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | 0.21.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | 0.22.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | 0.22.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
@@ -552,7 +552,7 @@ version it draws with, read from the crate. `scripts/checks/versions.sh` holds e
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ferrohealth-ui` (FerroUI) | 0.6.9 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `.claude/rules/console-ui.md` |
+| `ferrohealth-ui` (FerroUI) | 0.6.10 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `.claude/rules/console-ui.md` |
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only

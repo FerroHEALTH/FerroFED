@@ -318,14 +318,13 @@ input_descriptor = "organization_credential"
 file = "/run/secrets/nuts-organization-credential.jwt"
 
 # A FAPI 2.0 authorization server, the BgZ/eOverdracht track (Annex B
-# §B.4a): an ES256 private_key_jwt assertion naming the issuer, a DPoP-bound
-# token, and RFC 9396 authorization_details.
+# §B.4a): an ES256 private_key_jwt assertion naming the issuer, which the
+# fapi2 profile fixes, a DPoP-bound token, and RFC 9396 authorization_details.
 [credentials."cdr-e".credentials.oauth]
 issuer = "https://as.cdr-e.example.org"
 security_profile = "fapi2"
 client_id = "urn:oid:2.16.528.1.1007.3.3.<URA>"
 client_auth = "private_key_jwt"
-assertion_audience = "issuer"
 private_key_file = "/run/secrets/fapi2-client.pem"
 dpop_key_file = "/run/secrets/cdr-e-dpop.pem"
 authorization_details = '''[{"type": "nl-gis-v1", "purpose_of_use": "http://terminology.hl7.org/CodeSystem/v3-ActReason|TREAT"}]'''

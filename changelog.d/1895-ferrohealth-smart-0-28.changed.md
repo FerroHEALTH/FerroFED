@@ -1,0 +1,1 @@
+- FerroFED moves to `ferrohealth-smart` 0.28, with `ferrohealth-session` 0.23, `ihe-atna` and `ehds-logging` 0.22, `ihe-iti` and `nl-generic-functions` 0.13, `ferrobridge-term` and `ferrobridge-validator` 0.12, `eehrxf` 0.15, `ferrohealth-ui` 0.6.10 and `ferrohealth-config` 0.4.5, the releases on the same line, so one copy of each links (#1895).

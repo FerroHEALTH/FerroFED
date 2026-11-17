@@ -36,7 +36,7 @@ use ferrohealth_smart::client::assertion::{ASSERTION_TYPE, AssertionKey};
 use ferrohealth_smart::client::authorization_details::AuthorizationDetails;
 use ferrohealth_smart::client::dpop::DpopKey;
 use ferrohealth_smart::client::fapi2::{Fapi2, SecurityProfile};
-use ferrohealth_smart::client::{AssertionAudience as Audience, ClientCredentials, Endpoint};
+use ferrohealth_smart::client::{CLIENT_AUTHENTICATION_TYP, ClientCredentials, Endpoint};
 use ferrohealth_smart::config::onward::OnwardSection;
 use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
@@ -122,7 +122,6 @@ fn grant(
         key,
     )
     .with_dpop(Arc::clone(prover));
-    grant.assertion_audience = Audience::Issuer;
     grant.scope = Some(SCOPE.to_owned());
     grant.authorization_details = Some(AuthorizationDetails::parse(DETAILS)?);
     grant.profile = SecurityProfile::Fapi2(Fapi2::new());
@@ -303,8 +302,10 @@ async fn a_dpop_bound_token_reaches_the_node() -> TestResult {
 
 /// The token request is the client-credentials grant authenticated by a
 /// `private_key_jwt` assertion signed ES256 whose `aud` is the issuer as one
-/// string, with the scope and the `authorization_details` as configured, and
-/// no client secret (FAPI 2.0 §5.3.3.1, §5.4.1; RFC 9396 §6).
+/// string under `typ` `client-authentication+jwt`, the profile's own and
+/// never a setting, with the scope and the `authorization_details` as
+/// configured, and no client secret (FAPI 2.0 §5.3.3.1, §5.4.1; RFC 10070
+/// §4; RFC 9396 §6).
 // conformance: CP-17
 #[tokio::test]
 async fn the_token_request_names_the_issuer_and_carries_the_details() -> TestResult {
@@ -327,6 +328,7 @@ async fn the_token_request_names_the_issuer_and_carries_the_details() -> TestRes
     let assertion = field(form, "client_assertion").ok_or("an assertion")?;
     let header = jsonwebtoken::decode_header(assertion)?;
     assert_eq!(Algorithm::ES256, header.alg);
+    assert_eq!(Some(CLIENT_AUTHENTICATION_TYP), header.typ.as_deref());
     let payload = assertion.split('.').nth(1).ok_or("a JWS")?;
     let claims: AssertionAudience = serde_json::from_slice(&base64::Engine::decode(
         &base64::engine::general_purpose::URL_SAFE_NO_PAD,

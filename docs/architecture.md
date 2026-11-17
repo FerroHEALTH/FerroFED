@@ -90,7 +90,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
 The `openehr-*` rows are the lockstep 0.2.0, the line the published
-`eehrxf` 0.14.0 and `fhirconnect` 0.4.0 require (#813, #1581, #1722, #1742, #1754, #1799, #1805, #1785, #1891). The
+`eehrxf` 0.15.0 and `fhirconnect` 0.4.0 require (#813, #1581, #1722, #1742, #1754, #1799, #1805, #1785, #1891, #1895). The
 gaps FerroEHR #3505 to #3514 closed in 0.0.74, which v0.0.2 coded against,
 0.0.76 closes FerroEHR #3526, the open ITS-REST `Error`, 0.0.77 closes
 FerroEHR #3529, the function classification the rewrite reads, 0.0.78
@@ -1174,11 +1174,13 @@ no OAuth 2.0 client of its own (#1749):
   overlap window of at least the 60 s assertion lifetime plus the nodes'
   JWKS cache time;
 - **assertions:** `exp` of 60 s, fixed by the crate since `ferrohealth-smart`
-  0.19.1 (FerroHEALTH/FerroAUTH#461), a unique `jti`, `aud`
-  the node's token endpoint, or, with `assertion_audience = "issuer"`, the
-  authorization server's issuer identifier as one string, the other value
-  RFC 7523 §3 admits and the only one the FAPI 2.0 Security Profile accepts
-  (§5.3.2.1);
+  0.19.1 (FerroHEALTH/FerroAUTH#461), a unique `jti`, and an `aud` and
+  `typ` the grant's security profile fixes and no setting chooses (owner
+  ruling of 2026-11-16, `ferrohealth-smart` 0.28, #1895): a plain grant
+  names the node's token endpoint under `typ` `JWT` (SMART App Launch
+  2.2.0, Client Authentication: Asymmetric), and a FAPI 2.0 grant the
+  authorization server's issuer identifier as one string under `typ`
+  `client-authentication+jwt` (FAPI 2.0 §5.3.3.1; RFC 10070 §4);
 - **tokens:** fetched and cached by the crate's `TokenSource` until its
   `refresh_margin_ms` before the stated `exp`, or for half a lifetime
   shorter than twice the margin, and reused until a `401` when none is
@@ -1357,8 +1359,8 @@ with no branch for a region:
   since RFC 8705 §5 places an alias on any host). RFC 8414 §2 defaults read
   strictly: an omitted method list is `client_secret_basic`, an omitted
   grant list `authorization_code` and `implicit`;
-- **client authentication:** `private_key_jwt` (FAPI 2.0 §5.3.2.1) with
-  `assertion_audience = "issuer"` (§5.3.3.1), signed PS256, ES256 or EdDSA
+- **client authentication:** `private_key_jwt` (FAPI 2.0 §5.3.2.1), the
+  assertion naming the issuer as its `aud` (§5.3.3.1), signed PS256, ES256 or EdDSA
   (§5.4.1), so a P-384 key is refused. The key's public half is published
   in the gateway's JWK Set beside the `[signing]` keys (§5.4.2; §B.4a.2).
   MTLS, the profile's other method, is `client_auth = "tls_client_auth"` or

@@ -80,11 +80,15 @@ scope = "system/aql-*.s system/composition-*.cru"
   ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
   With `issuer` in its place, the token endpoint is read from the issuer's
   RFC 8414 metadata, and `issuer` is held to the same rule.
-- `assertion_audience` is `token_endpoint`, the default, or `issuer`. RFC
-  7523 §3 admits either as the assertion's `aud`. An authorization server
-  under the FAPI 2.0 Security Profile accepts only its issuer identifier,
-  as one string (§5.3.2.1). `issuer` needs the table's `issuer` set, which
-  then replaces `token_endpoint`: the two exclude each other.
+- A `private_key_jwt` assertion's `aud` and `typ` are never configured:
+  the grant's `security_profile` fixes them. A plain grant names the token
+  endpoint under `typ` `JWT` (SMART App Launch 2.2.0, Client
+  Authentication: Asymmetric: `aud` is "The FHIR authorization server's
+  'token URL'", `typ` is "Fixed value: JWT"). A `security_profile =
+  "fapi2"` grant names the issuer identifier as one string under `typ`
+  `client-authentication+jwt` (FAPI 2.0 Security Profile §5.3.3.1; RFC
+  10070 §4). `assertion_audience` is an unknown key. `issuer` and
+  `token_endpoint` exclude each other.
 - `refresh_margin_ms`, 30 seconds by default, is how long before the token
   expires a new one is fetched; `timeout_ms` bounds each call to the
   authorization server.
@@ -554,7 +558,6 @@ issuer = "https://as.cdr-e.example.org"
 security_profile = "fapi2"
 client_id = "urn:oid:2.16.528.1.1007.3.3.<URA>"
 client_auth = "private_key_jwt"
-assertion_audience = "issuer"
 private_key_file = "/run/secrets/fapi2-client.pem"
 dpop_key_file = "/run/secrets/cdr-e-dpop.pem"
 scope = "system/aql-*.s"                # optional when authorization_details is set
@@ -604,7 +607,8 @@ The keys every grant takes, held to the profile:
 - `client_auth` is `private_key_jwt`, or `tls_client_auth` or
   `self_signed_tls_client_auth` by the node section's certificate
   ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)); under
-  `private_key_jwt`, `assertion_audience = "issuer"` is required.
+  `private_key_jwt`, the assertion names the issuer under `typ`
+  `client-authentication+jwt`, which the profile fixes (§5.3.3.1).
 - Every key signs PS256, ES256 or EdDSA, the algorithms §5.4.1 admits, so a
   P-384 key cannot sign here: a P-256 key, an RSA key with
   `assertion_alg = "PS256"`, or an Ed25519 key.

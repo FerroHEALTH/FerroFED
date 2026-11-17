@@ -27,8 +27,7 @@ use ferrofed_testkit::tls::MutualTls;
 use ferrohealth_smart::client::fapi2::{AliasHost, Fapi2, Fapi2Error, SecurityProfile};
 use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::client::{
-    AssertionAudience as Audience, ClientAuth, ClientCredentials, Endpoint, PresentedTls,
-    TokenError,
+    ClientAuth, ClientCredentials, Endpoint, PresentedTls, TokenError,
 };
 use ferrohealth_smart::config::onward::OnwardSection;
 use openehr_federation::status::EndpointStatus;
@@ -369,7 +368,6 @@ fn a_grant_without_mutual_tls_takes_no_alias_host() -> TestResult {
         client_key()?,
     )
     .with_dpop(prover()?);
-    grant.assertion_audience = Audience::Issuer;
     grant.scope = Some(SCOPE.to_owned());
     grant.profile = SecurityProfile::Fapi2(
         Fapi2::new().with_alias_host(AliasHost::parse("mtls.cdr-a.example.org")?),
@@ -390,7 +388,6 @@ async fn a_grant_without_the_key_it_signs_with_cannot_be_built() -> TestResult {
     let harness = Harness::start().await?;
     let mut unsigned = harness.grant()?;
     unsigned.client_auth = ClientAuth::PrivateKeyJwt;
-    unsigned.assertion_audience = Audience::Issuer;
     assert!(matches!(
         unsigned.validate(),
         Err(TokenError::Credential { .. })
