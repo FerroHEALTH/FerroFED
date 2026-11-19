@@ -313,7 +313,7 @@ services:
   # and exits. It runs the pinned PostgreSQL image below for its `cp`, with no
   # network; `-f` replaces a copy a later `up` finds there.
   files:
-    image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     user: "0:0"
     network_mode: none
     entrypoint:
@@ -420,7 +420,7 @@ services:
   # quickstart. The ferropix-role config, which the files service copies
   # below, creates the restricted role FerroPIX connects as.
   ferropix-postgres:
-    image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     restart: unless-stopped
     environment:
       # A development superuser password, NOT for anything real.
