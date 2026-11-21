@@ -29,11 +29,13 @@ data_key_file = "/etc/ferropix/data-key"
 # is its client is a machine's (RFC 9068 §2.2). It signs with `typ` JWT and
 # names the client in `client_id`, so the issuer takes the claims it carries.
 # A development issuer, NOT for anything real.
-[[auth.issuer]]
+[auth.issuer.ferrofed]
 issuer = "http://localhost:8180/ferrofed"
 kind = "persons"
-profile = "rfc9068"
+preset = "rfc9068"
 audience = ["http://ferropix:8080/fhir"]
+
+[auth.issuer.ferrofed.profile]
 token_types = ["JWT"]
 required_claims = ["iss", "exp", "aud", "sub"]
 client_claims = ["client_id", "azp"]
@@ -41,7 +43,7 @@ client_claims = ["client_id", "azp"]
 # The client the development issuer may vouch for as the Source of each
 # domain (PIXm 3.1.0 §2:3.104.5).
 [[trust.issuer]]
-issuer = "http://localhost:8180/ferrofed"
+issuer = "ferrofed"
 clients = ["quickstart-source"]
 
 # The patient's namespace is authoritative, so FerroPIX links each member's

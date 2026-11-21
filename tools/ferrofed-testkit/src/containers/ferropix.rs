@@ -8,7 +8,7 @@
 //! PostgreSQL, [`FERROPIX_POSTGRES`], under FerroPIX's development profile:
 //! the patient namespaces as `authoritative` domains and each member's
 //! `ehr_id` domain as a `local` one, and no usage report. FerroPIX admits a
-//! machine only with a client credentials token of an `[[auth.issuer]]`
+//! machine only with a client credentials token of an `[auth.issuer.<name>]`
 //! (FerroPIX 0.0.21, GHSA-jhg2-jwjp-hq74) whose metadata it discovers over
 //! `https` (RFC 8414 §3) and whose metadata names a token endpoint (SMART App
 //! Launch 2.2.0, §Metadata). The harness issuer ([`crate::issuer::Issuer`])
@@ -265,9 +265,10 @@ fn config(
     let _written: std::fmt::Result = write!(
         text,
         "\n[auth.tls]\ntrust_roots_file = \"{ROOTS_TARGET}\"\n\n\
-         [[auth.issuer]]\nissuer = \"{issuer}\"\nkind = \"persons\"\nprofile = \"rfc9068\"\n\
-         audience = [\"{AUDIENCE}\"]\nclient_claims = [\"client_id\"]\n\n\
-         [[trust.issuer]]\nissuer = \"{issuer}\"\nclients = [\"{}\"]\n",
+         [auth.issuer.harness]\nissuer = \"{issuer}\"\nkind = \"persons\"\npreset = \"rfc9068\"\n\
+         audience = [\"{AUDIENCE}\"]\n\n\
+         [auth.issuer.harness.profile]\nclient_claims = [\"client_id\"]\n\n\
+         [[trust.issuer]]\nissuer = \"harness\"\nclients = [\"{}\"]\n",
         SOURCE.id
     );
     let kinds = authoritative
