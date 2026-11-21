@@ -325,6 +325,9 @@ impl ServerSettings {
             // bound is refused at once, as `server.max_concurrent_requests` documents.
             max_waiting_requests: 0,
             admission_wait: span(Duration::ZERO),
+            // NOTE: no specification governs this: our own design; the gateway reads a
+            // request body as sent, the crate's default, and `[server]` sets no coding.
+            request_decompression: false,
             tls: None,
             trusted_proxies: self.trusted_proxies.clone(),
             forwarded_header: self.forwarded_header,
