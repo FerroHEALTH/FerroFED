@@ -138,15 +138,16 @@ authentication` at `WARN` under `ferrofed::security`, with `event`
 answer's challenge says only `invalid_token` for every token that does not
 verify (RFC 6750 §3.1), so read the `check` in the log.
 
-**Fix.** By `check`: `issuer not trusted` is an `iss` no `[auth.issuer.<name>]`
-lists; `audience` is an `aud` other than the issuer's `audience`; a token
+**Fix.** By `check`, the reason code `ferrohealth-smart` gives the refusal:
+`issuer-unknown` is an `iss` no `[auth.issuer.<name>]` lists;
+`audience-mismatch` is an `aud` other than the issuer's `audience`; a token
 the issuer's `kind` admits no caller for (an unlisted client, an unlisted
-actor) is `no caller kind`; `expired` and
-`not yet valid` past the issuer's clock skew point at a clock out of step;
-`no key of the set` is a `kid` the issuer does not publish; `algorithm not
-accepted`, `typ names another kind` and `a required claim is missing` are
-tokens that are no RFC 9068 access tokens; `inactive` is a token the
-introspection endpoint no longer knows. By `reason`: `scope` and
+actor) carries the code of the classification step that refused it;
+`expired` and `not-yet-valid` past the issuer's clock skew point at a clock
+out of step; `key-unknown` is a `kid` the issuer does not publish;
+`algorithm-refused`, `type-mismatch` and `claim-missing` are tokens that are
+no RFC 9068 access tokens; `token-inactive` is a token the introspection
+endpoint no longer knows. By `reason`: `scope` and
 `purpose-of-use` are grants the token lacks
 ([Client authentication](authentication.md#configuration)).
 
