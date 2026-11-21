@@ -456,7 +456,7 @@ ferrohealth-ui = "=0.6.11"
 # `ferrosmart` issuer preset, and 0.29.1 refuses an issuer named in two
 # `[[auth.issuer]]` tables (#1899). Verified against
 # crates.io on 2026-11-17.
-ferrohealth-smart = { version = "0.32.0", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
+ferrohealth-smart = { version = "0.33.0", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
@@ -523,7 +523,7 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # FerroHEALTH/FerroSYS#372); 0.9 builds on ferrohealth-telemetry 0.5.
 # 0.10 keeps the overload bound always on, a NonZeroUsize
 # (FerroHEALTH/FerroSYS#398; #1891). Verified against crates.io on 2026-11-16.
-ferrohealth-server = { version = "=0.11.0", default-features = false }
+ferrohealth-server = { version = "=0.12.0", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.

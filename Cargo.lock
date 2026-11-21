@@ -1324,7 +1324,7 @@ checksum = "06c54ee3e64f23ee87602851f40dd60b84457b54bc536a5b991655b02c9ed893"
 dependencies = [
  "async-trait",
  "backon",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.32.0",
  "fhir-types",
  "http",
  "reqwest",
@@ -1369,7 +1369,7 @@ dependencies = [
  "ferrohealth-secret",
  "ferrohealth-server",
  "ferrohealth-session",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.33.0",
  "ferrohealth-telemetry",
  "ferrohealth-ui",
  "fluent-templates",
@@ -1408,7 +1408,7 @@ dependencies = [
  "ferrofed-registry",
  "ferrofed-testkit",
  "ferrohealth-server",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.33.0",
  "fhir-types",
  "fhirconnect",
  "http",
@@ -1438,7 +1438,7 @@ dependencies = [
  "ferrofed-registry",
  "ferrofed-testkit",
  "ferrohealth-secret",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.33.0",
  "http",
  "jiff 0.2.46",
  "jsonschema 0.62.0",
@@ -1478,7 +1478,7 @@ dependencies = [
  "ferrohealth-config",
  "ferrohealth-secret",
  "ferrohealth-server",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.33.0",
  "fhir-types",
  "http",
  "ihe-atna",
@@ -1556,7 +1556,7 @@ dependencies = [
  "ferrohealth-health",
  "ferrohealth-secret",
  "ferrohealth-server",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.33.0",
  "ferrohealth-telemetry",
  "ferrohealth-usage-report",
  "fhir-types",
@@ -1621,7 +1621,7 @@ dependencies = [
  "ferrohealth-secret",
  "ferrohealth-server",
  "ferrohealth-session",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.33.0",
  "ferrohealth-ui",
  "fhir-types",
  "fhirconnect",
@@ -1701,9 +1701,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-server"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d5e8fb529a60e0120eb322816fc8597e0aefd27cb21668cb9dc43eb20c5f41b"
+checksum = "5beacbdd769527817f33963e3341b31109202968c28e817d417bf0b0f8530e50"
 dependencies = [
  "aws-lc-rs",
  "axum",
@@ -1714,6 +1714,7 @@ dependencies = [
  "ferrohealth-secret",
  "ferrohealth-telemetry",
  "http",
+ "http-body-util",
  "hyper",
  "hyper-util",
  "ipnet",
@@ -1750,7 +1751,7 @@ dependencies = [
  "cookie",
  "ferrohealth-config",
  "ferrohealth-secret",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.32.0",
  "ferrohealth-ui",
  "http",
  "jiff 0.2.46",
@@ -1768,6 +1769,33 @@ name = "ferrohealth-smart"
 version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b702c145d6bbff36c0352374d2e03e3af74014df139a6ec863ac8f172173c3f7"
+dependencies = [
+ "argon2",
+ "aws-lc-rs",
+ "base64 0.23.1",
+ "ferrohealth-config",
+ "ferrohealth-secret",
+ "http",
+ "jiff 0.2.46",
+ "jsonwebtoken",
+ "reqwest",
+ "rustls",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+ "url",
+ "x509-parser",
+]
+
+[[package]]
+name = "ferrohealth-smart"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38ea5e175481b6babf24a5035ff52a72ff7ced299dcc76017a0923df8d59b240"
 dependencies = [
  "argon2",
  "aws-lc-rs",
@@ -2653,7 +2681,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aef4044906b0907a9746cb50e736e2bdaae4600106d85bc186d2b04fecd51568"
 dependencies = [
  "async-trait",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.32.0",
  "fhir-search",
  "fhir-types",
  "http",
@@ -2737,15 +2765,6 @@ name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
 dependencies = [
  "either",
 ]
@@ -3249,7 +3268,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da2b29b94fc983d64a7e671797534e398efcc217ffec20028208d36ed050acb8"
 dependencies = [
  "base64 0.23.1",
- "ferrohealth-smart",
+ "ferrohealth-smart 0.32.0",
  "fhir-search",
  "fhir-types",
  "http",
@@ -4011,7 +4030,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ad9c5423459fa2f729b8d9235fab810aa29628b171467744fc86d21460ad70d"
 dependencies = [
  "anyhow",
- "itertools 0.15.0",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -5103,7 +5122,7 @@ dependencies = [
  "ferroid",
  "futures",
  "http",
- "itertools 0.14.0",
+ "itertools",
  "log",
  "memchr",
  "parse-display",
