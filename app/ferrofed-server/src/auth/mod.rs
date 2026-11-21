@@ -25,7 +25,7 @@
 //! acting for the professional the token names, and the authentication
 //! assurance its issuer's entry requires (Regulation (EU) 2025/327 Annex II
 //! 3.1). A national contact point, a `federation` issuer whose
-//! `[[auth.federation]]` table sets `contact_point = true`, vouches for the
+//! `[auth.issuer.<name>.federation]` table sets `contact_point = true`, vouches for the
 //! professional of another Member State whose request its connector relays
 //! ([`contact_point`]): `ferrohealth-smart` holds its token to the
 //! MyHealth@EU contact-point profile, and the token must be bound to the
@@ -64,7 +64,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use ferrofed_engine::conveyance::caller::Acting;
-use ferrofed_identity::role::consent::Requester;
+use ferrofed_identity::role::consent::{Requester, Systems};
 use ferrofed_registry::id::EhrId;
 use ferrohealth_smart::client::onward::SubjectToken as OnwardSubject;
 use ferrohealth_smart::federation::{Attribute, Field};
@@ -446,7 +446,7 @@ impl Gate {
             _ => Acting::Person,
         };
         // NOTE: Regulation (EU) No 910/2014 Art 8(2); the level is the one
-        // `ferrohealth-smart` assessed under the issuer's [auth.issuer.assurance].
+        // `ferrohealth-smart` assessed under the issuer's [auth.issuer.<name>.assurance].
         let assurance = smart.assurance().level;
         if trusted.national_contact_point.is_some() {
             return contact_point_caller(smart, trusted, (subject, client_id), verified_by)
@@ -713,7 +713,7 @@ fn patient_context(caller: &Caller, trusted: &IssuerSettings) -> Result<PatientC
 /// Implementing Regulation (EU) 2026/2099 Art 6(3) sets the assurance level
 /// of that authentication for a cross-border exchange. Which claim values
 /// stand for which level, and the least level, are the deployment's per
-/// issuer, in `[auth.issuer.assurance]`: no specification governs this: our
+/// issuer, in `[auth.issuer.<name>.assurance]`: no specification governs this: our
 /// own design.
 ///
 /// # Errors
@@ -737,25 +737,42 @@ fn professional(caller: &Caller, issuer: &IssuerSettings) -> Result<(), Refusal>
 }
 
 /// Returns who asks for the data, as a professional of another domestic
-/// party's `[[auth.federation]]` field sources state it: the professional's
-/// number and role and the organisation's URA and type, when every one is
-/// stated (§13.1, §13.4).
+/// party's federation field sources state it: the professional's
+/// identifier and role and the organisation's identifier and type, when
+/// every one is stated (§13.1, §13.4), each with the code system it was
+/// stated in.
 fn requester(kind: &CallerKind) -> Option<Requester> {
     let CallerKind::ExternalPerson(external) = kind else {
         return None;
     };
-    let text = |field| {
-        external
-            .field(field)
-            .and_then(Attribute::text)
-            .map(str::to_owned)
-    };
-    Requester::new(
-        text(Field::NlProfessionalNumber)?,
-        text(Field::NlRole)?,
-        text(Field::NlUra)?,
-        text(Field::NlOrganisationType)?,
-    )
+    let (professional, professional_system) =
+        stated(external.field(Field::ProfessionalHpIdentifier))?;
+    let (role, role_system) = stated(external.field(Field::ProfessionalHpProfessionalRole))?;
+    let (organisation, organisation_system) =
+        stated(external.field(Field::ProviderHealthcareProviderIdentifier))?;
+    let (organisation_type, organisation_type_system) =
+        stated(external.field(Field::ProviderFacilityType))?;
+    Requester::new(professional, role, organisation, organisation_type).map(|requester| {
+        requester.with_systems(Systems {
+            professional: professional_system,
+            role: role_system,
+            organisation: organisation_system,
+            organisation_type: organisation_type_system,
+        })
+    })
+}
+
+/// Returns the one value `attribute` states and the code system it names: a
+/// string as written with none, or the code of its one coding with that
+/// coding's system. Several codings state no one value.
+fn stated(attribute: Option<&Attribute>) -> Option<(String, Option<String>)> {
+    match attribute? {
+        Attribute::Text(text) => Some((text.clone(), None)),
+        Attribute::Codes(codes) => match codes.as_slice() {
+            [code] => Some((code.code.clone(), code.system.clone())),
+            _ => None,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -791,7 +808,7 @@ mod representative_tests {
 mod kind_tests {
     use std::collections::BTreeMap;
 
-    use ferrohealth_smart::federation::{Attribute, External, Field};
+    use ferrohealth_smart::federation::{Attribute, Code, External, Field};
     use ferrohealth_smart::kind::{CallerKind, IssuerKind};
     use ferrohealth_smart::resource::{Caller as SmartCaller, Settings as KeySetSettings};
 
@@ -810,14 +827,17 @@ mod kind_tests {
     }
 
     // NOTE: §13.1 and §13.4; the requester of a domestic federation route is read from the
-    // fields ferrohealth-smart's [[auth.federation]] sources stated, and from no claim.
+    // fields ferrohealth-smart's federation table sources stated, and from no claim.
     #[test]
     fn a_domestic_federation_token_states_its_requester_through_caller_kind_alone() {
         let partner = external(&[
-            (Field::NlProfessionalNumber, "synthetic-uzi-0042"),
-            (Field::NlRole, "01.015"),
-            (Field::NlUra, "synthetic-ura-7"),
-            (Field::NlOrganisationType, "V4"),
+            (Field::ProfessionalHpIdentifier, "synthetic-uzi-0042"),
+            (Field::ProfessionalHpProfessionalRole, "01.015"),
+            (
+                Field::ProviderHealthcareProviderIdentifier,
+                "synthetic-ura-7",
+            ),
+            (Field::ProviderFacilityType, "V4"),
         ]);
         assert!(requester(&partner).is_some(), "{partner:?}");
         for kind in [CallerKind::Person, CallerKind::System, CallerKind::Patient] {
@@ -827,6 +847,52 @@ mod kind_tests {
                 "{kind:?} is no partner's professional"
             );
         }
+    }
+
+    // NOTE: §13.1 and §13.4; a value read with its coding keeps the code and the
+    // coding's system, so the consent pre-filter can hold it to the systems it asks in.
+    #[test]
+    fn a_coded_requester_value_keeps_its_system() {
+        let coded = |code: &str, system: Option<&str>| {
+            Attribute::Codes(vec![Code {
+                system: system.map(str::to_owned),
+                code: code.to_owned(),
+            }])
+        };
+        let fields = BTreeMap::from([
+            (
+                Field::ProfessionalHpIdentifier,
+                Attribute::Text(String::from("synthetic-uzi-0042")),
+            ),
+            (
+                Field::ProfessionalHpProfessionalRole,
+                coded("01.015", Some("urn:oid:2.16.840.1.113883.2.4.15.111")),
+            ),
+            (
+                Field::ProviderHealthcareProviderIdentifier,
+                coded("synthetic-ura-7", None),
+            ),
+            (
+                Field::ProviderFacilityType,
+                coded("V4", Some("urn:oid:2.999.1")),
+            ),
+        ]);
+        let partner =
+            CallerKind::ExternalPerson(Box::new(External::new("synthetic-remote", fields)));
+        let stated = requester(&partner).expect("every value is stated");
+        assert_eq!("01.015", stated.role());
+        assert_eq!("V4", stated.organisation_type());
+        let systems = stated.systems();
+        assert_eq!(None, systems.professional);
+        assert_eq!(
+            Some("urn:oid:2.16.840.1.113883.2.4.15.111"),
+            systems.role.as_deref()
+        );
+        assert_eq!(None, systems.organisation);
+        assert_eq!(
+            Some("urn:oid:2.999.1"),
+            systems.organisation_type.as_deref()
+        );
     }
 
     // NOTE: MyHealth@EU Requirements Catalogue 10.0.0 requirement 01; a contact point's

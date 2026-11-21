@@ -44,7 +44,7 @@ const HIGH: &str = "urn:example:loa:high";
 /// `national_provider_identifier`).
 const PROFESSIONAL: &str = "urn:oid:2.999.7.1|hp-0042";
 
-/// The suite's `[auth]`, its issuer's `[auth.issuer.assurance]` reading
+/// The suite's `[auth]`, its issuer's `[auth.issuer.<name>.assurance]` reading
 /// `acr` with the three values above and `minimum` the least level for
 /// patient data.
 fn requiring(minimum: AssuranceLevel) -> AuthSettings {

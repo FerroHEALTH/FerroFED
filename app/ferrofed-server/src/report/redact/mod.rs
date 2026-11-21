@@ -262,7 +262,7 @@ url = "{DATABASE_URL}"
 audience = ["CANARY-AUDIENCE"]
 product_scope = "__CANARY-SCOPE"
 
-[[auth.issuer]]
+[auth.issuer.idp]
 issuer = "https://idp.example.org/realms/CANARY-REALM"
 jwks_file = "/home/CANARY-PERSON/jwks.json"
 
@@ -504,7 +504,7 @@ value = 111111110
 value = 222222220
 ehr_id = "c0ffee00-0000-4000-8000-000000000705"
 
-[[auth.issuer]]
+[auth.issuer.idp]
 issuer = "https://idp.example.org"
 client_secret = 333333330
 
@@ -545,9 +545,13 @@ client_secret = 333333330
             assert!(!written.contains(canary), "{canary} leaked: {written}");
         }
         let redacted: toml::Table = toml::from_str(&written).expect("the output reads back");
+        let issuer = redacted["auth"]["issuer"]
+            .as_table()
+            .and_then(|issuers| issuers.values().next())
+            .expect("the one issuer table stays, under whatever its name redacts to");
         assert_eq!(
             "https://idp.example.org",
-            redacted["auth"]["issuer"][0]["issuer"]
+            issuer["issuer"]
                 .as_str()
                 .expect("a URL under a URL key keeps its host")
         );

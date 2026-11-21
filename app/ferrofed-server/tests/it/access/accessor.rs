@@ -51,7 +51,7 @@ const IDENTIFIER: &str = "urn:oid:2.999.7.1|hp-0742";
 /// The synthetic `client_id` of a national contact point's connector.
 const CONNECTOR: &str = "Qz7-national-connector";
 
-/// The suite's `[auth]`, its issuer's `[auth.issuer.assurance]` reading
+/// The suite's `[auth]`, its issuer's `[auth.issuer.<name>.assurance]` reading
 /// `acr` at the levels above and requiring `minimum`.
 fn assured(minimum: AssuranceLevel) -> AuthSettings {
     let mut auth = support::caller::auth();

@@ -339,9 +339,9 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is 0.2.0 since 2026-11-16, the line the published `eehrxf` 0.17,
-`fhirconnect` 0.5 and `openehr-mapping-core` 0.4 require by a caret range, so
-the lock holds one copy of each member (#1181, #813, #1891, #1899).
+pin is 0.3.0 since 2026-11-21, the line the published `eehrxf` 0.22,
+`fhirconnect` 0.7 and `openehr-mapping-core` 0.5 require by a caret range, so
+the lock holds one copy of each member (#1181, #813, #1891, #1899, #1915).
 `openehr-sdt` left the group with 0.0.116, which no longer carries the
 SMART on openEHR scope grammar: the onward grant (#81) writes and checks the
 scope it requests with `ferrohealth-smart`'s `openehr::smart_scopes`, the
@@ -350,10 +350,10 @@ module client authentication (#80) already read every caller's scopes with
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `openehr-query` | 0.2.0 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-its` | 0.2.0 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-base` | 0.2.0 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
-| `openehr-rm` | 0.2.0 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-query` | 0.3.0 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-its` | 0.3.0 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-base` | 0.3.0 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
+| `openehr-rm` | 0.3.0 | the root `Cargo.toml` `[workspace.dependencies]`, the `OPENEHR_FAMILY` constant of `ferrofed-server` |
 
 **0.0.74 is the lockstep release of the whole `openehr-*` family that carries
 the federation gaps FerroFED raised, FerroEHR #3505 to #3514 (the AST visitor,
@@ -493,11 +493,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | 0.17.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | 0.5.1 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | 0.4.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | 0.13.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | 0.13.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | 0.22.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | 0.7.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | 0.5.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | 0.16.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | 0.16.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -552,7 +552,7 @@ version it draws with, read from the crate. `scripts/checks/versions.sh` holds e
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ferrohealth-ui` (FerroUI) | 0.6.10 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `.claude/rules/console-ui.md` |
+| `ferrohealth-ui` (FerroUI) | 0.6.11 | the root `Cargo.toml` `[workspace.dependencies]` (pinned exactly), `.claude/rules/console-ui.md` |
 
 The browser journeys (#608) drive the console in headless Chrome over
 WebDriver, through chromedriver, with the `thirtyfour` client, a test-only

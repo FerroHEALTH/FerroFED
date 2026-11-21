@@ -5,7 +5,7 @@
 //! `[trust]` and `[[federation.contact_point]]`, which only the file sets,
 //! so a revision never holds them.
 //!
-//! The document lists the product scope, each `[[auth.issuer]]` by its
+//! The document lists the product scope, each `[auth.issuer.<name>]` by its
 //! issuer, kind, key set file and audience, with the client secret of its
 //! introspection when it has one, each `[[trust.issuer]]` by its issuer, and
 //! each national contact point's `[[federation.contact_point]]` (Regulation
@@ -25,7 +25,7 @@ use super::{Layers, at, indexed, provenance_key, sourced};
 /// table lists them.
 const CONTACT_POINT: [&str; 3] = ["issuer", "correlation_header", "additional_countries"];
 
-/// The keys of an `[[auth.issuer]]` the document lists that apply at the
+/// The keys of an `[auth.issuer.<name>]` the document lists that apply at the
 /// next reload.
 const ISSUER: [&str; 3] = ["issuer", "kind", "jwks_file"];
 
@@ -34,9 +34,9 @@ const ISSUER: [&str; 3] = ["issuer", "kind", "jwks_file"];
 pub(super) fn settings(layers: &Layers) -> Vec<Setting> {
     let mut settings = vec![listed(layers, "auth.product_scope", false)];
     match at(&layers.file_now, "auth.issuer") {
-        Some(toml::Value::Array(issuers)) => {
-            for (index, _) in issuers.iter().enumerate() {
-                let prefix = format!("auth.issuer[{index}]");
+        Some(toml::Value::Table(issuers)) => {
+            for name in issuers.keys() {
+                let prefix = format!("auth.issuer.{name}");
                 for key in ISSUER {
                     settings.push(listed(layers, &format!("{prefix}.{key}"), false));
                 }
@@ -162,13 +162,13 @@ mod tests {
 [auth]
 product_scope = "__ferrofed.operator"
 
-[[auth.issuer]]
+[auth.issuer.ncp]
 issuer = "https://ncp.example.org"
 kind = "persons"
 audience = ["urn:example:gw"]
 jwks_file = "/run/ferrofed/ncp-jwks.json"
 
-[auth.issuer.introspection.client]
+[auth.issuer.ncp.introspection.client]
 client_id = "ferrofed"
 client_secret = "SENTINEL-SECRET-9k2"
 
@@ -219,8 +219,8 @@ additional_countries = ["XA"]
                     "federation.contact_point[0].correlation_header",
                     "ncp-correlation-id",
                 ),
-                ("auth.issuer[0].issuer", "https://ncp.example.org"),
-                ("auth.issuer[0].kind", "persons"),
+                ("auth.issuer.ncp.issuer", "https://ncp.example.org"),
+                ("auth.issuer.ncp.kind", "persons"),
                 ("auth.product_scope", "__ferrofed.operator"),
             ] {
                 let setting = document.setting(key).expect(key);
@@ -246,7 +246,7 @@ additional_countries = ["XA"]
         assert!(!written.contains("SENTINEL-SECRET-9k2"), "{written}");
         assert!(!written.contains("SENTINEL-HASH-4f1"), "{written}");
         let secret = document
-            .setting("auth.issuer[0].introspection.client.client_secret")
+            .setting("auth.issuer.ncp.introspection.client.client_secret")
             .expect("listed");
         assert_eq!(None, secret.value);
         assert!(secret.secret.as_ref().is_some_and(|held| held.set));
@@ -257,7 +257,9 @@ additional_countries = ["XA"]
         let mut layers = layers(false);
         layers.file_now = tree(&FILE.replace("urn:example:gw", "urn:example:other"));
         let document = of(&layers);
-        let audience = document.setting("auth.issuer[0].audience").expect("listed");
+        let audience = document
+            .setting("auth.issuer.ncp.audience")
+            .expect("listed");
         assert!(audience.restart);
         assert_eq!(
             Some(toml::Value::Array(vec![toml::Value::from(
@@ -277,7 +279,7 @@ additional_countries = ["XA"]
     fn a_file_with_no_contact_point_lists_no_contact_point_key() {
         let mut layers = layers(false);
         layers.file_now = tree(
-            "[[auth.issuer]]\nissuer = \"https://idp.example.org\"\n\n[auth.issuer.introspection.client]\nclient_secret_file = \"/run/secret\"\n\n[[trust.issuer]]\nissuer = \"https://idp.example.org\"\n",
+            "[auth.issuer.idp]\nissuer = \"https://idp.example.org\"\n\n[auth.issuer.idp.introspection.client]\nclient_secret_file = \"/run/secret\"\n\n[[trust.issuer]]\nissuer = \"https://idp.example.org\"\n",
         );
         let document = of(&layers);
         assert!(document.setting("trust.issuer[0].issuer").is_some());
@@ -288,7 +290,7 @@ additional_countries = ["XA"]
                 .all(|setting| !setting.key.contains("contact_point"))
         );
         let secret = document
-            .setting("auth.issuer[0].introspection.client.client_secret")
+            .setting("auth.issuer.idp.introspection.client.client_secret")
             .expect("listed");
         assert_eq!(
             Some("/run/secret"),

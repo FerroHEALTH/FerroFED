@@ -1304,8 +1304,10 @@ GATE
   check "the head starts on its own tree's contract and the base on its own" 2 \
     "$(grep -cE '^  (head_pid="\$\(serve head [^ ]+ "\$CONFIG" ferrofed 8080 "\$ARM_ENV"|base_pid="\$\(serve base [^ ]+ "\$BASE_CONFIG" ferrofed_base 8070 "\$base_contract")' "$root/scripts/perf/gate.sh")"
   local config="$root/$CONFIG"
-  check "the gateway trusts the contact point the gate mints for" 3 \
+  check "the gateway trusts the contact point the gate mints for" 2 \
     "$(grep -cxF "issuer = \"$NCP_ISSUER\"" "$config")"
+  check "the contact point's federation table sits under its issuer" 1 \
+    "$(grep -cxF "[auth.issuer.perf_ncp.federation]" "$config")"
   check "the gateway reads the contact point's audience and key set" 2 \
     "$(grep -cxE "audience = \[\"$NCP_AUDIENCE\"\]|jwks_file = \"$NCP_JWKS\"" "$config")"
   printf '{"pairs":[{"head":{"groups":{"%s":{"answered":5},"x":{"answered":9}}}},{"head":{"groups":{"%s":{"answered":7}}}},{"head":{"groups":{}}}]}\n' \
@@ -1326,8 +1328,10 @@ GATE
     "$(uncached "$work/base.toml" > /dev/null 2>&1 && echo 0 || echo 1)"
   check "the gate's configuration has node A's onward lane, cached" 1 \
     "$(uncached "$config" | grep -cxF 'cache = false')"
-  check "the quickstart issuer signs the caller's token and the onward lane's, for node A's audience, and its attributes table names it" 4 \
+  check "the quickstart issuer signs the caller's token and the onward lane's, for node A's audience" 3 \
     "$(grep -cxE "issuer = \"$QUICKSTART_ISSUER\"|audiences = \[\"https://node-a.perf.ferrofed.invalid\"\]" "$config")"
+  check "the quickstart issuer's attributes table sits under it" 1 \
+    "$(grep -cxF "[auth.issuer.quickstart_issuer.attributes]" "$config")"
   check "node A trusts the token endpoint's issuers" 2 \
     "$(grep -cxE 'jwks_file = "/etc/ferroehr/onward/(persons|machines).json"' "$root/perf/ferroehr-onward.toml")"
   [[ "$failed" -eq 0 ]] || exit 1

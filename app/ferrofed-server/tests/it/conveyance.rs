@@ -341,7 +341,7 @@ const HP_ID: &str = "urn:oid:2.999.7.1|hp-0042";
 /// The code system of the synthetic professional's role.
 const ROLE_SYSTEM: &str = "http://terminology.hl7.org/CodeSystem/practitioner-role";
 
-/// The suite's `[auth]`, its issuer's `[[auth.attributes]]` table reading
+/// The suite's `[auth]`, its issuer's `[auth.issuer.<name>.attributes]` table reading
 /// the professional identifier's issuing authority from [`AUTHORITY_CLAIM`].
 fn naming_the_issuing_authority() -> AuthSettings {
     let mut auth = crate::support::caller::auth();

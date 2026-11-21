@@ -30,14 +30,7 @@ fn url(query: &str) -> String {
 }
 
 /// A trusted contact-point issuer with its `[[federation.contact_point]]`.
-const CONTACT_POINT: &str = "[auth]\n\n\
-[[auth.issuer]]\nissuer = \"https://ncp.example.test\"\nkind = \"federation\"\naudience = [\"urn:example:gateway\"]\n\
-sender_constraint = \"required\"\n\n\
-[[auth.federation]]\nissuer = \"https://ncp.example.test\"\ncontact_point = true\nmapping = \"ehdsi\"\ncountries = [\"LU\"]\n\
-fields.\"professional.country_code\" = [{ constant = \"LU\" }]\n\
-fields.\"professional.issuing_authority_name\" = [{ constant = \"pa\" }]\n\
-fields.\"provider.issuing_authority_name\" = [{ constant = \"ha\" }]\n\n\
-[[federation.contact_point]]\nissuer = \"https://ncp.example.test\"\n";
+const CONTACT_POINT: &str = "[auth]\n\n[auth.issuer.ncp]\nissuer = \"https://ncp.example.test\"\nkind = \"federation\"\naudience = [\"urn:example:gateway\"]\nsender_constraint = \"required\"\n\n[auth.issuer.ncp.federation]\ncontact_point = true\nmapping = \"ehdsi\"\ncountries = [\"LU\"]\nfields.\"professional.country_code\" = [{ constant = \"LU\" }]\nfields.\"professional.issuing_authority_name\" = [{ constant = \"pa\" }]\nfields.\"provider.issuing_authority_name\" = [{ constant = \"ha\" }]\n\n[[federation.contact_point]]\nissuer = \"https://ncp.example.test\"\n";
 
 /// A stored-query registry on the `postgres` backend, over a registry
 /// document in `dir`.

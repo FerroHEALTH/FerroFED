@@ -126,7 +126,7 @@ fn federation_lane(
         }),
     };
     let mut section = json!({
-        "issuer": FEDERATION, "kind": "federation", "profile": profile,
+        "issuer": FEDERATION, "kind": "federation", "preset": profile,
         "correlation_claim": correlation.unwrap_or_default(),
         "federation": federation,
         "assurance": {"levels": {"urn:acr:high": "high"}},

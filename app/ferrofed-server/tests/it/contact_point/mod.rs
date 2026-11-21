@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The national-contact-point caller: a `federation` issuer whose
-//! `[[auth.federation]]` table sets `contact_point = true`, whose connector
+//! `[auth.issuer.<name>.federation]` table sets `contact_point = true`, whose connector
 //! relays the request of a health professional of another Member State
 //! (Regulation (EU) 2025/327 Art 23; Implementing Regulation (EU) 2026/2099
 //! Art 6 and 7).
@@ -99,7 +99,7 @@ pub(crate) static CERTIFICATE: LazyLock<Vec<u8>> = LazyLock::new(|| {
     national_connector::client_certificate().expect("a test certificate should be made")
 });
 
-/// The `[[auth.federation]]` table of the test contact point: the `ehdsi`
+/// The `[auth.issuer.<name>.federation]` table of the test contact point: the `ehdsi`
 /// mapping, with the country and the issuing authorities configured.
 pub(crate) fn federation() -> FederationSection {
     let constant = |value: &str| vec![Source::Constant(value.to_owned())];

@@ -122,7 +122,7 @@ pub enum BindingFault {
     /// `pmir.feed_clients` names clients and `[auth]` trusts no issuer to
     /// sign their tokens.
     #[error(
-        "pmir.feed_clients names the Registry's clients, and [auth] trusts no [[auth.issuer]] to sign their client-credentials tokens"
+        "pmir.feed_clients names the Registry's clients, and [auth] trusts no [auth.issuer.<name>] to sign their client-credentials tokens"
     )]
     #[cfg(feature = "binding-ihe")]
     FeedIssuer,

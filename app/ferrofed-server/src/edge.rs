@@ -33,6 +33,9 @@ pub fn policy(state: &Arc<AppState>, request_log: RequestLog) -> StackPolicy {
         panic_body: panic_body(Arc::clone(state)),
         refusal_body: refusal_body(Arc::clone(state)),
         request_log,
+        // NOTE: no specification governs this: our own design; the gateway counts each
+        // overload refusal by its own limit ([`Limit`]), so the stack records none.
+        meter: None,
     }
 }
 

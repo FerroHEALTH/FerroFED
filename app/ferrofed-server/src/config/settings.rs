@@ -321,6 +321,10 @@ impl ServerSettings {
             shutdown_timeout: span(self.shutdown_timeout),
             max_concurrent_requests: self.overload.max_concurrent_requests,
             retry_after: span(self.overload.retry_after),
+            // NOTE: no specification governs this: our own design; a request past the
+            // bound is refused at once, as `server.max_concurrent_requests` documents.
+            max_waiting_requests: 0,
+            admission_wait: span(Duration::ZERO),
             tls: None,
             trusted_proxies: self.trusted_proxies.clone(),
             forwarded_header: self.forwarded_header,

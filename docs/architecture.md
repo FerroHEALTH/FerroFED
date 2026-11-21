@@ -75,8 +75,8 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | Federation Tier reference implementation | `syntaric/openehr-federation-ref` at `9cb8606d1fce457b6b7f3a42f703d7069686a413` (Apache-2.0) | the commit that tracks 1.0.1 and reports `spec_version` `"1.0"`; it has no release tag after `0.9.0`, so it is pinned by commit and moves with the specification. Evidence and a test corpus (the 17 AQL golden cases, the schemas, the demo data); never the bar, its code never copied. Its copy of `federated-result-set.schema.json` lacks `node-error` |
 | openEHR ITS-REST | 1.1.0 (`openEHR/specifications-ITS-REST` tag `Release-1.1.0`, commit `24058992`) | the federation specification binds ITS-REST by name at `Release-1.1.0`; the façade serves all 96 operations of its seven modules |
 | openEHR AQL | 1.1.0 (`openEHR/specifications-QUERY` tag `Release-1.1.0`, commit `b03c4800`) | the query language. AQL 1.1.0 leaves the default order, the order of nulls and string collation undefined and has no `GROUP BY` clause, which sections 4 and 9 build on |
-| `openehr-query` | 0.2.0 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529); 0.0.87 renders a column path with its AQL variable (FerroEHR #3782) |
-| `openehr-its` | 0.2.0 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543); 0.0.82 adds the DPoP credential (FerroEHR #3558); 0.0.83 says whether a send went out before a deadline passed (FerroEHR #3560); 0.0.84 says the same of a DPoP proof that could not be made (FerroEHR #3565); 0.0.87 bounds the bytes the client reads of one answer and unquotes a quoted GET query parameter (FerroEHR #3600, #3781) |
+| `openehr-query` | 0.3.0 | the AQL 1.1 lexer, parser, typed AST and canonical printer. 0.0.74 added the visitor, spans, parameter binding and the federation directive (FerroEHR #3505 to #3508, #3513); 0.0.77 classifies every function call as an AQL built-in or another name (FerroEHR #3529); 0.0.87 renders a column path with its AQL variable (FerroEHR #3782) |
+| `openehr-its` | 0.3.0 | the ITS-REST 1.1.0 contract: DTOs, server traits, route tables, clients, canonical JSON. 0.0.74 added the router builder, the operation matcher with `forward`, the credentials provider and per-call options (FerroEHR #3509 to #3512); 0.0.76 keeps the extra members of an open schema, `Error` among them (FerroEHR #3526); 0.0.77 builds every client with redirects off (FerroEHR #3531); 0.0.78 makes the `Authorization` value of a credential public, checked against RFC 7617 and RFC 6750 (FerroEHR #3535); 0.0.80 adds the identifier class of each path parameter, a public request decoder per operation, a Simplified Formats CONTRIBUTION reader and every request-body media type (FerroEHR #3539 to #3541, #3543); 0.0.82 adds the DPoP credential (FerroEHR #3558); 0.0.83 says whether a send went out before a deadline passed (FerroEHR #3560); 0.0.84 says the same of a DPoP proof that could not be made (FerroEHR #3565); 0.0.87 bounds the bytes the client reads of one answer and unquotes a quoted GET query parameter (FerroEHR #3600, #3781) |
 | `openehr-base`, `openehr-rm` | the same lockstep line | typed identifiers (`ObjectVersionId`, `HierObjectId`, ISO 8601 ordering), the RM with `DV_ORDERED` comparison and, from 0.0.79, the attribute model with the BASE primitives, the `Ordered` marker and the `OBJECT_REF` targets (FerroEHR #3537) |
 | IHE PIXm, mCSD, PMIR | 3.1.0, 4.0.0, 1.6.0 (FHIR 4.0.1, CC-BY-4.0) | the proposed IHE binding (Annex A). Each is vendored and pinned with the issue that first reads it (decision A18) |
 | Netherlands Generic Functions | `fhir.nl.gf` 0.3.0 (EUPL-1.2) | the regional binding Annex B names; vendored with #87 |
@@ -86,11 +86,11 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `ferrobridge-term` | 0.3.0 (FerroBRIDGE, BUSL-1.1) | the FHIR terminology client the interoperability component asks its optional terminology server through (decision A63, #925): `$translate`, `$lookup` and `$validate-code` in R4, over the HTTP client the gateway builds with its credential and TLS material |
 | `ferrohealth-smart` | =0.9.4 (`fetch`, `axum`, `openehr`; BUSL-1.1) | the SMART and OAuth 2.0 resource-server crate every FerroHEALTH product runs on (#1174): it checks tokens and never issues them, verifies each issuer's tokens from its RFC 8414 metadata and key set, decides the SMART on openEHR grants through `ferrohealth_smart::openehr`, and obtains the gateway's own token with the client credentials grant of `[<section>.oauth]` |
 | `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for the Nuts grant's presentations and the caller token; the `oauth` grants' assertions are signed by `ferrohealth-smart` |
-| `jsonschema` | 0.60.2 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
+| `jsonschema` | 0.62.0 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
 | PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
-The `openehr-*` rows are the lockstep 0.2.0, the line the published
-`eehrxf` 0.17.0 and `fhirconnect` 0.5.1 require (#813, #1581, #1722, #1742, #1754, #1799, #1805, #1785, #1891, #1895, #1899). The
+The `openehr-*` rows are the lockstep 0.3.0, the line the published
+`eehrxf` 0.22.0 and `fhirconnect` 0.7.0 require (#813, #1581, #1722, #1742, #1754, #1799, #1805, #1785, #1891, #1895, #1899, #1915). The
 gaps FerroEHR #3505 to #3514 closed in 0.0.74, which v0.0.2 coded against,
 0.0.76 closes FerroEHR #3526, the open ITS-REST `Error`, 0.0.77 closes
 FerroEHR #3529, the function classification the rewrite reads, 0.0.78
@@ -663,10 +663,15 @@ request carrying one XACML 3.0 `XACMLAuthzDecisionQuery` over mutual TLS,
 asked once per data holder among the candidates, through the `mitz` feature
 of `nl-generic-functions`. The data user is the verified caller: its
 professional by UZI number and role and its organisation by URA and type,
-read by `ferrohealth-smart` from the `nl.professional_number`, `nl.role`,
-`nl.ura` and `nl.organisation_type` fields of a domestic `federation`
-issuer's `[[auth.federation]]` table, the caller an `ExternalPerson`, and
-carried to the seam as a `Requester` (§3.2.4.2, §13.4; #1704). Mitz records
+read by `ferrohealth-smart` from the `professional.hp_identifier`,
+`professional.hp_professional_role`, `provider.healthcare_provider_identifier`
+and `provider.facility_type` fields of a domestic `federation` issuer's
+`federation` table, the caller an `ExternalPerson`, and carried to the seam as
+a `Requester` with the code system each value was stated in (§3.2.4.2, §13.4;
+#1704). A value stated without a system is taken as written; one that names a
+system other than the question's for it (the URA and UZI registers, the UZI
+role codes and the care provider categories, Implementatiehandleiding §4) is
+not asked about, as `caller-claims-invalid` (#1915). Mitz records
 that professional and decides on that role, so a configured identity is
 never substituted: a caller whose token lacks the claims is not asked
 about, and no member is filtered for it. Each member's data holder is its care provider by URA, from the configuration,

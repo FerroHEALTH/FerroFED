@@ -86,7 +86,7 @@ pub enum ServerFault {
     /// `metrics.scrape_clients` names clients and `[auth]` trusts no issuer
     /// to sign their tokens.
     #[error(
-        "metrics.scrape_clients names the scraper's clients, and [auth] trusts no [[auth.issuer]] to sign their client-credentials tokens"
+        "metrics.scrape_clients names the scraper's clients, and [auth] trusts no [auth.issuer.<name>] to sign their client-credentials tokens"
     )]
     ScrapeIssuer,
     /// `metrics.listen` names the address `server.listen` binds, at a port

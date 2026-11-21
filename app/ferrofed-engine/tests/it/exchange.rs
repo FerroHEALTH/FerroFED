@@ -148,11 +148,11 @@ pub(crate) fn section(
     let mut section = serde_json::json!({
         "issuer": ONWARD_ISSUER,
         "kind": "persons",
-        "profile": "rfc9068",
+        "preset": "rfc9068",
         "token_endpoint": endpoint.token_url(),
         "audiences": [RESOURCE],
         "indicators": [RESOURCE],
-        "keys": {"max_onward_lifetime": "1h"},
+        "profile": {"max_onward_lifetime": "1h"},
         "actor_assertion": true,
     });
     if let (Some(object), serde_json::Value::Object(extra)) = (section.as_object_mut(), extra) {

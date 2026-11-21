@@ -27,10 +27,10 @@ pub const PREPARING: &str = "0.0.20";
 
 /// `[[trust.issuer]] professional_issuing_authority`, which the
 /// `professional.issuing_authority_name` source of the issuer's
-/// `[[auth.attributes]]` table replaced (#1615).
+/// `[auth.issuer.<name>.attributes]` table replaced (#1615).
 const ISSUING_AUTHORITY: Retired = Retired::replaced(
     "professional_issuing_authority",
-    "auth.attributes[].fields.\"professional.issuing_authority_name\", the claim the issuer's [[auth.attributes]] table reads the issuing agency from",
+    "auth.attributes[].fields.\"professional.issuing_authority_name\", the claim the issuer's [auth.issuer.<name>.attributes] table reads the issuing agency from",
     PREPARING,
 );
 

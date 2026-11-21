@@ -208,15 +208,17 @@ rotation_overlap = '10min'
 [auth]
 product_scope = "__ferrofed.operator"
 
-[[auth.issuer]]
+[auth.issuer.idp]
 issuer = "https://idp.example.org"
 kind = "persons"
-profile = "rfc9068"
+preset = "rfc9068"
 audience = ["https://gateway.example.org/fed"]
 clock_skew = '1min'
 jwks_max_age = '5min'
 jwks_refresh_interval = '30s'
 timeout = '2s'
+
+[auth.issuer.idp.profile]
 first_party_clients = ["ferrofed-console"]
 
 [trust.purpose_of_use]
@@ -471,14 +473,14 @@ const CHECKED_ONLY: &[&str] = &["signing.node_jwks_cache"];
 
 /// The keys another key of the maximal configuration holds to the one
 /// value it has, so no change of the key alone loads: an issuer that
-/// `[[trust.issuer]]` and `[[auth.issuer]]` both name, an issuer's `kind`
-/// and `profile`, each one of a closed set of names, and a node grant's
+/// `[[trust.issuer]]` and `[auth.issuer.<name>]` both name, an issuer's `kind`
+/// and `preset`, each one of a closed set of names, and a node grant's
 /// `client_auth`, which takes no client secret and presents a certificate
 /// only with one configured.
 const HELD: &[&str] = &[
-    "auth.issuer[0].issuer",
-    "auth.issuer[0].kind",
-    "auth.issuer[0].profile",
+    "auth.issuer.idp.issuer",
+    "auth.issuer.idp.kind",
+    "auth.issuer.idp.preset",
     "config.backend",
     "config.ui",
     "credentials.node-a-query.credentials.oauth.client_auth",

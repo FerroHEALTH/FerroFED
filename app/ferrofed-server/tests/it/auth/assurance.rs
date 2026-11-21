@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! An issuer's assurance table, `[auth.issuer.assurance]`, which
+//! An issuer's assurance table, `[auth.issuer.<name>.assurance]`, which
 //! `ferrohealth-smart` reads, and the per-issuer keys it replaces: the
 //! removed `[trust.issuer.assurance]`, `[trust.issuer.requester]` and
 //! `client_tokens_act_for_professional` each refuse to boot, naming their
@@ -26,14 +26,14 @@ use crate::run::binary;
 /// appended to the text is the entry's.
 fn issuer() -> String {
     String::from(
-        "[auth]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n",
+        "[auth]\n\n[auth.issuer.issuer]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n",
     )
 }
 
-/// One trusted issuer with an `[auth.issuer.assurance]` table of `body`.
+/// One trusted issuer with an `[auth.issuer.<name>.assurance]` table of `body`.
 fn assuring(body: &str) -> String {
     format!(
-        "[auth]\n\n[[auth.issuer]]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[auth.issuer.assurance]\n{body}\n"
+        "[auth]\n\n[auth.issuer.issuer]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[auth.issuer.issuer.assurance]\n{body}\n"
     )
 }
 
@@ -50,7 +50,7 @@ fn refusal(text: &str) -> Result<Option<ConfigError>, Box<dyn Error>> {
 #[test]
 fn an_assurance_table_resolves_to_the_issuers_verification() -> Result<(), Box<dyn Error>> {
     let text = assuring(
-        "minimum = \"substantial\"\n[auth.issuer.assurance.levels]\n\"urn:example:loa:1\" = \"low\"\n\"urn:example:loa:3\" = \"substantial\"\n",
+        "minimum = \"substantial\"\n[auth.issuer.issuer.assurance.levels]\n\"urn:example:loa:1\" = \"low\"\n\"urn:example:loa:3\" = \"substantial\"\n",
     );
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let trusted = settings.server.auth.issuers.first().ok_or("one issuer")?;
@@ -132,14 +132,14 @@ fn config_check_notes_an_issuer_without_an_assurance_table() -> Result<(), Box<d
     let stdout = String::from_utf8_lossy(&plain.stdout);
     assert!(
         stdout.contains(
-            "ferrofed: note: the issuer https://issuer.example.test declares no [auth.issuer.assurance]"
+            "ferrofed: note: the issuer https://issuer.example.test declares no [auth.issuer.<name>.assurance]"
         ),
         "{stdout}"
     );
     let assured = binary(
         &["config", "check"],
         &assuring(
-            "minimum = \"substantial\"\n[auth.issuer.assurance.levels]\n\"urn:example:loa:2\" = \"substantial\"\n",
+            "minimum = \"substantial\"\n[auth.issuer.issuer.assurance.levels]\n\"urn:example:loa:2\" = \"substantial\"\n",
         ),
     )?;
     assert_eq!(
@@ -149,6 +149,9 @@ fn config_check_notes_an_issuer_without_an_assurance_table() -> Result<(), Box<d
         String::from_utf8_lossy(&assured.stderr)
     );
     let stdout = String::from_utf8_lossy(&assured.stdout);
-    assert!(!stdout.contains("[auth.issuer.assurance]"), "{stdout}");
+    assert!(
+        !stdout.contains("[auth.issuer.<name>.assurance]"),
+        "{stdout}"
+    );
     Ok(())
 }

@@ -38,14 +38,14 @@ fn gateway(base: &str, public: &str, signing: &str) -> String {
     )
 }
 
-/// An `[[auth.issuer]]` table trusting the suite's test issuer, with
+/// An `[auth.issuer.<name>]` table trusting the suite's test issuer, with
 /// `audience` written when one is given.
 fn issuer(audience: Option<&str>) -> String {
     let audience = audience.map_or_else(String::new, |audience| {
         format!("audience = [\"{audience}\"]\n")
     });
     format!(
-        "\n[[auth.issuer]]\nissuer = \"{}\"\nkind = \"persons\"\n{audience}jwks_file = {}\n",
+        "\n[auth.issuer.issuer_n]\nissuer = \"{}\"\nkind = \"persons\"\n{audience}jwks_file = {}\n",
         crate::support::caller::ISSUER,
         crate::support::toml_path(crate::support::caller::jwks_file())
     )

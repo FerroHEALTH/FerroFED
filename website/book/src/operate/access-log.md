@@ -58,7 +58,7 @@ and no other part of the record carries it:
 | who acts: `person` when the token's `sub` names a natural person, `client` when a client application acts for the professional the token names | a `role` coded `person` or `client` |
 
 The assurance level is recorded only when the issuer's
-`[auth.issuer.assurance]` table declares the claim and the token states a
+`[auth.issuer.<name>.assurance]` table declares the claim and the token states a
 value it maps; the gateway never infers one, so a record of an issuer that
 declares no mapping carries no level. A client acting with no person behind
 it reaches no patient data, so every record names a person as the one who

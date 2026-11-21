@@ -125,6 +125,21 @@ pub struct Requester {
     role: String,
     organisation: String,
     organisation_type: String,
+    systems: Systems,
+}
+
+/// The code system each value of a [`Requester`] was stated in, `None` for a
+/// value stated without one, such as a claim's string.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Systems {
+    /// The system of the professional's identification number.
+    pub professional: Option<String>,
+    /// The system of the professional's role code.
+    pub role: Option<String>,
+    /// The system of the organisation's identifier.
+    pub organisation: Option<String>,
+    /// The system of the organisation's type.
+    pub organisation_type: Option<String>,
 }
 
 impl Requester {
@@ -146,7 +161,21 @@ impl Requester {
             role,
             organisation,
             organisation_type,
+            systems: Systems::default(),
         })
+    }
+
+    /// Returns the requester with the code system each value was stated in.
+    #[must_use]
+    pub fn with_systems(mut self, systems: Systems) -> Self {
+        self.systems = systems;
+        self
+    }
+
+    /// Returns the code system each value was stated in.
+    #[must_use]
+    pub const fn systems(&self) -> &Systems {
+        &self.systems
     }
 
     /// Returns the professional's identification number (UZI).
@@ -180,6 +209,7 @@ impl std::fmt::Debug for Requester {
             .field("role", &self.role)
             .field("organisation", &self.organisation)
             .field("organisation_type", &self.organisation_type)
+            .field("systems", &self.systems)
             .finish_non_exhaustive()
     }
 }

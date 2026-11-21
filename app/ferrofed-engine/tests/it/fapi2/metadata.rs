@@ -403,10 +403,10 @@ async fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
         serde_json::from_value(serde_json::json!({
             "issuer": server.issuer(),
             "kind": "persons",
-            "profile": "rfc9068",
+            "preset": "rfc9068",
             "audiences": [],
             "indicators": [RESOURCE],
-            "keys": {"max_onward_lifetime": "1h"},
+            "profile": {"max_onward_lifetime": "1h"},
             "actor_assertion": true,
         }))?;
     assert!(

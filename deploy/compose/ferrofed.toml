@@ -90,23 +90,25 @@ overall_timeout = "25s"
 # product_scope = "__ferrofed.operator"
 
 # EDIT: an authorization server your callers get their tokens from, one
-# [[auth.issuer]] table each. The gateway reads its metadata (RFC 8414) and
+# [auth.issuer.<name>] table each. The gateway reads its metadata (RFC 8414) and
 # the key set it names; set jwks_file for keys handed over out of band.
-[[auth.issuer]]
+[auth.issuer.idp]
 issuer = "https://idp.example.org"
 # Whose tokens it signs: persons (your professionals, signing in through
 # your own clients), patients, machines or federation.
 kind = "persons"
 # The preset its tokens are read under: rfc9068 (the default), entra,
-# keycloak, okta or nl.
-profile = "rfc9068"
+# keycloak, okta or ferrosmart.
+preset = "rfc9068"
 # EDIT: the audience the issuer names this gateway by in `aud`.
 audience = ["https://gateway.example.org/fed"]
 # EDIT: the client_ids of your own applications, the only clients a
 # person's token of this issuer is admitted through.
-first_party_clients = ["example-clinical-app"]
 # The clock skew allowed on exp, nbf and iat, at most 300 seconds.
 clock_skew = "1min"
+
+[auth.issuer.idp.profile]
+first_party_clients = ["example-clinical-app"]
 
 # A token with no purpose of use is refused (§13.4). Set false only with the
 # reason recorded in your deployment's security decisions.
@@ -117,7 +119,7 @@ clock_skew = "1min"
 # data needs; without it, no level is read or required, and config check
 # notes it.
 # https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
-# [auth.issuer.assurance]
+# [auth.issuer.idp.assurance]
 # claim = "acr"
 # minimum = "substantial"
 # levels = { "urn:example:loa:substantial" = "substantial", "urn:example:loa:high" = "high" }
@@ -127,11 +129,10 @@ clock_skew = "1min"
 # claim carrying the agency that issued the professional's identifier as the
 # "professional.issuing_authority_name" source when the tokens state one.
 # https://ferrofed.eu/docs/operate/authentication.html#what-a-token-states-about-its-professional
-[[auth.attributes]]
-issuer = "https://idp.example.org"
+[auth.issuer.idp.attributes]
 mapping = "iua"
 authorization_details_purposes = true
-# [auth.attributes.fields]
+# [auth.issuer.idp.attributes.fields]
 # "professional.issuing_authority_name" = [{ claim = "hp_issuing_authority" }]
 
 # What the issuer's tokens are honoured for beyond their user/ and system/
@@ -152,17 +153,19 @@ issuer = "https://idp.example.org"
 # ehr_id_system = "urn:oid:2.999.9.1"
 # Whether the RFC 8693 act claim of these tokens names the patient's
 # representative (Regulation (EU) 2025/327 Art 4(2)) is the issuer's own
-# act_represents_patient key, on its [[auth.issuer]] table.
+# act_represents_patient key, on its [auth.issuer.<name>] table.
 
 # Or an issuer whose opaque tokens are verified by RFC 7662 introspection, in
 # place of its key set; one issuer at most is introspected:
-# [[auth.issuer]]
+# [auth.issuer.opaque_idp]
 # issuer = "https://opaque-idp.example.org"
 # kind = "persons"
 # audience = ["https://gateway.example.org/fed"]
-# first_party_clients = ["example-clinical-app"]
 # mode = "introspection"
-# [auth.issuer.introspection.client]
+
+# [auth.issuer.opaque_idp.profile]
+# first_party_clients = ["example-clinical-app"]
+# [auth.issuer.opaque_idp.introspection.client]
 # client_id = "ferrofed"
 # client_secret_file = "/run/secrets/ferrofed/introspection-secret"
 
@@ -251,7 +254,7 @@ url = "https://arr.example.org/fhir"          # EDIT
 # [pmir]
 # endpoint.url = "https://pmir.example.org/fhir"           # EDIT
 # callback_url = "https://gateway.example.org/pmir/feed"   # EDIT
-# feed_clients = ["pmir-registry"]   # EDIT: the Registry's client at an [[auth.issuer]]
+# feed_clients = ["pmir-registry"]   # EDIT: the Registry's client at an [auth.issuer.<name>]
 #
 # [pmir.endpoint.credentials.oauth]
 # token_endpoint = "https://pmir.example.org/auth/token"   # EDIT
@@ -292,11 +295,11 @@ scope = "system/aql-*.s"
 [credentials."node-b-query".credentials.onward]
 issuer = "https://auth.node-b.example.org"
 kind = "persons"
-profile = "rfc9068"
+preset = "rfc9068"
 audiences = ["https://node-b.example.org/openehr"]
 indicators = ["https://node-b.example.org/openehr"]
 
-[credentials."node-b-query".credentials.onward.keys]
+[credentials."node-b-query".credentials.onward.profile]
 max_onward_lifetime = "1h"
 
 # FerroFED's own PostgreSQL store, off unless the table is set. A

@@ -83,7 +83,7 @@ pub struct Caller {
     /// The patient the caller's grant is confined to, when only a
     /// `patient/` grant covers the operation.
     patient: Option<PatientContext>,
-    /// Who asks for the data, as the `[[auth.federation]]` field sources of
+    /// Who asks for the data, as the `[auth.issuer.<name>.federation]` field sources of
     /// a professional of another party state it, when they state it whole
     /// (§13.4).
     requester: Option<Requester>,
@@ -91,7 +91,7 @@ pub struct Caller {
     professional: Professional,
     /// The assurance level the caller's authentication reached, as
     /// `ferrohealth-smart` assessed it under the issuer's
-    /// `[auth.issuer.assurance]`, when the token carries a value it maps.
+    /// `[auth.issuer.<name>.assurance]`, when the token carries a value it maps.
     assurance: Option<AssuranceLevel>,
     /// Who acts: the person the token names, or a client application.
     acting: Acting,
@@ -183,7 +183,7 @@ impl PatientContext {
 
 /// The professional's identification a token states.
 ///
-/// It is read by the issuer's `[[auth.attributes]]` table: the IHE IUA
+/// It is read by the issuer's `[auth.issuer.<name>.attributes]` table: the IHE IUA
 /// extension (ITI TF-2 3.71.4.2.2.1.1), and the agency that issued the
 /// identifier from the table's `professional.issuing_authority_name` source.
 /// `Debug` shows which members are present and none of their values.

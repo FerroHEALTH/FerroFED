@@ -414,17 +414,15 @@ fn config_check_prints_no_credential() -> TestResult {
     Ok(())
 }
 
-/// The suite's `[auth]` and `[trust]`, with the four `[auth]` tables that
-/// name an issuer added, and the issuer of each named by a URL that carries
-/// userinfo.
+/// The suite's `[auth]` and `[trust]`, its issuer carrying a `party` table
+/// beside its `attributes` table, the issuer named by a URL that carries
+/// userinfo wherever it is named.
 fn issuer_with_userinfo() -> String {
     let issuer = format!("https://{URL_USER}:{URL_PASSWORD}@idp.example.org");
     let named = crate::support::caller::ISSUER;
     let tables = format!(
-        "\n[[auth.attributes]]\nissuer = \"{named}\"\nmapping = \"iua\"\n\n\
-         [[auth.federation]]\nissuer = \"{named}\"\ncontact_point = false\n\n\
-         [[auth.party]]\nissuer = \"{named}\"\nidentifier_issuer = \"urn:example:people\"\nidentifier_type = \"guid\"\n\n\
-         [[auth.scopeless_subjects]]\nissuer = \"{named}\"\nsub = \"service\"\n"
+        "\n[auth.issuer.{}.party]\nidentifier_issuer = \"urn:example:people\"\nidentifier_type = \"guid\"\n",
+        crate::support::caller::issuer_name(named)
     );
     format!("{}{tables}", crate::support::caller::auth_toml()).replace(named, &issuer)
 }

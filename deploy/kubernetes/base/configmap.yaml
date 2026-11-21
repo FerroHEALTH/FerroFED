@@ -100,25 +100,27 @@ data:
     # product_scope = "__ferrofed.operator"
 
     # EDIT: an authorization server your callers get their tokens from, one
-    # [[auth.issuer]] table each; the gateway reads its RFC 8414 metadata
+    # [auth.issuer.<name>] table each; the gateway reads its RFC 8414 metadata
     # and the key set it names. For RFC 7662 introspection in place of a key
-    # set, set mode = "introspection" with an [auth.issuer.introspection]
+    # set, set mode = "introspection" with an [auth.issuer.<name>.introspection]
     # table, its client secret a key of the ferrofed-secrets Secret.
-    [[auth.issuer]]
+    [auth.issuer.idp]
     issuer = "https://idp.example.org"
     # Whose tokens it signs: persons, patients, machines or federation.
     kind = "persons"
     # EDIT: the audience the issuer names this gateway by in `aud`.
     audience = ["https://gateway.example.org/fed"]
+
+    [auth.issuer.idp.profile]
+    first_party_clients = ["example-clinical-app"]
     # EDIT: the client_ids of your own applications, the only clients a
     # person's token of this issuer is admitted through.
-    first_party_clients = ["example-clinical-app"]
 
     # The claim, the level of each of its values and the least level patient
     # data needs; without it, no level is read or required, and config check
     # notes it.
     # https://ferrofed.eu/docs/operate/authentication.html#professionals-and-assurance
-    # [auth.issuer.assurance]
+    # [auth.issuer.idp.assurance]
     # claim = "acr"
     # minimum = "substantial"
     # levels = { "urn:example:loa:substantial" = "substantial", "urn:example:loa:high" = "high" }
@@ -126,11 +128,10 @@ data:
     # What the issuer's tokens state about their professional: the IHE IUA
     # extension and the purposes of use of their authorization_details.
     # https://ferrofed.eu/docs/operate/authentication.html#what-a-token-states-about-its-professional
-    [[auth.attributes]]
-    issuer = "https://idp.example.org"
+    [auth.issuer.idp.attributes]
     mapping = "iua"
     authorization_details_purposes = true
-    # [auth.attributes.fields]
+    # [auth.issuer.idp.attributes.fields]
     # "professional.issuing_authority_name" = [{ claim = "hp_issuing_authority" }]
 
     # What the issuer's tokens are honoured for beyond their user/ and

@@ -146,7 +146,7 @@ async fn the_keycloak_recipe_of_the_production_guide_admits_a_user_and_refuses_a
     assert!(
         log.lines()
             .any(|line| line.contains(r#""event":"caller-refused""#)
-                && line.contains(r#""check":"typ names another kind""#)),
+                && line.contains(r#""check":"type-mismatch""#)),
         "the security log names the type check: {log}"
     );
     Ok(())

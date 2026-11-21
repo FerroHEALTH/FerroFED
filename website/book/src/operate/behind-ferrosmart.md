@@ -26,7 +26,7 @@ FerroSMART issues a token only for a base it serves, and writes that base as
 the token's `aud`. Its `[[ferrosmart.resource]]` table names the gateway's
 public URL, the one `gateway.public_url` gives
 ([The public address](public-address.md)), as an `openehr` resource. Each
-`[[auth.issuer]]` `audience` the gateway leaves out takes that same URL, so
+`[auth.issuer.<name>]` `audience` the gateway leaves out takes that same URL, so
 the two agree:
 
 ```toml,ferrosmart
@@ -37,7 +37,7 @@ kind = "openehr"
 
 ## The gateway trusts FerroSMART
 
-One `[[auth.issuer]]` table names FerroSMART's issuer with `kind =
+One `[auth.issuer.<name>]` table names FerroSMART's issuer with `kind =
 "persons"` and `profile = "ferrosmart"`
 ([Client authentication](authentication.md)). The preset keeps every
 `rfc9068` default but two: `typ` is `at+jwt` alone (RFC 9068 §2.1), and
@@ -45,11 +45,10 @@ every token carries `scope` (SMART App Launch 2.2.0, Obtain access token,
 Response). A token without `scope` is refused with `401`.
 
 ```toml
-[[auth.issuer]]
+[auth.issuer.smart]
 issuer = "https://smart.example.org"
 kind = "persons"
-profile = "ferrosmart"
-delegates = [{ client = "growth-chart" }]
+preset = "ferrosmart"
 ```
 
 - **A person through a SMART app.** List each app the gateway admits by
@@ -61,7 +60,7 @@ delegates = [{ client = "growth-chart" }]
   `client_id` (RFC 9068 §2.2), so the same table reads it as the system: a
   `persons` issuer also signs its machines' app-only tokens.
 - **One table per issuer.** Name FerroSMART in this one table. A second
-  `[[auth.issuer]]` table of the same issuer, such as a `machines` table
+  `[auth.issuer.<name>]` table of the same issuer, such as a `machines` table
   beside it, refuses the start, naming the issuer
   (FerroHEALTH/FerroSMART#591).
 
@@ -79,3 +78,6 @@ authorization server metadata at its issuer.
 
 No specification governs this deployment shape: our own design, built on
 SMART App Launch 2.2.0 and RFC 9068.
+
+[auth.issuer.smart.profile]
+delegates = [{ client = "growth-chart" }]

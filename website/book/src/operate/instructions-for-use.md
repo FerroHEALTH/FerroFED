@@ -106,11 +106,11 @@ list after it:
 [federation.consent]
 disclose = false               # Art 8: a restriction is never shown to a provider
 
-[[auth.issuer]]                # the issuer of the production guide's step 4
+[auth.issuer.idp]                # the issuer of the production guide's step 4
 issuer = "https://idp.example.org/realms/ferrofed"
 kind = "persons"
 
-[auth.issuer.assurance]
+[auth.issuer.idp.assurance]
 claim = "acr"
 minimum = "substantial"        # Annex II 3.1; "high" for cross-border from 26 March 2032
 levels = { "urn:example:loa:substantial" = "substantial", "urn:example:loa:high" = "high" }
@@ -134,7 +134,7 @@ years = 3                      # Art 9(2): at least three years from each access
   ([Withholding consent exclusions](consent-exclusions.md)).
 - **The assurance level, per issuer.** Annex II, point 3.1, asks for
   "reliable mechanisms for the identification and authentication of health
-  professionals". Set `[auth.issuer.assurance]` for every issuer whose
+  professionals". Set `[auth.issuer.<name>.assurance]` for every issuer whose
   tokens reach patient data, with `minimum = "substantial"`; Implementing
   Regulation (EU) 2026/2099 Art 6(3) raises a cross-border exchange to
   `"high"` from 26 March 2032. List the values your issuer writes; no
@@ -301,9 +301,9 @@ event, and its frequency is the event's:
 | Keep the PIX Manager fed | continuously: the gateway keeps no patient index of its own, so a patient whose records a member has not fed to the PIX Manager over ITI-104, or whose binding the PIX Manager has dropped, resolves at no member and answers as not found | [Identity resolution](identity.md) |
 | Move the gateway's keys out of `[server]` | before you upgrade to 0.0.16: this release refuses `server.public_url`, `server.replica`, `server.bindings_drain_timeout` and `server.overload_retry_after_s` as unknown keys, so write them as `gateway.public_url`, `gateway.replica`, `gateway.bindings_drain_timeout` and `server.retry_after` | [Upgrading](upgrading.md#to-v0016-from-v0015) |
 | Keep the console's identity provider reachable at its start | when the console's `[oidc]` names `issuer` alone: the console reads the provider's endpoints from its discovery document when it starts and refuses to start without it; name `authorization_endpoint`, `token_endpoint` and `jwks_uri` to start without asking the provider | [Upgrading](upgrading.md#to-v0016-from-v0015) |
-| Move the keys 0.0.20 removed, and declare each issuer's attributes | before you upgrade to 0.0.20: an `[[auth.attributes]]` table for every issuer whose callers declare a purpose of use, without which each such caller is refused `purpose-of-use-required`, and `[[trust.issuer]] professional_issuing_authority` moved into that table; an imaging receiver's template at FerroBRIDGE v0.0.24 with `CLUSTER.organisation.v1`; the keys 0.0.19 refused by name are now refused as unknown keys, and `config check` names each one | [Upgrading](upgrading.md#to-v0020-from-v0019) |
+| Move the keys 0.0.20 removed, and declare each issuer's attributes | before you upgrade to 0.0.20: an `[auth.issuer.<name>.attributes]` table for every issuer whose callers declare a purpose of use, without which each such caller is refused `purpose-of-use-required`, and `[[trust.issuer]] professional_issuing_authority` moved into that table; an imaging receiver's template at FerroBRIDGE v0.0.24 with `CLUSTER.organisation.v1`; the keys 0.0.19 refused by name are now refused as unknown keys, and `config check` names each one | [Upgrading](upgrading.md#to-v0020-from-v0019) |
 | Move the keys 0.0.19 renamed or moved | before you upgrade to 0.0.19: every span of time and amount of data under a key that names no unit, the outbound tables' address, TLS and credential under each `endpoint` table, and the node credentials nested under `credentials`; the keys 0.0.18 refused by name are now refused as unknown keys, and `config check` names each one | [Upgrading](upgrading.md#to-v0019-from-v0018) |
-| Move the keys 0.0.18 renamed or removed | before you upgrade to 0.0.18: this release refuses each one at start-up and in `config check`, naming its replacement, among them `[auth]` issuer keys moved onto each `[[auth.issuer]]`, `[[auth.basic.users]]`, `[stored_queries] url`, `[trust.issuer.national_contact_point]`, a node's `oauth2` and `fapi2` tables and every outbound table's TLS keys outside its `tls` sub-table | [Upgrading](upgrading.md#to-v0018-from-v0016) |
+| Move the keys 0.0.18 renamed or removed | before you upgrade to 0.0.18: this release refuses each one at start-up and in `config check`, naming its replacement, among them `[auth]` issuer keys moved onto each `[auth.issuer.<name>]`, `[[auth.basic.users]]`, `[stored_queries] url`, `[trust.issuer.national_contact_point]`, a node's `oauth2` and `fapi2` tables and every outbound table's TLS keys outside its `tls` sub-table | [Upgrading](upgrading.md#to-v0018-from-v0016) |
 | Back up FerroFED's own store | when `[store]` is set, before every upgrade: dump the `ferrofed` schema of its PostgreSQL database, which holds the stored queries, the emergency access counts, the DPoP proofs and a contact point's dispensations; an older release refuses a store a newer one migrated | [FerroFED's own store](store.md#migrations) |
 | Rotate a node grant's private key | on your key policy's schedule, and at once when it may have leaked: name the next key in the grant's `next_private_key_file`, register its `kid` at the node's authorization server, then move it to `private_key_file` and keep the old one as `previous_private_key_file` until the node no longer holds an assertion signed with it | [Signing keys and the JWK Set](onward-credentials.md#signing-keys-and-the-jwk-set) |
 | Re-read this page and the information sheet | at each release | the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md) |
@@ -380,7 +380,7 @@ deployment in the EU must plan for are:
 - **The access record names the professional only as the token does.** It
   records the professional's identifier and the assurance level when your
   issuer's tokens state them, and an assurance level only for an issuer
-  with `[auth.issuer.assurance]`
+  with `[auth.issuer.<name>.assurance]`
   ([The person behind an access](access-log.md#the-person-behind-an-access)).
 - **A received document is checked only as far as the validator can
   evaluate it.** Every invariant, binding and entry profile is evaluated,

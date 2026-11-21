@@ -96,8 +96,8 @@ token proving it. The caller's own token never reaches a node.
 
 **What changes the answer:** `trust.mode = "edge"` moves end-user
 authentication to your proxy, whose signed assertion the gateway then
-verifies; `[[auth.issuer]]` decides whose authentication you accept, and
-a `federation` issuer whose `[[auth.federation]]` table sets
+verifies; `[auth.issuer.<name>]` decides whose authentication you accept, and
+a `federation` issuer whose `[auth.issuer.<name>.federation]` table sets
 `contact_point = true` relays a professional another Member State
 authenticated.
 
@@ -287,7 +287,7 @@ your deployment's documentation.
 2. End-user authentication
    Who authenticates the clinicians of each calling organisation: …
    The assurance level each issuer's tokens state, and the least level
-     required for patient data ([auth.issuer.assurance]): …
+     required for patient data ([auth.issuer.<name>.assurance]): …
    National contact points ([[federation.contact_point]]), the entity of
      each Member State that authenticates its professionals (2026/2099
      Art 6(1)), and the country and issuing authorities configured for each: …

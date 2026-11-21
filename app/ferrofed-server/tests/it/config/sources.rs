@@ -282,11 +282,11 @@ fn onward_lane(endpoint: &str, extra: &str) -> String {
          [credentials.\"{endpoint}\".credentials.onward]\n\
          issuer = \"https://federation.cdr-a.example.org\"\n\
          kind = \"persons\"\n\
-         profile = \"rfc9068\"\n\
+         preset = \"rfc9068\"\n\
          audiences = [\"https://cdr-a.example.org/openehr\"]\n\
          indicators = [\"https://cdr-a.example.org/openehr\"]\n\
          {extra}\n\
-         [credentials.\"{endpoint}\".credentials.onward.keys]\n\
+         [credentials.\"{endpoint}\".credentials.onward.profile]\n\
          max_onward_lifetime = '1h'\n\n",
         key = toml::Value::String(crate::support::signing_key_file().to_owned())
     )

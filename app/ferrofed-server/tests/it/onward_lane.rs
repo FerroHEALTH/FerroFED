@@ -68,12 +68,12 @@ pub(crate) fn lane(issuer: &str, kind: &str, extra: &str) -> String {
             "[credentials.\"node-a-pub\".credentials.onward]\n",
             "issuer = \"{onward}\"\n",
             "kind = \"{kind}\"\n",
-            "profile = \"rfc9068\"\n",
+            "preset = \"rfc9068\"\n",
             "token_endpoint = \"{issuer}/token\"\n",
             "audiences = [\"{node}\"]\n",
             "indicators = [\"{node}\"]\n",
             "{extra}",
-            "[credentials.\"node-a-pub\".credentials.onward.keys]\n",
+            "[credentials.\"node-a-pub\".credentials.onward.profile]\n",
             "max_onward_lifetime = '1h'\n",
         ),
         issuer = issuer,
@@ -94,8 +94,8 @@ fn federation_lane(issuer: &str) -> String {
         "[credentials.\"node-a-pub\".credentials.onward.federation]\ncontact_point = false\nexchanges_from = [\"{ISSUER}\"]\nperson_mapping = \"sub\"\ncountries = [\"NL\"]\nissuing_authorities = [\"synthetic-authority\"]\nprovider_identifier_prefixes = [\"urn:oid:2.999\"]\n"
     );
     lane(issuer, "federation", "").replace(
-        "[credentials.\"node-a-pub\".credentials.onward.keys]",
-        &format!("{federation}\n[credentials.\"node-a-pub\".credentials.onward.keys]"),
+        "[credentials.\"node-a-pub\".credentials.onward.profile]",
+        &format!("{federation}\n[credentials.\"node-a-pub\".credentials.onward.profile]"),
     )
 }
 

@@ -3,8 +3,8 @@
 
 //! `[[federation.contact_point]]`, as written and as resolved.
 //!
-//! A national contact point for digital health is an `[[auth.issuer]]` of
-//! kind `federation` whose `[[auth.federation]]` table sets
+//! A national contact point for digital health is an `[auth.issuer.<name>]` of
+//! kind `federation` whose `[auth.issuer.<name>.federation]` table sets
 //! `contact_point = true`: `ferrohealth-smart` holds its tokens to the
 //! MyHealth@EU contact-point profile (eHDSI SAML Profile 10.0.0 §2.1, §2.3)
 //! and reads what they assert. Its connector relays the requests of health
@@ -29,8 +29,8 @@ use crate::config::error::Error;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ContactPointTable {
-    /// The `[[auth.issuer]]` the table describes, a `federation` issuer
-    /// whose `[[auth.federation]]` table sets `contact_point = true`; a
+    /// The `[auth.issuer.<name>]` the table describes, a `federation` issuer
+    /// whose `[auth.issuer.<name>.federation]` table sets `contact_point = true`; a
     /// password in its userinfo reaches no rendering.
     pub issuer: SecretUrl,
     /// The request header the contact point's national connector sends its
@@ -39,7 +39,7 @@ pub struct ContactPointTable {
     /// none is read.
     pub correlation_header: Option<String>,
     /// The ISO 3166-1 alpha-2 codes, beside the Member States
-    /// ([`MEMBER_STATES`]), the `[[auth.federation]] countries` of this
+    /// ([`MEMBER_STATES`]), the `[auth.issuer.<name>.federation] countries` of this
     /// contact point may name: a third country whose contact point the
     /// Commission connected to MyHealth@EU (Regulation (EU) 2025/327
     /// Art 24(3)); none by default.
@@ -136,7 +136,7 @@ impl ContactPointTable {
 /// # Errors
 ///
 /// Returns [`Error::Missing`] for a table naming no issuer, or a
-/// contact-point table of `[[auth.federation]]` naming no source of
+/// contact-point table of `[auth.issuer.<name>.federation]` naming no source of
 /// `provider.issuing_authority_name`, which the access record names the
 /// provider's identifier by; and [`Error::Auth`] for a table that names an
 /// issuer twice or names no contact-point issuer
@@ -181,7 +181,7 @@ pub fn declare(issuers: &mut [IssuerSettings], tables: &[ContactPointTable]) -> 
     Ok(())
 }
 
-/// Holds the `[[auth.federation]]` table of a contact point to what the
+/// Holds the `[auth.issuer.<name>.federation]` table of a contact point to what the
 /// gateway reads from it: a Member State or a declared additional country
 /// for every `countries` code, and a source of the provider's issuing
 /// authority.

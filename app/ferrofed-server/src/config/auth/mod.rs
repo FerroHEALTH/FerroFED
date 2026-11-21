@@ -5,7 +5,7 @@
 //! N25), as written and as resolved.
 //!
 //! `[auth]` is the section `ferrohealth-smart` reads in every FerroHEALTH
-//! product: one `[[auth.issuer]]` table per issuer the gateway trusts, with
+//! product: one `[auth.issuer.<name>]` table per issuer the gateway trusts, with
 //! its `kind`, its profile, its audiences and its token rules, each issuer
 //! verified against the key set its metadata names (RFC 8414 §3), a key set
 //! file, or RFC 7662 introspection; and the product scope. No Basic user is
@@ -92,7 +92,7 @@ impl Default for AuthSettings {
 
 impl AuthSettings {
     /// What `config check` notes about the issuers: each one that declares
-    /// no `[auth.issuer.assurance]`, so no assurance level is read from its
+    /// no `[auth.issuer.<name>.assurance]`, so no assurance level is read from its
     /// tokens or required of them (Regulation (EU) 2025/327 Annex II 3.1).
     #[must_use]
     pub fn notes(&self) -> Vec<String> {
@@ -101,7 +101,7 @@ impl AuthSettings {
             .filter(|issuer| issuer.verification.assurance().is_none())
             .map(|issuer| {
                 format!(
-                    "the issuer {} declares no [auth.issuer.assurance]: the gateway reads no authentication assurance from its tokens and requires none for patient data",
+                    "the issuer {} declares no [auth.issuer.<name>.assurance]: the gateway reads no authentication assurance from its tokens and requires none for patient data",
                     issuer.issuer
                 )
             })
@@ -134,7 +134,7 @@ pub struct IssuerSettings {
     /// Where this issuer's `patient/` grants are confined, when they are
     /// honoured at all.
     pub patient: Option<PatientBinding>,
-    /// This issuer as a national contact point, when its `[[auth.federation]]`
+    /// This issuer as a national contact point, when its `[auth.issuer.<name>.federation]`
     /// table sets `contact_point = true`, with its
     /// `[[federation.contact_point]]`: its requests are served with consent
     /// exclusions withheld, and its tokens relay the professional and the
@@ -191,7 +191,7 @@ impl Verification {
         }
     }
 
-    /// Returns the issuer's `[[auth.federation]]` table, when it is a
+    /// Returns the issuer's `[auth.issuer.<name>.federation]` table, when it is a
     /// `federation` issuer.
     #[must_use]
     pub fn federation(&self) -> Option<&FederationSection> {
@@ -201,7 +201,7 @@ impl Verification {
         }
     }
 
-    /// Returns the issuer's assurance table, `[auth.issuer.assurance]`: the
+    /// Returns the issuer's assurance table, `[auth.issuer.<name>.assurance]`: the
     /// claim, the level of each of its values and the least level a
     /// patient-data request needs, when the deployment declares it.
     #[must_use]
@@ -213,7 +213,7 @@ impl Verification {
     }
 
     /// Whether the issuer is a MyHealth@EU contact point, its
-    /// `[[auth.federation]]` table setting `contact_point = true`.
+    /// `[auth.issuer.<name>.federation]` table setting `contact_point = true`.
     #[must_use]
     pub fn is_contact_point(&self) -> bool {
         self.federation()
@@ -253,7 +253,7 @@ pub enum AuthFault {
     Disabled,
     /// Two `[[trust.issuer]]` entries name the same issuer.
     DuplicateIssuer,
-    /// A `[[trust.issuer]]` entry names no `[[auth.issuer]]`, so no token of
+    /// A `[[trust.issuer]]` entry names no `[auth.issuer.<name>]`, so no token of
     /// it could be verified.
     UnknownIssuer,
     /// More than one issuer is introspected, so an opaque token, which names
@@ -276,7 +276,7 @@ pub enum AuthFault {
     /// `countries` names a code that is neither.
     CountryCode,
     /// A `[[federation.contact_point]]` names no issuer whose
-    /// `[[auth.federation]]` table sets `contact_point = true`.
+    /// `[auth.issuer.<name>.federation]` table sets `contact_point = true`.
     NotContactPoint,
     /// A contact-point issuer has no `[[federation.contact_point]]`.
     ContactPointUndeclared,
@@ -293,7 +293,7 @@ impl fmt::Display for AuthFault {
             Self::Disabled => "is false, and the gateway admits no caller it did not authenticate",
             Self::DuplicateIssuer => "names an issuer another [[trust.issuer]] already names",
             Self::UnknownIssuer => {
-                "names an issuer no [[auth.issuer]] table trusts, so no token of it could be verified"
+                "names an issuer no [auth.issuer.<name>] table trusts, so no token of it could be verified"
             }
             Self::SeveralIntrospection => {
                 "introspects at a second issuer: an opaque token names no issuer, so one issuer at most is introspected"
@@ -313,7 +313,7 @@ impl fmt::Display for AuthFault {
                 "names a code that is not two upper-case letters (ISO 3166-1 alpha-2), or a Member State, which every contact point admits; or, in a contact point's countries, a code that is no Member State and not one of its [[federation.contact_point]] additional_countries"
             }
             Self::NotContactPoint => {
-                "names no [[auth.issuer]] of kind \"federation\" whose [[auth.federation]] table sets contact_point = true"
+                "names no [auth.issuer.<name>] of kind \"federation\" whose [auth.issuer.<name>.federation] table sets contact_point = true"
             }
             Self::ContactPointUndeclared => {
                 "is a contact point, and no [[federation.contact_point]] table names it"
@@ -322,7 +322,7 @@ impl fmt::Display for AuthFault {
                 "is set, but gateway.public_url is not, and a DPoP proof's htu is checked against the URL clients address the gateway at"
             }
             Self::BasicRemoved => {
-                "is refused: the gateway admits no Basic caller; a machine authenticates with a client-credentials token (RFC 6749 §4.4) of an [[auth.issuer]], its client named in metrics.scrape_clients or pmir.feed_clients"
+                "is refused: the gateway admits no Basic caller; a machine authenticates with a client-credentials token (RFC 6749 §4.4) of an [auth.issuer.<name>] issuer, its client named in metrics.scrape_clients or pmir.feed_clients"
             }
         })
     }
@@ -333,8 +333,8 @@ impl Auth {
     /// `[[federation.contact_point]]` tables of `federation`, reading every
     /// `_file` secret.
     ///
-    /// An `[[auth.issuer]]` that names no audience takes `public`, the public
-    /// base URL as written, when that is set. A section that names no issuer
+    /// An `[auth.issuer.<name>]` that names no audience takes `public`, the
+    /// public base URL as written, when that is set. A section that names no issuer
     /// and no Basic user resolves to no issuer, and every guarded request is
     /// then refused.
     ///
@@ -350,28 +350,26 @@ impl Auth {
         federation: &Federation,
         public: Option<&PublicUrl>,
     ) -> Result<AuthSettings, Error> {
-        let mut section = self.0.clone();
+        let section = &self.0;
         if !section.enabled {
             return Err(fault("auth.enabled", AuthFault::Disabled));
         }
+        if let Some((name, _)) = section
+            .issuers()
+            .find(|(_, entry)| !entry.scopeless_subjects.is_empty())
+        {
+            return Err(fault(
+                &format!("auth.issuer.{name}.scopeless_subjects"),
+                AuthFault::Unread,
+            ));
+        }
         for (key, empty) in [
-            (
-                "auth.scopeless_subjects",
-                section.scopeless_subjects.is_empty(),
-            ),
             ("auth.capabilities", section.capabilities.is_empty()),
             ("auth.scopes_supported", section.scopes_supported.is_empty()),
             ("auth.described_issuer", section.described_issuer.is_none()),
         ] {
             if !empty {
                 return Err(fault(key, AuthFault::Unread));
-            }
-        }
-        if let Some(public) = public {
-            for entry in &mut section.issuer {
-                if entry.audience.iter().all(String::is_empty) {
-                    entry.audience = vec![public.as_str().to_owned()];
-                }
             }
         }
         let no_issuer = section.issuer.is_empty();
@@ -386,7 +384,8 @@ impl Auth {
             .and_then(|basic| basic.users.first())
             .map(|user| user.user.clone());
         if !no_issuer || basic_user.is_some() {
-            let resolved = section.resolve().map_err(|source| Error::Smart {
+            let bases: Vec<&str> = public.map(PublicUrl::as_str).into_iter().collect();
+            let resolved = section.resolve(&bases).map_err(|source| Error::Smart {
                 section: String::from("auth"),
                 source: Box::new(source),
             })?;

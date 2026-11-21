@@ -31,7 +31,7 @@
 //! mutual TLS the Registry asks for.
 //!
 //! The Registry sends the feed with a client-credentials token (RFC 6749
-//! §4.4) of a client `feed_clients` names, issued by an `[[auth.issuer]]` the
+//! §4.4) of a client `feed_clients` names, issued by an `[auth.issuer.<name>]` the
 //! gateway trusts and agreed with its operator out of band: the subscription carries no credential for the feed
 //! (§2:3.94.5), and ITI-93 leaves the client authentication to "an
 //! appropriate agreement between client and server" (§2:3.93.5). Both the
@@ -79,7 +79,7 @@ pub struct Pmir {
     /// The path under `{base}` the gateway serves the feed at.
     pub path: String,
     /// The clients the Registry may send the feed as, each with a
-    /// client-credentials token of an `[[auth.issuer]]` (RFC 6749 §4.4).
+    /// client-credentials token of an `[auth.issuer.<name>]` (RFC 6749 §4.4).
     pub feed_clients: Vec<String>,
     /// The assigning authority the feed is limited to, so the Registry sends
     /// only the Patients with an identifier it issued

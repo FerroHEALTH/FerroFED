@@ -12,7 +12,7 @@ client address the gateway takes.
 ## The public base URL
 
 Three keys name the URL clients and services reach the gateway at: each
-`[[auth.issuer]]` `audience`, the JWK Set's `signing.jwks_uri` and the PMIR
+`[auth.issuer.<name>]` `audience`, the JWK Set's `signing.jwks_uri` and the PMIR
 feed's `pmir.callback_url`. Name it once in `gateway.public_url`, with the scheme,
 the host, any port and the [base path](configuration.md#the-base-path), and
 leave the three out:
