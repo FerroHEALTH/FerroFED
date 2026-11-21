@@ -339,7 +339,7 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is 0.3.0 since 2026-11-21, the line the published `eehrxf` 0.22,
+pin is 0.3.0 since 2026-11-21, the line the published `eehrxf` 0.23,
 `fhirconnect` 0.7 and `openehr-mapping-core` 0.5 require by a caret range, so
 the lock holds one copy of each member (#1181, #813, #1891, #1899, #1915).
 `openehr-sdt` left the group with 0.0.116, which no longer carries the
@@ -493,11 +493,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | 0.22.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `eehrxf` | 0.23.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
 | `fhirconnect` | 0.7.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | 0.5.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | 0.16.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | 0.16.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | 0.17.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | 0.17.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 

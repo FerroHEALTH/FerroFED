@@ -1,0 +1,1 @@
+- FerroFED moves to `ferrohealth-smart` 0.33, with `ferrohealth-session` 0.28, `ferrohealth-server` 0.12, `eehrxf` 0.23, `ferrobridge-term` and `ferrobridge-validator` 0.17, and `ihe-iti` and `nl-generic-functions` 0.18, the releases on the same line, so one copy of each links. The gateway keeps reading a request body as sent (#1920).
