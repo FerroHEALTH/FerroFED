@@ -672,7 +672,7 @@ runs:
 
 Against Art 28(b), a limitation left out:
 
-100. The instructions for use did not name the `[[auth.attributes]]` table
+100. The instructions for use did not name the `[auth.issuer.<name>.attributes]` table
      a purpose-of-use issuer needs from 0.0.20, the imaging template it
      needs, or that the keys 0.0.19 refused by name are now refused as
      unknown keys. Their maintenance table now does, with the Upgrading

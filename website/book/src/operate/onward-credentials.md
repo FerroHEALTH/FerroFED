@@ -307,14 +307,14 @@ kind `persons` on each of the node's endpoints, and a deployment adds the node's
 FerroEHR's party binding page holds back for a gateway, once its gateway
 runs that release with those lanes. The node's side of the lane:
 
-- the onward issuer is an `[[auth.issuer]]` of kind `persons` whose
+- the onward issuer is an `[auth.issuer.<name>]` of kind `persons` whose
   `audience` is the node's own and is one of the lane's `audiences`;
 - the gateway's client is one of the issuer's `delegates`:
   `{ client = "<client_id>" }` where the issued token names the gateway as
   its client, or `{ sub = "<client_id>" }` where it names the gateway in
   `act`;
 - each person the lane carries binds to a `PERSON` under the issuer's
-  `[[auth.party]]` table, provisioned through SCIM or created at the first
+  `[auth.issuer.<name>.party]` table, provisioned through SCIM or created at the first
   request (FerroEHR's just-in-time creation).
 
 The quickstart runs four such nodes, and the end-to-end lane holds that a

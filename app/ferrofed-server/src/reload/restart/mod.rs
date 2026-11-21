@@ -31,7 +31,7 @@ pub fn keys() -> Vec<&'static str> {
 /// started with.
 ///
 /// The audience also names the gateway in its access records, read once at
-/// start, so a changed `[[auth.issuer]] audience` waits for a restart (no
+/// start, so a changed `[auth.issuer.<name>] audience` waits for a restart (no
 /// specification governs this: our own design).
 fn boot_audience(boot: &AuthSettings, mut fresh: AuthSettings) -> AuthSettings {
     for issuer in &mut fresh.issuers {

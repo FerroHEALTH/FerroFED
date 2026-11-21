@@ -11,13 +11,12 @@ issuer by naming that platform's member and the identifier system under
 which your cross-reference service knows its `ehr_id`s:
 
 ```toml
-[[auth.issuer]]
+[auth.issuer.patient_portal]
 issuer = "https://patient-portal.example.org"
 kind = "patients"
 audience = ["https://gateway.example.org/fed"]
 
-[[auth.attributes]]
-issuer = "https://patient-portal.example.org"
+[auth.issuer.patient_portal.attributes]
 mapping = "iua"
 authorization_details_purposes = true
 
@@ -33,7 +32,7 @@ The issuer is a `patients` issuer: `ferrohealth-smart` admits its token only
 when the token carries `patient/` scopes and no `user/` or `system/` scope,
 so a professional of the same platform signs in through an issuer of its
 own ([Who the caller is](authentication.md#who-the-caller-is)). Its
-`[[auth.attributes]]` table reads the purpose of use each token declares,
+`[auth.issuer.<name>.attributes]` table reads the purpose of use each token declares,
 the patient's and a representative's alike; it names no field but
 `purpose_of_use`, since a `patients` token states no professional. Without
 the table, every caller of the issuer is refused
@@ -102,7 +101,7 @@ person](../evaluate/receiving-documents.md#inserted-by-the-person)).
 A proxy or a legal representative (Art 4(2)) who inserts for the person is
 told apart only when the token says so. RFC 8693 §4.1 names any delegate
 in the `act` claim, a client service as well as a person, so set
-`act_represents_patient = true` on the `[[auth.issuer]]` of `kind =
+`act_represents_patient = true` on the `[auth.issuer.<name>]` of `kind =
 "patients"` only for an issuer whose patient tokens name the
 representative there; on any other issuer, a patient token that carries
 `act` is refused as an invalid token. Every entry of

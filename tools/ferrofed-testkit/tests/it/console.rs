@@ -60,12 +60,7 @@ fn gateway_configuration(
     let document = toml::Value::String(document.display().to_string());
     let key_file = toml::Value::String(key_file.display().to_string());
     Ok(format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n\
-         [federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n\
-         [signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
-         [auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n\
-         [[auth.issuer]]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\n\
-         first_party_clients = [\"synthetic-client\"]\njwks_file = {jwks}\n"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\n\n[signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[auth.issuer.issuer_issuer]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {jwks}\n\n[auth.issuer.issuer_issuer.profile]\nfirst_party_clients = [\"synthetic-client\"]\n"
     ))
 }
 

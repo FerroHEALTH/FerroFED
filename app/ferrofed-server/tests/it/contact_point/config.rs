@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! A contact point as written: an `[[auth.issuer]]` of kind `federation`
-//! whose `[[auth.federation]]` table sets `contact_point = true`, with its
+//! A contact point as written: an `[auth.issuer.<name>]` of kind `federation`
+//! whose `[auth.issuer.<name>.federation]` table sets `contact_point = true`, with its
 //! `[[federation.contact_point]]`. A table naming no contact point, a
 //! contact point without its table, a country neither a Member State nor
 //! added, a correlation header that is no field name or carries a
@@ -19,12 +19,12 @@ use ferrofed_server::config::error::Error as ConfigError;
 /// The contact point's issuer.
 const NCP: &str = "https://ncp.example.test";
 
-/// The contact point's `[[auth.issuer]]` and `[[auth.federation]]`, its
+/// The contact point's `[auth.issuer.<name>]` and `[auth.issuer.<name>.federation]`, its
 /// `countries` `countries`, with `federation` added to the latter, beside
 /// the FerroFED store a contact point needs.
 fn issuer(countries: &str, federation: &str) -> String {
     format!(
-        "{}\n[auth]\n\n[[auth.issuer]]\nissuer = \"{NCP}\"\nkind = \"federation\"\naudience = [\"urn:example:gateway\"]\nsender_constraint = \"required\"\n\n[[auth.federation]]\nissuer = \"{NCP}\"\ncontact_point = true\nmapping = \"ehdsi\"\ncountries = [{countries}]\nfields.\"professional.country_code\" = [{{ constant = \"LU\" }}]\nfields.\"professional.issuing_authority_name\" = [{{ constant = \"hp-authority\" }}]\n{federation}",
+        "{}\n[auth]\n\n[auth.issuer.issuer_ncp]\nissuer = \"{NCP}\"\nkind = \"federation\"\naudience = [\"urn:example:gateway\"]\nsender_constraint = \"required\"\n\n[auth.issuer.issuer_ncp.federation]\ncontact_point = true\nmapping = \"ehdsi\"\ncountries = [{countries}]\nfields.\"professional.country_code\" = [{{ constant = \"LU\" }}]\nfields.\"professional.issuing_authority_name\" = [{{ constant = \"hp-authority\" }}]\n{federation}",
         crate::support::store_table()
     )
 }
@@ -84,7 +84,7 @@ fn a_contact_point_with_its_table_is_declared() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn an_issuer_that_is_no_federation_issuer_is_no_contact_point() -> Result<(), Box<dyn Error>> {
-    let text = "[auth]\n\n[[auth.issuer]]\nissuer = \"https://idp.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n";
+    let text = "[auth]\n\n[auth.issuer.idp]\nissuer = \"https://idp.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n";
     let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
     let [issuer] = settings.server.auth.issuers.as_slice() else {
         return Err("one issuer".into());

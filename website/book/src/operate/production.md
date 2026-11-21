@@ -205,7 +205,7 @@ scope, a clinical application that signs users in, and a reporting service
 that uses the client-credentials grant. The realm's `acr.loa.map` names the
 levels of Keycloak's authentication flows, so its tokens carry `acr` as
 `urn:example:loa:substantial` for level 1 and `urn:example:loa:high` for
-level 2, the values the gateway's `[auth.issuer.assurance]` reads below.
+level 2, the values the gateway's `[auth.issuer.<name>.assurance]` reads below.
 Keycloak 26.8.0 wrote level 1 into a token after a password sign-in and
 into a client-credentials token. A real realm reaches each level only by a
 flow whose means meets it, which Regulation (EU) No 910/2014 Art 8(2)
@@ -329,22 +329,23 @@ since the gateway compares `iss` exactly:
 [auth]
 product_scope = "__ferrofed.operator"
 
-[[auth.issuer]]
+[auth.issuer.idp]
 issuer = "https://idp.example.org/realms/ferrofed"
 kind = "persons"
-first_party_clients = ["example-clinical-app", "example-reporting-service"]
 clock_skew = "1min"
 
-[auth.issuer.assurance]
+[auth.issuer.idp.profile]
+first_party_clients = ["example-clinical-app", "example-reporting-service"]
+
+[auth.issuer.idp.assurance]
 claim = "acr"
 minimum = "substantial"
 
-[auth.issuer.assurance.levels]
+[auth.issuer.idp.assurance.levels]
 "urn:example:loa:substantial" = "substantial"
 "urn:example:loa:high" = "high"
 
-[[auth.attributes]]
-issuer = "https://idp.example.org/realms/ferrofed"
+[auth.issuer.idp.attributes]
 mapping = "iua"
 
 [[trust.issuer]]
@@ -352,7 +353,7 @@ issuer = "https://idp.example.org/realms/ferrofed"
 backend_clients = ["example-reporting-service"]
 ```
 
-The `[[auth.attributes]]` table reads the professional and the purpose of
+The `[auth.issuer.<name>.attributes]` table reads the professional and the purpose of
 use from the IHE IUA claims under `extensions.ihe_iua` (ITI TF-2
 §3.71.4.2.2.1.1), where the realm's `purpose-of-use` mapper below writes
 them.
@@ -365,7 +366,7 @@ since its service account's `sub` is a user's and never the client's.
 token only a `system/` scope covers names no natural person, so the
 reporting service reaches no patient data: its query is refused
 `401 natural-person-required`.
-`[auth.issuer.assurance]` reads the realm's `acr` and refuses a token below
+`[auth.issuer.<name>.assurance]` reads the realm's `acr` and refuses a token below
 `substantial` with `401 authentication-assurance-insufficient`
 ([Professionals and assurance](authentication.md#professionals-and-assurance)).
 The gateway reads the realm's metadata at its OpenID Connect location and

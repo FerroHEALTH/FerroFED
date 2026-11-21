@@ -53,7 +53,7 @@ gateway's own listener, so no client of the federation reaches it.
 | Request | Admitted | Refused |
 |---|---|---|
 | `GET /metrics`, no `scrape_clients` named | every peer | never |
-| `GET /metrics`, `scrape_clients` named | a scrape with a client-credentials token (RFC 6749 §4.4) an `[[auth.issuer]]` signed for a client `scrape_clients` names | `401 unauthenticated` with a `WWW-Authenticate: Bearer` challenge, for a scrape with no token, a token that does not verify or another scheme; `403 operation-refused` for another client's token or a person's |
+| `GET /metrics`, `scrape_clients` named | a scrape with a client-credentials token (RFC 6749 §4.4) an `[auth.issuer.<name>]` signed for a client `scrape_clients` names | `401 unauthenticated` with a `WWW-Authenticate: Bearer` challenge, for a scrape with no token, a token that does not verify or another scheme; `403 operation-refused` for another client's token or a person's |
 | A write action, such as the distribution | a caller whose access token carries [`auth.product_scope`](authentication.md#the-operator-surface), from any peer | `401 unauthenticated` without a token that verifies, `403 scope-insufficient` without the operator scope |
 | A write action under `profile = "development"` | as above, and a loopback peer (`127.0.0.0/8`, `::1`) that sends no credential | as above |
 | A read of the configuration revisions, `GET /admin/config…` | as a write action, and never recorded as one | as a write action |
@@ -88,7 +88,7 @@ and restrict who reads them. No `[telemetry] filter` quiets the
 `ferrofed::security` target below `info`, so the records are written
 whatever the filter says.
 
-`scrape_clients` names clients of an `[[auth.issuer]]` the gateway trusts
+`scrape_clients` names clients of an `[auth.issuer.<name>]` the gateway trusts
 ([Client authentication](authentication.md#configuration)). The scraper
 obtains its own token with the client-credentials grant (RFC 6749 §4.4),
 and the gateway admits it only when `ferrohealth-smart` classifies the token
@@ -124,7 +124,7 @@ answers. `serve` and `config check` refuse:
 - outside `profile = "development"`, a `listen` address that is not a
   loopback address with nothing to authenticate the scrape: neither
   `scrape_clients` nor a `[metrics.tls]` with `client_auth = "required"`;
-- `scrape_clients` with no `[[auth.issuer]]` to sign their tokens;
+- `scrape_clients` with no `[auth.issuer.<name>]` to sign their tokens;
 - a `listen` address equal to `server.listen`.
 
 `serve` and `config check` refuse the collector as [Tracing](tracing.md#turning-it-on)

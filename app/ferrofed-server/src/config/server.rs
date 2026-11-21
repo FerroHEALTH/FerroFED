@@ -67,7 +67,7 @@ pub struct Metrics {
     /// remote address is refused unless this is set.
     pub allow_remote: bool,
     /// The clients a scrape of `GET /metrics` may authenticate as, each with
-    /// a client-credentials token of an `[[auth.issuer]]` (RFC 6749 §4.4);
+    /// a client-credentials token of an `[auth.issuer.<name>]` (RFC 6749 §4.4);
     /// empty, the scrape is open. Outside the development profile a `listen`
     /// address that is not a loopback one needs a client here, or
     /// `[metrics.tls] client_ca_file`.

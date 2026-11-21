@@ -138,7 +138,7 @@ authentication` at `WARN` under `ferrofed::security`, with `event`
 answer's challenge says only `invalid_token` for every token that does not
 verify (RFC 6750 §3.1), so read the `check` in the log.
 
-**Fix.** By `check`: `issuer not trusted` is an `iss` no `[[auth.issuer]]`
+**Fix.** By `check`: `issuer not trusted` is an `iss` no `[auth.issuer.<name>]`
 lists; `audience` is an `aud` other than the issuer's `audience`; a token
 the issuer's `kind` admits no caller for (an unlisted client, an unlisted
 actor) is `no caller kind`; `expired` and
@@ -383,7 +383,7 @@ binding a socket ([Running it](configuration.md#running-it)).
 | `… is not a socket address`, `… is not a base path`, `… is zero; it must be positive` | Correct the value of the named key ([The base path](configuration.md#the-base-path)). |
 | `… is not https, and … would travel over it in cleartext` | A credential or patient identifier would go over plain `http` outside the development profile; use `https` ([What must travel encrypted](configuration.md#what-must-travel-encrypted)). |
 | `… is plain http to a host that is not loopback` | An issuer's key set or introspection endpoint is plain `http`; use `https` ([Client authentication](authentication.md#configuration)). |
-| `auth.…` with a fault, or `the gateway federates, and [auth] names no [[auth.issuer]]` | Correct `[auth]`; a gateway with a registry lists at least one issuer ([Client authentication](authentication.md#configuration)). |
+| `auth.…` with a fault, or `the gateway federates, and [auth] names no [auth.issuer.<name>]` | Correct `[auth]`; a gateway with a registry lists at least one issuer ([Client authentication](authentication.md#configuration)). |
 | `… is not an endpoint id`, `… names …, which is no endpoint of the registry` | A `[credentials]`, `[trust.issuer.patient]`, `federation.demographic_endpoint` or `access_log.retention.origins` key names an endpoint the registry document does not declare ([Onward credentials](onward-credentials.md)). |
 | `… names more than one credentials scheme`, `… names no credentials`, `… takes basic credentials, not …`, `… takes basic credentials or the oauth client credentials grant, not …` | One credentials section names exactly one scheme its service takes ([Onward credentials](onward-credentials.md)). |
 | `… cannot be sent in the Authorization header`, `… cannot be sent: it holds …` | A basic user or password with a character RFC 7617 forbids ([Running it](configuration.md#running-it)). |
@@ -490,7 +490,7 @@ which every row has.
 | `rate-limited` | 429 | One caller sent more than `[server.caller_rate]` admits. | `limit` `caller-rate` under `ferrofed_server::overload`. | Raise the rate, or the caller slows down ([The per-caller rate](overload.md#the-per-caller-rate)). |
 | `access-unrecorded` | 503 | The record of an access could not be stored. | `the access could not be recorded, so its answer is withheld` at `ERROR` under `ferrofed_server::access`. | Free the spool ([Requests are refused `503 access-unrecorded`](#requests-are-refused-503-access-unrecorded)). |
 | `natural-person-required` | 401 | A patient-data request's token names no natural person. | `caller-refused`, `reason` `natural-person`. | Use a token of a person; a system's token reaches no patient data ([Professionals and assurance](authentication.md#professionals-and-assurance)). |
-| `authentication-assurance-insufficient` | 401 | The token states no assurance at the issuer's minimum. | `caller-refused`, `reason` `assurance`. | The user authenticates at the level, or correct `[auth.issuer.assurance]` ([The assurance level](authentication.md#the-assurance-level)). |
+| `authentication-assurance-insufficient` | 401 | The token states no assurance at the issuer's minimum. | `caller-refused`, `reason` `assurance`. | The user authenticates at the level, or correct `[auth.issuer.<name>.assurance]` ([The assurance level](authentication.md#the-assurance-level)). |
 | `contact-point-attributes-required` | 403 | A national contact point's token falls short of the MyHealth@EU contact-point profile. | `caller-refused`, `reason` `contact-point-attributes`. | The contact point sends what the eHDSI assertion carries under `ehdsi` ([National contact points](authentication.md#national-contact-points)). |
 | `emergency-limit-reached` | 403 | A professional a national contact point relays reached the limit of emergency accesses in the window. | `emergency-limit-reached` at `WARN` under `ferrofed::security`, naming the professional and `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS`. | None at the gateway: the limit holds until the oldest access leaves the window ([The emergency access limit](../integrate/national-contact-point.md#the-emergency-access-limit)). |
 | `emergency-uncounted` | 503 | The store did not answer when an emergency access was counted. | `a national contact point's emergency access could not be counted` at `ERROR` under `ferrofed_server::access::emergency`. | Bring the store back ([FerroFED's own store](store.md)). |

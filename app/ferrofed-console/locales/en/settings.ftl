@@ -32,7 +32,7 @@ setting-ncp-correlation-desc = The request header the contact point's connector 
 setting-ncp-countries = Added countries
 setting-ncp-countries-desc = The countries beside the 27 Member States the contact point's countries may name.
 setting-ncp-issuer = Contact point issuer
-setting-ncp-issuer-desc = The token issuer of a national contact point, a federation issuer whose [[auth.federation]] table sets contact_point = true.
+setting-ncp-issuer-desc = The token issuer of a national contact point, a federation issuer whose [auth.issuer.<name>.federation] table sets contact_point = true.
 setting-node-selection = Node selection
 setting-node-selection-desc = Which nodes a patient's query asks: localized, the nodes the localizer names, or ask-all, every node.
 setting-overall-timeout = Overall timeout

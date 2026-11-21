@@ -551,7 +551,7 @@ ITI-93 message (PMIR 1.6.0, Annex A.4).
 [pmir]
 callback_url = "https://gateway.example.org/pmir/feed"   # where the Registry sends the feed
 path = "/pmir/feed"                                       # the route under {base}, the default
-feed_clients = ["pmir-registry"]                          # the clients the Registry sends as, at an [[auth.issuer]]
+feed_clients = ["pmir-registry"]                          # the clients the Registry sends as, at an [auth.issuer.<name>]
 # identifier_system = "urn:oid:2.999.1"                  # only Patients with an identifier here
 # check_interval = "1min"
 # on_drain = "keep"                                       # or "unsubscribe"; see Several replicas
@@ -596,7 +596,7 @@ scope = "*"
   (§2:3.94.4.5) and does not say when.
 - **Authenticating the feed.** The subscription carries no credential for the
   feed (PMIR §2:3.94.5), so you register the Registry as a client of an
-  `[[auth.issuer]]` the gateway trusts, name its `client_id` in
+  `[auth.issuer.<name>]` the gateway trusts, name its `client_id` in
   `feed_clients`, and agree the client with the Registry's operator. The
   Registry sends a client-credentials token (RFC 6749 §4.4) in the bearer
   scheme. A message without one, or with one that does not verify, is

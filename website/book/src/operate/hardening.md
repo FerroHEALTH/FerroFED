@@ -87,7 +87,7 @@ page: our own design.
   `[[trust.issuer]]`, and have only the issuer your operators sign in at
   grant `auth.product_scope` ([Client authentication](authentication.md)).
 - [ ] **Require an assurance level per issuer.** Set
-  `[auth.issuer.assurance]` on every issuer whose tokens reach patient data,
+  `[auth.issuer.<name>.assurance]` on every issuer whose tokens reach patient data,
   with the values it writes for each level and the least level you accept;
   `config check` names each issuer without one
   ([Professionals and assurance](authentication.md#professionals-and-assurance)).
@@ -101,7 +101,7 @@ page: our own design.
 - [ ] **Use the edge mode only with a signing proxy.** `trust.mode = "edge"`
   verifies a signed assertion and nothing else; never configure a proxy that
   forwards an unsigned identity header (RFC 7239 §8.1).
-- [ ] **Know how to remove an issuer.** Remove its `[[auth.issuer]]` and
+- [ ] **Know how to remove an issuer.** Remove its `[auth.issuer.<name>]` and
   `[[trust.issuer]]` entries and reload, with `SIGHUP` or `POST /admin/reload`
   ([Reloading the registry](registry.md#reloading-the-registry)); write the
   steps into your incident runbook.
@@ -157,7 +157,7 @@ page: our own design.
   `scrape_clients` on a listener the console calls, never with a required
   client certificate.
 - [ ] **Authenticate the scrape off loopback.** Register your Prometheus as
-  a client of an `[[auth.issuer]]`, name it in `metrics.scrape_clients`, and
+  a client of an `[auth.issuer.<name>]`, name it in `metrics.scrape_clients`, and
   give your Prometheus its client secret with `oauth2.client_secret_file`; or
   set `[metrics.tls]` with `client_auth = "required"` and a
   `client_ca_file` that admits the scraper.
@@ -203,7 +203,7 @@ page: our own design.
 - [ ] **Use `https` and, where offered, mutual TLS** to the PIX Manager,
   the PDQm Supplier, the XCPD gateways, the NVI and Mitz (B3).
 - [ ] **Give the PMIR Registry its own client.** Register it at an
-  `[[auth.issuer]]`, name it in `pmir.feed_clients`, and agree the client
+  `[auth.issuer.<name>]`, name it in `pmir.feed_clients`, and agree the client
   with the Registry's operator; a message without its token changes
   nothing.
 - [ ] **Set `federation.binding_ttl`** no longer than you would accept a

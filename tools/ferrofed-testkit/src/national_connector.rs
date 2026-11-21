@@ -165,23 +165,39 @@ pub fn cnf(der: &[u8]) -> Value {
 /// The configuration that declares `issuer` a contact point whose tokens
 /// name `audience`, its key set in the file `jwks_file`.
 ///
-/// It is an `[[auth.issuer]]` of kind `federation` with `sender_constraint =
-/// "required"`, its `[[auth.federation]]` table on the `ehdsi` mapping with
+/// It is an `[auth.issuer.<name>]` of kind `federation` with
+/// `sender_constraint = "required"`, named by [`table_name`] of `issuer`,
+/// its `federation` table on the `ehdsi` mapping with
 /// [`COUNTRY`], [`HP_AUTHORITY`] and [`HCP_AUTHORITY`] configured, and its
 /// `[[federation.contact_point]]` naming [`CORRELATION_HEADER`].
 #[must_use]
 pub fn contact_point_toml(issuer: &str, audience: &str, jwks_file: &str) -> String {
     let jwks = toml_string(jwks_file);
+    let name = table_name(issuer);
     format!(
-        "\n[[auth.issuer]]\nissuer = \"{issuer}\"\nkind = \"federation\"\n\
-         audience = [\"{audience}\"]\njwks_file = {jwks}\nsender_constraint = \"required\"\n\n\
-         [[auth.federation]]\nissuer = \"{issuer}\"\ncontact_point = true\nmapping = \"ehdsi\"\n\
-         countries = [\"{COUNTRY}\"]\n\
-         fields.\"professional.country_code\" = [{{ constant = \"{COUNTRY}\" }}]\n\
-         fields.\"professional.issuing_authority_name\" = [{{ constant = \"{HP_AUTHORITY}\" }}]\n\
-         fields.\"provider.issuing_authority_name\" = [{{ constant = \"{HCP_AUTHORITY}\" }}]\n\n\
-         [[federation.contact_point]]\nissuer = \"{issuer}\"\ncorrelation_header = \"{CORRELATION_HEADER}\"\n"
+        "\n[auth.issuer.{name}]\nissuer = \"{issuer}\"\nkind = \"federation\"\naudience = [\"{audience}\"]\njwks_file = {jwks}\nsender_constraint = \"required\"\n\n[auth.issuer.{name}.federation]\ncontact_point = true\nmapping = \"ehdsi\"\ncountries = [\"{COUNTRY}\"]\nfields.\"professional.country_code\" = [{{ constant = \"{COUNTRY}\" }}]\nfields.\"professional.issuing_authority_name\" = [{{ constant = \"{HP_AUTHORITY}\" }}]\nfields.\"provider.issuing_authority_name\" = [{{ constant = \"{HCP_AUTHORITY}\" }}]\n\n[[federation.contact_point]]\nissuer = \"{issuer}\"\ncorrelation_header = \"{CORRELATION_HEADER}\"\n"
     )
+}
+
+/// The name of the `[auth.issuer.<name>]` table of `issuer`: `ncp_` and its
+/// identifier with every character outside `a` to `z` and `0` to `9` as `_`,
+/// within the 64 characters a name may hold.
+#[must_use]
+pub fn table_name(issuer: &str) -> String {
+    let folded: String = issuer
+        .split_once("://")
+        .map_or(issuer, |(_, rest)| rest)
+        .to_ascii_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_lowercase() || c.is_ascii_digit() {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    format!("ncp_{folded}").chars().take(64).collect()
 }
 
 /// `text` as a TOML basic string.

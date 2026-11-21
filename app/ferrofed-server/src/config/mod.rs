@@ -301,8 +301,8 @@ pub struct Federation {
     /// The most bytes read of one member answer, past which it is `node-error` (§11.1).
     pub max_node_answer_size: units::ByteSize,
     /// What the gateway needs of each national contact point, one
-    /// `[[federation.contact_point]]` per `[[auth.issuer]]` whose
-    /// `[[auth.federation]]` table sets `contact_point = true`.
+    /// `[[federation.contact_point]]` per `[auth.issuer.<name>]` whose
+    /// `[auth.issuer.<name>.federation]` table sets `contact_point = true`.
     pub contact_point: Vec<auth::contact_point::ContactPointTable>,
 }
 

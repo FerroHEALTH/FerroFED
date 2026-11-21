@@ -55,16 +55,17 @@ node_selection = "ask-all"
 # token names.
 [auth]
 
-[[auth.issuer]]
+[auth.issuer.quickstart]
 issuer = "http://localhost:8190/quickstart"
 kind = "persons"
 audience = ["ferrofed-quickstart"]
+
+[auth.issuer.quickstart.profile]
 first_party_clients = ["quickstart-client"]
 
 # What the issuer's tokens state about their professional: the IHE IUA
 # extension and the purposes of use of their authorization_details.
-[[auth.attributes]]
-issuer = "http://localhost:8190/quickstart"
+[auth.issuer.quickstart.attributes]
 mapping = "iua"
 authorization_details_purposes = true
 
@@ -103,12 +104,12 @@ scope = "system/aql-*.s"
 [credentials."node-a-query".credentials.onward]
 issuer = "http://localhost:8190/quickstart"
 kind = "persons"
-profile = "rfc9068"
+preset = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8081/ferroehr/rest/openehr"]
 indicators = ["http://localhost:8081/ferroehr/rest/openehr"]
 
-[credentials."node-a-query".credentials.onward.keys]
+[credentials."node-a-query".credentials.onward.profile]
 max_onward_lifetime = "1h"
 
 [credentials."node-b-query".credentials.oauth]
@@ -121,12 +122,12 @@ scope = "system/aql-*.s"
 [credentials."node-b-query".credentials.onward]
 issuer = "http://localhost:8190/quickstart"
 kind = "persons"
-profile = "rfc9068"
+preset = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8082/ferroehr/rest/openehr"]
 indicators = ["http://localhost:8082/ferroehr/rest/openehr"]
 
-[credentials."node-b-query".credentials.onward.keys]
+[credentials."node-b-query".credentials.onward.profile]
 max_onward_lifetime = "1h"
 
 [credentials."node-c-query".credentials.oauth]
@@ -139,12 +140,12 @@ scope = "system/aql-*.s"
 [credentials."node-c-query".credentials.onward]
 issuer = "http://localhost:8190/quickstart"
 kind = "persons"
-profile = "rfc9068"
+preset = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8083/ferroehr/rest/openehr"]
 indicators = ["http://localhost:8083/ferroehr/rest/openehr"]
 
-[credentials."node-c-query".credentials.onward.keys]
+[credentials."node-c-query".credentials.onward.profile]
 max_onward_lifetime = "1h"
 
 [credentials."node-d-query".credentials.oauth]
@@ -157,12 +158,12 @@ scope = "system/aql-*.s"
 [credentials."node-d-query".credentials.onward]
 issuer = "http://localhost:8190/quickstart"
 kind = "persons"
-profile = "rfc9068"
+preset = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8084/ferroehr/rest/openehr"]
 indicators = ["http://localhost:8084/ferroehr/rest/openehr"]
 
-[credentials."node-d-query".credentials.onward.keys]
+[credentials."node-d-query".credentials.onward.profile]
 max_onward_lifetime = "1h"
 
 # The patient index: FerroPIX's PIXm Manager on the compose network. Each

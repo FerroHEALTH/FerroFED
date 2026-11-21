@@ -89,12 +89,12 @@ pub(crate) fn lane_of(
     let section: OnwardSection = serde_json::from_value(serde_json::json!({
         "issuer": ONWARD_ISSUER,
         "kind": "federation",
-        "profile": "rfc9068",
+        "preset": "rfc9068",
         "token_endpoint": format!("{}/token", server.uri()),
         "audiences": [NODE],
         "indicators": [NODE],
         "correlation_claim": correlation.unwrap_or_default(),
-        "keys": {"max_onward_lifetime": "1h"},
+        "profile": {"max_onward_lifetime": "1h"},
         "federation": {
             "contact_point": false,
             "exchanges_from": [exchanges_from],

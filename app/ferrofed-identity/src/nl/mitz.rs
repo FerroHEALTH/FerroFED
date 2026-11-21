@@ -46,14 +46,18 @@ use nl_generic_functions::mitz::question::{
     Bsn, CareProviderType, ClosedQuestion, DataCategory, DataHolder, DataUser, MAX_CATEGORIES,
     ProfessionalId, Purpose, RoleCode,
 };
-use nl_generic_functions::mitz::{MitzClient, UZI_ROOT};
+use nl_generic_functions::mitz::{
+    CARE_PROVIDER_TYPE_SYSTEM, MitzClient, ROLE_SYSTEM, URA_ROOT, UZI_ROOT,
+};
 use secrecy::SecretString;
 use thiserror::Error;
 use tokio::task::JoinSet;
 
 use crate::nl::{DirectoryUraError, directory_custodians};
 use crate::outbound::Shown;
-use crate::role::consent::{ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester};
+use crate::role::consent::{
+    ConsentDecision, ConsentError, ConsentPrefilter, NotAsked, Requester, Systems,
+};
 use crate::role::patient::{IdentifierNamespace, PatientRef};
 
 /// The name `OPTIONS {base}/` declares the Mitz pre-filter under.
@@ -296,6 +300,9 @@ impl ConsentPrefilter for MitzPrefilter {
         let Some(requester) = requester else {
             return ConsentDecision::NotAsked(NotAsked::CallerClaims);
         };
+        if !in_question_systems(requester.systems()) {
+            return ConsentDecision::NotAsked(NotAsked::CallerClaimsInvalid);
+        }
         // NOTE: §3.2.4.2: a question with a refused requester or BSN is never put to
         // Mitz, so Mitz showed nothing of itself and the call is not asked, never an outage.
         let user = match data_user(requester) {
@@ -395,6 +402,28 @@ fn bsn(value: &str) -> Result<Bsn, NotAsked> {
     Bsn::new(SecretString::from(value)).map_err(|_refused| NotAsked::PatientValue)
 }
 
+/// Whether every value of the requester that names a code system names the
+/// one the question takes for it: the URA register, the UZI register, the UZI
+/// role codes and the care provider categories. A value stated without a
+/// system, such as a claim's string, is taken as written.
+fn in_question_systems(systems: &Systems) -> bool {
+    // NOTE: Implementatiehandleiding §4: the URA root 2.16.528.1.1007.3.3, the UZI root
+    // 2.16.528.1.1007.3.1, "UZI rolcode" 2.16.840.1.113883.2.4.15.111 and
+    // "Zorgaanbiedercategorie" 2.16.840.1.113883.2.4.15.1060.
+    [
+        (&systems.organisation, URA_ROOT),
+        (&systems.professional, UZI_ROOT),
+        (&systems.role, ROLE_SYSTEM),
+        (&systems.organisation_type, CARE_PROVIDER_TYPE_SYSTEM),
+    ]
+    .into_iter()
+    .all(|(stated, oid)| {
+        stated
+            .as_deref()
+            .is_none_or(|system| system == oid || system.strip_prefix("urn:oid:") == Some(oid))
+    })
+}
+
 /// The data user the verified caller is: its organisation by URA and type,
 /// and its professional by UZI number and role (§3.2.4.2).
 fn data_user(requester: &Requester) -> Result<DataUser, InvalidInput> {
@@ -483,7 +512,7 @@ fn holders(
 
 #[cfg(test)]
 mod tests {
-    use super::{NotAsked, bsn};
+    use super::{NotAsked, Systems, bsn, in_question_systems};
 
     // The patient reference refuses an empty value, so the public seam cannot
     // reach this refusal; the mapping is held here instead.
@@ -491,5 +520,59 @@ mod tests {
     fn a_value_the_question_does_not_take_as_a_bsn_is_not_asked_about() {
         assert_eq!(Some(NotAsked::PatientValue), bsn("").err());
         assert!(bsn("synthetic-patient-0001").is_ok());
+    }
+
+    /// The requester's systems with the URA, the UZI number and the role in
+    /// `stated` and the organisation type in none.
+    fn stated(
+        organisation: Option<&str>,
+        professional: Option<&str>,
+        role: Option<&str>,
+    ) -> Systems {
+        Systems {
+            professional: professional.map(str::to_owned),
+            role: role.map(str::to_owned),
+            organisation: organisation.map(str::to_owned),
+            organisation_type: None,
+        }
+    }
+
+    // NOTE: Implementatiehandleiding §4: a value stated without a system, such as a
+    // claim's string, is taken as written.
+    #[test]
+    fn a_requester_stated_without_systems_is_asked_about() {
+        assert!(in_question_systems(&Systems::default()));
+    }
+
+    // NOTE: Implementatiehandleiding §4: the URA, UZI and role systems, as an OID or a
+    // urn:oid URI.
+    #[test]
+    fn a_requester_stated_in_the_question_s_systems_is_asked_about() {
+        assert!(in_question_systems(&stated(
+            Some("urn:oid:2.16.528.1.1007.3.3"),
+            Some("2.16.528.1.1007.3.1"),
+            Some("urn:oid:2.16.840.1.113883.2.4.15.111"),
+        )));
+        assert!(in_question_systems(&Systems {
+            organisation_type: Some(String::from("urn:oid:2.16.840.1.113883.2.4.15.1060")),
+            ..Systems::default()
+        }));
+    }
+
+    // NOTE: Implementatiehandleiding §4: an identifier of another register, such as an
+    // AGB code in the URA's place, is not the question's, so the caller is not asked about.
+    #[test]
+    fn a_requester_stated_in_another_system_is_not_asked_about() {
+        for systems in [
+            stated(Some("urn:oid:2.16.840.1.113883.2.4.6.1"), None, None),
+            stated(None, Some("urn:oid:2.16.528.1.1007.3.3"), None),
+            stated(None, None, Some("urn:oid:2.999.4.15.111")),
+            Systems {
+                organisation_type: Some(String::from("http://example.org/organisation-type")),
+                ..Systems::default()
+            },
+        ] {
+            assert!(!in_question_systems(&systems), "{systems:?}");
+        }
     }
 }

@@ -137,16 +137,44 @@ pub(crate) const FIRST_PARTY: [&str; 6] = [
     "SYNTHETIC-NATIONAL-ID-0004",
 ];
 
-/// Returns the keys of an `[[auth.issuer]]` table the suite trusts beside
-/// its identifier and key set: `kind = "persons"`, the audience
-/// [`AUDIENCE`] and the first-party clients [`FIRST_PARTY`].
+/// Returns the name of the `[auth.issuer.<name>]` table of `issuer`: its
+/// identifier with every character outside `a` to `z` and `0` to `9` as `_`,
+/// after `issuer_`, within the 64 characters a name may hold.
+pub(crate) fn issuer_name(issuer: &str) -> String {
+    let bare = issuer
+        .split_once("://")
+        .map_or(issuer, |(_, rest)| rest)
+        .to_ascii_lowercase();
+    let folded: String = bare
+        .chars()
+        .map(|c| {
+            if c.is_ascii_lowercase() || c.is_ascii_digit() {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    format!("issuer_{folded}").chars().take(64).collect()
+}
+
+/// Returns the keys of an `[auth.issuer.<name>]` table the suite trusts
+/// beside its identifier and key set: `kind = "persons"` and the audience
+/// [`AUDIENCE`]; [`profile_toml`] lists its first-party clients.
 pub(crate) fn persons_toml() -> String {
+    format!("kind = \"persons\"\naudience = [\"{AUDIENCE}\"]\n")
+}
+
+/// Returns the `[auth.issuer.<name>.profile]` table of `issuer`: the
+/// first-party clients [`FIRST_PARTY`].
+pub(crate) fn profile_toml(issuer: &str) -> String {
     let listed: Vec<String> = FIRST_PARTY
         .iter()
         .map(|client| format!("\"{client}\""))
         .collect();
     format!(
-        "kind = \"persons\"\naudience = [\"{AUDIENCE}\"]\nfirst_party_clients = [{}]\n",
+        "\n[auth.issuer.{}.profile]\nfirst_party_clients = [{}]\n",
+        issuer_name(issuer),
         listed.join(", ")
     )
 }
@@ -163,7 +191,7 @@ pub(crate) fn key_set(issuer: &str, jwks_file: &Path) -> Verification {
     Verification::KeySet(Box::new(settings))
 }
 
-/// Returns the `[[auth.attributes]]` table of `issuer`: the IHE IUA
+/// Returns the `[auth.issuer.<name>.attributes]` table of `issuer`: the IHE IUA
 /// extension and the purposes of use of its `authorization_details`.
 pub(crate) fn iua(issuer: &str) -> AttributesSection {
     AttributesSection {
@@ -174,10 +202,12 @@ pub(crate) fn iua(issuer: &str) -> AttributesSection {
     }
 }
 
-/// Returns the `[[auth.attributes]]` table of [`iua`] as configuration text.
+/// Returns the `[auth.issuer.<name>.attributes]` table of [`iua`] as
+/// configuration text.
 pub(crate) fn attributes_toml(issuer: &str) -> String {
     format!(
-        "\n[[auth.attributes]]\nissuer = \"{issuer}\"\nmapping = \"iua\"\nauthorization_details_purposes = true\n"
+        "\n[auth.issuer.{}.attributes]\nmapping = \"iua\"\nauthorization_details_purposes = true\n",
+        issuer_name(issuer)
     )
 }
 
@@ -195,31 +225,35 @@ pub(crate) fn auth() -> AuthSettings {
 }
 
 /// Returns the `[auth]` and `[trust]` of [`auth`] as configuration text,
-/// its issuer an `[[auth.issuer]]` entry, so a test can append another.
+/// its issuer an `[auth.issuer.<name>]` table, so a test can append another.
 pub(crate) fn auth_toml() -> String {
     format!(
-        "\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\n{}jwks_file = {}\n{}\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
+        "\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[auth.issuer.{}]\nissuer = \"{ISSUER}\"\n{}jwks_file = {}\n{}{}\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
+        issuer_name(ISSUER),
         persons_toml(),
         toml_path(jwks_file()),
+        profile_toml(ISSUER),
         attributes_toml(ISSUER),
         claims().client_id
     )
 }
 
-/// Returns the `[[auth.issuer]]` entry of `issuer`, its key set written to
-/// a file as it is now.
+/// Returns the `[auth.issuer.<name>]` table of `issuer`, its key set written
+/// to a file as it is now.
 pub(crate) fn issuer_toml(issuer: &Issuer) -> Result<String, Box<dyn StdError>> {
     Ok(format!(
-        "\n[[auth.issuer]]\nissuer = \"{}\"\n{}jwks_file = {}\n{}",
+        "\n[auth.issuer.{}]\nissuer = \"{}\"\n{}jwks_file = {}\n{}{}",
+        issuer_name(issuer.name()),
         issuer.name(),
         persons_toml(),
         toml_path(&jwks_file_of(issuer)?),
+        profile_toml(issuer.name()),
         attributes_toml(issuer.name())
     ))
 }
 
 /// Sets the assurance table of every issuer of `auth`, as
-/// `[auth.issuer.assurance]` would: `acr` read at the `levels` given, with
+/// `[auth.issuer.<name>.assurance]` would: `acr` read at the `levels` given, with
 /// `minimum` the least level a patient-data request needs.
 pub(crate) fn assuring(
     auth: &mut AuthSettings,

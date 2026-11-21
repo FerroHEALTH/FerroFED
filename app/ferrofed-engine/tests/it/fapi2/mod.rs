@@ -151,10 +151,10 @@ fn exchange(
     let section: OnwardSection = serde_json::from_value(serde_json::json!({
         "issuer": server.issuer(),
         "kind": "persons",
-        "profile": "rfc9068",
+        "preset": "rfc9068",
         "audiences": [RESOURCE],
         "indicators": [RESOURCE],
-        "keys": {"max_onward_lifetime": "1h", "person_equality": ["sub"]},
+        "profile": {"max_onward_lifetime": "1h", "person_equality": ["sub"]},
         "actor_assertion": true,
     }))?;
     let gateway = UpstreamToken::provider(grant.clone())?;

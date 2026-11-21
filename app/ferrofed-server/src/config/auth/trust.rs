@@ -7,7 +7,7 @@
 //! One `[[trust.issuer]]` entry per issuer says what its tokens are honoured
 //! for beyond their `user/` and `system/` grants: the backend clients whose
 //! `system/aql-*` grant counts, the clients admitted to the DEMOGRAPHIC API,
-//! the member its `patient/` grants are bound to and the professional. Each entry names an `[[auth.issuer]]`, which says
+//! the member its `patient/` grants are bound to and the professional. Each entry names an `[auth.issuer.<name>]`, which says
 //! how its tokens are verified. `mode = "edge"` with `[trust.edge]` reads the
 //! credential from the header a trusted proxy signs its assertion in, and
 //! `[trust.purpose_of_use]` sets the §13.4 rule. No specification governs
@@ -84,7 +84,7 @@ pub struct Edge {
 #[serde(default, deny_unknown_fields)]
 pub struct TrustedIssuer {
     /// The issuer identifier its tokens carry in `iss`, which an
-    /// `[[auth.issuer]]` table trusts; a password in its userinfo reaches no
+    /// `[auth.issuer.<name>]` table trusts; a password in its userinfo reaches no
     /// rendering, as `ferrohealth-smart` 0.18 holds the issuer it names.
     pub issuer: SecretUrl,
     /// The `client_id`s of the backend clients whose `system/aql-*` grant is
@@ -99,7 +99,7 @@ pub struct TrustedIssuer {
     pub patient: Option<PatientIssuer>,
     /// The retired `professional_issuing_authority`, which the
     /// `professional.issuing_authority_name` source of the issuer's
-    /// `[[auth.attributes]]` table replaced in 0.0.20: set, it refuses the
+    /// `[auth.issuer.<name>.attributes]` table replaced in 0.0.20: set, it refuses the
     /// configuration.
     #[serde(skip_serializing)]
     pub professional_issuing_authority: ferrohealth_config::removed::Removed,

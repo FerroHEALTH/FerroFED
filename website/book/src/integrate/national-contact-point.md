@@ -30,9 +30,9 @@ You connect a contact point in four steps:
    prescriptions and dispensations in `[[fhir.serve]]`
    ([The patient summary over FHIR](patient-summary.md),
    [Prescriptions and dispensations over FHIR](prescriptions.md)).
-2. Trust the issuer of the connector's tokens as an `[[auth.issuer]]` of
+2. Trust the issuer of the connector's tokens as an `[auth.issuer.<name>]` of
    `kind = "federation"` with `sender_constraint = "required"`, and give it
-   an `[[auth.federation]]` table that sets `contact_point = true`
+   an `[auth.issuer.<name>.federation]` table that sets `contact_point = true`
    ([Authentication](../operate/authentication.md)).
 3. Name that issuer in a `[[federation.contact_point]]`, with the header the
    connector sends its correlation identifier in
@@ -53,14 +53,13 @@ members = ["node-a", "node-b"]
 category = "Electronic-Dispensations"
 members = ["node-a", "node-b"]
 
-[[auth.issuer]]
+[auth.issuer.ncp]
 issuer = "https://ncp.example.org"
 kind = "federation"
 audience = ["https://gateway.example.org/fed"]
 sender_constraint = "required"
 
-[[auth.federation]]
-issuer = "https://ncp.example.org"
+[auth.issuer.ncp.federation]
 contact_point = true
 mapping = "ehdsi"
 countries = ["LU"]

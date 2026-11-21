@@ -42,8 +42,7 @@ fn the_production_guide_carries_the_recipe_the_gated_test_applies() -> Result<()
         "{auth}"
     );
     assert!(
-        auth.contains("[auth.issuer.assurance]")
-            && !auth.contains("client_tokens_act_for_professional"),
+        auth.contains(".assurance]") && !auth.contains("client_tokens_act_for_professional"),
         "the issuer declares its levels, and no client acts for a professional: {auth}"
     );
     assert!(

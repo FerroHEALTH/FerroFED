@@ -150,7 +150,7 @@ pub(crate) fn lane_carrying(
         );
         object.insert("audiences".to_owned(), json!([NODE]));
         let keys = object
-            .entry("keys")
+            .entry("profile")
             .or_insert_with(|| json!({}))
             .as_object_mut()
             .ok_or("keys are a table")?;
@@ -178,7 +178,7 @@ fn persons_lane(
     profile: &str,
     extra: serde_json::Value,
 ) -> Result<Lane, Box<dyn Error>> {
-    let mut section = json!({"issuer": PERSONS, "kind": "persons", "profile": profile});
+    let mut section = json!({"issuer": PERSONS, "kind": "persons", "preset": profile});
     if let (Some(object), serde_json::Value::Object(extra)) = (section.as_object_mut(), extra) {
         object.extend(extra);
     }
@@ -283,7 +283,7 @@ async fn the_standards_profile_exchanges_the_person_for_the_node_as_its_resource
 pub(crate) fn keycloak_keys() -> serde_json::Value {
     json!({
         "indicators": [NODE],
-        "keys": {"app_only": [{"subjects": ["service-account-ferrofed"]}]},
+        "profile": {"app_only": [{"subjects": ["service-account-ferrofed"]}]},
     })
 }
 
@@ -406,7 +406,7 @@ async fn a_token_from_another_authorization_server_is_refused_before_use() -> Te
 /// as IHE IUA.
 fn federation_lane(server: &Server) -> Result<Lane, Box<dyn Error>> {
     let section = json!({
-        "issuer": FEDERATION, "kind": "federation", "profile": "rfc9068",
+        "issuer": FEDERATION, "kind": "federation", "preset": "rfc9068",
         "indicators": [NODE],
         "federation": {
             "contact_point": false,

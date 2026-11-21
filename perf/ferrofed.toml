@@ -40,31 +40,31 @@ node_selection = "ask-all"
 
 [auth]
 
-[[auth.issuer]]
+[auth.issuer.quickstart_issuer]
 issuer = "https://quickstart-issuer.ferrofed.invalid"
 kind = "persons"
 audience = ["ferrofed-quickstart"]
-first_party_clients = ["quickstart-client"]
 jwks_file = "docker/quickstart/issuer/jwks.json"
+
+[auth.issuer.quickstart_issuer.profile]
+first_party_clients = ["quickstart-client"]
 
 # What the issuer's tokens state about their professional: the IHE IUA
 # extension and the purposes of use of their authorization_details.
-[[auth.attributes]]
-issuer = "https://quickstart-issuer.ferrofed.invalid"
+[auth.issuer.quickstart_issuer.attributes]
 mapping = "iua"
 authorization_details_purposes = true
 
 # The synthetic national contact point, its key set written by the gate. Its
 # constants follow tools/ferrofed-testkit/src/national_connector.rs.
-[[auth.issuer]]
+[auth.issuer.perf_ncp]
 issuer = "https://perf-ncp.ferrofed.invalid"
 kind = "federation"
 audience = ["ferrofed-perf"]
 jwks_file = "target/perf-run/ncp-jwks.json"
 sender_constraint = "required"
 
-[[auth.federation]]
-issuer = "https://perf-ncp.ferrofed.invalid"
+[auth.issuer.perf_ncp.federation]
 contact_point = true
 mapping = "ehdsi"
 countries = ["LU"]
@@ -153,12 +153,12 @@ audience = "https://node-a.perf.ferrofed.invalid/machines"
 [credentials."node-a-query".credentials.onward]
 issuer = "https://quickstart-issuer.ferrofed.invalid"
 kind = "persons"
-profile = "rfc9068"
+preset = "rfc9068"
 token_endpoint = "http://127.0.0.1:8095/token"
 audiences = ["https://node-a.perf.ferrofed.invalid"]
 indicators = ["https://node-a.perf.ferrofed.invalid"]
 
-[credentials."node-a-query".credentials.onward.keys]
+[credentials."node-a-query".credentials.onward.profile]
 max_onward_lifetime = "1h"
 
 # Nodes B to D run with their authentication off under the gate

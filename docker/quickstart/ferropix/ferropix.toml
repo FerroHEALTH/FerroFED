@@ -29,7 +29,7 @@ data_key_file = "/etc/ferropix/data-key"
 # is its client is a machine's (RFC 9068 §2.2). It signs with `typ` JWT and
 # names the client in `client_id`, so the issuer takes the claims it carries.
 # A development issuer, NOT for anything real.
-[[auth.issuer]]
+[auth.issuer.<name>]
 issuer = "http://localhost:8180/ferrofed"
 kind = "persons"
 profile = "rfc9068"

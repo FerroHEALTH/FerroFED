@@ -129,26 +129,25 @@ credentials = { user = "ferrofed", password_file = "/run/secrets/mitz-password" 
 "node-a" = { type = "V6" }        # the URA from [nl_gf.nvi.custodians] or the directory
 "node-b" = { type = "V6", ura = "ura-test-0002" }
 
-[[auth.issuer]]                   # the issuer of your callers' tokens
+[auth.issuer.domestic]            # the issuer of your callers' tokens
 issuer = "https://issuer.example.org"
 kind = "federation"
 audience = ["https://gateway.example.org/fed"]
 
-[[auth.federation]]               # what that issuer asserts
-issuer = "https://issuer.example.org"
+[auth.issuer.domestic.federation] # what that issuer asserts
 contact_point = false
 mapping = "iua"
 countries = ["NL"]
 issuing_authorities = ["CIBG"]
 provider_identifier_prefixes = ["urn:oid:2.16.528.1.1007.3.3."]
 
-[auth.federation.fields]          # the claims of its tokens that name the requester
+[auth.issuer.domestic.federation.fields]  # the claims of its tokens that name the requester
 "professional.country_code" = [{ constant = "NL" }]
 "professional.issuing_authority_name" = [{ constant = "CIBG" }]
-"nl.professional_number" = [{ claim = "uzi_number" }]   # the professional's UZI number
-"nl.role" = [{ claim = "uzi_role" }]                    # the professional's UZI role code
-"nl.ura" = [{ claim = "ura" }]                          # the organisation's URA
-"nl.organisation_type" = [{ claim = "organisation_type" }]
+"professional.hp_identifier" = [{ claim = "uzi_number" }]                   # the UZI number
+"professional.hp_professional_role" = [{ claim = "uzi_role" }]              # the UZI role code
+"provider.healthcare_provider_identifier" = [{ claim = "ura" }]             # the URA
+"provider.facility_type" = [{ claim = "organisation_type" }]
 ```
 
 `endpoint.timeout` bounds one round of questions, and it is a part of
@@ -178,16 +177,26 @@ What a deployment must provide:
   URA and type. That is always the verified caller: Mitz records the
   professional and decides on their role, so the gateway never asks for
   anyone else. The caller is a professional of another domestic party, read
-  by `ferrohealth-smart` under the `federation` issuer's `[[auth.federation]]`
-  table, whose `nl.professional_number`, `nl.role`, `nl.ura` and
-  `nl.organisation_type` fields name the four
-  ([Client authentication](authentication.md#configuration)); no
-  specification the gateway binds names their claims, so each is configured
-  and none has a default. A caller of a `persons` issuer names no requester. A caller whose token does not carry all four is
+  by `ferrohealth-smart` under the `federation` issuer's
+  `[auth.issuer.<name>.federation]` table, whose `professional.hp_identifier`,
+  `professional.hp_professional_role`, `provider.healthcare_provider_identifier`
+  and `provider.facility_type` fields name the four
+  ([Client authentication](authentication.md#configuration)). The `iua`
+  mapping reads the first three from the IUA claims; a field the table
+  configures replaces the mapping's source for it, and the professional's
+  identifier and role are then required of every token of the issuer. A
+  value stated without a code system is taken as written; a value that names
+  one must name the question's: the URA register
+  (`urn:oid:2.16.528.1.1007.3.3`), the UZI register
+  (`urn:oid:2.16.528.1.1007.3.1`), the UZI role codes
+  (`urn:oid:2.16.840.1.113883.2.4.15.111`) and the care provider categories
+  (`urn:oid:2.16.840.1.113883.2.4.15.1060`), as the Implementatiehandleiding
+  §4 names them. A caller of a `persons` issuer names no requester. A caller whose token does not carry all four is
   not asked about: Mitz is not called, no member is filtered, and each node
   checks consent itself (N27). The call is counted as `not-asked` with the
   reason `caller-claims`. A token that carries them in a form the question
-  does not take, such as a UZI number that is not alphanumeric, is treated
+  does not take, such as a UZI number that is not alphanumeric or a value
+  in another code system, is treated
   the same way, with the reason `caller-claims-invalid`, and so is a patient
   value the question does not take as a BSN, with `patient-value`. Neither
   is reported as a Mitz outage, since Mitz is never called, and no claim

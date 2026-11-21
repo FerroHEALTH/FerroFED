@@ -67,11 +67,11 @@ fn refused_by_the_crate(text: &str, rule: &str) -> Result<(), Box<dyn Error>> {
 /// One trusted `persons` issuer at `issuer`, under `[auth]` keys `extra`.
 fn issuer(extra: &str, issuer: &str) -> String {
     format!(
-        "[auth]\n{extra}\n\n[[auth.issuer]]\nissuer = \"{issuer}\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n"
+        "[auth]\n{extra}\n\n[auth.issuer.idp]\nissuer = \"{issuer}\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n"
     )
 }
 
-/// One trusted `persons` issuer at [`ISSUER`], its `[[auth.issuer]]` table
+/// One trusted `persons` issuer at [`ISSUER`], its `[auth.issuer.<name>]` table
 /// carrying the keys `extra`.
 fn issuer_table(extra: &str) -> String {
     format!("{}{extra}\n", issuer("", ISSUER))
@@ -131,7 +131,7 @@ fn a_clock_skew_past_five_minutes_is_refused() -> Result<(), Box<dyn Error>> {
 #[test]
 fn an_issuer_without_an_audience_is_refused() -> Result<(), Box<dyn Error>> {
     refused_by_the_crate(
-        &format!("[auth]\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\n"),
+        &format!("[auth]\n\n[auth.issuer.idp]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\n"),
         "name no audience",
     )
 }
@@ -143,14 +143,14 @@ fn an_issuer_without_an_audience_is_refused() -> Result<(), Box<dyn Error>> {
 fn an_issuer_verified_two_ways_is_refused() -> Result<(), Box<dyn Error>> {
     refused_by_the_crate(
         &issuer_table(
-            "\n[auth.issuer.introspection]\nendpoint = \"https://issuer.example.test/introspect\"\n\n[auth.issuer.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n",
+            "\n[auth.issuer.idp.introspection]\nendpoint = \"https://issuer.example.test/introspect\"\n\n[auth.issuer.idp.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n",
         ),
         "exclude each other",
     )
 }
 
 /// The `[trust.issuer]` introspection keys are gone with no compatibility
-/// reading: `[[auth.issuer]]` says how an issuer's tokens are verified.
+/// reading: `[auth.issuer.<name>]` says how an issuer's tokens are verified.
 #[test]
 fn an_introspection_key_on_a_trust_entry_is_refused() -> Result<(), Box<dyn Error>> {
     for written in [
@@ -175,12 +175,12 @@ fn an_introspection_key_on_a_trust_entry_is_refused() -> Result<(), Box<dyn Erro
 }
 
 /// `ferrohealth-smart` 0.9 holds every issuer setting on its own
-/// `[[auth.issuer]]` table, and refuses each key `[auth]` held for every
+/// `[auth.issuer.<name>]` table, and refuses each key `[auth]` held for every
 /// issuer, naming the table.
 #[test]
 fn a_section_level_issuer_key_is_an_unknown_key() -> Result<(), Box<dyn Error>> {
     // NOTE: no specification governs this: the family's one-release rule; `ferrohealth-smart`
-    // 0.15 deleted the named refusals of the keys 0.9 moved onto [[auth.issuer]].
+    // 0.15 deleted the named refusals of the keys 0.9 moved onto [auth.issuer.<name>].
     for key in [
         "audience",
         "algorithms",
@@ -210,7 +210,7 @@ fn a_section_level_issuer_key_is_an_unknown_key() -> Result<(), Box<dyn Error>> 
 fn an_issuer_without_a_kind_is_refused() -> Result<(), Box<dyn Error>> {
     refused_by_the_crate(
         &format!(
-            "[auth]\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\naudience = [\"urn:example:gateway\"]\n"
+            "[auth]\n\n[auth.issuer.idp]\nissuer = \"{ISSUER}\"\naudience = [\"urn:example:gateway\"]\n"
         ),
         "auth.issuer.kind",
     )
@@ -295,13 +295,9 @@ fn a_product_scope_in_neither_extension_form_is_refused() -> Result<(), Box<dyn 
 #[test]
 fn a_key_the_gateway_reads_nowhere_is_refused() -> Result<(), Box<dyn Error>> {
     for (key, value) in [
-        (
-            "scopeless_subjects",
-            "[{ issuer = \"https://issuer.example.test\", sub = \"synthetic-service\" }]",
-        ),
         ("capabilities", "[\"permission-v1\"]"),
         ("scopes_supported", "[\"user/aql-*.s\"]"),
-        ("described_issuer", "\"https://issuer.example.test\""),
+        ("described_issuer", "\"idp\""),
     ] {
         refused_for(
             &issuer(&format!("{key} = {value}"), ISSUER),
@@ -309,7 +305,11 @@ fn a_key_the_gateway_reads_nowhere_is_refused() -> Result<(), Box<dyn Error>> {
             AuthFault::Unread,
         )?;
     }
-    Ok(())
+    refused_for(
+        &issuer_table("scopeless_subjects = [\"synthetic-service\"]"),
+        "auth.issuer.idp.scopeless_subjects",
+        AuthFault::Unread,
+    )
 }
 
 /// The keys `[auth]` held before it was `ferrohealth-smart`'s are unknown
@@ -333,7 +333,7 @@ fn a_key_of_the_former_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
         );
     }
     let inline = format!(
-        "[auth]\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\njwks = \"[1, 2]\"\n"
+        "[auth]\n\n[auth.issuer.idp]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\njwks = \"[1, 2]\"\n"
     );
     let error = Config::from_sources(Some(&inline), &BTreeMap::new())
         .and_then(|config| config.resolve())
@@ -350,7 +350,7 @@ fn a_key_of_the_former_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
 fn a_second_introspected_issuer_is_refused() -> Result<(), Box<dyn Error>> {
     let one = |name: &str| {
         format!(
-            "\n[[auth.issuer]]\nissuer = \"https://{name}.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\nmode = \"introspection\"\n\n[auth.issuer.introspection]\nendpoint = \"https://{name}.example.test/introspect\"\n\n[auth.issuer.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n"
+            "\n[auth.issuer.{name}]\nissuer = \"https://{name}.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\nmode = \"introspection\"\n\n[auth.issuer.{name}.introspection]\nendpoint = \"https://{name}.example.test/introspect\"\n\n[auth.issuer.{name}.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n"
         )
     };
     let text = format!("[auth]\n{}{}", one("first"), one("second"));

@@ -100,6 +100,27 @@ to get the fix; upgrading is free
 
 ### To v0.0.21, from v0.0.20
 
+- Name every issuer: each `[[auth.issuer]]` becomes an
+  `[auth.issuer.<name>]` table, its name a lower-case letter followed by
+  lower-case letters, digits and `_`, at most 64. Its `[[auth.attributes]]`,
+  `[[auth.federation]]` and `[[auth.party]]` tables move under it as
+  `[auth.issuer.<name>.attributes]`, `.federation` and `.party`, without
+  their `issuer` key, and `[auth.issuer.introspection]` and
+  `[auth.issuer.assurance]` become `[auth.issuer.<name>.introspection]` and
+  `.assurance`. Rename `profile = "…"` to `preset = "…"`, and move every
+  profile key (`first_party_clients`, `delegates`, `act_represents_patient`,
+  `token_types`, `client_claims` and the rest) into
+  `[auth.issuer.<name>.profile]`. In each
+  `[credentials."<id>".credentials.onward]` table, `profile` is now `preset`
+  and the `keys` table is now `profile`. `[[trust.issuer]]` and
+  `[[federation.contact_point]]` keep naming an issuer by its identifier
+  ([Client authentication](authentication.md), #1915).
+- The `nl` preset and the four `nl.*` federation fields are gone. Map the
+  claims the Mitz question reads to `professional.hp_identifier` (the UZI
+  number), `professional.hp_professional_role` (the UZI role),
+  `provider.healthcare_provider_identifier` (the URA) and
+  `provider.facility_type` (the organisation type)
+  ([Consent](consent.md), #1915).
 - Delete `assertion_audience` from every `credentials.oauth` table. It is
   now an unknown key and refuses the start. A grant's `security_profile`
   fixes the assertion's `aud` and `typ`: a plain grant names the token

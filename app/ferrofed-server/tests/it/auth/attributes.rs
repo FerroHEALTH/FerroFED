@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! What a token states about its professional comes from the issuer's
-//! `[[auth.attributes]]` table, which `ferrohealth-smart` reads: an issuer
+//! `[auth.issuer.<name>.attributes]` table, which `ferrohealth-smart` reads: an issuer
 //! with no table states none of it, and the per-issuer
 //! `professional_issuing_authority` the gateway read before is refused,
 //! naming its replacement.
@@ -21,7 +21,7 @@ use ferrofed_server::config::error::Error as ConfigError;
 use super::{Gateway, TestResult, assert_refused, bearing, claims, minted, query};
 use crate::support;
 
-/// §13.4: a token whose issuer has no `[[auth.attributes]]` table states no
+/// §13.4: a token whose issuer has no `[auth.issuer.<name>.attributes]` table states no
 /// purpose of use, whatever its IUA extension carries, so it reaches no node.
 // conformance: CP-17
 #[tokio::test]
@@ -38,7 +38,7 @@ async fn an_issuer_without_an_attributes_table_states_no_purpose() -> TestResult
 }
 
 /// The `professional_issuing_authority` 0.0.20 retired refuses the load,
-/// naming the `[[auth.attributes]]` source that replaces it (the family's
+/// naming the `[auth.issuer.<name>.attributes]` source that replaces it (the family's
 /// one-release rule, `ferrohealth_config::removed`).
 #[test]
 fn the_retired_issuing_authority_key_is_refused_naming_its_replacement() -> TestResult {

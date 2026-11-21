@@ -70,7 +70,7 @@ messages! {
     SettingNcpCountriesDesc = "setting-ncp-countries-desc",
     /// `Contact point issuer`
     SettingNcpIssuer = "setting-ncp-issuer",
-    /// `The token issuer of a national contact point, a federation issuer whose [[auth.federation]] table sets contact_point = true.`
+    /// `The token issuer of a national contact point, a federation issuer whose [auth.issuer.<name>.federation] table sets contact_point = true.`
     SettingNcpIssuerDesc = "setting-ncp-issuer-desc",
     /// `Node selection`
     SettingNodeSelection = "setting-node-selection",

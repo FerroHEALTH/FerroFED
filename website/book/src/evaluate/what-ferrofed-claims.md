@@ -566,7 +566,7 @@ ships what it holds.
 - FerroFED's own PostgreSQL store, `[store]`, for the state every replica
   shares: the stored queries, the emergency counts, the `DPoP` proofs and
   a contact point's dispensations ([#1636](https://github.com/FerroHEALTH/FerroFED/issues/1636), [#1637](https://github.com/FerroHEALTH/FerroFED/issues/1637)).
-- Every issuer an `[[auth.issuer]]` of its own `kind` on `ferrohealth-smart`
+- Every issuer an `[auth.issuer.<name>]` of its own `kind` on `ferrohealth-smart`
   0.13.0, no Basic caller, and each node request a caller originates sent
   under a token exchanged for that caller ([#1682](https://github.com/FerroHEALTH/FerroFED/issues/1682), [#1703](https://github.com/FerroHEALTH/FerroFED/issues/1703), [#1704](https://github.com/FerroHEALTH/FerroFED/issues/1704), [#1705](https://github.com/FerroHEALTH/FerroFED/issues/1705), [#1749](https://github.com/FerroHEALTH/FerroFED/issues/1749)).
 - Every outbound client on the family's `TlsClient`, at TLS 1.3 unless its
@@ -604,8 +604,8 @@ Released on 2026-11-12.
   reached under a Basic user
   ([#1615](https://github.com/FerroHEALTH/FerroFED/issues/1615)).
 - The professional, the organisation and the purposes of use a caller's
-  token states read only through its issuer's `[[auth.attributes]]` or
-  `[[auth.federation]]` table, by `ferrohealth-smart`
+  token states read only through its issuer's `[auth.issuer.<name>.attributes]` or
+  `[auth.issuer.<name>.federation]` table, by `ferrohealth-smart`
   ([#1615](https://github.com/FerroHEALTH/FerroFED/issues/1615), [#1704](https://github.com/FerroHEALTH/FerroFED/issues/1704)).
 - A received imaging report's performing organization carried into the
   member's structured record, and a performer that is no organization
@@ -689,7 +689,7 @@ These are the ones to know before you deploy FerroFED; the
   person behind the token, or a client application you declare to act for
   the professional its token names; any other token is refused
   `401 natural-person-required`. The gateway reads and requires an
-  assurance level only for an issuer with `[auth.issuer.assurance]`, and
+  assurance level only for an issuer with `[auth.issuer.<name>.assurance]`, and
   `config check` names each issuer without one
   ([Professionals and assurance](../operate/authentication.md#professionals-and-assurance)).
   Your issuer authenticates the person; the gateway verifies the token.

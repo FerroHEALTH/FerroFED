@@ -50,7 +50,7 @@ const PREFILTER_CALLS: &str = "ferrofed_consent_prefilter_requests_total";
 const URA_A: &str = "ura-test-0001";
 pub(crate) const URA_B: &str = "ura-test-0002";
 
-/// The names of the token claims the test issuer's `[[auth.federation]]`
+/// The names of the token claims the test issuer's `[auth.issuer.<name>.federation]`
 /// table reads the requester from; configured, since no bound specification
 /// names them.
 const PROFESSIONAL_CLAIM: &str = "test_uzi_number";
@@ -91,7 +91,7 @@ pub(crate) const FEDERATION: &str = "https://federation.issuer.example.test";
 pub(crate) fn federation_toml() -> String {
     let jwks = toml::Value::String(crate::support::caller::jwks_file().display().to_string());
     format!(
-        "{persons}\n[[auth.issuer]]\nissuer = \"{issuer}\"\nkind = \"federation\"\naudience = [\"{audience}\"]\njwks_file = {jwks}\n\n[auth.issuer.assurance]\nlevels = {{ \"{ACR}\" = \"substantial\" }}\n\n[[auth.federation]]\nissuer = \"{issuer}\"\ncontact_point = false\nmapping = \"iua\"\ncountries = [\"NL\"]\nissuing_authorities = [\"CIBG\"]\nprovider_identifier_prefixes = [\"ura-test-\"]\n\n[auth.federation.fields]\n\"professional.country_code\" = [{{ constant = \"NL\" }}]\n\"professional.issuing_authority_name\" = [{{ constant = \"CIBG\" }}]\n\"nl.professional_number\" = [{{ claim = \"{PROFESSIONAL_CLAIM}\" }}]\n\"nl.role\" = [{{ claim = \"{ROLE_CLAIM}\" }}]\n\"nl.ura\" = [{{ claim = \"{ORGANISATION_CLAIM}\" }}]\n\"nl.organisation_type\" = [{{ claim = \"{ORGANISATION_TYPE_CLAIM}\" }}]\n",
+        "{persons}\n[auth.issuer.issuer_issuer]\nissuer = \"{issuer}\"\nkind = \"federation\"\naudience = [\"{audience}\"]\njwks_file = {jwks}\n\n[auth.issuer.issuer_issuer.assurance]\nlevels = {{ \"{ACR}\" = \"substantial\" }}\n\n[auth.issuer.issuer_issuer.federation]\ncontact_point = false\nmapping = \"iua\"\ncountries = [\"NL\"]\nissuing_authorities = [\"CIBG\"]\nprovider_identifier_prefixes = [\"ura-test-\"]\n\n[auth.issuer.issuer_issuer.federation.fields]\n\"professional.country_code\" = [{{ constant = \"NL\" }}]\n\"professional.issuing_authority_name\" = [{{ constant = \"CIBG\" }}]\n\"professional.hp_identifier\" = [{{ claim = \"{PROFESSIONAL_CLAIM}\" }}]\n\"professional.hp_professional_role\" = [{{ claim = \"{ROLE_CLAIM}\" }}]\n\"provider.healthcare_provider_identifier\" = [{{ claim = \"{ORGANISATION_CLAIM}\" }}]\n\"provider.facility_type\" = [{{ claim = \"{ORGANISATION_TYPE_CLAIM}\" }}]\n",
         persons = crate::support::caller::auth_toml(),
         issuer = FEDERATION,
         audience = crate::support::caller::AUDIENCE,
@@ -183,12 +183,15 @@ pub(crate) fn naming_requester(
 }
 
 /// The `Authorization` value of a caller whose token names the professional
-/// and role `asking`, or no requester at all.
+/// and role `asking`, or no requester at all: the professional, their role
+/// and their organisation's URA, which every external professional states,
+/// and no organisation type.
 fn bearer_for(asking: Option<(&str, &str)>) -> Result<String, Box<dyn Error>> {
     let mut claims = crate::support::caller::claims();
     as_external_professional(&mut claims);
-    if let Some(asking) = asking {
-        naming_requester(&mut claims, asking);
+    naming_requester(&mut claims, asking.unwrap_or(CALLER));
+    if asking.is_none() {
+        claims.other.remove(ORGANISATION_TYPE_CLAIM);
     }
     Ok(format!(
         "Bearer {}",

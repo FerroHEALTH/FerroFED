@@ -24,7 +24,7 @@ use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::national_connector::{
     AUTHENTICATION_CLASS, CLIENT_ID, CORRELATION_HEADER, COUNTRY, HCP_AUTHORITY, HCP_ID,
     HP_AUTHORITY, HP_ID, NationalConnector, NationalId, PERSON_ID, ROLE, ROLE_SYSTEM, cnf,
-    contact_point_toml,
+    contact_point_toml, table_name,
 };
 use ferrofed_testkit::pdqm_stub::{self, Entry};
 use http::StatusCode;
@@ -104,10 +104,10 @@ fn the_declared_contact_point_configures_what_no_assertion_carries() -> TestResu
         AUDIENCE,
         "/dev/null",
     ))?;
-    let issuer = &table["auth"]["issuer"][0];
+    let issuer = &table["auth"]["issuer"][&table_name("https://ncp.example.test")];
     assert_eq!(issuer["kind"].as_str(), Some("federation"));
     assert_eq!(issuer["sender_constraint"].as_str(), Some("required"));
-    let federation = &table["auth"]["federation"][0];
+    let federation = &issuer["federation"];
     assert_eq!(federation["contact_point"].as_bool(), Some(true));
     assert_eq!(federation["mapping"].as_str(), Some("ehdsi"));
     for (field, value) in [

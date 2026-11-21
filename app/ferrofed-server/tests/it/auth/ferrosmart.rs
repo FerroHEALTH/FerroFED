@@ -21,7 +21,9 @@ use ferrofed_server::config::auth::AuthSettings;
 use http::StatusCode;
 
 use super::{Gateway, assert_refused, bearing, claims, minted, query, sent};
-use crate::support::caller::{AUDIENCE, ISSUER, OPERATOR_SCOPE, attributes_toml, jwks_file};
+use crate::support::caller::{
+    AUDIENCE, ISSUER, OPERATOR_SCOPE, attributes_toml, issuer_name, jwks_file,
+};
 use crate::support::{self, toml_path};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -37,9 +39,10 @@ const UNLISTED: &str = "unlisted-app";
 /// read from the configuration text.
 fn behind_ferrosmart() -> Result<AuthSettings, Box<dyn Error>> {
     let text = format!(
-        "[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[[auth.issuer]]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\nprofile = \"ferrosmart\"\naudience = [\"{AUDIENCE}\"]\ndelegates = [{{ client = \"{APP}\" }}]\njwks_file = {}\n{}\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{APP}\"]\n",
+        "[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[auth.issuer.{name}]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\npreset = \"ferrosmart\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {}\n{}\n\n[auth.issuer.{name}.profile]\ndelegates = [{{ client = \"{APP}\" }}]\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{APP}\"]\n",
         toml_path(jwks_file()),
         attributes_toml(ISSUER),
+        name = issuer_name(ISSUER),
     );
     let settings =
         Config::from_sources(Some(&support::signed(&text)), &BTreeMap::new())?.resolve()?;
