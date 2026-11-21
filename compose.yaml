@@ -262,7 +262,7 @@ services:
   # node the gateway asks for (its `resource`) as `aud` and the gateway as its
   # client, typed at+jwt (RFC 9068). `$$` is a literal `$` to compose.
   issuer:
-    image: ghcr.io/navikt/mock-oauth2-server:6.1.5@sha256:d88e445d55c4ff6eed59b02d86adfece47d985233b1616fb712669b98328c8a2
+    image: ghcr.io/navikt/mock-oauth2-server:7.0.1@sha256:eb07a0a65007c34c40c7b849592a47e6299128a514a5c6c582a53451cc6e3390
     restart: unless-stopped
     networks:
       default:
@@ -313,7 +313,7 @@ services:
   # and exits. It runs the pinned PostgreSQL image below for its `cp`, with no
   # network; `-f` replaces a copy a later `up` finds there.
   files:
-    image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     user: "0:0"
     network_mode: none
     entrypoint:
@@ -420,7 +420,7 @@ services:
   # quickstart. The ferropix-role config, which the files service copies
   # below, creates the restricted role FerroPIX connects as.
   ferropix-postgres:
-    image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
     restart: unless-stopped
     environment:
       # A development superuser password, NOT for anything real.
@@ -454,7 +454,7 @@ services:
   # audience, the scope asked for, and the issuer FerroPIX reads on loopback.
   # `$$` is a literal `$` to compose.
   ferropix-issuer:
-    image: ghcr.io/navikt/mock-oauth2-server:6.1.5@sha256:d88e445d55c4ff6eed59b02d86adfece47d985233b1616fb712669b98328c8a2
+    image: ghcr.io/navikt/mock-oauth2-server:7.0.1@sha256:eb07a0a65007c34c40c7b849592a47e6299128a514a5c6c582a53451cc6e3390
     restart: unless-stopped
     networks:
       default:
@@ -479,7 +479,7 @@ services:
   # ITI-83 and takes the seed's ITI-104 feed, in the issuer's network
   # namespace, as `ferropix` on the compose network.
   ferropix:
-    image: ghcr.io/ferrohealth/ferropix:0.0.33@sha256:6241e7334f0d9eb39b6fc4744960fb848f20f615980bd60d31849b44058e398e
+    image: ghcr.io/ferrohealth/ferropix:0.0.38@sha256:10f42e7f447f04e61a3676a7fc999297c72786120fbf100aafea66c2108f1b52
     restart: unless-stopped
     network_mode: service:ferropix-issuer
     depends_on:
@@ -1393,11 +1393,13 @@ configs:
       # is its client is a machine's (RFC 9068 §2.2). It signs with `typ` JWT and
       # names the client in `client_id`, so the issuer takes the claims it carries.
       # A development issuer, NOT for anything real.
-      [[auth.issuer]]
+      [auth.issuer.ferrofed]
       issuer = "http://localhost:8180/ferrofed"
       kind = "persons"
-      profile = "rfc9068"
+      preset = "rfc9068"
       audience = ["http://ferropix:8080/fhir"]
+
+      [auth.issuer.ferrofed.profile]
       token_types = ["JWT"]
       required_claims = ["iss", "exp", "aud", "sub"]
       client_claims = ["client_id", "azp"]
@@ -1405,7 +1407,7 @@ configs:
       # The client the development issuer may vouch for as the Source of each
       # domain (PIXm 3.1.0 §2:3.104.5).
       [[trust.issuer]]
-      issuer = "http://localhost:8180/ferrofed"
+      issuer = "ferrofed"
       clients = ["quickstart-source"]
 
       # The patient's namespace is authoritative, so FerroPIX links each member's
