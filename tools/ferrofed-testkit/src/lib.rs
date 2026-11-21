@@ -91,6 +91,8 @@
 //!   (#1623);
 //! - [`unreachable`](mod@unreachable): a base URL no connection can
 //!   reach, the unreachable node of a test;
+//! - [`spool`]: the records an audit spool holds on disk, read from its
+//!   segments (#1922);
 //! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone,
 //!   feeds the PIX Manager over ITI-104, and names patients only inside the
 //!   `urn:oid:2.999` example arc;
@@ -141,6 +143,7 @@ pub mod reference;
 pub mod revocation;
 pub mod seed;
 mod sender;
+pub mod spool;
 pub mod tls;
 pub mod unreachable;
 pub mod xcpd;

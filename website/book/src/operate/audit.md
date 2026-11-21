@@ -157,7 +157,10 @@ table's tries, and a failed round waits `retry.max_backoff` before the next.
   Annex II 3.2). `log` stays accepted under development, and outside it
   for a gateway with no registry, whose PIXm, PDQm or PMIR records it
   writes.
-- `repository` posts each record to `[url]/AuditEvent` as FHIR JSON. The
+- `repository` posts a record to `[url]/AuditEvent` as FHIR JSON, and
+  several records waiting together to `[url]` as one FHIR `batch` Bundle,
+  each judged by its entry of the `batch-response` (ITI TF-2 §3.20.4.4 and
+  §3.20.4.5). The
   url is `https` outside development; under development plain `http` is
   accepted and named on the banner, and without `spool_dir` the spool is
   held in memory, which a restart loses.
@@ -168,7 +171,12 @@ table's tries, and a failed round waits `retry.max_backoff` before the next.
 
 The FHIR Feed records follow the policy of the ITI-55 audit trail. Every
 record is written to the spool first, flushed to disk, and delivered from
-there in order, so it counts as recorded once it is on disk. While the
+there in order, so it counts as recorded once it is on disk. The records
+that arrive together are written as one segment file and reach the disk
+with one flush. A spool directory a release before 0.0.21 wrote holds one
+`.msg` file per record, which this release refuses at start, naming the
+file: let the older release deliver them, or move them out, before you
+upgrade. While the
 repository is down, or answers `5xx`, `408` or `429`, the transactions go on
 and the records wait in the spool. One delivery is one round of the
 `[audit.repository.endpoint]` `retry` table's tries, and a failed round
