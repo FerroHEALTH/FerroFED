@@ -24,7 +24,7 @@ use std::fmt;
 
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_registry::id::EndpointId;
-use ferrohealth_smart::config::AuthSection;
+use ferrohealth_smart::config::{AuthSection, ServerTls};
 use ferrohealth_smart::federation::FederationSection;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
 use ferrohealth_smart::resource::introspection::IntrospectionSettings;
@@ -331,7 +331,8 @@ impl fmt::Display for AuthFault {
 impl Auth {
     /// Resolves `[auth]` with `trust`, its policy, and the
     /// `[[federation.contact_point]]` tables of `federation`, reading every
-    /// `_file` secret.
+    /// `_file` secret and building every `tls` table, `[auth.tls]` and each
+    /// introspection grant's, with the family's TLS builder.
     ///
     /// An `[auth.issuer.<name>]` that names no audience takes `public`, the
     /// public base URL as written, when that is set. A section that names no issuer
@@ -385,10 +386,12 @@ impl Auth {
             .map(|user| user.user.clone());
         if !no_issuer || basic_user.is_some() {
             let bases: Vec<&str> = public.map(PublicUrl::as_str).into_iter().collect();
-            let resolved = section.resolve(&bases).map_err(|source| Error::Smart {
-                section: String::from("auth"),
-                source: Box::new(source),
-            })?;
+            let resolved = section
+                .resolve_with_tls(&ServerTls, &bases)
+                .map_err(|source| Error::Smart {
+                    section: String::from("auth"),
+                    source: Box::new(source),
+                })?;
             keyed = resolved.issuers;
             introspected = resolved.introspection;
             realm = resolved.realm;

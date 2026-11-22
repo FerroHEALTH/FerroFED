@@ -11,14 +11,17 @@
     reason = "a test asserts, and returns its setup errors"
 )]
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use ferrofed_server::auth::refusal::Refusal;
+use ferrofed_server::config::Config;
 use ferrofed_server::config::auth::{AuthSettings, IssuerSettings, Verification};
 use ferrofed_testkit::issuer::{Claims, Issuer, JWKS_PATH, METADATA_PATH};
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::tls::MutualTls;
 use ferrofed_testkit::unreachable;
 use ferrohealth_smart::kind::IssuerKind;
 use ferrohealth_smart::resource::Settings as KeySetSettings;
@@ -189,4 +192,81 @@ async fn a_key_set_file_verifies_and_a_missing_one_is_503() -> TestResult {
         Refusal::Unavailable,
     )
     .await
+}
+
+/// The key set settings `[auth]` resolves for one `persons` issuer at
+/// `issuer`, its `[auth.tls]` table naming `trust_roots_file` when one is
+/// given.
+fn resolved(
+    issuer: &str,
+    roots: Option<&std::path::Path>,
+) -> Result<KeySetSettings, Box<dyn Error>> {
+    let tls = roots.map_or_else(String::new, |file| {
+        format!(
+            "[auth.tls]\ntrust_roots_file = {}\n\n",
+            toml::Value::String(file.display().to_string())
+        )
+    });
+    let text = format!(
+        "{tls}[auth.issuer.idp]\nissuer = \"{issuer}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\n"
+    );
+    let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+    let [trusted] = settings.server.auth.issuers.as_slice() else {
+        return Err("one issuer".into());
+    };
+    let Verification::KeySet(settings) = &trusted.verification else {
+        return Err("verified by its key set".into());
+    };
+    Ok((**settings).clone())
+}
+
+/// An issuer behind a private certificate authority is reached with the
+/// roots `[auth.tls] trust_roots_file` names, and without them its metadata
+/// cannot be read and its tokens are a `503` (#1929).
+// conformance: CP-17
+#[tokio::test]
+async fn auth_tls_trust_roots_reach_an_issuer_behind_a_private_ca() -> TestResult {
+    let keys = Server::start().await;
+    let front = MutualTls::open(&keys.uri(), &[])?;
+    let issuer = Issuer::new(front.origin())?;
+    let metadata = serde_json::json!({
+        "issuer": issuer.name(),
+        "jwks_uri": format!("{}{JWKS_PATH}", front.origin()),
+    });
+    wiremock::Mock::given(method("GET"))
+        .and(path(METADATA_PATH))
+        .respond_with(ResponseTemplate::new(200).set_body_json(metadata))
+        .mount(&keys)
+        .await;
+    wiremock::Mock::given(method("GET"))
+        .and(path(JWKS_PATH))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/json")
+                .set_body_string(issuer.jwks_json()?),
+        )
+        .mount(&keys)
+        .await;
+    let dir = tempfile::tempdir()?;
+    let roots = dir.path().join("issuer-ca.pem");
+    std::fs::write(&roots, front.trust_roots())?;
+    for (file, admitted) in [(Some(roots.as_path()), true), (None, false)] {
+        let mut auth = trusting(issuer.name(), None, Duration::from_secs(30));
+        let Some(Verification::KeySet(settings)) = auth
+            .issuers
+            .first_mut()
+            .map(|trusted| &mut trusted.verification)
+        else {
+            return Err("verified by its key set".into());
+        };
+        settings.tls = resolved(issuer.name(), file)?.tls;
+        let gateway = Gateway::with(auth).await?;
+        let request = bearing(query()?, &token(&issuer)?)?;
+        if admitted {
+            assert_admitted(&gateway, request).await?;
+        } else {
+            assert_refused(&gateway, request, Refusal::Unavailable).await?;
+        }
+    }
+    Ok(())
 }

@@ -102,6 +102,34 @@ fn an_issuer_resolves_with_every_default() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// `[auth.tls]` is read through the gateway's TLS builder, so a roots file
+/// that cannot be read refuses the start naming the table, and the
+/// `auth.ca_file` no release reads is an unknown key (#1929).
+#[test]
+fn auth_tls_is_built_and_auth_ca_file_is_unknown() -> Result<(), Box<dyn Error>> {
+    refused_by_the_crate(
+        &issuer(
+            "[auth.tls]\ntrust_roots_file = \"/nonexistent/ferrofed-issuer-ca.pem\"",
+            ISSUER,
+        ),
+        "auth.tls is refused",
+    )?;
+    let text = issuer("ca_file = \"/etc/ferrofed/ca.pem\"", ISSUER);
+    let refused: Box<dyn Error> = match Config::from_sources(Some(&text), &BTreeMap::new()) {
+        Err(error) => Box::new(error),
+        Ok(config) => Box::new(config.resolve().err().ok_or("auth.ca_file is refused")?),
+    };
+    let mut shown = refused.to_string();
+    let mut cause = refused.source();
+    while let Some(source) = cause {
+        shown.push_str(": ");
+        shown.push_str(&source.to_string());
+        cause = source.source();
+    }
+    assert!(shown.contains("unknown field `ca_file`"), "{shown}");
+    Ok(())
+}
+
 #[test]
 fn an_absent_auth_section_trusts_no_issuer() -> Result<(), Box<dyn Error>> {
     let settings = Config::from_sources(None, &BTreeMap::new())?.resolve()?;

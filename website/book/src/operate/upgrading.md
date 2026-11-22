@@ -130,6 +130,10 @@ to get the fix; upgrading is free
   sends the token endpoint; set `security_profile = "fapi2"` when its
   authorization server is a FAPI 2.0 one
   ([Onward credentials](onward-credentials.md), #1895).
+- Move `[auth] ca_file` to `[auth.tls] trust_roots_file`. `auth.ca_file` is
+  an unknown key and refuses the start, as it has since v0.0.19, and v0.0.21
+  reads `[auth.tls]`, which v0.0.19 and v0.0.20 refused
+  ([Client authentication](authentication.md), #1929).
 
 ### To v0.0.20, from v0.0.19
 
