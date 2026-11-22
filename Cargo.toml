@@ -92,10 +92,14 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.65" }
 # FHIR Feed through the gateway's own `FeedClient` (feature `feed`) and
 # depends on no ferrohealth-smart (#1901); 0.24.0 writes a spool batch as
 # one segment flushed once and sends the records waiting as one batch Bundle,
-# its client answering a `FeedAnswer` (#1922). Verified against crates.io on
-# 2026-11-22.
-ihe-atna = { version = "0.24.0", default-features = false }
-ehds-logging = { version = "0.24.0", default-features = false }
+# its client answering a `FeedAnswer` (#1922); 0.24.3 appends each spool
+# batch to one active segment from one writer thread, opens a backlog through
+# segment indexes and removes a delivered record from the active segment, so
+# the floor skips 0.24.2, which kept it until the segment rolled
+# (FerroHEALTH/FerroAUDIT#264, #263, #267; #1924). Verified against crates.io
+# on 2026-11-22.
+ihe-atna = { version = "0.24.3", default-features = false }
+ehds-logging = { version = "0.24.3", default-features = false }
 # The European interoperability software component of Regulation (EU)
 # 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
 # owner decision of 2026-10-28 (#813). Like every FerroBRIDGE crate here it
