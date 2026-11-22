@@ -12,6 +12,11 @@
 //! (§3.81), over the records it accepted, and keeps the `Audit Log Used`
 //! event each search records ([`FeedRepository::log_used`]).
 //!
+//! It answers the Send Audit Bundle Request too, a FHIR `batch` Bundle of
+//! `AuditEvent` creates posted to `[base]` (ITI TF-2 §3.20.4.4), with a
+//! `batch-response` whose every entry answers `201 Created` (§3.20.4.5),
+//! keeping each record of the batch in its entry order.
+//!
 //! It answers `201` and keeps the record while it is
 //! [up](FeedRepository::set_up), and `503`, which a sender retries, while it
 //! is down. Once [silent](FeedRepository::go_silent), it takes each request
@@ -68,12 +73,64 @@ impl Respond for Answer {
             self.0.refused.fetch_add(1, Ordering::SeqCst);
             return ResponseTemplate::new(503);
         }
+        if request.url.path() == BASE {
+            return self.batch(&request.body);
+        }
+        self.keep([String::from_utf8_lossy(&request.body).into_owned()]);
+        ResponseTemplate::new(201)
+    }
+}
+
+/// A Send Audit Bundle Request: the entries of a `batch` Bundle, each
+/// resource kept as the text the sender wrote.
+#[derive(serde::Deserialize)]
+struct Batch<'a> {
+    #[serde(rename = "type")]
+    kind: &'a str,
+    #[serde(borrow)]
+    entry: Vec<BatchEntry<'a>>,
+}
+
+/// One entry of a [`Batch`].
+#[derive(serde::Deserialize)]
+struct BatchEntry<'a> {
+    #[serde(borrow)]
+    resource: &'a serde_json::value::RawValue,
+}
+
+impl Answer {
+    /// Keeps `records`, in order.
+    fn keep(&self, records: impl IntoIterator<Item = String>) {
         self.0
             .records
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .push(String::from_utf8_lossy(&request.body).into_owned());
-        ResponseTemplate::new(201)
+            .extend(records);
+    }
+
+    /// The answer to a Send Audit Bundle Request: every record kept and a
+    /// `batch-response` of one `201 Created` per entry (ITI TF-2
+    /// §3.20.4.5.2), or `400` for a body that is no `batch` Bundle.
+    fn batch(&self, body: &[u8]) -> ResponseTemplate {
+        let Ok(batch) = serde_json::from_slice::<Batch<'_>>(body) else {
+            return ResponseTemplate::new(400);
+        };
+        if batch.kind != "batch" {
+            return ResponseTemplate::new(400);
+        }
+        let entries = batch.entry.len();
+        self.keep(
+            batch
+                .entry
+                .into_iter()
+                .map(|entry| entry.resource.get().to_owned()),
+        );
+        let response = serde_json::json!({
+            "resourceType": "Bundle",
+            "type": "batch-response",
+            "entry": vec![serde_json::json!({"response": {"status": "201 Created"}}); entries],
+        });
+        ResponseTemplate::new(200).set_body_json(response)
     }
 }
 
@@ -84,6 +141,11 @@ impl FeedRepository {
         let held = Arc::new(Held::default());
         Mock::given(method("POST"))
             .and(path(format!("{BASE}AuditEvent")))
+            .respond_with(Answer(Arc::clone(&held)))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(BASE))
             .respond_with(Answer(Arc::clone(&held)))
             .mount(&server)
             .await;

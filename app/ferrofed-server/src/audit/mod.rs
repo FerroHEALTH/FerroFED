@@ -38,9 +38,11 @@ use ferrofed_operator_api::health::{Indication, Observed};
 use ferrohealth_server::tls_client::TlsClientError;
 use ferrohealth_smart::client::outbound::{OutboundClient, OutboundError, SendError};
 use ferrohealth_smart::config::ServerTls;
+use http::Method;
 use http::header::CONTENT_TYPE;
-use http::{Method, StatusCode};
-use ihe_atna::atna::feed::{FeedClient, FeedConfigError, FeedRepository, FeedSendError};
+use ihe_atna::atna::feed::{
+    FeedAnswer, FeedClient, FeedConfigError, FeedRepository, FeedSendError,
+};
 use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::RepositoryError;
 use ihe_atna::atna::spool::{Bounds, Content, Spool, SpoolError};
@@ -345,7 +347,7 @@ impl FeedClient for Feed {
         url: &url::Url,
         content_type: &'static str,
         body: &[u8],
-    ) -> Result<StatusCode, FeedSendError> {
+    ) -> Result<FeedAnswer, FeedSendError> {
         let answer = self
             .0
             .send(&Method::POST, url, |request| {
@@ -360,7 +362,12 @@ impl FeedClient for Feed {
                 }
                 other => FeedSendError::Credentials(Box::new(other)),
             })?;
-        Ok(answer.status())
+        let status = answer.status();
+        let body = answer
+            .bytes()
+            .await
+            .map_err(|error| FeedSendError::Transport(Box::new(error.without_url())))?;
+        Ok(FeedAnswer::new(status, body.to_vec()))
     }
 }
 

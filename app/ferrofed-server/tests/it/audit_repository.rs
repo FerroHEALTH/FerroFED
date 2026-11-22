@@ -404,15 +404,11 @@ async fn a_repository_that_is_down_holds_the_messages_and_shows_it() -> TestResu
     Ok(())
 }
 
-/// The messages in the spool directory `spool`, its quarantine left out.
+/// The messages waiting in the spool directory `spool`, its quarantine left
+/// out.
 fn spooled(spool: &Path) -> Result<usize, Box<dyn Error>> {
-    let mut files = 0;
-    for entry in std::fs::read_dir(spool)? {
-        if entry?.path().is_file() {
-            files += 1;
-        }
-    }
-    Ok(files)
+    std::fs::metadata(spool)?;
+    Ok(ferrofed_testkit::spool::records(spool).len())
 }
 
 // conformance: CP-5

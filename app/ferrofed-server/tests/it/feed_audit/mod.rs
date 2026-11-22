@@ -60,15 +60,11 @@ pub(crate) fn spool_key(dir: &Path) -> (String, std::path::PathBuf) {
     )
 }
 
-/// The records in the spool directory `spool`, its quarantine left out.
+/// The records waiting in the spool directory `spool`, its quarantine left
+/// out.
 pub(crate) fn spooled(spool: &Path) -> Result<usize, Box<dyn Error>> {
-    let mut files = 0_usize;
-    for entry in std::fs::read_dir(spool)? {
-        if entry?.path().is_file() {
-            files = files.saturating_add(1);
-        }
-    }
-    Ok(files)
+    std::fs::metadata(spool)?;
+    Ok(ferrofed_testkit::spool::records(spool).len())
 }
 
 /// The state `GET /operator/dependencies` reports of the FHIR Feed audit
