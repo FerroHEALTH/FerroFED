@@ -110,7 +110,10 @@ Fifteen workflows:
   `scripts/gh/fields.sh new` (its default token may not set the issue type
   and fields, and the issue then lands with its label alone,
   `issue-workflow.md` §Type, priority and labels), and fails only when a
-  release could not be read. Its `EHDS and CRA acts` job reads EUR-Lex for
+  release could not be read. Its `product image pins` job (`--family`)
+  reads every `ghcr.io/ferrohealth/*` image of another product in
+  `docs/VERSIONS.md` against that product's latest release and image index
+  digest, and opens or rewrites one issue per image behind. Its `EHDS and CRA acts` job reads EUR-Lex for
   the acts, amendments and corrigenda of Regulation (EU) 2025/327 and of
   Regulation (EU) 2024/2847, and the Commission's Have your say register for
   the acts Regulation (EU) 2025/327 still waits on
