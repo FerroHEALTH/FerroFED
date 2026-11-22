@@ -313,7 +313,7 @@ services:
   # and exits. It runs the pinned PostgreSQL image below for its `cp`, with no
   # network; `-f` replaces a copy a later `up` finds there.
   files:
-    image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    image: postgres:19.0@sha256:bb6e70add742cd868fb62cb3b2f67d1dd2bdd2b65a521e778420748753687c60
     user: "0:0"
     network_mode: none
     entrypoint:
@@ -420,7 +420,7 @@ services:
   # quickstart. The ferropix-role config, which the files service copies
   # below, creates the restricted role FerroPIX connects as.
   ferropix-postgres:
-    image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+    image: postgres:19.0@sha256:bb6e70add742cd868fb62cb3b2f67d1dd2bdd2b65a521e778420748753687c60
     restart: unless-stopped
     environment:
       # A development superuser password, NOT for anything real.
@@ -479,7 +479,7 @@ services:
   # ITI-83 and takes the seed's ITI-104 feed, in the issuer's network
   # namespace, as `ferropix` on the compose network.
   ferropix:
-    image: ghcr.io/ferrohealth/ferropix:0.0.38@sha256:10f42e7f447f04e61a3676a7fc999297c72786120fbf100aafea66c2108f1b52
+    image: ghcr.io/ferrohealth/ferropix:0.0.39@sha256:b91cff886b9ec1413706630c25e80c08c6bf09a223e1916704a2421f7071a674
     restart: unless-stopped
     network_mode: service:ferropix-issuer
     depends_on:

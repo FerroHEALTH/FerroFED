@@ -86,16 +86,17 @@ pub const EHRBASE_POSTGRES: PinnedImage = PinnedImage {
 /// lane resolves and localizes patients through.
 pub const FERROPIX: PinnedImage = PinnedImage {
     repository: "ghcr.io/ferrohealth/ferropix",
-    tag: "0.0.38",
-    digest: "sha256:10f42e7f447f04e61a3676a7fc999297c72786120fbf100aafea66c2108f1b52",
+    tag: "0.0.39",
+    digest: "sha256:b91cff886b9ec1413706630c25e80c08c6bf09a223e1916704a2421f7071a674",
 };
 
-/// The PostgreSQL FerroPIX keeps its cross-reference in: the release FerroPIX
-/// 0.0.4 pins for its own tests and quickstart, PostgreSQL 18.
+/// The PostgreSQL FerroPIX keeps its cross-reference in: PostgreSQL 19, the
+/// release FerroPIX pins for its own tests and quickstart and, since 0.0.39,
+/// the oldest it runs on.
 pub const FERROPIX_POSTGRES: PinnedImage = PinnedImage {
     repository: "postgres",
-    tag: "18.6",
-    digest: "sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42",
+    tag: "19.0",
+    digest: "sha256:bb6e70add742cd868fb62cb3b2f67d1dd2bdd2b65a521e778420748753687c60",
 };
 
 /// SanteMPI, SanteSuite's open-source master patient index, which answers
