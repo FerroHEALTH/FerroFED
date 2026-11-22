@@ -171,21 +171,21 @@ table's tries, and a failed round waits `retry.max_backoff` before the next.
 
 The FHIR Feed records follow the policy of the ITI-55 audit trail. Every
 record is written to the spool first, flushed to disk, and delivered from
-there in order, so it counts as recorded once it is on disk. The records
-that arrive together are written as one segment file and reach the disk
-with one flush. A spool directory a release before 0.0.21 wrote holds one
-`.msg` file per record, which this release refuses at start, naming the
-file: let the older release deliver them, or move them out, before you
-upgrade. While the
-repository is down, or answers `5xx`, `408` or `429`, the transactions go on
-and the records wait in the spool. One delivery is one round of the
-`[audit.repository.endpoint]` `retry` table's tries, and a failed round
-waits `retry.max_backoff` before the gateway tries again. A record the
-repository refuses with any other `4xx` would be refused again, so it is
-moved to the spool's `quarantine` subdirectory, logged with its sequence
-number and status and never its content, and the drain goes on; a spooled
-file that is no FHIR `AuditEvent` is quarantined the same way. A quarantined
-record stays counted under the spool's bounds until you remove it.
+there in order, so it counts as recorded once it is on disk. One writer
+appends the records that arrive together to the spool's active segment
+file and flushes them to the disk once. A spool directory a release before
+0.0.21 wrote holds one `.msg` file per record, which this release refuses
+at start, naming the file: let the older release deliver them, or move
+them out, before you upgrade. While the repository is down, or answers
+`5xx`, `408` or `429`, the transactions go on and the records wait in the
+spool. One delivery is one round of the `[audit.repository.endpoint]`
+`retry` table's tries, and a failed round waits `retry.max_backoff` before
+the gateway tries again. A record the repository refuses with any other
+`4xx` would be refused again, so it is moved to the spool's `quarantine`
+subdirectory, logged with its sequence number and status and never its
+content, and the drain goes on; a spooled file that is no FHIR
+`AuditEvent` is quarantined the same way. A quarantined record stays
+counted under the spool's bounds until you remove it.
 
 On `SIGTERM`, once the bindings have stopped, the gateway stops every audit
 trail within `gateway.bindings_drain_timeout`. Each forwarder finishes the
