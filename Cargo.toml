@@ -96,10 +96,13 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.65" }
 # batch to one active segment from one writer thread, opens a backlog through
 # segment indexes and removes a delivered record from the active segment, so
 # the floor skips 0.24.2, which kept it until the segment rolled
-# (FerroHEALTH/FerroAUDIT#264, #263, #267; #1924). Verified against crates.io
-# on 2026-11-22.
-ihe-atna = { version = "0.24.3", default-features = false }
-ehds-logging = { version = "0.24.3", default-features = false }
+# (FerroHEALTH/FerroAUDIT#264, #263, #267; #1924); 0.25.0 writes a record's
+# bytes straight from the typed AuditEvent, byte for byte those of 0.24, and
+# builds a withdrawable record's refusal only when it is withdrawn
+# (FerroHEALTH/FerroAUDIT#270, #272; #1926). Verified against crates.io on
+# 2026-11-22 (0.25.0).
+ihe-atna = { version = "0.25.0", default-features = false }
+ehds-logging = { version = "0.25.0", default-features = false }
 # The European interoperability software component of Regulation (EU)
 # 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
 # owner decision of 2026-10-28 (#813). Like every FerroBRIDGE crate here it
@@ -319,9 +322,9 @@ openehr-mapping-core = "0.5.0"
 # PMIR feed reads each Patient's active state and links (#1891); 0.13.0 is
 # the release on ferrohealth-smart 0.28 and ihe-atna 0.22 (#1895); 0.14.0
 # the release on ferrohealth-smart 0.29 and ihe-atna 0.23 (#1899); 0.19.0
-# the release on ihe-atna 0.24 (#1922). Verified against crates.io on
-# 2026-11-22.
-ihe-iti = "0.19.0"
+# the release on ihe-atna 0.24 (#1922); 0.20.0 the release on ihe-atna 0.25
+# (#1926). Verified against crates.io on 2026-11-22.
+ihe-iti = "0.20.0"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
 # published by FerroHEALTH/FerroPIX since #367. 0.0.33 is the release on ferrohealth-smart
 # 0.8 (#1390); 0.0.40 is the release on ihe-iti 0.0.73, whose `authorizer`
@@ -334,8 +337,9 @@ ihe-iti = "0.19.0"
 # (#1864), and 0.6.0 the release on ihe-iti 0.6 (#1876). 0.12.0 is the release
 # on ihe-iti 0.12 (#1891), 0.13.0 the release on ihe-iti 0.13 (#1895), and
 # 0.14.0 the release on ihe-iti 0.14 (#1899); 0.19.0 the release on ihe-iti
-# 0.19 (#1922). Verified against crates.io on 2026-11-22.
-nl-generic-functions = "0.19.0"
+# 0.19 (#1922); 0.20.0 the release on ihe-iti 0.20 (#1926). Verified against
+# crates.io on 2026-11-22.
+nl-generic-functions = "0.20.0"
 # The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
 # the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -539,9 +543,11 @@ ferrohealth-server = { version = "=0.12.0", default-features = false }
 # TLS checks and `http.server.active_requests`, and 0.2.4 a panic hook whose
 # line names the request in flight (FerroHEALTH/FerroSYS#181); 0.2.5 splits
 # the request log with the API unchanged; 0.5 installs its own bridge from
-# the `log` crate beside the subscriber (FerroHEALTH/FerroSYS#389).
-# Verified against crates.io on 2026-11-15.
-ferrohealth-telemetry = { version = "=0.5.0", default-features = false }
+# the `log` crate beside the subscriber (FerroHEALTH/FerroSYS#389); 0.5.1
+# renders no span fields in the JSON console, which no line writes
+# (FerroHEALTH/FerroSYS#416; #1926). Verified against crates.io on
+# 2026-11-22 (0.5.1).
+ferrohealth-telemetry = { version = "=0.5.1", default-features = false }
 # The installation report of FerroHEALTH/FerroSYS to FerroPULSE (#1397): the
 # `[usage_report]` section, envelope v2, the instance id, the window and the
 # reporter. Pinned exactly, as a product pins every family crate. Verified

@@ -510,8 +510,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | 0.24.3 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | 0.24.3 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | 0.25.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | 0.25.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
