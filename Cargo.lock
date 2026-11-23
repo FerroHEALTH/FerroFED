@@ -1172,9 +1172,9 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.23.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e3eee7254d02dda008e63a4b61bd29e0a96cead39e101dc4807b1e7de5a2d0d"
+checksum = "b9bdafc0a0a7c0cda288e9c009a5eb13dc586402e89c9495757974d83567b064"
 dependencies = [
  "async-trait",
  "ferrobridge-term",
@@ -1318,9 +1318,9 @@ dependencies = [
 
 [[package]]
 name = "ferrobridge-term"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e551a417eb463d64867e98d33d87030605630b78ac031dee19e040fbaf41908"
+checksum = "403abc5cf83141b99a569a565280c555859e5aa873ee561ada8b2a650748d317"
 dependencies = [
  "async-trait",
  "backon",
@@ -1337,9 +1337,9 @@ dependencies = [
 
 [[package]]
 name = "ferrobridge-validator"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975a976bda65ef72135e9bc7651696ce1720ad8c5fb76be7470b009948d670fd"
+checksum = "07816019bf6ead3b65dde9b614abf38a82d41c8e4e84a078a208665bf1ce73ef"
 dependencies = [
  "ferrobridge-fhirpath",
  "ferrobridge-term",
@@ -1701,9 +1701,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-server"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5beacbdd769527817f33963e3341b31109202968c28e817d417bf0b0f8530e50"
+checksum = "6b81adde7764e4b10b55c7bd4579ad0dd60b584320df0ba9a8d09f2c52f2dcb1"
 dependencies = [
  "aws-lc-rs",
  "axum",
@@ -1766,9 +1766,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-smart"
-version = "0.33.0"
+version = "0.33.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38ea5e175481b6babf24a5035ff52a72ff7ced299dcc76017a0923df8d59b240"
+checksum = "aaf5cf747ca823bb70733554c4157382960f585ff15c5a88facd9760aed56310"
 dependencies = [
  "argon2",
  "aws-lc-rs",
@@ -2739,15 +2739,6 @@ name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
 dependencies = [
  "either",
 ]
@@ -4013,7 +4004,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ad9c5423459fa2f729b8d9235fab810aa29628b171467744fc86d21460ad70d"
 dependencies = [
  "anyhow",
- "itertools 0.15.0",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -5105,7 +5096,7 @@ dependencies = [
  "ferroid",
  "futures",
  "http",
- "itertools 0.14.0",
+ "itertools",
  "log",
  "memchr",
  "parse-display",
