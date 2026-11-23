@@ -60,4 +60,4 @@ out PostgreSQL start-up under parallel e2e tests (#320).
   about EHRbase, never as a federation node of the e2e topology.
 - A second product joins the federation topology only when one is found
   that admits the BASE namespace, recorded as its own issue. Linked:
-  [[e2e-gate]], [[postgresql-18]], [[strict-over-reference]].
+  [[e2e-gate]], [[postgresql-19]], [[strict-over-reference]].
