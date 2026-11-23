@@ -132,3 +132,5 @@
 - [One milestone at a time](one-milestone-at-a-time.md): every worker on the current milestone until it is cut; en-route issues join it and are fixed first; owner 2026-10-19
 - [Shared-crate blockers](shared-crate-blockers.md): every filed issue gets a milestone; a shared-crate defect goes in the owner repo's current milestone with a worker at once; no consumer workaround; owner 2026-11-07
 - [Family toolchain](family-toolchain.md): newest stable Rust as toolchain, the toolchain minus one as MSRV; never lower an MSRV; owner 2026-10-21
+- [Lean comments, no history](lean-comments-no-history.md): comments rare and short, describing only the current code; a changed comment is rewritten whole, never extended with the old way; owner hard rule 2026-11-23
+- [Family memories in every repo](family-memories-every-repo.md): a family-wide owner rule goes into every FerroHEALTH repo's `.claude/memory` through a merged PR; owner 2026-11-23
