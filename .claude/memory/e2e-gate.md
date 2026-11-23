@@ -84,5 +84,5 @@ never its own `docker` calls, and sits under `tests/it/e2e/`; a new image is a
 compose` lives in `scripts/checks/` and a CI job, never in a Rust test, as
 `scripts/checks/release-compose.sh` does. Locally: `FERROFED_E2E=1 cargo nextest
 run --locked --workspace --all-features -E 'package(ferrofed-testkit) or
-test(/^e2e::/)'` with Docker running. Linked: [[postgresql-18]],
+test(/^e2e::/)'` with Docker running. Linked: [[postgresql-19]],
 [[strict-over-reference]].
