@@ -83,9 +83,9 @@ readonly KNOWN_INITIATIVES="12663 14992 15353 15594 15673 16155 16712 17192 1751
 # One "id<TAB>stage<TAB>what" record per line: an initiative whose act a
 # component waits for, at the stage the register showed on 2026-10-05.
 readonly WATCHED_INITIATIVES="\
-17512	PLANNING_WORKFLOW	Art 15(1), the exchange format
+17512	ISC_WORKFLOW	Art 15(1), the exchange format
 18579	PLANNING_WORKFLOW	Art 36(1), the common specifications for the harmonised components
-17513	PLANNING_WORKFLOW	Art 40(4), the European digital testing environment"
+17513	ISC_WORKFLOW	Art 40(4), the European digital testing environment"
 
 # basis_text CODE: a Cellar legal-basis code (`A23P4`, `A92P11FR1`) as
 # `Art 23(4)`, a zero-padded number (`A07P4`) without its zeros, with any
@@ -101,12 +101,13 @@ basis_text() {
   }'
 }
 
-# known_acts SCRIPT: the CELEX numbers the vendor script SCRIPT pins, a
+# known_acts SCRIPT: the CELEX numbers the vendor script SCRIPT pins, an
+# act's (`32024R2847`) or a C-series communication's (`52026XC06013`), a
 # corrigendum's `R(NN)` suffix included, then those NOT_VENDORED records, one
 # per line.
 known_acts() {
   local script="$1"
-  grep -oE 'CELEX 3[0-9]{4}[A-Z][0-9]{4}(R\([0-9]{2}\))?' "$script" | awk '{ print $2 }'
+  grep -oE 'CELEX [35][0-9]{4}[A-Z]{1,2}[0-9]{4,5}(R\([0-9]{2}\))?' "$script" | awk '{ print $2 }'
   awk -F'\t' '{ print $1 }' <<< "$NOT_VENDORED"
 }
 
@@ -216,10 +217,12 @@ self_test() {
 NEW-ACT    32024R2847R(08) CRA corrigendum 2027-05-01 (no article recorded): Corrigendum" "$status $got" "a pinned and a new CRA corrigendum"
   expect "32024R2847R(01)" "$(known_acts <(printf '%s\n' 'pin commit x "OJ L (CELEX 32024R2847R(01)), English"') | head -n 1)" \
     "a pinned corrigendum read from the vendor script"
+  expect "52026XC06013" "$(known_acts <(printf '%s\n' 'pin commit x "OJ C, C/2026/6013 (CELEX 52026XC06013), English"') | head -n 1)" \
+    "a pinned communication read from the vendor script"
 
   status=0
-  got="$(printf '17512\tPLANNING_WORKFLOW\tFormat\n18853\t-\tLabel\n' | classify_initiatives)" || status=$?
-  expect "0 initiative 17512 PLANNING_WORKFLOW (Art 15(1), the exchange format)" "$status $got" "an unmoved initiative"
+  got="$(printf '17512\tISC_WORKFLOW\tFormat\n18853\t-\tLabel\n' | classify_initiatives)" || status=$?
+  expect "0 initiative 17512 ISC_WORKFLOW (Art 15(1), the exchange format)" "$status $got" "an unmoved initiative"
   status=0
   got="$(printf '18579\tFEEDBACK_WORKFLOW\tSpecs\n' | classify_initiatives)" || status=$?
   expect "1 MOVED      18579: stage FEEDBACK_WORKFLOW, recorded PLANNING_WORKFLOW (Art 36(1), the common specifications for the harmonised components): Specs" \
