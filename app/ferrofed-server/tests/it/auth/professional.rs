@@ -204,7 +204,7 @@ async fn a_token_only_a_system_scope_covers_is_refused_patient_data() -> TestRes
 
 /// A client token reaches no patient data whatever it names and however it
 /// authenticated: a professional acting through a client is a delegated
-/// person of a `persons` issuer, never a system.
+/// user of a SMART issuer, never a system.
 #[tokio::test]
 async fn a_client_token_naming_a_professional_is_refused_at_any_level() -> TestResult {
     let gateway = Gateway::with(requiring(AssuranceLevel::Substantial)).await?;

@@ -11,8 +11,8 @@
 //! (ITS-REST 1.1.0 `UpdateAudit`, `UpdateVersion`), so the gateway writes the
 //! placeholder there, read from the onward token the lane obtained for the
 //! caller; it writes nothing else of the body. An attestation (ITS-REST
-//! `UpdateAttestation`) takes the same placeholder for a person exchanged
-//! at a `persons` issuer, and is refused before anything is sent for any
+//! `UpdateAttestation`) takes the same placeholder for a user exchanged at
+//! a SMART issuer, and is refused before anything is sent for any
 //! other caller, whose attestation the node refuses. A header commit is
 //! forwarded as the client sent it, and the gateway adds no committer to
 //! it. The placeholder's form is FerroEHR's; which body members the gateway
@@ -54,7 +54,7 @@ pub enum CommitterError {
     /// The body is no JSON object of a `CONTRIBUTION`.
     #[error("the CONTRIBUTION is no JSON object")]
     Body(#[source] Option<serde_json::Error>),
-    /// A version carries an attestation and the caller is no person of the
+    /// A version carries an attestation and the caller is no user of the
     /// node's organisation, whose attestation the node refuses.
     #[error("a CONTRIBUTION of a caller exchanged at a {issuer} issuer carries an attestation")]
     Attestation {
@@ -94,7 +94,7 @@ pub(crate) async fn committed(
     let attested = versions
         .iter()
         .any(|version| version.contains_key("attestations"));
-    if attested && kind != IssuerKind::Persons {
+    if attested && kind != IssuerKind::Smart {
         return Err(CommitterError::Attestation { issuer: kind });
     }
     let credentials = provider

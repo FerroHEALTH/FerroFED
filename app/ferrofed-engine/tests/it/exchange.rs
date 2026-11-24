@@ -61,7 +61,7 @@ const CLIENT_ID: &str = "ferrofed-test-gateway";
 /// The scope of the gateway's own client-credentials requests.
 const SCOPE: &str = "system/aql-*.s";
 
-/// The node's `persons` issuer, which issued the callers' tokens and signs
+/// The node's SMART issuer, which issued the callers' tokens and signs
 /// the exchanged ones.
 pub(crate) const ONWARD_ISSUER: &str = UPSTREAM;
 
@@ -93,9 +93,14 @@ pub(crate) static CALLERS: LazyLock<Issuer> =
 
 /// A token of the caller `subject`, as its issuer signed it.
 pub(crate) fn caller_token(subject: &str) -> Result<String, Box<dyn Error>> {
-    let mut claims = Claims::new(UPSTREAM, AUDIENCE);
+    caller_token_of(&CALLERS, subject)
+}
+
+/// A token of the caller `subject`, as `issuer` signed it.
+pub(crate) fn caller_token_of(issuer: &Issuer, subject: &str) -> Result<String, Box<dyn Error>> {
+    let mut claims = Claims::new(issuer.name(), AUDIENCE);
     subject.clone_into(&mut claims.sub);
-    Ok(CALLERS.mint(&claims)?)
+    Ok(issuer.mint(&claims)?)
 }
 
 /// The gateway's keys, the ones the token endpoint trusts.
@@ -135,7 +140,7 @@ fn grant(
     Ok(grant)
 }
 
-/// The onward table of a `persons` issuer at `endpoint` naming the gateway
+/// The onward table of a SMART issuer at `endpoint` naming the gateway
 /// as the actor, with `extra` keys beside it.
 #[expect(
     clippy::disallowed_types,
@@ -147,8 +152,6 @@ pub(crate) fn section(
 ) -> Result<OnwardSection, Box<dyn Error>> {
     let mut section = serde_json::json!({
         "issuer": ONWARD_ISSUER,
-        "kind": "persons",
-        "preset": "rfc9068",
         "token_endpoint": endpoint.token_url(),
         "audiences": [RESOURCE],
         "indicators": [RESOURCE],
@@ -169,7 +172,7 @@ fn lane(endpoint: &TokenEndpoint, grant: ClientCredentials) -> Result<Arc<Lane>,
     Ok(Arc::new(Lane::new(
         EndpointId::new("node-a-pub")?,
         (resolved.onward, resolved.target),
-        (IssuerKind::Persons, Organisations::Refused),
+        (IssuerKind::Smart, Organisations::Refused),
         gateway,
     )))
 }
@@ -223,11 +226,21 @@ fn client(
 
 /// The subject of `token`, a token of the person `subject`, its granted
 /// scopes covering the operation as `covering`, as `ferrohealth-smart` read it.
+pub(crate) fn subject_of(
+    token: &str,
+    subject: &str,
+    covering: &str,
+) -> Result<SubjectToken, Box<dyn Error>> {
+    subject_at(UPSTREAM, token, subject, covering)
+}
+
+/// The subject token of [`subject_of`], its caller signed by `issuer`.
 #[expect(
     clippy::disallowed_types,
     reason = "the claims of a test token are read as JSON"
 )]
-pub(crate) fn subject_of(
+pub(crate) fn subject_at(
+    issuer: &str,
     token: &str,
     subject: &str,
     covering: &str,
@@ -243,10 +256,9 @@ pub(crate) fn subject_of(
         Some("synthetic-client".to_owned()),
         COVERING,
         None,
-        false,
         CallerKind::Person,
     )
-    .with_issuer(UPSTREAM.to_owned())
+    .with_issuer(issuer.to_owned())
     .with_claims(claims);
     let secret = SecretString::from(token.to_owned());
     let onward = OnwardSubject::from_caller(&smart, secret.clone())?;

@@ -164,7 +164,7 @@ product_scope = "__ferrofed.operator"
 
 [auth.issuer.ncp]
 issuer = "https://ncp.example.org"
-kind = "persons"
+kind = "federation"
 audience = ["urn:example:gw"]
 jwks_file = "/run/ferrofed/ncp-jwks.json"
 
@@ -220,7 +220,7 @@ additional_countries = ["XA"]
                     "ncp-correlation-id",
                 ),
                 ("auth.issuer.ncp.issuer", "https://ncp.example.org"),
-                ("auth.issuer.ncp.kind", "persons"),
+                ("auth.issuer.ncp.kind", "federation"),
                 ("auth.product_scope", "__ferrofed.operator"),
             ] {
                 let setting = document.setting(key).expect(key);

@@ -1,16 +1,15 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The gateway behind FerroSMART: FerroSMART-shaped tokens read under
-//! `ferrohealth-smart`'s `ferrosmart` issuer preset, the issuer table read
-//! from the configuration as an operator writes it.
+//! The gateway behind FerroSMART: one `[auth.issuer.<name>]` table naming
+//! only the issuer trusts it, read from the configuration as an operator
+//! writes it.
 //!
-//! The preset keeps every `rfc9068` default but two: `typ` is `at+jwt` alone
-//! (RFC 9068 §2.1) and `scope` is required (SMART App Launch 2.2.0, Obtain
-//! access token, Response). One `persons` table names the FerroSMART issuer
-//! (FerroHEALTH/FerroSMART#591): a person reaches the gateway through a SMART
-//! app it lists in `delegates`, read as delegated, and a Backend Services
-//! token, whose `sub` is its `client_id` (RFC 9068 §2.2), reads as the system.
+//! A token's `typ` is `at+jwt` (RFC 9068 §2.1) and its `scope` is required
+//! (SMART App Launch 2.2.0, Obtain access token, Response). FerroSMART's
+//! registry is the one list of clients: any app whose token's `aud` names
+//! the gateway reaches it (RFC 9068 §4). A Backend Services token, whose
+//! `sub` is its `client_id` (RFC 9068 §2.2), reads as the system.
 
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -28,18 +27,14 @@ use crate::support::{self, toml_path};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-/// The SMART app the deployment admits for a person.
+/// A SMART app a person signs in through.
 const APP: &str = "growth-chart";
 
-/// A SMART app the deployment does not list.
-const UNLISTED: &str = "unlisted-app";
-
 /// The `[auth]` of a gateway trusting the suite's test issuer as FerroSMART:
-/// one `persons` table under the `ferrosmart` preset, [`APP`] its delegate,
-/// read from the configuration text.
+/// one table naming only the issuer, read from the configuration text.
 fn behind_ferrosmart() -> Result<AuthSettings, Box<dyn Error>> {
     let text = format!(
-        "[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[auth.issuer.{name}]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\npreset = \"ferrosmart\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {}\n{}\n\n[auth.issuer.{name}.profile]\ndelegates = [{{ client = \"{APP}\" }}]\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{APP}\"]\n",
+        "[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[auth.issuer.{name}]\nissuer = \"{ISSUER}\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {}\n{}\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{APP}\"]\n",
         toml_path(jwks_file()),
         attributes_toml(ISSUER),
         name = issuer_name(ISSUER),
@@ -50,7 +45,7 @@ fn behind_ferrosmart() -> Result<AuthSettings, Box<dyn Error>> {
 }
 
 #[tokio::test]
-async fn a_person_through_a_listed_app_is_read() -> TestResult {
+async fn a_person_through_an_app_audienced_to_the_gateway_is_read() -> TestResult {
     let gateway = Gateway::with(behind_ferrosmart()?).await?;
     let mut through = claims();
     APP.clone_into(&mut through.client_id);
@@ -60,13 +55,14 @@ async fn a_person_through_a_listed_app_is_read() -> TestResult {
 }
 
 #[tokio::test]
-async fn a_person_through_an_unlisted_app_is_refused() -> TestResult {
+async fn a_token_audienced_to_another_server_is_refused() -> TestResult {
     let gateway = Gateway::with(behind_ferrosmart()?).await?;
-    let mut through = claims();
-    UNLISTED.clone_into(&mut through.client_id);
+    let mut elsewhere = claims();
+    APP.clone_into(&mut elsewhere.client_id);
+    "https://other.example.org/openehr".clone_into(&mut elsewhere.aud);
     assert_refused(
         &gateway,
-        bearing(query()?, &minted(&through)?)?,
+        bearing(query()?, &minted(&elsewhere)?)?,
         Refusal::Invalid,
     )
     .await

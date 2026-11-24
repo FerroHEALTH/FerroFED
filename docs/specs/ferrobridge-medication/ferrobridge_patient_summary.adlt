@@ -1,13 +1,17 @@
 -- SPDX-FileCopyrightText: Cadasto B.V.
 -- SPDX-License-Identifier: BUSL-1.1
--- FerroBRIDGE's patient summary template over five published CKM archetypes
--- (fixtures/ckm/medication): a health summary COMPOSITION with a medication
--- summary section, an ad hoc SECTION holding INSTRUCTION.medication_order.v3
--- and ACTION.medication.v1, and an immunisations section, the vaccination list
--- SECTION whose "Vaccinations administered" slot holds ACTION.medication.v1.
--- The section path places an entry. No specification
--- governs this template: our own design for the HL7 Europe Patient Summary
--- medication summary and immunisations. Node identifiers are at-coded, the
+-- FerroBRIDGE's patient summary template over published CKM archetypes
+-- (fixtures/ckm/medication, discharge and library): a health summary
+-- COMPOSITION with six sections, each an ad hoc SECTION named for its HL7
+-- Europe Patient Summary section but the immunisations: the problem list
+-- holding EVALUATION.problem_diagnosis.v1, the allergies and intolerances
+-- holding EVALUATION.adverse_reaction_risk.v2, the medication summary holding
+-- INSTRUCTION.medication_order.v3 and ACTION.medication.v1, the history of
+-- procedures holding ACTION.procedure.v1, the medical devices holding
+-- EVALUATION.device_summary.v0, and the immunisations, the
+-- vaccination list SECTION whose "Vaccinations administered" slot holds
+-- ACTION.medication.v1. The section path places an entry. No specification
+-- governs this template: our own design. Node identifiers are at-coded, the
 -- ADL 1.4 codes of the CKM sources.
 template (adl_version=2.4.0; rm_release=1.1.0)
     openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0
@@ -26,7 +30,7 @@ description
     details = <
         ["en"] = <
             language = <[ISO_639-1::en]>
-            purpose = <"The HL7 Europe Patient Summary medication summary and immunisations of FerroBRIDGE.">
+            purpose = <"The HL7 Europe Patient Summary of FerroBRIDGE.">
         >
     >
 
@@ -35,6 +39,10 @@ definition
         content matches {
             use_archetype SECTION[at0000.2, openEHR-EHR-SECTION.adhoc-ferrobridge_medication_summary.v1]
             use_archetype SECTION[at0000.3, openEHR-EHR-SECTION.immunisation_list-ferrobridge.v0]
+            use_archetype SECTION[at0000.4, openEHR-EHR-SECTION.adhoc-ferrobridge_problem_list.v1]
+            use_archetype SECTION[at0000.5, openEHR-EHR-SECTION.adhoc-ferrobridge_allergies.v1]
+            use_archetype SECTION[at0000.6, openEHR-EHR-SECTION.adhoc-ferrobridge_procedures.v1]
+            use_archetype SECTION[at0000.7, openEHR-EHR-SECTION.adhoc-ferrobridge_devices.v1]
         }
     }
 
@@ -43,7 +51,7 @@ terminology
         ["en"] = <
             ["at0000.1"] = <
                 text = <"Patient summary">
-                description = <"The medication summary and the immunisations of a patient summary.">
+                description = <"The problems, allergies, medication summary, procedures, medical devices and immunisations of a patient summary.">
             >
             ["at0000.2"] = <
                 text = <"Medication summary">
@@ -52,6 +60,22 @@ terminology
             ["at0000.3"] = <
                 text = <"Immunisations">
                 description = <"The vaccines the patient received, recorded as medication actions.">
+            >
+            ["at0000.4"] = <
+                text = <"Problem list">
+                description = <"The problems and diagnoses of the patient.">
+            >
+            ["at0000.5"] = <
+                text = <"Allergies and intolerances">
+                description = <"The risks of an adverse reaction the patient carries.">
+            >
+            ["at0000.6"] = <
+                text = <"History of procedures">
+                description = <"The procedures the patient underwent.">
+            >
+            ["at0000.7"] = <
+                text = <"Medical devices">
+                description = <"The medical devices fitted to or implanted in the patient.">
             >
         >
     >
@@ -74,12 +98,17 @@ description
     details = <
         ["en"] = <
             language = <[ISO_639-1::en]>
-            purpose = <"The HL7 Europe Patient Summary medication summary and immunisations of FerroBRIDGE.">
+            purpose = <"The HL7 Europe Patient Summary of FerroBRIDGE.">
         >
     >
 
 definition
     SECTION[at0000.1] matches {
+        name matches {
+            DV_TEXT matches {
+                value matches {"Medication summary"}
+            }
+        }
         items matches {
             use_archetype INSTRUCTION[at0000.2, openEHR-EHR-INSTRUCTION.medication_order.v3]
             use_archetype ACTION[at0000.3, openEHR-EHR-ACTION.medication.v1]
@@ -122,7 +151,7 @@ description
     details = <
         ["en"] = <
             language = <[ISO_639-1::en]>
-            purpose = <"The HL7 Europe Patient Summary medication summary and immunisations of FerroBRIDGE.">
+            purpose = <"The HL7 Europe Patient Summary of FerroBRIDGE.">
         >
     >
 
@@ -143,6 +172,198 @@ terminology
             ["at0001.1"] = <
                 text = <"Vaccination administered">
                 description = <"Vaccination administered">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-SECTION.adhoc-ferrobridge_problem_list.v1.0.0
+
+specialize
+    openEHR-EHR-SECTION.adhoc.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Patient Summary of FerroBRIDGE.">
+        >
+    >
+
+definition
+    SECTION[at0000.1] matches {
+        name matches {
+            DV_TEXT matches {
+                value matches {"Problem list"}
+            }
+        }
+        items matches {
+            use_archetype EVALUATION[at0000.2, openEHR-EHR-EVALUATION.problem_diagnosis.v1] occurrences matches {0..*}
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Problem list">
+                description = <"Problem list">
+            >
+            ["at0000.2"] = <
+                text = <"Problem/Diagnosis">
+                description = <"Problem/Diagnosis">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-SECTION.adhoc-ferrobridge_allergies.v1.0.0
+
+specialize
+    openEHR-EHR-SECTION.adhoc.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Patient Summary of FerroBRIDGE.">
+        >
+    >
+
+definition
+    SECTION[at0000.1] matches {
+        name matches {
+            DV_TEXT matches {
+                value matches {"Allergies and intolerances"}
+            }
+        }
+        items matches {
+            use_archetype EVALUATION[at0000.2, openEHR-EHR-EVALUATION.adverse_reaction_risk.v2] occurrences matches {0..*}
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Allergies and intolerances">
+                description = <"Allergies and intolerances">
+            >
+            ["at0000.2"] = <
+                text = <"Adverse reaction risk">
+                description = <"Adverse reaction risk">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-SECTION.adhoc-ferrobridge_procedures.v1.0.0
+
+specialize
+    openEHR-EHR-SECTION.adhoc.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Patient Summary of FerroBRIDGE.">
+        >
+    >
+
+definition
+    SECTION[at0000.1] matches {
+        name matches {
+            DV_TEXT matches {
+                value matches {"History of procedures"}
+            }
+        }
+        items matches {
+            use_archetype ACTION[at0000.2, openEHR-EHR-ACTION.procedure.v1] occurrences matches {0..*}
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"History of procedures">
+                description = <"History of procedures">
+            >
+            ["at0000.2"] = <
+                text = <"Procedure">
+                description = <"Procedure">
+            >
+        >
+    >
+
+------------------------------------------------------------------------
+template_overlay
+    openEHR-EHR-SECTION.adhoc-ferrobridge_devices.v1.0.0
+
+specialize
+    openEHR-EHR-SECTION.adhoc.v1
+
+language
+    original_language = <[ISO_639-1::en]>
+
+description
+    lifecycle_state = <"unmanaged">
+    original_author = <
+        ["name"] = <"FerroBRIDGE">
+    >
+    details = <
+        ["en"] = <
+            language = <[ISO_639-1::en]>
+            purpose = <"The HL7 Europe Patient Summary of FerroBRIDGE.">
+        >
+    >
+
+definition
+    SECTION[at0000.1] matches {
+        name matches {
+            DV_TEXT matches {
+                value matches {"Medical devices"}
+            }
+        }
+        items matches {
+            use_archetype EVALUATION[at0000.2, openEHR-EHR-EVALUATION.device_summary.v0] occurrences matches {0..*}
+        }
+    }
+
+terminology
+    term_definitions = <
+        ["en"] = <
+            ["at0000.1"] = <
+                text = <"Medical devices">
+                description = <"Medical devices">
+            >
+            ["at0000.2"] = <
+                text = <"Medical device summary">
+                description = <"Medical device summary">
             >
         >
     >

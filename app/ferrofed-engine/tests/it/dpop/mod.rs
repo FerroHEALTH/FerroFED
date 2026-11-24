@@ -449,7 +449,7 @@ fn dpop_lane(
     Ok(Arc::new(Lane::new(
         EndpointId::new("node-a-pub")?,
         (resolved.onward, resolved.target),
-        (IssuerKind::Persons, Organisations::Refused),
+        (IssuerKind::Smart, Organisations::Refused),
         gateway,
     )))
 }

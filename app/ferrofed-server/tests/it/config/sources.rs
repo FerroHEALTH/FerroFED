@@ -281,8 +281,6 @@ fn onward_lane(endpoint: &str, extra: &str) -> String {
          private_key_file = {key}\n\n\
          [credentials.\"{endpoint}\".credentials.onward]\n\
          issuer = \"https://federation.cdr-a.example.org\"\n\
-         kind = \"persons\"\n\
-         preset = \"rfc9068\"\n\
          audiences = [\"https://cdr-a.example.org/openehr\"]\n\
          indicators = [\"https://cdr-a.example.org/openehr\"]\n\
          {extra}\n\

@@ -108,7 +108,6 @@ disclose = false               # Art 8: a restriction is never shown to a provid
 
 [auth.issuer.idp]                # the issuer of the production guide's step 4
 issuer = "https://idp.example.org/realms/ferrofed"
-kind = "persons"
 
 [auth.issuer.idp.assurance]
 claim = "acr"

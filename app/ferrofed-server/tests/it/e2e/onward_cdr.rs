@@ -162,7 +162,7 @@ async fn a_persons_query_reaches_the_cdr_under_the_exchanged_token_alone() -> Te
     let node = seeded_node().await?;
     let exchanged = node_token(CALLER, CLIENT_ID, "user/aql-*.s")?;
     let server = authorization_server(&exchanged, 200).await;
-    let tables = lane(&server.uri(), "persons", "");
+    let tables = lane(&server.uri(), None, "");
     let dir = tempfile::tempdir()?;
 
     let start = tables

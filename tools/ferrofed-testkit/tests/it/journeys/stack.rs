@@ -308,7 +308,7 @@ async fn gateway(
     let [document, key_file, definitions, jwks] = [document, key_file, definitions, jwks]
         .map(|file| toml::Value::String(file.display().to_string()));
     let mut text = format!(
-        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\nbest_effort = true\nper_node_timeout = '2s'\noverall_timeout = '3s'\n\n[stored_queries]\nbackend = \"redb\"\npath = {definitions}\n\n[signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[auth.issuer.issuer_issuer]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {jwks}\n\n[auth.issuer.issuer_issuer.profile]\nfirst_party_clients = [\"synthetic-client\"]\n\n[auth.issuer.issuer_issuer.attributes]\nmapping = \"iua\"\nauthorization_details_purposes = true\n"
+        "profile = \"development\"\n\n[registry]\ndocument = {document}\n\n[federation]\nid = \"example-federation\"\nnode_selection = \"ask-all\"\nbest_effort = true\nper_node_timeout = '2s'\noverall_timeout = '3s'\n\n[stored_queries]\nbackend = \"redb\"\npath = {definitions}\n\n[signing]\nkey_file = {key_file}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[auth.issuer.issuer_issuer]\nissuer = \"{ISSUER}\"\naudience = [\"{AUDIENCE}\"]\njwks_file = {jwks}\n\n[auth.issuer.issuer_issuer.attributes]\nmapping = \"iua\"\nauthorization_details_purposes = true\n"
     );
     // NOTE: writing to a String cannot fail, so the result is dropped.
     let _written: std::fmt::Result = write!(

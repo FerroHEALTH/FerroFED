@@ -46,7 +46,7 @@ use crate::lane::{NODE, OWN_TOKEN, refuses};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-/// The node's `persons` issuer, which also issued the caller's token.
+/// The node's SMART issuer, which also issued the caller's token.
 pub(crate) const PERSONS: &str = "https://as.cdr-a.example.org";
 
 /// The node's `federation` issuer.
@@ -167,7 +167,39 @@ pub(crate) fn lane_carrying(
     ))
 }
 
-/// The lane of the node's `persons` issuer under `profile`, with `extra`
+/// The onward profile keys of the authorization server `profile` names:
+/// none for a standards-only one, Keycloak's standard exchange naming the
+/// node's client in `audience`, or Entra ID's on-behalf-of grant.
+#[expect(
+    clippy::disallowed_types,
+    reason = "the claims and tables a test token and lane carry are written as JSON"
+)]
+pub(crate) fn onward_profile(profile: &str) -> serde_json::Value {
+    match profile {
+        "keycloak" => json!({
+            "token_types": ["JWT"],
+            "required_claims": ["iss", "sub", "aud", "exp", "iat", "jti", "azp"],
+            "onward_grant": "token_exchange",
+            "onward_indicator": "audience",
+            "onward_parameters": {
+                "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+            },
+            "onward_subject_audience": true,
+            "onward_preview": ["actor_token"],
+        }),
+        "entra" => json!({
+            "token_types": ["JWT"],
+            "required_claims": ["iss", "sub", "aud", "exp", "iat", "tid", "azp", "uti", "ver"],
+            "onward_grant": "jwt_bearer",
+            "onward_parameters": {"requested_token_use": "on_behalf_of"},
+            "onward_client_id": true,
+            "onward_subject_audience": true,
+        }),
+        _ => json!({}),
+    }
+}
+
+/// The lane of the node's SMART issuer under `profile`, with `extra`
 /// onward keys.
 #[expect(
     clippy::disallowed_types,
@@ -178,11 +210,11 @@ fn persons_lane(
     profile: &str,
     extra: serde_json::Value,
 ) -> Result<Lane, Box<dyn Error>> {
-    let mut section = json!({"issuer": PERSONS, "kind": "persons", "preset": profile});
+    let mut section = json!({"issuer": PERSONS, "profile": onward_profile(profile)});
     if let (Some(object), serde_json::Value::Object(extra)) = (section.as_object_mut(), extra) {
         object.extend(extra);
     }
-    lane(server, IssuerKind::Persons, section)
+    lane(server, IssuerKind::Smart, section)
 }
 
 /// The conveyance of a caller of `kind` whose verified token, issued by
@@ -202,7 +234,6 @@ pub(crate) fn conveyance(
         Some("synthetic-client".to_owned()),
         "user/aql-*.s",
         None,
-        false,
         kind,
     )
     .with_issuer(issuer.to_owned())
@@ -213,7 +244,7 @@ pub(crate) fn conveyance(
         .with_subject(SubjectToken::new(token, "user/aql-*.s").with_onward(onward)))
 }
 
-/// The claims of the person's token at the node's `persons` issuer, naming
+/// The claims of the person's token at the node's SMART issuer, naming
 /// `audience`.
 #[expect(
     clippy::disallowed_types,
@@ -227,7 +258,7 @@ fn person_claims(audience: &[&str]) -> serde_json::Value {
     })
 }
 
-/// The token the `persons` issuer issues for the person to the gateway.
+/// The token the SMART issuer issues for the person to the gateway.
 #[expect(
     clippy::disallowed_types,
     reason = "the claims and tables a test token and lane carry are written as JSON"
@@ -273,18 +304,14 @@ async fn the_standards_profile_exchanges_the_person_for_the_node_as_its_resource
     Ok(())
 }
 
-/// What a Keycloak issuer's table sets beside its preset: the node's client
-/// as the `audience` indicator, and its service accounts' subjects, which
-/// the preset leaves for the deployment to list.
+/// What a Keycloak issuer's table sets beside its onward profile: the
+/// node's client as the `audience` indicator.
 #[expect(
     clippy::disallowed_types,
     reason = "the claims and tables a test token and lane carry are written as JSON"
 )]
 pub(crate) fn keycloak_keys() -> serde_json::Value {
-    json!({
-        "indicators": [NODE],
-        "profile": {"app_only": [{"subjects": ["service-account-ferrofed"]}]},
-    })
+    json!({"indicators": [NODE]})
 }
 
 /// Keycloak's standard exchange names the node's client in `audience`, and
@@ -406,7 +433,7 @@ async fn a_token_from_another_authorization_server_is_refused_before_use() -> Te
 /// as IHE IUA.
 fn federation_lane(server: &Server) -> Result<Lane, Box<dyn Error>> {
     let section = json!({
-        "issuer": FEDERATION, "kind": "federation", "preset": "rfc9068",
+        "issuer": FEDERATION, "kind": "federation",
         "indicators": [NODE],
         "federation": {
             "contact_point": false,

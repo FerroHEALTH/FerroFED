@@ -17,6 +17,7 @@ use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::onward::grant::lane::LaneError;
 use ferrofed_engine::onward::grant::on_behalf::OnBehalf as _;
 use ferrofed_testkit::fapi::{AuthorizationServer, Metadata};
+use ferrofed_testkit::issuer::Issuer;
 use ferrofed_testkit::oauth;
 use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::dpop::DpopKey;
@@ -236,7 +237,10 @@ async fn an_exchanging_grant_needs_token_exchange_listed() -> TestResult {
     let lane = exchange(&server, grant(&server, key, &prover()?)?)?;
     let withheld = Arc::new(Withheld::new(Vec::<SecretString>::new()));
     let error = lane
-        .provider(&verified_caller("clinician-0042")?, &withheld)
+        .provider(
+            &verified_caller(&Issuer::new(server.issuer())?, "clinician-0042")?,
+            &withheld,
+        )
         .credentials()
         .await
         .err()
@@ -402,8 +406,6 @@ async fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
     let untargeted: ferrohealth_smart::config::onward::OnwardSection =
         serde_json::from_value(serde_json::json!({
             "issuer": server.issuer(),
-            "kind": "persons",
-            "preset": "rfc9068",
             "audiences": [],
             "indicators": [RESOURCE],
             "profile": {"max_onward_lifetime": "1h"},
