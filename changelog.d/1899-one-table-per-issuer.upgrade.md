@@ -1,1 +1,1 @@
-- An issuer named in two `[[auth.issuer]]` tables now refuses the start, naming the issuer. Upgrade: keep one table per issuer; a `persons` table also reads its issuer's Backend Services tokens as the system, so a `machines` table beside it for the same issuer goes (#1899).
+- An issuer named in two issuer tables now refuses the start, naming the issuer. Upgrade: keep one table per issuer (#1899).
