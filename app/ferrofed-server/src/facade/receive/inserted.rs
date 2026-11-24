@@ -8,14 +8,15 @@
 //! "be clearly distinguishable as having been inserted by the natural person
 //! or by his or her representative". A caller whose grant is confined to
 //! their own record and who acts in person inserts as the record's subject,
-//! a `PARTY_SELF`. When the caller's token names a representative, the
-//! current actor of its RFC 8693 §4.1 `act` claim, which its issuer declares
-//! one, each entry names that representative as a `PARTY_IDENTIFIED` with
-//! the one identifier the token states for them: the `act` `sub`, issued by
-//! the `act` `iss`, or the token's own `iss` when the claim names none. The
-//! gateway reads who acts only from the token, and a representative named by
-//! the patient's own identifier, or by the token's own `sub`, is refused, so
-//! the provider names nothing of the patient.
+//! a `PARTY_SELF`. When the caller acts as the patient's representative,
+//! each entry names that representative as a `PARTY_IDENTIFIED` with the one
+//! identifier the token states for them: for the current actor of a
+//! `Patient` token's RFC 8693 §4.1 `act` claim, the `act` `sub`, issued by
+//! the `act` `iss` or the token's own `iss` when the claim names none; for a
+//! `RelatedPerson`, the token's `sub` issued by its `iss`. The gateway reads
+//! who acts only from the token, and a representative named by the patient's
+//! own identifier, or an actor named by the `Patient` token's own `sub`, is
+//! refused, so the provider names nothing of the patient.
 
 use axum::response::Response;
 use eehrxf::receive::openehr::Representative;
@@ -27,7 +28,7 @@ use http::StatusCode;
 use openehr_rm::v1_2::data_types::basic::dv_identifier::DvIdentifier;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::auth::caller::{Actor, Caller};
+use crate::auth::caller::{Caller, Representation};
 use crate::facade::receive::refusal::{self, refused};
 
 /// Marks the composition of `prepared` as inserted by who acts behind
@@ -58,8 +59,8 @@ pub(super) fn mark(
             prepared.composition.inserted_by_subject(),
             Insertion::Subject,
         ),
-        Some(actor) => {
-            let representative = representative(actor, caller, withheld, logged)?;
+        Some(representation) => {
+            let representative = representative(representation, caller, withheld, logged)?;
             (
                 prepared
                     .composition
@@ -84,25 +85,43 @@ fn in_person(conveyance: &Conveyance) -> bool {
         )
 }
 
-/// The representative `actor` names, identified as `caller`'s token states
-/// them.
+/// The representative `representation` names, identified as `caller`'s
+/// token states them.
 ///
 /// # Errors
 ///
-/// The [`Response`] of an actor named by nothing, or by a value that names
-/// the patient: one of `withheld`, or the token's own `sub`.
+/// The [`Response`] of a representative named by nothing, or by a value
+/// that names the patient: one of `withheld`, or for an actor the `Patient`
+/// token's own `sub`.
 #[expect(
     clippy::result_large_err,
     reason = "the refusal is the handler's answer, returned at most once per request"
 )]
 fn representative(
-    actor: &Actor,
+    representation: &Representation,
     caller: &Caller,
     withheld: &[SecretString],
     logged: &str,
 ) -> Result<Representative, Response> {
-    let names_patient = actor.subject.as_deref().is_some_and(|subject| {
-        subject == caller.subject()
+    // NOTE: RFC 7519 §4.1.2, a `sub` is unique "in the context of the issuer"; an `act` with no
+    // `iss` names its actor in the context of the token's own issuer.
+    let (issuer, subject, own_sub) = match representation {
+        Representation::Actor(actor) => (
+            actor
+                .issuer
+                .clone()
+                .unwrap_or_else(|| caller.issuer().to_owned()),
+            actor.subject.clone(),
+            true,
+        ),
+        Representation::RelatedPerson => (
+            caller.issuer().to_owned(),
+            Some(caller.subject().to_owned()),
+            false,
+        ),
+    };
+    let names_patient = subject.as_deref().is_some_and(|subject| {
+        (own_sub && subject == caller.subject())
             || withheld
                 .iter()
                 .any(|identifier| identifier.expose_secret() == subject)
@@ -120,15 +139,8 @@ fn representative(
             "the token names the person's representative by an identifier of the person",
         ));
     }
-    // NOTE: RFC 7519 §4.1.2, a `sub` is unique "in the context of the issuer"; an `act` with no
-    // `iss` names its actor in the context of the token's own issuer.
-    let identifier = actor.subject.clone().map(|id| DvIdentifier {
-        issuer: Some(
-            actor
-                .issuer
-                .clone()
-                .unwrap_or_else(|| caller.issuer().to_owned()),
-        ),
+    let identifier = subject.map(|id| DvIdentifier {
+        issuer: Some(issuer),
         assigner: None,
         id,
         r#type: None,

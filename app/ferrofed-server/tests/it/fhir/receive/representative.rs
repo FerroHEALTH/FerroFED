@@ -4,7 +4,8 @@
 //! A document a representative inserts in a person's EHR under the person's
 //! grant (Regulation (EU) 2025/327 Art 4(2), Art 5): the current actor of
 //! the RFC 8693 §4.1 `act` claim of a `Patient` token, as its issuer asserts
-//! it, is named as every entry's provider, a `PARTY_IDENTIFIED` (openEHR RM
+//! it, or a `RelatedPerson` with the patient in context, is named as every
+//! entry's provider, a `PARTY_IDENTIFIED` (openEHR RM
 //! Release 1.1.0, Common IM, §Referring to Demographic Entities), with
 //! nothing of the patient in it (§5.4.1, N33).
 
@@ -119,6 +120,75 @@ async fn every_issuers_patient_token_names_its_actor_the_representative() -> Tes
                 .iter()
                 .all(|provider| provider["_type"] == "PARTY_IDENTIFIED"),
         "Art 5: the representative's insertion names them: {body}"
+    );
+    Ok(())
+}
+
+/// A `RelatedPerson` user's own token, confined to the person's record,
+/// with the person in context.
+fn related_person() -> Claims {
+    let mut granted = own_grant();
+    REPRESENTATIVE.clone_into(&mut granted.sub);
+    granted.other.insert(
+        String::from("fhirUser"),
+        String::from("RelatedPerson/synthetic-related-person"),
+    );
+    granted.other.insert(
+        String::from("patient"),
+        String::from("synthetic-patient-context"),
+    );
+    granted
+}
+
+// conformance: CP-26 track-10
+#[tokio::test]
+async fn a_related_persons_document_names_them_as_every_entrys_provider() -> TestResult {
+    let (a, b) = (creating().await, Server::start().await);
+    let dir = tempfile::tempdir()?;
+    let app = person_gateway(dir.path(), (&a, &b), "")?;
+    let token = minted(&related_person())?;
+    let (status, text) = call(app, bearing(post(&document())?, &token)?).await?;
+    assert_eq!(StatusCode::OK, status, "Art 4(2), Art 5: {text}");
+    let body = written(&a).await?;
+    let providers = providers(&body)?;
+    assert!(!providers.is_empty(), "the composition holds an entry");
+    for provider in &providers {
+        assert_eq!(
+            provider,
+            &serde_json::json!({
+                "_type": "PARTY_IDENTIFIED",
+                "identifiers": [{
+                    "_type": "DV_IDENTIFIER",
+                    "issuer": crate::support::caller::ISSUER,
+                    "id": REPRESENTATIVE,
+                }],
+            }),
+            "Common IM: the related person, named as their token states: {body}"
+        );
+        let named = provider.to_string();
+        for withheld in [PATIENT, PATIENT_TAIL, PERSON] {
+            assert!(
+                !named.contains(withheld),
+                "N33: the provider names nothing of the person: {named}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_related_person_named_by_an_identifier_of_the_person_is_refused() -> TestResult {
+    let (a, b) = (creating().await, Server::start().await);
+    let dir = tempfile::tempdir()?;
+    let app = person_gateway(dir.path(), (&a, &b), "")?;
+    let mut granted = related_person();
+    PATIENT.clone_into(&mut granted.sub);
+    let token = minted(&granted)?;
+    let (status, text) = call(app, bearing(post(&document())?, &token)?).await?;
+    assert_eq!(StatusCode::FORBIDDEN, status, "{text}");
+    assert!(
+        untouched(&a, &b).await?,
+        "nothing is sent when the related person is named by the person's identifier"
     );
     Ok(())
 }

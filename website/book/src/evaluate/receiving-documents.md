@@ -175,22 +175,24 @@ carries the `ehds-subject-inserted` entity ([Information a person
 inserted](../operate/access-log.md#information-a-person-inserted)).
 
 A proxy or a legal representative who acts for the person under the
-person's grant is told apart only when the token says a representative
-acts: its issuer declares that the RFC 8693 `act` claim of its patient
-tokens names one, and the token carries that claim
+person's grant is told apart when the token says a representative acts:
+the person's `Patient` token names a current actor in its RFC 8693 `act`
+claim, which the gateway reads as the issuer asserts it, or the caller is a
+`RelatedPerson` user with the person in context
 ([Patient grants](../operate/patient-grants.md)). Every
 entry then names the representative as its `provider`, a
 `PARTY_IDENTIFIED`, which the Common Information Model uses for every party
 other than the subject of the record ("Referring to Demographic
 Entities"), never a `PARTY_SELF`. Its one identifier is the `act` claim's
-`sub`, issued by the claim's `iss` or the token's own; it carries nothing
-else the token does not state. A token that names the representative by
-nothing, by its own `sub` or by an identifier of the document's patient is
-refused `403` with nothing sent, so the provider names nothing of the
-person. The access record carries the `ehds-representative-inserted`
-entity in place of `ehds-subject-inserted`. A token that cannot say a
-representative acts, because its issuer declares no `act` claim or the
-proxy service issues tokens in the person's own name, is read as the
+`sub`, issued by the claim's `iss` or the token's own, or for a related
+person the token's own `sub` and `iss`; it carries nothing else the token
+does not state. A token that names the representative by nothing, an actor
+named by the `Patient` token's own `sub`, or a representative named by an
+identifier of the document's patient is refused `403` with nothing sent, so
+the provider names nothing of the person. The access record carries the
+`ehds-representative-inserted` entity in place of `ehds-subject-inserted`.
+A token that cannot say a representative acts, because the proxy service
+issues tokens in the person's own name with no `act`, is read as the
 person's own, and the gateway cannot mark the representative.
 
 The component only creates compositions, so it never changes an entry a
