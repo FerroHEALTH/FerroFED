@@ -19,7 +19,7 @@ use std::path::Path;
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::{ContainerAsync, ContainerRequest, CopyTargetOptions, GenericImage, ImageExt};
 
-use super::images::{FERROEHR_POSTGRES, POSTGRES};
+use super::images::{FERROEHR_POSTGRES, POSTGRES, PinnedImage};
 use super::retry;
 use super::{
     DatabaseServer, HarnessError, POSTGRES_PORT, names, postgres_health_check, role_password,
@@ -244,30 +244,47 @@ async fn store_server(
     others: &[&str],
     extra: impl Fn(ContainerRequest<GenericImage>) -> ContainerRequest<GenericImage>,
 ) -> Result<DatabaseServer, HarnessError> {
-    let (network, host) = names("store");
     let databases = std::iter::once(first)
         .chain(others.iter().copied())
         .collect::<Vec<_>>()
         .join(" ");
+    started(&POSTGRES, ("store", first), |request| {
+        extra(
+            request
+                .with_copy_to(
+                    STORE_DATABASES_TARGET,
+                    STORE_DATABASES_SCRIPT.as_bytes().to_vec(),
+                )
+                .with_env_var("FERROFED_STORE_DATABASES", databases.clone()),
+        )
+    })
+    .await
+}
+
+/// Starts `image`, a PostgreSQL image, for `product` on a network of its
+/// own, healthy once its role and database `first` answer, its container
+/// request first passed through `configure`.
+async fn started(
+    image: &PinnedImage,
+    (product, first): (&str, &str),
+    configure: impl Fn(ContainerRequest<GenericImage>) -> ContainerRequest<GenericImage>,
+) -> Result<DatabaseServer, HarnessError> {
+    let (network, host) = names(product);
     let container = retry::start(|| {
-        let request = POSTGRES
-            .image()
-            .with_exposed_port(POSTGRES_PORT.tcp())
-            .with_wait_for(WaitFor::healthcheck())
-            .with_health_check(postgres_health_check(first, first))
-            .with_copy_to(
-                STORE_DATABASES_TARGET,
-                STORE_DATABASES_SCRIPT.as_bytes().to_vec(),
-            )
-            .with_env_var("POSTGRES_PASSWORD", "postgres")
-            .with_env_var("FERROFED_STORE_DATABASES", databases.clone())
-            .with_network(network.clone())
-            .with_container_name(host.clone());
-        extra(request)
+        configure(
+            image
+                .image()
+                .with_exposed_port(POSTGRES_PORT.tcp())
+                .with_wait_for(WaitFor::healthcheck())
+                .with_health_check(postgres_health_check(first, first))
+                .with_env_var("POSTGRES_PASSWORD", "postgres")
+                .with_network(network.clone())
+                .with_container_name(host.clone()),
+        )
     })
     .await
     .map_err(|source| HarnessError::Container {
-        image: POSTGRES.repository,
+        image: image.repository,
         source,
     })?;
     Ok(DatabaseServer {
@@ -297,34 +314,18 @@ async fn database_server_with(
     others: &[&str],
     extra: impl Fn(ContainerRequest<GenericImage>) -> ContainerRequest<GenericImage>,
 ) -> Result<DatabaseServer, HarnessError> {
-    let (network, host) = names("ferroehr");
-    let container = retry::start(|| {
-        let request = FERROEHR_POSTGRES
-            .image()
-            .with_exposed_port(POSTGRES_PORT.tcp())
-            .with_wait_for(WaitFor::healthcheck())
-            .with_health_check(postgres_health_check(first, first))
-            .with_copy_to(
-                CopyTargetOptions::new(NODE_DATABASES_TARGET).with_mode(0o755),
-                Path::new(NODE_DATABASES_SCRIPT),
-            )
-            .with_env_var("POSTGRES_PASSWORD", "postgres")
-            .with_env_var("PG_INIT_USER", first)
-            .with_env_var("PG_INIT_PASSWORD", role_password(first))
-            .with_env_var("PG_INIT_DB", first)
-            .with_env_var("FERROFED_NODE_DATABASES", others.join(" "))
-            .with_network(network.clone())
-            .with_container_name(host.clone());
-        extra(request)
+    started(&FERROEHR_POSTGRES, ("ferroehr", first), |request| {
+        extra(
+            request
+                .with_copy_to(
+                    CopyTargetOptions::new(NODE_DATABASES_TARGET).with_mode(0o755),
+                    Path::new(NODE_DATABASES_SCRIPT),
+                )
+                .with_env_var("PG_INIT_USER", first)
+                .with_env_var("PG_INIT_PASSWORD", role_password(first))
+                .with_env_var("PG_INIT_DB", first)
+                .with_env_var("FERROFED_NODE_DATABASES", others.join(" ")),
+        )
     })
     .await
-    .map_err(|source| HarnessError::Container {
-        image: FERROEHR_POSTGRES.repository,
-        source,
-    })?;
-    Ok(DatabaseServer {
-        container,
-        network,
-        host,
-    })
 }
