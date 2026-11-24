@@ -97,12 +97,6 @@ pub struct TrustedIssuer {
     /// (`[trust.issuer.patient]`); absent by default, and then a `patient/`
     /// grant of this issuer admits nothing.
     pub patient: Option<PatientIssuer>,
-    /// The retired `professional_issuing_authority`, which the
-    /// `professional.issuing_authority_name` source of the issuer's
-    /// `[auth.issuer.<name>.attributes]` table replaced in 0.0.20: set, it refuses the
-    /// configuration.
-    #[serde(skip_serializing)]
-    pub professional_issuing_authority: ferrohealth_config::removed::Removed,
 }
 
 /// `[trust.issuer.patient]`: the one member endpoint whose platform issues

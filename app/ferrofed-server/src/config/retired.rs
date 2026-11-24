@@ -6,7 +6,7 @@
 //!
 //! Each section keeps a retired key as a
 //! [`Removed`](ferrohealth_config::removed::Removed) field and this module
-//! declares it once as a [`Retired`],
+//! declares it once as a [`Retired`](ferrohealth_config::removed::Retired),
 //! with the release that retired it.
 //! [`check`] refuses every one the sources set, all at once, each naming
 //! its replacement. The release after it deletes the field and the
@@ -14,7 +14,9 @@
 //! specification governs this: the family's rule of 2026-11-09, read through
 //! `ferrohealth_config::removed`.
 
-use ferrohealth_config::removed::{Removals, RemovedKeys, Retired};
+#[cfg(test)]
+use ferrohealth_config::removed::Retired;
+use ferrohealth_config::removed::{Removals, RemovedKeys};
 
 use crate::config::Config;
 
@@ -23,20 +25,11 @@ use crate::config::Config;
 /// `removed::stale` holds every declaration to it
 /// (FerroHEALTH/FerroSYS#339). The workspace version moves only at the cut,
 /// so the first pull request after each cut moves this on.
-pub const PREPARING: &str = "0.0.20";
-
-/// `[[trust.issuer]] professional_issuing_authority`, which the
-/// `professional.issuing_authority_name` source of the issuer's
-/// `[auth.issuer.<name>.attributes]` table replaced (#1615).
-const ISSUING_AUTHORITY: Retired = Retired::replaced(
-    "professional_issuing_authority",
-    "auth.attributes[].fields.\"professional.issuing_authority_name\", the claim the issuer's [auth.issuer.<name>.attributes] table reads the issuing agency from",
-    PREPARING,
-);
+pub const PREPARING: &str = "0.0.21";
 
 /// Every declaration of this module, for the one-release check.
 #[cfg(test)]
-const ALL: &[Retired] = &[ISSUING_AUTHORITY];
+const ALL: &[Retired] = &[];
 
 /// Refuses every retired key `config` sets, all at once.
 ///
@@ -44,16 +37,8 @@ const ALL: &[Retired] = &[ISSUING_AUTHORITY];
 ///
 /// [`RemovedKeys`] naming each retired key the sources set with its
 /// replacement.
-pub fn check(config: &Config) -> Result<(), RemovedKeys> {
-    let mut removals = Removals::new();
-    for (index, issuer) in config.trust.issuer.iter().enumerate() {
-        removals.check_under(
-            issuer.professional_issuing_authority,
-            &ISSUING_AUTHORITY,
-            &format!("trust.issuer[{index}]"),
-        );
-    }
-    removals.finish()
+pub fn check(_config: &Config) -> Result<(), RemovedKeys> {
+    Removals::new().finish()
 }
 
 #[cfg(test)]
