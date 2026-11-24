@@ -20,6 +20,7 @@ use ferrofed_server::EXIT_CONFIG;
 use ferrofed_server::config::Config;
 use ferrofed_server::config::auth::{AuthFault, AuthMode, Verification};
 use ferrofed_server::config::error::Error as ConfigError;
+use ferrohealth_smart::kind::IssuerKind;
 
 use crate::run::binary;
 
@@ -64,14 +65,14 @@ fn refused_by_the_crate(text: &str, rule: &str) -> Result<(), Box<dyn Error>> {
     }
 }
 
-/// One trusted `persons` issuer at `issuer`, under `[auth]` keys `extra`.
+/// One trusted SMART issuer at `issuer`, under `[auth]` keys `extra`.
 fn issuer(extra: &str, issuer: &str) -> String {
     format!(
-        "[auth]\n{extra}\n\n[auth.issuer.idp]\nissuer = \"{issuer}\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n"
+        "[auth]\n{extra}\n\n[auth.issuer.idp]\nissuer = \"{issuer}\"\naudience = [\"urn:example:gateway\"]\n"
     )
 }
 
-/// One trusted `persons` issuer at [`ISSUER`], its `[auth.issuer.<name>]` table
+/// One trusted SMART issuer at [`ISSUER`], its `[auth.issuer.<name>]` table
 /// carrying the keys `extra`.
 fn issuer_table(extra: &str) -> String {
     format!("{}{extra}\n", issuer("", ISSUER))
@@ -159,7 +160,7 @@ fn a_clock_skew_past_five_minutes_is_refused() -> Result<(), Box<dyn Error>> {
 #[test]
 fn an_issuer_without_an_audience_is_refused() -> Result<(), Box<dyn Error>> {
     refused_by_the_crate(
-        &format!("[auth]\n\n[auth.issuer.idp]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\n"),
+        &format!("[auth]\n\n[auth.issuer.idp]\nissuer = \"{ISSUER}\"\n"),
         "name no audience",
     )
 }
@@ -233,15 +234,20 @@ fn a_section_level_issuer_key_is_an_unknown_key() -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
-/// `ferrohealth-smart` 0.9 has every issuer declare whose tokens it signs.
+/// An issuer whose table names no `kind` is a SMART App Launch 2.2
+/// authorization server.
 #[test]
-fn an_issuer_without_a_kind_is_refused() -> Result<(), Box<dyn Error>> {
-    refused_by_the_crate(
-        &format!(
-            "[auth]\n\n[auth.issuer.idp]\nissuer = \"{ISSUER}\"\naudience = [\"urn:example:gateway\"]\n"
-        ),
-        "auth.issuer.kind",
-    )
+fn an_issuer_without_a_kind_is_a_smart_issuer() -> Result<(), Box<dyn Error>> {
+    let text = format!(
+        "[auth]\n\n[auth.issuer.idp]\nissuer = \"{ISSUER}\"\naudience = [\"urn:example:gateway\"]\n"
+    );
+    let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
+    let issuer = settings.server.auth.issuers.first().ok_or("one issuer")?;
+    let Verification::KeySet(key_set) = &issuer.verification else {
+        return Err("a key set issuer".into());
+    };
+    assert_eq!(IssuerKind::Smart, key_set.kind);
+    Ok(())
 }
 
 /// GHSA-jhg2-jwjp-hq74: a Basic credential is a person's, and since
@@ -333,11 +339,36 @@ fn a_key_the_gateway_reads_nowhere_is_refused() -> Result<(), Box<dyn Error>> {
             AuthFault::Unread,
         )?;
     }
-    refused_for(
-        &issuer_table("scopeless_subjects = [\"synthetic-service\"]"),
-        "auth.issuer.idp.scopeless_subjects",
-        AuthFault::Unread,
-    )
+    Ok(())
+}
+
+/// An issuer is a SMART App Launch 2.2 authorization server unless it is
+/// `federation`, and its registry is the one list of clients, so the keys
+/// that classified a caller or listed clients are unknown keys.
+#[test]
+fn a_key_that_classified_callers_or_listed_clients_is_refused() -> Result<(), Box<dyn Error>> {
+    for written in [
+        "kind = \"persons\"",
+        "kind = \"patients\"",
+        "kind = \"machines\"",
+        "preset = \"rfc9068\"",
+        "profile_file = \"/etc/ferrofed/profile.toml\"",
+        "scopeless_subjects = [\"synthetic-service\"]",
+        "\n[auth.issuer.idp.profile]\nfirst_party_clients = [\"synthetic-client\"]",
+        "\n[auth.issuer.idp.profile]\ndelegates = [{ client = \"synthetic-client\" }]",
+        "\n[auth.issuer.idp.profile]\nact_represents_patient = true",
+        "\n[auth.issuer.idp.profile]\npatient_context = true",
+    ] {
+        let error = Config::from_sources(Some(&issuer_table(written)), &BTreeMap::new())
+            .and_then(|config| config.resolve())
+            .err()
+            .ok_or("refused")?;
+        assert!(
+            matches!(error, ConfigError::Load { .. } | ConfigError::Smart { .. }),
+            "{written}: {error:?}"
+        );
+    }
+    Ok(())
 }
 
 /// The keys `[auth]` held before it was `ferrohealth-smart`'s are unknown
@@ -361,7 +392,7 @@ fn a_key_of_the_former_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
         );
     }
     let inline = format!(
-        "[auth]\n\n[auth.issuer.idp]\nissuer = \"{ISSUER}\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\njwks = \"[1, 2]\"\n"
+        "[auth]\n\n[auth.issuer.idp]\nissuer = \"{ISSUER}\"\naudience = [\"urn:example:gateway\"]\njwks = \"[1, 2]\"\n"
     );
     let error = Config::from_sources(Some(&inline), &BTreeMap::new())
         .and_then(|config| config.resolve())
@@ -378,7 +409,7 @@ fn a_key_of_the_former_auth_section_is_refused() -> Result<(), Box<dyn Error>> {
 fn a_second_introspected_issuer_is_refused() -> Result<(), Box<dyn Error>> {
     let one = |name: &str| {
         format!(
-            "\n[auth.issuer.{name}]\nissuer = \"https://{name}.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\nmode = \"introspection\"\n\n[auth.issuer.{name}.introspection]\nendpoint = \"https://{name}.example.test/introspect\"\n\n[auth.issuer.{name}.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n"
+            "\n[auth.issuer.{name}]\nissuer = \"https://{name}.example.test\"\naudience = [\"urn:example:gateway\"]\nmode = \"introspection\"\n\n[auth.issuer.{name}.introspection]\nendpoint = \"https://{name}.example.test/introspect\"\n\n[auth.issuer.{name}.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n"
         )
     };
     let text = format!("[auth]\n{}{}", one("first"), one("second"));

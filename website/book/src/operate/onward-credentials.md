@@ -127,14 +127,12 @@ scope = "system/aql-*.s"                         # the gateway's own requests
 
 [credentials."cdr-c".credentials.onward]
 issuer = "https://auth.cdr-c.example.org"        # the issuer of the exchanged tokens
-kind = "persons"
-profile = "rfc9068"
 token_endpoint = "https://auth.cdr-c.example.org/oauth2/token"
 audiences = ["https://cdr-c.example.org/openehr"]
 indicators = ["https://cdr-c.example.org/openehr"]   # sent as resource (RFC 8707)
 actor_assertion = true
 
-[credentials."cdr-c".credentials.onward.keys]
+[credentials."cdr-c".credentials.onward.profile]
 max_onward_lifetime = "1h"
 ```
 
@@ -201,24 +199,26 @@ scope = "system/aql-*.s"            # the gateway's own requests alone
 
 [credentials."cdr-f".credentials.onward]
 issuer = "https://as.cdr-f.example.org"
-kind = "persons"                    # persons, federation or patients
-profile = "keycloak"                # rfc9068, entra or keycloak: picks the grant
+# kind = "federation"               # another party's issuer; unset for SMART
 audiences = ["cdr-f"]               # what an issued token's aud may name
-indicators = ["cdr-f"]              # sent as resource or audience, by the profile
-# scope = "..."                     # the Entra profile names the node here
+indicators = ["cdr-f"]              # sent as resource or audience, by onward_indicator
+# scope = "..."                     # an on-behalf-of grant names the node here
 # correlation_claim = "txn"         # a chained federation route
 
-[credentials."cdr-f".credentials.onward.keys]
+[credentials."cdr-f".credentials.onward.profile]
 max_onward_lifetime = "1h"          # required
-# The Keycloak profile only: the issuer's service accounts, whose sub is a
-# user's; the profile refuses the table at load until you list them.
-app_only = [{ subjects = ["service-account-cdr-f-batch"] }]
+# A Keycloak-style standard exchange names the node's client in audience:
+onward_grant = "token_exchange"
+onward_indicator = "audience"
+onward_subject_audience = true
 ```
 
-`ferrohealth-smart` runs the grant the profile picks: RFC 8693 token
-exchange with the caller's token as `subject_token` (with `audience` under
-the Keycloak profile), or the RFC 7523 JWT bearer grant with the on-behalf-of
-parameters under the Entra profile. It checks every issued token before use
+`ferrohealth-smart` runs the grant the `onward_grant` key picks: RFC 8693
+token exchange with the caller's token as `subject_token` (`token_exchange`,
+the default, naming the node as `resource` or, with `onward_indicator =
+"audience"`, as `audience`), or the RFC 7523 JWT bearer grant (`jwt_bearer`)
+with the `onward_parameters` an on-behalf-of grant needs
+(`requested_token_use = "on_behalf_of"`). It checks every issued token before use
 (its issuer, its `aud` inside `audiences`, its lifetime against
 `max_onward_lifetime`, the gateway as its client or `act`, and the caller's
 person), and caches it until shortly before it or the caller's token
@@ -231,9 +231,8 @@ Which caller the lane carries depends on `kind`:
 
 | `kind` | Carried | Refused |
 |---|---|---|
-| `persons` | a person of the node's organisation, acting alone, through a client or for another | everyone else |
+| unset (SMART) | a user of the node's organisation, whatever the type of their `fhirUser`, acting alone or with an actor | everyone else |
 | `federation` | a professional of another domestic party, and another domestic party's organisation when the section opts in | everyone else |
-| `patients` | the patient, on a token naming the patient context | everyone else |
 
 - A caller the lane does not carry, a system included, fails that node as
   `node-error`, and nothing is sent to the token endpoint or the node.
@@ -261,10 +260,10 @@ Which caller the lane carries depends on `kind`:
   opaque token those are the claims its issuer's introspection answer
   returned. The issued token must carry the same value, or that node is
   `node-error`.
-- With the Keycloak profile, the caller's token must name the gateway's
-  client in `aud`: give the inbound client scope an audience mapper that adds
-  it, and list the gateway among the node's delegates. Check this before the
-  lane carries traffic.
+- With a Keycloak-style exchange (`onward_subject_audience = true`), the
+  caller's token must name the gateway's client in `aud`: give the inbound
+  client scope an audience mapper that adds it. Check this before the lane
+  carries traffic.
 
 ### Who commits through the lane
 
@@ -282,8 +281,8 @@ ITS-REST requires a committer, one placeholder naming the token's `iss` and
   `commit_audit` (ITS-REST 1.1.0 `UpdateAudit`, `UpdateVersion`). The gateway
   writes these members alone and keeps the rest of the body as sent.
 - An attestation (`UpdateAttestation`) takes the same placeholder for a
-  person exchanged at a `persons` issuer. Through a `federation` or a
-  `patients` lane a `CONTRIBUTION` that carries an attestation is refused
+  user exchanged at a SMART issuer. Through a `federation` lane a
+  `CONTRIBUTION` that carries an attestation is refused
   `403 operation-refused` before any token is asked for, because the node
   refuses every attestation by an external person.
 - A header commit (`PUT` or `POST` of a composition, an `EHR_STATUS` or a
@@ -292,7 +291,7 @@ ITS-REST requires a committer, one placeholder naming the token's `iss` and
 
 The configuration refuses an `onward` table without its `oauth` table,
 beside a user and password or another grant, on a service's credentials,
-and when `ferrohealth-smart` refuses it: no `issuer`, `kind` or `audiences`,
+and when `ferrohealth-smart` refuses it: no `issuer` or `audiences`,
 no `max_onward_lifetime`, a `federation` issuer without `exchanges_from` or
 `person_mapping`, or a target its grant cannot ask for.
 
@@ -302,8 +301,9 @@ FerroEHR from release 5.7.0 binds every person who signs in to a
 demographic `PERSON`, and writes the committer of a person's commit
 itself, so it admits the gateway's writes for a caller only under a token
 that names that caller. FerroFED reaches such a node under the caller from
-v0.0.20, the first FerroFED release that does, through an onward lane of
-kind `persons` on each of the node's endpoints, and a deployment adds the node's `persons` issuers, the step
+v0.0.20, the first FerroFED release that does, through a SMART onward lane
+on each of the node's endpoints, and a deployment adds the node's issuers of
+persons, the step
 FerroEHR's party binding page holds back for a gateway, once its gateway
 runs that release with those lanes. The node's side of the lane:
 

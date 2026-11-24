@@ -315,7 +315,7 @@ pub(super) async fn untouched(a: &Server, b: &Server) -> Result<bool, Box<dyn Er
 }
 
 /// The suite's server settings, its issuer's patient tokens and those of
-/// the suite's `patients` issuer bound to node A, whose `ehr_id`s the
+/// the suite's patients' issuer bound to node A, whose `ehr_id`s the
 /// cross-reference knows under [`EHR_SYSTEM`].
 pub(super) fn bound() -> Result<ServerSettings, Box<dyn Error>> {
     let mut server = settings_with_room();

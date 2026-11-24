@@ -8,12 +8,11 @@
 //! §2.1, RFC 7523 §2.1).
 //!
 //! The lane's issuer signs tokens of one kind, and a caller reaches the node
-//! through it only when that kind carries the caller ([`route`]): a person of
-//! the node's organisation at a `persons` issuer, a professional of another
-//! party at a `federation` issuer, another party's organisation at a
-//! `federation` issuer whose lane opts in ([`Organisations`]), and a patient
-//! at a `patients` issuer. Every other caller is refused before anything is
-//! sent. An organisation reaches the node read-only ([`reads`]), and the
+//! through it only when that kind carries the caller ([`route`]): a user of
+//! the node's organisation at a SMART issuer, a professional of another
+//! party at a `federation` issuer, and another party's organisation at a
+//! `federation` issuer whose lane opts in ([`Organisations`]). Every other
+//! caller is refused before anything is sent. An organisation reaches the node read-only ([`reads`]), and the
 //! library refuses a caller whose token does not carry the lane's
 //! correlation claim before the token endpoint is asked. The client
 //! credentials grant of the lane's own `oauth` table carries only the
@@ -82,23 +81,18 @@ pub enum Organisations {
 /// Returns how a caller of `caller` reaches a node whose lane's issuer signs
 /// tokens of `issuer`, carrying `organisations`.
 ///
-/// A person of the node's organisation, acting alone, through a client or
-/// for another, is exchanged at a `persons` issuer, a professional of
-/// another party at a `federation` issuer, and a patient at a `patients`
-/// issuer. Another party's organisation is exchanged at a `federation`
-/// issuer whose lane opts in. A system and a guest are carried by none, so
-/// they are refused.
+/// A user of the node's organisation, whatever the type of their `fhirUser`
+/// and whether or not an actor acts for them, is exchanged at a SMART
+/// issuer, and a professional of another party at a `federation` issuer.
+/// Another party's organisation is exchanged at a `federation` issuer whose
+/// lane opts in. A system is carried by none, so it is refused.
 // NOTE: no specification governs this: our own design; ferrohealth-smart classifies every
 // contact-point token as a person, so a contact point never reaches the organisation arm.
 #[must_use]
 pub const fn route(caller: &CallerKind, issuer: IssuerKind, organisations: Organisations) -> Route {
     match (caller, issuer) {
-        (
-            CallerKind::Person | CallerKind::Delegated { .. } | CallerKind::Representative { .. },
-            IssuerKind::Persons,
-        )
-        | (CallerKind::ExternalPerson(_), IssuerKind::Federation)
-        | (CallerKind::Patient, IssuerKind::Patients) => Route::Exchanged,
+        (CallerKind::ExternalPerson(_), IssuerKind::Federation) => Route::Exchanged,
+        (user, IssuerKind::Smart) if user.is_user() => Route::Exchanged,
         (CallerKind::ExternalOrganisation(_), IssuerKind::Federation)
             if matches!(organisations, Organisations::ReadOnly) =>
         {
@@ -372,29 +366,34 @@ mod tests {
     const REFUSED: Organisations = Organisations::Refused;
     const READ_ONLY: Organisations = Organisations::ReadOnly;
 
+    const USERS: [CallerKind; 6] = [
+        CallerKind::Patient,
+        CallerKind::Practitioner,
+        CallerKind::PractitionerRole,
+        CallerKind::RelatedPerson,
+        CallerKind::Person,
+        CallerKind::User,
+    ];
+
     #[test]
-    fn a_person_is_exchanged_at_a_persons_issuer_alone() {
-        let delegated = CallerKind::Delegated { actor: None };
-        for kind in [&CallerKind::Person, &delegated] {
-            assert_eq!(
-                Route::Exchanged,
-                route(kind, IssuerKind::Persons, READ_ONLY)
-            );
-            assert_eq!(
-                Route::Refused,
-                route(kind, IssuerKind::Federation, READ_ONLY)
-            );
-            assert_eq!(Route::Refused, route(kind, IssuerKind::Patients, READ_ONLY));
+    fn a_user_is_exchanged_at_a_smart_issuer_alone() {
+        for kind in &USERS {
+            for organisations in [REFUSED, READ_ONLY] {
+                assert_eq!(
+                    Route::Exchanged,
+                    route(kind, IssuerKind::Smart, organisations)
+                );
+                assert_eq!(
+                    Route::Refused,
+                    route(kind, IssuerKind::Federation, organisations)
+                );
+            }
         }
     }
 
     #[test]
     fn a_system_is_never_exchanged_and_never_sent_under_the_gateway() {
-        for issuer in [
-            IssuerKind::Persons,
-            IssuerKind::Federation,
-            IssuerKind::Patients,
-        ] {
+        for issuer in [IssuerKind::Smart, IssuerKind::Federation] {
             assert_eq!(
                 Route::Refused,
                 route(&CallerKind::System, issuer, READ_ONLY)
@@ -403,15 +402,16 @@ mod tests {
     }
 
     #[test]
-    fn a_patient_is_exchanged_at_a_patients_issuer_alone() {
+    fn a_professional_of_another_party_is_exchanged_at_a_federation_issuer_alone() {
+        let person = CallerKind::ExternalPerson(Box::new(External::new(
+            "synthetic-remote-professional",
+            std::collections::BTreeMap::new(),
+        )));
         assert_eq!(
             Route::Exchanged,
-            route(&CallerKind::Patient, IssuerKind::Patients, REFUSED)
+            route(&person, IssuerKind::Federation, REFUSED)
         );
-        assert_eq!(
-            Route::Refused,
-            route(&CallerKind::Patient, IssuerKind::Persons, REFUSED)
-        );
+        assert_eq!(Route::Refused, route(&person, IssuerKind::Smart, READ_ONLY));
     }
 
     #[test]
@@ -440,9 +440,10 @@ mod tests {
             Route::Exchanged,
             route(&organisation, IssuerKind::Federation, READ_ONLY)
         );
-        for issuer in [IssuerKind::Persons, IssuerKind::Patients] {
-            assert_eq!(Route::Refused, route(&organisation, issuer, READ_ONLY));
-        }
+        assert_eq!(
+            Route::Refused,
+            route(&organisation, IssuerKind::Smart, READ_ONLY)
+        );
     }
 
     #[test]

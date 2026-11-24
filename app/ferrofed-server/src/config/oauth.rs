@@ -92,7 +92,7 @@ impl Onward {
     ///
     /// # Errors
     /// Returns [`Error::Smart`] naming `key` for a table `ferrohealth-smart`
-    /// refuses: no issuer, kind or audience, a profile without
+    /// refuses: no issuer or audience, a profile without
     /// `max_onward_lifetime`, or a target its grant cannot ask for.
     pub fn resolve(
         key: &str,
@@ -104,15 +104,9 @@ impl Onward {
             source: Box::new(source),
         };
         let lane = written.resolve(grant).map_err(refused)?;
-        let kind = written
-            .kind
-            .ok_or(ferrohealth_smart::config::ConfigError::Missing {
-                key: "credentials.onward.kind",
-            })
-            .map_err(refused)?;
         Ok(Self {
             lane,
-            kind,
+            kind: written.kind.unwrap_or_default(),
             organisations: Organisations::Refused,
             written: written.clone(),
         })

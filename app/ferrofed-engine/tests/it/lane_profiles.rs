@@ -39,7 +39,8 @@ use wiremock::{Mock, ResponseTemplate};
 use crate::lane::{NODE, OWN_TOKEN, refuses};
 use crate::lane_checked::{
     CALLER_TOKEN, CLIENT_ID, FEDERATION, HP_IDENTIFIER, PARTNER, PERSON, conveyance,
-    federation_token, forms, issuing, jws, keycloak_keys, lane_carrying, now, partner_call, sent,
+    federation_token, forms, issuing, jws, keycloak_keys, lane_carrying, now, onward_profile,
+    partner_call, sent,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -71,8 +72,8 @@ const PARAMETERS: [&str; 12] = [
     "client_assertion_type",
 ];
 
-/// What an issuer's table sets beside `profile`'s preset: the node as its
-/// indicator, Keycloak's service-account subjects, or Entra ID's scope.
+/// What an issuer's table sets beside `profile`'s onward keys: the node as
+/// its indicator, or Entra ID's scope.
 #[expect(
     clippy::disallowed_types,
     reason = "the claims and tables a test token and lane carry are written as JSON"
@@ -126,7 +127,7 @@ fn federation_lane(
         }),
     };
     let mut section = json!({
-        "issuer": FEDERATION, "kind": "federation", "preset": profile,
+        "issuer": FEDERATION, "kind": "federation", "profile": onward_profile(profile),
         "correlation_claim": correlation.unwrap_or_default(),
         "federation": federation,
         "assurance": {"levels": {"urn:acr:high": "high"}},

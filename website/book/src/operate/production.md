@@ -331,11 +331,7 @@ product_scope = "__ferrofed.operator"
 
 [auth.issuer.idp]
 issuer = "https://idp.example.org/realms/ferrofed"
-kind = "persons"
 clock_skew = "1min"
-
-[auth.issuer.idp.profile]
-first_party_clients = ["example-clinical-app", "example-reporting-service"]
 
 [auth.issuer.idp.assurance]
 claim = "acr"
@@ -358,10 +354,11 @@ use from the IHE IUA claims under `extensions.ihe_iua` (ITI TF-2
 §3.71.4.2.2.1.1), where the realm's `purpose-of-use` mapper below writes
 them.
 
-The realm's tokens are typed `at+jwt` and carry `client_id`, so the issuer
-keeps the default `rfc9068` profile. A person's token is admitted only
-through a client `first_party_clients` lists, the reporting service's too,
-since its service account's `sub` is a user's and never the client's.
+The realm's tokens are typed `at+jwt` and carry `client_id` and `scope`, as
+RFC 9068 §2.2 asks. The realm's client registry decides which clients reach
+the gateway: any token whose `aud` names it is admitted. The reporting
+service's token is a user's, since its service account's `sub` is never the
+client's.
 `system/aql-*` counts only for a client listed in `backend_clients`, and a
 token only a `system/` scope covers names no natural person, so the
 reporting service reaches no patient data: its query is refused

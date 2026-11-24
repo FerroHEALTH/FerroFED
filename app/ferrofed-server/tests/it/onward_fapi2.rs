@@ -367,7 +367,7 @@ async fn the_configuration_refuses_a_fapi2_grant_it_cannot_use() -> TestResult {
     );
 
     let untargeted = format!(
-        "{tables}\n[credentials.\"node-a-pub\".credentials.onward]\nissuer = \"https://as.example.org\"\nkind = \"persons\"\npreset = \"rfc9068\"\nactor_assertion = true\n\n[credentials.\"node-a-pub\".credentials.onward.profile]\nmax_onward_lifetime = '1h'\n"
+        "{tables}\n[credentials.\"node-a-pub\".credentials.onward]\nissuer = \"https://as.example.org\"\nactor_assertion = true\n\n[credentials.\"node-a-pub\".credentials.onward.profile]\nmax_onward_lifetime = '1h'\n"
     );
     let error = refused(&untargeted)?;
     assert!(
