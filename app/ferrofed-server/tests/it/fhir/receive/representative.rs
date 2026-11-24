@@ -2,24 +2,19 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! A document a representative inserts in a person's EHR under the person's
-//! grant (Regulation (EU) 2025/327 Art 4(2), Art 5): when the token's issuer
-//! declares the RFC 8693 §4.1 `act` claim of its patient tokens a
-//! representative, every entry names that representative as its provider, a
-//! `PARTY_IDENTIFIED` (openEHR RM Release 1.1.0, Common IM, §Referring to
-//! Demographic Entities), with nothing of the patient in it (§5.4.1, N33);
-//! an issuer that declares nothing leaves the mark the person's own.
+//! grant (Regulation (EU) 2025/327 Art 4(2), Art 5): the current actor of
+//! the RFC 8693 §4.1 `act` claim of a `Patient` token, as its issuer asserts
+//! it, is named as every entry's provider, a `PARTY_IDENTIFIED` (openEHR RM
+//! Release 1.1.0, Common IM, §Referring to Demographic Entities), with
+//! nothing of the patient in it (§5.4.1, N33).
 
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 
 use axum::Router;
-use ferrofed_server::config::auth::Verification;
-use ferrofed_server::config::settings::ServerSettings;
 use ferrofed_testkit::issuer::Claims;
 use ferrofed_testkit::mock::Server;
-use ferrohealth_smart::kind::IssuerKind;
-use ferrohealth_smart::profile::Delegate;
 use http::StatusCode;
 use serde_json::Value;
 
@@ -49,33 +44,8 @@ pub(super) fn acted_for(act: &[(&str, &str)]) -> Claims {
     granted
 }
 
-/// The suite's server settings with every issuer declaring the `act` claim
-/// of its patient tokens a representative, and each `persons` issuer
-/// declaring [`REPRESENTATIVE`] a delegate, the one actor `ferrohealth-smart`
-/// admits in a person's token's `act` (RFC 8693 §4.1).
-fn declaring() -> Result<ServerSettings, Box<dyn Error>> {
-    let mut server = bound()?;
-    for issuer in &mut server.auth.issuers {
-        if let Verification::KeySet(settings) = &mut issuer.verification
-            && settings.kind == IssuerKind::Patients
-        {
-            settings.profile.act_represents_patient = true;
-        }
-        if let Verification::KeySet(settings) = &mut issuer.verification
-            && settings.kind == IssuerKind::Persons
-        {
-            settings.profile.delegates.push(Delegate::Actor {
-                issuer: None,
-                sub: REPRESENTATIVE.to_owned(),
-            });
-        }
-    }
-    Ok(server)
-}
-
-/// The gateway receiving patient summaries at node A, its issuer declaring
-/// the `act` claim of its patient tokens a representative, with the tables
-/// `tables` added.
+/// The gateway receiving patient summaries at node A, its patients' issuer
+/// bound to node A, with the tables `tables` added.
 pub(super) fn representing_gateway(
     dir: &Path,
     (a, b): (&Server, &Server),
@@ -86,7 +56,7 @@ pub(super) fn representing_gateway(
         (EHR_SYSTEM, EHR_A, "node-a", EHR_A),
     ]);
     let fhir = format!("{}{tables}", receiving("node-a", &[NAMESPACE]));
-    gateway_with(dir, (a, b), (&crossref, &fhir), &declaring()?)
+    gateway_with(dir, (a, b), (&crossref, &fhir), &bound()?)
 }
 
 // conformance: CP-26 track-10
@@ -129,25 +99,32 @@ async fn a_representatives_document_names_them_as_every_entrys_provider() -> Tes
     Ok(())
 }
 
-// NOTE: RFC 8693 §4.1: ferrohealth-smart 0.14 refuses a token whose current actor its
-// issuer declares neither a delegate nor the patient's representative (FerroHEALTH/FerroSMART#377).
+// NOTE: RFC 8693 §4.1: ferrohealth-smart reads `act` as its issuer asserts it, so no issuer
+// declares its actors and the suite's own issuer names a representative too.
 #[tokio::test]
-async fn an_act_the_issuer_does_not_declare_is_refused_with_nothing_written() -> TestResult {
+async fn every_issuers_patient_token_names_its_actor_the_representative() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
     let app = person_gateway(dir.path(), (&a, &b), "")?;
-    let token = minted(&acted_for(&[("sub", REPRESENTATIVE)]))?;
+    let mut granted = acted_for(&[("sub", REPRESENTATIVE)]);
+    crate::support::caller::ISSUER.clone_into(&mut granted.iss);
+    let token = minted(&granted)?;
     let (status, text) = call(app, bearing(post(&document())?, &token)?).await?;
-    assert_eq!(StatusCode::UNAUTHORIZED, status, "{text}");
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let body = written(&a).await?;
+    let providers = providers(&body)?;
     assert!(
-        untouched(&a, &b).await?,
-        "nothing is sent for an actor the issuer does not declare"
+        !providers.is_empty()
+            && providers
+                .iter()
+                .all(|provider| provider["_type"] == "PARTY_IDENTIFIED"),
+        "Art 5: the representative's insertion names them: {body}"
     );
     Ok(())
 }
 
 #[tokio::test]
-async fn a_declaring_issuers_token_with_no_act_is_the_persons_own() -> TestResult {
+async fn a_patients_token_with_no_act_is_the_persons_own() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
     let dir = tempfile::tempdir()?;
     let app = representing_gateway(dir.path(), (&a, &b), "")?;

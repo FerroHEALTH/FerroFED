@@ -13,7 +13,6 @@ which your cross-reference service knows its `ehr_id`s:
 ```toml
 [auth.issuer.patient_portal]
 issuer = "https://patient-portal.example.org"
-kind = "patients"
 audience = ["https://gateway.example.org/fed"]
 
 [auth.issuer.patient_portal.attributes]
@@ -28,13 +27,13 @@ endpoint = "node-a-pub"
 ehr_id_system = "urn:oid:2.999.9.1"
 ```
 
-The issuer is a `patients` issuer: `ferrohealth-smart` admits its token only
-when the token carries `patient/` scopes and no `user/` or `system/` scope,
-so a professional of the same platform signs in through an issuer of its
-own ([Who the caller is](authentication.md#who-the-caller-is)). Its
+`ferrohealth-smart` reads a patient from the token's `fhirUser`, a
+`Patient`, and a representative from a `RelatedPerson` or from the RFC 8693
+`act` claim of a patient's token
+([Who the caller is](authentication.md#who-the-caller-is)). Its
 `[auth.issuer.<name>.attributes]` table reads the purpose of use each token declares,
 the patient's and a representative's alike; it names no field but
-`purpose_of_use`, since a `patients` token states no professional. Without
+`purpose_of_use`, since a patient's token states no professional. Without
 the table, every caller of the issuer is refused
 `purpose-of-use-required`.
 
@@ -99,18 +98,13 @@ and its access record says the person inserted it ([Inserted by the
 person](../evaluate/receiving-documents.md#inserted-by-the-person)).
 
 A proxy or a legal representative (Art 4(2)) who inserts for the person is
-told apart only when the token says so. RFC 8693 §4.1 names any delegate
-in the `act` claim, a client service as well as a person, so set
-`act_represents_patient = true` on the `[auth.issuer.<name>]` of `kind =
-"patients"` only for an issuer whose patient tokens name the
-representative there; on any other issuer, a patient token that carries
-`act` is refused as an invalid token. Every entry of
-a document such a token inserts then names the representative, a
-`PARTY_IDENTIFIED` holding the `act` `sub`, and its access record says a
-representative inserted it ([Inserted by the
-person](../evaluate/receiving-documents.md#inserted-by-the-person)). An
-issuer that declares nothing cannot say a representative acts, so what its
-tokens insert is marked as the person's own.
+told apart when the person's token says so: the gateway reads the current
+actor of the RFC 8693 §4.1 `act` claim of a `Patient` token as the issuer
+asserts it. Every entry of a document such a token inserts names the
+representative, a `PARTY_IDENTIFIED` holding the `act` `sub`, and its access
+record says a representative inserted it ([Inserted by the
+person](../evaluate/receiving-documents.md#inserted-by-the-person)). A
+patient's token without `act` inserts as the person's own.
 
 Over ITS-REST the gateway routes a person's write as it routes any
 caller's. Under a patient grant whose scopes cover a composition update or

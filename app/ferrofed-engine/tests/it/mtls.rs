@@ -440,7 +440,7 @@ async fn token_exchange_composes_with_mutual_tls() -> TestResult {
     let lane = Arc::new(Lane::new(
         EndpointId::new("node-a-pub")?,
         (resolved.onward, resolved.target),
-        (IssuerKind::Persons, Organisations::Refused),
+        (IssuerKind::Smart, Organisations::Refused),
         gateway,
     ));
     let client = harness.node(harness.transport(true)?)?.with_on_behalf(lane);

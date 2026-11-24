@@ -467,7 +467,7 @@ impl Gate {
             .with_professional(statement.professional())
             .with_assurance(assurance)
             .with_acting(acting)
-            .with_representative(representative(smart.kind()));
+            .with_representative(representative(smart));
         Ok(caller)
     }
 
@@ -537,12 +537,14 @@ impl Gate {
     }
 }
 
-/// The representative a caller of `kind` is, when `ferrohealth-smart`
-/// classified a patient token of an issuer declaring `act_represents_patient`
-/// as one: the current actor of its RFC 8693 §4.1 `act` claim.
-fn representative(kind: &CallerKind) -> Option<Actor> {
-    match kind {
-        CallerKind::PatientRepresentative { actor } => Some(Actor {
+/// The representative acting for the patient whose own token `smart` is:
+/// the current actor of its RFC 8693 §4.1 `act` claim, as the issuer
+/// asserts it.
+// NOTE: Regulation (EU) 2025/327 Art 4(2); ferrohealth-smart reads `act` as asserted, and only
+// a `Patient` token's actor acts for the patient the token names.
+fn representative(smart: &SmartCaller) -> Option<Actor> {
+    match (smart.kind(), smart.actor()) {
+        (CallerKind::Patient, Some(actor)) => Some(Actor {
             issuer: Some(actor.issuer.clone()).filter(|issuer| !issuer.is_empty()),
             subject: Some(actor.sub.clone()).filter(|sub| !sub.is_empty()),
         }),
@@ -778,29 +780,53 @@ fn stated(attribute: Option<&Attribute>) -> Option<(String, Option<String>)> {
 #[cfg(test)]
 mod representative_tests {
     use ferrohealth_smart::kind::{Actor as SmartActor, CallerKind};
+    use ferrohealth_smart::resource::Caller as SmartCaller;
 
     use super::representative;
     use crate::auth::caller::Actor;
 
-    // NOTE: Regulation (EU) 2025/327 Art 4(2), RFC 8693 §4.1: only the issuer's declaration,
-    // which ferrohealth-smart reads, makes the current actor a representative.
+    fn caller(kind: CallerKind, actor: Option<SmartActor>) -> SmartCaller {
+        let caller = SmartCaller::new(
+            String::from("synthetic-subject"),
+            Some(String::from("synthetic-client")),
+            "patient/*.rs",
+            None,
+            kind,
+        );
+        match actor {
+            Some(actor) => caller.with_actor(actor),
+            None => caller,
+        }
+    }
+
+    fn actor() -> SmartActor {
+        SmartActor {
+            issuer: String::from("https://actor.example.test"),
+            sub: String::from("synthetic-actor"),
+        }
+    }
+
     #[test]
-    fn a_representative_is_the_actor_ferrohealth_smart_classified_and_no_other_kind_is_one() {
-        let kind = CallerKind::PatientRepresentative {
-            actor: SmartActor {
-                issuer: String::from("https://actor.example.test"),
-                sub: String::from("synthetic-actor"),
-            },
-        };
+    fn the_actor_of_a_patient_token_is_the_patients_representative() {
         assert_eq!(
             Some(Actor {
                 issuer: Some(String::from("https://actor.example.test")),
                 subject: Some(String::from("synthetic-actor")),
             }),
-            representative(&kind)
+            representative(&caller(CallerKind::Patient, Some(actor())))
         );
-        assert_eq!(None, representative(&CallerKind::Patient));
-        assert_eq!(None, representative(&CallerKind::Person));
+    }
+
+    #[test]
+    fn no_other_token_names_a_representative() {
+        assert_eq!(None, representative(&caller(CallerKind::Patient, None)));
+        for kind in [
+            CallerKind::Practitioner,
+            CallerKind::Person,
+            CallerKind::User,
+        ] {
+            assert_eq!(None, representative(&caller(kind, Some(actor()))));
+        }
     }
 }
 
@@ -914,7 +940,6 @@ mod kind_tests {
                 Some("synthetic-ncp".to_owned()),
                 "patient/*.rs",
                 None,
-                false,
                 kind,
             )
             .with_issuer(issuer.to_owned());

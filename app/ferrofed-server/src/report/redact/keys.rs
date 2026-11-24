@@ -189,7 +189,6 @@ pub const KNOWN_KEYS: &[&str] = &[
     "rotation_overlap",
     "sample_ratio",
     "scope",
-    "scopeless_subjects",
     "scopes",
     "scopes_supported",
     "scrape_clients",

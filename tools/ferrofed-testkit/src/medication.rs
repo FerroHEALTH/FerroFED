@@ -211,10 +211,14 @@ pub const PATIENT_SUMMARY_TEMPLATE: &str =
 
 /// The archetypes FerroBRIDGE's patient summary template specialises beyond
 /// the medication template's.
-const SUMMARY_BESIDE: [&str; 3] = [
+const SUMMARY_BESIDE: [&str; 7] = [
     "openEHR-EHR-COMPOSITION.health_summary.v1.adl",
     "openEHR-EHR-SECTION.adhoc.v1.adl",
     "openEHR-EHR-SECTION.immunisation_list.v0.adl",
+    "openEHR-EHR-EVALUATION.problem_diagnosis.v1.adl",
+    "openEHR-EHR-EVALUATION.adverse_reaction_risk.v2.adl",
+    "openEHR-EHR-EVALUATION.device_summary.v0.adl",
+    "openEHR-EHR-ACTION.procedure.v1.adl",
 ];
 
 /// Returns FerroBRIDGE's ADL 2 patient summary template and every archetype

@@ -203,12 +203,11 @@ async fn a_request_being_admitted_finishes_on_the_issuers_it_started_with() -> T
         .mount(&keys)
         .await;
     let fetched = format!(
-        "{}\n[auth.issuer.{}]\nissuer = \"{}\"\n{}{}",
+        "{}\n[auth.issuer.{}]\nissuer = \"{}\"\n{}",
         auth_a(),
         support::caller::issuer_name(slow.name()),
         slow.name(),
-        support::caller::persons_toml(),
-        support::caller::profile_toml(slow.name())
+        support::caller::audience_toml()
     );
     let gateway = Trusting::start(&fetched)?;
     let b = format!("Bearer {}", slow.mint(&Claims::new(slow.name(), AUDIENCE))?);
@@ -260,7 +259,7 @@ async fn an_auth_that_does_not_load_is_refused_with_the_whole_reload() -> TestRe
     let unverifiable = format!(
         "{}\n[auth.issuer.issuer_b]\nissuer = \"http://issuer-b.example.test\"\n{}",
         auth_a(),
-        support::caller::persons_toml()
+        support::caller::audience_toml()
     );
     gateway.write_auth(&unverifiable)?;
 

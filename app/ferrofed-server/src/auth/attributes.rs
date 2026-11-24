@@ -4,12 +4,12 @@
 //! What a caller's token states about its professional, as
 //! `ferrohealth-smart` read it, in the shapes the gateway conveys.
 //!
-//! A `persons` token states it under its issuer's `[auth.issuer.<name>.attributes]`
+//! A SMART token states it under its issuer's `[auth.issuer.<name>.attributes]`
 //! table, and a `federation` token under its issuer's `[auth.issuer.<name>.federation]`
 //! table. With `mapping = "iua"` the crate reads the IHE IUA extension (ITI
 //! TF-2 3.71.4.2.2.1.1: `subject_name`, `national_provider_identifier`,
 //! `subject_role`, `subject_organization_id`, `purpose_of_use`), and a
-//! `persons` table may add the `system|code` `purpose_of_use` of each RFC 9396
+//! SMART issuer's table may add the `system|code` `purpose_of_use` of each RFC 9396
 //! `authorization_details` entry (the Federation Tier's Annex B §B.4a.3). The
 //! crate refuses a token whose claim has another shape. The agency that
 //! issued the professional's identifier is the table's
@@ -28,7 +28,7 @@ use crate::auth::caller::{Professional, PurposeOfUse};
 /// Where a caller's statement about its professional was read.
 #[derive(Clone, Copy)]
 pub(super) enum Statement<'caller> {
-    /// A `persons` token, under its issuer's `[auth.issuer.<name>.attributes]` table.
+    /// A SMART token, under its issuer's `[auth.issuer.<name>.attributes]` table.
     Persons(&'caller Attributes),
     /// A `federation` token, under its issuer's `[auth.issuer.<name>.federation]` table.
     Federation(&'caller External),

@@ -76,8 +76,6 @@ async fn beside_an_onward_lane_the_admission_check_uses_the_client_credentials_g
     admitted_with(concat!(
         "\n[credentials.\"node-a-pub\".credentials.onward]\n",
         "issuer = \"https://federation.cdr-a.example.org\"\n",
-        "kind = \"persons\"\n",
-        "preset = \"rfc9068\"\n",
         "audiences = [\"https://cdr-a.example.org/openehr\"]\n",
         "indicators = [\"https://cdr-a.example.org/openehr\"]\n\n",
         "[credentials.\"node-a-pub\".credentials.onward.profile]\n",

@@ -46,10 +46,11 @@ async fn a_named_aql_pattern_does_not_cover_an_ad_hoc_query() -> TestResult {
 }
 
 /// CP-17, inbound half: a scope the grammar does not read as a resource
-/// scope, and a token with no `scope` claim, grant nothing.
+/// scope grants nothing, and a token with no `scope` claim is no access
+/// token (SMART App Launch 2.2.0, Obtain access token, Response).
 // conformance: CP-17
 #[tokio::test]
-async fn a_scope_outside_the_grammar_and_no_scope_grant_nothing() -> TestResult {
+async fn a_scope_outside_the_grammar_grants_nothing_and_no_scope_is_no_token() -> TestResult {
     let gateway = Gateway::trusting_the_test_issuer().await?;
     let token = granting("aql-*.s openid launch/patient system/Observation.read")?;
     assert_refused(&gateway, bearing(query()?, &token)?, Refusal::Scope).await?;
@@ -58,7 +59,7 @@ async fn a_scope_outside_the_grammar_and_no_scope_grant_nothing() -> TestResult 
     assert_refused(
         &gateway,
         bearing(query()?, &minted(&none)?)?,
-        Refusal::Scope,
+        Refusal::Invalid,
     )
     .await
 }
