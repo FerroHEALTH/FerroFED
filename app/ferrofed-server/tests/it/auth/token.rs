@@ -274,7 +274,8 @@ async fn an_admitted_token_reaches_no_node() -> TestResult {
 }
 
 /// §7a.2, §13.1: `OPTIONS {base}/` answers `401` without a token, and `200`
-/// to an authenticated caller, who needs no scope and no purpose of use.
+/// to an authenticated caller, whose scope need cover no resource and who
+/// needs no purpose of use.
 // conformance: CP-17 CP-23
 #[tokio::test]
 async fn options_root_is_behind_the_gate() -> TestResult {
@@ -282,7 +283,7 @@ async fn options_root_is_behind_the_gate() -> TestResult {
     let options = || Request::options("/").body(Body::empty());
     assert_refused(&gateway, options()?, Refusal::Missing).await?;
     let mut bare = claims();
-    bare.scope = None;
+    bare.scope = Some(String::from("openid"));
     bare.extensions = None;
     let (status, _, text) = sent(&gateway.app, bearing(options()?, &minted(&bare)?)?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");

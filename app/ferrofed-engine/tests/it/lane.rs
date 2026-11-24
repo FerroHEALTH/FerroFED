@@ -89,7 +89,6 @@ pub(crate) fn lane_of(
     let section: OnwardSection = serde_json::from_value(serde_json::json!({
         "issuer": ONWARD_ISSUER,
         "kind": "federation",
-        "preset": "rfc9068",
         "token_endpoint": format!("{}/token", server.uri()),
         "audiences": [NODE],
         "indicators": [NODE],
@@ -132,7 +131,6 @@ fn conveyance_of(kind: CallerKind) -> Result<Conveyance, Box<dyn Error>> {
         Some("synthetic-client".to_owned()),
         "user/aql-*.s",
         None,
-        false,
         kind,
     )
     .with_issuer(UPSTREAM.to_owned())

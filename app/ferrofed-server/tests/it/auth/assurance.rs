@@ -26,14 +26,14 @@ use crate::run::binary;
 /// appended to the text is the entry's.
 fn issuer() -> String {
     String::from(
-        "[auth]\n\n[auth.issuer.issuer]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n",
+        "[auth]\n\n[auth.issuer.issuer]\nissuer = \"https://issuer.example.test\"\naudience = [\"urn:example:gateway\"]\n\n[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\n",
     )
 }
 
 /// One trusted issuer with an `[auth.issuer.<name>.assurance]` table of `body`.
 fn assuring(body: &str) -> String {
     format!(
-        "[auth]\n\n[auth.issuer.issuer]\nissuer = \"https://issuer.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n\n[auth.issuer.issuer.assurance]\n{body}\n"
+        "[auth]\n\n[auth.issuer.issuer]\nissuer = \"https://issuer.example.test\"\naudience = [\"urn:example:gateway\"]\n\n[auth.issuer.issuer.assurance]\n{body}\n"
     )
 }
 

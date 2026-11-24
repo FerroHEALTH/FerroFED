@@ -124,19 +124,6 @@ pub(crate) fn jwks_file_of(issuer: &Issuer) -> Result<PathBuf, Box<dyn StdError>
     Ok(file)
 }
 
-/// The clients the suite's test tokens name, each a first-party client of
-/// the `persons` issuers the suite trusts: the default, the backend client,
-/// the client the DEMOGRAPHIC suite leaves off its list, and the clients the
-/// overload and outbound identifier suites name.
-pub(crate) const FIRST_PARTY: [&str; 6] = [
-    "synthetic-unlisted-client",
-    "synthetic-client",
-    "synthetic-backend",
-    "client-one",
-    "client-two",
-    "SYNTHETIC-NATIONAL-ID-0004",
-];
-
 /// Returns the name of the `[auth.issuer.<name>]` table of `issuer`: its
 /// identifier with every character outside `a` to `z` and `0` to `9` as `_`,
 /// after `issuer_`, within the 64 characters a name may hold.
@@ -158,36 +145,18 @@ pub(crate) fn issuer_name(issuer: &str) -> String {
     format!("issuer_{folded}").chars().take(64).collect()
 }
 
-/// Returns the keys of an `[auth.issuer.<name>]` table the suite trusts
-/// beside its identifier and key set: `kind = "persons"` and the audience
-/// [`AUDIENCE`]; [`profile_toml`] lists its first-party clients.
-pub(crate) fn persons_toml() -> String {
-    format!("kind = \"persons\"\naudience = [\"{AUDIENCE}\"]\n")
-}
-
-/// Returns the `[auth.issuer.<name>.profile]` table of `issuer`: the
-/// first-party clients [`FIRST_PARTY`].
-pub(crate) fn profile_toml(issuer: &str) -> String {
-    let listed: Vec<String> = FIRST_PARTY
-        .iter()
-        .map(|client| format!("\"{client}\""))
-        .collect();
-    format!(
-        "\n[auth.issuer.{}.profile]\nfirst_party_clients = [{}]\n",
-        issuer_name(issuer),
-        listed.join(", ")
-    )
+/// Returns the key of an `[auth.issuer.<name>]` table the suite trusts
+/// beside its identifier and key set: the audience [`AUDIENCE`].
+pub(crate) fn audience_toml() -> String {
+    format!("audience = [\"{AUDIENCE}\"]\n")
 }
 
 /// Returns how `issuer`'s tokens addressed to [`AUDIENCE`] are verified:
-/// against the key set in `jwks_file`, as a `persons` issuer whose
-/// first-party clients are [`FIRST_PARTY`], under `ferrohealth-smart`'s
-/// `rfc9068` profile.
+/// against the key set in `jwks_file`, as a SMART issuer.
 pub(crate) fn key_set(issuer: &str, jwks_file: &Path) -> Verification {
-    let mut settings = KeySetSettings::new(issuer, AUDIENCE, IssuerKind::Persons);
+    let mut settings = KeySetSettings::new(issuer, AUDIENCE, IssuerKind::Smart);
     settings.jwks_file = Some(jwks_file.to_owned());
     settings.attributes = Some(iua(issuer));
-    settings.profile.first_party_clients = FIRST_PARTY.map(str::to_owned).to_vec();
     Verification::KeySet(Box::new(settings))
 }
 
@@ -228,11 +197,10 @@ pub(crate) fn auth() -> AuthSettings {
 /// its issuer an `[auth.issuer.<name>]` table, so a test can append another.
 pub(crate) fn auth_toml() -> String {
     format!(
-        "\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[auth.issuer.{}]\nissuer = \"{ISSUER}\"\n{}jwks_file = {}\n{}{}\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
+        "\n[auth]\nproduct_scope = \"{OPERATOR_SCOPE}\"\n\n[auth.issuer.{}]\nissuer = \"{ISSUER}\"\n{}jwks_file = {}\n{}\n[[trust.issuer]]\nissuer = \"{ISSUER}\"\ndemographic_clients = [\"{}\"]\n",
         issuer_name(ISSUER),
-        persons_toml(),
+        audience_toml(),
         toml_path(jwks_file()),
-        profile_toml(ISSUER),
         attributes_toml(ISSUER),
         claims().client_id
     )
@@ -242,12 +210,11 @@ pub(crate) fn auth_toml() -> String {
 /// to a file as it is now.
 pub(crate) fn issuer_toml(issuer: &Issuer) -> Result<String, Box<dyn StdError>> {
     Ok(format!(
-        "\n[auth.issuer.{}]\nissuer = \"{}\"\n{}jwks_file = {}\n{}{}",
+        "\n[auth.issuer.{}]\nissuer = \"{}\"\n{}jwks_file = {}\n{}",
         issuer_name(issuer.name()),
         issuer.name(),
-        persons_toml(),
+        audience_toml(),
         toml_path(&jwks_file_of(issuer)?),
-        profile_toml(issuer.name()),
         attributes_toml(issuer.name())
     ))
 }
@@ -307,19 +274,19 @@ pub(crate) fn scraping() -> String {
     format!("scrape_clients = [\"{SCRAPE_CLIENT}\"]\n{}", auth_toml())
 }
 
-/// The issuer identifier of the suite's `patients` issuer, which signs with
+/// The issuer identifier of the suite's patients' issuer, which signs with
 /// the test issuer's key.
 #[cfg(feature = "binding-ihe")]
 pub(crate) const PATIENT_ISSUER: &str = "https://patients.issuer.example.test";
 
-/// Returns the suite's `patients` issuer, its tokens verified against
+/// Returns the suite's patients' issuer, its tokens verified against
 /// [`jwks_file`], the purposes of use its tokens declare read by its
 /// [`iua`] table, and its `patient/` grants bound as `binding` says.
 #[cfg(feature = "binding-ihe")]
 pub(crate) fn patients_issuer(
     binding: ferrofed_server::config::auth::PatientBinding,
 ) -> IssuerSettings {
-    let mut settings = KeySetSettings::new(PATIENT_ISSUER, AUDIENCE, IssuerKind::Patients);
+    let mut settings = KeySetSettings::new(PATIENT_ISSUER, AUDIENCE, IssuerKind::Smart);
     settings.jwks_file = Some(jwks_file().to_owned());
     settings.attributes = Some(iua(PATIENT_ISSUER));
     let mut issuer = IssuerSettings::new(PATIENT_ISSUER, Verification::KeySet(Box::new(settings)));

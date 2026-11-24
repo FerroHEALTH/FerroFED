@@ -84,7 +84,7 @@ fn a_contact_point_with_its_table_is_declared() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn an_issuer_that_is_no_federation_issuer_is_no_contact_point() -> Result<(), Box<dyn Error>> {
-    let text = "[auth]\n\n[auth.issuer.idp]\nissuer = \"https://idp.example.test\"\nkind = \"persons\"\naudience = [\"urn:example:gateway\"]\n";
+    let text = "[auth]\n\n[auth.issuer.idp]\nissuer = \"https://idp.example.test\"\naudience = [\"urn:example:gateway\"]\n";
     let settings = Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?;
     let [issuer] = settings.server.auth.issuers.as_slice() else {
         return Err("one issuer".into());

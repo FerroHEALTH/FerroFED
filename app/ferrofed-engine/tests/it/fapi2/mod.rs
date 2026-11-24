@@ -29,6 +29,7 @@ use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrofed_testkit::dpop::{self, HEADER};
 use ferrofed_testkit::fapi::{AuthorizationServer, DETAILS_TYPE, METADATA_PATH};
 use ferrofed_testkit::issuance::Verdict;
+use ferrofed_testkit::issuer::Issuer;
 use ferrofed_testkit::leak;
 use ferrofed_testkit::mock::{self, Server};
 use ferrofed_testkit::oauth;
@@ -48,7 +49,7 @@ use serde::Deserialize;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
-use crate::conveyed::{UPSTREAM, caller, conveyance, shared};
+use crate::conveyed::{caller, conveyance, shared};
 use crate::exchange;
 
 mod metadata;
@@ -150,11 +151,9 @@ fn exchange(
     server.endpoint().issue_onward_tokens(&server.issuer());
     let section: OnwardSection = serde_json::from_value(serde_json::json!({
         "issuer": server.issuer(),
-        "kind": "persons",
-        "preset": "rfc9068",
         "audiences": [RESOURCE],
         "indicators": [RESOURCE],
-        "profile": {"max_onward_lifetime": "1h", "person_equality": ["sub"]},
+        "profile": {"max_onward_lifetime": "1h"},
         "actor_assertion": true,
     }))?;
     let gateway = UpstreamToken::provider(grant.clone())?;
@@ -162,7 +161,7 @@ fn exchange(
     Ok(Arc::new(Lane::new(
         EndpointId::new("node-a-pub")?,
         (resolved.onward, resolved.target),
-        (IssuerKind::Persons, Organisations::Refused),
+        (IssuerKind::Smart, Organisations::Refused),
         gateway,
     )))
 }
@@ -240,13 +239,15 @@ struct AssertionAudience {
     aud: String,
 }
 
-/// A caller verified by signature, carrying a token whose `sub` is `subject`.
-fn verified_caller(subject: &str) -> Result<Conveyance, Box<dyn Error>> {
-    let token = exchange::caller_token(subject)?;
+/// A caller verified by signature, carrying a token `callers` signed whose
+/// `sub` is `subject`.
+fn verified_caller(callers: &Issuer, subject: &str) -> Result<Conveyance, Box<dyn Error>> {
+    let token = exchange::caller_token_of(callers, subject)?;
     let mut verified = caller();
     verified.verified_by = Verification::Signature;
     Ok(
-        Conveyance::new(shared(), Principal::Caller(verified)).with_subject(exchange::subject_of(
+        Conveyance::new(shared(), Principal::Caller(verified)).with_subject(exchange::subject_at(
+            callers.name(),
             &token,
             subject,
             "user/aql-*.s",
@@ -510,16 +511,17 @@ async fn a_failed_discovery_is_tried_again() -> TestResult {
 async fn a_verified_callers_token_is_exchanged() -> TestResult {
     let key = client_key()?;
     let server = server(&key).await?;
+    let callers = Issuer::new(server.issuer())?;
     server
         .endpoint()
-        .accept_exchange(exchange::CALLERS.jwks(), UPSTREAM);
+        .accept_exchange(callers.jwks(), &server.issuer());
     server.endpoint().expect_resource(RESOURCE);
     let node = node(&server).await;
     let prover = prover()?;
     let grant = grant(&server, key, &prover)?;
     let client = client(&node, &prover)?.with_on_behalf(exchange(&server, grant)?);
 
-    let reply = query(&client, verified_caller("clinician-0042")?).await?;
+    let reply = query(&client, verified_caller(&callers, "clinician-0042")?).await?;
     assert_eq!(
         EndpointStatus::Active,
         reply.status(),
@@ -546,15 +548,16 @@ async fn a_verified_callers_token_is_exchanged() -> TestResult {
 async fn a_callers_token_carrying_the_patient_is_never_sent() -> TestResult {
     let key = client_key()?;
     let server = server(&key).await?;
+    let callers = Issuer::new(server.issuer())?;
     server
         .endpoint()
-        .accept_exchange(exchange::CALLERS.jwks(), UPSTREAM);
+        .accept_exchange(callers.jwks(), &server.issuer());
     let node = node(&server).await;
     let prover = prover()?;
     let grant = grant(&server, key, &prover)?;
     let client = client(&node, &prover)?.with_on_behalf(exchange(&server, grant)?);
 
-    let reply = query(&client, verified_caller(PATIENT)?).await?;
+    let reply = query(&client, verified_caller(&callers, PATIENT)?).await?;
     assert_eq!(EndpointStatus::NodeError, reply.status());
     assert_eq!(
         server.endpoint().exchanges(),

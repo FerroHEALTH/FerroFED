@@ -5,7 +5,8 @@
 #
 # Vendors FerroBRIDGE's ADL 2 medication template, the template the HL7
 # Europe MPD project the interoperability component ships maps over, with
-# the five published openEHR CKM archetypes it specialises that
+# the published and in-development openEHR CKM archetypes it and the patient
+# summary template specialise that
 # docs/specs/openehr-ckm-medication/ does not hold. The map mode of the
 # prescription face compiles that project against the operational template
 # built from them, and its tests read them.
@@ -39,7 +40,7 @@ corpus_require curl shasum awk
 pinned_begin
 
 bridge=https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/94f2f95381e96790a7f55ca44a1ca7c150e4638d
-summary=https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/4919759845d7297201bf52995da21ec79861648a
+summary=https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/72211ed8db48505876fa09eb11e82e629ea48d35
 mirror=https://raw.githubusercontent.com/openEHR/CKM-mirror/c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094/local/archetypes
 own='BUSL-1.1, the licence of the Licensor, Cadasto B.V., which publishes FerroBRIDGE (the file'"'"'s own SPDX header)'
 licence='"This work is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License. To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/4.0/." (the archetype'"'"'s licence field)'
@@ -49,10 +50,26 @@ pin commit ferrobridge_medication.adlt 'FerroHEALTH/FerroBRIDGE commit 94f2f95, 
   "$bridge/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_medication.adlt" \
   7d2224c9cf5b92093096c15286ff56594e88270fc23705caefceeb71a7929f75 "$own" \
   'The ADL 2 template with its template overlays.'
-pin commit ferrobridge_patient_summary.adlt 'FerroHEALTH/FerroBRIDGE commit 4919759 (FerroHEALTH/FerroBRIDGE#1696), template openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0' \
+pin commit ferrobridge_patient_summary.adlt 'FerroHEALTH/FerroBRIDGE commit 72211ed (eehrxf 0.26.0), template openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0' \
   "$summary/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt" \
-  3afafd92712ee2a64e0cc1f9596622771ed95532e5123c38a085e154683ee0ae "$own" \
-  'The ADL 2 patient summary template, whose sections place the component'"'"'s medication entries.'
+  bc2e6a17ea5141583314ad6166f28f741c02e085035e6b60ec17f400c1c70286 "$own" \
+  'The ADL 2 patient summary template, whose sections place the component'"'"'s entries.'
+pin commit openEHR-EHR-EVALUATION.problem_diagnosis.v1.adl 'CKM mirror commit c3fdc43, revision 1.7.4, PUBLISHED' \
+  "$mirror/entry/evaluation/openEHR-EHR-EVALUATION.problem_diagnosis.v1.adl" \
+  8462a3b811a440c2b01451f0da48c7d297d53b5dc4d45c4722b13321e645ce1f "$licence" \
+  'The archetype in ADL 1.4.'
+pin commit openEHR-EHR-EVALUATION.adverse_reaction_risk.v2.adl 'CKM mirror commit c3fdc43, revision 2.0.2, PUBLISHED' \
+  "$mirror/entry/evaluation/openEHR-EHR-EVALUATION.adverse_reaction_risk.v2.adl" \
+  661df61e13bd0f4ecfacd62349c175519c25a4c1ffd388f8ed81aa77249c1a1c "$licence" \
+  'The archetype in ADL 1.4.'
+pin commit openEHR-EHR-EVALUATION.device_summary.v0.adl 'CKM mirror commit c3fdc43, revision 0.0.1-alpha, in development' \
+  "$mirror/entry/evaluation/openEHR-EHR-EVALUATION.device_summary.v0.adl" \
+  c3acc311a00cdf34db6fc43bff23456732001ea6671118b35169518a5bdab646 "$licence" \
+  'The archetype in ADL 1.4.'
+pin commit openEHR-EHR-ACTION.procedure.v1.adl 'CKM mirror commit c3fdc43, revision 1.5.3, PUBLISHED' \
+  "$mirror/entry/action/openEHR-EHR-ACTION.procedure.v1.adl" \
+  a913b4ef4121bfd0e2c4fa975205fd588c01322cb1526eae128eced1bb1ddf11 "$licence" \
+  'The archetype in ADL 1.4.'
 pin commit openEHR-EHR-COMPOSITION.health_summary.v1.adl 'CKM mirror commit c3fdc43, revision 1.0.3, PUBLISHED' \
   "$mirror/composition/openEHR-EHR-COMPOSITION.health_summary.v1.adl" \
   ee0a386326ef43d549751da6201885fd027da655963ff8292f277eda1c5ebfc9 "$licence" \
@@ -95,13 +112,13 @@ the medication, therapeutic direction, dosage and daily timing slots. The
 HL7 Europe MPD project the \`eehrxf\` crate ships (\`mappings::MPD\`) maps
 over this template. Beside it is FerroBRIDGE's ADL 2 patient summary template,
 \`openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0\`, whose ad hoc
-medication summary section holds the medication order and the medication
-action and whose vaccination list section holds the medication action, the
-placement \`eehrxf\` reads in
-\`crosswalk::patient_summary::SOURCES\`, and the eight published or
-in-development archetypes of the openEHR international Clinical Knowledge
-Manager the two specialise that \`docs/specs/openehr-ckm-medication/\` does
-not hold, from the CKM mirror <https://github.com/openEHR/CKM-mirror>; the
+sections hold the problem or diagnosis, the adverse reaction risk, the
+medication order and action, the device summary and the procedure, and whose
+vaccination list section holds the medication action, the placement
+\`eehrxf\` reads in \`crosswalk::patient_summary::SOURCES\`, and the twelve
+published or in-development archetypes of the openEHR international Clinical
+Knowledge Manager the two specialise that
+\`docs/specs/openehr-ckm-medication/\` does not hold, from the CKM mirror <https://github.com/openEHR/CKM-mirror>; the
 other five come from there. The templates are the Licensor's own, under
 BUSL-1.1. Each archetype declares
 the Creative Commons Attribution-ShareAlike 4.0 International License in its

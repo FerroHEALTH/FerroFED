@@ -12,13 +12,14 @@
 //! The archetypes of a section are the ones the openEHR International
 //! Patient Summary template of the openEHR international Clinical Knowledge
 //! Manager names in the template section, or sections, that carry it (CKM cid
-//! `1013.26.376`, asset version 1), but for the medication entries: the
-//! medication order and the medication action are selected only under the
-//! section of FerroBRIDGE's patient summary template that holds each, as the
-//! interoperability component places them (`eehrxf`
-//! `crosswalk::patient_summary::SOURCES`, [`Section::placed`]), since the
-//! CKM template holds the action in both its medication summary and its
-//! immunisations section and the section is all that tells the two apart.
+//! `1013.26.376`, asset version 1), but for the entries the interoperability
+//! component places: the problem or diagnosis, the adverse reaction risk, the
+//! medication order and action, the device summary and the procedure are
+//! selected only under the section of FerroBRIDGE's patient summary template
+//! that holds each (`eehrxf` `crosswalk::patient_summary::SOURCES`,
+//! [`Section::placed`]), since the component maps an entry only where that
+//! section holds it, and the section is all that tells a medication action of
+//! the medication summary from one of the immunisations.
 //!
 //! The crosswalk sections no query feeds are listed in [`UNSELECTED`], each
 //! with the reason, for the clinical safety review.
@@ -131,9 +132,6 @@ const EXCLUSION: Archetype = archetype!("EVALUATION", "openEHR-EHR-EVALUATION.ex
 /// several sections.
 const ABSENCE: Archetype = archetype!("EVALUATION", "openEHR-EHR-EVALUATION.absence.v2");
 
-/// The problem or diagnosis evaluation.
-const PROBLEM: Archetype = archetype!("EVALUATION", "openEHR-EHR-EVALUATION.problem_diagnosis.v1");
-
 impl Section {
     /// Every section with a stored query, in the crosswalk's order.
     pub const ALL: [Self; 11] = [
@@ -221,9 +219,10 @@ impl Section {
 
     /// Returns the archetypes this section selects only where a template
     /// section holds them, as the interoperability component places them
-    /// (`eehrxf` `crosswalk::patient_summary::SOURCES`): the medication order
-    /// under the medication summary section, and the medication action under
-    /// the vaccination list section.
+    /// (`eehrxf` `crosswalk::patient_summary::SOURCES`): the medication action
+    /// under the ad hoc medication summary section for the medication summary
+    /// and under the vaccination list section for the immunisations, and each
+    /// other placed entry under its ad hoc section.
     ///
     /// The section is the placement criterion: an archetype two rows could
     /// take is selected for the row whose source names it under the section
@@ -257,9 +256,9 @@ impl Section {
             .collect()
     }
 
-    /// Returns the archetypes a composition of this section contains, at
-    /// least one of them, in the template's order, beside those it holds
-    /// under a template section ([`Section::placed`]).
+    /// Returns the archetypes a composition of this section contains, in the
+    /// template's order, beside those it holds under a template section
+    /// ([`Section::placed`]); a section selects by at least one of either.
     #[must_use]
     pub const fn archetypes(self) -> &'static [Archetype] {
         match self {
@@ -271,17 +270,9 @@ impl Section {
                 EXCLUSION,
                 ABSENCE,
             ],
-            Self::Problems => &[PROBLEM, EXCLUSION, ABSENCE],
-            Self::MedicationSummary => &[EXCLUSION, ABSENCE],
-            Self::MedicalDevicesAndImplants => &[archetype!(
-                "EVALUATION",
-                "openEHR-EHR-EVALUATION.device_summary.v0"
-            )],
-            Self::Procedures => &[
-                archetype!("ACTION", "openEHR-EHR-ACTION.procedure.v1"),
-                ABSENCE,
-                EXCLUSION,
-            ],
+            Self::Problems | Self::MedicationSummary => &[EXCLUSION, ABSENCE],
+            Self::MedicalDevicesAndImplants => &[],
+            Self::Procedures => &[ABSENCE, EXCLUSION],
             Self::Immunisations => &[ABSENCE],
             Self::SocialHistory => &[
                 archetype!(
@@ -358,11 +349,11 @@ impl Section {
     ///
     /// # Panics
     ///
-    /// Never: every section names at least one archetype.
+    /// Never: every section selects by at least one archetype.
     #[must_use]
     #[expect(
         clippy::expect_used,
-        reason = "every arm of Section::archetypes names at least one archetype, which a test holds"
+        reason = "every section names at least one archetype or placed archetype, which a test holds"
     )]
     pub fn query(self) -> SelectQuery {
         section_query::query(self.archetypes(), &self.placed())

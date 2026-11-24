@@ -398,8 +398,6 @@ async fn a_grant_without_the_key_it_signs_with_cannot_be_built() -> TestResult {
     assert!(by_certificate.assertion_keys.is_none());
     let exchanging: OnwardSection = serde_json::from_value(serde_json::json!({
         "issuer": harness.front.origin(),
-        "kind": "persons",
-        "preset": "rfc9068",
         "audiences": [RESOURCE],
         "indicators": [RESOURCE],
         "profile": {"max_onward_lifetime": "1h"},

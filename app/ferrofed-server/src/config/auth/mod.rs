@@ -355,15 +355,6 @@ impl Auth {
         if !section.enabled {
             return Err(fault("auth.enabled", AuthFault::Disabled));
         }
-        if let Some((name, _)) = section
-            .issuers()
-            .find(|(_, entry)| !entry.scopeless_subjects.is_empty())
-        {
-            return Err(fault(
-                &format!("auth.issuer.{name}.scopeless_subjects"),
-                AuthFault::Unread,
-            ));
-        }
         for (key, empty) in [
             ("auth.capabilities", section.capabilities.is_empty()),
             ("auth.scopes_supported", section.scopes_supported.is_empty()),

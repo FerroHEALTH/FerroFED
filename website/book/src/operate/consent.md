@@ -191,7 +191,7 @@ What a deployment must provide:
   (`urn:oid:2.16.528.1.1007.3.1`), the UZI role codes
   (`urn:oid:2.16.840.1.113883.2.4.15.111`) and the care provider categories
   (`urn:oid:2.16.840.1.113883.2.4.15.1060`), as the Implementatiehandleiding
-  §4 names them. A caller of a `persons` issuer names no requester. A caller whose token does not carry all four is
+  §4 names them. A caller of a SMART issuer names no requester. A caller whose token does not carry all four is
   not asked about: Mitz is not called, no member is filtered, and each node
   checks consent itself (N27). The call is counted as `not-asked` with the
   reason `caller-claims`. A token that carries them in a form the question

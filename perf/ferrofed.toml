@@ -42,12 +42,8 @@ node_selection = "ask-all"
 
 [auth.issuer.quickstart_issuer]
 issuer = "https://quickstart-issuer.ferrofed.invalid"
-kind = "persons"
 audience = ["ferrofed-quickstart"]
 jwks_file = "docker/quickstart/issuer/jwks.json"
-
-[auth.issuer.quickstart_issuer.profile]
-first_party_clients = ["quickstart-client"]
 
 # What the issuer's tokens state about their professional: the IHE IUA
 # extension and the purposes of use of their authorization_details.
@@ -152,8 +148,6 @@ audience = "https://node-a.perf.ferrofed.invalid/machines"
 
 [credentials."node-a-query".credentials.onward]
 issuer = "https://quickstart-issuer.ferrofed.invalid"
-kind = "persons"
-preset = "rfc9068"
 token_endpoint = "http://127.0.0.1:8095/token"
 audiences = ["https://node-a.perf.ferrofed.invalid"]
 indicators = ["https://node-a.perf.ferrofed.invalid"]

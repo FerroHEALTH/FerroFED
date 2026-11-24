@@ -34,12 +34,11 @@ const OPAQUE: &str = "synthetic-opaque-token-7Hq2";
 /// The path the introspection endpoint answers at.
 const INTROSPECT: &str = "/introspect";
 
-/// `[auth]` introspecting the `persons` issuer at `endpoint`, whose
-/// first-party client is `synthetic-client`, as the client `ferrofed` with
-/// the secret `synthetic-secret`.
+/// `[auth]` introspecting the SMART issuer at `endpoint`, as the client
+/// `ferrofed` with the secret `synthetic-secret`.
 fn introspecting(endpoint: &str) -> Result<AuthSettings, Box<dyn Error>> {
     let section: AuthSection = toml::from_str(&format!(
-        "[issuer.idp]\nissuer = \"{endpoint}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\nmode = \"introspection\"\n\n[issuer.idp.profile]\nfirst_party_clients = [\"synthetic-client\"]\n\n[issuer.idp.introspection]\nendpoint = \"{endpoint}{INTROSPECT}\"\n\n[issuer.idp.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n\n[issuer.idp.attributes]\nmapping = \"iua\"\n"
+        "[issuer.idp]\nissuer = \"{endpoint}\"\naudience = [\"{AUDIENCE}\"]\nmode = \"introspection\"\n\n[issuer.idp.introspection]\nendpoint = \"{endpoint}{INTROSPECT}\"\n\n[issuer.idp.introspection.client]\nclient_id = \"ferrofed\"\nclient_secret = \"synthetic-secret\"\n\n[issuer.idp.attributes]\nmapping = \"iua\"\n"
     ))?;
     let settings = section
         .resolve(&[])?
