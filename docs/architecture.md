@@ -87,7 +87,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | `ferrohealth-smart` | =0.9.4 (`fetch`, `axum`, `openehr`; BUSL-1.1) | the SMART and OAuth 2.0 resource-server crate every FerroHEALTH product runs on (#1174): it checks tokens and never issues them, verifies each issuer's tokens from its RFC 8414 metadata and key set, decides the SMART on openEHR grants through `ferrohealth_smart::openehr`, and obtains the gateway's own token with the client credentials grant of `[<section>.oauth]` |
 | `jsonwebtoken` | 11, on `aws_lc_rs` | the family's JWT crate, for the Nuts grant's presentations and the caller token; the `oauth` grants' assertions are signed by `ferrohealth-smart` |
 | `jsonschema` | 0.62.0 (draft 2020-12, `if`/`then`) | test-side validation of every envelope and `OPTIONS` body against the vendored schemas |
-| PostgreSQL | 18 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
+| PostgreSQL | 19 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
 The `openehr-*` rows are the lockstep 0.3.0, the line the published
 `eehrxf` 0.23.0 and `fhirconnect` 0.7.0 require (#813, #1581, #1722, #1742, #1754, #1799, #1805, #1785, #1891, #1895, #1899, #1915). The
@@ -1910,7 +1910,7 @@ one is refused, never one silent winner:
   immutability rule with no race, and an unversioned insert reads the newest
   version and writes the next in one write transaction. `redb` is the family's embedded store
   (FerroBRIDGE's identity store, FerroTERM's concept store);
-- **PostgreSQL 18** (`backend = "postgres"`, over FerroFED's own store,
+- **PostgreSQL 19** (`backend = "postgres"`, over FerroFED's own store,
   `[store]`, where several gateway replicas run; built with #268 and moved
   onto `[store]` by #1636, which removed the server's `postgres` cargo
   feature, so the client is in every build): the same interface,
@@ -2736,8 +2736,8 @@ the variable first and returns early, and CI runs an `e2e (containers)` job.
 | node B, FerroEHR, `system_id` `cdr-b.example.org` | the same pin (decision A44) |
 | node C, for three-node cases | a third FerroEHR on the same pin, with its own `system_id` (decision A44) |
 | the nodes' database server | one `ghcr.io/ferrohealth/ferroehr-postgres:5.4.1@sha256:eb3a720d6245f5472fe5f70ab66ed9662fe6addfa9c543f470ebc689f2eb2cfe` container per topology a test starts, holding a database per node, each owned by its own role (decision A47) |
-| the stored-query HA backend, when tested | `postgres:18.6`, pinned by digest in the change that adds it |
-| PIX Manager | FerroPIX, `ghcr.io/ferrohealth/ferropix:0.0.5@sha256:6d42e2f9498eb0a801401149d19134cb6f54c2db3d2c499ffe8ba77ad902a8d5` on `postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42`, the Manager the end-to-end PIXm cases resolve through and the XCPD Responding Gateway they localize through (decision A39, #367); a `wiremock` stub with fixed ITI-83 answers for the offline suites, no image (#1360); and SanteMPI, `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` on `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550`, the deployable Manager (#622) |
+| FerroFED's own store and the stored-query `postgres` backend | `postgres:19.0`, the FerroFED store database image of `docs/VERSIONS.md`, one database per use (#1941) |
+| PIX Manager | FerroPIX, the FerroPIX PIX Manager image of `docs/VERSIONS.md` on its `postgres:19.0` database image, the Manager the end-to-end PIXm cases resolve through and the XCPD Responding Gateway they localize through (decision A39, #367); a `wiremock` stub with fixed ITI-83 answers for the offline suites, no image (#1360); and SanteMPI, `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` on `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550`, the deployable Manager (#622) |
 | capture and fault proxy | in-testkit, one per node, no image |
 | localizer, consent pre-filter | in-testkit stubs |
 | gateway under test | in process on the library run path; the release image in one smoke test |

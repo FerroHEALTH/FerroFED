@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The PostgreSQL store of the stored-query registry, over FerroFED's own
-//! store, against a real PostgreSQL 18 serving TLS, one database per use on
+//! store, against a real PostgreSQL 19 serving TLS, one database per use on
 //! one server (§12.7, N44, CP-40):
 //! the store suite every writable store passes, two gateway instances in
 //! one process racing the same new version with exactly one stored, and

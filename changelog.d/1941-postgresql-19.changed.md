@@ -1,0 +1,1 @@
+- FerroFED's own store and the stored-query `postgres` backend are tested against, and documented for, PostgreSQL 19, the family's release; the quickstart's FerroPIX database runs the rebuilt `postgres:19.0` image (#1941).

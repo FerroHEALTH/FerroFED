@@ -1240,6 +1240,8 @@ if [[ -f "$harness" ]]; then
     "FerroEHR node database image|FERROEHR_POSTGRES" \
     "EHRbase node image|EHRBASE" \
     "EHRbase node database image|EHRBASE_POSTGRES" \
+    "FerroFED store database image|POSTGRES" \
+    "FerroPIX database image|FERROPIX_POSTGRES" \
     "SanteMPI PIX Manager image|SANTEMPI" \
     "SanteMPI database image|SANTEMPI_POSTGRES" \
     "Reference implementation build image|MAVEN" \

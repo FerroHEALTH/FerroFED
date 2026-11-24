@@ -3,7 +3,7 @@
 
 //! The limit of the emergency accesses a national contact point relays for
 //! one health professional, counted in FerroFED's own store on a real
-//! PostgreSQL 18 serving TLS (eHDSI Section II Security Services 10.0.0
+//! PostgreSQL 19 serving TLS (eHDSI Section II Security Services 10.0.0
 //! §2.5; `NCPeH` Architecture Specifications 10.0.0 §5.1.9).
 //!
 //! With no `[emergency]` declared, five emergency accesses of one
