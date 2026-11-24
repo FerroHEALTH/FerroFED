@@ -427,29 +427,11 @@ ferrohealth-config = "=0.4.5"
 # Verified against crates.io on 2026-10-28.
 ferrohealth-health = { version = "=0.1.1", default-features = false }
 # The HTTP server plumbing of FerroHEALTH/FerroSYS (#1397): the health routes
-# every product serves, the listeners with their TLS and the drain, and the
-# healthcheck. Pinned exactly, as a product pins every family crate; 0.3.7
-# carries GHSA-2mc2-h3jq-c5wg, 0.3.8 refuses a client CA under
-# `client_auth = "none"` and keeps a listener's TLS reloadable from the
-# product's own reload path, 0.3.9 names that refusal's values readably,
-# 0.4.1 keeps a product's own fallback and its layers through the stack, and
-# 0.4.2 writes the server-rendered console's policy; 0.4.4 splits the stack
-# with the API unchanged; 0.5.0 removes five forwarders, whose replacements
-# the gateway calls (FerroSYS #231); 0.5.1 carries the revocation check of an
-# eHDSI link, feature `revocation`, which moved there from ferrofed-identity
-# (#1646, FerroHEALTH/FerroSYS#243); 0.6.0 builds that check on der 0.8 and
-# x509-cert 0.3; 0.6.3 reads the outbound TLS material of every table and
-# returns the client certificate a grant binds its tokens to (#1750,
-# FerroHEALTH/FerroSYS#300); 0.6.4 compares two reads of that material and
-# builds the revocation check from it (FerroHEALTH/FerroSYS#305, #307);
-# 0.8.2 hands out the check's gated TLS, which a MyHealth@EU gateway's
-# outbound client is built over (#1815, FerroHEALTH/FerroSYS#348); 0.8.4
-# builds the platform verifier once per process for each set of extra roots,
-# so a resolve no longer reads the system root store each time (#1834,
-# FerroHEALTH/FerroSYS#372); 0.9 builds on ferrohealth-telemetry 0.5.
-# 0.10 keeps the overload bound always on, a NonZeroUsize
-# (FerroHEALTH/FerroSYS#398; #1891). Verified against crates.io on 2026-11-16.
-ferrohealth-server = { version = "=0.12.0", default-features = false }
+# every product serves, the listeners with their TLS and the drain, the
+# healthcheck and the revocation check of an eHDSI link (feature
+# `revocation`). Pinned exactly, as a product pins every family crate; 0.12.2
+# takes one allocation fewer per request than 0.12.0 (FerroHEALTH/FerroSYS#428).
+ferrohealth-server = { version = "=0.12.2", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 //! The PostgreSQL store of the configuration revisions against a real
-//! PostgreSQL 18: two gateway replicas on one database share the history
+//! PostgreSQL 19: two gateway replicas on one database share the history
 //! and the running mark, a save on a stale base and a move of the mark from
 //! where another replica left it are refused with nothing written, replicas
 //! racing on one base store exactly one revision, a reopened store holds

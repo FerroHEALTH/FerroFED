@@ -96,7 +96,15 @@ pub const FERROPIX: PinnedImage = PinnedImage {
 pub const FERROPIX_POSTGRES: PinnedImage = PinnedImage {
     repository: "postgres",
     tag: "19.0",
-    digest: "sha256:bb6e70add742cd868fb62cb3b2f67d1dd2bdd2b65a521e778420748753687c60",
+    digest: "sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1",
+};
+
+/// The PostgreSQL FerroFED's own store and its `postgres` stored-query
+/// backend are tested against: PostgreSQL 19, the family's release.
+pub const POSTGRES: PinnedImage = PinnedImage {
+    repository: "postgres",
+    tag: "19.0",
+    digest: "sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1",
 };
 
 /// SanteMPI, SanteSuite's open-source master patient index, which answers
@@ -113,8 +121,8 @@ pub const SANTEMPI: PinnedImage = PinnedImage {
 /// was published.
 pub const SANTEMPI_POSTGRES: PinnedImage = PinnedImage {
     repository: "postgres",
-    tag: "15.19",
-    digest: "sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550",
+    tag: "15.20",
+    digest: "sha256:91b9edc40277faf94bc1e3d7ae621b185fa70f3099b94309c4731a8296114870",
 };
 
 /// The Maven image the Federation Tier reference implementation is built
