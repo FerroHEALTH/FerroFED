@@ -45,7 +45,7 @@ fn issuer(audience: Option<&str>) -> String {
         format!("audience = [\"{audience}\"]\n")
     });
     format!(
-        "\n[auth.issuer.issuer_n]\nissuer = \"{}\"\nkind = \"persons\"\n{audience}jwks_file = {}\n",
+        "\n[auth.issuer.issuer_n]\nissuer = \"{}\"\n{audience}jwks_file = {}\n",
         crate::support::caller::ISSUER,
         crate::support::toml_path(crate::support::caller::jwks_file())
     )

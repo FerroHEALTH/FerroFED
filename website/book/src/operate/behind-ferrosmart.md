@@ -17,7 +17,7 @@ This page is the gateway's side of it.
      │                                   │
      │  Bearer access token              │ jwks_uri
      ▼                                   ▼
- FerroFED (resource server) ── reads the token under the `ferrosmart` preset
+ FerroFED (resource server) ── reads the caller from the token's standard claims
 ```
 
 ## FerroSMART names the gateway's base
@@ -37,32 +37,27 @@ kind = "openehr"
 
 ## The gateway trusts FerroSMART
 
-One `[auth.issuer.<name>]` table names FerroSMART's issuer with `kind =
-"persons"` and `profile = "ferrosmart"`
-([Client authentication](authentication.md)). The preset keeps every
-`rfc9068` default but two: `typ` is `at+jwt` alone (RFC 9068 §2.1), and
-every token carries `scope` (SMART App Launch 2.2.0, Obtain access token,
-Response). A token without `scope` is refused with `401`.
+One `[auth.issuer.<name>]` table names FerroSMART's issuer and nothing else
+([Client authentication](authentication.md)). A token's `typ` is `at+jwt`
+(RFC 9068 §2.1), and every token carries `scope` (SMART App Launch 2.2.0,
+Obtain access token, Response). A token without `scope` is refused with
+`401`.
 
 ```toml
 [auth.issuer.smart]
 issuer = "https://smart.example.org"
-kind = "persons"
-preset = "ferrosmart"
 ```
 
-- **A person through a SMART app.** List each app the gateway admits by
-  its `client_id` in `delegates`. A person's token through a listed app
-  reads as that person, delegated to the app. A token through any other app
-  is no caller and is refused with `401`. The preset lists no app, because
-  the apps are each deployment's.
+- **A person through a SMART app.** FerroSMART's registry is the one list
+  of clients. A person's token through any app FerroSMART registered, whose
+  `aud` names the gateway, reads as that person, by the type of their
+  `fhirUser`. A token whose `aud` names another server is no caller and is
+  refused with `401`.
 - **A Backend Services client.** A client credentials token's `sub` is its
-  `client_id` (RFC 9068 §2.2), so the same table reads it as the system: a
-  `persons` issuer also signs its machines' app-only tokens.
+  `client_id` (RFC 9068 §2.2), so the same table reads it as the system.
 - **One table per issuer.** Name FerroSMART in this one table. A second
-  `[auth.issuer.<name>]` table of the same issuer, such as a `machines` table
-  beside it, refuses the start, naming the issuer
-  (FerroHEALTH/FerroSMART#591).
+  `[auth.issuer.<name>]` table of the same issuer refuses the start, naming
+  the issuer (FerroHEALTH/FerroSMART#591).
 
 The gateway's own rules still apply on top: the purpose of use, the
 `[[trust.issuer]]` table and the patient grants
@@ -78,6 +73,3 @@ authorization server metadata at its issuer.
 
 No specification governs this deployment shape: our own design, built on
 SMART App Launch 2.2.0 and RFC 9068.
-
-[auth.issuer.smart.profile]
-delegates = [{ client = "growth-chart" }]

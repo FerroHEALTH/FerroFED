@@ -106,15 +106,10 @@ data:
     # table, its client secret a key of the ferrofed-secrets Secret.
     [auth.issuer.idp]
     issuer = "https://idp.example.org"
-    # Whose tokens it signs: persons, patients, machines or federation.
-    kind = "persons"
+    # A SMART App Launch 2.2 authorization server; set kind = "federation"
+    # only for another party's issuer.
     # EDIT: the audience the issuer names this gateway by in `aud`.
     audience = ["https://gateway.example.org/fed"]
-
-    [auth.issuer.idp.profile]
-    first_party_clients = ["example-clinical-app"]
-    # EDIT: the client_ids of your own applications, the only clients a
-    # person's token of this issuer is admitted through.
 
     # The claim, the level of each of its values and the least level patient
     # data needs; without it, no level is read or required, and config check

@@ -35,11 +35,16 @@ const ENTRIES: [&str; 5] = [
     "ADMIN_ENTRY",
 ];
 
-/// The claims of a person's own grant: confined to [`PATIENT`], whose EHR
-/// at node A the token names, with a scope that creates compositions.
+/// The claims of a person's own grant: a `Patient` user's token confined to
+/// [`PATIENT`], whose EHR at node A the token names, with a scope that
+/// creates compositions.
 pub(super) fn own_grant() -> Claims {
     let mut granted = claims();
     PERSON.clone_into(&mut granted.sub);
+    granted.other.insert(
+        String::from("fhirUser"),
+        String::from("Patient/synthetic-own-record"),
+    );
     granted.scope = Some(String::from("patient/composition-*.c"));
     granted.ehr_id = Some(EHR_A.to_owned());
     granted

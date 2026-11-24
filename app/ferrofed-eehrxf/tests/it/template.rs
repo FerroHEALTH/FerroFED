@@ -117,7 +117,10 @@ fn each_section_selects_exactly_the_entry_archetypes_its_template_sections_name_
 #[test]
 fn each_archetype_is_contained_as_the_class_its_id_names() {
     for section in Section::ALL {
-        assert!(!section.archetypes().is_empty(), "{section:?}");
+        assert!(
+            !section.archetypes().is_empty() || !section.placed().is_empty(),
+            "{section:?} selects by nothing"
+        );
         for Archetype { class, id } in section.archetypes() {
             assert!(
                 id.starts_with(&format!("openEHR-EHR-{class}.")),
@@ -174,8 +177,37 @@ fn each_placed_archetype_is_selected_under_the_section_the_component_places_it_i
             "openEHR-EHR-ACTION.medication.v1"
         )]
     );
+    for (section, archetype) in [
+        (
+            Section::Problems,
+            "openEHR-EHR-EVALUATION.problem_diagnosis.v1",
+        ),
+        (
+            Section::AllergiesAndIntolerances,
+            "openEHR-EHR-EVALUATION.adverse_reaction_risk.v2",
+        ),
+        (
+            Section::MedicalDevicesAndImplants,
+            "openEHR-EHR-EVALUATION.device_summary.v0",
+        ),
+        (Section::Procedures, "openEHR-EHR-ACTION.procedure.v1"),
+    ] {
+        assert_eq!(
+            placed(section),
+            [("openEHR-EHR-SECTION.adhoc.v1", archetype)],
+            "{section:?}"
+        );
+    }
     for section in Section::ALL {
-        if !matches!(section, Section::MedicationSummary | Section::Immunisations) {
+        if !matches!(
+            section,
+            Section::MedicationSummary
+                | Section::Immunisations
+                | Section::Problems
+                | Section::AllergiesAndIntolerances
+                | Section::MedicalDevicesAndImplants
+                | Section::Procedures
+        ) {
             assert!(section.placed().is_empty(), "{section:?}");
         }
         for placed in section.placed() {

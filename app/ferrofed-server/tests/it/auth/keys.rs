@@ -30,7 +30,7 @@ use wiremock::ResponseTemplate;
 use wiremock::matchers::{method, path};
 
 use super::{Gateway, TestResult, assert_admitted, assert_refused, bearing, query};
-use crate::support::caller::{AUDIENCE, FIRST_PARTY};
+use crate::support::caller::AUDIENCE;
 
 /// The issuer identifier of the issuer these tests read from a file.
 const ROTATING: &str = "https://rotating-issuer.example.test";
@@ -39,8 +39,7 @@ const ROTATING: &str = "https://rotating-issuer.example.test";
 /// given and from its metadata otherwise, read again at most every
 /// `refresh`.
 fn trusting(issuer: &str, file: Option<PathBuf>, refresh: Duration) -> AuthSettings {
-    let mut settings = KeySetSettings::new(issuer, AUDIENCE, IssuerKind::Persons);
-    settings.profile.first_party_clients = FIRST_PARTY.map(str::to_owned).to_vec();
+    let mut settings = KeySetSettings::new(issuer, AUDIENCE, IssuerKind::Smart);
     settings.jwks_file = file;
     settings.jwks_refresh_interval = refresh;
     settings.attributes = Some(crate::support::caller::iua(issuer));
@@ -194,7 +193,7 @@ async fn a_key_set_file_verifies_and_a_missing_one_is_503() -> TestResult {
     .await
 }
 
-/// The key set settings `[auth]` resolves for one `persons` issuer at
+/// The key set settings `[auth]` resolves for one SMART issuer at
 /// `issuer`, its `[auth.tls]` table naming `trust_roots_file` when one is
 /// given.
 fn resolved(
@@ -207,9 +206,8 @@ fn resolved(
             toml::Value::String(file.display().to_string())
         )
     });
-    let text = format!(
-        "{tls}[auth.issuer.idp]\nissuer = \"{issuer}\"\nkind = \"persons\"\naudience = [\"{AUDIENCE}\"]\n"
-    );
+    let text =
+        format!("{tls}[auth.issuer.idp]\nissuer = \"{issuer}\"\naudience = [\"{AUDIENCE}\"]\n");
     let settings = Config::from_sources(Some(&text), &BTreeMap::new())?.resolve()?;
     let [trusted] = settings.server.auth.issuers.as_slice() else {
         return Err("one issuer".into());

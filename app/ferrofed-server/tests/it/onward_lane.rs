@@ -55,8 +55,9 @@ const ONE_ROW: &str =
 const TOKEN_EXCHANGE: &str = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange";
 
 /// The `oauth` and `onward` tables of node A at the token endpoint `issuer`,
-/// whose onward issuer signs tokens of `kind`, with `extra` onward keys.
-pub(crate) fn lane(issuer: &str, kind: &str, extra: &str) -> String {
+/// whose onward issuer is of `kind`, a SMART issuer when none is given, with
+/// `extra` onward keys.
+pub(crate) fn lane(issuer: &str, kind: Option<&str>, extra: &str) -> String {
     format!(
         concat!(
             "[credentials.\"node-a-pub\".credentials.oauth]\n",
@@ -67,8 +68,7 @@ pub(crate) fn lane(issuer: &str, kind: &str, extra: &str) -> String {
             "scope = \"system/aql-*.s\"\n\n",
             "[credentials.\"node-a-pub\".credentials.onward]\n",
             "issuer = \"{onward}\"\n",
-            "kind = \"{kind}\"\n",
-            "preset = \"rfc9068\"\n",
+            "{kind}",
             "token_endpoint = \"{issuer}/token\"\n",
             "audiences = [\"{node}\"]\n",
             "indicators = [\"{node}\"]\n",
@@ -80,7 +80,9 @@ pub(crate) fn lane(issuer: &str, kind: &str, extra: &str) -> String {
         client = CLIENT_ID,
         key = toml::Value::String(crate::support::signing_key_file().to_owned()),
         onward = ISSUER,
-        kind = kind,
+        kind = kind
+            .map(|kind| format!("kind = \"{kind}\"\n"))
+            .unwrap_or_default(),
         node = NODE,
         extra = extra,
     )
@@ -93,7 +95,7 @@ fn federation_lane(issuer: &str) -> String {
     let federation = format!(
         "[credentials.\"node-a-pub\".credentials.onward.federation]\ncontact_point = false\nexchanges_from = [\"{ISSUER}\"]\nperson_mapping = \"sub\"\ncountries = [\"NL\"]\nissuing_authorities = [\"synthetic-authority\"]\nprovider_identifier_prefixes = [\"urn:oid:2.999\"]\n"
     );
-    lane(issuer, "federation", "").replace(
+    lane(issuer, Some("federation"), "").replace(
         "[credentials.\"node-a-pub\".credentials.onward.profile]",
         &format!("{federation}\n[credentials.\"node-a-pub\".credentials.onward.profile]"),
     )
@@ -221,7 +223,7 @@ async fn a_person_reaches_the_node_under_the_exchanged_token() -> TestResult {
     let server = authorization_server(&exchanged, 200).await;
     let a = node(&exchanged).await?;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), "persons", ""))?;
+    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), None, ""))?;
     let authorization = bearer_as(CALLER)?;
 
     let (status, text) = call(app, patient_post(&authorization)?).await?;
@@ -260,7 +262,7 @@ async fn a_refused_exchange_fails_the_node_with_nothing_sent() -> TestResult {
     let server = authorization_server("unused", 400).await;
     let a = node(OWN_TOKEN).await?;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), "persons", ""))?;
+    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), None, ""))?;
 
     let (status, text) = call(app, patient_post(&bearer_as(CALLER)?)?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
@@ -318,7 +320,7 @@ fn refusal(tables: &str) -> Result<ConfigError, Box<dyn Error>> {
 /// An onward table needs the `oauth` client it authenticates with.
 #[test]
 fn an_onward_table_without_its_oauth_client_is_refused() -> TestResult {
-    let tables = lane("https://as.example.org", "persons", "");
+    let tables = lane("https://as.example.org", None, "");
     let start = tables
         .find("[credentials.\"node-a-pub\".credentials.onward]")
         .ok_or("the onward table")?;
@@ -335,7 +337,7 @@ fn an_onward_table_without_its_oauth_client_is_refused() -> TestResult {
 fn an_onward_table_beside_a_basic_user_is_refused() -> TestResult {
     let tables = format!(
         "{}\n[credentials.\"node-a-pub\"]\ncredentials.user = \"synthetic-user\"\ncredentials.password = \"synthetic-password\"\n",
-        lane("https://as.example.org", "persons", "")
+        lane("https://as.example.org", None, "")
     );
     let error = refusal(&tables)?;
     assert!(
@@ -349,7 +351,7 @@ fn an_onward_table_beside_a_basic_user_is_refused() -> TestResult {
 /// naming the table.
 #[test]
 fn an_onward_table_with_no_audience_is_refused() -> TestResult {
-    let tables = lane("https://as.example.org", "persons", "")
+    let tables = lane("https://as.example.org", None, "")
         .replace(&format!("audiences = [\"{NODE}\"]\n"), "");
     let error = refusal(&tables)?;
     assert!(
@@ -365,17 +367,17 @@ fn opted_in(tables: &str) -> String {
 }
 
 /// A lane opts in to another party's organisation only at a `federation`
-/// issuer, and only with an onward table: a `persons` lane and an `oauth`
+/// issuer, and only with an onward table: a SMART lane and an `oauth`
 /// grant alone refuse the switch at load.
 #[test]
 fn onward_organisations_needs_a_federation_lane() -> TestResult {
-    let persons = lane("https://as.example.org", "persons", "");
-    let start = persons
+    let tables = lane("https://as.example.org", None, "");
+    let start = tables
         .find("[credentials.\"node-a-pub\".credentials.onward]")
         .ok_or("the onward table")?;
-    let oauth_alone = persons.get(..start).ok_or("the oauth part")?;
-    for tables in [opted_in(&persons), opted_in(oauth_alone)] {
-        let error = refusal(&tables)?;
+    let oauth_alone = tables.get(..start).ok_or("the oauth part")?;
+    for opted in [opted_in(&tables), opted_in(oauth_alone)] {
+        let error = refusal(&opted)?;
         assert!(
             matches!(&error, ConfigError::Credentials(CredentialsFault::OnwardOrganisations { section }) if section == "credentials.node-a-pub"),
             "{error:?}"
@@ -487,7 +489,7 @@ async fn a_contribution_names_the_onward_tokens_placeholder_as_its_committer() -
     let server = authorization_server(&exchanged, 200).await;
     let a = committing_node().await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), "persons", ""))?;
+    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), None, ""))?;
     let sent = contribution("");
 
     let (status, text) = call(app, contribution_post(sent.clone(), &bearer_as(CALLER)?)?).await?;
@@ -525,7 +527,7 @@ async fn a_persons_attestation_names_the_placeholder() -> TestResult {
     let server = authorization_server(&exchanged, 200).await;
     let a = committing_node().await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), "persons", ""))?;
+    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), None, ""))?;
     let sent = contribution(&attestation());
     let (status, text) = call(app, contribution_post(sent, &bearer_as(CALLER)?)?).await?;
     assert_eq!(StatusCode::CREATED, status, "{text}");
@@ -570,7 +572,7 @@ async fn a_header_commit_carries_no_committer_of_the_gateways() -> TestResult {
         .mount(&a)
         .await;
     let dir = tempfile::tempdir()?;
-    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), "persons", ""))?;
+    let app = gateway(dir.path(), &a.uri(), &lane(&server.uri(), None, ""))?;
     let uid = "8849182c-82ad-4088-a07f-48ead4180515::cdr-a.example.org::1";
     let request = Request::put(format!(
         "/v1/ehr/{}/composition/8849182c-82ad-4088-a07f-48ead4180515",
@@ -632,7 +634,7 @@ async fn no_inbound_request_reaches_the_node_under_the_client_credentials_token(
         .mount(&a)
         .await;
     let dir = tempfile::tempdir()?;
-    let tables = lane(&server.uri(), "persons", "");
+    let tables = lane(&server.uri(), None, "");
 
     let app = gateway(dir.path(), &a.uri(), &tables)?;
     let (status, text) = call(app, patient_post(&bearer_as(CALLER)?)?).await?;

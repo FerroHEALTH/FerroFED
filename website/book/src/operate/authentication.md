@@ -78,24 +78,26 @@ identity in a token of its own
 
 ### Who the caller is
 
-Every `[auth.issuer.<name>]` declares its `kind`, whose tokens it signs, and
-`ferrohealth-smart` classifies each token it verifies under it:
+An `[auth.issuer.<name>]` table that names only its `issuer` trusts a SMART
+App Launch 2.2 authorization server, FerroSMART among them.
+`ferrohealth-smart` reads every caller from the token's standard claims, the
+same way for every such issuer (RFC 9068 §2.2; SMART App Launch 2.2.0,
+Scopes and Launch Context):
 
-- `persons`: the professionals of your deployment, signing in through your
-  own clients. A token whose `sub` is its `client_id` is a system acting
-  without a user context; any other token is admitted only through a client
-  the issuer lists in `first_party_clients`, or a delegate it lists in
-  `delegates`, and an RFC 8693 `act` claim only when its actor is a listed
-  delegate;
-- `patients`: patients, each token carrying `patient/` scopes and no `user/`
-  or `system/` scope. An issuer bound to a member with
-  `[trust.issuer.patient]` is usually one;
-- `machines`: systems under the client credentials grant alone;
-- `federation`: another party's issuer, with its `[auth.issuer.<name>.federation]`
-  table.
+- a token's `typ` is `at+jwt` (RFC 9068 §2.1) and its `scope` is required;
+- a token whose `sub` is its `client_id` is a system acting without a user
+  context;
+- any other token is a user's, named by the type of their `fhirUser`
+  (`Patient`, `Practitioner`, `PractitionerRole`, `RelatedPerson`, `Person`,
+  or a user of no stated type when the token has none);
+- an RFC 8693 `act` claim names the actor as the issuer asserts it.
 
-A token that matches no step for its issuer's kind is refused as an invalid
-token. The gateway counts a system caller as no natural person
+The authorization server's registry is the one list of clients: any client
+whose token's `aud` names the gateway reaches it (RFC 9068 §4), and the
+gateway keeps no client list of its own. Set `kind = "federation"` only for
+another party's issuer, with its `[auth.issuer.<name>.federation]` table.
+
+A token that breaks one of these rules is refused as an invalid token. The gateway counts a system caller as no natural person
 ([Professionals and assurance](#professionals-and-assurance)). The gateway
 admits no HTTP Basic caller: a machine, such as a scraper of the admin
 listener or a PMIR Registry, authenticates with a client-credentials token
@@ -107,8 +109,8 @@ first (GHSA-jhg2-jwjp-hq74).
 
 Two sections configure client authentication. `[auth]` is the section of
 `ferrohealth-smart`, the same in every FerroHEALTH product: one
-`[auth.issuer.<name>]` table per issuer, with its kind, its profile, its
-audiences, its token rules and its assurance table, and the product scope.
+`[auth.issuer.<name>]` table per issuer, with its audiences, its token rules
+and its assurance table, and the product scope.
 `[trust]` is FerroFED's own policy over the callers `[auth]` verifies: what
 each issuer's tokens are honoured for, the edge mode and the purpose-of-use
 rule.
@@ -119,11 +121,7 @@ product_scope = "__ferrofed.operator"
 
 [auth.issuer.idp]
 issuer = "https://idp.example.org"
-kind = "persons"
 audience = ["https://gateway.example.org/fed"]
-
-[auth.issuer.idp.profile]
-first_party_clients = ["example-clinical-app"]
 
 [auth.issuer.idp.attributes]
 mapping = "iua"
@@ -138,10 +136,7 @@ demographic_clients = []
 | Key | Default | Meaning |
 |---|---|---|
 | `auth.issuer[].issuer` | none | The issuer identifier its tokens carry in `iss`: `https`, or `http` to a loopback host (RFC 8414 §2). An issuer URL that carries a user name or password refuses the start (OpenID Connect Core 1.0 §1.2). Each `auth.issuer[]` key below is the issuer's own; no `[auth]` key stands in for one an issuer leaves out. |
-| `auth.issuer[].kind` | none | Whose tokens the issuer signs: `persons`, `patients`, `machines` or `federation` ([Who the caller is](#who-the-caller-is)). Required. |
-| `auth.issuer[].profile` | `rfc9068` | The preset the issuer's tokens are read under: `rfc9068`, a standards-only authorization server; `ferrosmart`, FerroSMART's tokens (`typ` `at+jwt` alone, `scope` required; [Behind FerroSMART](behind-ferrosmart.md)); `entra`, `keycloak` and `okta`, each that product's token shape; `nl`, the Dutch harmonised authentication of Annex B. Any profile key set on the table, such as `token_types`, `required_claims` or `scope_claim`, is set over the preset. Name each issuer in one table only: a second table of the same issuer refuses the start. |
-| `auth.issuer[].first_party_clients` | `[]` | The `client_id`s of your own applications, the clients a `persons` token of the issuer is admitted through. |
-| `auth.issuer[].delegates` | `[]` | The third-party clients, each a `client_id`, and the RFC 8693 actors, each `{ issuer, sub }`, a `persons` token of the issuer is admitted through as a delegated person. |
+| `auth.issuer[].kind` | none | `federation` for another party's issuer; unset for a SMART App Launch 2.2 authorization server ([Who the caller is](#who-the-caller-is)). Name each issuer in one table only: a second table of the same issuer refuses the start. |
 | `auth.issuer[].audience` | the public URL | The audiences, of which every token of the issuer names one in `aud` (RFC 9068 §4). Unset, the `gateway.public_url` as written; an issuer without an audience refuses the start. |
 | `auth.issuer[].algorithms` | six | The signature algorithms admitted: RS256, RS384, PS256, PS384, ES256 and ES384. An HMAC algorithm refuses the start. |
 | `auth.issuer[].clock_skew_seconds` | `60` | The leeway on `exp`, `nbf` and `iat`, at most `300` (RFC 7519 §4.1.4). |
@@ -169,10 +164,9 @@ demographic_clients = []
 | `trust.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
 | `trust.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[trust.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](patient-grants.md)). |
 | `trust.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
-| `auth.issuer[].act_represents_patient` | `false` | On a `patients` issuer, whether the RFC 8693 `act` claim of its tokens names a proxy or a legal representative who acts for the patient (Regulation (EU) 2025/327 Art 4(2)), so a document such a token inserts names that representative; a patient token that carries `act` on an issuer without it is refused as an invalid token ([Patient grants](patient-grants.md)). |
 | `trust.issuer[].requester` | none | Refused: who asks for the data is read from the `professional.hp_identifier`, `professional.hp_professional_role`, `provider.healthcare_provider_identifier` and `provider.facility_type` fields of the issuer's `[auth.issuer.<name>.federation]` table, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. |
 | `trust.issuer[].client_tokens_act_for_professional` | none | Refused: a token `ferrohealth-smart` classifies as a system's reaches no patient data ([Professionals and assurance](#professionals-and-assurance)). |
-| `auth.attributes[].issuer` | none | A `persons` issuer whose tokens state their professional: its name, identifier and roles, the organisation and the purposes of use, read by `ferrohealth-smart` ([What a token states about its professional](#what-a-token-states-about-its-professional)); or a `patients` or `machines` issuer whose tokens state their purposes of use alone. Without a table, a token of the issuer states none of them. |
+| `auth.attributes[].issuer` | none | An issuer whose tokens state their professional: its name, identifier and roles, the organisation and the purposes of use, read by `ferrohealth-smart` ([What a token states about its professional](#what-a-token-states-about-its-professional)); a patient's, a related person's or a system's token states its purposes of use alone. Without a table, a token of the issuer states none of them. |
 | `auth.attributes[].mapping` | none | `iua`: read the IHE IUA extension, `extensions.ihe_iua` (ITI TF-2 3.71.4.2.2.1.1). |
 | `auth.attributes[].authorization_details_purposes` | `false` | Whether the `system\|code` `purpose_of_use` of each RFC 9396 `authorization_details` entry is read as a purpose of use too (Annex B §B.4a.3). |
 | `auth.attributes[].fields` | `{}` | Sources over the mapping's, one list per field, each `{ claim = "<dotted path>" }` or `{ constant = "<value>" }`. `"professional.issuing_authority_name"` names the agency that issued the professional's identifier (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which IHE IUA defines no claim for. |
@@ -184,7 +178,7 @@ demographic_clients = []
 | `trust.edge.header` | none | The header the edge's assertion travels in, with `trust.mode = "edge"`. |
 
 `[auth] enabled = false` is refused: the gateway has no unauthenticated mode.
-So are `auth.scopeless_subjects`, `auth.capabilities`,
+So are `auth.capabilities`,
 `auth.scopes_supported` and `auth.described_issuer`, which the gateway reads
 nowhere: it serves no SMART
 discovery document and grants nothing without a scope. A key `[auth]` held
@@ -192,7 +186,13 @@ for every issuer before `ferrohealth-smart` 0.9 (`audience`, `algorithms`,
 `clock_skew_seconds`, `jwks_max_age_seconds`, `jwks_refresh_interval_seconds`,
 `jwks_file`, `timeout_ms`, `mode`, `role_claims`) is refused at the section,
 naming the `[auth.issuer.<name>]` table it moved to, and so is an issuer written
-as `[auth] issuer = "…"`. A `[[trust.issuer]]` entry names an
+as `[auth] issuer = "…"`. The issuer keys `kind` (other than `federation`),
+`preset`, `profile_file` and `scopeless_subjects`, the `[auth.idp]` table and
+the profile keys that listed clients or classified callers
+(`first_party_clients`, `delegates`, `audience_delegates`,
+`issuer_client_is_person`, `patient_context`, `fhir_user_patient`,
+`representation`, `act_represents_patient`, `guest` and the vendor keys) are
+unknown keys, refused at load. A `[[trust.issuer]]` entry names an
 `[auth.issuer.<name>]`. A gateway that federates and lists no
 issuer refuses to start, with exit code `78`, because it could admit no one.
 Each bad value refuses to start under its key; a value `ferrohealth-smart`
@@ -384,7 +384,7 @@ patient identifier, is never read.
 ### What a token states about its professional
 
 An issuer's `[auth.issuer.<name>.attributes]` table is where `ferrohealth-smart` reads
-what a `persons` token states about its professional, the same table in
+what a professional's token states about them, the same table in
 every FerroHEALTH product. With `mapping = "iua"` it reads the IHE IUA
 `subject_name`, `national_provider_identifier`, `subject_role`,
 `subject_organization_id` and `purpose_of_use`, and a token whose claim has
@@ -394,9 +394,9 @@ table states no professional, organisation or purpose, so with
 `trust.purpose_of_use.required` its callers are refused every route that
 reaches a node. The agency that issued the professional's identifier is the
 table's `"professional.issuing_authority_name"` source. A machine of the
-issuer (a client-credentials token) states its purposes of use alone, and a
-`patients` or `machines` issuer may have a table that names no field but
-`purpose_of_use`, so a patient and their representative declare theirs
+issuer (a client-credentials token) states its purposes of use alone, and
+so do a patient's and a related person's tokens, so a patient and their
+representative declare theirs
 ([Patient grants](patient-grants.md)):
 
 ```toml
@@ -473,7 +473,6 @@ values stand for which level, and the least level patient data needs:
 ```toml
 [auth.issuer.idp]
 issuer = "https://idp.example.org"
-kind = "persons"
 # ...
 
 [auth.issuer.idp.assurance]
@@ -678,11 +677,7 @@ admits no one in this mode.
 
 [auth.issuer.edge]
 issuer = "https://edge.example.org"
-kind = "persons"
 audience = ["https://gateway.example.org/fed"]
-
-[auth.issuer.edge.profile]
-first_party_clients = ["example-clinical-app"]
 
 [trust]
 mode = "edge"

@@ -57,11 +57,7 @@ node_selection = "ask-all"
 
 [auth.issuer.quickstart]
 issuer = "http://localhost:8190/quickstart"
-kind = "persons"
 audience = ["ferrofed-quickstart"]
-
-[auth.issuer.quickstart.profile]
-first_party_clients = ["quickstart-client"]
 
 # What the issuer's tokens state about their professional: the IHE IUA
 # extension and the purposes of use of their authorization_details.
@@ -82,8 +78,8 @@ authorization_details_purposes = true
 key_file = "/run/secrets/signing-key"
 jwks_uri = "http://ferrofed:8080/.well-known/jwks.json"
 
-# Each node is reached for a caller under a token of its own issuer of
-# persons, the development issuer, obtained for that caller: the gateway
+# Each node is reached for a caller under a token of its own issuer, the
+# development issuer, obtained for that caller: the gateway
 # sends the caller's verified token to the issuer's token endpoint as the
 # subject of an RFC 8693 token exchange, naming the node's API root as its
 # resource (RFC 8707), and
@@ -103,8 +99,6 @@ scope = "system/aql-*.s"
 
 [credentials."node-a-query".credentials.onward]
 issuer = "http://localhost:8190/quickstart"
-kind = "persons"
-preset = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8081/ferroehr/rest/openehr"]
 indicators = ["http://localhost:8081/ferroehr/rest/openehr"]
@@ -121,8 +115,6 @@ scope = "system/aql-*.s"
 
 [credentials."node-b-query".credentials.onward]
 issuer = "http://localhost:8190/quickstart"
-kind = "persons"
-preset = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8082/ferroehr/rest/openehr"]
 indicators = ["http://localhost:8082/ferroehr/rest/openehr"]
@@ -139,8 +131,6 @@ scope = "system/aql-*.s"
 
 [credentials."node-c-query".credentials.onward]
 issuer = "http://localhost:8190/quickstart"
-kind = "persons"
-preset = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8083/ferroehr/rest/openehr"]
 indicators = ["http://localhost:8083/ferroehr/rest/openehr"]
@@ -157,8 +147,6 @@ scope = "system/aql-*.s"
 
 [credentials."node-d-query".credentials.onward]
 issuer = "http://localhost:8190/quickstart"
-kind = "persons"
-preset = "rfc9068"
 token_endpoint = "http://localhost:8190/quickstart/token"
 audiences = ["http://localhost:8084/ferroehr/rest/openehr"]
 indicators = ["http://localhost:8084/ferroehr/rest/openehr"]
