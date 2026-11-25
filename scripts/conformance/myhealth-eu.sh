@@ -11,8 +11,10 @@
 #
 # conformance/myhealth-eu.tsv is the source. The badge is a shields.io
 # endpoint file (https://shields.io/badges/endpoint-badge) counting the rows
-# met among the rows that bind the gateway, always blue and always marked
-# self-assessed, with the EU emblem on EU blue. Beside it, on the MyHealth@EU
+# met among the rows that bind the gateway, always blue, with the EU emblem
+# on EU blue. No badge repeats that its count is self-assessed or self-tested:
+# the README heading over the badges says it once (owner decision,
+# 2026-11-25). Beside it, on the MyHealth@EU
 # CI line (#1952), one badge per NAME of BADGES: the NCPeH API
 # DocumentReference search parameters the gateway answers, from conformance/myhealth-eu-search.tsv, and the
 # documents valid against MyHealth@EU Core, Laboratory Report and Hospital
@@ -88,9 +90,9 @@ ci_badge() {
   IFS=$'\t' read -r _ package title suffix <<< "$record"
   label="$title $(version "$package")$suffix"
   if [[ "$name" == search ]]; then
-    message="$(data "$SEARCH" | awk -F'\t' '{ n++ } $3 == "answered" { a++ } END { printf "%d/%d parameters answered, self-tested", a, n }')"
+    message="$(data "$SEARCH" | awk -F'\t' '{ n++ } $3 == "answered" { a++ } END { printf "%d/%d parameters answered", a, n }')"
   else
-    message="$(data "$VALIDATION" | awk -F'\t' -v guide="$name" '$1 == guide { n++; if ($3 == "valid") v++ } END { printf "%d/%d valid, self-tested", v, n }')"
+    message="$(data "$VALIDATION" | awk -F'\t' -v guide="$name" '$1 == guide { n++; if ($3 == "valid") v++ } END { printf "%d/%d valid", v, n }')"
   fi
   jq -cn --arg label "$label" --arg message "$message" --argjson logo "$(badge_logo_fields eu)" \
     '{schemaVersion: 1, label: $label, message: $message, color: "blue"} + $logo'
@@ -99,7 +101,7 @@ ci_badge() {
 badge() {
   case "${1:-self-assessed}" in
   self-assessed)
-    jq -cn --arg message "catalogue $CATALOGUE · $(count met)/$(count) met, self-assessed" \
+    jq -cn --arg message "catalogue $CATALOGUE · $(count met)/$(count) met" \
       --argjson logo "$(badge_logo_fields eu)" \
       '{schemaVersion: 1, label: "MyHealth@EU", message: $message, color: "blue"} + $logo'
     ;;
