@@ -39,20 +39,19 @@ cd "$root"
 corpus_require curl shasum awk
 pinned_begin
 
-bridge=https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/94f2f95381e96790a7f55ca44a1ca7c150e4638d
-summary=https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/72211ed8db48505876fa09eb11e82e629ea48d35
+bridge=https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/230fb966ebfb571a50101e4dec554ca1e2314081
 mirror=https://raw.githubusercontent.com/openEHR/CKM-mirror/c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094/local/archetypes
 own='BUSL-1.1, the licence of the Licensor, Cadasto B.V., which publishes FerroBRIDGE (the file'"'"'s own SPDX header)'
 licence='"This work is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License. To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/4.0/." (the archetype'"'"'s licence field)'
 read_by=$'#1560 (the map mode of the prescription face) and #1551 (the\n  patient summary'"'"'s placement by template section), app/ferrofed-eehrxf'
 
-pin commit ferrobridge_medication.adlt 'FerroHEALTH/FerroBRIDGE commit 94f2f95, template openEHR-EHR-COMPOSITION.ferrobridge_medication.v1.0.0' \
+pin commit ferrobridge_medication.adlt 'FerroHEALTH/FerroBRIDGE commit 230fb96 (eehrxf 0.35.0), template openEHR-EHR-COMPOSITION.ferrobridge_medication.v1.0.0' \
   "$bridge/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_medication.adlt" \
-  7d2224c9cf5b92093096c15286ff56594e88270fc23705caefceeb71a7929f75 "$own" \
+  7f196e7274b55d0542c1dcdee4ba8d2fc4a09d3b6feddbdb375694ed17b411e5 "$own" \
   'The ADL 2 template with its template overlays.'
-pin commit ferrobridge_patient_summary.adlt 'FerroHEALTH/FerroBRIDGE commit 72211ed (eehrxf 0.26.0), template openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0' \
-  "$summary/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt" \
-  bc2e6a17ea5141583314ad6166f28f741c02e085035e6b60ec17f400c1c70286 "$own" \
+pin commit ferrobridge_patient_summary.adlt 'FerroHEALTH/FerroBRIDGE commit 230fb96 (eehrxf 0.35.0), template openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0' \
+  "$bridge/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt" \
+  bd869965b136b65a3a512dcbd77a107c9334b0b9291d56ba362ca8e6f72d4fb0 "$own" \
   'The ADL 2 patient summary template, whose sections place the component'"'"'s entries.'
 pin commit openEHR-EHR-EVALUATION.problem_diagnosis.v1.adl 'CKM mirror commit c3fdc43, revision 1.7.4, PUBLISHED' \
   "$mirror/entry/evaluation/openEHR-EHR-EVALUATION.problem_diagnosis.v1.adl" \

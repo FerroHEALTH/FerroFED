@@ -199,6 +199,7 @@ impl Federation {
             .map(|purpose| Purpose {
                 system: purpose.system.clone(),
                 code: purpose.code.clone(),
+                text: None,
             })
             .collect();
         self.consent_emergency == EmergencyConsent::PassToNode

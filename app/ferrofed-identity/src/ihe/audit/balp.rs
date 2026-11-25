@@ -61,9 +61,12 @@ pub(crate) fn audited_as(on_behalf: &OnBehalfOf) -> ihe_atna::user::OnBehalfOf {
                 caller
                     .purposes()
                     .iter()
+                    // NOTE: the caller's token names each purpose by system and code alone, so the
+                    // record states no text.
                     .map(|purpose| PurposeOfUse {
                         system: purpose.system.clone(),
                         code: purpose.code.clone(),
+                        text: None,
                     })
                     .collect(),
             ),

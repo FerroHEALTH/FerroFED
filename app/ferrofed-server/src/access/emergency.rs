@@ -106,6 +106,7 @@ pub(super) async fn held(
         .map(|purpose| Purpose {
             system: purpose.system.clone(),
             code: purpose.code.clone(),
+            text: None,
         })
         .collect();
     federation.emergency_purposes().mark(&declared)?;

@@ -138,7 +138,7 @@ template_overlay
     openEHR-EHR-SECTION.immunisation_list-ferrobridge.v0.0.0
 
 specialize
-    openEHR-EHR-SECTION.immunisation_list.v0
+    openEHR-EHR-SECTION.immunisation_list.v0.0.1-alpha
 
 language
     original_language = <[ISO_639-1::en]>
@@ -350,7 +350,7 @@ definition
             }
         }
         items matches {
-            use_archetype EVALUATION[at0000.2, openEHR-EHR-EVALUATION.device_summary.v0] occurrences matches {0..*}
+            use_archetype EVALUATION[at0000.2, openEHR-EHR-EVALUATION.device_summary.v0.0.1-alpha] occurrences matches {0..*}
         }
     }
 
