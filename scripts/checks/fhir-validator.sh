@@ -78,6 +78,29 @@ docs/specs/eu-hl7-extensions/hl7.fhir.eu.extensions.r4-1.3.0.tgz
 docs/specs/eu-hl7-extensions/hl7.fhir.eu.extensions.r4-1.3.1.tgz
 docs/specs/ihe-pharm-mpd/ihe.pharm.mpd.r4-1.0.0-comment-2.tgz"
 
+# The MyHealth@EU CI builds each report category is held to (#1952), one
+# "guide<TAB>tarball<TAB>profile<TAB>documents" record per line: the guide's
+# package, the profile every document is validated against with -profile,
+# and the documents, a directory under DOCUMENTS or `patients` for the
+# Patient of every document. The guides and the vendored packages of their
+# closure are put in the cache beside the packages above.
+readonly MYHEALTH_EU_CHECKS="\
+core	docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz	http://fhir.ehdsi.eu/core/StructureDefinition/patient-myhealtheu-core	patients
+laboratory	docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz	http://fhir.ehdsi.eu/laboratory/StructureDefinition/Bundle-lab-myhealtheu	myhealth-eu/laboratory
+discharge	docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz	http://fhir.ehdsi.eu/hdr/StructureDefinition/bundle-hdr-myhealtheu	myhealth-eu/discharge"
+readonly MYHEALTH_EU_VENDORED="\
+docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz
+docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz
+docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz
+docs/specs/ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz
+docs/specs/eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz
+docs/specs/eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz
+docs/specs/eu-xtehr-models/xtehr.eu.ehds.models-1.0.0.tgz
+docs/specs/hl7-ips/hl7.fhir.uv.ips-2.0.1.tgz"
+
+# The verdicts the MyHealth@EU checks recorded, which a run must reproduce.
+readonly MYHEALTH_EU_RECORD=conformance/myhealth-eu-validation.tsv
+
 # The rest of the dependency closure of IGS, one "id<TAB>version<TAB>sha256"
 # record per line, each the registry tarball at the version a dependency
 # names. Below them are the packages the validator loads by itself:
@@ -99,6 +122,8 @@ hl7.terminology.r4	6.5.0	a28b638483a11df696ed92198276236d759e41c7a3a8960c9e7e7d0
 hl7.terminology.r4	7.1.0	1cb0cd5601972925fcd04f2c175d9cc63a9ecd9346a91a6e735f1a865dc5fba1
 hl7.terminology.r4	7.3.0	1a1ef2aa22ecc820341267f2bdba3b2d1f4adafb9bdddfc9e51c611cd64f3b54
 hl7.terminology.r4	7.5.0	1da3004587602c3f5120061abc2309fef1f96668a477a9964354fa9af6fa6e60
+hl7.terminology.r4	7.2.0	f8c33fd30f8daf78f7496540a841e3fd20585279c0e785fb97394e44d6f24fee
+hl7.terminology.r4	7.4.0	1dc558c204f5ee1f2b96ab9a8cd83d0811475b08a4e06a7c2bcea55d1ab116ed
 hl7.fhir.uv.extensions.r4	5.4.0	e93eb1ece7d14e6b3dfaa7af5ac510577957cb5fd2b61ef95cdcfbbdca81c96d
 hl7.fhir.uv.ipa	1.1.0	013b9f91683c496fc09eed93a8798b47dcbfb775587890fa3e11253a2409feef
 hl7.fhir.uv.smart-app-launch	2.0.0	627e7a64e7abe130201fbae2ee7d2cb85d7d94972458d302c4d06d59e2c7d084
@@ -310,8 +335,9 @@ judge() {
 
 # run DOCUMENTS OUT: fills the package cache, fetches the jar, runs the
 # validator offline over every document in DOCUMENTS and judges its output.
-run() {
-  local documents="$1" out="$2"
+# prepare: fills the package cache at $home/.fhir/packages with every
+# package of the two closures and fetches the jar; sets jar and home.
+prepare() {
   : "${FHIR_VALIDATOR_VERSION:?the validator version to run}"
   : "${FHIR_VALIDATOR_SHA256:?the sha256 of validator_cli.jar at that version}"
   command -v java > /dev/null 2>&1 || {
@@ -319,13 +345,14 @@ run() {
     return 1
   }
   local work="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/fhir-validator"
-  local home="$work/home" downloads="$work/downloads"
+  home="$work/home"
+  local downloads="$work/downloads"
   local cache="$home/.fhir/packages"
   mkdir -p "$downloads" "$out"
   rm -rf "$home"
   mkdir -p "$home"
 
-  local jar="${FHIR_VALIDATOR_JAR:-$downloads/validator_cli-$FHIR_VALIDATOR_VERSION.jar}"
+  jar="${FHIR_VALIDATOR_JAR:-$downloads/validator_cli-$FHIR_VALIDATOR_VERSION.jar}"
   fetch "$RELEASES/$FHIR_VALIDATOR_VERSION/validator_cli.jar" "$jar" "$FHIR_VALIDATOR_SHA256"
 
   # The validator writes the packages.ini of its own cache version into an
@@ -350,8 +377,13 @@ run() {
     [[ -n "$tarball" ]] || continue
     cache_package "$cache" "$tarball"
   done <<< "$IGS
-$VENDORED"
+$VENDORED
+$MYHEALTH_EU_VENDORED"
+}
 
+run() {
+  local documents="$1" out="$2" jar home
+  prepare || return 1
   local docs=() doc
   for doc in "$documents"/*.json; do
     [[ -f "$doc" ]] && docs+=("$doc")
@@ -383,6 +415,102 @@ $VENDORED"
   fi
   cp ${docs[@]+"${docs[@]}"} "$out/"
   judge "$out/validation.json" "$documents" "$out"
+}
+
+# verdicts OUTPUT GUIDE DIR: one "guide<TAB>document<TAB>verdict" record per
+# document of DIR, `invalid` when the validator output OUTPUT carries an
+# error, a fatal issue or an unchecked profile for it, `valid` otherwise. A
+# single OperationOutcome that names no file is the one document's outcome.
+verdicts() {
+  local output="$1" guide="$2" dir="$3"
+  local bases="$dir.bases"
+  (cd "$dir" && ls -1 -- *.json) > "$bases"
+  issues "$output" | awk -F '\t' -v guide="$guide" -v bases="$bases" '
+    BEGIN { while ((getline line < bases) > 0) doc[++n] = line }
+    {
+      unknown = ($3 ~ /^(VALIDATION_VAL_PROFILE_UNKNOWN|Validation_VAL_Profile_Unknown|Validation_VAL_Unknown_Profile|VALIDATION_VAL_GLOBAL_PROFILE_UNKNOWN)/) \
+        || ($5 ~ /has not been checked because it could not be found/)
+      file = ($1 == "" && n == 1) ? doc[1] : $1
+      if ($2 == "error" || $2 == "fatal" || unknown) bad[file] = 1
+    }
+    END { for (i = 1; i <= n; i++) printf "%s\t%s\t%s\n", guide, doc[i], (doc[i] in bad ? "invalid" : "valid") }'
+  rm -f "$bases"
+}
+
+# myhealth_eu DOCUMENTS OUT: validates each report category against its
+# MyHealth@EU CI build and the Patient of every document against MyHealth@EU
+# Core, writes the verdicts to OUT/myhealth-eu-validation.tsv and fails when
+# they differ from MYHEALTH_EU_RECORD, so a change of any verdict is
+# recorded on purpose (no specification governs this: our own design,
+# #1952).
+myhealth_eu() {
+  local documents="$1" out="$2" jar home
+  prepare || return 1
+  local guide tarball profile from dir docs doc status=0 code
+  local found="$out/myhealth-eu-validation.tsv"
+  : > "$found.unsorted"
+  while IFS=$'\t' read -r guide tarball profile from; do
+    [[ -n "$guide" ]] || continue
+    dir="$out/myhealth-eu/$guide"
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    if [[ "$from" == patients ]]; then
+      for doc in "$documents"/*.json "$documents"/myhealth-eu/*/*.json; do
+        [[ -f "$doc" ]] || continue
+        jq '[.entry[]?.resource | select(.resourceType == "Patient")][0] // empty' "$doc" > "$dir/${doc##*/}"
+        [[ -s "$dir/${doc##*/}" ]] || rm -f "$dir/${doc##*/}"
+      done
+    else
+      for doc in "$documents/$from"/*.json; do
+        [[ -f "$doc" ]] && cp "$doc" "$dir/"
+      done
+    fi
+    docs=()
+    for doc in "$dir"/*.json; do
+      [[ -f "$doc" ]] && docs+=("$doc")
+    done
+    if [[ "${#docs[@]}" -eq 0 ]]; then
+      echo "::error::no document to hold to MyHealth@EU $guide: did the tests run with FERROFED_EMIT_DIR set?" >&2
+      status=1
+      continue
+    fi
+    code=0
+    java -Xmx6g -Duser.home="$home" -jar "$jar" \
+      ${docs[@]+"${docs[@]}"} \
+      -version 4.0.1 \
+      -tx n/a \
+      -no-http-access \
+      -allow-example-urls true \
+      -ig "$tarball" \
+      -profile "$profile" \
+      -output "$dir.json" \
+      > "$dir.log" 2>&1 || code=$?
+    if [[ ! -f "$dir.json" ]]; then
+      tail -n 40 "$dir.log" >&2
+      echo "::error::the validator wrote no output for MyHealth@EU $guide (exit $code)" >&2
+      status=1
+      continue
+    fi
+    verdicts "$dir.json" "$guide" "$dir" >> "$found.unsorted"
+  done <<< "$MYHEALTH_EU_CHECKS"
+  {
+    printf 'guide\tdocument\tverdict\n'
+    LC_ALL=C sort "$found.unsorted"
+  } > "$found"
+  rm -f "$found.unsorted"
+  if ! diff -u <(grep -v '^#' "$MYHEALTH_EU_RECORD") "$found" > "$out/myhealth-eu-validation.diff"; then
+    cat "$out/myhealth-eu-validation.diff" >&2
+    echo "::error::the MyHealth@EU verdicts differ from $MYHEALTH_EU_RECORD; record the run's $found below its comment header on purpose" >&2
+    status=1
+  fi
+  {
+    echo "## MyHealth@EU CI builds"
+    echo
+    echo "| Guide | Valid | Checked |"
+    echo "|---|---|---|"
+    awk -F '\t' 'NR > 1 { n[$1]++; if ($3 == "valid") v[$1]++ } END { for (g in n) printf "| %s | %d | %d |\n", g, v[g], n[g] }' "$found" | sort
+  } >> "$out/summary.md"
+  return "$status"
 }
 
 # cache_key: the key of the CI cache of the downloads directory, a digest of
@@ -466,6 +594,13 @@ case "${1:-}" in
   : "${FHIR_VALIDATOR_VERSION:?the validator version to run}"
   : "${FHIR_VALIDATOR_SHA256:?the sha256 of validator_cli.jar at that version}"
   cache_key
+  ;;
+--myhealth-eu)
+  if [[ "$#" -ne 3 ]]; then
+    echo "usage: $0 --myhealth-eu DOCUMENTS OUT" >&2
+    exit 2
+  fi
+  myhealth_eu "$2" "$3"
   ;;
 --judge)
   [[ "$#" -eq 4 ]] || {

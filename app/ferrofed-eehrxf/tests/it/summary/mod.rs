@@ -213,7 +213,11 @@ fn a_document_from_two_members_meets_the_eps_profiles() -> Result<(), Box<dyn Er
     let text = serde_json::to_string(&assembled.bundle)?;
     let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
-    ferrofed_testkit::emit::document("ferrofed-eehrxf-summary-two-members", &text)?;
+    ferrofed_testkit::emit::document(
+        ferrofed_testkit::emit::Lane::Eehrxf,
+        "ferrofed-eehrxf-summary-two-members",
+        &text,
+    )?;
     let bundle: serde_json::Value = serde_json::from_str(&text)?;
     let allergies = section(&bundle, "48765-2").ok_or("the allergies section")?;
     assert_eq!(allergies["entry"].as_array().map(Vec::len), Some(1));
@@ -424,7 +428,11 @@ fn a_lossy_mapping_run_reports_its_losses_outside_the_document() -> Result<(), B
     assert!(kinds.contains(&"AllergyIntolerance"), "{kinds:?}");
     let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
-    ferrofed_testkit::emit::document("ferrofed-eehrxf-summary-lossy", &text)?;
+    ferrofed_testkit::emit::document(
+        ferrofed_testkit::emit::Lane::Eehrxf,
+        "ferrofed-eehrxf-summary-lossy",
+        &text,
+    )?;
     Ok(())
 }
 
