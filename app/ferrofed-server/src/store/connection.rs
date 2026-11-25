@@ -105,7 +105,7 @@ impl Target {
             .map_err(|_quoted| backend(ConnectionError::Unparsable))?;
         Ok(Self {
             config,
-            tls: tls(ca)?,
+            tls: MakeRustlsConnect::new(client_config(ca)?),
             budget,
         })
     }
@@ -325,9 +325,10 @@ async fn connect(target: &Target, prepare: Prepare) -> Result<Client, StoreError
     Ok(client)
 }
 
-/// The TLS connector: rustls over aws-lc-rs, verifying the server against
-/// the PEM CA certificates `ca`, or the platform's roots when it is `None`.
-fn tls(ca: Option<&str>) -> Result<MakeRustlsConnect, StoreError> {
+/// The TLS client configuration: rustls over aws-lc-rs, whose key exchange
+/// prefers X25519MLKEM768 (RFC 10024), verifying the server against the PEM
+/// CA certificates `ca`, or the platform's roots when it is `None`.
+fn client_config(ca: Option<&str>) -> Result<ClientConfig, StoreError> {
     let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
     let builder = ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
@@ -346,7 +347,7 @@ fn tls(ca: Option<&str>) -> Result<MakeRustlsConnect, StoreError> {
             .map_err(backend)?
             .with_no_client_auth(),
     };
-    Ok(MakeRustlsConnect::new(config))
+    Ok(config)
 }
 
 /// The backend failure `error`.
@@ -363,7 +364,14 @@ mod tests {
     use ferrofed_testkit::listener::ListenerCertificates;
     use ferrohealth_secret::secret_url::SecretUrl;
 
-    use super::{Connection, ConnectionError, Statement, Target, tls};
+    use std::sync::Arc;
+
+    use ferrofed_testkit::kx::KxPeer;
+    use rustls::crypto::aws_lc_rs::kx_group;
+    use rustls::pki_types::ServerName;
+    use rustls::{ClientConnection, NamedGroup};
+
+    use super::{Connection, ConnectionError, Statement, Target, client_config};
 
     /// A prepare that is never reached when the open fails first.
     fn prepared(_client: &mut tokio_postgres::Client) -> Statement<'_, ()> {
@@ -381,9 +389,9 @@ mod tests {
     #[test]
     fn the_ca_is_read_as_pem_and_anything_else_is_refused() {
         let certificates = ListenerCertificates::generate().unwrap();
-        assert!(tls(Some(certificates.ca())).is_ok());
-        assert!(tls(None).is_ok(), "the platform's roots");
-        let refused = tls(Some(
+        assert!(client_config(Some(certificates.ca())).is_ok());
+        assert!(client_config(None).is_ok(), "the platform's roots");
+        let refused = client_config(Some(
             "-----BEGIN CERTIFICATE-----\nnot base64 at all\n-----END CERTIFICATE-----\n",
         ))
         .err()
@@ -418,5 +426,33 @@ mod tests {
             .err()
             .unwrap();
         assert!(matches!(refused, StoreError::Backend(_)), "{refused:?}");
+    }
+
+    /// The group the store's TLS client, trusting the certificate of `peer`,
+    /// agrees on with it in one handshake.
+    fn agreed_by_the_store(peer: &KxPeer) -> Option<NamedGroup> {
+        let config = client_config(Some(peer.certificate())).expect("the CA reads");
+        let name = ServerName::try_from("localhost").expect("a server name");
+        let mut connection = ClientConnection::new(Arc::new(config), name).expect("a client");
+        let mut socket = std::net::TcpStream::connect(peer.address()).expect("the peer listens");
+        while connection.is_handshaking() {
+            connection.complete_io(&mut socket).expect("the handshake");
+        }
+        connection
+            .negotiated_key_exchange_group()
+            .map(rustls::crypto::SupportedKxGroup::name)
+    }
+
+    #[test]
+    fn the_store_client_prefers_x25519mlkem768() {
+        let peer = KxPeer::start(vec![kx_group::X25519, kx_group::X25519MLKEM768])
+            .expect("the peer starts");
+        assert_eq!(Some(NamedGroup::X25519MLKEM768), agreed_by_the_store(&peer));
+    }
+
+    #[test]
+    fn the_store_client_agrees_on_x25519_with_a_classical_only_peer() {
+        let peer = KxPeer::start(vec![kx_group::X25519]).expect("the peer starts");
+        assert_eq!(Some(NamedGroup::X25519), agreed_by_the_store(&peer));
     }
 }

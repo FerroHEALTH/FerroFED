@@ -87,6 +87,8 @@ ferrohealth-session = { workspace = true, features = ["axum", "test-clock"] }
 # The test OpenID Provider: an issuer whose key pair is generated at run
 # time, so no private key is committed, and the ID Tokens it signs.
 ferrofed-testkit.workspace = true
+# The key exchange groups a post-quantum test names.
+rustls.workspace = true
 jiff.workspace = true
 jsonwebtoken.workspace = true
 serde_json.workspace = true

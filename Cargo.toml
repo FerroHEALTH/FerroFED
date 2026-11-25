@@ -241,10 +241,11 @@ redb = { version = "4.3.0", default-features = false, features = ["std"] }
 # FerroFED's own PostgreSQL store (#268, #1636), in every build of the server:
 # the PostgreSQL client with
 # rustls for TLS, its crypto and roots the ones the node client already uses
-# (aws-lc-rs, the platform verifier). Verified against crates.io on 2026-10-03.
+# (aws-lc-rs, the platform verifier), its key exchange preferring
+# X25519MLKEM768 (RFC 10024, #1991). Verified against crates.io on 2026-10-03.
 tokio-postgres = { version = "0.7.18", default-features = false, features = ["runtime"] }
 tokio-postgres-rustls = "0.14.0"
-rustls = { version = "0.23.46", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
+rustls = { version = "0.23.46", default-features = false, features = ["std", "tls12", "aws_lc_rs", "prefer-post-quantum"] }
 rustls-platform-verifier = "0.7.1"
 # The ATNA audit repository connection (#418): ITI-20 syslog over TLS (RFC
 # 5425) behind ihe-iti's `atna` feature, at the version reqwest and
@@ -435,9 +436,10 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # The HTTP server plumbing of FerroHEALTH/FerroSYS (#1397): the health routes
 # every product serves, the listeners with their TLS and the drain, the
 # healthcheck and the revocation check of an eHDSI link (feature
-# `revocation`). Pinned exactly, as a product pins every family crate; 0.12.2
-# takes one allocation fewer per request than 0.12.0 (FerroHEALTH/FerroSYS#428).
-ferrohealth-server = { version = "=0.12.2", default-features = false }
+# `revocation`). Pinned exactly, as a product pins every family crate; 0.12.4
+# prefers the hybrid group X25519MLKEM768 (RFC 10024) on every rustls
+# listener and client (#1991).
+ferrohealth-server = { version = "=0.12.4", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.

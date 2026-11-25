@@ -261,9 +261,19 @@ fn transport(
 mod tests {
     use std::time::Duration;
 
-    use super::bounded;
+    use std::collections::BTreeMap;
+
+    use super::{NodeTransport, bounded, node_transport, transport};
+    use crate::config::Config;
+    use crate::config::settings::Settings;
+    use ferrofed_registry::id::EndpointId;
+    use ferrofed_testkit::kx::KxPeer;
+    use ferrohealth_config::tls::TlsClientSection;
+    use ferrohealth_server::tls_client::TlsClient;
     use http::StatusCode;
     use openehr_its::rest::client::{Transport, TransportError};
+    use rustls::NamedGroup;
+    use rustls::crypto::aws_lc_rs::kx_group;
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -313,6 +323,116 @@ mod tests {
         assert!(
             started.elapsed() < Duration::from_secs(5),
             "the read stopped at the bound, not at the engine's timeout"
+        );
+        Ok(())
+    }
+
+    /// The settings of a development gateway.
+    fn settings() -> Result<Settings, Box<dyn std::error::Error>> {
+        let text = "profile = \"development\"\n\n[audit]\ndestination = \"log\"\n";
+        Ok(Config::from_sources(Some(text), &BTreeMap::new())?.resolve()?)
+    }
+
+    /// Sends one `GET` through `transport` to `https://localhost` at the
+    /// port of `peer`, and returns the answer's status, `None` when the
+    /// call failed, with the group the peer recorded.
+    async fn agreed_by(
+        transport: &NodeTransport,
+        peer: &KxPeer,
+    ) -> Result<(Option<StatusCode>, Option<NamedGroup>), Box<dyn std::error::Error>> {
+        let url = format!("https://localhost:{}/v1/ehr", peer.address().port());
+        let status = transport
+            .send(http::Request::get(url).body(Vec::new())?)
+            .await
+            .ok()
+            .map(|answer| answer.status());
+        let group = peer
+            .agreed(0)
+            .map_err(|seen| format!("the peer recorded {seen} connections"))?;
+        Ok((status, group))
+    }
+
+    /// The shared node engine, which trusts no root the peer's certificate
+    /// chains to, so each call ends after the key exchange.
+    async fn agreed_by_the_shared_engine(
+        peer: &KxPeer,
+    ) -> Result<(Option<StatusCode>, Option<NamedGroup>), Box<dyn std::error::Error>> {
+        let engine = node_transport(reqwest::Client::builder(), &settings()?)?;
+        agreed_by(&engine, peer).await
+    }
+
+    /// The engine of an endpoint whose TLS table trusts the peer's
+    /// certificate.
+    async fn agreed_by_an_endpoint_engine(
+        peer: &KxPeer,
+    ) -> Result<(Option<StatusCode>, Option<NamedGroup>), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let roots = dir.path().join("roots.pem");
+        std::fs::write(&roots, peer.certificate())?;
+        let section = TlsClientSection {
+            trust_roots_file: Some(roots),
+            ..TlsClientSection::default()
+        };
+        let tls = TlsClient::read("registry.endpoint.node-a.tls", &section)?;
+        let engine = transport(&settings()?, &EndpointId::new("node-a")?, &tls)?;
+        agreed_by(&engine, peer).await
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn the_shared_node_engine_prefers_x25519mlkem768() -> TestResult {
+        let peer = KxPeer::start(vec![kx_group::X25519, kx_group::X25519MLKEM768])?;
+        assert_eq!(
+            (None, Some(NamedGroup::X25519MLKEM768)),
+            agreed_by_the_shared_engine(&peer).await?
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn the_shared_node_engine_agrees_on_x25519_with_a_classical_only_peer() -> TestResult {
+        let peer = KxPeer::start(vec![kx_group::X25519])?;
+        assert_eq!(
+            (None, Some(NamedGroup::X25519)),
+            agreed_by_the_shared_engine(&peer).await?
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn an_endpoint_engine_prefers_x25519mlkem768() -> TestResult {
+        let peer = KxPeer::start(vec![kx_group::X25519, kx_group::X25519MLKEM768])?;
+        assert_eq!(
+            (
+                Some(StatusCode::NO_CONTENT),
+                Some(NamedGroup::X25519MLKEM768)
+            ),
+            agreed_by_an_endpoint_engine(&peer).await?
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn an_endpoint_engine_connects_to_a_classical_only_peer() -> TestResult {
+        let peer = KxPeer::start(vec![kx_group::X25519])?;
+        assert_eq!(
+            (Some(StatusCode::NO_CONTENT), Some(NamedGroup::X25519)),
+            agreed_by_an_endpoint_engine(&peer).await?
         );
         Ok(())
     }
