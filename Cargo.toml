@@ -52,17 +52,17 @@ publish = false
 # printed a scope in its canonical form (FerroEHR #3557) and sent a DPoP-bound
 # token with a proof from a prover (FerroEHR #3558). 0.2.0 is the line
 # eehrxf 0.14, fhirconnect 0.4 and openehr-mapping-core 0.3 require (#1891).
-openehr-base = "0.3.0"
-openehr-rm = "0.3.0"
-openehr-query = { version = "0.3.0", features = ["federation"] }
-openehr-its = { version = "0.3.0", default-features = false }
+openehr-base = "0.5.0"
+openehr-rm = "0.5.0"
+openehr-query = { version = "0.5.0", features = ["federation"] }
+openehr-its = { version = "0.5.0", default-features = false }
 # The ADL parser and the OPT2 builder of the family, at its version: a map-mode
 # member's ADL 2 template is built into its operational template with them
 # (#1560). Verified against crates.io on 2026-11-08.
-openehr-adl = "0.3.0"
+openehr-adl = "0.5.0"
 # The archetype model the OPT2 builder writes, which a test hands the ADL 2
 # printer (#1581). Verified against crates.io on 2026-11-08.
-openehr-am = "0.3.0"
+openehr-am = "0.5.0"
 # Internal crates. A crates/* member another member depends on takes a path for
 # the workspace and a version for its packaged manifest, moved with the member
 # (the Cargo reference, Specifying Dependencies, multiple locations); an app/*
@@ -132,7 +132,7 @@ ehds-logging = { version = "0.27.0", default-features = false }
 # (#1895), and 0.17.0 the release on ferrobridge-term 0.13, fhirconnect 0.5
 # and openehr-mapping-core 0.4 (#1899). Verified against crates.io on
 # 2026-11-17.
-eehrxf = { version = "0.30.0", default-features = false }
+eehrxf = { version = "0.35.0", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -278,7 +278,7 @@ fhir-search = "0.1.131"
 # on openehr-* 0.2 that eehrxf 0.14.0 requires (#1891); 0.5.1 and
 # openehr-mapping-core 0.4.0 the releases eehrxf 0.17.0 requires (#1899).
 # Verified against crates.io on 2026-11-17.
-fhirconnect = "0.9.0"
+fhirconnect = "0.13.0"
 # The FHIR terminology client the European interoperability component asks
 # its terminology server through (#925), from FerroBRIDGE, with the `context`
 # form of `$validate-code`; required by a caret range, as eehrxf above (#1772),
@@ -296,7 +296,7 @@ ferrobridge-term = "0.19.0"
 # the release on ferrobridge-term 0.13 (#1899). Verified against crates.io on
 # 2026-11-17.
 ferrobridge-validator = "0.20.0"
-openehr-mapping-core = "0.6.0"
+openehr-mapping-core = "0.9.0"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by FerroHEALTH/FerroPIX
 # since #367 and required by a caret range, at the release on ferrohealth-smart

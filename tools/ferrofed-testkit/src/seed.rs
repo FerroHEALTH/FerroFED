@@ -506,22 +506,24 @@ pub fn ehr_status(subject: Option<PatientId>) -> EhrStatus {
         archetype_node_id: EHR_STATUS_ARCHETYPE.to_owned(),
         uid: None,
         links: None,
-        archetype_details: Some(Archetyped {
+        archetype_details: Some(Box::new(Archetyped {
             archetype_id: ArchetypeId {
                 value: EHR_STATUS_ARCHETYPE.to_owned(),
             },
             template_id: None,
             rm_version: "1.1.0".to_owned(),
-        }),
+        })),
         feeder_audit: None,
         subject: PartySelf {
-            external_ref: subject.map(|patient| PartyRef {
-                namespace: patient.namespace(),
-                r#type: "PERSON".to_owned(),
-                id: ObjectId::GenericId(GenericId {
-                    value: patient.value(),
-                    scheme: "ffd-test".to_owned(),
-                }),
+            external_ref: subject.map(|patient| {
+                Box::new(PartyRef {
+                    namespace: patient.namespace(),
+                    r#type: "PERSON".to_owned(),
+                    id: ObjectId::GenericId(GenericId {
+                        value: patient.value(),
+                        scheme: "ffd-test".to_owned(),
+                    }),
+                })
             }),
         },
         is_queryable: true,

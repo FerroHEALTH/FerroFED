@@ -82,10 +82,10 @@ definition
         /activities[at0001]/description[at0002]/items matches {
             use_archetype CLUSTER[at0143.1, openEHR-EHR-CLUSTER.medication.v2]
             use_archetype CLUSTER[at0177.1, openEHR-EHR-CLUSTER.therapeutic_direction-ferrobridge.v1]
-            use_archetype CLUSTER[at0069.1, openEHR-EHR-CLUSTER.medication_authorisation.v0]
+            use_archetype CLUSTER[at0069.1, openEHR-EHR-CLUSTER.medication_authorisation.v0.0.1-alpha]
         }
         /activities[at0001]/description[at0002]/items[at0129]/items matches {
-            use_archetype CLUSTER[at0065.1, openEHR-EHR-CLUSTER.medication_supply_amount.v0]
+            use_archetype CLUSTER[at0065.1, openEHR-EHR-CLUSTER.medication_supply_amount.v0.0.1-alpha]
         }
     }
 

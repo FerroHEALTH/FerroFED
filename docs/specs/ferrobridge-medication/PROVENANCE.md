@@ -8,14 +8,14 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `3b7be6870c8463247bfedf07e8ead9336a2e9e1a564c375be31caef81e13f078`
-- Fetched: 2026-11-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+  the pins): `766a4c3a2b0c7c48034acd5ad75c3099f537d4421a6a99a980c6dd613208094c`
+- Fetched: 2026-11-25, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 14 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 14 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `7f1a13c9d758379023c9cb991c114eccc998bf4cb3ec0c4e2bf30b2835a9fc08`
+  `PROVENANCE.md` excluded): `d746013745bcc8bd03c0d07b8d232d169417c1e6439cef53aa3f7bdf1b4d44e1`
 - Read by: #1560 (the map mode of the prescription face) and #1551 (the
   patient summary's placement by template section), app/ferrofed-eehrxf
 
@@ -44,17 +44,17 @@ committed verbatim with attribution, as CC BY-SA permits.
 
 ### `ferrobridge_medication.adlt` (committed)
 
-- Source: <https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/94f2f95381e96790a7f55ca44a1ca7c150e4638d/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_medication.adlt>
-- Version: FerroHEALTH/FerroBRIDGE commit 94f2f95, template openEHR-EHR-COMPOSITION.ferrobridge_medication.v1.0.0
-- sha256: `7d2224c9cf5b92093096c15286ff56594e88270fc23705caefceeb71a7929f75`
+- Source: <https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/230fb966ebfb571a50101e4dec554ca1e2314081/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_medication.adlt>
+- Version: FerroHEALTH/FerroBRIDGE commit 230fb96 (eehrxf 0.35.0), template openEHR-EHR-COMPOSITION.ferrobridge_medication.v1.0.0
+- sha256: `7f196e7274b55d0542c1dcdee4ba8d2fc4a09d3b6feddbdb375694ed17b411e5`
 - Licence: BUSL-1.1, the licence of the Licensor, Cadasto B.V., which publishes FerroBRIDGE (the file's own SPDX header)
 - Note: The ADL 2 template with its template overlays.
 
 ### `ferrobridge_patient_summary.adlt` (committed)
 
-- Source: <https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/72211ed8db48505876fa09eb11e82e629ea48d35/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt>
-- Version: FerroHEALTH/FerroBRIDGE commit 72211ed (eehrxf 0.26.0), template openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0
-- sha256: `bc2e6a17ea5141583314ad6166f28f741c02e085035e6b60ec17f400c1c70286`
+- Source: <https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/230fb966ebfb571a50101e4dec554ca1e2314081/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt>
+- Version: FerroHEALTH/FerroBRIDGE commit 230fb96 (eehrxf 0.35.0), template openEHR-EHR-COMPOSITION.ferrobridge_patient_summary.v1.0.0
+- sha256: `bd869965b136b65a3a512dcbd77a107c9334b0b9291d56ba362ca8e6f72d4fb0`
 - Licence: BUSL-1.1, the licence of the Licensor, Cadasto B.V., which publishes FerroBRIDGE (the file's own SPDX header)
 - Note: The ADL 2 patient summary template, whose sections place the component's entries.
 

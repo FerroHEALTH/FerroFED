@@ -105,15 +105,17 @@ pub fn ehr_status(external_ref: Option<PartyRef>) -> EhrStatus {
         archetype_node_id: EHR_STATUS_ARCHETYPE.to_owned(),
         uid: None,
         links: None,
-        archetype_details: Some(Archetyped {
+        archetype_details: Some(Box::new(Archetyped {
             archetype_id: ArchetypeId {
                 value: EHR_STATUS_ARCHETYPE.to_owned(),
             },
             template_id: None,
             rm_version: "1.1.0".to_owned(),
-        }),
+        })),
         feeder_audit: None,
-        subject: PartySelf { external_ref },
+        subject: PartySelf {
+            external_ref: external_ref.map(Box::new),
+        },
         is_queryable: true,
         is_modifiable: true,
         other_details: None,
