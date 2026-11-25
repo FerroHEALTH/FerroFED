@@ -55,12 +55,12 @@ use crate::state::AppState;
 mod admission;
 mod binary;
 pub mod errors;
+mod face_id;
 pub mod ids;
 mod list;
 mod lookup;
 pub mod medication;
 mod own;
-mod patient_id;
 mod patient_summary;
 mod trc;
 mod written;
@@ -81,13 +81,14 @@ static UNSERVED: LazyLock<String> = LazyLock::new(|| {
 
 /// Every path of the face with its handlers, the one list the router is
 /// built from and the `404` of any other path names.
-fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 12] {
+fn table() -> [(&'static str, MethodRouter<Arc<AppState>>); 13] {
     [
         (METADATA, get(metadata)),
         (PATIENTS, get(lookup::patients)),
         (SUMMARY, get(summary_get).post(summary_post)),
         (BUNDLE, post(bundle_post)),
         (DOCUMENTS, get(list::documents)),
+        (crate::face_path::DOCUMENT, get(list::document)),
         (binary::ROUTE, get(binary::read)),
         (
             crate::face_path::PRESCRIPTIONS,
@@ -294,7 +295,7 @@ mod tests {
         assert_eq!(
             UNSERVED.as_str(),
             "the FHIR face serves metadata, Patient, Patient/$summary, Bundle, DocumentReference, \
-             Binary/{token}, MedicationRequest, MedicationRequest/{id}, \
+             DocumentReference/{id}, Binary/{token}, MedicationRequest, MedicationRequest/{id}, \
              MedicationRequest/{id}/_history/{vid}, MedicationDispense, MedicationDispense/{id}, \
              MedicationDispense/{id}/_history/{vid} alone"
         );

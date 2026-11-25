@@ -38,6 +38,7 @@ use crate::facade::{
 };
 use crate::support::{call, exchange, field, send_as_is};
 
+mod document;
 mod own_discharge;
 mod own_imaging;
 mod own_laboratory;
@@ -507,10 +508,9 @@ async fn a_search_naming_no_patient_or_another_parameter_is_refused() -> TestRes
     let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
     let dir = tempfile::tempdir()?;
     let app = members.gateway(dir.path(), ("", ""))?;
-    // NOTE: MyHealth@EU NCPeH API 9.1.1-ci CapabilityStatementMyHealthEu; _id is refused, patient
-    // without a store, and a parameter the API does not name (conformance/myhealth-eu-search.tsv).
+    // NOTE: MyHealth@EU NCPeH API 9.1.1-ci CapabilityStatementMyHealthEu; patient is refused without
+    // a store, and so is a parameter the API does not name (conformance/myhealth-eu-search.tsv).
     let refused = [
-        "_id=synthetic",
         "patient=Patient%2Fsynthetic",
         "relatesto=DocumentReference%2Fsynthetic",
     ]
@@ -678,6 +678,7 @@ async fn the_capability_statement_declares_the_document_search() -> TestResult {
         names,
         [
             "patient.identifier",
+            "_id",
             "type",
             "category",
             "contenttype",

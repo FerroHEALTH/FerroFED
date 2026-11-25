@@ -14,7 +14,7 @@
 //! ([`dispensed`]; MyHealth@EU Requirements Catalogue 10.0.0 07.04), and
 //! the identifier each stable patient id of the FHIR face stands for,
 //! sealed and kept a window after the last answer that named it
-//! ([`patient_id`]). Caches, audit records, configuration and clinical data
+//! ([`face_id`]). Caches, audit records, configuration and clinical data
 //! are never kept here.
 //!
 //! Its tables live in the schema `ferrofed`. Each time a connection opens,
@@ -34,8 +34,8 @@
 pub mod connection;
 pub mod dispensed;
 pub mod emergency;
+pub mod face_id;
 pub mod migrations;
-pub mod patient_id;
 pub mod ready;
 pub mod replay;
 

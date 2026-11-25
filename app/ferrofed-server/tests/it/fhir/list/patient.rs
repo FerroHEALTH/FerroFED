@@ -129,7 +129,10 @@ async fn without_a_store_a_search_by_patient_is_refused_and_not_declared() -> Te
     members.proxy_b.clear_journal();
     let (status, text) = call(app.clone(), search(&format!("patient=Patient%2F{id}"))?).await?;
     assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
-    assert!(text.contains("keeps no record of patient ids"), "{text}");
+    assert!(
+        text.contains("keeps no record of the ids it gives"),
+        "{text}"
+    );
     assert!(members.proxy_a.journal().is_empty() && members.proxy_b.journal().is_empty());
     assert!(!declared(&app).await?.iter().any(|name| name == "patient"));
     Ok(())
@@ -161,7 +164,7 @@ async fn with_the_store_a_patient_id_lists_its_documents_until_it_expires() -> T
     unknown(&listed(&app, search(&format!("patient=Patient%2F{never}"))?).await?)?;
     executed(
         &server.plain_url("patient_id"),
-        "UPDATE ferrofed.patient_id SET expires_at = now() - interval '1 second'",
+        "UPDATE ferrofed.face_id SET expires_at = now() - interval '1 second'",
     )
     .await?;
     members.proxy_a.clear_journal();

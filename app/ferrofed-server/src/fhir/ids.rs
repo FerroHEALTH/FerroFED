@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The stable logical ids the face gives a patient, and the sealing of the
-//! identifier each one stands for.
+//! The stable logical ids the face gives a patient and the documents it
+//! lists, and the sealing of the patient identifier each one stands for.
 //!
 //! A FHIR logical id names the same resource in every answer (FHIR R4
 //! `Resource.id`), so a patient's id is derived from the patient's
-//! identifier and nothing else: the HMAC-SHA-256 of `system|value` under a
-//! key derived from `fhir.id_key`, in lowercase RFC 4648 base32 without
-//! padding, 52 characters, inside the 64 an id may hold. No identifier can
-//! be read back from the id. To resolve an id the face was given, the
+//! identifier and nothing else, the HMAC-SHA-256 of `system|value`, and a
+//! listed document's id from its holder and the holder's id of it, each
+//! under its own key derived from `fhir.id_key`, in lowercase RFC 4648
+//! base32 without padding, 52 characters, inside the 64 an id may hold. No
+//! identifier can be read back from an id. To resolve an id the face was given, the
 //! identifier is kept in the store sealed under a second key derived from
 //! the same secret (AES-256-GCM, a random nonce, the id as associated data),
 //! so a row moved to another id does not open. Each key is derived with
@@ -27,6 +28,9 @@ pub const KEY_LEN: usize = 32;
 
 /// The HKDF label of the key a patient's id is derived under.
 const PATIENT_ID: &[u8] = b"ferrofed fhir patient-id";
+
+/// The HKDF label of the key a listed document's id is derived under.
+const DOCUMENT_ID: &[u8] = b"ferrofed fhir document-id";
 
 /// The HKDF label of the key an identifier is sealed under.
 const SEAL: &[u8] = b"ferrofed fhir seal";
@@ -53,6 +57,7 @@ pub enum IdError {
 /// The keys the face derives its ids and seals from `fhir.id_key`.
 pub struct IdKeys {
     patient: hmac::Key,
+    document: hmac::Key,
     seal: LessSafeKey,
     random: SystemRandom,
 }
@@ -89,10 +94,12 @@ impl IdKeys {
         }
         let prk = Salt::new(HKDF_SHA256, &[]).extract(&secret);
         let patient = hmac::Key::new(hmac::HMAC_SHA256, &expand(&prk, PATIENT_ID, KEY_LEN)?);
+        let document = hmac::Key::new(hmac::HMAC_SHA256, &expand(&prk, DOCUMENT_ID, KEY_LEN)?);
         let seal = UnboundKey::new(&AES_256_GCM, &expand(&prk, SEAL, AES_256_GCM.key_len())?)
             .map_err(|_unspecified| IdError::Key)?;
         Ok(Self {
             patient,
+            document,
             seal: LessSafeKey::new(seal),
             random: SystemRandom::new(),
         })
@@ -100,9 +107,15 @@ impl IdKeys {
 
     /// The logical id of the patient `system`|`value`.
     #[must_use]
-    pub fn patient(&self, (system, value): (&str, &str)) -> PatientId {
-        let tag = hmac::sign(&self.patient, format!("{system}|{value}").as_bytes());
-        PatientId(BASE32_NOPAD.encode(tag.as_ref()).to_ascii_lowercase())
+    pub fn patient(&self, (system, value): (&str, &str)) -> FaceId {
+        tagged(&self.patient, &[system, value])
+    }
+
+    /// The logical id of the document the holder `holder` names `document`,
+    /// such as a member's endpoint and its own id of the document.
+    #[must_use]
+    pub fn document(&self, (holder, document): (&str, &str)) -> FaceId {
+        tagged(&self.document, &[holder, document])
     }
 
     /// Seals the patient `system`|`value` for the row of `id`: the nonce
@@ -111,7 +124,7 @@ impl IdKeys {
     /// # Errors
     ///
     /// [`IdError::Random`] when no nonce can be drawn.
-    pub fn seal(&self, id: &PatientId, (system, value): (&str, &str)) -> Result<Vec<u8>, IdError> {
+    pub fn seal(&self, id: &FaceId, (system, value): (&str, &str)) -> Result<Vec<u8>, IdError> {
         let mut nonce = [0_u8; NONCE_LEN];
         self.random
             .fill(&mut nonce)
@@ -135,7 +148,7 @@ impl IdKeys {
     /// # Errors
     ///
     /// [`IdError::Open`] when the row does not open under the key and `id`.
-    pub fn open(&self, id: &PatientId, row: &[u8]) -> Result<(String, String), IdError> {
+    pub fn open(&self, id: &FaceId, row: &[u8]) -> Result<(String, String), IdError> {
         let (nonce, sealed) = row.split_at_checked(NONCE_LEN).ok_or(IdError::Open)?;
         let nonce =
             Nonce::try_assume_unique_for_key(nonce).map_err(|_unspecified| IdError::Open)?;
@@ -150,6 +163,17 @@ impl IdKeys {
     }
 }
 
+/// The id `key` tags `parts` with: the parts joined by `|`, each `\\` and
+/// `|` inside a part escaped by a `\\`, so no two part lists give one input.
+fn tagged(key: &hmac::Key, parts: &[&str]) -> FaceId {
+    let joined: Vec<String> = parts
+        .iter()
+        .map(|part| part.replace('\\', "\\\\").replace('|', "\\|"))
+        .collect();
+    let tag = hmac::sign(key, joined.join("|").as_bytes());
+    FaceId(BASE32_NOPAD.encode(tag.as_ref()).to_ascii_lowercase())
+}
+
 /// HKDF-expands `prk` under the label `info` into `len` bytes.
 fn expand(prk: &Prk, info: &[u8], len: usize) -> Result<Vec<u8>, IdError> {
     let mut out = vec![0_u8; len];
@@ -159,16 +183,16 @@ fn expand(prk: &Prk, info: &[u8], len: usize) -> Result<Vec<u8>, IdError> {
     Ok(out)
 }
 
-/// A patient's logical id on the face.
+/// A logical id the face gives, of a patient or a listed document.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PatientId(String);
+pub struct FaceId(String);
 
-impl PatientId {
-    /// Reads `id`, the id part of a `patient` search value, when it has the
-    /// form the face gives: 52 characters of lowercase base32.
+impl FaceId {
+    /// Reads `id`, an id a caller sent back, when it has the form the face
+    /// gives: 52 characters of lowercase base32.
     #[must_use]
     pub fn parse(id: &str) -> Option<Self> {
-        // NOTE: an id of another form is no id the face gave, and matches no patient.
+        // NOTE: an id of another form is no id the face gave, and names nothing.
         (id.len() == 52
             && id
                 .bytes()
@@ -185,7 +209,7 @@ impl PatientId {
 
 #[cfg(test)]
 mod tests {
-    use super::{IdError, IdKeys, PatientId};
+    use super::{FaceId, IdError, IdKeys};
 
     const KEY: &str = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
 
@@ -197,7 +221,22 @@ mod tests {
         assert_ne!(id, keys.patient(("urn:oid:2.999.1", "synthetic-2")));
         assert_eq!(id.as_str().len(), 52);
         assert!(!id.as_str().contains("synthetic"));
-        assert_eq!(PatientId::parse(id.as_str()), Some(id));
+        assert_eq!(FaceId::parse(id.as_str()), Some(id));
+    }
+
+    #[test]
+    fn a_document_id_differs_from_a_patient_id_and_by_holder() {
+        let keys = IdKeys::from_base64url(KEY).unwrap();
+        assert_ne!(keys.document(("s", "v")), keys.patient(("s", "v")));
+        assert_ne!(keys.document(("a|b", "c")), keys.document(("a", "b|c")));
+        assert_eq!(
+            keys.document(("node-a", "doc-1")),
+            keys.document(("node-a", "doc-1"))
+        );
+        assert_ne!(
+            keys.document(("node-a", "doc-1")),
+            keys.document(("node-b", "doc-1"))
+        );
     }
 
     #[test]
@@ -232,7 +271,7 @@ mod tests {
 
     #[test]
     fn an_id_of_another_form_is_no_patient_id() {
-        assert_eq!(PatientId::parse("pat-a"), None);
-        assert_eq!(PatientId::parse(&"A".repeat(52)), None);
+        assert_eq!(FaceId::parse("pat-a"), None);
+        assert_eq!(FaceId::parse(&"A".repeat(52)), None);
     }
 }

@@ -81,7 +81,7 @@ struct Issue {
 /// data, the identification lookup among them.
 fn service(face: FacePath, query: Option<&str>) -> Option<Service> {
     match face {
-        FacePath::Summary | FacePath::Binary => Some(Service::PatientSummary),
+        FacePath::Summary | FacePath::Binary | FacePath::Document => Some(Service::PatientSummary),
         FacePath::Documents => Some(
             match ferrofed_eehrxf::list::ListRequest::from_query(query) {
                 Ok(read) if !read.admits_summaries() => Service::OriginalDocument,

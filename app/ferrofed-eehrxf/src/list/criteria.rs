@@ -16,7 +16,7 @@
 //! values.
 
 use fhir_search::date::{DateError, DateValue, Instants, SearchDate};
-use fhir_search::escape::split;
+use fhir_search::escape::{EscapeError, split, unescape};
 use fhir_search::prefix::Prefix;
 use fhir_search::token::{Token, TokenError};
 use fhir_types::codec::Value;
@@ -56,6 +56,13 @@ pub enum CriterionError {
         #[source]
         source: TokenError,
     },
+    /// An `_id` value carries an illegal escape.
+    #[error("an _id value carries an illegal escape")]
+    Id {
+        /// Why the value is refused.
+        #[source]
+        source: EscapeError,
+    },
     /// A date value of the parameter `name` is outside the date grammar or
     /// the calendar.
     #[error("a {name} value is not a date with an optional prefix")]
@@ -71,6 +78,8 @@ pub enum CriterionError {
 /// One parameter the gateway evaluates, with the values one occurrence ORs.
 #[derive(Clone, PartialEq, Eq)]
 enum Criterion {
+    /// `_id`: the entry's logical id (FHIR R4 `Resource-id`).
+    Id(Vec<String>),
     /// `category`: `DocumentReference.category`.
     Category(Vec<Token>),
     /// `contenttype`: `DocumentReference.content.attachment.contentType`.
@@ -114,6 +123,7 @@ impl Criteria {
     /// A [`CriterionError`] when a value is outside its parameter's grammar.
     pub fn read(&mut self, name: &str, value: &str) -> Result<bool, CriterionError> {
         let criterion = match name {
+            "_id" => Criterion::Id(ids(value)?),
             "category" => Criterion::Category(tokens(value, "category")?),
             "contenttype" => Criterion::ContentType(tokens(value, "contenttype")?),
             "status" => Criterion::Status(tokens(value, "status")?),
@@ -142,6 +152,10 @@ impl Criterion {
     /// Whether `document` meets one of the values.
     fn selects(&self, document: &Value, now: Timestamp) -> bool {
         match self {
+            Self::Id(ids) => document
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| ids.iter().any(|wanted| wanted == id)),
             Self::Category(tokens) => {
                 concepts(items(document, "category")).any(|coding| coded(tokens, coding))
             }
@@ -189,6 +203,14 @@ impl Criterion {
                 .is_some_and(|target| values.iter().any(|value| dated(value, target, now))),
         }
     }
+}
+
+/// The ids of one occurrence of `_id`, each unescaped.
+fn ids(value: &str) -> Result<Vec<String>, CriterionError> {
+    split(value, ',')
+        .iter()
+        .map(|part| unescape(part).map_err(|source| CriterionError::Id { source }))
+        .collect()
 }
 
 /// The token values of one occurrence of `name`.
@@ -426,6 +448,20 @@ mod tests {
             [("date", "ne2026-10-21")],
         ] {
             assert!(!selects(&query), "{query:?}");
+        }
+    }
+
+    #[test]
+    fn an_id_selects_the_entry_it_names() {
+        let named = Value::from_serde_json(serde_json::json!({"id": "abc"}));
+        for (value, selected) in [("abc", true), ("x,abc", true), ("abd", false)] {
+            let mut criteria = Criteria::default();
+            assert_eq!(criteria.read("_id", value), Ok(true));
+            assert_eq!(
+                criteria.selects(&named, Timestamp::UNIX_EPOCH),
+                selected,
+                "{value}"
+            );
         }
     }
 

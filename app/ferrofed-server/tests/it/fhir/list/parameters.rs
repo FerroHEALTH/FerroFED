@@ -46,9 +46,12 @@ async fn names_the_report(
     let (status, text) = call(app, list(&format!("{IMAGING_TYPE}&{query}"))?).await?;
     assert_eq!(StatusCode::OK, status, "{query}: {text}");
     let bundle: Value = serde_json::from_str(&text)?;
-    Ok(entries(&bundle, "match")
-        .iter()
-        .any(|reference| reference["id"] == "doc-img-1"))
+    Ok(entries(&bundle, "match").iter().any(|reference| {
+        reference.pointer("/masterIdentifier/value")
+            == Some(&Value::from(
+                "urn:uuid:1a900000-0000-4000-8000-0000000000b1",
+            ))
+    }))
 }
 
 #[tokio::test]
