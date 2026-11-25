@@ -57,6 +57,16 @@ page: our own design.
   suites of RFC 9325 (BCP 195). Set `Strict-Transport-Security` (RFC 6797)
   there for the gateway and for the operator console, which sends none of
   its own (B1, B4).
+- [ ] **Offer the post-quantum key exchange at the proxy too.** The
+  gateway's listeners and every client it builds offer the hybrid group
+  X25519MLKEM768 (RFC 10024) first and fall back to X25519, P-256 or P-384
+  for a peer without it. A session recorded today then stays confidential
+  against a later quantum computer, which health data needs: the EU
+  coordinated implementation roadmap asks a high-risk use to complete the
+  move by the end of 2030. A proxy that terminates TLS decides the group
+  its clients get, so enable X25519MLKEM768 there. The
+  [post-quantum inventory](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/post-quantum.md)
+  lists every cryptographic use with its algorithm and whether it is safe.
 - [ ] **Keep the production profile.** Outside `profile = "development"`,
   the gateway refuses to start when a credential or a patient identifier
   would travel over plain `http`, and a stored-query database password

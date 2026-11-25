@@ -539,3 +539,46 @@ pub fn checked<G: Gateway>(gateway: &G, reply: &Reply) -> Result<Federated, Fail
         .map_err(|why| Failure::Check(format!("the RESULT_SET does not hold: {why}")))?;
     reply.federated()
 }
+
+#[cfg(test)]
+mod tests {
+    use ferrofed_testkit::kx::KxPeer;
+    use rustls::NamedGroup;
+    use rustls::crypto::aws_lc_rs::kx_group;
+    use secrecy::SecretString;
+    use url::Url;
+
+    use super::HttpGateway;
+
+    /// The group the conformance run's client agreed on with `peer` in one
+    /// call, which ends after the key exchange: the client trusts no root
+    /// the peer's certificate chains to.
+    async fn agreed_by_the_run(peer: &KxPeer) -> Option<NamedGroup> {
+        let base =
+            Url::parse(&format!("https://localhost:{}/", peer.address().port())).expect("a base");
+        let gateway =
+            HttpGateway::new(base.clone(), SecretString::from("synthetic")).expect("the client");
+        let answer = gateway.client.get(base).send().await;
+        assert!(
+            answer.is_err(),
+            "the peer's certificate is trusted by no root"
+        );
+        peer.agreed(0).expect("the connection is recorded")
+    }
+
+    #[tokio::test]
+    async fn the_run_client_prefers_x25519mlkem768() {
+        let peer = KxPeer::start(vec![kx_group::X25519, kx_group::X25519MLKEM768])
+            .expect("the peer starts");
+        assert_eq!(
+            Some(NamedGroup::X25519MLKEM768),
+            agreed_by_the_run(&peer).await
+        );
+    }
+
+    #[tokio::test]
+    async fn the_run_client_agrees_on_x25519_with_a_classical_only_peer() {
+        let peer = KxPeer::start(vec![kx_group::X25519]).expect("the peer starts");
+        assert_eq!(Some(NamedGroup::X25519), agreed_by_the_run(&peer).await);
+    }
+}
