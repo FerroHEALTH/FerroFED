@@ -16,7 +16,7 @@ contenttype	SHALL	answered	app/ferrofed-server/tests/it/fhir/list/parameters.rs#
 creation	SHALL	answered	app/ferrofed-server/tests/it/fhir/list/parameters.rs#each_parameter_selects_the_report_it_describes
 date	SHOULD	answered	app/ferrofed-server/tests/it/fhir/list/parameters.rs#each_parameter_selects_the_report_it_describes
 modality	SHOULD	answered	app/ferrofed-server/tests/it/fhir/list/parameters.rs#each_parameter_selects_the_report_it_describes
-patient	SHALL	answered	app/ferrofed-server/tests/it/fhir/list/patient.rs#with_the_store_a_patient_id_lists_its_documents_until_it_expires
+patient	SHALL	answered	app/ferrofed-server/tests/it/e2e/face_ids.rs#with_the_store_a_patient_id_lists_its_documents_until_it_expires
 patient.identifier	SHALL	answered	app/ferrofed-server/tests/it/fhir/list/mod.rs#the_list_names_the_summary_written_on_request_and_each_members_own_document
 period	SHOULD	answered	app/ferrofed-server/tests/it/fhir/list/parameters.rs#each_parameter_selects_the_report_it_describes
 status	SHOULD	answered	app/ferrofed-server/tests/it/fhir/list/parameters.rs#each_parameter_selects_the_report_it_describes

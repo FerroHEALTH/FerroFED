@@ -58,7 +58,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 if [ -n "$untagged" ]; then
-  # TODO(#1480): move the pin to the 1.0.1 tag once upstream cuts it, and drop this branch.
+  # TODO(#1970): move the pin to the 1.0.1 tag once upstream cuts it, and drop this branch.
   commit="$want"
   pinned_as="commit \`$commit\`, which upstream has not tagged, by the owner's exception to the tag-only pin of this specification that docs/VERSIONS.md records"
   version_pin="the untagged commit \`$commit\`"
