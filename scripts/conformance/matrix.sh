@@ -670,20 +670,9 @@ check_pages() {
   [[ "$stale" -eq 0 ]] || exit 1
 }
 
-# The badge colour of k out of n, by the share in quarters.
+# The badge colour of k out of n, by the shared rule (owner decision, 2026-11-25).
 colour_of() {
-  local passed="$1" total="$2" share
-  if [[ "$total" -eq 0 ]]; then
-    echo lightgrey
-    return
-  fi
-  share=$((passed * 100 / total))
-  if [[ "$passed" -eq "$total" ]]; then echo brightgreen
-  elif [[ "$share" -ge 75 ]]; then echo green
-  elif [[ "$share" -ge 50 ]]; then echo yellow
-  elif [[ "$share" -ge 25 ]]; then echo orange
-  else echo red
-  fi
+  badge_count_color "$1" "$2"
 }
 
 # One endpoint badge file: label, message, colour, logo.
