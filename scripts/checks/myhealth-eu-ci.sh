@@ -104,7 +104,7 @@ check_badges() {
     fi
   done
   rm -f -- "$fresh"
-  check_words conformance/myhealth-eu-badge.json conformance/badges/*.json
+  check_words conformance/myhealth-eu-badge.json conformance/myhealth-eu/*.json conformance/badges/*.json
 }
 
 # check_words FILE...: no badge label of FILE says a banned word.

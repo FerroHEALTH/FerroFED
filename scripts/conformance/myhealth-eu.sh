@@ -107,7 +107,7 @@ badge() {
 badge_file() {
   case "$1" in
   self-assessed) echo "$BADGE" ;;
-  *) echo "conformance/badges/myhealth-eu-$1.json" ;;
+  *) echo "conformance/myhealth-eu/$1.json" ;;
   esac
 }
 
@@ -122,7 +122,7 @@ readme_block() {
   echo '<!-- myhealth-eu:begin -->'
   echo "[![MyHealth@EU self-assessed](${ENDPOINT})](${BOOK_PAGE})"
   awk -F'\t' '{ print $1 }' <<< "$BADGES" | while read -r name; do
-    echo "[![MyHealth@EU ${name}, self-tested](https://img.shields.io/endpoint?url=${RAW}badges%2Fmyhealth-eu-${name}.json)](${BOOK_PAGE})"
+    echo "[![MyHealth@EU ${name}, self-tested](https://img.shields.io/endpoint?url=${RAW}myhealth-eu%2F${name}.json)](${BOOK_PAGE})"
   done
   echo '<!-- myhealth-eu:end -->'
 }
@@ -174,7 +174,7 @@ write() {
   # A tree without the pinned packages, such as a guard's fixture, writes the
   # self-assessment alone; scripts/checks/myhealth-eu-ci.sh holds the rest.
   if [[ -f "$SEARCH" && -f "$VALIDATION" ]]; then
-    mkdir -p conformance/badges
+    mkdir -p conformance/myhealth-eu
     while IFS=$'\t' read -r name _; do
       badge "$name" > "$(badge_file "$name")"
     done <<< "$BADGES"

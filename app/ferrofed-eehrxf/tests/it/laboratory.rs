@@ -195,8 +195,8 @@ async fn a_written_laboratory_report_conforms_to_bundle_eu_lab() -> TestResult {
     let text = written(&header)?;
     let breaks = breaks(&text).await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
-    ferrofed_testkit::emit::report(
-        ferrofed_testkit::emit::Report::Laboratory,
+    ferrofed_testkit::emit::document(
+        ferrofed_testkit::emit::Lane::Laboratory,
         "ferrofed-eehrxf-laboratory-report",
         &text,
     )?;

@@ -280,8 +280,8 @@ async fn a_written_discharge_report_conforms_to_bundle_eu_hdr() -> TestResult {
     let report = written()?;
     let breaks = breaks(&report).await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
-    ferrofed_testkit::emit::report(
-        ferrofed_testkit::emit::Report::Discharge,
+    ferrofed_testkit::emit::document(
+        ferrofed_testkit::emit::Lane::Discharge,
         "ferrofed-eehrxf-discharge-report",
         &serde_json::to_string(&report)?,
     )?;

@@ -476,7 +476,7 @@ myhealth_eu() {
     fi
     code=0
     java -Xmx6g -Duser.home="$home" -jar "$jar" \
-      "${docs[@]}" \
+      ${docs[@]+"${docs[@]}"} \
       -version 4.0.1 \
       -tx n/a \
       -no-http-access \
