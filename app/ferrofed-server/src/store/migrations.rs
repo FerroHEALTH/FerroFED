@@ -58,9 +58,9 @@ pub const MIGRATIONS: [&str; 5] = [
   facility_value text NOT NULL,
   expires_at timestamptz NOT NULL
 );",
-    // 5: the identifier each stable patient id of the FHIR face stands for, sealed, kept a
-    // window after the last answer that named it (#1976).
-    "CREATE TABLE ferrofed.patient_id (
+    // 5: the patient identifier each stable id of the FHIR face stands for, sealed, kept a
+    // window after the last answer that named it (#1976, #1977).
+    "CREATE TABLE ferrofed.face_id (
   id text PRIMARY KEY,
   sealed bytea NOT NULL,
   expires_at timestamptz NOT NULL

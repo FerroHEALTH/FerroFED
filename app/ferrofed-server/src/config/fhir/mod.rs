@@ -90,7 +90,7 @@ pub struct Fhir {
     pub id_key_file: Option<PathBuf>,
     /// How long the store keeps the identifier a patient id stands for
     /// after the last answer that named it.
-    pub patient_id_lifetime: units::Duration,
+    pub id_lifetime: units::Duration,
 }
 
 impl Default for Fhir {
@@ -106,7 +106,7 @@ impl Default for Fhir {
             document_url_lifetime: units::Duration::from_mins(5),
             id_key: None,
             id_key_file: None,
-            patient_id_lifetime: units::Duration::from_hours(24),
+            id_lifetime: units::Duration::from_hours(24),
         }
     }
 }
@@ -214,7 +214,7 @@ pub struct FhirSettings {
     /// The keys of the face's stable logical ids (`fhir.id_key`).
     pub ids: Arc<IdKeys>,
     /// How long the store keeps the identifier a patient id stands for.
-    pub patient_id_lifetime: std::time::Duration,
+    pub id_lifetime: std::time::Duration,
     /// The terminology server the receive path and the patient summary
     /// ask, or none (`[eehrxf.terminology]`).
     pub terminology: Terminology,
@@ -473,9 +473,9 @@ pub enum FhirError {
     /// `fhir.document_url_lifetime` is under one second.
     #[error("fhir.document_url_lifetime is at least one second")]
     DocumentUrlLifetime,
-    /// `fhir.patient_id_lifetime` is under one second.
-    #[error("fhir.patient_id_lifetime is at least one second")]
-    PatientIdLifetime,
+    /// `fhir.id_lifetime` is under one second.
+    #[error("fhir.id_lifetime is at least one second")]
+    IdLifetime,
     /// `fhir.id_key` or its file cannot be read.
     #[error(transparent)]
     IdKeySecret(#[from] ferrohealth_secret::file::SecretError),
@@ -623,7 +623,7 @@ impl Fhir {
                 self.document_url_lifetime.as_secs(),
             ),
             ids: Arc::new(ids),
-            patient_id_lifetime: std::time::Duration::from_secs(self.patient_id_lifetime.as_secs()),
+            id_lifetime: std::time::Duration::from_secs(self.id_lifetime.as_secs()),
             terminology: Terminology::none(),
             validating: None,
             terminology_written: None,
@@ -638,10 +638,10 @@ impl Fhir {
     ///
     /// [`FhirError::Missing`] when no key is given, the secret errors of
     /// its file, [`FhirError::IdKey`] when it is not 32 bytes of base64url,
-    /// and [`FhirError::PatientIdLifetime`] for a window under one second.
+    /// and [`FhirError::IdLifetime`] for a window under one second.
     fn ids(&self) -> Result<IdKeys, FhirError> {
-        if self.patient_id_lifetime.as_secs() == 0 {
-            return Err(FhirError::PatientIdLifetime);
+        if self.id_lifetime.as_secs() == 0 {
+            return Err(FhirError::IdLifetime);
         }
         let key = read_secret(
             "fhir.id_key",

@@ -102,13 +102,13 @@ pub(super) fn listed(
             super::binary::mint_written(signer, fhir, caller, (&chosen, written, &held.uid))
                 .ok()?;
         let custodian = organisation(snapshot, &chosen.node);
-        let id = uuid::Uuid::new_v4().to_string();
         let unique = format!("urn:uuid:{object}");
+        let id = fhir.ids.document((endpoint.as_str(), &unique));
         matches.push((
-            format!("urn:uuid:{id}"),
+            format!("{}/DocumentReference/{}", fhir.absolute, id.as_str()),
             Match::Written(Box::new(list::written::entry(
                 written,
-                (&id, &unique),
+                (id.as_str(), &unique),
                 listing,
                 &custodian,
                 &format!("Binary/{token}"),

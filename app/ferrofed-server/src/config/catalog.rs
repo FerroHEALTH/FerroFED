@@ -239,12 +239,7 @@ pub(crate) const ENTRIES: &[Entry] = &[
             file: "fhir.id_key_file",
         },
     },
-    scalar(
-        "fhir.patient_id_lifetime",
-        Section::Fhir,
-        Some("\"24h\""),
-        FHIR,
-    ),
+    scalar("fhir.id_lifetime", Section::Fhir, Some("\"24h\""), FHIR),
 ];
 
 /// The setting whose dotted key is `key`.

@@ -508,7 +508,9 @@ impl Gate {
         {
             return match face {
                 crate::face_path::FacePath::Summary => "Patient/$summary",
-                crate::face_path::FacePath::Documents => "DocumentReference",
+                crate::face_path::FacePath::Documents | crate::face_path::FacePath::Document => {
+                    "DocumentReference"
+                }
                 crate::face_path::FacePath::Patients => "Patient",
                 crate::face_path::FacePath::Binary => "Binary",
                 crate::face_path::FacePath::Bundle => "Bundle",

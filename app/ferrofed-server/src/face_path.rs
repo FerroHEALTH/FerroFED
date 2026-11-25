@@ -27,6 +27,10 @@ pub const BUNDLE: &str = "/Bundle";
 /// `DocumentReference` search-type interaction.
 pub const DOCUMENTS: &str = "/DocumentReference";
 
+/// The path of the read of one listed document under `{fhir-base}`, the
+/// `DocumentReference` read interaction.
+pub const DOCUMENT: &str = "/DocumentReference/{id}";
+
 /// The path of the patient lookup under `{fhir-base}`, the `Patient`
 /// search-type interaction.
 pub const PATIENTS: &str = "/Patient";
@@ -71,6 +75,8 @@ pub enum FacePath {
     Bundle,
     /// `{fhir-base}/DocumentReference`, exactly.
     Documents,
+    /// `{fhir-base}/DocumentReference/{id}`, its id one FHIR R4 `id`.
+    Document,
     /// `{fhir-base}/Binary/{token}`, its token one segment of the compact
     /// JWS alphabet.
     Binary,
@@ -110,6 +116,12 @@ pub fn classify(fhir: &FhirSettings, path: &str) -> Option<FacePath> {
         FacePath::Bundle
     } else if path == fhir.base.join(DOCUMENTS) {
         FacePath::Documents
+    } else if path
+        .strip_prefix(fhir.base.join(DOCUMENTS).as_str())
+        .and_then(|rest| rest.strip_prefix('/'))
+        .is_some_and(is_fhir_id)
+    {
+        FacePath::Document
     } else if is_binary(fhir, path) {
         FacePath::Binary
     } else if let Some(addressed) = addressed(fhir, path) {

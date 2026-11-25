@@ -37,7 +37,7 @@ use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
 use crate::fhir_wire::fhir_json;
-use crate::ids::PatientId;
+use crate::ids::FaceId;
 
 /// `GET {fhir-base}/Patient?identifier=system|value`.
 pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {
@@ -75,10 +75,7 @@ pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {
                         None
                     } else {
                         let store = asked.state.store().map(AsRef::as_ref);
-                        Some(
-                            super::patient_id::recorded(store, admitted.fhir, patient, logged)
-                                .await,
-                        )
+                        Some(super::face_id::recorded(store, admitted.fhir, patient, logged).await)
                     };
                     found(
                         federation,
@@ -152,7 +149,7 @@ fn found(
     federation: &Federation,
     gathered: &Gathered,
     ((system, value), header): ((&str, &str), &PatientHeader),
-    (id, absolute): (Option<PatientId>, &str),
+    (id, absolute): (Option<FaceId>, &str),
 ) -> Response {
     let minted = || uuid::Uuid::new_v4().to_string();
     let mut matches = Vec::new();

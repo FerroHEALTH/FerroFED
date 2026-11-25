@@ -35,11 +35,13 @@ pub fn requirement(face: FacePath, method: &Method) -> Requirement {
         },
         // NOTE: no specification governs this: our own design; the list names the summary
         // and carries the members' own ones, so it takes what a summary takes.
-        FacePath::Documents | FacePath::Binary if *method == Method::GET => Requirement::Scope {
-            family: ResourceFamily::Aql,
-            permission: Permission::Search,
-            resource: Resource::Sections,
-        },
+        FacePath::Documents | FacePath::Document | FacePath::Binary if *method == Method::GET => {
+            Requirement::Scope {
+                family: ResourceFamily::Aql,
+                permission: Permission::Search,
+                resource: Resource::Sections,
+            }
+        }
         // NOTE: SMART on openEHR master08 §Resource Scopes; the lookup finds whether members hold
         // the patient's EHRs, as `GET /ehr?subject_id=` does, so it takes what that read takes.
         FacePath::Patients if *method == Method::GET => Requirement::Scope {
@@ -59,6 +61,7 @@ pub fn requirement(face: FacePath, method: &Method) -> Requirement {
         | FacePath::Summary
         | FacePath::Bundle
         | FacePath::Documents
+        | FacePath::Document
         | FacePath::Binary
         | FacePath::Other => Requirement::Refused,
     }

@@ -9,7 +9,7 @@
 # the rows to the CapabilityStatement and the evidence to the tree, and
 # scripts/conformance/myhealth-eu.sh renders the badge from them.
 parameter	expectation	status	evidence
-_id	-	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+_id	-	answered	app/ferrofed-server/tests/it/fhir/list/document.rs#every_entry_keeps_its_id_and_id_beside_the_patient_selects_it
 bodysite	SHOULD	answered	app/ferrofed-server/tests/it/fhir/list/parameters.rs#each_parameter_selects_the_report_it_describes
 category	SHOULD	answered	app/ferrofed-server/tests/it/fhir/list/parameters.rs#each_parameter_selects_the_report_it_describes
 contenttype	SHALL	answered	app/ferrofed-server/tests/it/fhir/list/parameters.rs#each_parameter_selects_the_report_it_describes
