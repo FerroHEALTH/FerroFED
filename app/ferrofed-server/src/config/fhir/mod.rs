@@ -41,6 +41,8 @@ use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_eehrxf::summary::mappings::{Mappings, MappingsError, Source};
 use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_identity::role::patient::{IdentifierNamespace, PatientRefError};
+use ferrohealth_secret::file::read_secret;
+use ferrohealth_secret::secret::Secret;
 use serde::Deserialize;
 
 pub mod report;
@@ -50,6 +52,7 @@ use crate::config::Config;
 use crate::config::base_path::{BasePath, BasePathError};
 use crate::config::fhir::serve::{ServeEntry, ServeMember, ServeMode};
 use crate::config::public_url::PublicUrl;
+use crate::ids::{IdError, IdKeys};
 
 /// The path segments directly under `{base}` the gateway serves itself,
 /// which `{fhir-base}` may not start with when `{base}` is `/`.
@@ -80,6 +83,14 @@ pub struct Fhir {
     /// How long the URL of a member's document in the
     /// document list stays valid.
     pub document_url_lifetime: units::Duration,
+    /// The secret the face derives its stable logical ids from, 32 bytes
+    /// in base64url.
+    pub id_key: Option<Secret>,
+    /// The file `id_key` is read from.
+    pub id_key_file: Option<PathBuf>,
+    /// How long the store keeps the identifier a patient id stands for
+    /// after the last answer that named it.
+    pub patient_id_lifetime: units::Duration,
 }
 
 impl Default for Fhir {
@@ -93,6 +104,9 @@ impl Default for Fhir {
             serve: Vec::new(),
             report: Vec::new(),
             document_url_lifetime: units::Duration::from_mins(5),
+            id_key: None,
+            id_key_file: None,
+            patient_id_lifetime: units::Duration::from_hours(24),
         }
     }
 }
@@ -197,6 +211,10 @@ pub struct FhirSettings {
     /// How long the URL of a member's document in the document list stays
     /// valid.
     pub document_url_lifetime: std::time::Duration,
+    /// The keys of the face's stable logical ids (`fhir.id_key`).
+    pub ids: Arc<IdKeys>,
+    /// How long the store keeps the identifier a patient id stands for.
+    pub patient_id_lifetime: std::time::Duration,
     /// The terminology server the receive path and the patient summary
     /// ask, or none (`[eehrxf.terminology]`).
     pub terminology: Terminology,
@@ -455,6 +473,15 @@ pub enum FhirError {
     /// `fhir.document_url_lifetime` is under one second.
     #[error("fhir.document_url_lifetime is at least one second")]
     DocumentUrlLifetime,
+    /// `fhir.patient_id_lifetime` is under one second.
+    #[error("fhir.patient_id_lifetime is at least one second")]
+    PatientIdLifetime,
+    /// `fhir.id_key` or its file cannot be read.
+    #[error(transparent)]
+    IdKeySecret(#[from] ferrohealth_secret::file::SecretError),
+    /// `fhir.id_key` is not 32 bytes of base64url.
+    #[error("fhir.id_key is refused")]
+    IdKey(#[source] IdError),
     /// A route a binding serves lies on the face's base, or the base on it.
     #[error("fhir.base and {key} name overlapping routes; give each a path of its own")]
     Clash {
@@ -575,6 +602,7 @@ impl Fhir {
         if self.document_url_lifetime.as_secs() == 0 {
             return Err(FhirError::DocumentUrlLifetime);
         }
+        let ids = self.ids()?;
         Ok(FhirSettings {
             base,
             absolute: absolute.as_str().trim_end_matches('/').to_owned(),
@@ -594,11 +622,34 @@ impl Fhir {
             document_url_lifetime: std::time::Duration::from_secs(
                 self.document_url_lifetime.as_secs(),
             ),
+            ids: Arc::new(ids),
+            patient_id_lifetime: std::time::Duration::from_secs(self.patient_id_lifetime.as_secs()),
             terminology: Terminology::none(),
             validating: None,
             terminology_written: None,
             written: self.clone(),
         })
+    }
+
+    /// Derives the keys of the face's stable ids from `fhir.id_key`, and
+    /// checks the window their record is kept.
+    ///
+    /// # Errors
+    ///
+    /// [`FhirError::Missing`] when no key is given, the secret errors of
+    /// its file, [`FhirError::IdKey`] when it is not 32 bytes of base64url,
+    /// and [`FhirError::PatientIdLifetime`] for a window under one second.
+    fn ids(&self) -> Result<IdKeys, FhirError> {
+        if self.patient_id_lifetime.as_secs() == 0 {
+            return Err(FhirError::PatientIdLifetime);
+        }
+        let key = read_secret(
+            "fhir.id_key",
+            self.id_key.clone(),
+            self.id_key_file.as_deref(),
+        )?
+        .ok_or(FhirError::Missing { key: "fhir.id_key" })?;
+        IdKeys::from_base64url(key.expose()).map_err(FhirError::IdKey)
     }
 
     /// Compiles the `[[fhir.receive]]` entries.

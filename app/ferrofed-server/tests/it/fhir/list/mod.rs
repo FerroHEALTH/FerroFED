@@ -43,6 +43,7 @@ mod own_imaging;
 mod own_laboratory;
 mod own_member;
 mod parameters;
+pub(crate) mod patient;
 mod resolution;
 
 /// The identifier system the members' `ehr_id`s are written in, in the
@@ -50,10 +51,10 @@ mod resolution;
 pub(super) const EHR_SYSTEM: &str = "urn:oid:2.999.4.1";
 
 /// Node A's own document, whose whitespace no serialiser would keep.
-pub(super) const DOCUMENT_A: &[u8] = b"{ \"resourceType\" :\"Bundle\",\n \"identifier\": {\"system\": \"urn:ietf:rfc:3986\", \"value\": \"urn:uuid:5a1e0000-0000-4000-8000-00000000000a\"},\n \"type\": \"document\" , \"entry\":[ ] }\n";
+pub(crate) const DOCUMENT_A: &[u8] = b"{ \"resourceType\" :\"Bundle\",\n \"identifier\": {\"system\": \"urn:ietf:rfc:3986\", \"value\": \"urn:uuid:5a1e0000-0000-4000-8000-00000000000a\"},\n \"type\": \"document\" , \"entry\":[ ] }\n";
 
 /// Node B's own document.
-pub(super) const DOCUMENT_B: &[u8] = b"{\"resourceType\":\"Bundle\",\"identifier\":{\"system\":\"urn:oid:2.999.4.2\",\"value\":\"synthetic-doc-b\"},\"type\":\"document\",\"entry\":[]}";
+pub(crate) const DOCUMENT_B: &[u8] = b"{\"resourceType\":\"Bundle\",\"identifier\":{\"system\":\"urn:oid:2.999.4.2\",\"value\":\"synthetic-doc-b\"},\"type\":\"document\",\"entry\":[]}";
 
 /// The LOINC token of the patient summary document type, percent-encoded.
 const SUMMARY_TYPE: &str = "http%3A%2F%2Floinc.org%7C60591-5";
@@ -84,20 +85,20 @@ async fn own_endpoint(response: ResponseTemplate) -> Server {
 /// Both members serving the patient summary themselves: each Query API
 /// endpoint, which must stay unasked, and each own endpoint behind a
 /// capturing proxy.
-pub(super) struct Members {
+pub(crate) struct Members {
     a: Server,
     b: Server,
     pub(super) own_a: Server,
     pub(super) own_b: Server,
-    pub(super) proxy_a: CapturingProxy,
-    pub(super) proxy_b: CapturingProxy,
+    pub(crate) proxy_a: CapturingProxy,
+    pub(crate) proxy_b: CapturingProxy,
     pdq: Server,
 }
 
 impl Members {
     /// The members, node A's own endpoint answering with `a` and node B's
     /// with `b`.
-    pub(super) async fn start(
+    pub(crate) async fn start(
         a: ResponseTemplate,
         b: ResponseTemplate,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -117,7 +118,7 @@ impl Members {
 
     /// The gateway over the members, with the `[federation]` keys
     /// `federation` and the tables `tables`.
-    pub(super) fn gateway(
+    pub(crate) fn gateway(
         &self,
         dir: &std::path::Path,
         tables: (&str, &str),
@@ -150,7 +151,9 @@ impl Members {
             native_endpoint("node-a-eps", ("node-a", "org-a"), self.proxy_a.origin()),
             native_endpoint("node-b-eps", ("node-b", "org-b"), self.proxy_b.origin())
         );
-        let table = format!("[fhir]\nbase = \"{FHIR}\"\n");
+        let table = format!(
+            "[fhir]\nbase = \"{FHIR}\"\nid_key = \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\"\n"
+        );
         let text = text_registered(
             dir,
             (
@@ -177,13 +180,13 @@ impl Members {
 }
 
 /// A served document, as `document` names it.
-pub(super) fn fhir_document(document: &[u8]) -> ResponseTemplate {
+pub(crate) fn fhir_document(document: &[u8]) -> ResponseTemplate {
     ResponseTemplate::new(200).set_body_raw(document.to_vec(), "application/fhir+json")
 }
 
 /// `GET {fhir-base}/DocumentReference` for the test patient, with the query
 /// `extra` added.
-pub(super) fn list(extra: &str) -> Result<Request<Body>, http::Error> {
+pub(crate) fn list(extra: &str) -> Result<Request<Body>, http::Error> {
     Request::get(format!(
         "{FHIR}/DocumentReference?patient.identifier={}%7C{PATIENT}{extra}",
         NAMESPACE.replace(':', "%3A")
@@ -192,7 +195,7 @@ pub(super) fn list(extra: &str) -> Result<Request<Body>, http::Error> {
 }
 
 /// The resources of the entries of `bundle` whose search mode is `mode`.
-pub(super) fn entries<'a>(bundle: &'a Value, mode: &str) -> Vec<&'a Value> {
+pub(crate) fn entries<'a>(bundle: &'a Value, mode: &str) -> Vec<&'a Value> {
     bundle["entry"]
         .as_array()
         .into_iter()
@@ -504,8 +507,8 @@ async fn a_search_naming_no_patient_or_another_parameter_is_refused() -> TestRes
     let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
     let dir = tempfile::tempdir()?;
     let app = members.gateway(dir.path(), ("", ""))?;
-    // NOTE: MyHealth@EU NCPeH API 9.1.1-ci CapabilityStatementMyHealthEu; _id and patient are
-    // refused (conformance/myhealth-eu-search.tsv), and so is a parameter the API does not name.
+    // NOTE: MyHealth@EU NCPeH API 9.1.1-ci CapabilityStatementMyHealthEu; _id is refused, patient
+    // without a store, and a parameter the API does not name (conformance/myhealth-eu-search.tsv).
     let refused = [
         "_id=synthetic",
         "patient=Patient%2Fsynthetic",

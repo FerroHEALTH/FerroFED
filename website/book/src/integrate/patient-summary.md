@@ -45,10 +45,27 @@ any subject, through the configured identity binding (Federation Tier
 (§5.4.1, N33). When the patient resolved at a member, the answer is a
 `searchset` with one entry: a `Patient` that carries the identifier it was
 looked up by and the names, birth date, gender, addresses and telecoms the
-Supplier holds, each as the Supplier gives it, under a `urn:uuid:` full URL
-minted for the answer. A patient with no name is still answered; only a
-summary requires one. Use the identifier, not the minted id, in the requests
-that follow: the face keeps no `Patient` resource to read by id.
+Supplier holds, each as the Supplier gives it. A patient with no name is
+still answered; only a summary requires one.
+
+The `Patient` has a stable id, the same in every answer, under the full URL
+`{fhir-base}/Patient/{id}`. The gateway derives it from the patient's
+identifier alone: the HMAC-SHA-256 of `system|value` under a key derived
+with HKDF-SHA-256 from `fhir.id_key`, in lowercase base32, 52 characters.
+The identifier cannot be read back from the id. With `[store]` set, each
+answer that names the patient also records the identifier the id stands
+for in FerroFED's store, sealed with AES-256-GCM under a second key derived
+from `fhir.id_key`, for `fhir.patient_id_lifetime` (`24h` unless set) after
+the last answer. A document search can then name the patient by this id
+([The document list](#the-document-list)). The derivation and the window
+are FerroFED's own design; no specification governs them. The face keeps no
+`Patient` resource to read by id.
+
+`fhir.id_key`, or `fhir.id_key_file`, is 32 random bytes in base64url, for
+example the output of `openssl rand 32 | basenc --base64url`. The face does
+not start without it. Rotating it changes every patient id the face gives,
+and the ids recorded under the old key no longer resolve, so a client
+repeats the lookup.
 
 An identifier the Supplier does not know, a patient no member holds and a
 patient every member restricts answer alike, with the empty `searchset`, so
@@ -245,8 +262,17 @@ GET {fhir-base}/DocumentReference?patient.identifier=urn:oid:2.999.1|SYNTHETIC-1
 Authorization: Bearer <token>
 ```
 
-- `patient.identifier` is required, once, as `system|value`, one patient
-  alone. The patient is resolved as for a summary (§5.2).
+- `patient.identifier`, once, as `system|value`, names one patient. The
+  patient is resolved as for a summary (§5.2).
+- `patient` names the patient instead, by the id the lookup answered, as
+  `Patient/{id}`, `{id}` or `{fhir-base}/Patient/{id}`. The gateway reads
+  the identifier the store holds for the id and searches by it, so the
+  answer is the one `patient.identifier` gives. An id the store does not
+  hold, never recorded or past `fhir.patient_id_lifetime`, matches nothing:
+  the answer is the empty `searchset` with an `outcome` entry, `not-found`,
+  asking you to repeat the lookup (FHIR R4 search §3.1.1.7), and no member
+  is asked. Without `[store]` a `patient` search is a `400`, and `metadata`
+  does not declare the parameter. Name the patient by one of the two, once.
 - `type`, when sent, is a token: `60591-5`, `http://loinc.org|60591-5` or
   `http://loinc.org|`. A `type` that admits no document type the list
   serves (the patient summary, and the laboratory, discharge and imaging
@@ -271,7 +297,8 @@ Authorization: Bearer <token>
 
 The answer is a `Bundle` of type `searchset`, each entry a `DocumentReference`
 that claims the `EehrxfMhdDocumentReference` profile, typed LOINC `60591-5`
-in the `Patient-Summaries` category, its `subject` the identifier you sent:
+in the `Patient-Summaries` category, its `subject` the identifier you sent
+and the reference `Patient/{id}` to the patient's stable id:
 
 - The summary the gateway writes on request, its custodian the operator of
   `[fhir.operator]`. The gateway does not write it to list it: its
@@ -590,6 +617,7 @@ public_url = "https://gateway.example.org"   # the face names its entries under 
 
 [fhir]
 base = "/fhir"                               # {fhir-base}, never {base} or a path under {base}/v1
+id_key_file = "/run/secrets/fhir-id-key"     # 32 random bytes in base64url, the key of the stable ids
 
 [fhir.operator]
 name = "Example Health Network"              # the operator, an author of every summary

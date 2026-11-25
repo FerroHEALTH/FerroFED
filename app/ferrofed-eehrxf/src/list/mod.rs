@@ -90,8 +90,7 @@ const JSON_FORMATS: [&str; 3] = ["json", "application/json", FHIR_JSON];
 /// patient summary.
 #[derive(Clone, PartialEq, Eq)]
 pub struct ListRequest {
-    system: String,
-    value: String,
+    subject: Subject,
     summaries: bool,
     laboratory: bool,
     discharge: Vec<&'static str>,
@@ -111,15 +110,41 @@ impl std::fmt::Debug for ListRequest {
     }
 }
 
+/// How a document search names its patient.
+#[derive(Clone, PartialEq, Eq)]
+pub enum Subject {
+    /// `patient.identifier`: by an identifier with its system.
+    Identifier {
+        /// The identifier system.
+        system: String,
+        /// The identifier value.
+        value: String,
+    },
+    /// `patient`: by the logical id of a `Patient` the face answered, as
+    /// the reference names it, `[id]`, `Patient/[id]` or an absolute URL
+    /// (FHIR R4 search §3.1.1.4.11).
+    Patient(String),
+}
+
+impl std::fmt::Debug for Subject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Identifier { .. } => f.write_str("Identifier"),
+            Self::Patient(_) => f.write_str("Patient"),
+        }
+    }
+}
+
 /// Why a document search is refused, naming no value it carries.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum ListRefusal {
-    /// The search names no `patient.identifier`.
-    #[error("the search names the patient by patient.identifier=system|value")]
+    /// The search names neither `patient.identifier` nor `patient`.
+    #[error(
+        "the search names the patient by patient.identifier=system|value or by patient=Patient/id"
+    )]
     NoPatient,
-    /// `patient.identifier` is given more than once, or names several
-    /// patients.
+    /// The patient is named more than once, or several patients are.
     #[error("the search names one patient")]
     Several,
     /// The identifier has no system or no value.
@@ -127,7 +152,7 @@ pub enum ListRefusal {
     Unqualified,
     /// The search carries a parameter or a modifier the face does not take.
     #[error(
-        "the search takes patient.identifier, type, category, contenttype, status, modality, \
+        "the search takes patient.identifier, patient, type, category, contenttype, status, modality, \
          bodysite, creation, date, period and _format alone, with no modifier"
     )]
     Parameter,
@@ -140,16 +165,10 @@ pub enum ListRefusal {
 }
 
 impl ListRequest {
-    /// Returns the identifier system.
+    /// Returns how the search names its patient.
     #[must_use]
-    pub fn system(&self) -> &str {
-        &self.system
-    }
-
-    /// Returns the identifier value.
-    #[must_use]
-    pub fn value(&self) -> &str {
-        &self.value
+    pub fn subject(&self) -> &Subject {
+        &self.subject
     }
 
     /// Returns whether every `type` the search gives admits a patient
@@ -198,7 +217,7 @@ impl ListRequest {
     /// The [`ListRefusal`] the search is answered with.
     pub fn from_query(query: Option<&str>) -> Result<Self, ListRefusal> {
         let pairs = url::form_urlencoded::parse(query.unwrap_or_default().as_bytes());
-        let mut identifier = None;
+        let mut subject = None;
         let mut summaries = true;
         let mut laboratory = true;
         let mut discharge = DISCHARGE_REPORTS.to_vec();
@@ -206,10 +225,18 @@ impl ListRequest {
         let mut criteria = Criteria::default();
         for (name, value) in pairs {
             match &*name {
-                "patient.identifier" => {
-                    // NOTE: FHIR R4 search, several values; a comma separates the values a
-                    // parameter ORs, so an identifier holding one names several patients.
-                    if value.contains(',') || identifier.replace(value.into_owned()).is_some() {
+                // NOTE: FHIR R4 search, several values; a comma separates the values a parameter
+                // ORs, so a value holding one names several patients.
+                "patient.identifier" | "patient" => {
+                    if value.contains(',') {
+                        return Err(ListRefusal::Several);
+                    }
+                    let named = if name == "patient" {
+                        Subject::Patient(value.into_owned())
+                    } else {
+                        identified(&value)?
+                    };
+                    if subject.replace(named).is_some() {
                         return Err(ListRefusal::Several);
                     }
                 }
@@ -236,14 +263,8 @@ impl ListRequest {
                 }
             }
         }
-        let identifier = identifier.ok_or(ListRefusal::NoPatient)?;
-        let (system, value) = identifier.split_once('|').ok_or(ListRefusal::Unqualified)?;
-        if system.is_empty() || value.is_empty() {
-            return Err(ListRefusal::Unqualified);
-        }
         Ok(Self {
-            system: system.to_owned(),
-            value: value.to_owned(),
+            subject: subject.ok_or(ListRefusal::NoPatient)?,
             summaries,
             laboratory,
             discharge,
@@ -251,6 +272,18 @@ impl ListRequest {
             criteria,
         })
     }
+}
+
+/// The patient `identifier`, a `patient.identifier` value, names.
+fn identified(identifier: &str) -> Result<Subject, ListRefusal> {
+    let (system, value) = identifier.split_once('|').ok_or(ListRefusal::Unqualified)?;
+    if system.is_empty() || value.is_empty() {
+        return Err(ListRefusal::Unqualified);
+    }
+    Ok(Subject::Identifier {
+        system: system.to_owned(),
+        value: value.to_owned(),
+    })
 }
 
 /// Whether the token `token` matches the document type `kind`, a LOINC
@@ -271,6 +304,8 @@ pub struct Listing<'a> {
     pub system: &'a str,
     /// The patient's identifier value.
     pub value: &'a str,
+    /// The patient's logical id on the face.
+    pub patient: &'a str,
     /// When the list is written.
     pub date: &'a str,
 }
@@ -415,6 +450,7 @@ pub(super) fn entry(
             ..CodeableConcept::default()
         }],
         subject: Some(Reference {
+            reference: Some(format!("Patient/{}", listing.patient).into()),
             r#type: Some("Patient".into()),
             identifier: Some(Box::new(Identifier {
                 system: Some(listing.system.into()),
@@ -454,6 +490,26 @@ fn organisation(organisation: &Organisation) -> Reference {
                 .into(),
         ),
         ..Reference::default()
+    }
+}
+
+/// Returns the `OperationOutcome` that says the `patient` a search named
+/// is no id the gateway holds a record of, so the caller repeats the
+/// `Patient` lookup.
+#[must_use]
+pub fn unknown_patient() -> OperationOutcome {
+    OperationOutcome {
+        issue: vec![OperationOutcomeIssue {
+            severity: "warning".into(),
+            code: "not-found".into(),
+            diagnostics: Some(
+                "the patient id is unknown or has expired; repeat the Patient lookup and search \
+                 with the id it answers"
+                    .into(),
+            ),
+            ..OperationOutcomeIssue::default()
+        }],
+        ..OperationOutcome::default()
     }
 }
 
@@ -636,7 +692,9 @@ pub fn unread(endpoint: &str, documents: &str, reason: &str) -> OperationOutcome
 
 #[cfg(test)]
 mod tests {
-    use super::{ListRefusal, ListRequest, Match, attachment_urls, readdressed, searchset};
+    use super::{
+        ListRefusal, ListRequest, Match, Subject, attachment_urls, readdressed, searchset,
+    };
     use crate::list::criteria::CriterionError;
     use fhir_search::date::DateError;
     use fhir_search::token::TokenError;
@@ -652,10 +710,23 @@ mod tests {
             "patient.identifier=urn%3Aoid%3A2.999.1%7Csynthetic-1&type=x%7Cy,60591-5&_format=json",
         ] {
             let read = ListRequest::from_query(Some(query)).unwrap();
-            assert_eq!(read.system(), "urn:oid:2.999.1", "{query}");
-            assert_eq!(read.value(), "synthetic-1", "{query}");
+            assert_eq!(
+                read.subject(),
+                &Subject::Identifier {
+                    system: "urn:oid:2.999.1".to_owned(),
+                    value: "synthetic-1".to_owned()
+                },
+                "{query}"
+            );
             assert!(read.admits_summaries(), "{query}");
         }
+    }
+
+    #[test]
+    fn a_patient_reference_is_read_as_sent() {
+        let read = ListRequest::from_query(Some("patient=Patient%2Fabc&type=60591-5")).unwrap();
+        assert_eq!(read.subject(), &Subject::Patient("Patient/abc".to_owned()));
+        assert!(!format!("{read:?}").contains("abc"));
     }
 
     #[test]
@@ -712,7 +783,12 @@ mod tests {
                 "patient.identifier=a%7Cb&type:text=summary",
                 ListRefusal::Parameter,
             ),
-            ("patient=Patient%2F1", ListRefusal::Parameter),
+            ("patient:Patient=1", ListRefusal::Parameter),
+            ("patient=Patient%2F1,Patient%2F2", ListRefusal::Several),
+            (
+                "patient=Patient%2F1&patient.identifier=a%7Cb",
+                ListRefusal::Several,
+            ),
             ("patient.identifier=a%7Cb&_format=xml", ListRefusal::Format),
         ] {
             assert_eq!(

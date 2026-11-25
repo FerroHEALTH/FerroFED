@@ -44,6 +44,7 @@ You connect a contact point in four steps:
 ```toml
 [fhir]
 base = "/fhir"
+id_key_file = "/run/secrets/fhir-id-key"
 
 [[fhir.serve]]
 category = "Electronic-Prescriptions"

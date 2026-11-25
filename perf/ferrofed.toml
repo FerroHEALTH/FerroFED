@@ -93,6 +93,8 @@ window = "1s"
 # template, so the summary counts them in its narrative.
 [fhir]
 base = "/fhir"
+# A synthetic key: the stable ids of the face are derived from it (#1976).
+id_key = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
 
 [[fhir.mapping]]
 section = "allergies-and-intolerances"

@@ -354,6 +354,9 @@ serde-saphyr = { version = "2.0.0", default-features = false, features = ["deser
 # for the token-exchange cache and a DPoP proof's `ath` with its SHA-256
 # (#439). Verified against crates.io on 2026-10-04.
 aws-lc-rs = { version = "1.18.1", default-features = false, features = ["aws-lc-sys"] }
+# RFC 4648 base32 and base64url, for the face's stable logical ids and the
+# `fhir.id_key` secret they are derived from (#1976).
+data-encoding = "2.11.1"
 # The PEM reader the testkit writes each synthetic key with, and the engine
 # reads the certificate of a mutual-TLS grant's client identity with (#492).
 # It stays on 3 while jsonwebtoken requires `pem ^3`, so the binary carries

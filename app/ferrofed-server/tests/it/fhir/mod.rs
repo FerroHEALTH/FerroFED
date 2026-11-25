@@ -23,7 +23,7 @@ mod config;
 mod contact_point_trc;
 mod header;
 mod independence;
-mod list;
+pub(crate) mod list;
 mod lookup;
 mod native;
 mod patient_grant;
@@ -112,7 +112,7 @@ fn fhir_tables_with(pdq: &str, keys: &str, tables: &str) -> String {
     let path = |value: &Path| toml::Value::String(value.display().to_string());
     let [model, context] = eps::mapping_files();
     format!(
-        "\n[fhir]\nbase = \"{FHIR}\"\n{keys}\n\n[fhir.operator]\nname = \"Synthetic Operator\"\n\
+        "\n[fhir]\nbase = \"{FHIR}\"\nid_key = \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\"\n{keys}\n\n[fhir.operator]\nname = \"Synthetic Operator\"\n\
          identifier_system = \"urn:oid:2.999.9\"\nidentifier_value = \"operator-1\"\n\n\
          [[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\ntemplate = {}\n\
          files = [{}, {}]\ncontext = \"{}\"\n\n\
