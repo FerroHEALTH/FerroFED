@@ -38,7 +38,11 @@
 [![EHDS](https://img.shields.io/badge/EHDS-regulatory%20status-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](https://ferrofed.eu/docs/evaluate/regulatory-status.html)
 [![CRA](https://img.shields.io/badge/CRA-risk%20assessment-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](https://ferrofed.eu/docs/evaluate/cra-risk-assessment.html)
 <!-- myhealth-eu:begin -->
-[![MyHealth@EU self-assessment](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu-badge.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU self-assessed](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu-badge.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU search, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fsearch.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU core, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fcore.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU laboratory, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Flaboratory.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU discharge, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fdischarge.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 <!-- myhealth-eu:end -->
 
 </div>
