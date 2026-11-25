@@ -461,6 +461,7 @@ and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 | Item | Pin | Repeated in |
 |---|---|---|
 | `fhir-types` | 0.1.131 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhir-search` | 0.1.131 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 The `pixm` feature takes `r4` and `terminology`: that root set holds every
 type ITI-83 reads (`Parameters`, `OperationOutcome`, `Identifier`, `Reference`,
@@ -469,6 +470,8 @@ because ITI-78 answers with `Patient` resources, which only `resources`
 carries (#119); the mCSD directory (#86) reads `Organization` and `Endpoint`
 from the same set. 0.1.127 is the release the FHIRconnect engine builds on
 (#684), so the build carries one `fhir-types`.
+The document list reads the NCPeH API search values with FerroBRIDGE's
+`fhir-search`, the search grammar published on the `fhir-types` line (#1975).
 
 ## The interoperability component and its engine (crates.io)
 

@@ -236,7 +236,9 @@ A `DocumentReference` search names every patient summary that exists for a
 patient: the one the gateway writes on request, and the one each member in
 the `native` mode serves itself. It is the search of the HL7 Europe EU
 Health Data API Document Access Provider, with its `patient.identifier` and
-`type` parameters:
+`type` parameters, and the further parameters of the MyHealth@EU national
+contact point API (`myhealth.eu.fhir.ncp-api` 9.1.1-ci,
+`CapabilityStatementMyHealthEu`):
 
 ```http
 GET {fhir-base}/DocumentReference?patient.identifier=urn:oid:2.999.1|SYNTHETIC-1&type=http://loinc.org|60591-5
@@ -250,6 +252,20 @@ Authorization: Bearer <token>
   serves (the patient summary, and the laboratory, discharge and imaging
   documents when the list names them) matches nothing: the answer is an empty
   `searchset`, and nothing is resolved or sent.
+- `category`, `contenttype`, `status`, `modality` and `bodysite`, when
+  sent, are tokens in any of the four FHIR R4 token forms, and `creation`,
+  `date` and `period` are dates with an optional prefix (`eq`, `ne`, `gt`,
+  `lt`, `ge`, `le`, `sa`, `eb` or `ap`). `contenttype` reads
+  `content.attachment.contentType` in the system `urn:ietf:bcp:13`, ignoring
+  case; `modality` and `bodysite` read the R5 cross-version extensions
+  `DocumentReference.modality` and `DocumentReference.bodySite` (its
+  `concept`); `period` reads `context.period`. A date without an offset is
+  read in UTC. The gateway evaluates each one on every entry it lists,
+  its own and the ones it passes through from a member, after it has them:
+  repetitions of a parameter must all match, the comma-separated values of
+  one are alternatives, and an entry without the element a parameter reads
+  does not match it. A value outside its grammar is a `400` naming the
+  parameter and no value.
 - `_format`, when sent, is `json`, `application/json` or
   `application/fhir+json`. Any other parameter or modifier is a `400`.
 
@@ -307,8 +323,8 @@ reports and imaging documents a member serves itself
 [Imaging reports over FHIR](imaging-reports.md)).
 
 `metadata` declares the search: the `DocumentReference` resource with the
-`search-type` interaction, its supported profile and the two parameters,
-and the `Binary` read.
+`search-type` interaction, its supported profile and each parameter above
+with its definition, and the `Binary` read.
 
 ### Reading a member's document
 

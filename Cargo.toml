@@ -266,6 +266,9 @@ base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # adds `resources` for the ITI-104 Patient (#47). 0.1.127 is the release
 # fhirconnect builds on, so the build carries one fhir-types (#684).
 fhir-types = { version = "0.1.131", default-features = false }
+# The FHIR R4 search value grammar the document list reads the NCPeH API
+# DocumentReference parameters with (#1975), on the fhir-types line.
+fhir-search = "0.1.131"
 # The FHIRconnect 1.0.0 mapping engine the European interoperability component
 # runs in process (#684), and the template index and mapping-file loader it
 # takes, both from FerroBRIDGE on the workspace openehr-* line, so the build
