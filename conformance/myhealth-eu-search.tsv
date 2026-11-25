@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+#
+# The DocumentReference search parameters of the MyHealth@EU NCPeH API
+# (myhealth.eu.fhir.ncp-api 9.1.1-ci, CapabilityStatementMyHealthEu), one row
+# each with its expectation, whether the gateway's document list answers it or
+# refuses it, and the test that shows it (#1952). FerroFED's own reading and
+# self-test, no MyHealth@EU test result. scripts/checks/myhealth-eu.sh holds
+# the rows to the CapabilityStatement and the evidence to the tree, and
+# scripts/conformance/myhealth-eu.sh renders the badge from them.
+parameter	expectation	status	evidence
+_id	-	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+bodysite	SHOULD	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+category	SHOULD	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+contenttype	SHALL	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+creation	SHALL	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+date	SHOULD	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+modality	SHOULD	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+patient	SHALL	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+patient.identifier	SHALL	answered	app/ferrofed-server/tests/it/fhir/list/mod.rs#the_list_names_the_summary_written_on_request_and_each_members_own_document
+period	SHOULD	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+status	SHOULD	refused	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_search_naming_no_patient_or_another_parameter_is_refused
+type	SHOULD	answered	app/ferrofed-server/tests/it/fhir/list/mod.rs#a_type_other_than_the_patient_summary_matches_nothing_and_nothing_is_sent

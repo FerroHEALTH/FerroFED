@@ -503,11 +503,28 @@ async fn a_search_naming_no_patient_or_another_parameter_is_refused() -> TestRes
     let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
     let dir = tempfile::tempdir()?;
     let app = members.gateway(dir.path(), ("", ""))?;
+    // NOTE: MyHealth@EU NCPeH API 9.1.1-ci CapabilityStatementMyHealthEu; every DocumentReference
+    // search parameter but patient.identifier and type is refused (conformance/myhealth-eu-search.tsv).
+    let refused = [
+        "_id=synthetic",
+        "bodysite=synthetic",
+        "category=synthetic",
+        "contenttype=application%2Ffhir%2Bjson",
+        "creation=2026-01-01",
+        "date=2026-01-01",
+        "modality=synthetic",
+        "patient=Patient%2Fsynthetic",
+        "period=2026-01-01",
+        "status=current",
+    ]
+    .map(|parameter| format!("patient.identifier=urn%3Aoid%3A2.999.1%7C{PATIENT}&{parameter}"));
     for query in [
         format!("type={SUMMARY_TYPE}"),
         format!("patient.identifier={PATIENT}"),
-        format!("patient.identifier=urn%3Aoid%3A2.999.1%7C{PATIENT}&status=current"),
-    ] {
+    ]
+    .into_iter()
+    .chain(refused)
+    {
         let request =
             Request::get(format!("{FHIR}/DocumentReference?{query}")).body(Body::empty())?;
         let (status, text) = call(app.clone(), request).await?;

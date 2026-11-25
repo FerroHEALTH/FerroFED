@@ -8,27 +8,26 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `e59077df1d1e1a7ab9f0be1f01aa5437840e6915d645c2fa1de6c9bbecc05a15`
-- Fetched: 2026-10-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+  the pins): `89bd71d64ad45aa1b7dad366868565027217ec8d5758b5f7792e1d9f121ceb65`
+- Fetched: 2026-11-25, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 1 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 1 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `f09c9baa2bc0a8488e20c9ee309af84fe332481109063a9d2d2d45335d3437ec`
+  `PROVENANCE.md` excluded): `8e16bc3c63e2193048efacac4365369ac18551d7876cb1f79c7b6c6cd694974f`
 - Read by: #1290 (the re-check of decisions A51, A60 to A72, A81 and A102 against
   the MyHealth@EU guides), and the testkit
 
-The MyHealth@EU Hospital Discharge Report service on FHIR (Wave 9),
-derived from the HL7 Europe Hospital Discharge Report, canonical
+The MyHealth@EU Hospital Discharge Report service on FHIR, derived from the HL7 Europe Hospital Discharge Report, canonical
 `http://fhir.ehdsi.eu/hdr`, committed under CC0-1.0.
 
 ## Artefacts
 
-### `myhealth.eu.fhir.hdr-9.1.1.tgz` (committed)
+### `myhealth.eu.fhir.hdr-9.2.0.tgz` (committed)
 
-- Source: <https://fhir.ehdsi.eu/hdr/package.tgz>
-- Version: 9.1.1, draft build (FHIR 4.0.1, 2026-05-05)
-- sha256: `38eb62092c18aa269c72cdceac01d706b293a5e5389186c682c50467bf84b38c`
+- Source: <https://build-fhir.ehdsi.eu/hdr/package.tgz>
+- Version: 9.2.0, CI build (FHIR 4.0.1, 2026-11-24)
+- sha256: `f3b649348d82c94821ef201ab9513517cfc143aa30cf623093f8772f21b93f6b`
 - Licence: CC0-1.0: the license of the package manifest and of the ImplementationGuide resource
-- Note: The package the MyHealth@EU site serves for its current build (package.json says notForPublication: true); not on packages.fhir.org, so a new build fails the pin loudly.
+- Note: The CI build https://build-fhir.ehdsi.eu/ serves, the line the family validates against by owner ruling of 2026-11-24 (#1951); not on packages.fhir.org, so a new build fails the pin loudly and scripts/checks/pin-freshness.sh reports it.

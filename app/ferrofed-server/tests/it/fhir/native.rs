@@ -136,7 +136,11 @@ async fn a_native_member_is_asked_by_its_ehr_id_alone_and_left_out_of_the_mapped
     assert_eq!(StatusCode::OK, status, "{text}");
     let findings = eps::profile::check(&text)?;
     assert!(findings.is_empty(), "{findings:#?}");
-    ferrofed_testkit::emit::document("ferrofed-server-summary-beside-native-member", &text)?;
+    ferrofed_testkit::emit::document(
+        ferrofed_testkit::emit::Lane::Eehrxf,
+        "ferrofed-server-summary-beside-native-member",
+        &text,
+    )?;
     let document: Value = serde_json::from_str(&text)?;
     let allergies = section(&document, ALLERGIES_SECTION).ok_or("the allergies section")?;
     assert_eq!(

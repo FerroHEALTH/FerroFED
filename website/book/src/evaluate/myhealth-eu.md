@@ -11,6 +11,26 @@ national contact points in operation, and FerroFED is not a national contact
 point. The badge in the README counts the rows below and says
 self-assessed; it never says compliant, certified or operation ready.
 
+## The badges on the MyHealth@EU CI line
+
+Beside the self-assessment, the README carries one badge per MyHealth@EU
+guide FerroFED is tested against, on the guides' CI line at
+`build-fhir.ehdsi.eu`. Each label names the guide at the exact version
+FerroFED pins, and each says self-tested: the counts are FerroFED's own test
+runs, never a MyHealth@EU result, and no badge says certified, compliant or
+conformant (`scripts/checks/myhealth-eu-ci.sh` refuses one that does).
+
+| Badge | What it counts | Where it comes from |
+|---|---|---|
+| MyHealth@EU NCP API 9.1.1-ci DocumentReference search | the `DocumentReference` search parameters of the NCPeH API's server `CapabilityStatement` the document list answers, out of all of them | `conformance/myhealth-eu-search.tsv`, each row with the test that shows it |
+| MyHealth@EU Core 1.0.1 (CI) | the documents FerroFED's tests write whose `Patient` is valid against `patient-myhealtheu-core` | the HL7 FHIR Validator in CI, `conformance/myhealth-eu-validation.tsv` |
+| MyHealth@EU Laboratory 9.2.0 (CI) | the laboratory reports valid against `Bundle-lab-myhealtheu` | the same |
+| MyHealth@EU HDR 9.2.0 (CI) | the hospital discharge reports valid against `bundle-hdr-myhealtheu` | the same |
+
+The validator lane runs HL7's FHIR Validator offline over the documents the
+tests write and fails when a verdict differs from the recorded one, so a
+change of any count is recorded on purpose.
+
 ## What the catalogue binds
 
 The catalogue's requirements address the national contact points for
