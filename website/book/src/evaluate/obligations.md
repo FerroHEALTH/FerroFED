@@ -13,13 +13,13 @@ point of their own. Each row of
 quotes the statement and names the test, the code, the issue or the
 report behind its status.
 
-**Statements:** 445, of which 374 fall on the gateway.
+**Statements:** 448, of which 377 fall on the gateway.
 
 ## Counts per status
 
 | Status | Statements | Gateway statements | Meaning |
 |---|---|---|---|
-| tested | 353 | 348 | a test asserts it |
+| tested | 356 | 351 | a test asserts it |
 | built-untested | 0 | 0 | the code does it and no test asserts it yet |
 | planned | 0 | 0 | not built yet; an open issue holds the work |
 | missing | 0 | 0 | not built, found missing by the audit; an issue holds the work |
