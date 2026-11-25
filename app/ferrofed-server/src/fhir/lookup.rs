@@ -30,7 +30,6 @@ use http::{StatusCode, Uri};
 
 use super::admission::Asked;
 use super::attach;
-use super::ids::FaceId;
 use super::patient_summary::{Headless, header_of, refused, unheaded_outcome};
 use crate::access::NoAccess;
 use crate::facade::demographics::Unheaded;
@@ -38,6 +37,7 @@ use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
 use crate::fhir_wire::fhir_json;
+use crate::ids::FaceId;
 
 /// `GET {fhir-base}/Patient?identifier=system|value`.
 pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {

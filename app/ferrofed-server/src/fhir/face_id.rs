@@ -4,7 +4,7 @@
 //! The stable ids of an answer, a patient's and its documents', recorded in
 //! the store, and the patient an id a caller sends back stands for.
 //!
-//! Each id is derived ([`super::ids`]), so it is the same in every answer
+//! Each id is derived ([`crate::ids`]), so it is the same in every answer
 //! whether or not the store records it. Recording renews the row's window;
 //! an id the store does not hold, never recorded or past `fhir.id_lifetime`,
 //! resolves to no patient, and the caller is told to repeat the search that
@@ -12,8 +12,8 @@
 
 use ferrofed_registry::definition::store::StoreError;
 
-use super::ids::{FaceId, IdError};
 use crate::config::fhir::FhirSettings;
+use crate::ids::{FaceId, IdError};
 use crate::store::Store;
 
 /// Why an id a caller sent could not be resolved.

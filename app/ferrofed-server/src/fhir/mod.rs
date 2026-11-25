@@ -56,7 +56,6 @@ mod admission;
 mod binary;
 pub mod errors;
 mod face_id;
-pub mod ids;
 mod list;
 mod lookup;
 pub mod medication;

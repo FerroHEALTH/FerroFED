@@ -44,7 +44,6 @@ use openehr_federation::status::EndpointStatus;
 
 use super::admission::Asked;
 use super::face_id::Unresolved;
-use super::ids::FaceId;
 use super::patient_summary::refused;
 use super::trc::Service;
 use super::{UNADMITTED, attach, outcome};
@@ -56,6 +55,7 @@ use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
 use crate::fhir_wire::fhir_json;
+use crate::ids::FaceId;
 
 /// The holder the summary written on request is named under, beside the
 /// patient's id, when its id is derived.
