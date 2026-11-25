@@ -32,7 +32,9 @@
 #      vendored corpus does not hold, or records another total than it holds;
 #   9. a file under conformance/badges/ or the README conformance block
 #      differs from what `scripts/conformance/matrix.sh --badges-write` writes;
-#  10. a badge file, or a static badge of the README, carries no logo.
+#  10. a badge file, or a static badge of the README, carries no logo;
+#  11. the README lacks the small caption under the conformance heading that
+#      says once what the badges count (owner decision, 2026-11-25).
 #
 # The golden test, in the Rust tier, fails when a listed case stops passing or
 # an unlisted case passes, so the pass list this reads is what the tests hold.
@@ -269,6 +271,9 @@ fi
 source scripts/checks/badge-logos/logo.sh
 badge_logo_check "$BADGES"/*.json conformance/myhealth-eu-badge.json || problem "a badge carries no logo"
 badge_logo_readme README.md || problem "a README badge carries no logo"
+
+# 11. The caption under the conformance heading.
+badge_caption_check README.md || problem "the README has no conformance caption"
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1

@@ -505,6 +505,39 @@ The deadline bounds the whole call: no attempt or backoff runs past it, and
 each attempt's engine timeout is the time left. The overall budget is the
 fan-out's own timeout over the join (section 9).
 
+**The document search parameters.** The MyHealth@EU NCPeH API
+(`myhealth.eu.fhir.ncp-api` 9.1.1-ci, `CapabilityStatementMyHealthEu`)
+searches `DocumentReference` with `patient`, `patient.identifier`,
+`contenttype` and `creation` (SHALL), `category`, `date`, `period`,
+`status` and `type` (SHOULD), and, for imaging, `modality` and `bodysite`
+(SHOULD, its own `SearchParameter`s over the R5 `DocumentReference`
+extensions). The document list answers from several holders at once: the
+summary and the reports the gateway writes itself, and the documents each
+member, FerroBRIDGE's facade among them, serves at its own endpoint. So the
+answer is the same whichever node holds a document, the gateway evaluates
+every parameter on the `DocumentReference`s it lists, after it has them,
+and passes a parameter through to a holder only as a narrowing the gateway
+evaluates again, and only where IHE MHD 4.2.2 ITI-67, the search a holder
+answers as an MHD Document Responder, defines it
+(`CapabilityStatement-IHE.MHD.DocumentResponder`). No specification governs
+the split: our own design (#1950).
+
+| Parameter | NCP API | The gateway | Passed through to a holder | Why |
+|---|---|---|---|---|
+| `patient.identifier` | SHALL | evaluates: resolves the patient through the identity binding and holds it to the TRC | never; each holder is asked by its own `ehr_id` or patient id | no directly identifying identifier travels to a node (§5.4.1, N33) |
+| `patient` | SHALL | evaluates, as `patient.identifier`, against the `Patient` the patient lookup returned | never | the same |
+| `_id` | none | evaluates: a listed id is the gateway's own token | never | a holder's id is not the id the caller holds |
+| `type` | SHOULD | evaluates on `DocumentReference.type`, a LOINC code, and selects the categories it gathers from | yes, as ITI-67 `type` | ITI-67 defines it; the gateway's own documents carry it too |
+| `category` | SHOULD | evaluates on `DocumentReference.category` | yes, as ITI-67 `category` | ITI-67 defines it |
+| `creation` | SHALL | evaluates on `DocumentReference.content.attachment.creation` | yes, as ITI-67 `creation` | ITI-67 defines it |
+| `date` | SHOULD | evaluates on `DocumentReference.date` | yes, as ITI-67 `date` | ITI-67 defines it |
+| `period` | SHOULD | evaluates on `DocumentReference.context.period` | yes, as ITI-67 `period` | ITI-67 defines it |
+| `status` | SHOULD | evaluates on `DocumentReference.status` | yes, as ITI-67 `status` | ITI-67 defines it |
+| `contenttype` | SHALL | evaluates on `DocumentReference.content.attachment.contentType` | no | ITI-67 defines no `contenttype` (its `format` is the format code), so a holder cannot be asked by it |
+| `modality` | SHOULD, imaging | evaluates on the R5 `modality` extension | no | ITI-67 defines no `modality` |
+| `bodysite` | SHOULD, imaging | evaluates on the R5 `bodysite` extension's `concept` | no | ITI-67 defines no `bodysite` |
+
+
 ## 6. Identity, localization and addressing
 
 Research: #19. FerroFED keeps the three Step-1 questions apart, as §14 and
@@ -3087,6 +3120,7 @@ R4 is #23, #25 and #27).
 | A120 | Writing the imaging report on the FHIR face [#1406, extending A119] | a `Medical-Imaging` `[[fhir.report]]` entry declares the template of the members' imaging compositions; the document list runs the reserved `eu.ferrofed.eehrxf::imaging-report`, every whole composition containing `openEHR-EHR-OBSERVATION.imaging_exam_result.v1`, under A119's rules, each composition one `EehrxfMhdDocumentReference` typed `85430-7` in `Medical-Imaging` whose read writes a `BundleReportEuImaging` through the shipped imaging mapping, the imaging study section listing the mapped study and the order, history and procedure sections empty as `unavailable`; a search admitting only `18748-4` asks no member the query; receiving an imaging report waits on the imaging package's dependency closure (#1716); the three written categories share one `Writes` mapping per category and one `ServedError`; the query by entry archetype, the listed type and the empty reasons are our own design (no specification governs them) | HL7 Europe Imaging Report 1.0.0-ballot `CompositionEuImaging` requires its first four sections and, by `eu-imaging-composition-1`, an entry or an `emptyReason` in each; the EU Health Data API 1.0.0-ballot `eehrxf-document-type-medical-imaging-vs` holds `85430-7` and `18748-4`; `openEHR-EHR-COMPOSITION.report-result.v1` roots laboratory reports too, so only the entry tells an imaging report | decided on #1406 (2026-11-07, by the worker under the orchestrator's standing delegation); the content-loss rating of I-20 is the owner's (#1668) |
 | A121 | Every onward grant on `ferrohealth-smart`'s client [#1749, amending A103 and A108] | FerroFED holds no OAuth 2.0 client of its own: every node grant is the `[credentials."<id>".credentials.oauth]` table, fetched and cached by the crate's `ClientCredentials` and `TokenSource`, with `DPoP` on its `DpopKey`, RFC 8705 client authentication and certificate binding by the node section's `tls` identity, the FAPI 2.0 profile as `security_profile = "fapi2"`, and RFC 9396 `authorization_details`; per-caller token exchange is the node's `onward` table with `actor_assertion = true`; `[signing]`, the conveyance signer and the JWK Set run on the crate's `KeyRing`; the `oauth2` and `fapi2` tables, the section's `mtls_alias_hosts` and `signing.assertion_lifetime_s` are refused at load, each naming its replacement, and a node's grant takes no client secret | one client for the product family, so a fix lands once (A103); a silent mapping would hide that the grant's key moves from `[signing]` to `private_key_file`, so a released key keeps a named refusal; N25 for the gateway authenticating to a node by its own key or certificate | decided (#1749, 2026-11-09) |
 | A122 | Client authentication on the one-registry `ferrohealth-smart` 0.34 [#1946, amending A117] | an `[auth.issuer.<name>]` table naming only its `issuer` trusts a SMART App Launch 2.2 authorization server, and `kind = "federation"` alone is still read; the caller comes from the token's standard claims (`typ` `at+jwt`, `scope` required, `sub` equal to `client_id` for a system, the `fhirUser` type for a user, `act` as asserted); the authorization server's registry is the one list of clients, so any client whose token's `aud` names the gateway reaches it and `[[trust.issuer]]` keeps only FerroFED's honouring policy; the onward lane carries every user at a SMART issuer and another party's professional or, opted in, organisation at a `federation` issuer; the removed kinds, `preset`, `profile_file`, `scopeless_subjects`, `[auth.idp]` and the classification profile keys are unknown keys with no named refusal | one classification for the product family, held in FerroSMART (FerroHEALTH/FerroSMART#804, #805); RFC 9068 §2.1, §2.2 and §4; SMART App Launch 2.2.0, Scopes and Launch Context; RFC 8693 §4.1; the owner's no-compatibility rule | decided on #1946 (2026-11-24) |
+| A123 | The document search parameters of the NCPeH API [#1950] | the gateway evaluates every NCPeH API search parameter on the `DocumentReference`s it lists; it passes `type`, `category`, `creation`, `date`, `period` and `status` through to a holder only as a narrowing it evaluates again, where IHE MHD 4.2.2 ITI-67 defines them, and never `patient.identifier`, `patient`, `_id`, `contenttype`, `modality` or `bodysite` (§5, The document search parameters) | the list joins the gateway's own documents with every holder's, so only an evaluation at the gateway gives one answer whichever node holds a document; N33 for the patient; ITI-67 is the search a holder answers as an MHD Document Responder | decided on #1950 (2026-11-25) |
 
 ## 16. Regulatory status
 
