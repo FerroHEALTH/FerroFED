@@ -759,6 +759,29 @@ mod tests {
     use fhir_types::codec::Value;
 
     #[test]
+    fn the_summary_written_on_request_is_listed_as_an_on_demand_entry() {
+        let listing = super::Listing {
+            system: "urn:oid:2.999.1",
+            value: "synthetic-1",
+            patient: "patient-id",
+            date: "2026-11-25T10:00:00Z",
+        };
+        let operator = crate::summary::Organisation {
+            id: String::from("operator"),
+            name: None,
+            identifiers: Vec::new(),
+        };
+        let entry = super::on_demand(("entry-id", "urn:uuid:entry"), listing, &operator);
+        let [content] = entry.content.as_slice() else {
+            panic!("one content");
+        };
+        // MHD 4.2.2 ex-DocumentReferenceComprehensiveOnDemand: an On-Demand entry carries
+        // neither hash nor size, which only a written document has.
+        assert!(content.attachment.hash.is_none() && content.attachment.size.is_none());
+        assert!(content.attachment.url.is_some());
+    }
+
+    #[test]
     fn the_patient_and_the_summary_type_are_read() {
         for query in [
             "patient.identifier=urn%3Aoid%3A2.999.1%7Csynthetic-1",
