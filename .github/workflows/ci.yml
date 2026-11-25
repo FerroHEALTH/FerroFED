@@ -470,6 +470,17 @@ jobs:
           bash scripts/checks/conformance-matrix.sh
           bash scripts/conformance/report.sh --self-test
 
+      # ---- post-quantum ------------------------------------------------
+      # The post-quantum inventory (#1991): conformance/post-quantum.tsv in its
+      # five columns with every location it names in the tree, the table of
+      # docs/post-quantum.md and the README badge counted from it.
+      - name: post-quantum
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          bash scripts/checks/post-quantum.sh --self-test
+          bash scripts/checks/post-quantum.sh --check
+
       # ---- obligations -------------------------------------------------
       # The obligations guard: the checklist of every normative statement of the
       # pinned specification, its rows against the vendored text, the matrix and

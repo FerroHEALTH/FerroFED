@@ -16,6 +16,7 @@ use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 use ferrohealth_smart::client::outbound::OutboundClient;
 use ferrohealth_smart::config::ServerTls;
+use nl_generic_functions::nuts_auth::NutsClient;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -50,7 +51,9 @@ pub(super) fn localizer(
     // NOTE: the IG's GFI-005: the Nuts grant's DPoP-bound token and a proof of each
     // request ride as the product's authorization; basic credentials stay in the table.
     if let Some(NviCredentials::Nuts(grant)) = &nvi.credentials {
-        let client = nuts::http_client().map_err(LocalizationError::NviNutsClient)?;
+        let client = nuts::http_client()
+            .map(NutsClient::new)
+            .map_err(LocalizationError::NviNutsClient)?;
         builder = builder.authorizer(Arc::new(NutsAuthorizer::new(
             NVI_KEY,
             grant.grant().clone(),

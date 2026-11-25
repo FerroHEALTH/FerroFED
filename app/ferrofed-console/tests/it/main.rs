@@ -44,6 +44,8 @@ mod overview;
 #[cfg(test)]
 mod pages;
 #[cfg(test)]
+mod post_quantum;
+#[cfg(test)]
 mod query;
 #[cfg(test)]
 mod refresh;

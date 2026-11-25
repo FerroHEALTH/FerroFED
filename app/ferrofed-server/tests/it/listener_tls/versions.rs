@@ -4,17 +4,21 @@
 //! The protocol versions and cipher suites the listener negotiates: TLS 1.3
 //! alone by default (RFC 8446; RFC 9325 §3.1.1), and with `min_version =
 //! "1.2"` TLS 1.3 when the client offers it, TLS 1.2 with a suite RFC 9325
-//! §4.2 recommends, and no TLS 1.2 suite outside that list.
+//! §4.2 recommends, and no TLS 1.2 suite outside that list. The TLS 1.3 key
+//! exchange agrees on the hybrid X25519MLKEM768 (RFC 10024) with a client
+//! that offers it, and on X25519 with a client that does not.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use ferrofed_testkit::listener::ListenerCertificates;
 use ferrohealth_server::tls::TlsKeys;
+use rustls::crypto::SupportedKxGroup;
+use rustls::crypto::aws_lc_rs::kx_group;
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, ServerName};
 use rustls::{
-    CipherSuite, ClientConfig, ProtocolVersion, RootCertStore, SupportedCipherSuite,
+    CipherSuite, ClientConfig, NamedGroup, ProtocolVersion, RootCertStore, SupportedCipherSuite,
     SupportedProtocolVersion,
 };
 use tokio::net::TcpStream;
@@ -114,6 +118,54 @@ async fn by_default_tls_13_alone_is_served_and_a_tls_12_client_is_refused() -> T
     assert!(
         tls12.is_err(),
         "a client that offers TLS 1.2 alone is refused unless min_version is \"1.2\""
+    );
+    Ok(())
+}
+
+/// The group a TLS 1.3 client trusting `ca` and offering `groups`, in that
+/// order, agrees on with the listener at `address`.
+async fn agreed(
+    address: SocketAddr,
+    ca: &str,
+    groups: Vec<&'static dyn SupportedKxGroup>,
+) -> Result<Option<NamedGroup>, Box<dyn std::error::Error>> {
+    let mut roots = RootCertStore::empty();
+    roots.add(CertificateDer::from_pem_slice(ca.as_bytes())?)?;
+    let provider = rustls::crypto::CryptoProvider {
+        kx_groups: groups,
+        ..rustls::crypto::aws_lc_rs::default_provider()
+    };
+    let config = ClientConfig::builder_with_provider(Arc::new(provider))
+        .with_protocol_versions(&[&rustls::version::TLS13])?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    let stream = TcpStream::connect(address).await?;
+    let tls = TlsConnector::from(Arc::new(config))
+        .connect(ServerName::try_from("127.0.0.1")?, stream)
+        .await?;
+    let (_, connection) = tls.get_ref();
+    Ok(connection
+        .negotiated_key_exchange_group()
+        .map(SupportedKxGroup::name))
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_key_exchange_agrees_on_x25519mlkem768_and_still_on_x25519() -> TestResult {
+    let (address, ca, _dir) = listening(false).await?;
+    assert_eq!(
+        Some(NamedGroup::X25519MLKEM768),
+        agreed(
+            address,
+            &ca,
+            vec![kx_group::X25519MLKEM768, kx_group::X25519]
+        )
+        .await?,
+        "RFC 10024: the listener takes the hybrid group a client offers"
+    );
+    assert_eq!(
+        Some(NamedGroup::X25519),
+        agreed(address, &ca, vec![kx_group::X25519]).await?,
+        "a client without the hybrid group still connects"
     );
     Ok(())
 }

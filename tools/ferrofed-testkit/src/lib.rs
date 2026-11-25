@@ -84,6 +84,8 @@
 //!   offline suites; patient identity is FerroPIX's (#1360);
 //! - [`pmir`]: the harness Patient Identity Registry, a test device that
 //!   takes ITI-94 subscriptions and sends ITI-93 messages to them (#147);
+//! - [`kx`]: a TLS 1.3 peer that records the key exchange group each
+//!   client agrees on (#1991);
 //! - [`tls`]: a mutual-TLS front that puts any harness server behind
 //!   `https` with client authentication (#507);
 //! - [`revocation`]: that front over a CA chain whose server certificate
@@ -119,6 +121,7 @@ pub mod health_data_api;
 pub mod imaging;
 pub mod issuance;
 pub mod issuer;
+pub mod kx;
 pub mod laboratory;
 pub mod leak;
 pub mod listener;

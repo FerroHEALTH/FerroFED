@@ -98,19 +98,78 @@ pub(super) fn documents(settings: &Settings) -> Result<Vec<PublicDocument>, Bind
 
 /// The client the Nuts grant of `endpoint` sends its requests through.
 fn client(endpoint: &EndpointId) -> Result<NutsClient, ProvideError> {
-    http_client().map_err(|source| ProvideError::NutsClient {
-        section: format!("credentials.{endpoint}.{KEY}"),
-        source,
-    })
+    http_client()
+        .map(NutsClient::new)
+        .map_err(|source| ProvideError::NutsClient {
+            section: format!("credentials.{endpoint}.{KEY}"),
+            source,
+        })
 }
 
-/// The client a Nuts grant sends its token requests through.
+/// The HTTP client a Nuts grant sends its token requests through, which
+/// [`NutsClient::new`] wraps.
 ///
 /// It follows no redirect, since the token request carries the gateway's
 /// credentials (no specification governs the client: our own design).
-pub(super) fn http_client() -> Result<NutsClient, reqwest::Error> {
+pub(super) fn http_client() -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()
-        .map(NutsClient::new)
+}
+
+#[cfg(test)]
+mod tests {
+    use ferrofed_testkit::kx::KxPeer;
+    use rustls::NamedGroup;
+    use rustls::crypto::aws_lc_rs::kx_group;
+
+    use super::http_client;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    /// The group the Nuts client agreed on with `peer` in one call, which
+    /// ends after the key exchange: the client trusts no root the peer's
+    /// certificate chains to.
+    async fn agreed_by_the_nuts_client(
+        peer: &KxPeer,
+    ) -> Result<Option<NamedGroup>, Box<dyn std::error::Error>> {
+        let answer = http_client()?
+            .get(format!("https://localhost:{}/", peer.address().port()))
+            .send()
+            .await;
+        if answer.is_ok() {
+            return Err("the peer's certificate is trusted by no root".into());
+        }
+        Ok(peer
+            .agreed(0)
+            .map_err(|seen| format!("the peer recorded {seen} connections"))?)
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn the_nuts_client_prefers_x25519mlkem768() -> TestResult {
+        let peer = KxPeer::start(vec![kx_group::X25519, kx_group::X25519MLKEM768])?;
+        assert_eq!(
+            Some(NamedGroup::X25519MLKEM768),
+            agreed_by_the_nuts_client(&peer).await?
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "a test asserts, and returns its setup errors"
+    )]
+    async fn the_nuts_client_agrees_on_x25519_with_a_classical_only_peer() -> TestResult {
+        let peer = KxPeer::start(vec![kx_group::X25519])?;
+        assert_eq!(
+            Some(NamedGroup::X25519),
+            agreed_by_the_nuts_client(&peer).await?
+        );
+        Ok(())
+    }
 }

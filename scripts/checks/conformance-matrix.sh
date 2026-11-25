@@ -272,14 +272,14 @@ fi
 # 10. Every badge carries a logo of scripts/checks/badge-logos/.
 # shellcheck source=scripts/checks/badge-logos/logo.sh
 source scripts/checks/badge-logos/logo.sh
-badge_logo_check "$BADGES"/*.json conformance/myhealth-eu-badge.json || problem "a badge carries no logo"
+badge_logo_check "$BADGES"/*.json conformance/myhealth-eu-badge.json conformance/post-quantum-badge.json || problem "a badge carries no logo"
 badge_logo_readme README.md || problem "a README badge carries no logo"
 
 # 11. The caption under the conformance heading.
 badge_caption_check README.md || problem "the README has no conformance caption"
 
 # 12. Every badge's colour follows its count, and an uncounted badge is blue.
-badge_color_check "$BADGES"/*.json conformance/myhealth-eu-badge.json conformance/myhealth-eu/*.json ||
+badge_color_check "$BADGES"/*.json conformance/myhealth-eu-badge.json conformance/myhealth-eu/*.json conformance/post-quantum-badge.json ||
   problem "a badge's colour does not follow its count"
 
 if [[ "$fail" -ne 0 ]]; then
