@@ -1216,10 +1216,8 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
-          status=0
           bash scripts/checks/fhir-validator.sh --myhealth-eu \
-            "$RUNNER_TEMP/eehrxf-documents" target/fhir-validation || status=$?
-          exit "$status"
+            "$RUNNER_TEMP/eehrxf-documents" target/fhir-validation
       - name: Upload the validation results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
