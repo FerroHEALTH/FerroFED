@@ -1,1 +1,0 @@
-- An issuer named in two issuer tables now refuses the start, naming the issuer. Upgrade: keep one table per issuer (#1899).

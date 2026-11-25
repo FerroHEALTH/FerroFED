@@ -43,7 +43,7 @@ Art 38(2)(b): "the name and version of the EHR system and date of its
 release".
 
 The EHR system is **FerroFED**. This sheet describes FerroFED 0.0.21,
-released on RELDATE. It ships as these forms:
+released on 2026-11-25. It ships as these forms:
 
 - the gateway image `ghcr.io/ferrohealth/ferrofed`, for Linux on `x86_64`
   and `aarch64`;
@@ -82,7 +82,7 @@ says what it holds and what it waits on.
 
 | Release | Date |
 |---|---|
-| 0.0.21 | RELDATE |
+| 0.0.21 | 2026-11-25 |
 | 0.0.20 | 2026-11-12 |
 | 0.0.19 | 2026-11-11 |
 | 0.0.18 | 2026-11-10 |
@@ -285,7 +285,7 @@ the minimum of Art 13(8), and ships them only in the newest release
 (Art 13(10)), with the end date published.
 [`SECURITY.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions)
 lists every release with the date until which fixes are published, five
-years from its release date. For FerroFED 0.0.21 that date is RELEND;
+years from its release date. For FerroFED 0.0.21 that date is 2031-11-25;
 0.0.21 itself is supported while it is the newest release.
 The rest of the information the Cyber Resilience Act's Annex II asks for is
 on [CRA information to the user](cra-user-information.md).

@@ -618,7 +618,7 @@ Released on 2026-11-12.
 
 ### v0.0.21: one registry of clients, and the summary's further sections
 
-Released on RELDATE.
+Released on 2026-11-25.
 
 - Client authentication on the one-registry `ferrohealth-smart` 0.34: an
   issuer table naming only its `issuer` trusts a SMART App Launch 2.2

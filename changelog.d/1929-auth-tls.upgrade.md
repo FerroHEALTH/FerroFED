@@ -1,1 +1,0 @@
-- Move `[auth] ca_file` to `[auth.tls] trust_roots_file`. `auth.ca_file` is an unknown key and refuses the start, as it has since 0.0.19 (#1929).

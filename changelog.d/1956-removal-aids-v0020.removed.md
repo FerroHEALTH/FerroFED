@@ -1,1 +1,0 @@
-- The named refusal of `[[trust.issuer]] professional_issuing_authority`, which v0.0.20 retired for the `"professional.issuing_authority_name"` source of the issuer's attributes table, is deleted under the one-release rule for removal aids; the key is now refused as an unknown key (#1956).
