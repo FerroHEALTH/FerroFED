@@ -353,9 +353,9 @@ build_base() {
   # The base's sources are extracted after the head's checkout, so cargo would
   # read the head's first-party crates as fresh; only their artifacts are cleaned,
   # and the dependencies stay built.
-  local members=()
-  mapfile -t members < <(cargo metadata --no-deps --format-version 1 --locked | jq -r '.packages[].name')
-  cargo clean --release "${members[@]/#/--package=}"
+  cargo metadata --no-deps --format-version 1 --locked \
+    | jq -r '.packages[].name | "--package=" + .' \
+    | xargs cargo clean --release
 }
 
 # build [BASE]: the base's release gateway and configuration contract into
