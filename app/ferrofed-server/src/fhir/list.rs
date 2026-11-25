@@ -372,7 +372,7 @@ fn entries(
         matches.push((
             located(&id),
             Match::Written(Box::new(list::on_demand(
-                (id.as_str(), &minted()),
+                (id.as_str(), &id.urn()),
                 listing,
                 &fhir.operator,
             ))),

@@ -205,6 +205,22 @@ impl FaceId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The `urn:uuid:` URN the id stands for: an RFC 9562 version 8 UUID of
+    /// the first 16 bytes of the SHA-256 of the id, the same for one id in
+    /// every answer.
+    #[must_use]
+    pub fn urn(&self) -> String {
+        let hash = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, self.0.as_bytes());
+        let mut bytes = [0_u8; 16];
+        for (byte, hashed) in bytes.iter_mut().zip(hash.as_ref()) {
+            *byte = *hashed;
+        }
+        format!(
+            "urn:uuid:{}",
+            uuid::Builder::from_custom_bytes(bytes).into_uuid()
+        )
+    }
 }
 
 #[cfg(test)]
@@ -267,6 +283,15 @@ mod tests {
             IdKeys::from_base64url("not base64!").err(),
             Some(IdError::Key)
         );
+    }
+
+    #[test]
+    fn an_id_stands_for_one_urn() {
+        let keys = IdKeys::from_base64url(KEY).unwrap();
+        let id = keys.document(("summary", "patient"));
+        assert_eq!(id.urn(), id.urn());
+        assert_ne!(id.urn(), keys.document(("summary", "other")).urn());
+        assert!(id.urn().starts_with("urn:uuid:"));
     }
 
     #[test]
