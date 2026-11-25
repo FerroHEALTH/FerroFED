@@ -33,9 +33,8 @@
 #   9. a file under conformance/badges/ or the README conformance block
 #      differs from what `scripts/conformance/matrix.sh --badges-write` writes;
 #  10. a badge file, or a static badge of the README, carries no logo;
-#  11. the README heading over the badges does not say the counts are
-#      self-tested and self-assessed, which the badges no longer repeat
-#      (owner decision, 2026-11-25).
+#  11. the README lacks the small caption under the conformance heading that
+#      says once what the badges count (owner decision, 2026-11-25).
 #
 # The golden test, in the Rust tier, fails when a listed case stops passing or
 # an unlisted case passes, so the pass list this reads is what the tests hold.
@@ -273,11 +272,8 @@ source scripts/checks/badge-logos/logo.sh
 badge_logo_check "$BADGES"/*.json conformance/myhealth-eu-badge.json || problem "a badge carries no logo"
 badge_logo_readme README.md || problem "a README badge carries no logo"
 
-# 11. The heading over the badges carries what the badges no longer say.
-heading="$(awk '/^<!-- conformance:begin -->$/ { print previous; exit } { previous = $0 }' README.md)"
-if ! grep -qi 'self-tested' <<< "$heading" || ! grep -qi 'self-assessed' <<< "$heading"; then
-  problem "the README heading over the badges does not say the counts are self-tested and self-assessed"
-fi
+# 11. The caption under the conformance heading.
+badge_caption_check README.md || problem "the README has no conformance caption"
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1

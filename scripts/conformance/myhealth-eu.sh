@@ -13,7 +13,7 @@
 # endpoint file (https://shields.io/badges/endpoint-badge) counting the rows
 # met among the rows that bind the gateway, always blue, with the EU emblem
 # on EU blue. No badge repeats that its count is self-assessed or self-tested:
-# the README heading over the badges says it once (owner decision,
+# the README caption under the badge heading says it once (owner decision,
 # 2026-11-25). Beside it, on the MyHealth@EU
 # CI line (#1952), one badge per NAME of BADGES: the NCPeH API
 # DocumentReference search parameters the gateway answers, from conformance/myhealth-eu-search.tsv, and the
