@@ -1,6 +1,6 @@
 ---
 name: spec-pin-1-0-0
-description: "The Federation Tier specification is vendored at its 1.0.1 erratum (untagged commit b4242c2, the owner's exception of 2026-11-02 to the tag-only pin, #1478, retired by #1480 when upstream tags it), after 1.0.0 (tag 1.0.0, commit 7dcf0f4, approved by the openEHR SEC 2026-10-12, #17); the reference implementation moves with it, now 9cb8606"
+description: "The Federation Tier specification is vendored at its 1.0.1 erratum (untagged commit b4242c2, the owner's exception of 2026-11-02 to the tag-only pin, #1478, retired by #1970 when upstream tags it), after 1.0.0 (tag 1.0.0, commit 7dcf0f4, approved by the openEHR SEC 2026-10-12, #17); the reference implementation moves with it, now 9cb8606"
 metadata:
   type: project
 ---
@@ -42,7 +42,7 @@ located at a copy's holder is `409` and never redirected (§12.3, §12.4,
 reference implementation moved to `9cb8606d1fce457b6b7f3a42f703d7069686a413`,
 which tracks 1.0.1. The `docs/VERSIONS.md` row names the newest tag, `1.0.0`,
 so `scripts/checks/pin-freshness.sh` reports it stale when upstream tags
-again; #1480 then moves the pin to the tag and drops the exception.
+again; #1970 then moves the pin to the tag and drops the exception.
 
 **Why:** a pin on a released, approved text keeps every citation checkable
 and the `spec_version` the gateway reports true.

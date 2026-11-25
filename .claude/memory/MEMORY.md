@@ -25,7 +25,7 @@
   the v0.0.1 research program into `docs/architecture.md`
 - [Spec pin 1.0.0](spec-pin-1-0-0.md): specification at its 1.0.1 erratum,
   untagged commit `b4242c2` by the owner's exception of 2026-11-02 (#1478,
-  retired by #1480), after tag `1.0.0` (`7dcf0f4`, #17); reference
+  retired by #1970), after tag `1.0.0` (`7dcf0f4`, #17); reference
   implementation at `9cb8606`
 - [Crate split](crate-split.md): spec-derived crates split from the app crates
   as in every product; nothing published for now, publishing is a one-line
