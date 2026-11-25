@@ -339,8 +339,8 @@ version like any other dependency (`docs/architecture.md` §2). FerroEHR
 releases them as one lockstep family, so the four rows below are one group:
 they move together, and `scripts/checks/versions.sh` fails when one member
 moves alone, here or in the root `Cargo.toml` `[workspace.dependencies]`. The
-pin is 0.3.0 since 2026-11-21, the line the published `eehrxf` 0.26,
-`fhirconnect` 0.7 and `openehr-mapping-core` 0.5 require by a caret range, so
+pin is 0.3.0 since 2026-11-21, the line the published `eehrxf` 0.30,
+`fhirconnect` 0.9 and `openehr-mapping-core` 0.6 require by a caret range, so
 the lock holds one copy of each member (#1181, #813, #1891, #1899, #1915).
 `openehr-sdt` left the group with 0.0.116, which no longer carries the
 SMART on openEHR scope grammar: the onward grant (#81) writes and checks the
@@ -460,7 +460,7 @@ and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhir-types` | 0.1.131 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhir-types` | 0.2.0 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 | `fhir-search` | 0.1.131 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 The `pixm` feature takes `r4` and `terminology`: that root set holds every
@@ -496,11 +496,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | 0.26.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | 0.7.2 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | 0.5.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | 0.18.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | 0.18.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | 0.30.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | 0.9.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | 0.6.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | 0.19.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | 0.20.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -513,8 +513,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | 0.25.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | 0.25.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | 0.27.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | 0.27.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 

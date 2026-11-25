@@ -101,8 +101,8 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.65" }
 # builds a withdrawable record's refusal only when it is withdrawn
 # (FerroHEALTH/FerroAUDIT#270, #272; #1926). Verified against crates.io on
 # 2026-11-22 (0.25.0).
-ihe-atna = { version = "0.25.0", default-features = false }
-ehds-logging = { version = "0.25.0", default-features = false }
+ihe-atna = { version = "0.27.0", default-features = false }
+ehds-logging = { version = "0.27.0", default-features = false }
 # The European interoperability software component of Regulation (EU)
 # 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
 # owner decision of 2026-10-28 (#813). Like every FerroBRIDGE crate here it
@@ -132,7 +132,7 @@ ehds-logging = { version = "0.25.0", default-features = false }
 # (#1895), and 0.17.0 the release on ferrobridge-term 0.13, fhirconnect 0.5
 # and openehr-mapping-core 0.4 (#1899). Verified against crates.io on
 # 2026-11-17.
-eehrxf = { version = "0.26.0", default-features = false }
+eehrxf = { version = "0.30.0", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -265,7 +265,7 @@ base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 # (#119) and the mCSD Organization and Endpoint (#74); the testkit's Manager
 # adds `resources` for the ITI-104 Patient (#47). 0.1.127 is the release
 # fhirconnect builds on, so the build carries one fhir-types (#684).
-fhir-types = { version = "0.1.131", default-features = false }
+fhir-types = { version = "0.2.0", default-features = false }
 # The FHIR R4 search value grammar the document list reads the NCPeH API
 # DocumentReference parameters with (#1975), on the fhir-types line.
 fhir-search = "0.1.131"
@@ -278,12 +278,12 @@ fhir-search = "0.1.131"
 # on openehr-* 0.2 that eehrxf 0.14.0 requires (#1891); 0.5.1 and
 # openehr-mapping-core 0.4.0 the releases eehrxf 0.17.0 requires (#1899).
 # Verified against crates.io on 2026-11-17.
-fhirconnect = "0.7.2"
+fhirconnect = "0.9.0"
 # The FHIR terminology client the European interoperability component asks
 # its terminology server through (#925), from FerroBRIDGE, with the `context`
 # form of `$validate-code`; required by a caret range, as eehrxf above (#1772),
 # at the release on ferrohealth-smart 0.34 (#1946).
-ferrobridge-term = "0.18.0"
+ferrobridge-term = "0.19.0"
 # The FHIR R4 profile validator a document received in the exchange format is
 # held to in full: every invariant, binding and entry profile (#808), from
 # FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
@@ -295,17 +295,17 @@ ferrobridge-term = "0.18.0"
 # (#1891), 0.12.0 the release on ferrobridge-term 0.12 (#1895), and 0.13.0
 # the release on ferrobridge-term 0.13 (#1899). Verified against crates.io on
 # 2026-11-17.
-ferrobridge-validator = "0.18.0"
-openehr-mapping-core = "0.5.0"
+ferrobridge-validator = "0.20.0"
+openehr-mapping-core = "0.6.0"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by FerroHEALTH/FerroPIX
 # since #367 and required by a caret range, at the release on ferrohealth-smart
 # 0.34 (#1946).
-ihe-iti = "0.21.0"
+ihe-iti = "0.22.0"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
 # published by FerroHEALTH/FerroPIX since #367 and required by a caret range, at
 # the release on ihe-iti 0.21 (#1946).
-nl-generic-functions = "0.21.0"
+nl-generic-functions = "0.22.0"
 # The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
 # the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -405,7 +405,7 @@ ferrohealth-smart = { version = "0.34.0", default-features = false, features = [
 # a product pins every family crate; 0.2.1 is the release
 # ferrohealth-config 0.4.4 requires (#1834).
 # Verified against crates.io on 2026-11-10.
-ferrohealth-secret = "=0.2.1"
+ferrohealth-secret = "=0.2.2"
 # The operator console's OpenID Connect sign-in and its session of
 # FerroHEALTH/FerroSMART (#1504): the `[oidc]` and `[session]` sections, the
 # session store, the four sign-in routes and the middleware every page sits

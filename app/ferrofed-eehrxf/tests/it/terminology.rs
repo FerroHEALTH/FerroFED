@@ -74,7 +74,13 @@ async fn a_translation_posts_its_parameters_and_keeps_only_equivalent_matches() 
         .await?;
     let codes: Vec<Option<String>> = found
         .iter()
-        .map(|coding| coding.code.as_ref().and_then(|code| code.value.clone()))
+        .map(|translated| {
+            translated
+                .coding
+                .code
+                .as_ref()
+                .and_then(|code| code.value.clone())
+        })
         .collect();
     assert_eq!(codes, [Some(String::from("1001"))]);
     Ok(())
