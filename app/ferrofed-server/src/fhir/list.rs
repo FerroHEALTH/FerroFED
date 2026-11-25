@@ -300,6 +300,11 @@ fn listed(
             list::silent(endpoint.as_str(), EndpointStatus::NotResolved.as_str()),
         ));
     }
+    let Ok(matches) = selected(matches, read).inspect_err(|error| {
+        tracing::error!(request_id = logged, %error, "a listed document did not serialise");
+    }) else {
+        return unlisted(federation, gathered, (system, value), "document");
+    };
     let mut response = fhir_json(StatusCode::OK, &list::searchset(matches, outcomes));
     attach(
         &mut response,
@@ -311,6 +316,23 @@ fn listed(
         ),
     );
     response
+}
+
+/// The `matches` every search parameter of `read` selects.
+// NOTE: MyHealth@EU NCPeH API 9.1.1-ci; the gateway evaluates every DocumentReference search
+// parameter on each entry it lists, whichever node holds the document (#1950).
+fn selected(
+    matches: Vec<(String, Match)>,
+    read: &ListRequest,
+) -> Result<Vec<(String, Match)>, serde_json::Error> {
+    let now = jiff::Timestamp::now();
+    let mut selected = Vec::with_capacity(matches.len());
+    for (url, listed) in matches {
+        if read.selects(&list::json(&listed)?, now) {
+            selected.push((url, listed));
+        }
+    }
+    Ok(selected)
 }
 
 /// The `500` of a list that could not name a member's `what` by a signed URL,

@@ -316,17 +316,24 @@ pub fn bundle(receivers: &Receivers) -> CapabilityStatementRestResource {
 }
 
 /// The `DocumentReference` resource of the capability statement: the
-/// search-type interaction with the two parameters the list takes, after
-/// the HL7 Europe EU Health Data API Document Access Provider.
+/// search-type interaction with the parameters the list takes, after the
+/// HL7 Europe EU Health Data API Document Access Provider and the
+/// MyHealth@EU national contact point API (`CapabilityStatementMyHealthEu`).
 fn documents() -> CapabilityStatementRestResource {
-    let parameter = |name: &str, definition: Option<&str>, documentation: &str| {
+    let typed = |(name, kind): (&str, &str), definition: Option<&str>, documentation: &str| {
         CapabilityStatementRestResourceSearchParam {
             name: name.into(),
             definition: definition.map(Into::into),
-            r#type: "token".into(),
+            r#type: kind.into(),
             documentation: Some(documentation.into()),
             ..CapabilityStatementRestResourceSearchParam::default()
         }
+    };
+    let parameter = |name: &str, definition: Option<&str>, documentation: &str| {
+        typed((name, "token"), definition, documentation)
+    };
+    let dated = |name: &str, definition: &str, documentation: &str| {
+        typed((name, "date"), Some(definition), documentation)
     };
     CapabilityStatementRestResource {
         r#type: "DocumentReference".into(),
@@ -344,7 +351,47 @@ fn documents() -> CapabilityStatementRestResource {
             parameter(
                 "type",
                 Some("http://hl7.org/fhir/SearchParameter/clinical-type"),
-                "The document type; the face lists patient summaries, LOINC 60591-5.",
+                "The document type, a LOINC code of the EEHRxF document type value sets.",
+            ),
+            parameter(
+                "category",
+                Some("http://hl7.org/fhir/SearchParameter/DocumentReference-category"),
+                "DocumentReference.category, evaluated by the gateway on every listed entry.",
+            ),
+            parameter(
+                "contenttype",
+                Some("http://hl7.org/fhir/SearchParameter/DocumentReference-contenttype"),
+                "content.attachment.contentType, evaluated by the gateway on every listed entry.",
+            ),
+            parameter(
+                "status",
+                Some("http://hl7.org/fhir/SearchParameter/DocumentReference-status"),
+                "DocumentReference.status, evaluated by the gateway on every listed entry.",
+            ),
+            parameter(
+                "modality",
+                Some("http://fhir.ehdsi.eu/ncp-api/SearchParameter/DocumentReference-modality"),
+                "The R5 modality extension, evaluated by the gateway on every listed entry.",
+            ),
+            parameter(
+                "bodysite",
+                Some("http://fhir.ehdsi.eu/ncp-api/SearchParameter/DocumentReference-bodysite"),
+                "The R5 bodySite extension's concept, evaluated by the gateway on every listed entry.",
+            ),
+            dated(
+                "creation",
+                "https://profiles.ihe.net/ITI/MHD/SearchParameter/DocumentReference-Creation",
+                "content.attachment.creation, evaluated by the gateway on every listed entry.",
+            ),
+            dated(
+                "date",
+                "http://hl7.org/fhir/SearchParameter/DocumentReference-date",
+                "DocumentReference.date, evaluated by the gateway on every listed entry.",
+            ),
+            dated(
+                "period",
+                "http://hl7.org/fhir/SearchParameter/DocumentReference-period",
+                "context.period, evaluated by the gateway on every listed entry.",
             ),
         ],
         ..CapabilityStatementRestResource::default()

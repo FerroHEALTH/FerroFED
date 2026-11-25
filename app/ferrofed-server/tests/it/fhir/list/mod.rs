@@ -42,6 +42,7 @@ mod own_discharge;
 mod own_imaging;
 mod own_laboratory;
 mod own_member;
+mod parameters;
 mod resolution;
 
 /// The identifier system the members' `ehr_id`s are written in, in the
@@ -503,19 +504,12 @@ async fn a_search_naming_no_patient_or_another_parameter_is_refused() -> TestRes
     let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
     let dir = tempfile::tempdir()?;
     let app = members.gateway(dir.path(), ("", ""))?;
-    // NOTE: MyHealth@EU NCPeH API 9.1.1-ci CapabilityStatementMyHealthEu; every DocumentReference
-    // search parameter but patient.identifier and type is refused (conformance/myhealth-eu-search.tsv).
+    // NOTE: MyHealth@EU NCPeH API 9.1.1-ci CapabilityStatementMyHealthEu; _id and patient are
+    // refused (conformance/myhealth-eu-search.tsv), and so is a parameter the API does not name.
     let refused = [
         "_id=synthetic",
-        "bodysite=synthetic",
-        "category=synthetic",
-        "contenttype=application%2Ffhir%2Bjson",
-        "creation=2026-01-01",
-        "date=2026-01-01",
-        "modality=synthetic",
         "patient=Patient%2Fsynthetic",
-        "period=2026-01-01",
-        "status=current",
+        "relatesto=DocumentReference%2Fsynthetic",
     ]
     .map(|parameter| format!("patient.identifier=urn%3Aoid%3A2.999.1%7C{PATIENT}&{parameter}"));
     for query in [
@@ -677,7 +671,21 @@ async fn the_capability_statement_declares_the_document_search() -> TestResult {
         .flatten()
         .filter_map(|parameter| parameter["name"].as_str())
         .collect();
-    assert_eq!(names, ["patient.identifier", "type"]);
+    assert_eq!(
+        names,
+        [
+            "patient.identifier",
+            "type",
+            "category",
+            "contenttype",
+            "status",
+            "modality",
+            "bodysite",
+            "creation",
+            "date",
+            "period"
+        ]
+    );
     let binary = resources
         .iter()
         .find(|resource| resource["type"] == "Binary")
