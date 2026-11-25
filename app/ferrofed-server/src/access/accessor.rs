@@ -63,6 +63,7 @@ pub(super) fn accessor(caller: &Caller) -> Accessor {
             .map(|purpose| Purpose {
                 system: purpose.system.clone(),
                 code: purpose.code.clone(),
+                text: None,
             })
             .collect(),
         relayed: relayed(caller),

@@ -288,6 +288,7 @@ pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
         .map(|purpose| Purpose {
             system: purpose.system.clone(),
             code: purpose.code.clone(),
+            text: None,
         })
         .collect();
     let emergency = EmergencyPurposes::declare(&purposes).map_err(AccessLogFault::Emergency)?;
