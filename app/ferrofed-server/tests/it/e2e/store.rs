@@ -497,6 +497,7 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
             (String::from("contact_point_dispensation"), 0),
             (String::from("dpop_proof"), 0),
             (String::from("emergency_access"), 0),
+            (String::from("face_id"), 0),
             (String::from("window_probe"), 0)
         ],
         store.sweep().await?
