@@ -1,16 +1,17 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! The FerroEHR PostgreSQL server: a database per node, and a database per
-//! use of the gateway's own PostgreSQL store.
+//! The PostgreSQL servers of the harness: the FerroEHR database image with a
+//! database per node, and PostgreSQL 19 with a database per use of the
+//! gateway's own PostgreSQL store.
 //!
 //! A database per node, never a schema per node: FerroEHR creates fixed
 //! schema names in the database it connects to, so two nodes in one database
-//! would share their tables. The database server is the same init script the
+//! would share their tables. The node server runs the same init script the
 //! compose quickstart mounts, [`NODE_DATABASES_SCRIPT`]. [`postgres`] starts
-//! the same server alone, its port published to the host, and
-//! [`postgres_tls`] starts it serving TLS under a CA generated for the run,
-//! the shape FerroFED's own store requires.
+//! the store's server, its port published to the host, and [`postgres_tls`]
+//! starts it serving TLS under a CA generated for the run, the shape
+//! FerroFED's own store requires.
 
 use rcgen::ExtendedKeyUsagePurpose;
 use std::net::Ipv4Addr;
@@ -18,7 +19,7 @@ use std::path::Path;
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::{ContainerAsync, ContainerRequest, CopyTargetOptions, GenericImage, ImageExt};
 
-use super::images::FERROEHR_POSTGRES;
+use super::images::{FERROEHR_POSTGRES, POSTGRES, PinnedImage};
 use super::retry;
 use super::{
     DatabaseServer, HarnessError, POSTGRES_PORT, names, postgres_health_check, role_password,
@@ -37,6 +38,22 @@ pub const NODE_DATABASES_SCRIPT: &str = concat!(
 /// scripts in sorted order.
 const NODE_DATABASES_TARGET: &str = "/docker-entrypoint-initdb.d/20-ferrofed-node-databases.sh";
 
+/// The init script that gives the store's server a login role owning a
+/// database of the same name for each name in `FERROFED_STORE_DATABASES`,
+/// each refused to every other role. The entrypoint sources a script that is
+/// not executable, so it sets no shell option.
+const STORE_DATABASES_SCRIPT: &str = "for name in $FERROFED_STORE_DATABASES; do
+psql -v ON_ERROR_STOP=1 --username \"$POSTGRES_USER\" --dbname \"$POSTGRES_DB\" <<SQL
+CREATE ROLE \"$name\" LOGIN PASSWORD '${name}_example';
+CREATE DATABASE \"$name\" OWNER \"$name\";
+REVOKE CONNECT ON DATABASE \"$name\" FROM PUBLIC;
+SQL
+done
+";
+
+/// Where the image's entrypoint finds [`STORE_DATABASES_SCRIPT`].
+const STORE_DATABASES_TARGET: &str = "/docker-entrypoint-initdb.d/20-ferrofed-store-databases.sh";
+
 /// The directory the server certificate and its key are copied to, readable
 /// by the database's own user.
 const TLS_SOURCE: &str = "/ferrofed-store-tls";
@@ -44,7 +61,7 @@ const TLS_SOURCE: &str = "/ferrofed-store-tls";
 /// The init script that turns TLS on: it copies the certificate and the key
 /// into the data directory, the key readable by the server's user alone as
 /// PostgreSQL requires, and names them in `postgresql.conf`
-/// (<https://www.postgresql.org/docs/18/ssl-tcp.html#SSL-SETUP>). The
+/// (<https://www.postgresql.org/docs/19/ssl-tcp.html#SSL-SETUP>). The
 /// entrypoint sources a script that is not executable, so it sets no shell
 /// option.
 const TLS_SCRIPT: &str = "install -m 0600 /ferrofed-store-tls/server.key \"$PGDATA/server.key\"
@@ -167,7 +184,7 @@ pub async fn postgres_tls(first: &str, others: &[&str]) -> Result<PostgresTls, H
         ("server.key", key.serialize_pem()),
     ];
     let server = published(
-        database_server_with(first, others, |request| {
+        store_server(first, others, |request| {
             let request = files.iter().fold(request, |request, (name, pem)| {
                 request.with_copy_to(
                     CopyTargetOptions::new(format!("{TLS_SOURCE}/{name}")).with_mode(0o644),
@@ -190,21 +207,20 @@ pub async fn postgres_tls(first: &str, others: &[&str]) -> Result<PostgresTls, H
 ///
 /// It holds the database `first` and one more for each of `others`, each
 /// owned by a login role of the same name whose development password is
-/// [`role_password`]. The server is the FerroEHR database image the nodes run, built on
-/// PostgreSQL 18.6, so a test of FerroFED's own PostgreSQL use runs on the
-/// release `docs/VERSIONS.md` pins, one database per use.
+/// [`role_password`]. The server is [`POSTGRES`], the PostgreSQL release
+/// `docs/VERSIONS.md` pins for FerroFED's own store, one database per use.
 ///
 /// # Errors
 ///
 /// Returns [`HarnessError::Container`] when Docker refuses the container or
 /// its port.
 pub async fn postgres(first: &str, others: &[&str]) -> Result<Postgres, HarnessError> {
-    published(database_server(first, others).await?).await
+    published(store_server(first, others, |request| request).await?).await
 }
 
 /// The host and the published port of `server`.
 async fn published(server: DatabaseServer) -> Result<Postgres, HarnessError> {
-    let image = FERROEHR_POSTGRES.repository;
+    let image = POSTGRES.repository;
     let host = server
         .container
         .get_host()
@@ -217,6 +233,65 @@ async fn published(server: DatabaseServer) -> Result<Postgres, HarnessError> {
         .await
         .map_err(|source| HarnessError::Container { image, source })?;
     Ok(Postgres { server, host, port })
+}
+
+/// Starts [`POSTGRES`] with the database `first` and one more for each of
+/// `others`, each owned by a login role of the same name whose development
+/// password is [`role_password`], its container request first passed
+/// through `extra`.
+async fn store_server(
+    first: &str,
+    others: &[&str],
+    extra: impl Fn(ContainerRequest<GenericImage>) -> ContainerRequest<GenericImage>,
+) -> Result<DatabaseServer, HarnessError> {
+    let databases = std::iter::once(first)
+        .chain(others.iter().copied())
+        .collect::<Vec<_>>()
+        .join(" ");
+    started(&POSTGRES, ("store", first), |request| {
+        extra(
+            request
+                .with_copy_to(
+                    STORE_DATABASES_TARGET,
+                    STORE_DATABASES_SCRIPT.as_bytes().to_vec(),
+                )
+                .with_env_var("FERROFED_STORE_DATABASES", databases.clone()),
+        )
+    })
+    .await
+}
+
+/// Starts `image`, a PostgreSQL image, for `product` on a network of its
+/// own, healthy once its role and database `first` answer, its container
+/// request first passed through `configure`.
+async fn started(
+    image: &PinnedImage,
+    (product, first): (&str, &str),
+    configure: impl Fn(ContainerRequest<GenericImage>) -> ContainerRequest<GenericImage>,
+) -> Result<DatabaseServer, HarnessError> {
+    let (network, host) = names(product);
+    let container = retry::start(|| {
+        configure(
+            image
+                .image()
+                .with_exposed_port(POSTGRES_PORT.tcp())
+                .with_wait_for(WaitFor::healthcheck())
+                .with_health_check(postgres_health_check(first, first))
+                .with_env_var("POSTGRES_PASSWORD", "postgres")
+                .with_network(network.clone())
+                .with_container_name(host.clone()),
+        )
+    })
+    .await
+    .map_err(|source| HarnessError::Container {
+        image: image.repository,
+        source,
+    })?;
+    Ok(DatabaseServer {
+        container,
+        network,
+        host,
+    })
 }
 
 /// Starts the FerroEHR PostgreSQL image with the database `first` and one
@@ -239,34 +314,18 @@ async fn database_server_with(
     others: &[&str],
     extra: impl Fn(ContainerRequest<GenericImage>) -> ContainerRequest<GenericImage>,
 ) -> Result<DatabaseServer, HarnessError> {
-    let (network, host) = names("ferroehr");
-    let container = retry::start(|| {
-        let request = FERROEHR_POSTGRES
-            .image()
-            .with_exposed_port(POSTGRES_PORT.tcp())
-            .with_wait_for(WaitFor::healthcheck())
-            .with_health_check(postgres_health_check(first, first))
-            .with_copy_to(
-                CopyTargetOptions::new(NODE_DATABASES_TARGET).with_mode(0o755),
-                Path::new(NODE_DATABASES_SCRIPT),
-            )
-            .with_env_var("POSTGRES_PASSWORD", "postgres")
-            .with_env_var("PG_INIT_USER", first)
-            .with_env_var("PG_INIT_PASSWORD", role_password(first))
-            .with_env_var("PG_INIT_DB", first)
-            .with_env_var("FERROFED_NODE_DATABASES", others.join(" "))
-            .with_network(network.clone())
-            .with_container_name(host.clone());
-        extra(request)
+    started(&FERROEHR_POSTGRES, ("ferroehr", first), |request| {
+        extra(
+            request
+                .with_copy_to(
+                    CopyTargetOptions::new(NODE_DATABASES_TARGET).with_mode(0o755),
+                    Path::new(NODE_DATABASES_SCRIPT),
+                )
+                .with_env_var("PG_INIT_USER", first)
+                .with_env_var("PG_INIT_PASSWORD", role_password(first))
+                .with_env_var("PG_INIT_DB", first)
+                .with_env_var("FERROFED_NODE_DATABASES", others.join(" ")),
+        )
     })
     .await
-    .map_err(|source| HarnessError::Container {
-        image: FERROEHR_POSTGRES.repository,
-        source,
-    })?;
-    Ok(DatabaseServer {
-        container,
-        network,
-        host,
-    })
 }

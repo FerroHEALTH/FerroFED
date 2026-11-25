@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Cadasto B.V.
 // SPDX-License-Identifier: BUSL-1.1
 
-//! FerroFED's own store against a real PostgreSQL 18 serving TLS, one
+//! FerroFED's own store against a real PostgreSQL 19 serving TLS, one
 //! database per use on one server: it is reached over TLS under the CA
 //! `ca_file` names and refused under roots that do not hold it; two
 //! replicas booting together over one empty database apply each migration

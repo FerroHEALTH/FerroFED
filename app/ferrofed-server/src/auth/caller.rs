@@ -21,10 +21,10 @@
 //! vouched for also holds what its token asserts, as `ferrohealth-smart`
 //! read it under the contact-point profile ([`External`]), the professional
 //! and the provider of another Member State it relays ([`Relayed`]), and
-//! the correlation identifier its connector sent. A caller whose patient token
-//! names a current actor ([`Actor`], RFC 8693 §4.1) holds it as the
-//! patient's representative only when the token's issuer declares its
-//! `act` claim one; the gateway never infers a representative.
+//! the correlation identifier its connector sent. A caller acts as the
+//! patient's representative ([`Representation`], Regulation (EU) 2025/327
+//! Art 4(2)) when its `Patient` token names a current actor ([`Actor`], RFC
+//! 8693 §4.1), or when it is a `RelatedPerson` with the patient in context.
 
 use std::fmt;
 
@@ -95,9 +95,9 @@ pub struct Caller {
     assurance: Option<AssuranceLevel>,
     /// Who acts: the person the token names, or a client application.
     acting: Acting,
-    /// The representative the token names as acting for the patient, when
-    /// its issuer declares its patient tokens' `act` one.
-    representative: Option<Actor>,
+    /// Who acts for the patient as their representative, when the token
+    /// names one.
+    representative: Option<Representation>,
     /// What a contact point's token asserts and the professional and the
     /// provider it relays, when the issuer that vouched for the caller is a
     /// national contact point.
@@ -292,6 +292,18 @@ pub struct Actor {
     pub subject: Option<String>,
 }
 
+/// Who acts for the patient as their representative (Regulation (EU)
+/// 2025/327 Art 4(2)).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Representation {
+    /// The current actor of a `Patient` token's RFC 8693 §4.1 `act` claim.
+    Actor(Actor),
+    /// The caller, a `RelatedPerson` user with the patient in context,
+    /// named by its token's `iss` and `sub`.
+    RelatedPerson,
+}
+
 impl fmt::Debug for Actor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Actor")
@@ -438,16 +450,15 @@ impl Caller {
     /// Returns this caller, its token naming `representative` as the
     /// person who acts for the patient its grant is confined to.
     #[must_use]
-    pub fn with_representative(mut self, representative: Option<Actor>) -> Self {
+    pub fn with_representative(mut self, representative: Option<Representation>) -> Self {
         self.representative = representative;
         self
     }
 
-    /// Returns the representative the caller's token names as acting for
-    /// the patient (Regulation (EU) 2025/327 Art 4(2)): its `act` claim, when
-    /// the issuer declares its patient tokens' `act` a representative.
+    /// Returns who the caller's token names as acting for the patient
+    /// (Regulation (EU) 2025/327 Art 4(2)).
     #[must_use]
-    pub fn representative(&self) -> Option<&Actor> {
+    pub fn representative(&self) -> Option<&Representation> {
         self.representative.as_ref()
     }
 

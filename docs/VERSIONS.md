@@ -607,15 +607,16 @@ and the stored-query registry's `postgres` backend need (#1636). Every PostgreSQ
 documents is the latest release line. A member node in the test harness runs
 its product's documented database image, which is part of the product under
 test (§13): FerroEHR's, and for the node profile's second product EHRbase's,
-built on PostgreSQL 16.2 (#549). The stored-query store's end-to-end tests run
-on FerroEHR's image, built on `postgres:18.6`, one database per use (#268),
-serving TLS under a CA the harness generates for the run (#1636).
+built on PostgreSQL 16.2 (#549). The tests of FerroFED's own store and of the
+stored-query `postgres` backend run on PostgreSQL 19, the family's release,
+one database per use (#268), serving TLS under a CA the harness generates for
+the run (#1636, #1941).
 The one other PostgreSQL image pinned is the database of the harness PIX
 Manager, SanteMPI, below (#622).
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| PostgreSQL | 18 | the tests of FerroFED's own store and the stored-query `postgres` backend, on the FerroEHR node database image below; the store page of the book |
+| PostgreSQL | 19 | the tests of FerroFED's own store and the stored-query `postgres` backend, on the FerroFED store database image below; the store page of the book, `docs/architecture.md` |
 
 ## Container images
 
@@ -644,11 +645,12 @@ it.
 | EHRbase node image | `ehrbase/ehrbase:2.38.0@sha256:b265855956270f028b7e457340d87c96290a007252ac5a52dffed3321a6ce93a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroPIX PIX Manager image | `ghcr.io/ferrohealth/ferropix:0.0.39@sha256:b91cff886b9ec1413706630c25e80c08c6bf09a223e1916704a2421f7071a674` | `compose.yaml`, the `FERROPIX` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| FerroPIX database image | `postgres:19.0@sha256:bb6e70add742cd868fb62cb3b2f67d1dd2bdd2b65a521e778420748753687c60` | `compose.yaml`, the `FERROPIX_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroFED store database image | `postgres:19.0@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1` | the `POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroPIX database image | `postgres:19.0@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1` | `compose.yaml`, the `FERROPIX_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | Quickstart FerroPIX token issuer image | `ghcr.io/navikt/mock-oauth2-server:7.0.1@sha256:eb07a0a65007c34c40c7b849592a47e6299128a514a5c6c582a53451cc6e3390` | `compose.yaml` |
 | Quickstart FerroPIX seed image | `curlimages/curl:8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93` | `compose.yaml` |
 | SanteMPI PIX Manager image | `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` | the `SANTEMPI` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| SanteMPI database image | `postgres:15.19@sha256:724292da1f2e50bdccfc3302ce75bbba7f4a6076701b588cc795fcac65683550` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| SanteMPI database image | `postgres:15.20@sha256:91b9edc40277faf94bc1e3d7ae621b185fa70f3099b94309c4731a8296114870` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | Reference implementation build image | `maven:3.10.0-eclipse-temurin-21@sha256:9b4877723dadf350b452dd97d9a6401e7b56f98fa9dfe420c32ad909989c7e4c` | the `MAVEN` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | Reference implementation runtime image | `eclipse-temurin:21.0.13_9-jre-noble@sha256:0d57a8e90c2bb844c5a8e1b2b71e11eff06dad7edcfd803cd21ed4ae203b2515` | the `TEMURIN_JRE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | Keycloak identity provider image | `quay.io/keycloak/keycloak:26.8.2@sha256:723b1d6e254c0fc96d5cffec860c7e0744d6a3277822b865bb538cf891575e41` | the `KEYCLOAK` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
@@ -822,7 +824,7 @@ versions the vendored manifests name.
 | `kustomize` | 5.8.3 | `.github/workflows/ci.yml` |
 | `lychee` | 0.24.2 | `.github/workflows/ci.yml` |
 | `promtool` | 3.16.0 | `.github/workflows/ci.yml` |
-| `validator_cli` | 7.0.5 | `.github/workflows/ci.yml` |
+| `validator_cli` | 7.0.6 | `.github/workflows/ci.yml` |
 
 Keep the locally installed versions on these numbers, so a finding costs a
 local run rather than a CI round trip (`.claude/rules/ci-cd.md`).

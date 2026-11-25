@@ -1143,8 +1143,8 @@ jobs:
     permissions:
       contents: read
     env:
-      FHIR_VALIDATOR_VERSION: 7.0.5
-      FHIR_VALIDATOR_SHA256: 9dfe9f305b0f9389eceade2a4a1c9a2740d7b0e614066fdf07a78b571c76d92f
+      FHIR_VALIDATOR_VERSION: 7.0.6
+      FHIR_VALIDATOR_SHA256: 2686590539f0b3ba7683149b25d78249f6886c04e2c326e884c5049d8947df89
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

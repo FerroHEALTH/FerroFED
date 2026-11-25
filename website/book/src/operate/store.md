@@ -36,7 +36,7 @@ at a member CDR's database or role, and never at a schema inside a FerroEHR
 cluster's database, so a gateway credential never reaches clinical data.
 The tables live in the schema `ferrofed`. The role needs `CREATE` on the
 database to make the schema, or a `ferrofed` schema made for it on which it
-holds `CREATE` and `USAGE`. The store is tested against PostgreSQL 18.6.
+holds `CREATE` and `USAGE`. The store is tested against PostgreSQL 19.0.
 
 ## What it holds
 

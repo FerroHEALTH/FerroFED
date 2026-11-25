@@ -104,6 +104,8 @@ asserts it. Every entry of a document such a token inserts names the
 representative, a `PARTY_IDENTIFIED` holding the `act` `sub`, and its access
 record says a representative inserted it ([Inserted by the
 person](../evaluate/receiving-documents.md#inserted-by-the-person)). A
+`RelatedPerson`'s own token, with the person in context, inserts as the
+representative too, the `PARTY_IDENTIFIED` holding the token's `sub`. A
 patient's token without `act` inserts as the person's own.
 
 Over ITS-REST the gateway routes a person's write as it routes any
