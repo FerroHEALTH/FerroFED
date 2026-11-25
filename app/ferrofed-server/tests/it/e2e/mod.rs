@@ -102,6 +102,7 @@ mod differential;
 mod discard;
 mod dpop_replay;
 mod emergency;
+#[cfg(feature = "binding-ihe")]
 mod face_ids;
 mod keycloak;
 mod national;
