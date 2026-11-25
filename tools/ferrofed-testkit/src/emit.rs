@@ -31,6 +31,45 @@ pub const EMIT_DIR_VARIABLE: &str = "FERROFED_EMIT_DIR";
 /// `_`, and the error of the file system when the directory or the file
 /// cannot be written.
 pub fn document(name: &str, text: &str) -> io::Result<Option<PathBuf>> {
+    emit(None, name, text)
+}
+
+/// A report category whose documents the validator lane holds to the
+/// MyHealth@EU guide of its service (#1952).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Report {
+    /// A laboratory report, held to MyHealth@EU Laboratory Report.
+    Laboratory,
+    /// A hospital discharge report, held to MyHealth@EU Hospital Discharge
+    /// Report.
+    Discharge,
+}
+
+impl Report {
+    /// The directory under [`EMIT_DIR_VARIABLE`] the category's documents
+    /// go to.
+    #[must_use]
+    pub const fn directory(self) -> &'static str {
+        match self {
+            Self::Laboratory => "myhealth-eu/laboratory",
+            Self::Discharge => "myhealth-eu/discharge",
+        }
+    }
+}
+
+/// Writes `text` to `<dir>/<category's directory>/<name>.json`, as
+/// [`document`] writes a document, for a report of `report`.
+///
+/// # Errors
+///
+/// As [`document`].
+pub fn report(report: Report, name: &str, text: &str) -> io::Result<Option<PathBuf>> {
+    emit(Some(report.directory()), name, text)
+}
+
+/// Writes `text` as `name` under `sub`, below [`EMIT_DIR_VARIABLE`].
+fn emit(sub: Option<&str>, name: &str, text: &str) -> io::Result<Option<PathBuf>> {
     if name.is_empty()
         || !name
             .bytes()
@@ -44,7 +83,10 @@ pub fn document(name: &str, text: &str) -> io::Result<Option<PathBuf>> {
     let Some(dir) = std::env::var_os(EMIT_DIR_VARIABLE) else {
         return Ok(None);
     };
-    let dir = PathBuf::from(dir);
+    let mut dir = PathBuf::from(dir);
+    if let Some(sub) = sub {
+        dir.push(sub);
+    }
     std::fs::create_dir_all(&dir)?;
     let path = dir.join(format!("{name}.json"));
     std::fs::write(&path, text)?;

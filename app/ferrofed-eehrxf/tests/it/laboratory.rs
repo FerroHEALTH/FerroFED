@@ -192,8 +192,14 @@ async fn a_written_laboratory_report_conforms_to_bundle_eu_lab() -> TestResult {
         birth_date: Some(String::from("1970-01-01")),
         ..PatientHeader::default()
     };
-    let breaks = breaks(&written(&header)?).await?;
+    let text = written(&header)?;
+    let breaks = breaks(&text).await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
+    ferrofed_testkit::emit::report(
+        ferrofed_testkit::emit::Report::Laboratory,
+        "ferrofed-eehrxf-laboratory-report",
+        &text,
+    )?;
     Ok(())
 }
 

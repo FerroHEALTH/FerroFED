@@ -277,8 +277,14 @@ async fn breaks(document: &Value) -> Result<Vec<String>, Box<dyn Error>> {
 
 #[tokio::test]
 async fn a_written_discharge_report_conforms_to_bundle_eu_hdr() -> TestResult {
-    let breaks = breaks(&written()?).await?;
+    let report = written()?;
+    let breaks = breaks(&report).await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
+    ferrofed_testkit::emit::report(
+        ferrofed_testkit::emit::Report::Discharge,
+        "ferrofed-eehrxf-discharge-report",
+        &serde_json::to_string(&report)?,
+    )?;
     Ok(())
 }
 

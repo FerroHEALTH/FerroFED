@@ -548,6 +548,19 @@ jobs:
           bash scripts/checks/myhealth-eu.sh --self-test
           bash scripts/checks/myhealth-eu.sh
 
+      # ---- myhealth-eu-ci ----------------------------------------------
+      # The MyHealth@EU CI-line badges (#1952): the search record holds every
+      # DocumentReference search parameter of the pinned NCPeH API with a
+      # test as evidence, the verdict record is well formed, every badge
+      # equals a fresh rendering, and no label says certified, compliant or
+      # conformant.
+      - name: myhealth-eu-ci
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          bash scripts/checks/myhealth-eu-ci.sh --self-test
+          bash scripts/checks/myhealth-eu-ci.sh
+
       # ---- economic-operators ------------------------------------------
       # The register of economic operators guard (Regulation (EU) 2025/327 Art
       # 35, Regulation (EU) 2024/2847 Art 23): the public copy has the documented
@@ -1139,7 +1152,7 @@ jobs:
     needs: [detect, test]
     if: needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
     env:
@@ -1181,6 +1194,18 @@ jobs:
           if [[ -f target/fhir-validation/summary.md ]]; then
             cat target/fhir-validation/summary.md >> "$GITHUB_STEP_SUMMARY"
           fi
+          exit "$status"
+      # The reports against their MyHealth@EU CI builds and every document's
+      # Patient against MyHealth@EU Core (#1952): a run must reproduce the
+      # verdicts conformance/myhealth-eu-validation.tsv records, which the
+      # README badges count.
+      - name: Every report against its MyHealth@EU CI build
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          status=0
+          bash scripts/checks/fhir-validator.sh --myhealth-eu \
+            "$RUNNER_TEMP/eehrxf-documents" target/fhir-validation || status=$?
           exit "$status"
       - name: Upload the validation results
         if: ${{ !cancelled() }}
