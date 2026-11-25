@@ -365,7 +365,7 @@ managing_organisation = "org-a"
              [[pixm.manager]]\nendpoint.url = \"http://127.0.0.1:9/fhir/\"\n\n\
              [pixm.manager.members]\n\"node-a\" = \"urn:oid:2.999.10\"\n\n[audit]\ndestination = \"log\"\n\n\
              [signing]\nkey_file = {}\njwks_uri = \"https://gw.example.org/.well-known/jwks.json\"\n\n\
-             [fhir]\nbase = \"{FHIR}\"\nreceive_namespaces = [\"{NAMESPACE}\"]\n\n\
+             [fhir]\nbase = \"{FHIR}\"\nid_key = \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\"\nreceive_namespaces = [\"{NAMESPACE}\"]\n\n\
              [fhir.operator]\nname = \"Synthetic Operator\"\n\
              identifier_system = \"urn:oid:2.999.9\"\nidentifier_value = \"operator-1\"\n\n\
              [[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\ntemplate = {}\n\

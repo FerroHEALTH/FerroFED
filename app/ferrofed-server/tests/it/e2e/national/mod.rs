@@ -280,7 +280,7 @@ impl Harness {
              [registry]\ndocument = {}\n\n[federation]\nid = \"example-federation\"\n\
              node_selection = \"ask-all\"\nper_node_timeout = '20s'\noverall_timeout = '25s'\n\n\
              [auth]\n{}\n\
-             [fhir]\nbase = \"{FHIR}\"\nreceive_namespaces = [\"{namespace}\"]\n\n\
+             [fhir]\nbase = \"{FHIR}\"\nid_key = \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\"\nreceive_namespaces = [\"{namespace}\"]\n\n\
              [fhir.operator]\nname = \"Synthetic Operator\"\nidentifier_system = \"urn:oid:2.999.9\"\n\
              identifier_value = \"operator-1\"\n\n[[fhir.mapping]]\nsection = \"allergies-and-intolerances\"\n\
              template = {}\nfiles = [{}, {}]\ncontext = \"{}\"\n\n\

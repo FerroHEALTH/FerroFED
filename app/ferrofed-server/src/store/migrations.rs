@@ -25,7 +25,7 @@ use crate::store::connection::backend;
 /// The migrations, in the order they apply: version `n` is the `n`th.
 ///
 /// A released migration never changes; a new one is added at the end.
-pub const MIGRATIONS: [&str; 4] = [
+pub const MIGRATIONS: [&str; 5] = [
     // 1: the stored-query definitions (§12.7, N44), as the `postgres` backend
     // of the stored-query registry created them.
     "CREATE TABLE IF NOT EXISTS ferrofed.stored_query_definition (
@@ -58,10 +58,17 @@ pub const MIGRATIONS: [&str; 4] = [
   facility_value text NOT NULL,
   expires_at timestamptz NOT NULL
 );",
+    // 5: the identifier each stable patient id of the FHIR face stands for, sealed, kept a
+    // window after the last answer that named it (#1976).
+    "CREATE TABLE ferrofed.patient_id (
+  id text PRIMARY KEY,
+  sealed bytea NOT NULL,
+  expires_at timestamptz NOT NULL
+);",
 ];
 
 /// The newest migration this binary has, the length of [`MIGRATIONS`].
-pub const KNOWN: u32 = 4;
+pub const KNOWN: u32 = 5;
 
 /// The table that records each migration applied.
 pub const LEDGER: &str = "ferrofed.store_migration";

@@ -149,7 +149,7 @@ impl Members {
             native_endpoint("node-a-eps", ("node-a", "org-a"), self.proxy_a.origin()),
             native_endpoint("node-b-eps", ("node-b", "org-b"), self.proxy_b.origin())
         );
-        let table = format!("[fhir]\nbase = \"{FHIR}\"\n");
+        let table = format!("[fhir]\nbase = \"{FHIR}\"\nid_key = \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\"\n");
         let text = text_registered(
             dir,
             (
